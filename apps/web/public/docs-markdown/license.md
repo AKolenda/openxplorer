@@ -24,7 +24,7 @@ Windows, Windows File Explorer, Zorin OS, Ubuntu, Debian and Vercel are names of
 
 ## Project identity before publication
 
-The canonical project domain is openxplorer.app and the public source repository is https://github.com/AKolenda/openxplorer-public. The website does not host release downloads. Use genuine maintainer/contact details when they are added and do not fabricate usage statistics or support claims.
+The canonical project domain is openxplorer.app and the public source repository is https://github.com/AKolenda/openxplorer. The website does not host release downloads. Use genuine maintainer/contact details when they are added and do not fabricate usage statistics or support claims.
 
 ---
 

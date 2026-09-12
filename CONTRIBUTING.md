@@ -19,6 +19,10 @@ pnpm dev
 
 Commit dependency changes together with the updated `pnpm-lock.yaml`. A normal checkout uses the committed lock; do not regenerate it merely to bypass an installation failure. Keep local environment values and Cloudflare credentials outside source control. `.env.example` and `.dev.vars.example`, when present, may contain only public placeholder values.
 
+## Pull requests
+
+Create a feature branch and open a pull request into `main`. Direct pushes, force pushes and deletion of `main` are blocked, including for administrators. A second reviewer is not required.
+
 ## Checks before a pull request
 
 Run the checks that cover the change and include their actual outcomes:
