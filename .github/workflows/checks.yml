@@ -82,6 +82,10 @@ jobs:
           "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/ui_file_drag.py
       - name: Exercise GTK and WebKit file transport into real Chromium on isolated X11
         run: |
+          # Ubuntu 24.04's runner AppArmor policy otherwise blocks bubblewrap's
+          # user namespace setup. Keep WebKit's sandbox enabled and permit its
+          # normal namespace isolation only inside this disposable CI runner.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' \
             env GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 \
             "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/native_file_transport.py
