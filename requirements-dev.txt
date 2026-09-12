@@ -1,0 +1,5 @@
+# Desktop/website browser tests and required package raster icons only.
+# Python GI must come from your distribution, not pip.
+playwright>=1.40
+CairoSVG>=2.7
+Pillow>=10.0  # Cropping full-page website screenshots for documentation.

@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+"""Chromium checks of actual application UI with fictional, simulated storage."""
+from pathlib import Path
+import json,os,re
+from playwright.sync_api import sync_playwright,expect
+ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'test-results';OUT.mkdir(exist_ok=True)
+checks=[];errors=[]
+def check(name,yes=True):
+ assert yes,name
+ checks.append(name);print('PASS',name,flush=True)
+DOCS='file:///home/demo/Documents';ZIP=DOCS+'/Website%20assets.zip'
+entry={'uri':ZIP,'name':'Website assets.zip','isDir':False}
+with sync_playwright() as pw:
+ browser=pw.chromium.launch(executable_path=os.environ.get('CHROMIUM','/usr/bin/chromium'),args=['--no-sandbox'])
+ page=browser.new_page(viewport={'width':1440,'height':940});page.set_default_timeout(8000)
+ page.on('pageerror',lambda e:errors.append(str(e)))
+ page.evaluate("()=>{const d={};Object.defineProperty(window,'localStorage',{value:{getItem:k=>d[k]??null,setItem:(k,v)=>d[k]=String(v),removeItem:k=>delete d[k]}})}")
+ page.set_content((ROOT/'preview.html').read_text(),wait_until='load');page.wait_for_function('()=>OpenXplorer.state.ready&&OpenXplorer.state.tabs[0].loaded')
+ def navigate(uri):
+  page.evaluate('(uri)=>OpenXplorer.navigate(uri)',uri)
+  page.wait_for_function('()=>OpenXplorer.state.tabs.find(t=>t.id===OpenXplorer.state.activeId).loaded')
+ def modal():
+  page.evaluate('(e)=>{void OpenXplorer.extractDialog(e)}',entry)
+  page.wait_for_function('()=>document.querySelector(".extract-summary")?.textContent.includes("unpacked")')
+ def close():
+  page.evaluate('()=>OpenXplorer.closeModal()')
+ navigate(DOCS)
+ ziprow=page.locator('.file-row').filter(has=page.locator('.name-text',has_text='Website assets.zip'))
+ check('ZIP row renders zipper folder',ziprow.locator('[data-icon="zip-folder"]').count()==1)
+ check('ZIP row retains file kind',ziprow.get_attribute('data-kind')=='file')
+ check('Real directory named .zip is still ordinary folder',page.evaluate('()=>OpenXplorer.fileIcon({name:"folder.zip",isDir:true}).dataset.icon')=='folder')
+ check('Uppercase ZIP icon',page.evaluate('()=>OpenXplorer.fileIcon({name:"ASSETS.ZIP",isDir:false}).dataset.icon')=='zip-folder')
+ check('ZIP MIME without extension',page.evaluate('()=>OpenXplorer.fileIcon({name:"download",isDir:false,contentType:"application/zip"}).dataset.icon')=='zip-folder')
+ check('PDF icon unchanged',page.evaluate('()=>OpenXplorer.fileIcon({name:"guide.pdf",isDir:false}).dataset.icon')=='file')
+ ziprow.click(button='right');expect(page.locator('button:visible').filter(has_text=re.compile(r'^Extract all…$'))).to_be_visible()
+ check('Classic menu offers extraction',page.locator('#menu').get_attribute('class').endswith('win10'))
+ page.locator('button:visible').filter(has_text=re.compile(r'^Extract all…$')).click();page.wait_for_function('()=>document.querySelector(".extract-summary")?.textContent.includes("unpacked")')
+ check('Destination has accessible label',page.get_by_label('Destination folder',exact=True).input_value()=='/home/demo/Documents')
+ check('Folder name defaults to ZIP base',page.get_by_label('New folder name').input_value()=='Website assets')
+ check('Shows full destination','/home/demo/Documents/Website assets' in page.locator('.extract-target').inner_text())
+ check('Open extracted files defaults on',page.get_by_label('Show extracted files when finished').is_checked())
+ check('Preflight shows unpacked size','unpacked' in page.locator('.extract-summary').inner_text())
+ page.screenshot(path=str(OUT/'zip-extract-dialog.png'))
+ page.get_by_label('New folder name').fill('../unsafe');page.get_by_role('button',name='Extract',exact=True).click()
+ expect(page.locator('.modal-error')).to_contain_text('without slashes')
+ check('Invalid destination name stays in dialog',page.locator('#modal-layer').is_visible())
+ page.get_by_label('New folder name').fill('Assets unpacked');page.get_by_role('button',name='Extract',exact=True).click()
+ page.wait_for_function('()=>OpenXplorer.state.tabs.find(t=>t.id===OpenXplorer.state.activeId).uri.endsWith("/Assets%20unpacked")&&OpenXplorer.state.tabs.find(t=>t.id===OpenXplorer.state.activeId).loaded')
+ check('Extraction opens new output folder',page.locator('.file-row').count()==2)
+ check('Extracted folder has regular folder icon',page.locator('.file-row').filter(has_text='Documents').locator('[data-icon="folder"]').count()==1)
+ navigate(DOCS);check('Source archive still listed',ziprow.count()==1)
+ # Windows 11 and browser entry points.
+ page.evaluate('(e)=>OpenXplorer.entryMenu(400,250,e,"win11")',entry)
+ check('Windows 11 menu has Extract all',page.locator('button:visible').filter(has_text=re.compile(r'^Extract all…$')).is_visible());page.keyboard.press('Escape')
+ ziprow.dblclick();expect(page.locator('.archive-modal')).to_be_visible()
+ check('Double-click still browses ZIP',page.locator('.archive-list').is_visible())
+ page.locator('button:visible').filter(has_text=re.compile(r'^Extract all…$')).click();page.wait_for_function('()=>document.querySelector(".extract-summary")?.textContent.includes("unpacked")')
+ check('ZIP browser Extract opens real extraction dialog',page.get_by_label('New folder name').is_visible());close()
+ # Output collision does not erase the previously extracted tree.
+ modal();page.get_by_label('New folder name').fill('Assets unpacked');page.get_by_role('button',name='Extract',exact=True).click()
+ expect(page.locator('#modal')).to_contain_text('destination already exists');check('Duplicate output fails without merging');close()
+ navigate(DOCS+'/Assets%20unpacked');check('Existing extracted contents retained',page.locator('.file-row').count()==2);navigate(DOCS)
+ # Cancellation through the actual progress control.
+ modal();page.get_by_label('New folder name').fill('Cancelled output');page.get_by_role('button',name='Extract',exact=True).click()
+ page.locator('#transfer-cancel').click();expect(page.locator('#modal')).to_contain_text('cancelled')
+ check('Cancel returns actionable feedback',not page.locator('#transfer').is_visible());close();navigate(DOCS)
+ check('Cancelled extraction has no visible output',page.locator('.name-text',has_text='Cancelled output').count()==0)
+ # Another destination, no automatic navigation.
+ modal();page.get_by_label('Destination folder',exact=True).fill('/home/demo/Downloads');page.get_by_label('New folder name').fill('Assets');page.get_by_label('Show extracted files when finished').uncheck()
+ # Already existing Assets in Downloads -> keep it intact.
+ page.get_by_role('button',name='Extract',exact=True).click();expect(page.locator('#modal')).to_contain_text('destination already exists');close()
+ modal();page.get_by_label('Destination folder',exact=True).fill('/home/demo/Downloads');page.get_by_label('New folder name').fill('Unpacked assets');page.get_by_label('Show extracted files when finished').uncheck()
+ page.get_by_role('button',name='Extract',exact=True).click();page.wait_for_function('()=>!OpenXplorer.state.operation&&document.getElementById("modal-layer").hidden')
+ check('Unchecked Show keeps the source location',page.evaluate('()=>OpenXplorer.state.tabs.find(t=>t.id===OpenXplorer.state.activeId).uri')==DOCS)
+ navigate('file:///home/demo/Downloads/Unpacked%20assets');check('Alternative destination used',page.locator('.file-row').count()==2)
+ # Simulated SMB destination uses the same dialog, no hidden local-only restriction.
+ modal();page.get_by_label('Destination folder',exact=True).fill('\\\\studio-nas\\Projects');page.get_by_label('New folder name').fill('Shared assets');page.get_by_role('button',name='Extract',exact=True).click()
+ page.wait_for_function('()=>OpenXplorer.state.tabs.find(t=>t.id===OpenXplorer.state.activeId).uri==="smb://studio-nas/Projects/Shared%20assets"&&OpenXplorer.state.tabs.find(t=>t.id===OpenXplorer.state.activeId).loaded')
+ check('SMB target accepted in simulated UI',page.locator('.tab.active .shared-bar').count()==1)
+ navigate(DOCS)
+ # Size changes use CSS font metrics, not page zoom, and survive prefs refresh.
+ page.locator('#main').focus();original_font=ziprow.evaluate('(e)=>parseFloat(getComputedStyle(e).fontSize)')
+ page.keyboard.press('Control+=');page.wait_for_function('()=>document.documentElement.dataset.textSize==="110"')
+ check('Ctrl equals increases text',ziprow.evaluate('(e)=>parseFloat(getComputedStyle(e).fontSize)')>original_font)
+ page.keyboard.press('Control+Shift+=');page.wait_for_function('()=>document.documentElement.dataset.textSize==="125"');check('Ctrl plus increases text')
+ page.keyboard.press('Control+-');page.wait_for_function('()=>document.documentElement.dataset.textSize==="110"');check('Ctrl minus decreases text')
+ page.keyboard.press('Control+0');page.wait_for_function('()=>document.documentElement.dataset.textSize==="100"');check('Ctrl zero resets',ziprow.evaluate('(e)=>parseFloat(getComputedStyle(e).fontSize)')==original_font)
+ page.keyboard.press('Control+NumpadAdd');page.wait_for_function('()=>document.documentElement.dataset.textSize==="110"');check('Keypad plus')
+ page.keyboard.press('Control+NumpadSubtract');page.wait_for_function('()=>document.documentElement.dataset.textSize==="100"');check('Keypad minus')
+ page.locator('#search').fill('abc');page.locator('#search').focus();page.keyboard.press('Control+=');page.wait_for_function('()=>document.documentElement.dataset.textSize==="110"')
+ check('Shortcut works inside search without changing text',page.locator('#search').input_value()=='abc');page.locator('#search').fill('');page.wait_for_timeout(400)
+ page.evaluate('()=>OpenXplorer.changeTextSize(150)');page.evaluate('()=>OpenXplorer.refreshEnvironment()')
+ check('Size persists through native-style environment refresh',page.evaluate('OpenXplorer.state.env.preferences.textSize')==150)
+ stored=page.evaluate('JSON.parse(localStorage.getItem("openxplorer-demo-091")).preferences.textSize');check('Preview persistence is bounded preference',stored==150)
+ page.evaluate('()=>OpenXplorer.settingsDialog()');page.wait_for_selector('#text-size-select')
+ check('Settings select agrees with shortcut',page.locator('#text-size-select').input_value()=='150')
+ page.select_option('#text-size-select','200');page.wait_for_function('()=>document.documentElement.dataset.textSize==="200"')
+ page.keyboard.press('Control++');page.wait_for_timeout(150);check('Size bounded at 200%',page.evaluate('OpenXplorer.state.env.preferences.textSize')==200)
+ page.select_option('#text-size-select','80');page.keyboard.press('Control+-');page.wait_for_timeout(150);check('Size bounded at 80%',page.evaluate('OpenXplorer.state.env.preferences.textSize')==80)
+ page.keyboard.press('Control+0');check('Reset works in Settings',page.locator('#text-size-select').input_value()=='100')
+ page.locator('#settings-search-input').fill('text size') if page.locator('#settings-search-input').count() else page.get_by_placeholder('Search settings').fill('text size')
+ check('Text size is searchable',page.locator('#text-size-line').evaluate('(e)=>e.dataset.searchTitle||e.textContent').lower().find('text size')>=0)
+ page.evaluate('()=>OpenXplorer.changeTextSize(125)');page.wait_for_timeout(250);page.screenshot(path=str(OUT/'text-size-settings.png'))
+ # Dialog/input key interception works before authentication focus traps.
+ close();navigate(DOCS);modal();page.get_by_label('New folder name').focus();before=page.get_by_label('New folder name').input_value();page.keyboard.press('Control++');page.wait_for_timeout(100)
+ check('Text changes while extraction dialog is open',page.evaluate('OpenXplorer.state.env.preferences.textSize')==150)
+ check('Shortcut does not insert characters',page.get_by_label('New folder name').input_value()==before);close()
+ page.evaluate('()=>{OpenXplorer.authPreview();document.getElementById("auth-password").focus();document.getElementById("auth-password").value="sample only";}');page.wait_for_timeout(80);check('Delayed autofocus does not steal password input',page.evaluate('document.activeElement.id')=='auth-password' and page.locator('#auth-password').input_value()=='sample only');page.wait_for_selector('#auth-dialog');page.keyboard.press('Control+0');check('Reset works in sign-in dialog',page.evaluate('OpenXplorer.state.env.preferences.textSize')==100)
+ page.keyboard.press('Escape');page.wait_for_timeout(100)
+ # Row positions remain separated and keyboard selection scrolls at maximum size.
+ page.evaluate('()=>OpenXplorer.changeTextSize(200)');navigate(DOCS);page.locator('#main').focus();page.keyboard.type('web')
+ expect(ziprow).to_have_attribute('aria-selected','true');check('Type-to-select still works at 200%')
+ rows=page.locator('.file-row').evaluate_all('(rows)=>rows.map(e=>({top:e.offsetTop,height:e.offsetHeight}))')
+ check('Virtualized row spacing accommodates larger text',all(rows[i]['top']+rows[i]['height']<=rows[i+1]['top'] for i in range(len(rows)-1)))
+ check('Page zoom unchanged',page.locator('body').evaluate('(e)=>getComputedStyle(e).zoom')=='1')
+ page.locator('#view').click();check('View menu has Larger text',page.get_by_role('menuitem',name='Larger text',exact=False).is_visible());page.keyboard.press('Escape')
+ page.locator('#status-grid').click();page.wait_for_timeout(100)
+ check('Grid has ZIP folder artwork',page.locator('.file-tile [data-icon="zip-folder"]').count()==1)
+ page.locator('#main').focus();page.keyboard.type('web');check('Grid type selection at large text',page.locator('.file-tile.selected .tile-name').inner_text()=='Website assets.zip')
+ page.evaluate('()=>OpenXplorer.changeTextSize(100)');page.locator('#status-list').click();ziprow.click(button='right');page.screenshot(path=str(OUT/'zip-context-menu.png'))
+ page.keyboard.press('Escape')
+ check('Cross-window preference event applied',page.evaluate('()=>{window.__nativeEvent("textSizeChanged",{textSize:125});return OpenXplorer.state.env.preferences.textSize===125;}'))
+ check('No JavaScript exceptions',not errors)
+ browser.close()
+(OUT/'ui-v093.json').write_text(json.dumps({'passed':True,'checks':len(checks),'details':checks,'errors':errors,'scope':'Actual desktop HTML in Chromium with fictional simulated storage; no native GTK/WebKit/SMB'},indent=2)+'\n')
+print('Passed',len(checks),'checks')

@@ -1,0 +1,32 @@
+{
+  "name": "openxplorer",
+  "private": true,
+  "version": "1.0.0-rc.4",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=22.13.0",
+    "pnpm": "10.34.5"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @openxplorer/web dev",
+    "build": "pnpm --filter @openxplorer/web build",
+    "check": "pnpm --filter @openxplorer/web check",
+    "preview": "python3 -m http.server 3000 --directory apps/web/out",
+    "designs": "node tools/render-previews.cjs",
+    "release": "python3 tools/release.py",
+    "test:website": "python3 tests/test_website.py",
+    "test:desktop": "cd desktop && python3 -m unittest discover -s tests -p 'test_*.py'",
+    "security:source": "python3 tools/security_sweep.py",
+    "cf:login": "wrangler auth create openxplorer",
+    "cf:activate": "wrangler auth activate openxplorer .",
+    "cf:profiles": "wrangler auth list",
+    "cf:whoami": "wrangler whoami",
+    "cf:dev": "wrangler dev --profile openxplorer",
+    "cf:dry-run": "wrangler deploy --dry-run --profile openxplorer",
+    "cf:deploy": "wrangler deploy --profile openxplorer"
+  },
+  "devDependencies": {
+    "wrangler": "4.131.1"
+  }
+}

@@ -1,0 +1,22 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: OpenXplorer
+Source: https://openxplorer.app
+
+Files: *
+Copyright: 2026 OpenXplorer contributors
+License: AGPL-3.0-only
+ This project is distributed under the GNU Affero General Public License,
+ version 3 only. The complete license is in AGPL-3.0.txt in this directory
+ and /opt/openxplorer/LICENSE. Original notices are retained in licenses/.
+
+Files: packaging/*.metainfo.xml
+Copyright: 2026 OpenXplorer contributors
+License: CC0-1.0
+ AppStream metadata is dedicated to the public domain under CC0 1.0.
+ See https://creativecommons.org/publicdomain/zero/1.0/
+
+Files: licenses/Winspace-MIT.txt
+Copyright: 2026 Winspace contributors
+License: MIT
+ Original Winspace attribution and the MIT grant are preserved verbatim
+ in licenses/Winspace-MIT.txt. Modified project code is AGPL-3.0-only.

@@ -1,0 +1,91 @@
+name: Source and release gates
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  website:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Require reviewed dependency lock
+        run: test -s pnpm-lock.yaml
+      - name: Activate the repository's pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.34.5 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=moderate
+      - run: pnpm check
+      - run: pnpm build
+      - name: Install the pinned production browser test driver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-venv
+          /usr/bin/python3 -m venv "$RUNNER_TEMP/website-tests"
+          "$RUNNER_TEMP/website-tests/bin/python" -m pip install playwright==1.62.0
+          "$RUNNER_TEMP/website-tests/bin/python" -m playwright install --with-deps chromium
+      - name: Verify the actual export, React hydration and mobile preview removal
+        run: '"$RUNNER_TEMP/website-tests/bin/python" tests/test_launch_production.py'
+      - name: Generated documentation matches its JSON source
+        run: git diff --exit-code -- docs apps/web/public/docs-markdown apps/web/public/assets/markdown.json
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      # Use Ubuntu's Python so PyGObject and its typelibs come from APT together.
+      # These are disposable CI prerequisites; the package is never installed.
+      - name: Install package-builder and native test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3-venv python3-gi python3-cairosvg desktop-file-utils \
+            gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-secret-1 \
+            xvfb xauth libxtst6 dbus-x11
+      - run: /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py'
+        working-directory: desktop
+      - run: node --test desktop/tests/*.test.cjs
+      - name: Verify corresponding-source exclusions with disposable fixtures
+        run: /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'
+      - run: /usr/bin/python3 tools/security_sweep.py
+      - name: Install the browser test driver in a disposable environment
+        run: |
+          /usr/bin/python3 -m venv --system-site-packages "$RUNNER_TEMP/browser-tests"
+          "$RUNNER_TEMP/browser-tests/bin/python" -m pip install playwright==1.62.0
+          "$RUNNER_TEMP/browser-tests/bin/python" -m playwright install --with-deps chromium
+          "$RUNNER_TEMP/browser-tests/bin/python" - <<'PY'
+          import os
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as playwright:
+              with open(os.environ['GITHUB_ENV'], 'a') as output:
+                  output.write('CHROMIUM=' + playwright.chromium.executable_path + '\n')
+          PY
+      - name: Build the shared UI preview and test the file-drag UI contract
+        run: |
+          /usr/bin/python3 desktop/tools/build_preview.py
+          "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/ui_file_drag.py
+      - name: Exercise GTK and WebKit file transport into real Chromium on isolated X11
+        run: |
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' \
+            env GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 \
+            "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/native_file_transport.py
+      - name: Build, verify and stage installer with matching source
+        run: /usr/bin/python3 tools/release.py
+      - name: Audit staged public data and screenshot provenance
+        run: /usr/bin/python3 tools/audit-public-data.py

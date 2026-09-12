@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<component type="desktop-application">
+  <id>io.winspace.Development</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <name>OpenXplorer</name>
+  <summary>Explorer-style local and SMB file manager</summary>
+  <description>
+    <p>Browse local files and SMB shares in a tabbed interface with light and dark appearances, a resizable sidebar, indexed filename search and read-only ZIP browsing.</p>
+    <p>This development release adds connected network locations, searchable Settings, tab-to-window movement and opt-in Show in folder integration for Zorin desktops. Installation does not change file associations, browser preferences or network mounts.</p>
+  </description>
+  <launchable type="desktop-id">io.winspace.Development.desktop</launchable>
+  <icon type="stock">io.winspace.Development</icon>
+  <provides>
+    <binary>openxplorer</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>FileManager</category>
+  </categories>
+  <releases>
+    <release version="1.0.0-rc.4" date="2026-09-07" type="development">
+      <description>
+        <p>Middle-click folders to open tabs in the background. Restore tab tear-out with the desktop-drop handshake and an explicit source-window drop area, while retaining cross-window merging. Existing defaults remain unchanged until requested.</p>
+      </description>
+    </release>
+  </releases>
+  <url type="homepage">https://openxplorer.app</url>
+  <url type="help">https://openxplorer.app/docs/installation/</url>
+  <keywords>
+    <keyword>File Explorer</keyword>
+    <keyword>File Manager</keyword>
+    <keyword>files</keyword>
+    <keyword>folders</keyword>
+    <keyword>SMB</keyword>
+    <keyword>NAS</keyword>
+    <keyword>network</keyword>
+    <keyword>ZIP</keyword>
+  </keywords>
+</component>

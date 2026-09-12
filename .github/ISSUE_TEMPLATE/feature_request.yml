@@ -1,0 +1,22 @@
+name: Workflow improvement
+description: Describe a file-management workflow and the behavior that would help.
+body:
+  - type: textarea
+    id: workflow
+    attributes:
+      label: What are you trying to do?
+      description: Describe the current workflow with fictional files or shares.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_behavior
+    attributes:
+      label: Desired behavior
+      description: Explain the observable result, including keyboard access or integration with other applications when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or constraints
+      description: Mention workarounds, native platform requirements, and file-safety considerations.

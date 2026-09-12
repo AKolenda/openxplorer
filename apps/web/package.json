@@ -1,0 +1,22 @@
+{
+  "name": "@openxplorer/web",
+  "version": "1.0.0-rc.4",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "node ../../tools/prepare-web.cjs && next dev",
+    "build": "node ../../tools/prepare-web.cjs && next build",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.10",
+    "@types/react": "19.0.12",
+    "@types/react-dom": "19.0.4",
+    "typescript": "5.8.3"
+  }
+}

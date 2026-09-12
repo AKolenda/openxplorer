@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+<title>OpenXplorer</title>
+<script src="bootstrap.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="titlebar">
+    <div id="tabs" class="tabs" role="tablist" aria-label="Folder tabs"></div>
+    <button class="newtab caption-icon" id="newtab" title="New tab (Ctrl+T)" aria-label="New tab"></button>
+    <div class="title-drag" id="title-drag"></div>
+    <button id="windows-button" class="windows-button" title="Open windows" aria-label="Open windows"></button>
+    <div class="window-buttons">
+      <button id="minimize" title="Minimize" aria-label="Minimize"></button>
+      <button id="maximize" title="Maximize" aria-label="Maximize"></button>
+      <button id="close-window" class="close-window" title="Close window" aria-label="Close window"></button>
+    </div>
+  </header>
+  <section class="navigation" aria-label="Navigation">
+    <div class="nav-buttons">
+      <button id="back" title="Back (Alt+Left)" aria-label="Back"></button>
+      <button id="forward" title="Forward (Alt+Right)" aria-label="Forward"></button>
+      <button id="up" title="Up (Alt+Up)" aria-label="Up"></button>
+      <button id="refresh" title="Refresh (F5)" aria-label="Refresh"></button>
+    </div>
+    <div class="address" id="address" title="Click to type a location (Ctrl+L)">
+      <span class="address-icon" id="address-icon"></span>
+      <div class="breadcrumbs" id="breadcrumbs"></div>
+      <input id="address-input" aria-label="Location" spellcheck="false" autocomplete="off" hidden>
+      <button class="address-chevron" id="address-edit" aria-label="Edit location"></button>
+    </div>
+    <div class="search-wrap"><input id="search" type="search" placeholder="Search Documents" aria-label="Search filenames and paths" autocomplete="off"><span id="search-icon"></span></div>
+  </section>
+  <section class="commandbar" aria-label="File commands">
+    <button id="new" class="command text-command"></button><span class="separator"></span>
+    <button id="cut" class="command" title="Cut (Ctrl+X)" aria-label="Cut"></button>
+    <button id="copy" class="command" title="Copy (Ctrl+C)" aria-label="Copy"></button>
+    <button id="paste" class="command" title="Paste files (Ctrl+V)" aria-label="Paste"></button>
+    <button id="rename" class="command" title="Rename (F2)" aria-label="Rename"></button>
+    <button id="copy-path" class="command" title="Copy path (does not change sharing permissions)" aria-label="Copy path"></button>
+    <button id="trash" class="command" title="Move to Trash (Delete)" aria-label="Move to Trash"></button>
+    <span class="separator"></span>
+    <button id="sort" class="command text-command"></button>
+    <button id="view" class="command text-command"></button>
+    <button id="more" class="command" title="More options" aria-label="More options"></button>
+    <span class="command-spacer"></span>
+    <button id="theme-toggle" class="command text-command" title="Appearance: Light, Dark, or System" aria-label="Appearance"></button>
+    <button id="settings-button" class="command" title="Settings (Ctrl+,)" aria-label="Settings"></button>
+    <button id="details-toggle" class="command text-command"></button>
+  </section>
+  <div id="snapshot-banner" class="snapshot-banner" role="status" hidden></div>
+  <div class="workspace">
+    <aside class="sidebar" aria-label="Folders and network locations"><div id="sidebar"></div><div class="sidebar-bottom"><button id="connect-sidebar"></button></div></aside>
+    <div id="sidebar-resizer" class="sidebar-resizer" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" tabindex="0"></div>
+    <main id="main" tabindex="0" aria-label="Folder contents — type a filename prefix to select">
+      <div id="landing" class="landing" hidden></div>
+      <div id="folder-view" class="folder-view">
+        <div id="search-info" class="search-info" hidden></div>
+        <div class="column-head" id="column-head" role="row"></div>
+        <div class="file-scroll" id="file-scroll"><div class="file-canvas" id="file-canvas" role="grid" aria-label="Files"></div></div>
+      </div>
+      <div class="empty-state" id="empty-state" hidden></div>
+      <div class="loading-line" id="loading-line" hidden></div>
+    </main>
+    <aside class="details" id="details" aria-label="Details pane"></aside>
+  </div>
+  <div class="transfer" id="transfer" hidden><span id="transfer-icon"></span><div class="transfer-body"><div id="transfer-label"></div><div class="progress-track"><div id="transfer-progress"></div></div></div><button id="transfer-cancel">Cancel</button></div>
+  <div id="size-scan" class="size-scan" hidden><span id="size-scan-label" role="status" aria-live="polite"></span><button id="size-scan-stop" class="secondary">Cancel scan</button></div>
+  <footer class="statusbar"><span id="status-count">Ready</span><span id="status-selected"></span><span id="type-select-status" class="type-select-status" role="status" aria-live="polite" aria-atomic="true" hidden></span><span class="status-spacer"></span><span id="status-mode" class="status-mode"></span><button id="status-list" title="Details view" aria-label="Details view"></button><button id="status-grid" title="Large icons" aria-label="Large icons"></button></footer>
+</div>
+<div class="menu" id="menu" role="menu" hidden></div>
+<div class="pin-drag-badge" id="pin-drag-badge" role="status" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="modal-layer" id="modal-layer" hidden><section id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></section></div>
+<div id="dialog-vault" hidden></div>
+<div id="auth-layer" class="auth-layer" hidden><section id="auth-dialog" class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title"></section></div>
+<script src="text-size.js"></script>
+<script src="type-select.js"></script>
+<script src="snapshot-meta.js"></script>
+<script src="app.js"></script>
+<div id="tab-drag-hint" class="tab-drag-hint" hidden></div>
+</body>
+</html>

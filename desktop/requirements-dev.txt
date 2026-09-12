@@ -1,0 +1,3 @@
+# Build/test tooling only. The application uses distro-managed GI, not pip GI.
+playwright>=1.40
+CairoSVG>=2.7

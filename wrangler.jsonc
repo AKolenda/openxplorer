@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openxplorer-site",
+  "compatibility_date": "2026-09-11",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "openxplorer.app", "custom_domain": true }],
+  "assets": {
+    "directory": "./apps/web/out",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
+  }
+}

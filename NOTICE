@@ -1,0 +1,20 @@
+OpenXplorer 0.8.0
+Modified and added project code: Copyright (c) 2026 OpenXplorer contributors.
+Modification date: 2026-09-06.
+
+This modified desktop application, companion website and project-authored
+supporting documentation are distributed under AGPL-3.0-only. See LICENSE.
+No warranty is provided. Project use of the standard license text's example
+notice does not change the explicit version-3-only grant above.
+
+Original Winspace material was distributed under MIT. Its unaltered copyright,
+permission and warranty notice is preserved in licenses/Winspace-MIT.txt and
+in the desktop package. This release does not revoke or relicense old copies
+already distributed under their original terms. Dependency licenses are not
+changed by the project's license choice. AppStream metadata remains CC0-1.0.
+
+Windows, Zorin OS, Ubuntu, Debian, Vercel and other referenced names belong to
+their respective owners. This project is independent and claims no endorsement.
+The public source repository is https://github.com/AKolenda/openxplorer-public.
+No maintainer postal or email address is included. Review public contact
+metadata and name clearance before a stable release.

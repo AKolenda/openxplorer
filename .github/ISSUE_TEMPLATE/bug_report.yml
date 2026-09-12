@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible application or website problem using fictional data.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For security-sensitive findings, follow SECURITY.md. Do not attach credentials, browser profiles, customer screenshots, or private paths and share names. Reproduce with disposable files and fictional data.
+  - type: input
+    id: version
+    attributes:
+      label: OpenXplorer version
+      description: Include whether you used an installed package, source checkout, or website preview.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Distribution/version, desktop/session (Wayland or X11), and browser/version for website issues. For SMB, describe the provider without private server addresses.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Include the smallest sequence using disposable files and fictional names.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: Expected and actual behavior
+      description: For a file operation, say whether the source and destination survived, changed, or were partially written.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Optional short error text and relevant test results. Review filenames, paths, user names and addresses before including them.
