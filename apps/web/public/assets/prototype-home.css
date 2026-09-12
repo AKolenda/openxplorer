@@ -1,0 +1,145 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* PROTOTYPE — throwaway. One width system for the whole page:
+   --shell 1152px content, --gutter 24px, --measure 680px for running text.
+   Header, sections and footer all use the same box. */
+.proto{--shell:1152px;--gutter:24px;--measure:680px;--gap:24px}
+.proto .shell,.proto .header-inner,.proto .footer-main,.proto .footer-fine{max-width:calc(var(--shell) + 2*var(--gutter));margin-inline:auto;padding-inline:var(--gutter);box-sizing:border-box}
+.proto .site-footer{padding-inline:0}
+.proto .measure{max-width:var(--measure)}
+.proto .lede{font-size:18px;line-height:1.7;color:var(--muted);max-width:var(--measure)}
+.proto .lede code,.proto h1 code{font-family:Consolas,"Liberation Mono",monospace;font-size:.9em;background:var(--blue-soft);color:var(--blue);padding:1px 6px;border-radius:5px;white-space:nowrap}
+.proto h1{font-size:clamp(40px,6vw,64px);font-weight:600;line-height:1.06;letter-spacing:-.035em;margin:0 0 20px;color:var(--text)}
+.proto h2{font-size:clamp(26px,3.2vw,36px);line-height:1.15;letter-spacing:-.025em;margin:0 0 14px}
+.proto .text-link{display:inline-flex;align-items:center;gap:6px;color:var(--blue);font-weight:500;margin-top:8px}
+.proto .product-shot{margin:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 14px 36px #345d8118;background:#fff}
+.proto .product-shot img{display:block;width:100%;height:auto}
+.proto .product-shot figcaption{font-size:12px;color:var(--muted);padding:10px 14px;border-top:1px solid var(--line);background:var(--surface)}
+.proto .live-product{margin-top:28px}
+.proto-cta{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:28px}
+.proto-cta small{flex-basis:100%;font-size:12px;color:var(--muted)}
+.proto-cta.center{justify-content:center;text-align:center}
+.proto-address{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--text);box-shadow:0 1px 0 #17324d0a}
+.proto-address code{font-family:Consolas,"Liberation Mono",monospace;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.proto-address>span{color:var(--blue);display:inline-flex}
+.proto-address small{grid-column:2/4;font-size:12px;color:var(--muted)}
+.proto-address svg:first-child{color:#2eaf72}
+
+/* A · Ledger */
+.proto-a .a-hero{text-align:center;padding-block:96px 40px}
+.proto-a .a-hero .lede{margin-inline:auto}
+.proto-a .a-hero h1{margin-inline:auto}
+.proto-a .a-shot{padding-block:24px 48px}
+.proto-a .a-chapter{display:grid;grid-template-columns:72px minmax(0,1fr);column-gap:var(--gap);row-gap:32px;padding-block:72px;border-top:1px solid var(--line)}
+.proto-a .a-chapter>*{grid-column:2}
+.proto-a .a-num{grid-column:1;grid-row:1;font-family:Consolas,monospace;font-size:14px;color:var(--blue);padding-top:8px;letter-spacing:.08em}
+.proto-a .a-chapter .measure p{font-size:17px;line-height:1.75;color:var(--muted)}
+.proto-a .a-addresses{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;max-width:100%}
+.proto-a .a-points{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--gap) 40px}
+.proto-a .a-points strong{display:block;font-size:15px;margin-bottom:6px}
+.proto-a .a-points p{font-size:14px;line-height:1.65;color:var(--muted)}
+.proto-a .a-end{padding-block:80px 96px;border-top:1px solid var(--line)}
+.proto-a .a-end p{font-size:17px;line-height:1.75;color:var(--muted)}
+
+/* B · Workbench */
+.proto-b .b-layout{display:grid;grid-template-columns:5fr 7fr;column-gap:48px;padding-block:64px 96px;align-items:start}
+.proto-b .b-rail{position:sticky;top:calc(var(--header) + 24px)}
+.proto-b .b-rail h1{font-size:clamp(36px,4.2vw,52px)}
+.proto-b .b-rail .lede{font-size:16px}
+.proto-b .b-typed{margin-top:24px}
+.proto-b .b-index{margin-top:36px;border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:2px}
+.proto-b .b-index a{display:flex;gap:14px;align-items:baseline;padding:8px 10px;border-radius:8px;color:var(--text);font-size:14px}
+.proto-b .b-index a span{font-family:Consolas,monospace;font-size:11px;color:var(--blue)}
+.proto-b .b-index a:hover{background:var(--blue-soft)}
+.proto-b .b-proof{display:flex;flex-direction:column;gap:72px;min-width:0}
+.proto-b .b-block p{font-size:16px;line-height:1.7;color:var(--muted);margin:0 0 20px;max-width:var(--measure)}
+.proto-b .b-block .product-shot{margin-top:20px}
+.proto-b .b-table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.proto-b .b-table td{padding:12px 14px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+.proto-b .b-table tr:first-child td{border-top:0}
+.proto-b .b-table td:first-child{color:var(--text)}
+.proto-b .b-table code{font-family:Consolas,"Liberation Mono",monospace;font-size:14px}
+.proto-b .b-table td:last-child{color:#2eaf72;width:1%}
+.proto-b .b-facts{list-style:none;padding:0;margin:20px 0 0;display:grid;gap:10px}
+.proto-b .b-facts li{font-size:14px;line-height:1.6;color:var(--muted);padding-left:14px;border-left:2px solid var(--blue-soft)}
+.proto-b .b-facts strong{color:var(--text)}
+.proto-b .b-open{padding:32px;border-radius:16px;background:var(--surface);border:1px solid var(--line)}
+.proto-b .live-product.compact-demo{margin-top:0}
+
+/* C · Grid */
+.proto-c .c-hero{background:#0f1f33;color:#fff;padding-block:80px 0;overflow:hidden}
+.proto-c .c-hero-inner{display:grid;grid-template-columns:5fr 7fr;column-gap:48px;align-items:end}
+.proto-c .c-hero h1{color:#fff}
+.proto-c .c-hero .lede{color:#b8c8dc}
+.proto-c .c-hero .lede code{background:#1d3452;color:#8fc4ff}
+.proto-c .c-hero .eyebrow{color:#8fc4ff}
+.proto-c .c-hero .proto-cta{margin-bottom:64px}
+.proto-c .c-hero .proto-cta small{color:#8fa4bf}
+.proto-c .c-hero .button.secondary{color:#fff;border-color:#33507a;background:transparent}
+.proto-c .c-hero .product-shot{border-radius:12px 12px 0 0;border-bottom:0;box-shadow:0 -10px 50px #00000055;margin-bottom:-2px}
+.proto-c .c-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--gap);padding-block:64px}
+.proto-c .c-tile{border:1px solid var(--line);border-radius:14px;background:#fff;padding:28px;min-width:0}
+.proto-c .span-12{grid-column:span 12}.proto-c .span-7{grid-column:span 7}.proto-c .span-6{grid-column:span 6}.proto-c .span-5{grid-column:span 5}.proto-c .span-4{grid-column:span 4}
+.proto-c .c-smb{display:grid;grid-template-columns:5fr 7fr;gap:40px;background:var(--surface)}
+.proto-c .c-smb h2{margin-top:12px}
+.proto-c .c-smb p{font-size:16px;line-height:1.7;color:var(--muted)}
+.proto-c .c-smb svg{color:#2eaf72}
+.proto-c .c-chips{display:grid;gap:10px;align-content:center}
+.proto-c .c-chips>div{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:12px 16px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.proto-c .c-chips code{font-family:Consolas,"Liberation Mono",monospace;font-size:15px;color:var(--text)}
+.proto-c .c-chips span{font-size:12px;color:var(--muted);text-align:right}
+.proto-c .c-fact strong{display:block;font-size:16px;margin-bottom:8px}
+.proto-c .c-fact p{font-size:14px;line-height:1.65;color:var(--muted)}
+.proto-c .c-shot{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.proto-c .c-shot .product-shot{border:0;border-radius:0;box-shadow:none}
+.proto-c .c-shot h3{font-size:18px;margin:20px 28px 6px}
+.proto-c .c-shot a{margin:0 28px 24px;color:var(--blue);font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.proto-c .c-demo{padding-block:0 64px}
+.proto-c .c-demo-head p{color:var(--muted);font-size:16px}
+.proto-c .c-bottom{padding-top:0;padding-bottom:96px}
+.proto-c .c-open,.proto-c .c-get{padding:36px}
+.proto-c .c-get{background:var(--blue-soft);border-color:transparent}
+.proto-c .c-open p,.proto-c .c-get p{font-size:15px;color:var(--muted);line-height:1.7;margin-bottom:20px}
+
+/* Responsive: everything stacks; the shell keeps its gutter */
+@media(max-width:959px){
+ .proto-a .a-chapter{grid-template-columns:1fr}.proto-a .a-chapter>*{grid-column:1}.proto-a .a-num{grid-row:auto}
+ .proto-a .a-points{grid-template-columns:1fr}
+ .proto-b .b-layout{grid-template-columns:1fr;row-gap:48px}.proto-b .b-rail{position:static}
+ .proto-c .c-hero-inner{grid-template-columns:1fr}.proto-c .c-hero .proto-cta{margin-bottom:40px}
+ .proto-c .c-smb{grid-template-columns:1fr}
+ .proto-c .c-tile{grid-column:span 12!important}
+}
+
+/* Switcher — obviously not part of the design under evaluation */
+.proto-switcher{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:999;display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:999px;background:#111;color:#fff;font:13px/1 Consolas,monospace;box-shadow:0 8px 30px #0006;white-space:nowrap}
+.proto-switcher button{background:#333;color:#fff;border:0;border-radius:999px;width:30px;height:30px;cursor:pointer;font-size:14px}
+.proto-switcher button:hover{background:#ff5a1f}
+.proto-switcher span{padding:0 10px}
+.proto-switcher b{color:#ffb38a;margin-right:6px}
+
+/* Cropped screenshots keep their natural size on a sky panel instead of stretching */
+.proto .product-shot.crop{background:var(--blue-soft);display:flex;justify-content:center;align-items:flex-start;padding:24px;box-shadow:none}
+.proto .product-shot.crop img{width:auto;max-width:100%;height:auto;border:1px solid #cad9e4;border-radius:8px;background:#fff;box-shadow:0 8px 24px #17324d14}
+.proto .product-shot.crop.tall{min-height:320px;padding:28px}
+.proto .product-shot.crop.tall img{width:210px}
+.proto .product-shot.crop:not(.wide):not(.tall):not(.mid) img{max-height:420px;object-fit:cover;object-position:top left}
+.proto-c .c-shot .product-shot.crop{padding:20px;height:300px;overflow:hidden;align-items:flex-start;border-radius:14px 14px 0 0}
+.proto-c .c-shot .product-shot.crop img{max-height:100%;object-fit:cover;object-position:top left}
+.proto-c .c-shot .product-shot.crop.tall img{width:210px}
+.proto-c .c-hero-inner{grid-template-columns:1fr 1fr}
+.proto-c .c-hero h1{font-size:clamp(36px,4.4vw,54px)}
+.proto-b .b-block .product-shot.crop.tall{min-height:260px}
+
+/* Cropped screenshots keep their natural size on a sky panel instead of stretching */
+.proto .product-shot.crop{background:var(--blue-soft);display:flex;justify-content:center;align-items:flex-start;padding:24px;box-shadow:none}
+.proto .product-shot.crop img{width:auto;max-width:100%;height:auto;border:1px solid #cad9e4;border-radius:8px;background:#fff;box-shadow:0 8px 24px #17324d14}
+.proto .product-shot.crop.tall{min-height:320px;padding:28px}
+.proto .product-shot.crop.tall img{width:210px}
+.proto .product-shot.crop:not(.wide):not(.tall):not(.mid) img{max-height:420px;object-fit:cover;object-position:top left}
+.proto-c .c-shot .product-shot.crop{padding:20px;height:300px;overflow:hidden;align-items:flex-start;border-radius:14px 14px 0 0}
+.proto-c .c-shot .product-shot.crop img{max-height:100%;object-fit:cover;object-position:top left}
+.proto-c .c-shot .product-shot.crop.tall img{width:210px}
+.proto-c .c-hero-inner{grid-template-columns:1fr 1fr}
+.proto-c .c-hero h1{font-size:clamp(36px,4.4vw,54px)}
+.proto-b .b-block .product-shot.crop.tall{min-height:260px}
+.proto .product-shot.crop{flex-wrap:wrap}.proto .product-shot.crop figcaption{flex-basis:100%;margin:16px -24px -24px;border-top:1px solid #cad9e4}
