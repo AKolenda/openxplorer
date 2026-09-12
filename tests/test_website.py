@@ -108,7 +108,7 @@ with sync_playwright() as p:
   if not f.name.startswith('docs-'):continue
   page=open_page(f.name)
   check(f.name+': Markdown button identifies this guide',page.locator('[data-copy-markdown]').get_attribute('data-copy-markdown')==f.stem[5:])
-  check(f.name+': downloadable .md provided',page.locator('a.markdown-download').count()==1)
+  check(f.name+': no direct download links',page.locator('a[download]').count()==0)
   check(f.name+': left sidebar and right contents',page.locator('.docs-sidebar').is_visible() and page.locator('.docs-toc').is_visible())
   page.close()
  page=open_page('docs-network-shares.html')

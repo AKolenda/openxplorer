@@ -77,19 +77,17 @@ The standalone HTML renderer inlines the same preview as sandboxed `srcdoc` and 
 | `/` | Selected Zorin design, interactive app preview, SMB / pins / search / snapshots bento grid |
 | `/docs/introduction/` | Guide entry point, real screenshot and interactive demo |
 | `/docs/[slug]/` | Topic navigation left, article center, same-page navigation right |
-| `/source/` | Actual corresponding-source and installer downloads |
+| `/source/` | Public source repository and license information |
 | `/concepts/` | Original three design directions, updated to use real application images |
 | `/app-preview.html` | Standalone, interactive application UI with simulated files |
-| `/docs-markdown/[slug].md` | Generated, downloadable guide Markdown |
+| `/docs-markdown/[slug].md` | Generated guide Markdown used by documentation tooling |
 
 ## Edit content and identity
 
-`lib/site.ts` contains the application name, release version, source/download
-paths, canonical `https://openxplorer.app` URL and selected design. The public
-repository link stays unset while the source repository is private; public
-visitors use the corresponding-source ZIP. Add a repository link if that
-repository is made public. See the [public source checklist](../../docs/PUBLIC-RELEASE-CHECKLIST.md)
-and [native experience roadmap](../../docs/NATIVE-EXPERIENCE-ROADMAP.md).
+`lib/site.ts` contains the application name, release version, public source repository,
+GitHub Releases URL, canonical `https://openxplorer.app` URL and selected design.
+Package buttons lead to GitHub Releases; source links lead to the public repository.
+The website has no direct download links or hosted release binaries.
 
 `lib/docs.json` is the canonical documentation source. Each section can contain paragraphs, a list, code, a callout, a real screenshot or the interactive preview. Run from the root:
 
@@ -99,7 +97,7 @@ node tools/prepare-web.cjs
 pnpm designs
 ```
 
-Each documentation page provides **Copy page as Markdown**, which copies the complete guide—not HTML or merely a link—and a downloadable `.md` file. These are generated from the same content. In restricted clipboard environments, the .md download remains available. Search is an ordinary labeled button; there is no Command-K badge or global Command-K handler.
+Each documentation page provides **Copy page as Markdown**, which copies the complete guide from the shared documentation content. Search is an ordinary labeled button; there is no Command-K badge or global Command-K handler.
 
 ## Screenshots, not substitute icons
 
@@ -214,7 +212,7 @@ review any tighter script rules against the actual exported Next.js output and
 the sandboxed preview before enabling them.
 
 The canonical domain is `openxplorer.app`. The source repository is public at
-`https://github.com/AKolenda/openxplorer-public`; the website hosts no release binaries.
+`https://github.com/AKolenda/openxplorer`; the website hosts no release binaries.
 See the [public source checklist](../../docs/PUBLIC-RELEASE-CHECKLIST.md),
 [stable-release checklist](../../docs/RELEASE-CHECKLIST.md) and
 [Cloudflare setup](../../docs/CLOUDFLARE-SETUP.md) before publication.

@@ -483,7 +483,7 @@
         "id": "markdown",
         "title": "Documentation as Markdown",
         "paragraphs": [
-          "Copy page as Markdown copies the full guide, including headings, paragraphs, code blocks, callouts and screenshot references—not a link or rendered HTML. Each guide also has a downloadable .md file. The content source is apps/web/lib/docs.json; tools/sync-docs.py regenerates repository documentation and the website copies.",
+          "Copy page as Markdown copies the full guide, including headings, paragraphs, code blocks, callouts and screenshot references—not a link or rendered HTML. The content source is apps/web/lib/docs.json; tools/sync-docs.py regenerates repository documentation and the website copies.",
           "Documentation search opens from its named button. The site does not intercept Command-K or Control-K. Keyboard navigation within the search dialog and Escape-to-close remain available."
         ]
       }
@@ -500,14 +500,14 @@
         "title": "Configure before publication",
         "paragraphs": [
           "Edit apps/web/lib/site.ts for public identity and the preferred design. The selected design is Zorin / Horizon; /concepts/windows/ and /concepts/vercel/ remain alternatives. The canonical project URL is https://openxplorer.app.",
-          "The public source repository is https://github.com/AKolenda/openxplorer-public. Website calls to action link there instead of serving installer, source archive or checksum downloads from the website host. Keep the repository public whenever the website links to it."
+          "The public source repository is https://github.com/AKolenda/openxplorer. Package calls to action link to https://github.com/AKolenda/openxplorer/releases. Source links lead to the repository. The website has no direct download links. Keep the repository public whenever the website links to it."
         ]
       },
       {
         "id": "source",
         "title": "Prepare a local release",
         "paragraphs": [
-          "The release tool creates and verifies a local Debian package, corresponding-source archive and checksums under dist/. It also removes any legacy website download directories. The website itself carries no release binaries; its source and install calls to action lead to the public GitHub repository."
+          "The release tool creates and verifies a local Debian package, corresponding-source archive and checksums under dist/. It also removes any legacy website download directories. The website itself carries no release binaries; its source links lead to the public GitHub repository and its package links lead to GitHub Releases."
         ],
         "code": "pnpm check\npnpm audit --audit-level=moderate\npnpm designs\npnpm release\npython3 tools/audit-public-data.py\npnpm build"
       },
@@ -578,7 +578,7 @@
         "id": "contact",
         "title": "Project identity before publication",
         "paragraphs": [
-          "The canonical project domain is openxplorer.app and the public source repository is https://github.com/AKolenda/openxplorer-public. The website does not host release downloads. Use genuine maintainer/contact details when they are added and do not fabricate usage statistics or support claims."
+          "The canonical project domain is openxplorer.app and the public source repository is https://github.com/AKolenda/openxplorer. The website does not host release downloads. Use genuine maintainer/contact details when they are added and do not fabricate usage statistics or support claims."
         ]
       }
     ]

@@ -8,7 +8,8 @@ export const site = {
   title: 'OpenXplorer — A familiar file manager for Linux',
   description: 'Browse local files and SMB shares, drag files into compatible apps, and keep folders close with tabs and pins. An open-source Linux file manager built for Zorin OS.',
   license: 'AGPL-3.0-only',
-  repository: 'https://github.com/AKolenda/openxplorer-public',
+  repository: 'https://github.com/AKolenda/openxplorer',
+  releases: 'https://github.com/AKolenda/openxplorer/releases',
   defaultDesign: 'zorin' as 'vercel' | 'windows' | 'zorin',
 };
 export type Vibe = 'windows' | 'zorin' | 'vercel';

@@ -58,7 +58,7 @@ pnpm designs
 
 ## Documentation as Markdown
 
-Copy page as Markdown copies the full guide, including headings, paragraphs, code blocks, callouts and screenshot references—not a link or rendered HTML. Each guide also has a downloadable .md file. The content source is apps/web/lib/docs.json; tools/sync-docs.py regenerates repository documentation and the website copies.
+Copy page as Markdown copies the full guide, including headings, paragraphs, code blocks, callouts and screenshot references—not a link or rendered HTML. The content source is apps/web/lib/docs.json; tools/sync-docs.py regenerates repository documentation and the website copies.
 
 Documentation search opens from its named button. The site does not intercept Command-K or Control-K. Keyboard navigation within the search dialog and Escape-to-close remain available.
 

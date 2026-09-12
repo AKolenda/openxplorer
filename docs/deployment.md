@@ -6,11 +6,11 @@ Publish a static site linked to its public source repository.
 
 Edit apps/web/lib/site.ts for public identity and the preferred design. The selected design is Zorin / Horizon; /concepts/windows/ and /concepts/vercel/ remain alternatives. The canonical project URL is https://openxplorer.app.
 
-The public source repository is https://github.com/AKolenda/openxplorer-public. Website calls to action link there instead of serving installer, source archive or checksum downloads from the website host. Keep the repository public whenever the website links to it.
+The public source repository is https://github.com/AKolenda/openxplorer. Package calls to action link to https://github.com/AKolenda/openxplorer/releases. Source links lead to the repository. The website has no direct download links. Keep the repository public whenever the website links to it.
 
 ## Prepare a local release
 
-The release tool creates and verifies a local Debian package, corresponding-source archive and checksums under dist/. It also removes any legacy website download directories. The website itself carries no release binaries; its source and install calls to action lead to the public GitHub repository.
+The release tool creates and verifies a local Debian package, corresponding-source archive and checksums under dist/. It also removes any legacy website download directories. The website itself carries no release binaries; its source links lead to the public GitHub repository and its package links lead to GitHub Releases.
 
 ```sh
 pnpm check

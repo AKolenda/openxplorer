@@ -62,7 +62,7 @@ def main():
             check('Hero screenshot loads eagerly at high priority',
                   page.locator('.product-hero-image img').get_attribute('loading')=='eager' and
                   page.locator('.product-hero-image img').get_attribute('fetchpriority')=='high')
-            check('Header links to the public repository',page.locator('.header-download').get_attribute('href')=='https://github.com/AKolenda/openxplorer-public')
+            check('Header links to the public repository',page.locator('.header-download').get_attribute('href')=='https://github.com/AKolenda/openxplorer/releases')
             check('Native file dragging links to its compatibility guide',page.locator('.bento-pins a[href="/docs/interface/#file-drag-drop"]').count()==1)
             page.locator('[data-search-open]').click()
             page.locator('#docs-search-input').fill('drag')
@@ -91,7 +91,7 @@ def main():
             check('Documentation release label fits its sidebar',page.locator('.docs-label').evaluate('(e)=>e.scrollWidth<=e.clientWidth'))
             page.goto(base+'/source/')
             check('Source page omits maintainer-only configuration instructions','apps/web/lib/site.ts' not in page.locator('main').inner_text())
-            check('Source page links to the public GitHub repository',page.locator('main a[href="https://github.com/AKolenda/openxplorer-public"]').count()==1)
+            check('Source page links to the public GitHub repository',page.locator('main a[href="https://github.com/AKolenda/openxplorer"]').count()==1)
             page.goto(base+'/concepts/')
             check('Design alternatives are excluded from indexing','noindex' in page.locator('meta[name=robots]').get_attribute('content'))
             check('No production JavaScript or React hydration errors',not errors)
