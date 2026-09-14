@@ -1,10 +1,13 @@
-# Stable 1.0 release checklist
+# 1.0 release checklist
 
-**Current status: 1.0.0-rc.4. Not approved as production 1.0.** A built Debian
-package, source inspection and simulated browser checks are useful evidence,
-but do not prove native compatibility or the absence of vulnerabilities.
+**Current status: 1.0.0 published as a stable release on 2026-09-13.** A built
+Debian package, source inspection and simulated browser checks are useful
+evidence, but do not prove native compatibility or the absence of
+vulnerabilities. Treat the gates below as the standing per-release list: the
+website and packaging gates run in CI and locally, while the native desktop
+gate stays an owner task on real Zorin hardware.
 
-## Website dependency gate (blocked in this build environment)
+## Website dependency gate
 
 On a connected development machine with the pinned pnpm:
 
@@ -26,7 +29,7 @@ exported routes, demo sandbox, mobile docs, real download/source links and host
 security headers. CI and Vercel deliberately require a lockfile. Pin CI actions
 to reviewed immutable commits before enabling a privileged release workflow.
 
-## Native desktop gate (not run here)
+## Native desktop gate (owner task on real hardware)
 
 On Zorin under the intended Wayland session, then X11 where supported:
 
@@ -53,13 +56,15 @@ On Zorin under the intended Wayland session, then X11 where supported:
 
 ## Publication gate (owner action required)
 
-Set a genuine maintainer contact in desktop package metadata and SECURITY.md;
-enable private vulnerability reporting in the real repository. Add the actual
+Private vulnerability reporting is enabled on the GitHub repository and
+SECURITY.md links to it. The Debian `Maintainer` field still carries a
+placeholder address; replace it with a monitored contact. Add the actual
 repository/source URL. Choose supported/tested distro versions and publish
 checksums via a trusted channel; checksums alone are not a signature. Create a
 signing/release process without embedding keys in the repo. Re-run current
 upstream advisories/system package updates before signing.
 
-Once these gates pass, change semantic and Debian versions to `1.0.0`, rebuild,
-verify source correspondence, and release stable. Do not present this checklist
-or a limited source sweep as independent security certification.
+Semantic and Debian versions are `1.0.0`. For each later release, bump both,
+rebuild, verify source correspondence, and publish the installer, the
+corresponding-source archive and `SHA256SUMS` together. Do not present this
+checklist or a limited source sweep as independent security certification.

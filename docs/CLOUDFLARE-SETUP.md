@@ -107,4 +107,4 @@ Restart the coding agent after registration to load newly configured servers.
 Keep all account credentials, local logs and `.wrangler` state out of Git and
 the corresponding-source archive. Consult the [public-release checklist](PUBLIC-RELEASE-CHECKLIST.md)
 for source review and the [native roadmap](NATIVE-EXPERIENCE-ROADMAP.md) for
-remaining desktop work. Hosting a release candidate does not mark it stable.
+remaining desktop work. Hosting the website is not desktop validation.
