@@ -14,8 +14,8 @@ import tempfile
 import threading
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
-VERSION = '1.0.0-rc.4'
-DEBIAN_VERSION = '1.0.0~rc4'
+VERSION = '1.0.0'
+DEBIAN_VERSION = '1.0.0'
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
 
 

@@ -1,3 +1,17 @@
+# 1.0.0
+
+First stable release. The application code is the release-candidate code with the
+candidate labelling removed: semantic and Debian versions are both `1.0.0`, so
+`apt` upgrades an installed `1.0.0~rc4` normally.
+
+- Publish 1.0.0 as a stable AppStream release entry instead of a development one.
+- Ship the installer, corresponding-source archive and `SHA256SUMS` together on
+  GitHub Releases; the package is still unsigned and not an APT repository.
+- Keep every desktop change opt-in: installation does not alter file-manager
+  defaults, browser preferences, folder locations or mounts.
+- Native Zorin/Wayland, live SMB and installed-app interoperability remain
+  environment-specific checks, as documented in docs/RELEASE-CHECKLIST.md.
+
 # 1.0.0-rc.4
 
 - Add native file dragging to compatible external apps with multiple selection,

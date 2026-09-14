@@ -65,7 +65,7 @@ def main() -> int:
             ready('file:///home/demo')
             check('Home starts at the real demo home URI', uri() == 'file:///home/demo')
             check('Home lists standard directories', row('Downloads').count() == 1 and row('Documents').count() == 1)
-            check('Release label is 1.0.0-rc.4', '1.0.0-rc.4' in page.locator('#status-mode').inner_text())
+            check('Release label is 1.0.0', '1.0.0' in page.locator('#status-mode').inner_text())
             check('Dark appearance is available', page.locator('html').get_attribute('data-theme') == 'dark')
             page.locator('#theme-toggle').click()
             page.get_by_role('menuitem', name='Light appearance', exact=True).click()

@@ -1,6 +1,6 @@
 # Security and data-safety notes
 
-Development build: test with disposable files and a non-critical SMB share.
+Stable release: still test with disposable files and a non-critical SMB share first.
 Do not treat testing with mocks or browser fixtures as a filesystem safety audit.
 
 The native UI is a local, ephemeral WebKit context, with a restrictive content

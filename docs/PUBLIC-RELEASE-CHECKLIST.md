@@ -1,6 +1,6 @@
 # Publishing the source repository
 
-This checklist covers publishing reviewable source and keeping website links synchronized with the public repository. It does not change the release candidate into stable 1.0; the separate [stable-release checklist](RELEASE-CHECKLIST.md) covers target-machine validation.
+This checklist covers publishing reviewable source and keeping website links synchronized with the public repository. Publishing source is not by itself target-machine validation; the separate [release checklist](RELEASE-CHECKLIST.md) covers that.
 
 ## Review the source snapshot
 

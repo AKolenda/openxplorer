@@ -47,4 +47,4 @@ Finish operations and close files on the server first. Sign out can disconnect m
 
 ---
 
-OpenXplorer 1.0.0-rc.4. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.0.0. Project-authored documentation: AGPL-3.0-only.

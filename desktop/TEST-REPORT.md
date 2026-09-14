@@ -1,3 +1,35 @@
+# OpenXplorer 1.0.0 — executed checks
+
+## 2026-09-13 stable 1.0.0 release run
+
+Executed on Zorin OS 18.1 (Python 3.12, Node 24) for the 1.0.0 version change. The
+sections below are retained records of earlier runs, not tests rerun today.
+
+| Check run for this release | Result | Scope |
+|---|---|---|
+| Python regression suite | 542 passed | Desktop logic with disposable local files and explicit desktop-library doubles. |
+| JavaScript unit runner | 74 passed | Selector, snapshot, text-size and helper tests. |
+| Application browser suites | 364 passed | Actual application HTML in Chromium: release 68, type-to-select 61, v06 65, v07 53, mouse/middle-click 29, file-drag contract 30, terminal 19, two-window transfer contract 28, UI/native contract 11. Simulated filesystem and desktop transport. |
+| Standalone website suite | 103 passed | Generated shared HTML, Markdown copying and relative links. |
+| Production export browser suite | 47 passed | HTTP-served static export, hydration, docs label now reading `1.0.0`, canonical metadata. |
+| Mobile/docs/date suite | 162 passed | Chromium narrow viewports; no physical-device claim. |
+| Website TypeScript check | Passed | `pnpm check`, dependency-aware `tsc --noEmit`. |
+| Next.js production build | Passed | `pnpm build`, 21 generated static pages. |
+| Website syntax transpilation | 16 files passed | Syntax only. |
+| Corresponding-source exclusion tests | 9 passed | Disposable trees, symlinks, credential/cache exclusions. |
+| Project source security checker | 20 passed | Project invariants, not an independent audit. |
+| Package build and verification | 52 passed | `openxplorer_1.0.0_all.deb`: control version `1.0.0`, stable AppStream release entry, packaged bytes matching source; no installation. |
+| Public-data audit | Passed | Rebuilt installer, source archive and regenerated captures; no private denylist configured. |
+| Screenshot regeneration | 7 product + 2 website stills | Recaptured from the actual UI so published images show `1.0.0`, not the candidate label. |
+
+Not run here: native GTK/WebKit tab and file transport suites, which need an
+isolated X server, plus native Zorin/Wayland, live SMB and installed-application
+interoperability. GitHub Actions runs the GTK/WebKit transport jobs on the pull
+request; the remaining items stay environment-specific checks for the installing
+user, as listed in [the release checklist](../docs/RELEASE-CHECKLIST.md).
+
+---
+
 # File interaction update — executed checks
 
 Date: 2026-09-11. This section covers the current drag/clipboard changes. The

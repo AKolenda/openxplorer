@@ -28,4 +28,4 @@ The canonical project domain is openxplorer.app and the public source repository
 
 ---
 
-OpenXplorer 1.0.0-rc.4. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.0.0. Project-authored documentation: AGPL-3.0-only.

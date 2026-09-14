@@ -8,7 +8,7 @@ from desktop_integration import APP_ID
 from reveal_integration import MARKER, SERVICE, AUTOSTART
 ROOT=Path(__file__).resolve().parents[1]
 class RebrandTests(unittest.TestCase):
-    def test_version(self):self.assertEqual(VERSION,'1.0.0-rc.4')
+    def test_version(self):self.assertEqual(VERSION,'1.0.0')
     def test_desktop_id_retained(self):self.assertEqual(APP_ID,'io.winspace.Development.desktop')
     def test_marker_retained(self):self.assertEqual(MARKER,'# Managed by Winspace: file-manager-integration v1\n')
     def test_previous_service_exact(self):self.assertEqual(SERVICE,MARKER+'[D-BUS Service]\nName=org.freedesktop.FileManager1\nExec=/usr/bin/winspace --filemanager-service\n')

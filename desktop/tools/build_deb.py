@@ -196,12 +196,13 @@ Maintainer: OpenXplorer contributors <maintainer@example.invalid>
 Installed-Size: {installed}
 Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1 (>= 2.40), gir1.2-secret-1, gvfs-backends, gvfs-fuse, xdg-utils, xdg-user-dirs, desktop-file-utils, hicolor-icon-theme
 Recommends: cifs-utils, file-roller, gnome-terminal | x-terminal-emulator
-Description: Explorer-style local and SMB file manager development preview
+Description: Explorer-style local and SMB file manager
  GTK/WebKitGTK interface with GIO/GVfs filesystem access, shared clipboard,
  session credentials, MIME-based opening, indexed search and local watches.
  Includes Properties, standard-folder locations, ZIP browsing and extraction.
  Free software licensed under AGPL-3.0-only; project: https://openxplorer.app.
- This is a development build; native integration needs on-device validation.
+ First stable release; developed for Zorin OS, with Ubuntu and Debian as
+ secondary compatibility targets.
  No default associations or system mounts change during installation.
 ''')
         for name in ('postinst', 'postrm'):

@@ -14,7 +14,7 @@ Browse local folders and SMB shares with tabs, clickable paths, pinned folders, 
 
 Get the Debian package from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases), then follow the [installation guide](docs/installation.md). Finish file operations and run `openxplorer --quit` before upgrading.
 
-Version **1.0.0-rc.4** is a release candidate. See the [update notes](docs/UPDATE-RC4.md), [test report](TEST-REPORT.md) and [release checklist](docs/RELEASE-CHECKLIST.md) for validation limits. File-manager defaults, browser settings, folder relocation and mount setup remain opt-in.
+Version **1.0.0** is the first stable release. See the [changelog](desktop/CHANGELOG.md), [test report](TEST-REPORT.md) and [release checklist](docs/RELEASE-CHECKLIST.md) for what was verified and what stays your own environment's responsibility. File-manager defaults, browser settings, folder relocation and mount setup remain opt-in.
 
 ## Develop
 

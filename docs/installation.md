@@ -1,6 +1,6 @@
 # Installation
 
-Install the development build without replacing your desktop.
+Install the stable release without replacing your desktop.
 
 ## Requirements
 
@@ -14,12 +14,12 @@ Close every old Winspace/OpenXplorer window and finish file operations. Download
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_1.0.0~rc4_all.deb
+sudo apt install ./openxplorer_1.0.0_all.deb
 openxplorer --check
 openxplorer
 ```
 
-> This is a local unsigned development package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts.
+> This is a local unsigned package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts.
 
 ## Upgrading from Winspace
 
@@ -56,4 +56,4 @@ A signed repository with a pre-indexed AppStream catalog can supply that informa
 
 ---
 
-OpenXplorer 1.0.0-rc.4. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.0.0. Project-authored documentation: AGPL-3.0-only.

@@ -48,10 +48,10 @@ Run browser checks against the actual HTTP-served Next.js export. Test hydration
 
 The application preview is embedded in an iframe with only allow-scripts; it has an opaque sandbox origin. The tour bridge accepts only fixed demo commands from its parent window. The page checks message sources before showing status. The preview’s CSP blocks network requests. Never replace this with a native credential or filesystem bridge.
 
-## Release-candidate launch checks
+## Release launch checks
 
-Dependency installation, pnpm check, the real pnpm build and production-export browser checks have passed. A dedicated Wrangler OAuth profile can deploy this site independently of the default login. Verify the current domain and deployment status before announcing a release. See TEST-REPORT.md for executed checks and docs/PUBLIC-RELEASE-CHECKLIST.md for source-publication preparation. The release candidate still has separate native target-machine checks before stable 1.0.
+Dependency installation, pnpm check, the real pnpm build and production-export browser checks have passed. A dedicated Wrangler OAuth profile can deploy this site independently of the default login. Verify the current domain and deployment status before announcing a release. See TEST-REPORT.md for executed checks and docs/PUBLIC-RELEASE-CHECKLIST.md for source-publication preparation. Stable 1.0.0 is published on GitHub Releases; re-run these checks before each new release.
 
 ---
 
-OpenXplorer 1.0.0-rc.4. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.0.0. Project-authored documentation: AGPL-3.0-only.

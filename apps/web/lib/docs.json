@@ -40,7 +40,7 @@
         "id": "release-status",
         "title": "Know what you are installing",
         "paragraphs": [
-          "Version 1.0.0-rc.4 is a release candidate. Native desktop tests and an audited, locked Next.js build must pass before stable 1.0. It is not Microsoft File Explorer, a complete Everything replacement, or a certified Windows compatibility layer. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration."
+          "Version 1.0.0 is the first stable release. It is not Microsoft File Explorer, a complete Everything replacement, or a certified Windows compatibility layer. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration."
         ],
         "callout": "Use a disposable folder and a non-critical share first. Native Zorin/WebKit, live NAS access, keyring behavior, and browser/portal integration have not been validated in the release environment."
       },
@@ -57,7 +57,7 @@
     "slug": "installation",
     "title": "Installation",
     "group": "Get started",
-    "description": "Install the development build without replacing your desktop.",
+    "description": "Install the stable release without replacing your desktop.",
     "sections": [
       {
         "id": "requirements",
@@ -73,8 +73,8 @@
         "paragraphs": [
           "Close every old Winspace/OpenXplorer window and finish file operations. Download the .deb, then run these commands from that download directory as your normal user."
         ],
-        "code": "sudo apt update\nsudo apt install ./openxplorer_1.0.0~rc4_all.deb\nopenxplorer --check\nopenxplorer",
-        "callout": "This is a local unsigned development package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts."
+        "code": "sudo apt update\nsudo apt install ./openxplorer_1.0.0_all.deb\nopenxplorer --check\nopenxplorer",
+        "callout": "This is a local unsigned package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts."
       },
       {
         "id": "upgrade",
@@ -209,7 +209,7 @@
         "id": "limits",
         "title": "Coverage and limits",
         "paragraphs": [
-          "The development implementation limits an initial root scan to one million entries, watches up to 8,192 local directories, and uses timed fallback beyond watch coverage. Search displays the first 500 matches and indicates truncation. System/temporary trees, snapshot collections, links and nested mounts are excluded from whole-disk traversal."
+          "The current implementation limits an initial root scan to one million entries, watches up to 8,192 local directories, and uses timed fallback beyond watch coverage. Search displays the first 500 matches and indicates truncation. System/temporary trees, snapshot collections, links and nested mounts are excluded from whole-disk traversal."
         ]
       },
       {
@@ -454,7 +454,7 @@
           "The website remains a Next.js static export. pnpm build writes apps/web/out, and pnpm check performs dependency-aware TypeScript checking. Cloudflare Workers Static Assets serves that export without a framework migration or application backend. The offline preview renderer does not exercise the Next.js runtime.",
           "The native experience roadmap and public source checklist are in docs/NATIVE-EXPERIENCE-ROADMAP.md and docs/PUBLIC-RELEASE-CHECKLIST.md. They distinguish remaining desktop work, source-publication preparation and stable-release validation."
         ],
-        "code": "pnpm check\npnpm build\npnpm preview\n\n# Desktop package (Debian-family build host)\npython3 desktop/tools/build_deb.py\npython3 desktop/tools/verify_deb.py desktop/dist/openxplorer_1.0.0~rc4_all.deb"
+        "code": "pnpm check\npnpm build\npnpm preview\n\n# Desktop package (Debian-family build host)\npython3 desktop/tools/build_deb.py\npython3 desktop/tools/verify_deb.py desktop/dist/openxplorer_1.0.0_all.deb"
       },
       {
         "id": "contribute",
@@ -531,9 +531,9 @@
       },
       {
         "id": "status",
-        "title": "Release-candidate launch checks",
+        "title": "Release launch checks",
         "paragraphs": [
-          "Dependency installation, pnpm check, the real pnpm build and production-export browser checks have passed. A dedicated Wrangler OAuth profile can deploy this site independently of the default login. Verify the current domain and deployment status before announcing a release. See TEST-REPORT.md for executed checks and docs/PUBLIC-RELEASE-CHECKLIST.md for source-publication preparation. The release candidate still has separate native target-machine checks before stable 1.0."
+          "Dependency installation, pnpm check, the real pnpm build and production-export browser checks have passed. A dedicated Wrangler OAuth profile can deploy this site independently of the default login. Verify the current domain and deployment status before announcing a release. See TEST-REPORT.md for executed checks and docs/PUBLIC-RELEASE-CHECKLIST.md for source-publication preparation. Stable 1.0.0 is published on GitHub Releases; re-run these checks before each new release."
         ]
       }
     ]

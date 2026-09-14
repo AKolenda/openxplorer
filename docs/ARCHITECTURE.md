@@ -35,9 +35,9 @@ a real, locked install.
 source, then stages matching downloads for the website. It never installs the
 app, changes desktop defaults, modifies Brave or mounts a network share.
 
-Keep common versions while the project is small. Debian uses `1.0.0~rc4` for
-this prerelease so that final `1.0.0` upgrades it normally. UI, source and website
-use semantic version `1.0.0-rc.4`. Stable internal Winspace IDs/paths remain for
+Keep common versions while the project is small. Debian and semantic versions are
+both `1.0.0` for this stable release; the earlier `1.0.0~rc4` prerelease sorts
+below it, so `apt` upgrades a candidate installation normally. Stable internal Winspace IDs/paths remain for
 compatibility. A website-only deployment can reuse the current desktop package.
 
 ## Ownership and contribution
