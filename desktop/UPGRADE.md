@@ -1,8 +1,8 @@
-# OpenXplorer 1.0.0-rc.4 — tabs and desktop routing
+# OpenXplorer 1.0.0 — tabs and desktop routing
 
 This release fixes missing tab reattachment and distinguishes ZIP opening from
-folder/SMB defaults and browser file-reveal integration. It remains a release
-candidate. Changes to desktop settings are explicit and reversible.
+folder/SMB defaults and browser file-reveal integration. It is the first stable
+release. Changes to desktop settings are explicit and reversible.
 
 ## Upgrade
 
@@ -10,7 +10,7 @@ Finish active file operations first. Install the new package, then restart the
 old background process using the new launcher:
 
 ```sh
-sudo apt install './openxplorer_1.0.0~rc4_all.deb'
+sudo apt install './openxplorer_1.0.0_all.deb'
 openxplorer --restart
 ```
 

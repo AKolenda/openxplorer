@@ -85,7 +85,7 @@ def main() -> int:
         try:
             page.set_content((ROOT/'preview.html').read_text(), wait_until='load')
             ready('file:///home/demo')
-            check('UI starts with 1.0.0-rc.4 label', '1.0.0-rc.4' in page.locator('#status-mode').inner_text())
+            check('UI starts with 1.0.0 label', '1.0.0' in page.locator('#status-mode').inner_text())
             check('No jump indicator is displayed until typing', hints_hidden())
             navigate('smb://studio-nas/')
             select('Backups')

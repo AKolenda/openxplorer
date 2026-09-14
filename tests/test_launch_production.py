@@ -87,7 +87,7 @@ def main():
             check('Mobile menu Escape restores focus',page.locator('[data-menu-toggle]').evaluate('(e)=>document.activeElement===e'))
             page.set_viewport_size({'width':1440,'height':1000})
             page.wait_for_timeout(150)
-            check('Documentation displays the current release',page.locator('.docs-label code').inner_text()=='1.0.0-rc.4')
+            check('Documentation displays the current release',page.locator('.docs-label code').inner_text()=='1.0.0')
             check('Documentation release label fits its sidebar',page.locator('.docs-label').evaluate('(e)=>e.scrollWidth<=e.clientWidth'))
             page.goto(base+'/source/')
             check('Source page omits maintainer-only configuration instructions','apps/web/lib/site.ts' not in page.locator('main').inner_text())

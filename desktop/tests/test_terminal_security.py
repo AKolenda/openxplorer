@@ -226,10 +226,12 @@ class AdditionalSecurityTests(Temporary):
         # /tmp is world-writable even when all child directories look private.
         directory=self.root/'owned';directory.mkdir(mode=0o700)
         with self.assertRaises(ValueError):secure_dir(directory,0o700)
-    def test_debian_candidate_sorts_before_final(self):
+    def test_stable_version_upgrades_candidates(self):
         import subprocess
-        self.assertEqual(VERSION,'1.0.0-rc.4')
-        subprocess.run(['dpkg','--compare-versions',DEBIAN_VERSION,'lt','1.0.0'],check=True)
+        self.assertEqual(VERSION,'1.0.0')
+        self.assertEqual(DEBIAN_VERSION,'1.0.0')
+        # apt must treat the stable package as an upgrade over every candidate.
+        subprocess.run(['dpkg','--compare-versions',DEBIAN_VERSION,'gt','1.0.0~rc4'],check=True)
         subprocess.run(['dpkg','--compare-versions',DEBIAN_VERSION,'gt','0.9.3'],check=True)
 
 

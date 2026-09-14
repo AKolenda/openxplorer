@@ -8,7 +8,11 @@ checks, **not an independent penetration test or a vulnerability-free guarantee*
 
 ## Decision
 
-Keep the combined monorepo. Deliver a 1.0 release candidate, not stable 1.0.
+> Status update, 2026-09-13: stable **1.0.0** was published from this code with the
+> rc.4 fixes. The review below is unchanged and still describes what was and was
+> not examined; publishing stable did not add native target-machine validation.
+
+Keep the combined monorepo.
 No known unfixed application-level exploit was demonstrated in the reviewed
 paths. That is not a claim that none exist: transitive dependencies, the full
 native runtime and real deployment remain unverified. See RELEASE-CHECKLIST.md.

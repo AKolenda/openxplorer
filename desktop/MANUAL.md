@@ -1,8 +1,8 @@
-# OpenXplorer 1.0.0-rc.4
+# OpenXplorer 1.0.0
 
 Explorer-style file manager for Zorin, with a Python GTK3/WebKitGTK host and a
 local HTML/CSS/JavaScript interface. GIO/GVfs provides filesystem and SMB access.
-This is a development build, not a production-certified Explorer replacement.
+This is the first stable release, not a production-certified Explorer replacement.
 
 The source archive contains all application source, the interface, tests,
 packaging/verification tools, this documentation, an offline preview, and the
@@ -34,7 +34,7 @@ In the folder containing the downloaded package:
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_1.0.0~rc4_all.deb
+sudo apt install ./openxplorer_1.0.0_all.deb
 openxplorer --check
 openxplorer
 ```
@@ -42,7 +42,7 @@ openxplorer
 From the extracted source directory, the package is under `dist/` instead:
 
 ```sh
-sudo apt install ./dist/openxplorer_1.0.0~rc4_all.deb
+sudo apt install ./dist/openxplorer_1.0.0_all.deb
 ```
 
 Do not launch the graphical application with sudo. The package uses the same
@@ -289,7 +289,7 @@ From this directory on Debian/Ubuntu/Zorin:
 ```sh
 python3 tools/build_preview.py
 python3 tools/build_deb.py
-python3 tools/verify_deb.py dist/openxplorer_1.0.0~rc4_all.deb
+python3 tools/verify_deb.py dist/openxplorer_1.0.0_all.deb
 ```
 
 Only Python 3.10+ and `dpkg-deb` are required for packaging. Optional CairoSVG
@@ -351,7 +351,7 @@ AGPL-3.0-only; see LICENSE and licenses/Winspace-MIT.txt for preserved upstream 
 NAS content or distribution native libraries are included.
 
 
-## ZIP extraction and text size (1.0.0-rc.4)
+## ZIP extraction and text size (1.0.0)
 
 Right-click a ZIP → Extract all…; choose a destination and new folder name. Existing names are never replaced. Progress and Cancel appear in the transfer panel. Double-click browsing stays read-only. Sign into SMB source/destination shares first. See [upgrade notes](UPGRADE.md) for limits and failure recovery.
 
