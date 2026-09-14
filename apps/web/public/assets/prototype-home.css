@@ -33,9 +33,6 @@
 .proto-a .a-chapter h2{max-width:var(--measure)}
 .proto-a .a-chapter .measure p{font-size:17px;line-height:1.75;color:var(--muted)}
 .proto-a .a-addresses{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;max-width:100%}
-.proto-a .a-points{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--gap) 40px}
-.proto-a .a-points strong{display:block;font-size:15px;margin-bottom:6px}
-.proto-a .a-points p{font-size:14px;line-height:1.65;color:var(--muted)}
 .proto-a .a-end{padding-block:88px 96px;border-top:1px solid var(--line)}
 .proto-a .a-end h2{margin-bottom:18px}
 .proto-a .a-end p{font-size:17px;line-height:1.75;color:var(--muted)}
@@ -103,7 +100,6 @@
 /* Responsive: everything stacks; the shell keeps its gutter */
 @media(max-width:959px){
  .proto-a .a-chapter{padding-block:56px;row-gap:28px}
- .proto-a .a-points{grid-template-columns:1fr}
  .proto-b .b-layout{grid-template-columns:1fr;row-gap:48px}.proto-b .b-rail{position:static}
  .proto-c .c-hero-inner{grid-template-columns:1fr}.proto-c .c-hero .proto-cta{margin-bottom:40px}
  .proto-c .c-smb{grid-template-columns:1fr}
