@@ -25,19 +25,19 @@
 .proto-address svg:first-child{color:#2eaf72}
 
 /* A · Ledger */
-.proto-a .a-hero{text-align:center;padding-block:96px 40px}
+.proto-a .a-hero{text-align:center;padding-block:76px 40px}
 .proto-a .a-hero .lede{margin-inline:auto}
-.proto-a .a-hero h1{margin-inline:auto}
+.proto-a .a-hero h1{margin-inline:auto;margin-bottom:22px}
 .proto-a .a-shot{padding-block:24px 48px}
-.proto-a .a-chapter{display:grid;grid-template-columns:72px minmax(0,1fr);column-gap:var(--gap);row-gap:32px;padding-block:72px;border-top:1px solid var(--line)}
-.proto-a .a-chapter>*{grid-column:2}
-.proto-a .a-num{grid-column:1;grid-row:1;font-family:Consolas,monospace;font-size:14px;color:var(--blue);padding-top:8px;letter-spacing:.08em}
+.proto-a .a-chapter{display:grid;grid-template-columns:minmax(0,1fr);row-gap:36px;padding-block:88px;border-top:1px solid var(--line)}
+.proto-a .a-chapter h2{max-width:var(--measure)}
 .proto-a .a-chapter .measure p{font-size:17px;line-height:1.75;color:var(--muted)}
 .proto-a .a-addresses{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;max-width:100%}
 .proto-a .a-points{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--gap) 40px}
 .proto-a .a-points strong{display:block;font-size:15px;margin-bottom:6px}
 .proto-a .a-points p{font-size:14px;line-height:1.65;color:var(--muted)}
-.proto-a .a-end{padding-block:80px 96px;border-top:1px solid var(--line)}
+.proto-a .a-end{padding-block:88px 96px;border-top:1px solid var(--line)}
+.proto-a .a-end h2{margin-bottom:18px}
 .proto-a .a-end p{font-size:17px;line-height:1.75;color:var(--muted)}
 
 /* B · Workbench */
@@ -102,7 +102,7 @@
 
 /* Responsive: everything stacks; the shell keeps its gutter */
 @media(max-width:959px){
- .proto-a .a-chapter{grid-template-columns:1fr}.proto-a .a-chapter>*{grid-column:1}.proto-a .a-num{grid-row:auto}
+ .proto-a .a-chapter{padding-block:56px;row-gap:28px}
  .proto-a .a-points{grid-template-columns:1fr}
  .proto-b .b-layout{grid-template-columns:1fr;row-gap:48px}.proto-b .b-rail{position:static}
  .proto-c .c-hero-inner{grid-template-columns:1fr}.proto-c .c-hero .proto-cta{margin-bottom:40px}
