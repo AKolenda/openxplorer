@@ -52,6 +52,13 @@ class GioLocalIntegration(unittest.TestCase):
         self.assertEqual(result.errors, [])
         self.assertEqual((dest/'payload.txt').read_text(), 'old')
         self.assertEqual((dest/'payload (copy 2).txt').read_text(), 'new')
+    def test_replace_existing_file(self):
+        src=self.root/'payload.txt';src.write_text('new')
+        dest=self.root/'dest';dest.mkdir();(dest/'payload.txt').write_text('old')
+        result=TransferEngine(GioNode).run('copy',[src.as_uri()],dest.as_uri(),'replace',self.cancel)
+        self.assertEqual(result.errors, [])
+        self.assertEqual((dest/'payload.txt').read_text(), 'new')
+        self.assertEqual(src.read_text(), 'new')
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

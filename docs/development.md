@@ -33,7 +33,7 @@ pnpm preview
 
 # Desktop package (Debian-family build host)
 python3 desktop/tools/build_deb.py
-python3 desktop/tools/verify_deb.py desktop/dist/openxplorer_1.0.0_all.deb
+python3 desktop/tools/verify_deb.py desktop/dist/openxplorer_1.0.2_all.deb
 ```
 
 ## Make a focused contribution
@@ -64,4 +64,4 @@ Documentation search opens from its named button. The site does not intercept Co
 
 ---
 
-OpenXplorer 1.0.0. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.0.2. Project-authored documentation: AGPL-3.0-only.

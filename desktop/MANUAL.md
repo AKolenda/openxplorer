@@ -1,8 +1,9 @@
-# OpenXplorer 1.0.0
+# OpenXplorer 1.0.2
 
 Explorer-style file manager for Zorin, with a Python GTK3/WebKitGTK host and a
-local HTML/CSS/JavaScript interface. GIO/GVfs provides filesystem and SMB access.
-This is the first stable release, not a production-certified Explorer replacement.
+local HTML/CSS/JavaScript interface. GIO/GVfs provides filesystem, SMB and
+connected-device access. This is a maintenance release, not a
+production-certified Explorer replacement.
 
 The source archive contains all application source, the interface, tests,
 packaging/verification tools, this documentation, an offline preview, and the
@@ -34,7 +35,7 @@ In the folder containing the downloaded package:
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_1.0.0_all.deb
+sudo apt install ./openxplorer_1.0.2_all.deb
 openxplorer --check
 openxplorer
 ```
@@ -42,7 +43,7 @@ openxplorer
 From the extracted source directory, the package is under `dist/` instead:
 
 ```sh
-sudo apt install ./dist/openxplorer_1.0.0_all.deb
+sudo apt install ./dist/openxplorer_1.0.2_all.deb
 ```
 
 Do not launch the graphical application with sudo. The package uses the same
@@ -81,6 +82,9 @@ errors. Include that output when diagnosing a failure; do not include passwords.
   folder Location settings, New file and real document templates.
 * SMB bookmarks, pointer-based sidebar pinning/reordering, a green network icon
   marker, network discovery through available GVfs providers, and server sign-out.
+* Connected Android and iPhone locations exposed by GVfs appear under This PC.
+  Unlock the phone and select file transfer or trust the computer when prompted.
+  OpenXplorer does not mount, probe or index a phone automatically.
 * In-app network credentials. Checked Remember requests permanent keyring storage;
   unchecked requests session-only credentials, reusable across shares on the
   same server/port. Successful credentials are reused, not rejected attempts.
@@ -257,8 +261,10 @@ valid Office/PDF document. Templates are copied, not executed.
 Select files or folders (Ctrl-click or Shift-click for multiple items), then drag
 them into an application that accepts native file drops. Escape cancels.
 Drop into an OpenXplorer folder or another window to confirm a copy using
-Skip duplicates or Keep both. Quick access drops pin/reorder folders. No file
-drop asks the source application to delete anything.
+**Replace existing** or **Skip duplicates**. Replacement begins after the new
+file is staged; same-name folders merge and retain destination-only files.
+Quick access drops pin/reorder folders. No file drop asks the source application
+to delete anything.
 
 ZIP contents must be extracted first. Network files are exported using an
 already-mounted local path where available; applications without SMB URI support
@@ -289,7 +295,7 @@ From this directory on Debian/Ubuntu/Zorin:
 ```sh
 python3 tools/build_preview.py
 python3 tools/build_deb.py
-python3 tools/verify_deb.py dist/openxplorer_1.0.0_all.deb
+python3 tools/verify_deb.py dist/openxplorer_1.0.2_all.deb
 ```
 
 Only Python 3.10+ and `dpkg-deb` are required for packaging. Optional CairoSVG

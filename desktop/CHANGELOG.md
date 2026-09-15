@@ -1,3 +1,28 @@
+# 1.0.2
+
+- Copy or move directly when no destination names conflict; show Replace/Skip
+  only after checking actual destination names, including hidden entries.
+- Offer Windows-style **Replace existing** and **Skip duplicates** choices for
+  clipboard paste and native file drops.
+- Stage copied data completely before replacing an existing file, and merge
+  same-name folders while retaining destination-only entries.
+- Keep file/folder type conflicts unchanged instead of deleting a directory as
+  a side effect of a batch replacement choice.
+- Fix copies to MTP/AFC/SMB-backed locations whose GVfs paths do not implement
+  Unix `chmod`; permission hardening remains enabled for real local staging.
+
+# 1.0.1
+
+- Show connected Android MTP, camera/PTP and iPhone AFC devices under This PC
+  and in the sidebar, including unmounted devices that can be connected on
+  demand through the existing native GIO mount dialog.
+- Refresh devices after mount, volume and drive state changes, such as plugging
+  in, unlocking or changing the phone's USB mode.
+- Support browsing and internal copy operations on GVfs device URIs without
+  treating their bracketed USB identifiers as malformed web addresses.
+- Keep device mounting opt-in and leave search indexing, terminal launching and
+  external drag export disabled for transient device locations.
+
 # 1.0.0
 
 First stable release. The application code is the release-candidate code with the

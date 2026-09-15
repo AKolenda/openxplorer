@@ -13,14 +13,14 @@ from pathlib import Path
 import re
 import tempfile
 import threading
-from urllib.parse import quote, unquote, urlsplit
-from core import normalise_location, validate_name
+from urllib.parse import quote, unquote
+from core import normalise_location, split_location, validate_name
 
 MARKERS = {'.snapshot', '.snapshots', '#snapshot'}
 
 
 def conventional_snapshot(uri):
-    parts = unquote(urlsplit(uri).path).split('/')
+    parts = unquote(split_location(uri).path).split('/')
     return any(p in MARKERS or p.startswith('@GMT-') for p in parts) or any(
         parts[i:i+2] == ['.zfs', 'snapshot'] for i in range(len(parts)-1))
 
@@ -108,7 +108,7 @@ class PreviousVersions:
         configured = sorted([s for s in self.sources() if within(uri, s['live'])], key=lambda s: len(s['live']), reverse=True)
         if configured:
             return configured[:1]
-        u = urlsplit(uri)
+        u = split_location(uri)
         parts = u.path.strip('/').split('/')
         if u.scheme == 'smb' and parts and parts[0]:
             live = 'smb://' + u.netloc + '/' + parts[0]

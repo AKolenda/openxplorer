@@ -29,7 +29,7 @@ from core import VERSION, DEBIAN_VERSION
 NAME = f'openxplorer_{DEBIAN_VERSION}_all.deb'
 REQUIRED = (
     'terminal_integration.py','private_storage.py','runtime_guard.py',
-    'network_locations.py', 'window_state.py', 'tab_transfers.py', 'native_tab_drag.py', 'native_file_drag.py', 'native_file_drop.py', 'reveal_integration.py', 'filemanager_bus.py', 'brave_integration.py', 'app_catalog.py', 'folder_sizes.py', 'winspace.py', 'core.py', 'gio_backend.py', 'entry_model.py', 'operations.py',
+    'network_locations.py', 'volume_locations.py', 'window_state.py', 'tab_transfers.py', 'native_tab_drag.py', 'native_file_drag.py', 'native_file_drop.py', 'reveal_integration.py', 'filemanager_bus.py', 'brave_integration.py', 'app_catalog.py', 'folder_sizes.py', 'winspace.py', 'core.py', 'gio_backend.py', 'entry_model.py', 'operations.py',
     'desktop_integration.py', 'auth_bridge.py', 'session_credentials.py',
     'zip_extraction.py', 'activation.py', 'native_opening.py', 'file_clipboard.py', 'archives.py',
     'search_index.py', 'index_service.py', 'local_watch.py', 'file_services.py',

@@ -4,8 +4,10 @@
 
 Copies are built in a newly created, unguessable staging DIRECTORY at the
 recipient. Each top-level item is renamed into its final name only when the
-copy succeeds. Existing names are never overwritten. No source is deleted by
-copy. Moves explicitly prohibit a copy/delete fallback. Trash never falls back
+copy succeeds. The explicit Replace policy commits completed staged files with
+the backend's overwrite operation and merges same-name directories; Skip never
+touches the existing item. No source is deleted by copy. Moves explicitly
+prohibit a copy/delete fallback. Trash never falls back
 to permanent deletion; a permanent delete is a separate mode the user has to
 confirm explicitly, and is offered where the location has no Trash at all. This is not a crash-recovery/undo or filesystem snapshot
 engine. A crash can leave a .winspace-transfer-*.part directory to inspect.
@@ -14,12 +16,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import os
 from typing import Callable, Iterator, Protocol
-from urllib.parse import urlsplit, unquote
+from urllib.parse import unquote
 import uuid
-from core import new_copy_name
+from core import new_copy_name, split_location
 
 
 class Cancelled(Exception):
+    pass
+
+
+class ReplaceUnsupported(Exception):
+    """The backend cannot atomically overwrite, but native rename may work."""
     pass
 
 
@@ -47,6 +54,7 @@ class Node(Protocol):
     def mkdir(self, cancel: Cancellation | None = None) -> None: ...
     def copy_file(self, target: 'Node', cancel: Cancellation, progress: Callable[[int, int], None]) -> None: ...
     def move_native(self, target: 'Node', cancel: Cancellation | None = None) -> None: ...
+    def replace_native(self, target: 'Node', cancel: Cancellation | None = None) -> None: ...
     def delete(self) -> None: ...  # used ONLY on this engine's exclusive staging tree
     def trash(self, cancel: Cancellation) -> None: ...
     def delete_tree(self, cancel: Cancellation) -> None: ...  # explicit permanent delete
@@ -75,7 +83,7 @@ def guard_destination(source: Node, directory: Node) -> None:
         s, d = os.path.realpath(source.path), os.path.realpath(directory.path)
         if s == d or os.path.commonpath([s, d]) == s:
             raise ValueError('Cannot place a folder inside itself (including through a symlink).')
-    a, b = urlsplit(source.uri), urlsplit(directory.uri)
+    a, b = split_location(source.uri), split_location(directory.uri)
     if a.scheme == b.scheme and a.netloc.lower() == b.netloc.lower():
         s, d = unquote(a.path).rstrip('/'), unquote(b.path).rstrip('/')
         if a.scheme == 'smb':
@@ -93,8 +101,8 @@ class TransferEngine:
             policy: str, cancel: Cancellation) -> Result:
         if mode not in ('copy', 'move', 'trash', 'delete'):
             raise ValueError('Unknown operation.')
-        if policy not in ('skip', 'keep-both'):
-            raise ValueError('Only Skip duplicates or Keep both is supported. Overwrite is disabled.')
+        if policy not in ('skip', 'keep-both', 'replace'):
+            raise ValueError('Choose Skip duplicates, Keep both, or Replace existing.')
         if not isinstance(uris, list) or not uris or len(uris) > 100000:
             raise ValueError('Select between 1 and 100,000 items.')
         uris = list(dict.fromkeys(uris))
@@ -135,16 +143,21 @@ class TransferEngine:
                     if policy == 'skip':
                         result.skipped.append(uri)
                         continue
-                    count = 2
-                    while destination.exists(cancel):
-                        cancel.check()
-                        destination = dest_dir.child(new_copy_name(source.name, count, info.kind == 'directory'))
-                        count += 1
-                        if count > 10000:
-                            raise ValueError('Too many duplicate names. Rename the item before copying.')
+                    if policy == 'keep-both':
+                        count = 2
+                        while destination.exists(cancel):
+                            cancel.check()
+                            destination = dest_dir.child(new_copy_name(source.name, count, info.kind == 'directory'))
+                            count += 1
+                            if count > 10000:
+                                raise ValueError('Too many duplicate names. Rename the item before copying.')
                 if mode == 'move':
-                    # Backends MUST use NO_FALLBACK_FOR_MOVE and never OVERWRITE.
-                    source.move_native(destination, cancel)
+                    # Backends MUST use NO_FALLBACK_FOR_MOVE. Replace is an
+                    # explicit user choice and still never degrades to copy/delete.
+                    if policy == 'replace':
+                        self._commit_replace(source, destination, cancel)
+                    else:
+                        source.move_native(destination, cancel)
                     result.done.append(uri)
                     continue
                 # Reserve a private namespace. A failed mkdir never grants us
@@ -152,14 +165,17 @@ class TransferEngine:
                 candidate = dest_dir.child('.winspace-transfer-' + uuid.uuid4().hex + '.part')
                 candidate.mkdir(cancel)
                 stage = candidate
-                if getattr(stage, 'path', None):
-                    os.chmod(stage.path, 0o700, follow_symlinks=False)
+                self._secure_local_staging(stage)
                 staged_item = stage.child('payload')
                 self._copy(source, staged_item, cancel, stage.name, 0)
                 cancel.check()
-                # Native rename in the same destination directory, no overwrite.
-                # A racing conflicting name therefore fails, preserving it.
-                staged_item.move_native(destination, cancel)
+                # Native rename in the same destination directory. Replace is
+                # only reached after the user explicitly chose it; other
+                # policies retain the no-overwrite race guard.
+                if policy == 'replace':
+                    self._commit_replace(staged_item, destination, cancel)
+                else:
+                    staged_item.move_native(destination, cancel)
                 result.done.append(uri)
                 stage.delete()  # now empty; cannot recursively remove final item
                 stage = None
@@ -178,6 +194,94 @@ class TransferEngine:
                 break
         self.emit({'label': f'{len(result.done)} item(s) completed', 'fraction': 1})
         return result
+
+    @staticmethod
+    def _secure_local_staging(stage: Node) -> None:
+        """Harden real local staging without applying Unix modes to GVfs.
+
+        MTP, AFC and many SMB backends expose a FUSE path but do not implement
+        chmod. Their random staging namespace remains private to the connected
+        session. Local paths use an opened, no-follow directory descriptor so
+        a path swap cannot redirect the permission change.
+        """
+        path = getattr(stage, 'path', None)
+        if not path or not stage.uri.startswith('file:'):
+            return
+        flags = os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+        descriptor = os.open(path, flags)
+        try:
+            os.fchmod(descriptor, 0o700)
+        finally:
+            os.close(descriptor)
+
+    def _commit_replace(self, source: Node, destination: Node,
+                        cancel: Cancellation) -> None:
+        """Commit one completed item using Windows-like replace semantics.
+
+        Same-name directories merge recursively and keep destination-only
+        children. Files and symlinks use the backend's explicit overwrite move.
+        A file/folder type mismatch is left untouched instead of deleting a
+        directory tree as a side effect of a batch choice.
+        """
+        cancel.check()
+        if not destination.exists(cancel):
+            source.move_native(destination, cancel)
+            return
+        incoming, existing = source.info(cancel), destination.info(cancel)
+        if incoming.kind == 'directory' and existing.kind == 'directory':
+            for child in list(source.children(cancel)):
+                self._commit_replace(child, destination.child(child.name), cancel)
+            source.delete()
+            return
+        if 'directory' in (incoming.kind, existing.kind):
+            raise ValueError('A file and folder have the same name. Rename or remove one of them, then try again.')
+        if incoming.kind not in ('file', 'symlink') or existing.kind not in ('file', 'symlink'):
+            raise ValueError('This item type cannot be replaced automatically.')
+        try:
+            source.replace_native(destination, cancel)
+        except ReplaceUnsupported:
+            self._replace_via_backup(source, destination, cancel)
+
+    @staticmethod
+    def _replace_via_backup(source: Node, destination: Node,
+                            cancel: Cancellation) -> None:
+        """Replace a file on backends such as MTP using reversible renames.
+
+        The old destination is retained under an unguessable sibling name until
+        the completed incoming file is installed. If installation fails, the
+        old name is restored. No copy/delete fallback is used for a move.
+        """
+        parent = destination.parent()
+        if parent is None:
+            raise ValueError('Filesystem roots cannot be replaced.')
+        backup = None
+        for _ in range(100):
+            candidate = parent.child('.winspace-replaced-' + uuid.uuid4().hex + '.backup')
+            if not candidate.exists(cancel):
+                backup = candidate
+                break
+        if backup is None:
+            raise ValueError('Could not reserve a temporary replacement name.')
+        destination.move_native(backup, cancel)
+        try:
+            # Once the old file moved aside, finish the tiny commit step even
+            # if cancellation arrives; stopping here would unnecessarily leave
+            # the public destination name empty.
+            source.move_native(destination, None)
+        except Exception as install_error:
+            try:
+                backup.move_native(destination, None)
+            except Exception as restore_error:
+                raise ValueError(
+                    f'Replacement failed and the original remains at {backup.uri}. '
+                    f'Restore it manually before retrying. {restore_error}') from install_error
+            raise
+        try:
+            backup.delete()
+        except Exception as cleanup_error:
+            raise ValueError(
+                f'Replacement completed, but the prior file remains at {backup.uri}. '
+                f'Remove that backup after checking the new file. {cleanup_error}') from cleanup_error
 
     def _copy(self, source: Node, target: Node, cancel: Cancellation,
               own_stage_name: str, depth: int) -> None:

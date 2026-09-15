@@ -23,7 +23,7 @@ def main():
         try:
             page.set_content((ROOT/'preview.html').read_text(),wait_until='load');ready()
             page.evaluate("()=>OpenXplorer.applyTheme('dark',false)")
-            check('Version 1.0.0 is visible','1.0.0' in page.locator('#status-right').inner_text() if page.locator('#status-right').count() else '1.0.0' in page.locator('body').inner_text())
+            check('Version 1.0.2 is visible','1.0.2' in page.locator('#status-right').inner_text() if page.locator('#status-right').count() else '1.0.2' in page.locator('body').inner_text())
             share='smb://archive-nas/work'
             nav('smb://archive-nas/');nav(share)
             entry=page.locator('#sidebar [data-uri="'+share+'"][data-network-saved]')

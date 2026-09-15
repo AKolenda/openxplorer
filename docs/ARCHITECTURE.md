@@ -36,8 +36,8 @@ source, then stages matching downloads for the website. It never installs the
 app, changes desktop defaults, modifies Brave or mounts a network share.
 
 Keep common versions while the project is small. Debian and semantic versions are
-both `1.0.0` for this stable release; the earlier `1.0.0~rc4` prerelease sorts
-below it, so `apt` upgrades a candidate installation normally. Stable internal Winspace IDs/paths remain for
+both `1.0.2` for this maintenance release; the earlier `1.0.0~rc4`, `1.0.0`
+and `1.0.1` releases sort below it, so `apt` upgrades normally. Stable internal Winspace IDs/paths remain for
 compatibility. A website-only deployment can reuse the current desktop package.
 
 ## Ownership and contribution
