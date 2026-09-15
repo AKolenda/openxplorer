@@ -54,4 +54,4 @@ Dependency installation, pnpm check, the real pnpm build and production-export b
 
 ---
 
-OpenXplorer 1.0.0. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.0.2. Project-authored documentation: AGPL-3.0-only.

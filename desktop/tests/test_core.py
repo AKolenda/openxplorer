@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from core import normalise_location, require_share, validate_name, new_copy_name, Settings
+from core import normalise_location, require_item_uri, require_share, split_location, validate_name, new_copy_name, Settings
 
 class CoreTests(unittest.TestCase):
     def test_unc(self):
@@ -20,6 +20,31 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(normalise_location('Plans', 'file:///home/a'), 'file:///home/a/Plans')
     def test_relative_smb(self):
         self.assertEqual(normalise_location('Next plan', 'smb://nas/share'), 'smb://nas/share/Next%20plan')
+    def test_connected_phone_locations(self):
+        cases = {
+            'mtp://[usb:001,010]/Internal storage/DCIM': 'mtp://[usb:001,010]/Internal%20storage/DCIM',
+            'gphoto2://[usb:001,002]/DCIM': 'gphoto2://[usb:001,002]/DCIM',
+            'afc://00008020-001C/': 'afc://00008020-001C/',
+        }
+        for value, expected in cases.items():
+            with self.subTest(value=value):
+                normalized = normalise_location(value)
+                self.assertEqual(normalized, expected)
+                self.assertEqual(split_location(normalized).scheme, expected.split(':', 1)[0])
+    def test_relative_connected_phone_path(self):
+        self.assertEqual(normalise_location('DCIM/Camera', 'mtp://[usb:001,010]/Internal%20storage'),
+                         'mtp://[usb:001,010]/Internal%20storage/DCIM/Camera')
+    def test_reject_unsafe_connected_device_addresses(self):
+        for value in ('mtp://user@device/DCIM', 'mtp://[usb:001,002/DCIM',
+                      'mtp://[usb:001,002]/DCIM?mode=write', 'afc:///DCIM',
+                      'mtp://[usb:001,002]/a%00b'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                normalise_location(value)
+    def test_device_root_is_not_a_clipboard_item(self):
+        with self.assertRaises(ValueError):
+            require_item_uri('mtp://[usb:001,010]/')
+        self.assertEqual(require_item_uri('mtp://[usb:001,010]/Internal%20storage'),
+                         'mtp://[usb:001,010]/Internal%20storage')
     def test_home(self):
         self.assertEqual(normalise_location('~/Docs', home=Path('/home/test')), 'file:///home/test/Docs')
     def test_file_localhost(self):

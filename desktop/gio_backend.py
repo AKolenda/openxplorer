@@ -11,7 +11,7 @@ gi.require_version('Gio', '2.0')
 from gi.repository import Gio, GLib
 from core import normalise_location, validate_name, require_item_uri, is_smb_server
 from entry_model import classify_entry
-from operations import Cancelled, Info
+from operations import Cancelled, Info, ReplaceUnsupported
 
 ATTRIBUTES = 'standard::name,standard::display-name,standard::type,standard::is-hidden,standard::is-symlink,standard::size,standard::content-type,standard::target-uri,standard::is-virtual,time::modified'
 NOFOLLOW = Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS
@@ -108,6 +108,19 @@ class GioNode:
         except GLib.Error as exc:
             if exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.NOT_SUPPORTED) or exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.WOULD_RECURSE):
                 raise ValueError('A native move is not supported here. Cross-filesystem/cross-share moves are deliberately disabled. Copy, verify, then trash the source separately.') from exc
+            raise
+
+    def replace_native(self, target, cancel=None):
+        """Move over an existing file only after explicit user confirmation."""
+        require_item_uri(self.uri)
+        try:
+            self.file.move(target.file, MOVE_FLAGS | Gio.FileCopyFlags.OVERWRITE,
+                           raw(cancel), None, None)
+        except GLib.Error as exc:
+            if (exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.NOT_SUPPORTED)
+                    or exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.WOULD_RECURSE)
+                    or exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.EXISTS)):
+                raise ReplaceUnsupported('The backend does not support direct overwrite.') from exc
             raise
 
     def delete(self):

@@ -8,8 +8,7 @@ Keep navigability separate from mutability: a share is not a regular directory
 that can be renamed or sent to Trash from the server browser.
 """
 from __future__ import annotations
-from urllib.parse import urlsplit
-from core import normalise_location
+from core import normalise_location, split_location
 
 
 def classify_entry(kind: str, uri: str, content_type: str | None = None,
@@ -24,7 +23,7 @@ def classify_entry(kind: str, uri: str, content_type: str | None = None,
             # or persist an address containing credentials.
             target = None
     folder_mime = content_type == 'inode/directory'
-    source = urlsplit(uri)
+    source = split_location(uri)
     # Some SMB backends omit a content type/target. Limit the fallback to an
     # actual mountable SMB share, not all extensionless files or all shortcuts.
     smb_mount = (kind == 'mountable' and source.scheme == 'smb'

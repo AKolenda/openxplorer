@@ -35,6 +35,10 @@ class EntryModelTests(unittest.TestCase):
         self.assertTrue(classify_entry('mountable','smb://nas/work')['isDir'])
     def test_non_smb_mountable_not_assumed_to_be_directory(self):
         self.assertFalse(classify_entry('mountable','file:///tmp/thing')['isDir'])
+    def test_mtp_directory_with_bracketed_usb_identifier(self):
+        entry = classify_entry('directory', 'mtp://[usb:001,010]/Internal%20storage')
+        self.assertTrue(entry['isDir'])
+        self.assertTrue(entry['canOperate'])
     def test_file_shortcut_is_not_a_folder(self):
         self.assertFalse(classify_entry('shortcut','file:///tmp/shortcut','text/plain','file:///tmp/file.txt')['isDir'])
     def test_virtual_bad_scheme_is_not_followed(self):
