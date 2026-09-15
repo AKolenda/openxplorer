@@ -428,7 +428,22 @@ async function copySelection(mode){
 }
 
 async function copyPath(){const e=selected();const uri=e.length===1?e[0].uri:active().uri;if(['home:','pc:','network:','settings:'].includes(uri)){toast('Open a folder first.');return;}const text=displayUri(uri);try{await call('clipboardText',{text});toast('Path copied. Sharing permissions are unchanged.');}catch(e){showMessage('Location',text);}}
-async function paste(){await refreshClipboard();if(state.query){toast('Open the destination folder before pasting.');return;}if(!state.clipboard||state.operation)return;const target=active().uri;if(!writableLocation(target))return;const clip={...state.clipboard,uris:[...state.clipboard.uris]};const answer=await showModal(clip.mode==='move'?'Move items here?':'Copy items here?',`${clip.uris.length} item(s) → ${displayUri(target)}\n\nReplace existing files or skip conflicts. Same-name folders are merged; destination-only files stay in place.`,null,[{label:'Cancel',cancel:true},{label:'Skip duplicates',fn:()=>({policy:'skip'})},{label:'Replace existing',className:'primary',fn:()=>({policy:'replace'})}]);if(!answer)return;await runOperation(clip.mode,{uris:clip.uris,target,policy:answer.policy,clipboardToken:clip.token});}
+async function transferWithConflicts(mode,args){
+  if(state.operation||state.transferPlanning)return;
+  state.transferPlanning=true;
+  try{
+    const {conflicts}=await call('transferConflicts',{target:args.target,uris:args.uris});
+    let policy='skip'; // A name appearing after this check must never be overwritten silently.
+    if(conflicts.length){
+      const answer=await showModal('Items already exist',`${conflicts.length} matching name(s) in ${displayUri(args.target)}\n\nReplace existing files or skip conflicts. Same-name folders are merged; destination-only files stay in place.`,null,[{label:'Cancel',cancel:true},{label:'Skip duplicates',fn:()=>({policy:'skip'})},{label:'Replace existing',className:'primary',fn:()=>({policy:'replace'})}]);
+      if(!answer)return;
+      policy=answer.policy;
+    }
+    if(!state.operation)await runOperation(mode,{...args,policy});
+  }catch(e){await showMessage('Could not check destination',e.message);}
+  finally{state.transferPlanning=false;}
+}
+async function paste(){await refreshClipboard();if(state.query){toast('Open the destination folder before pasting.');return;}if(!state.clipboard||state.operation)return;const target=active().uri;if(!writableLocation(target))return;const clip={...state.clipboard,uris:[...state.clipboard.uris]};await transferWithConflicts(clip.mode,{uris:clip.uris,target,clipboardToken:clip.token});}
 async function rename(){const s=selected();if(s.length!==1||state.operation||!canOperate(s[0])||readonlyLocation(s[0].uri))return;const result=await nameDialog('Rename',s[0].name,name=>call('rename',{uri:s[0].uri,name}));if(result){state.selection.clear();load(active(),false);}}
 // Locations without a Trash (SMB shares, most remote backends) get an explicit
 // permanent delete instead of a Trash move that can only fail.
@@ -593,8 +608,7 @@ async function receiveFileDrop(data){
   const target=data.target;
   if(data.kind!=='copy'||!fileDragEntry({uri:target})||!writableLocation(target)){toast('Open a writable destination folder before dropping files.');return;}
   if(uris.some(uri=>sameLocation(uri,target))){toast('A folder cannot be copied into itself.');return;}
-  const answer=await showModal('Copy dropped items?',`${uris.length} item(s) → ${displayUri(target)}\n\nReplace existing files or skip conflicts. Same-name folders are merged; destination-only files stay in place.`,null,[{label:'Cancel',cancel:true},{label:'Skip duplicates',fn:()=>({policy:'skip'})},{label:'Replace existing',className:'primary',fn:()=>({policy:'replace'})}]);
-  if(answer&&!state.operation)await runOperation('copy',{uris,target,policy:answer.policy});
+  await transferWithConflicts('copy',{uris,target});
 }
 function clearDropFeedback(){
   const q=$('quick-access');q?.classList.remove('pin-drop-active');
@@ -1062,6 +1076,7 @@ const demo = (()=>{
     case'desktopRestore':store.reveal=false;demoDefault=false;return{isDefault:false,allDefault:false,revealEnabled:false,revealOwned:false,canRestore:false,current:{'inode/directory':'org.gnome.Nautilus.desktop'}};
     case'desktopStatus':return{zipDefault:!!store.zipDefault,canRestoreZip:!!store.zipDefault,isDefault:demoDefault,allDefault:demoDefault,revealEnabled:!!store.reveal,revealOwned:!!store.reveal,canRestore:demoDefault,current:{'application/zip':store.zipDefault?'io.winspace.Development.desktop':'org.gnome.FileRoller.desktop','x-scheme-handler/smb':demoDefault?'io.winspace.Development.desktop':'org.gnome.Nautilus.desktop','inode/directory':demoDefault?'io.winspace.Development.desktop':'org.gnome.Nautilus.desktop'}};
     case'environment':return{knownFolders:knownFolders.map(f=>({...f})),stableMounts:[stableMount],snapshotRoots:[...snapshotRoots],home:root,quick:[...quick],shares:[...shares],mounts:[{label:'2 TB Volume',uri:'file:///media/demo/Archive',mounted:true,total:2000000000000,free:1100000000000}],recent:[...entries.values()].filter(e=>!e.isDir&&e.uri.startsWith(docs)).slice(0,4),preferences:{...prefs},systemDark:!!window.matchMedia?.('(prefers-color-scheme: dark)').matches};
+    case'transferConflicts':ensureDir(a.target);return{conflicts:a.uris.filter(uri=>exists(uriChild(a.target,baseName(uri))))};
     case'normalise':return{uri:normaliseAddress(a.value,a.base)};
     case'list':ensureDir(a.uri);return{uri:a.uri,entries:immediateChildren(a.uri).filter(e=>a.showHidden||!e.hidden).map(e=>({...e}))};
     case'preferences':prefs={...prefs,...a};savePreview();return true;

@@ -1,5 +1,7 @@
 # 1.0.2
 
+- Copy or move directly when no destination names conflict; show Replace/Skip
+  only after checking actual destination names, including hidden entries.
 - Offer Windows-style **Replace existing** and **Skip duplicates** choices for
   clipboard paste and native file drops.
 - Stage copied data completely before replacing an existing file, and merge

@@ -61,6 +61,8 @@ with sync_playwright() as pw:
         elif method == 'list':
             result = {'uri':args['uri'], 'count':len(entries)}
             events = [['entries', {'token':args['token'], 'entries':entries}]]
+        elif method == 'transferConflicts':
+            result = {'conflicts':[uri for uri in args['uris'] if uri.endswith('/Report.txt')]}
         elif method == 'cacheStatus':
             result = {'roots':[]}
         elif method == 'clipboardGet':
@@ -160,7 +162,7 @@ with sync_playwright() as pw:
     page.mouse.up()
 
     emit('fileDrop', {'kind':'copy','target':HOME+'/Folder','uris':['file:///home/demo/Downloads/Report.txt']})
-    expect(page.get_by_role('heading',name='Copy dropped items?')).to_be_visible()
+    expect(page.get_by_role('heading',name='Items already exist')).to_be_visible()
     check('Drop waits for conflict policy before copying', not calls('operate'))
     check('Dialog clears native source and target geometry', not layout()['items'] and not layout()['targets'])
     before = len(calls('beginFileDrag'))
@@ -176,6 +178,13 @@ with sync_playwright() as pw:
           calls('operate')[-1]['policy']=='replace')
     check('Drop operation never uses clipboard cut/move state', not calls('clipboardConsume'))
     check('Native geometry returns when the operation finishes', bool(layout()['items']))
+
+    before = len(calls('operate'))
+    emit('fileDrop', {'kind':'copy','target':HOME+'/Folder','uris':['file:///home/demo/Downloads/New.txt']})
+    page.wait_for_function('()=>!OpenXplorer.state.transferPlanning&&!OpenXplorer.state.operation')
+    check('Drop without conflicts copies immediately without a dialog',
+          len(calls('operate'))==before+1 and page.locator('#modal-layer').is_hidden())
+    check('No-conflict copy protects names that appear after the check', calls('operate')[-1]['policy']=='skip')
 
     emit('fileDrop', {'kind':'pin','before':'file:///home/demo/Pictures','uris':[HOME+'/Folder']})
     check('Quick access drop reuses validated pin API and insertion position',
