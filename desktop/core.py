@@ -12,11 +12,54 @@ import posixpath
 import re
 import tempfile
 import threading
-from urllib.parse import quote, unquote, urlsplit, urlunsplit
+from urllib.parse import quote, unquote, SplitResult, urlsplit, urlunsplit
 
-VERSION = '1.0.0'
-DEBIAN_VERSION = '1.0.0'
+VERSION = '1.0.2'
+DEBIAN_VERSION = '1.0.2'
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
+DEVICE_SCHEMES = frozenset({'mtp', 'gphoto2', 'afc'})
+DEVICE_URI = re.compile(r'^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#]+)(/[^?#]*)?$')
+
+
+def split_location(value: str) -> SplitResult:
+    """Split a validated location, including GVfs's non-RFC USB authorities.
+
+    MTP and gphoto2 roots look like ``mtp://[usb:001,002]/``. Python's URL
+    parser treats the bracketed bus identifier as malformed IPv6, although it
+    is the URI format produced and consumed by GIO. Keep this narrow parser for
+    the three portable-device backends; ordinary file/SMB parsing stays on the
+    standard library implementation.
+    """
+    match = DEVICE_URI.fullmatch(value) if isinstance(value, str) else None
+    if match and match.group(1).lower() in DEVICE_SCHEMES:
+        return SplitResult(match.group(1).lower(), match.group(2), match.group(3) or '/', '', '')
+    return urlsplit(value)
+
+
+def is_device_location(value: str) -> bool:
+    try:
+        return split_location(value).scheme.lower() in DEVICE_SCHEMES
+    except (TypeError, ValueError):
+        return False
+
+
+def _normalise_device_location(value: str, scheme: str) -> str:
+    match = DEVICE_URI.fullmatch(value)
+    if not match or match.group(1).lower() != scheme:
+        raise ValueError('A connected-device address must include a device identifier and path.')
+    authority, encoded_path = match.group(2), match.group(3) or '/'
+    if (len(authority) > 512 or '@' in authority or '%' in authority
+            or any(c.isspace() for c in authority) or CONTROL.search(authority)):
+        raise ValueError('Invalid connected-device identifier.')
+    if ('[' in authority or ']' in authority) and not (
+            authority.startswith('[') and authority.endswith(']')
+            and '[' not in authority[1:-1] and ']' not in authority[1:-1]):
+        raise ValueError('Invalid connected-device identifier.')
+    decoded = unquote(encoded_path, errors='strict')
+    if CONTROL.search(decoded):
+        raise ValueError('Encoded control characters are not allowed.')
+    path = posixpath.normpath('/' + decoded.lstrip('/'))
+    return f'{scheme}://{authority}' + quote(path, safe='/')
 
 
 def validate_name(name: str) -> str:
@@ -30,7 +73,7 @@ def validate_name(name: str) -> str:
 
 
 def normalise_location(value: str, base: str | None = None, home: Path | None = None) -> str:
-    """Accept Linux paths, SMB URLs and UNC paths; reject embedded credentials.
+    """Accept Linux paths, SMB URLs, UNC paths and connected-device URIs.
 
     URL path components are canonicalised once, preserving escaped #, ? and %.
     Local paths (not URLs) may contain these characters literally. We never run
@@ -56,7 +99,13 @@ def normalise_location(value: str, base: str | None = None, home: Path | None = 
         elif value.startswith('~/'):
             value = str(home / value[2:])
         if not value.startswith('/'):
-            if base and base.startswith('smb://'):
+            base_scheme = ''
+            if base:
+                try:
+                    base_scheme = split_location(base).scheme.lower()
+                except (TypeError, ValueError):
+                    pass
+            if base and base_scheme in ({'smb'} | DEVICE_SCHEMES):
                 return normalise_location(base.rstrip('/') + '/' + quote(value, safe='/'), home=home)
             base_path = str(home)
             if base and base.startswith('file:'):
@@ -64,9 +113,13 @@ def normalise_location(value: str, base: str | None = None, home: Path | None = 
             value = os.path.join(base_path, value)
         value = os.path.abspath(os.path.normpath(value))
         return Path(value).as_uri()
+    scheme_match = re.match(r'^([A-Za-z][A-Za-z0-9+.-]*):', value)
+    scheme = scheme_match.group(1).lower() if scheme_match else ''
+    if scheme in DEVICE_SCHEMES:
+        return _normalise_device_location(value, scheme)
     u = urlsplit(value)
     if u.scheme.lower() not in ('file', 'smb'):
-        raise ValueError('Only local paths and smb:// locations are supported in this build.')
+        raise ValueError('Only local paths, smb:// locations and connected devices are supported in this build.')
     if u.username is not None or u.password is not None:
         raise ValueError('Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.')
     if u.query or u.fragment:
@@ -100,7 +153,7 @@ def normalise_location(value: str, base: str | None = None, home: Path | None = 
 
 def require_share(value: str) -> str:
     uri = normalise_location(value)
-    u = urlsplit(uri)
+    u = split_location(uri)
     if u.scheme != 'smb' or not u.path.strip('/'):
         raise ValueError('Enter a shared folder such as \\\\nas\\Projects, not only the server name.')
     return uri
@@ -174,7 +227,7 @@ class Settings:
                         uri = normalise_location(item['uri'])
                         if kind == 'shares':
                             uri = require_share(uri)
-                        label = safe_label(item.get('label', ''), unquote(urlsplit(uri).path).split('/')[-1] or 'Folder')
+                        label = safe_label(item.get('label', ''), unquote(split_location(uri).path).split('/')[-1] or 'Folder')
                         self.data[kind].append({'uri': uri, 'label': label})
                     except (ValueError, KeyError, TypeError):
                         continue
@@ -288,7 +341,7 @@ class Settings:
             items = self.data[key]
             self.data[key] = [p for p in items if p['uri'] != uri]
             if action == 'add':
-                self.data[key].append({'uri': uri, 'label': safe_label(label, unquote(urlsplit(uri).path).split('/')[-1] or 'Folder')})
+                self.data[key].append({'uri': uri, 'label': safe_label(label, unquote(split_location(uri).path).split('/')[-1] or 'Folder')})
                 if kind == 'pin':
                     self.data['hiddenQuick'] = [u for u in self.data['hiddenQuick'] if u != uri]
             elif kind == 'pin' and uri not in self.data['hiddenQuick']:
@@ -311,7 +364,9 @@ class Settings:
             if not isinstance(item, dict):
                 raise ValueError('Invalid folder shortcut.')
             uri = normalise_location(item.get('uri'))
-            label = safe_label(item.get('label', ''), unquote(urlsplit(uri).path).rstrip('/').split('/')[-1] or urlsplit(uri).hostname or 'Folder')
+            parts = split_location(uri)
+            host = parts.hostname if parts.scheme == 'smb' else None
+            label = safe_label(item.get('label', ''), unquote(parts.path).rstrip('/').split('/')[-1] or host or parts.netloc or 'Folder')
             if uri not in seen:
                 clean.append({'uri': uri, 'label': label})
                 seen.add(uri)
@@ -356,14 +411,16 @@ class Settings:
 
 def is_smb_server(uri: str) -> bool:
     """A server listing holds shares, not files users can create/delete."""
-    u = urlsplit(normalise_location(uri))
+    u = split_location(normalise_location(uri))
     return u.scheme == 'smb' and not u.path.strip('/')
 
 
 def require_item_uri(uri: str) -> str:
     """Do not rename, move, trash, or transfer a whole SMB server/share root."""
     uri = normalise_location(uri)
-    u = urlsplit(uri)
+    u = split_location(uri)
     if u.scheme == 'smb' and len([p for p in u.path.split('/') if p]) <= 1:
         raise ValueError('Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here.')
+    if u.scheme in DEVICE_SCHEMES and not u.path.strip('/'):
+        raise ValueError('Open the device storage first, then select files or folders inside it. The device itself cannot be moved or copied.')
     return uri

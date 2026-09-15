@@ -74,7 +74,7 @@ Drag a tab onto another OpenXplorer tab strip to merge it. To open a separate wi
 
 Select one or more files or folders and drag them into an application that accepts native file drops. The desktop app supplies file URIs and readable paths through GTK, including already-mounted network paths when available. Ctrl-click or Shift-click to select multiple items. Press Escape to cancel.
 
-Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. Choose Skip duplicates or Keep both before copying; existing files are never overwritten. Quick access drops pin or reorder folders. File drops never request deletion of the source.
+Drop files into an OpenXplorer folder, the empty area of the current folder, or another OpenXplorer window to propose a copy. Choose Replace existing or Skip duplicates. Incoming data is staged before file replacement; same-name folders merge and keep destination-only entries. File/folder type conflicts are left unchanged. Quick access drops pin or reorder folders. File drops never request deletion of the source.
 
 ZIP members must be extracted first. Some editors only accept local files: network items need an existing GVfs/FUSE or CIFS path for those applications. Dragging does not mount a share or download a temporary copy. Drag-to-move, automatic extraction, and undo remain unavailable; use Cut and Paste for supported same-filesystem moves.
 
@@ -82,4 +82,4 @@ The website preview uses sample files and cannot export desktop files. Compatibi
 
 ---
 
-OpenXplorer 1.0.0. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.0.2. Project-authored documentation: AGPL-3.0-only.

@@ -30,7 +30,7 @@ except (ImportError, ValueError) as exc:
           '\n\nThen run: /usr/bin/python3 openxplorer.py\n\nDetails: ' + str(exc), file=sys.stderr)
     sys.exit(1)
 
-from core import VERSION, Settings, normalise_location, require_share, safe_label, require_item_uri, is_smb_server
+from core import VERSION, Settings, is_device_location, normalise_location, require_share, safe_label, split_location, require_item_uri, is_smb_server
 from gio_backend import (GioCancellation, GioNode, enumerate_folder, verify_folder,
                          inspect, create_item, rename_item, error_payload, verify_pin, index_directory, discover_servers,
                          trash_support)
@@ -41,6 +41,7 @@ from auth_bridge import MountPrompts
 from desktop_integration import DesktopIntegration
 from folder_locations import FolderLocations
 from mount_support import read_mounts, mount_plan, mount_for_path
+from volume_locations import locations as volume_locations, volume_id
 from previous_versions import PreviousVersions
 from file_services import properties, list_applications, prepare_launch, list_templates, create_from_template, SnapshotProvider
 from file_clipboard import FileClipboard
@@ -279,7 +280,9 @@ class OpenXplorerWindow:
         self.file_drag = NativeFileDrag(self, Gtk, Gdk, GLib, resolve_local=local_path)
         self.file_drop = NativeFileDrop(self, Gtk, Gdk, GLib)
         self.volume_monitor = Gio.VolumeMonitor.get()
-        for signal in ('mount-added', 'mount-removed', 'mount-changed', 'volume-added', 'volume-removed'):
+        for signal in ('mount-added', 'mount-removed', 'mount-changed',
+                       'volume-added', 'volume-removed', 'volume-changed',
+                       'drive-connected', 'drive-disconnected', 'drive-changed'):
             self.volume_signals.append(self.volume_monitor.connect(signal, lambda *_: self.emit('mounts', {})))
         # Map the GTK surface BEFORE loading HTML; load_uri used to run before
         # any native surface existed. The map signal schedules exactly one load.
@@ -512,6 +515,8 @@ class OpenXplorerWindow:
             self.start_worker(request, lambda c: self.search_index.snapshot(), pool=self.query_workers)
         elif method == 'cacheSet':
             uri = normalise_location(a.get('uri'))
+            if is_device_location(uri):
+                raise ValueError('Connected-device search caching is not supported. Copy files to local storage before indexing them.')
             if a.get('enabled') is not True:
                 self.indexer.cancel(uri)
             def configure(c):
@@ -751,7 +756,7 @@ class OpenXplorerWindow:
         elif method == 'list':
             uri = normalise_location(a['uri'])
             a['uri'] = uri
-            if urlsplit(uri).hostname in self.signing_out_hosts:
+            if uri.startswith('smb:') and urlsplit(uri).hostname in self.signing_out_hosts:
                 raise ValueError('This server is being signed out. Reopen it after sign-out finishes.')
             self.start_worker(request, lambda c: enumerate_folder(uri, bool(a.get('showHidden')), c,
                 lambda batch: self.emit('entries', {'token': a['token'], 'entries': self.previous_versions.annotate(batch)})), mount_retry=True)
@@ -984,7 +989,7 @@ class OpenXplorerWindow:
         if any(c.writes for c in self.app.controllers):
             raise ValueError('Finish active file operations in every OpenXplorer window before signing out.')
         uri = normalise_location(request['args'].get('uri'))
-        u = urlsplit(uri)
+        u = split_location(uri)
         if u.scheme != 'smb' or not u.hostname:
             raise ValueError('Select an SMB location to sign out.')
         host = u.hostname
@@ -1092,7 +1097,8 @@ class OpenXplorerWindow:
                 if not exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.ALREADY_MOUNTED):
                     error = exc
             self.prompts.finish(op,success=error is None)
-            if error is None and urlsplit(uri).hostname: self.indexer.resume_server(urlsplit(uri).hostname)
+            if error is None and uri.startswith('smb:') and urlsplit(uri).hostname:
+                self.indexer.resume_server(urlsplit(uri).hostname)
             callback(error)
         file.mount_enclosing_volume(Gio.MountMountFlags.NONE, op, cancel.raw, done, None)
 
@@ -1193,7 +1199,7 @@ class OpenXplorerWindow:
 
     @staticmethod
     def volume_id(volume):
-        return volume.get_uuid() or volume.get_identifier('unix-device') or volume.get_name()
+        return volume_id(volume)
 
     def environment(self):
         data = self.settings_store.snapshot()
@@ -1215,14 +1221,7 @@ class OpenXplorerWindow:
                 quick.append(pin)
         rank = {uri: index for index, uri in enumerate(data['quickOrder'])}
         quick.sort(key=lambda p: rank.get(p['uri'], len(rank)))
-        mounts = []
-        if self.volume_monitor:
-            for m in self.volume_monitor.get_mounts():
-                if not m.is_shadowed() and m.get_root().get_uri().startswith(('file:', 'smb:')):
-                    mounts.append({'label': m.get_name(), 'uri': m.get_root().get_uri(), 'mounted': True})
-            for v in self.volume_monitor.get_volumes():
-                if not v.get_mount() and v.can_mount():
-                    mounts.append({'id': self.volume_id(v), 'label': v.get_name(), 'mounted': False})
+        mounts = volume_locations(self.volume_monitor)
         shares = []
         for item in data['shares']:
             file = Gio.File.new_for_uri(item['uri'])

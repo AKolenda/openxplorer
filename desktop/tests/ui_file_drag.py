@@ -48,7 +48,7 @@ with sync_playwright() as pw:
     sample.wait_for_function('()=>OpenXplorer.state.ready')
     env = sample.evaluate('OpenXplorer.state.env')
     sample.close()
-    env.update(home=HOME, startUri=HOME, version='1.0.0', nativeFileDrag=True,
+    env.update(home=HOME, startUri=HOME, version='1.0.2', nativeFileDrag=True,
                quick=[{'uri':'file:///home/demo/Pictures','label':'Pictures'}],
                mounts=[], shares=[], networkLocations=[])
 
@@ -166,11 +166,14 @@ with sync_playwright() as pw:
     before = len(calls('beginFileDrag'))
     emit('fileDragRequest', {'uri':HOME+'/Alpha.txt'})
     check('Native drag requests are rejected while a modal is open', len(calls('beginFileDrag'))==before)
-    page.get_by_role('button',name='Keep both',exact=True).click()
+    check('Drop conflict dialog offers Windows-style replace and skip choices',
+          page.get_by_role('button',name='Replace existing',exact=True).count()==1 and
+          page.get_by_role('button',name='Skip duplicates',exact=True).count()==1)
+    page.get_by_role('button',name='Replace existing',exact=True).click()
     page.wait_for_function('()=>!OpenXplorer.state.operation&&document.getElementById("modal-layer").hidden')
     check('Copy drop reuses the copy operation and captured folder destination',
           calls('operate')[-1]['mode']=='copy' and calls('operate')[-1]['target']==HOME+'/Folder' and
-          calls('operate')[-1]['policy']=='keep-both')
+          calls('operate')[-1]['policy']=='replace')
     check('Drop operation never uses clipboard cut/move state', not calls('clipboardConsume'))
     check('Native geometry returns when the operation finishes', bool(layout()['items']))
 

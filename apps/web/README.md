@@ -201,7 +201,7 @@ AGPL-3.0-only for project-authored site code and documentation. The full license
 
 ## 1.0 release gate
 
-This source tree is 1.0.0. Keep the supplied lockfile under review and retain
+This source tree is 1.0.2. Keep the supplied lockfile under review and retain
 `pnpm install --frozen-lockfile` in CI and release procedures. The real typecheck
 and export are now verified separately from the standalone HTML renderer;
 production hydration and deployment each need their own recorded checks.

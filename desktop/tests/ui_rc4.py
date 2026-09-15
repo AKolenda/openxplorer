@@ -52,6 +52,11 @@ with sync_playwright() as pw:
     # Mounted volumes and paths are locations as well.
     before=count();page.locator('#sidebar .side-entry').filter(has=page.locator('.name',has_text='2 TB Volume')).click(button='middle')
     check('Mounted-volume sidebar entry supports middle-click',count()==before+1)
+    page.evaluate("""()=>{OpenXplorer.state.env.mounts.push({label:'Sample Phone',uri:'mtp://[usb:001,010]/',mounted:true,kind:'device',canUnmount:true});OpenXplorer.renderSidebar();}""")
+    phone=page.locator('#sidebar .side-entry').filter(has=page.locator('.name',has_text='Sample Phone'))
+    check('MTP phone appears in the sidebar with a device icon',phone.count()==1 and phone.locator('[data-icon="phone"]').count()==1)
+    check('Bracketed MTP URI has readable device breadcrumbs',page.evaluate("""()=>OpenXplorer.breadcrumbSegments('mtp://[usb:001,010]/Internal%20storage/DCIM').map(x=>x.label).join('|')""")=='Sample Phone|Internal storage|DCIM')
+    check('Connected-device display does not expose a raw transport identifier',page.evaluate("""()=>OpenXplorer.displayUri('mtp://[usb:001,010]/Internal%20storage')""")=='Sample Phone / Internal storage')
     go(home+'/Documents');before=count();id0=active();page.locator('#breadcrumbs .crumb').filter(has_text=re.compile('^home$')).click(button='middle')
     check('Ancestor breadcrumb opens in background without navigating source',count()==before+1 and active()==id0 and uri()==home+'/Documents')
     go('pc:');before=count();page.locator('#landing .drive-card').filter(has=page.locator('.card-name',has_text='Local Disk')).click(button='middle')

@@ -1,3 +1,60 @@
+# OpenXplorer 1.0.2 — replacement and phone-transfer maintenance build
+
+## 2026-09-14 replacement/phone-transfer run
+
+Executed for the 1.0.2 source and package. Older sections below are retained
+records, not checks rerun for this maintenance build.
+
+| Check | Result | Scope |
+|---|---|---|
+| Full Python regression suite | 558 passed | Desktop logic with disposable files and backend doubles, including staged Replace/Skip behavior, directory merging, rollback and phone-style filesystems without Unix mode support. |
+| Explicit local GIO integration suite | 5 passed | Real GIO operations in a disposable local directory, including atomic replacement; not MTP or SMB. |
+| JavaScript unit runner | 37 passed | Type-to-select helper behavior. |
+| JavaScript syntax check | Passed | Final shared desktop UI source parsed by Node. |
+| Focused replacement browser check | 4 passed | Shared UI in bundled Chromium: Replace and Skip choices, folder-merge explanation and dispatched replacement policy; simulated filesystem. |
+| Website TypeScript check | Passed | Dependency-aware `pnpm check`. |
+| Next.js production build | Passed | Compiled, typechecked and generated 21 static pages. |
+| Documentation and design regeneration | Passed | Synchronized Markdown and standalone designs from shared sources; not a Next.js build. |
+| Package build and verification | 52 passed | `openxplorer_1.0.2_all.deb`: metadata, payload, dependencies, checksums, syntax and source correspondence; no installation. |
+
+No physical phone was connected to this build environment. The reported MTP
+failure is covered with an MTP-style backend regression that exposes a local
+FUSE path but rejects `chmod`; an actual Pixel/MTP replacement and copy still
+need confirmation on the target machine. The full Python Playwright UI suite
+was not run because that module is unavailable; the four focused checks used
+the bundled Node Playwright runtime. No package was installed, no device was
+mounted automatically and no website or release was uploaded.
+
+---
+
+# OpenXplorer 1.0.1 — connected-device maintenance build
+
+## 2026-09-13 connected-device run
+
+Executed for the 1.0.1 source and package. Older sections below are retained
+records, not checks rerun for this maintenance build.
+
+| Check | Result | Scope |
+|---|---|---|
+| Full Python regression suite | 550 passed | Desktop logic with disposable local files and explicit GIO volume/mount doubles, including MTP, gPhoto2 and AFC URI handling. |
+| JavaScript unit runner | 37 passed | Type-to-select helper behavior. |
+| JavaScript syntax check | Passed | Final shared desktop UI source parsed by Node. |
+| Website TypeScript check | Passed | Dependency-aware `pnpm check`. |
+| Focused connected-device browser check | 5 passed | Shared UI in bundled Chromium with mocked mounted/unmounted phones; no USB or native bridge. |
+| Next.js production build | Passed | Compiled, typechecked and generated 21 static pages. |
+| Documentation and design regeneration | Passed | Synchronized Markdown and standalone designs from shared sources; not a Next.js build. |
+| Screenshot regeneration | 7 product stills | Actual shared HTML rendered in bundled Chromium with fictional fixtures; not native WebKit or a physical device. |
+| Package build and verification | 52 passed | `openxplorer_1.0.1_all.deb`: metadata, payload, dependencies, checksums, syntax and source correspondence; no installation. |
+
+The environment exposed GIO volume-monitor signals, but no physical phone was
+connected, so USB/MTP/PTP/AFC discovery, unlock/trust prompts and transfers on a
+real handset remain target-machine checks. The full Python Playwright UI suite
+was not run because that module is unavailable; the five focused device checks
+used the bundled Node Playwright runtime. No package was installed and no device
+was mounted automatically.
+
+---
+
 # OpenXplorer 1.0.0 — executed checks
 
 ## 2026-09-13 stable 1.0.0 release run

@@ -1,8 +1,11 @@
-# OpenXplorer 1.0.0 — tabs and desktop routing
+# OpenXplorer 1.0.2 — replace/skip and phone transfers
 
-This release fixes missing tab reattachment and distinguishes ZIP opening from
-folder/SMB defaults and browser file-reveal integration. It is the first stable
-release. Changes to desktop settings are explicit and reversible.
+This maintenance release adds explicit **Replace existing** and **Skip
+duplicates** choices for copy and move conflicts. Same-name folders merge while
+destination-only files remain. It also fixes phone copies failing when an MTP
+backend rejects Unix `chmod`; local staging remains permission-hardened. The
+1.0.1 connected-device work remains included, without automatic mounting or
+indexing. Changes to desktop settings are explicit and reversible.
 
 ## Upgrade
 
@@ -10,7 +13,7 @@ Finish active file operations first. Install the new package, then restart the
 old background process using the new launcher:
 
 ```sh
-sudo apt install './openxplorer_1.0.0_all.deb'
+sudo apt install './openxplorer_1.0.2_all.deb'
 openxplorer --restart
 ```
 
