@@ -2,6 +2,13 @@
 
 ## 2026-09-14 replacement/phone-transfer run
 
+Publication follow-up: removed the unconditional paste/drop prompt. The native
+backend now checks destination names before offering Replace/Skip. Re-ran all
+558 Python tests, the release browser suite and 33 file-drag browser checks,
+including immediate transfer without conflicts and the conflicting-name dialog.
+Python Playwright was installed in a temporary validation directory for these
+two browser suites; the earlier module limitation below describes the prior run.
+
 Executed for the 1.0.2 source and package. Older sections below are retained
 records, not checks rerun for this maintenance build.
 

@@ -766,6 +766,17 @@ class OpenXplorerWindow:
         elif method == 'rename':
             self.previous_versions.assert_writable(a['uri'])
             self.start_worker(request, lambda c: rename_item(a['uri'], a['name'], c), write=True)
+        elif method == 'transferConflicts':
+            if not isinstance(a.get('uris'), list) or not 1 <= len(a['uris']) <= 100000:
+                raise ValueError('Select between 1 and 100,000 items.')
+            uris = [require_item_uri(u) for u in a['uris']]
+            target = GioNode(normalise_location(a['target']))
+            def conflicts(cancel):
+                if target.info(cancel).kind != 'directory':
+                    raise ValueError('Open a destination folder before pasting.')
+                return {'conflicts': [uri for uri in uris
+                        if target.child(GioNode(uri).name).exists(cancel)]}
+            self.start_worker(request, conflicts)
         elif method == 'operate':
             if self.writes:
                 raise ValueError('Another file operation is still running.')
