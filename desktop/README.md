@@ -2,12 +2,14 @@
 
 **Windows File Explorer-inspired file manager for Linux.** Zorin OS is the primary target; compatible Ubuntu and Debian desktops are additional targets, not certified configurations.
 
-Version **1.0.0** is the first stable release, renamed from Winspace 0.7.0. The native engine is Python + GTK 3/WebKitGTK + GIO/GVfs. The website is separate; Node.js is not a desktop runtime dependency.
+Version **1.0.2** is a maintenance release; 1.0.1 added connected-device browsing and 1.0.0 was the first stable release, renamed from Winspace 0.7.0. The native engine is Python + GTK 3/WebKitGTK + GIO/GVfs. The website is separate; Node.js is not a desktop runtime dependency.
 
 ## This release
 
 Merge tabs into existing windows with native tab dragging or **Move tab to window…**.
 ZIP opening is an independent optional association, not the folder default.
+Connected phones exposed by GVfs now appear under This PC and can be browsed without mounting or indexing them automatically.
+Copy and cut/paste conflicts now offer **Replace existing** or **Skip duplicates**. Phone copies no longer attempt unsupported Unix permission changes through MTP.
 See [upgrade notes](UPGRADE.md) for installation and Brave diagnostics.
 
 ## Drag files between applications
@@ -30,18 +32,18 @@ Finish transfers and quit existing windows and the optional service with `openxp
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_1.0.0_all.deb
+sudo apt install ./openxplorer_1.0.2_all.deb
 openxplorer --check
 openxplorer --restart
 ```
 
-From this directory after building, use `./dist/openxplorer_1.0.0_all.deb` instead. Never run the file manager with sudo. The optional administrative mount helper is a separate command.
+From this directory after building, use `./dist/openxplorer_1.0.2_all.deb` instead. Never run the file manager with sudo. The optional administrative mount helper is a separate command.
 
 ## Build from source
 
 ```sh
 python3 tools/build_deb.py
-python3 tools/verify_deb.py dist/openxplorer_1.0.0_all.deb
+python3 tools/verify_deb.py dist/openxplorer_1.0.2_all.deb
 ```
 
 Debian/Ubuntu `dpkg-deb` is required. CairoSVG is required at build time for installer raster icons; it is not a runtime dependency. Runtime libraries are provided by APT, not vendored. No root privileges or dependency downloads are used by the package builder.
@@ -61,7 +63,7 @@ Browser tests require Python Playwright and Chromium. Native GIO tests need dist
 
 - [Zorin and Brave integration](ZORIN-SETUP.md)
 - [Complete retained feature manual](MANUAL.md)
-- [1.0.0 upgrade notes](UPGRADE.md)
+- [1.0.2 upgrade notes](UPGRADE.md)
 - [Source repository documentation](../docs/introduction.md)
 
 ## Compatibility contract

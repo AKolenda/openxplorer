@@ -14,7 +14,7 @@ Close every old Winspace/OpenXplorer window and finish file operations. Download
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_1.0.0_all.deb
+sudo apt install ./openxplorer_1.0.2_all.deb
 openxplorer --check
 openxplorer
 ```
@@ -29,7 +29,7 @@ Stop the previous background reveal service before upgrading: winspace --quit. D
 
 ## First-run checklist
 
-Open a disposable folder. Create and rename a test file, then send it to Trash. Connect to a non-critical SMB share before trusting the app with your main storage. See Known limitations in the project README before enabling advanced operations.
+Open a disposable folder. Create and rename a test file, then send it to Trash. Connect to a non-critical SMB share before trusting the app with your main storage. For a phone, unlock it and select file transfer or trust the computer when prompted; a GVfs-supported device then appears under This PC. See Known limitations in the project README before enabling advanced operations.
 
 ## Blank window or graphics trouble
 
@@ -56,4 +56,4 @@ A signed repository with a pre-indexed AppStream catalog can supply that informa
 
 ---
 
-OpenXplorer 1.0.0. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.0.2. Project-authored documentation: AGPL-3.0-only.

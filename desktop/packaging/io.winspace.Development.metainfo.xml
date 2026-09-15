@@ -19,6 +19,16 @@
     <category>FileManager</category>
   </categories>
   <releases>
+    <release version="1.0.2" date="2026-09-14" type="stable">
+      <description>
+        <p>Add explicit Replace or Skip conflict handling and fix transfers to connected phones that do not support Unix permission changes.</p>
+      </description>
+    </release>
+    <release version="1.0.1" date="2026-09-13" type="stable">
+      <description>
+        <p>Show connected Android, camera/PTP and iPhone devices in the sidebar and This PC, with native GIO browsing and hot-plug refresh.</p>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-09-13" type="stable">
       <description>
         <p>First stable release. Middle-click folders to open tabs in the background, tear tabs out onto the desktop and merge them back across windows, extract ZIP archives and open terminals in the current folder. Existing defaults remain unchanged until requested.</p>

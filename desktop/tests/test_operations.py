@@ -4,7 +4,8 @@ from pathlib import Path
 import os
 import tempfile
 import unittest
-from operations import TransferEngine
+from unittest.mock import patch
+from operations import ReplaceUnsupported, TransferEngine
 from tests.local_provider import LocalNode, Cancellation
 
 class TransferTests(unittest.TestCase):
@@ -29,7 +30,7 @@ class TransferTests(unittest.TestCase):
         r=self.run_op([p]); self.assertEqual(len(r.done),1); self.assertFalse(r.errors)
         self.assertEqual((self.dst/'tree'/'deep'/'a.txt').read_text(),'alpha')
         self.assertEqual((self.dst/'tree'/'.hidden').read_text(),'secret'); self.no_stage()
-    def test_never_overwrite(self):
+    def test_skip_never_overwrites(self):
         p=self.src/'file.txt'; p.write_text('new'); (self.dst/'file.txt').write_text('precious')
         r=self.run_op([p]); self.assertEqual(r.skipped,[p.as_uri()]); self.assertEqual((self.dst/'file.txt').read_text(),'precious'); self.no_stage()
     def test_keep_both(self):
@@ -38,6 +39,62 @@ class TransferTests(unittest.TestCase):
         r=self.run_op([p],policy='keep-both'); self.assertEqual(len(r.done),1)
         self.assertEqual((self.dst/'file (copy 3).txt').read_text(),'new')
         self.assertEqual((self.dst/'file.txt').read_text(),'old'); self.no_stage()
+    def test_replace_file_after_staging_copy_completes(self):
+        p=self.src/'file.txt';p.write_text('new');(self.dst/'file.txt').write_text('old')
+        r=self.run_op([p],policy='replace')
+        self.assertEqual(r.done,[p.as_uri()]);self.assertEqual(r.errors,[])
+        self.assertEqual((self.dst/'file.txt').read_text(),'new');self.assertEqual(p.read_text(),'new');self.no_stage()
+    def test_replace_merges_directories_and_keeps_destination_only_files(self):
+        p=self.src/'tree';p.mkdir();(p/'same.txt').write_text('new');(p/'incoming.txt').write_text('incoming')
+        target=self.dst/'tree';target.mkdir();(target/'same.txt').write_text('old');(target/'existing.txt').write_text('existing')
+        r=self.run_op([p],policy='replace')
+        self.assertEqual(r.done,[p.as_uri()]);self.assertEqual(r.errors,[])
+        self.assertEqual((target/'same.txt').read_text(),'new')
+        self.assertEqual((target/'incoming.txt').read_text(),'incoming')
+        self.assertEqual((target/'existing.txt').read_text(),'existing');self.no_stage()
+    def test_replace_type_mismatch_preserves_existing_folder(self):
+        p=self.src/'same';p.write_text('new');target=self.dst/'same';target.mkdir();(target/'keep').write_text('keep')
+        r=self.run_op([p],policy='replace')
+        self.assertTrue(r.errors);self.assertEqual((target/'keep').read_text(),'keep');self.assertEqual(p.read_text(),'new');self.no_stage()
+    def test_replace_move_is_native_and_removes_source(self):
+        p=self.src/'a';p.write_text('new');(self.dst/'a').write_text('old')
+        r=self.run_op([p],mode='move',policy='replace')
+        self.assertEqual(r.done,[p.as_uri()]);self.assertFalse(p.exists());self.assertEqual((self.dst/'a').read_text(),'new')
+    def test_replace_falls_back_to_reversible_rename_for_remote_backend(self):
+        class NoDirectReplace(LocalNode):
+            def replace_native(self, target, cancel=None):
+                raise ReplaceUnsupported('overwrite flag unsupported')
+        p=self.src/'a';p.write_text('new');(self.dst/'a').write_text('old')
+        r=self.run_op([p],policy='replace',engine=TransferEngine(NoDirectReplace))
+        self.assertEqual(r.done,[p.as_uri()]);self.assertEqual(r.errors,[])
+        self.assertEqual((self.dst/'a').read_text(),'new');self.assertEqual(p.read_text(),'new')
+        self.assertFalse(list(self.dst.glob('.winspace-replaced-*')));self.no_stage()
+    def test_replace_fallback_restores_old_file_if_install_fails(self):
+        class FailInstall(LocalNode):
+            def replace_native(self, target, cancel=None):
+                raise ReplaceUnsupported('overwrite flag unsupported')
+            def move_native(self, target, cancel=None):
+                if self.name=='payload' and target.name=='a':
+                    raise OSError('simulated install failure')
+                return super().move_native(target,cancel)
+        p=self.src/'a';p.write_text('new');(self.dst/'a').write_text('old')
+        r=self.run_op([p],policy='replace',engine=TransferEngine(FailInstall))
+        self.assertTrue(r.errors);self.assertEqual((self.dst/'a').read_text(),'old')
+        self.assertEqual(p.read_text(),'new');self.assertFalse(list(self.dst.glob('.winspace-replaced-*')));self.no_stage()
+    def test_remote_staging_does_not_attempt_unix_chmod(self):
+        remote=type('RemoteStage',(),{'uri':'mtp://device/.stage','path':'/run/user/example/gvfs/device/.stage'})()
+        with patch('operations.os.open') as opened:
+            self.engine._secure_local_staging(remote)
+        opened.assert_not_called()
+    def test_mtp_backed_copy_with_fuse_path_does_not_require_chmod(self):
+        class MtpBackedLocalNode(LocalNode):
+            def __init__(self, uri=None, path=None):
+                super().__init__(uri=uri, path=path)
+                self.uri='mtp://test-device'+self.p.as_posix()
+        p=self.src/'phone-copy.apk';p.write_bytes(b'android package fixture')
+        r=self.run_op([p],engine=TransferEngine(MtpBackedLocalNode))
+        self.assertEqual(r.done,[p.as_uri()]);self.assertEqual(r.errors,[])
+        self.assertEqual((self.dst/p.name).read_bytes(),p.read_bytes());self.no_stage()
     def test_symlink_copied_not_followed(self):
         outside=self.root/'external';outside.mkdir();(outside/'keep').write_text('keep')
         p=self.src/'link';p.symlink_to(outside,target_is_directory=True)

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Modified 2026-09-06; original notices: licenses/Winspace-MIT.txt.
 'use strict';
-/* OpenXplorer 1.0.0 — one interface, two transports: a native GIO bridge and an
+/* OpenXplorer 1.0.2 — one interface, two transports: a native GIO bridge and an
    explicitly simulated, offline preview. No libraries, CDNs or web services. */
 (() => {
 const $ = id => document.getElementById(id);
 const native = window.__OPENXPLORER_NATIVE__ === true;
-const UI_RELEASE = '1.0.0';
+const UI_RELEASE = '1.0.2';
 if (native) document.body.classList.add('native');
 document.body.classList.toggle('dark', document.documentElement.dataset.theme === 'dark');
 const NS = 'http://www.w3.org/2000/svg';
@@ -36,6 +36,7 @@ const paths = {
   network:'M8 3h8v6H8zM3 16h6v5H3zM15 16h6v5h-6zM12 9v4M6 16v-3h12v3',
   server:'M5 3h14v7H5zM5 14h14v7H5zM8 6.5h.01M8 17.5h.01M12 6.5h4M12 17.5h4',
   drive:'m5 5-3 11v5h20v-5L19 5zM2 16h20M17 18.5h.01M20 18.5h.01',
+  phone:'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM10 5h4M11 19h2',
   check:'m5 12 4 4L19 6', shield:'m12 2 8 3v6c0 5-8 11-8 11S4 16 4 11V5zM8 11l3 3 5-6',
   info:'M12 11v6M12 7h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
   sun:'M12 2v2M12 20v2M2 12h2M20 12h2m-3-7 1.5-1.5M5 19l-1.5 1.5m0-17L5 5m14 14 1.5 1.5M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0',
@@ -52,6 +53,7 @@ function icon(name, size=18) {
   if(name==='terminal')s.dataset.icon='terminal';
   s.setAttribute('viewBox','0 0 24 24'); s.setAttribute('width',size);s.setAttribute('height',size);
   s.setAttribute('fill','none');s.setAttribute('stroke','currentColor');s.setAttribute('stroke-width',name==='more'?'3':'1.35');
+  if(name==='phone')s.dataset.icon='phone';
   s.setAttribute('stroke-linecap','round');s.setAttribute('stroke-linejoin','round');s.classList.add('svg-icon');s.setAttribute('aria-hidden','true');
   const p=document.createElementNS(NS,'path');p.setAttribute('d',paths[name]||paths.documents);s.append(p);return s;
 }
@@ -99,9 +101,14 @@ function button(label,fn,cls='',ico=''){const e=elem('button',cls,label);if(ico)
 function setButton(id,ico,label='',arrow=false){const b=$(id);b.replaceChildren(icon(ico));if(label)b.append(document.createTextNode(label));if(arrow){const v=icon('down');v.classList.add('chevron');b.append(v);}}
 function prettyBytes(n){if(n===null||n===undefined)return '—';if(n<1024)return `${n} bytes`;const units=['KB','MB','GB','TB'];let u=-1;do{n/=1024;u++;}while(n>=1024&&u<3);return `${n>=100?n.toFixed(0):n.toFixed(1)} ${units[u]}`;}
 function dateText(n){return n?new Date(n*1000).toLocaleDateString(undefined,{year:'numeric',month:'2-digit',day:'2-digit'}):'—';}
-function baseName(uri){try{const u=new URL(uri);return decodeURIComponent(u.pathname.split('/').filter(Boolean).pop()||u.host)||'Local Disk';}catch{return uri;}}
-function parentUri(uri){try{const u=new URL(uri);let p=u.pathname.replace(/\/$/,'');if(!p)return null;u.pathname=p.slice(0,p.lastIndexOf('/')+1)||'/';return u.href.replace(/\/$/,(u.pathname==='/'?'/':''));}catch{return null;}}
-function displayUri(uri){if(uri==='settings:')return 'Settings';if(uri==='home:')return 'Home';if(uri==='pc:')return 'This PC';if(uri==='network:')return 'Network';try{const u=new URL(uri);if(u.protocol==='smb:')return '\\\\'+u.host+decodeURIComponent(u.pathname).replaceAll('/','\\');if(u.protocol==='file:')return decodeURIComponent(u.pathname);}catch{}return uri;}
+function deviceParts(uri){const m=typeof uri==='string'&&uri.match(/^(mtp|gphoto2|afc):\/\/([^/?#]+)(\/[^?#]*)?$/i);return m?{protocol:m[1].toLowerCase()+':',host:m[2],pathname:m[3]||'/'}:null;}
+function locationParts(uri){return deviceParts(uri)||new URL(uri);}
+function deviceLocation(uri){return !!deviceParts(uri);}
+function deviceRoot(uri){const u=deviceParts(uri);return u?u.protocol+'//'+u.host+'/':null;}
+function deviceMountName(uri){const root=deviceRoot(uri);return(state.env?.mounts||[]).find(m=>m.mounted&&deviceRoot(m.uri)===root)?.label||'Connected device';}
+function baseName(uri){try{const u=locationParts(uri),part=u.pathname.split('/').filter(Boolean).pop();return decodeURIComponent(part||'')||(deviceLocation(uri)?deviceMountName(uri):u.host)||'Local Disk';}catch{return uri;}}
+function parentUri(uri){try{const d=deviceParts(uri);if(d){const path=d.pathname.replace(/\/$/,'');if(!path)return null;const parent=path.slice(0,path.lastIndexOf('/')+1)||'/';return d.protocol+'//'+d.host+parent;}const u=new URL(uri);let p=u.pathname.replace(/\/$/,'');if(!p)return null;u.pathname=p.slice(0,p.lastIndexOf('/')+1)||'/';return u.href.replace(/\/$/,(u.pathname==='/'?'/':''));}catch{return null;}}
+function displayUri(uri){if(uri==='settings:')return 'Settings';if(uri==='home:')return 'Home';if(uri==='pc:')return 'This PC';if(uri==='network:')return 'Network';try{const u=locationParts(uri);if(u.protocol==='smb:')return '\\\\'+u.host+decodeURIComponent(u.pathname).replaceAll('/','\\');if(u.protocol==='file:')return decodeURIComponent(u.pathname);if(deviceLocation(uri)){const path=decodeURIComponent(u.pathname).replace(/^\/+|\/+$/g,'');return deviceMountName(uri)+(path?' / '+path:'');}}catch{}return uri;}
 function titleFor(uri){if(uri==='settings:')return 'Settings';if(uri==='home:'||sameLocation(uri,state.env?.home))return'Home';if(uri==='pc:')return'This PC';if(uri==='network:')return'Network';return baseName(uri);}
 function uriChild(uri,name){return uri.replace(/\/$/,'')+'/'+encodeURIComponent(name);}
 function validateName(name){if(typeof name!=='string'||!name||name==='.'||name==='..'||/[\/\\\x00-\x1f]/.test(name))throw Error('Use a name without slashes or control characters.');return name;}
@@ -266,7 +273,7 @@ function renderTabs(){
     tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(t.id===state.activeId));tab.tabIndex=t.id===state.activeId?0:-1;
     const snapshot=snapshotFor(t);
     if(snapshot)tab.classList.add('snapshot-tab');
-    const im=t.uri==='settings:'?icon('settings'):t.uri==='network:'?icon('network'):folderIcon(17);
+    const im=t.uri==='settings:'?icon('settings'):t.uri==='network:'?icon('network'):deviceLocation(t.uri)?icon('phone'):folderIcon(17);
     const wrap=elem('span','tab-icon-wrap');wrap.append(im);im.classList.add('tab-icon');
     if(networkLocation(t.uri)){wrap.classList.add('shared');wrap.append(elem('span','shared-bar'));wrap.title='Network location';}
     tab.title=displayUri(t.uri)+(networkLocation(t.uri)?' · Network location':'')+(t.savedDialog?' · Properties open':'');
@@ -294,7 +301,7 @@ async function load(t,clear=true){
 }
 function scheduleListing(){if(state.renderQueued)return;state.renderQueued=true;setTimeout(()=>{state.renderQueued=false;state.filterCache=null;renderRows();updateStatus();},90);}
 function filtered(){const t=active();if(!t)return[];const key=[t.id,t.entries.length,state.searchGeneration,state.query,state.sort,state.descending,state.showHidden].join('|');if(state.filterCache?.key===key&&!t.dirty)return state.filterCache.items;let a=(state.searchResults||t.entries).filter(e=>(state.showHidden||!e.hidden)&&(state.searchResults||state.query.toLocaleLowerCase().trim().split(/\s+/).every(term=>e.name.toLocaleLowerCase().includes(term))));const collator=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'});a.sort((x,y)=>{if(x.isDir!==y.isDir)return x.isDir?-1:1;let n;if(state.sort==='size'||state.sort==='modified')n=(state.sort==='size'?itemSize(x):x[state.sort]||0)-(state.sort==='size'?itemSize(y):y[state.sort]||0);else n=collator.compare(String(x[state.sort]||''),String(y[state.sort]||''));return (state.descending?-1:1)*n||collator.compare(x.name,y.name);});t.dirty=false;state.filterCache={key,items:a};return a;}
-function renderNavigation(){const t=active();if(!t)return;renderSnapshotBanner(t);$('back').disabled=t.index===0;$('forward').disabled=t.index>=t.history.length-1;$('up').disabled=['home:','pc:','network:','settings:'].includes(t.uri)||!parentUri(t.uri);$('search').placeholder='Search '+titleFor(t.uri);$('search').title='Search cached filenames and paths. Enable folders in Settings → Search cache.';$('search').disabled=['home:','pc:','network:','settings:'].includes(t.uri);$('address-icon').replaceChildren(icon(t.uri==='home:'?'home':t.uri==='pc:'?'desktop':t.uri==='network:'||t.uri.startsWith('smb:')?'network':'folder'));
+function renderNavigation(){const t=active();if(!t)return;renderSnapshotBanner(t);$('back').disabled=t.index===0;$('forward').disabled=t.index>=t.history.length-1;$('up').disabled=['home:','pc:','network:','settings:'].includes(t.uri)||!parentUri(t.uri);$('search').placeholder='Search '+titleFor(t.uri);$('search').title='Search cached filenames and paths. Enable folders in Settings → Search cache.';$('search').disabled=['home:','pc:','network:','settings:'].includes(t.uri)||deviceLocation(t.uri);$('address-icon').replaceChildren(icon(t.uri==='home:'?'home':t.uri==='pc:'?'desktop':t.uri==='network:'||t.uri.startsWith('smb:')?'network':deviceLocation(t.uri)?'phone':'folder'));
   const crumbs=$('breadcrumbs');crumbs.replaceChildren();
   const segments=breadcrumbSegments(t.uri);
   segments.forEach((segment,i)=>{
@@ -341,7 +348,7 @@ function renderSidebar(){
   setupPinDrop(quick);
   sb.append(elem('div','side-separator'));add('This PC','pc:','desktop',{expand:true,color:'#347ba7'});
   add('Local Disk','file:///','drive',{indent:true,drive:true});
-  for(const m of state.env.mounts.filter(m=>!m.uri?.startsWith('smb:')))add(m.label,m.uri||'','drive',{indent:true,drive:true,volume:!m.mounted?m.id:null});
+  for(const m of state.env.mounts.filter(m=>!m.uri?.startsWith('smb:')))add(m.label,m.uri||'',m.kind==='device'?'phone':'drive',{indent:true,drive:true,volume:!m.mounted?m.id:null});
   sb.append(elem('div','side-separator'));add('Network','network:','network',{expand:true,color:'#318db9'});
   for(const s of networkLocations()){const row=add(s.label,s.uri,'server',{indent:true,shared:true,network:s});row.dataset.networkSaved=String(!!s.saved);row.title=displayUri(s.uri)+' · '+(s.connected?'Connected':s.saved?'Saved · connect on open':'Opened this session');}
 }
@@ -388,10 +395,10 @@ function renderLanding(uri){const l=$('landing');if(uri==='settings:'){renderSet
   const quick=()=>{section('Quick access','pin');const g=elem('div','quick-grid');for(const p of state.env.quick){const c=button('',()=>navigate(p.uri),'quick-card');bindMiddleOpen(c,()=>p.uri);c.append(folderIcon(43));const d=elem('div');d.append(elem('div','card-name',p.label),elem('div','card-sub',p.uri.startsWith('smb:')?'Network folder':'Stored on this PC'));c.append(d);g.append(c);}l.append(g);};
   const shares=()=>{const h=section('Network locations','network');h.append(button('Map network location',()=>connectDialog()));const g=elem('div','drive-grid');for(const s of state.env.shares){const c=button('',()=>navigate(s.uri),'drive-card');bindMiddleOpen(c,()=>s.uri);const im=icon('server',46);im.style.color='#4b96c0';c.append(im);const d=elem('div','drive-info');d.append(elem('div','card-name',s.label),elem('div','card-sub',displayUri(s.uri)));const stat=elem('div','connected');stat.append(elem('span','status-dot'+(!s.connected?' offline':'')),document.createTextNode(!native?'Sample SMB location':s.connected?'Mounted in this session':'Connect on open'));d.append(stat);c.append(d);c.addEventListener('contextmenu',ev=>{ev.preventDefault();const items=[{label:'Open',icon:'folderline',fn:()=>navigate(s.uri)},{label:'Open in new tab',icon:'plus',fn:()=>addTab(s.uri)},{label:'Remove saved location',icon:'pin',fn:()=>removeBookmark(s.uri,true)}];items.push({label:'Sign out of server…',icon:'eject',fn:()=>signOut(s.uri)});openMenu(ev.clientX,ev.clientY,items);});g.append(c);}l.append(g);if(!state.env.shares.length)l.append(elem('div','notice','No network locations saved. Use “Map network location” to connect to a share and add it to the sidebar.'));};
   if(uri==='home:'){quick();shares();section('Recently opened','clock');const recent=state.env.recent||[];if(!recent.length)l.append(elem('p','quiet','Files you open in OpenXplorer will appear here.'));else{const table=elem('table','recent-table');const h=elem('tr');for(const n of ['Name','Location','Modified'])h.append(elem('th','',n));table.append(h);for(const e of recent.slice(0,8)){const r=elem('tr');r.tabIndex=0;const n=elem('td');const box=elem('div','recent-name');box.append(fileIcon(e),document.createTextNode(e.name));n.append(box);r.append(n,elem('td','',titleFor(parentUri(e.uri)||e.uri)),elem('td','',dateText(e.modified)));r.addEventListener('dblclick',()=>openEntry(e));r.addEventListener('keydown',ev=>{if(ev.key==='Enter')openEntry(e);});table.append(r);}l.append(table);}}
-  if(uri==='pc:'){quick();section('Devices and drives','drive');const g=elem('div','drive-grid');const drives=[{label:'Local Disk',uri:'file:///',mounted:true},...state.env.mounts.filter(m=>!m.uri?.startsWith('smb:'))];for(const m of drives){const c=button('',()=>m.mounted?navigate(m.uri):mountVolume(m.id),'drive-card');bindMiddleOpen(c,()=>m.mounted?m.uri:null);c.append(icon('drive',46));const d=elem('div','drive-info');d.append(elem('div','card-name',m.label),elem('div','card-sub',m.mounted?displayUri(m.uri):'Click to mount'));if(m.total){const bar=elem('div','capacity');const fill=elem('span');fill.style.width=((m.total-m.free)/m.total*100)+'%';bar.append(fill);d.append(bar,elem('div','card-sub',prettyBytes(m.free)+' free of '+prettyBytes(m.total)));}c.append(d);if(m.mounted&&m.uri!=='file:///')c.addEventListener('contextmenu',ev=>{ev.preventDefault();openMenu(ev.clientX,ev.clientY,[{label:'Disconnect mount',icon:'eject',fn:()=>unmount(m.uri)}]);});g.append(c);}l.append(g);shares();}
+  if(uri==='pc:'){quick();section('Devices and drives','drive');const g=elem('div','drive-grid');const drives=[{label:'Local Disk',uri:'file:///',mounted:true},...state.env.mounts.filter(m=>!m.uri?.startsWith('smb:'))];for(const m of drives){const c=button('',()=>m.mounted?navigate(m.uri):mountVolume(m.id),'drive-card');bindMiddleOpen(c,()=>m.mounted?m.uri:null);c.append(icon(m.kind==='device'?'phone':'drive',46));const d=elem('div','drive-info');d.append(elem('div','card-name',m.label),elem('div','card-sub',m.mounted?(m.kind==='device'?'Connected device':displayUri(m.uri)):'Click to connect'));if(m.total){const bar=elem('div','capacity');const fill=elem('span');fill.style.width=((m.total-m.free)/m.total*100)+'%';bar.append(fill);d.append(bar,elem('div','card-sub',prettyBytes(m.free)+' free of '+prettyBytes(m.total)));}c.append(d);if(m.mounted&&m.uri!=='file:///'&&m.canUnmount!==false)c.addEventListener('contextmenu',ev=>{ev.preventDefault();openMenu(ev.clientX,ev.clientY,[{label:m.kind==='device'?'Disconnect device':'Disconnect mount',icon:'eject',fn:()=>unmount(m.uri)}]);});g.append(c);}l.append(g);shares();}
   if(uri==='network:'){const b=elem('div','network-banner');b.append(icon('network',38));const d=elem('div');d.append(elem('div','','Map a network location'),elem('p','','Use \\\\server\\share or smb://server/share.'));b.append(d,button('Connect',()=>connectDialog(),'primary'));l.append(b);shares();section('How connections work','shield');l.append(elem('div','notice',native?'Credentials are requested by the system mount dialog, not this interface. Saved locations reconnect when opened. This does not edit /etc/fstab, assign Windows drive letters, or change server permissions.':'This preview uses sample files. It never connects to your NAS, asks for a password, or accesses your computer. The desktop application uses native GIO/GVfs mounts.'));}
 }
-function updateStatus(){const t=active();if(!t)return;const n=filtered().length;$('status-count').textContent=t.busy?`${n} items · Loading…`:['home:','pc:','network:','settings:'].includes(t.uri)?'Ready':`${n} item${n!==1?'s':''}`;$('status-selected').textContent=state.selection.size?`${state.selection.size} selected`:'';if(state.query)$('status-count').textContent=state.searchBusy?'Searching…':`${n} result${n===1?'':'s'}${state.searchResultMeta?.truncated?' (first 500)':''}${state.searchResultMeta?.source==='cache'?' · Cached':''}`;$('status-mode').textContent=native?'OpenXplorer 1.0.0 · Stable release':'OpenXplorer 1.0.0 preview · Sample data';$('status-list').classList.toggle('active',state.view==='details');$('status-grid').classList.toggle('active',state.view==='grid');}
+function updateStatus(){const t=active();if(!t)return;const n=filtered().length;$('status-count').textContent=t.busy?`${n} items · Loading…`:['home:','pc:','network:','settings:'].includes(t.uri)?'Ready':`${n} item${n!==1?'s':''}`;$('status-selected').textContent=state.selection.size?`${state.selection.size} selected`:'';if(state.query)$('status-count').textContent=state.searchBusy?'Searching…':`${n} result${n===1?'':'s'}${state.searchResultMeta?.truncated?' (first 500)':''}${state.searchResultMeta?.source==='cache'?' · Cached':''}`;$('status-mode').textContent=native?'OpenXplorer 1.0.2 · Stable release':'OpenXplorer 1.0.2 preview · Sample data';$('status-list').classList.toggle('active',state.view==='details');$('status-grid').classList.toggle('active',state.view==='grid');}
 function updateToolbar(){scheduleFileDragLayout();const s=selected(),busy=!!state.operation||s.some(e=>!canOperate(e)),readOnly=s.some(e=>e.readOnly||readonlyLocation(e.uri));$('copy').disabled=!s.length||busy;for(const id of ['cut','trash'])$(id).disabled=!s.length||busy||readOnly;$('rename').disabled=s.length!==1||busy||readOnly;{const label=deleteLabel(s[0]?.uri||active()?.uri||'');$('trash').title=label+' (Delete)';$('trash').setAttribute('aria-label',label);}$('copy-path').disabled=s.length>1;$('paste').disabled=!!state.query||!state.clipboard||busy||!writableLocation(active()?.uri);$('new').disabled=!!state.query||!!state.operation||!writableLocation(active()?.uri);}
 function toggleDetails(){state.details=!state.details;fire('preferences',{details:state.details});renderContent();}
 function changeView(view){resetTypeSelect();state.view=view;fire('preferences',{view});$('file-scroll').scrollTop=0;renderContent();}
@@ -421,7 +428,22 @@ async function copySelection(mode){
 }
 
 async function copyPath(){const e=selected();const uri=e.length===1?e[0].uri:active().uri;if(['home:','pc:','network:','settings:'].includes(uri)){toast('Open a folder first.');return;}const text=displayUri(uri);try{await call('clipboardText',{text});toast('Path copied. Sharing permissions are unchanged.');}catch(e){showMessage('Location',text);}}
-async function paste(){await refreshClipboard();if(state.query){toast('Open the destination folder before pasting.');return;}if(!state.clipboard||state.operation)return;const target=active().uri;if(!writableLocation(target))return;const clip={...state.clipboard,uris:[...state.clipboard.uris]};const answer=await showModal(clip.mode==='move'?'Move items here?':'Copy items here?',`${clip.uris.length} item(s) → ${displayUri(target)}\n\nExisting files are never overwritten. Choose how to handle a name already in use.`,null,[{label:'Cancel',cancel:true},{label:'Skip duplicates',fn:()=>({policy:'skip'})},{label:'Keep both',className:'primary',fn:()=>({policy:'keep-both'})}]);if(!answer)return;await runOperation(clip.mode,{uris:clip.uris,target,policy:answer.policy,clipboardToken:clip.token});}
+async function transferWithConflicts(mode,args){
+  if(state.operation||state.transferPlanning)return;
+  state.transferPlanning=true;
+  try{
+    const {conflicts}=await call('transferConflicts',{target:args.target,uris:args.uris});
+    let policy='skip'; // A name appearing after this check must never be overwritten silently.
+    if(conflicts.length){
+      const answer=await showModal('Items already exist',`${conflicts.length} matching name(s) in ${displayUri(args.target)}\n\nReplace existing files or skip conflicts. Same-name folders are merged; destination-only files stay in place.`,null,[{label:'Cancel',cancel:true},{label:'Skip duplicates',fn:()=>({policy:'skip'})},{label:'Replace existing',className:'primary',fn:()=>({policy:'replace'})}]);
+      if(!answer)return;
+      policy=answer.policy;
+    }
+    if(!state.operation)await runOperation(mode,{...args,policy});
+  }catch(e){await showMessage('Could not check destination',e.message);}
+  finally{state.transferPlanning=false;}
+}
+async function paste(){await refreshClipboard();if(state.query){toast('Open the destination folder before pasting.');return;}if(!state.clipboard||state.operation)return;const target=active().uri;if(!writableLocation(target))return;const clip={...state.clipboard,uris:[...state.clipboard.uris]};await transferWithConflicts(clip.mode,{uris:clip.uris,target,clipboardToken:clip.token});}
 async function rename(){const s=selected();if(s.length!==1||state.operation||!canOperate(s[0])||readonlyLocation(s[0].uri))return;const result=await nameDialog('Rename',s[0].name,name=>call('rename',{uri:s[0].uri,name}));if(result){state.selection.clear();load(active(),false);}}
 // Locations without a Trash (SMB shares, most remote backends) get an explicit
 // permanent delete instead of a Trash move that can only fail.
@@ -586,8 +608,7 @@ async function receiveFileDrop(data){
   const target=data.target;
   if(data.kind!=='copy'||!fileDragEntry({uri:target})||!writableLocation(target)){toast('Open a writable destination folder before dropping files.');return;}
   if(uris.some(uri=>sameLocation(uri,target))){toast('A folder cannot be copied into itself.');return;}
-  const answer=await showModal('Copy dropped items?',`${uris.length} item(s) → ${displayUri(target)}\n\nExisting files are never overwritten. Choose how to handle a name already in use.`,null,[{label:'Cancel',cancel:true},{label:'Skip duplicates',fn:()=>({policy:'skip'})},{label:'Keep both',className:'primary',fn:()=>({policy:'keep-both'})}]);
-  if(answer&&!state.operation)await runOperation('copy',{uris,target,policy:answer.policy});
+  await transferWithConflicts('copy',{uris,target});
 }
 function clearDropFeedback(){
   const q=$('quick-access');q?.classList.remove('pin-drop-active');
@@ -668,7 +689,7 @@ async function setCache(uri,enabled,label){
 }
 function isCachedRoot(uri){return (state.cache?.roots||[]).some(r=>r.enabled&&sameLocation(r.uri,uri));}
 async function openContainingFolder(e){await navigate(e.parentUri||parentUri(e.uri));const i=filtered().findIndex(v=>v.uri===e.uri);if(i>=0){state.selection=new Set([e.uri]);state.anchor=i;$('file-scroll').scrollTop=Math.max(0,i*38-80);renderRows();renderDetails();updateToolbar();updateStatus();}}
-function cacheMenuItems(uri,label){if(!uri||isSmbServer(uri)||['pc:','network:'].includes(uri))return[];return[{label:isCachedRoot(uri)?'Stop caching this folder':'Cache this folder for search',icon:isCachedRoot(uri)?'check':'search',fn:()=>setCache(uri,!isCachedRoot(uri),label)}];}
+function cacheMenuItems(uri,label){if(!uri||deviceLocation(uri)||isSmbServer(uri)||['pc:','network:'].includes(uri))return[];return[{label:isCachedRoot(uri)?'Stop caching this folder':'Cache this folder for search',icon:isCachedRoot(uri)?'check':'search',fn:()=>setCache(uri,!isCachedRoot(uri),label)}];}
 
 // A separate, higher modal layer leaves an in-progress Map Location dialog
 // intact. Multiple GIO challenges are queued; Cancel replies only to its token.
@@ -764,8 +785,8 @@ function renderSettingsPage(page){
 }
 function renderSettingsCache(){
   const list=$('settings-cache-list');if(!list)return;list.replaceChildren();
-  const roots=state.cache?.roots||[],places=[];const add=(uri,label)=>{uri=realLocation(uri);if(uri&&!['pc:','network:','settings:'].includes(uri)&&!isSmbServer(uri)&&!places.some(p=>sameLocation(p.uri,uri)))places.push({uri,label:label||titleFor(uri)});};
-  add(state.settingsOrigin||active()?.uri,titleFor(state.settingsOrigin||active()?.uri||''));for(const r of roots)add(r.uri,r.label);add(state.env?.home,'Home');for(const q of state.env?.quick||[])add(q.uri,q.label);for(const s of state.env?.shares||[])add(s.uri,s.label);add('file:///','Local Disk');for(const m of state.env?.mounts||[])if(m.mounted)add(m.uri,m.label);
+  const roots=state.cache?.roots||[],places=[];const add=(uri,label)=>{uri=realLocation(uri);if(uri&&!['pc:','network:','settings:'].includes(uri)&&!deviceLocation(uri)&&!isSmbServer(uri)&&!places.some(p=>sameLocation(p.uri,uri)))places.push({uri,label:label||titleFor(uri)});};
+  add(state.settingsOrigin||active()?.uri,titleFor(state.settingsOrigin||active()?.uri||''));for(const r of roots)add(r.uri,r.label);add(state.env?.home,'Home');for(const q of state.env?.quick||[])add(q.uri,q.label);for(const s of state.env?.shares||[])add(s.uri,s.label);add('file:///','Local Disk');for(const m of state.env?.mounts||[])if(m.mounted&&!deviceLocation(m.uri))add(m.uri,m.label);
   for(const p of places){const r=roots.find(r=>sameLocation(r.uri,p.uri));const row=elem('div','cache-setting-row');const label=elem('label');const cb=elem('input');cb.type='checkbox';cb.checked=!!r?.enabled;cb.setAttribute('aria-label','Cache '+p.label);cb.onchange=async()=>{cb.disabled=true;await setCache(p.uri,cb.checked,p.label);};label.append(cb,folderIcon(24));const text=elem('div','cache-folder-text');text.append(elem('strong','',p.label),elem('span','cache-folder-path',displayUri(p.uri)));label.append(text);row.append(label);const meta=elem('div','cache-row-meta');const status=r?.enabled?`${r.status} · ${Number(r.count||0).toLocaleString()} names · ${r.update_mode||'Snapshot'}`:'Not cached';const statusText=elem('span','cache-row-status',status);statusText.title=r?.watch_error||r?.error|| (r?.updated?'Last full refresh: '+new Date(r.updated*1000).toLocaleString():'Not yet scanned');meta.append(statusText);if(r?.enabled){const scan=button('',async()=>{await call(r.status==='Indexing'?'cacheStop':'cacheRefresh',{uri:p.uri});await refreshCacheStatus();},'cache-small',r.status==='Indexing'?'cancel':'refresh');scan.title=r.status==='Indexing'?'Stop indexing':'Refresh cache';scan.setAttribute('aria-label',scan.title+' '+p.label);meta.append(scan);const clear=button('',async()=>{await call('cacheClear',{uri:p.uri});await refreshCacheStatus();},'cache-small','trash');clear.title='Clear cached names only';clear.setAttribute('aria-label','Clear cache for '+p.label);meta.append(clear);}row.append(meta);list.append(row);}
 }
 async function updateDefaultStatus(){try{const d=await call('desktopStatus');renderDefaultStatus(d);}catch(e){if($('default-status'))$('default-status').textContent=e.message;}}
@@ -865,7 +886,7 @@ function setup(){
   $('new').onclick=()=>openNewMenu();
   $('sort').onclick=()=>menuBelow('sort',[...['name','modified','type','size'].map(s=>({label:{name:'Name',modified:'Date modified',type:'Type',size:'Size'}[s],icon:state.sort===s?'check':'sort',fn:()=>{state.sort=s;state.filterCache=null;renderColumns();renderRows();}})),'-',{label:state.descending?'Descending':'Ascending',icon:state.descending?'down':'up',fn:()=>{state.descending=!state.descending;state.filterCache=null;renderColumns();renderRows();}}]);
   $('view').onclick=()=>menuBelow('view',[{label:'Details',icon:state.view==='details'?'check':'list',fn:()=>changeView('details')},{label:'Large icons',icon:state.view==='grid'?'check':'grid',fn:()=>changeView('grid')},'-',{label:'Show hidden files',icon:state.showHidden?'check':'eye',fn:toggleHidden},{label:'Details pane',icon:state.details?'check':'details',fn:toggleDetails},'-',{label:'Larger text',icon:'plus',shortcut:'Ctrl++',fn:()=>changeTextSize('increase')},{label:'Smaller text',icon:'minus',shortcut:'Ctrl+−',fn:()=>changeTextSize('decrease')},{label:'Reset text size',icon:'refresh',shortcut:'Ctrl+0',fn:()=>changeTextSize('reset')}]);
-  $('more').onclick=()=>menuBelow('more',[{label:'New window',icon:'plus',shortcut:'Ctrl+N',fn:()=>call('newWindow',{uri:active().uri.startsWith('file:')||active().uri.startsWith('smb:')?active().uri:state.env.home})},{label:'Settings',icon:'settings',fn:settingsDialog},{label:'Default file explorer…',icon:'folderline',fn:()=>settingsDialog('default')},...cacheMenuItems(active().uri),{label:'Map network location',icon:'network',fn:connectDialog},{label:'Pin current folder',icon:'pin',fn:pinCurrent,disabled:['home:','pc:','network:','settings:'].includes(active().uri)},'-',{label:'Light appearance',icon:state.theme==='light'?'check':'sun',fn:()=>applyTheme('light')},{label:'Dark appearance',icon:state.theme==='dark'?'check':'moon',fn:()=>applyTheme('dark')},{label:'Use system appearance',icon:state.theme==='system'?'check':'desktop',fn:()=>applyTheme('system')},{label:'Show hidden files',icon:state.showHidden?'check':'eye',fn:toggleHidden},'-',{label:'License & source',icon:'code',fn:showLicense},{label:'About this build',icon:'info',fn:()=>showMessage('OpenXplorer 1.0.0','An independent Windows 11–inspired file manager for Zorin.\n\n'+(native?'Desktop: WebKitGTK + GIO/GVfs.':'Offline preview: sample data only.')+'\n\nStable release. No overwriting or permanent-delete fallback. Cached filename/path search is opt-in. Thumbnails, undo, and cross-filesystem cut/move are not implemented. ZIP browsing is read-only; local cache changes use inotify. Network changes use incremental polling.')}]);
+  $('more').onclick=()=>menuBelow('more',[{label:'New window',icon:'plus',shortcut:'Ctrl+N',fn:()=>call('newWindow',{uri:active().uri.startsWith('file:')||active().uri.startsWith('smb:')?active().uri:state.env.home})},{label:'Settings',icon:'settings',fn:settingsDialog},{label:'Default file explorer…',icon:'folderline',fn:()=>settingsDialog('default')},...cacheMenuItems(active().uri),{label:'Map network location',icon:'network',fn:connectDialog},{label:'Pin current folder',icon:'pin',fn:pinCurrent,disabled:['home:','pc:','network:','settings:'].includes(active().uri)},'-',{label:'Light appearance',icon:state.theme==='light'?'check':'sun',fn:()=>applyTheme('light')},{label:'Dark appearance',icon:state.theme==='dark'?'check':'moon',fn:()=>applyTheme('dark')},{label:'Use system appearance',icon:state.theme==='system'?'check':'desktop',fn:()=>applyTheme('system')},{label:'Show hidden files',icon:state.showHidden?'check':'eye',fn:toggleHidden},'-',{label:'License & source',icon:'code',fn:showLicense},{label:'About this build',icon:'info',fn:()=>showMessage('OpenXplorer 1.0.2','An independent Windows 11–inspired file manager for Zorin.\n\n'+(native?'Desktop: WebKitGTK + GIO/GVfs.':'Offline preview: sample data only.')+'\n\nStable release. Replacing existing files requires confirmation; there is no permanent-delete fallback. Cached filename/path search is opt-in. Thumbnails, undo, and cross-filesystem cut/move are not implemented. ZIP browsing is read-only; local cache changes use inotify. Network changes use incremental polling.')}]);
   $('theme-toggle').onclick=appearanceMenu;setButton('settings-button','settings');$('settings-button').onclick=settingsDialog;
   $('details-toggle').onclick=toggleDetails;$('status-list').onclick=()=>changeView('details');$('status-grid').onclick=()=>changeView('grid');$('connect-sidebar').onclick=connectDialog;$('transfer-cancel').onclick=()=>{if(state.operation){fire('cancel',{token:state.operation});$('transfer-label').textContent='Cancelling…';}};
   if(!native&&window.matchMedia){window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(state.theme==='system')applyTheme('system',false);});}
@@ -1055,6 +1076,7 @@ const demo = (()=>{
     case'desktopRestore':store.reveal=false;demoDefault=false;return{isDefault:false,allDefault:false,revealEnabled:false,revealOwned:false,canRestore:false,current:{'inode/directory':'org.gnome.Nautilus.desktop'}};
     case'desktopStatus':return{zipDefault:!!store.zipDefault,canRestoreZip:!!store.zipDefault,isDefault:demoDefault,allDefault:demoDefault,revealEnabled:!!store.reveal,revealOwned:!!store.reveal,canRestore:demoDefault,current:{'application/zip':store.zipDefault?'io.winspace.Development.desktop':'org.gnome.FileRoller.desktop','x-scheme-handler/smb':demoDefault?'io.winspace.Development.desktop':'org.gnome.Nautilus.desktop','inode/directory':demoDefault?'io.winspace.Development.desktop':'org.gnome.Nautilus.desktop'}};
     case'environment':return{knownFolders:knownFolders.map(f=>({...f})),stableMounts:[stableMount],snapshotRoots:[...snapshotRoots],home:root,quick:[...quick],shares:[...shares],mounts:[{label:'2 TB Volume',uri:'file:///media/demo/Archive',mounted:true,total:2000000000000,free:1100000000000}],recent:[...entries.values()].filter(e=>!e.isDir&&e.uri.startsWith(docs)).slice(0,4),preferences:{...prefs},systemDark:!!window.matchMedia?.('(prefers-color-scheme: dark)').matches};
+    case'transferConflicts':ensureDir(a.target);return{conflicts:a.uris.filter(uri=>exists(uriChild(a.target,baseName(uri))))};
     case'normalise':return{uri:normaliseAddress(a.value,a.base)};
     case'list':ensureDir(a.uri);return{uri:a.uri,entries:immediateChildren(a.uri).filter(e=>a.showHidden||!e.hidden).map(e=>({...e}))};
     case'preferences':prefs={...prefs,...a};savePreview();return true;
@@ -1078,7 +1100,7 @@ const demo = (()=>{
     case'cancel':cancelled.add(a.token);return true;
     case'operate':{const done=[],errors=[],skipped=[];for(let i=0;i<a.uris.length;i++){if(cancelled.has(a.token))break;const uri=a.uris[i],src=entries.get(uri);if(!src){errors.push(baseName(uri)+': source no longer exists.');continue;}
       if(a.mode==='trash'||a.mode==='delete'){for(const key of [...entries.keys()])if(key===uri||key.startsWith(uri+'/'))entries.delete(key);done.push(uri);}
-      else{ensureDir(a.target);if(a.target===uri||a.target.startsWith(uri+'/')){errors.push(src.name+': cannot place a folder inside itself.');continue;}let name=src.name,dst=uriChild(a.target,name);if(exists(dst)){if(a.policy==='skip'){skipped.push(uri);continue;}let count=2;const dot=!src.isDir&&name.lastIndexOf('.')>0?name.lastIndexOf('.'):-1;const stem=dot>0?name.slice(0,dot):name,ext=dot>0?name.slice(dot):'';while(exists(dst)){name=stem+' (copy '+(count++)+')'+ext;dst=uriChild(a.target,name);}}
+      else{ensureDir(a.target);if(a.target===uri||a.target.startsWith(uri+'/')){errors.push(src.name+': cannot place a folder inside itself.');continue;}let name=src.name,dst=uriChild(a.target,name);if(exists(dst)){if(a.policy==='skip'){skipped.push(uri);continue;}if(a.policy==='replace'&&entries.get(dst)?.isDir!==src.isDir){errors.push(src.name+': a file and folder have the same name.');continue;}if(a.policy==='keep-both'){let count=2;const dot=!src.isDir&&name.lastIndexOf('.')>0?name.lastIndexOf('.'):-1;const stem=dot>0?name.slice(0,dot):name,ext=dot>0?name.slice(dot):'';while(exists(dst)){name=stem+' (copy '+(count++)+')'+ext;dst=uriChild(a.target,name);}}}
       const all=[...entries.values()].filter(e=>e.uri===uri||e.uri.startsWith(uri+'/'));for(const e of all){const dest=dst+e.uri.slice(uri.length);entries.set(dest,{...e,uri:dest,name:e.uri===uri?name:e.name});}if(a.mode==='move')for(const e of all)entries.delete(e.uri);done.push(uri);}
       window.__nativeEvent('transfer',{token:a.token,label:(a.mode==='copy'?'Copying ':a.mode==='move'?'Moving ':a.mode==='delete'?'Deleting ':'Trashing ')+src.name,fraction:(i+1)/a.uris.length});await new Promise(r=>setTimeout(r,120));}return{done,errors,skipped,cancelled:cancelled.has(a.token)};}
     case'window':case'chrome':case'uiReady':return true;
@@ -1114,7 +1136,7 @@ async function start(){
 /* 0.4: compact context menus, properties, XDG locations, templates, versions. */
 function readonlyLocation(uri) {
   if (!uri) return false;
-  let parts=[]; try { parts=decodeURIComponent(new URL(uri).pathname).split('/'); } catch {}
+  let parts=[]; try { parts=decodeURIComponent(locationParts(uri).pathname).split('/'); } catch {}
   return parts.some(p=>['.snapshot','.snapshots','#snapshot'].includes(p)||p.startsWith('@GMT-')) ||
     parts.some((p,i)=>p==='.zfs'&&parts[i+1]==='snapshot') ||
     (state.env?.snapshotRoots||[]).some(root=>sameLocation(uri,root)||uri.startsWith(root.replace(/\/$/,'')+'/'));
@@ -1478,10 +1500,11 @@ async function archiveDialog(entry){
 function breadcrumbSegments(uri){
   if(['home:','pc:','network:','settings:'].includes(uri))return[{label:titleFor(uri),uri}];
   try{
-    const u=new URL(uri),parts=u.pathname.split('/').filter(Boolean),result=[];
+    const u=locationParts(uri),parts=u.pathname.split('/').filter(Boolean),result=[];
     let acc;
     if(u.protocol==='smb:'){acc='smb://'+u.host;result.push({label:u.host,uri:acc+'/'});}
     else if(u.protocol==='file:'){acc='file://';result.push({label:'/',uri:'file:///'});}
+    else if(deviceLocation(uri)){acc=u.protocol+'//'+u.host;result.push({label:deviceMountName(uri),uri:acc+'/'});}
     else return[{label:uri,uri}];
     for(const part of parts){acc+='/'+part;result.push({label:decodeURIComponent(part),uri:acc});}
     return result;
@@ -1901,6 +1924,6 @@ async function braveDialog(destination=null){
   }}]);
 }
 
-window.OpenXplorer={moveTabMenu,moveTabToWindow,receiveTransferredTab,settleIncomingTab,finishTabTransfer,reorderTab,renderDefaultStatus,changeZipDefault,extractDialog,changeTextSize,applyTextSize,isZipEntry,zipFolderIcon,prepareTabTransfer,detachTab,restoreTransferredTab,settingsSearch,windowsMenu,handleFileManagerRequest,networkLocations,braveDialog,previewTransport:native?null:demo,snapshotFor,renderTabs,renderSidebar,closeModal,icon,folderIcon,fileIcon,breadcrumbSegments,networkLocation,uniqueEditors,applyLayout,resetLayout,switchTab,closeTab,scanFolderSizes,stopSizeScan,state,navigate,addTab,refreshEnvironment,call,normaliseAddress,validateName,applyTheme,settingsDialog,authPreview,receiveAuth,dismissAuth,runSearch,refreshCacheStatus,discoverNetwork,signOut,goHistory,propertiesDialog,openWithDialog,entryMenu,newTemplateDialog,openNewMenu,readonlyLocation,openEntry,archiveDialog,copySelection,paste,refreshClipboard};
+window.OpenXplorer={moveTabMenu,moveTabToWindow,receiveTransferredTab,settleIncomingTab,finishTabTransfer,reorderTab,renderDefaultStatus,changeZipDefault,extractDialog,changeTextSize,applyTextSize,isZipEntry,zipFolderIcon,prepareTabTransfer,detachTab,restoreTransferredTab,settingsSearch,windowsMenu,handleFileManagerRequest,networkLocations,braveDialog,previewTransport:native?null:demo,snapshotFor,renderTabs,renderSidebar,closeModal,icon,folderIcon,fileIcon,breadcrumbSegments,deviceLocation,displayUri,networkLocation,uniqueEditors,applyLayout,resetLayout,switchTab,closeTab,scanFolderSizes,stopSizeScan,state,navigate,addTab,refreshEnvironment,call,normaliseAddress,validateName,applyTheme,settingsDialog,authPreview,receiveAuth,dismissAuth,runSearch,refreshCacheStatus,discoverNetwork,signOut,goHistory,propertiesDialog,openWithDialog,entryMenu,newTemplateDialog,openNewMenu,readonlyLocation,openEntry,archiveDialog,copySelection,paste,refreshClipboard};
 start();
 })();

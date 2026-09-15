@@ -71,6 +71,9 @@ class LocalNode:
         if rename(-100, os.fsencode(self.p), -100, os.fsencode(target.p), 1):
             e=ctypes.get_errno()
             raise OSError(e, os.strerror(e))
+    def replace_native(self, target, cancel=None):
+        if cancel: cancel.check()
+        os.replace(self.p, target.p)
     def delete(self):
         if self.p.is_dir() and not self.p.is_symlink(): self.p.rmdir()
         else: self.p.unlink()
