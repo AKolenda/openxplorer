@@ -1,3 +1,8 @@
+# 1.1.2 — 2026-09-19
+
+- Move Check for updates to an icon beside the bottom-right view controls.
+- Remove the native status bar’s green stable-release indicator; version information remains in About and the updater.
+
 # 1.1.1 — 2026-09-19
 
 - Show a theme-matched native file-manager layout immediately while the interface starts, replacing the centered startup message and spinner.

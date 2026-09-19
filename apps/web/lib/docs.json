@@ -40,7 +40,7 @@
         "id": "release-status",
         "title": "Know what you are installing",
         "paragraphs": [
-          "Version 1.1.1 shows the file-manager layout immediately during startup instead of a centered startup message and spinner. The in-app updater and safety fixes from 1.1.0 remain included. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration."
+          "Version 1.1.2 places Check for updates beside the bottom-right view controls and removes the native stable-release status indicator. It includes the immediate startup layout from 1.1.1 and the updater and safety fixes from 1.1.0. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration."
         ],
         "callout": "Use a disposable folder and a non-critical share first. Native Zorin/WebKit, live NAS access, keyring behavior, and browser/portal integration have not been validated in the release environment."
       },
@@ -73,14 +73,14 @@
         "paragraphs": [
           "Close every old Winspace/OpenXplorer window and finish file operations. Download the .deb, then run these commands from that download directory as your normal user."
         ],
-        "code": "sudo apt update\nsudo apt install ./openxplorer_1.1.1_all.deb\nopenxplorer --check\nopenxplorer",
+        "code": "sudo apt update\nsudo apt install ./openxplorer_1.1.2_all.deb\nopenxplorer --check\nopenxplorer",
         "callout": "This is a local unsigned package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts."
       },
       {
         "id": "app-updates",
         "title": "Update from inside the app",
         "paragraphs": [
-          "Starting with 1.1.0, click Check for updates at the bottom of the sidebar. This contacts the public OpenXplorer GitHub Releases API only when requested. Review the version and release notes, then choose Install update. Finish file operations and tab moves first.",
+          "Click the Check for updates icon at the bottom right, beside the view controls. In 1.1.0 and 1.1.1, this button is at the bottom of the sidebar. This contacts the public OpenXplorer GitHub Releases API only when requested. Review the version and release notes, then choose Install update. Finish file operations and tab moves first.",
           "The installed Debian app downloads the release installer, verifies its GitHub SHA-256 digest and package identity, then asks for system administrator approval through polkit. APT installs the update without removing packages. Choose Restart now when finished; restarting closes existing windows and tabs.",
           "Older releases need one manual upgrade to 1.1.0 before this control is available. Source checkouts can check versions but cannot install in-app. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature."
         ]
@@ -463,7 +463,7 @@
           "The website remains a Next.js static export. pnpm build writes apps/web/out, and pnpm check performs dependency-aware TypeScript checking. Cloudflare Workers Static Assets serves that export without a framework migration or application backend. The offline preview renderer does not exercise the Next.js runtime.",
           "The native experience roadmap and public source checklist are in docs/NATIVE-EXPERIENCE-ROADMAP.md and docs/PUBLIC-RELEASE-CHECKLIST.md. They distinguish remaining desktop work, source-publication preparation and stable-release validation."
         ],
-        "code": "pnpm check\npnpm build\npnpm preview\n\n# Desktop package (Debian-family build host)\npython3 desktop/tools/build_deb.py\npython3 desktop/tools/verify_deb.py desktop/dist/openxplorer_1.1.1_all.deb"
+        "code": "pnpm check\npnpm build\npnpm preview\n\n# Desktop package (Debian-family build host)\npython3 desktop/tools/build_deb.py\npython3 desktop/tools/verify_deb.py desktop/dist/openxplorer_1.1.2_all.deb"
       },
       {
         "id": "contribute",

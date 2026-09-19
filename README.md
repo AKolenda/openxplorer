@@ -14,7 +14,7 @@ Browse local folders and SMB shares with tabs, clickable paths, pinned folders, 
 
 Get the Debian package from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases), then follow the [installation guide](docs/installation.md). Finish file operations and run `openxplorer --quit` before upgrading.
 
-Version **1.1.1** shows the app layout immediately while startup finishes, replacing the centered startup message and spinner. Version 1.1.0 users can install it from **Check for updates** in the sidebar; older versions need one manual upgrade from GitHub. See the [changelog](desktop/CHANGELOG.md), [test report](TEST-REPORT.md) and [release checklist](docs/RELEASE-CHECKLIST.md) for verification and remaining target-machine checks.
+Version **1.1.2** moves the update action beside the bottom-right view controls and removes the green stable-release indicator. Version 1.1.0 and 1.1.1 users can install it from **Check for updates** in the sidebar; older versions need one manual upgrade from GitHub. See the [changelog](desktop/CHANGELOG.md), [test report](TEST-REPORT.md) and [release checklist](docs/RELEASE-CHECKLIST.md) for verification and remaining target-machine checks.
 
 ## Develop
 
