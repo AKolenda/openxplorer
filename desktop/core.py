@@ -14,8 +14,8 @@ import tempfile
 import threading
 from urllib.parse import quote, unquote, SplitResult, urlsplit, urlunsplit
 
-VERSION = '1.1.0'
-DEBIAN_VERSION = '1.1.0'
+VERSION = '1.1.1'
+DEBIAN_VERSION = '1.1.1'
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
 DEVICE_SCHEMES = frozenset({'mtp', 'gphoto2', 'afc'})
 DEVICE_URI = re.compile(r'^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#]+)(/[^?#]*)?$')

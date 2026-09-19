@@ -1,3 +1,8 @@
+# 1.1.1 — 2026-09-19
+
+- Show a theme-matched native file-manager layout immediately while the interface starts, replacing the centered startup message and spinner.
+- Keep static placeholders until the real interface is ready, with retry and software-rendering recovery on failure.
+
 # 1.1.0 — 2026-09-19
 
 - Add manual in-app release checks, verified Debian downloads, administrator-approved APT installation and safe restart.
