@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from operations import ReplaceUnsupported, TransferEngine
+from previous_versions import PreviousVersions
 from tests.local_provider import LocalNode, Cancellation
 
 class TransferTests(unittest.TestCase):
@@ -95,6 +96,16 @@ class TransferTests(unittest.TestCase):
         r=self.run_op([p],engine=TransferEngine(MtpBackedLocalNode))
         self.assertEqual(r.done,[p.as_uri()]);self.assertEqual(r.errors,[])
         self.assertEqual((self.dst/p.name).read_bytes(),p.read_bytes());self.no_stage()
+    def test_remote_directory_copy_never_applies_unix_modes(self):
+        class DeviceNode(LocalNode):
+            def __init__(self, uri=None, path=None):
+                super().__init__(uri=uri, path=path)
+                self.uri='mtp://test-device'+self.p.as_posix()
+        source=self.src/'private';source.mkdir(mode=0o700);(source/'data').write_text('data')
+        with patch('operations.os.fchmod',side_effect=OSError('Unsupported device chmod')) as chmod:
+            result=self.run_op([source],engine=TransferEngine(DeviceNode))
+        self.assertEqual(result.errors,[]);self.assertEqual(len(result.done),1)
+        chmod.assert_not_called();self.no_stage()
     def test_symlink_copied_not_followed(self):
         outside=self.root/'external';outside.mkdir();(outside/'keep').write_text('keep')
         p=self.src/'link';p.symlink_to(outside,target_is_directory=True)
@@ -166,5 +177,57 @@ class TransferTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.run_op([p],mode='erase')
         with self.assertRaises(ValueError): self.run_op([p],policy='overwrite')
         self.assertTrue(p.exists())
+
+class ProtectedTransferTests(unittest.TestCase):
+    """A protected descendant must stop its whole top-level operation preflight."""
+    def setUp(self):
+        TransferTests.setUp(self)
+        self.versions=PreviousVersions(self.root/'configuration')
+        self.engine=TransferEngine(LocalNode,assert_writable=self.versions.assert_writable)
+    tearDown=TransferTests.tearDown
+    run_op=TransferTests.run_op
+    no_stage=TransferTests.no_stage
+
+    def test_replace_cannot_overwrite_nested_snapshot(self):
+        source=self.src/'project';target=self.dst/'project'
+        for folder,content in [(source,'incoming'),(target,'original')]:
+            (folder/'.snapshot').mkdir(parents=True)
+            (folder/'ordinary.txt').write_text(content)
+            (folder/'.snapshot'/'version.txt').write_text(content)
+        result=self.run_op([source],policy='replace')
+        self.assertTrue(result.errors);self.assertEqual(result.done,[])
+        self.assertEqual((target/'ordinary.txt').read_text(),'original')
+        self.assertEqual((target/'.snapshot'/'version.txt').read_text(),'original');self.no_stage()
+
+    def test_removal_or_move_preserves_whole_tree_containing_snapshot(self):
+        source=self.src/'project';(source/'.snapshot').mkdir(parents=True)
+        (source/'ordinary.txt').write_text('keep');(source/'.snapshot'/'version.txt').write_text('backup')
+        for mode in ('delete','trash','move'):
+            with self.subTest(mode=mode):
+                result=self.run_op([source],mode=mode)
+                self.assertTrue(result.errors);self.assertIn('read-only',result.errors[0])
+                self.assertEqual(result.done,[])
+                self.assertEqual((source/'ordinary.txt').read_text(),'keep')
+                self.assertEqual((source/'.snapshot'/'version.txt').read_text(),'backup')
+                self.assertFalse((self.dst/'project').exists())
+
+    def test_configured_backup_descendant_is_protected(self):
+        source=self.src/'project';backup=source/'history';backup.mkdir(parents=True)
+        (backup/'version.txt').write_text('backup')
+        self.versions.configure(source.as_uri(),backup.as_uri())
+        result=self.run_op([source],mode='delete')
+        self.assertTrue(result.errors);self.assertEqual((backup/'version.txt').read_text(),'backup')
+
+    def test_snapshot_file_can_be_restored_to_another_folder(self):
+        snapshot=self.src/'.snapshot';snapshot.mkdir();source=snapshot/'document.txt';source.write_text('saved')
+        result=self.run_op([source])
+        self.assertEqual(result.errors,[]);self.assertEqual((self.dst/'document.txt').read_text(),'saved')
+
+    def test_symlink_to_snapshot_is_removed_without_traversal(self):
+        snapshot=self.src/'.snapshot';snapshot.mkdir();(snapshot/'version.txt').write_text('backup')
+        link=self.src/'shortcut';link.symlink_to(snapshot,target_is_directory=True)
+        result=self.run_op([link],mode='delete')
+        self.assertEqual(result.errors,[]);self.assertFalse(link.is_symlink())
+        self.assertEqual((snapshot/'version.txt').read_text(),'backup')
 
 if __name__ == '__main__':unittest.main()

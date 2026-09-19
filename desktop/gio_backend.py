@@ -11,7 +11,7 @@ gi.require_version('Gio', '2.0')
 from gi.repository import Gio, GLib
 from core import normalise_location, validate_name, require_item_uri, is_smb_server
 from entry_model import classify_entry
-from operations import Cancelled, Info, ReplaceUnsupported
+from operations import Cancelled, Info, ReplaceUnsupported, TransferEngine
 
 ATTRIBUTES = 'standard::name,standard::display-name,standard::type,standard::is-hidden,standard::is-symlink,standard::size,standard::content-type,standard::target-uri,standard::is-virtual,time::modified'
 NOFOLLOW = Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS
@@ -71,10 +71,11 @@ class GioNode:
         return self.file.query_exists(raw(cancel))
 
     def info(self, cancel=None):
-        i = self.file.query_info('standard::type,standard::size', NOFOLLOW, raw(cancel))
+        i = self.file.query_info('standard::type,standard::size,unix::mode', NOFOLLOW, raw(cancel))
         kind = {Gio.FileType.DIRECTORY: 'directory', Gio.FileType.REGULAR: 'file',
                 Gio.FileType.SYMBOLIC_LINK: 'symlink'}.get(i.get_file_type(), 'special')
-        return Info(kind, i.get_size())
+        mode = i.get_attribute_uint32('unix::mode') & 0o7777 if i.has_attribute('unix::mode') else None
+        return Info(kind, i.get_size(), mode)
 
     def is_directory(self, cancel=None):
         info = self.file.query_info('standard::type', Gio.FileQueryInfoFlags.NONE, raw(cancel))
@@ -148,21 +149,23 @@ class GioNode:
             return False
         return bool(info.get_attribute_boolean('access::can-trash'))
 
-    def delete_tree(self, cancel):
+    def delete_tree(self, cancel, assert_writable=None):
         """Permanent, unrecoverable delete of a user-selected item. Only ever
         reached when the user confirmed a permanent delete in the UI. Symlinks
         are removed as links; their targets are never traversed."""
         require_item_uri(self.uri)
-        self._delete_recursive(cancel, 0)
+        self._delete_recursive(cancel, 0, assert_writable)
 
-    def _delete_recursive(self, cancel, depth):
+    def _delete_recursive(self, cancel, depth, assert_writable=None):
         cancel.check()
+        if assert_writable is not None:
+            assert_writable(self.uri)
         if depth > 128:
             raise ValueError('Folder nesting exceeds this build’s safety limit (128).')
         info = self.file.query_info('standard::type', NOFOLLOW, raw(cancel))
         if info.get_file_type() == Gio.FileType.DIRECTORY:
             for child in self.children(cancel):
-                child._delete_recursive(cancel, depth + 1)
+                child._delete_recursive(cancel, depth + 1, assert_writable)
         self.file.delete(raw(cancel))
 
 
@@ -255,7 +258,7 @@ def create_item(uri: str, name: str, kind: str, cancel=None) -> dict:
     return {'uri': child.get_uri()}
 
 
-def rename_item(uri: str, name: str, cancel=None) -> dict:
+def rename_item(uri: str, name: str, cancel=None, assert_writable=None) -> dict:
     validate_name(name)
     src = GioNode(require_item_uri(uri))
     parent = src.parent()
@@ -264,6 +267,8 @@ def rename_item(uri: str, name: str, cancel=None) -> dict:
     dest = parent.child(name)
     if src.uri == dest.uri:
         return {'uri': src.uri}
+    TransferEngine(GioNode, assert_writable=assert_writable)._check_write_tree(
+        src, dest, cancel or GioCancellation(), source_writable=True)
     src.move_native(dest, cancel)
     return {'uri': dest.uri}
 

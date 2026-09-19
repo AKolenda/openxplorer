@@ -13,7 +13,7 @@ with sync_playwright() as pw:
     browser=pw.chromium.launch(executable_path=os.environ.get('CHROMIUM','/usr/bin/chromium'),args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':1320,'height':900});page.set_default_timeout(7000)
     page.on('pageerror',lambda e:errors.append(str(e)))
-    page.set_content((ROOT/'preview.html').read_text());page.wait_for_function('()=>OpenXplorer.state.ready&&OpenXplorer.state.tabs[0].loaded')
+    page.set_content((ROOT/'preview.html').read_text());page.wait_for_function('()=>OpenXplorer.state.ready&&OpenXplorer.state.tabs[0]?.loaded')
     page.evaluate("""()=>{window.calls=[];const orig=OpenXplorer.previewTransport.call.bind(OpenXplorer.previewTransport);OpenXplorer.previewTransport.call=async(m,a)=>{window.calls.push(m);return orig(m,a);};}""")
     def count():return page.locator('#tabs [role=tab]').count()
     def active():return page.evaluate('OpenXplorer.state.activeId')

@@ -17,7 +17,9 @@ from unittest.mock import Mock
 import zipfile
 
 from archives import Archives
-from core import VERSION, normalise_location, is_smb_server
+from core import VERSION, normalise_location, is_smb_server, require_item_uri
+from operations import TransferEngine
+from previous_versions import PreviousVersions
 from runtime_guard import identity, same_build, require_current, Session
 from tests.local_provider import LocalNode, Cancellation
 from zip_extraction import ZipExtractor
@@ -146,6 +148,7 @@ def opener(uri,cancel):
 class ContractHost:
     def __init__(self):
         self.archives=Archives(opener);self.writes=0;self.previous_versions=NS(assert_writable=lambda _:None)
+        self.app=NS(update_busy=False,update_restart_required=False)
         self.file_clipboard=None;self.responses=[];self.events=[]
     def respond(self,request,value=None,error=None):
         self.responses.append((request['id'],value,error));self.result=value
@@ -156,11 +159,39 @@ class ContractHost:
         else:self.respond(request,result)
 
 space={'normalise_location':normalise_location,'is_smb_server':is_smb_server,'ZipExtractor':ZipExtractor,
+       'require_item_uri':require_item_uri,'TransferEngine':TransferEngine,
        'GioNode':LocalNode,'exclusive_output':output,'time':time,
        'inspect':lambda u,c:{'kind':'directory','isDir':True},'local_path':lambda u:str(LocalNode(u).path)}
 exec(compile(ast.fix_missing_locations(ast.Module(body=[dispatch],type_ignores=[])),str(ROOT/'winspace.py'),'exec'),space)
 ContractHost.dispatch=space['dispatch']
 class DispatchTests(unittest.TestCase):
+    def test_operate_dispatch_protects_backup_descendants(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);source=root/'source'/'project';target=root/'destination'/'project'
+            for directory,contents in [(source,'incoming'),(target,'saved')]:
+                (directory/'.snapshot').mkdir(parents=True)
+                (directory/'.snapshot'/'version.txt').write_text(contents)
+            host=ContractHost();host.previous_versions=PreviousVersions(root/'config')
+            host.dispatch({'id':1,'method':'operate','args':{'mode':'copy','uris':[source.as_uri()],
+                'target':target.parent.as_uri(),'policy':'replace','token':'replace'}})
+            self.assertTrue(host.result['errors'])
+            host.dispatch({'id':2,'method':'operate','args':{'mode':'delete','uris':[target.as_uri()],
+                'policy':'skip','token':'delete'}})
+            self.assertTrue(host.result['errors'])
+            self.assertEqual((target/'.snapshot'/'version.txt').read_text(),'saved')
+
+    def test_extract_dispatch_checks_member_destinations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);source=root/'archive.zip'
+            with zipfile.ZipFile(source,'w') as archive:
+                archive.writestr('.snapshot/version.txt','saved')
+            host=ContractHost();host.previous_versions=PreviousVersions(root/'config')
+            with self.assertRaisesRegex(ValueError,'read-only'):
+                host.dispatch({'id':1,'method':'archiveExtract','args':{'uri':source.as_uri(),
+                    'target':root.as_uri(),'name':'Extracted','token':'extract'}})
+            self.assertFalse((root/'Extracted').exists())
+            self.assertFalse(list(root.glob('.openxplorer-extract-*')))
+
     def test_inspect_and_extract_actual_actions(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Path(tmp);source=d/'Assets.zip'
