@@ -14,13 +14,13 @@
     "snapshot-tab.png"
   ],
   "sha256": {
-    "cached-search.png": "a7524b3c51595927f7b88e1f672a3ff86dd2f0b9589874087c3e800183e4d2a4",
-    "explorer-dark.png": "5205ec838bc7b274a3d3d46562f5e18f5a3d8ded34645ffade096080764abbdc",
-    "explorer-light.png": "23b447c1518dc573f388f4d6fa3deab131c09fc4234a0e8312159b564d4cc44c",
+    "cached-search.png": "1638f18cdf0b6963436d63bbfa03ed43c7be8628cabb656c8df75fbc36b8af6c",
+    "explorer-dark.png": "07ace6fbf6249a10e317e590d3c8eebd32d7eedb77ab8e91e8a6bc1153636221",
+    "explorer-light.png": "850541f9e637c38ed39d9089e1be3f72fe5b61f1b8e0e78a38d09c7391b693e7",
     "network-path.png": "e963527ee0af11f4c70effebfedae508483124ac22047886a4c014dce23a7c05",
     "pinned-sidebar.png": "e1b8a82aa1bf181d161fdec0fd1233d23afec416dedb435bd31018bcef8d4ed7",
     "previous-versions.png": "9b4d1a617bfc45ddaf848896a5785fe7542d4e6a59cec068711586028def269f",
-    "snapshot-tab.png": "c47be810c2f1bd1afef9495360f2965691de72cd6b1362834d1af8fb9db4dbdd"
+    "snapshot-tab.png": "c0cc4de53e1128f9e86c7fe3be4f7f3323303c1ab6ea2087a32c14deac4c9f3b"
   },
-  "fixtureSourceSha256": "66060f54a9309f3090e7b9dfbcb79962960fd65dfcac2adb647f959b7f8c18b7"
+  "fixtureSourceSha256": "04cf3d3d446d2978c40284a080717e2c170179c7bae559565f550a6bd95f7e44"
 }

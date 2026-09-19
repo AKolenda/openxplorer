@@ -159,8 +159,15 @@ function check(label, value) {assert.ok(value, label); console.log('PASS', label
     check('No uncaught JavaScript exceptions', pageErrors.length === 0);
     console.log(`${count} checks passed (Chromium shared UI; simulated filesystem/updater; no native installation).`);
   } finally {
-    browser.kill(); await exited;
+    // Let Chromium flush and stop its profile-writing child processes first.
+    if (browser.exitCode === null && browser.signalCode === null) {
+      const shutdown = command('Browser.close', {}, null).catch(() => {});
+      const forceStop = setTimeout(() => browser.kill('SIGKILL'), 5000);
+      await exited;
+      clearTimeout(forceStop);
+      await shutdown;
+    }
     for (const promise of pending.values()) clearTimeout(promise.timer);
-    fs.rmSync(temporary, {recursive: true, force: true, maxRetries: 5, retryDelay: 100});
+    await fs.promises.rm(temporary, {recursive: true, force: true, maxRetries: 10, retryDelay: 200});
   }
 })().catch(error => {console.error(error); process.exitCode = 1;});

@@ -246,35 +246,9 @@ class OpenXplorerWindow:
         self.drag_area.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
         self.drag_area.connect('button-press-event', self.on_title_press)
         overlay.add_overlay(self.drag_area)
-        # A native startup surface remains visible even if HTML/JS cannot load.
-        # It disappears only after the DOM/bridge explicitly reports ready.
-        self.loading_cover = Gtk.EventBox()
-        self.loading_cover.set_name('winspace-loading')
-        self.loading_cover.set_halign(Gtk.Align.FILL)
-        self.loading_cover.set_valign(Gtk.Align.FILL)
-        loading = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-        loading.set_halign(Gtk.Align.CENTER)
-        loading.set_valign(Gtk.Align.CENTER)
-        self.startup_spinner = Gtk.Spinner()
-        self.startup_spinner.start()
-        self.startup_label = Gtk.Label(label='Starting OpenXplorer…')
-        self.startup_label.set_line_wrap(True)
-        self.startup_label.set_max_width_chars(64)
-        self.startup_label.set_justify(Gtk.Justification.CENTER)
-        loading.pack_start(self.startup_spinner, False, False, 0)
-        loading.pack_start(self.startup_label, False, False, 0)
-        self.startup_actions = Gtk.Box(spacing=10)
-        self.startup_actions.set_halign(Gtk.Align.CENTER)
-        retry = Gtk.Button(label='Retry')
-        retry.connect('clicked', lambda *_: self.retry_startup(False))
-        software = Gtk.Button(label='Retry with software rendering')
-        software.connect('clicked', lambda *_: self.retry_startup(True))
-        close = Gtk.Button(label='Close')
-        close.connect('clicked', lambda *_: self.window.close())
-        for button in (retry, software, close):
-            self.startup_actions.pack_start(button, False, False, 0)
-        loading.pack_start(self.startup_actions, False, False, 0)
-        self.loading_cover.add(loading)
+        # Show the file-manager layout while WebKit starts. The static native
+        # surface also keeps recovery available if HTML/JS cannot load.
+        self.create_startup_cover()
         overlay.add_overlay(self.loading_cover)
         self.window.add(overlay)
         self.tab_drag = NativeTabDrag(self, Gtk, Gdk, GLib)
@@ -288,8 +262,130 @@ class OpenXplorerWindow:
         # Map the GTK surface BEFORE loading HTML; load_uri used to run before
         # any native surface existed. The map signal schedules exactly one load.
         self.window.show_all()
-        self.startup_actions.hide()
         self.window.present()
+
+    def create_startup_cover(self):
+        """Build inert, theme-matched shell placeholders without file metadata."""
+        def box(style, *, vertical=False, spacing=0, width=-1, height=-1):
+            widget = Gtk.Box(orientation=Gtk.Orientation.VERTICAL if vertical else Gtk.Orientation.HORIZONTAL,
+                             spacing=spacing)
+            widget.get_style_context().add_class(style)
+            widget.set_size_request(width, height)
+            return widget
+
+        def placeholder(width, height=9, style='startup-placeholder'):
+            widget = box(style, width=width, height=height)
+            widget.set_valign(Gtk.Align.CENTER)
+            return widget
+
+        self.loading_cover = Gtk.EventBox()
+        self.loading_cover.set_name('winspace-loading')
+        self.loading_cover.set_halign(Gtk.Align.FILL)
+        self.loading_cover.set_valign(Gtk.Align.FILL)
+        self.loading_cover.get_accessible().set_name('Preparing file manager')
+        shell = box('startup-shell', vertical=True)
+        titlebar = box('startup-titlebar', height=42)
+        tab = box('startup-tab', spacing=10, width=215, height=34)
+        tab.set_valign(Gtk.Align.END)
+        tab.pack_start(placeholder(17, 14, 'startup-folder'), False, False, 0)
+        tab.pack_start(placeholder(96), False, False, 0)
+        titlebar.pack_start(tab, False, False, 0)
+        titlebar.pack_start(box('startup-spacer'), True, True, 0)
+        for _ in range(3):
+            control = box('startup-caption', width=46)
+            control.pack_start(placeholder(10, 2), True, False, 0)
+            titlebar.pack_start(control, False, False, 0)
+        shell.pack_start(titlebar, False, False, 0)
+
+        navigation = box('startup-navigation', spacing=14, height=62)
+        controls = box('startup-navigation-controls', spacing=14)
+        for _ in range(3):
+            controls.pack_start(placeholder(16, 16), False, False, 0)
+        navigation.pack_start(controls, False, False, 0)
+        address = box('startup-field', spacing=14, width=160, height=34)
+        address.set_valign(Gtk.Align.CENTER)
+        address.pack_start(placeholder(17, 14, 'startup-folder'), False, False, 0)
+        address.pack_start(placeholder(126), False, False, 0)
+        navigation.pack_start(address, True, True, 0)
+        search = box('startup-field', width=175, height=34)
+        search.set_valign(Gtk.Align.CENTER)
+        search.pack_start(placeholder(88), False, False, 0)
+        navigation.pack_start(search, False, False, 0)
+        shell.pack_start(navigation, False, False, 0)
+
+        commands = box('startup-commands', spacing=24, height=55)
+        for width in (56, 18, 18, 18, 18, 60, 52):
+            commands.pack_start(placeholder(width, 12), False, False, 0)
+        shell.pack_start(commands, False, False, 0)
+
+        workspace = box('startup-workspace')
+        sidebar = box('startup-sidebar', vertical=True, spacing=0, width=210)
+        for width in (80, 98, 72, 104, 90, 68, 94):
+            row = box('startup-side-row', spacing=13, height=35)
+            row.pack_start(placeholder(17, 17), False, False, 0)
+            row.pack_start(placeholder(width), False, False, 0)
+            sidebar.pack_start(row, False, False, 0)
+        workspace.pack_start(sidebar, False, False, 0)
+        content = box('startup-content', vertical=True)
+        columns = box('startup-columns', spacing=22, height=38)
+        for index, width in enumerate((104, 88, 56, 30)):
+            cell = box('startup-cell', width=width)
+            cell.pack_start(placeholder(width, 8), False, False, 0)
+            columns.pack_start(cell, index == 0, index == 0, 0)
+        content.pack_start(columns, False, False, 0)
+        self.startup_rows = box('startup-rows', vertical=True)
+        for width in (132, 112, 124, 94, 122):
+            row = box('startup-file-row', spacing=22, height=38)
+            name = box('startup-name', spacing=12)
+            name.pack_start(placeholder(18, 20), False, False, 0)
+            name.pack_start(placeholder(width), False, False, 0)
+            row.pack_start(name, True, True, 0)
+            row.pack_start(placeholder(88), False, False, 0)
+            row.pack_start(placeholder(56), False, False, 0)
+            row.pack_start(placeholder(30), False, False, 0)
+            self.startup_rows.pack_start(row, False, False, 0)
+        content.pack_start(self.startup_rows, False, False, 0)
+        self.startup_notice = box('startup-notice', vertical=True, spacing=16)
+        self.startup_notice.set_no_show_all(True)
+        self.startup_label = Gtk.Label()
+        self.startup_label.set_line_wrap(True)
+        self.startup_label.set_max_width_chars(48)
+        self.startup_label.set_xalign(0)
+        self.startup_label.set_halign(Gtk.Align.FILL)
+        self.startup_notice.pack_start(self.startup_label, False, False, 0)
+        self.startup_actions = Gtk.Box(spacing=10)
+        self.startup_actions.set_halign(Gtk.Align.START)
+        retry = Gtk.Button(label='Retry')
+        retry.connect('clicked', lambda *_: self.retry_startup(False))
+        software = Gtk.Button(label='Retry with software rendering')
+        software.connect('clicked', lambda *_: self.retry_startup(True))
+        close = Gtk.Button(label='Close')
+        close.connect('clicked', lambda *_: self.window.close())
+        for button in (retry, software, close):
+            self.startup_actions.pack_start(button, False, False, 0)
+        self.startup_notice.pack_start(self.startup_actions, False, False, 0)
+        content.pack_start(self.startup_notice, False, False, 0)
+        workspace.pack_start(content, True, True, 0)
+        shell.pack_start(workspace, True, True, 0)
+        footer = box('startup-footer', height=30)
+        footer.pack_start(placeholder(94, 7), False, False, 0)
+        shell.pack_start(footer, False, False, 0)
+        self.loading_cover.add(shell)
+        return self.loading_cover
+
+    def show_startup_error(self, message):
+        self.startup_rows.hide()
+        self.startup_label.set_text(message)
+        self.startup_notice.set_no_show_all(False)
+        self.startup_notice.show_all()
+        self.loading_cover.show()
+
+    def reset_startup_cover(self):
+        self.startup_notice.hide()
+        self.startup_notice.set_no_show_all(True)
+        self.startup_label.set_text('')
+        self.startup_rows.show_all()
+        self.loading_cover.show()
 
     def system_dark(self) -> bool:
         if self.desktop_settings:
@@ -312,10 +408,26 @@ class OpenXplorerWindow:
         preference = self.settings_store.snapshot()['preferences']['theme']
         dark = preference == 'dark' or (preference == 'system' and self.system_dark())
         bg, fg = ('#202020', '#f1f1f1') if dark else ('#f7f7f7', '#242424')
+        surface, chrome, title, sidebar, border, placeholder = (
+            ('#202020', '#262626', '#191919', '#252525', '#373737', '#3b3b3b') if dark else
+            ('#ffffff', '#f7f7f7', '#eff1f4', '#fafafa', '#e8e8e8', '#e4e6e9'))
         if self.native_css:
             self.native_css.load_from_data((
                 '#winspace-title { min-height: 0; padding: 0; margin: 0; border: 0; }'
                 + '#winspace-shell, #winspace-loading { background-color: ' + bg + '; color: ' + fg + '; }'
+                + '#winspace-loading .startup-shell, #winspace-loading .startup-content, #winspace-loading .startup-footer { background-color: ' + surface + '; }'
+                + '#winspace-loading .startup-titlebar { background-color: ' + title + '; padding-left: 9px; }'
+                + '#winspace-loading .startup-tab { background-color: ' + chrome + '; border-radius: 8px 8px 0 0; padding: 0 13px; }'
+                + '#winspace-loading .startup-navigation, #winspace-loading .startup-commands { background-color: ' + chrome + '; border-bottom: 1px solid ' + border + '; padding: 0 16px; }'
+                + '#winspace-loading .startup-field { background-color: ' + surface + '; border: 1px solid ' + border + '; border-radius: 5px; padding: 0 11px; }'
+                + '#winspace-loading .startup-sidebar { background-color: ' + sidebar + '; border-right: 1px solid ' + border + '; padding: 13px 18px 0; }'
+                + '#winspace-loading .startup-columns { border-bottom: 1px solid ' + border + '; padding: 0 24px; }'
+                + '#winspace-loading .startup-file-row { padding: 0 24px; }'
+                + '#winspace-loading .startup-rows { padding-top: 9px; }'
+                + '#winspace-loading .startup-footer { border-top: 1px solid ' + border + '; padding: 0 19px; }'
+                + '#winspace-loading .startup-placeholder { background-color: ' + placeholder + '; border-radius: 3px; }'
+                + '#winspace-loading .startup-folder { background-color: #eac763; border-radius: 2px; }'
+                + '#winspace-loading .startup-notice { padding: 24px; }'
             ).encode())
         # Only this application's GTK settings are touched, not GNOME's theme.
         Gtk.Settings.get_default().set_property('gtk-application-prefer-dark-theme', dark)
@@ -334,6 +446,7 @@ class OpenXplorerWindow:
         if self.closed:
             return GLib.SOURCE_REMOVE
         self.ui_ready = False
+        self.reset_startup_cover()
         self.webview.load_uri(APP_URI)
         if self.startup_timeout:
             GLib.source_remove(self.startup_timeout)
@@ -343,9 +456,7 @@ class OpenXplorerWindow:
     def startup_timed_out(self):
         self.startup_timeout = None
         if not self.ui_ready and not self.closed:
-            self.startup_spinner.stop()
-            self.startup_label.set_text('The interface is taking longer than expected.\nTry software rendering if this window previously stayed blank.')
-            self.startup_actions.show_all()
+            self.show_startup_error('The interface is taking longer than expected.\nTry software rendering if this window previously stayed blank.')
         return GLib.SOURCE_REMOVE
 
     def retry_startup(self, software=False):
@@ -354,9 +465,6 @@ class OpenXplorerWindow:
         self.software_rendering = software or self.software_rendering
         if self.software_rendering:
             self.webview.get_settings().set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.NEVER)
-        self.startup_actions.hide()
-        self.startup_label.set_text('Starting OpenXplorer…')
-        self.startup_spinner.start()
         self.begin_ui_load()
 
     def on_load_changed(self, _view, event):
@@ -367,10 +475,7 @@ class OpenXplorerWindow:
         if self.startup_timeout:
             GLib.source_remove(self.startup_timeout)
             self.startup_timeout = None
-        self.startup_spinner.stop()
-        self.startup_label.set_text('Could not load the OpenXplorer interface.\n' + str(error))
-        self.startup_actions.show_all()
-        self.loading_cover.show()
+        self.show_startup_error('Could not load the OpenXplorer interface.\n' + str(error))
         return True
 
     def request_initial_paint(self):
@@ -401,7 +506,6 @@ class OpenXplorerWindow:
         if self.startup_timeout:
             GLib.source_remove(self.startup_timeout)
             self.startup_timeout = None
-        self.startup_spinner.stop()
         self.loading_cover.hide()
         self.request_initial_paint()
         # Bounded extra invalidations cover the GTK/WebKit handoff at mapping.
