@@ -82,4 +82,4 @@ The website preview uses sample files and cannot export desktop files. Compatibi
 
 ---
 
-OpenXplorer 1.1.1. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.1.2. Project-authored documentation: AGPL-3.0-only.
