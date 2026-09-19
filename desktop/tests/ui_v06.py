@@ -27,7 +27,7 @@ def main():
             page.mouse.move(x,y);page.mouse.down();page.mouse.move(x+dx,y,steps=15);page.mouse.up();page.wait_for_timeout(120)
         try:
             page.set_content((ROOT/'preview.html').read_text(),wait_until='load');ready('file:///home/demo')
-            check('Release 1.1.0 starts', '1.1.0' in page.locator('#status-mode').inner_text())
+            check('Release 1.1.1 starts', '1.1.1' in page.locator('#status-mode').inner_text())
             check('Quick-access counter and flag/heading removed',page.locator('.quick-heading,.quick-count').count()==0)
             check('Quick-access folders and drop target remain',page.locator('#quick-access .side-entry').count()>=6)
             old=width('.sidebar');drag('#sidebar-resizer',110)

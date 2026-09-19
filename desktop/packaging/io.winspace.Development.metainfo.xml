@@ -19,6 +19,9 @@
     <category>FileManager</category>
   </categories>
   <releases>
+    <release version="1.1.1" date="2026-09-19" type="stable">
+      <description><p>Display the native app layout immediately during startup instead of a centered message and spinner, while preserving startup recovery.</p></description>
+    </release>
     <release version="1.1.0" date="2026-09-19" type="stable">
       <description><p>Add opt-in in-app updates and fix folder permission preservation, backup protection, keyboard activation, tab navigation, cached search and device ZIP extraction.</p></description>
     </release>

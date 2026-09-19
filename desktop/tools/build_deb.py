@@ -121,7 +121,7 @@ def build(output: Path) -> Path:
         raise RuntimeError('Incomplete source tree: ' + ', '.join(missing))
     for path in ROOT.glob('*.py'):
         ast.parse(path.read_text(encoding='utf-8'), filename=str(path), feature_version=(3, 10))
-    epoch = int(os.environ.get('SOURCE_DATE_EPOCH', '1789776000'))  # 2026-09-19 UTC; distinct from prior releases to invalidate timestamp-based bytecode
+    epoch = int(os.environ.get('SOURCE_DATE_EPOCH', '1789776060'))  # 2026-09-19 UTC; distinct from prior releases to invalidate timestamp-based bytecode
     if epoch < 0:
         raise ValueError('SOURCE_DATE_EPOCH must be nonnegative.')
     output = output.resolve()
