@@ -1,3 +1,11 @@
+# 1.1.0 — 2026-09-19
+
+- Add manual in-app release checks, verified Debian downloads, administrator-approved APT installation and safe restart.
+- Preserve directory permissions when copying local folders and enforce backup protection throughout recursive operations.
+- Fix Enter on buttons, delayed folder opens targeting another tab, and missing current-folder matches when only a child is cached.
+- Support ZIP extraction to device backends without Unix chmod.
+- Detect multiword private identifiers and duplicate-content private filenames in the publication audit.
+
 # 1.0.2
 
 - Copy or move directly when no destination names conflict; show Replace/Skip

@@ -35,7 +35,7 @@ class LocalNode:
         if cancel: cancel.check()
         s = self.p.lstat()
         kind = 'directory' if stat.S_ISDIR(s.st_mode) else 'symlink' if stat.S_ISLNK(s.st_mode) else 'file' if stat.S_ISREG(s.st_mode) else 'special'
-        return Info(kind, s.st_size)
+        return Info(kind, s.st_size, stat.S_IMODE(s.st_mode))
     def is_directory(self, cancel=None):
         if cancel: cancel.check()
         return self.p.is_dir()
@@ -82,8 +82,9 @@ class LocalNode:
         raise NotImplementedError('Test provider deliberately does not support Trash; no delete fallback')
     def can_trash(self, cancel=None):
         return False
-    def delete_tree(self, cancel):
+    def delete_tree(self, cancel, assert_writable=None):
         cancel.check()
+        if assert_writable is not None: assert_writable(self.uri)
         if self.p.is_dir() and not self.p.is_symlink():
-            for child in self.children(cancel): child.delete_tree(cancel)
+            for child in self.children(cancel): child.delete_tree(cancel, assert_writable)
         self.delete()
