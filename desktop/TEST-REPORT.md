@@ -20,6 +20,10 @@ WebKit finishes loading. The existing uiReady handoff and failure recovery remai
 | Debian package verification | 52 passed | Metadata, payload, permissions and syntax; no installation. |
 | Staged public-data audit and SHA-256 checksums | Passed | Installer, corresponding source and captures. |
 
+One hosted run passed all 27 UI assertions but raced Chromium profile cleanup.
+The harness now requests graceful browser shutdown and retries asynchronous
+profile removal. All 27 checks passed locally after that change.
+
 Public captures use fictional fixtures; the post-capture public-data audit passed.
 No administrator-approved installation, live SMB, physical mobile device or full
 native cold-start timing was exercised in this local verification.
