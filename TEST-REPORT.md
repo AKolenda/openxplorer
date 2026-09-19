@@ -1,3 +1,31 @@
+# OpenXplorer 1.1.1 — native startup frame
+
+## 2026-09-19 verification
+
+The native window shows a static, theme-matched file-manager skeleton before
+WebKit finishes loading. The existing uiReady handoff and failure recovery remain.
+
+| Check | Result | Scope |
+|---|---|---|
+| Desktop Python suite | 614 passed | Includes seven new startup lifecycle, recovery and focus checks using extracted production methods. |
+| Native startup visual review | Passed | Real GTK offscreen light/dark renders and narrow recovery controls; no measured cold-start benchmark. |
+| JavaScript units | 74 passed | Shared helper regressions. |
+| Shared UI regression suite | 27 passed | Chromium, simulated native services and updater; no privileged installation. |
+| Privacy/source archive regressions | 8 / 9 passed | Disposable fixtures. |
+| Website TypeScript and production build | Passed | pnpm check and actual Next.js build, 21 exported pages. |
+| Production website browser suite | 47 passed | Real static export in Chromium. |
+| Project security invariants | 20 passed | Project checks, not an independent audit. |
+| Dependency advisory audit | Passed | No known vulnerabilities reported at this run. |
+| Website deployment dry run | Passed | Pinned Wrangler and current export. |
+| Debian package verification | 52 passed | Metadata, payload, permissions and syntax; no installation. |
+| Staged public-data audit and SHA-256 checksums | Passed | Installer, corresponding source and captures. |
+
+Public captures use fictional fixtures; the post-capture public-data audit passed.
+No administrator-approved installation, live SMB, physical mobile device or full
+native cold-start timing was exercised in this local verification.
+
+---
+
 # OpenXplorer 1.1.0 — in-app updates and safety fixes
 
 ## 2026-09-19 verification

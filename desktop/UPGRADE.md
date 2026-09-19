@@ -1,8 +1,10 @@
-# OpenXplorer 1.1.0 — in-app updates and safety fixes
+# OpenXplorer 1.1.1 — immediate startup layout
 
-This release fixes folder permission preservation, recursive backup protection,
-keyboard button activation, delayed tab navigation, partial-cache search, device
-ZIP extraction and publication privacy checks.
+The native app now displays its window layout immediately instead of the
+centered startup message and spinner. Static placeholders stay visible until
+the real interface is ready. Error recovery and software-rendering retry remain.
+
+From 1.1.0, use **Check for updates** in the sidebar.
 
 ## Upgrade once from an older release
 
@@ -10,7 +12,7 @@ Finish active file operations and quit OpenXplorer, then install the package:
 
 ```sh
 openxplorer --quit
-sudo apt install ./openxplorer_1.1.0_all.deb
+sudo apt install ./openxplorer_1.1.1_all.deb
 openxplorer --restart
 ```
 
