@@ -1,3 +1,23 @@
+# OpenXplorer 1.1.2 — status-bar update action
+
+## 2026-09-19 verification
+
+Moved the manual update action beside the bottom-right view buttons. Removed
+the native release badge and its green dot. The preview retains its sample-data
+label; version information remains available in About and the updater.
+
+- 27 existing Chromium UI regressions passed, including keyboard updater activation.
+- Six focused Chromium visual/layout checks passed: light/dark at 1320px and
+  670px width, plus 800px at 200% text. Verified icon location, accessible name,
+  removed dot and keyboard activation. Reviewed the resulting dark screenshot.
+- pnpm check and the actual Next.js production build passed (21 exported pages).
+- Fictional screenshots were regenerated and the post-capture public-data audit passed.
+
+These local browser checks use simulated native services, not a native WebKit
+session or an administrator-approved package installation.
+
+---
+
 # OpenXplorer 1.1.1 — native startup frame
 
 ## 2026-09-19 verification

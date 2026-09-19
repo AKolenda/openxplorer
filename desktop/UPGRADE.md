@@ -1,10 +1,10 @@
-# OpenXplorer 1.1.1 — immediate startup layout
+# OpenXplorer 1.1.2 — update control placement
 
-The native app now displays its window layout immediately instead of the
-centered startup message and spinner. Static placeholders stay visible until
-the real interface is ready. Error recovery and software-rendering retry remain.
+Check for updates is now a compact icon beside the bottom-right view controls.
+The native status bar no longer shows the green stable-release indicator.
+The immediate startup layout from 1.1.1 remains included.
 
-From 1.1.0, use **Check for updates** in the sidebar.
+From 1.1.0 or 1.1.1, use **Check for updates** in the sidebar to install this release.
 
 ## Upgrade once from an older release
 
@@ -12,13 +12,13 @@ Finish active file operations and quit OpenXplorer, then install the package:
 
 ```sh
 openxplorer --quit
-sudo apt install ./openxplorer_1.1.1_all.deb
+sudo apt install ./openxplorer_1.1.2_all.deb
 openxplorer --restart
 ```
 
 ## Later updates inside the app
 
-Click **Check for updates** in the sidebar. Review the version and release notes,
+Click **Check for updates** at the bottom right beside the view controls. Review the version and release notes,
 then click **Install update**. The app verifies the GitHub release asset digest
 and package identity before invoking APT with a system administrator prompt.
 Finish transfers, folder loading and tab moves before installing. File actions

@@ -42,4 +42,4 @@ Disable Show in folder removes only OpenXplorer’s unmodified user-level servic
 
 ---
 
-OpenXplorer 1.1.1. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.1.2. Project-authored documentation: AGPL-3.0-only.
