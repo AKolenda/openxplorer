@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Modified 2026-09-06; original notices: licenses/Winspace-MIT.txt.
 'use strict';
-/* OpenXplorer 1.0.2 — one interface, two transports: a native GIO bridge and an
+/* OpenXplorer 1.1.0 — one interface, two transports: a native GIO bridge and an
    explicitly simulated, offline preview. No libraries, CDNs or web services. */
 (() => {
 const $ = id => document.getElementById(id);
 const native = window.__OPENXPLORER_NATIVE__ === true;
-const UI_RELEASE = '1.0.2';
+const UI_RELEASE = '1.1.0';
 if (native) document.body.classList.add('native');
 document.body.classList.toggle('dark', document.documentElement.dataset.theme === 'dark');
 const NS = 'http://www.w3.org/2000/svg';
@@ -170,6 +170,7 @@ window.__nativeEvent=(name,data)=>{
   if(name==='textSizeChanged')applyTextSize(data.textSize);
   if(name==='theme'){if(state.env)state.env.systemDark=!!data.systemDark;applyTheme(state.theme,false);}
   if(name==='transfer')updateTransfer(data);
+  if(name==='updateProgress'&&state.updateInstalling&&$('update-status'))$('update-status').textContent=data.message||'Installing update…';
   if(name==='serverSigningOut'){state.signedOutHosts.add(data.host);state.sessionNetwork=(state.sessionNetwork||[]).filter(s=>new URL(s.uri).hostname!==data.host);}
   if(name==='changed'){const t=active();if(t&&t.uri===data.uri&&!state.operation&&!state.query&&!state.signedOutHosts.has((()=>{try{return new URL(data.uri).hostname;}catch{return '';}})()))load(t,false);}
   if(name==='mounts'||name==='environmentChanged')refreshEnvironment();
@@ -280,20 +281,28 @@ function renderTabs(){
     tab.append(wrap,elem('span','tab-title',titleFor(t.uri)));
     if(snapshot){const badge=elem('span','snapshot-tab-badge','Previous version');badge.prepend(icon('clock',12));badge.title='Previous version · '+snapshot.label;tab.append(badge);tab.title+=' · Previous version · '+snapshot.label;tab.setAttribute('aria-label',titleFor(t.uri)+' — Previous version — '+snapshot.label);}
     const close=button('',e=>{e.stopPropagation();closeTab(t.id);},'tab-close','close');close.title='Close tab';close.setAttribute('aria-label','Close '+titleFor(t.uri));tab.append(close);
-    setupTabDrag(tab,t);tab.addEventListener('click',()=>{if(performance.now()>(state.tabClickSuppress||0))switchTab(t.id);});tab.addEventListener('keydown',e=>{if(e.key==='Enter')switchTab(t.id);});
+    setupTabDrag(tab,t);tab.addEventListener('click',()=>{if(performance.now()>(state.tabClickSuppress||0))switchTab(t.id);});tab.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target===tab){e.preventDefault();switchTab(t.id);}});
     bindMiddleClick(tab,()=>closeTab(t.id));list.append(tab);
   }
   requestAnimationFrame(updateChrome);
 }
 function updateChrome(){if(!native)return;scheduleFileDragLayout();if(state.env?.nativeTabDrag)publishTabDragLayout();fire('windowMetadata',{title:titleFor(active()?.uri||state.env?.home||'home:'),titles:state.tabs.map(t=>titleFor(t.uri))});const r=$('title-drag').getBoundingClientRect();fire('chrome',{x:Math.round(r.x),y:Math.round(r.y),width:Math.max(1,Math.round(r.width)),height:Math.round(r.height)});}
-async function navigate(uri,history=true){if(state.outgoingTab===state.activeId){toast('Wait for this tab to finish moving.');return;}state.anchor=-1;uri=realLocation(uri);resetSearch();state.searchScope='folder';try{state.signedOutHosts.delete(new URL(uri).hostname);}catch{}const t=active();t.scroll=0;state.query='';$('search').value='';state.selection.clear();state.filterCache=null;if(history&&t.uri!==uri){t.history=t.history.slice(0,t.index+1);t.history.push(uri);t.index=t.history.length-1;}t.uri=uri;t.loaded=false;renderTabs();renderNavigation();renderSidebar();await load(t);}
+async function navigate(uri,history=true,t=active()){
+  if(!t||!state.tabs.includes(t))return;
+  if(state.outgoingTab===t.id){toast('Wait for this tab to finish moving.');return;}
+  uri=realLocation(uri);t.navigationGeneration=(t.navigationGeneration||0)+1;
+  try{state.signedOutHosts.delete(new URL(uri).hostname);}catch{}
+  if(t===active()){state.anchor=-1;resetSearch();state.searchScope='folder';state.query='';$('search').value='';state.selection.clear();state.filterCache=null;}
+  t.scroll=0;if(history&&t.uri!==uri){t.history=t.history.slice(0,t.index+1);t.history.push(uri);t.index=t.history.length-1;}
+  t.uri=uri;t.loaded=false;renderTabs();if(t===active()){renderNavigation();renderSidebar();}await load(t);
+}
 async function load(t,clear=true){
   if(t===active())resetTypeSelect();
   if(t.busy)fire('cancel',{token:t.loadToken});
   if(['home:','pc:','network:','settings:'].includes(t.uri)){t.busy=false;t.entries=[];t.loaded=true;t.error='';if(t===active())renderContent();if(t.uri==='network:'&&!state.discovery.started)void discoverNetwork();return;}
   const token='list-'+(++seq);t.loadToken=token;t.busy=true;t.error='';if(clear)t.entries=[];t.dirty=true;state.filterCache=null;
   if(t===active()){renderContent();renderNavigation();}
-  const oldSelection=new Set(state.selection);let batches=[];
+  const oldSelection=new Set(t===active()?state.selection:[]);let batches=[];
   if(!clear){t.entries=[];}
   try{const result=await call('list',{uri:t.uri,token,showHidden:state.showHidden});if(t.loadToken!==token)return;if(result.entries)t.entries=result.entries;t.uri=result.uri||t.uri;t.loaded=true;t.error='';rememberPreviewNetwork(t.uri);void refreshTrashSupport(t.uri);}
   catch(e){if(t.loadToken!==token)return;if(e.code==='not-directory'){const file=t.uri;t.uri=parentUri(file)||state.env.home;t.busy=false;await load(t);void openEntry({uri:file,name:baseName(file)});return;}if(e.code!=='cancelled')t.error=e.message;}
@@ -373,15 +382,17 @@ function syncRowSelection(){for(const row of $('file-canvas').children){const ye
 function selectEntry(e,i,event={}){if(event.shiftKey&&state.anchor>=0){if(!event.ctrlKey)state.selection.clear();const list=filtered();for(let j=Math.min(state.anchor,i);j<=Math.max(state.anchor,i);j++)state.selection.add(list[j].uri);}else if(event.ctrlKey||event.metaKey){if(state.selection.has(e.uri))state.selection.delete(e.uri);else state.selection.add(e.uri);state.anchor=i;}else{state.selection=new Set([e.uri]);state.anchor=i;}syncRowSelection();renderDetails();updateStatus();updateToolbar();$('main').focus({preventScroll:true});}
 function clearSelection(){resetTypeSelect();state.anchor=-1;state.selection.clear();renderRows();renderDetails();updateToolbar();updateStatus();}
 async function openEntry(e){
-  if(state.opening)return;
-  state.opening=true;
+  const tab=active(),generation=tab?.navigationGeneration||0;
+  if(!tab||tab.opening)return;
+  tab.opening=true;
   try{
     const result=await call('activateItem',{uri:e.targetUri||e.uri});
-    if(result.action==='directory')await navigate(result.uri);
-    else if(result.action==='archive')void archiveDialog(result.entry||e);
+    if(!state.tabs.includes(tab)||(tab.navigationGeneration||0)!==generation)return;
+    if(result.action==='directory')await navigate(result.uri,true,tab);
+    else if(result.action==='archive'&&tab===active())void archiveDialog(result.entry||e);
     else if(!native)toast('Preview only — this file would open in its file-type application.');
-  }catch(error){showMessage('Could not open the item',error.message);}
-  finally{state.opening=false;}
+  }catch(error){if(state.tabs.includes(tab)&&(tab.navigationGeneration||0)===generation){if(tab===active())showMessage('Could not open the item',error.message);else toast('Could not open '+(e.name||baseName(e.uri))+': '+error.message);}}
+  finally{tab.opening=false;}
 }
 async function openIncoming(uris){for(let i=0;i<uris.length;i++){if(i)addTab();await openEntry({uri:uris[i],name:baseName(uris[i])});}}
 
@@ -398,15 +409,15 @@ function renderLanding(uri){const l=$('landing');if(uri==='settings:'){renderSet
   if(uri==='pc:'){quick();section('Devices and drives','drive');const g=elem('div','drive-grid');const drives=[{label:'Local Disk',uri:'file:///',mounted:true},...state.env.mounts.filter(m=>!m.uri?.startsWith('smb:'))];for(const m of drives){const c=button('',()=>m.mounted?navigate(m.uri):mountVolume(m.id),'drive-card');bindMiddleOpen(c,()=>m.mounted?m.uri:null);c.append(icon(m.kind==='device'?'phone':'drive',46));const d=elem('div','drive-info');d.append(elem('div','card-name',m.label),elem('div','card-sub',m.mounted?(m.kind==='device'?'Connected device':displayUri(m.uri)):'Click to connect'));if(m.total){const bar=elem('div','capacity');const fill=elem('span');fill.style.width=((m.total-m.free)/m.total*100)+'%';bar.append(fill);d.append(bar,elem('div','card-sub',prettyBytes(m.free)+' free of '+prettyBytes(m.total)));}c.append(d);if(m.mounted&&m.uri!=='file:///'&&m.canUnmount!==false)c.addEventListener('contextmenu',ev=>{ev.preventDefault();openMenu(ev.clientX,ev.clientY,[{label:m.kind==='device'?'Disconnect device':'Disconnect mount',icon:'eject',fn:()=>unmount(m.uri)}]);});g.append(c);}l.append(g);shares();}
   if(uri==='network:'){const b=elem('div','network-banner');b.append(icon('network',38));const d=elem('div');d.append(elem('div','','Map a network location'),elem('p','','Use \\\\server\\share or smb://server/share.'));b.append(d,button('Connect',()=>connectDialog(),'primary'));l.append(b);shares();section('How connections work','shield');l.append(elem('div','notice',native?'Credentials are requested by the system mount dialog, not this interface. Saved locations reconnect when opened. This does not edit /etc/fstab, assign Windows drive letters, or change server permissions.':'This preview uses sample files. It never connects to your NAS, asks for a password, or accesses your computer. The desktop application uses native GIO/GVfs mounts.'));}
 }
-function updateStatus(){const t=active();if(!t)return;const n=filtered().length;$('status-count').textContent=t.busy?`${n} items · Loading…`:['home:','pc:','network:','settings:'].includes(t.uri)?'Ready':`${n} item${n!==1?'s':''}`;$('status-selected').textContent=state.selection.size?`${state.selection.size} selected`:'';if(state.query)$('status-count').textContent=state.searchBusy?'Searching…':`${n} result${n===1?'':'s'}${state.searchResultMeta?.truncated?' (first 500)':''}${state.searchResultMeta?.source==='cache'?' · Cached':''}`;$('status-mode').textContent=native?'OpenXplorer 1.0.2 · Stable release':'OpenXplorer 1.0.2 preview · Sample data';$('status-list').classList.toggle('active',state.view==='details');$('status-grid').classList.toggle('active',state.view==='grid');}
+function updateStatus(){const t=active();if(!t)return;const n=filtered().length;$('status-count').textContent=t.busy?`${n} items · Loading…`:['home:','pc:','network:','settings:'].includes(t.uri)?'Ready':`${n} item${n!==1?'s':''}`;$('status-selected').textContent=state.selection.size?`${state.selection.size} selected`:'';if(state.query)$('status-count').textContent=state.searchBusy?'Searching…':`${n} result${n===1?'':'s'}${state.searchResultMeta?.truncated?' (first 500)':''}${state.searchResultMeta?.source==='cache'?' · Cached':''}`;$('status-mode').textContent=native?'OpenXplorer 1.1.0 · Stable release':'OpenXplorer 1.1.0 preview · Sample data';$('status-list').classList.toggle('active',state.view==='details');$('status-grid').classList.toggle('active',state.view==='grid');}
 function updateToolbar(){scheduleFileDragLayout();const s=selected(),busy=!!state.operation||s.some(e=>!canOperate(e)),readOnly=s.some(e=>e.readOnly||readonlyLocation(e.uri));$('copy').disabled=!s.length||busy;for(const id of ['cut','trash'])$(id).disabled=!s.length||busy||readOnly;$('rename').disabled=s.length!==1||busy||readOnly;{const label=deleteLabel(s[0]?.uri||active()?.uri||'');$('trash').title=label+' (Delete)';$('trash').setAttribute('aria-label',label);}$('copy-path').disabled=s.length>1;$('paste').disabled=!!state.query||!state.clipboard||busy||!writableLocation(active()?.uri);$('new').disabled=!!state.query||!!state.operation||!writableLocation(active()?.uri);}
 function toggleDetails(){state.details=!state.details;fire('preferences',{details:state.details});renderContent();}
 function changeView(view){resetTypeSelect();state.view=view;fire('preferences',{view});$('file-scroll').scrollTop=0;renderContent();}
 function toast(text){const box=$('toast');box.textContent=text;box.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>box.hidden=true,4000);}
 function closeMenu(){$('menu').hidden=true;}
 function menuBelow(id,items){const r=$(id).getBoundingClientRect();openMenu(r.left,r.bottom+5,items);}
-function closeModal(result=null){state.modalOwner=null;$('modal-layer').classList.remove('tab-scoped');if(result===null)state.modalCancel?.();state.modalCancel=null;$('modal-layer').hidden=true;const resolve=state.modalResolve;state.modalResolve=null;$('modal').replaceChildren();resolve?.(result);$('main').focus({preventScroll:true});}
-function showModal(title,description,build,actions){resetTypeSelect();closeMenu();if(state.modalResolve)closeModal();const box=$('modal');box.setAttribute('aria-modal','true');box.hidden=false;box.className='modal';box.replaceChildren(elem('h2','',title));box.firstChild.id='modal-title';if(description)box.append(elem('p','',description));const content=elem('div');box.append(content);const fields=build?.(content)||{};state.modalCancel=fields.onCancel||null;const error=elem('div','modal-error');box.append(error);const bar=elem('div','modal-actions');box.append(bar);$('modal-layer').hidden=false;
+function closeModal(result=null){if(state.updateInstalling)return;state.modalOwner=null;$('modal-layer').classList.remove('tab-scoped');if(result===null)state.modalCancel?.();state.modalCancel=null;$('modal-layer').hidden=true;const resolve=state.modalResolve;state.modalResolve=null;$('modal').replaceChildren();resolve?.(result);$('main').focus({preventScroll:true});}
+function showModal(title,description,build,actions){if(state.updateInstalling)return Promise.resolve(null);resetTypeSelect();closeMenu();if(state.modalResolve)closeModal();const box=$('modal');box.setAttribute('aria-modal','true');box.hidden=false;box.className='modal';box.replaceChildren(elem('h2','',title));box.firstChild.id='modal-title';if(description)box.append(elem('p','',description));const content=elem('div');box.append(content);const fields=build?.(content)||{};state.modalCancel=fields.onCancel||null;const error=elem('div','modal-error');box.append(error);const bar=elem('div','modal-actions');box.append(bar);$('modal-layer').hidden=false;
   const promise=new Promise(resolve=>state.modalResolve=resolve);
   for(const a of actions){const b=button(a.label,async()=>{if(a.cancel){closeModal();return;}try{error.textContent='';const value=await a.fn(fields,b);if(value!==false)closeModal(value??true);}catch(e){error.textContent=e.message;}},a.className||'');bar.append(b);}
   setTimeout(()=>{if(!content.isConnected||box.id!=='modal'||$('modal-layer').hidden||box.contains(document.activeElement))return;const input=content.querySelector('input');(input||bar.querySelector('button'))?.focus();input?.select?.();},30);return promise;
@@ -630,8 +641,55 @@ function setupPinDrop(zone){
 function connectDialog(){return showModal('Map network location','Add a shared folder to your sidebar. Connect using a Windows-style address or an SMB URL.',body=>{const location=textField(body,'Folder','','\\\\nas\\Projects');const label=textField(body,'Display name (optional)','','Projects (Z:)');const line=elem('label','checkbox-row');const remember=elem('input');remember.type='checkbox';remember.checked=true;line.append(remember,document.createTextNode('Save in the sidebar · reconnect when opened'));body.append(line);body.append(elem('div','modal-note',native?'OpenXplorer will ask for your username and password if needed. Remember my credentials is selected by default. No passwords are saved in OpenXplorer settings. A label such as “Z:” is only a label, not a system-wide drive letter.':'Preview mode: this opens a simulated share with sample files. It will not connect to a server or ask for credentials.'));const fields={location,label,remember,token:'connect-'+(++seq),cancelled:false};fields.onCancel=()=>{fields.cancelled=true;fire('cancel',{token:fields.token});};return fields;},[{label:'Cancel',cancel:true},{label:native?'Connect':'Open sample share',className:'primary',fn:async(f,b)=>{b.disabled=true;b.textContent='Connecting…';try{const r=await call('connect',{address:f.location.value,label:f.label.value,remember:f.remember.checked,token:f.token});if(f.cancelled)return false;await refreshEnvironment();if(f.cancelled)return false;navigate(r.uri);return true;}finally{b.disabled=false;b.textContent=native?'Connect':'Open sample share';}}}]);}
 async function mountVolume(id){try{const r=await call('mountVolume',{id});await refreshEnvironment();navigate(r.uri);}catch(e){showMessage('Could not mount device',e.message);}}
 async function unmount(uri){if(state.operation){toast('Finish the current operation before disconnecting.');return;}const ok=await showModal('Disconnect this mount?',displayUri(uri)+'\n\nClose files using this mount first. This disconnects the session mount for other applications too.',null,[{label:'Cancel',cancel:true},{label:'Disconnect',className:'primary',fn:()=>true}]);if(!ok)return;try{await call('unmount',{uri});await refreshEnvironment();navigate('network:');}catch(e){showMessage('Could not disconnect',e.message);}}
-async function askClose(){if(!native){toast('This is an offline preview. Close the browser tab to exit.');return;}if(state.operation){await showMessage('A file operation is running','Cancel the operation and wait for its result before closing OpenXplorer.');return;}fire('window',{action:'close'});}
+async function askClose(){if(state.updateInstalling){toast('Wait for the update to finish before closing OpenXplorer.');return;}if(!native){toast('This is an offline preview. Close the browser tab to exit.');return;}if(state.operation){await showMessage('A file operation is running','Cancel the operation and wait for its result before closing OpenXplorer.');return;}fire('window',{action:'close'});}
 function toggleHidden(){state.showHidden=!state.showHidden;fire('preferences',{showHidden:state.showHidden});for(const t of state.tabs)t.loaded=false;load(active());}
+function updatesDialog(){
+  if(state.updateInstalling)return;
+  let release=null,checking=false,installed=false,alive=true,status,versions,notes;
+  const sync=()=>{
+    if(!alive)return;
+    const busy=checking||!!state.updateInstalling;
+    $('modal').querySelector('.update-close').disabled=!!state.updateInstalling;
+    $('modal').querySelector('.update-check').disabled=busy||installed;
+    const install=$('modal').querySelector('.update-install');install.hidden=!release?.available||installed;install.disabled=busy||!release?.canInstall;
+    const restart=$('modal').querySelector('.update-restart');restart.hidden=!installed;restart.disabled=busy;
+    $('modal').setAttribute('aria-busy',String(busy));
+  };
+  const check=async()=>{
+    if(checking||state.updateInstalling||installed)return;
+    checking=true;release=null;notes.textContent='';status.textContent='Checking for updates…';sync();
+    try{
+      const result=await call('updateCheck');if(!alive)return;release=result;installed=!!result.restartRequired;
+      versions.textContent='Installed: '+result.currentVersion+(result.available?' · Available: '+result.version:'');
+      notes.textContent=typeof result.notes==='string'?result.notes:'';
+      status.textContent=installed?'Updated application files are installed. Restart OpenXplorer before continuing.':result.available?(result.canInstall?'An update is available. Install it when file operations have finished.':'An update is available. Automatic installation is unavailable for this installation.'):(native?'OpenXplorer is up to date.':'Preview only — no update available. No network request was made.');
+    }catch(error){if(alive)status.textContent='Could not check for updates. '+error.message;}
+    finally{checking=false;sync();}
+  };
+  const promise=showModal('Software updates','Updates are checked only when you ask. Installing requires administrator approval. Restart OpenXplorer after installation.',body=>{
+    body.className='update-body';versions=elem('p','update-versions','Installed: '+(state.env?.version||UI_RELEASE));versions.id='update-versions';
+    status=elem('p','update-status');status.id='update-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+    notes=elem('pre','update-notes');notes.id='update-notes';notes.setAttribute('aria-label','Release notes');body.append(versions,status,notes);
+    return{onCancel:()=>{alive=false;}};
+  },[{label:'Close',cancel:true,className:'update-close'},
+    {label:'Check again',className:'update-check secondary',fn:()=>{void check();return false;}},
+    {label:'Install update…',className:'update-install primary',fn:async()=>{
+      if(!release?.available||!release.canInstall||state.updateInstalling)return false;
+      if(state.operation||state.transferPlanning){status.textContent='Finish file operations before installing the update.';return false;}
+      state.updateInstalling=true;$('app').inert=true;status.textContent='Preparing update. Approve the administrator prompt to install.';sync();status.tabIndex=-1;status.focus();
+      try{const result=await call('updateInstall',{version:release.version,confirmed:true});if(result?.installed!==true)throw Error('The installer did not confirm completion.');installed=true;status.textContent='OpenXplorer '+result.version+' is installed. Restart to use the update.';}
+      catch(error){
+        release=null;let recovery=' Check again to retry.';
+        try{const result=await call('updateCheck');installed=!!result.restartRequired;if(installed)recovery=' Some application files changed. Restart OpenXplorer before continuing.';}catch{}
+        status.textContent='Update installation did not complete. '+error.message+recovery;
+      }
+      finally{state.updateInstalling=false;$('app').inert=false;sync();$('modal').querySelector(installed?'.update-restart':'.update-check').focus();}
+      return false;
+    }},
+    {label:'Restart now',className:'update-restart primary',fn:async(_fields,b)=>{if(!installed)return false;b.disabled=true;try{await call('updateRestart');}catch(error){status.textContent='Could not restart. '+error.message;b.disabled=false;}return false;}}
+  ]);
+  $('modal').classList.add('updates-modal');sync();void check();return promise;
+}
 function applyTheme(theme,save=true){
   if(!['light','dark','system'].includes(theme))theme='system';
   state.theme=theme;
@@ -652,6 +710,8 @@ function appearanceMenu(){menuBelow('theme-toggle',[
 function realLocation(uri){return uri==='home:'?(state.env?.home||'file:///home/demo'):uri;}
 function resetSearch(){resetTypeSelect();if(state.searchToken)fire('cancel',{token:state.searchToken});state.searchToken=null;clearTimeout(state.searchTimer);state.searchGeneration=(state.searchGeneration||0)+1;state.searchResults=null;state.searchResultMeta=null;state.searchBusy=false;state.filterCache=null;}
 function cacheRootsFor(uri){return (state.cache?.roots||[]).filter(r=>r.enabled&&(sameLocation(uri,r.uri)||uri?.startsWith(r.uri.replace(/\/$/,'')+'/')||r.uri.startsWith(uri?.replace(/\/$/,'')+'/')));}
+function cacheCovers(uri){return cacheRootsFor(uri).some(r=>sameLocation(uri,r.uri)||uri.startsWith(r.uri.replace(/\/$/,'')+'/'));}
+function currentFolderMatches(tab,text){const terms=text.toLocaleLowerCase().split(/\s+/);return tab.entries.filter(e=>(state.showHidden||!e.hidden)&&terms.every(term=>(e.name+' '+displayUri(tab.uri)).toLocaleLowerCase().includes(term)));}
 async function refreshCacheStatus(){try{state.cache=await call('cacheStatus');renderSearchInfo();if($('settings-cache-list'))renderSettingsCache();return state.cache;}catch(e){state.cacheError=e.message;return null;}}
 function queueSearch(){resetSearch();state.query=$('search').value;state.selection.clear();$('file-scroll').scrollTop=0;state.searchBusy=!!state.query;state.searchTimer=setTimeout(runSearch,120);renderSearchInfo();renderRows();updateStatus();updateToolbar();}
 async function runSearch(){
@@ -664,7 +724,13 @@ async function runSearch(){
   try{
     state.searchToken='search-'+(++seq);const result=await call('search',{token:state.searchToken,query:text,scope:state.searchScope==='all'?null:uri,limit:500,showHidden:state.showHidden});
     if(generation!==state.searchGeneration||active()?.id!==tabId||active()?.uri!==uri)return;
-    state.searchResults=result.entries;state.searchResultMeta=result;state.filterCache=null;t.dirty=true;
+    const merged=new Map();
+    // A cached child does not cover its parent. Keep matches from the visible
+    // listing, then add cached descendants without duplicating the same URI.
+    if(state.searchScope!=='all')for(const entry of currentFolderMatches(t,text))merged.set(entry.uri,entry);
+    for(const entry of result.entries)if(!merged.has(entry.uri))merged.set(entry.uri,entry);
+    state.searchResults=[...merged.values()].slice(0,500);
+    state.searchResultMeta={...result,truncated:result.truncated||merged.size>500,partialCache:state.searchScope!=='all'&&!cacheCovers(uri)};state.filterCache=null;t.dirty=true;
   }catch(e){if(generation!==state.searchGeneration)return;state.searchError=e.message;state.searchResults=[];state.searchResultMeta={source:'cache'};}
   finally{if(generation===state.searchGeneration){state.searchToken=null;state.searchBusy=false;renderSearchInfo();renderColumns();renderRows();renderDetails();updateStatus();updateToolbar();}}
 }
@@ -674,13 +740,14 @@ function renderSearchInfo(){
   if(!state.query)return;
   strip.replaceChildren(icon('search',15));
   const cached=state.searchScope==='all'||cacheRootsFor(active().uri).length>0;
-  const label=state.searchError|| (state.searchBusy?'Searching…':cached?'Cached names & paths':'Current folder only');
+  const partial=cached&&state.searchScope!=='all'&&!cacheCovers(active().uri);
+  const label=state.searchError|| (state.searchBusy?'Searching…':partial?'Current folder + cached subfolders':cached?'Cached names & paths':'Current folder only');
   const desc=elem('span','search-caption',label);strip.append(desc);
   const scope=elem('select');scope.setAttribute('aria-label','Search scope');
   for(const [value,text]of [['folder','This folder + subfolders'],['all','All cached folders']]){const o=elem('option','',text);o.value=value;scope.append(o);}
   scope.value=state.searchScope;scope.onchange=()=>{state.searchScope=scope.value;resetSearch();void runSearch();};strip.append(scope);
-  if(!cached){strip.append(button('Cache this folder',()=>setCache(active().uri,true),'cache-link','plus'));}
-  else{const info=elem('span','cache-freshness',state.searchResultMeta?.truncated?'First 500 results · narrow your search':'Cached metadata · see update coverage in Settings');info.title='Names and paths are stored locally. Refresh the cache to pick up changes on a disconnected or unmonitored share.';strip.append(info);}
+  if(!cached||partial){strip.append(button('Cache this folder',()=>setCache(active().uri,true),'cache-link','plus'));}
+  if(cached){const info=elem('span','cache-freshness',state.searchResultMeta?.truncated?'First 500 results · narrow your search':partial?'Other subfolders are not indexed.':'Cached metadata · see update coverage in Settings');info.title='Names and paths are stored locally. Refresh the cache to pick up changes on a disconnected or unmonitored share.';strip.append(info);}
   const clear=button('',()=>{$('search').value='';state.query='';void runSearch();},'','close');clear.title='Clear search';clear.setAttribute('aria-label','Clear search');strip.append(clear);
 }
 async function setCache(uri,enabled,label){
@@ -875,7 +942,7 @@ function setup(){
   $('sidebar').addEventListener('scroll',scheduleFileDragLayout,{passive:true});
   $('tabs').addEventListener('scroll',()=>{if(native&&state.env?.nativeTabDrag)publishTabDragLayout();},{passive:true});setButton('windows-button','desktop');$('windows-button').onclick=windowsMenu;setupSidebarResize();$('breadcrumbs').addEventListener('wheel',e=>{const c=$('breadcrumbs');if(c.scrollWidth>c.clientWidth){e.preventDefault();c.scrollLeft+=e.deltaX||e.deltaY;}},{passive:false});
   for(const[id,ico]of Object.entries({newtab:'plus',minimize:'minus',maximize:'maximize','close-window':'close',back:'back',forward:'forward',up:'up',refresh:'refresh','address-edit':'down',cut:'cut',copy:'copy',paste:'paste',rename:'rename','copy-path':'share',trash:'trash',more:'more','status-list':'list','status-grid':'grid'}))setButton(id,ico);
-  setButton('new','plus','New',true);setButton('sort','sort','Sort',true);setButton('view','grid','View',true);setButton('details-toggle','details','Details');setButton('connect-sidebar','plus','Map network location');$('search-icon').append(icon('search'));$('transfer-icon').append(icon('copy'));
+  setButton('new','plus','New',true);setButton('sort','sort','Sort',true);setButton('view','grid','View',true);setButton('details-toggle','details','Details');setButton('connect-sidebar','plus','Map network location');setButton('check-updates','refresh','Check for updates');$('check-updates').onclick=updatesDialog;$('search-icon').append(icon('search'));$('transfer-icon').append(icon('copy'));
   $('newtab').onclick=()=>addTab();$('minimize').onclick=()=>native?fire('window',{action:'minimize'}):toast('Window controls work in the desktop application.');$('maximize').onclick=()=>{if(native)fire('window',{action:'maximize'});else document.body.style.padding=document.body.style.padding==='0px'?'34px':'0px';};$('close-window').onclick=askClose;
   $('back').onclick=()=>goHistory(-1);$('forward').onclick=()=>goHistory(1);$('up').onclick=()=>{const p=parentUri(active().uri);if(p)navigate(p);};$('refresh').onclick=()=>{refreshEnvironment();load(active(),false);};
   $('address').addEventListener('click',e=>{if(e.target===$('address')||e.target===$('breadcrumbs')||e.target.closest('#address-edit'))editAddress();});$('address-input').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submitAddress();}if(e.key==='Escape')finishAddress();});$('address-input').addEventListener('blur',finishAddress);
@@ -886,7 +953,7 @@ function setup(){
   $('new').onclick=()=>openNewMenu();
   $('sort').onclick=()=>menuBelow('sort',[...['name','modified','type','size'].map(s=>({label:{name:'Name',modified:'Date modified',type:'Type',size:'Size'}[s],icon:state.sort===s?'check':'sort',fn:()=>{state.sort=s;state.filterCache=null;renderColumns();renderRows();}})),'-',{label:state.descending?'Descending':'Ascending',icon:state.descending?'down':'up',fn:()=>{state.descending=!state.descending;state.filterCache=null;renderColumns();renderRows();}}]);
   $('view').onclick=()=>menuBelow('view',[{label:'Details',icon:state.view==='details'?'check':'list',fn:()=>changeView('details')},{label:'Large icons',icon:state.view==='grid'?'check':'grid',fn:()=>changeView('grid')},'-',{label:'Show hidden files',icon:state.showHidden?'check':'eye',fn:toggleHidden},{label:'Details pane',icon:state.details?'check':'details',fn:toggleDetails},'-',{label:'Larger text',icon:'plus',shortcut:'Ctrl++',fn:()=>changeTextSize('increase')},{label:'Smaller text',icon:'minus',shortcut:'Ctrl+−',fn:()=>changeTextSize('decrease')},{label:'Reset text size',icon:'refresh',shortcut:'Ctrl+0',fn:()=>changeTextSize('reset')}]);
-  $('more').onclick=()=>menuBelow('more',[{label:'New window',icon:'plus',shortcut:'Ctrl+N',fn:()=>call('newWindow',{uri:active().uri.startsWith('file:')||active().uri.startsWith('smb:')?active().uri:state.env.home})},{label:'Settings',icon:'settings',fn:settingsDialog},{label:'Default file explorer…',icon:'folderline',fn:()=>settingsDialog('default')},...cacheMenuItems(active().uri),{label:'Map network location',icon:'network',fn:connectDialog},{label:'Pin current folder',icon:'pin',fn:pinCurrent,disabled:['home:','pc:','network:','settings:'].includes(active().uri)},'-',{label:'Light appearance',icon:state.theme==='light'?'check':'sun',fn:()=>applyTheme('light')},{label:'Dark appearance',icon:state.theme==='dark'?'check':'moon',fn:()=>applyTheme('dark')},{label:'Use system appearance',icon:state.theme==='system'?'check':'desktop',fn:()=>applyTheme('system')},{label:'Show hidden files',icon:state.showHidden?'check':'eye',fn:toggleHidden},'-',{label:'License & source',icon:'code',fn:showLicense},{label:'About this build',icon:'info',fn:()=>showMessage('OpenXplorer 1.0.2','An independent Windows 11–inspired file manager for Zorin.\n\n'+(native?'Desktop: WebKitGTK + GIO/GVfs.':'Offline preview: sample data only.')+'\n\nStable release. Replacing existing files requires confirmation; there is no permanent-delete fallback. Cached filename/path search is opt-in. Thumbnails, undo, and cross-filesystem cut/move are not implemented. ZIP browsing is read-only; local cache changes use inotify. Network changes use incremental polling.')}]);
+  $('more').onclick=()=>menuBelow('more',[{label:'New window',icon:'plus',shortcut:'Ctrl+N',fn:()=>call('newWindow',{uri:active().uri.startsWith('file:')||active().uri.startsWith('smb:')?active().uri:state.env.home})},{label:'Settings',icon:'settings',fn:settingsDialog},{label:'Default file explorer…',icon:'folderline',fn:()=>settingsDialog('default')},...cacheMenuItems(active().uri),{label:'Map network location',icon:'network',fn:connectDialog},{label:'Pin current folder',icon:'pin',fn:pinCurrent,disabled:['home:','pc:','network:','settings:'].includes(active().uri)},'-',{label:'Light appearance',icon:state.theme==='light'?'check':'sun',fn:()=>applyTheme('light')},{label:'Dark appearance',icon:state.theme==='dark'?'check':'moon',fn:()=>applyTheme('dark')},{label:'Use system appearance',icon:state.theme==='system'?'check':'desktop',fn:()=>applyTheme('system')},{label:'Show hidden files',icon:state.showHidden?'check':'eye',fn:toggleHidden},'-',{label:'License & source',icon:'code',fn:showLicense},{label:'About this build',icon:'info',fn:()=>showMessage('OpenXplorer 1.1.0','An independent Windows 11–inspired file manager for Zorin.\n\n'+(native?'Desktop: WebKitGTK + GIO/GVfs.':'Offline preview: sample data only.')+'\n\nStable release. Replacing existing files requires confirmation; there is no permanent-delete fallback. Cached filename/path search is opt-in. Thumbnails, undo, and cross-filesystem cut/move are not implemented. ZIP browsing is read-only; local cache changes use inotify. Network changes use incremental polling.')}]);
   $('theme-toggle').onclick=appearanceMenu;setButton('settings-button','settings');$('settings-button').onclick=settingsDialog;
   $('details-toggle').onclick=toggleDetails;$('status-list').onclick=()=>changeView('details');$('status-grid').onclick=()=>changeView('grid');$('connect-sidebar').onclick=connectDialog;$('transfer-cancel').onclick=()=>{if(state.operation){fire('cancel',{token:state.operation});$('transfer-label').textContent='Cancelling…';}};
   if(!native&&window.matchMedia){window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(state.theme==='system')applyTheme('system',false);});}
@@ -913,6 +980,7 @@ function onKey(e){
   // Never interpret an IME's provisional key events as file actions.
   if(e.defaultPrevented||e.isComposing||e.keyCode===229)return;
   if(activeAuth)return;
+  if(state.updateInstalling){if(e.key==='Tab')$('update-status')?.focus();e.preventDefault();return;}
   if((e.ctrlKey||e.metaKey)&&e.key==='Tab'&&state.modalOwner){e.preventDefault();const i=state.tabs.findIndex(t=>t.id===state.activeId);switchTab(state.tabs[(i+(e.shiftKey?-1:1)+state.tabs.length)%state.tabs.length].id);return;}
   if(state.ready&&handleTypeSelect(e))return;
   if(!['Shift','CapsLock'].includes(e.key))resetTypeSelect();
@@ -939,7 +1007,7 @@ function onKey(e){
   if(ctrl&&key==='a'){state.selection=new Set(filtered().map(x=>x.uri));renderRows();renderDetails();updateToolbar();updateStatus();e.preventDefault();return;}
   if(ctrl&&key==='c'){copySelection('copy');e.preventDefault();return;}if(ctrl&&key==='x'){copySelection('move');e.preventDefault();return;}if(ctrl&&key==='v'){paste();e.preventDefault();return;}
   if(ctrl&&e.shiftKey&&key==='n'){if(!$('new').disabled)newItem('folder');e.preventDefault();return;}
-  if(e.key==='Delete'){trash();e.preventDefault();return;}if(e.key==='F2'){rename();e.preventDefault();return;}if(e.key==='Enter'){const s=selected();if(s.length===1)openEntry(s[0]);e.preventDefault();return;}
+  if(e.key==='Delete'){trash();e.preventDefault();return;}if(e.key==='F2'){rename();e.preventDefault();return;}if(e.key==='Enter'&&typeSelectTarget(e.target)){const s=selected();if(s.length===1)openEntry(s[0]);e.preventDefault();return;}
   if(e.key==='Escape'){clearSelection();return;}
   if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){const arr=filtered();if(!arr.length)return;const current=Math.max(0,state.anchor);let next=e.key==='Home'?0:e.key==='End'?arr.length-1:Math.min(arr.length-1,Math.max(0,current+(e.key==='ArrowDown'?1:-1)));selectEntry(arr[next],next,e);revealEntry(next);e.preventDefault();}
 }
@@ -1014,6 +1082,8 @@ const demo = (()=>{
   function ensureDir(uri){if(uri==='file:///'||uri==='file:///home'||uri===root||uri===nas||uri===media||shares.some(s=>s.uri===uri))return;if(!entries.get(uri)?.isDir)throw Error('This location does not exist in the preview. Try Documents or the sample NAS.');}
   function exists(uri){return entries.has(uri);}
   return{async call(method,a){await new Promise(r=>setTimeout(r,method==='list'?100:5));switch(method){
+    case'updateCheck':return{currentVersion:UI_RELEASE,version:UI_RELEASE,available:false,notes:'',releaseUrl:'',canInstall:false};
+    case'updateInstall':case'updateRestart':throw Error('Updates are available only in the installed desktop application.');
     case'authReply':{a.password='';return true;}
     case'cacheStatus':return cacheSnapshot();
     case'cacheSet':{const uri=normaliseAddress(a.uri);if(isSmbServer(uri))throw Error('Open a share first. Cache a folder, not a server.');ensureDir(uri);demoCaches.set(uri,{uri,label:a.label||baseName(uri),enabled:a.enabled?1:0,status:a.enabled?'Ready':'Disabled',count:0});if(a.enabled)sampleIndex(uri);else demoSnapshots.delete(uri);return cacheSnapshot();}

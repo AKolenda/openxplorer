@@ -1,25 +1,35 @@
-# OpenXplorer 1.0.2 — replace/skip and phone transfers
+# OpenXplorer 1.1.0 — in-app updates and safety fixes
 
-This maintenance release adds explicit **Replace existing** and **Skip
-duplicates** choices for copy and move conflicts. Same-name folders merge while
-destination-only files remain. It also fixes phone copies failing when an MTP
-backend rejects Unix `chmod`; local staging remains permission-hardened. The
-1.0.1 connected-device work remains included, without automatic mounting or
-indexing. Changes to desktop settings are explicit and reversible.
+This release fixes folder permission preservation, recursive backup protection,
+keyboard button activation, delayed tab navigation, partial-cache search, device
+ZIP extraction and publication privacy checks.
 
-## Upgrade
+## Upgrade once from an older release
 
-Finish active file operations first. Install the new package, then restart the
-old background process using the new launcher:
+Finish active file operations and quit OpenXplorer, then install the package:
 
 ```sh
-sudo apt install './openxplorer_1.0.2_all.deb'
+openxplorer --quit
+sudo apt install ./openxplorer_1.1.0_all.deb
 openxplorer --restart
 ```
 
-Settings, pins and credentials keep their existing compatibility paths. The
-fallback GTK app-menu remains disabled. The reproducible package timestamp is
-new for this build so Python can invalidate timestamp-based bytecode on upgrade.
+## Later updates inside the app
+
+Click **Check for updates** in the sidebar. Review the version and release notes,
+then click **Install update**. The app verifies the GitHub release asset digest
+and package identity before invoking APT with a system administrator prompt.
+Finish transfers, folder loading and tab moves before installing. File actions
+are blocked during installation and until restart. **Restart now** closes the
+existing windows and tabs and starts the installed version.
+
+Checks and installations are opt-in. Source checkouts can check releases but
+cannot install through the app. This is a native package update, not live code
+replacement. GitHub HTTPS and asset digests provide integrity; releases are not
+independently signed. Failed downloads leave the installed app unchanged. If
+APT reports a configuration error, repair the system package state before retrying.
+
+Settings, pins and credentials keep their existing compatibility paths.
 
 ## Merge a tab back into a window
 

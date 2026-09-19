@@ -14,12 +14,20 @@ Close every old Winspace/OpenXplorer window and finish file operations. Download
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_1.0.2_all.deb
+sudo apt install ./openxplorer_1.1.0_all.deb
 openxplorer --check
 openxplorer
 ```
 
 > This is a local unsigned package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts.
+
+## Update from inside the app
+
+Starting with 1.1.0, click Check for updates at the bottom of the sidebar. This contacts the public OpenXplorer GitHub Releases API only when requested. Review the version and release notes, then choose Install update. Finish file operations and tab moves first.
+
+The installed Debian app downloads the release installer, verifies its GitHub SHA-256 digest and package identity, then asks for system administrator approval through polkit. APT installs the update without removing packages. Choose Restart now when finished; restarting closes existing windows and tabs.
+
+Older releases need one manual upgrade to 1.1.0 before this control is available. Source checkouts can check versions but cannot install in-app. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature.
 
 ## Upgrading from Winspace
 
@@ -56,4 +64,4 @@ A signed repository with a pre-indexed AppStream catalog can supply that informa
 
 ---
 
-OpenXplorer 1.0.2. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.1.0. Project-authored documentation: AGPL-3.0-only.
