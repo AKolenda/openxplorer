@@ -6,11 +6,13 @@ from pathlib import Path
 import stat
 import tempfile
 import unittest
+from unittest.mock import patch
 import warnings
 import zipfile
 from archives import Archives
 from core import Settings
 from operations import Cancelled
+from previous_versions import PreviousVersions
 from zip_extraction import Limits, ZipExtractor, plan, suggested_name
 from tests.local_provider import LocalNode, Cancellation
 
@@ -51,6 +53,35 @@ class ZipExtractTests(unittest.TestCase):
         self.make_zip([('a/b.txt',b'data'),('a/',b'')]);self.run_extract();self.assertTrue((self.dest/'Unpacked/a/b.txt').is_file())
     def test_empty_archive(self):
         self.make_zip([]);r=self.run_extract();self.assertEqual(r['files'],0);self.assertTrue((self.dest/'Unpacked').is_dir())
+    def test_device_destination_does_not_require_unix_chmod(self):
+        class DeviceNode(LocalNode):
+            def __init__(self,uri=None,path=None):
+                super().__init__(uri=uri,path=path)
+                self.uri='mtp://test-device'+self.p.as_posix()
+        self.make_zip()
+        self.extractor.factory=DeviceNode
+        # The simulated device writer creates files without applying Unix modes.
+        @contextmanager
+        def device_writer(node,cancel):
+            with node.p.open('xb') as stream:yield stream
+        self.extractor.writer=device_writer
+        with patch('operations.os.fchmod',side_effect=OSError('Device does not support chmod')) as chmod:
+            result=self.run_extract()
+        self.assertEqual(result['files'],2)
+        self.assertEqual((self.dest/'Unpacked'/'Docs'/'Guide.txt').read_text(),'hello world')
+        chmod.assert_not_called()
+    def test_protected_extraction_descendant_fails_before_writing(self):
+        self.make_zip([('ordinary.txt',b'first'),('.snapshot/version.txt',b'backup')])
+        versions=PreviousVersions(self.root/'configuration')
+        self.extractor.assert_writable=versions.assert_writable
+        with self.assertRaisesRegex(ValueError,'read-only'):self.run_extract()
+        self.assert_no_output()
+    def test_configured_extraction_root_is_protected(self):
+        self.make_zip();versions=PreviousVersions(self.root/'configuration')
+        versions.configure(self.dest.as_uri(),(self.dest/'Unpacked').as_uri())
+        self.extractor.assert_writable=versions.assert_writable
+        with self.assertRaisesRegex(ValueError,'read-only'):self.run_extract()
+        self.assert_no_output()
     def test_empty_folders(self):
         self.make_zip([('a/b/',b'')]);self.run_extract();self.assertTrue((self.dest/'Unpacked/a/b').is_dir())
     def test_unicode_spaces(self):

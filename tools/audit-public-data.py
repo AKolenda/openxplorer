@@ -11,11 +11,23 @@ import argparse,base64,hashlib,html,io,json,os,re,subprocess,tarfile,tempfile,zi
 from pathlib import Path
 from urllib.parse import unquote
 ROOT=Path(__file__).resolve().parents[1]
-DENIED=set()
-DENIED.update(hashlib.sha256(x.strip().casefold().encode()).hexdigest() for x in os.environ.get('OX_PRIVATE_TERMS','').split(',') if x.strip())
+DENIED={}
 TEXT={'.py','.js','.cjs','.mjs','.ts','.tsx','.css','.html','.md','.txt','.json','.xml','.yml','.yaml','.sh','.svg','.desktop','.service'}
 SKIP={'.git','node_modules','.next','.pnpm-store','__pycache__'}
 def digest(data):return hashlib.sha256(data).hexdigest()
+def deny_terms(terms):
+    """Keep supplied identifiers in memory only, including full names/addresses."""
+    for value in terms:
+        term=' '.join(value.casefold().split())
+        if not term:continue
+        # Match complete identifiers, with whitespace allowed to wrap in text.
+        # Underscores and punctuation remain word separators as in the previous
+        # token checks; Unicode letters and digits are not separators.
+        pattern=r'(?<![^\W_])'+r'\s+'.join(re.escape(part) for part in term.split())+r'(?![^\W_])'
+        DENIED[digest(term.encode())]=re.compile(pattern)
+def contains_private_term(value):
+    return any(pattern.search(value.casefold()) for pattern in DENIED.values())
+deny_terms(os.environ.get('OX_PRIVATE_TERMS','').split(','))
 def audit(paths):
     seen=set();issues=[];texts=archives=images=0
     known_images=set()
@@ -23,12 +35,12 @@ def audit(paths):
         if manifest.exists():known_images.update(json.loads(manifest.read_text()).get('sha256',{}).values())
     def visit(name,data,depth=0):
         nonlocal texts,archives,images
+        # Names are distinct publication data even when their payloads match.
+        if contains_private_term(unquote(name)):issues.append(name+': rejected filename fingerprint')
         h=digest(data)
         if h in seen:return
         seen.add(h)
         if depth>8:issues.append(name+': nested archive depth exceeded');return
-        filename_tokens=set(re.findall(r'[a-z0-9]+(?:[._-][a-z0-9]+)*',unquote(name).casefold()))|set(re.findall(r'[a-z0-9]+',unquote(name).casefold()))
-        if any(digest(token.encode()) in DENIED for token in filename_tokens):issues.append(name+': rejected filename fingerprint')
         suffix=Path(name).suffix.lower()
         if suffix=='.zip':
             archives+=1
@@ -55,8 +67,7 @@ def audit(paths):
                 try:image_hash=digest(base64.b64decode(encoded,validate=True))
                 except ValueError:issues.append(name+': invalid inline image');continue
                 if image_hash not in known_images:issues.append(name+': unregistered inline screenshot')
-            tokens=set(re.findall(r'[a-z0-9]+(?:[._-][a-z0-9]+)*',s))|set(re.findall(r'[a-z0-9]+',s))
-            if any(digest(token.encode()) in DENIED for token in tokens):issues.append(name+': rejected private-data fingerprint')
+            if contains_private_term(s):issues.append(name+': rejected private-data fingerprint')
     for p in paths:
         if p.is_file():visit(str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else p.name,p.read_bytes());continue
         for f in sorted(p.rglob('*')):
@@ -86,7 +97,7 @@ if __name__=='__main__':
     if a.private_terms:
         terms=json.loads(a.private_terms.read_text())
         if not isinstance(terms,list) or not all(isinstance(t,str) for t in terms):raise SystemExit('Private terms must be a JSON array of strings')
-        DENIED.update(digest(t.strip().casefold().encode()) for t in terms if t.strip())
+        deny_terms(terms)
     report=audit(a.paths or [ROOT]);print(json.dumps(report,indent=2))
     if a.json:a.json.parent.mkdir(parents=True,exist_ok=True);a.json.write_text(json.dumps(report,indent=2)+'\n')
     raise SystemExit(0 if report['passed'] else 1)

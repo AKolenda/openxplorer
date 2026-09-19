@@ -34,6 +34,7 @@ class ReplaceUnsupported(Exception):
 class Info:
     kind: str  # directory, file, symlink, special
     size: int = 0
+    mode: int | None = None  # Unix permissions, only when the provider exposes them
 
 
 class Cancellation(Protocol):
@@ -57,7 +58,7 @@ class Node(Protocol):
     def replace_native(self, target: 'Node', cancel: Cancellation | None = None) -> None: ...
     def delete(self) -> None: ...  # used ONLY on this engine's exclusive staging tree
     def trash(self, cancel: Cancellation) -> None: ...
-    def delete_tree(self, cancel: Cancellation) -> None: ...  # explicit permanent delete
+    def delete_tree(self, cancel: Cancellation, assert_writable=None) -> None: ...  # explicit permanent delete
 
 
 @dataclass
@@ -93,9 +94,11 @@ def guard_destination(source: Node, directory: Node) -> None:
 
 
 class TransferEngine:
-    def __init__(self, factory: Callable[[str], Node], emit: Callable[[dict], None] | None = None):
+    def __init__(self, factory: Callable[[str], Node], emit: Callable[[dict], None] | None = None,
+                 assert_writable: Callable[[str], None] | None = None):
         self.factory = factory
         self.emit = emit or (lambda _: None)
+        self.assert_writable = assert_writable
 
     def run(self, mode: str, uris: list[str], target: str | None,
             policy: str, cancel: Cancellation) -> Result:
@@ -126,10 +129,11 @@ class TransferEngine:
                 self.emit({'label': f'{("Delete" if mode == "delete" else mode.title())}: {source.name} ({index+1}/{len(uris)})',
                            'fraction': index / len(uris) if removal else 0})
                 if removal:
+                    self._check_write_tree(source, None, cancel, source_writable=True)
                     if mode == 'trash':
                         source.trash(cancel)
                     else:
-                        source.delete_tree(cancel)
+                        source.delete_tree(cancel, self.assert_writable)
                     result.done.append(uri)
                     continue
                 assert dest_dir is not None
@@ -151,6 +155,9 @@ class TransferEngine:
                             count += 1
                             if count > 10000:
                                 raise ValueError('Too many duplicate names. Rename the item before copying.')
+                # Check every affected path before changing this top-level item.
+                # A writable parent can contain protected backup descendants.
+                self._check_write_tree(source, destination, cancel, source_writable=mode == 'move')
                 if mode == 'move':
                     # Backends MUST use NO_FALLBACK_FOR_MOVE. Replace is an
                     # explicit user choice and still never degrades to copy/delete.
@@ -167,15 +174,16 @@ class TransferEngine:
                 stage = candidate
                 self._secure_local_staging(stage)
                 staged_item = stage.child('payload')
-                self._copy(source, staged_item, cancel, stage.name, 0)
+                directory_modes = {}
+                self._copy(source, staged_item, cancel, stage.name, 0, directory_modes)
                 cancel.check()
                 # Native rename in the same destination directory. Replace is
                 # only reached after the user explicitly chose it; other
                 # policies retain the no-overwrite race guard.
                 if policy == 'replace':
-                    self._commit_replace(staged_item, destination, cancel)
+                    self._commit_replace(staged_item, destination, cancel, directory_modes)
                 else:
-                    staged_item.move_native(destination, cancel)
+                    self._publish_staged(staged_item, destination, directory_modes, cancel)
                 result.done.append(uri)
                 stage.delete()  # now empty; cannot recursively remove final item
                 stage = None
@@ -204,18 +212,84 @@ class TransferEngine:
         session. Local paths use an opened, no-follow directory descriptor so
         a path swap cannot redirect the permission change.
         """
-        path = getattr(stage, 'path', None)
-        if not path or not stage.uri.startswith('file:'):
+        TransferEngine._set_local_directory_mode(stage, 0o700)
+
+    @staticmethod
+    def _set_local_directory_mode(node: Node, mode: int) -> None:
+        path = getattr(node, 'path', None)
+        if not path or not node.uri.startswith('file:'):
             return
         flags = os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0) | getattr(os, 'O_NOFOLLOW', 0)
         descriptor = os.open(path, flags)
         try:
-            os.fchmod(descriptor, 0o700)
+            os.fchmod(descriptor, mode)
         finally:
             os.close(descriptor)
 
+    def _check_write_tree(self, source: Node, destination: Node | None,
+                          cancel: Cancellation, source_writable: bool = False,
+                          depth: int = 0) -> None:
+        """Preflight without following links or modifying selected directories."""
+        if self.assert_writable is None:
+            return
+        cancel.check()
+        if depth > 128:
+            raise ValueError('Folder nesting exceeds this build’s safety limit (128).')
+        if source_writable:
+            self.assert_writable(source.uri)
+        if destination is not None:
+            self.assert_writable(destination.uri)
+        if source.info(cancel).kind == 'directory':
+            for child in source.children(cancel):
+                self._check_write_tree(child, destination.child(child.name) if destination else None,
+                                       cancel, source_writable, depth + 1)
+
+    @staticmethod
+    def _restore_directory_modes(source: Node, modes: dict, cancel: Cancellation) -> None:
+        # Restore children before parents, and only immediately before publishing
+        # a complete subtree. Restrictive source modes must not prevent building,
+        # merging or cleaning an exclusively owned staging directory.
+        cancel.check()
+        for child in source.children(cancel):
+            if child.uri in modes:
+                TransferEngine._restore_directory_modes(child, modes, cancel)
+        pending = modes.pop(source.uri, None)
+        if pending is not None:
+            TransferEngine._set_local_directory_mode(*pending)
+
+    @staticmethod
+    def _publish_staged(source: Node, destination: Node, modes: dict, cancel: Cancellation) -> None:
+        # Linux requires owner write access when moving a directory between
+        # parents. Retain it just for the rename, then restore the exact mode
+        # through the already-open descriptor. Group/other permissions are
+        # restricted before publication, so private contents are never exposed.
+        root = modes.pop(source.uri, None)
+        descriptor = None
+        published = False
+        if root is not None:
+            flags = os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+            descriptor = os.open(source.path, flags)
+        try:
+            if root is not None and modes:
+                TransferEngine._restore_directory_modes(source, modes, cancel)
+            if descriptor is not None:
+                os.fchmod(descriptor, root[1] | 0o700)
+            source.move_native(destination, cancel)
+            published = True
+        finally:
+            if descriptor is not None:
+                try:
+                    try:
+                        os.fchmod(descriptor, root[1])
+                    except OSError as exc:
+                        if published:
+                            raise ValueError(f'The copied folder exists at {destination.uri}, but its final permissions could not be restored. {exc}') from exc
+                        raise
+                finally:
+                    os.close(descriptor)
+
     def _commit_replace(self, source: Node, destination: Node,
-                        cancel: Cancellation) -> None:
+                        cancel: Cancellation, directory_modes: dict | None = None) -> None:
         """Commit one completed item using Windows-like replace semantics.
 
         Same-name directories merge recursively and keep destination-only
@@ -224,14 +298,21 @@ class TransferEngine:
         directory tree as a side effect of a batch choice.
         """
         cancel.check()
+        if self.assert_writable is not None:
+            self.assert_writable(destination.uri)
         if not destination.exists(cancel):
-            source.move_native(destination, cancel)
+            if directory_modes is not None:
+                self._publish_staged(source, destination, directory_modes, cancel)
+            else:
+                source.move_native(destination, cancel)
             return
         incoming, existing = source.info(cancel), destination.info(cancel)
         if incoming.kind == 'directory' and existing.kind == 'directory':
             for child in list(source.children(cancel)):
-                self._commit_replace(child, destination.child(child.name), cancel)
+                self._commit_replace(child, destination.child(child.name), cancel, directory_modes)
             source.delete()
+            if directory_modes is not None:
+                directory_modes.pop(source.uri, None)
             return
         if 'directory' in (incoming.kind, existing.kind):
             raise ValueError('A file and folder have the same name. Rename or remove one of them, then try again.')
@@ -284,7 +365,7 @@ class TransferEngine:
                 f'Remove that backup after checking the new file. {cleanup_error}') from cleanup_error
 
     def _copy(self, source: Node, target: Node, cancel: Cancellation,
-              own_stage_name: str, depth: int) -> None:
+              own_stage_name: str, depth: int, directory_modes: dict) -> None:
         cancel.check()
         if depth > 128:
             raise ValueError('Folder nesting exceeds this build’s safety limit (128).')
@@ -293,8 +374,12 @@ class TransferEngine:
         info = source.info(cancel)  # lstat/NOFOLLOW_SYMLINKS, never traverse links
         if info.kind == 'directory':
             target.mkdir(cancel)
+            if target.path and target.uri.startswith('file:'):
+                mode = info.mode if info.mode is not None else target.info(cancel).mode
+                directory_modes[target.uri] = (target, mode if mode is not None else 0o700)
+                self._secure_local_staging(target)
             for child in source.children(cancel):
-                self._copy(child, target.child(child.name), cancel, own_stage_name, depth + 1)
+                self._copy(child, target.child(child.name), cancel, own_stage_name, depth + 1, directory_modes)
         elif info.kind in ('file', 'symlink'):
             def progress(current: int, total: int) -> None:
                 cancel.check()
@@ -309,6 +394,7 @@ class TransferEngine:
         # This root was exclusively created by us. Children are inspected with
         # NOFOLLOW_SYMLINKS. Never call this on a user-selected path.
         if node.info().kind == 'directory':
+            TransferEngine._secure_local_staging(node)
             for child in node.children():
                 TransferEngine._clean_staging(child)
         node.delete()

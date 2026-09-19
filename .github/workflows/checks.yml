@@ -63,6 +63,9 @@ jobs:
       - run: node --test desktop/tests/*.test.cjs
       - name: Verify corresponding-source exclusions with disposable fixtures
         run: /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'
+      - run: /usr/bin/python3 -m unittest discover -s tests -p 'test_public_data.py'
+      - run: /usr/bin/python3 -m unittest tests.gio_integration
+        working-directory: desktop
       - run: /usr/bin/python3 tools/security_sweep.py
       - name: Install the browser test driver in a disposable environment
         run: |
@@ -80,6 +83,7 @@ jobs:
         run: |
           /usr/bin/python3 desktop/tools/build_preview.py
           "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/ui_file_drag.py
+          node desktop/tests/ui_regressions.cjs
       - name: Exercise GTK and WebKit file transport into real Chromium on isolated X11
         run: |
           # Ubuntu 24.04's runner AppArmor policy otherwise blocks bubblewrap's

@@ -30,7 +30,7 @@ The desktop app is Python with GTK 3 and WebKitGTK. Its HTML/CSS/JavaScript inte
 
 ## Know what you are installing
 
-Version 1.0.2 adds explicit Replace/Skip conflict handling and fixes copies to phones that do not support Unix permission bits; 1.0.1 added connected-phone browsing. It is not Microsoft File Explorer, a complete Everything replacement, or a certified Windows compatibility layer. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration.
+Version 1.1.0 adds an opt-in in-app updater and fixes folder permissions, recursive backup protection, keyboard activation, delayed tab navigation, partial-cache search, device ZIP extraction and release privacy checks. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration.
 
 > Use a disposable folder and a non-critical share first. Native Zorin/WebKit, live NAS access, keyring behavior, and browser/portal integration have not been validated in the release environment.
 
@@ -40,4 +40,4 @@ Read Installation, open your home directory, and test a network share. Enable in
 
 ---
 
-OpenXplorer 1.0.2. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.1.0. Project-authored documentation: AGPL-3.0-only.

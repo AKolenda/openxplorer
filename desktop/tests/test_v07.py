@@ -203,7 +203,7 @@ class AppManagerTests(unittest.TestCase):
         tree=ast.parse((ROOT/'winspace.py').read_text());names={'OpenXplorer','argument_parser','CLI_OPTIONS'}
         nodes=[n for n in tree.body if getattr(n,'name',None) in names or isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id in names for t in n.targets)]
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
-        ctx={'Gtk':NS(Application=Base),'Gio':NS(ApplicationFlags=NS(HANDLES_COMMAND_LINE=1,HANDLES_OPEN=2)),
+        ctx={'Updater':lambda **kw:NS(), 'ROOT':ROOT, 'Gtk':NS(Application=Base),'Gio':NS(ApplicationFlags=NS(HANDLES_COMMAND_LINE=1,HANDLES_OPEN=2)),
              'GLib':NS(OptionFlags=NS(NONE=0),OptionArg=NS(NONE=0)), 'Settings':lambda:NS(directory=Path(self.tmp.name)),
              'TabTransfers':__import__('tab_transfers').TabTransfers,'DesktopIntegration':lambda *a:None,'RevealRegistration':lambda *a:NS(enabled=lambda:False), 'BraveIntegration':lambda *a:None,
              'OpenXplorerWindow':Controller,'argparse':argparse,'Path':Path,'normalise_location':normalise_location,'os':os,'sys':sys,'urlsplit':urlsplit}

@@ -1,3 +1,47 @@
+# OpenXplorer 1.1.0 — in-app updates and safety fixes
+
+## 2026-09-19 verification
+
+This release fixes the seven reviewed gaps and adds a manual in-app updater.
+The updater checks the fixed public GitHub release endpoint, verifies the asset
+SHA-256 digest and Debian package identity, and invokes APT only after an explicit
+install click. Polkit asks for administrator approval. File actions are blocked
+during installation and until the updated process restarts. Existing versions
+need one manual upgrade to obtain the updater.
+
+| Check | Result | Scope |
+|---|---|---|
+| Full desktop Python regression suite | 607 passed | Includes 38 updater tests with fixture HTTP responses, mocked package commands and actual extracted bridge methods; no privileged installation. |
+| Explicit native local GIO suite | 11 passed | Disposable local files; permissions including 0700/0500, merge behavior, failed-publication cleanup and recursive backup/rename protection. |
+| JavaScript unit runner | 74 passed | Existing selector, date, text-size and helper checks. |
+| New UI regression suite | 27 passed | Actual shared UI in isolated Brave/Chromium; keyboard activation, tab ownership, partial-cache search and updater state/failure/restart. Simulated filesystem and updater. |
+| Existing desktop browser suites | 312 passed | Release 68, file-drag 33, type-select 61, v06 65, v07 53, mouse/tab 32. Actual shared HTML with simulated storage/native services. |
+| Privacy audit regressions | 8 passed | Fictional multiword/Unicode identifiers and duplicate-content filenames in disposable fixtures. |
+| Corresponding-source exclusions | 9 passed | Existing disposable source-archive policy checks. |
+| Website TypeScript check | Passed | Dependency-aware pnpm check. |
+| Next.js production build | Passed | Real pnpm build; 21 exported pages. |
+| Production website browser suite | 47 passed | Actual export, hydration, current release docs, links and mobile iframe removal. |
+| Dependency advisory audit | Passed | pnpm audit --audit-level=moderate reported no known vulnerabilities at this run. |
+| Project source security checks | 20 passed | Project invariants, not an independent security audit. |
+| Updater public endpoint check | Passed | Read current GitHub release metadata; no download, administrator prompt or installation. |
+| Website deployment dry run | Passed | Pinned Wrangler; static export packaging for openxplorer.app. |
+| Mobile/docs/date browser checks | 162 passed | Chromium narrow viewports and date rendering; no physical device. |
+| Debian package verification | 52 passed | Metadata, payload, imports, permissions, source correspondence and syntax; no installation. |
+| Staged publication audit and checksums | Passed | Installer, matching source archive and captures; no external private denylist. |
+
+The mouse suite's initial readiness predicate accessed a tab before initialization
+completed. The predicate now waits for that tab to exist; all 32 checks passed
+on rerun. Product screenshots were regenerated from fictional fixtures and the
+public-data audit passed after capture; no private denylist was supplied.
+
+The updater dialog was visually reviewed, including 800×600 at 200% text.
+No actual administrator-approved package installation/restart, native WebKit UI,
+Wayland session, physical phone, live SMB share or target-machine install/upgrade
+was exercised. Phone/ZIP permission failures use simulated providers. GitHub HTTPS
+and release asset digests provide integrity, not an independent publisher signature.
+
+---
+
 # OpenXplorer 1.0.2 — replacement and phone-transfer maintenance build
 
 ## 2026-09-14 replacement/phone-transfer run

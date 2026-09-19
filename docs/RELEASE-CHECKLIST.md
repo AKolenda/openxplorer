@@ -1,6 +1,6 @@
 # 1.0 release checklist
 
-**Current status: 1.0.0 is published; this source tree prepares a local 1.0.2 maintenance build.** A built
+**Current status: 1.0.0 is published; this source tree prepares a local 1.1.0 maintenance build.** A built
 Debian package, source inspection and simulated browser checks are useful
 evidence, but do not prove native compatibility or the absence of
 vulnerabilities. Treat the gates below as the standing per-release list: the
@@ -64,7 +64,7 @@ checksums via a trusted channel; checksums alone are not a signature. Create a
 signing/release process without embedding keys in the repo. Re-run current
 upstream advisories/system package updates before signing.
 
-Semantic and Debian versions are `1.0.2`. For each later release, bump both,
+Semantic and Debian versions are `1.1.0`. For each later release, bump both,
 rebuild, verify source correspondence, and publish the installer, the
 corresponding-source archive and `SHA256SUMS` together. Do not present this
 checklist or a limited source sweep as independent security certification.

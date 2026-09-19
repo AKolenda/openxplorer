@@ -9,7 +9,6 @@ Archive permissions, symlinks, executables bits and ownership are not applied.
 """
 from __future__ import annotations
 from dataclasses import dataclass
-import os
 import stat
 import unicodedata
 import uuid
@@ -100,10 +99,11 @@ def plan(archive: zipfile.ZipFile, cancel, limits: Limits = Limits()) -> tuple[l
 
 
 class ZipExtractor:
-    def __init__(self, archives, factory, writer, emit=None, limits=Limits()):
+    def __init__(self, archives, factory, writer, emit=None, limits=Limits(), assert_writable=None):
         self.archives, self.factory, self.writer = archives, factory, writer
         self.emit = emit or (lambda value: None)
         self.limits = limits
+        self.assert_writable = assert_writable
 
     def inspect(self, uri, cancel):
         with self.archives.opened(uri, cancel) as archive:
@@ -116,6 +116,8 @@ class ZipExtractor:
         if directory.info(cancel).kind != 'directory':
             raise ValueError('Choose a real destination folder, not a link or server listing.')
         final = directory.child(name)
+        if self.assert_writable is not None:
+            self.assert_writable(final.uri)
         if final.exists(cancel):
             raise FileExistsError('The destination already exists. Choose a new folder name; existing files are never overwritten.')
         stage = None
@@ -124,12 +126,21 @@ class ZipExtractor:
             self.emit({'label': 'Checking ZIP contents…', 'fraction': 0})
             with self.archives.opened(uri, cancel) as archive:
                 members, summary = plan(archive, cancel, self.limits)
+                if self.assert_writable is not None:
+                    checked = set()
+                    for _, parts in members:
+                        cancel.check()
+                        node = final
+                        for part in parts:
+                            node = node.child(part)
+                            if node.uri not in checked:
+                                self.assert_writable(node.uri)
+                                checked.add(node.uri)
                 cancel.check()
                 candidate = directory.child('.openxplorer-extract-' + uuid.uuid4().hex + '.part')
                 candidate.mkdir(cancel)
                 stage = candidate  # Only a successful, exclusive mkdir grants cleanup ownership.
-                if stage.path:
-                    os.chmod(stage.path, 0o700, follow_symlinks=False)
+                TransferEngine._secure_local_staging(stage)
                 dirs = {(): stage}
                 count, total = 0, 0
                 for item, parts in members:

@@ -64,6 +64,7 @@ from filemanager_bus import FileManagerBus
 from brave_integration import BraveIntegration
 from terminal_integration import prepare_directory, launch_terminal
 from runtime_guard import identity, Session, require_current
+from updater import Updater
 
 ROOT = Path(__file__).resolve().parent
 APP_URI = (ROOT / 'ui' / 'index.html').as_uri()
@@ -501,10 +502,53 @@ class OpenXplorerWindow:
 
     def dispatch(self, request: dict):
         method, a = request['method'], request['args']
+        if getattr(self.app, 'update_busy', False) and method not in ('chrome', 'windowMetadata', 'uiReady'):
+            raise ValueError('An application update is running. Wait for it to finish before using files.')
+        if getattr(self.app, 'update_restart_required', False) and method not in (
+                'updateCheck', 'updateRestart', 'quit', 'chrome', 'windowMetadata', 'uiReady', 'environment'):
+            raise ValueError('Restart OpenXplorer to finish the application update before using files.')
         if method.startswith('clipboard') and self.file_clipboard is None:
             raise ValueError('The desktop file clipboard is unavailable. Restart OpenXplorer in your normal desktop session.')
         if method == 'environment':
             self.respond(request, self.environment())
+        elif method == 'updateCheck':
+            if self.app.update_restart_required:
+                self.respond(request, {'currentVersion': VERSION, 'version': self.app.updater.installed_version or 'installed update',
+                    'available': False, 'restartRequired': True, 'canInstall': False, 'notes': '',
+                    'releaseUrl': 'https://github.com/AKolenda/openxplorer/releases'})
+            else:
+                self.start_worker(request, lambda c: self.app.updater.check())
+        elif method == 'updateInstall':
+            if a.get('confirmed') is not True:
+                raise ValueError('Confirm installation before updating.')
+            if any(c.jobs or c.writes or c.mount_ops or c.handoff for c in self.app.controllers if not c.closed) or self.app.tab_transfers.pending:
+                raise ValueError('Wait for file operations, folder loading and tab moves to finish, then try again.')
+            self.app.update_busy = True
+            def install_update(cancel):
+                try:
+                    return self.app.updater.install(a.get('version'), True,
+                        lambda message: self.app.broadcast('updateProgress', {'message': message}))
+                finally:
+                    # Even a failed package configuration may have replaced files.
+                    try:
+                        self.app.update_restart_required = identity(ROOT, VERSION) != RUNTIME
+                    except OSError:
+                        self.app.update_restart_required = True
+                    finally:
+                        self.app.update_busy = False
+            try:
+                self.start_worker(request, install_update, write=True)
+            except Exception:
+                self.app.update_busy = False
+                raise
+        elif method == 'updateRestart':
+            if not self.app.update_restart_required:
+                raise ValueError('No installed update is waiting for restart.')
+            if any(c.writes for c in self.app.controllers if not c.closed):
+                raise ValueError('Wait for file operations to finish before restarting.')
+            # The fresh launcher asks this exact D-Bus owner to quit safely.
+            subprocess.Popen(['/usr/bin/openxplorer', '--restart'], start_new_session=True)
+            self.respond(request, {'restarting': True})
         elif method == 'authReply':
             self.respond(request, self.prompts.answer(a))
         elif method == 'search':
@@ -715,7 +759,7 @@ class OpenXplorerWindow:
                 if now - last_emit[0] >= .08 or data.get('fraction') == 1:
                     last_emit[0] = now
                     self.emit('transfer', {'token': token, **data})
-            extractor = ZipExtractor(self.archives, GioNode, exclusive_output, progress)
+            extractor = ZipExtractor(self.archives, GioNode, exclusive_output, progress, assert_writable=self.previous_versions.assert_writable)
             # A write is NOT automatically replayed after an authentication/connection error.
             # The user opens/signs in to the source/destination share, then retries.
             self.start_worker(request, lambda c: extractor.extract(uri, target, a['name'], c), write=True)
@@ -765,7 +809,7 @@ class OpenXplorerWindow:
             self.start_worker(request, lambda c: create_item(a['uri'], a['name'], a['kind'], c), write=True)
         elif method == 'rename':
             self.previous_versions.assert_writable(a['uri'])
-            self.start_worker(request, lambda c: rename_item(a['uri'], a['name'], c), write=True)
+            self.start_worker(request, lambda c: rename_item(a['uri'], a['name'], c, assert_writable=self.previous_versions.assert_writable), write=True)
         elif method == 'transferConflicts':
             if not isinstance(a.get('uris'), list) or not 1 <= len(a['uris']) <= 100000:
                 raise ValueError('Select between 1 and 100,000 items.')
@@ -793,7 +837,7 @@ class OpenXplorerWindow:
                 if now-last_emit[0] >= .08 or data.get('fraction') == 1:
                     last_emit[0] = now
                     self.emit('transfer', {'token': a['token'], **data})
-            engine = TransferEngine(GioNode, progress)
+            engine = TransferEngine(GioNode, progress, assert_writable=self.previous_versions.assert_writable)
             self.start_worker(request, lambda c: engine.run(a['mode'], uris, target, a.get('policy', 'skip'), c).as_dict(), write=True)
         elif method == 'trashSupport':
             uri = normalise_location(a['uri'])
@@ -1282,6 +1326,9 @@ class OpenXplorerWindow:
         return GLib.SOURCE_REMOVE
 
     def on_delete(self, *_):
+        if getattr(self.app, 'update_busy', False):
+            self.emit('notice', {'message': 'Wait for the application update to finish before closing.'})
+            return True
         if self.writes:
             self.emit('notice', {'message': 'A file operation is still finishing. Wait or cancel it before closing.'})
             return True
@@ -1328,6 +1375,9 @@ class OpenXplorer(Gtk.Application):
         super().__init__(application_id='io.winspace.Development',
                          flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE | Gio.ApplicationFlags.HANDLES_OPEN)
         self.controllers = []
+        self.updater = Updater(root=ROOT)
+        self.update_busy = False
+        self.update_restart_required = False
         self.tab_transfers = TabTransfers(self.transfer_emit, self.transfer_available)
         self.transfer_timer = None
         self.visited_network = {}
@@ -1378,6 +1428,8 @@ class OpenXplorer(Gtk.Application):
         return GLib.SOURCE_CONTINUE
 
     def create_window(self, uri=None, software=False, transfer=None):
+        if self.update_busy or self.update_restart_required:
+            raise ValueError('Finish the application update and restart before opening another window.')
         controller=OpenXplorerWindow(self,initial=uri,software_rendering=software,transfer=transfer)
         self.controllers.append(controller)
         controller.activate_window()
@@ -1464,6 +1516,9 @@ class OpenXplorer(Gtk.Application):
         return {**result,**self.reveal_status()}
 
     def quit_safely(self):
+        if getattr(self, 'update_busy', False):
+            self.broadcast('notice', {'message': 'Wait for the application update to finish before quitting.'})
+            return False
         if any(c.writes for c in self.controllers if not c.closed):
             self.broadcast('notice',{'message':'Finish or cancel active file operations before quitting OpenXplorer.'})
             return False

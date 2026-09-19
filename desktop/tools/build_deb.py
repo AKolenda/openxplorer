@@ -28,7 +28,7 @@ from core import VERSION, DEBIAN_VERSION
 
 NAME = f'openxplorer_{DEBIAN_VERSION}_all.deb'
 REQUIRED = (
-    'terminal_integration.py','private_storage.py','runtime_guard.py',
+    'updater.py','terminal_integration.py','private_storage.py','runtime_guard.py',
     'network_locations.py', 'volume_locations.py', 'window_state.py', 'tab_transfers.py', 'native_tab_drag.py', 'native_file_drag.py', 'native_file_drop.py', 'reveal_integration.py', 'filemanager_bus.py', 'brave_integration.py', 'app_catalog.py', 'folder_sizes.py', 'winspace.py', 'core.py', 'gio_backend.py', 'entry_model.py', 'operations.py',
     'desktop_integration.py', 'auth_bridge.py', 'session_credentials.py',
     'zip_extraction.py', 'activation.py', 'native_opening.py', 'file_clipboard.py', 'archives.py',
@@ -121,7 +121,7 @@ def build(output: Path) -> Path:
         raise RuntimeError('Incomplete source tree: ' + ', '.join(missing))
     for path in ROOT.glob('*.py'):
         ast.parse(path.read_text(encoding='utf-8'), filename=str(path), feature_version=(3, 10))
-    epoch = int(os.environ.get('SOURCE_DATE_EPOCH', '1788742800'))  # 2026-09-07 UTC; distinct from prior releases to invalidate timestamp-based bytecode
+    epoch = int(os.environ.get('SOURCE_DATE_EPOCH', '1789776000'))  # 2026-09-19 UTC; distinct from prior releases to invalidate timestamp-based bytecode
     if epoch < 0:
         raise ValueError('SOURCE_DATE_EPOCH must be nonnegative.')
     output = output.resolve()
@@ -195,7 +195,7 @@ Architecture: all
 Maintainer: OpenXplorer contributors <maintainer@example.invalid>
 Installed-Size: {installed}
 Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1 (>= 2.40), gir1.2-secret-1, gvfs-backends, gvfs-fuse, xdg-utils, xdg-user-dirs, desktop-file-utils, hicolor-icon-theme
-Recommends: cifs-utils, file-roller, gnome-terminal | x-terminal-emulator
+Recommends: pkexec, cifs-utils, file-roller, gnome-terminal | x-terminal-emulator
 Description: Explorer-style local and SMB file manager
  GTK/WebKitGTK interface with GIO/GVfs filesystem access, shared clipboard,
  session credentials, MIME-based opening, indexed search and local watches.

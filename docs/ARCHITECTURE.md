@@ -36,15 +36,14 @@ source, then stages matching downloads for the website. It never installs the
 app, changes desktop defaults, modifies Brave or mounts a network share.
 
 Keep common versions while the project is small. Debian and semantic versions are
-both `1.0.2` for this maintenance release; the earlier `1.0.0~rc4`, `1.0.0`
-and `1.0.1` releases sort below it, so `apt` upgrades normally. Stable internal Winspace IDs/paths remain for
+both `1.1.0` for this maintenance release; the earlier `1.0.0~rc4`, `1.0.0`
+`1.0.1` and `1.0.2` releases sort below it, so `apt` upgrades normally. Stable internal Winspace IDs/paths remain for
 compatibility. A website-only deployment can reuse the current desktop package.
 
 ## Ownership and contribution
 
 Use one issue tracker, one review flow and one security reporting channel, with
-area labels such as desktop, website, docs and integration. The repository owner
-has not supplied a public repository/contact yet; no links or emails are invented.
+area labels such as desktop, website, docs and integration. The public repository is https://github.com/AKolenda/openxplorer; private security reports use GitHub Security Advisories.
 AGPL-3.0-only applies to project-authored changes; preserve file-level exceptions
 and third-party notices. Review ownership/contact and source availability before
 announcing a public release.
