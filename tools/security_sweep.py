@@ -70,7 +70,7 @@ def main():
       'limitations':['Project-specific syntactic checks; not complete SAST, malware detection or pentesting.',
       'No transitive dependency resolution/audit or Next production build in this offline environment.',
       'No native Zorin/WebKit, real terminal GUI or live SMB/keyring test.'],
-      'releaseGate':'1.1.1 maintenance build; see docs/RELEASE-CHECKLIST.md.'}
+      'releaseGate':'1.1.2 maintenance build; see docs/RELEASE-CHECKLIST.md.'}
     out=ROOT/'test-results';out.mkdir(exist_ok=True);(out/'security-sweep.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps({'passed':result['passed'],'checks':len(checks),'failed':[c['check'] for c in checks if not c['passed']]},indent=2))
     return 0 if result['passed'] else 1
