@@ -224,6 +224,11 @@ try:
                     args=['--no-sandbox', '--disable-dev-shm-usage', '--ozone-platform=x11', '--window-position=580,320', '--window-size=450,420'])
                 page = chrome.new_page(no_viewport=True)
                 page.set_content('''<!doctype html><body style="margin:0;height:280px">Browser attachment receiver<script>window.drops=[];document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',async e=>{e.preventDefault();const files=Array.from(e.dataTransfer.files);window.drops.push(await Promise.all(files.map(async f=>({name:f.name,size:f.size,text:await f.text()}))));});</script>''')
+                page.bring_to_front()
+                page.wait_for_function('document.hasFocus() && document.visibilityState === "visible"')
+                # Wait for the native browser window to paint before XTest
+                # enters it; set_content alone can finish before first mapping.
+                page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))')
                 position = page.evaluate('({x:screenX+(outerWidth-innerWidth)/2+100,y:screenY+outerHeight-innerHeight+120})')
                 start(uris[:2])
                 move(display, -1, int(position['x']), int(position['y']), 0)
