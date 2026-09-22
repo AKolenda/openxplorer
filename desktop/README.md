@@ -2,7 +2,7 @@
 
 **Windows File Explorer-inspired file manager for Linux.** Zorin OS is the primary target; compatible Ubuntu and Debian desktops are additional targets, not certified configurations.
 
-Version **1.1.2** moves the update action to the bottom right and removes the stable-release indicator; 1.0.1 added connected-device browsing and 1.0.0 was the first stable release, renamed from Winspace 0.7.0. The native engine is Python + GTK 3/WebKitGTK + GIO/GVfs. The website is separate; Node.js is not a desktop runtime dependency.
+Version **1.1.3** fixes dragging files with punctuation in their names and simplifies the update dialog; 1.0.1 added connected-device browsing and 1.0.0 was the first stable release, renamed from Winspace 0.7.0. The native engine is Python + GTK 3/WebKitGTK + GIO/GVfs. The website is separate; Node.js is not a desktop runtime dependency.
 
 ## This release
 
@@ -36,18 +36,18 @@ Finish transfers and quit existing windows and the optional service with `openxp
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_1.1.2_all.deb
+sudo apt install ./openxplorer_1.1.3_all.deb
 openxplorer --check
 openxplorer --restart
 ```
 
-From this directory after building, use `./dist/openxplorer_1.1.2_all.deb` instead. Never run the file manager with sudo. The optional administrative mount helper is a separate command.
+From this directory after building, use `./dist/openxplorer_1.1.3_all.deb` instead. Never run the file manager with sudo. The optional administrative mount helper is a separate command.
 
 ## Build from source
 
 ```sh
 python3 tools/build_deb.py
-python3 tools/verify_deb.py dist/openxplorer_1.1.2_all.deb
+python3 tools/verify_deb.py dist/openxplorer_1.1.3_all.deb
 ```
 
 Debian/Ubuntu `dpkg-deb` is required. CairoSVG is required at build time for installer raster icons; it is not a runtime dependency. Runtime libraries are provided by APT, not vendored. No root privileges or dependency downloads are used by the package builder.

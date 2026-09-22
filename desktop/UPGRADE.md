@@ -1,7 +1,8 @@
-# OpenXplorer 1.1.2 — update control placement
+# OpenXplorer 1.1.3 — file dragging and update status
 
-Check for updates is now a compact icon beside the bottom-right view controls.
-The native status bar no longer shows the green stable-release indicator.
+This release fixes dragging filenames containing parentheses and other punctuation.
+The update dialog shows the installed version, availability and relevant actions.
+Check for updates remains beside the bottom-right view controls.
 The immediate startup layout from 1.1.1 remains included.
 
 From 1.1.0 or 1.1.1, use **Check for updates** in the sidebar to install this release.
@@ -12,7 +13,7 @@ Finish active file operations and quit OpenXplorer, then install the package:
 
 ```sh
 openxplorer --quit
-sudo apt install ./openxplorer_1.1.2_all.deb
+sudo apt install ./openxplorer_1.1.3_all.deb
 openxplorer --restart
 ```
 

@@ -121,6 +121,25 @@ class FileDragTests(unittest.TestCase):
         self.request()
         self.assertFalse(self.events)
 
+    def test_gio_uri_spelling_survives_ui_round_trip_and_payload_is_canonical(self):
+        for uri in ('file:///tmp/Meeting%20(1).mp4',
+                    'file:///tmp/Meeting%20(2026-09-01)%20-%20Transcript.docx',
+                    'file:///tmp/Notes%20&%20plan+draft;final.txt',
+                    'file:///tmp/Review%20%2528literal%2529.txt',
+                    'smb://studio-nas/Projects/Meeting%20(1).mp4'):
+            with self.subTest(uri=uri):
+                self.drag.update({**self.layout, 'items': [{**self.layout['items'][0], 'uri': uri}]})
+                self.request()
+                # The UI finds rows and selected items by their exact GIO URI.
+                self.assertEqual(self.events[-1], ('fileDragRequest', {'uri': uri}))
+                self.drag.begin(uri, [uri])
+                self.assertEqual(self.events[-1], ('fileDragStarted', {'uris': [uri]}))
+                self.assertEqual(self.drag.uris, (file_uri(uri),))
+                data = Mock()
+                self.drag.data_get(self.view, self.drag.context, data, URI_INFO, 0)
+                data.set_uris.assert_called_once_with([file_uri(uri)])
+                self.drag.drag_end(self.view, self.drag.context)
+
     def test_scaled_geometry_and_clipping(self):
         self.view.get_allocated_width.return_value = 2000
         self.assertEqual(self.drag.item_at(60, 330)['uri'], 'file:///tmp/Sample.txt')

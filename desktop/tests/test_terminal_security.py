@@ -228,8 +228,8 @@ class AdditionalSecurityTests(Temporary):
         with self.assertRaises(ValueError):secure_dir(directory,0o700)
     def test_stable_version_upgrades_candidates(self):
         import subprocess
-        self.assertEqual(VERSION,'1.1.2')
-        self.assertEqual(DEBIAN_VERSION,'1.1.2')
+        self.assertEqual(VERSION,'1.1.3')
+        self.assertEqual(DEBIAN_VERSION,'1.1.3')
         # apt must treat the stable package as an upgrade over every candidate.
         subprocess.run(['dpkg','--compare-versions',DEBIAN_VERSION,'gt','1.0.0~rc4'],check=True)
         subprocess.run(['dpkg','--compare-versions',DEBIAN_VERSION,'gt','0.9.3'],check=True)

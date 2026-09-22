@@ -116,7 +116,7 @@ function check(label, value) {assert.ok(value, label); console.log('PASS', label
     await press('Escape');
     await evaluate(`window.updateReplies={available:true,version:'9.9.9',currentVersion:'1.0.0',notes:'<img src=x onerror=alert(1)>\\nRelease notes',canInstall:true};OpenXplorer.previewTransport.call=function(method,args){reviewCalls.push({method,args});if(method==='updateCheck')return Promise.resolve({...updateReplies});if(method==='updateInstall')return new Promise((resolve,reject)=>{window.finishInstall=resolve;window.failInstall=reject});if(method==='updateRestart')return Promise.resolve(true);return reviewTransport.call(this,method,args)};document.getElementById('check-updates').click()`);
     await until(`!document.querySelector('.update-install').disabled`);
-    check('Release notes render as plain text', await evaluate(`document.getElementById('update-notes').textContent.includes('<img')&&!document.getElementById('update-notes').querySelector('img')`));
+    check('Update dialog shows versions and availability without release notes or boilerplate', await evaluate(`document.getElementById('update-versions').textContent==='Installed: 1.0.0 · Available: 9.9.9'&&document.getElementById('update-status').textContent==='An update is available.'&&!document.getElementById('update-notes')&&!document.getElementById('modal').textContent.includes('administrator approval')`));
     await evaluate(`document.querySelector('.update-install').click()`);
     await until(`Boolean(OpenXplorer.state.updateInstalling)`);
     await evaluate(`window.__nativeEvent('updateProgress',{message:'Installing verified package…'})`);
