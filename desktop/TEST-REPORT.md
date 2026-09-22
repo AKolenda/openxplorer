@@ -1,5 +1,23 @@
 # OpenXplorer verification
 
+## 2026-09-22 — self-hosted Debian runner
+
+- The release workflow passed the 615 Python tests, 74 Node tests, 11 GIO
+  integration tests, 9 source-policy tests, 8 public-data tests, security sweep,
+  37 file-drag UI checks and 27 updater/UI regressions on the dedicated runner.
+- Dependency audit, TypeScript checking, the actual Next.js production build,
+  47 production browser checks and generated-document consistency passed there.
+- The initial native job stopped because LXC's overlaid procfs blocked WebKit's
+  nested sandbox mount. A root-owned service helper now gives only the runner
+  a private procfs mount and drops privileges before running repository code.
+- With that setup and an explicit receiver paint/focus wait, all 31 native
+  GTK/WebKit/Chromium transport checks passed twice. WebKit's sandbox remained
+  enabled; the Chromium test receiver uses its existing no-sandbox test flag.
+
+These checks use disposable fixtures and isolated X11, not the user's desktop,
+T3 Code itself, Wayland, live SMB or portal integration. Publication and deployment
+results are recorded in GitHub Actions rather than asserted before that run.
+
 ## 2026-09-21 — drag identity fix and compact updater (1.1.3 changes)
 
 Reproduced GIO/Python URI spelling differences for fictional MP4 and DOCX names
