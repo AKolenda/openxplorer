@@ -87,7 +87,11 @@ def layout_value(data):
         bounds = {key: number(row.get(key)) for key in ('left', 'right', 'top', 'bottom')}
         if bounds['left'] >= bounds['right'] or bounds['top'] >= bounds['bottom']:
             raise ValueError('Invalid file drag bounds.')
-        items.append(dict(uri=file_uri(row.get('uri')), **bounds))
+        file_uri(row.get('uri'))
+        # Keep the validated file-list identity for the JS round trip. GIO
+        # leaves characters such as parentheses unescaped; canonicalizing here
+        # makes the UI's exact row lookup fail for otherwise ordinary files.
+        items.append(dict(uri=row['uri'], **bounds))
     return {'width': width, 'height': height, 'items': items}
 
 
@@ -163,12 +167,12 @@ class NativeFileDrag:
         return True
 
     def begin(self, uri, uris):
-        if not self.available() or not self.press or not self.requested or self.press['uri'] != file_uri(uri):
+        if not self.available() or not self.press or not self.requested or file_uri(self.press['uri']) != file_uri(uri):
             raise ValueError('The file drag gesture ended before it could start. Drag the selection again.')
         p = self.press
         try:
             files = prepare_files(uris, self.resolve_local)
-            if p['uri'] not in files.uris:
+            if file_uri(p['uri']) not in files.uris:
                 raise ValueError('The dragged file must be included in the selection.')
             self.files, self.uris = files, files.uris
             self.failed = False
@@ -186,7 +190,9 @@ class NativeFileDrag:
         finally:
             self.press = None
             self.requested = False
-        self.c.emit('fileDragStarted', {'uris': list(self.uris)})
+        # Feedback uses the same identities as selection; external payloads and
+        # same-process file operations continue to use canonical URIs.
+        self.c.emit('fileDragStarted', {'uris': list(dict.fromkeys(uris))})
         return {'started': True, 'count': len(self.uris), 'remoteOnly': files.remote_only}
 
     def data_get(self, view, context, data, info, time):

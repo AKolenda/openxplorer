@@ -42,6 +42,12 @@ pnpm cf:dev
 pnpm cf:deploy
 ```
 
+## Automatic releases
+
+Changes merged into main run on the dedicated OpenXplorer self-hosted GitHub Actions runner. The workflow checks the website and desktop, verifies native file transport, packages matching installer and source archives, publishes a new version to GitHub Releases, and deploys the verified website to Cloudflare. Existing release assets are not overwritten.
+
+Pull requests do not execute on this runner. Cloudflare uses a dedicated repository secret; local OAuth credentials are not copied to CI. Runner setup and recovery are documented in docs/SELF-HOSTED-RUNNER.md.
+
 ## Check before announcing
 
 Run browser checks against the actual HTTP-served Next.js export. Test hydration, routes, keyboard navigation, mobile menus, search and every public-repository link. Confirm that no release binaries are emitted into the website export. Also verify Cloudflare routing/security headers and 404 behavior. The site has no application sign-in, analytics scripts, external fonts or tracking pixels.
@@ -54,4 +60,4 @@ Dependency installation, pnpm check, the real pnpm build and production-export b
 
 ---
 
-OpenXplorer 1.1.2. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.1.3. Project-authored documentation: AGPL-3.0-only.
