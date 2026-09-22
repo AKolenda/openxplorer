@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Modified 2026-09-06; original notices: licenses/Winspace-MIT.txt.
 'use strict';
-/* OpenXplorer 1.1.2 — one interface, two transports: a native GIO bridge and an
+/* OpenXplorer 1.1.3 — one interface, two transports: a native GIO bridge and an
    explicitly simulated, offline preview. No libraries, CDNs or web services. */
 (() => {
 const $ = id => document.getElementById(id);
 const native = window.__OPENXPLORER_NATIVE__ === true;
-const UI_RELEASE = '1.1.2';
+const UI_RELEASE = '1.1.3';
 if (native) document.body.classList.add('native');
 document.body.classList.toggle('dark', document.documentElement.dataset.theme === 'dark');
 const NS = 'http://www.w3.org/2000/svg';
@@ -409,7 +409,7 @@ function renderLanding(uri){const l=$('landing');if(uri==='settings:'){renderSet
   if(uri==='pc:'){quick();section('Devices and drives','drive');const g=elem('div','drive-grid');const drives=[{label:'Local Disk',uri:'file:///',mounted:true},...state.env.mounts.filter(m=>!m.uri?.startsWith('smb:'))];for(const m of drives){const c=button('',()=>m.mounted?navigate(m.uri):mountVolume(m.id),'drive-card');bindMiddleOpen(c,()=>m.mounted?m.uri:null);c.append(icon(m.kind==='device'?'phone':'drive',46));const d=elem('div','drive-info');d.append(elem('div','card-name',m.label),elem('div','card-sub',m.mounted?(m.kind==='device'?'Connected device':displayUri(m.uri)):'Click to connect'));if(m.total){const bar=elem('div','capacity');const fill=elem('span');fill.style.width=((m.total-m.free)/m.total*100)+'%';bar.append(fill);d.append(bar,elem('div','card-sub',prettyBytes(m.free)+' free of '+prettyBytes(m.total)));}c.append(d);if(m.mounted&&m.uri!=='file:///'&&m.canUnmount!==false)c.addEventListener('contextmenu',ev=>{ev.preventDefault();openMenu(ev.clientX,ev.clientY,[{label:m.kind==='device'?'Disconnect device':'Disconnect mount',icon:'eject',fn:()=>unmount(m.uri)}]);});g.append(c);}l.append(g);shares();}
   if(uri==='network:'){const b=elem('div','network-banner');b.append(icon('network',38));const d=elem('div');d.append(elem('div','','Map a network location'),elem('p','','Use \\\\server\\share or smb://server/share.'));b.append(d,button('Connect',()=>connectDialog(),'primary'));l.append(b);shares();section('How connections work','shield');l.append(elem('div','notice',native?'Credentials are requested by the system mount dialog, not this interface. Saved locations reconnect when opened. This does not edit /etc/fstab, assign Windows drive letters, or change server permissions.':'This preview uses sample files. It never connects to your NAS, asks for a password, or accesses your computer. The desktop application uses native GIO/GVfs mounts.'));}
 }
-function updateStatus(){const t=active();if(!t)return;const n=filtered().length;$('status-count').textContent=t.busy?`${n} items · Loading…`:['home:','pc:','network:','settings:'].includes(t.uri)?'Ready':`${n} item${n!==1?'s':''}`;$('status-selected').textContent=state.selection.size?`${state.selection.size} selected`:'';if(state.query)$('status-count').textContent=state.searchBusy?'Searching…':`${n} result${n===1?'':'s'}${state.searchResultMeta?.truncated?' (first 500)':''}${state.searchResultMeta?.source==='cache'?' · Cached':''}`;$('status-mode').hidden=native;$('status-mode').textContent=native?'':'OpenXplorer 1.1.2 preview · Sample data';$('status-list').classList.toggle('active',state.view==='details');$('status-grid').classList.toggle('active',state.view==='grid');}
+function updateStatus(){const t=active();if(!t)return;const n=filtered().length;$('status-count').textContent=t.busy?`${n} items · Loading…`:['home:','pc:','network:','settings:'].includes(t.uri)?'Ready':`${n} item${n!==1?'s':''}`;$('status-selected').textContent=state.selection.size?`${state.selection.size} selected`:'';if(state.query)$('status-count').textContent=state.searchBusy?'Searching…':`${n} result${n===1?'':'s'}${state.searchResultMeta?.truncated?' (first 500)':''}${state.searchResultMeta?.source==='cache'?' · Cached':''}`;$('status-mode').hidden=native;$('status-mode').textContent=native?'':'OpenXplorer 1.1.3 preview · Sample data';$('status-list').classList.toggle('active',state.view==='details');$('status-grid').classList.toggle('active',state.view==='grid');}
 function updateToolbar(){scheduleFileDragLayout();const s=selected(),busy=!!state.operation||s.some(e=>!canOperate(e)),readOnly=s.some(e=>e.readOnly||readonlyLocation(e.uri));$('copy').disabled=!s.length||busy;for(const id of ['cut','trash'])$(id).disabled=!s.length||busy||readOnly;$('rename').disabled=s.length!==1||busy||readOnly;{const label=deleteLabel(s[0]?.uri||active()?.uri||'');$('trash').title=label+' (Delete)';$('trash').setAttribute('aria-label',label);}$('copy-path').disabled=s.length>1;$('paste').disabled=!!state.query||!state.clipboard||busy||!writableLocation(active()?.uri);$('new').disabled=!!state.query||!!state.operation||!writableLocation(active()?.uri);}
 function toggleDetails(){state.details=!state.details;fire('preferences',{details:state.details});renderContent();}
 function changeView(view){resetTypeSelect();state.view=view;fire('preferences',{view});$('file-scroll').scrollTop=0;renderContent();}
@@ -645,7 +645,7 @@ async function askClose(){if(state.updateInstalling){toast('Wait for the update 
 function toggleHidden(){state.showHidden=!state.showHidden;fire('preferences',{showHidden:state.showHidden});for(const t of state.tabs)t.loaded=false;load(active());}
 function updatesDialog(){
   if(state.updateInstalling)return;
-  let release=null,checking=false,installed=false,alive=true,status,versions,notes;
+  let release=null,checking=false,installed=false,alive=true,status,versions;
   const sync=()=>{
     if(!alive)return;
     const busy=checking||!!state.updateInstalling;
@@ -657,19 +657,18 @@ function updatesDialog(){
   };
   const check=async()=>{
     if(checking||state.updateInstalling||installed)return;
-    checking=true;release=null;notes.textContent='';status.textContent='Checking for updates…';sync();
+    checking=true;release=null;status.textContent='Checking for updates…';sync();
     try{
       const result=await call('updateCheck');if(!alive)return;release=result;installed=!!result.restartRequired;
       versions.textContent='Installed: '+result.currentVersion+(result.available?' · Available: '+result.version:'');
-      notes.textContent=typeof result.notes==='string'?result.notes:'';
-      status.textContent=installed?'Updated application files are installed. Restart OpenXplorer before continuing.':result.available?(result.canInstall?'An update is available. Install it when file operations have finished.':'An update is available. Automatic installation is unavailable for this installation.'):(native?'OpenXplorer is up to date.':'Preview only — no update available. No network request was made.');
+      status.textContent=installed?'Restart OpenXplorer to finish updating.':result.available?(result.canInstall?'An update is available.':'An update is available. Automatic installation is unavailable.'):(native?'OpenXplorer is up to date.':'Preview only — no update check performed.');
     }catch(error){if(alive)status.textContent='Could not check for updates. '+error.message;}
     finally{checking=false;sync();}
   };
-  const promise=showModal('Software updates','Updates are checked only when you ask. Installing requires administrator approval. Restart OpenXplorer after installation.',body=>{
+  const promise=showModal('Software updates','',body=>{
     body.className='update-body';versions=elem('p','update-versions','Installed: '+(state.env?.version||UI_RELEASE));versions.id='update-versions';
     status=elem('p','update-status');status.id='update-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
-    notes=elem('pre','update-notes');notes.id='update-notes';notes.setAttribute('aria-label','Release notes');body.append(versions,status,notes);
+    body.append(versions,status);
     return{onCancel:()=>{alive=false;}};
   },[{label:'Close',cancel:true,className:'update-close'},
     {label:'Check again',className:'update-check secondary',fn:()=>{void check();return false;}},
@@ -953,7 +952,7 @@ function setup(){
   $('new').onclick=()=>openNewMenu();
   $('sort').onclick=()=>menuBelow('sort',[...['name','modified','type','size'].map(s=>({label:{name:'Name',modified:'Date modified',type:'Type',size:'Size'}[s],icon:state.sort===s?'check':'sort',fn:()=>{state.sort=s;state.filterCache=null;renderColumns();renderRows();}})),'-',{label:state.descending?'Descending':'Ascending',icon:state.descending?'down':'up',fn:()=>{state.descending=!state.descending;state.filterCache=null;renderColumns();renderRows();}}]);
   $('view').onclick=()=>menuBelow('view',[{label:'Details',icon:state.view==='details'?'check':'list',fn:()=>changeView('details')},{label:'Large icons',icon:state.view==='grid'?'check':'grid',fn:()=>changeView('grid')},'-',{label:'Show hidden files',icon:state.showHidden?'check':'eye',fn:toggleHidden},{label:'Details pane',icon:state.details?'check':'details',fn:toggleDetails},'-',{label:'Larger text',icon:'plus',shortcut:'Ctrl++',fn:()=>changeTextSize('increase')},{label:'Smaller text',icon:'minus',shortcut:'Ctrl+−',fn:()=>changeTextSize('decrease')},{label:'Reset text size',icon:'refresh',shortcut:'Ctrl+0',fn:()=>changeTextSize('reset')}]);
-  $('more').onclick=()=>menuBelow('more',[{label:'New window',icon:'plus',shortcut:'Ctrl+N',fn:()=>call('newWindow',{uri:active().uri.startsWith('file:')||active().uri.startsWith('smb:')?active().uri:state.env.home})},{label:'Settings',icon:'settings',fn:settingsDialog},{label:'Default file explorer…',icon:'folderline',fn:()=>settingsDialog('default')},...cacheMenuItems(active().uri),{label:'Map network location',icon:'network',fn:connectDialog},{label:'Pin current folder',icon:'pin',fn:pinCurrent,disabled:['home:','pc:','network:','settings:'].includes(active().uri)},'-',{label:'Light appearance',icon:state.theme==='light'?'check':'sun',fn:()=>applyTheme('light')},{label:'Dark appearance',icon:state.theme==='dark'?'check':'moon',fn:()=>applyTheme('dark')},{label:'Use system appearance',icon:state.theme==='system'?'check':'desktop',fn:()=>applyTheme('system')},{label:'Show hidden files',icon:state.showHidden?'check':'eye',fn:toggleHidden},'-',{label:'License & source',icon:'code',fn:showLicense},{label:'About this build',icon:'info',fn:()=>showMessage('OpenXplorer 1.1.2','An independent Windows 11–inspired file manager for Zorin.\n\n'+(native?'Desktop: WebKitGTK + GIO/GVfs.':'Offline preview: sample data only.')+'\n\nStable release. Replacing existing files requires confirmation; there is no permanent-delete fallback. Cached filename/path search is opt-in. Thumbnails, undo, and cross-filesystem cut/move are not implemented. ZIP browsing is read-only; local cache changes use inotify. Network changes use incremental polling.')}]);
+  $('more').onclick=()=>menuBelow('more',[{label:'New window',icon:'plus',shortcut:'Ctrl+N',fn:()=>call('newWindow',{uri:active().uri.startsWith('file:')||active().uri.startsWith('smb:')?active().uri:state.env.home})},{label:'Settings',icon:'settings',fn:settingsDialog},{label:'Default file explorer…',icon:'folderline',fn:()=>settingsDialog('default')},...cacheMenuItems(active().uri),{label:'Map network location',icon:'network',fn:connectDialog},{label:'Pin current folder',icon:'pin',fn:pinCurrent,disabled:['home:','pc:','network:','settings:'].includes(active().uri)},'-',{label:'Light appearance',icon:state.theme==='light'?'check':'sun',fn:()=>applyTheme('light')},{label:'Dark appearance',icon:state.theme==='dark'?'check':'moon',fn:()=>applyTheme('dark')},{label:'Use system appearance',icon:state.theme==='system'?'check':'desktop',fn:()=>applyTheme('system')},{label:'Show hidden files',icon:state.showHidden?'check':'eye',fn:toggleHidden},'-',{label:'License & source',icon:'code',fn:showLicense},{label:'About this build',icon:'info',fn:()=>showMessage('OpenXplorer 1.1.3','An independent Windows 11–inspired file manager for Zorin.\n\n'+(native?'Desktop: WebKitGTK + GIO/GVfs.':'Offline preview: sample data only.')+'\n\nStable release. Replacing existing files requires confirmation; there is no permanent-delete fallback. Cached filename/path search is opt-in. Thumbnails, undo, and cross-filesystem cut/move are not implemented. ZIP browsing is read-only; local cache changes use inotify. Network changes use incremental polling.')}]);
   $('theme-toggle').onclick=appearanceMenu;setButton('settings-button','settings');$('settings-button').onclick=settingsDialog;
   $('details-toggle').onclick=toggleDetails;$('status-list').onclick=()=>changeView('details');$('status-grid').onclick=()=>changeView('grid');$('connect-sidebar').onclick=connectDialog;$('transfer-cancel').onclick=()=>{if(state.operation){fire('cancel',{token:state.operation});$('transfer-label').textContent='Cancelling…';}};
   if(!native&&window.matchMedia){window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(state.theme==='system')applyTheme('system',false);});}

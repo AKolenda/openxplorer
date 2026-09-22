@@ -1,3 +1,11 @@
+# 1.1.3 — 2026-09-21
+
+- Fix dragging files whose GIO addresses contain parentheses or other unescaped
+  punctuation. Preserve file-list identities during the drag handshake while
+  validating and canonicalizing the addresses exported to other applications.
+- Simplify Software updates to installed/available versions, update status and
+  actions; remove release notes and introductory installation instructions.
+
 # 1.1.2 — 2026-09-19
 
 - Move Check for updates to an icon beside the bottom-right view controls.

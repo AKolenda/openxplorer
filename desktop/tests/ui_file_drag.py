@@ -8,11 +8,16 @@ Run tools/build_preview.py first. Does not capture screenshots or mutate files.
 """
 import json
 import os
+import sys
 from pathlib import Path
+from types import SimpleNamespace as NS
+from unittest.mock import Mock
 
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from native_file_drag import NativeFileDrag, file_uri
 HOME = 'file:///home/demo/Documents'
 OUT = ROOT / 'test-results'
 checks = []
@@ -37,6 +42,12 @@ entries = [entry('Alpha.txt'), entry('Bravo.txt'),
            entry('Socket', kind='special'),
            entry('Virtual.txt', isVirtual=True),
            entry('Zip-member.txt', archiveMember='Zip-member.txt', archiveUri=HOME+'/Sample.zip')]
+punctuated = [entry('Meeting (1).mp4', uri=HOME+'/Meeting%20(1).mp4'),
+              entry('Meeting (2026-09-01) - Transcript.docx',
+                    uri=HOME+'/Meeting%20(2026-09-01)%20-%20Transcript.docx')]
+entries.extend(punctuated)
+native_drag = None
+native_events = []
 
 with sync_playwright() as pw:
     launch = {'args': ['--no-sandbox']}
@@ -48,7 +59,7 @@ with sync_playwright() as pw:
     sample.wait_for_function('()=>OpenXplorer.state.ready')
     env = sample.evaluate('OpenXplorer.state.env')
     sample.close()
-    env.update(home=HOME, startUri=HOME, version='1.1.2', nativeFileDrag=True,
+    env.update(home=HOME, startUri=HOME, version='1.1.3', nativeFileDrag=True,
                quick=[{'uri':'file:///home/demo/Pictures','label':'Pictures'}],
                mounts=[], shares=[], networkLocations=[])
 
@@ -70,9 +81,14 @@ with sync_playwright() as pw:
         elif method == 'trashSupport':
             result = {'canTrash':True}
         elif method == 'beginFileDrag':
-            result = {'started':True, 'count':len(args['uris']),
-                      'remoteOnly':sum(uri.startswith('smb:') for uri in args['uris'])}
-            events = [['fileDragStarted', {'uris':args['uris']}]]
+            if native_drag is not None:
+                result = native_drag.begin(args['uri'], args['uris'])
+                events = list(native_events)
+                native_events.clear()
+            else:
+                result = {'started':True, 'count':len(args['uris']),
+                          'remoteOnly':sum(uri.startswith('smb:') for uri in args['uris'])}
+                events = [['fileDragStarted', {'uris':args['uris']}]]
         elif method == 'operate':
             result = {'done':args['uris'], 'errors':[], 'skipped':[]}
         return {'value':result, 'events':events}
@@ -124,6 +140,41 @@ with sync_playwright() as pw:
     check('Quick access publishes insertion and end pin targets',
           len(quick)==2 and quick[0]['before']=='file:///home/demo/Pictures' and quick[1]['before'] is None)
     check('Native source disables HTML dragging', row('Alpha.txt').get_attribute('draggable')=='false')
+
+    # Exercise production layout -> request -> real UI lookup -> production
+    # begin/feedback. Only GTK's device/transport calls are simulated here.
+    view = Mock()
+    view.get_allocated_width.return_value = 1320
+    view.drag_check_threshold.return_value = True
+    controller = NS(webview=view, writes=0, ui_ready=True, tab_drag=None,
+                    emit=lambda name, data: native_events.append([name, data]))
+    native_drag = NativeFileDrag(controller, NS(TargetList=NS(new=lambda _: Mock()),
+        drag_set_icon_name=Mock(), drag_cancel=Mock()),
+        NS(DragAction=NS(COPY=2), ModifierType=NS(BUTTON1_MASK=256),
+           EventMask=NS(BUTTON_PRESS_MASK=1, BUTTON_RELEASE_MASK=2, POINTER_MOTION_MASK=4)), None)
+    for item in punctuated:
+        row(item['name']).click()
+        row('Alpha.txt').click(modifiers=['Control'])
+        native_drag.update(layout())
+        region = next(r for r in native_drag.layout['items'] if r['uri'] == item['uri'])
+        event = NS(button=1, state=256, x=region['left']+20, y=(region['top']+region['bottom'])/2)
+        event.copy = lambda: event
+        native_drag.button_press(view, event)
+        native_drag.pointer_motion(view, event)
+        request = native_events.pop()
+        before = len(calls('beginFileDrag'))
+        emit(*request)
+        check('Punctuated filename starts native drag with the complete selection: '+item['name'],
+              len(calls('beginFileDrag')) == before+1 and
+              set(calls('beginFileDrag')[-1]['uris']) == {item['uri'],HOME+'/Alpha.txt'})
+        check('Native feedback retains both selected row identities: '+item['name'],
+              page.locator('.file-dragging .drag-source').count() == 2 and
+              set(native_drag.uris) == {file_uri(item['uri']),HOME+'/Alpha.txt'})
+        native_drag.drag_end(view, native_drag.context)
+        native_events.clear()
+        finish_drag()
+    native_drag.close()
+    native_drag = None
 
     row('Alpha.txt').click()
     row('Bravo.txt').click(modifiers=['Control'])

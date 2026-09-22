@@ -1,4 +1,28 @@
-# OpenXplorer 1.1.2 — status-bar update action
+# OpenXplorer verification
+
+## 2026-09-21 — drag identity fix and compact updater (1.1.3 changes)
+
+Reproduced GIO/Python URI spelling differences for fictional MP4 and DOCX names
+containing parentheses. The native drag request previously canonicalized the URI,
+so the UI's exact lookup found no row and displayed the selection-limit warning.
+The regression failed before the fix and passes with the original UI identity
+preserved. Canonical URI validation and external file export remain in place.
+
+- 615 Python tests passed.
+- 37 Chromium file-drag checks passed, including production native layout,
+  request, begin and feedback logic connected to the actual UI for punctuated
+  filenames and multiple selection. GTK device/transport calls are mocked in
+  this suite.
+- 31 native transport checks passed on isolated Xvfb/X11 with GTK3/WebKit and
+  real GIO URI spelling. A separate Chromium process received readable files
+  from an actual native drag. Synthetic files and source HTML were used; this
+  does not establish installed T3 Code, Wayland or SMB interoperability.
+- 27 Chromium UI regressions passed, including the compact update dialog,
+  installation/restart/error states, keyboard controls and narrow-window layout.
+  The filesystem and updater transport are simulated; no package installation
+  was performed by those tests.
+- Standalone designs were regenerated with `pnpm designs`; this is not a Next.js
+  production build.
 
 ## 2026-09-19 verification
 
