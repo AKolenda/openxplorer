@@ -22,6 +22,22 @@ published SHA-256 before registering it to this repository with the
 `openxplorer` label. Install its systemd service under the dedicated user.
 The workflow installs its pinned pnpm and Playwright versions without sudo.
 
+On LXC hosts whose overlaid `/proc` blocks nested sandbox mounts, install
+`tools/runner-service.sh` root-owned and mode 0755 at
+`/usr/local/libexec/openxplorer-runner-service`. Override only this service:
+
+```ini
+[Service]
+ExecStart=
+ExecStart=+/usr/local/libexec/openxplorer-runner-service
+```
+
+The root-owned helper creates a private mount namespace, mounts a fresh procfs,
+and drops to the runner user with no-new-privileges before executing runner code.
+It does not change the container's shared mounts or disable WebKit's sandbox.
+Check the full nested mount, not only creation of a user namespace:
+`bwrap --ro-bind / / --unshare-user --unshare-pid --proc /proc -- true`.
+
 Repository configuration:
 
 - Secret `CLOUDFLARE_API_TOKEN`: a dedicated deployment token with Workers
