@@ -25,7 +25,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
 gi.require_version('WebKit2', '4.1')
-from gi.repository import Gtk, Gdk, GLib, WebKit2
+from gi.repository import Gtk, Gdk, Gio, GLib, WebKit2
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from native_file_drag import NativeFileDrag
@@ -125,13 +125,15 @@ if not display:
 try:
     with tempfile.TemporaryDirectory(prefix='openxplorer-drag-fixture-') as temporary:
         folder = Path(temporary)
-        first = folder / 'Sample file #1.txt'
+        first = folder / 'Meeting (1) #sample.mp4'
         second = folder / 'résumé.txt'
         child = folder / 'Sample Folder'
         first.write_text('First synthetic fixture\n')
         second.write_text('Second synthetic fixture\n')
         child.mkdir()
-        uris = [first.as_uri(), second.as_uri(), child.as_uri()]
+        paths = [first, second, child]
+        uris = [Gio.File.new_for_path(str(path)).get_uri() for path in paths]
+        exported = [path.as_uri() for path in paths]
         manager = WebKit2.UserContentManager()
         manager.register_script_message_handler('test')
         context = WebKit2.WebContext.new_ephemeral()
@@ -146,6 +148,7 @@ try:
         def emit(name, data):
             events.append((name, data))
             if name == 'fileDragRequest':
+                check('Native request preserves the exact GIO file-list identity', data['uri'] == uris[0])
                 code = 'window.webkit.messageHandlers.test.postMessage({type:"begin",uri:' + json.dumps(data['uri']) + ',uris:window.selectedUris})'
                 view.evaluate_javascript(code, -1, None, None, None, None, None)
             elif name == 'tabDragRequest':
@@ -207,8 +210,8 @@ try:
         release()
         until(lambda: bool(receipts), 'Native GTK receiver obtained the selected files and folder')
         check('Only COPY is offered to the native destination', receipts[-1]['actions'] == int(Gdk.DragAction.COPY))
-        check('Native URI selection preserves spaces, Unicode, order and folder references', receipts[-1]['uris'] == uris)
-        check('URI payload uses standards-compatible CRLF line endings', receipts[-1]['raw'] == ('\r\n'.join(uris) + '\r\n').encode())
+        check('Native URI selection preserves punctuation, spaces, Unicode, order and folder references', receipts[-1]['uris'] == exported)
+        check('URI payload uses standards-compatible CRLF line endings', receipts[-1]['raw'] == ('\r\n'.join(exported) + '\r\n').encode())
         until(lambda: controller.file_drag.context is None, 'Successful native drag cleared source state')
         check('Source files survived the external drop', first.is_file() and second.is_file() and child.is_dir())
 
@@ -245,7 +248,7 @@ try:
         release()
         until(lambda: any(name == 'fileDrop' for name, _ in events), 'Production NativeFileDrop accepted an internal copy proposal')
         dropped = next(data for name, data in reversed(events) if name == 'fileDrop')
-        check('Internal copy proposal preserves selection and destination', dropped['uris'] == uris[:2] and dropped['target'] == child.as_uri() and dropped['kind'] == 'copy')
+        check('Internal copy proposal preserves selection and destination', dropped['uris'] == exported[:2] and dropped['target'] == child.as_uri() and dropped['kind'] == 'copy')
         check('Native copy proposal alone never writes the destination', not list(child.iterdir()))
 
         start(uris[:2])

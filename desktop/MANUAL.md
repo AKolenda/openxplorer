@@ -1,4 +1,4 @@
-# OpenXplorer 1.1.2
+# OpenXplorer 1.1.3
 
 Explorer-style file manager for Zorin, with a Python GTK3/WebKitGTK host and a
 local HTML/CSS/JavaScript interface. GIO/GVfs provides filesystem, SMB and
@@ -35,7 +35,7 @@ In the folder containing the downloaded package:
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_1.1.2_all.deb
+sudo apt install ./openxplorer_1.1.3_all.deb
 openxplorer --check
 openxplorer
 ```
@@ -43,7 +43,7 @@ openxplorer
 From the extracted source directory, the package is under `dist/` instead:
 
 ```sh
-sudo apt install ./dist/openxplorer_1.1.2_all.deb
+sudo apt install ./dist/openxplorer_1.1.3_all.deb
 ```
 
 Do not launch the graphical application with sudo. The package uses the same
@@ -295,7 +295,7 @@ From this directory on Debian/Ubuntu/Zorin:
 ```sh
 python3 tools/build_preview.py
 python3 tools/build_deb.py
-python3 tools/verify_deb.py dist/openxplorer_1.1.2_all.deb
+python3 tools/verify_deb.py dist/openxplorer_1.1.3_all.deb
 ```
 
 Only Python 3.10+ and `dpkg-deb` are required for packaging. Optional CairoSVG

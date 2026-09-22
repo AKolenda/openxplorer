@@ -1,16 +1,24 @@
-name: Source and release gates
-on: [push, pull_request, workflow_dispatch]
+name: Build, release and deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: checks-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: openxplorer-production
+  cancel-in-progress: false
 jobs:
-  website:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+  release:
+    # Public pull requests and non-main dispatches must not run on the LAN host.
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64, openxplorer]
+    timeout-minutes: 45
+    permissions:
+      contents: write
     env:
       NEXT_TELEMETRY_DISABLED: '1'
+      TMPDIR: /var/tmp/openxplorer-runner
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -18,60 +26,20 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - name: Require reviewed dependency lock
-        run: test -s pnpm-lock.yaml
-      - name: Activate the repository's pinned pnpm
+      - name: Activate the pinned package manager without administrator access
         run: |
-          corepack enable
-          corepack prepare pnpm@10.34.5 --activate
+          test -s pnpm-lock.yaml
+          npm install --prefix "$RUNNER_TEMP/package-manager" pnpm@10.34.5
+          echo "$RUNNER_TEMP/package-manager/node_modules/.bin" >> "$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level=moderate
       - run: pnpm check
       - run: pnpm build
-      - name: Install the pinned production browser test driver
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3-venv
-          /usr/bin/python3 -m venv "$RUNNER_TEMP/website-tests"
-          "$RUNNER_TEMP/website-tests/bin/python" -m pip install playwright==1.62.0
-          "$RUNNER_TEMP/website-tests/bin/python" -m playwright install --with-deps chromium
-      - name: Verify the actual export, React hydration and mobile preview removal
-        run: '"$RUNNER_TEMP/website-tests/bin/python" tests/test_launch_production.py'
-      - name: Generated documentation matches its JSON source
-        run: git diff --exit-code -- docs apps/web/public/docs-markdown apps/web/public/assets/markdown.json
-  desktop:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '22'
-      # Use Ubuntu's Python so PyGObject and its typelibs come from APT together.
-      # These are disposable CI prerequisites; the package is never installed.
-      - name: Install package-builder and native test prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            python3-venv python3-gi python3-cairosvg desktop-file-utils \
-            gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gir1.2-secret-1 \
-            xvfb xauth libxtst6 dbus-x11
-      - run: /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py'
-        working-directory: desktop
-      - run: node --test desktop/tests/*.test.cjs
-      - name: Verify corresponding-source exclusions with disposable fixtures
-        run: /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'
-      - run: /usr/bin/python3 -m unittest discover -s tests -p 'test_public_data.py'
-      - run: /usr/bin/python3 -m unittest tests.gio_integration
-        working-directory: desktop
-      - run: /usr/bin/python3 tools/security_sweep.py
-      - name: Install the browser test driver in a disposable environment
+      - name: Prepare browser tests
         run: |
           /usr/bin/python3 -m venv --system-site-packages "$RUNNER_TEMP/browser-tests"
           "$RUNNER_TEMP/browser-tests/bin/python" -m pip install playwright==1.62.0
-          "$RUNNER_TEMP/browser-tests/bin/python" -m playwright install --with-deps chromium
+          "$RUNNER_TEMP/browser-tests/bin/python" -m playwright install chromium
           "$RUNNER_TEMP/browser-tests/bin/python" - <<'PY'
           import os
           from playwright.sync_api import sync_playwright
@@ -79,21 +47,59 @@ jobs:
               with open(os.environ['GITHUB_ENV'], 'a') as output:
                   output.write('CHROMIUM=' + playwright.chromium.executable_path + '\n')
           PY
-      - name: Build the shared UI preview and test the file-drag UI contract
+      - name: Verify production export, hydration and mobile preview removal
+        run: '"$RUNNER_TEMP/browser-tests/bin/python" tests/test_launch_production.py'
+      - name: Verify generated documentation
+        run: git diff --exit-code -- docs apps/web/public/docs-markdown apps/web/public/assets/markdown.json
+      - run: /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py'
+        working-directory: desktop
+      - run: node --test desktop/tests/*.test.cjs
+      - name: Verify release source and public-data policies
+        run: |
+          /usr/bin/python3 -m unittest discover -s tests -p 'test_release_source.py'
+          /usr/bin/python3 -m unittest discover -s tests -p 'test_public_data.py'
+      - run: /usr/bin/python3 -m unittest tests.gio_integration
+        working-directory: desktop
+      - run: /usr/bin/python3 tools/security_sweep.py
+      - name: Verify drag and updater UI
         run: |
           /usr/bin/python3 desktop/tools/build_preview.py
           "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/ui_file_drag.py
           node desktop/tests/ui_regressions.cjs
-      - name: Exercise GTK and WebKit file transport into real Chromium on isolated X11
+      - name: Verify native file transport with WebKit sandbox enabled
         run: |
-          # Ubuntu 24.04's runner AppArmor policy otherwise blocks bubblewrap's
-          # user namespace setup. Keep WebKit's sandbox enabled and permit its
-          # normal namespace isolation only inside this disposable CI runner.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' \
             env GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 \
             "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/native_file_transport.py
-      - name: Build, verify and stage installer with matching source
+      - name: Stage matching installer and corresponding source
         run: /usr/bin/python3 tools/release.py
-      - name: Audit staged public data and screenshot provenance
+      - name: Audit complete release
         run: /usr/bin/python3 tools/audit-public-data.py
+      - name: Publish a new desktop version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          tag="v$version"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving its assets unchanged."
+          else
+            python3 - <<'PY'
+          import os
+          from pathlib import Path
+          notes = Path('desktop/CHANGELOG.md').read_text().split('\n# ', 1)[0]
+          (Path(os.environ['RUNNER_TEMP'])/'release-notes.md').write_text(notes)
+          PY
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "OpenXplorer $version" --notes-file "$RUNNER_TEMP/release-notes.md" \
+              "dist/openxplorer_${version}_all.deb" "dist/openxplorer-${version}-source.zip" dist/SHA256SUMS
+          fi
+      - name: Deploy the verified website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          pnpm exec wrangler deploy --dry-run
+          pnpm exec wrangler deploy
