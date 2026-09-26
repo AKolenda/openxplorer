@@ -22,6 +22,9 @@ from core import VERSION
 from private_storage import private_directory
 
 REPOSITORY = 'https://github.com/AKolenda/openxplorer'
+# The repository is moving to the openxplorer organization. GitHub redirects the
+# old API endpoint afterwards, but release assets then carry the new owner.
+REPOSITORIES = (REPOSITORY, 'https://github.com/openxplorer/openxplorer')
 LATEST = 'https://api.github.com/repos/AKolenda/openxplorer/releases/latest'
 MAX_PACKAGE = 100 * 1024 * 1024
 HOSTS = {'api.github.com', 'github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com'}
@@ -61,12 +64,13 @@ def release_metadata(data, current=VERSION):
     version = tag[1:]
     newer = version_tuple(version) > version_tuple(current)
     name = f'openxplorer_{version}_all.deb'
-    expected_url = f'{REPOSITORY}/releases/download/{tag}/{name}'
     assets = data.get('assets')
     if not isinstance(assets, list):
         raise ValueError('The release asset list is invalid.')
     asset = next((a for a in assets if isinstance(a, dict) and a.get('name') == name), None)
-    if not asset or asset.get('browser_download_url') != expected_url:
+    url = asset.get('browser_download_url') if asset else None
+    repository = next((r for r in REPOSITORIES if url == f'{r}/releases/download/{tag}/{name}'), None)
+    if not repository:
         raise ValueError('The release is missing its expected Debian installer.')
     digest = asset.get('digest') or ''
     if not isinstance(digest, str) or not re.fullmatch(r'sha256:[a-f0-9]{64}', digest):
@@ -75,8 +79,8 @@ def release_metadata(data, current=VERSION):
     if type(size) is not int or not 0 < size <= MAX_PACKAGE:
         raise ValueError('The release installer size is invalid.')
     return {'currentVersion': current, 'version': version, 'available': newer,
-        'notes': str(data.get('body') or '')[:20000], 'releaseUrl': f'{REPOSITORY}/releases/tag/{tag}',
-        'url': expected_url, 'sha256': digest[7:], 'size': size, 'name': name}
+        'notes': str(data.get('body') or '')[:20000], 'releaseUrl': f'{repository}/releases/tag/{tag}',
+        'url': url, 'sha256': digest[7:], 'size': size, 'name': name}
 
 
 class Updater:

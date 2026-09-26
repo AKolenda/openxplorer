@@ -1,7 +1,8 @@
-# OpenXplorer 1.1.3 — file dragging and update status
+# OpenXplorer 1.1.4 — updates after the repository move
 
-This release fixes dragging filenames containing parentheses and other punctuation.
-The update dialog shows the installed version, availability and relevant actions.
+The OpenXplorer repository is moving to the openxplorer GitHub organization.
+This release accepts updates published from either location, so Check for updates
+keeps working after the move. Earlier releases then need one manual upgrade.
 Check for updates remains beside the bottom-right view controls.
 The immediate startup layout from 1.1.1 remains included.
 
@@ -13,7 +14,7 @@ Finish active file operations and quit OpenXplorer, then install the package:
 
 ```sh
 openxplorer --quit
-sudo apt install ./openxplorer_1.1.3_all.deb
+sudo apt install ./openxplorer_1.1.4_all.deb
 openxplorer --restart
 ```
 

@@ -59,7 +59,7 @@ with sync_playwright() as pw:
     sample.wait_for_function('()=>OpenXplorer.state.ready')
     env = sample.evaluate('OpenXplorer.state.env')
     sample.close()
-    env.update(home=HOME, startUri=HOME, version='1.1.3', nativeFileDrag=True,
+    env.update(home=HOME, startUri=HOME, version='1.1.4', nativeFileDrag=True,
                quick=[{'uri':'file:///home/demo/Pictures','label':'Pictures'}],
                mounts=[], shares=[], networkLocations=[])
 

@@ -14,7 +14,7 @@ Browse local folders and SMB shares with tabs, clickable paths, pinned folders, 
 
 Get the Debian package from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases), then follow the [installation guide](docs/installation.md). Finish file operations and run `openxplorer --quit` before upgrading.
 
-Version **1.1.3** fixes dragging files whose names contain parentheses or other punctuation and simplifies the Software updates dialog. Install it from **Check for updates** beside the bottom-right view controls. See the [changelog](desktop/CHANGELOG.md), [test report](TEST-REPORT.md) and [release checklist](docs/RELEASE-CHECKLIST.md) for verification and remaining target-machine checks.
+Version **1.1.4** keeps in-app updates working after the repository moves to the `openxplorer` GitHub organization. Install it from **Check for updates** beside the bottom-right view controls. See the [changelog](desktop/CHANGELOG.md), [test report](TEST-REPORT.md) and [release checklist](docs/RELEASE-CHECKLIST.md) for verification and remaining target-machine checks.
 
 ## Develop
 
