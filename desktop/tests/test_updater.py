@@ -19,7 +19,7 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
-from updater import (HOSTS, LATEST, MAX_PACKAGE, REPOSITORY, TrustedRedirect,
+from updater import (HOSTS, LATEST, MAX_PACKAGE, REPOSITORIES, REPOSITORY, TrustedRedirect,
                      Updater, open_url, release_metadata, trusted_url, version_tuple)
 
 
@@ -28,12 +28,12 @@ NEXT = '1.0.1'
 PACKAGE = b'Fictional package bytes. Never an executable Debian package.\n'
 
 
-def release(version=NEXT):
+def release(version=NEXT, repository=REPOSITORY):
     name = f'openxplorer_{version}_all.deb'
     return {'tag_name': 'v' + version, 'draft': False, 'prerelease': False,
             'body': 'Fictional release notes.', 'assets': [{
                 'name': name, 'browser_download_url':
-                    f'{REPOSITORY}/releases/download/v{version}/{name}',
+                    f'{repository}/releases/download/v{version}/{name}',
                 'digest': 'sha256:' + hashlib.sha256(PACKAGE).hexdigest(),
                 'size': len(PACKAGE)}]}
 
@@ -69,6 +69,8 @@ class MetadataTests(unittest.TestCase):
                 release_metadata(data, CURRENT)
         for url in ('https://example.invalid/package.deb',
                     'https://github.com/other/project/releases/download/v1.0.1/openxplorer_1.0.1_all.deb',
+                    'https://github.com/openxplorer/other/releases/download/v1.0.1/openxplorer_1.0.1_all.deb',
+                    'https://github.com/AKolenda/openxplorer/releases/download/v1.0.2/openxplorer_1.0.1_all.deb',
                     release()['assets'][0]['browser_download_url'] + '?path=elsewhere',
                     'file:///tmp/example.deb'):
             data = release()
@@ -103,6 +105,13 @@ class MetadataTests(unittest.TestCase):
         parsed = release_metadata(data, CURRENT)
         self.assertEqual(len(parsed['notes']), 20000)
         self.assertEqual(parsed['releaseUrl'], REPOSITORY + '/releases/tag/v' + NEXT)
+
+    def test_releases_from_the_organization_repository_are_accepted(self):
+        self.assertEqual(REPOSITORIES, (REPOSITORY, 'https://github.com/openxplorer/openxplorer'))
+        data = release(repository=REPOSITORIES[1])
+        parsed = release_metadata(data, CURRENT)
+        self.assertEqual(parsed['url'], data['assets'][0]['browser_download_url'])
+        self.assertEqual(parsed['releaseUrl'], REPOSITORIES[1] + '/releases/tag/v' + NEXT)
 
 
 class UrlTests(unittest.TestCase):

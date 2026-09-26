@@ -1,5 +1,25 @@
 # OpenXplorer verification
 
+## 2026-09-26 — updates from the organization repository (1.1.4 changes)
+
+The updater previously required installer URLs under AKolenda/openxplorer, so a
+transfer to the openxplorer organization would have rejected every new release.
+It now accepts either repository and derives the release link from the match.
+
+- 616 Python tests passed, including 39 updater tests. Fixtures cover the
+  organization URL and reject other repositories and mismatched tags.
+- 74 Node tests, 11 GIO integration tests, source-policy and public-data tests,
+  and the 20-check security sweep passed.
+- 37 file-drag UI checks, 27 updater/UI regressions and the release, type-select,
+  0.6 and 0.7 preview checks passed in Chromium with simulated storage.
+- Frozen install, dependency audit, TypeScript checking, the Next.js production
+  build and 47 production browser checks passed. Regenerated docs were unchanged.
+- The staged 1.1.4 installer, source archive and checksums passed the public-data
+  audit; the packaged updater contains the organization repository.
+
+Not run locally: the native GTK/WebKit transport check (no Xvfb) or an update
+from a real GitHub release. The release workflow runs the native check.
+
 ## 2026-09-22 — self-hosted Debian runner
 
 - The release workflow passed the 615 Python tests, 74 Node tests, 11 GIO

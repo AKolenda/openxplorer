@@ -14,7 +14,7 @@ Close every old Winspace/OpenXplorer window and finish file operations. Download
 
 ```sh
 sudo apt update
-sudo apt install ./openxplorer_1.1.3_all.deb
+sudo apt install ./openxplorer_1.1.4_all.deb
 openxplorer --check
 openxplorer
 ```
@@ -27,7 +27,7 @@ Click the Check for updates icon at the bottom right, beside the view controls. 
 
 The installed Debian app downloads the release installer, verifies its GitHub SHA-256 digest and package identity, then asks for system administrator approval through polkit. APT installs the update without removing packages. Choose Restart now when finished; restarting closes existing windows and tabs.
 
-Older releases need one manual upgrade to 1.1.0 before this control is available. Source checkouts can check versions but cannot install in-app. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature.
+Older releases need one manual upgrade to 1.1.0 before this control is available. Install 1.1.4 before the repository moves to the openxplorer GitHub organization; earlier releases then need one manual upgrade from GitHub Releases. Source checkouts can check versions but cannot install in-app. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature.
 
 ## Upgrading from Winspace
 
@@ -64,4 +64,4 @@ A signed repository with a pre-indexed AppStream catalog can supply that informa
 
 ---
 
-OpenXplorer 1.1.3. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.1.4. Project-authored documentation: AGPL-3.0-only.

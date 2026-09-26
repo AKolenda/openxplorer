@@ -30,7 +30,7 @@ The desktop app is Python with GTK 3 and WebKitGTK. Its HTML/CSS/JavaScript inte
 
 ## Know what you are installing
 
-Version 1.1.3 fixes dragging filenames containing parentheses and simplifies the Software updates dialog. Check for updates is beside the bottom-right view controls. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration.
+Version 1.1.4 keeps in-app updates working after the repository moves to the openxplorer GitHub organization. Check for updates is beside the bottom-right view controls. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration.
 
 > Use a disposable folder and a non-critical share first. Native Zorin/WebKit, live NAS access, keyring behavior, and browser/portal integration have not been validated in the release environment.
 
@@ -40,4 +40,4 @@ Read Installation, open your home directory, and test a network share. Enable in
 
 ---
 
-OpenXplorer 1.1.3. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 1.1.4. Project-authored documentation: AGPL-3.0-only.
