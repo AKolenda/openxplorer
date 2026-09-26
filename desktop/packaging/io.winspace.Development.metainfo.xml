@@ -19,6 +19,7 @@
     <category>FileManager</category>
   </categories>
   <releases>
+    <release version="1.1.4" date="2026-09-26" type="stable"><description><p>Keep in-app updates working after the repository moves to the openxplorer GitHub organization.</p></description></release>
     <release version="1.1.3" date="2026-09-21" type="stable"><description><p>Fix dragging filenames containing parentheses and simplify the Software updates dialog.</p></description></release>
     <release version="1.1.2" date="2026-09-19"><description><p>Place the update action beside the bottom-right view controls and remove the stable-release status indicator.</p></description></release>
     <release version="1.1.1" date="2026-09-19" type="stable">

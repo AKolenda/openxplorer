@@ -1,3 +1,10 @@
+# 1.1.4 — 2026-09-26
+
+- Accept stable releases published from the openxplorer GitHub organization as
+  well as the current repository, so in-app updates keep working after the
+  repository moves. Installer name, download URL, size and SHA-256 checks are
+  unchanged, and the release link follows the repository that published it.
+
 # 1.1.3 — 2026-09-21
 
 - Fix dragging files whose GIO addresses contain parentheses or other unescaped
