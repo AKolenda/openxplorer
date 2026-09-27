@@ -363,6 +363,35 @@ fn same_device_keep_both_renames_inside_staging_and_refreshes_before_cleanup() {
     fixture.no_stage();
 }
 
+/// A copy within one device is moved out of its private folder at the end,
+/// which devices without MTP `MoveObject` (Android 7 and 8) refuse. The
+/// error says so instead of blaming a cross-filesystem move, and nothing is
+/// left behind.
+///
+/// parity: XFER-023
+#[test]
+fn a_copy_within_a_device_without_move_object_explains_the_refusal() {
+    let fixture = Fixture::with_destination("phone");
+    let source = fixture.src.join("photo.jpg");
+    write(&source, "photo");
+    let phone = Arc::new(Phone {
+        device: Device::without_move_object(),
+        same_device_copy: true,
+        ..Phone::default()
+    });
+
+    let result = fixture.copy(phone, &[&source], ConflictPolicy::Skip);
+
+    assert!(result.done.is_empty(), "{result:?}");
+    assert_eq!(result.errors.len(), 1, "{result:?}");
+    assert!(
+        result.errors[0].contains("cannot move items between folders"),
+        "{result:?}"
+    );
+    assert!(list(&fixture.dst).is_empty(), "{:?}", list(&fixture.dst));
+    assert_eq!(read(&source), "photo");
+}
+
 /// A copy within one device that fails after `CopyObject` already placed
 /// part of it in the private folder, like `SameDevice` in
 /// `test_same_device_copy_failure_leaves_nothing_under_the_final_name`.

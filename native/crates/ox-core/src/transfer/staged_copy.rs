@@ -15,7 +15,9 @@
 //!   Android 7 and 8 do not offer.
 //! - A copy within one device (MTP `CopyObject`) keeps the source's name
 //!   whatever target is requested, so it is built under that name inside a
-//!   private folder, renamed there, and moved out under the same name.
+//!   private folder, renamed there, and moved out under the same name. As
+//!   in the Python app, that last move needs MTP `MoveObject`; a device
+//!   without it gets an error that says so.
 //! - A device's success report is never trusted: the final name must exist
 //!   and the staged name must be gone.
 //! - Only staging this item created is recorded for cleanup: a failed
@@ -133,16 +135,18 @@ impl StagedCopy<'_> {
         let token = staging_name()?;
         let mut modes = DirectoryModes::default();
         slot.place = StagingPlace::of(self.dest_dir);
-        match self.layout() {
+        let layout = self.layout();
+        match layout {
             Layout::Sibling => self.build_sibling(&token, &mut modes, slot)?,
-            layout => self.build_in_folder(&token, layout, &mut modes, slot)?,
+            _ => self.build_in_folder(&token, layout, &mut modes, slot)?,
         }
         self.cancel.check()?;
         let stage = slot
             .stage
             .as_ref()
             .ok_or_else(|| TransferError::failed("The copy was not staged. Nothing was published."))?;
-        self.publish(stage, &mut modes)?;
+        self.publish(stage, &mut modes)
+            .map_err(|error| explain_publish_error(error, layout))?;
         if slot.place == StagingPlace::Device {
             verify_device_publication(stage, self.destination)?;
             if matches!(stage, Stage::Sibling(_)) {
@@ -270,6 +274,22 @@ impl StagedCopy<'_> {
         } else {
             publish_staged(stage.item(), self.destination, modes, self.cancel)
         }
+    }
+}
+
+/// A copy within one device ends with a move out of its private folder
+/// (MTP `MoveObject`), which devices such as Android 7 and 8 phones do not
+/// offer. Their refusal is explained in those terms rather than as the
+/// generic unsupported move, which blames a cross-filesystem move.
+fn explain_publish_error(error: TransferError, layout: Layout) -> TransferError {
+    match error {
+        TransferError::NotSupported(_) if layout == Layout::SameDeviceCopy => TransferError::NotSupported(
+            "This device cannot move items between folders, so a copy within the device \
+             cannot be finished. Nothing was published. Copy the item to this computer \
+             first, then copy it back to the device."
+                .into(),
+        ),
+        other => other,
     }
 }
 
