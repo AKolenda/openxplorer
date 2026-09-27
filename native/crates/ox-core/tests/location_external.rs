@@ -21,6 +21,7 @@ struct PythonFixture {
     external: ExternalCases,
 }
 
+/// The `external` table: one home folder and two answers per input.
 #[derive(Debug, Deserialize)]
 struct ExternalCases {
     /// The home folder `core.py` resolved `~` and relative names against.
@@ -31,6 +32,7 @@ struct ExternalCases {
     items: Vec<Case>,
 }
 
+/// The committed `external` table of `python.json`.
 fn external_cases() -> ExternalCases {
     let fixture: PythonFixture = parse_fixture(include_str!("location_fixtures/python.json"));
     fixture.external

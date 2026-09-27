@@ -19,15 +19,25 @@ use support::{parse_fixture, Case, Mismatches, Outcome};
 struct PythonFixture {
     /// The home folder `core.py` resolved `~` and relative names against.
     home: PathBuf,
+    /// `normalise_location(input, home=home)`.
     normalise: Vec<Case>,
+    /// `normalise_location(input, base, home)`.
     relative: Vec<RelativeCase>,
+    /// `validate_name(input)`.
     names: Vec<Case>,
+    /// `new_copy_name(name, number, is_dir)`.
     copies: Vec<CopyNameCase>,
+    /// `safe_label(input, fallback)`.
     labels: Vec<LabelCase>,
+    /// `require_item_uri(input)`.
     items: Vec<Case>,
+    /// `require_share(input)`.
     shares: Vec<Case>,
+    /// `is_smb_server(input)`.
     servers: Vec<ServerCase>,
+    /// `is_device_location(input)`.
     devices: Vec<DeviceCase>,
+    /// `split_location(input)`.
     splits: Vec<Case<SplitParts>>,
 }
 
@@ -103,6 +113,7 @@ impl From<LocationParts> for SplitParts {
     }
 }
 
+/// The committed answers of `core.py`.
 fn fixture() -> PythonFixture {
     parse_fixture(include_str!("location_fixtures/python.json"))
 }
@@ -173,12 +184,15 @@ fn sidebar_labels_are_validated_like_core_py() {
     mismatches.assert_none();
 }
 
-/// parity: OPS-035
+/// parity: OPS-035, NET-003
 #[test]
 fn share_and_device_roots_are_not_operation_items_like_core_py() {
     assert_cases_match("require_item_uri", &fixture().items, location::require_item_uri);
 }
 
+/// A saved network location must be a shared folder, not a server.
+///
+/// parity: NET-017
 #[test]
 fn shared_folders_are_required_like_core_py() {
     assert_cases_match("require_share", &fixture().shares, location::require_share);

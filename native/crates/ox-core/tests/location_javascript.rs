@@ -16,11 +16,16 @@ use ox_core::location::{self, Crumb, DeviceLabel, LocationContext};
 use serde::Deserialize;
 use support::{parse_fixture, Mismatches};
 
+/// The tables of `javascript.json`.
 #[derive(Debug, Deserialize)]
 struct JavascriptFixture {
+    /// The `state.env` the helpers ran with.
     environment: Environment,
+    /// Every URI helper's answer for each captured URI.
     uris: Vec<UriCase>,
+    /// `sameLocation` answers.
     pairs: Vec<PairCase>,
+    /// `prettyBytes` answers.
     sizes: Vec<SizeCase>,
 }
 
@@ -30,16 +35,22 @@ struct JavascriptFixture {
 struct Environment {
     /// The home folder as a `file://` URI.
     home: String,
+    /// Mounted and unmounted devices.
     mounts: Vec<Mount>,
+    /// Folders that hold read-only snapshots.
     snapshot_roots: Vec<String>,
+    /// Mount points from the mount table.
     stable_mounts: Vec<StableMount>,
 }
 
 /// A volume-monitor mount.
 #[derive(Debug, Deserialize)]
 struct Mount {
+    /// The mount's display name.
     label: String,
+    /// Its root URI.
     uri: String,
+    /// False for a device that is known but not mounted.
     mounted: bool,
 }
 
@@ -97,10 +108,15 @@ impl Environment {
     reason = "one field per yes-or-no helper in app.js; the JSON fixes the shape"
 )]
 struct UriCase {
+    /// The URI every helper was given.
     uri: String,
+    /// `baseName`.
     base_name: String,
+    /// `parentUri`.
     parent_uri: Option<String>,
+    /// `displayUri`.
     display_uri: String,
+    /// `titleFor`.
     title_for: String,
     /// `writableLocation`.
     writable: bool,
@@ -112,6 +128,7 @@ struct UriCase {
     crumbs: Vec<CrumbCase>,
     /// `networkLocation`.
     network: bool,
+    /// `deviceRoot`.
     device_root: Option<String>,
 }
 
@@ -125,9 +142,12 @@ impl UriCase {
     }
 }
 
+/// One segment of `breadcrumbSegments`.
 #[derive(Debug, Deserialize)]
 struct CrumbCase {
+    /// The decoded text on the button.
     label: String,
+    /// The location the button opens.
     uri: String,
 }
 
@@ -136,6 +156,7 @@ struct CrumbCase {
 struct PairCase {
     first: String,
     second: String,
+    /// The web UI's answer.
     same: bool,
 }
 
@@ -143,9 +164,11 @@ struct PairCase {
 #[derive(Debug, Deserialize)]
 struct SizeCase {
     bytes: u64,
+    /// The web UI's text.
     text: String,
 }
 
+/// The committed answers of the `app.js` helpers.
 fn fixture() -> JavascriptFixture {
     parse_fixture(include_str!("location_fixtures/javascript.json"))
 }
