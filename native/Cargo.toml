@@ -54,6 +54,5 @@ must_use_candidate = "allow"
 similar_names = "allow"
 
 [profile.release]
-opt-level = 3
 # Thin LTO optimises across crates without the long link times of full LTO.
 lto = "thin"
