@@ -36,17 +36,14 @@ pub(super) fn build_entry(
     let content_type = string_attribute(info, "standard::content-type");
     let classification = classify_info(uri, info, kind, content_type.as_deref());
     let type_label = type_label(classification.folder_type, content_type.as_deref());
+    let is_dir = classification.is_dir();
     // A folder's own size is not the size of its contents, so none is shown.
-    let size = if classification.is_dir {
-        None
-    } else {
-        reported_size(info)
-    };
+    let size = if is_dir { None } else { reported_size(info) };
     Entry {
         uri: uri.to_owned(),
         name: display_name(uri, info, fallback_name),
         kind,
-        is_dir: classification.is_dir,
+        is_dir,
         is_virtual: classification.is_virtual,
         can_operate: classification.can_operate,
         target_uri: classification.target_uri,
