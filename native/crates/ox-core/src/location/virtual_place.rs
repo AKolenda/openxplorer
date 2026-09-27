@@ -158,14 +158,11 @@ impl VirtualPlace {
     }
 
     /// The virtual folder GIO lists under `scheme`, which must be
-    /// lower-case.
+    /// lower-case: the inverse of [`gio_scheme`](Self::gio_scheme).
     fn from_gio_scheme(scheme: &str) -> Option<Self> {
-        match scheme {
-            "network" => Some(VirtualPlace::Network),
-            "trash" => Some(VirtualPlace::RecycleBin),
-            "recent" => Some(VirtualPlace::Recent),
-            _ => None,
-        }
+        Self::ALL
+            .into_iter()
+            .find(|place| place.gio_scheme() == Some(scheme))
     }
 }
 
@@ -296,6 +293,16 @@ mod tests {
         }
         assert!(VirtualPlace::Home.is_page());
         assert!(!VirtualPlace::RecycleBin.is_page());
+    }
+
+    #[test]
+    fn gio_folders_round_trip_through_their_schemes() {
+        for place in VirtualPlace::ALL {
+            let from_scheme = place.gio_scheme().and_then(VirtualPlace::from_gio_scheme);
+            let expected = (!place.is_page()).then_some(place);
+            assert_eq!(from_scheme, expected, "{place:?}");
+        }
+        assert_eq!(VirtualPlace::from_gio_scheme("file"), None);
     }
 
     #[test]
