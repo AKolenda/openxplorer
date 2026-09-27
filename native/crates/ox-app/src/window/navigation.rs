@@ -39,10 +39,12 @@ fn address_icon(uri: &str) -> AddressIcon {
     }
 }
 
-/// A tab's icon: the page glyph, a phone, network art or a folder.
+/// A tab's icon, as `renderTabs` picks it: the network glyph on the
+/// Network page, a phone for devices, network art for SMB, and the colour
+/// folder everywhere else, This PC included.
 fn tab_icon(uri: &str) -> TabIcon {
-    if let Some(page) = Page::from_uri(uri) {
-        return TabIcon::Glyph(page.glyph());
+    if Page::from_uri(uri) == Some(Page::Network) {
+        return TabIcon::Glyph(Glyph::Network);
     }
     if is_device_location(uri) {
         TabIcon::Glyph(Glyph::Phone)
@@ -367,5 +369,53 @@ impl BrowserWindow {
             self.chrome().address.show_crumbs(&address);
         }
         self.content().focus();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A location and the tab and address-bar icons it shows.
+    struct IconCase {
+        uri: &'static str,
+        tab: TabIcon,
+        address: AddressIcon,
+    }
+
+    /// parity: TAB-010
+    #[test]
+    fn tabs_and_the_address_bar_show_the_current_apps_icons() {
+        let cases = [
+            IconCase {
+                uri: "file:///tmp/work",
+                tab: TabIcon::Art(ArtKind::Folder),
+                address: AddressIcon::Folder,
+            },
+            IconCase {
+                uri: "smb://nas/media",
+                tab: TabIcon::Art(ArtKind::NetworkFolder),
+                address: AddressIcon::Glyph(Glyph::Network),
+            },
+            IconCase {
+                uri: "mtp://%5Busb%3A001%2C010%5D/",
+                tab: TabIcon::Glyph(Glyph::Phone),
+                address: AddressIcon::Glyph(Glyph::Phone),
+            },
+            IconCase {
+                uri: Page::ThisPc.uri(),
+                tab: TabIcon::Art(ArtKind::Folder),
+                address: AddressIcon::Glyph(Glyph::Desktop),
+            },
+            IconCase {
+                uri: Page::Network.uri(),
+                tab: TabIcon::Glyph(Glyph::Network),
+                address: AddressIcon::Glyph(Glyph::Network),
+            },
+        ];
+        for case in cases {
+            assert_eq!(tab_icon(case.uri), case.tab, "{}", case.uri);
+            assert_eq!(address_icon(case.uri), case.address, "{}", case.uri);
+        }
     }
 }
