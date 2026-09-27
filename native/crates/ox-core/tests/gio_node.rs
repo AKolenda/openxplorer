@@ -9,6 +9,7 @@ use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::sync::Arc;
 
+use gio::prelude::VfsExt;
 use ox_core::gio_node::GioNode;
 use ox_core::transfer::{
     Cancellation, ConflictPolicy, Node, NodeKind, TransferEngine, TransferError, TransferMode,
@@ -369,6 +370,11 @@ fn device_capabilities_and_unsupported_renames_are_resolved_without_device_io() 
 /// of offering a permanent delete. Any other failure means "no Trash".
 #[test]
 fn trash_support_reports_an_unmounted_share_instead_of_denying_trash() {
+    let schemes = gio::Vfs::default().supported_uri_schemes();
+    assert!(
+        schemes.iter().any(|scheme| scheme == "smb"),
+        "this check needs GVfs with its SMB backend (gvfs-backends); found {schemes:?}"
+    );
     let unmounted = GioNode::new("smb://example.invalid/share/folder").can_trash(None);
     assert!(
         matches!(unmounted, Err(TransferError::NotMounted(_))),
