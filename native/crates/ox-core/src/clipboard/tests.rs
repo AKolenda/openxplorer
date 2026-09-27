@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Clipboard protocol regressions from `desktop/tests/test_file_clipboard_interop.py`.
+//! Clipboard protocol regressions from
+//! `desktop/tests/test_file_clipboard_interop.py` and the `ClipboardTests`
+//! in `desktop/tests/test_v05.py`.
 
 use super::*;
 
 const ONE: &str = "file:///home/demo/Read%20me.txt";
 const TWO: &str = "file:///home/demo/Planning.pdf";
 
+/// A valid two-item selection with a fresh token.
 fn selection(mode: ClipboardMode) -> ClipboardFiles {
     ClipboardFiles::new(mode, &[ONE.into(), TWO.into()]).expect("valid selection")
 }
 
+/// The bytes `files` publishes as `mime_type`.
 fn published(files: &ClipboardFiles, mime_type: &str) -> Vec<u8> {
     files
         .encode()
@@ -19,6 +23,8 @@ fn published(files: &ClipboardFiles, mime_type: &str) -> Vec<u8> {
         .bytes
 }
 
+/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_gnome_cut_can_consume_successful_items_across_reads`
+///
 /// parity: CLIP-008
 #[test]
 fn gnome_cut_keeps_identity_across_reads_and_consumes_only_successful_items() {
@@ -32,6 +38,9 @@ fn gnome_cut_keeps_identity_across_reads_and_consumes_only_successful_items() {
     assert!(files.encode().is_empty());
 }
 
+/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_changed_external_payload_is_not_consumed_by_old_operation`
+/// and `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_changed_mode_is_not_consumed_by_old_cut`
+///
 /// parity: CLIP-008
 #[test]
 fn old_cut_cannot_consume_a_changed_payload_or_a_copy() {
@@ -43,6 +52,10 @@ fn old_cut_cannot_consume_a_changed_payload_or_a_copy() {
     }
 }
 
+/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_uri_list_without_exact_kde_cut_marker_remains_copy`,
+/// `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_nul_terminated_kde_cut_marker`
+/// and `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_gnome_copy_ignores_unrelated_kde_cut_marker`
+///
 /// parity: CLIP-006
 #[test]
 fn kde_requires_an_exact_short_cut_marker() {
@@ -80,6 +93,8 @@ fn kde_cut_marker_uses_the_mime_type_kio_reads() {
     assert_eq!(published(&selection(ClipboardMode::Copy), kio_mime_type), b"0");
 }
 
+/// Ported from `desktop/tests/test_v05.py::ClipboardTests::test_deduplication`
+///
 /// parity: CLIP-005
 #[test]
 fn uri_list_discards_comments_and_deduplicates_canonical_addresses() {
@@ -89,7 +104,14 @@ fn uri_list_discards_comments_and_deduplicates_canonical_addresses() {
     assert_eq!(files.uris(), &["file:///tmp/a", "smb://studio-nas/Shared/a"]);
 }
 
-/// parity: CLIP-005
+/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_kde_marker_cannot_turn_plain_text_into_files`,
+/// `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_kde_marker_cannot_turn_invalid_uri_list_into_files`
+/// and the `test_plain_text_is_not_file_clipboard`, `test_unsafe_scheme`,
+/// `test_no_password_in_clipboard_uri`, `test_share_itself_not_transferable`,
+/// `test_malformed_json` and `test_large_rejected` cases of
+/// `desktop/tests/test_v05.py::ClipboardTests`
+///
+/// parity: CLIP-005, SAFE-010
 #[test]
 fn invalid_external_payloads_fail_closed() {
     let oversized = vec![b'x'; MAX_BYTES + 1];
@@ -98,6 +120,7 @@ fn invalid_external_payloads_fail_closed() {
         b"\xff",
         b"https://example.test/file",
         b"smb://studio-nas/Shared",
+        b"smb://user:pass@nas/share/a",
         b"file:///tmp/a%0Ab",
         oversized.as_slice(),
     ] {
@@ -105,12 +128,17 @@ fn invalid_external_payloads_fail_closed() {
     }
     assert!(decode("text/plain", ONE.as_bytes(), Some(b"1")).is_none());
     assert!(decode(GNOME, format!("move\n{ONE}").as_bytes(), None).is_none());
+    assert!(decode(GNOME, b"cut\nsmb://nas/share", None).is_none());
+    assert!(decode(CUSTOM, b"{", None).is_none());
+    assert!(decode(CUSTOM, &oversized, None).is_none());
     let too_many = std::iter::repeat_n(ONE, MAX_ITEMS + 1)
         .collect::<Vec<_>>()
         .join("\n");
     assert!(decode(URI_LIST, too_many.as_bytes(), None).is_none());
 }
 
+/// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_custom_payload_keeps_priority_and_its_token`
+///
 /// parity: CLIP-005
 #[test]
 fn custom_payload_preserves_token_and_rejects_invalid_operations() {
@@ -125,6 +153,10 @@ fn custom_payload_preserves_token_and_rejects_invalid_operations() {
     assert_eq!(no_token.token().len(), 32);
 }
 
+/// Ported from `desktop/tests/test_v05.py::ClipboardTests::test_custom_copy_roundtrip`,
+/// `desktop/tests/test_v05.py::ClipboardTests::test_custom_cut_roundtrip`
+/// and `desktop/tests/test_v05.py::ClipboardTests::test_gnome_cut_flag`
+///
 /// parity: CLIP-004
 #[test]
 fn every_advertised_format_round_trips() {
@@ -154,8 +186,9 @@ fn external_fingerprint_matches_the_python_clipboard() {
     // cut consumption between Python and native windows.
     let files = decode(GNOME, b"cut\nfile:///tmp/a", None).expect("cut");
     let script = "from file_clipboard import decode_clipboard, GNOME; print(decode_clipboard(GNOME, b'cut\\nfile:///tmp/a')['token'])";
+    let desktop = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../desktop");
     let output = std::process::Command::new("python3")
-        .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../desktop"))
+        .current_dir(desktop)
         .args(["-c", script])
         .output()
         .expect("Python oracle");
@@ -177,6 +210,7 @@ fn legacy_line_endings_do_not_drop_valid_selections() {
     }
 }
 
+/// parity: CLIP-004
 #[test]
 fn published_file_lists_match_the_python_encoding() {
     let files = selection(ClipboardMode::Cut);
@@ -184,4 +218,32 @@ fn published_file_lists_match_the_python_encoding() {
     let uri_list = format!("{ONE}\r\n{TWO}\r\n");
     assert_eq!(published(&files, GNOME), gnome.as_bytes());
     assert_eq!(published(&files, URI_LIST), uri_list.as_bytes());
+}
+
+/// parity: CLIP-004
+#[test]
+fn selections_outside_one_to_two_hundred_items_are_refused_in_the_python_wording() {
+    let too_many = vec![ONE.to_owned(); MAX_ITEMS + 1];
+    for uris in [Vec::new(), too_many] {
+        let error = ClipboardFiles::new(ClipboardMode::Copy, &uris).expect_err("item count");
+        assert_eq!(error, ClipboardError::ItemCount);
+        assert_eq!(
+            error.to_string(),
+            "Copy or cut between 1 and 200 items at a time."
+        );
+    }
+}
+
+/// parity: CLIP-004, OPS-035
+#[test]
+fn share_roots_cannot_be_copied_and_keep_the_location_message() {
+    let error = ClipboardFiles::new(ClipboardMode::Cut, &["smb://nas/share".into()]).expect_err("share root");
+    let ClipboardError::Item(location_error) = &error else {
+        panic!("expected an item error, got {error:?}");
+    };
+    assert_eq!(error.to_string(), location_error.message());
+    assert!(
+        error.to_string().starts_with("Open the network share first"),
+        "{error}"
+    );
 }

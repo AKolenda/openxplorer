@@ -17,13 +17,19 @@
 //! | [`KDE_CUT`] | Dolphin and other KDE apps | `1` for cut, `0` for copy |
 //!
 //! Paste tries [`CUSTOM`], then [`GNOME`], then [`URI_LIST`] with the
-//! [`KDE_CUT`] marker of the same clipboard owner.
+//! [`KDE_CUT`] marker of the same clipboard owner; [`decode`] reads one of
+//! them.
+
+mod decode;
+mod lines;
 
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
 use crate::location::{require_item_uri, LocationError};
+
+pub use decode::decode;
 
 /// The app's own cross-process format; the name is a compatibility
 /// contract with the Python app and older Winspace windows.
@@ -46,11 +52,6 @@ pub const MAX_BYTES: usize = 1024 * 1024;
 /// Maximum number of items per copy or cut, before deduplication.
 pub const MAX_ITEMS: usize = 200;
 
-/// The longest KDE cut marker accepted: `1` followed by NUL padding.
-const MAX_CUT_MARKER_BYTES: usize = 16;
-/// The longest token kept from a [`CUSTOM`] payload, in characters.
-const MAX_TOKEN_CHARS: usize = 80;
-
 /// Whether pasting copies the items or moves them after confirmation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClipboardMode {
@@ -63,15 +64,16 @@ pub enum ClipboardMode {
 }
 
 impl ClipboardMode {
-    /// The name in the [`CUSTOM`] payload and in external fingerprints.
-    fn wire_name(self) -> &'static str {
+    /// The mode's name in the [`CUSTOM`] payload and in Python: `copy` or
+    /// `move`.
+    fn as_str(self) -> &'static str {
         match self {
             Self::Copy => "copy",
             Self::Cut => "move",
         }
     }
 
-    /// The first line of a GNOME payload.
+    /// The first line of a [`GNOME`] payload.
     fn gnome_verb(self) -> &'static str {
         match self {
             Self::Copy => "copy",
@@ -79,6 +81,7 @@ impl ClipboardMode {
         }
     }
 
+    /// The mode a [`GNOME`] payload's first line names, if it names one.
     fn from_gnome_verb(verb: &str) -> Option<Self> {
         match verb {
             "copy" => Some(Self::Copy),
@@ -96,6 +99,18 @@ impl ClipboardMode {
     }
 }
 
+/// Why a selection cannot be copied or cut.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ClipboardError {
+    /// The selection is empty or has more than [`MAX_ITEMS`] items.
+    #[error("Copy or cut between 1 and {max} items at a time.", max = MAX_ITEMS)]
+    ItemCount,
+    /// An item is not a file or folder that can be copied: a share or
+    /// device root, a foreign scheme or an address with credentials.
+    #[error(transparent)]
+    Item(#[from] LocationError),
+}
+
 /// One published format of a selection: the bytes a reader gets when it
 /// asks for `mime_type`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,7 +121,8 @@ pub struct ClipboardPayload {
     pub bytes: Vec<u8>,
 }
 
-/// A validated, ordered file selection and the identity of its clipboard owner.
+/// A validated, ordered file selection and the identity of its clipboard
+/// owner. Serializes as the [`CUSTOM`] payload.
 ///
 /// The fields are private so encoding cannot bypass URI validation or inject
 /// another line into an external file-list format.
@@ -118,23 +134,22 @@ pub struct ClipboardFiles {
 }
 
 impl ClipboardFiles {
-    /// Validates items, removes duplicates in selection order and assigns a token.
+    /// Validates items, removes duplicates in selection order and assigns a
+    /// fresh owner token.
     ///
     /// # Errors
     ///
-    /// A [`LocationError`] with the message to show when the selection has
-    /// fewer than 1 or more than [`MAX_ITEMS`] items, or when an item is
-    /// not a file or folder that can be copied (a share or device root, a
-    /// foreign scheme, an address with credentials).
-    pub fn new(mode: ClipboardMode, uris: &[String]) -> Result<Self, LocationError> {
-        Self::validated(mode, uris, new_token())
+    /// [`ClipboardError::ItemCount`] when the selection has fewer than 1 or
+    /// more than [`MAX_ITEMS`] items, and [`ClipboardError::Item`] when an
+    /// item is not a file or folder that can be copied.
+    pub fn new(mode: ClipboardMode, uris: &[String]) -> Result<Self, ClipboardError> {
+        Self::with_token(mode, uris, new_token())
     }
 
-    fn validated(mode: ClipboardMode, uris: &[String], token: String) -> Result<Self, LocationError> {
+    /// [`ClipboardFiles::new`] with an owner token read from a clipboard.
+    fn with_token(mode: ClipboardMode, uris: &[String], token: String) -> Result<Self, ClipboardError> {
         if !(1..=MAX_ITEMS).contains(&uris.len()) {
-            return Err(LocationError::new(
-                "Copy or cut between 1 and 200 items at a time.",
-            ));
+            return Err(ClipboardError::ItemCount);
         }
         let mut seen = HashSet::new();
         let mut canonical = Vec::with_capacity(uris.len());
@@ -166,10 +181,12 @@ impl ClipboardFiles {
         &self.token
     }
 
-    /// Removes successfully moved items only when the paste still owns this cut.
+    /// Removes successfully moved items only when the paste still owns this
+    /// cut.
     ///
-    /// Returns true if anything was removed. An empty result means the caller
-    /// can clear the clipboard after confirming that its owner is still current.
+    /// Returns true if anything was removed. An empty result means the
+    /// caller can clear the clipboard after confirming that its owner is
+    /// still current.
     pub fn consume(&mut self, token: &str, moved: &[String]) -> bool {
         // Safety rule (cut identity): a copy, or a clipboard that now holds
         // another selection, is never altered by an older paste.
@@ -215,144 +232,13 @@ impl ClipboardFiles {
     }
 }
 
-/// The [`CUSTOM`] payload as read. The token may be any JSON value; only a
-/// short string is kept.
-#[derive(Deserialize)]
-struct CustomPayload {
-    mode: ClipboardMode,
-    uris: Vec<String>,
-    #[serde(default)]
-    token: serde_json::Value,
-}
-
-/// Decodes a recognized file format.
-///
-/// Safety rule (fail closed): malformed, oversized and plain-text payloads
-/// are never a file list, whatever format they claim to be. A KDE marker
-/// affects only `text/uri-list`; the GTK caller must read `cut_selection`
-/// from the same clipboard owner as `payload`.
-pub fn decode(mime_type: &str, payload: &[u8], cut_selection: Option<&[u8]>) -> Option<ClipboardFiles> {
-    if payload.is_empty() || payload.len() > MAX_BYTES {
-        return None;
-    }
-    let text = std::str::from_utf8(payload).ok()?.trim_end_matches('\0');
-    match mime_type {
-        CUSTOM => decode_custom(text),
-        GNOME => decode_gnome(payload, text),
-        URI_LIST => decode_uri_list(payload, text, cut_selection),
-        _ => None,
-    }
-}
-
-/// Decodes the [`CUSTOM`] format, keeping its token so a paste in
-/// another window can consume the cut it read.
-fn decode_custom(text: &str) -> Option<ClipboardFiles> {
-    let custom: CustomPayload = serde_json::from_str(text).ok()?;
-    let token = custom
-        .token
-        .as_str()
-        .filter(|token| token.chars().count() <= MAX_TOKEN_CHARS)
-        .map_or_else(new_token, str::to_owned);
-    ClipboardFiles::validated(custom.mode, &custom.uris, token).ok()
-}
-
-/// Decodes a GNOME payload: `copy` or `cut`, then one URI per line.
-fn decode_gnome(payload: &[u8], text: &str) -> Option<ClipboardFiles> {
-    let mut lines = payload_lines(text).into_iter();
-    let mode = ClipboardMode::from_gnome_verb(lines.next()?)?;
-    let uris: Vec<String> = lines.map(str::to_owned).collect();
-    let token = external_token(GNOME, payload, mode)?;
-    ClipboardFiles::validated(mode, &uris, token).ok()
-}
-
-/// Decodes a URI list, skipping blank lines and `#` comments. It is a cut
-/// only with an exact KDE cut marker.
-fn decode_uri_list(payload: &[u8], text: &str, cut_selection: Option<&[u8]>) -> Option<ClipboardFiles> {
-    let mode = if is_kde_cut_marker(cut_selection) {
-        ClipboardMode::Cut
-    } else {
-        ClipboardMode::Copy
-    };
-    let uris: Vec<String> = payload_lines(text)
-        .into_iter()
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .map(str::to_owned)
-        .collect();
-    let token = external_token(URI_LIST, payload, mode)?;
-    ClipboardFiles::validated(mode, &uris, token).ok()
-}
-
-/// Safety rule (exact cut marker): only `1`, optionally NUL-padded and at
-/// most [`MAX_CUT_MARKER_BYTES`] long, grants move semantics. KIO always
-/// writes exactly `1` or `0`; anything else is a copy.
-fn is_kde_cut_marker(marker: Option<&[u8]>) -> bool {
-    let Some(marker) = marker else {
-        return false;
-    };
-    if marker.len() > MAX_CUT_MARKER_BYTES {
-        return false;
-    }
-    marker
-        .strip_prefix(b"1")
-        .is_some_and(|padding| padding.iter().all(|byte| *byte == 0))
-}
-
-/// Splits `text` the way Python's `str.splitlines()` does, including bare
-/// CR and Unicode separators. A final line ending does not add an empty
-/// URI, and CRLF is one separator.
-fn payload_lines(text: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut characters = text.char_indices().peekable();
-    while let Some((index, character)) = characters.next() {
-        if !is_line_separator(character) {
-            continue;
-        }
-        lines.push(&text[start..index]);
-        start = index + character.len_utf8();
-        if character == '\r' && characters.peek().is_some_and(|(_, next)| *next == '\n') {
-            characters.next();
-            start += 1;
-        }
-    }
-    if start < text.len() {
-        lines.push(&text[start..]);
-    }
-    lines
-}
-
-/// The characters Python's `str.splitlines()` splits on.
-fn is_line_separator(character: char) -> bool {
-    matches!(
-        character,
-        '\n' | '\r' | '\x0b' | '\x0c' | '\x1c'..='\x1e' | '\u{85}' | '\u{2028}' | '\u{2029}'
-    )
-}
-
 /// A fresh owner token: 32 hex digits, like Python's `uuid.uuid4().hex`.
 fn new_token() -> String {
     glib::uuid_string_random().replace('-', "")
 }
 
-/// A stable identity for a payload another application published.
-///
-/// External formats carry no token. Re-reading the same payload must keep
-/// its identity so moved items can be consumed across reads, while a
-/// changed payload must never be cleared by an older paste. The fingerprint
-/// is the one `decode_clipboard` computes in Python, so Python and native
-/// windows agree on it.
-fn external_token(mime_type: &str, payload: &[u8], mode: ClipboardMode) -> Option<String> {
-    let mut checksum = glib::Checksum::new(glib::ChecksumType::Sha256)?;
-    checksum.update(mime_type.as_bytes());
-    checksum.update(b"\0");
-    checksum.update(payload);
-    checksum.update(b"\0");
-    checksum.update(mode.wire_name().as_bytes());
-    Some(format!("external-{}", checksum.string()?))
-}
-
-/// Encodes validated URIs as a GNOME payload, with `cut` or `copy` on the
-/// first line. `uris` is never empty here.
+/// Encodes validated URIs as a [`GNOME`] payload, with `cut` or `copy` on
+/// the first line. `uris` is never empty here.
 fn encode_gnome(mode: ClipboardMode, uris: &[String]) -> String {
     format!("{}\n{}", mode.gnome_verb(), uris.join("\n"))
 }
