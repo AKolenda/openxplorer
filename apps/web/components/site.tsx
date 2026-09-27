@@ -1,54 +1,491 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import {site,releaseUrl,issuesUrl} from '../lib/site';
+import { site, releaseUrl, issuesUrl } from '../lib/site';
 import docs from '../lib/docs.json';
-import {AppIcon,Icon} from './icons';
-import {Screenshot,ProductDemo,ProductTour} from './product';
-export type Doc=typeof docs[number];
-const groups=['Get started','Using OpenXplorer','Build & contribute','Project'];
-const External=()=><span aria-hidden="true">↗</span>;
-export function Brand({size=36}:{size?:number}){return <a className="brand" href="/" aria-label="OpenXplorer home"><AppIcon size={size}/>OpenXplorer</a>;}
+import { AppIcon, Icon } from './icons';
+import { Screenshot, ProductDemo, ProductTour } from './product';
+export type Doc = (typeof docs)[number];
+const groups = ['Get started', 'Using OpenXplorer', 'Build & contribute', 'Project'];
+const External = () => <span aria-hidden="true">↗</span>;
+export function Brand({ size = 36 }: { size?: number }) {
+  return (
+    <a className="brand" href="/" aria-label="OpenXplorer home">
+      <AppIcon size={size} />
+      OpenXplorer
+    </a>
+  );
+}
 /** Documentation pages add search and a topic menu for small screens. */
-export function Header({docSlug=''}:{docSlug?:string}){
- const inDocs=Boolean(docSlug);
- return <><a className="skip" href="#main">Skip to content</a><header className="header wrap"><Brand/><nav className="header-nav" aria-label="Main navigation"><a href="/#screenshots">Screenshots</a><a href="/#features">Features</a><a href="/docs/introduction/" aria-current={inDocs?'true':undefined}>Documentation</a><a href={site.repository}>GitHub <External/></a></nav>
- {inDocs&&<div className="header-tools"><button className="search-trigger" data-search-open="" aria-label="Search documentation"><Icon name="search" size={16}/><span>Search docs</span></button><button className="menu-button" data-menu-toggle="" aria-expanded="false" aria-label="Open documentation menu" aria-controls="mobile-navigation"><Icon name="menu"/></button></div>}
- {inDocs&&<nav id="mobile-navigation" className="mobile-nav" data-mobile-nav="" aria-label="Documentation menu" hidden>
-  <div className="mobile-nav-primary"><a href="/">Home</a><a href="/#features">Features</a><a href={site.repository}>GitHub <External/></a></div>
-  <div className="mobile-doc-topics">{groups.map(group=><div className="mobile-doc-group" key={group}><strong>{group}</strong>{docs.filter(d=>d.group===group).map(d=><a key={d.slug} href={'/docs/'+d.slug+'/'} aria-current={d.slug===docSlug?'page':undefined}>{d.title}{d.slug===docSlug&&<Icon name="check" size={16}/>}</a>)}</div>)}</div>
- </nav>}</header></>;
+export function Header({ docSlug = '' }: { docSlug?: string }) {
+  const inDocs = Boolean(docSlug);
+  return (
+    <>
+      <a className="skip" href="#main">
+        Skip to content
+      </a>
+      <header className="header wrap">
+        <Brand />
+        <nav className="header-nav" aria-label="Main navigation">
+          <a href="/#screenshots">Screenshots</a>
+          <a href="/#features">Features</a>
+          <a href="/docs/introduction/" aria-current={inDocs ? 'true' : undefined}>
+            Documentation
+          </a>
+          <a href={site.repository}>
+            GitHub <External />
+          </a>
+        </nav>
+        {inDocs && (
+          <div className="header-tools">
+            <button
+              className="search-trigger"
+              data-search-open=""
+              aria-label="Search documentation"
+            >
+              <Icon name="search" size={16} />
+              <span>Search docs</span>
+            </button>
+            <button
+              className="menu-button"
+              data-menu-toggle=""
+              aria-expanded="false"
+              aria-label="Open documentation menu"
+              aria-controls="mobile-navigation"
+            >
+              <Icon name="menu" />
+            </button>
+          </div>
+        )}
+        {inDocs && (
+          <nav
+            id="mobile-navigation"
+            className="mobile-nav"
+            data-mobile-nav=""
+            aria-label="Documentation menu"
+            hidden
+          >
+            <div className="mobile-nav-primary">
+              <a href="/">Home</a>
+              <a href="/#features">Features</a>
+              <a href={site.repository}>
+                GitHub <External />
+              </a>
+            </div>
+            <div className="mobile-doc-topics">
+              {groups.map(group => (
+                <div className="mobile-doc-group" key={group}>
+                  <strong>{group}</strong>
+                  {docs
+                    .filter(d => d.group === group)
+                    .map(d => (
+                      <a
+                        key={d.slug}
+                        href={'/docs/' + d.slug + '/'}
+                        aria-current={d.slug === docSlug ? 'page' : undefined}
+                      >
+                        {d.title}
+                        {d.slug === docSlug && <Icon name="check" size={16} />}
+                      </a>
+                    ))}
+                </div>
+              ))}
+            </div>
+          </nav>
+        )}
+      </header>
+    </>
+  );
 }
-export function Footer(){return <footer className="footer wrap"><Brand size={25}/><p>Independent software. Not affiliated with Microsoft or Zorin.</p><a href="/source/">GNU AGPL v3.0</a></footer>;}
-export function GlobalSearch(){return <><dialog className="search-dialog" id="docs-search" aria-label="Search documentation"><div className="search-dialog-top"><Icon name="search"/><input autoComplete="off" id="docs-search-input" aria-label="Search topics" placeholder="Search documentation…"/><button data-search-close="" aria-label="Close search"><kbd>Esc</kbd></button></div><div className="search-results" id="docs-search-results" aria-live="polite"/><footer>Search stays in your browser.　↵ Open result</footer></dialog><div className="toast" id="site-toast" role="status" aria-live="polite"/></>;}
-function CodeBlock({code,label='Terminal'}:{code:string;label?:string}){return <div className="code-block"><div className="code-heading"><span><Icon name="terminal" size={13}/> {label}</span><button data-copy-code="" aria-label="Copy command"><Icon name="copy" size={14}/><span>Copy</span></button></div><pre><code>{code}</code></pre></div>;}
-export function Home(){
- return <div className="site"><Header/><main id="main">
-  <section className="hero"><div className="hero-inner wrap">
-   <div className="hero-copy"><h1>Familiar by design.<br/>Built for Linux.</h1><p className="lead">Browse local folders and SMB shares the way you did on Windows. Type a share path, pin the folders you use, and drag files into the apps that accept them.</p><div className="hero-actions"><a className="button primary" href={releaseUrl}><Icon name="download" size={21}/>Download v{site.version}</a><a className="text-link" href={site.repository}>View source <External/></a></div><p className="release-note">Zorin OS and compatible Ubuntu or Debian · <span className="nowrap">GNU AGPL v3.0</span><br/>Package, checksum, and release notes on GitHub.</p></div>
-   <ProductTour/>
-  </div></section>
-  <section className="screens wrap" id="screenshots">
-   <div className="section-intro"><h2>Every share.<br/>Right beside your files.</h2><p>Open a NAS share and it sits in the same window as your local folders, with tabs, a breadcrumb for every level, and a details pane. Snapshots the NAS exposes open as read-only previous versions.</p></div>
-   <Screenshot name="explorer-light" alt="OpenXplorer showing the sample share studio-nas, Projects beside local folders, with Design pinned to Quick access" caption="A sample share, \\studio-nas\Projects, next to local folders. Design is pinned to Quick access."/>
-   <Screenshot name="snapshot-tab" alt="A previous version of the sample Launch planning folder, marked with a Previous version tab badge and a read-only banner" caption="A previous version of a folder, opened from the NAS’s snapshots. The tab badge and banner mark it as read-only."/>
-  </section>
-  <section className="features wrap" id="features">
-   <div className="section-intro"><h2>A familiar explorer.<br/>Native Linux storage.</h2><p>Shares open through GIO/GVfs, the storage layer your Linux desktop already uses. There is no OpenXplorer account, cloud service or relay between you and your NAS.</p></div>
-   <div className="details">
-    <article><h3>Open shares the Windows way</h3><p>Type <code>{'\\\\studio-nas\\Projects'}</code> or an <code>smb://</code> address into the address bar. Sign-ins are kept per server, in your system keyring or only for this login session.</p><a href="/docs/network-shares/">Connect your network storage</a></article>
-    <article><h3>Drag it where you need it</h3><p>Drag files into compatible editors and attachment fields, onto a folder to copy them, or into Quick access to pin a folder. The originals stay where they are.</p><a href="/docs/interface/#file-drag-drop">File dragging &amp; compatibility</a></article>
-    <article><h3>Find the file. Keep the path.</h3><p>Opt folders into a local filename index, then search a disk or a share and open the real location, not a copy in a results list.</p><a href="/docs/search-indexing/">How cached search works</a></article>
-   </div>
-  </section>
-  <section className="open-source wrap" id="open-source">
-   <div><h2>Open source.<br/>Open for contributions.</h2><p>Read the code, build the package, or report something that needs attention. The app, this website, the documentation and the build tools share one public repository.</p></div>
-   <div className="source-links"><a href={site.repository}>Browse the source <External/></a><a href="/docs/development/">Build it yourself <span aria-hidden="true">→</span></a><a href={issuesUrl}>Report an issue <External/></a></div>
-  </section>
- </main><Footer/></div>;
+export function Footer() {
+  return (
+    <footer className="footer wrap">
+      <Brand size={25} />
+      <p>Independent software. Not affiliated with Microsoft or Zorin.</p>
+      <a href="/source/">GNU AGPL v3.0</a>
+    </footer>
+  );
 }
-export function DocsSidebar({current}:{current:string}){return <aside className="docs-sidebar"><div className="docs-label"><Icon name="book" size={15}/><span>Documentation</span><code>{site.version}</code></div><button className="docs-sidebar-search" data-search-open=""><Icon name="search" size={14}/> Search docs </button><nav aria-label="Documentation topics">{groups.map(group=><div key={group} className="docs-nav-group"><span>{group}</span>{docs.filter(d=>d.group===group).map(d=><a href={'/docs/'+d.slug+'/'} className={d.slug===current?'selected':''} aria-current={d.slug===current?'page':undefined} key={d.slug}>{d.title}</a>)}</div>)}</nav><a className="docs-source-link" href={site.repository}>Browse on GitHub <External/></a></aside>;}
-export function DocPage({slug='introduction'}:{slug?:string}){
- const index=docs.findIndex(d=>d.slug===slug),doc=docs[index]||docs[0],prev=docs[index-1],next=docs[index+1];
- return <div className="site docs-site"><Header docSlug={doc.slug}/><div className="docs-layout wrap"><DocsSidebar current={doc.slug}/><main id="main" className="doc-article"><div className="doc-meta"><span>{doc.group}<Icon name="chevron" size={12}/>{doc.title}</span><button data-copy-markdown={doc.slug} aria-label="Copy page as Markdown"><Icon name="copy" size={13}/> Copy page as Markdown</button></div><header><h1>{doc.title}</h1><p>{doc.description}</p></header>{doc.sections.map(s=><section id={s.id} key={s.id} data-doc-section=""><h2><a href={'#'+s.id}>{s.title}<span>#</span></a></h2>{s.paragraphs.map((p,i)=><p key={i}>{p}</p>)}{'items' in s&&s.items?.length&&<ul>{s.items.map((t:string)=><li key={t}>{t}</li>)}</ul>}{'code' in s&&s.code&&<CodeBlock code={s.code}/>} {'image' in s&&s.image&&<Screenshot name={String(s.image)} alt={s.imageAlt||s.title} caption="Actual HTML interface. Sample files; no live NAS connection."/>} {'demo' in s&&s.demo&&<ProductDemo compact/>} {'callout' in s&&s.callout&&<div className="doc-callout"><Icon name="info" size={18}/><p>{s.callout}</p></div>}</section>)}<div className="doc-bottom-note">Project documentation · OpenXplorer {site.version} · <a href="/docs/license/">AGPL-3.0-only</a></div><div className="doc-pagination">{prev?<a href={'/docs/'+prev.slug+'/'}><small>Previous</small><span><Icon name="back" size={16}/>{prev.title}</span></a>:<span/>}{next&&<a href={'/docs/'+next.slug+'/'}><small>Next</small><span>{next.title}<Icon name="arrow" size={16}/></span></a>}</div></main><aside className="docs-toc"><span>On this page</span><nav aria-label="On this page">{doc.sections.map(s=><a key={s.id} href={'#'+s.id}>{s.title}</a>)}</nav><div className="toc-note"><strong>Built in the open.</strong><p>Read, improve and share the project.</p><a href={site.repository}>Get the source <External/></a></div></aside></div><Footer/><GlobalSearch/></div>;
+export function GlobalSearch() {
+  return (
+    <>
+      <dialog className="search-dialog" id="docs-search" aria-label="Search documentation">
+        <div className="search-dialog-top">
+          <Icon name="search" />
+          <input
+            autoComplete="off"
+            id="docs-search-input"
+            aria-label="Search topics"
+            placeholder="Search documentation…"
+          />
+          <button data-search-close="" aria-label="Close search">
+            <kbd>Esc</kbd>
+          </button>
+        </div>
+        <div className="search-results" id="docs-search-results" aria-live="polite" />
+        <footer>Search stays in your browser.　↵ Open result</footer>
+      </dialog>
+      <div className="toast" id="site-toast" role="status" aria-live="polite" />
+    </>
+  );
 }
-export function SourcePage(){return <div className="site"><Header/><main id="main" className="page wrap source-page"><div className="section-intro"><h1>Not just a product.<br/>The whole project.</h1><p>The application, this website, the documentation and the tools to build them. Publicly available under AGPL-3.0-only.</p></div><div className="source-links"><a href={site.repository}><span>Browse the GitHub repository<small>OpenXplorer {site.version} · editable project and build tools</small></span><External/></a></div><div className="details two"><article><h3>What you can do</h3><p>Use the application, study how it works, and modify and redistribute it under the license terms. The full license is included, along with preserved third-party notices.</p><a href="/LICENSE.txt">Read the full AGPL-3.0 license</a></article><article><h3>What you should know</h3><p>This is an independent development project. No warranty is provided. If you distribute or host a modified version, review the corresponding-source obligations in the actual license.</p><a href="/docs/license/">License &amp; source documentation</a></article></div><div className="doc-callout"><Icon name="info" size={18}/><p>The public repository is the preferred corresponding source for the desktop application and this website, including build tools and third-party license notices.</p></div></main><Footer/></div>;}
-export function NotFoundPage(){return <div className="site"><Header/><main id="main" className="page wrap not-found"><h1>Page not found.</h1><p>This address doesn’t point to an OpenXplorer page.</p><a href="/">Go to the homepage</a></main><Footer/></div>;}
+function CodeBlock({ code, label = 'Terminal' }: { code: string; label?: string }) {
+  return (
+    <div className="code-block">
+      <div className="code-heading">
+        <span>
+          <Icon name="terminal" size={13} /> {label}
+        </span>
+        <button data-copy-code="" aria-label="Copy command">
+          <Icon name="copy" size={14} />
+          <span>Copy</span>
+        </button>
+      </div>
+      <pre>
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+export function Home() {
+  return (
+    <div className="site">
+      <Header />
+      <main id="main">
+        <section className="hero">
+          <div className="hero-inner wrap">
+            <div className="hero-copy">
+              <h1>
+                Familiar by design.
+                <br />
+                Built for Linux.
+              </h1>
+              <p className="lead">
+                Browse local folders and SMB shares the way you did on Windows. Type a share path,
+                pin the folders you use, and drag files into the apps that accept them.
+              </p>
+              <div className="hero-actions">
+                <a className="button primary" href={releaseUrl}>
+                  <Icon name="download" size={21} />
+                  Download v{site.version}
+                </a>
+                <a className="text-link" href={site.repository}>
+                  View source <External />
+                </a>
+              </div>
+              <p className="release-note">
+                Zorin OS and compatible Ubuntu or Debian ·{' '}
+                <span className="nowrap">GNU AGPL v3.0</span>
+                <br />
+                Package, checksum, and release notes on GitHub.
+              </p>
+            </div>
+            <ProductTour />
+          </div>
+        </section>
+        <section className="screens wrap" id="screenshots">
+          <div className="section-intro">
+            <h2>
+              Every share.
+              <br />
+              Right beside your files.
+            </h2>
+            <p>
+              Open a NAS share and it sits in the same window as your local folders, with tabs, a
+              breadcrumb for every level, and a details pane. Snapshots the NAS exposes open as
+              read-only previous versions.
+            </p>
+          </div>
+          <Screenshot
+            name="explorer-light"
+            alt="OpenXplorer showing the sample share studio-nas, Projects beside local folders, with Design pinned to Quick access"
+            caption="A sample share, \\studio-nas\Projects, next to local folders. Design is pinned to Quick access."
+          />
+          <Screenshot
+            name="snapshot-tab"
+            alt="A previous version of the sample Launch planning folder, marked with a Previous version tab badge and a read-only banner"
+            caption="A previous version of a folder, opened from the NAS’s snapshots. The tab badge and banner mark it as read-only."
+          />
+        </section>
+        <section className="features wrap" id="features">
+          <div className="section-intro">
+            <h2>
+              A familiar explorer.
+              <br />
+              Native Linux storage.
+            </h2>
+            <p>
+              Shares open through GIO/GVfs, the storage layer your Linux desktop already uses. There
+              is no OpenXplorer account, cloud service or relay between you and your NAS.
+            </p>
+          </div>
+          <div className="details">
+            <article>
+              <h3>Open shares the Windows way</h3>
+              <p>
+                Type <code>{'\\\\studio-nas\\Projects'}</code> or an <code>smb://</code> address
+                into the address bar. Sign-ins are kept per server, in your system keyring or only
+                for this login session.
+              </p>
+              <a href="/docs/network-shares/">Connect your network storage</a>
+            </article>
+            <article>
+              <h3>Drag it where you need it</h3>
+              <p>
+                Drag files into compatible editors and attachment fields, onto a folder to copy
+                them, or into Quick access to pin a folder. The originals stay where they are.
+              </p>
+              <a href="/docs/interface/#file-drag-drop">File dragging &amp; compatibility</a>
+            </article>
+            <article>
+              <h3>Find the file. Keep the path.</h3>
+              <p>
+                Opt folders into a local filename index, then search a disk or a share and open the
+                real location, not a copy in a results list.
+              </p>
+              <a href="/docs/search-indexing/">How cached search works</a>
+            </article>
+          </div>
+        </section>
+        <section className="open-source wrap" id="open-source">
+          <div>
+            <h2>
+              Open source.
+              <br />
+              Open for contributions.
+            </h2>
+            <p>
+              Read the code, build the package, or report something that needs attention. The app,
+              this website, the documentation and the build tools share one public repository.
+            </p>
+          </div>
+          <div className="source-links">
+            <a href={site.repository}>
+              Browse the source <External />
+            </a>
+            <a href="/docs/development/">
+              Build it yourself <span aria-hidden="true">→</span>
+            </a>
+            <a href={issuesUrl}>
+              Report an issue <External />
+            </a>
+          </div>
+        </section>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+export function DocsSidebar({ current }: { current: string }) {
+  return (
+    <aside className="docs-sidebar">
+      <div className="docs-label">
+        <Icon name="book" size={15} />
+        <span>Documentation</span>
+        <code>{site.version}</code>
+      </div>
+      <button className="docs-sidebar-search" data-search-open="">
+        <Icon name="search" size={14} /> Search docs{' '}
+      </button>
+      <nav aria-label="Documentation topics">
+        {groups.map(group => (
+          <div key={group} className="docs-nav-group">
+            <span>{group}</span>
+            {docs
+              .filter(d => d.group === group)
+              .map(d => (
+                <a
+                  href={'/docs/' + d.slug + '/'}
+                  className={d.slug === current ? 'selected' : ''}
+                  aria-current={d.slug === current ? 'page' : undefined}
+                  key={d.slug}
+                >
+                  {d.title}
+                </a>
+              ))}
+          </div>
+        ))}
+      </nav>
+      <a className="docs-source-link" href={site.repository}>
+        Browse on GitHub <External />
+      </a>
+    </aside>
+  );
+}
+export function DocPage({ slug = 'introduction' }: { slug?: string }) {
+  const index = docs.findIndex(d => d.slug === slug),
+    doc = docs[index] || docs[0],
+    prev = docs[index - 1],
+    next = docs[index + 1];
+  return (
+    <div className="site docs-site">
+      <Header docSlug={doc.slug} />
+      <div className="docs-layout wrap">
+        <DocsSidebar current={doc.slug} />
+        <main id="main" className="doc-article">
+          <div className="doc-meta">
+            <span>
+              {doc.group}
+              <Icon name="chevron" size={12} />
+              {doc.title}
+            </span>
+            <button data-copy-markdown={doc.slug} aria-label="Copy page as Markdown">
+              <Icon name="copy" size={13} /> Copy page as Markdown
+            </button>
+          </div>
+          <header>
+            <h1>{doc.title}</h1>
+            <p>{doc.description}</p>
+          </header>
+          {doc.sections.map(s => (
+            <section id={s.id} key={s.id} data-doc-section="">
+              <h2>
+                <a href={'#' + s.id}>
+                  {s.title}
+                  <span>#</span>
+                </a>
+              </h2>
+              {s.paragraphs.map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
+              {'items' in s && s.items?.length && (
+                <ul>
+                  {s.items.map((t: string) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+              )}
+              {'code' in s && s.code && <CodeBlock code={s.code} />}{' '}
+              {'image' in s && s.image && (
+                <Screenshot
+                  name={String(s.image)}
+                  alt={s.imageAlt || s.title}
+                  caption="Actual HTML interface. Sample files; no live NAS connection."
+                />
+              )}{' '}
+              {'demo' in s && s.demo && <ProductDemo compact />}{' '}
+              {'callout' in s && s.callout && (
+                <div className="doc-callout">
+                  <Icon name="info" size={18} />
+                  <p>{s.callout}</p>
+                </div>
+              )}
+            </section>
+          ))}
+          <div className="doc-bottom-note">
+            Project documentation · OpenXplorer {site.version} ·{' '}
+            <a href="/docs/license/">AGPL-3.0-only</a>
+          </div>
+          <div className="doc-pagination">
+            {prev ? (
+              <a href={'/docs/' + prev.slug + '/'}>
+                <small>Previous</small>
+                <span>
+                  <Icon name="back" size={16} />
+                  {prev.title}
+                </span>
+              </a>
+            ) : (
+              <span />
+            )}
+            {next && (
+              <a href={'/docs/' + next.slug + '/'}>
+                <small>Next</small>
+                <span>
+                  {next.title}
+                  <Icon name="arrow" size={16} />
+                </span>
+              </a>
+            )}
+          </div>
+        </main>
+        <aside className="docs-toc">
+          <span>On this page</span>
+          <nav aria-label="On this page">
+            {doc.sections.map(s => (
+              <a key={s.id} href={'#' + s.id}>
+                {s.title}
+              </a>
+            ))}
+          </nav>
+          <div className="toc-note">
+            <strong>Built in the open.</strong>
+            <p>Read, improve and share the project.</p>
+            <a href={site.repository}>
+              Get the source <External />
+            </a>
+          </div>
+        </aside>
+      </div>
+      <Footer />
+      <GlobalSearch />
+    </div>
+  );
+}
+export function SourcePage() {
+  return (
+    <div className="site">
+      <Header />
+      <main id="main" className="page wrap source-page">
+        <div className="section-intro">
+          <h1>
+            Not just a product.
+            <br />
+            The whole project.
+          </h1>
+          <p>
+            The application, this website, the documentation and the tools to build them. Publicly
+            available under AGPL-3.0-only.
+          </p>
+        </div>
+        <div className="source-links">
+          <a href={site.repository}>
+            <span>
+              Browse the GitHub repository
+              <small>OpenXplorer {site.version} · editable project and build tools</small>
+            </span>
+            <External />
+          </a>
+        </div>
+        <div className="details two">
+          <article>
+            <h3>What you can do</h3>
+            <p>
+              Use the application, study how it works, and modify and redistribute it under the
+              license terms. The full license is included, along with preserved third-party notices.
+            </p>
+            <a href="/LICENSE.txt">Read the full AGPL-3.0 license</a>
+          </article>
+          <article>
+            <h3>What you should know</h3>
+            <p>
+              This is an independent development project. No warranty is provided. If you distribute
+              or host a modified version, review the corresponding-source obligations in the actual
+              license.
+            </p>
+            <a href="/docs/license/">License &amp; source documentation</a>
+          </article>
+        </div>
+        <div className="doc-callout">
+          <Icon name="info" size={18} />
+          <p>
+            The public repository is the preferred corresponding source for the desktop application
+            and this website, including build tools and third-party license notices.
+          </p>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+export function NotFoundPage() {
+  return (
+    <div className="site">
+      <Header />
+      <main id="main" className="page wrap not-found">
+        <h1>Page not found.</h1>
+        <p>This address doesn’t point to an OpenXplorer page.</p>
+        <a href="/">Go to the homepage</a>
+      </main>
+      <Footer />
+    </div>
+  );
+}

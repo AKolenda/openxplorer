@@ -5,15 +5,23 @@
 (() => {
   'use strict';
   const native = window.__OPENXPLORER_NATIVE__ === true;
-  let theme = native ? (window.__OPENXPLORER_BOOT__?.theme || 'system') : 'dark';
+  let theme = native ? window.__OPENXPLORER_BOOT__?.theme || 'system' : 'dark';
   if (!native) {
     try {
-      const saved = JSON.parse(localStorage.getItem('winspace-preview-v3') || localStorage.getItem('winspace-preview-v2') || '{}');
-      if (['light', 'dark', 'system'].includes(saved.preferences?.theme)) theme = saved.preferences.theme;
-    } catch (_) { /* file:// or opaque browser origins may disallow storage */ }
+      const saved = JSON.parse(
+        localStorage.getItem('winspace-preview-v3') ||
+          localStorage.getItem('winspace-preview-v2') ||
+          '{}'
+      );
+      if (['light', 'dark', 'system'].includes(saved.preferences?.theme))
+        theme = saved.preferences.theme;
+    } catch (_) {
+      /* file:// or opaque browser origins may disallow storage */
+    }
   }
-  const systemDark = native ? !!window.__OPENXPLORER_BOOT__?.systemDark :
-    !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const systemDark = native
+    ? !!window.__OPENXPLORER_BOOT__?.systemDark
+    : !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
   const dark = theme === 'dark' || (theme === 'system' && systemDark);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   window.__OPENXPLORER_FIRST_THEME__ = theme;
