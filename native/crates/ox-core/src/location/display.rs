@@ -87,7 +87,7 @@ impl LocationContext {
         if let Some(place) = VirtualPlace::from_uri(uri) {
             return place.title().to_string();
         }
-        if let Some(Ok(folder)) = VirtualFolder::parse(uri) {
+        if let Ok(Some(folder)) = VirtualFolder::parse(uri) {
             return folder.segments.last().cloned().unwrap_or_default();
         }
         let Some(parts) = location_parts(uri) else {
@@ -121,7 +121,7 @@ impl LocationContext {
         if let Some(place) = VirtualPlace::from_uri(uri) {
             return place.title().to_string();
         }
-        if let Some(Ok(folder)) = VirtualFolder::parse(uri) {
+        if let Ok(Some(folder)) = VirtualFolder::parse(uri) {
             return with_subpath(folder.place.title(), &folder.segments.join("/"));
         }
         let Some(parts) = location_parts(uri) else {
@@ -145,7 +145,7 @@ impl LocationContext {
         if let Some(place) = VirtualPlace::from_uri(uri) {
             return vec![Crumb::new(place.title(), place.uri())];
         }
-        if let Some(Ok(folder)) = VirtualFolder::parse(uri) {
+        if let Ok(Some(folder)) = VirtualFolder::parse(uri) {
             return virtual_crumbs(&folder);
         }
         self.folder_crumbs(uri)
@@ -213,8 +213,9 @@ pub fn parent_location(uri: &str) -> Option<String> {
     if VirtualPlace::from_uri(uri).is_some() {
         return None;
     }
-    if let Some(folder) = VirtualFolder::parse(uri) {
-        let mut folder = folder.ok()?;
+    // A malformed address inside a virtual folder has no parent either.
+    let virtual_folder = VirtualFolder::parse(uri).ok()?;
+    if let Some(mut folder) = virtual_folder {
         folder.segments.pop()?;
         return Some(folder.uri());
     }

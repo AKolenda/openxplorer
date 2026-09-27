@@ -63,16 +63,12 @@ pub use virtual_place::{
     SETTINGS_URI, TRASH_URI,
 };
 
-/// GIO's schemes for phones, cameras and iOS devices. Their authorities can
-/// contain brackets (`mtp://[usb:001,002]/`), which ordinary URL parsers
-/// reject.
-pub const DEVICE_SCHEMES: [&str; 3] = ["mtp", "gphoto2", "afc"];
-
 /// A user-facing validation error. The message is shown as-is.
 ///
 /// Where the Rust port refuses what a `raise` in `desktop/core.py` refuses,
 /// the message is the Python app's, word for word; `location_python.rs`
-/// checks every one of them.
+/// checks every one of them. Where Python's standard library refused an
+/// address in its own words, the message is in the app's wording instead.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{message}")]
 pub struct LocationError {
@@ -81,8 +77,9 @@ pub struct LocationError {
 }
 
 impl LocationError {
-    /// An error with the given user-facing message.
-    pub fn new(message: impl Into<String>) -> Self {
+    /// An error with the given user-facing message. Only this crate
+    /// creates location errors, so every message is one of its own.
+    pub(crate) fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
         }

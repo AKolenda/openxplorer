@@ -124,7 +124,9 @@ impl VirtualPlace {
         if let Some(page) = Self::page_from_uri(uri) {
             return Some(page);
         }
-        let folder = VirtualFolder::parse(uri)?.ok()?;
+        let Ok(Some(folder)) = VirtualFolder::parse(uri) else {
+            return None;
+        };
         folder.segments.is_empty().then_some(folder.place)
     }
 
@@ -196,8 +198,8 @@ pub fn normalise_navigation(address: &str, base: Option<&str>, home: &Path) -> R
     if let Some(place) = VirtualPlace::from_uri(trimmed) {
         return Ok(place.uri().to_string());
     }
-    if let Some(folder) = VirtualFolder::parse(trimmed) {
-        return folder.map(|folder| folder.uri());
+    if let Some(folder) = VirtualFolder::parse(trimmed)? {
+        return Ok(folder.uri());
     }
     normalise_location(address, base, home)
 }
@@ -215,14 +217,23 @@ pub(crate) struct VirtualFolder {
 impl VirtualFolder {
     /// Splits a `trash:`, `recent:` or `network:` location.
     ///
-    /// `None` when `uri` has another scheme. `Some(Err(..))` when it is in
-    /// a virtual folder but cannot be canonicalised: navigation then shows
-    /// the error instead of treating `uri` as a folder path. To ask only
-    /// whether `uri` is virtual, use [`is_in_virtual_folder`].
-    pub(crate) fn parse(uri: &str) -> Option<Result<Self, LocationError>> {
-        let (scheme, after_scheme) = split_scheme(uri)?;
-        let place = VirtualPlace::from_gio_scheme(&scheme)?;
-        Some(Self::parse_path(place, after_scheme))
+    /// `Ok(None)` when `uri` has another scheme. To ask only whether `uri`
+    /// is virtual, use [`is_in_virtual_folder`].
+    ///
+    /// # Errors
+    ///
+    /// When `uri` is in a virtual folder but cannot be canonicalised: it
+    /// has a query, fragment or server name, or a component that does not
+    /// decode or decodes to a control character. Navigation then shows the
+    /// error instead of treating `uri` as a folder path.
+    pub(crate) fn parse(uri: &str) -> Result<Option<Self>, LocationError> {
+        let Some((scheme, after_scheme)) = split_scheme(uri) else {
+            return Ok(None);
+        };
+        let Some(place) = VirtualPlace::from_gio_scheme(&scheme) else {
+            return Ok(None);
+        };
+        Self::parse_path(place, after_scheme).map(Some)
     }
 
     /// The folder of `after_scheme`, the text after `trash:`, `recent:` or

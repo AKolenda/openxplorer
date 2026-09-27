@@ -165,9 +165,7 @@ fn resolve_dot_segments(path: &str, root: PosixRoot) -> Vec<&str> {
     for component in path.split('/') {
         match component {
             "" | "." => {}
-            ".." if root == PosixRoot::Relative && matches!(components.last(), None | Some(&"..")) => {
-                components.push(component);
-            }
+            ".." if keeps_unresolved_parent(root, &components) => components.push(component),
             ".." => {
                 components.pop();
             }
@@ -175,6 +173,13 @@ fn resolve_dot_segments(path: &str, root: PosixRoot) -> Vec<&str> {
         }
     }
     components
+}
+
+/// `posixpath.normpath` keeps a `..` in a relative path when nothing but
+/// other `..`s is left to remove. At an absolute root it drops the `..`.
+fn keeps_unresolved_parent(root: PosixRoot, components: &[&str]) -> bool {
+    let nothing_to_remove = matches!(components.last(), None | Some(&".."));
+    root == PosixRoot::Relative && nothing_to_remove
 }
 
 /// Removes at most one trailing `/`, as the web UI's `replace(/\/$/, '')`.

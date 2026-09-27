@@ -10,11 +10,16 @@
 use std::borrow::Cow;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use super::{LocationError, DEVICE_SCHEMES};
+use super::LocationError;
 
 /// Characters `urlsplit` removes wherever they occur (Python's
 /// `_UNSAFE_URL_BYTES_TO_REMOVE`).
 const UNSAFE_URL_CHARACTERS: [char; 3] = ['\t', '\r', '\n'];
+
+/// GIO's schemes for phones, cameras and iOS devices (`DEVICE_SCHEMES` in
+/// `core.py`). Their authorities can contain brackets
+/// (`mtp://[usb:001,002]/`), which ordinary URL parsers reject.
+const DEVICE_SCHEMES: [&str; 3] = ["mtp", "gphoto2", "afc"];
 
 /// What kind of place the scheme of a location names; see
 /// [`location_kind`](super::location_kind).
@@ -160,8 +165,9 @@ impl LocationParts {
 ///
 /// # Errors
 ///
-/// A [`LocationError`] with Python's wording for unbalanced or invalid
-/// bracketed hosts.
+/// A [`LocationError`] in the app's wording for unbalanced or misplaced
+/// brackets and for a bracketed host that is neither an IPv6 address nor
+/// an RFC 3986 future address: the locations Python's `urlsplit` refuses.
 pub fn split_location(location: &str) -> Result<LocationParts, LocationError> {
     let device_parts = DeviceUriMatch::parse(location).map(DeviceUriMatch::to_parts);
     match device_parts {
@@ -183,7 +189,8 @@ pub(crate) struct DeviceUriMatch<'a> {
 }
 
 impl<'a> DeviceUriMatch<'a> {
-    /// Matches any scheme; callers check it against [`DEVICE_SCHEMES`].
+    /// Matches any scheme; callers check that the scheme names a
+    /// [`LocationKind::Device`].
     pub(crate) fn parse(uri: &'a str) -> Option<Self> {
         let (scheme, after_scheme) = uri.split_once("://")?;
         if !is_scheme(scheme) || after_scheme.contains(['?', '#']) {
@@ -242,11 +249,11 @@ pub(crate) fn split_url(location: &str) -> Result<LocationParts, LocationError> 
         Some((scheme, after_scheme)) => (scheme, after_scheme),
         None => (String::new(), cleaned.as_ref()),
     };
-    let (authority, after_authority) = split_netloc(after_scheme);
+    let (authority, after_authority) = split_authority(after_scheme);
     check_brackets(authority)?;
     let (before_fragment, fragment) = partition(after_authority, '#');
     let (path, query) = partition(before_fragment, '?');
-    check_nfkc_netloc(authority)?;
+    check_nfkc_authority(authority)?;
     Ok(LocationParts {
         scheme,
         authority: authority.to_string(),
@@ -270,7 +277,7 @@ fn strip_ignored_url_characters(location: &str) -> Cow<'_, str> {
 /// Python's `_splitnetloc`: the authority after a leading `//`, up to the
 /// first `/`, `?` or `#`, and the text after it. Without `//` the
 /// authority is empty.
-fn split_netloc(text: &str) -> (&str, &str) {
+fn split_authority(text: &str) -> (&str, &str) {
     let Some(after_slashes) = text.strip_prefix("//") else {
         return ("", text);
     };
@@ -279,30 +286,30 @@ fn split_netloc(text: &str) -> (&str, &str) {
 }
 
 /// `urlsplit`'s bracket rules: balanced brackets, and then
-/// [`check_bracketed_netloc`].
+/// [`check_bracketed_authority`].
 fn check_brackets(authority: &str) -> Result<(), LocationError> {
     let has_open = authority.contains('[');
     let has_close = authority.contains(']');
     if has_open != has_close {
-        return Err(invalid_ipv6_url());
+        return Err(misplaced_brackets());
     }
     if !has_open {
         return Ok(());
     }
-    check_bracketed_netloc(authority)
+    check_bracketed_authority(authority)
 }
 
 /// Python's `_check_bracketed_netloc`: nothing before `[`, only `:port`
 /// after `]`, and an IPv6 address or an RFC 3986 future address (`v1.x`)
 /// inside.
-fn check_bracketed_netloc(authority: &str) -> Result<(), LocationError> {
+fn check_bracketed_authority(authority: &str) -> Result<(), LocationError> {
     let host_info = after_user_info(authority);
     let host = match host_info.split_once('[') {
         Some((before_bracket, bracketed)) => {
             let (host, after_bracket) = partition(bracketed, ']');
             let has_only_port_after = after_bracket.is_empty() || after_bracket.starts_with(':');
             if !before_bracket.is_empty() || !has_only_port_after {
-                return Err(invalid_ipv6_url());
+                return Err(misplaced_brackets());
             }
             host
         }
@@ -313,20 +320,25 @@ fn check_bracketed_netloc(authority: &str) -> Result<(), LocationError> {
     check_bracketed_host(host)
 }
 
-/// Python's `_check_bracketed_host`.
+/// Python's `_check_bracketed_host`. It refuses the same hosts, but in the
+/// app's wording rather than the standard library's.
 fn check_bracketed_host(host: &str) -> Result<(), LocationError> {
     if host.starts_with('v') {
         if !is_ip_future_address(host) {
-            return Err(LocationError::new("IPvFuture address is invalid"));
+            return Err(LocationError::new(format!(
+                "The server name “{host}” in brackets is not a valid IPvFuture address."
+            )));
         }
         return Ok(());
     }
     if host.parse::<Ipv4Addr>().is_ok() {
-        return Err(LocationError::new("An IPv4 address cannot be in brackets"));
+        return Err(LocationError::new(format!(
+            "Enter the IPv4 address “{host}” without brackets."
+        )));
     }
     if !is_ipv6_address(host) {
         return Err(LocationError::new(format!(
-            "{host:?} does not appear to be an IPv4 or IPv6 address"
+            "The server name “{host}” in brackets is not an IPv6 address."
         )));
     }
     Ok(())
@@ -334,11 +346,14 @@ fn check_bracketed_host(host: &str) -> Result<(), LocationError> {
 
 /// `\Av[a-fA-F0-9]+\..+\z`: an RFC 3986 future address such as `v1.x`.
 fn is_ip_future_address(host: &str) -> bool {
-    let Some((version, rest)) = host.strip_prefix('v').and_then(|future| future.split_once('.')) else {
+    let Some(future) = host.strip_prefix('v') else {
+        return false;
+    };
+    let Some((version, address)) = future.split_once('.') else {
         return false;
     };
     let is_hex_version = !version.is_empty() && version.bytes().all(|byte| byte.is_ascii_hexdigit());
-    is_hex_version && !rest.is_empty()
+    is_hex_version && !address.is_empty()
 }
 
 /// Python's `ipaddress.IPv6Address`, which accepts a non-empty zone such as
@@ -355,7 +370,7 @@ fn is_ipv6_address(host: &str) -> bool {
 /// Python's `_checknetloc`: a non-ASCII authority must not gain `/`, `?`,
 /// `#`, `@` or `:` under NFKC normalisation, because it would then split
 /// differently once a client converts it to ASCII.
-fn check_nfkc_netloc(authority: &str) -> Result<(), LocationError> {
+fn check_nfkc_authority(authority: &str) -> Result<(), LocationError> {
     if authority.is_ascii() {
         return Ok(());
     }
@@ -385,9 +400,10 @@ fn partition(text: &str, separator: char) -> (&str, &str) {
     text.split_once(separator).unwrap_or((text, ""))
 }
 
-/// Python's wording for unbalanced or misplaced brackets.
-fn invalid_ipv6_url() -> LocationError {
-    LocationError::new("Invalid IPv6 URL")
+/// The refusal of unbalanced or misplaced brackets, which Python words
+/// "Invalid IPv6 URL".
+fn misplaced_brackets() -> LocationError {
+    LocationError::new("Put only an IPv6 address in brackets, as in smb://[fe80::1]/share.")
 }
 
 #[cfg(test)]
@@ -463,6 +479,48 @@ mod tests {
             "smb://[::1]x/",
         ] {
             assert!(split_location(bad).is_err(), "{bad} should be rejected");
+        }
+    }
+
+    /// A location with a bracket mistake and the message that refuses it.
+    struct BracketRefusalCase {
+        location: &'static str,
+        message: &'static str,
+    }
+
+    /// One case per bracket refusal. Python's standard library words these
+    /// itself, so the fixtures record them as `rejected`; this pins the
+    /// app's wording, which quotes the host as text rather than as a Rust
+    /// string literal.
+    const BRACKET_REFUSALS: [BracketRefusalCase; 5] = [
+        BracketRefusalCase {
+            location: "smb://[nas/share",
+            message: "Put only an IPv6 address in brackets, as in smb://[fe80::1]/share.",
+        },
+        BracketRefusalCase {
+            location: "smb://x[::1]/",
+            message: "Put only an IPv6 address in brackets, as in smb://[fe80::1]/share.",
+        },
+        BracketRefusalCase {
+            location: "smb://[nas]/a",
+            message: "The server name “nas” in brackets is not an IPv6 address.",
+        },
+        BracketRefusalCase {
+            location: "smb://[1.2.3.4]/",
+            message: "Enter the IPv4 address “1.2.3.4” without brackets.",
+        },
+        BracketRefusalCase {
+            location: "smb://[v1.]/share",
+            message: "The server name “v1.” in brackets is not a valid IPvFuture address.",
+        },
+    ];
+
+    #[test]
+    fn bracket_mistakes_are_refused_in_the_app_wording() {
+        for case in &BRACKET_REFUSALS {
+            let result = split_location(case.location);
+            let refusal = result.as_ref().map_err(LocationError::message);
+            assert_eq!(refusal, Err(case.message), "{}", case.location);
         }
     }
 

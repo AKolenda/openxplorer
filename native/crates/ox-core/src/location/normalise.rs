@@ -13,12 +13,12 @@ use std::path::Path;
 
 use percent_encoding::percent_encode;
 
-use super::parts::{split_location, split_scheme, split_url, DeviceUriMatch, LocationParts};
+use super::parts::{split_location, split_scheme, split_url, DeviceUriMatch, LocationKind, LocationParts};
 use super::text::{
     contains_python_space, has_control_character, normalise_posix_path, python_strip, quote_component,
     quote_path, unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,
 };
-use super::{LocationError, DEVICE_SCHEMES};
+use super::LocationError;
 
 /// Longest accepted device authority, in characters (Python's `len()`).
 const MAX_DEVICE_AUTHORITY_CHARS: usize = 512;
@@ -69,12 +69,12 @@ pub fn normalise_location(address: &str, base: Option<&str>, home: &Path) -> Res
             "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share.",
         ));
     }
-    match split_scheme(&address) {
-        None => normalise_plain_path(&address, base, home),
-        Some((scheme, _)) if DEVICE_SCHEMES.contains(&scheme.as_str()) => {
-            normalise_device_location(&address, &scheme)
-        }
-        Some(_) => normalise_url(&address),
+    let Some((scheme, _)) = split_scheme(&address) else {
+        return normalise_plain_path(&address, base, home);
+    };
+    match LocationKind::from_scheme(&scheme) {
+        LocationKind::Device => normalise_device_location(&address, &scheme),
+        LocationKind::Local | LocationKind::Smb | LocationKind::Other => normalise_url(&address),
     }
 }
 
@@ -197,7 +197,10 @@ fn normalise_plain_path(address: &str, base: Option<&str>, home: &Path) -> Resul
         return normalise_location(&joined, None, home);
     }
     let base_path = match base {
-        Some(base) if base.starts_with("file:") => unquote_lossy(&split_url(base)?.path),
+        Some(base) if base.starts_with("file:") => {
+            let base_parts = split_url(base)?;
+            unquote_lossy(&base_parts.path)
+        }
         _ => home.to_string_lossy().into_owned(),
     };
     local_path_uri(&join_path(&base_path, &expanded))
