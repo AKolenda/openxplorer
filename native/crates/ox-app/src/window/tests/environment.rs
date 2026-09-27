@@ -78,7 +78,10 @@ fn this_pc_lists_quick_access_devices_and_network_locations() {
         .navigate(Page::Network.uri())
         .expect("the Network page");
     test.wait_for_listing("the Network page");
-    assert_eq!(landing::section_titles(landing), ["Connected & saved locations"]);
+    assert_eq!(
+        landing::section_titles(landing),
+        ["Discovered servers", "Connected & saved locations"]
+    );
 }
 
 #[gtk::test]

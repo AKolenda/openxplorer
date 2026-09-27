@@ -56,7 +56,7 @@ const fn command(action: &'static str, milestone: Milestone) -> UnportedCommand 
 }
 
 /// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 19] = [
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 20] = [
     command("new-folder", Milestone::FileOperations),
     command("new-text-document", Milestone::FileOperations),
     command("new-file", Milestone::FileOperations),
@@ -71,6 +71,7 @@ pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 19] = [
     command("rename", Milestone::FileOperations),
     command("trash", Milestone::FileOperations),
     command("map-network-location", Milestone::NetworkAndDevices),
+    command("discover-servers", Milestone::NetworkAndDevices),
     command("cache-folder", Milestone::SearchAndMetadata),
     command("settings", Milestone::PreferencesAndSessions),
     command("license", Milestone::PreferencesAndSessions),

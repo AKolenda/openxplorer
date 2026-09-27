@@ -105,7 +105,7 @@ fn view_stack(details_scroll: &gtk::ScrolledWindow, grid_scroll: &gtk::ScrolledW
 
 /// The landing page's contents and the scroller around them.
 fn landing_page() -> (gtk::Box, gtk::ScrolledWindow) {
-    let landing = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    let landing = gtk::Box::new(gtk::Orientation::Vertical, 0);
     landing.add_css_class("page");
     let landing_scroll = scrolled(&landing);
     landing_scroll.add_css_class("landing");

@@ -154,6 +154,7 @@ impl BrowserWindow {
             }),
             with_text("go-to", BrowserWindow::navigate_or_report),
             with_text("mount-volume", BrowserWindow::mount_volume),
+            with_text("open-server-address", BrowserWindow::open_server_address),
         ]);
     }
 

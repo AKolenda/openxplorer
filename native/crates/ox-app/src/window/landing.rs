@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The This PC and Network landing pages.
 //!
-//! Ports the `pc:` branch of `renderLanding` and `renderNetwork` in
-//! `desktop/ui/app.js`. This PC lists Quick access, then Devices and drives
-//! (Local Disk, drives and devices with a capacity bar, unmounted volumes
-//! that connect on click), then the saved network locations with their
-//! state. Network lists every connected and saved location. Server
-//! discovery and the manual address box arrive with the discovery service.
+//! Ports the `pc:` branch of `renderLanding` in `desktop/ui/app.js`, and
+//! draws the title of every page ([`super::network_page`] draws the rest
+//! of Network). This PC lists Quick access (cards in a stretching grid,
+//! [`super::card_grid`]), then Devices and drives (Local Disk, drives and
+//! devices with a capacity bar, unmounted volumes that connect on click),
+//! then the saved network locations with their state.
 //!
 //! Cards activate `win.go-to` or `win.mount-volume`; a middle-click opens a
 //! folder in a background tab.
@@ -16,7 +16,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
 use ox_core::location::LocationContext;
-use ox_core::places::{NetworkLocation, Place};
+use ox_core::places::Place;
 
 use crate::icons::{self, ArtKind, Glyph};
 use crate::locations::Page;
@@ -24,7 +24,11 @@ use crate::places::{Places, SavedShare};
 use crate::theme::Appearance;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
-use super::gestures;
+use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
+use super::{gestures, network_page, unported};
+
+/// The action of the "Map network location" heading button.
+const MAP_NETWORK_ACTION: &str = "win.map-network-location";
 
 /// Colour of the server glyph on saved-share cards (`im.style.color`).
 const SHARE_GLYPH_COLOR: &str = "#4b96c0";
@@ -50,7 +54,8 @@ fn label(text: &str, css_class: &str) -> gtk::Label {
         .build()
 }
 
-fn section_title(text: &str, glyph: Glyph) -> gtk::Box {
+/// A section heading: a glyph and a bold title.
+pub(super) fn section_title(text: &str, glyph: Glyph) -> gtk::Box {
     let title = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     title.add_css_class("section-title");
     title.append(&icons::glyph(glyph, 14));
@@ -58,19 +63,8 @@ fn section_title(text: &str, glyph: Glyph) -> gtk::Box {
     title
 }
 
-fn card_grid(max_per_line: u32) -> gtk::FlowBox {
-    gtk::FlowBox::builder()
-        .selection_mode(gtk::SelectionMode::None)
-        .column_spacing(12)
-        .row_spacing(10)
-        .min_children_per_line(1)
-        .max_children_per_line(max_per_line)
-        .homogeneous(true)
-        .build()
-}
-
 /// A card button that opens `uri`.
-fn location_card(css_class: &str, uri: &str, content: &gtk::Box) -> gtk::Button {
+pub(super) fn location_card(css_class: &str, uri: &str, content: &gtk::Box) -> gtk::Button {
     let card = gtk::Button::builder()
         .child(content)
         .css_classes([css_class])
@@ -81,14 +75,20 @@ fn location_card(css_class: &str, uri: &str, content: &gtk::Box) -> gtk::Button 
     card
 }
 
-fn texts(name: &str, subtitle: &str) -> gtk::Box {
+/// A card's name above `subtitle`.
+fn texts_with(name: &str, subtitle: &gtk::Label) -> gtk::Box {
     let texts = gtk::Box::new(gtk::Orientation::Vertical, 4);
     texts.set_hexpand(true);
     texts.set_valign(gtk::Align::Center);
     texts.add_css_class("drive-info");
     texts.append(&label(name, "card-name"));
-    texts.append(&label(subtitle, "card-sub"));
+    texts.append(subtitle);
     texts
+}
+
+/// A card's name above a subtitle that ends in "…" when it is too long.
+pub(super) fn texts(name: &str, subtitle: &str) -> gtk::Box {
+    texts_with(name, &label(subtitle, "card-sub"))
 }
 
 fn quick_card(place: &Place, drawing: Drawing) -> gtk::Button {
@@ -100,15 +100,22 @@ fn quick_card(place: &Place, drawing: Drawing) -> gtk::Button {
     };
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 15);
     content.append(&icons::art_image(art, 43, drawing.appearance, drawing.scale));
-    content.append(&texts(&place.label, subtitle));
+    // "Stored on this PC" is never cut short: in a narrow card it runs
+    // into the padding, as `.quick-card .card-sub` lets it.
+    let whole_subtitle = gtk::Label::builder()
+        .label(subtitle)
+        .xalign(0.0)
+        .css_classes(["card-sub"])
+        .build();
+    content.append(&texts_with(&place.label, &whole_subtitle));
     location_card("quick-card", &place.uri, &content)
 }
 
 fn quick_access(body: &gtk::Box, places: &Places, drawing: Drawing) {
     body.append(&section_title("Quick access", Glyph::Pin));
-    let cards = card_grid(4);
+    let cards = card_grid(QUICK_GRID);
     for place in &places.quick_access {
-        cards.insert(&quick_card(place, drawing), -1);
+        cards.append(&quick_card(place, drawing));
     }
     body.append(&cards);
 }
@@ -194,10 +201,10 @@ fn local_disk() -> VolumeRow {
 
 fn devices_and_drives(body: &gtk::Box, places: &Places, locations: &LocationContext) {
     body.append(&section_title("Devices and drives", Glyph::Drive));
-    let cards = card_grid(3);
+    let cards = card_grid(DRIVE_GRID);
     let drives = std::iter::once(local_disk()).chain(places.drives.iter().cloned());
     for row in drives {
-        cards.insert(&drive_card(&row, locations), -1);
+        cards.append(&drive_card(&row, locations));
     }
     body.append(&cards);
 }
@@ -226,12 +233,26 @@ fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::But
     location_card("drive-card", &bookmark.uri, &content)
 }
 
+/// "Map network location" at the right of the Network locations heading,
+/// disabled until the connect dialog is ported.
+fn map_network_button() -> gtk::Button {
+    gtk::Button::builder()
+        .label("Map network location")
+        .action_name(MAP_NETWORK_ACTION)
+        .tooltip_text(unported::tooltip(MAP_NETWORK_ACTION, "Map network location"))
+        .hexpand(true)
+        .halign(gtk::Align::End)
+        .build()
+}
+
 /// The saved network locations with their state (`shares()` in app.js).
 fn saved_shares(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&section_title("Network locations", Glyph::Network));
-    let cards = card_grid(3);
+    let title = section_title("Network locations", Glyph::Network);
+    title.append(&map_network_button());
+    body.append(&title);
+    let cards = card_grid(DRIVE_GRID);
     for share in &places.saved_shares {
-        cards.insert(&saved_share_card(share, locations), -1);
+        cards.append(&saved_share_card(share, locations));
     }
     body.append(&cards);
     if places.saved_shares.is_empty() {
@@ -243,26 +264,6 @@ fn saved_shares(body: &gtk::Box, places: &Places, locations: &LocationContext) {
             .build();
         body.append(&empty);
     }
-}
-
-fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk::Button {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 15);
-    content.append(&icons::glyph(Glyph::Network, 34));
-    content.append(&texts(
-        &location.label,
-        &locations.display_location(&location.uri),
-    ));
-    location_card("drive-card", &location.uri, &content)
-}
-
-/// Every connected, saved and visited network location (`renderNetwork`).
-fn connected_and_saved(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&section_title("Connected & saved locations", Glyph::Pin));
-    let cards = card_grid(3);
-    for location in &places.network {
-        cards.insert(&network_card(location, locations), -1);
-    }
-    body.append(&cards);
 }
 
 fn page_header(body: &gtk::Box, page: Page) {
@@ -299,7 +300,7 @@ pub(super) fn render(
             devices_and_drives(body, places, locations);
             saved_shares(body, places, locations);
         }
-        Page::Network => connected_and_saved(body, places, locations),
+        Page::Network => network_page::render(body, places, locations),
     }
 }
 
@@ -310,8 +311,10 @@ pub(super) fn section_titles(body: &gtk::Box) -> Vec<String> {
     let mut child = body.first_child();
     while let Some(widget) = child {
         if widget.has_css_class("section-title") {
+            // The glyph, then the title's label.
             let text = widget
-                .last_child()
+                .first_child()
+                .and_then(|glyph| glyph.next_sibling())
                 .and_downcast::<gtk::Label>()
                 .map(|label| label.text().to_string());
             titles.extend(text);

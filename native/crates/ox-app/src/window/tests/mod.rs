@@ -14,6 +14,7 @@ mod command_bar;
 mod environment;
 mod geometry;
 mod input;
+mod landing_pages;
 mod listing;
 mod opening;
 mod panes_layout;

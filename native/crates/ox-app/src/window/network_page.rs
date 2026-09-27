@@ -1,0 +1,180 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! The Network landing page.
+//!
+//! Ports `renderNetwork` in `desktop/ui/app.js`: the "Computers & network
+//! storage" banner with Discover servers, the server address field with
+//! Open address and Map location, the discovered servers, the note on how
+//! discovery works, and every connected, saved and visited network
+//! location. Server discovery and the connect dialog arrive with the
+//! Network and devices milestone, so their buttons are disabled until then
+//! ([`super::unported`]); Open address works now.
+
+use gtk::glib;
+use gtk::prelude::*;
+use ox_core::location::{self, LocationContext};
+use ox_core::places::NetworkLocation;
+
+use crate::icons::{self, Glyph};
+use crate::places::Places;
+
+use super::card_grid::{card_grid, DRIVE_GRID};
+use super::landing::{location_card, section_title, texts};
+use super::{unported, BrowserWindow};
+
+/// Starts looking for advertised SMB servers (`discoverNetwork`).
+const DISCOVER_ACTION: &str = "win.discover-servers";
+/// Opens the connect dialog (`connectDialog`).
+const MAP_NETWORK_ACTION: &str = "win.map-network-location";
+/// Opens the server or share typed in the address field.
+const OPEN_ADDRESS_ACTION: &str = "win.open-server-address";
+
+/// The note under the discovered servers (`.discovery-note`).
+const DISCOVERY_NOTE: &str = "Discovery depends on devices advertising themselves and on local \
+firewall/network settings. It does not guarantee a list of every host.";
+
+/// A button for a command that may not be ported yet.
+fn command_button(label: &str, action: &str, css_class: &str) -> gtk::Button {
+    gtk::Button::builder()
+        .label(label)
+        .action_name(action)
+        .tooltip_text(unported::tooltip(action, label))
+        .valign(gtk::Align::Center)
+        .css_classes([css_class])
+        .build()
+}
+
+/// "Computers & network storage" with Discover servers.
+fn banner() -> gtk::Box {
+    let words = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    words.set_hexpand(true);
+    words.append(
+        &gtk::Label::builder()
+            .label("Computers & network storage")
+            .xalign(0.0)
+            .build(),
+    );
+    let hint = gtk::Label::builder()
+        .label("Discover devices without scanning their files.")
+        .xalign(0.0)
+        .wrap(true)
+        .css_classes(["banner-hint"])
+        .build();
+    words.append(&hint);
+    let glyph = icons::glyph(Glyph::Network, 38);
+    glyph.add_css_class("banner-glyph");
+    let banner = gtk::Box::builder()
+        .spacing(18)
+        .css_classes(["network-banner"])
+        .build();
+    banner.append(&glyph);
+    banner.append(&words);
+    banner.append(&command_button("Discover servers", DISCOVER_ACTION, "primary"));
+    banner
+}
+
+/// The server address field with Open address and Map location
+/// (`.network-manual`).
+fn server_address_field() -> gtk::Box {
+    let address = gtk::Entry::builder()
+        .placeholder_text("\\\\server or \\\\archive-nas")
+        .hexpand(true)
+        .build();
+    address.update_property(&[gtk::accessible::Property::Label("SMB server address")]);
+    address.connect_activate(open_typed_address);
+    let open = gtk::Button::builder()
+        .label("Open address")
+        .valign(gtk::Align::Center)
+        .css_classes(["secondary"])
+        .build();
+    open.connect_clicked(glib::clone!(
+        #[weak]
+        address,
+        move |_| open_typed_address(&address)
+    ));
+    let map_content = gtk::Box::new(gtk::Orientation::Horizontal, 7);
+    map_content.append(&icons::glyph(Glyph::Plus, 14));
+    map_content.append(&gtk::Label::new(Some("Map location")));
+    let map = command_button("Map location", MAP_NETWORK_ACTION, "secondary");
+    map.set_child(Some(&map_content));
+    let field = gtk::Box::builder()
+        .spacing(9)
+        .css_classes(["network-manual"])
+        .build();
+    field.append(&address);
+    field.append(&open);
+    field.append(&map);
+    field
+}
+
+/// Runs Open address for the text in `entry`.
+fn open_typed_address(entry: &gtk::Entry) {
+    let typed = entry.text();
+    // The action exists on every browser window.
+    let _ = entry.activate_action(OPEN_ADDRESS_ACTION, Some(&typed.to_variant()));
+}
+
+/// "Discovered servers" with their count, and the notice while there are
+/// none. Discovery is not ported, so no server is ever found yet.
+fn discovered_servers(body: &gtk::Box) {
+    let title = section_title("Discovered servers", Glyph::Desktop);
+    let count = gtk::Label::builder()
+        .label("0")
+        .hexpand(true)
+        .xalign(1.0)
+        .css_classes(["network-count"])
+        .build();
+    title.append(&count);
+    body.append(&title);
+    let notice = gtk::Label::builder()
+        .label("No advertised SMB servers found yet. Discover again or enter an address above.")
+        .xalign(0.0)
+        .wrap(true)
+        .css_classes(["notice"])
+        .build();
+    body.append(&notice);
+    let note = gtk::Label::builder()
+        .label(DISCOVERY_NOTE)
+        .xalign(0.0)
+        .wrap(true)
+        .css_classes(["discovery-note"])
+        .build();
+    body.append(&note);
+}
+
+fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk::Button {
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 15);
+    content.append(&icons::glyph(Glyph::Network, 34));
+    let address = locations.display_location(&location.uri);
+    content.append(&texts(&location.label, &address));
+    location_card("drive-card", &location.uri, &content)
+}
+
+/// Every connected, saved and visited network location.
+fn connected_and_saved(body: &gtk::Box, places: &Places, locations: &LocationContext) {
+    body.append(&section_title("Connected & saved locations", Glyph::Pin));
+    let cards = card_grid(DRIVE_GRID);
+    for location in &places.network {
+        cards.append(&network_card(location, locations));
+    }
+    body.append(&cards);
+}
+
+/// Draws the Network page's sections into `body`, below its title.
+pub(super) fn render(body: &gtk::Box, places: &Places, locations: &LocationContext) {
+    body.append(&banner());
+    body.append(&server_address_field());
+    discovered_servers(body);
+    connected_and_saved(body, places, locations);
+}
+
+impl BrowserWindow {
+    /// Open address: opens the SMB server or share `typed` names, and
+    /// refuses anything else as the Network page's field does.
+    pub(super) fn open_server_address(&self, typed: &str) {
+        match location::normalise_location(typed, None, &glib::home_dir()) {
+            Ok(uri) if uri.starts_with("smb:") => self.navigate_or_report(&uri),
+            Ok(_) => self.chrome().show_message("Enter an SMB server or share."),
+            Err(error) => self.chrome().show_message(error.message()),
+        }
+    }
+}
