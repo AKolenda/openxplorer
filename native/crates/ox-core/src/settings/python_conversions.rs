@@ -4,8 +4,10 @@
 //! Ports the conversions `Settings.__init__` in `desktop/core.py` makes on
 //! each `recent` entry: `str(item['name'])` and
 //! `max(0, int(item.get('size') or 0))`. Both applications must keep and
-//! skip exactly the same entries, so every JSON type converts the way it
-//! does in Python.
+//! skip the same entries, so every JSON type converts the way it does in
+//! Python, with one known exception: a count written as a string of
+//! non-ASCII decimal digits, such as `"１２"`, which Python's `int()`
+//! accepts and `parse_python_int` skips.
 
 use serde_json::{Number, Value};
 
@@ -54,9 +56,14 @@ fn number_count(number: &Number) -> u64 {
     number.as_f64().map_or(0, |float| float.max(0.0) as u64)
 }
 
-/// Parses a decimal integer the way Python's `int(str)` does (surrounding
-/// white space, a sign, and single underscores between digits), clamped to
+/// Parses ASCII decimal digits like Python's `int(str)` (surrounding white
+/// space, a sign, and single underscores between digits), clamped to
 /// `0..=u64::MAX`.
+///
+/// Python also accepts every other Unicode decimal digit (`int("１２")` is
+/// 12); such a count is skipped here. The Python app writes counts as JSON
+/// numbers, so only a hand-edited file holds one, and the standard library
+/// has no table of Unicode decimal digit values to read it with.
 fn parse_python_int(text: &str) -> Option<u64> {
     let trimmed = python_strip(text);
     let (is_negative, digits) = match trimmed.as_bytes().first() {
@@ -101,6 +108,9 @@ mod tests {
         assert_eq!(parse_python_int("_1"), None);
         assert_eq!(parse_python_int("99999999999999999999999"), Some(u64::MAX));
         assert_eq!(parse_python_int("abc"), None);
+        // A known gap: Python's int() reads these as 12 and 123.
+        assert_eq!(parse_python_int("１２"), None);
+        assert_eq!(parse_python_int("١٢٣"), None);
     }
 
     /// parity: HOME-011

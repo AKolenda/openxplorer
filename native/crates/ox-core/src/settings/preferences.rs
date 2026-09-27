@@ -55,7 +55,7 @@ impl Column {
     ];
 
     /// The key used in `columnWidths` and by the UI (`parentUri`, ...).
-    pub fn key(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Column::Name => "name",
             Column::Modified => "modified",
@@ -91,7 +91,7 @@ pub struct ColumnWidths {
     pub parent_uri: Option<u32>,
     /// Width of [`Column::Type`].
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub kind: Option<u32>,
+    pub file_type: Option<u32>,
     /// Width of [`Column::Size`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u32>,
@@ -104,7 +104,7 @@ impl ColumnWidths {
             Column::Name => self.name,
             Column::Modified => self.modified,
             Column::ParentUri => self.parent_uri,
-            Column::Type => self.kind,
+            Column::Type => self.file_type,
             Column::Size => self.size,
         }
     }
@@ -130,7 +130,7 @@ impl ColumnWidths {
             Column::Name => &mut self.name,
             Column::Modified => &mut self.modified,
             Column::ParentUri => &mut self.parent_uri,
-            Column::Type => &mut self.kind,
+            Column::Type => &mut self.file_type,
             Column::Size => &mut self.size,
         }
     }
@@ -295,7 +295,7 @@ fn read_network_interval(value: &Value) -> Option<u32> {
 fn read_column_widths(value: &Value) -> Option<Vec<(Column, f64)>> {
     let columns = value.as_object()?;
     let numeric_width = |column: Column| {
-        let width = columns.get(column.key())?.as_f64()?;
+        let width = columns.get(column.as_str())?.as_f64()?;
         Some((column, width))
     };
     Some(Column::ALL.into_iter().filter_map(numeric_width).collect())
@@ -365,12 +365,13 @@ mod tests {
             });
             assert_eq!(preferences.text_size, size);
         }
+        let kept = preferences.text_size;
         for size in [0, 101, 201, 10_000] {
             preferences.apply(&PreferencesUpdate {
                 text_size: Some(size),
                 ..PreferencesUpdate::default()
             });
-            assert_eq!(preferences.text_size, 200);
+            assert_eq!(preferences.text_size, kept, "{size} is not offered");
         }
     }
 
