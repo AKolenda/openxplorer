@@ -56,7 +56,7 @@ pub use display::{
     base_name, breadcrumbs, crumb_divider, device_root, display_location, parent_location, same_location,
     title_for, DeviceLabel, LocationContext,
 };
-pub use names::{new_copy_name, safe_label, try_new_copy_name, validate_name, MAX_LABEL_CHARS};
+pub use names::{new_copy_name, safe_label, try_new_copy_name, validate_name, ItemKind, MAX_LABEL_CHARS};
 pub use normalise::{
     file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
 };

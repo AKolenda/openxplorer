@@ -10,7 +10,7 @@ mod support;
 use std::fmt::Debug;
 use std::path::PathBuf;
 
-use ox_core::location::{self, LocationError, LocationParts};
+use ox_core::location::{self, ItemKind, LocationError, LocationParts};
 use serde::Deserialize;
 use support::{parse_fixture, Case, Mismatches, Outcome};
 
@@ -39,13 +39,24 @@ struct RelativeCase {
     outcome: Outcome<String>,
 }
 
-/// `new_copy_name(name, number, is_dir)`: the "Keep both" name.
+/// `new_copy_name(name, number, is_directory)`: the "Keep both" name.
 #[derive(Debug, Deserialize)]
 struct CopyNameCase {
     name: String,
     number: u32,
     is_dir: bool,
     outcome: Outcome<String>,
+}
+
+impl CopyNameCase {
+    /// The fixture's `is_dir` flag as the Rust port's [`ItemKind`].
+    fn kind(&self) -> ItemKind {
+        if self.is_dir {
+            ItemKind::Folder
+        } else {
+            ItemKind::File
+        }
+    }
 }
 
 /// `safe_label(input, fallback)`: a sidebar label.
@@ -144,7 +155,7 @@ fn file_names_are_validated_like_core_py() {
 fn copy_names_are_chosen_like_core_py() {
     let mut mismatches = Mismatches::new("new_copy_name");
     for case in &fixture().copies {
-        let actual = location::try_new_copy_name(&case.name, case.number, case.is_dir);
+        let actual = location::try_new_copy_name(&case.name, case.number, case.kind());
         let input = (&case.name, case.number, case.is_dir);
         mismatches.expect_outcome(input, &case.outcome, &actual);
     }
