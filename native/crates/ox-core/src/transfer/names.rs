@@ -113,7 +113,10 @@ mod tests {
         assert!(!is_own_staging_name(&backup));
     }
 
-    /// Port of `StagingNameTests` in `desktop/tests/test_device_staging.py`.
+    /// Port of `StagingNameTests.test_only_exact_generated_names_match` in
+    /// `desktop/tests/test_device_staging.py`.
+    ///
+    /// parity: XFER-002
     #[test]
     fn only_exact_generated_names_match() {
         let good = format!(".winspace-transfer-{}.part", "a".repeat(32));

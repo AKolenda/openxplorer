@@ -1,14 +1,46 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Local copy, move, deletion and preflight invariants.
+//! Local copy, move, deletion and preflight invariants. Ports the cases of
+//! `TransferTests` and `ProtectedTransferTests` in
+//! `desktop/tests/test_operations.py` that the other case files do not.
 
 use std::fs;
 use std::os::unix::fs::symlink;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{ConflictPolicy, TransferError, TransferMode, MAX_DEPTH};
+use ox_core::transfer::{
+    Cancellation, ConflictPolicy, Node, NodeKind, TransferError, TransferMode, MAX_DEPTH,
+};
 
-use crate::transfer_support::{local, versions::PreviousVersions, *};
+use crate::transfer_support::{
+    local::{self, LocalNode, Provider},
+    versions::PreviousVersions,
+    *,
+};
 
+/// Port of `test_copy_file`.
+///
+/// parity: XFER-001
+#[test]
+fn a_copied_file_arrives_complete_and_leaves_no_staging() {
+    let fixture = Fixture::new();
+    let source = fixture.src.join("data.bin");
+    let content = random_bytes(35_000);
+    fs::write(&source, &content).unwrap();
+
+    let result = fixture.copy(local::local(), &[&source], ConflictPolicy::Skip);
+
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert_eq!(result.done, [uri(&source)]);
+    assert_eq!(fs::read(fixture.dst.join("data.bin")).unwrap(), content);
+    fixture.no_stage();
+}
+
+/// Ports `test_recursive_copy_includes_hidden`,
+/// `test_symlink_copied_not_followed` and
+/// `test_nested_symlink_loop_not_traversed`.
+///
+/// parity: XFER-001, XFER-005, XFER-017
 #[test]
 fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
     let fixture = Fixture::new();
@@ -33,13 +65,10 @@ fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
     assert_eq!(read(&nested.join(".hidden")), "hidden content");
     let copied = fixture.dst.join("tree/nested");
     assert_eq!(read(&copied.join(".hidden")), "hidden content");
-    assert_eq!(
-        fs::read_link(copied.join("loop")).unwrap(),
-        std::path::Path::new("..")
-    );
+    assert_eq!(fs::read_link(copied.join("loop")).unwrap(), Path::new(".."));
     assert_eq!(
         fs::read_link(copied.join("dangling")).unwrap(),
-        std::path::Path::new("missing")
+        Path::new("missing")
     );
     assert_eq!(mode_of(&fixture.dst.join("tree")), 0o750);
     assert_eq!(mode_of(&copied), 0o500);
@@ -49,6 +78,11 @@ fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
     set_mode(&copied, 0o700);
 }
 
+/// Ports `test_skip_never_overwrites`, `test_keep_both` and
+/// `test_replace_file_after_staging_copy_completes`. Each run selects the
+/// source twice, which must not make a second copy.
+///
+/// parity: XFER-006, XFER-008, XFER-009
 #[test]
 fn conflict_policies_never_overwrite_without_replace() {
     for policy in [
@@ -83,6 +117,76 @@ fn conflict_policies_never_overwrite_without_replace() {
     }
 }
 
+/// Port of `test_duplicate_sources_deduplicated`.
+///
+/// parity: XFER-019
+#[test]
+fn a_source_selected_twice_is_copied_once() {
+    let fixture = Fixture::new();
+    let source = fixture.src.join("a");
+    write(&source, "a");
+
+    let result = fixture.copy(local::local(), &[&source, &source], ConflictPolicy::Skip);
+
+    assert_eq!(result.done, [uri(&source)]);
+    assert!(
+        result.errors.is_empty() && result.skipped.is_empty(),
+        "{result:?}"
+    );
+    assert_eq!(list(&fixture.dst), ["a"]);
+}
+
+/// Port of `test_move_native`.
+///
+/// parity: XFER-011
+#[test]
+fn a_move_takes_the_item_out_of_its_folder() {
+    let fixture = Fixture::new();
+    let source = fixture.src.join("a");
+    write(&source, "a");
+    let mut engine = fixture.engine(local::local());
+
+    let result = fixture.run(
+        &mut engine,
+        &[&source],
+        TransferMode::Move,
+        ConflictPolicy::Skip,
+        None,
+    );
+
+    assert_eq!(result.done, [uri(&source)]);
+    assert!(!lexists(&source));
+    assert_eq!(read(&fixture.dst.join("a")), "a");
+}
+
+/// Port of `test_replace_move_is_native_and_removes_source`.
+///
+/// parity: XFER-009, XFER-011
+#[test]
+fn a_move_with_replace_overwrites_the_existing_file_and_removes_the_source() {
+    let fixture = Fixture::new();
+    let source = fixture.src.join("a");
+    write(&source, "new");
+    write(&fixture.dst.join("a"), "old");
+    let mut engine = fixture.engine(local::local());
+
+    let result = fixture.run(
+        &mut engine,
+        &[&source],
+        TransferMode::Move,
+        ConflictPolicy::Replace,
+        None,
+    );
+
+    assert_eq!(result.done, [uri(&source)]);
+    assert!(!lexists(&source));
+    assert_eq!(read(&fixture.dst.join("a")), "new");
+}
+
+/// Ports `test_replace_merges_directories_and_keeps_destination_only_files`,
+/// for copies and moves.
+///
+/// parity: XFER-009
 #[test]
 fn replace_merges_folders_and_retains_destination_only_children() {
     for mode in [TransferMode::Copy, TransferMode::Move] {
@@ -105,13 +209,53 @@ fn replace_merges_folders_and_retains_destination_only_children() {
     }
 }
 
+/// A backend that cannot overwrite in one step, like `NoDirectReplace` in
+/// `desktop/tests/test_operations.py`.
+struct NoDirectReplace;
+
+impl Provider for NoDirectReplace {
+    fn replace_native(
+        &self,
+        _node: &LocalNode,
+        _target: &dyn Node,
+        _cancel: Option<&Cancellation>,
+    ) -> Result<(), TransferError> {
+        Err(TransferError::ReplaceUnsupported(
+            "overwrite flag unsupported".into(),
+        ))
+    }
+}
+
+/// Port of `test_replace_falls_back_to_reversible_rename_for_remote_backend`.
+///
+/// parity: XFER-010
+#[test]
+fn replace_without_direct_overwrite_renames_reversibly_and_leaves_no_backup() {
+    let fixture = Fixture::new();
+    let source = fixture.src.join("a");
+    write(&source, "new");
+    write(&fixture.dst.join("a"), "old");
+
+    let result = fixture.copy(Arc::new(NoDirectReplace), &[&source], ConflictPolicy::Replace);
+
+    assert_eq!(result.done, [uri(&source)]);
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert_eq!(read(&fixture.dst.join("a")), "new");
+    assert_eq!(read(&source), "new");
+    assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
+}
+
+/// Port of `test_replace_type_mismatch_preserves_existing_folder`, in both
+/// directions.
+///
+/// parity: XFER-009
 #[test]
 fn replacement_type_mismatch_preserves_both_items() {
-    for source_is_directory in [true, false] {
+    for source_kind in [NodeKind::Directory, NodeKind::File] {
         let fixture = Fixture::new();
         let source = fixture.src.join("conflict");
         let destination = fixture.dst.join("conflict");
-        let (folder, file) = if source_is_directory {
+        let (folder, file) = if source_kind == NodeKind::Directory {
             (&source, &destination)
         } else {
             (&destination, &source)
@@ -136,6 +280,10 @@ fn replacement_type_mismatch_preserves_both_items() {
     }
 }
 
+/// Ports `test_reject_self_descendant` and
+/// `test_reject_symlink_destination_inside_source`.
+///
+/// parity: XFER-016
 #[test]
 fn self_and_descendant_destinations_are_rejected_including_symlink_aliases() {
     for mode in [TransferMode::Copy, TransferMode::Move] {
@@ -163,6 +311,9 @@ fn self_and_descendant_destinations_are_rejected_including_symlink_aliases() {
     }
 }
 
+/// Port of `test_removal_or_move_preserves_whole_tree_containing_snapshot`.
+///
+/// parity: XFER-020
 #[test]
 fn protected_descendants_stop_mutations_before_any_item_changes() {
     for mode in [TransferMode::Move, TransferMode::Trash, TransferMode::Delete] {
@@ -182,6 +333,10 @@ fn protected_descendants_stop_mutations_before_any_item_changes() {
     }
 }
 
+/// A configured snapshot folder is read-only as a destination, while a copy
+/// out of it is allowed.
+///
+/// parity: XFER-020
 #[test]
 fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed() {
     let fixture = Fixture::new();
@@ -210,6 +365,10 @@ fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed(
     assert_eq!(read(&source), "photo");
 }
 
+/// Port of `test_trash_unsupported_no_delete`; deleting a link removes the
+/// link and never its target.
+///
+/// parity: XFER-014, XFER-015, XFER-017
 #[test]
 fn delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete() {
     let fixture = Fixture::new();
@@ -239,6 +398,41 @@ fn delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete() {
     assert_eq!(read(&original), "keep");
 }
 
+/// Ports `test_delete_removes_tree_permanently` and
+/// `test_delete_does_not_need_a_destination`.
+///
+/// parity: XFER-015
+#[test]
+fn permanent_delete_removes_folders_and_files_without_a_destination() {
+    let fixture = Fixture::new();
+    let tree = fixture.src.join("tree");
+    fs::create_dir_all(tree.join("sub")).unwrap();
+    write(&tree.join("a"), "a");
+    write(&tree.join("sub/b"), "b");
+    let loose = fixture.src.join("loose");
+    write(&loose, "x");
+    let mut engine = fixture.engine(local::local());
+
+    let result = engine
+        .run(
+            TransferMode::Delete,
+            &[uri(&tree), uri(&loose)],
+            None,
+            ConflictPolicy::Skip,
+            &fixture.cancel,
+        )
+        .expect("a permanent delete needs no destination");
+
+    assert_eq!(result.done.len(), 2, "{result:?}");
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert!(!lexists(&tree));
+    assert!(!lexists(&loose));
+}
+
+/// Ports `test_special_file_rejected_cleanup`; a tree deeper than the
+/// nesting limit is refused the same way.
+///
+/// parity: XFER-018
 #[test]
 fn deep_trees_and_special_files_are_not_published() {
     let fixture = Fixture::new();
@@ -263,8 +457,14 @@ fn deep_trees_and_special_files_are_not_published() {
     assert!(result.errors[0].contains("nesting"));
     assert!(result.errors[1].contains("special files"));
     assert!(list(&fixture.dst).is_empty());
+    assert!(lexists(&fifo));
 }
 
+/// Port of `test_copy_cancel_removes_partial_stage`: the user's
+/// cancellation stops the copy between blocks, removes its staging and
+/// starts no later item.
+///
+/// parity: OPS-022, XFER-001
 #[test]
 fn cancellation_during_copy_removes_partial_stage_and_stops_the_batch() {
     let fixture = Fixture::new();
@@ -295,17 +495,17 @@ fn cancellation_during_copy_removes_partial_stage_and_stops_the_batch() {
     assert!(list(&fixture.dst).is_empty());
     assert_eq!(fs::read(first).unwrap(), content);
     assert_eq!(read(&later), "later");
-    assert_eq!(
-        updates
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|event| event.label.starts_with("Copying "))
-            .count(),
-        1
-    );
+    let byte_updates = updates
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|event| event.label.starts_with("Copying "))
+        .count();
+    assert_eq!(byte_updates, 1);
 }
 
+/// A Replace merge deeper than the nesting limit stops before anything is
+/// moved, even when no write guard walked the tree first.
 #[test]
 fn a_deep_move_merge_is_bounded_even_without_a_write_guard() {
     let fixture = Fixture::new();

@@ -4,9 +4,9 @@
 //! `desktop/tests/test_operations.py` and adds the native adversarial cases.
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, TransferError, TransferMode};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeInfo, TransferError, TransferMode};
 
 use crate::transfer_support::{
     local::{local_path_of, LocalNode, Provider},
@@ -323,6 +323,62 @@ fn a_name_taken_while_copying_is_not_overwritten_at_publication() {
     assert_eq!(read(&source), "original");
     assert_eq!(read(&fixture.dst.join("document")), "racing file");
     fixture.no_stage();
+}
+
+/// A local destination that stops answering once a copy fails, like
+/// `Unreachable` in `test_local_stage_query_error_is_still_reported`.
+#[derive(Default)]
+struct UnreachableAfterFailure {
+    unreachable: Mutex<bool>,
+}
+
+impl Provider for UnreachableAfterFailure {
+    fn info(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
+        let unreachable = *self.unreachable.lock().expect("reachability");
+        if unreachable && is_staging(node) {
+            return Err(TransferError::failed("Input/output error"));
+        }
+        node.local_info(cancel)
+    }
+
+    fn copy_file(
+        &self,
+        _node: &LocalNode,
+        _target: &dyn Node,
+        _cancel: &Cancellation,
+        _progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<(), TransferError> {
+        *self.unreachable.lock().expect("reachability") = true;
+        Err(TransferError::failed("Input/output error"))
+    }
+}
+
+/// Port of `test_local_stage_query_error_is_still_reported`: local staging
+/// that cannot even be queried gets one cleanup attempt and is reported
+/// with its exact location.
+///
+/// parity: XFER-003
+#[test]
+fn a_local_stage_that_cannot_be_queried_is_still_reported() {
+    let fixture = Fixture::new();
+    let source = fixture.src.join("a");
+    write(&source, "data");
+
+    let result = fixture.copy(
+        Arc::new(UnreachableAfterFailure::default()),
+        &[&source],
+        ConflictPolicy::Skip,
+    );
+
+    let names = list(&fixture.dst);
+    assert_eq!(names.len(), 1, "{names:?}");
+    let stage = fixture.dst.join(&names[0]);
+    let report = format!("Incomplete staging folder left at {}", uri(&stage));
+    assert!(
+        result.errors.iter().any(|error| error.contains(&report)),
+        "{result:?}"
+    );
+    assert!(fixture.sleeps().is_empty());
 }
 
 /// A staging folder another program created first is never cleaned up.

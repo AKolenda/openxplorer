@@ -6,7 +6,7 @@
 use std::fs;
 use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, TransferError};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeKind, TransferError};
 
 use crate::transfer_support::{
     local::{local_path_of, LocalNode, Provider},
@@ -74,10 +74,10 @@ impl Provider for FuseMountedDevice {
 /// parity: XFER-004, XFER-005
 #[test]
 fn device_copies_with_a_fuse_path_never_change_unix_modes() {
-    for directory in [false, true] {
+    for kind in [NodeKind::File, NodeKind::Directory] {
         let fixture = Fixture::new();
         let source = fixture.src.join("private");
-        if directory {
+        if kind == NodeKind::Directory {
             fs::create_dir(&source).expect("create the source folder");
             set_mode(&source, 0o700);
             write(&source.join("data"), "data");
@@ -94,7 +94,7 @@ fn device_copies_with_a_fuse_path_never_change_unix_modes() {
             staged_modes.iter().all(|mode| *mode == DEVICE_FOLDER_MODE),
             "{staged_modes:?}"
         );
-        if directory {
+        if kind == NodeKind::Directory {
             assert_eq!(mode_of(&fixture.dst.join("private")), DEVICE_FOLDER_MODE);
             assert_eq!(read(&fixture.dst.join("private/data")), "data");
         } else {

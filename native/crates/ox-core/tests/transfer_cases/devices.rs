@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, TransferError, TransferMode};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeKind, TransferError, TransferMode};
 
 use crate::transfer_support::{
     device::Device,
@@ -112,10 +112,10 @@ impl Provider for Phone {
 /// parity: XFER-021
 #[test]
 fn uploads_publish_by_one_same_folder_rename_from_a_staged_sibling() {
-    for directory in [false, true] {
+    for kind in [NodeKind::File, NodeKind::Directory] {
         let fixture = Fixture::with_destination("phone");
         let source = fixture.src.join("incoming");
-        if directory {
+        if kind == NodeKind::Directory {
             fs::create_dir(&source).expect("create the source folder");
             write(&source.join("photo.jpg"), "photo");
         } else {
@@ -126,7 +126,7 @@ fn uploads_publish_by_one_same_folder_rename_from_a_staged_sibling() {
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(result.done, [uri(&source)]);
         let published = fixture.dst.join("incoming");
-        let target = if directory {
+        let target = if kind == NodeKind::Directory {
             published.join("photo.jpg")
         } else {
             published.clone()
@@ -361,6 +361,60 @@ fn same_device_keep_both_renames_inside_staging_and_refreshes_before_cleanup() {
     assert_eq!(phone.device.refreshes().len(), 2);
     assert!(phone.stale_move.lock().expect("stale move").is_none());
     fixture.no_stage();
+}
+
+/// A copy within one device that fails after `CopyObject` already placed
+/// part of it in the private folder, like `SameDevice` in
+/// `test_same_device_copy_failure_leaves_nothing_under_the_final_name`.
+#[derive(Default)]
+struct FailingSameDeviceCopy {
+    device: Device,
+}
+
+impl Provider for FailingSameDeviceCopy {
+    fn base(&self) -> Option<&dyn Provider> {
+        Some(&self.device)
+    }
+
+    fn native_copy_keeps_name(&self, _node: &LocalNode, _target_dir: &dyn Node) -> bool {
+        true
+    }
+
+    fn copy_file(
+        &self,
+        node: &LocalNode,
+        target: &dyn Node,
+        _cancel: &Cancellation,
+        _progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<(), TransferError> {
+        let folder = local_path_of(target)
+            .parent()
+            .expect("the copy lands in a folder")
+            .to_path_buf();
+        write(&folder.join(node.name()), "partial");
+        Err(TransferError::failed("device copy failed"))
+    }
+}
+
+/// Port of `test_same_device_copy_failure_leaves_nothing_under_the_final_name`.
+///
+/// parity: XFER-001, XFER-023
+#[test]
+fn a_failed_copy_within_one_device_leaves_nothing_behind() {
+    let fixture = Fixture::with_destination("phone");
+    let source = fixture.src.join("a.txt");
+    write(&source, "data");
+
+    let result = fixture.copy(
+        Arc::new(FailingSameDeviceCopy::default()),
+        &[&source],
+        ConflictPolicy::Skip,
+    );
+
+    assert_eq!(result.errors.len(), 1, "{result:?}");
+    assert!(result.errors[0].contains("device copy failed"), "{result:?}");
+    assert!(list(&fixture.dst).is_empty(), "{:?}", list(&fixture.dst));
+    assert_eq!(read(&source), "data");
 }
 
 /// Port of `test_device_move_relists_each_source_folder_once`.

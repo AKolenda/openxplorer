@@ -25,14 +25,16 @@
 //! | `labels` | Progress text |
 //! | `error` | [`TransferError`] and how backend errors map onto it |
 //!
-//! The transfer cases of `desktop/tests/test_operations.py`,
-//! `desktop/tests/test_device_staging.py`, `desktop/tests/test_rc2.py` and
-//! the engine cases of `desktop/tests/gio_integration.py` are ported to
-//! `tests/transfer.rs` and `tests/transfer_cases/`, against temporary local
+//! Every test of `desktop/tests/test_operations.py` and
+//! `desktop/tests/test_device_staging.py`, and the engine cases of
+//! `desktop/tests/gio_integration.py`, is ported to `tests/transfer.rs`,
+//! `tests/transfer_cases/` and `tests/gio_node.rs`, against temporary local
 //! files, device test doubles and the production GIO adapter; each port
-//! names the Python test it comes from. The ZIP extraction cases of
-//! `desktop/tests/test_zip_extract.py` wait for the ZIP extractor. Native
-//! backend limitations are documented in [`crate::gio_node`].
+//! names the Python test it comes from. Still to come with the features
+//! they test: the rename cases of `gio_integration.py`, the bridge dispatch
+//! of `desktop/tests/test_rc2.py` (its engine half is ported) and the ZIP
+//! extraction cases of `desktop/tests/test_zip_extract.py`. Native backend
+//! limitations are documented in [`crate::gio_node`].
 
 mod commit;
 mod conflicts;

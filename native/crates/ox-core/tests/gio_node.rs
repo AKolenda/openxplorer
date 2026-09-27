@@ -22,6 +22,10 @@ fn engine() -> TransferEngine {
     TransferEngine::new(Arc::new(|uri| Ok(Box::new(GioNode::new(uri)))))
 }
 
+/// Port of the listing half of `test_enumeration_and_creation` in
+/// `desktop/tests/gio_integration.py`.
+///
+/// parity: XFER-017
 #[test]
 fn metadata_and_listing_preserve_hidden_files_and_do_not_follow_links() {
     let temp = tempfile::tempdir().unwrap();
@@ -79,6 +83,10 @@ fn local_copy_move_and_explicit_replace_use_the_gio_adapter() {
     assert!(progress.iter().all(|(current, total)| current <= total));
 }
 
+/// Port of the creation half of `test_enumeration_and_creation`: copies,
+/// moves and new folders never take a name that exists.
+///
+/// parity: XFER-002
 #[test]
 fn exclusive_copy_move_and_mkdir_preserve_existing_destinations() {
     let temp = tempfile::tempdir().unwrap();
@@ -159,6 +167,7 @@ fn publishing_installs_a_staged_file_or_folder_under_a_free_name() {
     assert!(!staged_file.exists() && !staged_folder.exists());
 }
 
+/// parity: XFER-015, XFER-017
 #[test]
 fn copying_and_deleting_symbolic_links_never_traverses_the_target() {
     let temp = tempfile::tempdir().unwrap();
@@ -179,6 +188,7 @@ fn copying_and_deleting_symbolic_links_never_traverses_the_target() {
     assert!(fs::symlink_metadata(link).unwrap().file_type().is_symlink());
 }
 
+/// parity: OPS-022
 #[test]
 fn cancellation_prevents_copy_move_and_recursive_delete() {
     let temp = tempfile::tempdir().unwrap();
@@ -225,6 +235,10 @@ fn names_that_are_not_utf8_are_listed_and_copied_byte_for_byte() {
     assert_eq!(fs::read(copies.join(&name)).unwrap(), b"song");
 }
 
+/// Port of `test_recursive_copy_preserves_link_and_source` in
+/// `desktop/tests/gio_integration.py`.
+///
+/// parity: XFER-001, XFER-005, XFER-017
 #[test]
 fn complete_engine_stages_and_publishes_a_recursive_local_copy() {
     let temp = tempfile::tempdir().unwrap();
@@ -264,6 +278,7 @@ fn complete_engine_stages_and_publishes_a_recursive_local_copy() {
     fs::set_permissions(target.join("source/nested"), fs::Permissions::from_mode(0o700)).unwrap();
 }
 
+/// parity: XFER-015, XFER-020
 #[test]
 fn protected_descendants_are_preflighted_before_gio_permanent_deletion() {
     let temp = tempfile::tempdir().unwrap();
@@ -294,6 +309,7 @@ fn protected_descendants_are_preflighted_before_gio_permanent_deletion() {
     assert_eq!(fs::read(source.join("protected/data")).unwrap(), b"snapshot");
 }
 
+/// parity: XFER-011
 #[test]
 fn cross_filesystem_move_is_refused_without_copying_or_removing_the_source() {
     let source_temp = tempfile::tempdir_in("/tmp").unwrap();
@@ -362,6 +378,7 @@ fn trash_support_reports_an_unmounted_share_instead_of_denying_trash() {
     assert_eq!(node(&missing).can_trash(None), Ok(false));
 }
 
+/// parity: XFER-019
 #[test]
 fn roots_and_whole_network_shares_are_refused_before_mutation() {
     let cancel = Cancellation::new();
@@ -375,9 +392,19 @@ fn roots_and_whole_network_shares_are_refused_before_mutation() {
     }
 }
 
+/// Which folder another program swaps for a symbolic link mid-deletion.
+#[derive(Debug, Clone, Copy)]
+enum SwappedFolder {
+    /// The folder the user selected.
+    Selected,
+    /// A folder inside it.
+    Nested,
+}
+
+/// parity: XFER-015
 #[test]
 fn an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion() {
-    for replace_root in [false, true] {
+    for swapped_folder in [SwappedFolder::Nested, SwappedFolder::Selected] {
         let temp = tempfile::tempdir().unwrap();
         let selected = temp.path().join("selected");
         let nested = selected.join("nested");
@@ -390,7 +417,10 @@ fn an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion() {
         fs::write(outside.join("nested/victim"), b"must also survive").unwrap();
         let swapped = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let did_swap = swapped.clone();
-        let ancestor = if replace_root { selected.clone() } else { nested };
+        let ancestor = match swapped_folder {
+            SwappedFolder::Selected => selected.clone(),
+            SwappedFolder::Nested => nested,
+        };
         let detached = temp.path().join("detached");
         let outside_for_guard = outside.clone();
         let guard = move |uri: &str| {
@@ -414,6 +444,7 @@ fn an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion() {
     }
 }
 
+/// parity: XFER-015, XFER-017
 #[test]
 fn local_recursive_delete_removes_selected_tree_without_following_its_links() {
     let temp = tempfile::tempdir().unwrap();
@@ -453,6 +484,7 @@ fn local_delete_works_inside_a_folder_reached_through_a_symbolic_link() {
     assert!(fs::symlink_metadata(&alias).unwrap().file_type().is_symlink());
 }
 
+/// parity: OPS-022, XFER-015
 #[test]
 fn cancellation_during_local_delete_preflight_preserves_the_file() {
     let temp = tempfile::tempdir().unwrap();

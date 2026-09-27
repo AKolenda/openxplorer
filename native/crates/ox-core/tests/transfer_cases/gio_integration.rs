@@ -189,7 +189,10 @@ fn a_failed_publish_removes_staging_that_holds_a_read_only_folder() {
     assert_eq!(read(&source.join("payload")), "contents");
 }
 
-/// Port of `test_recursive_replace_and_delete_preserve_backup_descendant`.
+/// Port of `test_recursive_replace_and_delete_preserve_backup_descendant`,
+/// which is also the engine half of
+/// `test_operate_dispatch_protects_backup_descendants` in
+/// `desktop/tests/test_rc2.py` (its bridge dispatch has no native port yet).
 ///
 /// parity: XFER-015, XFER-020
 #[test]

@@ -6,7 +6,7 @@
 use std::fs;
 use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeInfo, TransferError};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeInfo, NodeKind, TransferError};
 
 use crate::transfer_support::{
     device::Device,
@@ -19,8 +19,12 @@ use crate::transfer_support::{
 enum Fault {
     /// Deleting the stage fails twice, then works.
     TransientDelete,
+    /// Deleting the stage always fails.
+    StuckDelete,
     /// The stage answers "not found" although it exists.
     FalseNotFound,
+    /// The stage answers "not found" once, then is found again.
+    TransientNotFound,
     /// The device dropped the aborted upload entirely.
     DiscardedUpload,
     /// The stage cannot be queried at all after the failure.
@@ -38,6 +42,8 @@ struct BrokenPhone {
     device: Device,
     fault: Fault,
     upload_failed: Mutex<bool>,
+    /// Queries of staged items after the upload failed.
+    stage_lookups: Mutex<usize>,
     stage_deletions: Mutex<usize>,
 }
 
@@ -47,12 +53,20 @@ impl BrokenPhone {
             device: Device::default(),
             fault,
             upload_failed: Mutex::default(),
+            stage_lookups: Mutex::default(),
             stage_deletions: Mutex::default(),
         })
     }
 
     fn stage_deletions(&self) -> usize {
         *self.stage_deletions.lock().expect("deletion count")
+    }
+
+    /// Counts one query of a staged item and returns how many there were.
+    fn count_stage_lookup(&self) -> usize {
+        let mut lookups = self.stage_lookups.lock().expect("lookup count");
+        *lookups += 1;
+        *lookups
     }
 
     fn mark_upload_failed(&self) {
@@ -106,18 +120,20 @@ impl Provider for BrokenPhone {
     }
 
     fn info(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
-        if self.has_upload_failed() && inside_staging(node) {
-            match self.fault {
-                Fault::FalseNotFound => {
-                    return Err(TransferError::NotFound("Uncached device path.".into()));
-                }
-                Fault::Disconnected | Fault::UnverifiablePublication => {
-                    return Err(TransferError::failed("Device is disconnected."));
-                }
-                _ => {}
-            }
+        if !self.has_upload_failed() || !inside_staging(node) {
+            return node.local_info(cancel);
         }
-        node.local_info(cancel)
+        let lookup = self.count_stage_lookup();
+        match self.fault {
+            Fault::FalseNotFound => Err(TransferError::NotFound("Uncached device path.".into())),
+            Fault::TransientNotFound if lookup == 1 => {
+                Err(TransferError::NotFound("Uncached device path.".into()))
+            }
+            Fault::Disconnected | Fault::UnverifiablePublication => {
+                Err(TransferError::failed("Device is disconnected."))
+            }
+            _ => node.local_info(cancel),
+        }
     }
 
     fn move_native(
@@ -140,7 +156,12 @@ impl Provider for BrokenPhone {
         if is_staging(node) {
             let mut deletions = self.stage_deletions.lock().expect("deletion count");
             *deletions += 1;
-            if self.fault == Fault::TransientDelete && *deletions < 3 {
+            let busy = match self.fault {
+                Fault::TransientDelete => *deletions < 3,
+                Fault::StuckDelete => true,
+                _ => false,
+            };
+            if busy {
                 return Err(TransferError::failed("The phone is still busy."));
             }
         }
@@ -172,27 +193,91 @@ fn aborted_device_upload_cleanup_retries_transient_errors() {
     fixture.no_stage();
 }
 
-/// Ports `test_missing_stage_after_aborted_upload_is_not_reported_as_leftover`
-/// and `test_device_stage_query_error_is_retried_and_reported`: "not found"
+/// Port of `test_persistent_cleanup_failure_reports_exact_location`: after
+/// every retry fails, the leftover is reported with its exact location.
+///
+/// parity: XFER-003, XFER-022
+#[test]
+fn a_device_stage_that_cannot_be_deleted_is_reported_with_its_location() {
+    let fixture = Fixture::new();
+    let source = photo(&fixture);
+    let phone = BrokenPhone::new(Fault::StuckDelete);
+
+    let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
+
+    let names = list(&fixture.dst);
+    assert_eq!(names.len(), 1, "{names:?}");
+    let stage = fixture.dst.join(&names[0]);
+    assert!(is_staging_path(&stage), "{}", stage.display());
+    let report = format!("Incomplete staging item left at {}", uri(&stage));
+    assert!(
+        result.errors.iter().any(|error| error.contains(&report)),
+        "{result:?}"
+    );
+    assert_eq!(fixture.sleeps(), [0.5, 1.5]);
+    assert_eq!(phone.stage_deletions(), 3);
+}
+
+/// Port of `test_missing_stage_after_aborted_upload_is_not_reported_as_leftover`:
+/// an upload the device discarded needs no cleanup and no retry.
+///
+/// parity: XFER-022
+#[test]
+fn a_discarded_device_upload_is_not_reported_as_a_leftover() {
+    let fixture = Fixture::new();
+    let source = photo(&fixture);
+
+    let result = fixture.copy(
+        BrokenPhone::new(Fault::DiscardedUpload),
+        &[&source],
+        ConflictPolicy::Skip,
+    );
+
+    assert_eq!(result.errors.len(), 1, "{result:?}");
+    assert!(fixture.sleeps().is_empty());
+    assert_eq!(read(&source), "complete");
+    assert!(!fixture.dst.join("photo").exists());
+    fixture.no_stage();
+}
+
+/// Port of `test_not_found_for_an_existing_stage_is_confirmed_by_listing`: a
+/// "not found" the folder listing contradicts is retried, and the stage is
+/// then removed without being reported.
+///
+/// parity: XFER-022
+#[test]
+fn a_false_not_found_for_a_device_stage_is_retried_until_it_is_removed() {
+    let fixture = Fixture::new();
+    let source = photo(&fixture);
+
+    let result = fixture.copy(
+        BrokenPhone::new(Fault::TransientNotFound),
+        &[&source],
+        ConflictPolicy::Skip,
+    );
+
+    assert_eq!(result.errors.len(), 1, "{result:?}");
+    assert!(!result.errors[0].contains("Incomplete staging"), "{result:?}");
+    assert_eq!(fixture.sleeps(), [0.5]);
+    assert!(list(&fixture.dst).is_empty());
+}
+
+/// Ports `test_device_stage_query_error_is_retried_and_reported`: "not found"
 /// counts only when listing the folder confirms it, and any other query
 /// error is retried and reported with the stage's exact location.
 ///
 /// parity: XFER-003, XFER-022
 #[test]
 fn device_not_found_requires_a_successful_parent_listing_without_the_stage() {
-    for fault in [Fault::FalseNotFound, Fault::DiscardedUpload, Fault::Disconnected] {
+    for fault in [Fault::FalseNotFound, Fault::Disconnected] {
         let fixture = Fixture::new();
         let source = photo(&fixture);
         let phone = BrokenPhone::new(fault);
+
         let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
+
         assert_eq!(read(&source), "complete");
         assert!(!fixture.dst.join("photo").exists());
-        if fault == Fault::DiscardedUpload {
-            assert_eq!(result.errors.len(), 1, "{result:?}");
-            assert!(fixture.sleeps().is_empty());
-            fixture.no_stage();
-            continue;
-        }
         assert_eq!(result.errors.len(), 2, "{fault:?}: {result:?}");
         let stage = fixture.dst.join(&list(&fixture.dst)[0]);
         assert_eq!(read(&stage), "partial upload");
@@ -228,10 +313,10 @@ fn a_devices_false_success_is_not_counted_as_a_published_copy() {
 /// parity: XFER-002
 #[test]
 fn a_device_staging_name_created_by_someone_else_is_never_cleaned_up() {
-    for directory in [false, true] {
+    for kind in [NodeKind::File, NodeKind::Directory] {
         let fixture = Fixture::new();
         let source = fixture.src.join("photo");
-        if directory {
+        if kind == NodeKind::Directory {
             fs::create_dir(&source).expect("create the source folder");
             write(&source.join("inner"), "complete");
         } else {
@@ -244,7 +329,7 @@ fn a_device_staging_name_created_by_someone_else_is_never_cleaned_up() {
         let names = list(&fixture.dst);
         assert_eq!(names.len(), 1);
         let foreign = fixture.dst.join(&names[0]);
-        let foreign_file = if directory {
+        let foreign_file = if kind == NodeKind::Directory {
             foreign.join("foreign")
         } else {
             foreign
