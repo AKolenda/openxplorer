@@ -78,23 +78,25 @@ pub(super) fn apply_bookmark(
         BookmarkKind::Pin => &mut data.pins,
     };
     list.retain(|bookmark| bookmark.uri != uri);
-    let is_pin = kind == BookmarkKind::Pin;
-    match added {
-        Some(bookmark) => {
-            list.push(bookmark);
-            if is_pin {
-                data.hidden_quick.retain(|hidden| *hidden != uri);
-            }
-        }
-        None if is_pin => {
-            if !data.hidden_quick.contains(&uri) {
-                data.hidden_quick.push(uri.clone());
-            }
-            data.quick_order.retain(|ordered| *ordered != uri);
-        }
-        None => {}
+    list.extend(added);
+    if kind == BookmarkKind::Pin {
+        show_or_hide_in_quick_access(data, action, &uri);
     }
     Ok(())
+}
+
+/// Adding a pin shows it in Quick access again; removing one hides it,
+/// which also unpins a standard folder, and forgets its place in the order.
+fn show_or_hide_in_quick_access(data: &mut SettingsData, action: BookmarkAction, uri: &str) {
+    match action {
+        BookmarkAction::Add => data.hidden_quick.retain(|hidden| hidden != uri),
+        BookmarkAction::Remove => {
+            if !data.hidden_quick.iter().any(|hidden| hidden == uri) {
+                data.hidden_quick.push(uri.to_owned());
+            }
+            data.quick_order.retain(|ordered| ordered != uri);
+        }
+    }
 }
 
 /// Adds or reorders Quick access pins and returns the cleaned batch.

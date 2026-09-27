@@ -43,7 +43,7 @@ pub(crate) fn pin_fallback_label(uri: &str) -> String {
     };
     smb_host
         .filter(|host| !host.is_empty())
-        .or_else(|| Some(parts.netloc.to_owned()).filter(|netloc| !netloc.is_empty()))
+        .or_else(|| Some(parts.netloc.clone()).filter(|netloc| !netloc.is_empty()))
         .unwrap_or_else(|| FALLBACK_LABEL.to_owned())
 }
 

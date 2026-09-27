@@ -20,8 +20,8 @@ fn mode(path: &Path) -> u32 {
     fs::metadata(path).expect("the path exists").mode() & 0o777
 }
 
-fn prefs(values: serde_json::Value) -> PreferencesUpdate {
-    PreferencesUpdate::from_json(&values).expect("an object")
+fn prefs(values: &serde_json::Value) -> PreferencesUpdate {
+    PreferencesUpdate::from_json(values).expect("an object")
 }
 
 /// The names of the kept unreadable settings files in `directory`.
@@ -63,7 +63,7 @@ fn settings_private_and_atomic() {
         .unwrap();
     store
         .update_preferences(&prefs(
-            json!({"theme": "dark", "password": "not-stored", "view": "bogus"}),
+            &json!({"theme": "dark", "password": "not-stored", "view": "bogus"}),
         ))
         .unwrap();
     let reread = Settings::open(&directory);
@@ -182,7 +182,7 @@ fn save_error_rolls_back_in_memory() {
     let directory = root.path().join("config");
     let mut store = Settings::open(&directory);
     store
-        .update_preferences(&prefs(json!({"theme": "dark"})))
+        .update_preferences(&prefs(&json!({"theme": "dark"})))
         .unwrap();
     let before = store.snapshot();
     // A directory in place of settings.json makes the save fail.
@@ -211,7 +211,7 @@ fn system_theme_and_legacy_migration() {
     assert_eq!(store.data().preferences.theme, Theme::Dark);
     assert_eq!(store.data().shares.len(), 1);
     store
-        .update_preferences(&prefs(json!({"theme": "system"})))
+        .update_preferences(&prefs(&json!({"theme": "system"})))
         .unwrap();
     assert_eq!(Settings::open(&directory).data().preferences.theme, Theme::System);
 }
@@ -224,10 +224,10 @@ fn two_windows_preserve_each_others_preferences() {
     let mut first = Settings::open(root.path());
     let mut second = Settings::open(root.path());
     first
-        .update_preferences(&prefs(json!({"theme": "dark"})))
+        .update_preferences(&prefs(&json!({"theme": "dark"})))
         .unwrap();
     second
-        .update_preferences(&prefs(json!({"details": false})))
+        .update_preferences(&prefs(&json!({"details": false})))
         .unwrap();
     let merged = first.snapshot().preferences;
     assert_eq!(merged.theme, Theme::Dark);
@@ -261,7 +261,7 @@ fn settings_lock_symlink_refused() {
     let target = root.path().join("target");
     fs::write(&target, "unchanged").unwrap();
     symlink(&target, directory.join("settings.lock")).unwrap();
-    let result = store.update_preferences(&prefs(json!({"theme": "dark"})));
+    let result = store.update_preferences(&prefs(&json!({"theme": "dark"})));
     assert!(matches!(result, Err(SettingsError::Io { .. })));
     assert_eq!(fs::read_to_string(&target).unwrap(), "unchanged");
 }
@@ -296,7 +296,7 @@ fn settings_still_persist() {
     let directory = root.path().join("config");
     let mut store = Settings::open(&directory);
     store
-        .update_preferences(&prefs(json!({"textSize": 125})))
+        .update_preferences(&prefs(&json!({"textSize": 125})))
         .unwrap();
     assert_eq!(Settings::open(&directory).snapshot().preferences.text_size, 125);
 }
@@ -379,11 +379,13 @@ fn a_deleted_file_keeps_the_data_last_read() {
     let root = temp();
     let mut store = Settings::open(root.path());
     store
-        .update_preferences(&prefs(json!({"theme": "dark"})))
+        .update_preferences(&prefs(&json!({"theme": "dark"})))
         .unwrap();
     fs::remove_file(store.path()).unwrap();
     assert_eq!(store.snapshot().preferences.theme, Theme::Dark);
-    store.update_preferences(&prefs(json!({"view": "grid"}))).unwrap();
+    store
+        .update_preferences(&prefs(&json!({"view": "grid"})))
+        .unwrap();
     let reread = Settings::open(root.path()).snapshot().preferences;
     assert_eq!((reread.theme, reread.view), (Theme::Dark, View::Grid));
 }
@@ -420,7 +422,7 @@ fn a_change_keeps_an_unreadable_file_as_a_backup() {
     assert!(store.warning().is_some());
 
     store
-        .update_preferences(&prefs(json!({"theme": "dark"})))
+        .update_preferences(&prefs(&json!({"theme": "dark"})))
         .unwrap();
 
     let kept = backups(root.path());
@@ -465,9 +467,11 @@ fn a_readable_file_is_replaced_without_a_backup() {
     let root = temp();
     let mut store = Settings::open(root.path());
     store
-        .update_preferences(&prefs(json!({"theme": "dark"})))
+        .update_preferences(&prefs(&json!({"theme": "dark"})))
         .unwrap();
-    store.update_preferences(&prefs(json!({"view": "grid"}))).unwrap();
+    store
+        .update_preferences(&prefs(&json!({"view": "grid"})))
+        .unwrap();
     assert_eq!(backups(root.path()), Vec::<String>::new());
     assert!(store.warning().is_none());
 }
@@ -486,7 +490,7 @@ fn a_change_never_moves_a_refused_file() {
     let mut store = Settings::open(&directory);
     assert!(store.warning().is_some());
 
-    let result = store.update_preferences(&prefs(json!({"theme": "dark"})));
+    let result = store.update_preferences(&prefs(&json!({"theme": "dark"})));
 
     assert!(matches!(result, Err(SettingsError::Invalid(_))));
     assert_eq!(

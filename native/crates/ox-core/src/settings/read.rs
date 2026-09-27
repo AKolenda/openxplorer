@@ -279,16 +279,16 @@ mod tests {
     use super::super::model::Preferences;
     use super::*;
 
-    fn read(value: Value) -> (SettingsData, Option<SettingsError>) {
+    fn read(value: &Value) -> (SettingsData, Option<SettingsError>) {
         let mut data = SettingsData::default();
-        let problem = read_settings(&value, &mut data).err();
+        let problem = read_settings(value, &mut data).err();
         (data, problem)
     }
 
     /// parity: SET-012, SAFE-010, SAFE-018
     #[test]
     fn invalid_entries_are_skipped_without_a_warning() {
-        let (data, problem) = read(json!({
+        let (data, problem) = read(&json!({
             "pins": [
                 {"uri": "file:///tmp/Work", "label": "Work"},
                 {"uri": "https://example.invalid/", "label": "Web"},
@@ -318,7 +318,7 @@ mod tests {
         let recent: Vec<Value> = (0..40)
             .map(|i| json!({"uri": format!("file:///tmp/r{i}"), "name": "r"}))
             .collect();
-        let (data, _) = read(json!({"pins": pins, "quickOrder": order, "recent": recent}));
+        let (data, _) = read(&json!({"pins": pins, "quickOrder": order, "recent": recent}));
         assert_eq!(data.pins.len(), MAX_BOOKMARKS);
         assert_eq!(data.quick_order.len(), MAX_ORDER);
         assert_eq!(data.recent.len(), MAX_RECENT);
@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn quick_order_is_deduplicated_but_hidden_entries_are_not() {
-        let (data, _) = read(json!({
+        let (data, _) = read(&json!({
             "hiddenQuick": ["file:///tmp/a", "file:///tmp/a", 3],
             "quickOrder": ["file:///tmp/a", "file:///tmp/b", "file:///tmp/a"]
         }));
@@ -336,7 +336,7 @@ mod tests {
 
     #[test]
     fn a_string_location_section_reads_each_character_like_python() {
-        let (data, problem) = read(json!({"hiddenQuick": "/ ", "pins": "text"}));
+        let (data, problem) = read(&json!({"hiddenQuick": "/ ", "pins": "text"}));
         assert!(problem.is_none());
         assert_eq!(data.hidden_quick, ["file:///"]);
         assert!(data.pins.is_empty());
@@ -345,7 +345,7 @@ mod tests {
     /// parity: SET-013
     #[test]
     fn a_section_of_the_wrong_type_stops_reading_with_a_warning() {
-        let (data, problem) = read(json!({
+        let (data, problem) = read(&json!({
             "pins": [{"uri": "file:///tmp/kept"}],
             "shares": null,
             "quickOrder": ["file:///tmp/lost"],
@@ -360,10 +360,10 @@ mod tests {
     /// parity: SET-013
     #[test]
     fn non_object_files_and_preferences_warn() {
-        assert!(read(json!([1, 2])).1.is_some());
-        assert!(read(json!({"preferences": []})).1.is_some());
-        assert!(read(json!({"preferences": null})).1.is_some());
-        assert!(read(json!({"pins": "text"})).1.is_none());
+        assert!(read(&json!([1, 2])).1.is_some());
+        assert!(read(&json!({"preferences": []})).1.is_some());
+        assert!(read(&json!({"preferences": null})).1.is_some());
+        assert!(read(&json!({"pins": "text"})).1.is_none());
     }
 
     /// parity: SET-016
@@ -393,7 +393,7 @@ mod tests {
     /// parity: SET-016
     #[test]
     fn preference_types_follow_python() {
-        let (data, _) = read(json!({"preferences": {
+        let (data, _) = read(&json!({"preferences": {
             "textSize": 150.0, "networkInterval": 30.0, "sidebarWidth": true,
             "details": "no", "showHidden": true, "columnWidths": {"name": 300, "type": true, "css": 1}
         }}));
@@ -409,7 +409,7 @@ mod tests {
 
     #[test]
     fn recent_entries_convert_like_python() {
-        let (data, _) = read(json!({"recent": [
+        let (data, _) = read(&json!({"recent": [
             {"uri": "file:///tmp/a.txt", "name": "a.txt", "size": "1_024", "modified": -5, "isDir": true},
             {"uri": "file:///tmp/b.txt", "name": 12, "type": null, "size": 2.9, "modified": []},
             {"uri": "file:///tmp/c.txt", "name": "c", "size": "12.5"},

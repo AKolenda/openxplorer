@@ -21,10 +21,10 @@ fn network_interval_whitelist() {
     let root = temp();
     let mut store = Settings::open(root.path());
     store
-        .update_preferences(&prefs(json!({"networkInterval": 30})))
+        .update_preferences(&prefs(&json!({"networkInterval": 30})))
         .unwrap();
     store
-        .update_preferences(&prefs(json!({"networkInterval": 1})))
+        .update_preferences(&prefs(&json!({"networkInterval": 1})))
         .unwrap();
     assert_eq!(store.snapshot().preferences.network_interval, 30);
 }
@@ -37,7 +37,7 @@ fn layout_persists() {
     let mut store = Settings::open(root.path());
     store
         .update_preferences(&prefs(
-            json!({"sidebarWidth": 333, "columnWidths": {"name": 460, "size": 100}}),
+            &json!({"sidebarWidth": 333, "columnWidths": {"name": 460, "size": 100}}),
         ))
         .unwrap();
     let reread = Settings::open(root.path()).snapshot().preferences;
@@ -62,7 +62,7 @@ fn sidebar_width_bounds() {
     ];
     for value in rejected {
         store
-            .update_preferences(&prefs(json!({"sidebarWidth": value})))
+            .update_preferences(&prefs(&json!({"sidebarWidth": value})))
             .unwrap();
         assert_eq!(store.snapshot().preferences.sidebar_width, None, "{value}");
     }
@@ -81,7 +81,7 @@ fn width_rounding() {
     let root = temp();
     let mut store = Settings::open(root.path());
     store
-        .update_preferences(&prefs(json!({"sidebarWidth": 280.4})))
+        .update_preferences(&prefs(&json!({"sidebarWidth": 280.4})))
         .unwrap();
     assert_eq!(store.snapshot().preferences.sidebar_width, Some(280));
 }
@@ -93,7 +93,7 @@ fn columns_whitelist() {
     let root = temp();
     let mut store = Settings::open(root.path());
     let update = json!({"columnWidths": {"name": 150, "css": "url(bad)", "size": 99999, "type": true}});
-    store.update_preferences(&prefs(update)).unwrap();
+    store.update_preferences(&prefs(&update)).unwrap();
     let columns = serde_json::to_value(store.snapshot().preferences.column_widths).unwrap();
     assert_eq!(columns, json!({"name": 150}));
 }
@@ -105,10 +105,10 @@ fn column_reset() {
     let root = temp();
     let mut store = Settings::open(root.path());
     store
-        .update_preferences(&prefs(json!({"columnWidths": {"name": 700}})))
+        .update_preferences(&prefs(&json!({"columnWidths": {"name": 700}})))
         .unwrap();
     store
-        .update_preferences(&prefs(json!({"columnWidths": {}})))
+        .update_preferences(&prefs(&json!({"columnWidths": {}})))
         .unwrap();
     let columns = serde_json::to_value(store.snapshot().preferences.column_widths).unwrap();
     assert_eq!(columns, json!({}));
@@ -121,10 +121,10 @@ fn other_preferences_retained() {
     let root = temp();
     let mut store = Settings::open(root.path());
     store
-        .update_preferences(&prefs(json!({"theme": "dark", "contextMenu": "win11"})))
+        .update_preferences(&prefs(&json!({"theme": "dark", "contextMenu": "win11"})))
         .unwrap();
     store
-        .update_preferences(&prefs(json!({"sidebarWidth": 300})))
+        .update_preferences(&prefs(&json!({"sidebarWidth": 300})))
         .unwrap();
     let current = store.snapshot().preferences;
     assert_eq!(
@@ -141,10 +141,10 @@ fn partial_window_updates_do_not_remove_other_preferences() {
     let mut store = Settings::open(root.path());
     let mut other = Settings::open(root.path());
     store
-        .update_preferences(&prefs(json!({"sidebarWidth": 270})))
+        .update_preferences(&prefs(&json!({"sidebarWidth": 270})))
         .unwrap();
     other
-        .update_preferences(&prefs(json!({"columnWidths": {"modified": 200}})))
+        .update_preferences(&prefs(&json!({"columnWidths": {"modified": 200}})))
         .unwrap();
     let merged = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(merged.sidebar_width, Some(270));
@@ -159,7 +159,7 @@ fn text_size_default_round_trip() {
     let mut store = Settings::open(root.path());
     assert_eq!(store.snapshot().preferences.text_size, 100);
     store
-        .update_preferences(&prefs(json!({"textSize": 150})))
+        .update_preferences(&prefs(&json!({"textSize": 150})))
         .unwrap();
     assert_eq!(Settings::open(root.path()).snapshot().preferences.text_size, 150);
 }
@@ -171,7 +171,7 @@ fn text_size_invalid_values_ignored() {
     let root = temp();
     let mut store = Settings::open(root.path());
     store
-        .update_preferences(&prefs(json!({"textSize": 125})))
+        .update_preferences(&prefs(&json!({"textSize": 125})))
         .unwrap();
     let rejected = [
         json!(true),
@@ -188,7 +188,7 @@ fn text_size_invalid_values_ignored() {
     ];
     for value in rejected {
         store
-            .update_preferences(&prefs(json!({"textSize": value})))
+            .update_preferences(&prefs(&json!({"textSize": value})))
             .unwrap();
         assert_eq!(store.snapshot().preferences.text_size, 125, "{value}");
     }
@@ -202,7 +202,7 @@ fn text_size_all_sizes() {
     let mut store = Settings::open(root.path());
     for size in TEXT_SIZES {
         let result = store
-            .update_preferences(&prefs(json!({"textSize": size})))
+            .update_preferences(&prefs(&json!({"textSize": size})))
             .unwrap();
         assert_eq!(result.text_size, size);
     }
@@ -216,11 +216,11 @@ fn text_size_preserves_other_settings() {
     let mut store = Settings::open(root.path());
     store
         .update_preferences(&prefs(
-            json!({"theme": "dark", "sidebarWidth": 310, "showHidden": true}),
+            &json!({"theme": "dark", "sidebarWidth": 310, "showHidden": true}),
         ))
         .unwrap();
     store
-        .update_preferences(&prefs(json!({"textSize": 150})))
+        .update_preferences(&prefs(&json!({"textSize": 150})))
         .unwrap();
     let current = store.snapshot().preferences;
     assert_eq!(current.theme, Theme::Dark);
@@ -236,10 +236,10 @@ fn text_size_multiple_instances_merge() {
     let mut first = Settings::open(root.path());
     let mut second = Settings::open(root.path());
     first
-        .update_preferences(&prefs(json!({"textSize": 175})))
+        .update_preferences(&prefs(&json!({"textSize": 175})))
         .unwrap();
     second
-        .update_preferences(&prefs(json!({"theme": "dark"})))
+        .update_preferences(&prefs(&json!({"theme": "dark"})))
         .unwrap();
     let merged = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(merged.text_size, 175);

@@ -4,7 +4,7 @@
 //! Ports `FOLDERS` and `FolderLocations.paths` from
 //! `desktop/folder_locations.py`, and the Quick access glyph colours from
 //! `environment` in `desktop/winspace.py`. The paths are read from
-//! `user-dirs.dirs` on every call instead of through GLib's special-folder
+//! `user-dirs.dirs` on every call instead of through the `GLib` special-folder
 //! cache, which lives for the whole process: a folder moved with
 //! `xdg-user-dirs-update` or the Python app shows up at once.
 
@@ -15,7 +15,7 @@ use super::user_dirs::{self, UserDirs};
 use super::Place;
 use crate::location::file_uri;
 
-/// GLib log domain for problems with `user-dirs.dirs`.
+/// `GLib` log domain for problems with `user-dirs.dirs`.
 const LOG_DOMAIN: &str = "openxplorer";
 
 /// An XDG standard folder.
@@ -183,6 +183,10 @@ pub struct KnownFolderPaths {
 
 impl KnownFolderPaths {
     /// Where `folder` is.
+    ///
+    /// # Panics
+    ///
+    /// Never: [`FolderLocations::paths`] fills in every standard folder.
     pub fn path(&self, folder: KnownFolder) -> &Path {
         self.paths
             .get(&folder)

@@ -160,7 +160,7 @@ pub fn merge_network_locations(
 }
 
 /// One source's view of a network location (the arguments of `add` in
-/// network_locations.py).
+/// `network_locations.py`).
 struct Contribution<'a> {
     uri: &'a str,
     label: &'a str,
@@ -239,7 +239,7 @@ fn mount_label(mount: &StableMount) -> Cow<'_, str> {
 }
 
 /// The label of a row without one: the last path name, else the host
-/// (network_locations.py:28). Pins fall back differently, see
+/// (`network_locations.py:28`). Pins fall back differently, see
 /// `pin_fallback_label` in the settings module.
 fn fallback_label(uri: &str) -> String {
     let Ok(parts) = split_location(uri) else {

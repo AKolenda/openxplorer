@@ -178,8 +178,8 @@ fn expand_home(value: &[u8], home: &Path) -> Vec<u8> {
 /// Decodes the shell's quoted-string escapes `\\`, `\"`, `\$` and `` \` ``;
 /// any other backslash stays literal.
 ///
-/// Safety rule "never evaluate the file" (folder_locations.py:
-/// `read_user_dirs`): an unescaped `$` or backtick would be a variable or
+/// Safety rule "never evaluate the file" (`read_user_dirs` in
+/// `folder_locations.py`): an unescaped `$` or backtick would be a variable or
 /// command substitution in a shell, and a control character is never part
 /// of a folder name, so either makes the value invalid.
 fn unescape(raw: &[u8]) -> Option<Vec<u8>> {
@@ -295,7 +295,7 @@ mod tests {
             "XDG_DESKTOP_DIR=\"/del\u{7f}\"",
             r#"XDG_DESKTOP_DIR="/x" trailing"#,
             r#"XDG_DESKTOP_DIR="/unterminated"#,
-            r#"XDG_DESKTOP_DIR=/unquoted"#,
+            r"XDG_DESKTOP_DIR=/unquoted",
             r#"xdg_desktop_dir="/lower""#,
             r#"XDG__DIR="/no-name""#,
         ];

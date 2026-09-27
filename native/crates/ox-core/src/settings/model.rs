@@ -289,12 +289,20 @@ pub struct SettingsData {
 
 impl SettingsData {
     /// The file contents as a JSON value, in the layout both apps write.
+    ///
+    /// # Panics
+    ///
+    /// Never: the data holds only strings, numbers, flags and lists.
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::to_value(self.file_layout()).expect("settings data holds only strings, numbers and lists")
     }
 
     /// The file contents as pretty-printed JSON with a final newline,
     /// matching Python's `json.dump(..., indent=2)` key order.
+    ///
+    /// # Panics
+    ///
+    /// Never: the data holds only strings, numbers, flags and lists.
     pub fn to_file_text(&self) -> String {
         let mut text = serde_json::to_string_pretty(&self.file_layout())
             .expect("settings data holds only strings, numbers and lists");

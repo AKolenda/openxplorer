@@ -27,6 +27,7 @@ mod choices;
 mod model;
 mod mutate;
 mod read;
+mod save;
 pub mod storage;
 mod validate;
 
@@ -41,9 +42,8 @@ pub use model::{
 pub use mutate::{BookmarkAction, BookmarkKind, PinRequest};
 pub(crate) use validate::last_path_name;
 
-use storage::{
-    private_directory, private_file, read_limited_text, replace_private_file, OldFile, SettingsLock,
-};
+use save::{replace_private_file, OldFile, SettingsLock};
+use storage::{private_directory, private_file, read_limited_text, PrivateFileOptions, SETTINGS_SIZE_LIMIT};
 
 /// Why a settings change was refused.
 #[derive(Debug, thiserror::Error)]
@@ -311,6 +311,17 @@ enum ReadFailure {
     Damaged(SettingsError),
 }
 
+impl ReadFailure {
+    /// Reading an opened file fails either in the operating system, which
+    /// says nothing about the contents, or on the contents themselves.
+    fn from_reading(error: SettingsError) -> Self {
+        match error {
+            SettingsError::Io { .. } => Self::Refused(error),
+            SettingsError::Invalid(_) => Self::Damaged(error),
+        }
+    }
+}
+
 /// Checks the directory and file, then reads what is valid into `data`,
 /// which starts as the defaults. Sections read before a problem are kept,
 /// as in Python.
@@ -323,16 +334,15 @@ fn read_file(directory: &Path, data: &mut SettingsData) -> FileState {
     }
 }
 
+/// [`read_file`], telling a refused file from a damaged one: the storage
+/// checks come first, then the contents.
 fn try_read_file(directory: &Path, data: &mut SettingsData) -> Result<(), ReadFailure> {
     if directory.exists() || directory.is_symlink() {
         private_directory(directory).map_err(ReadFailure::Refused)?;
     }
     let path = directory.join(Settings::FILE_NAME);
-    let file = private_file(&path, storage::PrivateFileOptions::default()).map_err(ReadFailure::Refused)?;
-    let text = read_limited_text(file, &path, storage::SETTINGS_SIZE_LIMIT).map_err(|error| match error {
-        SettingsError::Io { .. } => ReadFailure::Refused(error),
-        SettingsError::Invalid(_) => ReadFailure::Damaged(error),
-    })?;
+    let file = private_file(&path, PrivateFileOptions::default()).map_err(ReadFailure::Refused)?;
+    let text = read_limited_text(file, &path, SETTINGS_SIZE_LIMIT).map_err(ReadFailure::from_reading)?;
     let source: serde_json::Value =
         serde_json::from_str(&text).map_err(|error| ReadFailure::Damaged(error.into()))?;
     read::read_settings(&source, data).map_err(ReadFailure::Damaged)
