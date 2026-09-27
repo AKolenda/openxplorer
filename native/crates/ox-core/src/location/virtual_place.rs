@@ -30,10 +30,11 @@
 //! Python app rejects every virtual place there, so neither app may store
 //! one.
 
+use std::path::Path;
+
 use super::parts::split_scheme;
 use super::text::{python_strip, quote_component, unquote_without_controls};
 use super::{normalise_location, LocationError};
-use std::path::Path;
 
 /// URI of the Home page: Quick access, shares and recently opened files.
 pub const HOME_URI: &str = "ox:home";
@@ -120,11 +121,8 @@ impl VirtualPlace {
     /// `trash:`. Schemes are case-insensitive, as in every URI. `None` for
     /// items inside a virtual folder.
     pub fn from_uri(uri: &str) -> Option<Self> {
-        match uri.to_ascii_lowercase().as_str() {
-            HOME_URI | "home:" => return Some(VirtualPlace::Home),
-            PC_URI | "pc:" => return Some(VirtualPlace::ThisPc),
-            SETTINGS_URI | "settings:" => return Some(VirtualPlace::Settings),
-            _ => {}
+        if let Some(page) = Self::page_from_uri(uri) {
+            return Some(page);
         }
         let folder = VirtualFolder::parse(uri)?.ok()?;
         folder.segments.is_empty().then_some(folder.place)
@@ -148,6 +146,19 @@ impl VirtualPlace {
             .find(|place| place.title().to_lowercase() == typed)
     }
 
+    /// The app page `uri` names, in the native (`ox:home`) or the web UI's
+    /// (`home:`) spelling.
+    fn page_from_uri(uri: &str) -> Option<Self> {
+        match uri.to_ascii_lowercase().as_str() {
+            HOME_URI | "home:" => Some(VirtualPlace::Home),
+            PC_URI | "pc:" => Some(VirtualPlace::ThisPc),
+            SETTINGS_URI | "settings:" => Some(VirtualPlace::Settings),
+            _ => None,
+        }
+    }
+
+    /// The virtual folder GIO lists under `scheme`, which must be
+    /// lower-case.
     fn from_gio_scheme(scheme: &str) -> Option<Self> {
         match scheme {
             "network" => Some(VirtualPlace::Network),
@@ -194,54 +205,38 @@ pub fn normalise_navigation(value: &str, base: Option<&str>, home: &Path) -> Res
 /// components.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VirtualFolder {
-    pub place: VirtualPlace,
+    /// The Network, Recycle Bin or Recent folder the location is in.
+    pub(crate) place: VirtualPlace,
     /// Decoded components; `.` and `..` already resolved.
-    pub segments: Vec<String>,
+    pub(crate) segments: Vec<String>,
 }
 
 impl VirtualFolder {
-    /// `None` when `uri` is not `trash:`, `recent:` or `network:`; an error
-    /// when it is but cannot be canonicalised.
-    pub fn parse(uri: &str) -> Option<Result<Self, LocationError>> {
-        let (scheme, rest) = split_scheme(uri)?;
+    /// Splits a `trash:`, `recent:` or `network:` location.
+    ///
+    /// `None` when `uri` has another scheme. `Some(Err(..))` when it is in
+    /// a virtual folder but cannot be canonicalised: callers still know it
+    /// is virtual, and so never writable, without being able to open it.
+    pub(crate) fn parse(uri: &str) -> Option<Result<Self, LocationError>> {
+        let (scheme, after_scheme) = split_scheme(uri)?;
         let place = VirtualPlace::from_gio_scheme(&scheme)?;
-        Some(Self::parse_path(place, rest))
+        Some(Self::parse_path(place, after_scheme))
     }
 
-    fn parse_path(place: VirtualPlace, rest: &str) -> Result<Self, LocationError> {
-        if rest.contains(['?', '#']) {
+    /// The folder of `after_scheme`, the text after `trash:`, `recent:` or
+    /// `network:`.
+    fn parse_path(place: VirtualPlace, after_scheme: &str) -> Result<Self, LocationError> {
+        if after_scheme.contains(['?', '#']) {
             return Err(LocationError::query_or_fragment());
         }
-        let path = match rest.strip_prefix("//") {
-            Some(after_slashes) => {
-                let authority_end = after_slashes.find('/').unwrap_or(after_slashes.len());
-                if authority_end > 0 {
-                    return Err(LocationError::new(format!(
-                        "Use {} without a server name.",
-                        place.uri()
-                    )));
-                }
-                after_slashes
-            }
-            None => rest,
-        };
-        let mut segments: Vec<String> = Vec::new();
-        for raw in path.split('/').filter(|raw| !raw.is_empty()) {
-            let segment = unquote_without_controls(raw)?;
-            match segment.as_str() {
-                "." => {}
-                ".." => {
-                    segments.pop();
-                }
-                _ => segments.push(segment),
-            }
-        }
+        let path = strip_empty_authority(place, after_scheme)?;
+        let segments = decode_segments(path)?;
         Ok(Self { place, segments })
     }
 
     /// The canonical URI, each component escaped with Python's
     /// `quote(component, safe='')`.
-    pub fn uri(&self) -> String {
+    pub(crate) fn uri(&self) -> String {
         let escaped: Vec<String> = self
             .segments
             .iter()
@@ -249,6 +244,40 @@ impl VirtualFolder {
             .collect();
         format!("{}{}", self.place.uri(), escaped.join("/"))
     }
+}
+
+/// The path of `trash:///a` or `trash:a`. GIO's virtual folders have no
+/// server, so `trash://host/a` is refused.
+fn strip_empty_authority(place: VirtualPlace, after_scheme: &str) -> Result<&str, LocationError> {
+    let Some(after_slashes) = after_scheme.strip_prefix("//") else {
+        return Ok(after_scheme);
+    };
+    let has_authority = !after_slashes.is_empty() && !after_slashes.starts_with('/');
+    if has_authority {
+        return Err(LocationError::new(format!(
+            "Use {} without a server name.",
+            place.uri()
+        )));
+    }
+    Ok(after_slashes)
+}
+
+/// Decodes the non-empty components of `path` and resolves `.` and `..`.
+/// Each component is decoded on its own, so an escaped `/` inside one (as
+/// in `recent:///` item names) stays part of it.
+fn decode_segments(path: &str) -> Result<Vec<String>, LocationError> {
+    let mut segments = Vec::new();
+    for escaped in path.split('/').filter(|escaped| !escaped.is_empty()) {
+        let segment = unquote_without_controls(escaped)?;
+        match segment.as_str() {
+            "." => {}
+            ".." => {
+                segments.pop();
+            }
+            _ => segments.push(segment),
+        }
+    }
+    Ok(segments)
 }
 
 #[cfg(test)]
