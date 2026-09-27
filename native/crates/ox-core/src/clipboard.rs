@@ -17,8 +17,8 @@
 //! | [`KDE_CUT`] | Dolphin and other KDE apps | `1` for cut, `0` for copy |
 //!
 //! Paste tries [`CUSTOM`], then [`GNOME`], then [`URI_LIST`] with the
-//! [`KDE_CUT`] marker of the same clipboard owner; [`decode()`] reads one of
-//! them.
+//! [`KDE_CUT`] marker of the same clipboard owner. [`FileListFormat`] names
+//! these three formats, and [`decode()`] reads one of them.
 
 mod decode;
 mod lines;
@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::location::{require_item_uri, LocationError};
 
-pub use decode::decode;
+pub use decode::{decode, FileListFormat};
 
 /// The app's own cross-process format; the name is a compatibility
 /// contract with the Python app and older Winspace windows.
@@ -124,8 +124,9 @@ pub struct ClipboardPayload {
 /// A validated, ordered file selection and the identity of its clipboard
 /// owner. Serializes as the [`CUSTOM`] payload.
 ///
-/// The fields are private so encoding cannot bypass URI validation or inject
-/// another line into an external file-list format.
+/// The fields are private so that no selection can bypass the safety rule
+/// (validated items) that [`ClipboardFiles::new`] enforces, and so that
+/// encoding can never inject another line into an external file-list format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ClipboardFiles {
     mode: ClipboardMode,
@@ -154,6 +155,11 @@ impl ClipboardFiles {
         let mut seen = HashSet::new();
         let mut canonical = Vec::with_capacity(uris.len());
         for uri in uris {
+            // Safety rule (validated items): only canonical file and folder
+            // URIs enter a selection, so no payload can carry credentials, a
+            // share or device root, or an encoded line break into the GNOME
+            // or URI-list formats (`validate_clipboard` in
+            // desktop/file_clipboard.py, `require_item_uri` in desktop/core.py).
             let uri = require_item_uri(uri)?;
             if seen.insert(uri.clone()) {
                 canonical.push(uri);

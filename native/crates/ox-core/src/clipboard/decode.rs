@@ -15,6 +15,52 @@ const MAX_CUT_MARKER_BYTES: usize = 16;
 /// The longest token kept from a [`CUSTOM`] payload, in characters.
 const MAX_TOKEN_CHARS: usize = 80;
 
+/// A file-list format another window may publish, in the order paste tries
+/// them.
+///
+/// Plain text is deliberately not a variant: text copied in another
+/// application is never pasted as files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileListFormat<'a> {
+    /// [`CUSTOM`]: JSON with mode, URIs and owner token.
+    Custom,
+    /// [`GNOME`]: `copy` or `cut`, then one URI per line.
+    Gnome,
+    /// [`URI_LIST`]: one URI per line, a cut only with an exact KDE marker.
+    UriList {
+        /// The [`KDE_CUT`](super::KDE_CUT) payload, which the caller must
+        /// read from the same clipboard owner as the list; `None` when the
+        /// owner offers none.
+        kde_cut_marker: Option<&'a [u8]>,
+    },
+}
+
+impl FileListFormat<'_> {
+    /// The MIME type the format is published and read as.
+    pub fn mime_type(self) -> &'static str {
+        match self {
+            Self::Custom => CUSTOM,
+            Self::Gnome => GNOME,
+            Self::UriList { .. } => URI_LIST,
+        }
+    }
+
+    /// The file-list format published as `mime_type`, such as the one a
+    /// clipboard read reports it chose.
+    ///
+    /// A URI list comes without its KDE marker, which the caller reads next
+    /// from the same owner. Plain text and the [`KDE_CUT`](super::KDE_CUT)
+    /// marker itself are not file lists, so they give `None`.
+    pub fn from_mime_type(mime_type: &str) -> Option<Self> {
+        match mime_type {
+            CUSTOM => Some(Self::Custom),
+            GNOME => Some(Self::Gnome),
+            URI_LIST => Some(Self::UriList { kde_cut_marker: None }),
+            _ => None,
+        }
+    }
+}
+
 /// The [`CUSTOM`] payload as read. The token may be any JSON value; only a
 /// short string is kept.
 #[derive(Deserialize)]
@@ -25,22 +71,20 @@ struct CustomPayload {
     token: serde_json::Value,
 }
 
-/// Decodes a recognized file format.
+/// Decodes a file list published in `format`.
 ///
-/// Safety rule (fail closed): malformed, oversized and plain-text payloads
-/// are never a file list, whatever format they claim to be. The
-/// `kde_cut_marker` affects only `text/uri-list`; the GTK caller must read
-/// it from the same clipboard owner as `payload`.
-pub fn decode(mime_type: &str, payload: &[u8], kde_cut_marker: Option<&[u8]>) -> Option<ClipboardFiles> {
+/// Safety rule (fail closed): malformed and oversized payloads are never a
+/// file list, whatever format they claim to be, and plain text cannot even
+/// be named as a [`FileListFormat`].
+pub fn decode(format: FileListFormat<'_>, payload: &[u8]) -> Option<ClipboardFiles> {
     if payload.is_empty() || payload.len() > MAX_BYTES {
         return None;
     }
     let text = std::str::from_utf8(payload).ok()?.trim_end_matches('\0');
-    match mime_type {
-        CUSTOM => decode_custom(text),
-        GNOME => decode_gnome(payload, text),
-        URI_LIST => decode_uri_list(payload, text, kde_cut_marker),
-        _ => None,
+    match format {
+        FileListFormat::Custom => decode_custom(text),
+        FileListFormat::Gnome => decode_gnome(payload, text),
+        FileListFormat::UriList { kde_cut_marker } => decode_uri_list(payload, text, kde_cut_marker),
     }
 }
 
