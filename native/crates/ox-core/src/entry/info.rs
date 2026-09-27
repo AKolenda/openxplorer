@@ -9,7 +9,7 @@
 use gio::prelude::*;
 
 use super::attributes::{optional_boolean, path_attribute, string_attribute};
-use super::classify::{classify_entry, ItemMetadata};
+use super::classify::{classify_entry, Classification, ItemMetadata};
 use super::type_label::type_label;
 use super::{Entry, EntryKind};
 use crate::location::split_location;
@@ -39,14 +39,7 @@ pub fn entry_for_uri(uri: &str, info: &gio::FileInfo) -> Entry {
 fn build_entry(uri: &str, info: &gio::FileInfo, fallback_name: impl FnOnce() -> Option<String>) -> Entry {
     let kind = file_kind(info);
     let content_type = string_attribute(info, "standard::content-type");
-    let backend_target = string_attribute(info, "standard::target-uri");
-    let classification = classify_entry(&ItemMetadata {
-        kind,
-        uri,
-        content_type: content_type.as_deref(),
-        target_uri: backend_target.as_deref(),
-        has_virtual_flag: info.boolean("standard::is-virtual"),
-    });
+    let classification = classify_info(uri, info, kind, content_type.as_deref());
     let type_label = type_label(classification.folder_type, content_type.as_deref());
     // A folder's own size is not the size of its contents, so none is shown.
     let size = if classification.is_dir {
@@ -76,6 +69,24 @@ fn build_entry(uri: &str, info: &gio::FileInfo, fallback_name: impl FnOnce() -> 
         can_write: optional_boolean(info, "access::can-write"),
         serialized_icon: serialized_icon(info),
     }
+}
+
+/// Classifies the item at `uri` from its kind, content type and the
+/// backend's target and virtual flag.
+fn classify_info(
+    uri: &str,
+    info: &gio::FileInfo,
+    kind: EntryKind,
+    content_type: Option<&str>,
+) -> Classification {
+    let backend_target = string_attribute(info, "standard::target-uri");
+    classify_entry(&ItemMetadata {
+        kind,
+        uri,
+        content_type,
+        target_uri: backend_target.as_deref(),
+        has_virtual_flag: info.boolean("standard::is-virtual"),
+    })
 }
 
 /// `standard::type`, or [`EntryKind::Unknown`] when the backend did not

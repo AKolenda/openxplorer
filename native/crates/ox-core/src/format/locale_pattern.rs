@@ -264,52 +264,92 @@ mod tests {
         pattern: &'static str,
     }
 
+    const DATE_CASES: [DateCase; 8] = [
+        DateCase {
+            description: "C",
+            sample: "11/22/33",
+            pattern: "%m/%d/%Y",
+        },
+        DateCase {
+            description: "en_US",
+            sample: "11/22/2033",
+            pattern: "%m/%d/%Y",
+        },
+        DateCase {
+            description: "en_GB",
+            sample: "22/11/33",
+            pattern: "%d/%m/%Y",
+        },
+        DateCase {
+            description: "de_DE",
+            sample: "22.11.2033",
+            pattern: "%d.%m.%Y",
+        },
+        DateCase {
+            description: "en_CA, sv_SE",
+            sample: "2033-11-22",
+            pattern: "%Y-%m-%d",
+        },
+        DateCase {
+            description: "ja_JP",
+            sample: "2033年11月22日",
+            pattern: "%Y年%m月%d日",
+        },
+        DateCase {
+            description: "ko_KR",
+            sample: "2033. 11. 22.",
+            pattern: "%Y. %m. %d.",
+        },
+        DateCase {
+            description: "a literal percent sign",
+            sample: "22%11%33",
+            pattern: "%d%%%m%%%Y",
+        },
+    ];
+
+    const TIME_CASES: [TimeCase; 6] = [
+        TimeCase {
+            description: "C, de_DE",
+            sample: "13:44:55",
+            day_period: "PM",
+            pattern: "%H:%M:%S",
+        },
+        TimeCase {
+            description: "en_US",
+            sample: "01:44:55 PM",
+            day_period: "PM",
+            pattern: "%-I:%M:%S %p",
+        },
+        TimeCase {
+            description: "en_IN",
+            sample: "01:44:55 PM UTC",
+            day_period: "PM",
+            pattern: "%-I:%M:%S %p",
+        },
+        TimeCase {
+            description: "a space-padded hour",
+            sample: " 1:44:55 pm",
+            day_period: "pm",
+            pattern: "%-I:%M:%S %p",
+        },
+        TimeCase {
+            description: "a day period first",
+            sample: "午後01時44分55秒",
+            day_period: "午後",
+            pattern: "%p%-I時%M分%S秒",
+        },
+        TimeCase {
+            description: "dots between the fields",
+            sample: "13.44.55",
+            day_period: "",
+            pattern: "%H.%M.%S",
+        },
+    ];
+
     /// parity: LOOK-026
     #[test]
     fn date_patterns_keep_the_locale_order_with_a_full_year() {
-        let cases = [
-            DateCase {
-                description: "C",
-                sample: "11/22/33",
-                pattern: "%m/%d/%Y",
-            },
-            DateCase {
-                description: "en_US",
-                sample: "11/22/2033",
-                pattern: "%m/%d/%Y",
-            },
-            DateCase {
-                description: "en_GB",
-                sample: "22/11/33",
-                pattern: "%d/%m/%Y",
-            },
-            DateCase {
-                description: "de_DE",
-                sample: "22.11.2033",
-                pattern: "%d.%m.%Y",
-            },
-            DateCase {
-                description: "en_CA, sv_SE",
-                sample: "2033-11-22",
-                pattern: "%Y-%m-%d",
-            },
-            DateCase {
-                description: "ja_JP",
-                sample: "2033年11月22日",
-                pattern: "%Y年%m月%d日",
-            },
-            DateCase {
-                description: "ko_KR",
-                sample: "2033. 11. 22.",
-                pattern: "%Y. %m. %d.",
-            },
-            DateCase {
-                description: "a literal percent sign",
-                sample: "22%11%33",
-                pattern: "%d%%%m%%%Y",
-            },
-        ];
-        for case in cases {
+        for case in DATE_CASES {
             assert_eq!(
                 date_pattern_from_sample(case.sample).as_deref(),
                 Some(case.pattern),
@@ -337,45 +377,7 @@ mod tests {
     /// parity: LOOK-026
     #[test]
     fn time_patterns_follow_the_locale_clock() {
-        let cases = [
-            TimeCase {
-                description: "C, de_DE",
-                sample: "13:44:55",
-                day_period: "PM",
-                pattern: "%H:%M:%S",
-            },
-            TimeCase {
-                description: "en_US",
-                sample: "01:44:55 PM",
-                day_period: "PM",
-                pattern: "%-I:%M:%S %p",
-            },
-            TimeCase {
-                description: "en_IN",
-                sample: "01:44:55 PM UTC",
-                day_period: "PM",
-                pattern: "%-I:%M:%S %p",
-            },
-            TimeCase {
-                description: "a space-padded hour",
-                sample: " 1:44:55 pm",
-                day_period: "pm",
-                pattern: "%-I:%M:%S %p",
-            },
-            TimeCase {
-                description: "a day period first",
-                sample: "午後01時44分55秒",
-                day_period: "午後",
-                pattern: "%p%-I時%M分%S秒",
-            },
-            TimeCase {
-                description: "dots between the fields",
-                sample: "13.44.55",
-                day_period: "",
-                pattern: "%H.%M.%S",
-            },
-        ];
-        for case in cases {
+        for case in TIME_CASES {
             assert_eq!(
                 time_pattern_from_sample(case.sample, case.day_period, "UTC").as_deref(),
                 Some(case.pattern),
@@ -384,6 +386,10 @@ mod tests {
                 case.sample
             );
         }
+    }
+
+    #[test]
+    fn incomplete_or_unrecognised_time_samples_fall_back() {
         assert_eq!(time_pattern_from_sample("PM", "PM", "UTC"), None);
         assert_eq!(time_pattern_from_sample("13:44:55:13", "", "UTC"), None);
         assert_eq!(time_pattern_from_sample("13 Uhr", "", "UTC"), None);
