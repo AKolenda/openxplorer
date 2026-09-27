@@ -31,7 +31,7 @@
 //! one.
 
 use super::parts::url_scheme;
-use super::text::{has_control, python_strip, quote_component, unquote_strict};
+use super::text::{python_strip, quote_component, unquote_without_controls};
 use super::{normalise_location, LocationError};
 use std::path::Path;
 
@@ -229,10 +229,7 @@ impl VirtualFolder {
         };
         let mut segments: Vec<String> = Vec::new();
         for raw in path.split('/').filter(|raw| !raw.is_empty()) {
-            let segment = unquote_strict(raw)?;
-            if has_control(&segment) {
-                return Err(LocationError::new("Encoded control characters are not allowed."));
-            }
+            let segment = unquote_without_controls(raw)?;
             match segment.as_str() {
                 "." => {}
                 ".." => {

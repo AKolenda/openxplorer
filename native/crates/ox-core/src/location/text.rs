@@ -2,11 +2,11 @@
 //! Character, escaping and path rules shared by the location parsers.
 //!
 //! `desktop/core.py` leans on a handful of Python standard-library functions
-//! (`str.strip`, `urllib.parse.quote`/`unquote`, `posixpath.normpath`) and
-//! the web UI on `decodeURIComponent`. Each helper here reproduces exactly
-//! one of those behaviours so that the native app produces the same
-//! canonical URIs as the Python app: both write them to the shared
-//! `settings.json`.
+//! (`str.strip`, `str.isspace`, `urllib.parse.quote`/`unquote`,
+//! `posixpath.normpath`) and the web UI on `decodeURIComponent`. Each helper
+//! here reproduces exactly one of those behaviours so that the native app
+//! produces the same canonical URIs as the Python app: both write them to the
+//! shared `settings.json`.
 
 use std::borrow::Cow;
 
@@ -26,7 +26,7 @@ pub(crate) const PYTHON_PATH_SAFE: &AsciiSet = &PYTHON_ALWAYS_SAFE.remove(b'/');
 
 /// True if `text` contains a C0 control character or DEL, the characters
 /// matched by `CONTROL = re.compile(r'[\x00-\x1f\x7f]')` in `core.py`.
-pub(crate) fn has_control(text: &str) -> bool {
+pub(crate) fn has_control_character(text: &str) -> bool {
     text.chars().any(|c| c <= '\u{1f}' || c == '\u{7f}')
 }
 
@@ -34,6 +34,12 @@ pub(crate) fn has_control(text: &str) -> bool {
 /// information separators U+001C..U+001F, which Rust does not count.
 pub(crate) fn is_python_space(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
+}
+
+/// True if `text` contains a character Python's `str.isspace()` accepts,
+/// like `any(c.isspace() for c in text)` in `core.py`.
+pub(crate) fn contains_python_space(text: &str) -> bool {
+    text.chars().any(is_python_space)
 }
 
 /// Python's `str.strip()` with no arguments.
@@ -62,6 +68,20 @@ pub(crate) fn unquote_strict(text: &str) -> Result<String, LocationError> {
         .map_err(|_| LocationError::new("Percent-encoded text in the address must be valid UTF-8."))
 }
 
+/// [`unquote_strict`] for the path of an address, which must not decode to
+/// a control character.
+///
+/// Safety rule (`core.py`: `if CONTROL.search(decoded)` after every
+/// `unquote`): a `%00` or `%0A` in an address never reaches GIO or a file
+/// name.
+pub(crate) fn unquote_without_controls(text: &str) -> Result<String, LocationError> {
+    let decoded = unquote_strict(text)?;
+    if has_control_character(&decoded) {
+        return Err(LocationError::new("Encoded control characters are not allowed."));
+    }
+    Ok(decoded)
+}
+
 /// `unquote(text)` with Python's default `errors='replace'`: invalid UTF-8
 /// becomes U+FFFD instead of failing.
 pub(crate) fn unquote_lossy(text: &str) -> String {
@@ -72,63 +92,68 @@ pub(crate) fn unquote_lossy(text: &str) -> String {
 /// any `%` that does not start a two-digit hex escape. The web UI fell back
 /// to showing the raw URI in that case, and so do the display helpers.
 pub(crate) fn decode_uri_component(text: &str) -> Option<String> {
-    let bytes = text.as_bytes();
-    let mut index = 0;
-    while let Some(offset) = bytes[index..].iter().position(|&b| b == b'%') {
-        let escape = index + offset;
-        let digits = bytes.get(escape + 1..escape + 3)?;
-        if !digits.iter().all(u8::is_ascii_hexdigit) {
-            return None;
-        }
-        index = escape + 3;
+    if !has_only_complete_escapes(text) {
+        return None;
     }
     percent_decode_str(text).decode_utf8().ok().map(Cow::into_owned)
 }
 
-/// `posixpath.normpath`: removes empty and `.` components and resolves
-/// `..` without touching the filesystem.
-///
-/// Like POSIX (and Python), exactly two leading slashes are kept because
-/// their meaning is implementation-defined; three or more become one. An
-/// empty result is `.`.
-#[expect(
-    clippy::bool_to_int_with_if,
-    reason = "the three leading-slash cases read best side by side"
-)]
-pub(crate) fn normpath(path: &str) -> String {
-    if path.is_empty() {
-        return ".".into();
-    }
-    let leading_slashes = if path.starts_with("//") && !path.starts_with("///") {
-        2
-    } else if path.starts_with('/') {
-        1
-    } else {
-        0
+/// True when every `%` in `text` starts a `%XX` escape.
+fn has_only_complete_escapes(text: &str) -> bool {
+    text.split('%').skip(1).all(starts_with_two_hex_digits)
+}
+
+fn starts_with_two_hex_digits(text: &str) -> bool {
+    let Some(digits) = text.as_bytes().get(..2) else {
+        return false;
     };
+    digits.iter().all(u8::is_ascii_hexdigit)
+}
+
+/// `posixpath.normpath`: removes empty and `.` components and resolves
+/// `..` without touching the filesystem. An empty result is `.`.
+pub(crate) fn normpath(path: &str) -> String {
+    let root = posix_root(path);
+    let components = resolve_dot_segments(path, !root.is_empty());
+    let normal = format!("{root}{}", components.join("/"));
+    if normal.is_empty() {
+        ".".into()
+    } else {
+        normal
+    }
+}
+
+/// The leading slashes `normpath` keeps. Like POSIX (and Python), exactly
+/// two are kept because their meaning is implementation-defined; three or
+/// more become one.
+fn posix_root(path: &str) -> &'static str {
+    if path.starts_with("//") && !path.starts_with("///") {
+        "//"
+    } else if path.starts_with('/') {
+        "/"
+    } else {
+        ""
+    }
+}
+
+/// The components of `path` without empty and `.` ones, each `..` removing
+/// the component before it. An absolute path stops at the root; a relative
+/// path keeps the `..` it cannot resolve.
+fn resolve_dot_segments(path: &str, is_absolute: bool) -> Vec<&str> {
     let mut components: Vec<&str> = Vec::new();
     for component in path.split('/') {
         match component {
             "" | "." => {}
+            ".." if !is_absolute && matches!(components.last(), None | Some(&"..")) => {
+                components.push(component);
+            }
             ".." => {
-                // A relative path keeps `..` it cannot resolve; an absolute
-                // path stops at the root.
-                let unresolvable = matches!(components.last(), None | Some(&".."));
-                if leading_slashes == 0 && unresolvable {
-                    components.push(component);
-                } else {
-                    components.pop();
-                }
+                components.pop();
             }
             _ => components.push(component),
         }
     }
-    let joined = format!("{}{}", "/".repeat(leading_slashes), components.join("/"));
-    if joined.is_empty() {
-        ".".into()
-    } else {
-        joined
-    }
+    components
 }
 
 /// Removes at most one trailing `/`, as the web UI's `replace(/\/$/, '')`.
@@ -142,13 +167,13 @@ mod tests {
 
     #[test]
     fn control_characters_match_the_python_pattern() {
-        assert!(has_control("a\u{0}b"));
-        assert!(has_control("line\n"));
-        assert!(has_control("\u{1f}"));
-        assert!(has_control("del\u{7f}"));
-        assert!(!has_control("Résumé 2026.txt"));
+        assert!(has_control_character("a\u{0}b"));
+        assert!(has_control_character("line\n"));
+        assert!(has_control_character("\u{1f}"));
+        assert!(has_control_character("del\u{7f}"));
+        assert!(!has_control_character("Résumé 2026.txt"));
         // C1 controls are not in `[\x00-\x1f\x7f]`.
-        assert!(!has_control("\u{85}"));
+        assert!(!has_control_character("\u{85}"));
     }
 
     #[test]
@@ -179,6 +204,17 @@ mod tests {
     }
 
     #[test]
+    fn encoded_control_characters_are_refused_in_address_paths() {
+        assert_eq!(unquote_without_controls("a%20b").as_deref(), Ok("a b"));
+        for escaped in ["a%00b", "line%0A", "%1F", "del%7F"] {
+            let error = unquote_without_controls(escaped).expect_err(escaped);
+            assert_eq!(error.message(), "Encoded control characters are not allowed.");
+        }
+        // C1 controls are not in `[\x00-\x1f\x7f]`.
+        assert_eq!(unquote_without_controls("%C2%85").as_deref(), Ok("\u{85}"));
+    }
+
+    #[test]
     fn decode_uri_component_rejects_malformed_escapes() {
         assert_eq!(decode_uri_component("Q3%20%231").as_deref(), Some("Q3 #1"));
         assert_eq!(decode_uri_component("%zz"), None);
@@ -186,25 +222,70 @@ mod tests {
         assert_eq!(decode_uri_component("%C3"), None);
     }
 
+    /// One `posixpath.normpath` example.
+    struct NormpathCase {
+        path: &'static str,
+        normal: &'static str,
+    }
+
     #[test]
     fn normpath_matches_posixpath() {
         let cases = [
-            ("", "."),
-            ("/", "/"),
-            ("//", "//"),
-            ("///", "/"),
-            ("//tmp/x", "//tmp/x"),
-            ("///tmp//x/", "/tmp/x"),
-            ("/a/./b/../c", "/a/c"),
-            ("/..", "/"),
-            ("/../../x", "/x"),
-            ("a/../..", ".."),
-            ("../a", "../a"),
-            ("a/b/..", "a"),
-            ("a/..", "."),
+            NormpathCase {
+                path: "",
+                normal: ".",
+            },
+            NormpathCase {
+                path: "/",
+                normal: "/",
+            },
+            NormpathCase {
+                path: "//",
+                normal: "//",
+            },
+            NormpathCase {
+                path: "///",
+                normal: "/",
+            },
+            NormpathCase {
+                path: "//tmp/x",
+                normal: "//tmp/x",
+            },
+            NormpathCase {
+                path: "///tmp//x/",
+                normal: "/tmp/x",
+            },
+            NormpathCase {
+                path: "/a/./b/../c",
+                normal: "/a/c",
+            },
+            NormpathCase {
+                path: "/..",
+                normal: "/",
+            },
+            NormpathCase {
+                path: "/../../x",
+                normal: "/x",
+            },
+            NormpathCase {
+                path: "a/../..",
+                normal: "..",
+            },
+            NormpathCase {
+                path: "../a",
+                normal: "../a",
+            },
+            NormpathCase {
+                path: "a/b/..",
+                normal: "a",
+            },
+            NormpathCase {
+                path: "a/..",
+                normal: ".",
+            },
         ];
-        for (input, expected) in cases {
-            assert_eq!(normpath(input), expected, "normpath({input:?})");
+        for case in cases {
+            assert_eq!(normpath(case.path), case.normal, "normpath({:?})", case.path);
         }
     }
 }

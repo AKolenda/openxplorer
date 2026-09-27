@@ -10,7 +10,6 @@
 use std::borrow::Cow;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use super::text::is_python_space;
 use super::{LocationError, DEVICE_SCHEMES};
 
 /// A location split into its URI components, like Python's `SplitResult`.
@@ -305,11 +304,6 @@ fn invalid_ipv6() -> LocationError {
 
 fn invalid_ipv6_address(host: &str) -> LocationError {
     LocationError::new(format!("{host:?} does not appear to be an IPv4 or IPv6 address"))
-}
-
-/// True if `text` contains a character Python's `str.isspace()` accepts.
-pub(crate) fn contains_python_space(text: &str) -> bool {
-    text.chars().any(is_python_space)
 }
 
 #[cfg(test)]

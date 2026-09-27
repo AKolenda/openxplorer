@@ -4,7 +4,7 @@
 //! Ports `validate_name`, `new_copy_name` and `safe_label` from
 //! `desktop/core.py`.
 
-use super::text::{has_control, python_strip};
+use super::text::{has_control_character, python_strip};
 use super::LocationError;
 
 /// Longest file name most Linux filesystems accept (`NAME_MAX`), in bytes.
@@ -26,7 +26,7 @@ pub fn validate_name(name: &str) -> Result<&str, LocationError> {
             "Enter a non-empty file name, not “.” or “..”.",
         ));
     }
-    if name.contains(['/', '\\']) || has_control(name) {
+    if name.contains(['/', '\\']) || has_control_character(name) {
         return Err(LocationError::new(
             "A name cannot contain slashes or control characters.",
         ));
@@ -91,7 +91,7 @@ pub fn safe_label(value: &str, fallback: &str) -> Result<String, LocationError> 
     if value.is_empty() {
         return Ok(fallback.to_string());
     }
-    if has_control(value) || value.chars().count() > MAX_LABEL_CHARS {
+    if has_control_character(value) || value.chars().count() > MAX_LABEL_CHARS {
         return Err(LocationError::new(
             "A sidebar label must be at most 120 characters and contain no control characters.",
         ));

@@ -12,10 +12,10 @@ use std::path::Path;
 
 use percent_encoding::percent_encode;
 
-use super::parts::{contains_python_space, split_location, url_scheme, urlsplit, DeviceMatch};
+use super::parts::{split_location, url_scheme, urlsplit, DeviceMatch};
 use super::text::{
-    has_control, normpath, python_strip, quote_component, quote_path, unquote_lossy, unquote_strict,
-    PYTHON_PATH_SAFE,
+    contains_python_space, has_control_character, normpath, python_strip, quote_component, quote_path,
+    unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,
 };
 use super::{LocationError, DEVICE_SCHEMES};
 
@@ -51,7 +51,7 @@ pub fn normalise_location(value: &str, base: Option<&str>, home: &Path) -> Resul
     if value.is_empty() {
         return Err(LocationError::new("Enter a local folder path or an SMB address."));
     }
-    if has_control(value) {
+    if has_control_character(value) {
         return Err(LocationError::new(
             "Control characters are not allowed in an address.",
         ));
@@ -165,7 +165,7 @@ fn unc_to_smb(value: &str) -> Result<String, LocationError> {
     let forward = value.replace('\\', "/");
     let mut components = forward.trim_start_matches('/').split('/');
     let server = components.next().unwrap_or_default();
-    if server.is_empty() || server.contains(['@', ':']) || has_control(server) {
+    if server.is_empty() || server.contains(['@', ':']) || has_control_character(server) {
         return Err(LocationError::new(
             "Use a server name without credentials, for example \\\\nas\\share.",
         ));
@@ -263,10 +263,7 @@ fn normalise_url(value: &str) -> Result<String, LocationError> {
             "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.",
         ));
     }
-    let decoded = unquote_strict(&parts.path)?;
-    if has_control(&decoded) {
-        return Err(LocationError::new("Encoded control characters are not allowed."));
-    }
+    let decoded = unquote_without_controls(&parts.path)?;
     if parts.scheme == "file" {
         normalise_file_url(&parts.netloc, &decoded)
     } else {
@@ -287,7 +284,7 @@ fn normalise_file_url(netloc: &str, decoded_path: &str) -> Result<String, Locati
 }
 
 fn normalise_smb_url(parts: &super::LocationParts, decoded_path: &str) -> Result<String, LocationError> {
-    if parts.netloc.contains('%') || has_control(&parts.netloc) {
+    if parts.netloc.contains('%') || has_control_character(&parts.netloc) {
         return Err(LocationError::new(
             "Use an unescaped server name without credentials or control characters.",
         ));
@@ -326,10 +323,7 @@ fn normalise_device_location(value: &str, scheme: &str) -> Result<String, Locati
         ));
     };
     check_device_authority(device.authority)?;
-    let decoded = unquote_strict(device.path)?;
-    if has_control(&decoded) {
-        return Err(LocationError::new("Encoded control characters are not allowed."));
-    }
+    let decoded = unquote_without_controls(device.path)?;
     let path = normpath(&format!("/{}", decoded.trim_start_matches('/')));
     Ok(format!("{scheme}://{}{}", device.authority, quote_path(&path)))
 }
@@ -342,7 +336,7 @@ fn check_device_authority(authority: &str) -> Result<(), LocationError> {
     if too_long
         || authority.contains(['@', '%'])
         || contains_python_space(authority)
-        || has_control(authority)
+        || has_control_character(authority)
     {
         return Err(invalid());
     }
