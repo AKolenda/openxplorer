@@ -476,8 +476,9 @@ mod tests {
         assert_eq!(ipv6.hostname().as_deref(), Some("fe80::1"));
         assert_eq!(ipv6.port(), Ok(Some(139)));
         assert_eq!(split("smb://nas:/x").port(), Ok(None));
-        assert!(split("smb://nas:99999/").port().is_err());
-        assert!(split("smb://nas:4x/").port().is_err());
+        let invalid_port = Err(LocationError::new("Invalid SMB port."));
+        assert_eq!(split("smb://nas:99999/").port(), invalid_port);
+        assert_eq!(split("smb://nas:4x/").port(), invalid_port);
         assert_eq!(split("smb:///share").hostname(), None);
     }
 

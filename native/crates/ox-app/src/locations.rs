@@ -7,9 +7,9 @@
 //! breadcrumb divider and small comparisons. ox-core does not model the
 //! virtual pages, so they live here.
 //!
-//! The window does not collect mounted devices for ox-core's
-//! [`LocationContext`] yet, so names come from `LocationContext::default()`,
-//! which calls every phone "Connected device".
+//! Names come from `LocationContext::default()`: this window does not
+//! collect the mounted devices a [`LocationContext`] can name, so every
+//! phone is called "Connected device".
 
 use ox_core::location::{self, Crumb, LocationContext, LocationKind};
 
