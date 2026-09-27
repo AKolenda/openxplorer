@@ -275,3 +275,56 @@ impl Default for FolderModel {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::file_entry;
+
+    /// A model showing a tab's store of files called `names`, and the store.
+    fn model_with(names: &[&str]) -> (FolderModel, gio::ListStore) {
+        let store = gio::ListStore::new::<FileItem>();
+        for name in names {
+            store.append(&FileItem::new(file_entry(name)));
+        }
+        let model = FolderModel::new();
+        model.set_store(Some(&store));
+        (model, store)
+    }
+
+    fn uri(name: &str) -> String {
+        file_entry(name).uri
+    }
+
+    fn sorted_selection(model: &FolderModel) -> Vec<String> {
+        let mut selected = model.selected_uris();
+        selected.sort();
+        selected
+    }
+
+    #[gtk::test]
+    fn restoring_a_selection_selects_exactly_the_listed_uris() {
+        let (model, _store) = model_with(&["a.txt", "b.txt", "c.txt"]);
+        let saved = [uri("c.txt"), uri("a.txt"), uri("gone.txt"), uri("a.txt")];
+        model.select_uris(&saved);
+        assert_eq!(sorted_selection(&model), [uri("a.txt"), uri("c.txt")]);
+    }
+
+    #[gtk::test]
+    fn restoring_an_empty_selection_clears_it() {
+        let (model, _store) = model_with(&["a.txt", "b.txt"]);
+        model.select_all();
+        model.select_uris(&[]);
+        assert!(model.selected_uris().is_empty());
+    }
+
+    #[gtk::test]
+    fn a_whole_selected_folder_is_restored() {
+        let names: Vec<String> = (0..2000).map(|number| format!("photo {number}.jpg")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (model, _store) = model_with(&names);
+        let everything: Vec<String> = names.iter().map(|name| uri(name)).collect();
+        model.select_uris(&everything);
+        assert_eq!(model.summary().count, 2000);
+    }
+}

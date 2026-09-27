@@ -175,14 +175,18 @@ fn navigating_to_another_folder_starts_at_the_top_without_a_selection() {
 fn the_folder_watch_survives_a_reload() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    let watch_id = |test: &TestWindow| {
+        let session = test.window.imp().session.borrow();
+        let tab = session.active().expect("one tab");
+        tab.watch.as_ref().map(crate::folder_view::watch::Watch::id)
+    };
+    let before = watch_id(&test);
+    assert!(before.is_some(), "the folder is watched");
     test.window.refresh();
-    let session = test.window.imp().session.borrow();
-    let tab = session.active().expect("one tab");
-    assert!(tab.loading, "the reload is still running");
-    assert_eq!(
-        tab.watch.as_ref().map(|watch| watch.uri().to_owned()),
-        Some(fixture.uri())
-    );
+    assert!(test.window.is_loading(), "the reload is still running");
+    assert_eq!(watch_id(&test), before, "a reload keeps the same watch");
+    test.wait_for_listing("the reload");
+    assert_eq!(watch_id(&test), before);
 }
 
 #[gtk::test]
@@ -300,5 +304,11 @@ fn only_the_visible_view_holds_the_model() {
     assert!(
         content.grid.max_columns() < 64,
         "the tile budget follows the width"
+    );
+    test.activate("view", Some("details"));
+    assert!(content.details.model().is_some());
+    assert!(
+        content.grid.model().is_none(),
+        "switching back detaches the icon view"
     );
 }

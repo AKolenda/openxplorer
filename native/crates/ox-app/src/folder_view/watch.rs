@@ -106,6 +106,12 @@ impl Watch {
     pub fn uri(&self) -> &str {
         &self.uri
     }
+
+    /// Tells watches apart, for tests that a watch was kept.
+    #[cfg(test)]
+    pub fn id(&self) -> WatchId {
+        self.id
+    }
 }
 
 impl Drop for Watch {
