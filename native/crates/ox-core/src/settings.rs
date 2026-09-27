@@ -21,8 +21,8 @@
 //! [`warning`](Settings::warning) says where it went.
 //!
 //! The submodules split the work: `read` reads the file, `mutate` holds
-//! the changes, `save` locks and writes, and `storage` enforces the
-//! private-storage rules all of them rely on.
+//! the changes, and `save` locks and writes. Reading and saving rely on
+//! the private-storage rules of `crate::private_storage`.
 //!
 //! The `winspace` directory name is a compatibility contract; do not rename
 //! it.
@@ -36,14 +36,14 @@ mod preferences;
 mod python_conversions;
 mod read;
 mod save;
-mod storage;
 #[cfg(test)]
 mod test_support;
 
 use std::path::{Path, PathBuf};
 
+pub use crate::private_storage::StorageRefusal;
 pub use choices::{Appearance, ContextMenu, Theme, View};
-pub use error::{SettingsError, StorageRefusal};
+pub use error::SettingsError;
 pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use preferences::{

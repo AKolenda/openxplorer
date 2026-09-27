@@ -2,10 +2,12 @@
 //! Private application state: owned 0700 directories and 0600 files that
 //! are never symlinks, hard links, FIFOs or devices.
 //!
-//! Ports `desktop/private_storage.py`; the settings lock and the atomic
-//! replace built on it are in the `save` module. This is defence in depth
-//! against misplaced or tampered XDG state, not isolation from another
-//! process running as the same user.
+//! Ports `desktop/private_storage.py`, which several Python services use.
+//! The settings keep `settings.json` here (their lock and atomic replace
+//! are in `settings::save`); the search index will check its SQLite files
+//! with [`validate_sqlite_files`] once it is ported. This is defence in
+//! depth against misplaced or tampered XDG state, not isolation from
+//! another process running as the same user.
 //!
 //! Every open uses `O_NOFOLLOW` (a symlinked leaf fails with `ELOOP`) and
 //! `O_NONBLOCK` (a FIFO never blocks), and the checks run on the opened
@@ -15,33 +17,108 @@
 use std::fs::{self, DirBuilder, File, Metadata, OpenOptions, Permissions};
 use std::io::{self, Read};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
-use std::path::Path;
-
-use super::error::{StorageRefusal, WithPath};
-use super::SettingsError;
-
-/// Largest settings file read, in bytes.
-pub(super) const SETTINGS_SIZE_LIMIT: u64 = 4 * 1024 * 1024;
+use std::path::{Path, PathBuf};
 
 /// Mode of private directories.
 const DIRECTORY_MODE: u32 = 0o700;
 
 /// Mode of private files.
-pub(super) const FILE_MODE: u32 = 0o600;
+pub(crate) const FILE_MODE: u32 = 0o600;
 
 /// The sidecar files SQLite keeps next to a database.
 const SQLITE_SIDECAR_SUFFIXES: [&str; 3] = ["-wal", "-shm", "-journal"];
 
+/// Why private storage refused a file or directory, or could not use it.
+///
+/// Python raises `ValueError` for a refusal and `OSError` for everything
+/// else; both name the path, so a warning can say which file it was.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum StorageError {
+    /// `path` broke a private-storage rule.
+    #[error("{reason} ({})", path.display())]
+    Refused {
+        /// The file or directory that was refused.
+        path: PathBuf,
+        /// Which rule it broke.
+        reason: StorageRefusal,
+    },
+    /// The file system refused an operation on `path`, for example `ELOOP`
+    /// when the path is a symlink.
+    #[error("{error}: {}", path.display())]
+    Io {
+        /// The file or directory the operation was on.
+        path: PathBuf,
+        /// What the operating system reported.
+        error: io::Error,
+    },
+}
+
+/// The private-storage rule a file or directory broke, in the words of
+/// `desktop/private_storage.py`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum StorageRefusal {
+    /// The application's own directory belongs to another user.
+    #[error("Application state directory must be owned by this user.")]
+    ForeignDirectory,
+    /// A hard link, FIFO, device, or a file that belongs to another user.
+    #[error("Application state must be an owned regular file, not a link or device.")]
+    NotPrivateFile,
+    /// Larger than the read limit. The message names 4 MiB whatever the
+    /// limit, as `private_text` in `private_storage.py` does.
+    #[error("Settings file exceeds the 4 MiB safety limit.")]
+    TooLarge,
+    /// Not UTF-8, which Python's `decode('utf-8')` refuses.
+    #[error("The settings file is not valid UTF-8 text.")]
+    NotText,
+}
+
+impl StorageError {
+    /// A refusal of `path`.
+    pub(crate) fn refused(path: &Path, reason: StorageRefusal) -> Self {
+        Self::Refused {
+            path: path.to_path_buf(),
+            reason,
+        }
+    }
+
+    /// A file-system error on `path`.
+    pub(crate) fn io(path: &Path, error: io::Error) -> Self {
+        Self::Io {
+            path: path.to_path_buf(),
+            error,
+        }
+    }
+
+    /// Whether this is a missing file or directory, which Python reports as
+    /// `FileNotFoundError` and most callers treat as "nothing there yet".
+    pub(crate) fn is_not_found(&self) -> bool {
+        matches!(self, Self::Io { error, .. } if error.kind() == io::ErrorKind::NotFound)
+    }
+}
+
+/// Adds the affected path to an I/O error, as Python's `OSError` does.
+pub(crate) trait WithPath<T> {
+    /// This result, with an error turned into [`StorageError::Io`] on
+    /// `path`.
+    fn with_path(self, path: &Path) -> Result<T, StorageError>;
+}
+
+impl<T> WithPath<T> for io::Result<T> {
+    fn with_path(self, path: &Path) -> Result<T, StorageError> {
+        self.map_err(|error| StorageError::io(path, error))
+    }
+}
+
 /// How a private file is opened.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(super) struct PrivateFileOptions {
+pub(crate) struct PrivateFileOptions {
     /// Create the file (mode 0600) if it is missing.
-    pub(super) create: bool,
+    pub(crate) create: bool,
     /// Open for reading and writing instead of reading only.
-    pub(super) writable: bool,
+    pub(crate) writable: bool,
     /// Accept a file whose last directory entry was removed after opening,
     /// as SQLite does with its sidecar files. Its mode is left unchanged.
-    pub(super) allow_unlinked: bool,
+    pub(crate) allow_unlinked: bool,
 }
 
 /// Creates `path` (and missing parents) and makes it a private directory:
@@ -56,10 +133,10 @@ pub(super) struct PrivateFileOptions {
 ///
 /// # Errors
 ///
-/// [`SettingsError::Io`] if the directory cannot be created or opened,
-/// including `ELOOP` for a symlink; [`SettingsError::Refused`] with
+/// [`StorageError::Io`] if the directory cannot be created or opened,
+/// including `ELOOP` for a symlink; [`StorageError::Refused`] with
 /// [`StorageRefusal::ForeignDirectory`] if it is owned by another user.
-pub(super) fn private_directory(path: &Path) -> Result<(), SettingsError> {
+pub(crate) fn private_directory(path: &Path) -> Result<(), StorageError> {
     create_directory(path).with_path(path)?;
     let directory = OpenOptions::new()
         .read(true)
@@ -68,7 +145,7 @@ pub(super) fn private_directory(path: &Path) -> Result<(), SettingsError> {
         .with_path(path)?;
     let metadata = directory.metadata().with_path(path)?;
     if !metadata.is_dir() || metadata.uid() != effective_uid() {
-        return Err(SettingsError::refused(path, StorageRefusal::ForeignDirectory));
+        return Err(StorageError::refused(path, StorageRefusal::ForeignDirectory));
     }
     directory
         .set_permissions(Permissions::from_mode(DIRECTORY_MODE))
@@ -81,16 +158,16 @@ pub(super) fn private_directory(path: &Path) -> Result<(), SettingsError> {
 ///
 /// # Errors
 ///
-/// [`SettingsError::Io`] if the file cannot be opened, including `ELOOP`
+/// [`StorageError::Io`] if the file cannot be opened, including `ELOOP`
 /// for a symlink and `ENOENT` for a missing file without
-/// [`create`](PrivateFileOptions::create); [`SettingsError::Refused`] with
+/// [`create`](PrivateFileOptions::create); [`StorageError::Refused`] with
 /// [`StorageRefusal::NotPrivateFile`] for a hard link, FIFO, device or a
 /// file owned by another user.
-pub(super) fn private_file(path: &Path, options: PrivateFileOptions) -> Result<File, SettingsError> {
+pub(crate) fn private_file(path: &Path, options: PrivateFileOptions) -> Result<File, StorageError> {
     let file = open_without_following(path, options).with_path(path)?;
     let opened = OpenedFile::inspect(&file.metadata().with_path(path)?);
     match opened.verdict(options) {
-        Verdict::Refuse => Err(SettingsError::refused(path, StorageRefusal::NotPrivateFile)),
+        Verdict::Refuse => Err(StorageError::refused(path, StorageRefusal::NotPrivateFile)),
         Verdict::AcceptUnlinked => Ok(file),
         Verdict::AcceptAndMakePrivate => {
             file.set_permissions(Permissions::from_mode(FILE_MODE))
@@ -106,10 +183,10 @@ pub(super) fn private_file(path: &Path, options: PrivateFileOptions) -> Result<F
 /// # Errors
 ///
 /// Everything [`private_file`] refuses except a missing file.
-pub(super) fn private_file_if_present(
+pub(crate) fn private_file_if_present(
     path: &Path,
     options: PrivateFileOptions,
-) -> Result<Option<File>, SettingsError> {
+) -> Result<Option<File>, StorageError> {
     match private_file(path, options) {
         Ok(file) => Ok(Some(file)),
         Err(error) if error.is_not_found() => Ok(None),
@@ -119,8 +196,8 @@ pub(super) fn private_file_if_present(
 
 /// Reads an opened file as UTF-8 text of at most `limit` bytes. Together
 /// with [`private_file`] this is `private_text` in `private_storage.py`;
-/// the reader calls them one after the other so that it can tell a refused
-/// file from unusable contents.
+/// the settings reader calls them one after the other so that it can tell
+/// a refused file from unusable contents.
 ///
 /// Safety rule "settings reads are bounded" (`private_text` in
 /// `private_storage.py`): a file over the limit is refused before it is
@@ -128,21 +205,21 @@ pub(super) fn private_file_if_present(
 ///
 /// # Errors
 ///
-/// [`SettingsError::Io`] if reading fails; [`SettingsError::Refused`] with
+/// [`StorageError::Io`] if reading fails; [`StorageError::Refused`] with
 /// [`StorageRefusal::TooLarge`] or [`StorageRefusal::NotText`] if the
 /// contents are too large or not UTF-8.
-pub(super) fn read_limited_text(file: File, path: &Path, limit: u64) -> Result<String, SettingsError> {
+pub(crate) fn read_limited_text(file: File, path: &Path, limit: u64) -> Result<String, StorageError> {
     if file.metadata().with_path(path)?.len() > limit {
-        return Err(SettingsError::refused(path, StorageRefusal::TooLarge));
+        return Err(StorageError::refused(path, StorageRefusal::TooLarge));
     }
     let mut bytes = Vec::new();
     file.take(limit.saturating_add(1))
         .read_to_end(&mut bytes)
         .with_path(path)?;
     if bytes.len() as u64 > limit {
-        return Err(SettingsError::refused(path, StorageRefusal::TooLarge));
+        return Err(StorageError::refused(path, StorageRefusal::TooLarge));
     }
-    String::from_utf8(bytes).map_err(|_| SettingsError::refused(path, StorageRefusal::NotText))
+    String::from_utf8(bytes).map_err(|_| StorageError::refused(path, StorageRefusal::NotText))
 }
 
 /// Checks a SQLite database and any `-wal`, `-shm` or `-journal` sidecar
@@ -161,7 +238,7 @@ pub(super) fn read_limited_text(file: File, path: &Path, limit: u64) -> Result<S
                   (ROADMAP.md: recover the remaining Python application services)"
     )
 )]
-pub(super) fn validate_sqlite_files(path: &Path) -> Result<(), SettingsError> {
+pub(crate) fn validate_sqlite_files(path: &Path) -> Result<(), StorageError> {
     let database = PrivateFileOptions {
         writable: true,
         ..PrivateFileOptions::default()
@@ -271,8 +348,7 @@ mod tests {
     use std::os::unix::fs::symlink;
 
     use super::*;
-    use crate::settings::test_support::mode;
-    use crate::test_support::make_fifo;
+    use crate::test_support::{make_fifo, mode};
 
     fn writable() -> PrivateFileOptions {
         PrivateFileOptions {
@@ -291,7 +367,7 @@ mod tests {
 
     /// Python's `private_text`: [`private_file`], then
     /// [`read_limited_text`].
-    fn private_text(path: &Path, limit: u64) -> Result<String, SettingsError> {
+    fn private_text(path: &Path, limit: u64) -> Result<String, StorageError> {
         let file = private_file(path, PrivateFileOptions::default())?;
         read_limited_text(file, path, limit)
     }
@@ -331,7 +407,7 @@ mod tests {
         fs::set_permissions(&real, Permissions::from_mode(0o755)).unwrap();
         let link = root.path().join("link");
         symlink(&real, &link).unwrap();
-        assert!(matches!(private_directory(&link), Err(SettingsError::Io { .. })));
+        assert!(matches!(private_directory(&link), Err(StorageError::Io { .. })));
         assert_eq!(mode(&real), 0o755);
     }
 
@@ -347,7 +423,7 @@ mod tests {
         symlink(&real, &link).unwrap();
         assert!(matches!(
             private_file(&link, writable()),
-            Err(SettingsError::Io { .. })
+            Err(StorageError::Io { .. })
         ));
         assert_eq!(fs::read_to_string(&real).unwrap(), "private");
         assert_eq!(mode(&real), 0o644);
@@ -364,7 +440,7 @@ mod tests {
         let result = private_file(&root.path().join("link"), PrivateFileOptions::default());
         assert!(matches!(
             result,
-            Err(SettingsError::Refused {
+            Err(StorageError::Refused {
                 reason: StorageRefusal::NotPrivateFile,
                 ..
             })
@@ -381,7 +457,7 @@ mod tests {
         let result = private_file(&fifo, PrivateFileOptions::default());
         assert!(matches!(
             result,
-            Err(SettingsError::Refused {
+            Err(StorageError::Refused {
                 reason: StorageRefusal::NotPrivateFile,
                 ..
             })
@@ -397,7 +473,7 @@ mod tests {
         fs::write(&file, [b'x'; 33]).unwrap();
         assert!(matches!(
             private_text(&file, 32),
-            Err(SettingsError::Refused {
+            Err(StorageError::Refused {
                 reason: StorageRefusal::TooLarge,
                 ..
             })
@@ -414,7 +490,7 @@ mod tests {
         fs::write(&target, b"unchanged").unwrap();
         symlink(&target, root.path().join("search.sqlite3")).unwrap();
         let result = validate_sqlite_files(&root.path().join("search.sqlite3"));
-        assert!(matches!(result, Err(SettingsError::Io { .. })));
+        assert!(matches!(result, Err(StorageError::Io { .. })));
         assert_eq!(fs::read(&target).unwrap(), b"unchanged");
     }
 
@@ -430,7 +506,7 @@ mod tests {
         symlink(&target, root.path().join("search.sqlite3-wal")).unwrap();
         assert!(matches!(
             validate_sqlite_files(&database),
-            Err(SettingsError::Io { .. })
+            Err(StorageError::Io { .. })
         ));
         assert_eq!(fs::read(&target).unwrap(), b"unchanged");
         fs::remove_file(root.path().join("search.sqlite3-wal")).unwrap();
@@ -508,6 +584,6 @@ mod tests {
         let link = root.path().join("link");
         symlink(&missing, &link).unwrap();
         let result = private_file_if_present(&link, PrivateFileOptions::default());
-        assert!(matches!(result, Err(SettingsError::Io { .. })));
+        assert!(matches!(result, Err(StorageError::Io { .. })));
     }
 }

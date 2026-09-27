@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The error of every settings change and private-storage check.
+//! The error of every settings change.
 //!
-//! Mirrors the exceptions `desktop/core.py` and `desktop/private_storage.py`
-//! raise. Python raises `ValueError` for a request or stored data that fails
-//! validation, for a location or label it refuses, and for a file private
-//! storage refuses; here they are [`SettingsError::Invalid`],
-//! [`SettingsError::Location`] and [`SettingsError::Refused`]. A refusal
-//! names the refused path, as Python's `OSError` ([`SettingsError::Io`])
-//! does, so the settings warning can say which file was refused.
+//! Mirrors the exceptions `desktop/core.py` raises, including those of the
+//! private storage it relies on (`desktop/private_storage.py`, ported in
+//! `crate::private_storage`). Python raises `ValueError` for a request or
+//! stored data that fails validation, for a location or label it refuses,
+//! and for a file private storage refuses; here they are
+//! [`SettingsError::Invalid`], [`SettingsError::Location`] and
+//! [`SettingsError::Refused`]. A refusal names the refused path, as
+//! Python's `OSError` ([`SettingsError::Io`]) does, so the settings warning
+//! can say which file was refused.
 
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::location::LocationError;
+use crate::private_storage::{StorageError, StorageRefusal};
 
-/// Why a settings change or a private-storage check was refused.
+/// Why a settings change was refused or could not be saved.
 #[derive(Debug, thiserror::Error)]
 pub enum SettingsError {
     /// The request or the stored data failed validation (Python's
@@ -47,63 +50,43 @@ pub enum SettingsError {
     },
 }
 
-/// The private-storage rule a file or directory broke, in the words of
-/// `desktop/private_storage.py`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-pub enum StorageRefusal {
-    /// The application's own directory belongs to another user.
-    #[error("Application state directory must be owned by this user.")]
-    ForeignDirectory,
-    /// A hard link, FIFO, device, or a file that belongs to another user.
-    #[error("Application state must be an owned regular file, not a link or device.")]
-    NotPrivateFile,
-    /// Larger than the read limit. The message names 4 MiB whatever the
-    /// limit, as `private_text` in `private_storage.py` does.
-    #[error("Settings file exceeds the 4 MiB safety limit.")]
-    TooLarge,
-    /// Not UTF-8, which Python's `decode('utf-8')` refuses.
-    #[error("The settings file is not valid UTF-8 text.")]
-    NotText,
-}
-
 impl SettingsError {
     /// A validation error with a user-facing message.
     pub(super) fn invalid(message: impl Into<String>) -> Self {
         Self::Invalid(message.into())
     }
+}
 
-    /// A private-storage refusal of `path`.
-    pub(super) fn refused(path: &Path, reason: StorageRefusal) -> Self {
-        Self::Refused {
-            path: path.to_path_buf(),
-            reason,
+/// A private-storage error keeps its path, reason and message.
+impl From<StorageError> for SettingsError {
+    fn from(error: StorageError) -> Self {
+        match error {
+            StorageError::Refused { path, reason } => Self::Refused { path, reason },
+            StorageError::Io { path, error } => Self::Io { path, error },
         }
-    }
-
-    /// A file-system error on `path`.
-    pub(super) fn io(path: &Path, error: io::Error) -> Self {
-        Self::Io {
-            path: path.to_path_buf(),
-            error,
-        }
-    }
-
-    /// Whether this is a missing file or directory, which Python reports as
-    /// `FileNotFoundError` and most callers treat as "nothing there yet".
-    pub(super) fn is_not_found(&self) -> bool {
-        matches!(self, Self::Io { error, .. } if error.kind() == io::ErrorKind::NotFound)
     }
 }
 
-/// Adds the affected path to an I/O error, as Python's `OSError` does.
-pub(super) trait WithPath<T> {
-    /// This result, with an error turned into [`SettingsError::Io`] on
-    /// `path`.
-    fn with_path(self, path: &Path) -> Result<T, SettingsError>;
-}
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
 
-impl<T> WithPath<T> for io::Result<T> {
-    fn with_path(self, path: &Path) -> Result<T, SettingsError> {
-        self.map_err(|error| SettingsError::io(path, error))
+    use super::*;
+
+    /// The settings warning shows either type, so both must say the same.
+    #[test]
+    fn a_storage_error_keeps_its_message_as_a_settings_error() {
+        let path = Path::new("/state/settings.json");
+        let storage_errors = [
+            StorageError::refused(path, StorageRefusal::NotPrivateFile),
+            StorageError::io(path, io::Error::from_raw_os_error(libc::ELOOP)),
+        ];
+        for storage_error in storage_errors {
+            let message = storage_error.to_string();
+
+            let settings_error = SettingsError::from(storage_error);
+
+            assert_eq!(settings_error.to_string(), message);
+        }
     }
 }

@@ -13,9 +13,10 @@ use tempfile::TempDir;
 
 mod preferences;
 
-use super::test_support::{mode, names_starting_with, shown_quick_order};
+use super::test_support::{names_starting_with, shown_quick_order};
 use super::*;
 use crate::location::file_uri;
+use crate::test_support::mode;
 
 fn temporary_directory() -> TempDir {
     tempfile::tempdir().expect("a temporary directory")

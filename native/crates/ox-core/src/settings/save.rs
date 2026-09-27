@@ -2,9 +2,10 @@
 //! The settings lock and the atomic, private replace of `settings.json`.
 //!
 //! Ports the `flock` of `settings_mutation` and the temporary-file-and-
-//! rename of `Settings.save` in `desktop/core.py`, built on the private
-//! storage checks in the `storage` module. Keeping a damaged file as a
-//! backup ([`OldFile::KeepAsBackup`]) goes beyond the Python app.
+//! rename of `Settings.save` in `desktop/core.py`, built on the checks in
+//! `crate::private_storage`, whose [`StorageError`] every step here
+//! returns. Keeping a damaged file as a backup ([`OldFile::KeepAsBackup`])
+//! goes beyond the Python app.
 
 use std::fs::{self, File, OpenOptions, Permissions};
 use std::io::{self, Write};
@@ -12,11 +13,10 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::error::WithPath;
-use super::storage::{
-    private_directory, private_file, private_file_if_present, PrivateFileOptions, FILE_MODE,
+use crate::private_storage::{
+    private_directory, private_file, private_file_if_present, PrivateFileOptions, StorageError, WithPath,
+    FILE_MODE,
 };
-use super::SettingsError;
 
 /// An exclusive `flock` on `settings.lock`, released when dropped.
 #[derive(Debug)]
@@ -34,8 +34,8 @@ impl SettingsLock {
     ///
     /// Everything [`private_directory`] and [`private_file`] refuse for the
     /// directory and the lock file (a symlinked `settings.lock` fails with
-    /// [`SettingsError::Io`]), and a failing `flock`.
-    pub(super) fn acquire(directory: &Path) -> Result<Self, SettingsError> {
+    /// [`StorageError::Io`]), and a failing `flock`.
+    pub(super) fn acquire(directory: &Path) -> Result<Self, StorageError> {
         private_directory(directory)?;
         let path = directory.join(Self::FILE_NAME);
         let options = PrivateFileOptions {
@@ -74,7 +74,7 @@ pub(super) enum OldFile {
 /// # Errors
 ///
 /// Everything [`private_directory`] and [`private_file`] refuse for the
-/// directory and an existing target, and [`SettingsError::Io`] if writing,
+/// directory and an existing target, and [`StorageError::Io`] if writing,
 /// keeping the old file or the final rename fails. On any error the
 /// temporary file is removed and `target` is unchanged.
 pub(super) fn replace_private_file(
@@ -82,7 +82,7 @@ pub(super) fn replace_private_file(
     prefix: &str,
     contents: &[u8],
     old_file: OldFile,
-) -> Result<Option<PathBuf>, SettingsError> {
+) -> Result<Option<PathBuf>, StorageError> {
     let directory = parent_directory(target);
     private_directory(directory)?;
     // Safety rule "never write through a link": a symlinked or hard-linked
@@ -111,7 +111,7 @@ fn write_and_publish(
     target: &Path,
     contents: &[u8],
     old_file: OldFile,
-) -> Result<Option<PathBuf>, SettingsError> {
+) -> Result<Option<PathBuf>, StorageError> {
     let path = temporary.path.as_path();
     let file = &mut temporary.file;
     file.set_permissions(Permissions::from_mode(FILE_MODE))
@@ -127,7 +127,7 @@ fn write_and_publish(
             // Best effort: if this fails too, the backup still holds it.
             let _ = fs::rename(backup, target);
         }
-        return Err(SettingsError::io(target, error));
+        return Err(StorageError::io(target, error));
     }
     Ok(backup)
 }
@@ -138,7 +138,7 @@ fn write_and_publish(
 ///
 /// The new name is first reserved with an empty private file, so the
 /// rename can only replace that placeholder, never another file.
-fn move_aside(path: &Path) -> Result<Option<PathBuf>, SettingsError> {
+fn move_aside(path: &Path) -> Result<Option<PathBuf>, StorageError> {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     let prefix = format!("{name}.unreadable-{}-", unix_seconds());
     let UniqueFile {
@@ -155,7 +155,7 @@ fn move_aside(path: &Path) -> Result<Option<PathBuf>, SettingsError> {
     if error.kind() == io::ErrorKind::NotFound {
         Ok(None)
     } else {
-        Err(SettingsError::io(path, error))
+        Err(StorageError::io(path, error))
     }
 }
 
@@ -172,7 +172,7 @@ impl UniqueFile {
     /// `create_new` (`O_CREAT | O_EXCL`) never opens an existing file or
     /// follows a symlink, so a taken name fails instead of being
     /// overwritten.
-    fn create(directory: &Path, prefix: &str) -> Result<Self, SettingsError> {
+    fn create(directory: &Path, prefix: &str) -> Result<Self, StorageError> {
         let path = directory.join(format!("{prefix}{}", glib::uuid_string_random()));
         let file = OpenOptions::new()
             .write(true)
@@ -211,7 +211,7 @@ mod tests {
     use std::os::unix::fs::symlink;
 
     use super::*;
-    use crate::settings::test_support::mode;
+    use crate::test_support::mode;
 
     /// parity: SET-012, SAFE-009
     #[test]

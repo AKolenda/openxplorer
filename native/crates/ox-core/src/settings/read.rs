@@ -10,6 +10,7 @@
 //! stops reading with a warning; sections read before it are kept and the
 //! rest keep their defaults.
 
+use std::fmt::Display;
 use std::path::Path;
 
 use serde_json::{Map, Value};
@@ -18,11 +19,15 @@ use super::labels::bookmark_fallback_label;
 use super::model::{Bookmark, RecentEntry, SettingsData, MAX_BOOKMARKS, MAX_HIDDEN, MAX_ORDER, MAX_RECENT};
 use super::preferences::PreferencesUpdate;
 use super::python_conversions::{python_count, python_str};
-use super::storage::{
-    private_directory, private_file, read_limited_text, PrivateFileOptions, SETTINGS_SIZE_LIMIT,
-};
-use super::{FileState, Settings, SettingsError, StorageRefusal};
+use super::{FileState, Settings, SettingsError};
 use crate::location::{normalise, require_share, safe_label, LocationError};
+use crate::private_storage::{
+    private_directory, private_file, read_limited_text, PrivateFileOptions, StorageError, StorageRefusal,
+};
+
+/// Largest settings file read, in bytes: the default limit of
+/// `private_text` in `desktop/private_storage.py`.
+const SETTINGS_SIZE_LIMIT: u64 = 4 * 1024 * 1024;
 
 /// How a location read from the file is checked: [`normalise`] for a pin,
 /// [`require_share`] for a mapped share.
@@ -46,7 +51,7 @@ pub(super) fn read_file(directory: &Path, settings: &mut SettingsData) -> FileSt
 #[derive(Debug)]
 enum ReadFailure {
     /// A private-storage check refused the file or its directory.
-    Refused(SettingsError),
+    Refused(StorageError),
     /// The file is private but its contents are unusable.
     Damaged(SettingsError),
 }
@@ -60,19 +65,17 @@ impl ReadFailure {
     /// damaged one is kept as a backup, a refused one is never touched
     /// (see `Settings::save_while_locked`). The match names every variant
     /// and reason, so a new one must be placed on one side deliberately.
-    fn from_reading(error: SettingsError) -> Self {
+    fn from_reading(error: StorageError) -> Self {
         match error {
-            SettingsError::Refused {
+            StorageError::Refused {
                 reason: StorageRefusal::TooLarge | StorageRefusal::NotText,
                 ..
-            }
-            | SettingsError::Invalid(_)
-            | SettingsError::Location(_) => Self::Damaged(error),
-            SettingsError::Refused {
+            } => Self::Damaged(error.into()),
+            StorageError::Refused {
                 reason: StorageRefusal::ForeignDirectory | StorageRefusal::NotPrivateFile,
                 ..
             }
-            | SettingsError::Io { .. } => Self::Refused(error),
+            | StorageError::Io { .. } => Self::Refused(error),
         }
     }
 }
@@ -100,7 +103,7 @@ fn parse_json(text: &str) -> Result<Value, SettingsError> {
 
 /// The warning shown when reading fell back to defaults, in the Python
 /// app's words.
-fn read_warning(error: &SettingsError) -> String {
+fn read_warning(error: &impl Display) -> String {
     format!("Could not fully read settings; using safe defaults. {error}")
 }
 
