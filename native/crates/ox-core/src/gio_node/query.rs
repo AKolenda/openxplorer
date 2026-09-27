@@ -5,7 +5,7 @@
 
 use gio::prelude::*;
 
-use super::{check, raw, GioNode};
+use super::{check, gio_cancellable, GioNode};
 use crate::transfer::{Cancellation, Node, NodeInfo, NodeKind, TransferError};
 
 /// The attributes [`GioNode::query_info`] reads.
@@ -18,7 +18,7 @@ impl GioNode {
         let info = self.file.query_info(
             INFO_ATTRIBUTES,
             gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-            raw(cancel),
+            gio_cancellable(cancel),
         )?;
         let mode = info
             .has_attribute("unix::mode")
@@ -69,7 +69,7 @@ pub(super) fn enumerate_files(
     let enumerator = folder.enumerate_children(
         "standard::name",
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-        raw(cancel),
+        gio_cancellable(cancel),
     )?;
     let listed = collect_files(&enumerator, cancel);
     // Preserve the enumeration error if closing fails as well.
@@ -91,7 +91,7 @@ fn collect_files(
     let mut files = Vec::new();
     loop {
         check(cancel)?;
-        let Some(info) = enumerator.next_file(raw(cancel))? else {
+        let Some(info) = enumerator.next_file(gio_cancellable(cancel))? else {
             return Ok(files);
         };
         files.push(enumerator.child(&info));

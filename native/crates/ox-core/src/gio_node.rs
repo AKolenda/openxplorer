@@ -50,6 +50,7 @@ impl GioNode {
         &self.file
     }
 
+    /// True for an item on a phone or another MTP device.
     fn is_mtp(&self) -> bool {
         self.file.has_uri_scheme("mtp")
     }
@@ -116,9 +117,11 @@ impl Node for GioNode {
         check(cancel)?;
         // Follows links on purpose: a destination reached through a link to
         // a folder is a folder, as in the Python app.
-        let info = self
-            .file
-            .query_info("standard::type", gio::FileQueryInfoFlags::NONE, raw(cancel))?;
+        let info = self.file.query_info(
+            "standard::type",
+            gio::FileQueryInfoFlags::NONE,
+            gio_cancellable(cancel),
+        )?;
         Ok(info.file_type() == gio::FileType::Directory)
     }
 
@@ -128,7 +131,7 @@ impl Node for GioNode {
 
     fn mkdir(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         check(cancel)?;
-        self.file.make_directory(raw(cancel))?;
+        self.file.make_directory(gio_cancellable(cancel))?;
         Ok(())
     }
 
@@ -177,7 +180,7 @@ impl Node for GioNode {
         let queried = self.file.query_info(
             "access::can-trash",
             gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-            raw(cancel),
+            gio_cancellable(cancel),
         );
         match queried {
             Ok(info) => Ok(info.boolean("access::can-trash")),
@@ -238,10 +241,13 @@ fn byte_count(value: i64) -> u64 {
     u64::try_from(value).unwrap_or(0)
 }
 
-fn raw(cancel: Option<&Cancellation>) -> Option<&gio::Cancellable> {
+/// The GIO cancellable behind an optional cancellation, for GIO calls.
+fn gio_cancellable(cancel: Option<&Cancellation>) -> Option<&gio::Cancellable> {
     cancel.map(Cancellation::cancellable)
 }
 
+/// Stops before the next step when the user cancelled; without a
+/// cancellation there is nothing to check.
 fn check(cancel: Option<&Cancellation>) -> Result<(), TransferError> {
     match cancel {
         Some(cancel) => cancel.check(),

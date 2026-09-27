@@ -14,6 +14,7 @@ use super::error::TransferError;
 use super::guard::{check_write_tree, guard_destination, SourceChange};
 use super::labels::{completed_label, item_label};
 use super::node::{Cancellation, Node, NodeFactory, NodeKind, WriteGuard};
+use super::relisting::SourceFolders;
 use super::staged_copy::{StageSlot, StagedCopy};
 use super::staging::{discard_stage, leftover_report};
 use super::types::{progress_fraction, ConflictPolicy, Progress, TransferMode, TransferResult};
@@ -415,34 +416,6 @@ fn deduplicate(uris: &[String]) -> Vec<String> {
         .filter(|uri| seen.insert(uri.as_str()))
         .cloned()
         .collect()
-}
-
-/// The folders moves took items from, each once, in first-use order.
-#[derive(Default)]
-struct SourceFolders {
-    folders: Vec<Box<dyn Node>>,
-}
-
-impl SourceFolders {
-    /// Remembers `source`'s folder. Called before the move, so a failed or
-    /// partial device move is relisted too.
-    fn remember(&mut self, source: &dyn Node) {
-        let Some(parent) = source.parent() else {
-            return;
-        };
-        let uri = parent.uri();
-        if !self.folders.iter().any(|folder| folder.uri() == uri) {
-            self.folders.push(parent);
-        }
-    }
-
-    /// Relists every remembered folder. Best effort: an unmounted device
-    /// drops its cache anyway, so a failure is ignored.
-    fn refresh_all(&self) {
-        for folder in &self.folders {
-            let _ = folder.refresh_listing(None);
-        }
-    }
 }
 
 #[cfg(test)]

@@ -24,7 +24,7 @@ use gio::prelude::*;
 use rustix::fs::{renameat_with, RenameFlags, CWD};
 use rustix::io::Errno;
 
-use super::{check, raw, GioNode};
+use super::{check, gio_cancellable, GioNode};
 use crate::transfer::{verify_installation, Cancellation, Node, TransferError};
 
 /// Whether a move may overwrite an existing item at the target.
@@ -73,7 +73,7 @@ impl GioNode {
             Overwrite::Replace => MOVE_FLAGS | gio::FileCopyFlags::OVERWRITE,
         };
         self.file
-            .move_(&target_file, flags, raw(cancel), None)
+            .move_(&target_file, flags, gio_cancellable(cancel), None)
             .map_err(|error| move_error(error, overwrite))
     }
 
@@ -129,7 +129,7 @@ impl GioNode {
                 "This device only accepts names that are valid UTF-8. Nothing was changed.",
             ));
         };
-        match self.file.set_display_name(&new_name, raw(cancel)) {
+        match self.file.set_display_name(&new_name, gio_cancellable(cancel)) {
             Ok(_) => Ok(()),
             Err(error) => self.settle_failed_rename(target, error),
         }

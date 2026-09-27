@@ -23,6 +23,7 @@
 //! | `modes` | Unix modes of local staging folders |
 //! | `names` | Staging, backup and validated child names |
 //! | `labels` | Progress text |
+//! | `relisting` | Relisting the folders moves took items from (MTP) |
 //! | `error` | [`TransferError`] and how backend errors map onto it |
 //!
 //! Every test of `desktop/tests/test_operations.py` and
@@ -46,6 +47,7 @@ mod labels;
 mod modes;
 mod names;
 mod node;
+mod relisting;
 mod staged_copy;
 mod staging;
 mod types;
