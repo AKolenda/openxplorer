@@ -3,17 +3,19 @@
 
 use super::*;
 
-/// Ported from desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic
+/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic`
+/// parity: SET-016
 #[test]
 fn default_context_menu_classic() {
     let root = temp();
     assert_eq!(
         Settings::open(root.path()).snapshot().preferences.context_menu,
-        "win10"
+        ContextMenu::Win10
     );
 }
 
-/// Ported from desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist
+/// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist`
+/// parity: SET-016
 #[test]
 fn network_interval_whitelist() {
     let root = temp();
@@ -27,7 +29,8 @@ fn network_interval_whitelist() {
     assert_eq!(store.snapshot().preferences.network_interval, 30);
 }
 
-/// Ported from desktop/tests/test_v06.py::PrefTests::test_layout_persists
+/// Ported from `desktop/tests/test_v06.py::PrefTests::test_layout_persists`
+/// parity: SIDE-023, VIEW-028
 #[test]
 fn layout_persists() {
     let root = temp();
@@ -43,7 +46,8 @@ fn layout_persists() {
     assert_eq!(columns, json!({"name": 460, "size": 100}));
 }
 
-/// Ported from desktop/tests/test_v06.py::PrefTests::test_sidebar_width_bounds
+/// Ported from `desktop/tests/test_v06.py::PrefTests::test_sidebar_width_bounds`
+/// parity: SIDE-023
 #[test]
 fn sidebar_width_bounds() {
     let root = temp();
@@ -70,7 +74,8 @@ fn sidebar_width_bounds() {
     assert_eq!(store.snapshot().preferences.sidebar_width, None);
 }
 
-/// Ported from desktop/tests/test_v06.py::PrefTests::test_width_rounding
+/// Ported from `desktop/tests/test_v06.py::PrefTests::test_width_rounding`
+/// parity: SIDE-023, VIEW-028
 #[test]
 fn width_rounding() {
     let root = temp();
@@ -81,7 +86,8 @@ fn width_rounding() {
     assert_eq!(store.snapshot().preferences.sidebar_width, Some(280));
 }
 
-/// Ported from desktop/tests/test_v06.py::PrefTests::test_columns_whitelist
+/// Ported from `desktop/tests/test_v06.py::PrefTests::test_columns_whitelist`
+/// parity: VIEW-028, SAFE-018
 #[test]
 fn columns_whitelist() {
     let root = temp();
@@ -92,7 +98,8 @@ fn columns_whitelist() {
     assert_eq!(columns, json!({"name": 150}));
 }
 
-/// Ported from desktop/tests/test_v06.py::PrefTests::test_column_reset
+/// Ported from `desktop/tests/test_v06.py::PrefTests::test_column_reset`
+/// parity: VIEW-028
 #[test]
 fn column_reset() {
     let root = temp();
@@ -107,7 +114,8 @@ fn column_reset() {
     assert_eq!(columns, json!({}));
 }
 
-/// Ported from desktop/tests/test_v06.py::PrefTests::test_other_preferences_retained
+/// Ported from `desktop/tests/test_v06.py::PrefTests::test_other_preferences_retained`
+/// parity: SET-014, SIDE-023
 #[test]
 fn other_preferences_retained() {
     let root = temp();
@@ -120,12 +128,13 @@ fn other_preferences_retained() {
         .unwrap();
     let current = store.snapshot().preferences;
     assert_eq!(
-        (current.theme.as_str(), current.context_menu.as_str()),
-        ("dark", "win11")
+        (current.theme, current.context_menu),
+        (Theme::Dark, ContextMenu::Win11)
     );
 }
 
-/// Ported from desktop/tests/test_v06.py::PrefTests::test_partial_window_updates_do_not_remove_other_preferences
+/// Ported from `desktop/tests/test_v06.py::PrefTests::test_partial_window_updates_do_not_remove_other_preferences`
+/// parity: SET-014, VIEW-028
 #[test]
 fn partial_window_updates_do_not_remove_other_preferences() {
     let root = temp();
@@ -142,7 +151,8 @@ fn partial_window_updates_do_not_remove_other_preferences() {
     assert_eq!(merged.column_widths.unwrap().get(Column::Modified), Some(200));
 }
 
-/// Ported from desktop/tests/test_zip_extract.py::TextPreferenceTests::test_default_round_trip
+/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_default_round_trip`
+/// parity: VIEW-045
 #[test]
 fn text_size_default_round_trip() {
     let root = temp();
@@ -154,7 +164,8 @@ fn text_size_default_round_trip() {
     assert_eq!(Settings::open(root.path()).snapshot().preferences.text_size, 150);
 }
 
-/// Ported from desktop/tests/test_zip_extract.py::TextPreferenceTests::test_invalid_values_ignored
+/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_invalid_values_ignored`
+/// parity: VIEW-045
 #[test]
 fn text_size_invalid_values_ignored() {
     let root = temp();
@@ -183,7 +194,8 @@ fn text_size_invalid_values_ignored() {
     }
 }
 
-/// Ported from desktop/tests/test_zip_extract.py::TextPreferenceTests::test_all_sizes
+/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_all_sizes`
+/// parity: VIEW-045
 #[test]
 fn text_size_all_sizes() {
     let root = temp();
@@ -196,7 +208,8 @@ fn text_size_all_sizes() {
     }
 }
 
-/// Ported from desktop/tests/test_zip_extract.py::TextPreferenceTests::test_preserves_other_settings
+/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_preserves_other_settings`
+/// parity: VIEW-045
 #[test]
 fn text_size_preserves_other_settings() {
     let root = temp();
@@ -210,12 +223,13 @@ fn text_size_preserves_other_settings() {
         .update_preferences(&prefs(json!({"textSize": 150})))
         .unwrap();
     let current = store.snapshot().preferences;
-    assert_eq!(current.theme, "dark");
+    assert_eq!(current.theme, Theme::Dark);
     assert_eq!(current.sidebar_width, Some(310));
     assert!(current.show_hidden);
 }
 
-/// Ported from desktop/tests/test_zip_extract.py::TextPreferenceTests::test_multiple_instances_merge
+/// Ported from `desktop/tests/test_zip_extract.py::TextPreferenceTests::test_multiple_instances_merge`
+/// parity: VIEW-045, SET-014
 #[test]
 fn text_size_multiple_instances_merge() {
     let root = temp();
@@ -229,5 +243,5 @@ fn text_size_multiple_instances_merge() {
         .unwrap();
     let merged = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(merged.text_size, 175);
-    assert_eq!(merged.theme, "dark");
+    assert_eq!(merged.theme, Theme::Dark);
 }

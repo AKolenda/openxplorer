@@ -9,7 +9,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use ox_core::settings::{BookmarkAction, BookmarkKind, PreferencesUpdate, Settings};
+use ox_core::settings::{BookmarkAction, BookmarkKind, PreferencesUpdate, Settings, Theme};
 use serde_json::{json, Value};
 
 fn python(script: &str, directory: &Path) -> Command {
@@ -36,6 +36,7 @@ fn run_python(script: &str, directory: &Path) -> String {
     String::from_utf8(output.stdout).expect("Python emitted UTF-8")
 }
 
+/// parity: SET-014, SIDE-022
 #[test]
 fn python_and_rust_mutations_preserve_each_others_settings() {
     let temporary = tempfile::tempdir().unwrap();
@@ -54,7 +55,7 @@ store.pin_many([{'uri': 'mtp://[usb:001,002]/Storage', 'label': 'Phone'}])
     );
     let mut rust = Settings::open(&directory);
     assert!(rust.warning().is_none());
-    assert_eq!(rust.data().preferences.theme, "dark");
+    assert_eq!(rust.data().preferences.theme, Theme::Dark);
     assert_eq!(rust.data().shares[0].uri, "smb://nas/Team%20files");
     rust.update_preferences(&PreferencesUpdate {
         show_hidden: Some(true),
@@ -89,8 +90,12 @@ print(json.dumps(store.snapshot()))
     assert_eq!(from_python["pins"][1]["uri"], "file:///home/demo/Work%20%281%29");
 }
 
+/// The lock call `SettingsLock` uses conflicts with Python's `fcntl.flock`.
+/// That a change holds this lock throughout is checked in
+/// `settings/tests.rs` (`a_change_holds_the_settings_lock_until_it_is_written`).
+/// parity: SET-014
 #[test]
-fn python_flock_observes_a_rust_file_lock() {
+fn python_flock_conflicts_with_a_rust_file_lock() {
     let temporary = tempfile::tempdir().unwrap();
     let path = temporary.path().join("settings.lock");
     let file = OpenOptions::new()
@@ -127,12 +132,13 @@ impl Drop for PythonChild {
     }
 }
 
+/// parity: SET-014, SIDE-022
 #[test]
 fn rust_settings_mutation_waits_for_python_and_reloads_after_unlock() {
     let temporary = tempfile::tempdir().unwrap();
     let directory = temporary.path().join("winspace");
     let mut rust = Settings::open(&directory);
-    rust.save().unwrap();
+    rust.update_preferences(&PreferencesUpdate::default()).unwrap();
     let child = python(
         r#"
 import fcntl, sys
@@ -176,6 +182,6 @@ with (root / 'settings.lock').open('r+') as lock:
     mutation.join().unwrap();
     assert!(child.0.wait().unwrap().success());
     let data = Settings::open(&directory).snapshot();
-    assert_eq!(data.preferences.theme, "dark");
+    assert_eq!(data.preferences.theme, Theme::Dark);
     assert_eq!(data.pins[0].uri, "file:///home/demo/Work");
 }

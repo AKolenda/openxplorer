@@ -9,9 +9,9 @@
 
 use super::model::{Bookmark, RecentEntry, SettingsData};
 use super::read::{first_chars, MAX_BOOKMARKS, MAX_NAME_CHARS, MAX_ORDER, MAX_RECENT, MAX_TYPE_CHARS};
-use super::validate::{bookmark_fallback_label, pin_fallback_label, safe_label};
+use super::validate::{bookmark_fallback_label, pin_fallback_label};
 use super::SettingsError;
-use crate::location::{normalise, require_share};
+use crate::location::{normalise, require_share, safe_label};
 
 /// Whether [`Settings::bookmark`](super::Settings::bookmark) adds or
 /// removes the location.
@@ -115,20 +115,51 @@ pub(super) fn pin_many(
             "Drag between 1 and 200 folders at a time.",
         ));
     }
-    let clean = clean_pins(items)?;
+    let dragged = clean_pins(items)?;
     let before = before.map(normalise).transpose()?;
-    if quick_order.is_some_and(|order| order.len() > MAX_ORDER) {
+    let shown_order = clean_order(quick_order.unwrap_or_default())?;
+    let pins = merge_pins(&data.pins, &dragged)?;
+    let mut order = if shown_order.is_empty() {
+        saved_then_pinned(&data.quick_order, &pins)
+    } else {
+        shown_order
+    };
+    place_dragged(&mut order, &dragged, before.as_deref());
+    data.pins = pins;
+    data.quick_order = order;
+    data.hidden_quick.retain(|uri| !is_dragged(&dragged, uri));
+    Ok(dragged)
+}
+
+/// The sidebar order as shown, normalised and without duplicates.
+fn clean_order(shown: &[String]) -> Result<Vec<String>, SettingsError> {
+    if shown.len() > MAX_ORDER {
         return Err(SettingsError::invalid("Invalid sidebar order."));
     }
-    let mut order = Vec::new();
-    for uri in quick_order.unwrap_or_default() {
+    let mut order = Vec::with_capacity(shown.len());
+    for uri in shown {
         push_unique(&mut order, normalise(uri)?);
     }
+    Ok(order)
+}
 
-    let mut pins = data.pins.clone();
-    for pin in &clean {
+/// The saved order followed by every pin missing from it, as Python's
+/// `dict.fromkeys(quickOrder + pins)`.
+fn saved_then_pinned(saved_order: &[String], pins: &[Bookmark]) -> Vec<String> {
+    let mut order = Vec::new();
+    let pinned = pins.iter().map(|pin| &pin.uri);
+    for uri in saved_order.iter().chain(pinned) {
+        push_unique(&mut order, uri.clone());
+    }
+    order
+}
+
+/// The saved pins with `dragged` added at the end or relabelled in place.
+fn merge_pins(saved: &[Bookmark], dragged: &[Bookmark]) -> Result<Vec<Bookmark>, SettingsError> {
+    let mut pins = saved.to_vec();
+    for pin in dragged {
         match pins.iter_mut().find(|existing| existing.uri == pin.uri) {
-            Some(existing) => existing.label = pin.label.clone(),
+            Some(existing) => existing.label.clone_from(&pin.label),
             None => pins.push(pin.clone()),
         }
     }
@@ -137,31 +168,30 @@ pub(super) fn pin_many(
             "Quick access supports up to 200 custom pins.",
         ));
     }
-    if order.is_empty() {
-        let saved_then_pinned = data.quick_order.iter().chain(pins.iter().map(|pin| &pin.uri));
-        for uri in saved_then_pinned {
-            push_unique(&mut order, uri.clone());
-        }
-    }
-    let is_dragged = |uri: &String| clean.iter().any(|pin| pin.uri == *uri);
-    let dropped_on_itself = before.as_ref().is_some_and(is_dragged);
+    Ok(pins)
+}
+
+/// Moves the dragged pins in front of `before` (or to the end). A drop on
+/// one of the dragged pins keeps the order, only appending new pins.
+fn place_dragged(order: &mut Vec<String>, dragged: &[Bookmark], before: Option<&str>) {
+    let dropped_on_itself = before.is_some_and(|before| dragged.iter().any(|pin| pin.uri == before));
     if dropped_on_itself {
-        for pin in &clean {
-            push_unique(&mut order, pin.uri.clone());
+        for pin in dragged {
+            push_unique(order, pin.uri.clone());
         }
-    } else {
-        order.retain(|uri| !is_dragged(uri));
-        let index = before
-            .as_ref()
-            .and_then(|before| order.iter().position(|uri| uri == before))
-            .unwrap_or(order.len());
-        let dragged = clean.iter().map(|pin| pin.uri.clone());
-        order.splice(index..index, dragged);
+        return;
     }
-    data.pins = pins;
-    data.quick_order = order;
-    data.hidden_quick.retain(|uri| !is_dragged(uri));
-    Ok(clean)
+    order.retain(|uri| !is_dragged(dragged, uri));
+    let index = before
+        .and_then(|before| order.iter().position(|uri| uri == before))
+        .unwrap_or(order.len());
+    let dragged_uris = dragged.iter().map(|pin| pin.uri.clone());
+    order.splice(index..index, dragged_uris);
+}
+
+/// True if `uri` is one of the dragged pins.
+fn is_dragged(dragged: &[Bookmark], uri: &str) -> bool {
+    dragged.iter().any(|pin| pin.uri == uri)
 }
 
 /// Puts `entry` first in the recent files, removing an older entry for the
@@ -220,7 +250,8 @@ mod tests {
         PinRequest::new(uri, "")
     }
 
-    /// Ported from desktop/tests/test_pins.py::PinTests::test_insert_before_documents
+    /// Ported from `desktop/tests/test_pins.py::PinTests::test_insert_before_documents`
+    /// parity: SIDE-007, SIDE-008
     #[test]
     fn insert_before_documents() {
         let mut data = SettingsData::default();
@@ -229,7 +260,8 @@ mod tests {
         assert_eq!(data.quick_order, [QUICK[0], QUICK[1], "smb://nas/work", QUICK[2]]);
     }
 
-    /// Ported from desktop/tests/test_pins.py::PinTests::test_duplicate_batch_dedupes_canonical_uri
+    /// Ported from `desktop/tests/test_pins.py::PinTests::test_duplicate_batch_dedupes_canonical_uri`
+    /// parity: SIDE-007
     #[test]
     fn duplicate_batch_dedupes_canonical_uri() {
         let mut data = SettingsData::default();
@@ -243,7 +275,8 @@ mod tests {
         assert_eq!(data.pins.len(), 1);
     }
 
-    /// Ported from desktop/tests/test_pins.py::PinTests::test_repeat_drag_does_not_duplicate
+    /// Ported from `desktop/tests/test_pins.py::PinTests::test_repeat_drag_does_not_duplicate`
+    /// parity: SIDE-007
     #[test]
     fn repeat_drag_does_not_duplicate() {
         let mut data = SettingsData::default();
@@ -253,7 +286,8 @@ mod tests {
         assert_eq!(data.pins.len(), 1);
     }
 
-    /// Ported from desktop/tests/test_pins.py::PinTests::test_reorder_offline_pin_without_querying_nas
+    /// Ported from `desktop/tests/test_pins.py::PinTests::test_reorder_offline_pin_without_querying_nas`
+    /// parity: SIDE-008
     #[test]
     fn reorder_offline_pin_without_querying_nas() {
         let mut data = SettingsData::default();
@@ -269,7 +303,8 @@ mod tests {
         assert_eq!(data.quick_order[0], "smb://offline/work");
     }
 
-    /// Ported from desktop/tests/test_pins.py::PinTests::test_drop_on_self_keeps_order
+    /// Ported from `desktop/tests/test_pins.py::PinTests::test_drop_on_self_keeps_order`
+    /// parity: SIDE-008
     #[test]
     fn drop_on_self_keeps_order() {
         let mut data = SettingsData::default();
@@ -285,7 +320,8 @@ mod tests {
         assert_eq!(data.quick_order, before);
     }
 
-    /// Ported from desktop/tests/test_pins.py::PinTests::test_unpin_removes_order_only_not_share
+    /// Ported from `desktop/tests/test_pins.py::PinTests::test_unpin_removes_order_only_not_share`
+    /// parity: SIDE-009
     #[test]
     fn unpin_removes_order_only_not_share() {
         let mut data = SettingsData::default();
@@ -310,7 +346,8 @@ mod tests {
         assert_eq!(data.shares.len(), 1);
     }
 
-    /// Ported from desktop/tests/test_pins.py::PinTests::test_invalid_batch_has_no_partial_writes
+    /// Ported from `desktop/tests/test_pins.py::PinTests::test_invalid_batch_has_no_partial_writes`
+    /// parity: SIDE-007
     #[test]
     fn invalid_batch_has_no_partial_writes() {
         let mut data = SettingsData::default();
@@ -319,7 +356,8 @@ mod tests {
         assert_eq!(data, SettingsData::default());
     }
 
-    /// Ported from desktop/tests/test_pins.py::PinTests::test_bad_label_does_not_mutate
+    /// Ported from `desktop/tests/test_pins.py::PinTests::test_bad_label_does_not_mutate`
+    /// parity: SIDE-007
     #[test]
     fn bad_label_does_not_mutate() {
         let mut data = SettingsData::default();
@@ -328,7 +366,8 @@ mod tests {
         assert_eq!(data, SettingsData::default());
     }
 
-    /// Ported from desktop/tests/test_pins.py::PinTests::test_pin_cap
+    /// Ported from `desktop/tests/test_pins.py::PinTests::test_pin_cap`
+    /// parity: SIDE-007
     #[test]
     fn pin_cap() {
         let mut data = SettingsData::default();
@@ -340,7 +379,8 @@ mod tests {
         assert_eq!(error.to_string(), "Quick access supports up to 200 custom pins.");
     }
 
-    /// Ported from desktop/tests/test_core.py::CoreTests::test_hidden_builtin_pin
+    /// Ported from `desktop/tests/test_core.py::CoreTests::test_hidden_builtin_pin`
+    /// parity: SIDE-009
     #[test]
     fn hidden_builtin_pin() {
         let mut data = SettingsData::default();
@@ -358,7 +398,8 @@ mod tests {
         assert!(!data.hidden_quick.contains(&desktop.to_owned()));
     }
 
-    /// Ported from desktop/tests/test_core.py::CoreTests::test_credential_bookmark_rejected
+    /// Ported from `desktop/tests/test_core.py::CoreTests::test_credential_bookmark_rejected`
+    /// parity: SAFE-010, NET-017
     #[test]
     fn credential_bookmark_rejected() {
         let mut data = SettingsData::default();
@@ -373,6 +414,7 @@ mod tests {
         assert_eq!(data, SettingsData::default());
     }
 
+    /// parity: SIDE-007
     #[test]
     fn pin_labels_fall_back_to_the_folder_or_host() {
         let mut data = SettingsData::default();
@@ -387,6 +429,7 @@ mod tests {
         assert_eq!(labels, ["nas", "Work%20Files"]);
     }
 
+    /// parity: NET-017
     #[test]
     fn re_adding_a_bookmark_moves_it_last_with_the_new_label() {
         let mut data = SettingsData::default();
@@ -401,6 +444,7 @@ mod tests {
         assert_eq!(shares, [("smb://nas/b", "b"), ("smb://nas/a", "New")]);
     }
 
+    /// parity: HOME-011
     #[test]
     fn remember_open_keeps_thirty_newest_unique_files() {
         let mut data = SettingsData::default();

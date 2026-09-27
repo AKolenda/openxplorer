@@ -11,10 +11,11 @@
 
 use serde_json::{Map, Value};
 
+use super::choices::{ContextMenu, Theme, View};
 use super::model::{Bookmark, Column, PreferencesUpdate, RecentEntry, SettingsData, NETWORK_INTERVALS};
-use super::validate::{bookmark_fallback_label, python_strip, safe_label};
+use super::validate::bookmark_fallback_label;
 use super::SettingsError;
-use crate::location::{normalise, require_share};
+use crate::location::{normalise, python_strip, require_share, safe_label, LocationError};
 
 /// Most pins and most shares kept.
 pub(super) const MAX_BOOKMARKS: usize = 200;
@@ -69,52 +70,63 @@ pub(super) fn read_settings(source: &Value, data: &mut SettingsData) -> Result<(
 
 impl PreferencesUpdate {
     /// Reads a preferences object from untrusted JSON (the file, or a
-    /// request from another window). Values of the wrong JSON type are
-    /// dropped here; range checks happen in
-    /// [`Preferences::apply`](super::Preferences::apply). Fails only if
-    /// `value` is not an object.
+    /// request from another window). Values of the wrong JSON type and
+    /// unknown choices are dropped here; numeric ranges are checked in
+    /// [`Preferences::apply`](super::Preferences::apply).
+    ///
+    /// # Errors
+    ///
+    /// [`SettingsError::Invalid`] if `value` is not an object.
     pub fn from_json(value: &Value) -> Result<Self, SettingsError> {
         let Some(values) = value.as_object() else {
             return Err(SettingsError::invalid("Preferences must be an object."));
         };
-        let text = |key: &str| values.get(key).and_then(Value::as_str).map(str::to_owned);
+        let text = |key: &str| values.get(key).and_then(Value::as_str);
         let flag = |key: &str| values.get(key).and_then(Value::as_bool);
-        // Python accepts only a true `int` here: 150.0 and "150" are ignored.
-        let text_size = values
-            .get("textSize")
-            .and_then(Value::as_u64)
-            .and_then(|size| u32::try_from(size).ok());
-        // Python compares with `in (30, 60, 300)`, so 60.0 also matches.
-        let network_interval = values
-            .get("networkInterval")
-            .and_then(Value::as_f64)
-            .and_then(|seconds| {
-                NETWORK_INTERVALS
-                    .into_iter()
-                    .find(|&choice| f64::from(choice) == seconds)
-            });
         let column_widths = values
             .get("columnWidths")
             .and_then(Value::as_object)
-            .map(|columns| {
-                Column::ALL
-                    .into_iter()
-                    .filter_map(|column| Some((column, columns.get(column.key())?.as_f64()?)))
-                    .collect()
-            });
+            .map(read_column_widths);
         Ok(Self {
-            theme: text("theme"),
-            view: text("view"),
+            theme: text("theme").and_then(Theme::from_key),
+            view: text("view").and_then(View::from_key),
             details: flag("details"),
             show_hidden: flag("showHidden"),
             auto_index: flag("autoIndex"),
-            text_size,
+            text_size: values.get("textSize").and_then(read_text_size),
             sidebar_width: values.get("sidebarWidth").and_then(Value::as_f64),
             column_widths,
-            context_menu: text("contextMenu"),
-            network_interval,
+            context_menu: text("contextMenu").and_then(ContextMenu::from_key),
+            network_interval: values.get("networkInterval").and_then(read_network_interval),
         })
     }
+}
+
+/// A text size given as a true integer. Python checks `type(size) is int`,
+/// so 150.0 and "150" are ignored.
+fn read_text_size(value: &Value) -> Option<u32> {
+    let size = value.as_u64()?;
+    u32::try_from(size).ok()
+}
+
+/// One of the offered network intervals. Python compares with
+/// `in (30, 60, 300)`, so 60.0 matches as well.
+#[expect(clippy::float_cmp, reason = "Python's `in` compares with ==, so only exact values match")]
+fn read_network_interval(value: &Value) -> Option<u32> {
+    let seconds = value.as_f64()?;
+    NETWORK_INTERVALS
+        .into_iter()
+        .find(|&choice| f64::from(choice) == seconds)
+}
+
+/// The numeric widths of known columns; out-of-range widths are dropped
+/// when applied.
+fn read_column_widths(columns: &Map<String, Value>) -> Vec<(Column, f64)> {
+    let numeric_width = |column: Column| {
+        let width = columns.get(column.key())?.as_f64()?;
+        Some((column, width))
+    };
+    Column::ALL.into_iter().filter_map(numeric_width).collect()
 }
 
 /// The first `limit` items of a section of objects; a missing section is
@@ -161,10 +173,7 @@ fn wrong_type(key: &str) -> SettingsError {
 }
 
 /// A `{uri, label}` entry, or `None` if it is unusable.
-fn read_bookmark(
-    item: &Value,
-    check: fn(&str) -> Result<String, crate::location::LocationError>,
-) -> Option<Bookmark> {
+fn read_bookmark(item: &Value, check: fn(&str) -> Result<String, LocationError>) -> Option<Bookmark> {
     let uri = check(item.get("uri")?.as_str()?).ok()?;
     let label = item.get("label").and_then(Value::as_str).unwrap_or_default();
     let label = safe_label(label, &bookmark_fallback_label(&uri)).ok()?;
@@ -201,6 +210,11 @@ fn python_str(value: &Value) -> String {
 
 /// Python's `max(0, int(value or 0))`; `None` where `int()` would raise,
 /// which makes the reader skip the entry.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "`as` truncates toward zero like int(), and max(0.0) plus saturation stand in for max(0, ...)"
+)]
 fn python_count(value: Option<&Value>) -> Option<u64> {
     let Some(value) = value else {
         return Some(0);
@@ -259,6 +273,7 @@ pub(super) fn first_chars(text: &str, limit: usize) -> String {
 mod tests {
     use serde_json::json;
 
+    use super::super::model::Preferences;
     use super::*;
 
     fn read(value: Value) -> (SettingsData, Option<SettingsError>) {
@@ -267,6 +282,7 @@ mod tests {
         (data, problem)
     }
 
+    /// parity: SET-012, SAFE-010, SAFE-018
     #[test]
     fn invalid_entries_are_skipped_without_a_warning() {
         let (data, problem) = read(json!({
@@ -289,6 +305,7 @@ mod tests {
         assert!(data.shares.is_empty());
     }
 
+    /// parity: SET-012
     #[test]
     fn lists_are_capped() {
         let pins: Vec<Value> = (0..250)
@@ -322,6 +339,7 @@ mod tests {
         assert!(data.pins.is_empty());
     }
 
+    /// parity: SET-013
     #[test]
     fn a_section_of_the_wrong_type_stops_reading_with_a_warning() {
         let (data, problem) = read(json!({
@@ -333,9 +351,10 @@ mod tests {
         assert!(problem.is_some());
         assert_eq!(data.pins.len(), 1);
         assert!(data.quick_order.is_empty());
-        assert_eq!(data.preferences.theme, "system");
+        assert_eq!(data.preferences.theme, Theme::System);
     }
 
+    /// parity: SET-013
     #[test]
     fn non_object_files_and_preferences_warn() {
         assert!(read(json!([1, 2])).1.is_some());
@@ -344,6 +363,28 @@ mod tests {
         assert!(read(json!({"pins": "text"})).1.is_none());
     }
 
+    /// parity: SET-016
+    #[test]
+    fn choices_outside_the_whitelist_are_ignored() {
+        let values = json!({
+            "theme": "dark", "view": "bogus", "contextMenu": "win11", "networkInterval": 1
+        });
+        let mut prefs = Preferences::default();
+        prefs.apply(&PreferencesUpdate::from_json(&values).unwrap());
+        assert_eq!(prefs.theme, Theme::Dark);
+        assert_eq!(prefs.view, View::Details);
+        assert_eq!(prefs.context_menu, ContextMenu::Win11);
+        assert_eq!(prefs.network_interval, 60);
+    }
+
+    #[test]
+    fn choices_are_case_sensitive_and_must_be_strings() {
+        let values = json!({"theme": "Dark", "view": ["grid"], "contextMenu": 11});
+        let update = PreferencesUpdate::from_json(&values).unwrap();
+        assert_eq!((update.theme, update.view, update.context_menu), (None, None, None));
+    }
+
+    /// parity: SET-016
     #[test]
     fn preference_types_follow_python() {
         let (data, _) = read(json!({"preferences": {

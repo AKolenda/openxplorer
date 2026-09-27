@@ -1,29 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Sidebar label checks and the text rules they share with the location
-//! whitelist.
+//! The labels a pin or share gets when the user gives none.
 //!
-//! Ports `safe_label` and the label fallbacks used by `Settings` in
-//! `desktop/core.py`. Python's `str.strip()`, `str.isspace()` and its
-//! `CONTROL` pattern (`[\x00-\x1f\x7f]`) are reproduced exactly, because a
-//! label accepted by one application must be accepted by the other.
+//! Ports the label fallbacks used by `Settings` in `desktop/core.py`. The
+//! label check itself is [`safe_label`](crate::location::safe_label).
 
-use super::SettingsError;
-pub(crate) use crate::location::python_strip;
-use crate::location::{split_location, unquote_lossy};
-
-pub use crate::location::MAX_LABEL_CHARS;
+use crate::location::{split_location, unquote_lossy, LocationParts};
 
 /// Label used when a location has no usable name.
 const FALLBACK_LABEL: &str = "Folder";
 
-/// Validates a sidebar label. A blank label becomes `fallback`; a label
-/// with control characters or more than 120 characters is rejected.
-pub fn safe_label(value: &str, fallback: &str) -> Result<String, SettingsError> {
-    crate::location::safe_label(value, fallback).map_err(Into::into)
-}
-
 /// The label a pin or share gets from `bookmark` and when read from the
-/// file: the last component of the decoded path, or "Folder".
+/// file: the last component of the decoded path, or "Folder"
+/// (core.py:`Settings.__init__` and `bookmark`).
 pub(crate) fn bookmark_fallback_label(uri: &str) -> String {
     let Ok(parts) = split_location(uri) else {
         return FALLBACK_LABEL.to_owned();
@@ -37,21 +25,16 @@ pub(crate) fn bookmark_fallback_label(uri: &str) -> String {
     }
 }
 
-/// The label a dragged-in pin gets (`pin_many`): the last path component
-/// ignoring trailing slashes, else the SMB host, else the authority, else
-/// "Folder".
+/// The label a dragged-in pin gets (core.py:`pin_many`): the last path
+/// component ignoring trailing slashes, else the SMB host, else the
+/// authority, else "Folder".
 pub(crate) fn pin_fallback_label(uri: &str) -> String {
     let Ok(parts) = split_location(uri) else {
         return FALLBACK_LABEL.to_owned();
     };
-    let decoded = unquote_lossy(&parts.path);
-    let last = decoded
-        .trim_end_matches('/')
-        .rsplit('/')
-        .next()
-        .unwrap_or_default();
-    if !last.is_empty() {
-        return last.to_owned();
+    let name = last_path_name(&parts);
+    if !name.is_empty() {
+        return name;
     }
     let smb_host = if parts.scheme == "smb" {
         parts.hostname()
@@ -64,10 +47,20 @@ pub(crate) fn pin_fallback_label(uri: &str) -> String {
         .unwrap_or_else(|| FALLBACK_LABEL.to_owned())
 }
 
+/// The decoded last component of the path, ignoring trailing slashes;
+/// empty for a root. Python's `unquote(path).rstrip('/').split('/')[-1]`.
+pub(crate) fn last_path_name(parts: &LocationParts) -> String {
+    let decoded = unquote_lossy(&parts.path);
+    let name = decoded.trim_end_matches('/').rsplit('/').next();
+    name.unwrap_or_default().to_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::location::safe_label;
 
+    /// parity: SAFE-018, SIDE-007
     #[test]
     fn labels_follow_the_python_rules() {
         assert_eq!(safe_label("  Work  ", "Folder").unwrap(), "Work");

@@ -7,7 +7,9 @@
 
 use std::ops::RangeInclusive;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+
+use super::choices::{ContextMenu, Theme, View};
 
 /// Format version written to `settings.json`.
 pub const SETTINGS_VERSION: u32 = 2;
@@ -15,23 +17,20 @@ pub const SETTINGS_VERSION: u32 = 2;
 /// Text sizes offered in Settings, in percent.
 pub const TEXT_SIZES: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
 
-/// Accepted `theme` values.
-pub const THEMES: [&str; 3] = ["light", "dark", "system"];
-
-/// Accepted `view` values.
-pub const VIEWS: [&str; 2] = ["details", "grid"];
-
-/// Accepted `contextMenu` styles: classic (Windows 10) or compact (Windows 11).
-pub const CONTEXT_MENUS: [&str; 2] = ["win10", "win11"];
+/// The text size of a new installation and of "Reset text size", in percent.
+pub const DEFAULT_TEXT_SIZE: u32 = 100;
 
 /// Accepted network refresh intervals, in seconds.
 pub const NETWORK_INTERVALS: [u32; 3] = [30, 60, 300];
+
+/// The network refresh interval of a new installation, in seconds.
+const DEFAULT_NETWORK_INTERVAL: u32 = 60;
 
 /// Accepted sidebar widths, in pixels.
 pub const SIDEBAR_WIDTHS: RangeInclusive<u32> = 140..=560;
 
 /// A saved location: a Quick access pin or a mapped network share.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Bookmark {
     /// Canonical location URI.
     pub uri: String,
@@ -40,7 +39,7 @@ pub struct Bookmark {
 }
 
 /// A recently opened file, shown on the Home page.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentEntry {
     /// Canonical file URI.
@@ -106,30 +105,30 @@ impl Column {
 }
 
 /// Saved Details-view column widths; unset columns use their default width.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ColumnWidths {
     /// Width of [`Column::Name`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<u32>,
     /// Width of [`Column::Modified`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub modified: Option<u32>,
     /// Width of [`Column::ParentUri`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_uri: Option<u32>,
     /// Width of [`Column::Type`].
-    #[serde(default, rename = "type", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub kind: Option<u32>,
     /// Width of [`Column::Size`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u32>,
 }
 
 impl ColumnWidths {
     /// The saved width of `column`.
     pub fn get(&self, column: Column) -> Option<u32> {
-        *self.slot(column)
+        self.slot(column)
     }
 
     /// Keeps only in-range widths, rounded like Python's `round()`.
@@ -148,13 +147,13 @@ impl ColumnWidths {
         Column::ALL.iter().all(|&column| self.get(column).is_none())
     }
 
-    fn slot(&self, column: Column) -> &Option<u32> {
+    fn slot(&self, column: Column) -> Option<u32> {
         match column {
-            Column::Name => &self.name,
-            Column::Modified => &self.modified,
-            Column::ParentUri => &self.parent_uri,
-            Column::Type => &self.kind,
-            Column::Size => &self.size,
+            Column::Name => self.name,
+            Column::Modified => self.modified,
+            Column::ParentUri => self.parent_uri,
+            Column::Type => self.kind,
+            Column::Size => self.size,
         }
     }
 
@@ -170,21 +169,21 @@ impl ColumnWidths {
 }
 
 /// User preferences shared by every window and by the Python app.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Preferences {
-    /// `system`, `light` or `dark`.
-    pub theme: String,
-    /// `details` or `grid`.
-    pub view: String,
+    /// The colour theme.
+    pub theme: Theme,
+    /// Details list or icon grid.
+    pub view: View,
     /// Details pane visible.
     pub details: bool,
     /// Hidden files shown.
     pub show_hidden: bool,
     /// Background search indexing enabled.
     pub auto_index: bool,
-    /// `win10` (classic) or `win11` (compact) context menus.
-    pub context_menu: String,
+    /// Classic (Windows 10) or compact (Windows 11) context menus.
+    pub context_menu: ContextMenu,
     /// Seconds between network location refreshes: 30, 60 or 300.
     pub network_interval: u32,
     /// Percent: 80, 90, 100, 110, 125, 150, 175 or 200.
@@ -200,14 +199,14 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
-            theme: "system".into(),
-            view: "details".into(),
+            theme: Theme::default(),
+            view: View::default(),
             details: true,
             show_hidden: false,
             auto_index: true,
-            context_menu: "win10".into(),
-            network_interval: 60,
-            text_size: 100,
+            context_menu: ContextMenu::default(),
+            network_interval: DEFAULT_NETWORK_INTERVAL,
+            text_size: DEFAULT_TEXT_SIZE,
             sidebar_width: None,
             column_widths: None,
         }
@@ -219,53 +218,43 @@ impl Preferences {
     /// exactly like `update_preferences` in the Python app. A present
     /// `column_widths` replaces all saved column widths.
     pub fn apply(&mut self, update: &PreferencesUpdate) {
-        if let Some(details) = update.details {
-            self.details = details;
-        }
-        if let Some(show_hidden) = update.show_hidden {
-            self.show_hidden = show_hidden;
-        }
-        if let Some(auto_index) = update.auto_index {
-            self.auto_index = auto_index;
-        }
-        if let Some(size) = update.text_size.filter(|size| TEXT_SIZES.contains(size)) {
-            self.text_size = size;
-        }
+        let text_size = update.text_size.filter(|size| TEXT_SIZES.contains(size));
         let sidebar_width = update
             .sidebar_width
             .and_then(|width| bounded_width(width, SIDEBAR_WIDTHS));
-        if let Some(width) = sidebar_width {
-            self.sidebar_width = Some(width);
-        }
-        if let Some(columns) = &update.column_widths {
-            self.column_widths = Some(ColumnWidths::from_values(columns));
-        }
-        if let Some(menu) = allowed(update.context_menu.as_deref(), &CONTEXT_MENUS) {
-            self.context_menu = menu;
-        }
-        let interval = update
+        let network_interval = update
             .network_interval
             .filter(|interval| NETWORK_INTERVALS.contains(interval));
-        if let Some(interval) = interval {
-            self.network_interval = interval;
+        let column_widths = update
+            .column_widths
+            .as_deref()
+            .map(ColumnWidths::from_values);
+
+        replace_if_some(&mut self.theme, update.theme);
+        replace_if_some(&mut self.view, update.view);
+        replace_if_some(&mut self.details, update.details);
+        replace_if_some(&mut self.show_hidden, update.show_hidden);
+        replace_if_some(&mut self.auto_index, update.auto_index);
+        replace_if_some(&mut self.context_menu, update.context_menu);
+        replace_if_some(&mut self.network_interval, network_interval);
+        replace_if_some(&mut self.text_size, text_size);
+        if sidebar_width.is_some() {
+            self.sidebar_width = sidebar_width;
         }
-        if let Some(theme) = allowed(update.theme.as_deref(), &THEMES) {
-            self.theme = theme;
-        }
-        if let Some(view) = allowed(update.view.as_deref(), &VIEWS) {
-            self.view = view;
+        if column_widths.is_some() {
+            self.column_widths = column_widths;
         }
     }
 }
 
 /// A partial preferences change; `None` leaves a preference unchanged and
-/// out-of-range values are ignored when applied.
+/// out-of-range numbers are ignored when applied.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PreferencesUpdate {
     /// New theme.
-    pub theme: Option<String>,
+    pub theme: Option<Theme>,
     /// New view.
-    pub view: Option<String>,
+    pub view: Option<View>,
     /// Show or hide the details pane.
     pub details: Option<bool>,
     /// Show or hide hidden files.
@@ -279,7 +268,7 @@ pub struct PreferencesUpdate {
     /// Replaces all column widths; an empty list resets them.
     pub column_widths: Option<Vec<(Column, f64)>>,
     /// New context menu style.
-    pub context_menu: Option<String>,
+    pub context_menu: Option<ContextMenu>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
 }
@@ -344,6 +333,11 @@ struct FileLayout<'a> {
 
 /// Rounds `value` half-to-even (Python's `round()`) if it lies in `range`.
 /// The range is checked before rounding, so 139.6 is rejected for 140..=560.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the value lies within a u32 range, so the cast is exact after rounding"
+)]
 pub(crate) fn bounded_width(value: f64, range: RangeInclusive<u32>) -> Option<u32> {
     let low = f64::from(*range.start());
     let high = f64::from(*range.end());
@@ -351,29 +345,48 @@ pub(crate) fn bounded_width(value: f64, range: RangeInclusive<u32>) -> Option<u3
     in_range.then(|| value.round_ties_even() as u32)
 }
 
-/// `value` if it is one of `choices`.
-fn allowed(value: Option<&str>, choices: &[&str]) -> Option<String> {
-    value.filter(|value| choices.contains(value)).map(str::to_owned)
+/// Stores `value` in `slot` if there is one.
+fn replace_if_some<T>(slot: &mut T, value: Option<T>) {
+    if let Some(value) = value {
+        *slot = value;
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     fn update() -> PreferencesUpdate {
         PreferencesUpdate::default()
     }
 
+    /// parity: SET-016
     #[test]
     fn defaults_match_the_python_app() {
         let prefs = Preferences::default();
-        assert_eq!(prefs.theme, "system");
-        assert_eq!(prefs.context_menu, "win10");
+        assert_eq!(prefs.theme, Theme::System);
+        assert_eq!(prefs.view, View::Details);
+        assert_eq!(prefs.context_menu, ContextMenu::Win10);
         assert_eq!(prefs.network_interval, 60);
         assert_eq!(prefs.text_size, 100);
         assert!(prefs.auto_index && prefs.details && !prefs.show_hidden);
     }
 
+    /// The layout of `Settings.data['preferences']` in `desktop/core.py`.
+    /// parity: SET-016
+    #[test]
+    fn default_preferences_are_stored_like_the_python_app() {
+        let stored = serde_json::to_value(Preferences::default()).unwrap();
+        let python = json!({
+            "theme": "system", "view": "details", "details": true, "showHidden": false,
+            "autoIndex": true, "contextMenu": "win10", "networkInterval": 60, "textSize": 100
+        });
+        assert_eq!(stored, python);
+    }
+
+    /// parity: SET-016, VIEW-045
     #[test]
     fn text_size_accepts_only_the_offered_sizes() {
         let mut prefs = Preferences::default();
@@ -403,29 +416,30 @@ mod tests {
         assert_eq!(bounded_width(f64::INFINITY, SIDEBAR_WIDTHS), None);
     }
 
+    /// parity: VIEW-028
     #[test]
     fn column_widths_keep_only_known_in_range_columns() {
         let widths = ColumnWidths::from_values(&[(Column::Name, 150.0), (Column::Size, 99_999.0)]);
         assert_eq!(widths.get(Column::Name), Some(150));
         assert_eq!(widths.get(Column::Size), None);
         let json = serde_json::to_value(&widths).unwrap();
-        assert_eq!(json, serde_json::json!({"name": 150}));
+        assert_eq!(json, json!({"name": 150}));
     }
 
+    /// parity: SET-016
     #[test]
-    fn choices_outside_the_whitelist_are_ignored() {
+    fn network_intervals_outside_the_whitelist_are_ignored() {
         let mut prefs = Preferences::default();
         prefs.apply(&PreferencesUpdate {
-            theme: Some("dark".into()),
-            view: Some("bogus".into()),
-            context_menu: Some("win11".into()),
             network_interval: Some(1),
             ..update()
         });
-        assert_eq!(prefs.theme, "dark");
-        assert_eq!(prefs.view, "details");
-        assert_eq!(prefs.context_menu, "win11");
         assert_eq!(prefs.network_interval, 60);
+        prefs.apply(&PreferencesUpdate {
+            network_interval: Some(300),
+            ..update()
+        });
+        assert_eq!(prefs.network_interval, 300);
     }
 
     #[test]
