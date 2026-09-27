@@ -33,8 +33,8 @@ with sync_playwright() as pw:
     p.keyboard.press('Escape');check(f'{width}px: Escape closes menu',p.locator('[data-mobile-nav]').is_hidden())
     check(f'{width}px: Escape returns focus',toggle.evaluate('e=>e===document.activeElement'))
    else:
-    check(f'{width}px: mobile CTA goes to features',p.locator('.hero-actions .mobile-feature-link').is_visible())
-    check(f'{width}px: tour link hidden on mobile',p.locator('[data-play-tour]').is_hidden())
+    check(f'{width}px: download button fits',p.locator('.hero-actions .button').evaluate('e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth}'))
+    check(f'{width}px: guided tour stays visible',p.locator('.product-tour').is_visible())
    p.close()
  p=page_for('docs-introduction.html')
  p.screenshot(path=str(OUT/'docs-mobile.png'))

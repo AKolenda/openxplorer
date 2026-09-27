@@ -18,6 +18,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT/'apps/web/out'
+VERSION = json.loads((ROOT/'package.json').read_text())['version']
 checks, errors = [], []
 
 
@@ -59,17 +60,30 @@ def main():
                 check(path+' has one primary heading',page.locator('h1').count()==1)
             page.goto(base+'/')
             page.wait_for_timeout(200)
-            check('Hero screenshot loads eagerly at high priority',
-                  page.locator('.product-hero-image img').get_attribute('loading')=='eager' and
-                  page.locator('.product-hero-image img').get_attribute('fetchpriority')=='high')
-            check('Header links to the public repository',page.locator('.header-download').get_attribute('href')=='https://github.com/AKolenda/openxplorer/releases')
-            check('Native file dragging links to its compatibility guide',page.locator('.bento-pins a[href="/docs/interface/#file-drag-drop"]').count()==1)
-            page.locator('[data-search-open]').click()
+            check('Hero tour screenshot loads eagerly at high priority',
+                  page.locator('.tour-frame img').get_attribute('loading') in (None,'eager') and
+                  page.locator('.tour-frame img').get_attribute('fetchpriority')=='high')
+            check('Header links to the public repository',page.locator('.header-nav a[href="https://github.com/AKolenda/openxplorer"]').count()==1)
+            download=page.locator('.hero .button.primary')
+            check('Download button names and opens the current release',
+                  download.inner_text().strip()=='Download v'+VERSION and
+                  download.get_attribute('href')=='https://github.com/AKolenda/openxplorer/releases/tag/v'+VERSION)
+            check('Native file dragging links to its compatibility guide',page.locator('.details a[href="/docs/interface/#file-drag-drop"]').count()==1)
+            check('Homepage runs no embedded explorer',page.locator('iframe').count()==0)
+            for width in [320,390,768,959]:
+                page.set_viewport_size({'width':width,'height':844})
+                page.wait_for_timeout(120)
+                check(f'{width}px homepage has no page overflow',page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'))
+                check(f'{width}px download call to action fits',download.evaluate('(e)=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth}'))
+            page.set_viewport_size({'width':1440,'height':1000})
+            page.goto(base+'/docs/introduction/')
+            page.wait_for_timeout(200)
+            page.locator('[data-search-open]').first.click()
             page.locator('#docs-search-input').fill('drag')
             check('Search works after production hydration',page.locator('#docs-search-results a').count()>0)
             page.keyboard.press('Escape')
-            check('Search Escape restores focus',page.locator('[data-search-open]').evaluate('(e)=>document.activeElement===e'))
-            page.locator('#demo').scroll_into_view_if_needed()
+            check('Search Escape restores focus',page.locator('[data-search-open]').first.evaluate('(e)=>document.activeElement===e'))
+            page.locator('[data-product-demo]').scroll_into_view_if_needed()
             page.wait_for_function('document.querySelector("[data-product-demo]").dataset.phase==="ready"')
             check('Production hydration preserves the inert iframe template',page.locator('[data-demo-template]').evaluate('(e)=>e.content.querySelectorAll("iframe").length')==1)
             check('Desktop production preview loads in a script-only sandbox',
@@ -78,22 +92,21 @@ def main():
                 page.set_viewport_size({'width':width,'height':844})
                 page.wait_for_timeout(120)
                 check(f'{width}px removes the running iframe',page.locator('iframe').count()==0 and len(page.frames)==1)
-                check(f'{width}px has no page overflow',page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'))
-                check(f'{width}px GitHub call to action fits',page.locator('#download .button').evaluate('(e)=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth}'))
+                check(f'{width}px guide has no page overflow',page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'))
             page.goto(base+'/docs/interface/')
             page.locator('[data-menu-toggle]').click()
+            check('Production mobile menu opens',page.locator('[data-mobile-nav]').is_visible())
             check('Production mobile menu shows every guide',page.locator('.mobile-doc-group a').count()==10)
             page.keyboard.press('Escape')
             check('Mobile menu Escape restores focus',page.locator('[data-menu-toggle]').evaluate('(e)=>document.activeElement===e'))
             page.set_viewport_size({'width':1440,'height':1000})
             page.wait_for_timeout(150)
-            check('Documentation displays the current release',page.locator('.docs-label code').inner_text()=='1.1.4')
+            check('Documentation displays the current release',page.locator('.docs-label code').inner_text()==VERSION)
             check('Documentation release label fits its sidebar',page.locator('.docs-label').evaluate('(e)=>e.scrollWidth<=e.clientWidth'))
             page.goto(base+'/source/')
             check('Source page omits maintainer-only configuration instructions','apps/web/lib/site.ts' not in page.locator('main').inner_text())
             check('Source page links to the public GitHub repository',page.locator('main a[href="https://github.com/AKolenda/openxplorer"]').count()==1)
-            page.goto(base+'/concepts/')
-            check('Design alternatives are excluded from indexing','noindex' in page.locator('meta[name=robots]').get_attribute('content'))
+            check('Removed design lab is not published',page.goto(base+'/concepts/').status==404)
             check('No production JavaScript or React hydration errors',not errors)
             browser.close()
     finally:

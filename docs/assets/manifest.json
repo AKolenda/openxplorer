@@ -2,7 +2,7 @@
   "source": "tools/capture-website.py; generated designs only",
   "fictional": true,
   "sha256": {
-    "website-bento.png": "3c80b92cb6dee0a2d4184c0ff1471bf1ae984773a2eb84b37c8bcb1f883244cb",
-    "website-home.png": "ab3f3c7aa09cb275e7bd750263b14c3354f22de33aadbcb0f54b7bc7cefe69ef"
+    "website-features.png": "4de948bf2f8050efd53a7bf77bc1b6c7d11e10479ee5dd0ee2a886362ecdf39a",
+    "website-home.png": "817ab11a5bd263c31b1d60b00ffbe8b148b722b0815108e002563b7ac6e309bf"
   }
 }

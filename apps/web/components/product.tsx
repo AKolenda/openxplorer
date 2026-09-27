@@ -15,14 +15,23 @@ export function ProductDemo({compact=false}:{compact?:boolean}){
   <p className="demo-status" data-demo-status="" role="status">Double-click a folder, try a right-click, or drag a folder to the sidebar. No access to your files, NAS or credentials.</p>
  </div>;
 }
-export function BentoFeatures(){
- return <section id="features" className="section product-features"><div className="section-heading"><h2>Less looking around.<br/>More getting things done.</h2><p>Local folders and the NAS.<br/>Finally speaking the same language.</p></div>
-  <div className="product-bento">
-   <article className="bento-network"><div className="bento-copy"><Icon name="network" size={27}/><h3>Your NAS belongs here.</h3><p>Native SMB access through Linux’s GIO/GVfs. Open a share with a Windows-style path, sign in, and browse it alongside your local files.</p><code className="unc-example">{'\\\\studio-nas\\Projects'}</code><a href="/docs/network-shares/">Connect your network storage</a></div><Screenshot name="network-path" alt="Actual OpenXplorer breadcrumb buttons for studio-nas, Projects and Design"/></article>
-   <article className="bento-pins"><div className="bento-copy"><Icon name="pin" size={24}/><h3>Drag it where you need it.</h3><p>Drag selected files into compatible editors and attachment fields. Drop onto a folder to copy, or into Quick access to pin a folder. Sources stay in place.</p><a href="/docs/interface/#file-drag-drop">File dragging &amp; compatibility</a><a href="#demo" data-play-tour="" className="desktop-demo-link">Watch folder pinning</a></div><Screenshot name="pinned-sidebar" alt="Actual OpenXplorer sidebar with Design pinned and a green network indicator"/></article>
-   <article className="bento-search"><div className="bento-copy"><Icon name="search" size={24}/><h3>Find the file. Keep the path.</h3><p>Opt selected folders into the filename cache. Search locally or on a share, then open the actual location.</p><a href="/docs/search-indexing/">How cached search works</a></div><Screenshot name="cached-search" alt="Real cached search results with filenames and full SMB folder paths"/></article>
-   <article className="bento-versions"><div className="bento-copy"><Icon name="clock" size={24}/><h3>The right moment, clearly marked.</h3><p>Browse exposed NAS snapshots with dates beside each version. Historical tabs carry a Previous version badge so you know where you are.</p><a href="/docs/interface/#snapshots">Explore previous versions</a></div><Screenshot name="previous-versions" alt="Previous versions of the fictional Launch planning folder, with compact dates and separate actions"/></article>
+const CURSOR=<svg viewBox="0 0 28 34"><path d="M3 2 25 18l-10 2 6 9-5 3-6-10-7 7Z"/></svg>;
+/** CSS-only guided tour over a crop of the real screenshot. Each click target and
+ *  cursor share one coordinate system: percentages of the cropped frame. */
+export function ProductTour(){
+ return <figure className="product-tour" aria-labelledby="tour-caption">
+  <div className="tour-board">
+   <div className="tour-topline"><span>Guided tour</span><span>9 seconds</span></div>
+   <div className="tour-stage">
+    <div className="tour-frame"><img src="/assets/screenshots/explorer-light.png" alt="OpenXplorer with the sample share studio-nas, Projects open and a Design folder pinned in the sidebar" width={1440} height={900} fetchPriority="high"/></div>
+    <span className="click-target target-path" aria-hidden="true"/>
+    <span className="click-target target-folder" aria-hidden="true"/>
+    <span className="click-target target-pin" aria-hidden="true"/>
+    <span className="tour-cursor cursor-path" aria-hidden="true">{CURSOR}<b>Type a share path</b></span>
+    <span className="tour-cursor cursor-folder" aria-hidden="true">{CURSOR}<b>Open a folder</b></span>
+    <span className="tour-cursor cursor-pin" aria-hidden="true">{CURSOR}<b>Drag it to Quick access</b></span>
+   </div>
   </div>
-  <p className="product-disclosure">Screenshots use the real interface with fictional files. Native file dragging is available in the desktop build; the browser preview simulates folder pinning. Network files may need an existing local mount for apps that only accept local files.</p>
- </section>;
+  <figcaption id="tour-caption"><span>Path</span><i/><span>Folder</span><i/><span>Pin</span></figcaption>
+ </figure>;
 }

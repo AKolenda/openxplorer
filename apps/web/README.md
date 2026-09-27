@@ -1,6 +1,6 @@
 # OpenXplorer website
 
-A Next.js App Router website for the open-source OpenXplorer file manager. The selected visual direction is **Zorin / Horizon**: white and pale-blue surfaces, clear typography, and the actual application—not a re-created explorer widget—at the center.
+A Next.js App Router website for the open-source OpenXplorer file manager. The visual system follows [winrdp.app](https://winrdp.app/): a white header, one blue hero band with a CSS-only guided tour over a real screenshot, two-line headings, large screenshots, and the actual application—not a re-created explorer widget—at the center.
 
 ![Actual application interface featured on the website](public/assets/screenshots/explorer-light.png)
 
@@ -52,15 +52,15 @@ These changes apply to the Next.js component/CSS source and the generated offlin
 
 ## The website at a glance
 
-![Zorin-inspired homepage with the actual application preview](../../docs/assets/website-home.png)
+![Homepage with the blue hero and guided tour over the actual interface](../../docs/assets/website-home.png)
 
-![Unequal feature cards using actual screenshots, not replacement icons](../../docs/assets/website-bento.png)
+![Three feature columns under a two-line heading](../../docs/assets/website-features.png)
 
 These are captures of the standalone HTML rendered from the same site components. They are not evidence of a successful Next.js production build. Run `python3 tools/capture-website.py` from the repository root after `pnpm designs` to refresh them (Playwright, Chromium and Pillow required).
 
 ## The real interface, embedded
 
-`components/product.tsx` embeds `/app-preview.html`, generated from `desktop/ui/` plus the preview-only tour controller in `desktop/demo/showcase.js`.
+`components/product.tsx` embeds `/app-preview.html` on the Introduction guide, generated from `desktop/ui/` plus the preview-only tour controller in `desktop/demo/showcase.js`.
 
 The preview has the real folder and file icons, tabs, breadcrumb buttons, menu behavior, pinning handlers and light/dark controls. Its storage adapter is simulated. It cannot access local files, NAS services, operating-system settings, credentials or a keyring.
 
@@ -74,18 +74,17 @@ The standalone HTML renderer inlines the same preview as sandboxed `srcdoc` and 
 
 | Route | Purpose |
 |---|---|
-| `/` | Selected Zorin design, interactive app preview, SMB / pins / search / snapshots bento grid |
+| `/` | Hero with a CSS guided tour, screenshots, SMB / drag / search features, open-source links |
 | `/docs/introduction/` | Guide entry point, real screenshot and interactive demo |
 | `/docs/[slug]/` | Topic navigation left, article center, same-page navigation right |
 | `/source/` | Public source repository and license information |
-| `/concepts/` | Original three design directions, updated to use real application images |
 | `/app-preview.html` | Standalone, interactive application UI with simulated files |
 | `/docs-markdown/[slug].md` | Generated guide Markdown used by documentation tooling |
 
 ## Edit content and identity
 
 `lib/site.ts` contains the application name, release version, public source repository,
-GitHub Releases URL, canonical `https://openxplorer.app` URL and selected design.
+GitHub Releases URL, and canonical `https://openxplorer.app` URL.
 Package buttons lead to GitHub Releases; source links lead to the public repository.
 The website has no direct download links or hosted release binaries.
 

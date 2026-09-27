@@ -25,7 +25,7 @@ class Links(HTMLParser):
   if tag=='img':self.images.append(a)
 files=sorted(p for p in D.glob('*.html') if p.name!='app-preview.html')
 parsed={p.name:Links(p.read_text()) for p in files};count=0
-check('All 16 standalone site and guide pages exist',len(files)==16)
+check('All 12 standalone site and guide pages exist',len(files)==12)
 for p in files:
  for href in parsed[p.name].links:
   u=urlsplit(href)
@@ -46,20 +46,22 @@ with sync_playwright() as p:
   page=b.new_page(viewport={'width':width,'height':height},reduced_motion='reduce' if reduced else 'no-preference')
   page.set_default_timeout(8000);page.on('pageerror',lambda e:errors.append(str(e)));page.on('request',lambda r:requests.append(r.url))
   page.set_content((D/name).read_text(),wait_until='load');return page
- for name in ['index.html','openxplorer-zorin.html','openxplorer-windows.html','openxplorer-vercel.html','source.html','concepts.html']:
+ for name in ['index.html','source.html']:
   page=open_page(name)
   check(name+': single primary heading',page.locator('h1').count()==1)
   check(name+': no Command-K badge',page.locator('kbd').filter(has_text=re.compile(r'[⌘K]')).count()==0)
   check(name+': no imitation explorer markup',page.locator('.explorer-mock').count()==0)
-  if 'openxplorer-' in name or name=='index.html':
-   check(name+': actual UI sandbox present',page.locator('iframe').get_attribute('sandbox')=='allow-scripts')
-   check(name+': feature bento has four unequal cards',page.locator('.product-bento>article').count()==4)
-   check(name+': no decorative hero status dots',page.locator('.hero-intro .status-dot,.release-pill').count()==0)
+  if name=='index.html':
+   check(name+': guided tour runs over the real screenshot',page.locator('.tour-frame img').get_attribute('src').startswith('data:image/png'))
+   check(name+': guided tour has three labelled steps',page.locator('.tour-cursor b').count()==3)
+   check(name+': three feature details',page.locator('.details>article').count()==3)
+   check(name+': homepage embeds no running explorer',page.locator('iframe').count()==0)
   page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(100)
   check(name+': no page-wide mobile overflow',page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'))
   page.close()
- page=open_page('index.html')
- host=page.locator('[data-product-demo]');page.locator('#demo').scroll_into_view_if_needed()
+ # The interactive preview lives in the introduction guide.
+ page=open_page('docs-introduction.html')
+ host=page.locator('[data-product-demo]');host.scroll_into_view_if_needed()
  page.wait_for_function('()=>document.querySelector("[data-product-demo]").dataset.phase==="ready"')
  frame=page.frame_locator('iframe')
  check('Preview starts in real application Home/Documents',frame.locator('.file-row').count()>0)
@@ -98,8 +100,8 @@ with sync_playwright() as p:
  page.wait_for_timeout(60)
  check('Parent rejects forged status from a non-frame source','forged' not in page.locator('[data-demo-status]').inner_text())
  page.close()
- page=open_page('index.html',reduced=True)
- page.locator('#demo').scroll_into_view_if_needed();page.wait_for_function('()=>document.querySelector("[data-product-demo]").dataset.phase==="ready"')
+ page=open_page('docs-introduction.html',reduced=True)
+ page.locator('[data-product-demo]').scroll_into_view_if_needed();page.wait_for_function('()=>document.querySelector("[data-product-demo]").dataset.phase==="ready"')
  check('Reduced motion still requires user initiation',page.locator('[data-demo-command="stop"]').is_hidden())
  page.locator('[data-demo-command="play"]').click();page.wait_for_function('()=>document.querySelector("[data-product-demo]").dataset.phase==="complete"',timeout=20000)
  check('Tour works with reduced motion')
