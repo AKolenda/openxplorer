@@ -201,10 +201,11 @@ pub trait Node: Send + Sync {
         cancel: &Cancellation,
         assert_writable: Option<&WriteGuard>,
     ) -> Result<(), TransferError>;
-    /// Stage directory copies beside the final name (MTP). Asked of the
-    /// destination folder: its native move cannot rename across folders.
-    /// Directory copies use a hidden sibling plus same-folder rename; file
-    /// copies keep their final name inside an exclusively owned folder.
+    /// Stage copies beside their final name (MTP). Asked of the destination
+    /// folder: its native move cannot rename across folders, and some
+    /// devices cannot move across folders at all. Files and folders are
+    /// built under a hidden sibling name and published by a same-folder
+    /// rename.
     fn stage_as_sibling(&self) -> bool {
         false
     }

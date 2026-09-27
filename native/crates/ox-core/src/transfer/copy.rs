@@ -17,7 +17,7 @@
 use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::labels::copy_label;
-use super::modes::{secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
+use super::modes::{local_directory_path, secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
 use super::names::child_node;
 use super::node::{Cancellation, Node, NodeInfo, NodeKind};
 use super::types::Progress;
@@ -82,8 +82,7 @@ impl<'a> Copier<'a> {
         depth: usize,
     ) -> Result<(), TransferError> {
         target.mkdir(Some(self.cancel))?;
-        let local_path = target.path().filter(|_| target.uri().starts_with("file:"));
-        if let Some(path) = local_path {
+        if let Some(path) = local_directory_path(target) {
             let mode = match info.mode {
                 Some(mode) => Some(mode),
                 None => target.info(Some(self.cancel))?.mode,
@@ -92,9 +91,20 @@ impl<'a> Copier<'a> {
             self.modes.record(target.uri(), path, final_mode);
             secure_local_staging(target)?;
         }
+        self.copy_children(source, target, depth + 1)
+    }
+
+    /// Copies every item of the folder `source` into the existing folder
+    /// `target`, at nesting `depth`.
+    pub(crate) fn copy_children(
+        &mut self,
+        source: &dyn Node,
+        target: &dyn Node,
+        depth: usize,
+    ) -> Result<(), TransferError> {
         for child in source.children(Some(self.cancel))? {
             let child_target = child_node(target, child.name())?;
-            self.copy(child.as_ref(), child_target.as_ref(), depth + 1)?;
+            self.copy(child.as_ref(), child_target.as_ref(), depth)?;
         }
         Ok(())
     }

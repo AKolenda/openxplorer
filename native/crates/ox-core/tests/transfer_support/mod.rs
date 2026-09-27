@@ -5,6 +5,7 @@ pub mod device;
 pub mod local;
 pub mod versions;
 
+use std::ffi::OsStr;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -81,6 +82,18 @@ impl Fixture {
         engine.run(mode, &uris, Some(&target_uri), policy, &self.cancel)
     }
 
+    /// Copies `paths` into the destination with a new engine over
+    /// `provider`.
+    pub fn copy(
+        &self,
+        provider: Arc<dyn Provider>,
+        paths: &[&Path],
+        policy: ConflictPolicy,
+    ) -> TransferResult {
+        let mut engine = self.engine(provider);
+        self.run(&mut engine, paths, TransferMode::Copy, policy, None)
+    }
+
     /// Like [`Fixture::try_run`] for runs that must not be refused.
     pub fn run(
         &self,
@@ -133,6 +146,13 @@ fn collect_leftovers(root: &Path, folder: &Path, found: &mut Vec<String>) {
 /// Python tests.
 pub fn is_staging(node: &dyn Node) -> bool {
     is_own_staging_name(&node.display_name())
+}
+
+/// True for a path whose last component is an engine staging name.
+pub fn is_staging_path(path: &Path) -> bool {
+    path.file_name()
+        .and_then(OsStr::to_str)
+        .is_some_and(is_own_staging_name)
 }
 
 /// True for an item named like the engine's replacement backups

@@ -15,7 +15,7 @@ use super::labels::{completed_label, item_label};
 use super::names::{child_node, new_copy_name};
 use super::node::{Cancellation, Node, NodeFactory, NodeKind, WriteGuard};
 use super::staged_copy::{StageSlot, StagedCopy};
-use super::staging::discard_stage;
+use super::staging::{discard_stage, leftover_report};
 use super::types::{ConflictPolicy, Progress, TransferMode, TransferResult};
 
 /// The most items one run accepts.
@@ -163,12 +163,8 @@ impl TransferEngine {
         }
         if let Some(stage) = slot.stage.take() {
             let root = stage.root();
-            if let Some(problem) = discard_stage(root, slot.device, &*self.sleep) {
-                let what = if slot.device { "item" } else { "folder" };
-                result.errors.push(format!(
-                    "Incomplete staging {what} left at {}. Inspect it before removing it. {problem}",
-                    root.uri()
-                ));
+            if let Err(problem) = discard_stage(root, slot.place, &*self.sleep) {
+                result.errors.push(leftover_report(root, slot.place, &problem));
             }
         }
     }
@@ -252,23 +248,17 @@ impl TransferEngine {
         }
         let copy = StagedCopy {
             source: source.as_ref(),
-            is_directory,
+            source_kind: info.kind,
             dest_dir,
             destination: destination.as_ref(),
-            replace: batch.policy == ConflictPolicy::Replace,
+            policy: batch.policy,
             cancel,
             guard: self.assert_writable.as_deref(),
             emit: &mut *self.emit,
         };
         copy.run(slot)?;
         result.done.push(uri.to_string());
-        // The private folder is empty now. A plain delete removes only an
-        // empty folder, so it can never take the published item with it.
-        if let Some(stage) = &slot.stage {
-            stage.root().delete()?;
-        }
-        slot.stage = None;
-        Ok(())
+        slot.remove_empty_folder()
     }
 
     /// Trash or permanently delete one user-selected item.

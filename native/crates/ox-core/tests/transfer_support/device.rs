@@ -7,6 +7,10 @@
 //! non-overwriting rename (`set_display_name`); a cross-folder move keeps
 //! the item's name; a cross-folder move under a different name is refused;
 //! one-step overwrite is unsupported. Every move and relist is recorded.
+//!
+//! [`Device::without_move_object`] models devices without MTP `MoveObject`
+//! (Android 7 and 8): GVfs refuses every cross-folder move there, while a
+//! same-folder rename still works.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -24,13 +28,34 @@ pub enum Call {
     Refresh(PathBuf),
 }
 
+/// Whether a device implements MTP `MoveObject`, which cross-folder moves
+/// need.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MoveObject {
+    /// A cross-folder move keeps the item's name (a Pixel 9).
+    #[default]
+    Supported,
+    /// Every cross-folder move fails with "not supported", as `do_move` in
+    /// GVfs's MTP backend reports without the capability.
+    Unsupported,
+}
+
 /// The device behaviour and its call log.
 #[derive(Default)]
 pub struct Device {
     calls: Mutex<Vec<Call>>,
+    move_object: MoveObject,
 }
 
 impl Device {
+    /// A device without MTP `MoveObject`, such as a phone with Android 7 or 8.
+    pub fn without_move_object() -> Self {
+        Self {
+            move_object: MoveObject::Unsupported,
+            ..Self::default()
+        }
+    }
+
     /// Every recorded call, in order.
     pub fn calls(&self) -> Vec<Call> {
         self.calls.lock().expect("call log").clone()
@@ -68,7 +93,9 @@ impl Device {
             let same_name = from.file_name() == to.file_name();
             assert!(
                 same_folder || same_name,
-                "impossible device move {from:?} -> {to:?}"
+                "impossible device move {} -> {}",
+                from.display(),
+                to.display()
             );
         }
     }
@@ -102,6 +129,9 @@ impl Provider for Device {
                 )));
             }
             return node.local_move_native(target, cancel);
+        }
+        if self.move_object == MoveObject::Unsupported {
+            return Err(TransferError::NotSupported("Operation not supported".into()));
         }
         if node.name() != target.name() {
             return Err(TransferError::failed(
