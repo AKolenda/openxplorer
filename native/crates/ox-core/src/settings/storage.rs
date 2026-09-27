@@ -48,6 +48,12 @@ pub struct PrivateFileOptions {
 /// it must be a real directory owned by this user, not a symlink, and its
 /// mode becomes 0700. Parents keep their default mode, as in Python.
 ///
+/// Safety rule "private state lives in an owned, real directory"
+/// (`private_directory` in `private_storage.py`): the directory is opened
+/// with `O_DIRECTORY | O_NOFOLLOW`, so a symlink fails with `ELOOP` before
+/// anything changes its target's mode, and one owned by another user is
+/// refused.
+///
 /// # Errors
 ///
 /// [`SettingsError::Io`] if the directory cannot be created or opened,
@@ -200,6 +206,7 @@ enum Verdict {
 }
 
 impl OpenedFile {
+    /// The facts of an opened file's `metadata` that decide its verdict.
     fn inspect(metadata: &Metadata) -> Self {
         Self {
             is_regular: metadata.file_type().is_file(),
