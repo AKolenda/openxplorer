@@ -12,8 +12,8 @@
 use serde_json::{Map, Value};
 
 use super::choices::{ContextMenu, Theme, View};
+use super::labels::bookmark_fallback_label;
 use super::model::{Bookmark, Column, PreferencesUpdate, RecentEntry, SettingsData, NETWORK_INTERVALS};
-use super::validate::bookmark_fallback_label;
 use super::SettingsError;
 use crate::location::{normalise, python_strip, require_share, safe_label, LocationError};
 

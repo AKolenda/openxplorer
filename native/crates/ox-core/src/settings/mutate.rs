@@ -7,9 +7,9 @@
 //! before changing anything, so a rejected request leaves the data as it
 //! was.
 
+use super::labels::{bookmark_fallback_label, pin_fallback_label};
 use super::model::{Bookmark, RecentEntry, SettingsData};
 use super::read::{first_chars, MAX_BOOKMARKS, MAX_NAME_CHARS, MAX_ORDER, MAX_RECENT, MAX_TYPE_CHARS};
-use super::validate::{bookmark_fallback_label, pin_fallback_label};
 use super::SettingsError;
 use crate::location::{normalise, require_share, safe_label};
 
