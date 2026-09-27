@@ -21,7 +21,7 @@ use super::python_conversions::{python_count, python_str};
 use super::storage::{
     private_directory, private_file, read_limited_text, PrivateFileOptions, SETTINGS_SIZE_LIMIT,
 };
-use super::{FileState, Settings, SettingsError};
+use super::{FileState, Settings, SettingsError, StorageRefusal};
 use crate::location::{normalise, require_share, safe_label, LocationError};
 
 /// How a location read from the file is checked: [`normalise`] for a pin,
@@ -53,11 +53,20 @@ enum ReadFailure {
 
 impl ReadFailure {
     /// Reading an opened file fails either in the operating system, which
-    /// says nothing about the contents, or on the contents themselves.
+    /// says nothing about the contents, or on the contents themselves: too
+    /// large, or not UTF-8 text.
     fn from_reading(error: SettingsError) -> Self {
         match error {
-            SettingsError::Io { .. } => Self::Refused(error),
-            SettingsError::Invalid(_) => Self::Damaged(error),
+            SettingsError::Refused {
+                reason: StorageRefusal::TooLarge | StorageRefusal::NotText,
+                ..
+            }
+            | SettingsError::Invalid(_) => Self::Damaged(error),
+            SettingsError::Refused {
+                reason: StorageRefusal::ForeignDirectory | StorageRefusal::NotPrivateFile,
+                ..
+            }
+            | SettingsError::Io { .. } => Self::Refused(error),
         }
     }
 }
@@ -73,8 +82,14 @@ fn try_read_file(directory: &Path, settings: &mut SettingsData) -> Result<(), Re
     let path = directory.join(Settings::FILE_NAME);
     let file = private_file(&path, PrivateFileOptions::default()).map_err(ReadFailure::Refused)?;
     let text = read_limited_text(file, &path, SETTINGS_SIZE_LIMIT).map_err(ReadFailure::from_reading)?;
-    let source: Value = serde_json::from_str(&text).map_err(|error| ReadFailure::Damaged(error.into()))?;
+    let source = parse_json(&text).map_err(ReadFailure::Damaged)?;
     read_sections(&source, settings).map_err(ReadFailure::Damaged)
+}
+
+/// The file's text as JSON; the error keeps serde's line and column.
+fn parse_json(text: &str) -> Result<Value, SettingsError> {
+    serde_json::from_str(text)
+        .map_err(|error| SettingsError::invalid(format!("The settings file is not valid JSON ({error}).")))
 }
 
 /// The warning shown when reading fell back to defaults, in the Python

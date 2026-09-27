@@ -36,14 +36,14 @@ mod preferences;
 mod python_conversions;
 mod read;
 mod save;
-pub mod storage;
+mod storage;
 #[cfg(test)]
 mod test_support;
 
 use std::path::{Path, PathBuf};
 
 pub use choices::{Appearance, ContextMenu, Theme, View};
-pub use error::SettingsError;
+pub use error::{SettingsError, StorageRefusal};
 pub use model::{Bookmark, RecentEntry, SettingsData, SETTINGS_VERSION};
 pub use mutate::{BookmarkAction, BookmarkKind, PinRequest};
 pub use preferences::{
@@ -160,8 +160,9 @@ impl Settings {
     ///
     /// # Errors
     ///
-    /// [`SettingsError::Io`] or [`SettingsError::Invalid`] if the settings
-    /// directory, lock or file is refused or cannot be written.
+    /// [`SettingsError::Refused`] if private storage refuses the settings
+    /// directory, lock or file, and [`SettingsError::Io`] if one of them
+    /// cannot be opened or written.
     pub fn update_preferences(&mut self, update: &PreferencesUpdate) -> Result<Preferences, SettingsError> {
         self.mutate(|data| {
             data.preferences.apply(update);

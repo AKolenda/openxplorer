@@ -15,3 +15,6 @@ pub mod location;
 pub mod places;
 pub mod settings;
 pub mod transfer;
+
+#[cfg(test)]
+mod test_support;

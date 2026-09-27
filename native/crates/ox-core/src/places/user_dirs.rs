@@ -223,6 +223,7 @@ fn normalise_absolute(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::make_fifo;
 
     const HOME: &str = "/home/demo";
 
@@ -336,11 +337,7 @@ mod tests {
     fn a_fifo_is_refused_without_blocking() {
         let root = tempfile::tempdir().unwrap();
         let fifo = root.path().join("user-dirs.dirs");
-        let made = std::process::Command::new("mkfifo")
-            .arg(&fifo)
-            .status()
-            .expect("mkfifo (GNU coreutils) is required for the FIFO safety test");
-        assert!(made.success(), "mkfifo failed: {made}");
+        make_fifo(&fifo);
         let result = read(&fifo, Path::new(HOME));
         assert!(matches!(result, Err(UserDirsError::NotAFile)));
     }

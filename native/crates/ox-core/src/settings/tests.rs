@@ -306,7 +306,12 @@ fn a_hard_linked_settings_file_is_refused_with_a_warning() {
     fs::write(&original, r#"{"preferences": {"theme": "dark"}}"#).unwrap();
     fs::hard_link(&original, directory.join("settings.json")).unwrap();
     let store = Settings::open(&directory);
-    assert!(store.warning().is_some());
+    let warning = store.warning().expect("the refused file is reported");
+    let refused_path = store.path().display().to_string();
+    assert!(
+        warning.contains(&refused_path),
+        "the warning names the refused file: {warning}"
+    );
     assert_eq!(store.data().preferences.theme, Theme::System);
 }
 
@@ -454,7 +459,13 @@ fn a_change_never_moves_a_refused_file() {
 
     let result = store.update_preferences(&update_from(&json!({"theme": "dark"})));
 
-    assert!(matches!(result, Err(SettingsError::Invalid(_))));
+    assert!(matches!(
+        result,
+        Err(SettingsError::Refused {
+            reason: StorageRefusal::NotPrivateFile,
+            ..
+        })
+    ));
     assert_eq!(
         fs::read_to_string(directory.join("settings.json")).unwrap(),
         "{bad"
