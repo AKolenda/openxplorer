@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The transfer orchestration. Port of `TransferEngine.run` and
 //! `_run_items` in `desktop/operations.py`; see the module documentation for
-//! the rules. The request is validated in `request.rs`, the destination name
-//! is chosen in `conflicts.rs`, and the copy of one item (staging,
-//! publishing, device checks) is in `staged_copy.rs`.
+//! the rules. The request is validated in `request.rs`, the settings of the
+//! run are in `batch.rs`, the destination name is chosen in `conflicts.rs`,
+//! and the copy of one item (staging, publishing, device checks) is in
+//! `staged_copy.rs`.
 
 use std::fmt;
 use std::time::Duration;
 
+use super::batch::{Batch, Removal};
 use super::cancellation::Cancellation;
 use super::commit::commit_replace;
-use super::conflicts::Placement;
 use super::containment::guard_destination;
 use super::error::TransferError;
 use super::guard::{check_write_tree, SourceChange};
@@ -20,7 +21,7 @@ use super::relisting::SourceFolders;
 use super::request::{destination_folder, distinct_items};
 use super::staged_copy::{ItemStaging, StagedCopy};
 use super::staging::{discard_stage, leftover_report};
-use super::types::{progress_fraction, ConflictPolicy, Progress, TransferMode, TransferResult};
+use super::types::{ConflictPolicy, Progress, TransferMode, TransferResult};
 
 /// Receives the progress of a run for the transfer panel.
 type ProgressCallback = Box<dyn FnMut(Progress) + Send>;
@@ -43,68 +44,6 @@ impl fmt::Debug for TransferEngine {
             .debug_struct("TransferEngine")
             .field("has_write_guard", &self.write_guard.is_some())
             .finish_non_exhaustive()
-    }
-}
-
-/// The settings shared by every item of one run.
-struct Batch<'a> {
-    mode: TransferMode,
-    policy: ConflictPolicy,
-    /// The destination folder; `None` for Trash and delete.
-    destination_folder: Option<&'a dyn Node>,
-    cancel: &'a Cancellation,
-    /// The number of distinct items.
-    total: usize,
-}
-
-impl Batch<'_> {
-    /// The progress shown when item `index` starts. Trash and delete have
-    /// no byte progress, so the batch position is the only honest fraction
-    /// to show for them.
-    fn start_fraction(&self, index: usize) -> f64 {
-        if self.mode.is_removal() {
-            progress_fraction(index as u64, self.total as u64)
-        } else {
-            0.0
-        }
-    }
-
-    /// How a copy or move into `destination_folder` names its items.
-    fn placement<'a>(&'a self, destination_folder: &'a dyn Node) -> Placement<'a> {
-        Placement {
-            mode: self.mode,
-            policy: self.policy,
-            destination_folder,
-            cancel: self.cancel,
-        }
-    }
-
-    /// Move, Trash and delete change their sources; a copy keeps them.
-    fn source_change(&self) -> SourceChange {
-        match self.mode {
-            TransferMode::Move | TransferMode::Trash | TransferMode::Delete => SourceChange::Changed,
-            TransferMode::Copy => SourceChange::Kept,
-        }
-    }
-}
-
-/// How Trash and delete remove an item.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Removal {
-    /// Move to the Trash.
-    Trash,
-    /// Delete permanently, after the user confirmed it.
-    PermanentDelete,
-}
-
-impl Removal {
-    /// The removal `mode` asks for; `None` for copies and moves.
-    fn of(mode: TransferMode) -> Option<Self> {
-        match mode {
-            TransferMode::Trash => Some(Removal::Trash),
-            TransferMode::Delete => Some(Removal::PermanentDelete),
-            TransferMode::Copy | TransferMode::Move => None,
-        }
     }
 }
 
@@ -244,7 +183,7 @@ impl TransferEngine {
         staging: &mut ItemStaging,
     ) -> Result<ItemOutcome, TransferError> {
         let selected = self.start_item(batch, index, uri)?;
-        if let Some(removal) = Removal::of(batch.mode) {
+        if let Some(removal) = batch.removal() {
             self.remove(removal, selected.node.as_ref(), batch.cancel)?;
             return Ok(ItemOutcome::Done);
         }

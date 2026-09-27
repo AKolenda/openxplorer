@@ -23,6 +23,7 @@
 //! |---|---|
 //! | `engine` | The public API and the per-item loop (`run`, `_run_items`) |
 //! | `request` | Validating a run's items and destination folder |
+//! | `batch` | The settings shared by every item of one run |
 //! | `conflicts` | Skip, Keep both and Replace: the destination name |
 //! | `staged_copy` | Staging, publishing and device checks for one copy |
 //! | `copy` | The recursive copy into staging (`_copy`) |
@@ -50,6 +51,7 @@
 //! extraction cases of `desktop/tests/test_zip_extract.py`. Native backend
 //! limitations are documented in [`crate::gio_node`].
 
+mod batch;
 mod cancellation;
 mod commit;
 mod conflicts;
