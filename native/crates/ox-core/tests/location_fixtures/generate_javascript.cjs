@@ -103,6 +103,7 @@ function declarationAt(source, start) {
   throw new Error(`No complete function declaration at offset ${start}.`);
 }
 
+// True when `code` parses as a strict-mode script. Nothing is run.
 function compiles(code) {
   try {
     new vm.Script(`'use strict';\n${code}`);
@@ -149,6 +150,7 @@ function runIsolated(code, provided) {
   return { value, unresolved };
 }
 
+// Every table in javascript.json: the helpers' answers for the inputs above.
 function capture(api) {
   return {
     environment: ENVIRONMENT,
@@ -170,6 +172,8 @@ function capture(api) {
   };
 }
 
+// Extracts the helpers from the app.js named on the command line, runs them
+// and prints javascript.json. Fails if a helper read a global it lacked.
 function main() {
   const [appPath] = process.argv.slice(2);
   const helpers = extractWithDependencies(fs.readFileSync(appPath, 'utf8'), HELPERS);

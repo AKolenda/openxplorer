@@ -135,6 +135,7 @@ def capture() -> dict:
 
 
 def main() -> None:
+    """Print python.json as UTF-8, whatever the terminal's encoding."""
     document = json.dumps(capture(), ensure_ascii=False, indent=2) + '\n'
     sys.stdout.buffer.write(document.encode('utf-8'))
 
