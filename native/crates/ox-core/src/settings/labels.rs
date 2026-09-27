@@ -13,7 +13,7 @@ const FALLBACK_LABEL: &str = "Folder";
 /// The label a pin or share gets from `bookmark` and when read from the
 /// file: the decoded last path component, or "Folder" for a path ending in
 /// `/`. Python: `unquote(path).split('/')[-1] or 'Folder'`.
-pub(crate) fn bookmark_fallback_label(uri: &str) -> String {
+pub(super) fn bookmark_fallback_label(uri: &str) -> String {
     let Ok(parts) = split_location(uri) else {
         return FALLBACK_LABEL.to_owned();
     };
@@ -30,7 +30,7 @@ pub(crate) fn bookmark_fallback_label(uri: &str) -> String {
 /// the last path name (ignoring trailing slashes), the SMB host and the
 /// authority, else "Folder". Python: `name or host or parts.netloc or
 /// 'Folder'`.
-pub(crate) fn pin_fallback_label(uri: &str) -> String {
+pub(super) fn pin_fallback_label(uri: &str) -> String {
     let Ok(parts) = split_location(uri) else {
         return FALLBACK_LABEL.to_owned();
     };

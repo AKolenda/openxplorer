@@ -135,7 +135,7 @@ pub fn private_text(path: &Path, limit: u64) -> Result<String, SettingsError> {
 ///
 /// [`SettingsError::Io`] if reading fails; [`SettingsError::Invalid`] if the
 /// contents are too large or not UTF-8.
-pub(crate) fn read_limited_text(file: File, path: &Path, limit: u64) -> Result<String, SettingsError> {
+pub(super) fn read_limited_text(file: File, path: &Path, limit: u64) -> Result<String, SettingsError> {
     // The message names 4 MiB whatever the limit, as private_storage.py does.
     let too_large = || SettingsError::invalid("Settings file exceeds the 4 MiB safety limit.");
     if file.metadata().with_path(path)?.len() > limit {

@@ -20,13 +20,13 @@ use super::SettingsError;
 
 /// An exclusive `flock` on `settings.lock`, released when dropped.
 #[derive(Debug)]
-pub(crate) struct SettingsLock {
+pub(super) struct SettingsLock {
     _locked_file: File,
 }
 
 impl SettingsLock {
     /// Name of the lock file inside the settings directory.
-    pub(crate) const FILE_NAME: &'static str = "settings.lock";
+    pub(super) const FILE_NAME: &'static str = "settings.lock";
 
     /// Makes `directory` private and blocks until the lock is held.
     ///
@@ -35,7 +35,7 @@ impl SettingsLock {
     /// Everything [`private_directory`] and [`private_file`] refuse for the
     /// directory and the lock file (a symlinked `settings.lock` fails with
     /// [`SettingsError::Io`]), and a failing `flock`.
-    pub(crate) fn acquire(directory: &Path) -> Result<Self, SettingsError> {
+    pub(super) fn acquire(directory: &Path) -> Result<Self, SettingsError> {
         private_directory(directory)?;
         let path = directory.join(Self::FILE_NAME);
         let options = PrivateFileOptions {
@@ -55,7 +55,7 @@ impl SettingsLock {
 
 /// What [`replace_private_file`] does with the file it replaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum OldFile {
+pub(super) enum OldFile {
     /// Let the new file replace it.
     Discard,
     /// Rename it to `<name>.unreadable-<unix seconds>-<random>` first.
@@ -77,7 +77,7 @@ pub(crate) enum OldFile {
 /// directory and an existing target, and [`SettingsError::Io`] if writing,
 /// keeping the old file or the final rename fails. On any error the
 /// temporary file is removed and `target` is unchanged.
-pub(crate) fn replace_private_file(
+pub(super) fn replace_private_file(
     target: &Path,
     prefix: &str,
     contents: &[u8],

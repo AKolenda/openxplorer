@@ -31,12 +31,12 @@ pub enum SettingsError {
 
 impl SettingsError {
     /// A validation error with a user-facing message.
-    pub(crate) fn invalid(message: impl Into<String>) -> Self {
+    pub(super) fn invalid(message: impl Into<String>) -> Self {
         Self::Invalid(message.into())
     }
 
     /// A file-system error on `path`.
-    pub(crate) fn io(path: &Path, error: io::Error) -> Self {
+    pub(super) fn io(path: &Path, error: io::Error) -> Self {
         Self::Io {
             path: path.to_path_buf(),
             error,
