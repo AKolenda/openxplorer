@@ -112,13 +112,53 @@ impl BrowserWindow {
     }
 
     fn folder_input(&self, view: &gtk::Widget) {
+        let input = self.typing_input(view);
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |controller, key, _, modifiers| window.folder_key(controller, &input, key, modifiers)
+        ));
+        view.add_controller(keys);
+        view.add_controller(self.prefix_reset_on_click());
+        view.add_controller(self.folder_middle_click(view));
+        self.attach_context_menu(view);
+    }
+
+    /// The input method that turns key presses in `view` into text for
+    /// type-to-select. Like GTK's own text widgets, it knows `view` only
+    /// while `view` is realized: GTK's Wayland input method would otherwise
+    /// ask a destroyed view for its position.
+    fn typing_input(&self, view: &gtk::Widget) -> gtk::IMMulticontext {
         let input = gtk::IMMulticontext::new();
-        input.set_client_widget(Some(view));
+        view.connect_realize(glib::clone!(
+            #[strong]
+            input,
+            move |view| input.set_client_widget(Some(view))
+        ));
+        view.connect_unrealize(glib::clone!(
+            #[strong]
+            input,
+            move |_| {
+                input.focus_out();
+                input.set_client_widget(None::<&gtk::Widget>);
+            }
+        ));
         input.connect_commit(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |_, text| window.type_text(text)
         ));
+        view.add_controller(self.typing_focus(&input));
+        input
+    }
+
+    /// Tells `input` when the view gains and loses keyboard focus; losing
+    /// it also ends a typed prefix.
+    fn typing_focus(&self, input: &gtk::IMMulticontext) -> gtk::EventControllerFocus {
         let focus = gtk::EventControllerFocus::new();
         focus.connect_enter(glib::clone!(
             #[strong]
@@ -135,20 +175,7 @@ impl BrowserWindow {
                 window.reset_typeahead();
             }
         ));
-        view.add_controller(focus);
-        let keys = gtk::EventControllerKey::new();
-        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-        keys.connect_key_pressed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |controller, key, _, modifiers| window.folder_key(controller, &input, key, modifiers)
-        ));
-        view.add_controller(keys);
-        view.add_controller(self.prefix_reset_on_click());
-        view.add_controller(self.folder_middle_click(view));
-        self.attach_context_menu(view);
+        focus
     }
 
     /// Handles a key in a folder view before the view does.

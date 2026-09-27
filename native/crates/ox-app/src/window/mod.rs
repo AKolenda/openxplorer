@@ -109,7 +109,15 @@ mod imp {
     }
 
     impl WidgetImpl for BrowserWindow {}
-    impl WindowImpl for BrowserWindow {}
+    impl WindowImpl for BrowserWindow {
+        fn close_request(&self) -> glib::Propagation {
+            // Let go of keyboard focus first. On Wayland, GTK's input method
+            // otherwise keeps the focused address entry and later asks a
+            // destroyed widget for its cursor position (a Gtk-CRITICAL).
+            gtk::prelude::GtkWindowExt::set_focus(&*self.obj(), None::<&gtk::Widget>);
+            self.parent_close_request()
+        }
+    }
     impl ApplicationWindowImpl for BrowserWindow {}
 }
 
