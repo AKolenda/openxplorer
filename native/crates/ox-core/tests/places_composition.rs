@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Sidebar regression cases from desktop/tests/test_v07.py, `environment()`
-//! in desktop/winspace.py, and `read_user_dirs` in
-//! desktop/folder_locations.py, which runs on the same files as the Rust
+//! Sidebar regression cases from `desktop/tests/test_v07.py`, `environment()`
+//! in `desktop/winspace.py`, and `read_user_dirs` in
+//! `desktop/folder_locations.py`, which runs on the same files as the Rust
 //! parser. Every file is inside a temporary directory.
 
 use std::collections::BTreeMap;
@@ -23,13 +23,15 @@ fn bookmark(uri: &str, label: &str) -> Bookmark {
     }
 }
 
-fn saved(uri: &str, label: &str, connected: bool) -> SavedShare {
+/// A saved share that is not connected.
+fn saved(uri: &str, label: &str) -> SavedShare {
     SavedShare {
         bookmark: bookmark(uri, label),
-        connected,
+        connected: false,
     }
 }
 
+/// A known-folder row with the Documents glyph.
 fn place(uri: &str, label: &str) -> Place {
     Place {
         uri: uri.into(),
@@ -41,6 +43,7 @@ fn place(uri: &str, label: &str) -> Place {
     }
 }
 
+/// A mounted GIO network mount.
 fn mounted(uri: &str, label: &str) -> NetworkMount {
     NetworkMount {
         uri: uri.into(),
@@ -67,10 +70,8 @@ fn quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order() {
         ..SettingsData::default()
     };
     let rows = compose_quick_access(&settings, &known, &[]);
-    assert_eq!(
-        rows.iter().map(|row| row.label.as_str()).collect::<Vec<_>>(),
-        ["Work", "Documents", "Other"]
-    );
+    let labels: Vec<&str> = rows.iter().map(|row| row.label.as_str()).collect();
+    assert_eq!(labels, ["Work", "Documents", "Other"]);
     assert!(rows[0].is_shared);
     assert_eq!(rows[1].icon, Some("documents"));
 }
@@ -115,7 +116,7 @@ fn network_identity_preserves_custom_ports_and_host_aliases() {
 /// parity: NET-018
 #[test]
 fn saved_labels_win_and_connected_state_merges() {
-    let shares = [saved("smb://nas/Work", "My Work", false)];
+    let shares = [saved("smb://nas/Work", "My Work")];
     let mounts = [mounted("smb://NAS:445/work/", "work")];
     let rows = merge_network_locations(&shares, &mounts, &[], &[]);
     assert_eq!(rows.len(), 1);
@@ -138,10 +139,7 @@ fn a_mounted_share_is_connected_but_not_saved() {
 /// parity: NET-018
 #[test]
 fn shares_with_the_same_label_on_different_hosts_stay_apart() {
-    let shares = [
-        saved("smb://a/work", "Work", false),
-        saved("smb://b/work", "Work", false),
-    ];
+    let shares = [saved("smb://a/work", "Work"), saved("smb://b/work", "Work")];
     assert_eq!(merge_network_locations(&shares, &[], &[], &[]).len(), 2);
 }
 
@@ -176,9 +174,12 @@ fn visited_servers_and_stable_mounts_need_no_saved_bookmark() {
 #[test]
 fn malformed_and_non_network_contributors_are_ignored() {
     let shares = [
-        saved("https://example.invalid", "Bad", false),
-        saved("smb://user:secret@nas/share", "Bad", true),
-        saved("", "", false),
+        saved("https://example.invalid", "Bad"),
+        SavedShare {
+            connected: true,
+            ..saved("smb://user:secret@nas/share", "Bad")
+        },
+        saved("", ""),
     ];
     let mounts = [
         NetworkMount {
@@ -195,12 +196,15 @@ fn malformed_and_non_network_contributors_are_ignored() {
     assert!(merge_network_locations(&shares, &mounts, &stable, &[]).is_empty());
 }
 
-/// One `user-dirs.dirs` fixture; `None` means the file does not exist.
+/// One `user-dirs.dirs` fixture.
 struct UserDirsCase {
+    /// The case directory, which stands for `$XDG_CONFIG_HOME`.
     name: &'static str,
+    /// The file contents; `None` means the file does not exist.
     contents: Option<&'static str>,
 }
 
+/// Valid, unusual and hostile `user-dirs.dirs` files that both parsers read.
 const USER_DIRS_CASES: [UserDirsCase; 10] = [
     UserDirsCase {
         name: "missing",
@@ -273,7 +277,7 @@ const USER_DIRS_CASES: [UserDirsCase; 10] = [
     },
 ];
 
-/// Runs `FolderLocations.paths()` from desktop/folder_locations.py on every
+/// Runs `FolderLocations.paths()` from `desktop/folder_locations.py` on every
 /// case directory under `root` and returns `{case: {XDG key: path}}`.
 fn python_folder_paths(root: &Path, home: &Path) -> Value {
     let desktop = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../desktop");
