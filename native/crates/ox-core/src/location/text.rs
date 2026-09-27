@@ -110,12 +110,12 @@ fn starts_with_two_hex_digits(text: &str) -> bool {
     digits.iter().all(u8::is_ascii_hexdigit)
 }
 
-/// `posixpath.normpath`: removes empty and `.` components and resolves
-/// `..` without touching the filesystem. An empty result is `.`.
-pub(crate) fn normpath(path: &str) -> String {
-    let root = posix_root(path);
-    let components = resolve_dot_segments(path, !root.is_empty());
-    let normal = format!("{root}{}", components.join("/"));
+/// Python's `posixpath.normpath`: removes empty and `.` components and
+/// resolves `..` without touching the filesystem. An empty result is `.`.
+pub(crate) fn normalise_posix_path(path: &str) -> String {
+    let root = PosixRoot::of(path);
+    let components = resolve_dot_segments(path, root).join("/");
+    let normal = format!("{}{components}", root.as_str());
     if normal.is_empty() {
         ".".into()
     } else {
@@ -123,28 +123,49 @@ pub(crate) fn normpath(path: &str) -> String {
     }
 }
 
-/// The leading slashes `normpath` keeps. Like POSIX (and Python), exactly
-/// two are kept because their meaning is implementation-defined; three or
-/// more become one.
-fn posix_root(path: &str) -> &'static str {
-    if path.starts_with("//") && !path.starts_with("///") {
-        "//"
-    } else if path.starts_with('/') {
-        "/"
-    } else {
-        ""
+/// How a path starts, which decides the root `posixpath.normpath` keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PosixRoot {
+    /// No leading slash: the path is relative.
+    Relative,
+    /// One leading slash, or three or more, which POSIX treats as one.
+    Slash,
+    /// Exactly two leading slashes. POSIX leaves their meaning to the
+    /// implementation, so Python keeps both.
+    DoubleSlash,
+}
+
+impl PosixRoot {
+    /// The root `path` starts with.
+    fn of(path: &str) -> Self {
+        if path.starts_with("//") && !path.starts_with("///") {
+            Self::DoubleSlash
+        } else if path.starts_with('/') {
+            Self::Slash
+        } else {
+            Self::Relative
+        }
+    }
+
+    /// The leading slashes of the normal path.
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Relative => "",
+            Self::Slash => "/",
+            Self::DoubleSlash => "//",
+        }
     }
 }
 
 /// The components of `path` without empty and `.` ones, each `..` removing
-/// the component before it. An absolute path stops at the root; a relative
+/// the component before it. An absolute path stops at its root; a relative
 /// path keeps the `..` it cannot resolve.
-fn resolve_dot_segments(path: &str, is_absolute: bool) -> Vec<&str> {
+fn resolve_dot_segments(path: &str, root: PosixRoot) -> Vec<&str> {
     let mut components: Vec<&str> = Vec::new();
     for component in path.split('/') {
         match component {
             "" | "." => {}
-            ".." if !is_absolute && matches!(components.last(), None | Some(&"..")) => {
+            ".." if root == PosixRoot::Relative && matches!(components.last(), None | Some(&"..")) => {
                 components.push(component);
             }
             ".." => {
@@ -203,6 +224,7 @@ mod tests {
         assert_eq!(unquote_lossy("a%FFb"), "a\u{fffd}b");
     }
 
+    /// parity: NAV-035
     #[test]
     fn encoded_control_characters_are_refused_in_address_paths() {
         assert_eq!(unquote_without_controls("a%20b").as_deref(), Ok("a b"));
@@ -223,69 +245,74 @@ mod tests {
     }
 
     /// One `posixpath.normpath` example.
-    struct NormpathCase {
+    struct PosixPathCase {
         path: &'static str,
         normal: &'static str,
     }
 
     #[test]
-    fn normpath_matches_posixpath() {
+    fn paths_are_normalised_like_posixpath() {
         let cases = [
-            NormpathCase {
+            PosixPathCase {
                 path: "",
                 normal: ".",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "/",
                 normal: "/",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "//",
                 normal: "//",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "///",
                 normal: "/",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "//tmp/x",
                 normal: "//tmp/x",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "///tmp//x/",
                 normal: "/tmp/x",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "/a/./b/../c",
                 normal: "/a/c",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "/..",
                 normal: "/",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "/../../x",
                 normal: "/x",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "a/../..",
                 normal: "..",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "../a",
                 normal: "../a",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "a/b/..",
                 normal: "a",
             },
-            NormpathCase {
+            PosixPathCase {
                 path: "a/..",
                 normal: ".",
             },
         ];
         for case in cases {
-            assert_eq!(normpath(case.path), case.normal, "normpath({:?})", case.path);
+            assert_eq!(
+                normalise_posix_path(case.path),
+                case.normal,
+                "normpath({:?})",
+                case.path
+            );
         }
     }
 }

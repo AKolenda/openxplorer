@@ -15,8 +15,8 @@ use percent_encoding::percent_encode;
 
 use super::parts::{split_location, split_scheme, urlsplit, DeviceUriMatch, LocationParts};
 use super::text::{
-    contains_python_space, has_control_character, normpath, python_strip, quote_component, quote_path,
-    unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,
+    contains_python_space, has_control_character, normalise_posix_path, python_strip, quote_component,
+    quote_path, unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,
 };
 use super::{LocationError, DEVICE_SCHEMES};
 
@@ -233,7 +233,7 @@ fn join_path(base: &str, path: &str) -> String {
 
 /// `Path(os.path.abspath(os.path.normpath(path))).as_uri()`.
 fn local_path_uri(path: &str) -> Result<String, LocationError> {
-    let normal = normpath(path);
+    let normal = normalise_posix_path(path);
     let absolute = if normal.starts_with('/') {
         normal
     } else {
@@ -241,7 +241,7 @@ fn local_path_uri(path: &str) -> Result<String, LocationError> {
         // `os.path.abspath` against the working directory.
         let current_folder = std::env::current_dir()
             .map_err(|error| LocationError::new(format!("Could not resolve the current folder: {error}")))?;
-        normpath(&join_path(&current_folder.to_string_lossy(), &normal))
+        normalise_posix_path(&join_path(&current_folder.to_string_lossy(), &normal))
     };
     Ok(format!("file://{}", quote_path(&absolute)))
 }
@@ -284,7 +284,8 @@ fn normalise_file_url(netloc: &str, decoded_path: &str) -> Result<String, Locati
     if !decoded_path.starts_with('/') {
         return Err(LocationError::new("A file URL must contain an absolute path."));
     }
-    Ok(format!("file://{}", quote_path(&normpath(decoded_path))))
+    let path = normalise_posix_path(decoded_path);
+    Ok(format!("file://{}", quote_path(&path)))
 }
 
 /// An `smb:` URL with its authority and path canonical.
@@ -364,7 +365,7 @@ fn is_one_bracketed_identifier(authority: &str) -> bool {
 /// `posixpath.normpath('/' + path.lstrip('/'))`: the canonical absolute
 /// form of a decoded URL path.
 fn absolute_normal_path(decoded_path: &str) -> String {
-    normpath(&format!("/{}", decoded_path.trim_start_matches('/')))
+    normalise_posix_path(&format!("/{}", decoded_path.trim_start_matches('/')))
 }
 
 #[cfg(test)]
