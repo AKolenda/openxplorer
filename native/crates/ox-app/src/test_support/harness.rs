@@ -262,6 +262,12 @@ impl TestWindow {
     pub fn wait_for_listing(&self, what: &str) {
         wait_until(what, || !self.window.is_loading());
     }
+
+    /// The directory of the window's settings file, for tests that change
+    /// it as another process would.
+    pub fn settings_directory(&self) -> &Path {
+        self.settings_directory.path()
+    }
 }
 
 impl Drop for TestWindow {

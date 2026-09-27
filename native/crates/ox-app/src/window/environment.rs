@@ -72,12 +72,15 @@ impl BrowserWindow {
     }
 
     /// A device was plugged in, renamed or removed: every title, crumb and
-    /// place may name it.
+    /// place may name it. The settings are read again too, as the Python
+    /// app's `environment()` does on every change, so pins the Python app
+    /// saved meanwhile appear.
     fn volumes_changed(&self) {
         self.read_volumes();
         self.render_places();
         self.render_location();
         self.update_details_pane();
+        self.context().reload_settings();
     }
 
     /// The sidebar and landing sections for the current settings and volumes.

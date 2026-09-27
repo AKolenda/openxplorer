@@ -2,6 +2,7 @@
 //! The sidebar, the landing pages, pins and the details pane.
 
 use gtk::prelude::*;
+use ox_core::settings::{PinRequest, Settings};
 
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
@@ -113,4 +114,21 @@ fn the_details_pane_lists_a_file_and_the_folder() {
     assert_eq!(keys, ["Type", "Size", "Modified", "Location"]);
     let folder_address = fixture.root().display().to_string();
     assert_eq!(property(&file, "Location"), Some(folder_address.as_str()));
+}
+
+/// parity: SIDE-022
+#[gtk::test]
+fn pins_another_process_saved_appear_after_a_refresh() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let mut python_app = Settings::open(test.settings_directory());
+    let pin = PinRequest::new(fixture.uri_of("Documents"), "Pinned elsewhere");
+    python_app
+        .pin_many(&[pin], None, None)
+        .expect("the settings file takes a pin");
+    test.activate("refresh", None);
+    wait_until("the pin to reach the sidebar", || {
+        let labels = test.window.sidebar().labels();
+        labels.contains(&"Pinned elsewhere".to_owned())
+    });
 }
