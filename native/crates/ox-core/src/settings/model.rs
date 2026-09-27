@@ -225,10 +225,7 @@ impl Preferences {
         let network_interval = update
             .network_interval
             .filter(|interval| NETWORK_INTERVALS.contains(interval));
-        let column_widths = update
-            .column_widths
-            .as_deref()
-            .map(ColumnWidths::from_values);
+        let column_widths = update.column_widths.as_deref().map(ColumnWidths::from_values);
 
         replace_if_some(&mut self.theme, update.theme);
         replace_if_some(&mut self.view, update.view);

@@ -213,10 +213,7 @@ fn system_theme_and_legacy_migration() {
     store
         .update_preferences(&prefs(json!({"theme": "system"})))
         .unwrap();
-    assert_eq!(
-        Settings::open(&directory).data().preferences.theme,
-        Theme::System
-    );
+    assert_eq!(Settings::open(&directory).data().preferences.theme, Theme::System);
 }
 
 /// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_two_windows_preserve_each_others_preferences`
@@ -445,7 +442,8 @@ fn a_change_keeps_an_unreadable_file_as_a_backup() {
 fn a_change_keeps_a_partly_read_file_as_a_backup() {
     let root = temp();
     // Python reads pins, then shares: the pin is kept, the hidden entry lost.
-    let partial = r#"{"pins": [{"uri": "file:///tmp/Kept"}], "shares": 5, "hiddenQuick": ["file:///tmp/Hidden"]}"#;
+    let partial =
+        r#"{"pins": [{"uri": "file:///tmp/Kept"}], "shares": 5, "hiddenQuick": ["file:///tmp/Hidden"]}"#;
     fs::write(root.path().join("settings.json"), partial).unwrap();
     let mut store = Settings::open(root.path());
     assert!(store.warning().is_some());
@@ -469,9 +467,7 @@ fn a_readable_file_is_replaced_without_a_backup() {
     store
         .update_preferences(&prefs(json!({"theme": "dark"})))
         .unwrap();
-    store
-        .update_preferences(&prefs(json!({"view": "grid"})))
-        .unwrap();
+    store.update_preferences(&prefs(json!({"view": "grid"}))).unwrap();
     assert_eq!(backups(root.path()), Vec::<String>::new());
     assert!(store.warning().is_none());
 }
@@ -493,7 +489,10 @@ fn a_change_never_moves_a_refused_file() {
     let result = store.update_preferences(&prefs(json!({"theme": "dark"})));
 
     assert!(matches!(result, Err(SettingsError::Invalid(_))));
-    assert_eq!(fs::read_to_string(directory.join("settings.json")).unwrap(), "{bad");
+    assert_eq!(
+        fs::read_to_string(directory.join("settings.json")).unwrap(),
+        "{bad"
+    );
     assert_eq!(fs::metadata(&original).unwrap().nlink(), 2);
     assert_eq!(backups(&directory), Vec::<String>::new());
 }

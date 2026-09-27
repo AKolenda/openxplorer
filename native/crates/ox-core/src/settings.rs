@@ -35,12 +35,15 @@ use std::path::{Path, PathBuf};
 
 pub use choices::{ContextMenu, Theme, View};
 pub use model::{
-    Bookmark, Column, ColumnWidths, Preferences, PreferencesUpdate, RecentEntry, SettingsData, DEFAULT_TEXT_SIZE,
-    NETWORK_INTERVALS, SETTINGS_VERSION, SIDEBAR_WIDTHS, TEXT_SIZES,
+    Bookmark, Column, ColumnWidths, Preferences, PreferencesUpdate, RecentEntry, SettingsData,
+    DEFAULT_TEXT_SIZE, NETWORK_INTERVALS, SETTINGS_VERSION, SIDEBAR_WIDTHS, TEXT_SIZES,
 };
 pub use mutate::{BookmarkAction, BookmarkKind, PinRequest};
+pub(crate) use validate::last_path_name;
 
-use storage::{private_directory, private_file, read_limited_text, replace_private_file, OldFile, SettingsLock};
+use storage::{
+    private_directory, private_file, read_limited_text, replace_private_file, OldFile, SettingsLock,
+};
 
 /// Why a settings change was refused.
 #[derive(Debug, thiserror::Error)]
@@ -282,7 +285,12 @@ impl Settings {
             _ => OldFile::Discard,
         };
         let contents = self.data.to_file_text();
-        let backup = replace_private_file(&self.path(), Self::TEMPORARY_PREFIX, contents.as_bytes(), old_file)?;
+        let backup = replace_private_file(
+            &self.path(),
+            Self::TEMPORARY_PREFIX,
+            contents.as_bytes(),
+            old_file,
+        )?;
         if let Some(backup) = backup {
             let message = format!(
                 "Your previous settings could not be read and were kept as “{}”.",

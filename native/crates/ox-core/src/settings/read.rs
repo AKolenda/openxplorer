@@ -111,7 +111,10 @@ fn read_text_size(value: &Value) -> Option<u32> {
 
 /// One of the offered network intervals. Python compares with
 /// `in (30, 60, 300)`, so 60.0 matches as well.
-#[expect(clippy::float_cmp, reason = "Python's `in` compares with ==, so only exact values match")]
+#[expect(
+    clippy::float_cmp,
+    reason = "Python's `in` compares with ==, so only exact values match"
+)]
 fn read_network_interval(value: &Value) -> Option<u32> {
     let seconds = value.as_f64()?;
     NETWORK_INTERVALS
@@ -381,7 +384,10 @@ mod tests {
     fn choices_are_case_sensitive_and_must_be_strings() {
         let values = json!({"theme": "Dark", "view": ["grid"], "contextMenu": 11});
         let update = PreferencesUpdate::from_json(&values).unwrap();
-        assert_eq!((update.theme, update.view, update.context_menu), (None, None, None));
+        assert_eq!(
+            (update.theme, update.view, update.context_menu),
+            (None, None, None)
+        );
     }
 
     /// parity: SET-016

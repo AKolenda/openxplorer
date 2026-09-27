@@ -467,10 +467,7 @@ mod tests {
         fs::set_permissions(&real, Permissions::from_mode(0o755)).unwrap();
         let link = root.path().join("link");
         symlink(&real, &link).unwrap();
-        assert!(matches!(
-            private_directory(&link),
-            Err(SettingsError::Io { .. })
-        ));
+        assert!(matches!(private_directory(&link), Err(SettingsError::Io { .. })));
         assert_eq!(mode(&real), 0o755);
     }
 
@@ -526,10 +523,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let file = root.path().join("large");
         fs::write(&file, [b'x'; 33]).unwrap();
-        assert!(matches!(
-            private_text(&file, 32),
-            Err(SettingsError::Invalid(_))
-        ));
+        assert!(matches!(private_text(&file, 32), Err(SettingsError::Invalid(_))));
         assert_eq!(private_text(&file, 33).unwrap().len(), 33);
     }
 
@@ -596,7 +590,10 @@ mod tests {
             is_regular: false,
             ..owned_regular_file(1)
         };
-        assert_eq!(owned_regular_file(1).verdict(options), Verdict::AcceptAndMakePrivate);
+        assert_eq!(
+            owned_regular_file(1).verdict(options),
+            Verdict::AcceptAndMakePrivate
+        );
         assert_eq!(owned_regular_file(2).verdict(options), Verdict::Refuse);
         assert_eq!(foreign.verdict(options), Verdict::Refuse);
         assert_eq!(fifo.verdict(options), Verdict::Refuse);
