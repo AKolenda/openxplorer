@@ -13,7 +13,7 @@ use std::path::Path;
 
 use percent_encoding::percent_encode;
 
-use super::parts::{split_location, split_scheme, urlsplit, DeviceUriMatch, LocationParts};
+use super::parts::{split_location, split_scheme, split_url, DeviceUriMatch, LocationParts};
 use super::text::{
     contains_python_space, has_control_character, normalise_posix_path, python_strip, quote_component,
     quote_path, unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,
@@ -197,7 +197,7 @@ fn normalise_plain_path(value: &str, base: Option<&str>, home: &Path) -> Result<
         return normalise_location(&joined, None, home);
     }
     let base_path = match base {
-        Some(base) if base.starts_with("file:") => unquote_lossy(&urlsplit(base)?.path),
+        Some(base) if base.starts_with("file:") => unquote_lossy(&split_url(base)?.path),
         _ => home.to_string_lossy().into_owned(),
     };
     local_path_uri(&join_path(&base_path, &expanded))
@@ -248,8 +248,8 @@ fn local_path_uri(path: &str) -> Result<String, LocationError> {
 
 /// A `file:` or `smb:` URL; any other scheme is rejected.
 fn normalise_url(value: &str) -> Result<String, LocationError> {
-    let parts = urlsplit(value)?;
-    if parts.scheme != "file" && !parts.is_smb() {
+    let parts = split_url(value)?;
+    if !parts.is_local() && !parts.is_smb() {
         return Err(LocationError::new(
             "Only local paths, smb:// locations and connected devices are supported in this build.",
         ));

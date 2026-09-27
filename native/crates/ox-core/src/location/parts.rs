@@ -12,8 +12,34 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use super::{LocationError, DEVICE_SCHEMES};
 
-/// Characters `urlsplit` removes wherever they occur.
+/// Characters `urlsplit` removes wherever they occur (Python's
+/// `_UNSAFE_URL_BYTES_TO_REMOVE`).
 const UNSAFE_URL_CHARACTERS: [char; 3] = ['\t', '\r', '\n'];
+
+/// What kind of place the scheme of a location names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LocationKind {
+    /// `file:`: a folder on this computer.
+    Local,
+    /// `smb:`: a Windows or Samba server, share or shared folder.
+    Smb,
+    /// `mtp:`, `gphoto2:` or `afc:`: a phone, camera or iOS device.
+    Device,
+    /// Any other scheme, or a plain path without one.
+    Other,
+}
+
+impl LocationKind {
+    /// The kind a lower-case `scheme` names.
+    pub(crate) fn from_scheme(scheme: &str) -> Self {
+        match scheme {
+            "file" => Self::Local,
+            "smb" => Self::Smb,
+            _ if DEVICE_SCHEMES.contains(&scheme) => Self::Device,
+            _ => Self::Other,
+        }
+    }
+}
 
 /// A location split into its URI components, like Python's `SplitResult`.
 ///
@@ -77,15 +103,25 @@ impl LocationParts {
             .map_err(|_| LocationError::new("Port out of range 0-65535"))
     }
 
-    /// True for phones, cameras and iOS devices: `mtp:`, `gphoto2:` and
-    /// `afc:` locations.
-    pub(crate) fn is_device(&self) -> bool {
-        DEVICE_SCHEMES.contains(&self.scheme.as_str())
+    /// What kind of place the scheme names.
+    pub(crate) fn kind(&self) -> LocationKind {
+        LocationKind::from_scheme(&self.scheme)
+    }
+
+    /// True for `file:` locations.
+    pub(crate) fn is_local(&self) -> bool {
+        self.kind() == LocationKind::Local
     }
 
     /// True for `smb:` locations.
     pub(crate) fn is_smb(&self) -> bool {
-        self.scheme == "smb"
+        self.kind() == LocationKind::Smb
+    }
+
+    /// True for phones, cameras and iOS devices: `mtp:`, `gphoto2:` and
+    /// `afc:` locations.
+    pub(crate) fn is_device(&self) -> bool {
+        self.kind() == LocationKind::Device
     }
 
     /// The number of non-empty path components: 0 at a local, server or
@@ -125,13 +161,11 @@ impl LocationParts {
 /// A [`LocationError`] with Python's wording for unbalanced or invalid
 /// bracketed hosts.
 pub fn split_location(value: &str) -> Result<LocationParts, LocationError> {
-    if let Some(device) = DeviceUriMatch::parse(value) {
-        let parts = device.to_parts();
-        if parts.is_device() {
-            return Ok(parts);
-        }
+    let device_parts = DeviceUriMatch::parse(value).map(DeviceUriMatch::to_parts);
+    match device_parts {
+        Some(parts) if parts.is_device() => Ok(parts),
+        _ => split_url(value),
     }
-    urlsplit(value)
 }
 
 /// A match of `DEVICE_URI` in `core.py`:
@@ -150,15 +184,16 @@ impl<'a> DeviceUriMatch<'a> {
     /// Matches any scheme; callers check it against [`DEVICE_SCHEMES`].
     pub(crate) fn parse(value: &'a str) -> Option<Self> {
         let (scheme, after_scheme) = value.split_once("://")?;
-        if !is_scheme(scheme) {
+        if !is_scheme(scheme) || after_scheme.contains(['?', '#']) {
             return None;
         }
-        let authority_end = after_scheme.find('/').unwrap_or(after_scheme.len());
-        let (authority, path) = after_scheme.split_at(authority_end);
-        if authority.is_empty() || authority.contains(['?', '#']) || path.contains(['?', '#']) {
+        let (authority, path) = match after_scheme.find('/') {
+            Some(slash) => after_scheme.split_at(slash),
+            None => (after_scheme, "/"),
+        };
+        if authority.is_empty() {
             return None;
         }
-        let path = if path.is_empty() { "/" } else { path };
         Some(Self {
             scheme,
             authority,
@@ -199,8 +234,8 @@ fn is_scheme(text: &str) -> bool {
 /// every tab, carriage return and line feed (the WHATWG rules), then checks
 /// bracketed hosts and rejects non-ASCII authorities that NFKC
 /// normalisation turns into URL delimiters (`℀` becomes `a/c`).
-pub(crate) fn urlsplit(value: &str) -> Result<LocationParts, LocationError> {
-    let cleaned = strip_whatwg_noise(value);
+pub(crate) fn split_url(value: &str) -> Result<LocationParts, LocationError> {
+    let cleaned = strip_ignored_url_characters(value);
     let (scheme, after_scheme) = match split_scheme(&cleaned) {
         Some((scheme, after_scheme)) => (scheme, after_scheme),
         None => (String::new(), cleaned.as_ref()),
@@ -221,7 +256,7 @@ pub(crate) fn urlsplit(value: &str) -> Result<LocationParts, LocationError> {
 
 /// Drops leading C0 controls and spaces and removes tabs, carriage returns
 /// and line feeds anywhere, as `urlsplit` does before parsing.
-fn strip_whatwg_noise(value: &str) -> Cow<'_, str> {
+fn strip_ignored_url_characters(value: &str) -> Cow<'_, str> {
     let trimmed = value.trim_start_matches(|c: char| c <= ' ');
     if trimmed.contains(UNSAFE_URL_CHARACTERS) {
         Cow::Owned(trimmed.replace(UNSAFE_URL_CHARACTERS, ""))
@@ -366,6 +401,12 @@ mod tests {
         }
     }
 
+    /// Splits a location the test knows to be valid.
+    fn split(value: &str) -> LocationParts {
+        split_location(value).expect("valid URL")
+    }
+
+    /// parity: DEV-005
     #[test]
     fn device_authorities_with_brackets_split() {
         assert_eq!(
@@ -381,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn urlsplit_matches_python() {
+    fn urls_are_split_like_python_urlsplit() {
         assert_eq!(
             split_location("smb://NAS/Team%20files"),
             Ok(parts("smb", "NAS", "/Team%20files"))
@@ -389,10 +430,22 @@ mod tests {
         assert_eq!(split_location("file:///tmp/x"), Ok(parts("file", "", "/tmp/x")));
         assert_eq!(split_location("/tmp/a:b"), Ok(parts("", "", "/tmp/a:b")));
         assert_eq!(split_location("C:\\Windows"), Ok(parts("c", "", "\\Windows")));
-        let with_query = split_location("smb://nas/a?b#c").expect("valid URL");
-        assert_eq!((with_query.path.as_str(), with_query.query.as_str()), ("/a", "b"));
+        let with_query = split("smb://nas/a?b#c");
+        assert_eq!(with_query.path, "/a");
+        assert_eq!(with_query.query, "b");
         assert_eq!(with_query.fragment, "c");
         assert_eq!(split_location("mtp:foo"), Ok(parts("mtp", "", "foo")));
+    }
+
+    #[test]
+    fn location_kinds_follow_the_scheme() {
+        assert_eq!(split("file:///tmp").kind(), LocationKind::Local);
+        assert_eq!(split("SMB://nas/share").kind(), LocationKind::Smb);
+        for device in ["mtp://[usb:001,010]/", "gphoto2://[usb:001,002]/", "afc://id/"] {
+            assert_eq!(split(device).kind(), LocationKind::Device, "{device}");
+        }
+        assert_eq!(split("trash:///").kind(), LocationKind::Other);
+        assert_eq!(split("/tmp").kind(), LocationKind::Other);
     }
 
     #[test]
@@ -413,34 +466,22 @@ mod tests {
 
     #[test]
     fn hostname_and_port_follow_python() {
-        let smb = split_location("smb://User@NAS:0445/share").expect("valid URL");
+        let smb = split("smb://User@NAS:0445/share");
         assert!(smb.has_credentials());
         assert_eq!(smb.hostname().as_deref(), Some("nas"));
         assert_eq!(smb.port(), Ok(Some(445)));
-        let ipv6 = split_location("smb://[FE80::1]:139/").expect("valid URL");
+        let ipv6 = split("smb://[FE80::1]:139/");
         assert_eq!(ipv6.hostname().as_deref(), Some("fe80::1"));
         assert_eq!(ipv6.port(), Ok(Some(139)));
-        assert_eq!(
-            split_location("smb://nas:/x").expect("valid URL").port(),
-            Ok(None)
-        );
-        assert!(split_location("smb://nas:99999/")
-            .expect("valid URL")
-            .port()
-            .is_err());
-        assert!(split_location("smb://nas:4x/")
-            .expect("valid URL")
-            .port()
-            .is_err());
-        assert_eq!(
-            split_location("smb:///share").expect("valid URL").hostname(),
-            None
-        );
+        assert_eq!(split("smb://nas:/x").port(), Ok(None));
+        assert!(split("smb://nas:99999/").port().is_err());
+        assert!(split("smb://nas:4x/").port().is_err());
+        assert_eq!(split("smb:///share").hostname(), None);
     }
 
     #[test]
     fn ipv6_zones_keep_their_case() {
-        let parts = split_location("smb://[FE80::1%Eth0]/share").expect("valid URL");
+        let parts = split("smb://[FE80::1%Eth0]/share");
         assert_eq!(parts.hostname().as_deref(), Some("fe80::1%Eth0"));
     }
 
