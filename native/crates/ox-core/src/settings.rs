@@ -20,6 +20,10 @@
 //! `settings.json.unreadable-…` beside the new file, and the
 //! [`warning`](Settings::warning) says where it went.
 //!
+//! The submodules split the work: `read` reads the file, `mutate` holds
+//! the changes, `save` locks and writes, and `storage` enforces the
+//! private-storage rules all of them rely on.
+//!
 //! The `winspace` directory name is a compatibility contract; do not rename
 //! it.
 
@@ -29,6 +33,7 @@ mod labels;
 mod model;
 mod mutate;
 mod preferences;
+mod python_conversions;
 mod read;
 mod save;
 pub mod storage;
@@ -48,7 +53,6 @@ pub use preferences::{
 };
 
 use save::{replace_private_file, OldFile, SettingsLock};
-use storage::{private_directory, private_file, read_limited_text, PrivateFileOptions, SETTINGS_SIZE_LIMIT};
 
 /// Settings shared by every window of both applications.
 ///
@@ -98,7 +102,7 @@ impl Settings {
     /// Does not create the directory.
     pub fn open(directory: &Path) -> Self {
         let mut data = SettingsData::default();
-        let file_state = read_file(directory, &mut data);
+        let file_state = read::read_file(directory, &mut data);
         Self {
             directory: directory.to_path_buf(),
             data,
@@ -218,6 +222,11 @@ impl Settings {
 
     /// Locks, re-reads, changes a copy of the data, saves it, and only then
     /// keeps it. The Python app's `settings_mutation` protocol.
+    ///
+    /// Safety rule "a failed change changes nothing" (the `self.data = old`
+    /// rollback of `pin_many` in core.py, applied here to every change):
+    /// the change is made on a copy, so an invalid request or a failed save
+    /// leaves [`data`](Self::data) as it was.
     fn mutate<T>(
         &mut self,
         change: impl FnOnce(&mut SettingsData) -> Result<T, SettingsError>,
@@ -255,58 +264,6 @@ impl Settings {
         }
         Ok(())
     }
-}
-
-/// Why `settings.json` was not fully read.
-#[derive(Debug)]
-enum ReadFailure {
-    /// A private-storage check refused the file or its directory.
-    Refused(SettingsError),
-    /// The file is private but its contents are unusable.
-    Damaged(SettingsError),
-}
-
-impl ReadFailure {
-    /// Reading an opened file fails either in the operating system, which
-    /// says nothing about the contents, or on the contents themselves.
-    fn from_reading(error: SettingsError) -> Self {
-        match error {
-            SettingsError::Io { .. } => Self::Refused(error),
-            SettingsError::Invalid(_) => Self::Damaged(error),
-        }
-    }
-}
-
-/// Checks the directory and file, then reads what is valid into `data`,
-/// which starts as the defaults. Sections read before a problem are kept,
-/// as in Python.
-fn read_file(directory: &Path, data: &mut SettingsData) -> FileState {
-    match try_read_file(directory, data) {
-        Ok(()) => FileState::Sound,
-        Err(ReadFailure::Refused(error)) if error.is_not_found() => FileState::Sound,
-        Err(ReadFailure::Refused(error)) => FileState::Refused(read_warning(&error)),
-        Err(ReadFailure::Damaged(error)) => FileState::Damaged(read_warning(&error)),
-    }
-}
-
-/// [`read_file`], telling a refused file from a damaged one: the storage
-/// checks come first, then the contents.
-fn try_read_file(directory: &Path, data: &mut SettingsData) -> Result<(), ReadFailure> {
-    if directory.exists() || directory.is_symlink() {
-        private_directory(directory).map_err(ReadFailure::Refused)?;
-    }
-    let path = directory.join(Settings::FILE_NAME);
-    let file = private_file(&path, PrivateFileOptions::default()).map_err(ReadFailure::Refused)?;
-    let text = read_limited_text(file, &path, SETTINGS_SIZE_LIMIT).map_err(ReadFailure::from_reading)?;
-    let source: serde_json::Value =
-        serde_json::from_str(&text).map_err(|error| ReadFailure::Damaged(error.into()))?;
-    read::read_settings(&source, data).map_err(ReadFailure::Damaged)
-}
-
-/// The warning shown when reading fell back to defaults, in the Python
-/// app's words.
-fn read_warning(error: &SettingsError) -> String {
-    format!("Could not fully read settings; using safe defaults. {error}")
 }
 
 #[cfg(test)]

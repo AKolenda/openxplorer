@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Whitelist validation of an untrusted `settings.json`.
+//! Reading `settings.json`: the private-storage checks, then a whitelist
+//! validation of the untrusted contents.
 //!
 //! Ports the reading half of `Settings.__init__` in `desktop/core.py`.
 //! Reading never fails: invalid entries are skipped, lists are capped, and
@@ -9,45 +10,96 @@
 //! stops reading with a warning; sections read before it are kept and the
 //! rest keep their defaults.
 
-use serde_json::{Map, Number, Value};
+use std::path::Path;
+
+use serde_json::{Map, Value};
 
 use super::labels::bookmark_fallback_label;
 use super::model::{Bookmark, RecentEntry, SettingsData, MAX_BOOKMARKS, MAX_HIDDEN, MAX_ORDER, MAX_RECENT};
 use super::preferences::PreferencesUpdate;
-use super::SettingsError;
-use crate::location::{normalise, python_strip, require_share, safe_label, LocationError};
+use super::python_conversions::{python_count, python_str};
+use super::storage::{
+    private_directory, private_file, read_limited_text, PrivateFileOptions, SETTINGS_SIZE_LIMIT,
+};
+use super::{FileState, Settings, SettingsError};
+use crate::location::{normalise, require_share, safe_label, LocationError};
 
-/// Validates a parsed file into `settings`, which starts as the defaults.
-/// Sections read before a problem are kept, as in Python.
-pub(super) fn read_settings(source: &Value, settings: &mut SettingsData) -> Result<(), SettingsError> {
+/// How a location read from the file is checked: [`normalise`] for a pin,
+/// [`require_share`] for a mapped share.
+type LocationCheck = fn(&str) -> Result<String, LocationError>;
+
+/// Checks the settings directory and file, then reads what is valid into
+/// `settings`, which starts as the defaults. Sections read before a problem
+/// are kept, as in Python.
+pub(super) fn read_file(directory: &Path, settings: &mut SettingsData) -> FileState {
+    match try_read_file(directory, settings) {
+        Ok(()) => FileState::Sound,
+        // No file yet is a first start, not a problem (Python's
+        // `except FileNotFoundError: pass`).
+        Err(ReadFailure::Refused(error)) if error.is_not_found() => FileState::Sound,
+        Err(ReadFailure::Refused(error)) => FileState::Refused(read_warning(&error)),
+        Err(ReadFailure::Damaged(error)) => FileState::Damaged(read_warning(&error)),
+    }
+}
+
+/// Why `settings.json` was not fully read.
+#[derive(Debug)]
+enum ReadFailure {
+    /// A private-storage check refused the file or its directory.
+    Refused(SettingsError),
+    /// The file is private but its contents are unusable.
+    Damaged(SettingsError),
+}
+
+impl ReadFailure {
+    /// Reading an opened file fails either in the operating system, which
+    /// says nothing about the contents, or on the contents themselves.
+    fn from_reading(error: SettingsError) -> Self {
+        match error {
+            SettingsError::Io { .. } => Self::Refused(error),
+            SettingsError::Invalid(_) => Self::Damaged(error),
+        }
+    }
+}
+
+/// [`read_file`], telling a refused file from a damaged one: the storage
+/// checks come first, then the contents.
+fn try_read_file(directory: &Path, settings: &mut SettingsData) -> Result<(), ReadFailure> {
+    // Reading never creates the directory, but one that exists (or a
+    // symlink in its place) must pass the private-directory check.
+    if directory.exists() || directory.is_symlink() {
+        private_directory(directory).map_err(ReadFailure::Refused)?;
+    }
+    let path = directory.join(Settings::FILE_NAME);
+    let file = private_file(&path, PrivateFileOptions::default()).map_err(ReadFailure::Refused)?;
+    let text = read_limited_text(file, &path, SETTINGS_SIZE_LIMIT).map_err(ReadFailure::from_reading)?;
+    let source: Value = serde_json::from_str(&text).map_err(|error| ReadFailure::Damaged(error.into()))?;
+    read_sections(&source, settings).map_err(ReadFailure::Damaged)
+}
+
+/// The warning shown when reading fell back to defaults, in the Python
+/// app's words.
+fn read_warning(error: &SettingsError) -> String {
+    format!("Could not fully read settings; using safe defaults. {error}")
+}
+
+/// Validates a parsed file into `settings`, section by section in the
+/// order Python reads them.
+fn read_sections(source: &Value, settings: &mut SettingsData) -> Result<(), SettingsError> {
     let Some(sections) = source.as_object() else {
         return Err(SettingsError::invalid("Settings must be a JSON object."));
     };
-    settings.pins = entry_section(sections, "pins", MAX_BOOKMARKS)?
-        .iter()
-        .filter_map(|item| read_bookmark(item, normalise))
-        .collect();
-    settings.shares = entry_section(sections, "shares", MAX_BOOKMARKS)?
-        .iter()
-        .filter_map(|item| read_bookmark(item, require_share))
-        .collect();
+    settings.pins = read_bookmarks(entry_section(sections, "pins", MAX_BOOKMARKS)?, normalise);
+    settings.shares = read_bookmarks(entry_section(sections, "shares", MAX_BOOKMARKS)?, require_share);
     settings.recent = entry_section(sections, "recent", MAX_RECENT)?
         .iter()
         .filter_map(read_recent)
         .collect();
+    let hidden = location_section(sections, "hiddenQuick", MAX_HIDDEN)?;
     // Hidden entries are not deduplicated, matching the Python reader.
-    settings.hidden_quick = location_section(sections, "hiddenQuick", MAX_HIDDEN)?
-        .iter()
-        .filter_map(|location| normalise(location).ok())
-        .collect();
-    for location in location_section(sections, "quickOrder", MAX_ORDER)? {
-        let Ok(uri) = normalise(&location) else {
-            continue;
-        };
-        if !settings.quick_order.contains(&uri) {
-            settings.quick_order.push(uri);
-        }
-    }
+    settings.hidden_quick = normalised(&hidden);
+    let order = location_section(sections, "quickOrder", MAX_ORDER)?;
+    settings.quick_order = normalised_without_duplicates(&order);
     if let Some(preferences) = sections.get("preferences") {
         let update = PreferencesUpdate::from_json(preferences)?;
         settings.preferences.apply(&update);
@@ -98,9 +150,17 @@ fn wrong_type(key: &str) -> SettingsError {
     SettingsError::invalid(format!("“{key}” must be a list."))
 }
 
+/// The usable `{uri, label}` entries of a pins or shares section.
+fn read_bookmarks(items: &[Value], check: LocationCheck) -> Vec<Bookmark> {
+    items
+        .iter()
+        .filter_map(|item| read_bookmark(item, check))
+        .collect()
+}
+
 /// A `{uri, label}` entry whose location passes `check`, or `None` if it
 /// is unusable.
-fn read_bookmark(item: &Value, check: fn(&str) -> Result<String, LocationError>) -> Option<Bookmark> {
+fn read_bookmark(item: &Value, check: LocationCheck) -> Option<Bookmark> {
     let uri = check(item.get("uri")?.as_str()?).ok()?;
     let label = item.get("label").and_then(Value::as_str).unwrap_or_default();
     let label = safe_label(label, &bookmark_fallback_label(&uri)).ok()?;
@@ -125,79 +185,23 @@ fn read_recent(item: &Value) -> Option<RecentEntry> {
     Some(entry.into_stored())
 }
 
-/// Python's `str(value)` for JSON scalars; lists, objects and fractional
-/// numbers use their JSON text instead of Python's `repr`.
-fn python_str(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        other => other.to_string(),
-    }
+/// The canonical form of every location that normalises, in order.
+fn normalised(locations: &[String]) -> Vec<String> {
+    locations
+        .iter()
+        .filter_map(|location| normalise(location).ok())
+        .collect()
 }
 
-/// Python's `max(0, int(value or 0))` for a field that may be missing;
-/// `None` where `int()` would raise, which makes the reader skip the entry.
-fn python_count(value: Option<&Value>) -> Option<u64> {
-    let Some(value) = value else {
-        return Some(0);
-    };
-    match value {
-        Value::Null | Value::Bool(false) => Some(0),
-        Value::Bool(true) => Some(1),
-        Value::Number(number) => Some(number_count(number)),
-        Value::String(text) if text.is_empty() => Some(0),
-        Value::String(text) => parse_python_int(text),
-        Value::Array(items) => items.is_empty().then_some(0),
-        Value::Object(fields) => fields.is_empty().then_some(0),
+/// [`normalised`], keeping only the first of equal locations.
+fn normalised_without_duplicates(locations: &[String]) -> Vec<String> {
+    let mut unique = Vec::with_capacity(locations.len());
+    for uri in normalised(locations) {
+        if !unique.contains(&uri) {
+            unique.push(uri);
+        }
     }
-}
-
-/// Python's `max(0, int(number))`: a fraction is truncated toward zero, a
-/// negative number becomes 0, and a huge one saturates at `u64::MAX`.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "`as` truncates toward zero like int(), and max(0.0) plus saturation stand in for max(0, ...)"
-)]
-fn number_count(number: &Number) -> u64 {
-    if let Some(count) = number.as_u64() {
-        return count;
-    }
-    number.as_f64().map_or(0, |float| float.max(0.0) as u64)
-}
-
-/// Parses a decimal integer the way Python's `int(str)` does (surrounding
-/// white space, a sign, and single underscores between digits), clamped to
-/// `0..=u64::MAX`.
-fn parse_python_int(text: &str) -> Option<u64> {
-    let trimmed = python_strip(text);
-    let (is_negative, digits) = match trimmed.as_bytes().first() {
-        Some(b'-') => (true, &trimmed[1..]),
-        Some(b'+') => (false, &trimmed[1..]),
-        _ => (false, trimmed),
-    };
-    if !is_python_digit_string(digits) {
-        return None;
-    }
-    if is_negative {
-        return Some(0);
-    }
-    let value = digits
-        .bytes()
-        .filter(u8::is_ascii_digit)
-        .fold(0_u64, |total, digit| {
-            total.saturating_mul(10).saturating_add(u64::from(digit - b'0'))
-        });
-    Some(value)
-}
-
-/// Whether `digits` is ASCII digits in groups separated by single
-/// underscores, as Python's `int()` accepts (`1_000`, not `1__0` or `_1`).
-fn is_python_digit_string(digits: &str) -> bool {
-    let is_digit_group = |group: &str| !group.is_empty() && group.bytes().all(|byte| byte.is_ascii_digit());
-    !digits.is_empty() && digits.split('_').all(is_digit_group)
+    unique
 }
 
 #[cfg(test)]
@@ -208,16 +212,23 @@ mod tests {
     use crate::settings::model::MAX_NAME_CHARS;
     use crate::settings::{Column, Theme};
 
-    fn read(value: &Value) -> (SettingsData, Option<SettingsError>) {
+    /// What reading one parsed file produced.
+    struct Outcome {
+        settings: SettingsData,
+        /// Why reading stopped early; it becomes the warning.
+        problem: Option<SettingsError>,
+    }
+
+    fn read(source: &Value) -> Outcome {
         let mut settings = SettingsData::default();
-        let problem = read_settings(value, &mut settings).err();
-        (settings, problem)
+        let problem = read_sections(source, &mut settings).err();
+        Outcome { settings, problem }
     }
 
     /// parity: SET-012, SAFE-010, SAFE-018
     #[test]
     fn invalid_entries_are_skipped_without_a_warning() {
-        let (data, problem) = read(&json!({
+        let Outcome { settings, problem } = read(&json!({
             "pins": [
                 {"uri": "file:///tmp/Work", "label": "Work"},
                 {"uri": "https://example.invalid/", "label": "Web"},
@@ -232,9 +243,9 @@ mod tests {
             "password": "not-stored"
         }));
         assert!(problem.is_none());
-        let labels: Vec<&str> = data.pins.iter().map(|pin| pin.label.as_str()).collect();
+        let labels: Vec<&str> = settings.pins.iter().map(|pin| pin.label.as_str()).collect();
         assert_eq!(labels, ["Work", "Plain"]);
-        assert!(data.shares.is_empty());
+        assert!(settings.shares.is_empty());
     }
 
     /// parity: SET-012
@@ -247,69 +258,69 @@ mod tests {
         let recent: Vec<Value> = (0..40)
             .map(|i| json!({"uri": format!("file:///tmp/r{i}"), "name": "r"}))
             .collect();
-        let (data, _) = read(&json!({"pins": pins, "quickOrder": order, "recent": recent}));
-        assert_eq!(data.pins.len(), MAX_BOOKMARKS);
-        assert_eq!(data.quick_order.len(), MAX_ORDER);
-        assert_eq!(data.recent.len(), MAX_RECENT);
+        let Outcome { settings, .. } = read(&json!({"pins": pins, "quickOrder": order, "recent": recent}));
+        assert_eq!(settings.pins.len(), MAX_BOOKMARKS);
+        assert_eq!(settings.quick_order.len(), MAX_ORDER);
+        assert_eq!(settings.recent.len(), MAX_RECENT);
     }
 
     /// parity: SET-012
     #[test]
     fn quick_order_is_deduplicated_but_hidden_entries_are_not() {
-        let (data, _) = read(&json!({
+        let Outcome { settings, .. } = read(&json!({
             "hiddenQuick": ["file:///tmp/a", "file:///tmp/a", 3],
             "quickOrder": ["file:///tmp/a", "file:///tmp/b", "file:///tmp/a"]
         }));
-        assert_eq!(data.hidden_quick, ["file:///tmp/a", "file:///tmp/a"]);
-        assert_eq!(data.quick_order, ["file:///tmp/a", "file:///tmp/b"]);
+        assert_eq!(settings.hidden_quick, ["file:///tmp/a", "file:///tmp/a"]);
+        assert_eq!(settings.quick_order, ["file:///tmp/a", "file:///tmp/b"]);
     }
 
     /// parity: SET-013
     #[test]
     fn a_string_location_section_reads_each_character_like_python() {
-        let (data, problem) = read(&json!({"hiddenQuick": "/ ", "pins": "text"}));
+        let Outcome { settings, problem } = read(&json!({"hiddenQuick": "/ ", "pins": "text"}));
         assert!(problem.is_none());
-        assert_eq!(data.hidden_quick, ["file:///"]);
-        assert!(data.pins.is_empty());
+        assert_eq!(settings.hidden_quick, ["file:///"]);
+        assert!(settings.pins.is_empty());
     }
 
     /// parity: SET-013
     #[test]
     fn a_section_of_the_wrong_type_stops_reading_with_a_warning() {
-        let (data, problem) = read(&json!({
+        let Outcome { settings, problem } = read(&json!({
             "pins": [{"uri": "file:///tmp/kept"}],
             "shares": null,
             "quickOrder": ["file:///tmp/lost"],
             "preferences": {"theme": "dark"}
         }));
         assert!(problem.is_some());
-        assert_eq!(data.pins.len(), 1);
-        assert!(data.quick_order.is_empty());
-        assert_eq!(data.preferences.theme, Theme::System);
+        assert_eq!(settings.pins.len(), 1);
+        assert!(settings.quick_order.is_empty());
+        assert_eq!(settings.preferences.theme, Theme::System);
     }
 
     /// parity: SET-013
     #[test]
     fn non_object_files_and_preferences_warn() {
-        assert!(read(&json!([1, 2])).1.is_some());
-        assert!(read(&json!({"preferences": []})).1.is_some());
-        assert!(read(&json!({"preferences": null})).1.is_some());
-        assert!(read(&json!({"pins": "text"})).1.is_none());
+        assert!(read(&json!([1, 2])).problem.is_some());
+        assert!(read(&json!({"preferences": []})).problem.is_some());
+        assert!(read(&json!({"preferences": null})).problem.is_some());
+        assert!(read(&json!({"pins": "text"})).problem.is_none());
     }
 
     /// parity: SET-016
     #[test]
     fn preference_types_follow_python() {
-        let (data, _) = read(&json!({"preferences": {
+        let Outcome { settings, .. } = read(&json!({"preferences": {
             "textSize": 150.0, "networkInterval": 30.0, "sidebarWidth": true,
             "details": "no", "showHidden": true, "columnWidths": {"name": 300, "type": true, "css": 1}
         }}));
-        let prefs = data.preferences;
-        assert_eq!(prefs.text_size, 100);
-        assert_eq!(prefs.network_interval, 30);
-        assert_eq!(prefs.sidebar_width, None);
-        assert!(prefs.details && prefs.show_hidden);
-        let columns = prefs.column_widths.unwrap();
+        let preferences = settings.preferences;
+        assert_eq!(preferences.text_size, 100);
+        assert_eq!(preferences.network_interval, 30);
+        assert_eq!(preferences.sidebar_width, None);
+        assert!(preferences.details && preferences.show_hidden);
+        let columns = preferences.column_widths.unwrap();
         assert_eq!(columns.get(Column::Name), Some(300));
         assert_eq!(columns.get(Column::Type), None);
     }
@@ -317,33 +328,22 @@ mod tests {
     /// parity: HOME-011, SAFE-018
     #[test]
     fn recent_entries_convert_like_python() {
-        let (data, _) = read(&json!({"recent": [
+        let Outcome { settings, .. } = read(&json!({"recent": [
             {"uri": "file:///tmp/a.txt", "name": "a.txt", "size": "1_024", "modified": -5, "isDir": true},
             {"uri": "file:///tmp/b.txt", "name": 12, "type": null, "size": 2.9, "modified": []},
             {"uri": "file:///tmp/c.txt", "name": "c", "size": "12.5"},
             {"uri": "file:///tmp/d.txt", "size": 1},
             {"uri": "file:///tmp/e.txt", "name": "é".repeat(600)}
         ]}));
-        let names: Vec<&str> = data.recent.iter().map(|entry| entry.name.as_str()).collect();
+        let names: Vec<&str> = settings.recent.iter().map(|entry| entry.name.as_str()).collect();
         assert_eq!(names.len(), 3);
         assert_eq!(names[..2], ["a.txt", "12"]);
         assert_eq!(names[2].chars().count(), MAX_NAME_CHARS);
-        let first = &data.recent[0];
+        let first = &settings.recent[0];
         assert_eq!((first.size, first.modified, first.is_dir), (1024, 0, false));
         assert_eq!(first.type_name, "File");
-        let second = &data.recent[1];
+        let second = &settings.recent[1];
         assert_eq!((second.size, second.modified), (2, 0));
         assert_eq!(second.type_name, "None");
-    }
-
-    /// parity: HOME-011
-    #[test]
-    fn text_counts_parse_like_python_int() {
-        assert_eq!(parse_python_int(" +42 "), Some(42));
-        assert_eq!(parse_python_int("-7"), Some(0));
-        assert_eq!(parse_python_int("1__0"), None);
-        assert_eq!(parse_python_int("_1"), None);
-        assert_eq!(parse_python_int("99999999999999999999999"), Some(u64::MAX));
-        assert_eq!(parse_python_int("abc"), None);
     }
 }
