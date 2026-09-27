@@ -64,10 +64,12 @@ mod tests {
     use super::*;
     use crate::gio_node::GioNode;
 
+    /// Resolves every URI with the production GIO adapter.
     fn gio_factory() -> NodeFactory {
         Arc::new(|uri: &str| Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>))
     }
 
+    /// The selection `names`, as the engine receives it.
     fn uris(names: &[&str]) -> Vec<String> {
         names.iter().map(ToString::to_string).collect()
     }

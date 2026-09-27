@@ -27,6 +27,7 @@ struct FuseMountedDevice {
 }
 
 impl FuseMountedDevice {
+    /// The modes of the staging folders around every received file.
     fn staged_folder_modes(&self) -> Vec<u32> {
         self.staged_folder_modes.lock().expect("mode log").clone()
     }

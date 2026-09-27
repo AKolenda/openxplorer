@@ -135,6 +135,8 @@ impl FakeDevice {
             .collect()
     }
 
+    /// Adds the item `relative` of `file_type`, and any missing parent
+    /// folders.
     fn add(&self, relative: &str, file_type: gio::FileType) {
         let mut items = self.items.lock().expect("items");
         let mut uri = self.root.trim_end_matches('/').to_owned();
@@ -227,6 +229,7 @@ impl FakeDevice {
         Ok(())
     }
 
+    /// Adds `call` to the log.
     fn record(&self, call: DeviceCall) {
         self.calls.lock().expect("call log").push(call);
     }

@@ -49,6 +49,7 @@ glib::wrapper! {
 }
 
 impl DeviceListing {
+    /// A listing of `folder` that hands out `infos` in order.
     fn new(folder: &DeviceFile, mut infos: Vec<gio::FileInfo>) -> Self {
         // Items are handed out from the end; reverse to list in name order.
         infos.reverse();
@@ -104,14 +105,17 @@ mod imp {
     impl ObjectImpl for DeviceFile {}
 
     impl DeviceFile {
+        /// The escaped URI this file addresses.
         fn location(&self) -> &str {
             self.uri.get().expect("set at construction")
         }
 
+        /// The device that answers for this file.
         fn device(&self) -> &Arc<FakeDevice> {
             self.device.get().expect("set at construction")
         }
 
+        /// Another file of the same device.
         fn file_at(&self, uri: &str) -> gio::File {
             super::DeviceFile::new(uri, Arc::clone(self.device())).upcast()
         }

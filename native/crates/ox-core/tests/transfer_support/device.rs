@@ -103,6 +103,7 @@ impl Device {
         }
     }
 
+    /// Adds `call` to the log.
     fn record(&self, call: Call) {
         self.calls.lock().expect("call log").push(call);
     }

@@ -52,6 +52,7 @@ struct BrokenPhone {
 }
 
 impl BrokenPhone {
+    /// A phone failing with `fault`.
     fn new(fault: Fault) -> Arc<Self> {
         Arc::new(Self {
             device: Device::default(),
@@ -77,10 +78,12 @@ impl BrokenPhone {
         self.stage_deletions.fetch_add(1, Ordering::SeqCst) + 1
     }
 
+    /// Makes staged items misbehave from now on.
     fn mark_upload_failed(&self) {
         self.upload_failed.store(true, Ordering::SeqCst);
     }
 
+    /// True once an upload failed.
     fn has_upload_failed(&self) -> bool {
         self.upload_failed.load(Ordering::SeqCst)
     }

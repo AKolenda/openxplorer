@@ -93,6 +93,7 @@ mod tests {
 
     use super::*;
 
+    /// Deletes the local tree at `path` through the remote deletion walk.
     fn delete(path: &Path, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError> {
         delete_tree(&gio::File::for_path(path), cancel, guard)
     }
