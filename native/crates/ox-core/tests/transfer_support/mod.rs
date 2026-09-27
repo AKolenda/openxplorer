@@ -3,6 +3,7 @@
 
 pub mod device;
 pub mod local;
+pub mod mtp_device;
 pub mod versions;
 
 use std::ffi::OsStr;

@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use gio::prelude::*;
 use ox_core::transfer::{Cancellation, Node, NodeFactory, NodeInfo, NodeKind, TransferError, WriteGuard};
+use rustix::fs::{renameat_with, RenameFlags, CWD};
 
 /// The `file://` URI of `path`.
 pub fn file_uri(path: &Path) -> String {
@@ -70,7 +71,7 @@ pub trait Provider: Send + Sync + 'static {
     }
 
     fn stage_as_sibling(&self) -> bool {
-        self.base().is_some_and(|base| base.stage_as_sibling())
+        self.base().is_some_and(Provider::stage_as_sibling)
     }
 
     fn native_copy_keeps_name(&self, node: &LocalNode, target_dir: &dyn Node) -> bool {
@@ -267,14 +268,9 @@ impl LocalNode {
         Ok(())
     }
 
-    /// A rename that never overwrites.
-    ///
-    /// The Python double calls `renameat2(RENAME_NOREPLACE)`, which needs
-    /// `unsafe` here. Files and links are hard-linked to the new name (which
-    /// fails if the name exists) and then unlinked, so they are never
-    /// overwritten. Folders cannot be hard-linked: they are checked and then
-    /// renamed, which leaves a race window between the check and the rename
-    /// in this test double only. No test races a folder rename.
+    /// A rename that never overwrites: `renameat2(RENAME_NOREPLACE)`, like
+    /// the Python double. The kernel refuses a taken name atomically, so
+    /// even a racing writer is never overwritten.
     pub fn local_move_native(
         &self,
         target: &dyn Node,
@@ -282,18 +278,7 @@ impl LocalNode {
     ) -> Result<(), TransferError> {
         check(cancel)?;
         let target_path = local_path_of(target);
-        if fs::symlink_metadata(&self.path)?.is_dir() {
-            if fs::symlink_metadata(&target_path).is_ok() {
-                return Err(TransferError::Exists(format!(
-                    "File exists: {}",
-                    target_path.display()
-                )));
-            }
-            fs::rename(&self.path, &target_path)?;
-        } else {
-            fs::hard_link(&self.path, &target_path)?;
-            fs::remove_file(&self.path)?;
-        }
+        renameat_with(CWD, &self.path, CWD, &target_path, RenameFlags::NOREPLACE)?;
         Ok(())
     }
 

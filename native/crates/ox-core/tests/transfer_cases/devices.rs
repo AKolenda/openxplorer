@@ -15,7 +15,7 @@ use crate::transfer_support::{
     *,
 };
 
-/// A phone whose object paths behave like GVfs MTP: after a cross-folder
+/// A phone whose object paths behave like `GVfs` MTP: after a cross-folder
 /// move the old path keeps resolving to the moved object until its folder
 /// is listed again.
 #[derive(Default)]

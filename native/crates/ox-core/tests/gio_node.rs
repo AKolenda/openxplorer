@@ -61,7 +61,7 @@ fn local_copy_move_and_explicit_replace_use_the_gio_adapter() {
     let mut progress = Vec::new();
     node(&source)
         .copy_file(&node(&target), &cancel, &mut |current, total| {
-            progress.push((current, total))
+            progress.push((current, total));
         })
         .unwrap();
     assert_eq!(fs::read(&target).unwrap(), b"complete content");
@@ -258,15 +258,27 @@ fn cross_filesystem_move_is_refused_without_copying_or_removing_the_source() {
     assert!(!target.exists());
 }
 
+/// Ports `test_same_device_copies_are_detected` and
+/// `test_device_schemes_request_sibling_staging` in
+/// `desktop/tests/test_device_staging.py`: only MTP destinations stage
+/// beside the final name (cameras on gphoto2 keep folder staging), and only
+/// a copy within one MTP device keeps the source's name.
+///
+/// parity: XFER-021, XFER-023
 #[test]
 fn device_capabilities_and_unsupported_renames_are_resolved_without_device_io() {
     let source = GioNode::new("mtp://test-device/Internal/source/photo.jpg");
     let same_device = GioNode::new("mtp://test-device/Internal/destination");
     let other_device = GioNode::new("mtp://other-device/Internal/destination");
+    let local = GioNode::new("file:///tmp/x");
     assert!(source.stage_as_sibling());
+    for folder in ["gphoto2://cam/DCIM/x", "smb://host/share/x", "file:///tmp/x"] {
+        assert!(!GioNode::new(folder).stage_as_sibling(), "{folder}");
+    }
     assert!(source.native_copy_keeps_name(&same_device));
     assert!(!source.native_copy_keeps_name(&other_device));
-    assert!(!source.native_copy_keeps_name(&GioNode::new("file:///tmp")));
+    assert!(!source.native_copy_keeps_name(&local));
+    assert!(!local.native_copy_keeps_name(&same_device));
     let renamed = GioNode::new("mtp://test-device/Internal/destination/other.jpg");
     assert!(source
         .move_native(&renamed, None)

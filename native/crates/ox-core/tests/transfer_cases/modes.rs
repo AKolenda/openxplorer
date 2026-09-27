@@ -17,7 +17,7 @@ use crate::transfer_support::{
 /// `chmod` by the engine would change it.
 const DEVICE_FOLDER_MODE: u32 = 0o751;
 
-/// A GVfs FUSE view of a phone: `mtp://` URIs that also have a local path,
+/// A `GVfs` FUSE view of a phone: `mtp://` URIs that also have a local path,
 /// on a backend without `chmod`, like `MtpBackedLocalNode` in the Python
 /// tests. It records the modes of the staging folders around every file it
 /// receives.

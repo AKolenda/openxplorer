@@ -19,6 +19,8 @@ mod gio_engine;
 mod gio_integration;
 #[path = "transfer_cases/modes.rs"]
 mod modes;
+#[path = "transfer_cases/mtp_adapter.rs"]
+mod mtp_adapter;
 #[path = "transfer_cases/operations.rs"]
 mod operations;
 #[path = "transfer_cases/snapshots.rs"]

@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Test double of a GVfs MTP destination: `DeviceNode` in
+//! Test double of a `GVfs` MTP destination: `DeviceNode` in
 //! `desktop/tests/test_device_staging.py`.
 //!
 //! It follows the adapter contract `GioNode` provides for `mtp://`, as
-//! measured on a Pixel 9 with GVfs 1.54.4: a same-folder move is a
+//! measured on a Pixel 9 with `GVfs` 1.54.4: a same-folder move is a
 //! non-overwriting rename (`set_display_name`); a cross-folder move keeps
 //! the item's name; a cross-folder move under a different name is refused;
 //! one-step overwrite is unsupported. Every move and relist is recorded.
 //!
 //! [`Device::without_move_object`] models devices without MTP `MoveObject`
-//! (Android 7 and 8): GVfs refuses every cross-folder move there, while a
+//! (Android 7 and 8): `GVfs` refuses every cross-folder move there, while a
 //! same-folder rename still works.
 
 use std::path::PathBuf;
@@ -36,7 +36,7 @@ pub enum MoveObject {
     #[default]
     Supported,
     /// Every cross-folder move fails with "not supported", as `do_move` in
-    /// GVfs's MTP backend reports without the capability.
+    /// the MTP backend of `GVfs` reports without the capability.
     Unsupported,
 }
 
