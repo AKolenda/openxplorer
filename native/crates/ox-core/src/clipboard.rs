@@ -17,7 +17,7 @@
 //! | [`KDE_CUT`] | Dolphin and other KDE apps | `1` for cut, `0` for copy |
 //!
 //! Paste tries [`CUSTOM`], then [`GNOME`], then [`URI_LIST`] with the
-//! [`KDE_CUT`] marker of the same clipboard owner; [`decode`] reads one of
+//! [`KDE_CUT`] marker of the same clipboard owner; [`decode()`] reads one of
 //! them.
 
 mod decode;

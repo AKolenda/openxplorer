@@ -5,7 +5,7 @@
 //! from `desktop/ui/app.js`. Dates follow the user's `LC_TIME` locale the
 //! way the web UI followed the browser locale: the order and separators of
 //! the locale's numeric date, with a four-digit year and two-digit month
-//! and day. See [`locale_pattern`] for how the pattern is found.
+//! and day. The `locale_pattern` submodule explains how the pattern is found.
 
 mod locale_pattern;
 
