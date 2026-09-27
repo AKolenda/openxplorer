@@ -29,6 +29,8 @@ impl BrowserWindow {
     /// Gives `view` its context menu and the gestures and keys that open it.
     pub(super) fn attach_context_menu(&self, view: &gtk::Widget) {
         let popover = gtk::PopoverMenu::from_model(Some(&context_menu_model()));
+        // Windows and app.js draw context menus without an arrow.
+        popover.set_has_arrow(false);
         popover.add_css_class("ox-menu");
         popover.set_parent(view);
         view.connect_destroy(glib::clone!(

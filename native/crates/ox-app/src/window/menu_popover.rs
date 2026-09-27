@@ -128,8 +128,11 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let popover = self.obj();
+            // No arrow, the left edges lined up and 4 pixels below the
+            // button, as `openMenu` places `.menu` in app.js.
             popover.set_has_arrow(false);
             popover.set_halign(gtk::Align::Start);
+            popover.set_offset(0, 4);
             popover.add_css_class("ox-menu");
             let list = gtk::ListBox::builder()
                 .selection_mode(gtk::SelectionMode::None)
