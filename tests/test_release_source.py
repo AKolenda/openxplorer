@@ -11,10 +11,12 @@ from tools.release import source_files
 
 
 class SourceArchiveTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix='openxplorer-source-test-')
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        # source_files() resolves its root, so the fixture root must be resolved
+        # too; otherwise a TMPDIR reached through a symlink breaks relative paths.
+        self.root = Path(self.temporary.name).resolve()
 
     def put(self, relative, value='synthetic fixture\n'):
         path = self.root / relative

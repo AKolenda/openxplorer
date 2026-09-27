@@ -25,12 +25,14 @@ def load_audit():
 
 
 class PublicDataAuditTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.audit = load_audit()
         self.audit.DENIED.clear()
         self.temporary = tempfile.TemporaryDirectory(prefix='openxplorer-public-data-test-')
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        # audit() resolves its inputs, so ROOT must be resolved too; otherwise
+        # a TMPDIR reached through a symlink breaks every relative name.
+        self.root = Path(self.temporary.name).resolve()
         self.audit.ROOT = self.root
         # Supply isolated, valid provenance so unrelated repository captures do
         # not determine whether these privacy regression checks pass.
@@ -114,6 +116,17 @@ class PublicDataAuditTests(unittest.TestCase):
         self.assertTrue(result['passed'], result['issues'])
         self.assertEqual(result['uniqueTextFiles'], 1)
         self.assertNotIn('native/target', seen)
+
+    def test_symlinked_input_paths_are_reported_relative_to_the_repository(self) -> None:
+        """A path through a symlink still names the file by its repository path."""
+        self.audit.deny_terms(['Fictional Private Customer'])
+        self.put('inputs/example.txt', 'Contains Fictional Private Customer.')
+        with tempfile.TemporaryDirectory(prefix='openxplorer-link-test-') as directory:
+            link = Path(directory) / 'repository'
+            link.symlink_to(self.root, target_is_directory=True)
+            result = self.audit.audit([link / 'inputs/example.txt'])
+        self.assertEqual(result['issues'], [
+            'inputs/example.txt: rejected private-data fingerprint'])
 
     def test_each_filename_is_checked_even_when_payloads_match(self):
         self.audit.deny_terms(['privatecustomer'])
