@@ -3,6 +3,8 @@
 
 mod transfer_support;
 
+#[path = "transfer_cases/conflicts.rs"]
+mod conflicts;
 #[path = "transfer_cases/device_cleanup.rs"]
 mod device_cleanup;
 #[path = "transfer_cases/device_replace.rs"]
@@ -13,7 +15,11 @@ mod devices;
 mod failures;
 #[path = "transfer_cases/gio_engine.rs"]
 mod gio_engine;
+#[path = "transfer_cases/gio_integration.rs"]
+mod gio_integration;
 #[path = "transfer_cases/modes.rs"]
 mod modes;
 #[path = "transfer_cases/operations.rs"]
 mod operations;
+#[path = "transfer_cases/snapshots.rs"]
+mod snapshots;

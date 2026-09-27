@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The engine over the production GIO adapter, on temporary local files.
-//!
-//! Ports the engine cases of `desktop/tests/gio_integration.py`, plus the
-//! byte-exact handling of names that are not valid UTF-8, which the Python
-//! app gets from PyGObject.
+//! The engine over the production GIO adapter with file names that are not
+//! valid UTF-8, on temporary local files. The Python app handles them byte
+//! for byte through `PyGObject`; the other engine cases of
+//! `desktop/tests/gio_integration.py` are in `gio_integration.rs`.
 
 use std::ffi::{OsStr, OsString};
 use std::fs;

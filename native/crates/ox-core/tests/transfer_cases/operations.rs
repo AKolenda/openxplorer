@@ -5,7 +5,7 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{ConflictPolicy, TransferMode, MAX_DEPTH};
+use ox_core::transfer::{ConflictPolicy, TransferError, TransferMode, MAX_DEPTH};
 
 use crate::transfer_support::{local, versions::PreviousVersions, *};
 
@@ -334,4 +334,58 @@ fn a_deep_move_merge_is_bounded_even_without_a_write_guard() {
     assert!(result.errors[0].contains("nesting"));
     assert_eq!(read(&source_nested.join("incoming")), "incoming");
     assert_eq!(read(&target_nested.join("original")), "original");
+}
+
+/// Port of `test_failure_inside_tree_leaves_source`: one special file deep
+/// inside a folder fails the whole folder. Nothing is published, the stage
+/// is removed and the source is untouched.
+///
+/// parity: XFER-018
+#[test]
+fn a_special_file_inside_a_folder_fails_the_whole_folder() {
+    let fixture = Fixture::new();
+    let tree = fixture.src.join("tree");
+    fs::create_dir(&tree).unwrap();
+    write(&tree.join("a"), "hello");
+    mkfifo(&tree.join("pipe"));
+    let mut engine = fixture.engine(local::local());
+
+    let result = fixture.run(
+        &mut engine,
+        &[&tree],
+        TransferMode::Copy,
+        ConflictPolicy::Skip,
+        None,
+    );
+
+    assert!(result.done.is_empty(), "{result:?}");
+    assert_eq!(result.errors.len(), 1, "{result:?}");
+    assert!(result.errors[0].contains("special files"), "{result:?}");
+    assert!(list(&fixture.dst).is_empty());
+    assert_eq!(read(&tree.join("a")), "hello");
+}
+
+/// Port of `test_cancel_before_start`: a run cancelled before it starts is
+/// refused while the destination is checked, before anything is touched.
+///
+/// parity: OPS-022
+#[test]
+fn a_run_cancelled_before_it_starts_changes_nothing() {
+    let fixture = Fixture::new();
+    let source = fixture.src.join("a");
+    write(&source, "a");
+    fixture.cancel.cancel();
+    let mut engine = fixture.engine(local::local());
+
+    let refused = fixture.try_run(
+        &mut engine,
+        &[&source],
+        TransferMode::Copy,
+        ConflictPolicy::Skip,
+        None,
+    );
+
+    assert_eq!(refused, Err(TransferError::Cancelled));
+    assert!(list(&fixture.dst).is_empty());
+    assert_eq!(read(&source), "a");
 }
