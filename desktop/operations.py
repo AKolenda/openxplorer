@@ -11,10 +11,16 @@ prohibit a copy/delete fallback. Trash never falls back
 to permanent deletion; a permanent delete is a separate mode the user has to
 confirm explicitly, and is offered where the location has no Trash at all. This is not a crash-recovery/undo or filesystem snapshot
 engine. A crash can leave a .winspace-transfer-*.part directory to inspect.
+
+Destinations whose native move cannot rename across folders (Node attribute
+``stage_as_sibling``: MTP) stage the item itself under a hidden
+``.winspace-transfer-<32 hex>.part`` name beside its final name and publish it
+with a same-folder rename; a crash can leave that file or folder instead.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
 import os
+import time
 from typing import Callable, Iterator, Protocol
 from urllib.parse import unquote
 import uuid
@@ -23,6 +29,12 @@ from core import new_copy_name, split_location
 
 class Cancelled(Exception):
     pass
+
+
+def is_not_found(exc: BaseException) -> bool:
+    """A definite "does not exist": FileNotFoundError or G_IO_ERROR_NOT_FOUND."""
+    return isinstance(exc, FileNotFoundError) or (
+        getattr(exc, 'domain', None) == 'g-io-error-quark' and getattr(exc, 'code', None) == 1)
 
 
 class ReplaceUnsupported(Exception):
@@ -95,10 +107,12 @@ def guard_destination(source: Node, directory: Node) -> None:
 
 class TransferEngine:
     def __init__(self, factory: Callable[[str], Node], emit: Callable[[dict], None] | None = None,
-                 assert_writable: Callable[[str], None] | None = None):
+                 assert_writable: Callable[[str], None] | None = None,
+                 sleep: Callable[[float], None] = time.sleep):
         self.factory = factory
         self.emit = emit or (lambda _: None)
         self.assert_writable = assert_writable
+        self.sleep = sleep
 
     def run(self, mode: str, uris: list[str], target: str | None,
             policy: str, cancel: Cancellation) -> Result:
@@ -116,8 +130,28 @@ class TransferEngine:
             raise ValueError('Choose a destination folder.')
         if dest_dir and not dest_dir.is_directory(cancel):
             raise ValueError('The destination is not a folder.')
+        moved_from: dict[str, Node] = {}
+        try:
+            self._run_items(mode, uris, dest_dir, policy, cancel, result, removal, moved_from)
+        finally:
+            # MTP keeps resolving a moved item's OLD path to the object until
+            # that folder is listed again. Relist once per source folder.
+            for folder in moved_from.values():
+                refresh = getattr(folder, 'refresh_listing', None)
+                if refresh is not None:
+                    try:
+                        refresh(None)
+                    except Exception:
+                        pass  # Best effort: an unmounted device drops its cache.
+        self.emit({'label': f'{len(result.done)} item(s) completed', 'fraction': 1})
+        return result
+
+    def _run_items(self, mode: str, uris: list[str], dest_dir: Node | None, policy: str,
+                   cancel: Cancellation, result: Result, removal: bool,
+                   moved_from: dict) -> None:
         for index, uri in enumerate(uris):
             stage: Node | None = None
+            device = False
             try:
                 cancel.check()
                 source = self.factory(uri)
@@ -161,21 +195,59 @@ class TransferEngine:
                 if mode == 'move':
                     # Backends MUST use NO_FALLBACK_FOR_MOVE. Replace is an
                     # explicit user choice and still never degrades to copy/delete.
+                    parent = source.parent()
+                    if parent is not None:
+                        moved_from.setdefault(parent.uri, parent)
                     if policy == 'replace':
                         self._commit_replace(source, destination, cancel)
                     else:
                         source.move_native(destination, cancel)
                     result.done.append(uri)
                     continue
-                # Reserve a private namespace. A failed mkdir never grants us
-                # permission to delete that name during cleanup.
-                candidate = dest_dir.child('.winspace-transfer-' + uuid.uuid4().hex + '.part')
-                candidate.mkdir(cancel)
-                stage = candidate
-                self._secure_local_staging(stage)
-                staged_item = stage.child('payload')
+                token = '.winspace-transfer-' + uuid.uuid4().hex + '.part'
                 directory_modes = {}
-                self._copy(source, staged_item, cancel, stage.name, 0, directory_modes)
+                device = getattr(dest_dir, 'stage_as_sibling', False)
+                keeps_name = getattr(source, 'native_copy_keeps_name', None)
+                same_device_file = info.kind != 'directory' and keeps_name is not None and keeps_name(dest_dir)
+                if device and not same_device_file:
+                    # The item itself is built under a hidden, unguessable
+                    # sibling name and published by a same-folder rename.
+                    staged_item = dest_dir.child(token)
+                    if staged_item.exists(cancel):
+                        raise ValueError('Could not reserve a private staging name. Nothing was changed.')
+                    if info.kind == 'directory':
+                        staged_item.mkdir(cancel)  # exclusive; failure grants no cleanup rights
+                        stage = staged_item
+                        for child in source.children(cancel):
+                            self._copy(child, staged_item.child(child.name), cancel, token, 1, directory_modes)
+                    else:
+                        # copy_file never overwrites and the name was free and
+                        # random, so anything left there after a failure is ours.
+                        stage = staged_item
+                        self._copy(source, staged_item, cancel, token, 0, directory_modes)
+                else:
+                    # Reserve a private namespace. A failed mkdir never grants us
+                    # permission to delete that name during cleanup.
+                    candidate = dest_dir.child(token)
+                    candidate.mkdir(cancel)
+                    stage = candidate
+                    self._secure_local_staging(stage)
+                    if same_device_file:
+                        # A copy within one MTP device runs as CopyObject, which
+                        # keeps the SOURCE name whatever target is requested.
+                        # Copy under that name inside the private folder, rename
+                        # it there, then move it out under the same name.
+                        staged_item = stage.child(source.name)
+                        self._copy(source, staged_item, cancel, stage.name, 0, directory_modes)
+                        if not staged_item.exists(cancel):
+                            raise ValueError('The device did not place the copy in its private staging folder. Nothing was published.')
+                        if destination.name != source.name:
+                            renamed = stage.child(destination.name)
+                            staged_item.move_native(renamed, cancel)
+                            staged_item = renamed
+                    else:
+                        staged_item = stage.child('payload')
+                        self._copy(source, staged_item, cancel, stage.name, 0, directory_modes)
                 cancel.check()
                 # Native rename in the same destination directory. Replace is
                 # only reached after the user explicitly chose it; other
@@ -184,9 +256,21 @@ class TransferEngine:
                     self._commit_replace(staged_item, destination, cancel, directory_modes)
                 else:
                     self._publish_staged(staged_item, destination, directory_modes, cancel)
+                if device:
+                    # Never trust a device's success report for the final name.
+                    # MTP keeps resolving a moved item's old path until its
+                    # folder is listed again, so relist a staging folder first.
+                    refresh = getattr(stage, 'refresh_listing', None)
+                    if staged_item is not stage and refresh is not None:
+                        refresh(None)
+                    if not destination.exists(None) or staged_item.exists(None):
+                        raise ValueError(f'The device reported success, but the copy is not at {destination.uri}.')
+                    if staged_item is stage:
+                        stage = None
                 result.done.append(uri)
-                stage.delete()  # now empty; cannot recursively remove final item
-                stage = None
+                if stage is not None:
+                    stage.delete()  # now empty; cannot recursively remove final item
+                    stage = None
             except Exception as exc:
                 if isinstance(exc, Cancelled) or cancel.is_cancelled():
                     result.cancelled = True
@@ -194,14 +278,51 @@ class TransferEngine:
                     result.errors.append(f'{self.factory(uri).name}: {exc}')
             finally:
                 if stage is not None:
-                    try:
-                        self._clean_staging(stage)
-                    except Exception as exc:
-                        result.errors.append(f'Incomplete staging folder left at {stage.uri}. Inspect it before removing it. {exc}')
+                    problem = self._discard_stage(stage, device)
+                    if problem is not None:
+                        result.errors.append(f'Incomplete staging {"item" if device else "folder"} left at {stage.uri}. '
+                                             f'Inspect it before removing it. {problem}')
             if result.cancelled:
                 break
-        self.emit({'label': f'{len(result.done)} item(s) completed', 'fraction': 1})
-        return result
+
+    def _discard_stage(self, stage: Node, device: bool) -> Exception | None:
+        """Remove this engine's own staging item and return any problem.
+
+        Local and network staging gets one attempt, and every failure is
+        reported. Phones can reject the first request after an aborted
+        transfer, so device cleanup retries briefly, and a stage the device
+        reports as definitely missing (an aborted upload it discarded) needs no
+        cleanup. Any other query error counts as a failed attempt."""
+        problem = None
+        for delay in ((0, .5, 1.5) if device else (0,)):
+            if delay:
+                self.sleep(delay)
+            try:
+                stage.info()
+            except Exception as exc:
+                if device and is_not_found(exc) and self._confirmed_absent(stage):
+                    return None
+                problem = exc
+                continue
+            try:
+                self._clean_staging(stage)
+                return None
+            except Exception as exc:
+                problem = exc
+        return problem
+
+    @staticmethod
+    def _confirmed_absent(stage: Node) -> bool:
+        """GVfs MTP answers "not found" for an uncached path it failed to look
+        up, so only a successful listing of the parent without the stage
+        proves the stage is gone."""
+        parent = stage.parent()
+        if parent is None:
+            return False
+        try:
+            return all(child.name != stage.name for child in parent.children())
+        except Exception:
+            return False
 
     @staticmethod
     def _secure_local_staging(stage: Node) -> None:
@@ -343,7 +464,20 @@ class TransferEngine:
                 break
         if backup is None:
             raise ValueError('Could not reserve a temporary replacement name.')
-        destination.move_native(backup, cancel)
+        # Like the install step below, the move-aside is not interruptible: a
+        # device can finish a rename after the client stopped waiting for it.
+        cancel.check()
+        try:
+            destination.move_native(backup, None)
+        except Exception as aside_error:
+            if backup.exists(None) and not destination.exists(None):
+                try:
+                    backup.move_native(destination, None)
+                except Exception as restore_error:
+                    raise ValueError(
+                        f'Replacement stopped and the original remains at {backup.uri}. '
+                        f'Restore it manually before retrying. {restore_error}') from aside_error
+            raise
         try:
             # Once the old file moved aside, finish the tiny commit step even
             # if cancellation arrives; stopping here would unnecessarily leave

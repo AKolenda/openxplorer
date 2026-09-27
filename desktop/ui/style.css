@@ -82,9 +82,8 @@ select{font:inherit;color:var(--text);background:var(--chrome);border:1px solid 
 .version-row button{font-size:calc(10px * var(--text-scale,1));min-width:0;padding:0 7px;height:29px}.version-row button svg{width:13px;height:13px}.snapshot-warnings{margin-top:13px;font-size:calc(11px * var(--text-scale,1))}.snapshot-warnings summary{cursor:pointer;color:var(--muted)}.snapshot-warnings pre{font-size:calc(10px * var(--text-scale,1));max-height:130px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted)}.snapshot-source-actions{display:flex;gap:8px;margin-top:20px}.snapshot-source-actions button{font-size:calc(11px * var(--text-scale,1));min-width:0;padding:0 12px}
 @media(max-width:660px){.properties-modal{padding:18px 16px}.property-tab{padding:0 8px;font-size:calc(11px * var(--text-scale,1))}.property-grid{grid-template-columns:90px minmax(0,1fr);gap:12px}.properties-panel{max-height:65vh}.version-row{flex-wrap:wrap}.version-text{flex-basis:60%}.settings-line select{max-width:45%;font-size:calc(10px * var(--text-scale,1))}}
 
-/* 0.5: network pin marker and read-only compressed-folder browser. */
+/* 0.5: sidebar icon slot and read-only compressed-folder browser. */
 .side-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;width:20px;height:24px;flex-shrink:0}
-.shared-bar{position:absolute;left:2px;right:2px;bottom:0;height:3px;background:#35b46b;border-radius:2px;box-shadow:0 0 0 1px var(--sidebar)}
 .archive-modal{width:720px;max-width:calc(100vw - 36px)}
 .archive-toolbar{display:flex;gap:12px;align-items:center;margin-bottom:12px}.archive-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(12px * var(--text-scale,1));color:var(--muted)}
 .archive-list{max-height:360px;min-height:160px;overflow:auto;border:1px solid var(--border);border-radius:5px;padding:6px}
@@ -121,7 +120,6 @@ select{font:inherit;color:var(--text);background:var(--chrome);border:1px solid 
 .breadcrumbs .crumb:focus-visible{border-color:var(--accent)}
 .crumb-divider{flex:none;color:var(--muted);padding:0 1px;opacity:.7}
 .tab-icon-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;width:19px;height:24px;flex:none}
-.tab-icon-wrap .shared-bar{bottom:1px;left:2px;right:2px;box-shadow:none}
 .tab-scoped{top:var(--dialog-top,42px);bottom:var(--dialog-bottom,0px);left:var(--dialog-left,0px);right:var(--dialog-right,0px)}
 .tab-scoped .modal{max-height:calc(100% - 20px)}
 .size-scan{display:flex;align-items:center;gap:15px;padding:8px 18px;background:var(--chrome);border-top:1px solid var(--border);font-size:calc(11px * var(--text-scale,1));min-height:44px}

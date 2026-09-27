@@ -17,6 +17,17 @@ ATTRIBUTES = 'standard::name,standard::display-name,standard::type,standard::is-
 NOFOLLOW = Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS
 COPY_FLAGS = Gio.FileCopyFlags.NOFOLLOW_SYMLINKS
 MOVE_FLAGS = COPY_FLAGS | Gio.FileCopyFlags.NO_FALLBACK_FOR_MOVE
+# GVfs backends whose native move cannot give an item a new name in another
+# folder. MTP (GVfs 1.54) maps g_file_move to MTP MoveObject only: it keeps the
+# OLD name when the target name differs, and fails in the same folder. Copies
+# to these stage beside the final name.
+SIBLING_STAGING_SCHEMES = frozenset({'mtp'})
+
+
+def exists_error(name: str) -> GLib.Error:
+    return GLib.Error.new_literal(Gio.io_error_quark(),
+                                  f'An item named “{name}” already exists. Nothing was overwritten.',
+                                  int(Gio.IOErrorEnum.EXISTS))
 
 
 class GioCancellation:
@@ -55,6 +66,11 @@ class GioNode:
         self.uri = self.file.get_uri()
         self.name = self.file.get_basename() or self.uri
         self.path = self.file.get_path()
+        self.scheme = (self.file.get_uri_scheme() or '').lower()
+
+    @property
+    def stage_as_sibling(self) -> bool:
+        return self.scheme in SIBLING_STAGING_SCHEMES
 
     def child(self, name):
         # Generated staging names and source names can include backslashes on
@@ -102,8 +118,25 @@ class GioNode:
             progress(current, total)
         self.file.copy(target.file, COPY_FLAGS, raw(cancel), callback, None)
 
+    def native_copy_keeps_name(self, target_dir) -> bool:
+        """A copy within one MTP device runs as MTP CopyObject, which keeps
+        the source's name whatever target name is requested."""
+        return (self.scheme == 'mtp' and getattr(target_dir, 'scheme', '') == 'mtp'
+                and self.uri.split('/')[2] == target_dir.uri.split('/')[2])
+
+    def _same_parent(self, target) -> bool:
+        a, b = self.file.get_parent(), target.file.get_parent()
+        return a is not None and b is not None and a.equal(b)
+
     def move_native(self, target, cancel=None):
         require_item_uri(self.uri)
+        if self.scheme == 'mtp':
+            if self._same_parent(target):
+                return self._rename_mtp(target, cancel)
+            if self.name != target.name:
+                # GVfs would report success and keep the old name.
+                raise ValueError('This device can move an item to another folder or rename it, '
+                                 'but not both in one step. Nothing was changed.')
         try:
             self.file.move(target.file, MOVE_FLAGS, raw(cancel), None, None)
         except GLib.Error as exc:
@@ -111,9 +144,45 @@ class GioNode:
                 raise ValueError('A native move is not supported here. Cross-filesystem/cross-share moves are deliberately disabled. Copy, verify, then trash the source separately.') from exc
             raise
 
+    def _rename_mtp(self, target, cancel=None):
+        """Same-folder rename through MTP SetObjectPropValue(ObjectFileName).
+        The device refuses a taken name (reported as FAILED); it never
+        replaces the other item."""
+        if cancel:
+            cancel.check()
+        if target.exists(cancel):
+            raise exists_error(target.name)
+        try:
+            self.file.set_display_name(target.name, raw(cancel))
+        except GLib.Error as exc:
+            # The device can finish a rename the client gave up on (cancel,
+            # timeout). Report what actually happened.
+            if target.exists(None):
+                if not self.exists(None):
+                    return
+                raise exists_error(target.name) from exc
+            raise
+
+    def refresh_listing(self, cancel=None):
+        """GVfs MTP does not update its path cache after MoveObject: the old
+        path keeps resolving to the moved object, so deleting the old path
+        deletes the moved file. Enumerating a folder rebuilds its entries."""
+        if self.scheme != 'mtp':
+            return
+        en = self.file.enumerate_children('standard::name', NOFOLLOW, raw(cancel))
+        try:
+            while en.next_file(raw(cancel)) is not None:
+                pass
+        finally:
+            en.close(None)
+
     def replace_native(self, target, cancel=None):
         """Move over an existing file only after explicit user confirmation."""
         require_item_uri(self.uri)
+        if self.scheme == 'mtp':
+            # GVfs MTP deletes the existing destination before MoveObject and
+            # cannot restore it when the move fails. Use reversible renames.
+            raise ReplaceUnsupported('This device cannot replace an item in one step.')
         try:
             self.file.move(target.file, MOVE_FLAGS | Gio.FileCopyFlags.OVERWRITE,
                            raw(cancel), None, None)

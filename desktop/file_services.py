@@ -13,7 +13,7 @@ from gi.repository import Gio
 from native_opening import local_path
 from app_catalog import unique_applications
 from core import normalise_location, validate_name, is_smb_server
-from gio_backend import inspect, raw, entry_from_info, ATTRIBUTES, error_payload
+from gio_backend import inspect, raw, entry_from_info, ATTRIBUTES, error_payload, GioNode
 
 PROPERTY_ATTRS = ATTRIBUTES + ',time::created,time::access,time::changed,access::can-read,access::can-write,access::can-execute,owner::user,owner::group,unix::mode,standard::symlink-target,standard::allocated-size'
 PRESETS = {
@@ -145,7 +145,8 @@ def create_from_template(uri, name, template, directory, cancel):
         try:
             out.write_all(data, raw(cancel))
         finally: out.close(None)
-        stage.move(target, Gio.FileCopyFlags.NO_FALLBACK_FOR_MOVE, raw(cancel), None, None)
+        # Same-folder, non-overwriting rename (set_display_name on MTP).
+        GioNode(gfile=stage).move_native(GioNode(gfile=target), cancel)
         created = False
         return {'uri': target.get_uri()}
     finally:
