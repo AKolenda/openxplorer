@@ -5,27 +5,30 @@
 //! `GioNode._rename_mtp` in `desktop/gio_backend.py`.
 //!
 //! Rules enforced here:
-//! - No move ever falls back to copy-then-delete (`NO_FALLBACK_FOR_MOVE`).
+//! - XFER-011: no move ever falls back to copy-then-delete
+//!   (`NO_FALLBACK_FOR_MOVE`).
 //! - A move without Replace never overwrites. For the user's own items GIO
 //!   checks the target and then renames, which leaves a tiny window for
 //!   another program to create the name in between; the Python app has the
 //!   same window. GIO's local move is kept anyway, because it also moves
 //!   the item's `GVfs` metadata (Nautilus emblems, custom icons), which a
 //!   plain kernel rename leaves behind.
-//! - Publishing a local staged copy closes that window: the kernel's atomic
-//!   no-replace rename refuses a taken name. A staged copy has no metadata
-//!   to carry (GIO copies without `ALL_METADATA`), so nothing is lost.
-//! - On MTP, a move within one folder is a rename (`set_display_name`, MTP
-//!   `SetObjectPropValue`), a move to another folder keeps the item's name
-//!   (MTP `MoveObject`), and Replace is never done in one step, because
-//!   `GVfs` deletes the existing item before it moves and cannot restore it.
+//! - XFER-007: publishing a local staged copy closes that window: the
+//!   kernel's atomic no-replace rename refuses a taken name. A staged copy
+//!   has no metadata to carry (GIO copies without `ALL_METADATA`), so
+//!   nothing is lost.
+//! - XFER-024: on MTP, a move within one folder is a rename
+//!   (`set_display_name`, MTP `SetObjectPropValue`), and a move to another
+//!   folder keeps the item's name (MTP `MoveObject`).
+//! - XFER-026: on MTP, Replace is never done in one step, because `GVfs`
+//!   deletes the existing item before it moves and cannot restore it.
 
 use gio::prelude::*;
 use rustix::fs::{renameat_with, RenameFlags, CWD};
 use rustix::io::Errno;
 
-use super::{check, gio_cancellable, GioNode};
-use crate::transfer::{verify_installation, Cancellation, Node, TransferError};
+use super::{gio_cancellable, GioNode};
+use crate::transfer::{check_cancelled, verify_installation, Cancellation, Node, TransferError};
 
 /// Whether a move may overwrite an existing item at the target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,7 +39,8 @@ pub(super) enum Overwrite {
     Replace,
 }
 
-/// `MOVE_FLAGS` in `desktop/gio_backend.py`.
+/// XFER-011 and XFER-017: `MOVE_FLAGS` in `desktop/gio_backend.py`. A move
+/// never follows a link and never degrades to copy-then-delete.
 const MOVE_FLAGS: gio::FileCopyFlags =
     gio::FileCopyFlags::NOFOLLOW_SYMLINKS.union(gio::FileCopyFlags::NO_FALLBACK_FOR_MOVE);
 
@@ -48,32 +52,55 @@ impl GioNode {
         cancel: Option<&Cancellation>,
         overwrite: Overwrite,
     ) -> Result<(), TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
         self.require_item()?;
         let target_file = gio::File::for_uri(&target.uri());
-        if self.is_mtp() {
-            if overwrite == Overwrite::Replace {
-                return Err(TransferError::ReplaceUnsupported(
-                    "This device cannot replace an item in one step.".into(),
-                ));
-            }
-            if self.has_same_parent(&target_file) {
-                return self.rename_mtp(target, cancel);
-            }
-            // GVfs would report success and keep the old name.
-            if self.name() != target.name() {
-                return Err(TransferError::failed(
-                    "This device can move an item to another folder or rename it, \
-                     but not both in one step. Nothing was changed.",
-                ));
-            }
+        if !self.is_mtp() {
+            return self.move_with_gio(&target_file, cancel, overwrite);
         }
+        // XFER-026: the engine replaces through reversible renames instead.
+        if overwrite == Overwrite::Replace {
+            return Err(TransferError::ReplaceUnsupported(
+                "This device cannot replace an item in one step.".into(),
+            ));
+        }
+        self.move_on_device(target, &target_file, cancel)
+    }
+
+    /// XFER-024: a move on a phone, where a rename and a move to another
+    /// folder are different device calls and cannot be combined.
+    fn move_on_device(
+        &self,
+        target: &dyn Node,
+        target_file: &gio::File,
+        cancel: Option<&Cancellation>,
+    ) -> Result<(), TransferError> {
+        if self.has_same_parent(target_file) {
+            return self.rename_mtp(target, cancel);
+        }
+        // GVfs would report success and keep the old name.
+        if self.name() != target.name() {
+            return Err(TransferError::failed(
+                "This device can move an item to another folder or rename it, \
+                 but not both in one step. Nothing was changed.",
+            ));
+        }
+        self.move_with_gio(target_file, cancel, Overwrite::Never)
+    }
+
+    /// `g_file_move` with [`MOVE_FLAGS`], overwriting only for Replace.
+    fn move_with_gio(
+        &self,
+        target_file: &gio::File,
+        cancel: Option<&Cancellation>,
+        overwrite: Overwrite,
+    ) -> Result<(), TransferError> {
         let flags = match overwrite {
             Overwrite::Never => MOVE_FLAGS,
             Overwrite::Replace => MOVE_FLAGS | gio::FileCopyFlags::OVERWRITE,
         };
         self.file
-            .move_(&target_file, flags, gio_cancellable(cancel), None)
+            .move_(target_file, flags, gio_cancellable(cancel), None)
             .map_err(|error| move_error(error, overwrite))
     }
 
@@ -86,7 +113,7 @@ impl GioNode {
         target: &dyn Node,
         cancel: Option<&Cancellation>,
     ) -> Result<(), TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
         let target_path = GioNode::new(&target.uri()).local_path();
         let (Some(staged_path), Some(target_path)) = (self.local_path(), target_path) else {
             return self.move_item(target, cancel, Overwrite::Never);
@@ -116,22 +143,24 @@ impl GioNode {
         }
     }
 
-    /// A same-folder rename through MTP `SetObjectPropValue`. The device
-    /// refuses a taken name (reported as a failure); it never replaces the
-    /// other item.
+    /// A same-folder rename through MTP `SetObjectPropValue`. A taken name
+    /// is refused before the device is asked; the device itself also
+    /// refuses one (reported as a failure) and never replaces the other
+    /// item.
     fn rename_mtp(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
         if target.exists(cancel) {
             return Err(name_taken(target));
         }
         // MTP object names are text; an item is never given a lossily
         // converted name.
-        let Some(new_name) = target.name().to_str().map(str::to_owned) else {
+        let target_name = target.name();
+        let Some(new_name) = target_name.to_str() else {
             return Err(TransferError::failed(
                 "This device only accepts names that are valid UTF-8. Nothing was changed.",
             ));
         };
-        match self.file.set_display_name(&new_name, gio_cancellable(cancel)) {
+        match self.file.set_display_name(new_name, gio_cancellable(cancel)) {
             Ok(_) => Ok(()),
             Err(error) => self.settle_failed_rename(target, error),
         }
@@ -146,7 +175,8 @@ impl GioNode {
         if verify_installation(self, target).is_ok() {
             return Ok(());
         }
-        if self.info(None).is_ok() && target.info(None).is_ok() {
+        let both_names_exist = self.info(None).is_ok() && target.info(None).is_ok();
+        if both_names_exist {
             return Err(name_taken(target));
         }
         Err(error.into())
@@ -162,8 +192,9 @@ fn name_taken(target: &dyn Node) -> TransferError {
 }
 
 /// Maps a failed native move. With Replace, "cannot overwrite here" asks the
-/// engine for its reversible replacement; without it, an unsupported move
-/// (for example across filesystems) is refused with an explanation.
+/// engine for its reversible replacement (XFER-010); without it, an
+/// unsupported move (for example across filesystems) is refused with an
+/// explanation (XFER-011).
 fn move_error(error: glib::Error, overwrite: Overwrite) -> TransferError {
     let code = error.kind::<gio::IOErrorEnum>();
     let unsupported = matches!(

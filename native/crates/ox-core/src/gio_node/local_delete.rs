@@ -6,7 +6,8 @@
 //! `_clean_staging` in `desktop/operations.py` for `file:` items, with
 //! stronger protection than the Python app's path-based walks.
 //!
-//! Rules enforced here:
+//! Rules enforced here (XFER-015 for the user's deletions, XFER-002 for
+//! staging cleanup):
 //! - The folder that holds the item is opened once, following symbolic
 //!   links like the path the user saw (`~/Music` may be a link to a data
 //!   drive). Everything below it is reached through descriptors without
@@ -15,8 +16,8 @@
 //! - A symbolic link is removed as a link; its target is never touched.
 //! - A folder is checked to still be the folder that was opened before each
 //!   of its items and before it is removed; otherwise the deletion stops.
-//! - A user deletion asks the write guard about every item and can be
-//!   cancelled; the nesting limit applies.
+//! - A user deletion asks the write guard about every item (XFER-020) and
+//!   can be cancelled; the nesting limit applies.
 //! - Staging cleanup starts only while the staging name still leads to the
 //!   folder the engine created, and makes each of its folders owner-only
 //!   before emptying it (a copied read-only mode must not block cleanup).
@@ -31,11 +32,9 @@ use rustix::fd::{AsFd, BorrowedFd, OwnedFd};
 use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat};
 
 use crate::transfer::{
-    nesting_error, Cancellation, ItemIdentity, TransferError, WriteGuard, MAX_DEPTH, STAGING_LEVELS,
+    check_cancelled, nesting_error, Cancellation, ItemIdentity, TransferError, WriteGuard, MAX_DEPTH,
+    PRIVATE_DIRECTORY_MODE, STAGING_LEVELS,
 };
-
-/// Owner-only access for staging folders being emptied.
-const PRIVATE_FOLDER_MODE: u32 = 0o700;
 
 /// Permanently deletes the local item at `path` and everything inside it.
 ///
@@ -80,7 +79,8 @@ pub(super) fn delete_staging(path: &Path, created: Option<ItemIdentity>) -> Resu
 }
 
 /// Pins the folder that contains the item, resolving symbolic links in its
-/// path once, as the user's view of the path does.
+/// path once, as the user's view of the path does. The descriptor is
+/// `O_PATH`: it only anchors the `*at` calls below it.
 fn open_parent(path: &Path) -> Result<OwnedFd, TransferError> {
     // GIO paths are absolute and free of `..`. Anything else means the path
     // is not the one the user saw, and `..` after a link would resolve to
@@ -147,7 +147,7 @@ impl Deletion<'_> {
         path: &Path,
         depth: usize,
     ) -> Result<(), TransferError> {
-        self.check_cancelled()?;
+        check_cancelled(self.cancel)?;
         if depth > self.max_depth {
             return Err(nesting_error());
         }
@@ -163,7 +163,7 @@ impl Deletion<'_> {
         }
         // unlinkat removes a link itself. If the name raced into a folder,
         // it fails rather than traversing or recursively removing it.
-        self.check_cancelled()?;
+        check_cancelled(self.cancel)?;
         fs::unlinkat(parent, name, AtFlags::empty())?;
         Ok(())
     }
@@ -184,10 +184,10 @@ impl Deletion<'_> {
         require_same_item(seen, &opened)?;
         if self.folders == FolderAccess::MadePrivate {
             // Through the pinned descriptor, so the mode lands on this folder.
-            fs::fchmod(&folder, Mode::from_raw_mode(PRIVATE_FOLDER_MODE))?;
+            fs::fchmod(&folder, Mode::from_raw_mode(PRIVATE_DIRECTORY_MODE))?;
         }
         for entry in Dir::read_from(&folder)? {
-            self.check_cancelled()?;
+            check_cancelled(self.cancel)?;
             let entry = entry?;
             let child_name = OsStr::from_bytes(entry.file_name().to_bytes());
             if child_name == "." || child_name == ".." {
@@ -196,20 +196,13 @@ impl Deletion<'_> {
             // Stop if the folder's name was swapped after opening. All I/O
             // still goes through its descriptor, so even a swap after this
             // check cannot redirect the next item's deletion.
-            require_same_item(&opened, &fs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)?)?;
+            require_still_named(parent, name, &opened)?;
             self.delete_at(folder.as_fd(), child_name, &path.join(child_name), depth + 1)?;
         }
-        self.check_cancelled()?;
-        require_same_item(&opened, &fs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)?)?;
+        check_cancelled(self.cancel)?;
+        require_still_named(parent, name, &opened)?;
         fs::unlinkat(parent, name, AtFlags::REMOVEDIR)?;
         Ok(())
-    }
-
-    fn check_cancelled(&self) -> Result<(), TransferError> {
-        match self.cancel {
-            Some(cancel) => cancel.check(),
-            None => Ok(()),
-        }
     }
 
     /// Refuses an item other than the one the engine recorded, for example
@@ -225,11 +218,19 @@ impl Deletion<'_> {
     }
 }
 
+/// The device and inode `stat` describes.
 fn identity_of(stat: &Stat) -> ItemIdentity {
     ItemIdentity {
         device: stat.st_dev,
         inode: stat.st_ino,
     }
+}
+
+/// Refuses to continue when `name` in `parent` no longer leads to the
+/// folder that was `opened`.
+fn require_still_named(parent: BorrowedFd<'_>, name: &OsStr, opened: &Stat) -> Result<(), TransferError> {
+    let current = fs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)?;
+    require_same_item(opened, &current)
 }
 
 /// Refuses to continue when a name no longer leads to the folder that was

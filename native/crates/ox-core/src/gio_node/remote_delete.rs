@@ -5,7 +5,7 @@
 //!
 //! Ports `GioNode._delete_recursive` in `desktop/gio_backend.py`.
 //!
-//! Rules enforced here:
+//! Rules enforced here (XFER-015):
 //! - Every item is inspected without following symbolic links. Only real
 //!   folders are entered; links, shortcuts, mountables and special files
 //!   are deleted as items, so a link's target is never touched.

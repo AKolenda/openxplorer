@@ -1,17 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Synchronous GIO/GVfs adapter for the transfer engine.
 //!
-//! Ports `GioNode` in `desktop/gio_backend.py`. Calls belong on a worker,
-//! never the GTK main thread. Metadata queries and enumeration never follow
-//! symbolic links (`query`). Moves, the no-replace publishing of local
-//! copies and the MTP device restrictions live in `move_item`.
+//! Ports `GioNode` in `desktop/gio_backend.py`. Calls block, so they belong
+//! on a worker, never the GTK main thread. The transfer rules this adapter
+//! enforces carry the feature ids of [`crate::transfer`]:
+//!
+//! | Module | Responsibility |
+//! |---|---|
+//! | `query` | Metadata and listings that never follow links (XFER-017) |
+//! | `move_item` | Native moves (XFER-011), no-replace publishing (XFER-007) and MTP renames (XFER-024) |
+//! | `removal` | Trash (XFER-014) and permanent deletion (XFER-015) |
+//! | `local_delete` | Deletion relative to pinned folder descriptors |
+//! | `remote_delete` | Deletion by path on shares and phones |
 //!
 //! Permanent deletion of a local item, and cleanup of local staging, run
-//! relative to pinned folder descriptors (`local_delete`), so a folder
-//! swapped for a symbolic link during the deletion cannot redirect it.
-//! Remote locations (SMB shares, phones) can only be deleted by path
-//! (`remote_delete`), exactly as the Python app, Nautilus and Dolphin do.
-//! MTP behaviour is regression-tested with simulated devices, not hardware.
+//! relative to pinned folder descriptors, so a folder swapped for a
+//! symbolic link during the deletion cannot redirect it. Remote locations
+//! (SMB shares, phones) can only be deleted by path, exactly as the Python
+//! app, Nautilus and Dolphin do. MTP behaviour is regression-tested with
+//! simulated devices, not hardware.
 
 mod local_delete;
 mod move_item;
@@ -25,7 +32,9 @@ use std::path::PathBuf;
 use gio::prelude::*;
 
 use crate::location::split_location;
-use crate::transfer::{clean_staging, Cancellation, ItemIdentity, Node, NodeInfo, TransferError, WriteGuard};
+use crate::transfer::{
+    check_cancelled, clean_staging, Cancellation, ItemIdentity, Node, NodeInfo, TransferError, WriteGuard,
+};
 
 /// A file or folder addressed through GIO, including `GVfs` remote backends.
 #[derive(Clone, Debug)]
@@ -65,7 +74,7 @@ impl GioNode {
         }
     }
 
-    /// Refuses filesystem roots, whole shares and whole devices, like
+    /// OPS-035: refuses filesystem roots, whole shares and whole devices, like
     /// `require_item_uri` in `desktop/core.py`.
     fn require_item(&self) -> Result<(), TransferError> {
         if self.file.parent().is_none() {
@@ -84,6 +93,8 @@ impl Node for GioNode {
     }
 
     fn name(&self) -> OsString {
+        // Only a URI without a path has no base name; its URI is the only
+        // name left to show.
         match self.file.basename() {
             Some(name) => name.into_os_string(),
             None => OsString::from(self.uri()),
@@ -114,7 +125,7 @@ impl Node for GioNode {
     }
 
     fn is_directory(&self, cancel: Option<&Cancellation>) -> Result<bool, TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
         // Follows links on purpose: a destination reached through a link to
         // a folder is a folder, as in the Python app.
         let info = self.file.query_info(
@@ -130,7 +141,8 @@ impl Node for GioNode {
     }
 
     fn mkdir(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
+        // XFER-002: `make_directory` is exclusive and fails on a taken name.
         self.file.make_directory(gio_cancellable(cancel))?;
         Ok(())
     }
@@ -144,8 +156,9 @@ impl Node for GioNode {
         cancel.check()?;
         let target_file = gio::File::for_uri(&target.uri());
         let mut report = |current: i64, total: i64| progress(byte_count(current), byte_count(total));
-        // Without OVERWRITE the copy refuses an existing target, which keeps
-        // the engine's "never overwrite" rule for staging and uploads.
+        // XFER-002: without OVERWRITE the copy refuses an existing target,
+        // which keeps the engine's "never overwrite" rule for staging and
+        // uploads. XFER-017: a link is copied as a link.
         self.file.copy(
             &target_file,
             gio::FileCopyFlags::NOFOLLOW_SYMLINKS,
@@ -212,8 +225,8 @@ impl Node for GioNode {
         self.is_mtp()
     }
 
-    fn native_copy_keeps_name(&self, target_dir: &dyn Node) -> bool {
-        let target_uri = target_dir.uri();
+    fn native_copy_keeps_name(&self, target_folder: &dyn Node) -> bool {
+        let target_uri = target_folder.uri();
         let target_is_mtp = gio::File::for_uri(&target_uri).has_uri_scheme("mtp");
         self.is_mtp() && target_is_mtp && same_authority(&self.uri(), &target_uri)
     }
@@ -235,8 +248,8 @@ fn same_authority(first: &str, second: &str) -> bool {
     }
 }
 
-/// A byte count from GIO's progress callback; GIO never reports a negative
-/// one, and a broken backend's is shown as zero.
+/// A size or byte count from GIO. GIO never reports a negative one; a
+/// broken backend's is shown as zero.
 fn byte_count(value: i64) -> u64 {
     u64::try_from(value).unwrap_or(0)
 }
@@ -244,13 +257,4 @@ fn byte_count(value: i64) -> u64 {
 /// The GIO cancellable behind an optional cancellation, for GIO calls.
 fn gio_cancellable(cancel: Option<&Cancellation>) -> Option<&gio::Cancellable> {
     cancel.map(Cancellation::cancellable)
-}
-
-/// Stops before the next step when the user cancelled; without a
-/// cancellation there is nothing to check.
-fn check(cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-    match cancel {
-        Some(cancel) => cancel.check(),
-        None => Ok(()),
-    }
 }
