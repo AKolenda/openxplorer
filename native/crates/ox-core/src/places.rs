@@ -61,21 +61,21 @@ impl Place {
     }
 }
 
-/// The six Quick access standard folders, read from `user-dirs.dirs` now
-/// (see [`FolderLocations::read_paths`]). Creates no folder and moves
-/// nothing.
-pub fn known_folders() -> Vec<Place> {
-    FolderLocations::from_environment()
-        .read_paths()
-        .quick_access_places()
-}
-
 /// Known folders and user pins, respecting hidden folders and saved order.
 /// Reads `user-dirs.dirs` on every call, as the Python app does. For local
 /// CIFS/SMB3 mount badges, use [`compose_quick_access`] with the current
 /// network mount paths.
 pub fn quick_access(settings: &SettingsData) -> Vec<Place> {
-    compose_quick_access(settings, &known_folders(), &[])
+    compose_quick_access(settings, &quick_access_folders(), &[])
+}
+
+/// The Quick access rows of the six standard folders
+/// ([`KnownFolder::QUICK_ACCESS`]), read from `user-dirs.dirs` now (see
+/// [`FolderLocations::read_paths`]). Creates no folder and moves nothing.
+fn quick_access_folders() -> Vec<Place> {
+    FolderLocations::from_environment()
+        .read_paths()
+        .quick_access_places()
 }
 
 /// Combines the known-folder rows with settings, retaining built-in labels

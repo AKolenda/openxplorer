@@ -444,7 +444,8 @@ fn a_readable_file_is_replaced_without_a_backup() {
 }
 
 /// Refused files stay refused: moving a hard-linked settings.json aside
-/// would undo the refusal.
+/// would undo the refusal. The change would keep an unreadable file as a
+/// backup, but the checks before the save refuse this one first.
 /// parity: SAFE-009
 #[test]
 fn a_change_never_moves_a_refused_file() {
@@ -472,4 +473,18 @@ fn a_change_never_moves_a_refused_file() {
     );
     assert_eq!(fs::metadata(&original).unwrap().nlink(), 2);
     assert_eq!(backups(&directory), Vec::<String>::new());
+}
+
+/// Safety rule "never erase unreadable settings": only a file that was
+/// read completely, or that a change has just written, is replaced
+/// without a backup.
+/// parity: SET-013
+#[test]
+fn only_a_completely_read_file_is_replaced_without_a_backup() {
+    let unreadable = FileState::Unreadable("Could not fully read settings.".into());
+    let backed_up = FileState::BackedUp("Kept as settings.json.unreadable-1-a.".into());
+
+    assert_eq!(FileState::Sound.old_file(), OldFile::Discard);
+    assert_eq!(backed_up.old_file(), OldFile::Discard);
+    assert_eq!(unreadable.old_file(), OldFile::KeepAsBackup);
 }

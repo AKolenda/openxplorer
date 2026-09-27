@@ -4,8 +4,8 @@
 //! Ports the `flock` of `settings_mutation` and the temporary-file-and-
 //! rename of `Settings.save` in `desktop/core.py`, built on the checks in
 //! `crate::private_storage`, whose [`StorageError`] every step here
-//! returns. Keeping a damaged file as a backup ([`OldFile::KeepAsBackup`])
-//! goes beyond the Python app.
+//! returns. Keeping an unreadable file as a backup
+//! ([`OldFile::KeepAsBackup`]) goes beyond the Python app.
 
 use std::fs::{self, File, OpenOptions, Permissions};
 use std::io::{self, Write};
@@ -89,23 +89,37 @@ pub(super) fn replace_private_file(
     // target is refused here, before anything is written. Only the check
     // matters; the opened file is closed at once.
     private_file_if_present(target, PrivateFileOptions::default())?;
-    let mut temporary = UniqueFile::create(directory, prefix)?;
-    let published = write_and_publish(&mut temporary, target, contents, old_file);
-    if published.is_err() {
-        // The rename did not happen; do not leave the partial copy behind.
-        let _ = fs::remove_file(&temporary.path);
-    }
-    let backup = published?;
+    let temporary = UniqueFile::create(directory, prefix)?;
+    let backup = publish_or_discard(temporary, target, contents, old_file)?;
     sync_directory(directory);
     Ok(backup)
 }
 
+/// [`write_and_publish`], removing the temporary file if any step fails.
+///
+/// Safety rule "a failed save leaves no temporary file": a change that
+/// fails leaves the settings directory with the files it had before.
+fn publish_or_discard(
+    mut temporary: UniqueFile,
+    target: &Path,
+    contents: &[u8],
+    old_file: OldFile,
+) -> Result<Option<PathBuf>, StorageError> {
+    let published = write_and_publish(&mut temporary, target, contents, old_file);
+    if published.is_err() {
+        // Safety rule "a failed save leaves no temporary file": the new
+        // file never took the target's place, so the copy is useless.
+        // Removing it is best effort; a leftover is private and named with
+        // the temporary prefix.
+        let _ = fs::remove_file(&temporary.path);
+    }
+    published
+}
+
 /// Writes and flushes the temporary file, keeps the old target if asked,
 /// and renames the temporary file over the target. The explicit `fchmod`
-/// makes the mode exactly 0600 whatever the umask.
-///
-/// The old file is moved aside only once the new contents are on disk, and
-/// moved back if the final rename fails, so `target` is never left missing.
+/// makes the mode exactly 0600 whatever the umask. The old file is moved
+/// aside only once the new contents are on disk.
 fn write_and_publish(
     temporary: &mut UniqueFile,
     target: &Path,
@@ -122,14 +136,26 @@ fn write_and_publish(
         OldFile::KeepAsBackup => move_aside(target)?,
         OldFile::Discard => None,
     };
-    if let Err(error) = fs::rename(path, target) {
-        if let Some(backup) = &backup {
-            // Best effort: if this fails too, the backup still holds it.
-            let _ = fs::rename(backup, target);
-        }
-        return Err(StorageError::io(target, error));
-    }
+    publish(path, target, backup.as_deref())?;
     Ok(backup)
+}
+
+/// Renames the written `temporary` file over `target`.
+///
+/// Safety rule "the settings file is never left missing": if the rename
+/// fails after the old file was moved to `backup`, the old file is renamed
+/// back to `target`.
+fn publish(temporary: &Path, target: &Path, backup: Option<&Path>) -> Result<(), StorageError> {
+    let Err(error) = fs::rename(temporary, target) else {
+        return Ok(());
+    };
+    if let Some(backup) = backup {
+        // Safety rule "the settings file is never left missing". Best
+        // effort: if this fails too, the backup still holds the old
+        // contents.
+        let _ = fs::rename(backup, target);
+    }
+    Err(StorageError::io(target, error))
 }
 
 /// Renames `path` to an unused `<name>.unreadable-<unix seconds>-<random>`
@@ -272,5 +298,40 @@ mod tests {
         let backup = replace_private_file(&target, ".settings-", b"{}", OldFile::KeepAsBackup).unwrap();
         assert_eq!(backup, None);
         assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+    }
+
+    /// Safety rule "the settings file is never left missing".
+    /// parity: SET-012
+    #[test]
+    fn a_failed_publish_puts_the_kept_file_back() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("settings.json");
+        let backup = root.path().join("settings.json.unreadable-1-kept");
+        fs::write(&backup, "{bad").unwrap();
+        let missing_temporary = root.path().join(".settings-missing");
+
+        let published = publish(&missing_temporary, &target, Some(&backup));
+
+        assert!(published.is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "{bad");
+        assert!(!backup.exists());
+    }
+
+    /// Safety rule "a failed save leaves no temporary file".
+    /// parity: SET-012
+    #[test]
+    fn a_failed_save_removes_its_temporary_file() {
+        let root = tempfile::tempdir().unwrap();
+        let temporary = UniqueFile::create(root.path(), ".settings-").unwrap();
+        let target_in_missing_directory = root.path().join("missing/settings.json");
+
+        let saved = publish_or_discard(temporary, &target_in_missing_directory, b"{}", OldFile::Discard);
+
+        assert!(saved.is_err());
+        assert_eq!(
+            fs::read_dir(root.path()).unwrap().count(),
+            0,
+            "no temporary file remains"
+        );
     }
 }

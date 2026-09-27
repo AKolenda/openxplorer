@@ -18,6 +18,7 @@ use ox_core::settings::{Bookmark, SettingsData};
 use python_support::run_python;
 use serde_json::Value;
 
+/// A pin or share as the settings store it.
 fn bookmark(uri: &str, label: &str) -> Bookmark {
     Bookmark {
         uri: uri.into(),
@@ -33,12 +34,12 @@ fn saved(uri: &str, label: &str) -> SavedShare {
     }
 }
 
-/// A known-folder row of the Documents folder.
-fn place(uri: &str, label: &str) -> Place {
+/// The Quick access row of the standard folder `folder`, found at `uri`.
+fn known_folder_row(folder: KnownFolder, uri: &str) -> Place {
     Place {
         uri: uri.into(),
-        label: label.into(),
-        known_folder: Some(KnownFolder::Documents),
+        label: folder.label().into(),
+        known_folder: Some(folder),
         is_shared: false,
     }
 }
@@ -56,8 +57,8 @@ fn mounted(uri: &str, label: &str) -> NetworkMount {
 #[test]
 fn quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order() {
     let known = [
-        place("file:///home/demo/Desktop", "Desktop"),
-        place("file:///home/demo/Documents", "Documents"),
+        known_folder_row(KnownFolder::Desktop, "file:///home/demo/Desktop"),
+        known_folder_row(KnownFolder::Documents, "file:///home/demo/Documents"),
     ];
     let settings = SettingsData {
         hidden_quick: vec![known[0].uri.clone()],
@@ -79,9 +80,11 @@ fn quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order() {
 /// parity: NET-006
 #[test]
 fn mount_badges_respect_path_boundaries_and_escaping() {
+    // Documents lives on the share mounted at "/mnt/Team (1)"; Downloads
+    // lives in a local folder whose name only starts the same way.
     let known = [
-        place("file:///mnt/Team%20%281%29/Docs", "Shared"),
-        place("file:///mnt/Team%20%281%29-other", "Local"),
+        known_folder_row(KnownFolder::Documents, "file:///mnt/Team%20%281%29/Docs"),
+        known_folder_row(KnownFolder::Downloads, "file:///mnt/Team%20%281%29-other"),
     ];
     let rows = compose_quick_access(
         &SettingsData::default(),

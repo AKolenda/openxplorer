@@ -90,8 +90,9 @@ impl StorageError {
     }
 
     /// Whether this is a missing file or directory, which Python reports as
-    /// `FileNotFoundError` and most callers treat as "nothing there yet".
-    pub(crate) fn is_not_found(&self) -> bool {
+    /// `FileNotFoundError` and [`private_file_if_present`] treats as
+    /// "nothing there yet".
+    fn is_not_found(&self) -> bool {
         matches!(self, Self::Io { error, .. } if error.kind() == io::ErrorKind::NotFound)
     }
 }

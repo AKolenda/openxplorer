@@ -21,9 +21,7 @@ use super::preferences::PreferencesUpdate;
 use super::python_conversions::{python_count, python_str};
 use super::{FileState, Settings, SettingsError};
 use crate::location::{normalise, require_share, safe_label, LocationError};
-use crate::private_storage::{
-    private_directory, private_file, read_limited_text, PrivateFileOptions, StorageError, StorageRefusal,
-};
+use crate::private_storage::{private_directory, private_file, read_limited_text, PrivateFileOptions};
 
 /// Largest settings file read, in bytes: the default limit of
 /// `private_text` in `desktop/private_storage.py`.
@@ -37,62 +35,38 @@ type LocationCheck = fn(&str) -> Result<String, LocationError>;
 /// `settings`, which starts as the defaults. Sections read before a problem
 /// are kept, as in Python.
 pub(super) fn read_file(directory: &Path, settings: &mut SettingsData) -> FileState {
-    match try_read_file(directory, settings) {
+    let outcome = try_read_file(directory, settings);
+    file_state_after(outcome)
+}
+
+/// The state a read left the file in.
+fn file_state_after(outcome: Result<(), SettingsError>) -> FileState {
+    match outcome {
         Ok(()) => FileState::Sound,
         // No file yet is a first start, not a problem (Python's
         // `except FileNotFoundError: pass`).
-        Err(ReadFailure::Refused(error)) if error.is_not_found() => FileState::Sound,
-        Err(ReadFailure::Refused(error)) => FileState::Refused(read_warning(&error)),
-        Err(ReadFailure::Damaged(error)) => FileState::Damaged(read_warning(&error)),
+        Err(error) if error.is_not_found() => FileState::Sound,
+        // Safety rule "never erase unreadable settings": whatever else
+        // stopped the read (a refusal, an I/O error such as `EIO` after the
+        // file was opened, or unusable contents), the file is unreadable, so
+        // `FileState::old_file` keeps it when the next change is saved.
+        Err(error) => FileState::Unreadable(read_warning(&error)),
     }
 }
 
-/// Why `settings.json` was not fully read.
-#[derive(Debug)]
-enum ReadFailure {
-    /// A private-storage check refused the file or its directory.
-    Refused(StorageError),
-    /// The file is private but its contents are unusable.
-    Damaged(SettingsError),
-}
-
-impl ReadFailure {
-    /// Reading an opened file fails either in the operating system, which
-    /// says nothing about the contents, or on the contents themselves: too
-    /// large, or not UTF-8 text.
-    ///
-    /// The split decides what the next change does with the file: a
-    /// damaged one is kept as a backup, a refused one is never touched
-    /// (see `Settings::save_while_locked`). The match names every variant
-    /// and reason, so a new one must be placed on one side deliberately.
-    fn from_reading(error: StorageError) -> Self {
-        match error {
-            StorageError::Refused {
-                reason: StorageRefusal::TooLarge | StorageRefusal::NotText,
-                ..
-            } => Self::Damaged(error.into()),
-            StorageError::Refused {
-                reason: StorageRefusal::ForeignDirectory | StorageRefusal::NotPrivateFile,
-                ..
-            }
-            | StorageError::Io { .. } => Self::Refused(error),
-        }
-    }
-}
-
-/// [`read_file`], telling a refused file from a damaged one: the storage
-/// checks come first, then the contents.
-fn try_read_file(directory: &Path, settings: &mut SettingsData) -> Result<(), ReadFailure> {
+/// [`read_file`], stopping at the first problem: the private-storage checks
+/// of the directory and the file come first, then the contents.
+fn try_read_file(directory: &Path, settings: &mut SettingsData) -> Result<(), SettingsError> {
     // Reading never creates the directory, but one that exists (or a
     // symlink in its place) must pass the private-directory check.
     if directory.exists() || directory.is_symlink() {
-        private_directory(directory).map_err(ReadFailure::Refused)?;
+        private_directory(directory)?;
     }
     let path = directory.join(Settings::FILE_NAME);
-    let file = private_file(&path, PrivateFileOptions::default()).map_err(ReadFailure::Refused)?;
-    let text = read_limited_text(file, &path, SETTINGS_SIZE_LIMIT).map_err(ReadFailure::from_reading)?;
-    let source = parse_json(&text).map_err(ReadFailure::Damaged)?;
-    read_sections(&source, settings).map_err(ReadFailure::Damaged)
+    let file = private_file(&path, PrivateFileOptions::default())?;
+    let text = read_limited_text(file, &path, SETTINGS_SIZE_LIMIT)?;
+    let source = parse_json(&text)?;
+    read_sections(&source, settings)
 }
 
 /// The file's text as JSON; the error keeps serde's line and column.
@@ -160,13 +134,22 @@ fn location_section(
 ) -> Result<Vec<String>, SettingsError> {
     match sections.get(key) {
         None => Ok(Vec::new()),
-        Some(Value::String(text)) => Ok(text.chars().take(limit).map(String::from).collect()),
+        Some(Value::String(text)) => {
+            let characters = text.chars().take(limit);
+            Ok(characters.map(String::from).collect())
+        }
         Some(Value::Array(items)) => {
-            let as_text = |item: &Value| item.as_str().unwrap_or_default().to_owned();
-            Ok(items.iter().take(limit).map(as_text).collect())
+            let first_items = items.iter().take(limit);
+            Ok(first_items.map(location_text).collect())
         }
         Some(_) => Err(wrong_type(key)),
     }
+}
+
+/// A location item as text; an item that is not a string becomes an empty
+/// string, which never normalises.
+fn location_text(item: &Value) -> String {
+    item.as_str().unwrap_or_default().to_owned()
 }
 
 /// The warning for a section that is neither a list nor a string.
@@ -232,10 +215,13 @@ fn normalised_without_duplicates(locations: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use serde_json::json;
 
     use super::*;
     use crate::settings::model::MAX_NAME_CHARS;
+    use crate::settings::save::OldFile;
     use crate::settings::{Column, Theme};
 
     /// What reading one parsed file produced.
@@ -249,6 +235,41 @@ mod tests {
         let mut settings = SettingsData::default();
         let problem = read_sections(source, &mut settings).err();
         Outcome { settings, problem }
+    }
+
+    /// A read of `settings.json` that failed with the operating-system
+    /// error `error`.
+    fn failed_read(error: io::Error) -> Result<(), SettingsError> {
+        Err(SettingsError::Io {
+            path: "/state/winspace/settings.json".into(),
+            error,
+        })
+    }
+
+    /// Safety rule "never erase unreadable settings": an I/O error after
+    /// the file was opened (`EIO` from a failing disk) says nothing about
+    /// its contents, so the next change keeps the file as a backup instead
+    /// of replacing it.
+    /// parity: SET-013
+    #[test]
+    fn a_read_error_after_opening_leaves_the_file_unreadable() {
+        let eio = io::Error::from_raw_os_error(libc::EIO);
+
+        let state = file_state_after(failed_read(eio));
+
+        assert!(matches!(state, FileState::Unreadable(_)), "{state:?}");
+        assert_eq!(state.old_file(), OldFile::KeepAsBackup);
+    }
+
+    /// A missing file is a first start, which Python reads without a
+    /// warning (`except FileNotFoundError: pass`).
+    #[test]
+    fn a_missing_file_is_read_without_a_warning() {
+        let missing = io::Error::from(io::ErrorKind::NotFound);
+
+        let state = file_state_after(failed_read(missing));
+
+        assert_eq!(state, FileState::Sound);
     }
 
     /// parity: SET-012, SAFE-010, SAFE-018

@@ -55,6 +55,12 @@ impl SettingsError {
     pub(super) fn invalid(message: impl Into<String>) -> Self {
         Self::Invalid(message.into())
     }
+
+    /// Whether this is a missing file or directory, which Python reports as
+    /// `FileNotFoundError` and the settings reader treats as a first start.
+    pub(super) fn is_not_found(&self) -> bool {
+        matches!(self, Self::Io { error, .. } if error.kind() == io::ErrorKind::NotFound)
+    }
 }
 
 /// A private-storage error keeps its path, reason and message.

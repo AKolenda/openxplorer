@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Shared settings in `$XDG_CONFIG_HOME/winspace/settings.json`.
 //!
-//! Ports `Settings` in `desktop/core.py` and `desktop/private_storage.py`.
-//! The Python application and this one use the same file, so the protocol
-//! matches exactly:
+//! Ports `Settings` in `desktop/core.py`, on the private storage of
+//! `crate::private_storage` (`desktop/private_storage.py`). The Python
+//! application and this one use the same file, so the protocol matches
+//! exactly:
 //!
 //! * Reading validates against a whitelist and never fails: unreadable
 //!   input yields safe defaults plus a [`warning`](Settings::warning).
@@ -16,9 +17,10 @@
 //!   back, so a change made here never erases a Python setting.
 //!
 //! One rule goes beyond the Python app: a change never erases a settings
-//! file whose contents could not be read. It is first renamed to
+//! file that could not be read completely. It is first renamed to
 //! `settings.json.unreadable-…` beside the new file, and the
-//! [`warning`](Settings::warning) says where it went.
+//! [`warning`](Settings::warning) says where it went. A file private storage
+//! refuses is never renamed: the change fails instead.
 //!
 //! The submodules split the work: `read` reads the file, `mutate` holds
 //! the changes, and `save` locks and writes. Reading and saving rely on
@@ -71,16 +73,37 @@ pub struct Settings {
 enum FileState {
     /// Read completely, or not created yet.
     Sound,
-    /// A private-storage check refused the file or its directory (a
-    /// symlink, hard link, other owner or I/O error). Changes are refused
-    /// too, and the file is never moved or replaced.
-    Refused(String),
-    /// The file is private, but its contents are too large, not UTF-8, not
-    /// JSON or of the wrong shape. The next change keeps it as a backup.
-    Damaged(String),
-    /// A change replaced a damaged file after keeping it as a backup; the
-    /// message names the backup.
+    /// Not read completely: private storage refused the file or its
+    /// directory (a symlink, hard link, FIFO, other owner, or an open that
+    /// failed), reading it failed, or its contents are too large, not UTF-8,
+    /// not JSON or of the wrong shape. The message says why. What the next
+    /// change does with the file is decided by [`FileState::old_file`].
+    Unreadable(String),
+    /// A change replaced an unreadable file after keeping it as a backup;
+    /// the message names the backup.
     BackedUp(String),
+}
+
+impl FileState {
+    /// What the next change does with the file this state describes.
+    ///
+    /// Safety rule "never erase unreadable settings" (a gain over
+    /// `Settings.save` in core.py): a file that was not read completely is
+    /// kept as a backup, whatever stopped the read. Keeping it never moves a
+    /// file private storage refuses, because [`replace_private_file`] runs
+    /// the same checks and fails before it writes or renames anything. If a
+    /// refusal has gone away since the read (an open that failed only once),
+    /// the file is still kept rather than replaced by settings that never
+    /// came from it. The match names every state, so a new one cannot fall
+    /// into [`OldFile::Discard`] unnoticed.
+    fn old_file(&self) -> OldFile {
+        match self {
+            // Safety rule "never erase unreadable settings".
+            FileState::Unreadable(_) => OldFile::KeepAsBackup,
+            // Read completely, or written by the last change: nothing is lost.
+            FileState::Sound | FileState::BackedUp(_) => OldFile::Discard,
+        }
+    }
 }
 
 impl Settings {
@@ -141,9 +164,7 @@ impl Settings {
     pub fn warning(&self) -> Option<&str> {
         match &self.file_state {
             FileState::Sound => None,
-            FileState::Refused(message) | FileState::Damaged(message) | FileState::BackedUp(message) => {
-                Some(message)
-            }
+            FileState::Unreadable(message) | FileState::BackedUp(message) => Some(message),
         }
     }
 
@@ -234,31 +255,29 @@ impl Settings {
         &mut self,
         change: impl FnOnce(&mut SettingsData) -> Result<T, SettingsError>,
     ) -> Result<T, SettingsError> {
-        let _lock = SettingsLock::acquire(&self.directory)?;
+        let lock = SettingsLock::acquire(&self.directory)?;
         let mut updated = self.clone();
         updated.reload();
         let result = change(&mut updated.data)?;
-        updated.save_while_locked()?;
+        updated.save_while_locked(&lock)?;
         *self = updated;
         Ok(result)
     }
 
-    /// Writes the data; the caller holds the [`SettingsLock`].
-    fn save_while_locked(&mut self) -> Result<(), SettingsError> {
-        // Safety rule "never erase unreadable settings" (a gain over
-        // `Settings.save` in core.py): damaged contents are kept as a backup.
-        // The match names every state, so a new one cannot fall into
-        // `Discard` unnoticed.
-        let old_file = match self.file_state {
-            FileState::Damaged(_) => OldFile::KeepAsBackup,
-            FileState::Sound | FileState::Refused(_) | FileState::BackedUp(_) => OldFile::Discard,
-        };
+    /// Writes the data, keeping an unreadable file as a backup (see
+    /// [`FileState::old_file`]).
+    ///
+    /// Safety rule "changes never interleave" (the `flock` of
+    /// `settings_mutation` in core.py): the borrowed [`SettingsLock`] proves
+    /// that the caller has held the lock since it re-read the file, so no
+    /// other window or Python process can change the file in between.
+    fn save_while_locked(&mut self, _lock: &SettingsLock) -> Result<(), SettingsError> {
         let contents = self.data.to_file_text();
         let backup = replace_private_file(
             &self.path(),
             Self::TEMPORARY_PREFIX,
             contents.as_bytes(),
-            old_file,
+            self.file_state.old_file(),
         )?;
         if let Some(backup) = backup {
             let message = format!(
