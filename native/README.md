@@ -45,13 +45,25 @@ sudo apt install libgtk-4-dev xvfb xauth dbus-x11
 python3 native/tools/check.py
 ```
 
-The driver checks inventory consistency, formatting and strict Clippy, compiles
-every test target, then runs the actual test binaries on Xvfb with private D-Bus
-sessions and disposable home/config/cache directories. It never connects tests
-to the user's desktop or remote volume monitors. The hosted CI workflow uses
-the minimum supported Rust version and the same driver. Its result is native
-GTK/GIO **local** validation; simulated MTP tests do not certify phone hardware,
-and no SMB server is exercised by these checks.
+The driver runs the parity inventory checks, its own tests, rustfmt and strict
+Clippy, and compiles every test target. It then runs each test binary, and the
+doctests, on its own Xvfb display with a private D-Bus session and disposable
+home, config, cache and runtime directories, so tests never see the user's
+display, session bus, settings or remote volume monitors. Each run starts in a
+new process session. When it finishes, fails or exceeds `--test-timeout` (180
+seconds by default), every process it started, including Xvfb and the bus
+daemon, is stopped before its temporary directories are deleted.
+
+This isolates the desktop session, not the filesystem: tests can still reach
+absolute paths, so they must write only inside temporary directories. GIO keeps
+using GVfs, because the app relies on its `smb://` and `mtp://` handling. Tests
+must not mount or do I/O on remote locations; transfer tests use simulated
+devices.
+
+The hosted CI workflow uses the minimum supported Rust version and the same
+driver, and runs the release-source and public-data policy tests in a separate
+job. Its result is native GTK/GIO **local** validation; simulated MTP tests do
+not certify phone hardware, and no SMB server is exercised by these checks.
 
 `python3 native/parity/check.py --require-replacement --gate replace --gate dolphin`
 deliberately fails while bridge operations, existing OpenXplorer behaviours or

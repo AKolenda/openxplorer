@@ -114,8 +114,9 @@ This checklist records requirements, not completed comparisons:
 2. Run `python3 native/tools/check.py` for inventory consistency, formatting,
    strict Clippy, core tests and real GTK integration tests in disposable
    sessions. Python 3 is required by settings interop tests. Require
-   `python3 native/parity/check.py --require-replacement` before replacement,
-   plus the separate UI and Dolphin acceptance checks above.
+   `python3 native/parity/check.py --require-replacement --gate replace --gate dolphin`
+   before replacement (see [parity/README.md](parity/README.md)), plus the
+   manual UI and Dolphin acceptance checks above.
 3. Exercise real SMB authentication/reconnect, removable devices, Trash,
    concurrent settings writers, conflict/cancellation/recovery and accessibility.
    Headless GTK and local GIO tests cannot substitute for these checks.
