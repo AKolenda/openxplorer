@@ -1,181 +1,201 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Compatibility cases captured from desktop/core.py; see location_fixtures/README.md.
+//! Compares the location functions with `desktop/core.py`, using the
+//! answers `generate_python.py` captured in `python.json`; see
+//! `location_fixtures/README.md`. `location_fixture_drift.rs` proves the
+//! captured answers are still what `core.py` says.
 
-use std::path::Path;
+#[path = "location_fixtures/support.rs"]
+mod support;
 
-use ox_core::location::{self, LocationError};
-use serde_json::Value;
+use std::fmt::Debug;
+use std::path::PathBuf;
 
-const CORE_MESSAGES: &[&str] = &[
-    "A connected-device address must include a device identifier and path.",
-    "Invalid connected-device identifier.",
-    "Encoded control characters are not allowed.",
-    "Enter a non-empty file name, not “.” or “..”.",
-    "A name cannot contain slashes or control characters.",
-    "This name is longer than 255 bytes.",
-    "Enter a local folder path or an SMB address.",
-    "Control characters are not allowed in an address.",
-    "Use a server name without credentials, for example \\\\nas\\share.",
-    "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share.",
-    "Only local paths, smb:// locations and connected devices are supported in this build.",
-    "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.",
-    "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.",
-    "For network folders, use smb://server/share rather than file://server/…",
-    "A file URL must contain an absolute path.",
-    "Use an unescaped server name without credentials or control characters.",
-    "Enter an SMB server name, for example smb://nas/Projects.",
-    "Invalid SMB port.",
-    "Enter a shared folder such as \\\\nas\\Projects, not only the server name.",
-    "This file name is too long to generate a duplicate name.",
-    "A sidebar label must be at most 120 characters and contain no control characters.",
-    "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here.",
-    "Open the device storage first, then select files or folders inside it. The device itself cannot be moved or copied.",
-];
+use ox_core::location::{self, LocationError, LocationParts};
+use serde::Deserialize;
+use support::{parse_fixture, Case, Mismatches, Outcome};
 
-fn compare(
-    label: &str,
-    input: &str,
-    expected: &Value,
-    actual: Result<String, LocationError>,
-    failures: &mut Vec<String>,
-) {
-    let ok = match (expected.get("ok"), &actual) {
-        (Some(want), Ok(got)) => want.as_str() == Some(got.as_str()),
-        (None, Err(error)) => match expected["err"].as_str() {
-            Some(message) if CORE_MESSAGES.contains(&message) => message == error.0,
-            _ => true,
-        },
-        _ => false,
-    };
-    if !ok {
-        failures.push(format!("{label} {input:?}: python {expected} rust {actual:?}"));
+/// The tables of `python.json` this file checks.
+#[derive(Debug, Deserialize)]
+struct PythonFixture {
+    /// The home folder `core.py` resolved `~` and relative names against.
+    home: PathBuf,
+    normalise: Vec<Case>,
+    relative: Vec<RelativeCase>,
+    names: Vec<Case>,
+    copies: Vec<CopyNameCase>,
+    labels: Vec<LabelCase>,
+    items: Vec<Case>,
+    shares: Vec<Case>,
+    servers: Vec<ServerCase>,
+    devices: Vec<DeviceCase>,
+    splits: Vec<Case<SplitParts>>,
+}
+
+/// A name typed in a folder: `normalise_location(input, base)`.
+#[derive(Debug, Deserialize)]
+struct RelativeCase {
+    input: String,
+    base: String,
+    outcome: Outcome<String>,
+}
+
+/// `new_copy_name(name, number, is_dir)`: the "Keep both" name.
+#[derive(Debug, Deserialize)]
+struct CopyNameCase {
+    name: String,
+    number: u32,
+    is_dir: bool,
+    outcome: Outcome<String>,
+}
+
+/// `safe_label(input, fallback)`: a sidebar label.
+#[derive(Debug, Deserialize)]
+struct LabelCase {
+    input: String,
+    fallback: String,
+    outcome: Outcome<String>,
+}
+
+/// `is_smb_server(input)`.
+#[derive(Debug, Deserialize)]
+struct ServerCase {
+    input: String,
+    is_server: bool,
+}
+
+/// `is_device_location(input)`.
+#[derive(Debug, Deserialize)]
+struct DeviceCase {
+    input: String,
+    is_device: bool,
+}
+
+/// Python's `SplitResult` fields, compared with [`LocationParts`].
+#[derive(Debug, PartialEq, Deserialize)]
+struct SplitParts {
+    scheme: String,
+    netloc: String,
+    path: String,
+    query: String,
+    fragment: String,
+}
+
+impl From<LocationParts> for SplitParts {
+    fn from(parts: LocationParts) -> Self {
+        Self {
+            scheme: parts.scheme,
+            netloc: parts.netloc,
+            path: parts.path,
+            query: parts.query,
+            fragment: parts.fragment,
+        }
     }
 }
 
+fn fixture() -> PythonFixture {
+    parse_fixture(include_str!("location_fixtures/python.json"))
+}
+
+/// Checks the Rust `ported` function against every case of a one-argument
+/// table of `function`.
+fn assert_cases_match<T: PartialEq + Debug>(
+    function: &'static str,
+    cases: &[Case<T>],
+    ported: impl Fn(&str) -> Result<T, LocationError>,
+) {
+    let mut mismatches = Mismatches::new(function);
+    for case in cases {
+        mismatches.expect_outcome(&case.input, &case.outcome, &ported(&case.input));
+    }
+    mismatches.assert_none();
+}
+
+/// parity: NAV-034, NAV-035, DEV-005, SAFE-010
 #[test]
-fn matches_python() {
-    let text = include_str!("location_fixtures/python.json");
-    let data: Value = serde_json::from_str(text).expect("json");
-    let home = Path::new("/home/test");
-    let mut failures = Vec::new();
-    for case in data["normalise"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        compare(
-            "normalise",
-            value,
-            &case[2],
-            location::normalise_location(value, None, home),
-            &mut failures,
-        );
+fn typed_addresses_are_normalised_like_core_py() {
+    let fixture = fixture();
+    assert_cases_match("normalise_location", &fixture.normalise, |input| {
+        location::normalise_location(input, None, &fixture.home)
+    });
+}
+
+/// parity: NAV-034
+#[test]
+fn relative_names_resolve_against_their_folder_like_core_py() {
+    let fixture = fixture();
+    let mut mismatches = Mismatches::new("normalise_location with a base");
+    for case in &fixture.relative {
+        let actual = location::normalise_location(&case.input, Some(&case.base), &fixture.home);
+        mismatches.expect_outcome((&case.input, &case.base), &case.outcome, &actual);
     }
-    for case in data["relative"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        let base = case[1].as_str().unwrap();
-        let label = format!("relative to {base:?}");
-        compare(
-            &label,
-            value,
-            &case[2],
-            location::normalise_location(value, Some(base), home),
-            &mut failures,
-        );
+    mismatches.assert_none();
+}
+
+/// parity: OPS-006
+#[test]
+fn file_names_are_validated_like_core_py() {
+    assert_cases_match("validate_name", &fixture().names, |input| {
+        location::validate_name(input).map(str::to_string)
+    });
+}
+
+/// parity: XFER-008
+#[test]
+fn copy_names_are_chosen_like_core_py() {
+    let mut mismatches = Mismatches::new("new_copy_name");
+    for case in &fixture().copies {
+        let actual = location::try_new_copy_name(&case.name, case.number, case.is_dir);
+        let input = (&case.name, case.number, case.is_dir);
+        mismatches.expect_outcome(input, &case.outcome, &actual);
     }
-    for case in data["names"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        compare(
-            "name",
-            value,
-            &case[1],
-            location::validate_name(value).map(str::to_string),
-            &mut failures,
-        );
+    mismatches.assert_none();
+}
+
+/// parity: SAFE-018
+#[test]
+fn sidebar_labels_are_validated_like_core_py() {
+    let mut mismatches = Mismatches::new("safe_label");
+    for case in &fixture().labels {
+        let actual = location::safe_label(&case.input, &case.fallback);
+        mismatches.expect_outcome((&case.input, &case.fallback), &case.outcome, &actual);
     }
-    for case in data["copies"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        let count = case[1].as_u64().unwrap() as u32;
-        let is_dir = case[2].as_bool().unwrap();
-        let label = format!("copy {count} dir={is_dir}");
-        compare(
-            &label,
-            value,
-            &case[3],
-            location::try_new_copy_name(value, count, is_dir),
-            &mut failures,
-        );
+    mismatches.assert_none();
+}
+
+/// parity: OPS-035
+#[test]
+fn share_and_device_roots_are_not_operation_items_like_core_py() {
+    assert_cases_match("require_item_uri", &fixture().items, location::require_item_uri);
+}
+
+#[test]
+fn shared_folders_are_required_like_core_py() {
+    assert_cases_match("require_share", &fixture().shares, location::require_share);
+}
+
+#[test]
+fn smb_server_listings_are_recognised_like_core_py() {
+    let mut mismatches = Mismatches::new("is_smb_server");
+    for case in &fixture().servers {
+        let actual = location::is_smb_server(&case.input);
+        mismatches.expect_equal(&case.input, &case.is_server, &actual);
     }
-    for case in data["labels"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        let fallback = case[1].as_str().unwrap();
-        compare(
-            "label",
-            value,
-            &case[2],
-            location::safe_label(value, fallback),
-            &mut failures,
-        );
+    mismatches.assert_none();
+}
+
+#[test]
+fn device_locations_are_recognised_like_core_py() {
+    let mut mismatches = Mismatches::new("is_device_location");
+    for case in &fixture().devices {
+        let actual = location::is_device_location(&case.input);
+        mismatches.expect_equal(&case.input, &case.is_device, &actual);
     }
-    for case in data["items"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        compare(
-            "item",
-            value,
-            &case[1],
-            location::require_item_uri(value),
-            &mut failures,
-        );
-    }
-    for case in data["shares"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        compare(
-            "share",
-            value,
-            &case[1],
-            location::require_share(value),
-            &mut failures,
-        );
-    }
-    for case in data["servers"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        if location::is_smb_server(value) != case[1].as_bool().unwrap() {
-            failures.push(format!("server {value:?}: python {}", case[1]));
-        }
-    }
-    for case in data["devices"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        if location::is_device_location(value) != case[1].as_bool().unwrap() {
-            failures.push(format!("device {value:?}: python {}", case[1]));
-        }
-    }
-    for case in data["splits"].as_array().unwrap() {
-        let value = case[0].as_str().unwrap();
-        let actual = location::split_location(value);
-        let expected = &case[1];
-        let ok = match (expected.get("ok"), &actual) {
-            (Some(want), Ok(parts)) => {
-                let got = [
-                    &parts.scheme,
-                    &parts.netloc,
-                    &parts.path,
-                    &parts.query,
-                    &parts.fragment,
-                ];
-                want.as_array()
-                    .unwrap()
-                    .iter()
-                    .zip(got)
-                    .all(|(w, g)| w.as_str() == Some(g.as_str()))
-            }
-            (None, Err(_)) => true,
-            _ => false,
-        };
-        if !ok {
-            failures.push(format!("split {value:?}: python {expected} rust {actual:?}"));
-        }
-    }
-    assert!(
-        failures.is_empty(),
-        "{} mismatches:\n{}",
-        failures.len(),
-        failures.join("\n")
-    );
+    mismatches.assert_none();
+}
+
+#[test]
+fn locations_are_split_like_core_py() {
+    assert_cases_match("split_location", &fixture().splits, |input| {
+        location::split_location(input).map(SplitParts::from)
+    });
 }
