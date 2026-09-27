@@ -5,9 +5,11 @@
 //! items and dividers, and the commands that are not ported yet shown
 //! disabled with the milestone that brings them.
 
+use gtk::glib;
 use gtk::prelude::*;
 
 use super::geometry::laid_out;
+use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
 use crate::window::menu_popover::MenuPopover;
 
@@ -188,4 +190,50 @@ fn the_view_menu_keeps_the_text_size_items_and_checks_the_current_view() {
     view.popdown();
     assert!(checked.contains(&"Large icons".to_owned()), "{checked:?}");
     assert!(!checked.contains(&"Details".to_owned()), "{checked:?}");
+}
+
+/// The text on the clipboard of `test`'s window.
+fn clipboard_text(test: &TestWindow) -> Option<String> {
+    let clipboard = test.window.clipboard();
+    let read = glib::MainContext::default().block_on(clipboard.read_text_future());
+    read.ok().flatten().map(|text| text.to_string())
+}
+
+#[gtk::test]
+fn copy_path_copies_the_selected_items_address_or_the_folders() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.activate("copy-path", None);
+    let folder = fixture.root().display().to_string();
+    assert_eq!(
+        clipboard_text(&test).as_deref(),
+        Some(folder.as_str()),
+        "nothing selected"
+    );
+    let message = test.window.chrome().message.text();
+    assert_eq!(
+        message.as_str(),
+        "Path copied. Sharing permissions are unchanged."
+    );
+    test.window.folder_model().select_only(1);
+    test.activate("copy-path", None);
+    let file = fixture.path("Notes 2.txt").display().to_string();
+    assert_eq!(
+        clipboard_text(&test).as_deref(),
+        Some(file.as_str()),
+        "one item selected"
+    );
+}
+
+#[gtk::test]
+fn copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most() {
+    let fixture = Fixture::standard();
+    let test = laid_out(Page::ThisPc.uri());
+    test.activate("copy-path", None);
+    let message = test.window.chrome().message.text();
+    assert_eq!(message.as_str(), "Open a folder first.");
+    test.window.navigate(&fixture.uri()).expect("the fixture folder");
+    test.wait_for_listing("the fixture folder");
+    test.window.folder_model().select_all();
+    assert!(!test.window.is_action_enabled("copy-path"), "one path at a time");
 }
