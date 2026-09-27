@@ -307,10 +307,15 @@ def check_formatting_and_lints() -> None:
 def check_rust_tests(test_timeout: float) -> int:
     """Run every test executable, then the doctests, each in isolation.
 
-    Returns the number of test executables that ran.
+    The tests inside one executable run one at a time, because they share one
+    process and one private session. Returns the number of test executables
+    that ran.
     """
     binaries = compiled_test_binaries()
     for binary in binaries:
+        # GTK is not thread-safe, and parallel tests in one process could call
+        # GTK and GDK from two threads at once. The tests of an executable also
+        # share its private display, session bus and HOME.
         run_isolated([str(binary), '--test-threads=1'], test_timeout)
     run_isolated(['cargo', 'test', '--workspace', '--doc', '--locked'], test_timeout)
     return len(binaries)

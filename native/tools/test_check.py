@@ -199,14 +199,22 @@ class EnvironmentTests(unittest.TestCase):
 
     def test_the_live_session_is_removed_and_user_directories_are_private(self) -> None:
         """No live-session variable survives, and every user directory is a new one in root."""
-        live_session = {'DISPLAY': ':0', 'WAYLAND_DISPLAY': 'wayland-0',
-                        'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus'}
+        # Listed here, not taken from check.LIVE_SESSION_VARIABLES, so that a
+        # variable dropped from that tuple makes this test fail.
+        live_session = {
+            'DISPLAY': ':0',
+            'WAYLAND_DISPLAY': 'wayland-0',
+            'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus',
+            'DBUS_SESSION_BUS_PID': '1234',
+            'SESSION_MANAGER': 'local/host:@/tmp/.ICE-unix/1234,unix/host:/tmp/.ICE-unix/1234',
+        }
         with tempfile.TemporaryDirectory(prefix='openxplorer-check-test-') as temporary:
             root = Path(temporary)
             with patch.dict(os.environ, live_session):
                 environment = check.isolated_environment(root)
             for name in live_session:
-                self.assertNotIn(name, environment)
+                with self.subTest(variable=name):
+                    self.assertNotIn(name, environment)
             for name in ('HOME', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME',
                          'XDG_STATE_HOME', 'XDG_RUNTIME_DIR'):
                 with self.subTest(variable=name):
