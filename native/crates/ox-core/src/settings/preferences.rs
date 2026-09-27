@@ -327,20 +327,16 @@ mod tests {
 
     use super::*;
 
-    fn update() -> PreferencesUpdate {
-        PreferencesUpdate::default()
-    }
-
     /// parity: SET-016
     #[test]
     fn defaults_match_the_python_app() {
-        let prefs = Preferences::default();
-        assert_eq!(prefs.theme, Theme::System);
-        assert_eq!(prefs.view, View::Details);
-        assert_eq!(prefs.context_menu, ContextMenu::Win10);
-        assert_eq!(prefs.network_interval, 60);
-        assert_eq!(prefs.text_size, 100);
-        assert!(prefs.auto_index && prefs.details && !prefs.show_hidden);
+        let preferences = Preferences::default();
+        assert_eq!(preferences.theme, Theme::System);
+        assert_eq!(preferences.view, View::Details);
+        assert_eq!(preferences.context_menu, ContextMenu::Win10);
+        assert_eq!(preferences.network_interval, 60);
+        assert_eq!(preferences.text_size, 100);
+        assert!(preferences.auto_index && preferences.details && !preferences.show_hidden);
     }
 
     /// The layout of `Settings.data['preferences']` in `desktop/core.py`.
@@ -358,20 +354,20 @@ mod tests {
     /// parity: SET-016, VIEW-045
     #[test]
     fn text_size_accepts_only_the_offered_sizes() {
-        let mut prefs = Preferences::default();
+        let mut preferences = Preferences::default();
         for size in TEXT_SIZES {
-            prefs.apply(&PreferencesUpdate {
+            preferences.apply(&PreferencesUpdate {
                 text_size: Some(size),
-                ..update()
+                ..PreferencesUpdate::default()
             });
-            assert_eq!(prefs.text_size, size);
+            assert_eq!(preferences.text_size, size);
         }
         for size in [0, 101, 201, 10_000] {
-            prefs.apply(&PreferencesUpdate {
+            preferences.apply(&PreferencesUpdate {
                 text_size: Some(size),
-                ..update()
+                ..PreferencesUpdate::default()
             });
-            assert_eq!(prefs.text_size, 200);
+            assert_eq!(preferences.text_size, 200);
         }
     }
 
@@ -399,17 +395,17 @@ mod tests {
     /// parity: SET-016
     #[test]
     fn network_intervals_outside_the_whitelist_are_ignored() {
-        let mut prefs = Preferences::default();
-        prefs.apply(&PreferencesUpdate {
+        let mut preferences = Preferences::default();
+        preferences.apply(&PreferencesUpdate {
             network_interval: Some(1),
-            ..update()
+            ..PreferencesUpdate::default()
         });
-        assert_eq!(prefs.network_interval, 60);
-        prefs.apply(&PreferencesUpdate {
+        assert_eq!(preferences.network_interval, 60);
+        preferences.apply(&PreferencesUpdate {
             network_interval: Some(300),
-            ..update()
+            ..PreferencesUpdate::default()
         });
-        assert_eq!(prefs.network_interval, 300);
+        assert_eq!(preferences.network_interval, 300);
     }
 
     /// parity: SET-016
@@ -418,12 +414,12 @@ mod tests {
         let values = json!({
             "theme": "dark", "view": "bogus", "contextMenu": "win11", "networkInterval": 1
         });
-        let mut prefs = Preferences::default();
-        prefs.apply(&PreferencesUpdate::from_json(&values).unwrap());
-        assert_eq!(prefs.theme, Theme::Dark);
-        assert_eq!(prefs.view, View::Details);
-        assert_eq!(prefs.context_menu, ContextMenu::Win11);
-        assert_eq!(prefs.network_interval, 60);
+        let mut preferences = Preferences::default();
+        preferences.apply(&PreferencesUpdate::from_json(&values).unwrap());
+        assert_eq!(preferences.theme, Theme::Dark);
+        assert_eq!(preferences.view, View::Details);
+        assert_eq!(preferences.context_menu, ContextMenu::Win11);
+        assert_eq!(preferences.network_interval, 60);
     }
 
     /// parity: SET-016

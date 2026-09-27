@@ -115,6 +115,7 @@ impl SettingsData {
         text
     }
 
+    /// The data with the format version, in the order the file lists it.
     fn file_layout(&self) -> FileLayout<'_> {
         FileLayout {
             version: SETTINGS_VERSION,
@@ -154,13 +155,15 @@ mod tests {
     #[test]
     fn file_text_uses_the_python_layout() {
         let text = SettingsData::default().to_file_text();
-        let keys: Vec<&str> = text
+
+        let top_level_keys: Vec<&str> = text
             .lines()
-            .filter(|line| line.starts_with("  \"") && !line.starts_with("    "))
+            .filter(|line| line.starts_with("  \""))
             .map(|line| line.trim().split('"').nth(1).unwrap())
             .collect();
+
         assert_eq!(
-            keys,
+            top_level_keys,
             [
                 "version",
                 "pins",

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The fixed choices of the `theme`, `view` and `contextMenu` preferences.
+//! The fixed choices of the `theme`, `view` and `contextMenu` preferences,
+//! and the [`Appearance`] a theme resolves to.
 //!
-//! Ports the whitelists in `update_preferences` (`desktop/core.py`). Each
+//! Ports the whitelists in `update_preferences` (`desktop/core.py`) and the
+//! light-or-dark decision of `applyTheme` (`desktop/ui/app.js`). Each
 //! choice serialises to the exact string both applications store in
 //! `settings.json`; [`from_key`](Theme::from_key) is the case-sensitive
 //! check Python's `value in (...)` makes, so anything else is ignored.
@@ -39,15 +41,25 @@ impl Theme {
         Self::ALL.into_iter().find(|theme| theme.as_str() == key)
     }
 
-    /// Whether this theme shows the dark palette on a desktop that does or
-    /// does not prefer dark (`applyTheme` in `desktop/ui/app.js`).
-    pub const fn is_dark(self, desktop_prefers_dark: bool) -> bool {
+    /// The appearance this theme draws on a desktop whose own colour scheme
+    /// is `desktop`: [`Theme::System`] follows the desktop, the others
+    /// ignore it (`applyTheme` in `desktop/ui/app.js`).
+    pub const fn appearance(self, desktop: Appearance) -> Appearance {
         match self {
-            Theme::System => desktop_prefers_dark,
-            Theme::Light => false,
-            Theme::Dark => true,
+            Theme::System => desktop,
+            Theme::Light => Appearance::Light,
+            Theme::Dark => Appearance::Dark,
         }
     }
+}
+
+/// The colours actually drawn: `data-theme` in `desktop/ui/app.js`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Appearance {
+    /// Light surfaces with dark text.
+    Light,
+    /// Dark surfaces with light text.
+    Dark,
 }
 
 /// How folders are shown (`preferences.view`).
@@ -121,6 +133,7 @@ mod tests {
         serde_json::to_value(choice).expect("a choice serialises to a string")
     }
 
+    /// parity: SET-016
     #[test]
     fn stored_values_match_the_keys() {
         for theme in Theme::ALL {
@@ -148,11 +161,12 @@ mod tests {
         assert_eq!(ContextMenu::from_key(""), None);
     }
 
+    /// parity: LOOK-003
     #[test]
     fn system_theme_follows_the_desktop() {
-        assert!(Theme::System.is_dark(true));
-        assert!(!Theme::System.is_dark(false));
-        assert!(!Theme::Light.is_dark(true));
-        assert!(Theme::Dark.is_dark(false));
+        assert_eq!(Theme::System.appearance(Appearance::Dark), Appearance::Dark);
+        assert_eq!(Theme::System.appearance(Appearance::Light), Appearance::Light);
+        assert_eq!(Theme::Light.appearance(Appearance::Dark), Appearance::Light);
+        assert_eq!(Theme::Dark.appearance(Appearance::Light), Appearance::Dark);
     }
 }
