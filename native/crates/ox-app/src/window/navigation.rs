@@ -12,7 +12,7 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::{self, is_device_location, parent_location, LocationError};
+use ox_core::location::{self, is_device_location, parent_location, LocationContext, LocationError};
 
 use crate::icons::{ArtKind, Glyph};
 use crate::locations::{self, Page};
@@ -299,31 +299,37 @@ impl BrowserWindow {
         self.set_action_enabled("back", can_go_back);
         self.set_action_enabled("forward", can_go_forward);
         self.set_action_enabled("up", parent_location(&uri).is_some());
-        let breadcrumbs = locations.breadcrumbs(&uri);
+        self.set_action_enabled("pin-folder", Page::from_uri(&uri).is_none());
+        self.render_address(&uri, &locations);
+        let search = &self.chrome().search;
+        search.set_folder_title(&locations.title_for(&uri));
+        search.set_enabled(Page::from_uri(&uri).is_none() && !is_device_location(&uri));
+        self.render_tabs();
+        self.sidebar().select(&uri);
+        self.render_landing();
+    }
+
+    /// Shows `uri` in the address bar: its icon, and its crumbs divided as
+    /// `renderNavigation` divides them.
+    fn render_address(&self, uri: &str, locations: &LocationContext) {
+        let breadcrumbs = locations.breadcrumbs(uri);
         let crumbs: Vec<CrumbButton> = breadcrumbs
             .iter()
             .enumerate()
             .map(|(index, crumb)| CrumbButton {
                 address: locations.display_location(&crumb.uri),
-                divider_before: location::crumb_divider(&uri, &breadcrumbs, index),
+                divider_before: location::crumb_divider(uri, &breadcrumbs, index),
                 crumb: crumb.clone(),
             })
             .collect();
-        let address = locations.display_location(&uri);
+        let address = locations.display_location(uri);
         let style = ArtStyle {
             appearance: self.skin().appearance(),
             scale: self.scale_factor(),
         };
         self.chrome()
             .address
-            .show_location(&crumbs, &address, address_icon(&uri), style);
-        let search = &self.chrome().search;
-        search.set_folder_title(&locations.title_for(&uri));
-        search.set_enabled(Page::from_uri(&uri).is_none() && !is_device_location(&uri));
-        self.set_action_enabled("pin-folder", Page::from_uri(&uri).is_none());
-        self.render_tabs();
-        self.sidebar().select(&uri);
-        self.render_landing();
+            .show_location(&crumbs, &address, address_icon(uri), style);
     }
 
     /// Redraws the tab strip.

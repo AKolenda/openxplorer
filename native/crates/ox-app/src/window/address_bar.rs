@@ -101,29 +101,13 @@ impl AddressBar {
             .spacing(2)
             .css_classes(["breadcrumbs"])
             .build();
-        // External: scrollable without a visible bar, and never asking the
-        // window to be as wide as the path.
-        let crumb_scroll = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::External)
-            .vscrollbar_policy(gtk::PolicyType::Never)
-            .propagate_natural_width(true)
-            .hexpand(true)
-            .child(&crumbs)
-            .build();
+        let crumb_scroll = crumb_scroller(&crumbs);
         let stack = gtk::Stack::builder().hexpand(true).hhomogeneous(false).build();
         stack.add_named(&crumb_scroll, Some(AddressMode::Crumbs.name()));
         stack.add_named(&entry, Some(AddressMode::Entry.name()));
-        let history = gtk::Button::builder()
-            .child(&icons::glyph(Glyph::Down, 12))
-            .tooltip_text("Edit location (Ctrl+L)")
-            .action_name("win.location")
-            .valign(gtk::Align::Center)
-            .css_classes(["address-chevron"])
-            .build();
-        history.update_property(&[gtk::accessible::Property::Label("Edit location")]);
         root.append(&icon);
         root.append(&stack);
-        root.append(&history);
+        root.append(&edit_button());
         let bar = Self {
             root,
             icon,
@@ -258,6 +242,32 @@ impl AddressBar {
     pub fn crumb_adjustment(&self) -> gtk::Adjustment {
         self.crumb_scroll.hadjustment()
     }
+}
+
+/// The scroller around `crumbs`. External: scrollable without a visible
+/// bar, and never asking the window to be as wide as the path.
+fn crumb_scroller(crumbs: &gtk::Box) -> gtk::ScrolledWindow {
+    gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::External)
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .propagate_natural_width(true)
+        .hexpand(true)
+        .child(crumbs)
+        .build()
+}
+
+/// The chevron at the end of the bar that edits the address
+/// (`#address-edit`).
+fn edit_button() -> gtk::Button {
+    let button = gtk::Button::builder()
+        .child(&icons::glyph(Glyph::Down, 12))
+        .tooltip_text("Edit location (Ctrl+L)")
+        .action_name("win.location")
+        .valign(gtk::Align::Center)
+        .css_classes(["address-chevron"])
+        .build();
+    button.update_property(&[gtk::accessible::Property::Label("Edit location")]);
+    button
 }
 
 /// The `/` or `\\` between crumbs, hidden from screen readers as

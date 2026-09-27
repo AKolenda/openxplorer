@@ -231,7 +231,7 @@ impl MenuPopover {
             if row.header().is_some() {
                 labels.push("-".to_owned());
             }
-            labels.extend(row.tooltip_text().map(|text| text.to_string()));
+            labels.extend(row_label(&row));
         }
         labels
     }
@@ -252,9 +252,7 @@ impl MenuPopover {
     #[cfg(test)]
     pub fn checked_labels(&self) -> Vec<String> {
         let checked = self.rows().into_iter().filter(|row| row.has_css_class("checked"));
-        checked
-            .filter_map(|row| row.tooltip_text().map(|text| text.to_string()))
-            .collect()
+        checked.filter_map(|row| row_label(&row)).collect()
     }
 }
 
@@ -270,7 +268,9 @@ fn action_state(widget: &gtk::Widget, detailed_name: &str) -> Option<glib::Varia
     }
 }
 
-fn item_row(item: &MenuItem, checked: Option<bool>) -> gtk::ListBoxRow {
+/// A row's glyph (the check mark while checked, as app.js draws it), its
+/// label and its shortcut.
+fn item_content(item: &MenuItem, checked: Option<bool>) -> gtk::Box {
     let glyph = if checked == Some(true) {
         Glyph::Check
     } else {
@@ -286,23 +286,28 @@ fn item_row(item: &MenuItem, checked: Option<bool>) -> gtk::ListBoxRow {
         .build();
     content.append(&label);
     if let Some(shortcut) = item.shortcut {
-        content.append(
-            &gtk::Label::builder()
-                .label(shortcut)
-                .css_classes(["shortcut"])
-                .build(),
-        );
+        let shortcut = gtk::Label::builder()
+            .label(shortcut)
+            .css_classes(["shortcut"])
+            .build();
+        content.append(&shortcut);
     }
+    content
+}
+
+/// The row for `item`; `checked` is `None` for an item that is never
+/// checked.
+fn item_row(item: &MenuItem, checked: Option<bool>) -> gtk::ListBoxRow {
     let role = match checked {
         Some(_) => gtk::AccessibleRole::MenuItemCheckbox,
         None => gtk::AccessibleRole::MenuItem,
     };
     let row = gtk::ListBoxRow::builder()
-        .child(&content)
+        .child(&item_content(item, checked))
         .accessible_role(role)
-        .tooltip_text(&item.label)
         .action_name(&item.action)
         .build();
+    row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
     row.set_action_target_value(item.target.as_ref());
     if let Some(checked) = checked {
         let state = if checked {
@@ -316,4 +321,13 @@ fn item_row(item: &MenuItem, checked: Option<bool>) -> gtk::ListBoxRow {
         row.add_css_class("checked");
     }
     row
+}
+
+/// The label of `row`, for tests.
+#[cfg(test)]
+fn row_label(row: &gtk::ListBoxRow) -> Option<String> {
+    let content = row.child()?;
+    let glyph = content.first_child()?;
+    let label = glyph.next_sibling().and_downcast::<gtk::Label>()?;
+    Some(label.text().to_string())
 }

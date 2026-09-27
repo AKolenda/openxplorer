@@ -33,6 +33,16 @@ pub(super) struct EmptyPage {
     retry: gtk::Button,
 }
 
+/// A centred, wrapping label. Wrapping keeps a narrow window at its size
+/// when a folder is empty (`.empty-state{text-align:center}` wraps in
+/// app.js too).
+fn centred_text() -> gtk::Label {
+    gtk::Label::builder()
+        .wrap(true)
+        .justify(gtk::Justification::Center)
+        .build()
+}
+
 impl EmptyPage {
     /// A page that says nothing yet.
     pub fn new() -> Self {
@@ -45,19 +55,11 @@ impl EmptyPage {
             .build();
         let spinner = gtk::Spinner::new();
         let icon = icons::glyph(Glyph::FolderLine, 44);
-        // Wrapping, so a narrow window keeps its size when a folder is
-        // empty (`.empty-state{text-align:center}` wraps in app.js too).
-        let title = gtk::Label::builder()
-            .wrap(true)
-            .justify(gtk::Justification::Center)
-            .css_classes(["empty-title"])
-            .build();
-        let message = gtk::Label::builder()
-            .wrap(true)
-            .max_width_chars(65)
-            .justify(gtk::Justification::Center)
-            .selectable(true)
-            .build();
+        let title = centred_text();
+        title.add_css_class("empty-title");
+        let message = centred_text();
+        message.set_max_width_chars(65);
+        message.set_selectable(true);
         let retry = gtk::Button::builder()
             .label("Try again")
             .action_name("win.refresh")

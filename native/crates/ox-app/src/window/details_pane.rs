@@ -230,18 +230,9 @@ impl DetailsPane {
     pub fn new(appearance: Appearance) -> Self {
         let inner = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .spacing(0)
             .css_classes(["details-inner"])
             .build();
-        // A fixed width: the property values expand within the pane, and
-        // without this the pane would take half the window from the list.
-        let root = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .width_request(PANE_WIDTH)
-            .hexpand(false)
-            .child(&inner)
-            .css_classes(["details"])
-            .build();
+        let root = pane_scroller(&inner);
         inner.append(&header());
         let preview = icons::art_image(ArtKind::Folder, PREVIEW_SIZE, appearance, 1);
         inner.append(&preview_frame(&preview));
@@ -333,6 +324,19 @@ impl DetailsPane {
             .map_while(|row| Some((text(0, row)?, text(1, row)?)))
             .collect()
     }
+}
+
+/// The pane around `inner`, scrolling when the window is short. A fixed
+/// width: the property values expand within the pane, and without it the
+/// pane would take half the window from the list.
+fn pane_scroller(inner: &gtk::Box) -> gtk::ScrolledWindow {
+    gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .width_request(PANE_WIDTH)
+        .hexpand(false)
+        .child(inner)
+        .css_classes(["details"])
+        .build()
 }
 
 /// The frame that centres the preview art.

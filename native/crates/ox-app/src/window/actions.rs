@@ -209,19 +209,26 @@ impl BrowserWindow {
                 details::sort_by(&window.content().details, column, direction);
                 true
             }),
-            toggle("hidden", preferences.show_hidden, |window, show| {
-                window.content().model.set_show_hidden(show);
-                window.update_content();
-                // The folder's item count changes with it.
-                window.update_details_pane();
-                window.save_preference(Preference::ShowHidden(show));
-            }),
+            toggle(
+                "hidden",
+                preferences.show_hidden,
+                BrowserWindow::show_hidden_files,
+            ),
             toggle("details-pane", preferences.details, |window, show| {
                 window.place_details_pane(show);
                 window.save_preference(Preference::DetailsPane(show));
             }),
         ]);
         self.follow_header_sorting();
+    }
+
+    /// Show hidden files: lists or hides them, and saves the choice.
+    fn show_hidden_files(&self, show: bool) {
+        self.content().model.set_show_hidden(show);
+        self.update_content();
+        // The folder's item count changes with it.
+        self.update_details_pane();
+        self.save_preference(Preference::ShowHidden(show));
     }
 
     /// Keeps the Sort menu in step with sorting by a column header.
