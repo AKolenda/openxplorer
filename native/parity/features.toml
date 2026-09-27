@@ -93,7 +93,7 @@ native_note = "History model tested in native/crates/ox-app/src/history.rs (back
 id = "NAV-002"
 area = "NAV"
 title = "Alt+Left / Alt+Right navigate history"
-behaviour = "Alt+ArrowLeft goes back and Alt+ArrowRight goes forward in the active tab's history, including while focus is in the search box or address bar; no-ops at the ends."
+behaviour = "Alt+ArrowLeft goes back and Alt+ArrowRight goes forward in the active tab's history from the file pane, sidebar, buttons and the Settings page; no-ops at the ends. They do nothing while focus is in a text field such as the search box or the address field, which keeps the keys, or while a dialog is open."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -102,6 +102,7 @@ sources = [
   "desktop/ui/app.js:351",
   "desktop/ui/app.js:185",
   "desktop/ui/app.js:996-998",
+  "desktop/ui/app.js:1019",
 ]
 python_tests = []
 bridge = ["list"]
@@ -127,6 +128,7 @@ sources = [
   "desktop/ui/app.js:996",
   "desktop/README.md (Features: mouse side-button navigation)",
   "docs/NATIVE-EXPERIENCE-ROADMAP.md (Mouse navigation)",
+  "dolphin:src/views/dolphinview.cpp:1410-1421",
 ]
 python_tests = []
 bridge = ["list"]
@@ -248,7 +250,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "DolphinViewContainer::redirect (empty location state)"
 native = "todo"
-native_note = "Porting notes: load() replaces t.uri with the resolved URI, but the history keeps the pre-redirect URI."
+native_note = "Porting notes: load() replaces t.uri with the resolved URI, but the history keeps the pre-redirect URI. Existing OpenXplorer part is protected by NAV-001 and NAV-005."
 
 [[feature]]
 id = "NAV-010"
@@ -591,7 +593,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "ShowFullPath (default false)"
 native = "todo"
-native_note = "Porting notes: Explorer also shows place-relative crumbs such as 'Home > Documents'. OpenXplorer always shows the full path from '/'."
+native_note = "Porting notes: Explorer also shows place-relative crumbs such as 'Home > Documents'. OpenXplorer always shows the full path from '/'. Existing OpenXplorer part is protected by NAV-017."
 
 [[feature]]
 id = "NAV-025"
@@ -926,7 +928,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "DolphinView::currentDirectoryRemoved"
 native = "todo"
-native_note = "Porting notes: OpenXplorer reloads on the change event and ends on the 'This location is unavailable' page with 'Try again'."
+native_note = "Porting notes: OpenXplorer reloads on the change event and ends on the 'This location is unavailable' page with 'Try again'. Existing OpenXplorer part is protected by VIEW-047 and VIEW-055."
 
 [[feature]]
 id = "NAV-040"
@@ -1007,6 +1009,8 @@ sources = [
   "desktop/winspace.py:132-140",
   "desktop/winspace.py:1590-1592",
   "desktop/winspace.py:1666-1671",
+  "dolphin:src/global.cpp:110-116",
+  "dolphin:src/settings/dolphin_generalsettings.kcfg:33-36",
 ]
 python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_relative_path_uses_callers_working_directory",
@@ -1015,6 +1019,26 @@ bridge = ["activateItem", "list"]
 dolphin = "OpenExternallyCalledFolderInNewTab (“Open new folders in tabs”)"
 gnome = "GApplication::open / command-line (Nautilus opens a new window)"
 native = "todo"
+native_note = "Existing OpenXplorer part is protected by NAV-041 and INT-014."
+
+[[feature]]
+id = "NAV-043"
+area = "NAV"
+title = "Typed-location history drop-down in the address bar"
+behaviour = "Every location entered and applied in the editable address bar is added to the top of a most-recent-first history; entering it again moves it to the top, and the oldest entries drop off at a fixed limit. A drop-down at the right end of the address bar (Explorer: F4, and Alt+Down while editing) lists the history, and choosing an entry navigates the active tab. The history lasts at least for the session. Addresses with user info are never stored (NAV-035 refuses them)."
+origin = ["dolphin"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "kio:src/filewidgets/kurlnavigator.cpp:249-261",
+  "kio:src/filewidgets/kurlnavigator.cpp:294-315",
+]
+python_tests = []
+bridge = ["normalise"]
+dolphin = "KUrlNavigator editable mode: KUrlComboBox history; slotApplyUrl prepends each applied URL and drops the oldest (RemoveBottom)"
+gnome = "GtkEntry with a GtkPopover or GtkListView of recent locations, persisted under $XDG_STATE_HOME"
+native = "todo"
+native_note = "Porting notes: Not covered by NAV-006 (Back/Forward menus), NAV-030 (completion) or NAV-026, where the chevron currently means 'Edit location'. The Windows 11 address bar has the same drop-down. Shortcut conflict, Explorer wins: F4 is also Dolphin's terminal panel key (OPEN-022)."
 
 [[feature]]
 id = "HOME-001"
@@ -1053,7 +1077,7 @@ native = "todo"
 id = "HOME-003"
 area = "HOME"
 title = "Devices and drives cards on This PC"
-behaviour = "The first card is Local Disk (file:///), followed by every non-SMB mount or volume. Each card shows a phone icon (kind=device) or drive icon, the name and a subtitle: 'Connected device', the mount path, or 'Click to connect' for unmounted volumes. Clicking an unmounted volume mounts it; clicking a mounted one navigates. Middle-click on a mounted drive opens it in a background tab. (Capacity bars are a separate feature.)"
+behaviour = "The first card is Local Disk (file:///), followed by every non-SMB mount or volume. Each card shows a phone icon (kind=device) or drive icon, the name and a subtitle: 'Connected device', the mount path, or 'Click to connect' for unmounted volumes. Clicking an unmounted volume mounts it; clicking a mounted one navigates. Middle-click on a mounted drive opens it in a background tab. Right-clicking a mounted card other than Local Disk offers 'Disconnect device' or 'Disconnect mount' (DEV-006). (Capacity bars are a separate feature.)"
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -1077,6 +1101,7 @@ sources = [
   "desktop/ui/app.js:431",
   "desktop/volume_locations.py:30-32",
   "desktop/winspace.py:1387",
+  "kio:src/filewidgets/kfileplacesview.cpp:227-278",
 ]
 python_tests = []
 bridge = ["environment"]
@@ -1307,7 +1332,7 @@ native_note = "Porting notes: Ctrl+PageUp/PageDown are not bound in 1.1.4."
 id = "TAB-005"
 area = "TAB"
 title = "Ctrl+Tab / Ctrl+Shift+Tab cycle tabs"
-behaviour = "Ctrl+Tab activates the next tab and Ctrl+Shift+Tab the previous one, wrapping at the ends. It works while a tab-scoped Properties dialog is open (the dialog is suspended with its tab), but not while focus is in a text field."
+behaviour = "Ctrl+Tab activates the next tab and Ctrl+Shift+Tab the previous one, wrapping at the ends. It does not work while focus is in an ordinary text field. While a tab-scoped Properties dialog is open it always works, from any focus including the dialog's own text fields (Folder location, snapshot source fields), and the dialog is suspended with its tab."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -1457,13 +1482,18 @@ behaviour = "Right-clicking a tab offers: 'Move tab to new window', 'Move tab to
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
-sources = ["desktop/ui/app.js:1824-1831", "desktop/ui/app.js:1824-1830", "desktop/ui/app.js:1824"]
+sources = [
+  "desktop/ui/app.js:1824-1831",
+  "desktop/ui/app.js:1824-1830",
+  "desktop/ui/app.js:1824",
+  "dolphin:src/dolphintabbar.cpp:119-153",
+]
 python_tests = [
   "desktop/tests/ui_v07.py::Tab menu offers explicit move fallback",
   "desktop/tests/ui_rc3_contract.py::Tab context menu lists the other window, not its own",
 ]
 bridge = ["detachTab", "windows"]
-dolphin = "Dolphin tab menu: New Tab, Detach Tab, Open in New Window, Close Other Tabs, Close Tab."
+dolphin = "Dolphin tab menu (DolphinTabBar::contextMenuEvent): New Tab, Detach Tab, Close Other Tabs, Close Tab."
 native = "todo"
 
 [[feature]]
@@ -1552,7 +1582,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "OpenNewTabAfterLastTab (default false = after current)"
 native = "todo"
-native_note = "Porting notes: OpenXplorer always appends new tabs at the end."
+native_note = "Porting notes: OpenXplorer always appends new tabs at the end. Existing OpenXplorer part is protected by TAB-001, TAB-020 and OPEN-016."
 
 [[feature]]
 id = "TAB-018"
@@ -1980,6 +2010,7 @@ python_tests = [
   "desktop/tests/test_rc4.py::TearOutTests::test_other_window_body_is_not_detach_target",
   "desktop/tests/test_rc4.py::TearOutTests::test_busy_source_keeps_tab",
   "desktop/tests/test_rc4.py::TearOutTests::test_unready_source_keeps_tab",
+  "desktop/tests/native_tab_transport.py::GTK source and destination callbacks completed without exceptions",
 ]
 bridge = ["beginTabDrag", "tabDragLayout", "tabTransferReady"]
 native = "todo"
@@ -2041,6 +2072,7 @@ python_tests = [
   "desktop/tests/test_rc4.py::TearOutTests::test_own_strip_still_reorders",
   "desktop/tests/test_rc4.py::TearOutTests::test_window_controls_are_not_targets",
   "desktop/tests/test_rc4.py::TearOutTests::test_root_request_always_replies_empty",
+  "desktop/tests/native_tab_transport.py::All production signal handlers remained exception free",
 ]
 bridge = ["beginTabDrag", "detachTab", "handoffReady", "tabDragLayout", "tabTransferReady"]
 dolphin = "Detach tab; Drag tab out to detach; drag between windows"
@@ -2080,6 +2112,7 @@ python_tests = [
   "desktop/tests/test_rc4.py::TearOutTests::test_acknowledged_merge_cannot_also_detach",
   "desktop/tests/test_rc4.py::TearOutTests::test_cancel_emitted_before_detach_to_unlock_source",
   "desktop/tests/test_rc4.py::TearOutTests::test_missing_geometry_not_a_target",
+  "desktop/tests/native_tab_transport.py::All production signal handlers remained exception free",
 ]
 bridge = ["beginTabDrag"]
 native = "todo"
@@ -2464,7 +2497,7 @@ native_note = "Porting notes: No automated test. Native should use Gtk.WindowHan
 id = "TAB-049"
 area = "TAB"
 title = "Guarded window close"
-behaviour = "While an update is installing, closing shows the toast 'Wait for the update to finish before closing OpenXplorer.'. While a file operation runs, a dialog titled 'A file operation is running' says 'Cancel the operation and wait for its result before closing OpenXplorer.' and the window stays open. The native 'close-request' event takes the same path."
+behaviour = "The caption Close button goes through the interface first: while an update is installing it shows the toast 'Wait for the update to finish before closing OpenXplorer.'; while a file operation runs, a dialog titled 'A file operation is running' says 'Cancel the operation and wait for its result before closing OpenXplorer.' and the window stays open. Every window close, including window-manager closes (Alt+F4, the dock, the shell), is also refused natively with a toast: 'Wait for the application update to finish before closing.' during an update install, 'A file operation is still finishing. Wait or cancel it before closing.' while writes run, and 'A tab is moving. Wait for the handoff or its timeout before closing.' while a tab transfer involving the window is pending."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -2474,6 +2507,7 @@ sources = [
   "desktop/winspace.py:1432-1442",
   "desktop/winspace.py:1432-1441",
   "desktop/winspace.py:1432",
+  "desktop/winspace.py:1025-1035",
 ]
 python_tests = [
   "desktop/tests/test_updater.py::BridgeTests::test_quit_and_window_close_refuse_while_update_runs",
@@ -2481,6 +2515,7 @@ python_tests = [
 ]
 bridge = ["window"]
 native = "todo"
+native_note = "Porting notes: app.js listens for a 'close-request' event, but no backend code emits it; window-manager closes reach only the native refusal."
 
 [[feature]]
 id = "TAB-050"
@@ -2579,7 +2614,7 @@ behaviour = "New windows open at the last used size and maximized state instead 
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
-sources = ["desktop/winspace.py:185-186"]
+sources = ["desktop/winspace.py:185-186", "dolphin:src/dolphinmainwindow.cpp:173"]
 python_tests = []
 bridge = ["preferences"]
 dolphin = "KMainWindow autosaved window geometry"
@@ -2639,6 +2674,27 @@ bridge = []
 native = "todo"
 
 [[feature]]
+id = "TAB-058"
+area = "TAB"
+title = "Ctrl+Q quits OpenXplorer"
+behaviour = "Ctrl+Q in any window, from any focus, runs 'Quit OpenXplorer' (TAB-052): every window closes through the same guarded path, and it is refused the same way while any window runs a file operation ('Finish or cancel active file operations before quitting OpenXplorer.') or an update installs. The Open windows menu shows 'Ctrl+Q' next to 'Quit OpenXplorer'."
+origin = ["dolphin", "gnome"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/dolphinmainwindow.cpp:1587",
+  "kconfig:src/gui/kstandardshortcut.cpp:75",
+  "desktop/ui/app.js:1928-1935",
+  "desktop/winspace.py:1622-1636",
+]
+python_tests = []
+bridge = ["quit"]
+dolphin = "file_quit: Ctrl+Q (KStandardAction::quit)"
+gnome = "gtk_application_set_accels_for_action(\"app.quit\", \"<Primary>q\"), as Nautilus 46 binds app.quit"
+native = "todo"
+native_note = "Porting notes: The Quit action exists (TAB-052) but onKey binds no Ctrl+Q. Explorer has no Ctrl+Q, so there is no conflict; Alt+F4 closes one window (TAB-049)."
+
+[[feature]]
 id = "VIEW-001"
 area = "VIEW"
 title = "Details view columns"
@@ -2678,6 +2734,7 @@ sources = [
   "desktop/gio_backend.py:16",
   "desktop/gio_backend.py:241-255",
   "desktop/entry_model.py:37-44",
+  "dolphin:src/kitemviews/kfileitemmodel.cpp:1846-1985",
 ]
 python_tests = [
   "desktop/tests/test_gio_serialization.py::GioSerializationTests::test_mountable_network_share_has_directory_icon_flag_and_unknown_size",
@@ -2724,7 +2781,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "UseShortRelativeDates (default true)"
 native = "todo"
-native_note = "Porting notes: OpenXplorer's dateText() shows the date only, with no time. Explorer shows date and time."
+native_note = "Porting notes: OpenXplorer's dateText() shows the date only, with no time. Explorer shows date and time. Existing OpenXplorer part is protected by VIEW-001."
 
 [[feature]]
 id = "VIEW-005"
@@ -2811,7 +2868,7 @@ area = "VIEW"
 title = "Compact (list) view mode"
 behaviour = "A compact mode shows small icons with names beside them, laid out in columns that scroll horizontally, for a dense overview of large folders."
 origin = ["dolphin"]
-priority = "should"
+priority = "must"
 openxplorer = "missing"
 sources = [
   "dolphin:src/views/dolphinviewactionhandler.cpp:636-646",
@@ -2867,7 +2924,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "view_zoom_in Ctrl++/Ctrl+=, view_zoom_out Ctrl+-, view_zoom_reset Ctrl+0"
 native = "todo"
-native_note = "Porting notes: In OpenXplorer these keys change text size (80-200%), not icon size, and there is only one grid icon size. Keep text size; add icon sizes through the View menu and Ctrl+wheel. Explorer's Ctrl+numpad-Plus auto-sizes columns in Details."
+native_note = "Porting notes: In OpenXplorer these keys change text size (80-200%), not icon size, and there is only one grid icon size. Keep text size; add icon sizes through the View menu and Ctrl+wheel. Explorer's Ctrl+numpad-Plus auto-sizes columns in Details. Existing OpenXplorer part is protected by VIEW-005, VIEW-043 and VIEW-044."
 
 [[feature]]
 id = "VIEW-011"
@@ -2983,7 +3040,7 @@ python_tests = []
 bridge = []
 dolphin = "ascending/descending actions"
 native = "todo"
-native_note = "Porting notes: OpenXplorer shows only 'Ascending' or 'Descending'."
+native_note = "Porting notes: OpenXplorer shows only 'Ascending' or 'Descending'. Existing OpenXplorer part is protected by VIEW-013."
 
 [[feature]]
 id = "VIEW-017"
@@ -3002,7 +3059,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "folders_first / hidden_last"
 native = "todo"
-native_note = "Porting notes: OpenXplorer always sorts folders first and has no hidden-last option. Explorer also keeps folders first."
+native_note = "Porting notes: OpenXplorer always sorts folders first and has no hidden-last option. Explorer also keeps folders first. Existing OpenXplorer part is protected by VIEW-015."
 
 [[feature]]
 id = "VIEW-018"
@@ -3062,7 +3119,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "GlobalViewProps (default true) + ViewProperties"
 native = "todo"
-native_note = "Porting notes: OpenXplorer persists view mode, hidden-file visibility and column widths globally. Sort key and order are neither persisted nor tracked per folder."
+native_note = "Porting notes: OpenXplorer persists view mode, hidden-file visibility and column widths globally. Sort key and order are neither persisted nor tracked per folder. Existing OpenXplorer part is protected by VIEW-007, VIEW-024 and VIEW-028."
 
 [[feature]]
 id = "VIEW-021"
@@ -3147,6 +3204,8 @@ sources = [
   "desktop/core.py:302-304",
   "desktop/gio_backend.py:274-298",
   "desktop/ui/app.js:667",
+  "dolphin:src/views/dolphinviewactionhandler.cpp:316-327",
+  "kio:src/core/kcoredirlister.cpp:1217-1232",
 ]
 python_tests = [
   "desktop/tests/gio_integration.py::GioLocalIntegration::test_enumeration_and_creation",
@@ -3335,7 +3394,7 @@ python_tests = ["desktop/tests/test_v06.py::PrefTests::test_column_reset"]
 bridge = ["preferences"]
 dolphin = "header menu 'Automatic Column Widths' / 'Side Padding'"
 native = "todo"
-native_note = "Porting notes: OpenXplorer only has 'Reset sidebar and column widths' in Settings."
+native_note = "Porting notes: OpenXplorer only has 'Reset sidebar and column widths' in Settings. Existing OpenXplorer part is protected by VIEW-028, VIEW-029 and VIEW-046."
 
 [[feature]]
 id = "VIEW-033"
@@ -3449,7 +3508,7 @@ python_tests = [
 bridge = ["folderSize", "cancel"]
 dolphin = "RecursiveDirectorySizeLimit"
 native = "todo"
-native_note = "Porting notes: OpenXplorer measures folder sizes only on request (Calculate folder size) and marks incomplete results. It does not measure automatically."
+native_note = "Porting notes: OpenXplorer measures folder sizes only on request (Calculate folder size) and marks incomplete results. It does not measure automatically. Existing OpenXplorer part is protected by PROP-026 and PROP-027."
 
 [[feature]]
 id = "VIEW-039"
@@ -3489,7 +3548,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "UseSystemFont / ViewFont"
 native = "todo"
-native_note = "Porting notes: OpenXplorer offers a global text size (80-200%) but no font choice."
+native_note = "Porting notes: OpenXplorer offers a global text size (80-200%) but no font choice. Existing OpenXplorer part is protected by VIEW-044 and VIEW-045."
 
 [[feature]]
 id = "VIEW-041"
@@ -3509,7 +3568,7 @@ python_tests = []
 bridge = []
 dolphin = "ShowToolTips (default false) + name tooltip for elided labels"
 native = "todo"
-native_note = "Porting notes: OpenXplorer sets the row title to the name, or to the path in search results, but has no rich tooltip."
+native_note = "Porting notes: OpenXplorer sets the row title to the name, or to the path in search results, but has no rich tooltip. Existing OpenXplorer part is protected by VIEW-001 and VIEW-042."
 
 [[feature]]
 id = "VIEW-042"
@@ -3737,7 +3796,7 @@ python_tests = []
 bridge = ["list", "cancel"]
 dolphin = "stop action + status bar progress"
 native = "todo"
-native_note = "Porting notes: OpenXplorer shows an indeterminate loading line. A listing is cancelled only by navigating away or closing the tab."
+native_note = "Porting notes: OpenXplorer shows an indeterminate loading line. A listing is cancelled only by navigating away or closing the tab. Existing OpenXplorer part is protected by VIEW-047 and NAV-016."
 
 [[feature]]
 id = "VIEW-050"
@@ -3923,7 +3982,7 @@ area = "VIEW"
 title = "Split view"
 behaviour = "The Split action divides the tab into two side-by-side panes, each with its own location bar, history, view settings and selection. The active pane is highlighted and the inactive one dimmed. Closing the split closes the active pane by default ('Turning off split view closes active pane'). An option lets Tab switch panes. 'Begin in split view mode' applies to new windows."
 origin = ["dolphin"]
-priority = "should"
+priority = "must"
 openxplorer = "missing"
 sources = [
   "dolphin:src/dolphinmainwindow.cpp:1750-1757",
@@ -3988,13 +4047,89 @@ behaviour = "The Trash view adds sortable “Original location” and “Date de
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
-sources = ["desktop/ui/app.js:1683-1702"]
+sources = [
+  "desktop/ui/app.js:1683-1702",
+  "dolphin:src/views/viewproperties.cpp:122-124",
+  "dolphin:src/kitemviews/kfileitemmodel.cpp:1923-1952",
+]
 python_tests = []
 bridge = ["list"]
-dolphin = "Trash view columns “Original Location” and “Deletion Time”"
+dolphin = "Trash view default columns: Name, “Path” (original location) and “Deletion Time”"
 gnome = "trash::orig-path, trash::deletion-date"
 native = "todo"
 native_note = "native/crates/ox-core/src/entry/info.rs reads trash::orig-path and deletion dates (trash_items_keep_their_origin_and_deletion_date); no Trash view exists."
+
+[[feature]]
+id = "VIEW-063"
+area = "VIEW"
+title = "Keyboard shortcut toggles the Details pane"
+behaviour = "Alt+Shift+P (Explorer's Details pane key) toggles the Details pane exactly like the command-bar 'Details' button and View › 'Details pane' (VIEW-027), saves the preference and leaves keyboard focus where it was."
+origin = ["dolphin"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/dolphinmainwindow.cpp:2051",
+  "desktop/ui/app.js:436",
+  "desktop/ui/app.js:1000-1034",
+]
+python_tests = []
+bridge = ["preferences"]
+dolphin = "show_information_panel: F11"
+native = "todo"
+native_note = "Porting notes: The toggle exists without a shortcut (VIEW-027). Shortcut conflict, Explorer wins: Dolphin's F11 is full screen in Explorer (PROP-010)."
+
+[[feature]]
+id = "VIEW-064"
+area = "VIEW"
+title = "Stash split pane"
+behaviour = "'Stash' opens the stash virtual folder in a split pane. Items dropped there are collected as references, without being copied, until they are moved or copied onward. The action is shown only while a stash service is running."
+origin = ["dolphin"]
+priority = "could"
+openxplorer = "missing"
+sources = ["dolphin:src/dolphinmainwindow.cpp:1759-1767", "dolphin:src/dolphinui.rc:114"]
+python_tests = []
+bridge = []
+dolphin = "split_stash: Ctrl+S; visible only when org.kde.kio.StashNotifier is registered"
+native = "todo"
+native_note = "Porting notes: GNOME has no stash service, so this probably becomes n-a by product decision, with the reason recorded here. DND-018 mentions stash drops. Ctrl+S is Nautilus's Select Items Matching (SEL-037)."
+
+[[feature]]
+id = "VIEW-065"
+area = "VIEW"
+title = "Version-control status and actions"
+behaviour = "In folders under Git version control (optionally SVN, Mercurial or Bazaar), items show state emblems: unmodified, modified, added, conflicting, ignored or unversioned. The context menu offers the backend's actions, for example 'Git Commit…', 'Add', 'Show Local Changes', 'Pull' and 'Push'. Status is computed off the UI thread and refreshed when files change. Settings chooses the enabled backends."
+origin = ["dolphin"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/views/versioncontrol/versioncontrolobserver.cpp",
+  "dolphin:src/dolphincontextmenu.cpp:452-457",
+  "dolphin:src/settings/dolphin_versioncontrolsettings.kcfg",
+]
+python_tests = []
+bridge = []
+dolphin = "VersionControlObserver with KVersionControlPlugin (Git, SVN, Mercurial and Bazaar plugins from dolphin-plugins); VersionControl › enabledPlugins"
+native = "todo"
+native_note = "Porting notes: Keep SAFE-015: filename-derived text never becomes shell code. Use libgit2, or run git with a fixed argv (git status --porcelain=v2 -z)."
+
+[[feature]]
+id = "VIEW-066"
+area = "VIEW"
+title = "Permissions column format"
+behaviour = "When the Permissions column is shown (VIEW-033), a setting chooses its style: Symbolic ('drwxr-xr-x', the default), Numeric ('755') or Combined ('drwxr-xr-x (755)')."
+origin = ["dolphin"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/settings/dolphin_contentdisplaysettings.kcfg:21-29",
+  "dolphin:src/settings/viewmodes/contentdisplaytab.cpp:76",
+  "dolphin:src/settings/viewmodes/contentdisplaytab.cpp:112-117",
+  "dolphin:src/kitemviews/kfileitemlistwidget.cpp:101-114",
+]
+python_tests = []
+bridge = ["preferences"]
+dolphin = "ContentDisplaySettings::UsePermissionsFormat (Settings › View › Content Display › Permissions style)"
+native = "todo"
 
 [[feature]]
 id = "SEL-001"
@@ -4282,7 +4417,7 @@ native_note = "Porting notes: Explorer offers the same through its 'Item check b
 id = "SEL-015"
 area = "SEL"
 title = "Selection lifecycle across navigation, search and reload"
-behaviour = "Navigating, switching tabs and typing in the search box clear the selection and range anchor. Reloading the same folder (Refresh, F5, live change notifications) keeps the selection of items that still exist. After a file operation, rename or new item the selection is cleared and the folder reloads."
+behaviour = "Navigating, switching tabs and typing in the search box clear the selection and range anchor. Reloading the same folder (Refresh, F5, live change notifications) keeps the selection of items that still exist. After a file operation (copy, move, trash, delete or restoring a copy) or a rename, the selection is cleared and the folder reloads. Creating a folder or a file from New reloads the folder like Refresh and keeps the selection of items that still exist (OPS-001)."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -4293,6 +4428,9 @@ sources = [
   "desktop/ui/app.js:737",
   "desktop/ui/app.js:480",
   "desktop/ui/app.js:506-509",
+  "desktop/ui/app.js:450",
+  "desktop/ui/app.js:1410",
+  "desktop/ui/app.js:1555",
 ]
 python_tests = ["desktop/tests/ui_rc4.py::Source selection is not changed by middle-click"]
 bridge = ["list"]
@@ -4355,7 +4493,7 @@ python_tests = ["desktop/tests/ui_release.py::Double-click folder navigates"]
 bridge = ["activateItem"]
 dolphin = "SH_ItemView_ActivateItemOnSingleClick"
 native = "todo"
-native_note = "Porting notes: OpenXplorer always opens on double-click. Explorer's 'Single-click to open an item' would be the equivalent option."
+native_note = "Porting notes: OpenXplorer always opens on double-click. Explorer's 'Single-click to open an item' would be the equivalent option. Existing OpenXplorer part is protected by OPEN-001."
 
 [[feature]]
 id = "SEL-019"
@@ -4837,7 +4975,7 @@ python_tests = [
 ]
 bridge = []
 native = "partial"
-native_note = "native/crates/ox-app/src/typeahead.rs (spaces_within_a_filename_are_significant, prefix_length_is_bounded). Porting notes: Dolphin uses Ctrl+Space to toggle selection of the focused item; OpenXplorer has no toggle-by-keyboard."
+native_note = "native/crates/ox-app/src/typeahead.rs (spaces_within_a_filename_are_significant, prefix_length_is_bounded). Porting notes: Dolphin uses Ctrl+Space to toggle selection of the focused item; OpenXplorer has no toggle-by-keyboard. Conflicts with SEL-036 (a lone Space selects the current item in Dolphin and Explorer); see SEL-036 for the proposed rule. Keep this behaviour until the product owner decides."
 
 [[feature]]
 id = "SEL-036"
@@ -4857,7 +4995,22 @@ python_tests = ["desktop/tests/type_select.test.cjs::spaces within a filename ar
 bridge = []
 dolphin = "Key_Space handling + handleSpaceAsNormalKey"
 native = "todo"
-native_note = "Porting notes: In OpenXplorer a lone Space starts a type-ahead prefix ' '. Explorer uses Space to select the focused item."
+native_note = "Porting notes: In OpenXplorer a lone Space starts a type-ahead prefix ' '. Explorer uses Space to select the focused item. Existing OpenXplorer part is protected by SEL-035. Conflict: SEL-035 (replace gate) makes a lone Space a type-ahead prefix and never a selection key, so implementing this changes current behaviour. Product decision needed; proposed rule: Space inside an active prefix is prefix text (SEL-035) and a lone Space selects the current item (this feature), narrowing SEL-035. Until decided, SEL-035 wins."
+
+[[feature]]
+id = "SEL-037"
+area = "SEL"
+title = "Select items matching a pattern"
+behaviour = "'Select items matching…' asks for a wildcard pattern such as *.pdf or IMG_2024*. It selects every displayed item whose name matches, case-insensitively, following the current hidden-file and filter state. An empty or invalid pattern selects nothing."
+origin = ["gnome"]
+priority = "could"
+openxplorer = "missing"
+sources = ["desktop/ui/app.js:1028"]
+python_tests = []
+bridge = []
+gnome = "Nautilus 46 view.select-pattern ('Select Items Matching', Ctrl+S) using GPatternSpec"
+native = "todo"
+native_note = "Porting notes: Explorer leaves Ctrl+S unbound, but Dolphin binds it to Stash (VIEW-064); choose the key when both are decided. The wildcard syntax can be shared with SRCH-004."
 
 [[feature]]
 id = "SIDE-001"
@@ -4940,7 +5093,7 @@ python_tests = []
 bridge = []
 dolphin = "KFilePlacesModel::closestItem"
 native = "todo"
-native_note = "Porting notes: OpenXplorer highlights exact matches only."
+native_note = "Porting notes: OpenXplorer highlights exact matches only. Existing OpenXplorer part is protected by SIDE-003."
 
 [[feature]]
 id = "SIDE-005"
@@ -5119,7 +5272,7 @@ python_tests = ["desktop/tests/test_core.py::CoreTests::test_hidden_builtin_pin"
 bridge = ["bookmark"]
 dolphin = "Places 'Hide' / 'Hide Section' / 'Show Hidden Places'"
 native = "todo"
-native_note = "Porting notes: OpenXplorer can hide (unpin) the built-in Quick access folders, but nothing restores them and sections cannot be hidden."
+native_note = "Porting notes: OpenXplorer can hide (unpin) the built-in Quick access folders, but nothing restores them and sections cannot be hidden. Existing OpenXplorer part is protected by SIDE-006 and SIDE-009."
 
 [[feature]]
 id = "SIDE-011"
@@ -5200,12 +5353,7 @@ sources = [
   "desktop/ui/app.js:1566",
   "desktop/ui/app.js:1793",
 ]
-python_tests = [
-  "desktop/tests/ui_terminal.py::Sidebar pin includes Terminal",
-  "desktop/tests/ui_terminal.py::Network sidebar share offers Terminal",
-  "desktop/tests/ui_v07.py::Keep in Network explicitly persists location",
-  "desktop/tests/ui_v07.py::Saved network row includes sign-out",
-]
+python_tests = ["desktop/tests/ui_terminal.py::Sidebar pin includes Terminal"]
 bridge = [
   "bookmark",
   "openTerminal",
@@ -5214,11 +5362,10 @@ bridge = [
   "signOut",
   "properties",
   "previousVersions",
-  "newWindow",
-  "mountVolume",
 ]
 dolphin = "Places context menu 'Properties'"
 native = "todo"
+native_note = "Porting notes: sidebarMenu's share branch ('Remove saved location') is dead code, because renderSidebar never passes opts.share; network entries use the network location menu (SIDE-020)."
 
 [[feature]]
 id = "SIDE-015"
@@ -5301,7 +5448,7 @@ python_tests = []
 bridge = ["environment"]
 dolphin = "KFilePlacesModel::CapacityBarRecommendedRole"
 native = "todo"
-native_note = "Porting notes: The This PC drive cards have capacity bars; the sidebar entries do not."
+native_note = "Porting notes: The This PC drive cards have capacity bars; the sidebar entries do not. Existing OpenXplorer part is protected by HOME-004."
 
 [[feature]]
 id = "SIDE-019"
@@ -5472,7 +5619,7 @@ bridge = ["environment", "open", "openWith", "activateItem"]
 dolphin = "recentlyused:/files, recentlyused:/locations; Places “Recent Files” (recentlyused:/files) and “Recent Locations”"
 gnome = "GtkRecentManager (~/.local/share/recently-used.xbel); GVfs recent:/// backend / GtkRecentManager (~/.local/share/recently-used.xbel)"
 native = "todo"
-native_note = "Porting notes: OpenXplorer's Home page lists up to 8 files opened in OpenXplorer only, from its private list. The existing OpenXplorer list must not be lost."
+native_note = "Porting notes: OpenXplorer's Home page lists up to 8 files opened in OpenXplorer only, from its private list. The existing OpenXplorer list must not be lost. Existing OpenXplorer part is protected by HOME-011."
 
 [[feature]]
 id = "SIDE-027"
@@ -5529,6 +5676,41 @@ bridge = ["preferences"]
 dolphin = "lock_panels"
 native = "todo"
 native_note = "Porting notes: This does not fit the Explorer layout; offering it is optional."
+
+[[feature]]
+id = "SIDE-030"
+area = "SIDE"
+title = "Bookmarks menu with saved tab sets"
+behaviour = "A Bookmarks menu lists saved locations and bookmark folders. 'Add Bookmark' (Ctrl+B) saves the current location. 'Bookmark Tabs as Folder…' saves every tab of the window as one folder, and that folder's 'Open Folder in Tabs' reopens them. 'Edit Bookmarks…' renames, reorders and deletes entries. Bookmarks are separate from Quick access pins."
+origin = ["dolphin"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/dolphinmainwindow.cpp:1919-1925",
+  "dolphin:src/dolphinbookmarkhandler.cpp:31-37",
+  "dolphin:src/dolphinbookmarkhandler.cpp:91-94",
+]
+python_tests = []
+bridge = []
+dolphin = "Bookmarks menu (KBookmarkMenu through DolphinBookmarkHandler, kfile/bookmarks.xml)"
+native = "todo"
+native_note = "Porting notes: Quick access covers single-location bookmarks. The distinct capability is saving and reopening a set of tabs, which could live in Quick access or the tab context menu to keep the Explorer layout."
+
+[[feature]]
+id = "SIDE-031"
+area = "SIDE"
+title = "Add a place for any location"
+behaviour = "Right-clicking empty sidebar space offers 'Add Entry…', a dialog with Label, Location (any supported address, such as a folder path or smb://server/share/folder, with a folder picker) and Icon. It adds the entry to Quick access without navigating there first, using the same validation as SIDE-007."
+origin = ["dolphin"]
+priority = "could"
+openxplorer = "missing"
+sources = ["kio:src/filewidgets/kfileplacesview.cpp:1156-1158"]
+python_tests = []
+bridge = ["pin"]
+dolphin = "KFilePlacesView context menu 'Add Entry…' (empty area)"
+gnome = "GTK bookmarks file entries (SIDE-013)"
+native = "todo"
+native_note = "Porting notes: SIDE-011 covers editing an existing place only."
 
 [[feature]]
 id = "CMD-001"
@@ -5690,7 +5872,7 @@ native_note = "Only the stored preference is ported (native/crates/ox-core/src/s
 id = "CMD-009"
 area = "CMD"
 title = "File and folder context menu (classic)"
-behaviour = "Item order: 'Open' (Enter); 'Extract all…' (ZIP only); 'Open in Terminal' or 'Open containing folder in Terminal'; 'Open folder with…' or 'Open with…'; one 'Open in <editor>' per detected editor; for folders 'Open in new tab' and 'Pin to Quick access'; during search 'Open file location'; separator; 'Cut' (Ctrl+X), 'Copy' (Ctrl+C), 'Paste' (Ctrl+V); separator; 'Rename' (F2), 'Move to Trash' or 'Delete permanently' (Delete), 'Copy path'; for folders the cache toggle; for SMB 'Sign out of server…'; separator; for folders other than a server 'Calculate folder size'; 'Previous versions'; 'Properties' (Alt+Enter). With multiple items selected, Open, Open with, editors, new tab, pin, Rename, Copy path, Previous versions and Properties are disabled."
+behaviour = "Item order: 'Open' (Enter); 'Extract all…' (ZIP only); 'Open in Terminal' or 'Open containing folder in Terminal'; 'Open folder with…' or 'Open with…'; one 'Open in <editor>' per detected editor; for folders 'Open in new tab' and 'Pin to Quick access'; during search 'Open file location'; separator; 'Cut' (Ctrl+X), 'Copy' (Ctrl+C), 'Paste' (Ctrl+V); separator; 'Rename' (F2), 'Move to Trash' or 'Delete permanently' (Delete), 'Copy path'; for folders the cache toggle; for SMB 'Sign out of server…'; separator; for folders other than a server 'Calculate folder size'; 'Previous versions'; 'Properties' (Alt+Enter). With multiple items selected, Open, Extract all…, the Terminal entry, Open with, editors, new tab, pin, Open file location, Rename, Copy path, Previous versions and Properties are disabled. 'Calculate folder size' stays enabled and measures every selected folder; it is disabled only while a folder-size scan runs."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -5700,6 +5882,7 @@ sources = [
   "desktop/core.py:215 (contextMenu default win10)",
   "dolphin:src/dolphincontextmenu.cpp:157-274",
   "dolphin:src/dolphincontextmenu.cpp:325-375",
+  "desktop/ui/app.js:1274-1279",
 ]
 python_tests = [
   "desktop/tests/ui_release.py::Menu includes Open with…",
@@ -5829,7 +6012,7 @@ python_tests = []
 bridge = []
 dolphin = "Key_Menu"
 native = "todo"
-native_note = "Porting notes: OpenXplorer opens it at a fixed offset from the top-left of the file pane."
+native_note = "Porting notes: OpenXplorer opens it at a fixed offset from the top-left of the file pane. Existing OpenXplorer part is protected by CMD-013."
 
 [[feature]]
 id = "CMD-015"
@@ -5879,17 +6062,24 @@ native = "todo"
 id = "CMD-017"
 area = "CMD"
 title = "Shortcut scope depends on focus"
-behaviour = "From text fields (search, address, dialogs excluded) these still work: Ctrl+, , text-size keys, Alt+Enter, ContextMenu/Shift+F10, Ctrl+L, Alt+D, Ctrl+F, F5, Ctrl+R, Alt+Left/Right/Up. These do not: Ctrl+H, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab, Ctrl+A/C/X/V, Ctrl+Shift+N, Delete, F2, Enter, Escape, arrows (the field handles them). File shortcuts (Ctrl+A/C/X/V, Ctrl+Shift+N, Delete, F2, Enter, Escape, arrows) are also disabled on the Settings page and when focus is on a resize handle or breadcrumb. IME composition keys never trigger shortcuts."
+behaviour = "From text fields (search, address, dialogs excluded) these still work: Ctrl+, , text-size keys, Alt+Enter, ContextMenu/Shift+F10, Ctrl+L, Alt+D, Ctrl+F, F5, Ctrl+R. These do not: Ctrl+H, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab, Alt+Left/Right/Up, Ctrl+A/C/X/V, Ctrl+Shift+N, Delete, F2, Enter, Escape, arrows (the field handles them). Exception: while a tab-scoped Properties dialog is open, Ctrl+Tab and Ctrl+Shift+Tab switch tabs from any focus, including the dialog's text fields. File shortcuts (Ctrl+A/C/X/V, Ctrl+Shift+N, Delete, F2, Enter, Escape, arrows) are also disabled on the Settings page and when focus is on a resize handle or breadcrumb. IME composition keys never trigger shortcuts."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
-sources = ["desktop/ui/app.js:1000-1033"]
+sources = [
+  "desktop/ui/app.js:1000-1033",
+  "desktop/ui/app.js:1005",
+  "desktop/ui/app.js:1008",
+  "desktop/ui/app.js:1019",
+  "desktop/ui/app.js:1025",
+]
 python_tests = [
   "desktop/tests/ui_v093.py::Shortcut works inside search without changing text",
   "desktop/tests/ui_type_select.py::Ctrl+F still focuses Search and clears the prefix",
 ]
 bridge = []
 native = "todo"
+native_note = "Porting notes: Ctrl+, is handled before the modal-dialog branch (app.js:1008), so it opens Settings even while an ordinary modal dialog is open and leaves that dialog floating over the Settings tab. This is a bug to fix natively, not a behaviour to preserve."
 
 [[feature]]
 id = "CMD-018"
@@ -5944,7 +6134,7 @@ python_tests = []
 bridge = ["clipboardGet"]
 dolphin = "KIO::pasteActionText"
 native = "todo"
-native_note = "Porting notes: OpenXplorer shows a disabled 'Paste' with a fixed label."
+native_note = "Porting notes: OpenXplorer shows a disabled 'Paste' with a fixed label. Existing OpenXplorer part is protected by CMD-009, CMD-011 and CLIP-003."
 
 [[feature]]
 id = "CMD-021"
@@ -6001,7 +6191,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "ContextMenuSettings"
 native = "todo"
-native_note = "Porting notes: OpenXplorer offers only the Windows 10 or Windows 11 menu style."
+native_note = "Porting notes: OpenXplorer offers only the Windows 10 or Windows 11 menu style. Existing OpenXplorer part is protected by CMD-008."
 
 [[feature]]
 id = "CMD-024"
@@ -6032,7 +6222,7 @@ behaviour = "The context menu offers “Send to → Bluetooth device…”, whic
 origin = ["dolphin"]
 priority = "could"
 openxplorer = "missing"
-sources = ["desktop/ui/app.js:1341-1365"]
+sources = ["desktop/ui/app.js:1341-1365", "dolphin:src/dolphincontextmenu.cpp:442-450"]
 python_tests = []
 bridge = []
 dolphin = "Share submenu (KDE Purpose) / BlueDevil “Send via Bluetooth”"
@@ -6135,6 +6325,7 @@ sources = [
   "desktop/ui/app.js:1416",
   "desktop/ui/app.js:1348",
   "desktop/file_services.py:70-72",
+  "kio:src/widgets/kfileitemactions.cpp:431-445",
 ]
 python_tests = []
 bridge = ["applications"]
@@ -6142,6 +6333,76 @@ dolphin = "KOpenWithDialog and the Open With submenu show service icons"
 gnome = "g_app_info_get_icon → GtkImage from GIcon"
 native = "todo"
 native_note = "Porting notes: Rows already show the name and default/recommended/requires-mount labels."
+
+[[feature]]
+id = "CMD-032"
+area = "CMD"
+title = "Keyboard shortcuts window"
+behaviour = "Ctrl+? and a 'Keyboard shortcuts' entry in the More options menu open a window that lists every bound shortcut, grouped by task (Navigation, Tabs and windows, Selection, Files, View, Search, Text size), with a search field. The list is generated from the live bindings, so it cannot disagree with the hints in menus and tooltips (CMD-016). It works from any tab, including Settings, and opens no network resource."
+origin = ["gnome"]
+priority = "should"
+openxplorer = "missing"
+sources = ["desktop/ui/app.js:1000-1034"]
+python_tests = []
+bridge = []
+dolphin = "Settings › Configure Keyboard Shortcuts… (KShortcutsDialog) lists every action with its keys; rebinding is CMD-029"
+gnome = "GtkShortcutsWindow as win.show-help-overlay with <Primary>question, as Nautilus 46 offers under 'Keyboard Shortcuts'"
+native = "todo"
+native_note = "Porting notes: Shortcuts are discoverable today only through menu hints and tooltips (CMD-016)."
+
+[[feature]]
+id = "CMD-033"
+area = "CMD"
+title = "Help: offline manual (F1) and issue reporting"
+behaviour = "F1 and a 'Help' entry in More options open the OpenXplorer user manual installed with the package, so it works offline, at the section for the current context where possible. Both work from any tab, including Settings. The About dialog links to 'Report an issue' (the project's issue tracker) and the website; a link opens in the default browser only after the user clicks it (SAFE-002)."
+origin = ["dolphin", "gnome"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/dolphinmainwindow.cpp:2558-2610",
+  "desktop/MANUAL.md",
+  "desktop/ui/app.js:1000-1034",
+]
+python_tests = []
+bridge = []
+dolphin = "Help menu (KHelpMenu): Dolphin Handbook (F1), What's This? (Shift+F1), Report Bug…, Donate, About Dolphin"
+gnome = "app.help opening help: URIs in Yelp (Nautilus 46), or a bundled HTML manual opened with gtk_uri_launcher; AdwAboutDialog issue-url and website"
+native = "todo"
+native_note = "Porting notes: desktop/MANUAL.md ships with the package, but nothing in the app opens it. UPD-015 and UPD-016 cover About and License only. Windows Explorer's F1 opens online help; this manual must stay offline."
+
+[[feature]]
+id = "CMD-034"
+area = "CMD"
+title = "Customise the command bar"
+behaviour = "The user can show or hide individual command-bar commands (for example Copy path, Sort, View, Details or the appearance toggle, and optional extras such as Undo or Open in Terminal) and restore the default set. The choice is saved for every window, and the More options menu omits commands already on the bar."
+origin = ["dolphin"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/dolphinmainwindow.cpp:1396",
+  "dolphin:src/dolphinmainwindow.cpp:2533-2535",
+  "dolphin:src/dolphinmainwindow.cpp:2653",
+]
+python_tests = []
+bridge = ["preferences"]
+dolphin = "Settings › Configure Toolbars… (options_configure_toolbars); KHamburgerMenu::hideActionsOf(toolBar())"
+native = "todo"
+native_note = "Porting notes: Rule 3: the default stays the Windows 11 command bar, whose order is fixed in Explorer. Free reordering needs a product decision; show and hide do not change the look."
+
+[[feature]]
+id = "CMD-035"
+area = "CMD"
+title = "Letter shortcuts work on non-Latin keyboard layouts"
+behaviour = "Letter shortcuts (Ctrl+A, C, X, V, F, H, L, N, R, T and W, Ctrl+Shift+N, Alt+D, and Ctrl+Z once undo exists) fire the same actions while a non-Latin layout such as Cyrillic, Greek, Hebrew or Arabic is active, matching the key of the Latin layout group as GTK accelerators do. Type-ahead still uses the typed character."
+origin = ["gnome"]
+priority = "should"
+openxplorer = "missing"
+sources = ["desktop/ui/app.js:1015-1030"]
+python_tests = []
+bridge = []
+gnome = "GtkShortcutController and gtk_application_set_accels_for_action match keyvals across keyboard layout groups"
+native = "todo"
+native_note = "Porting notes: Unverified in WebKitGTK. onKey compares e.key.toLowerCase() with Latin letters, so these shortcuts are expected to fail on a Cyrillic layout. If they work today, this is a current-app behaviour: add openxplorer to origin and make it must."
 
 [[feature]]
 id = "OPS-001"
@@ -6211,7 +6472,7 @@ id = "OPS-003"
 area = "OPS"
 title = "Templates listed directly in the New menu, with subfolders as submenus"
 behaviour = "Every file in the XDG Templates folder appears directly in the New menu (not only behind 'From template…'), subfolders of Templates become submenus, and the suggested name drops the template's extension handling quirks. Built-in starters and the existing template safety rules stay."
-origin = ["dolphin"]
+origin = ["dolphin", "gnome"]
 priority = "must"
 openxplorer = "missing"
 sources = [
@@ -6219,13 +6480,14 @@ sources = [
   "desktop/file_services.py:88-155",
   "desktop/winspace.py:823-827",
   "desktop/ui/app.js:1385-1411",
+  "kio:src/filewidgets/knewfilemenu.cpp:969-1013",
 ]
 python_tests = []
 bridge = ["templates", "createTemplate"]
 dolphin = "KNewFileMenu “Create New” (~/Templates and ~/.local/share/templates/*.desktop)"
 gnome = "XDG TEMPLATES directory (Nautilus “New Document” submenu, subfolders shown as submenus)"
 native = "todo"
-native_note = "Porting notes: No automated test for list_templates or create_from_template."
+native_note = "Porting notes: No automated test for list_templates or create_from_template. KNewFileMenu at KF 5.115 lists .desktop template entries directly in Create New, including those in XDG_TEMPLATES_DIR; plain files in Templates and subfolder submenus are the Nautilus behaviour. OPS-048 defines the template safety rules that must stay."
 
 [[feature]]
 id = "OPS-004"
@@ -6380,7 +6642,7 @@ python_tests = ["desktop/tests/ui_type_select.py::Rename text is not intercepted
 bridge = ["rename"]
 dolphin = "renamefile: F2 (RenameInline default true)"
 native = "todo"
-native_note = "Porting notes: OpenXplorer renames in a modal dialog and selects the whole name, extension included. Explorer renames inline with the base name selected."
+native_note = "Porting notes: OpenXplorer renames in a modal dialog and selects the whole name, extension included. Explorer renames inline with the base name selected. Existing OpenXplorer part is protected by OPS-009."
 
 [[feature]]
 id = "OPS-011"
@@ -6440,7 +6702,7 @@ area = "OPS"
 title = "Batch rename"
 behaviour = "F2 with several items selected opens 'Rename Items': 'Rename the <n> selected items to:' with the template 'New name #', where # becomes ascending numbers from a chosen start. If all the items' extensions differ, a common name without # is allowed and each keeps its extension. Undo reverses the whole batch as one step."
 origin = ["dolphin"]
-priority = "should"
+priority = "must"
 openxplorer = "missing"
 sources = [
   "dolphin:src/views/dolphinview.cpp:748-752",
@@ -6542,6 +6804,9 @@ sources = [
   "desktop/gio_backend.py:258-260",
   "desktop/operations.py:1-20",
   "desktop/ui/app.js:481-502",
+  "dolphin:src/views/dolphinview.cpp:756-776",
+  "kio:src/ioslaves/trash/trashimpl.cpp:964-1017",
+  "kio:src/ioslaves/trash/trashimpl.cpp:1094-1166",
 ]
 python_tests = [
   "desktop/tests/test_operations.py::TransferTests::test_trash_unsupported_no_delete",
@@ -6622,7 +6887,7 @@ python_tests = [
 bridge = ["operate", "cancel"]
 dolphin = "KJobTrackerInterface / KUiServer progress"
 native = "todo"
-native_note = "Porting notes: OpenXplorer shows a label, a progress bar and Cancel in the window. It has no speed, time remaining or pause. GNOME has no system job tracker; Nautilus shows progress in the window."
+native_note = "Porting notes: OpenXplorer shows a label, a progress bar and Cancel in the window. It has no speed, time remaining or pause. GNOME has no system job tracker; Nautilus shows progress in the window. Existing OpenXplorer part is protected by OPS-019 and OPS-020."
 
 [[feature]]
 id = "OPS-022"
@@ -6645,7 +6910,7 @@ native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (cancell
 id = "OPS-023"
 area = "OPS"
 title = "Operation completion reporting"
-behaviour = "Full success shows the toast 'N item(s) copied.', 'moved.', 'permanently deleted.' or 'sent to Trash.'. Errors, cancellation or skips open 'Operation result' listing 'N completed.', 'N skipped (name already exists).', 'Cancelled. Completed items remain in place.' and each error line. A thrown failure shows 'Operation stopped' with the message. Afterwards the panel hides, the selection clears and the current folder reloads."
+behaviour = "Full success shows the toast 'N item(s) copied.', 'moved.', 'permanently deleted.' or 'sent to Trash.'. Errors, cancellation or skips open 'Operation result' listing 'N completed.', 'N skipped (name already exists).', 'Cancelled. Completed items remain in place.' and each error line. A failed item is recorded as '<name>: <message>' and the batch continues with the next item; only cancellation stops the loop, and completed items remain. A thrown failure shows 'Operation stopped' with the message. Afterwards the panel hides, the selection clears and the current folder reloads."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -6716,7 +6981,7 @@ python_tests = []
 bridge = ["operate", "cancel"]
 dolphin = "asynchronous KIO jobs"
 native = "todo"
-native_note = "Porting notes: OpenXplorer allows one operation at a time (state.operation) and disables further file commands until it ends. Browsing stays available."
+native_note = "Porting notes: OpenXplorer allows one operation at a time (state.operation) and disables further file commands until it ends. Browsing stays available. Existing OpenXplorer part is protected by OPS-024."
 
 [[feature]]
 id = "OPS-026"
@@ -7086,7 +7351,8 @@ priority = "could"
 openxplorer = "missing"
 sources = [
   "kio:src/ioslaves/trash/kcmtrash.cpp:230-282",
-  "dolphin:src/dolphinsettingsdialog.cpp:95-105",
+  "dolphin:src/settings/dolphinsettingsdialog.cpp:94-102",
+  "dolphin:src/settings/trash/trashsettingspage.cpp",
   "dolphin:doc/index.docbook:1418-1454",
 ]
 python_tests = []
@@ -7122,6 +7388,47 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "DropJob allItemsAreFromTrash"
 native = "todo"
+
+[[feature]]
+id = "OPS-047"
+area = "OPS"
+title = "Retry, Skip or Skip all when one item fails"
+behaviour = "When one item of a copy, move, trash or delete fails for a reason other than a name conflict (unreadable source, permission denied, device gone, I/O error), the operation pauses and a dialog names the item and the error. It offers 'Retry' (repeat that item only), 'Skip', 'Skip all' (shown with several items; later errors are skipped without asking) and 'Cancel' (finished items stay). Skipped and failed items still appear in the final 'Operation result' report, and no partial file is left behind for a skipped item. Without an answer, as in a background or non-interactive run, today's rule applies: the error is recorded as '<name>: <error>' and the next item runs."
+origin = ["dolphin", "gnome"]
+priority = "should"
+openxplorer = "partial"
+sources = [
+  "kio:src/core/copyjob.cpp:1745-1766",
+  "kio:src/widgets/skipdialog.cpp:47-71",
+  "desktop/operations.py:274-286",
+  "desktop/ui/app.js:503-506",
+]
+python_tests = []
+bridge = ["operate", "cancel"]
+dolphin = "KIO::SkipDialog through AskUserActionInterface::askUserSkip (Retry, Skip, Skip All, Cancel)"
+gnome = "Nautilus file-operation error dialogs (Skip, Skip All, Retry, Cancel)"
+native = "todo"
+native_note = "Existing OpenXplorer part (record the error, continue and list it at the end) is protected by OPS-023. Porting notes: 'Skip all' must end in the OPS-023 report. OPS-028 covers name conflicts only."
+
+[[feature]]
+id = "OPS-048"
+area = "OPS"
+title = "User templates are bounded regular files, copied privately and never executed"
+behaviour = "The template list starts with six built-in starters with fixed names and content: Text document ('New document.txt', empty), Markdown document ('New document.md', '# New document'), CSV file ('New spreadsheet.csv', empty), JSON file ('New file.json', '{}'), HTML document ('New page.html', a minimal UTF-8 HTML5 page) and Empty file ('New file'). User templates are the first 100 files in the XDG Templates folder that are regular, not hidden, not symlinks, not .desktop files and at most 16 MiB; the folder is listed without following links. Creating from a user template checks its id against a fresh list ('This template is unavailable, too large, or not a regular template file.'). The file is opened with O_NOFOLLOW and O_NONBLOCK and checked with fstat, so links, FIFOs and devices are refused ('Templates must be regular files, not links or devices.'). It is read in 64 KiB blocks with cancellation and refused past 16 MiB ('Template exceeds 16 MiB.'). Other errors: an unknown id ('Choose an available template or Empty file.'), a server listing ('Open a share before creating a file.') and an existing name ('An item with that name already exists. Nothing was overwritten.'). The content goes to a private hidden '.winspace-new-<hex>' file in the target folder, which is published by a same-folder rename that never overwrites (set_display_name on MTP); the stage file is deleted on failure. The template's permissions, including execute bits, are never copied, and a template is never executed."
+origin = ["openxplorer"]
+priority = "must"
+openxplorer = "has"
+sources = [
+  "desktop/file_services.py:19-26",
+  "desktop/file_services.py:88-155",
+  "desktop/winspace.py:823-827",
+  "desktop/ui/app.js:1385-1411",
+]
+python_tests = []
+bridge = ["templates", "createTemplate"]
+gnome = "G_USER_DIRECTORY_TEMPLATES; g_file_create with G_FILE_CREATE_PRIVATE and a non-overwriting same-folder rename; open templates with O_NOFOLLOW and check them with fstat"
+native = "todo"
+native_note = "Porting notes: No desktop test covers these rules; the only template test checks the New menu labels. Add backend tests before porting. OPS-002 describes the dialog, and OPS-003 relies on these rules."
 
 [[feature]]
 id = "XFER-001"
@@ -7786,6 +8093,30 @@ dolphin = "RenameDialog Resume / .part files"
 native = "todo"
 
 [[feature]]
+id = "XFER-028"
+area = "XFER"
+title = "Destination limits are checked before and during copies"
+behaviour = "Before a copy or move starts, the total size to write is compared with the destination's free space. If it cannot fit, nothing is written and the error names the shortfall, for example 'Not enough free space on <destination>: <needed> needed, <free> free.'. A file larger than 4 GiB − 1 byte going to a FAT/vfat destination is refused with a specific message ('<name> is too large for the destination file system, which only supports files up to 4 GiB.') instead of a generic write error. A name with characters the destination forbids (on FAT, exFAT and NTFS: \" * : < > ? \\ | and control characters) asks per item: 'Replace invalid characters' (with '_'), 'Replace all', 'Skip', 'Skip all' or 'Cancel'. A symbolic link copied to FAT or exFAT, which cannot store links, asks 'Skip', 'Skip all' or 'Cancel' instead of failing obscurely."
+origin = ["dolphin"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "kio:src/core/copyjob.cpp:1040-1060",
+  "kio:src/core/copyjob.cpp:1914-1942",
+  "kio:src/core/copyjob.cpp:1980-2008",
+  "kio:src/core/copyjob.cpp:142-157",
+  "kio:src/core/job_error.cpp:247-250",
+  "kio:src/widgets/skipdialog.cpp:47-71",
+  "desktop/operations.py:149-286",
+]
+python_tests = []
+bridge = ["operate"]
+dolphin = "KIO CopyJob: ERR_DISK_FULL check after the stat phase, ERR_FILE_TOO_LARGE_FOR_FAT32, handleMsdosFsQuirks (SkipDialog_Replace_Invalid_Chars, SkipFatSymlinks)"
+gnome = "g_file_query_filesystem_info on the destination (filesystem::free, filesystem::type); G_IO_ERROR_NO_SPACE and G_IO_ERROR_INVALID_FILENAME"
+native = "todo"
+native_note = "Porting notes: desktop/operations.py has no free-space, FAT size or invalid-name handling; a full disk or a vfat name error shows only as the raw GIO error for that item. XFER-017 copies symlinks as links, which vfat and exFAT reject. The staging rules (XFER-001 to XFER-003) must still hold."
+
+[[feature]]
 id = "CLIP-001"
 area = "CLIP"
 title = "Ctrl+C copies the selection to the system file clipboard"
@@ -7993,6 +8324,7 @@ sources = [
   "desktop/file_clipboard.py:37-42",
   "desktop/file_clipboard.py:137-145",
   "native/crates/ox-core/src/clipboard.rs:21",
+  "kio:src/widgets/paste.cpp:352-362",
 ]
 python_tests = [
   "desktop/tests/test_v05.py::ClipboardTests::test_kde_cut_flag",
@@ -8005,7 +8337,7 @@ bridge = ["clipboardSet", "clipboardGet", "clipboardConsume"]
 dolphin = "KIO::setClipboardDataCut / isClipboardDataCut use “application/x-kde-cutselection” (string found in the installed libKF5KIOWidgets.so.5)"
 gnome = "KDE format carried over GdkClipboard"
 native = "todo"
-native_note = "native/crates/ox-core/src/clipboard.rs copies the wrong target name x-kde-cutselection; fix it together with the Python app. Porting notes: The listed tests reuse the same wrong constant, so they cannot catch this; add a test with the literal KDE MIME and, ideally, a real Dolphin interop check. The failure is safe (copy instead of move) but wrong."
+native_note = "native/crates/ox-core/src/clipboard.rs copies the wrong target name x-kde-cutselection; fix it together with the Python app. Porting notes: The listed tests reuse the same wrong constant, so they cannot catch this; add a test with the literal KDE MIME and, ideally, a real Dolphin interop check. The failure is safe (copy instead of move) but wrong. Existing OpenXplorer part is protected by CLIP-004 and CLIP-006."
 
 [[feature]]
 id = "CLIP-008"
@@ -8233,6 +8565,7 @@ python_tests = [
   "desktop/tests/test_native_file_drag.py::PayloadTests::test_existing_smb_mount_exports_local_path_and_keeps_original",
   "desktop/tests/native_file_transport.py::Source files survived the external drop",
   "desktop/tests/test_native_file_drag.py::PayloadTests::test_rejects_credentials_controls_virtual_members_and_non_file_schemes",
+  "desktop/tests/native_file_transport.py::Production signal handlers completed without exceptions",
 ]
 bridge = ["beginFileDrag", "fileDragLayout"]
 dolphin = "Dolphin drags with Copy/Move/Link actions chosen by the target.; startDragging (Move|Copy|Link offered, Copy default); KIO drag with text/uri-list"
@@ -8789,7 +9122,7 @@ bridge = ["operate", "transferConflicts"]
 dolphin = "KIO::DropJob / DropMenu; Dolphin drop popup (Move Here / Copy Here / Link Here) and modifier keys"
 gnome = "GdkDragAction negotiation (COPY|MOVE|LINK|ASK) in GtkDropTarget; Nautilus moves within a filesystem and copies across"
 native = "todo"
-native_note = "Porting notes: Explorer wins on the defaults: a plain drag moves within the same volume and copies across volumes, Shift forces move, Ctrl forces copy, Alt (or Ctrl+Shift) links, and a right-button drag shows Copy here, Move here, Create shortcuts here and Cancel. OpenXplorer always copies. A gain; keep a copy-only mode available per the current safety policy."
+native_note = "Porting notes: Explorer wins on the defaults: a plain drag moves within the same volume and copies across volumes, Shift forces move, Ctrl forces copy, Alt (or Ctrl+Shift) links, and a right-button drag shows Copy here, Move here, Create shortcuts here and Cancel. OpenXplorer always copies. A gain; keep a copy-only mode available per the current safety policy. Existing OpenXplorer part is protected by DND-009."
 
 [[feature]]
 id = "DND-019"
@@ -8869,15 +9202,15 @@ native_note = "Porting notes: OpenXplorer rejects web links on purpose. Any down
 [[feature]]
 id = "DND-023"
 area = "DND"
-title = "Accept XDS (direct save) drops"
-behaviour = "Accepts XdndDirectSave drops (e.g. dragging a file out of an archive manager) by giving the source a destination URI in the target folder, so the source writes the file there."
+title = "Accept direct-save drops from archive managers"
+behaviour = "Dropping files dragged out of an archive manager makes the source write them into the target folder instead of offering existing files: Ark's drag-extract protocol (the target asks Ark over D-Bus to extract the selected members there) and, on X11, XdndDirectSave (the target gives the source a destination URI in the folder)."
 origin = ["dolphin"]
 priority = "could"
 openxplorer = "missing"
-sources = ["desktop/native_file_drop.py:86-87"]
+sources = ["desktop/native_file_drop.py:86-87", "dolphin:src/views/draganddrophelper.cpp:37-62"]
 python_tests = []
 bridge = ["fileDragLayout"]
-dolphin = "Dolphin supports XdndDirectSave (e.g. drags from Ark)"
+dolphin = "Ark drag-extract (application/x-kde-ark-dndextract-service and -path, org.kde.ark.DndExtract.extractSelectedFilesTo); Dolphin 23.08.5 has no XdndDirectSave support"
 gnome = "X11-only XdndDirectSave0 (not supported by GTK4 or Nautilus 46)"
 native = "todo"
 native_note = "Porting notes: X11 only; low value on Wayland Zorin sessions."
@@ -8903,21 +9236,50 @@ dolphin = "Ark DnD extract (application/x-kde-ark-dndextract-*)"
 native = "todo"
 
 [[feature]]
+id = "DND-025"
+area = "DND"
+title = "The view scrolls while a drag hovers near its edge"
+behaviour = "While a file drag, including one from another application, hovers near the top or bottom edge of the file list or the sidebar, that view scrolls, faster closer to the edge, so off-screen folders can be reached as drop targets. Scrolling stops when the pointer leaves the edge zone, the drag leaves the view or the drop happens."
+origin = ["dolphin"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/kitemviews/kitemlistview.cpp:266-277",
+  "dolphin:src/kitemviews/kitemlistview.cpp:991-1005",
+  "dolphin:src/kitemviews/kitemlistview.cpp:1533",
+  "desktop/native_file_drop.py:101-108",
+]
+python_tests = []
+bridge = []
+dolphin = "KItemListView::dragEnterEvent enables autoscroll, dragMoveEvent restarts its timer, triggerAutoScrolling"
+gnome = "GtkDropControllerMotion plus stepping the GtkScrolledWindow vadjustment on a timer"
+native = "todo"
+native_note = "Porting notes: Native file drops stop WebKit's drag-motion handling (native_file_drop.py), so the file list does not scroll during a drop today. DND-015 covers only sidebar autoscroll during the pointer pin drag, and SEL-012 covers rubber-band autoscroll."
+
+[[feature]]
 id = "SRCH-001"
 area = "SRCH"
 title = "Search box and Ctrl+F"
-behaviour = "The search field has placeholder 'Search <location title>' and tooltip 'Search cached filenames and paths. Enable folders in Settings → Search cache.'. It is disabled on pseudo-pages and phone/camera locations. Ctrl+F (from anywhere) focuses it and selects its text."
+behaviour = "The search field has placeholder 'Search <location title>' and tooltip 'Search cached filenames and paths. Enable folders in Settings → Search cache.'. It is disabled on pseudo-pages and phone/camera locations. Ctrl+F (from anywhere) focuses it and selects its text. The field is a search input with a built-in clear (×) button. With the field focused, Escape empties it, and so does clicking ×; either counts as editing the query (SRCH-002), so the running search is cancelled and the normal listing and columns return. If a menu is open, Escape closes the menu instead."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
-sources = ["desktop/ui/index.html:35", "desktop/ui/app.js:333", "desktop/ui/app.js:1017"]
+sources = [
+  "desktop/ui/index.html:35",
+  "desktop/ui/app.js:333",
+  "desktop/ui/app.js:1017",
+  "desktop/ui/index.html:37",
+  "desktop/ui/style.css:6",
+  "desktop/ui/app.js:970",
+  "desktop/ui/app.js:1012",
+]
 python_tests = [
   "desktop/tests/ui_type_select.py::Ctrl+F still focuses Search and clears the prefix",
 ]
 bridge = []
 dolphin = "Dolphin: Ctrl+F opens search; Ctrl+I filter bar."
 native = "todo"
-native_note = "win.search (Ctrl+F) is bound in native/crates/ox-app/src/window/actions.rs; the SearchEntry is used by the browsing test for filtering only."
+native_note = "win.search (Ctrl+F) is bound in native/crates/ox-app/src/window/actions.rs; the SearchEntry is used by the browsing test for filtering only. Porting notes: WebKit's type=search provides Escape and × (both fire input); a GtkSearchEntry gives the same natively. No desktop test covers them."
 
 [[feature]]
 id = "SRCH-002"
@@ -8959,9 +9321,7 @@ sources = [
   "desktop/ui/app.js:758",
   "desktop/ui/app.js:1017",
 ]
-python_tests = [
-  "desktop/tests/ui_type_select.py::Ctrl+F still focuses Search and clears the prefix",
-]
+python_tests = []
 bridge = []
 dolphin = "Ctrl+F search / Ctrl+I filter"
 native = "partial"
@@ -9021,12 +9381,11 @@ origin = ["dolphin"]
 priority = "could"
 openxplorer = "partial"
 sources = ["dolphin:src/filterbar/filterbar.cpp:103-133"]
-python_tests = [
-  "desktop/tests/ui_type_select.py::Ctrl+F still focuses Search and clears the prefix",
-]
+python_tests = []
 bridge = []
 dolphin = "FilterBar::keyPressEvent"
 native = "todo"
+native_note = "OpenXplorer has only the first rule: Escape in the search box empties it. Existing OpenXplorer part is protected by SRCH-001."
 
 [[feature]]
 id = "SRCH-007"
@@ -9640,7 +9999,7 @@ bridge = ["search", "cacheStatus", "cancel"]
 dolphin = "edit_find: Ctrl+F (filenamesearch:/ or baloosearch:/); Baloo filename search (Search → File name, From here)"
 gnome = "Tracker3 nfo:fileName query scoped by URI prefix (Nautilus search engine, recursive-search=local-only)"
 native = "todo"
-native_note = "Porting notes: OpenXplorer searches subfolders only below folders the user has added to its opt-in filename cache. Elsewhere it filters the current folder only."
+native_note = "Porting notes: OpenXplorer searches subfolders only below folders the user has added to its opt-in filename cache. Elsewhere it filters the current folder only. Existing OpenXplorer part is protected by SRCH-003 and SRCH-007."
 
 [[feature]]
 id = "SRCH-036"
@@ -9966,7 +10325,7 @@ native = "todo"
 id = "NET-011"
 area = "NET"
 title = "Sign-in answers: remember, session-only or guest"
-behaviour = "'Remember' defaults on and saves the password permanently in the default keyring. Unchecked saves it for the login session only, so it survives closing OpenXplorer but not logging out. Guest connects anonymously and saves nothing. The username is required unless guest ('Enter your username.'). Passwords are at most 16,384 characters without NUL ('The password is not valid.'). Answering an expired prompt: 'This sign-in request expired or was cancelled. Try connecting again.'"
+behaviour = "'Remember' defaults on and saves the password permanently in the default keyring. Unchecked saves it for the login session only, so it survives closing OpenXplorer but not logging out. Guest connects anonymously and saves nothing. The username is required unless guest ('Enter your username.'). A username 'DOMAIN\\user' is split into domain and user; without one, the server's default domain is used. A username over 512 characters or containing NUL, CR or LF fails with 'Enter a valid username.'; an empty domain part, an empty user part or a second backslash fails with 'Enter a username, or use DOMAIN\\username.'. Passwords are at most 16,384 characters without NUL ('The password is not valid.'). Answering an expired prompt: 'This sign-in request expired or was cancelled. Try connecting again.'"
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -9983,6 +10342,7 @@ sources = [
   "desktop/ui/app.js:785-832",
   "desktop/session_credentials.py:1-131",
   "desktop/auth_bridge.py:30-218",
+  "desktop/auth_bridge.py:17-28",
 ]
 python_tests = [
   "desktop/tests/test_v05.py::AuthTests::test_unchecked_session_not_never",
@@ -10337,6 +10697,7 @@ sources = [
   "desktop/gio_backend.py:373-411",
   "desktop/winspace.py:1108-1145",
   "desktop/ui/app.js:919-935",
+  "kio:src/filewidgets/kfileplacesmodel.cpp:315-318",
 ]
 python_tests = [
   "desktop/tests/test_entry_model.py::EntryModelTests::test_shortcut_server_uses_real_target",
@@ -10374,8 +10735,8 @@ native = "todo"
 [[feature]]
 id = "NET-027"
 area = "NET"
-title = "Persistent network mount assistant (plan)"
-behaviour = "For a share without a stable Linux path, the assistant plans a systemd SMB 3.0 automount at /mnt/winspace/u<uid>s<hash>. The plan includes the mount and automount unit text, a root-only credential file path, the command 'sudo /usr/bin/openxplorer-mount-share --share //server/share' and the matching --remove command. Only a hostname or IPv4 without port is supported ('The persistent mount assistant supports a hostname or IPv4 address without a port.'), and share names only allow letters, digits, spaces, '.', '_', '$' and '-' ('This share name needs manual mounting…')."
+title = "Persistent network mount assistant: plan and Location-tab UI"
+behaviour = "For a share without a stable Linux path, the assistant plans a systemd SMB 3.0 automount at /mnt/winspace/u<uid>s<hash>. The plan includes the mount and automount unit text, a root-only credential file path, the command 'sudo /usr/bin/openxplorer-mount-share --share //server/share' and the matching --remove command. Only a hostname or IPv4 without port is supported ('The persistent mount assistant supports a hostname or IPv4 address without a port.'), and share names only allow letters, digits, spaces, '.', '_', '$' and '-' ('This share name needs manual mounting…'). In the Location tab of a standard folder (PROP-017), a collapsed section 'Set up network mount (SMB)' explains that an SMB bookmark is not a permanent Linux path and that the assistant prepares a command for an on-demand CIFS mount but never runs it; administrator approval happens in the user's terminal. A 'Network folder' field (placeholder '\\\\archive-nas\\Shared') and 'Prepare setup command' request the plan. The result shows '1. Install cifs-utils if needed. 2. Review and run the command in a terminal. 3. Return here and use the Linux path below.', the command in a read-only text area (accessible name 'Mount setup command'), 'Copy command' (toast 'Setup command copied. Review it before running.'), 'Linux folder: <path>' and 'Use this path', which fills 'Folder location', clears the previous check and shows 'After mounting, click Check location.'. A note says the helper creates two systemd units and a root-only plaintext SMB credential file, uses SMB 3.0, prompts before changes, does not edit fstab, refuses to overwrite existing configuration, and that 'Sign out of server' does not remove the mount. A collapsed 'Removal command (after restoring folder locations)' shows the --remove command. A plan error replaces the result with its message."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -10387,12 +10748,14 @@ sources = [
   "desktop/MANUAL.md (Downloads on a NAS)",
   "docs/folder-locations.md (Review the optional mount helper)",
   "desktop/ui/app.js:1496-1503",
+  "desktop/ui/app.js:1495",
 ]
 python_tests = [
   "desktop/tests/test_v05.py::SettingsWindowsTests::test_mapped_path_plan_requires_admin_not_automatic",
 ]
 bridge = ["mountPlan", "clipboardText"]
 native = "todo"
+native_note = "Porting notes: No UI test covers the assistant."
 
 [[feature]]
 id = "NET-028"
@@ -10451,6 +10814,8 @@ sources = [
   "desktop/core.py:120-122",
   "desktop/volume_locations.py:33-35",
   "desktop/ui/app.js:135-157",
+  "dolphin:src/dolphinnavigatorswidgetaction.cpp:190-203",
+  "dolphin:src/dolphinnavigatorswidgetaction.cpp:252-268",
 ]
 python_tests = [
   "desktop/tests/test_core.py::CoreTests::test_reject_unsafe_addresses",
@@ -10470,7 +10835,7 @@ behaviour = "Accepts ftp:// and ftps:// addresses, supports anonymous login via 
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
-sources = ["desktop/core.py:120-122"]
+sources = ["desktop/core.py:120-122", "kio:src/kioworkers/ftp/ftp.cpp:517-537"]
 python_tests = []
 bridge = ["normalise", "connect", "list", "authReply"]
 dolphin = "kio_ftp (ftp:/)"
@@ -10485,7 +10850,7 @@ behaviour = "Accepts dav:// and davs:// addresses with the same sign-in, save-lo
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
-sources = ["desktop/core.py:120-122"]
+sources = ["desktop/core.py:120-122", "kio:src/kioworkers/http/http.json:34-88"]
 python_tests = []
 bridge = ["normalise", "connect", "list", "authReply"]
 dolphin = "webdav:/ and webdavs:/ (kio_http)"
@@ -10500,7 +10865,7 @@ behaviour = "Accepts nfs://host/export addresses and browses the export."
 origin = ["dolphin"]
 priority = "could"
 openxplorer = "missing"
-sources = ["desktop/core.py:120-122"]
+sources = ["desktop/core.py:120-122", "dolphin:src/dolphinnavigatorswidgetaction.cpp:190-203"]
 python_tests = []
 bridge = ["normalise", "list"]
 dolphin = "kio nfs:/ worker"
@@ -10615,6 +10980,8 @@ sources = [
   "desktop/ui/app.js:664",
   "desktop/ui/app.js:354-356",
   "desktop/ui/app.js:1563-1564",
+  "kio:src/filewidgets/kfileplacesview.cpp:1904-1909",
+  "kio:src/filewidgets/kfileplacesmodel.cpp:1506-1522",
 ]
 python_tests = [
   "desktop/tests/test_volume_locations.py::VolumeLocationTests::test_unmounted_phone_is_click_to_connect_device",
@@ -10662,6 +11029,8 @@ sources = [
   "desktop/core.py:418-426",
   "desktop/volume_locations.py:1-47",
   "desktop/winspace.py:664-667",
+  "kio:src/filewidgets/kfileplacesmodel.cpp:476-481",
+  "kio:src/filewidgets/kfileplacesitem.cpp:328-333",
 ]
 python_tests = [
   "desktop/tests/test_core.py::CoreTests::test_connected_phone_locations",
@@ -10681,7 +11050,7 @@ native_note = "native/crates/ox-core/src/location/normalise.rs (device_uris_keep
 id = "DEV-006"
 area = "DEV"
 title = "Disconnect (unmount) a drive, phone or share"
-behaviour = "Unmounting the mount that contains a location uses GTK's mount operation, which shows processes blocking the unmount. It is refused while this window has a write running ('Finish the active file operation first.'), when there is no user mount ('This location has no active user-session mount.') or when the system forbids it ('The system does not permit unmounting this location.'). It unmounts; it does not eject or power off the drive."
+behaviour = "On This PC, right-clicking a mounted drive or device card other than Local Disk, unless the backend reports canUnmount=false, opens a one-item menu: 'Disconnect device' for phones and cameras (kind=device), otherwise 'Disconnect mount'. Unmounted volumes have no menu, and the sidebar drive menu has no Disconnect entry. While this window runs a file operation, choosing it only shows the toast 'Finish the current operation before disconnecting.'. Otherwise the dialog 'Disconnect this mount?' reads '<display path>\\n\\nClose files using this mount first. This disconnects the session mount for other applications too.' with 'Cancel' and primary 'Disconnect'. The backend unmounts the mount that contains the location using GTK's mount operation, which shows processes blocking the unmount. It is refused while this window has a write running ('Finish the active file operation first.'), when there is no user mount ('This location has no active user-session mount.') or when the system forbids it ('The system does not permit unmounting this location.'). On success the environment refreshes and the active tab navigates to Network; on failure the dialog 'Could not disconnect' shows the error. It unmounts; it does not eject or power off the drive."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -10693,6 +11062,8 @@ sources = [
   "desktop/winspace.py:998",
   "desktop/ui/app.js:431",
   "desktop/auth_bridge.py:126-130",
+  "kio:src/filewidgets/kfileplacesmodel.cpp:1387-1447",
+  "kio:src/filewidgets/kfileplacesmodel.cpp:1462-1477",
 ]
 python_tests = []
 bridge = ["unmount", "environment"]
@@ -10734,7 +11105,11 @@ behaviour = "“Safely remove” on a USB disk unmounts all its filesystems and 
 origin = ["dolphin"]
 priority = "must"
 openxplorer = "missing"
-sources = ["desktop/volume_locations.py:20-47"]
+sources = [
+  "desktop/volume_locations.py:20-47",
+  "kio:src/filewidgets/kfileplacesmodel.cpp:1419-1425",
+  "kio:src/filewidgets/kfileplacesmodel.cpp:1462-1477",
+]
 python_tests = []
 bridge = ["unmount", "environment"]
 dolphin = "“Safely Remove” in the Places panel"
@@ -10757,7 +11132,7 @@ python_tests = []
 bridge = ["unmount", "list"]
 dolphin = "setViewsToHomeIfMountPathOpen"
 native = "todo"
-native_note = "Porting notes: OpenXplorer moves only the active tab, and only after unmounting (to Network)."
+native_note = "Porting notes: OpenXplorer moves only the active tab, and only after unmounting (to Network). Existing OpenXplorer part is protected by DEV-006."
 
 [[feature]]
 id = "DEV-010"
@@ -10788,6 +11163,7 @@ bridge = ["openWith", "environment"]
 dolphin = "dolphin-plugins “Mount ISO” service menu"
 gnome = "gnome-disk-image-mounter (udisks2 Manager.LoopSetup)"
 native = "todo"
+native_note = "Today it works only through Open with (Disk Image Mounter). Existing OpenXplorer part is protected by OPEN-011 and OPEN-012."
 
 [[feature]]
 id = "DEV-012"
@@ -10809,7 +11185,7 @@ id = "DEV-013"
 area = "DEV"
 title = "Online-account drives (Google Drive, OneDrive, Nextcloud)"
 behaviour = "Accounts configured in GNOME Online Accounts appear as network drives that can be listed, opened and copied. Today such mounts are dropped because their schemes are outside the allowlist."
-origin = ["dolphin"]
+origin = ["gnome"]
 priority = "could"
 openxplorer = "missing"
 sources = ["desktop/core.py:118-122", "desktop/volume_locations.py:33-35"]
@@ -10817,9 +11193,10 @@ python_tests = [
   "desktop/tests/test_volume_locations.py::VolumeLocationTests::test_unsupported_and_shadowed_mounts_stay_hidden",
 ]
 bridge = ["environment", "list"]
-dolphin = "kio-gdrive gdrive:/ (KAccounts)"
+dolphin = "kio-gdrive gdrive:/ (KAccounts), a separate add-on outside Dolphin"
 gnome = "GOA + GVfs google-drive / onedrive / davs backends (google.mount and onedrive.mount present) via the goa volume monitor"
 native = "todo"
+native_note = "Dolphin 23.08.5 has no online-account drives of its own, so the origin is GNOME Online Accounts."
 
 [[feature]]
 id = "OPEN-001"
@@ -10844,7 +11221,7 @@ sources = [
   "desktop/README.md (Features: Activation queries current metadata)",
   "dolphin:src/dolphinviewcontainer.cpp:708-740",
   "dolphin:src/views/dolphinview.cpp:1063-1071",
-  "desktop/activation.py:10-35",
+  "desktop/activation.py:10-28",
   "desktop/native_opening.py:44-58",
 ]
 python_tests = [
@@ -10945,7 +11322,7 @@ native_note = "Porting notes: Bug fix in 1.1.x ('delayed folder opens targeting 
 id = "OPEN-005"
 area = "OPEN"
 title = "Default application chosen by content type, never OpenXplorer"
-behaviour = "The default application is looked up by the file's content type, not its URI, so the smb scheme handler (OpenXplorer) is never picked for a PDF. OpenXplorer's own desktop IDs are skipped in favour of the next application that accepts files or URIs. Without one: 'No application is installed for this file type. Use Open with… to choose one.' Folders fail with 'This item is a folder.' and non-regular items with 'Cannot open a special filesystem object.'"
+behaviour = "The default application is looked up by the file's content type, not its URI, so the smb scheme handler (OpenXplorer) is never picked for a PDF. OpenXplorer's own desktop IDs are skipped in favour of the next application that accepts files or URIs. Without one: 'No application is installed for this file type. Use Open with… to choose one.' Activating an item whose fresh metadata reports a special file, an unknown type or a symbolic link fails with 'This item is not a regular file or a readable folder.'. Folders fail with 'This item is a folder.' and non-regular items with 'Cannot open a special filesystem object.'"
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -10962,6 +11339,8 @@ sources = [
   "desktop/winspace.py:965-968",
   "desktop/winspace.py:1282-1301",
   "desktop/ui/app.js:406-418",
+  "kio:src/gui/openurljob.cpp:602-621",
+  "desktop/activation.py:10-19",
 ]
 python_tests = [
   "desktop/tests/test_v05.py::OpeningTests::test_excludes_smb_self_handler",
@@ -11025,7 +11404,7 @@ sources = [
   "dolphin:src/settings/general/confirmationssettingspage.cpp:64-70",
   "dolphin:src/dolphinviewcontainer.cpp:729-740",
   "desktop/native_opening.py:44-58",
-  "desktop/activation.py:10-35",
+  "desktop/activation.py:10-28",
 ]
 python_tests = [
   "desktop/tests/test_v05.py::OpeningTests::test_no_recursion_without_external_app",
@@ -11089,7 +11468,7 @@ native = "todo"
 id = "OPEN-011"
 area = "OPEN"
 title = "Open with dialog"
-behaviour = "'Open with…' (files) or 'Open folder with…' (folders, sidebar) and Properties 'Change app…' open 'Open with', described by the item name. It has a 'Find an application' filter, a listbox of installed apps (icon, name and 'Current default', 'Requires a local mount' (disabled), 'Recommended' or 'Installed application'), 'No matching installed applications.' when the filter matches nothing, and the checkbox 'Show all installed applications' (checked by default for folders; refetches). The checkbox 'Always use this app for this file type' is unchecked by default and hidden for folders. Status reads 'Finding installed applications…' then 'Choose an installed application.'. The default or first available app is preselected. 'Open' is disabled until an app is chosen. Success toasts 'Opened with the selected application.' or a warning."
+behaviour = "'Open with…' (files) or 'Open folder with…' (folders, sidebar) and Properties 'Change app…' open 'Open with', described by the item name. It has a 'Find an application' filter, a listbox of installed apps (icon, name and 'Current default', 'Requires a local mount' (disabled), 'Recommended' or 'Installed application'), 'No matching installed applications.' when the filter matches nothing, and the checkbox 'Show all installed applications' (checked by default for folders; refetches). The checkbox 'Always use this app for this file type' is unchecked by default and hidden for folders. Status reads 'Finding installed applications…' then 'Choose an installed application.'. The default or first available app is preselected. 'Open' is disabled until an app is chosen. Success toasts 'Opened with the selected application.' or a warning. The list omits OpenXplorer's own launcher (io.winspace.Development.desktop), launchers that should not be shown, URL-handler IDs and applications that accept neither files nor URIs. Launchers with the same visible name (ignoring case and spacing) are merged, preferring the current default, then code.desktop or codium.desktop, then the lowest ID. Rows sort default first, then recommended, then by name. Folders and 'Show all' list every installed application; otherwise the recommended applications for the content type are listed (application/octet-stream when unknown). A symlink fails with 'Open the link target first to choose an application.'."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -11147,6 +11526,7 @@ sources = [
   "desktop/winspace.py:819-822",
   "desktop/winspace.py:1303-1317",
   "desktop/ui/app.js:1424-1428",
+  "kio:src/widgets/kopenwithdialog.cpp:738-748",
 ]
 python_tests = [
   "desktop/tests/ui_release.py::Open with does not change defaults by default",
@@ -11182,7 +11562,7 @@ bridge = ["applications", "openWith"]
 dolphin = "KFileItemActions::insertOpenWithActionsTo; Context menu “Open With” submenu (KFileItemActions::addOpenWithActionsTo)"
 gnome = "g_app_info_get_recommended_for_type"
 native = "todo"
-native_note = "Porting notes: OpenXplorer lists only editor shortcuts (VS Code, VSCodium) plus 'Open with…'. Explorer's 'Open with' submenu lists the recommended applications."
+native_note = "Porting notes: OpenXplorer lists only editor shortcuts (VS Code, VSCodium) plus 'Open with…'. Explorer's 'Open with' submenu lists the recommended applications. Existing OpenXplorer part is protected by OPEN-011 and OPEN-015."
 
 [[feature]]
 id = "OPEN-014"
@@ -11279,6 +11659,7 @@ sources = [
   "docs/interface.md (Open in Terminal)",
   "desktop/terminal_integration.py:1-151",
   "desktop/terminal_integration.py:69",
+  "dolphin:src/dolphinmainwindow.cpp:1891-1907",
 ]
 python_tests = [
   "desktop/tests/ui_terminal.py::Folder has Open in Terminal",
@@ -11373,6 +11754,7 @@ bridge = ["openTerminal"]
 dolphin = "KDE Default Applications → Terminal emulator (TerminalApplication in kdeglobals)"
 gnome = "xdg-terminal-exec / org.gnome.desktop.default-applications.terminal (exec) / x-terminal-emulator alternative"
 native = "todo"
+native_note = "OpenXplorer uses the Debian alternative, then a fixed allowlist order. Existing OpenXplorer part is protected by OPEN-018."
 
 [[feature]]
 id = "OPEN-020"
@@ -11426,7 +11808,7 @@ bridge = ["openTerminal"]
 dolphin = "open_terminal: Shift+F4; open_terminal_here: Shift+Alt+F4; Dolphin Shift+F4 “Open Terminal”"
 gnome = "The default terminal (xdg-terminal-exec, or org.gnome.desktop.default-applications.terminal); GtkShortcutController / application accelerator"
 native = "todo"
-native_note = "Porting notes: OpenXplorer has context-menu entries only, with no keyboard shortcut, and one folder at a time (disabled for multiple selections). Explorer has no default shortcut for this."
+native_note = "Porting notes: OpenXplorer has context-menu entries only, with no keyboard shortcut, and one folder at a time (disabled for multiple selections). Explorer has no default shortcut for this. Existing OpenXplorer part is protected by OPEN-017."
 
 [[feature]]
 id = "OPEN-022"
@@ -11434,7 +11816,7 @@ area = "OPEN"
 title = "Embedded terminal panel"
 behaviour = "A panel hosts a terminal whose working directory follows the view, and cd in the terminal moves the view. Ctrl+Shift+F4 focuses it. Closing the window while a program runs there asks for confirmation."
 origin = ["dolphin"]
-priority = "could"
+priority = "should"
 openxplorer = "missing"
 sources = [
   "dolphin:src/dolphinmainwindow.cpp:2111-2165",
@@ -11506,7 +11888,27 @@ bridge = ["activateItem", "open", "openWith"]
 dolphin = "KActivities ResourceInstance / KRecentDocument; KActivities / KRecentDocument::add"
 gnome = "Gtk.RecentManager.add_item (~/.local/share/recently-used.xbel); gtk_recent_manager_add_full"
 native = "todo"
-native_note = "Porting notes: OpenXplorer records up to 30 opened files in its private settings only."
+native_note = "Porting notes: OpenXplorer records up to 30 opened files in its private settings only. Existing OpenXplorer part is protected by HOME-011."
+
+[[feature]]
+id = "OPEN-026"
+area = "OPEN"
+title = "Manage the applications associated with a file type"
+behaviour = "For a file's content type, the user can see every associated application, set one as the default, add an application to the list, remove an association the user added, and reset the type to the system defaults. Changes are written only to the user's ~/.config/mimeapps.list and never touch OpenXplorer's own folder or ZIP associations (INT-008 to INT-012)."
+origin = ["dolphin"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "kio:src/widgets/kpropertiesdialog.cpp:1069",
+  "kio:src/widgets/kpropertiesdialog.cpp:1300",
+  "desktop/file_services.py:53-85",
+]
+python_tests = []
+bridge = ["applications", "openWith"]
+dolphin = "Properties › General › file-type options button (KFilePropsPlugin::slotEditFileType)"
+gnome = "g_app_info_set_as_default_for_type, g_app_info_add_supports_type, g_app_info_remove_supports_type and g_app_info_reset_type_associations"
+native = "todo"
+native_note = "Porting notes: OPEN-012 can only set a new default through 'Always use this app'. Nothing lists, removes or resets associations."
 
 [[feature]]
 id = "ARC-001"
@@ -12097,7 +12499,7 @@ bridge = ["archiveList", "archiveOpenMember"]
 dolphin = "BrowseThroughArchives (default false); Settings → Navigation “Open archives as folder” (BrowseThroughArchives, kio-extras archive worker)"
 gnome = "GVfs archive backend (archive:// via archive.mount, “Archive Mounter”) or libarchive"
 native = "todo"
-native_note = "Porting notes: OpenXplorer browses ZIP archives only, read-only, and always opens them in its archive browser rather than behind an option."
+native_note = "Porting notes: OpenXplorer browses ZIP archives only, read-only, and always opens them in its archive browser rather than behind an option. Existing OpenXplorer part is protected by ARC-002 and ARC-003."
 
 [[feature]]
 id = "ARC-023"
@@ -12139,6 +12541,7 @@ sources = [
   "desktop/zip_extraction.py:1-193",
   "desktop/ui/app.js:1283-1318",
   "desktop/activation.py:10-19",
+  "dolphin:src/dolphincontextmenu.cpp:442-450",
 ]
 python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_round_trip",
@@ -12149,6 +12552,27 @@ bridge = ["archiveInspect", "archiveExtract"]
 dolphin = "Ark “Extract → Extract archive here, autodetect subfolder”"
 gnome = "gnome-autoar AutoarExtractor (libarchive), as Nautilus “Extract Here”"
 native = "todo"
+native_note = "OpenXplorer extracts ZIPs in-app; other archives open in their default application. Existing OpenXplorer part is protected by ARC-009, ARC-012 and OPEN-001."
+
+[[feature]]
+id = "ARC-025"
+area = "ARC"
+title = "Extract here without a dialog"
+behaviour = "The context menu of a ZIP offers 'Extract here'. Without asking, it extracts into a new folder next to the archive, named after it, or a unique '(2)' name if that is taken. When the archive has exactly one top-level folder, that folder becomes the output instead of being nested. All ZIP safety rules, limits, progress and Cancel from Extract all… apply. It is disabled in read-only or non-writable folders, where Extract all… can still choose another destination."
+origin = ["dolphin", "gnome"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/dolphincontextmenu.cpp:442-450",
+  "desktop/ui/app.js:1345",
+  "desktop/zip_extraction.py:113-139",
+]
+python_tests = []
+bridge = ["archiveInspect", "archiveExtract"]
+dolphin = "Ark service menu 'Extract archive here, autodetect subfolder' (added through KFileItemActions)"
+gnome = "gnome-autoar AutoarExtractor (Nautilus 'Extract', output-is-dest detection)"
+native = "todo"
+native_note = "Porting notes: OpenXplorer offers only the dialog (ARC-009) and never overwrites (ARC-012). ARC-024 extends this to other archive formats."
 
 [[feature]]
 id = "PROP-001"
@@ -12284,7 +12708,7 @@ area = "PROP"
 title = "Edit permissions and ownership"
 behaviour = "The Permissions tab edits access for owner, group and others ('No Access', 'Can Only View', 'Can View & Modify'), 'Is executable', and for folders 'Only owner can rename and delete folder content'. It can change owner and group, offers 'Advanced Permissions' (rwx per class, setuid, setgid, sticky) and 'Apply changes to all subfolders and their contents'. Links are noted as having no permissions."
 origin = ["dolphin"]
-priority = "should"
+priority = "must"
 openxplorer = "missing"
 sources = [
   "kio:src/widgets/kpropertiesdialog.cpp:1755-1762",
@@ -12344,7 +12768,7 @@ native = "todo"
 id = "PROP-009"
 area = "PROP"
 title = "Details pane contents"
-behaviour = "The details pane has the header 'Details' with a close button, then a large preview icon: the item icon for one item, a copy glyph for several, a folder for none. Below are the name ('N items selected' or the folder title) and type ('Multiple items' or 'Folder'). For one item there is an 'Open' button, plus 'Pin to Quick access' for folders. With nothing selected on a real folder there is 'Pin to Quick access' for the folder. The 'Properties' list shows Type, Size (folders: measured or 'Not scanned'), Modified and Location for one item, or Items, Location and Storage ('Network share' or 'This computer') otherwise. A note ends the pane."
+behaviour = "The details pane has the header 'Details' with a close button, then a large preview icon: the item icon for one item, a copy glyph for several, a folder for none. Below are the name ('N items selected' or the folder title) and type ('Multiple items' or 'Folder'). For one item there is an 'Open' button, plus 'Pin to Quick access' for folders. With nothing selected on a real folder there is 'Pin to Quick access' for the folder. The 'Properties' list shows Type, Size (folders: measured or 'Not scanned'), Modified and Location for one item, or otherwise Items (the number selected, or the folder's entries when nothing is selected), Location and Storage ('Network share' or 'This computer'). A note always ends the pane: in an SMB location 'Files are accessed through GIO/GVfs. A saved location is not a system-wide drive letter.', elsewhere 'Select an item to see its properties. Double-click to open it.' (even when an item is selected)."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -12424,7 +12848,12 @@ behaviour = "Properties and Details show image dimensions and camera, audio/vide
 origin = ["dolphin"]
 priority = "could"
 openxplorer = "missing"
-sources = ["desktop/file_services.py:18", "desktop/file_services.py:29-50"]
+sources = [
+  "desktop/file_services.py:18",
+  "desktop/file_services.py:29-50",
+  "dolphin:src/panels/information/informationpanelcontent.cpp:98-100",
+  "dolphin:src/kitemviews/kfileitemmodel.cpp:2739-2750",
+]
 python_tests = []
 bridge = ["properties"]
 dolphin = "Information panel and Properties Details (KFileMetaData)"
@@ -12487,7 +12916,7 @@ native_note = "Porting notes: The default Windows-style artwork stays."
 id = "PROP-017"
 area = "PROP"
 title = "Location tab: relocate a standard XDG folder safely"
-behaviour = "For Desktop, Downloads, Documents, Pictures, Music and Videos, the Location tab reads 'Choose where <label> is stored. Applications that honor Linux’s standard-folder settings will use this location.'. It has a 'Folder location' field, an optional 'Choose a mounted network drive…' select of stable CIFS mounts, and buttons 'Check location', 'Restore default' and 'Use previous' (when a previous path exists). A status line and a warning follow: 'Existing files will NOT be moved. …'. The consent checkbox 'Change the system folder location; leave existing files in place.' starts unchecked. 'Apply location' stays disabled until the checkbox is ticked and the checked path equals the field; editing the field requires re-checking. A check reports 'Mounted network folder · <path>' or 'Local folder · <path>', or 'The destination changed. Check it again.' if edited mid-check. Apply reports 'Location updated. Configuration backed up. No files moved.'."
+behaviour = "For Desktop, Downloads, Documents, Pictures, Music and Videos, the Location tab reads 'Choose where <label> is stored. Applications that honor Linux’s standard-folder settings will use this location.'. It has a 'Folder location' field, an optional 'Choose a mounted network drive…' select of stable CIFS mounts, and buttons 'Check location', 'Restore default' and 'Use previous' (when a previous path exists). A status line and a warning follow: 'Existing files will NOT be moved. …'. The consent checkbox 'Change the system folder location; leave existing files in place.' starts unchecked. 'Apply location' stays disabled until the checkbox is ticked and the checked path equals the field; editing the field requires re-checking. A check reports 'Mounted network folder · <path>' or 'Local folder · <path>', or 'The destination changed. Check it again.' if edited mid-check. Apply reports 'Location updated. Configuration backed up. No files moved.'. Below sits the collapsed 'Set up network mount (SMB)' assistant (NET-027). The backend checks are PROP-031."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -12660,7 +13089,7 @@ native = "todo"
 id = "PROP-023"
 area = "PROP"
 title = "Snapshot source mapping"
-behaviour = "'Snapshot source…' replaces the list with a form explaining how to map a live folder to a folder of dated snapshots. Fields: 'Live folder', which defaults to the folder or, for SMB, the share root; 'Snapshot collection folder', which defaults to live + '/.snapshot' (or '\\.snapshot' for SMB); and a layout select ('snapshot-name / relative path' or 'snapshot-id / snapshot / relative path'). Buttons 'Back', 'Save source' and 'Remove mapping' refresh the environment and list. Errors show inline."
+behaviour = "'Snapshot source…' replaces the list with a form explaining how to map a live folder to a folder of dated snapshots. Fields: 'Live folder', which defaults to the folder or, for SMB, the share root; 'Snapshot collection folder', which defaults to live + '/.snapshot' (or '\\.snapshot' for SMB); and a layout select ('snapshot-name / relative path' or 'snapshot-id / snapshot / relative path'). Buttons 'Back', 'Save source' and 'Remove mapping' refresh the environment and list. Errors show inline. The layout must be direct or snapper ('Unknown snapshot folder layout.'). The snapshot folder may not equal or contain the live folder ('The snapshot folder must not contain the current live folder.'). At most 64 sources are allowed ('At most 64 snapshot sources are supported.'), and mapping an already mapped live folder replaces its mapping. Mappings are saved atomically to a private 0600 file, invalid saved entries are dropped on load, and saving emits environmentChanged so read-only marking updates at once."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -12677,6 +13106,7 @@ python_tests = [
 ]
 bridge = ["snapshotSource", "environment", "previousVersions"]
 native = "todo"
+native_note = "Porting notes: No backend test covers configure() or sources()."
 
 [[feature]]
 id = "PROP-024"
@@ -12896,6 +13326,46 @@ sources = ["desktop/folder_sizes.py:53-89", "desktop/folder_sizes.py:103"]
 python_tests = []
 bridge = ["folderSize"]
 native = "todo"
+
+[[feature]]
+id = "PROP-031"
+area = "PROP"
+title = "Relocating a standard folder: validation, backup and verification"
+behaviour = "Check validates the target. The key must be a known standard folder ('Choose a standard folder, such as Downloads or Documents.'). An smb:// address must resolve to a stable kernel CIFS/SMB3 mount ('This SMB folder is not mounted at a stable Linux path. Use “Set up network mount”, or mount it with CIFS first. A sidebar bookmark alone is not enough.'). The path is resolved through symlinks and refused under /run, /tmp or /var/tmp ('Use a persistent location, not a temporary or per-login GVfs path.') or on a GVfs mount ('GVfs session paths cannot be used as persistent standard folders.'). It must be an existing folder ('The new location must be an existing folder.'), must not be the home folder or / ('Choose a dedicated folder, not your entire home directory or the filesystem root.'), and must be writable and enterable ('You do not have write access to this folder.'). The result reports the real path, whether it is a network mount and its source. Apply requires confirmed=true ('Confirm the new location before applying it.'), and applying the current path changes nothing. Before a change, user-dirs.dirs is copied to a 0600 backup in a private 0700 location-backups folder. Then 'xdg-user-dirs-update --set' runs without a shell with a 15 s timeout; if the tool is missing: 'Install xdg-user-dirs before changing a standard folder.'. The configuration is read back, and a mismatch fails with 'The folder configuration did not retain the requested path. A backup was saved; no user files were moved.'. The previous path is recorded in a private history file for 'Use previous'. Files are never moved, and every window refreshes through environmentChanged."
+origin = ["openxplorer"]
+priority = "must"
+openxplorer = "has"
+sources = [
+  "desktop/folder_locations.py:21-26",
+  "desktop/folder_locations.py:79-87",
+  "desktop/folder_locations.py:110-171",
+  "desktop/winspace.py:828-832",
+  "desktop/mount_support.py",
+]
+python_tests = ["desktop/tests/test_v05.py::SettingsWindowsTests::test_mount_resolution"]
+bridge = ["locationCheck", "locationApply", "environment"]
+gnome = "xdg-user-dirs-update --set run without a shell; re-read user-dirs.dirs; detect CIFS and GVfs mounts from /proc/self/mountinfo"
+native = "todo"
+native_note = "Porting notes: PROP-017 describes the dialog, SET-018 the parsing and SAFE-020 the 15 s timeout. No test covers these backend rules; the PROP-017 tests run against the preview. The backend also accepts the TEMPLATES and PUBLICSHARE keys, although the UI offers six folders; decide whether to keep that."
+
+[[feature]]
+id = "PROP-032"
+area = "PROP"
+title = "Previous versions: where snapshots are searched and how matches are found"
+behaviour = "Finding previous versions of an item first uses the configured snapshot source whose live folder most specifically contains the item. Without one, an smb:// item is looked up at its share root under .snapshot, #snapshot and .zfs/snapshot (direct layout) and .snapshots (Snapper layout, '<id>/snapshot/…'). Other locations are looked up in the same collections except #snapshot, next to the item (in its parent folder for a file). Each collection lists at most 100 entries without following links, and each snapshot folder that is not a link is checked for the item's path relative to the live folder; links are skipped. An item missing from a snapshot is ignored, and any other error becomes a warning, with at most 8 kept. At most 100 versions are returned, sorted by snapshot name in descending order, with a truncated flag and the list of collections read. Every collection that could be read is remembered as a discovered snapshot root, which makes it read-only (PROP-024). With no match the message is 'No matching previous versions were found in readable snapshot folders. This does not prove that your server has no snapshots or backups.'. The lookup can be cancelled, reads metadata only, never creates snapshots and never enumerates SMB shadow copies."
+origin = ["openxplorer"]
+priority = "must"
+openxplorer = "has"
+sources = [
+  "desktop/previous_versions.py:107-166",
+  "desktop/file_services.py:158-177",
+  "desktop/winspace.py:835-836",
+]
+python_tests = []
+bridge = ["previousVersions"]
+gnome = "GIO enumerate_children and query_info with NOFOLLOW_SYMLINKS on local paths and GVfs smb://"
+native = "todo"
+native_note = "Porting notes: PROP-019 covers the dialog, and PROP-021 and PROP-024 cover detection and read-only marking. No backend test covers the lookup; ui_release's snapshot checks run against preview fixtures."
 
 [[feature]]
 id = "SET-001"
@@ -13495,6 +13965,8 @@ python_tests = [
   "desktop/tests/native_window_menu.py::All four application actions still registered",
   "desktop/tests/native_window_menu.py::No menu model or visible row in third window",
   "desktop/tests/native_window_menu.py::No menu after desktop-export setting changes to 1",
+  "desktop/tests/native_window_menu.py::Harness found production constructor and menubar policy",
+  "desktop/tests/native_window_menu.py::Baseline reproduces visible fallback GtkMenuBar",
 ]
 bridge = ["chrome"]
 gnome = "GActionGroup exported on the session bus"
@@ -13639,7 +14111,7 @@ python_tests = [
 bridge = ["list"]
 dolphin = "KFileItem overlays (emblem-symbolic-link, emblem-locked)"
 native = "todo"
-native_note = "Porting notes: OpenXplorer has only the green network marker. Explorer shows a shortcut arrow on links."
+native_note = "Porting notes: OpenXplorer has only the green network marker. Explorer shows a shortcut arrow on links. Existing OpenXplorer part is protected by LOOK-016."
 
 [[feature]]
 id = "LOOK-018"
@@ -13649,13 +14121,19 @@ behaviour = "Devices get a glyph matching their GIO icon category, drawn in the 
 origin = ["dolphin"]
 priority = "could"
 openxplorer = "partial"
-sources = ["desktop/ui/app.js:382", "desktop/ui/app.js:431", "desktop/volume_locations.py:30-44"]
+sources = [
+  "desktop/ui/app.js:382",
+  "desktop/ui/app.js:431",
+  "desktop/volume_locations.py:30-44",
+  "kio:src/filewidgets/kfileplacesitem.cpp:311-313",
+  "kio:src/filewidgets/kfileplacesitem.cpp:476-477",
+]
 python_tests = []
 bridge = ["environment"]
 dolphin = "Solid device icons in the Places panel"
 gnome = "g_mount_get_symbolic_icon / g_volume_get_icon / g_drive_get_icon names (drive-removable-media-usb, media-optical, phone, camera-photo)"
 native = "todo"
-native_note = "Porting notes: Keep the Windows 11 artwork; only the choice of glyph changes."
+native_note = "Porting notes: Keep the Windows 11 artwork; only the choice of glyph changes. Existing OpenXplorer part is protected by HOME-003, SIDE-016 and LOOK-015."
 
 [[feature]]
 id = "LOOK-019"
@@ -13795,7 +14273,7 @@ bridge = []
 dolphin = "KDE regional settings (QLocale)"
 gnome = "org.gnome.desktop.interface clock-format; GDateTime locale formatting"
 native = "partial"
-native_note = "native/crates/ox-core/src/format/locale_pattern.rs (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); clock-format setting not read."
+native_note = "native/crates/ox-core/src/format/locale_pattern.rs (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); clock-format setting not read. Existing OpenXplorer part is protected by VIEW-001."
 
 [[feature]]
 id = "LOOK-027"
@@ -13811,7 +14289,27 @@ bridge = ["chrome", "window"]
 dolphin = "KWin title-bar actions (server-side decorations)"
 gnome = "GSettings org.gnome.desktop.wm.preferences action-*-titlebar; gdk_toplevel_titlebar_gesture / gdk_toplevel_show_window_menu (GTK 4.14)"
 native = "todo"
-native_note = "Porting notes: button-layout (left/right) is deliberately not followed, to keep the Windows look."
+native_note = "Porting notes: button-layout (left/right) is deliberately not followed, to keep the Windows look. Existing OpenXplorer part is protected by TAB-048."
+
+[[feature]]
+id = "LOOK-028"
+area = "LOOK"
+title = "Sharp rendering at every display scale"
+behaviour = "At 100 % and 200 % display scaling, and under fractional scaling (125, 150 and 175 %), text, line icons, folder and file artwork and focus outlines are drawn sharp. Layout metrics scale in proportion, and hit targets match what is drawn. A window moved to a monitor with a different scale redraws at the new scale."
+origin = ["openxplorer"]
+priority = "must"
+openxplorer = "has"
+sources = [
+  "desktop/ui/app.js:14-47",
+  "desktop/ui/app.js:62-117",
+  "desktop/native_file_drag.py:125-128",
+  "desktop/native_tab_drag.py:105-108",
+]
+python_tests = []
+bridge = []
+gnome = "GTK4 draws at the surface scale (gdk_surface_get_scale, fractional on Wayland with GTK 4.12 or later); use SVG or symbolic icons, or textures rendered at that scale, never 1x bitmaps scaled up"
+native = "todo"
+native_note = "Porting notes: WebKitGTK draws today's CSS and inline SVG icons at the device scale (under fractional scaling GTK3 renders at the next integer scale and the compositor downsamples), so the app is sharp now and rule 3 forbids a regression. DND-016 covers only hit-testing, and PERF-008 lists scaling only as a manual check. Add a native UI test at scale 2 and at one fractional scale."
 
 [[feature]]
 id = "INT-001"
@@ -13831,6 +14329,7 @@ sources = [
   "desktop/winspace.py:1670-1671",
   "desktop/winspace.py:1502-1510",
   "desktop/winspace.py:1548-1562",
+  "dolphin:src/main.cpp:174-189",
 ]
 python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_unique_application_id",
@@ -13913,6 +14412,7 @@ sources = [
   "desktop/winspace.py:1642-1704",
   "desktop/winspace.py:1622-1635",
   "desktop/winspace.py:1656",
+  "dolphin:src/main.cpp:134-142",
 ]
 python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_cli_flags_registered",
@@ -14253,6 +14753,8 @@ sources = [
   "desktop/winspace.py:1516-1518",
   "desktop/winspace.py:1610-1620",
   "desktop/winspace.py:1659-1661",
+  "dolphin:src/dbusinterface.cpp:17-27",
+  "dolphin:CMakeLists.txt:196-202",
 ]
 python_tests = [
   "desktop/tests/test_v07.py::RevealTests::test_disabled_by_default",
@@ -14365,7 +14867,7 @@ native = "todo"
 id = "INT-020"
 area = "INT"
 title = "Brave download folder sync dialog"
-behaviour = "'Use Linux Downloads in Brave…' (Settings 'Brave & downloads'), or the Downloads relocation follow-up, opens 'Use this Downloads folder in Brave' ('One-time sync. Quit Brave before applying. …'). It shows the destination path and 'Checking native Brave profiles…', then one checked checkbox per detected native profile ('<name> · <flavour>' and current path or 'Uses browser default'). Status reads 'Brave is running. Quit it completely, then Recheck.', 'Brave is closed. Select the profiles to update.' or 'No supported native profiles found. …', plus sandboxed installs needing manual setup. 'Recheck profiles' re-reads. The consent checkbox 'Back up and update the selected Brave profiles.' starts unchecked. 'Apply to Brave' requires consent ('Confirm the change using the checkbox.') and at least one profile ('Select at least one profile.'). It sends only the chosen profiles, the path and confirmed=true, then toasts 'Brave Downloads updated for N profile(s).', or reports per-profile errors and stays open. 'Restore previous' requires exactly one selected profile plus consent."
+behaviour = "'Use Linux Downloads in Brave…' (Settings 'Brave & downloads'), or the Downloads relocation follow-up, opens 'Use this Downloads folder in Brave' ('One-time sync. Quit Brave before applying. …'). It shows the destination path and 'Checking native Brave profiles…', then one checked checkbox per detected native profile ('<name> · <flavour>' and current path or 'Uses browser default'). Status reads 'Brave is running. Quit it completely, then Recheck.', 'Brave is closed. Select the profiles to update.' or 'No supported native profiles found. …', plus sandboxed installs needing manual setup. 'Recheck profiles' re-reads. The consent checkbox 'Back up and update the selected Brave profiles.' starts unchecked. 'Apply to Brave' requires consent ('Confirm the change using the checkbox.') and at least one profile ('Select at least one profile.'). It sends only the chosen profiles, the path and confirmed=true, then toasts 'Brave Downloads updated for N profile(s).', or reports per-profile errors and stays open. 'Restore previous' requires exactly one selected profile plus consent. The backend accepts 1–40 distinct profiles ('Select 1–40 distinct Brave profiles.'). The destination must be absolute ('Use an absolute download directory.'), an existing writable folder ('Downloads must be an existing writable local or persistent-mount path.'), and not under /run, /proc, /sys or /dev, nor the home folder or / ('Use a persistent, dedicated download directory.'). All profiles are validated before any write, and only download.default_directory and savefile.default_directory change. A timestamped private backup and an undo record are written first. If Brave starts or the file changes during the write, that profile fails with 'Brave started or its preferences changed. Close Brave and retry.'. Errors are reported per profile."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14513,7 +15015,12 @@ behaviour = "When a copy, move, trash, delete or extract finishes or fails while
 origin = ["dolphin"]
 priority = "should"
 openxplorer = "missing"
-sources = ["desktop/ui/app.js:438", "desktop/ui/app.js:503-507", "desktop/tools/build_deb.py:41-68"]
+sources = [
+  "desktop/ui/app.js:438",
+  "desktop/ui/app.js:503-507",
+  "desktop/tools/build_deb.py:41-68",
+  "kio:src/widgets/kdynamicjobtracker.cpp:84-189",
+]
 python_tests = []
 bridge = ["operate", "archiveExtract"]
 dolphin = "KIO job notifications in Plasma (“Open Destination”)"
@@ -14528,7 +15035,7 @@ behaviour = "During long transfers the taskbar or dock icon shows a progress bar
 origin = ["dolphin"]
 priority = "could"
 openxplorer = "missing"
-sources = ["desktop/ui/app.js:503-507"]
+sources = ["desktop/ui/app.js:503-507", "kio:src/widgets/kdynamicjobtracker.cpp:84-189"]
 python_tests = []
 bridge = ["operate"]
 dolphin = "Plasma task-manager job progress"
@@ -14584,6 +15091,43 @@ python_tests = [
 bridge = []
 native = "todo"
 native_note = "Porting notes: The native preview uses io.winspace.Development.Native; replacing the Python app needs a migration plan for the ID."
+
+[[feature]]
+id = "INT-030"
+area = "INT"
+title = "Default file explorer settings card"
+behaviour = "The Settings card 'Default file explorer' reads 'Open local folders and SMB links in OpenXplorer. System file-picker dialogs are unchanged.'. Its status first shows 'Checking the current default…', then one row each for 'Folders' (inode/directory), 'SMB links' (x-scheme-handler/smb) and 'ZIP files' (application/zip), showing the handler's desktop id, 'OpenXplorer' for io.winspace.Development.desktop, or 'Not set'. A status error replaces the rows with its message. The primary 'Make OpenXplorer default' is re-enabled after every status read, so it can re-apply after another application took a route; 'Restore previous' is disabled unless a restore record exists. Both are disabled while a request runs and send the Show in folder and ZIP checkbox values (INT-009). The status is re-rendered from the result, with the toast 'Requested associations updated. Review each status below.', 'Previous recorded handlers restored.' or 'File handlers updated, but Show in folder setup failed: <error>'. On error the message is toasted and the status read again. The native integrationChanged event re-reads the status live."
+origin = ["openxplorer"]
+priority = "must"
+openxplorer = "has"
+sources = ["desktop/ui/app.js:866-868", "desktop/ui/app.js:880-899", "desktop/ui/app.js:181"]
+python_tests = [
+  "desktop/tests/ui_rc3_contract.py::Folder default does not falsely claim ZIP ownership",
+]
+bridge = ["desktopStatus", "desktopDefault", "desktopRestore"]
+native = "todo"
+native_note = "Porting notes: INT-008 to INT-012 cover the backend, the two checkboxes, the ZIP controls and the Show in folder controls; this feature is the card itself. The 'Browser preview' note is WebKit-preview only."
+
+[[feature]]
+id = "INT-031"
+area = "INT"
+title = "Translated interface that follows the desktop language"
+behaviour = "All interface text is translatable: menus, dialogs, toasts, the status bar, Settings and accessible names. It appears in the desktop's language (LANGUAGE, LC_MESSAGES) when a translation is installed, with English as the fallback. Counts use the language's plural rules ('1 item', '2 items'). Right-to-left languages mirror the layout: the sidebar side, navigation arrows, breadcrumb order and caption-button side follow the text direction, while file names and other user data keep their own direction and are never translated. The desktop file and AppStream metadata carry translated names and descriptions. Stable error codes (OPS-037) do not depend on the language."
+origin = ["dolphin"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "dolphin:src/main.cpp:93",
+  "dolphin:po/",
+  "dolphin:src/dolphinmainwindow.cpp:1394",
+  "desktop/ui/app.js (all interface text is hard-coded English)",
+]
+python_tests = []
+bridge = []
+dolphin = "KI18n throughout, with translations for about 89 languages in po/; Configure › Switch Application Language"
+gnome = "gettext (bindtextdomain, ngettext) with installed .mo files for Rust and GtkBuilder strings; GTK text direction from the locale (gtk_widget_get_default_direction); msgfmt --desktop and --xml for the .desktop file and metainfo"
+native = "todo"
+native_note = "Porting notes: The Python app is English-only, and features.toml quotes English source strings; keep them as msgids so the inventory stays testable. Translatable strings are cheap from the first native commit and expensive to retrofit. Decide whether the Windows 11 layout mirrors for right-to-left languages. Dates already follow the locale (VIEW-001, LOOK-026)."
 
 [[feature]]
 id = "UPD-001"
@@ -14712,7 +15256,7 @@ native = "todo"
 id = "UPD-005"
 area = "UPD"
 title = "Installing an update locks the application"
-behaviour = "'Install update…' is refused while file operations run ('Finish file operations before installing the update.'). Otherwise it sends the exact checked version with confirmed=true. It shows 'Preparing update. Approve the administrator prompt to install.' and streams 'updateProgress' messages. During install the app is inert, Close and Escape cannot dismiss, window close is refused, no other dialogs open, and Tab keeps focus on the status. Success requires the installer to confirm, then shows 'OpenXplorer <v> is installed. Restart to use the update.' and focuses 'Restart now'."
+behaviour = "'Install update…' is refused while file operations run ('Finish file operations before installing the update.'). Otherwise it sends the exact checked version with confirmed=true. It shows 'Preparing update. Approve the administrator prompt to install.' and streams 'updateProgress' messages. During install the app is inert, Close and Escape cannot dismiss, window close is refused, no other dialogs open, and Tab keeps focus on the status. The backend refuses an install without confirmed=true before any worker starts ('Confirm installation before updating.'), and while any open window has running jobs (including folder loading), writes, mount prompts, a pending handoff or pending tab transfers ('Wait for file operations, folder loading and tab moves to finish, then try again.'). While an update installs, every request in every window except chrome, windowMetadata and uiReady fails with 'An application update is running. Wait for it to finish before using files.', and new windows are refused ('Finish the application update and restart before opening another window.'). Success requires the installer to confirm, then shows 'OpenXplorer <v> is installed. Restart to use the update.' and focuses 'Restart now'."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14759,7 +15303,7 @@ native = "todo"
 id = "UPD-006"
 area = "UPD"
 title = "Update failure recovery and restart"
-behaviour = "If installation fails, the status reads 'Update installation did not complete. <error> Check again to retry.', Install hides and 'Check again' is enabled. If a recheck reports that application files changed, it instead ends with ' Some application files changed. Restart OpenXplorer before continuing.' and 'Restart now' appears. 'Restart now' uses a separate restart action; its failure shows 'Could not restart. <error>'. Reopening the dialog while a restart is pending shows only Restart."
+behaviour = "If installation fails, the status reads 'Update installation did not complete. <error> Check again to retry.', Install hides and 'Check again' is enabled. If a recheck reports that application files changed, it instead ends with ' Some application files changed. Restart OpenXplorer before continuing.' and 'Restart now' appears. 'Restart now' uses a separate restart action; its failure shows 'Could not restart. <error>'. Reopening the dialog while a restart is pending shows only Restart. While a restart is required, every request except updateCheck, updateRestart, quit, chrome, windowMetadata, uiReady and environment fails with 'Restart OpenXplorer to finish the application update before using files.'; updateCheck answers restartRequired without contacting GitHub, and new windows are refused with 'Finish the application update and restart before opening another window.'."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -14768,6 +15312,7 @@ sources = [
   "desktop/winspace.py:611-613",
   "desktop/winspace.py:619-622",
   "desktop/winspace.py:635-642",
+  "desktop/winspace.py:1534-1536",
 ]
 python_tests = [
   "desktop/tests/ui_regressions.cjs::Failed installation preserves the error and allows rechecking",
@@ -14842,6 +15387,9 @@ python_tests = [
   "desktop/tests/native_runtime_guard.py::Busy server refuses restart without being killed",
   "desktop/tests/native_runtime_guard.py::Normal current-version activation leaves process running",
   "desktop/tests/native_runtime_guard.py::Legacy safe quit releases the bus name",
+  "desktop/tests/native_runtime_guard.py::No pre-existing isolated application owner",
+  "desktop/tests/native_runtime_guard.py::legacy child registered",
+  "desktop/tests/native_runtime_guard.py::current actual bus owner found",
 ]
 bridge = ["quit"]
 gnome = "GtkApplication single-instance D-Bus name (org.gtk.Actions)."
@@ -14892,16 +15440,20 @@ native = "todo"
 id = "UPD-011"
 area = "UPD"
 title = "Startup failure screen and ready handshake"
-behaviour = "On startup the UI loads the environment, shows any environment warning as a toast, applies preferences (details, view, hidden, theme, layout, text size), refreshes cache status and opens the start URI (or Home). It signals 'uiReady' with the theme after two animation frames, or after 350 ms at the latest. Any startup error hides the file view and shows 'Could not start OpenXplorer', the message and a 'Retry' button, and sends uiReady with failed=true. Environment, uiReady, chrome and preferences calls time out after 15 s with 'The desktop interface did not respond. Restart OpenXplorer or try software rendering.'."
+behaviour = "On startup the UI loads the environment, shows any environment warning as a toast, applies preferences (details, view, hidden, theme, layout, text size), refreshes cache status and opens the start URI (or Home). It signals 'uiReady' with the theme after two animation frames, or after 350 ms at the latest. Any startup error hides the file view and shows 'Could not start OpenXplorer', the message and a 'Retry' button, and sends uiReady with failed=true. If the interface and the running application report different versions, the message is 'The interface is <ui>, but the running application is <v>. Finish active operations, then run openxplorer --restart. Closing one window is not enough when the background service is running.' ('an older version' when unknown), and the button is 'Quit old process safely', which sends quit instead of reloading. Environment, uiReady, chrome and preferences calls time out after 15 s with 'The desktop interface did not respond. Restart OpenXplorer or try software rendering.'."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
-sources = ["desktop/ui/app.js:200-210", "desktop/ui/app.js:1202-1226"]
+sources = [
+  "desktop/ui/app.js:200-210",
+  "desktop/ui/app.js:1202-1226",
+  "desktop/ui/app.js:1206-1209",
+]
 python_tests = [
   "desktop/tests/test_startup.py::StartupTests::test_only_existing_ui_ready_handoff_hides_cover_and_delivers_pending",
   "desktop/tests/test_startup.py::StartupTests::test_timeout_reveals_recovery_without_dismissing_cover",
 ]
-bridge = ["environment", "uiReady", "cacheStatus"]
+bridge = ["environment", "uiReady", "cacheStatus", "quit"]
 native = "todo"
 
 [[feature]]
@@ -15197,7 +15749,7 @@ python_tests = [
 bridge = []
 dolphin = "KItemListViewAccessible"
 native = "todo"
-native_note = "Porting notes: OpenXplorer marks up a grid with rows, aria-selected and labels but announces no drag-and-drop events. It is not verified with a real screen reader."
+native_note = "Porting notes: OpenXplorer marks up a grid with rows, aria-selected and labels but announces no drag-and-drop events. It is not verified with a real screen reader. Existing OpenXplorer part is protected by ACC-001."
 
 [[feature]]
 id = "ACC-003"
@@ -15221,7 +15773,7 @@ native = "todo"
 id = "ACC-004"
 area = "ACC"
 title = "Dialog focus management"
-behaviour = "When a dialog opens, its first text input is focused and selected after 30 ms (or its first button), unless focus is already inside. Tab and Shift+Tab wrap within the dialog's enabled inputs, buttons and selects. Enter in a text input triggers the primary button. Escape cancels unless an operation is running. On close, focus returns to the file pane. Opening a dialog closes menus and clears type-to-select."
+behaviour = "When a dialog opens, its first text input is focused and selected after 30 ms (or its first button), unless focus is already inside. Tab and Shift+Tab wrap within the dialog's enabled inputs, buttons and selects. Enter on any input element triggers the primary button: text fields, but also checkboxes and radio buttons (Enter on 'Show extracted files when finished' starts the extraction). Escape cancels unless an operation is running. On close, focus returns to the file pane. Opening a dialog closes menus and clears type-to-select."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -15235,7 +15787,7 @@ python_tests = [
 bridge = []
 gnome = "Adw.Dialog/Gtk.Window modal with default widget and Escape via Gtk.ShortcutController."
 native = "todo"
-native_note = "Porting notes: The Tab focus trap has no dedicated test."
+native_note = "Porting notes: The Tab focus trap has no dedicated test. Enter on a checkbox confirming the dialog is a bug to fix, not preserve: natively only text entries activate the default button (GtkEntry activates-default)."
 
 [[feature]]
 id = "ACC-005"
@@ -15409,6 +15961,7 @@ bridge = ["preferences"]
 dolphin = "KDE font DPI and the Dolphin zoom slider"
 gnome = "org.gnome.desktop.interface text-scaling-factor → gtk-xft-dpi (GTK4 scales fonts automatically; pixel metrics must derive from Pango font metrics)"
 native = "todo"
+native_note = "OpenXplorer applies only its own text size. Existing OpenXplorer part is protected by VIEW-044 and VIEW-045."
 
 [[feature]]
 id = "ACC-014"
@@ -15426,6 +15979,21 @@ python_tests = [
 bridge = []
 gnome = "ATK accessible name"
 native = "todo"
+
+[[feature]]
+id = "ACC-015"
+area = "ACC"
+title = "F6 cycles keyboard focus between window regions"
+behaviour = "F6 moves keyboard focus to the next region of the window and Shift+F6 to the previous one, wrapping around. The regions, in order, are the tab strip, the address bar, the search box, the command bar, the sidebar, the file list and the Details pane when it is shown; hidden or disabled regions are skipped. Focus lands on the region's current item (the current row of the file list, the selected sidebar entry) or its first control, without changing the selection. F6 works from any region, including text fields."
+origin = ["gnome"]
+priority = "should"
+openxplorer = "missing"
+sources = ["desktop/ui/app.js:1000-1034", "dolphin:src/dolphinmainwindow.cpp:1785-1792"]
+python_tests = []
+bridge = []
+gnome = "GtkPaned cycle-child-focus key binding (F6 and Shift+F6), gtk_widget_child_focus"
+native = "todo"
+native_note = "Porting notes: Windows 11 Explorer also cycles panes with F6; today only Tab order moves between regions. Dolphin binds F6 to Editable Location instead, and NAV-029 already decides not to follow that."
 
 [[feature]]
 id = "PERF-001"

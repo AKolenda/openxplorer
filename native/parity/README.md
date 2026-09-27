@@ -25,6 +25,7 @@ The product owner set four rules. The inventory exists to enforce the first two.
 | `features.toml` | Every behaviour the native app must provide, one `[[feature]]` per behaviour. |
 | `bridge.json` | Every operation of the Python bridge in `desktop/winspace.py`, with its native status. |
 | `check.py` | Validates both inventories, the parity markers and the cited tests, and applies the gates. |
+| `bridge.py`, `dispatch.py` | The checks for `bridge.json`, and the reader that lists the operations `desktop/winspace.py` dispatches. |
 | `features.py`, `desktop_tests.py`, `markers.py` | The checks for features, desktop test citations and parity markers. |
 | `test_check.py` | Tests for all of the above. |
 
@@ -102,6 +103,29 @@ unknown feature, and `done` without a marker.
 - When the Python app changes, update the affected features and their
   `python_tests` in the same change.
 
+## Bridge operations
+
+`bridge.json` lists every operation that `dispatch` in `desktop/winspace.py`
+handles, exactly once. `dispatch.py` reads the names from the source without
+running it. It fails closed: if the dispatcher uses the operation name in a
+form it cannot read, such as a handler table, `getattr` or
+`method.startswith(...)` as a branch, the check fails instead of skipping a
+possible operation.
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | Not ported, or ported without tests. `note` says what is missing. |
+| `core-tested` | The `ox-core` logic is ported and tested. The native UI is not yet proven, so this does not unblock replacement. |
+| `native-tested` | The whole workflow is proven in the native app. |
+
+A tested status must cite at least one test in `evidence`, as
+`path/to/file.rs::test_name` relative to the repository root. The check
+confirms that the file defines `fn test_name` under a `#[test]` attribute
+(comments and other attributes may sit between them) and that it is not
+`#[ignore]`d. Cite the file that defines the function, not the file that
+includes it: the tests that `ox-core/tests/transfer.rs` pulls in through
+`#[path]` modules are defined in `ox-core/tests/transfer_cases/`.
+
 ## Gates
 
 | Command | Passes when |
@@ -118,7 +142,8 @@ Wayland drag and drop, assistive technology). Local tests cannot certify those.
 
 ## Running the checks
 
-From the repository root:
+The checks need Python 3.12 or later and nothing outside the standard
+library. From the repository root:
 
 ```sh
 python3 native/parity/check.py                   # validate, print status per area

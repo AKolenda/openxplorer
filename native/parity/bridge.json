@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "scope": "Legacy bridge operations only. See ROADMAP.md for UI, Dolphin and native integration requirements.",
+  "scope": "Legacy bridge operations only. features.toml lists the user-visible behaviours, the Dolphin baseline and GNOME integration.",
   "methods": {
     "activateItem": {
       "status": "pending",
@@ -49,10 +49,13 @@
     },
     "bookmark": {
       "status": "core-tested",
-      "note": "Stored pin/network preferences and GIO pin classification tested; complete pin/reorder/unpin UI remains pending.",
+      "note": "Adding, re-adding and removing stored pins and network locations is tested, including UNC normalisation, credential refusal and two windows writing at once; the native pin, unpin and network-location UI remains pending.",
       "evidence": [
-        "native/crates/ox-core/src/settings/tests.rs",
-        "native/crates/ox-core/src/entry/inspect.rs"
+        "native/crates/ox-core/src/settings/tests.rs::settings_private_and_atomic",
+        "native/crates/ox-core/src/settings/tests.rs::credential_bookmark_rejected",
+        "native/crates/ox-core/src/settings/tests.rs::two_windows_pins_not_lost",
+        "native/crates/ox-core/src/settings/mutate.rs::unpin_removes_order_only_not_share",
+        "native/crates/ox-core/src/settings/mutate.rs::re_adding_a_bookmark_moves_it_last_with_the_new_label"
       ]
     },
     "braveRestore": {
@@ -102,10 +105,14 @@
     },
     "cancel": {
       "status": "core-tested",
-      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
+      "note": "Core cancellation is regression-tested: the transfer engine stops mid-copy and removes its partial stage, a replacement cancelled after the old item is moved aside still finishes so the name is never lost, a local delete cancelled during its preflight keeps the file, GIO copy, move and delete refuse an already-cancelled token, and a listing stops after a batch. GIO cancellation during a copy is not tested, and the native UI has no transfer to cancel yet.",
       "evidence": [
-        "native/crates/ox-core/tests/transfer.rs",
-        "native/crates/ox-core/tests/gio_node.rs"
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::cancellation_during_copy_removes_partial_stage_and_stops_the_batch",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_old_name",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::cancellation_never_hides_a_backup_that_requires_manual_recovery",
+        "native/crates/ox-core/tests/gio_node.rs::cancellation_prevents_copy_move_and_recursive_delete",
+        "native/crates/ox-core/tests/gio_node.rs::cancellation_during_local_delete_preflight_preserves_the_file",
+        "native/crates/ox-core/tests/entry_enumeration.rs::cancelling_after_a_batch_stops_delivery"
       ]
     },
     "chrome": {
@@ -117,21 +124,27 @@
       "status": "core-tested",
       "note": "Validated GNOME/KDE/custom formats and cut identity tested; native clipboard ownership and asynchronous reads are not wired.",
       "evidence": [
-        "native/crates/ox-core/src/clipboard/tests.rs"
+        "native/crates/ox-core/src/clipboard/tests.rs::gnome_cut_keeps_identity_across_reads_and_consumes_only_successful_items",
+        "native/crates/ox-core/src/clipboard/tests.rs::old_cut_cannot_consume_a_changed_payload_or_a_copy"
       ]
     },
     "clipboardGet": {
       "status": "core-tested",
       "note": "Validated GNOME/KDE/custom formats and cut identity tested; native clipboard ownership and asynchronous reads are not wired.",
       "evidence": [
-        "native/crates/ox-core/src/clipboard/tests.rs"
+        "native/crates/ox-core/src/clipboard/tests.rs::kde_requires_an_exact_short_cut_marker",
+        "native/crates/ox-core/src/clipboard/tests.rs::uri_list_discards_comments_and_deduplicates_canonical_addresses",
+        "native/crates/ox-core/src/clipboard/tests.rs::invalid_external_payloads_fail_closed",
+        "native/crates/ox-core/src/clipboard/tests.rs::external_fingerprint_matches_the_python_clipboard",
+        "native/crates/ox-core/src/clipboard/tests.rs::legacy_line_endings_do_not_drop_valid_selections"
       ]
     },
     "clipboardSet": {
       "status": "core-tested",
       "note": "Validated GNOME/KDE/custom formats and cut identity tested; native clipboard ownership and asynchronous reads are not wired.",
       "evidence": [
-        "native/crates/ox-core/src/clipboard/tests.rs"
+        "native/crates/ox-core/src/clipboard/tests.rs::every_advertised_format_round_trips",
+        "native/crates/ox-core/src/clipboard/tests.rs::custom_payload_preserves_token_and_rejects_invalid_operations"
       ]
     },
     "clipboardText": {
@@ -208,7 +221,12 @@
       "status": "core-tested",
       "note": "GIO enumeration covers batching, hidden files, symlinks and cancellation on temporary local folders. Remote authentication remains pending.",
       "evidence": [
-        "native/crates/ox-core/tests/entry_enumeration.rs"
+        "native/crates/ox-core/tests/entry_enumeration.rs::listing_batches_entries_and_preserves_metadata",
+        "native/crates/ox-core/tests/entry_enumeration.rs::hidden_toggle_changes_the_listing_and_empty_folders_finish",
+        "native/crates/ox-core/tests/entry_enumeration.rs::cancelling_after_a_batch_stops_delivery",
+        "native/crates/ox-core/tests/entry_enumeration.rs::cancelled_before_start_delivers_no_rows",
+        "native/crates/ox-core/tests/entry_enumeration.rs::worker_listing_completes_without_a_gtk_main_loop",
+        "native/crates/ox-core/tests/entry_enumeration.rs::symlink_to_a_folder_is_browsable_without_recursing_into_it"
       ]
     },
     "locationApply": {
@@ -245,7 +263,8 @@
       "status": "core-tested",
       "note": "Canonical locations tested against Python and external address fixtures; address-bar integration is separate.",
       "evidence": [
-        "native/crates/ox-core/tests/location_external.rs"
+        "native/crates/ox-core/tests/location_external.rs::normalise_matches_python",
+        "native/crates/ox-core/tests/location_python.rs::matches_python"
       ]
     },
     "open": {
@@ -267,23 +286,44 @@
       "status": "core-tested",
       "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
       "evidence": [
-        "native/crates/ox-core/tests/transfer.rs",
-        "native/crates/ox-core/tests/gio_node.rs"
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::recursive_copy_preserves_sources_hidden_files_links_and_modes",
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::conflict_policies_never_overwrite_without_replace",
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::replace_merges_folders_and_retains_destination_only_children",
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::self_and_descendant_destinations_are_rejected_including_symlink_aliases",
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::protected_descendants_stop_mutations_before_any_item_changes",
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::native_move_failure_never_degrades_to_copy_then_delete",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::a_name_taken_while_copying_is_not_overwritten_at_publication",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::replacement_install_failure_or_false_success_restores_the_old_name",
+        "native/crates/ox-core/tests/transfer_cases/devices.rs::uploads_publish_only_through_moves_the_device_can_perform",
+        "native/crates/ox-core/tests/gio_node.rs::complete_engine_stages_and_publishes_a_recursive_local_copy",
+        "native/crates/ox-core/tests/gio_node.rs::roots_and_whole_network_shares_are_refused_before_mutation",
+        "native/crates/ox-core/tests/gio_node.rs::protected_descendants_are_preflighted_before_gio_permanent_deletion",
+        "native/crates/ox-core/tests/gio_node.rs::cross_filesystem_move_is_refused_without_copying_or_removing_the_source"
       ]
     },
     "pin": {
       "status": "core-tested",
       "note": "Stored pin/network preferences and GIO pin classification tested; complete pin/reorder/unpin UI remains pending.",
       "evidence": [
-        "native/crates/ox-core/src/settings/tests.rs",
-        "native/crates/ox-core/src/entry/inspect.rs"
+        "native/crates/ox-core/src/settings/tests.rs::add_pin_preserves_file_tree",
+        "native/crates/ox-core/src/settings/tests.rs::bulk_pin_and_reload",
+        "native/crates/ox-core/src/settings/tests.rs::invalid_batch_writes_nothing",
+        "native/crates/ox-core/src/entry/inspect.rs::pin_inspects_browse_item_but_saves_real_share_target",
+        "native/crates/ox-core/src/entry/inspect.rs::verify_pin_uses_validated_target_not_browse_uri",
+        "native/crates/ox-core/src/entry/inspect.rs::verify_pin_rejects_regular_file"
       ]
     },
     "preferences": {
       "status": "core-tested",
       "note": "Shared settings serialization and file locking implemented; complete native settings UI remains pending.",
       "evidence": [
-        "native/crates/ox-core/src/settings/tests.rs"
+        "native/crates/ox-core/src/settings/tests.rs::settings_private_and_atomic",
+        "native/crates/ox-core/src/settings/tests.rs::two_windows_preserve_each_others_preferences",
+        "native/crates/ox-core/src/settings/tests.rs::system_theme_and_legacy_migration",
+        "native/crates/ox-core/src/settings/tests.rs::settings_still_persist",
+        "native/crates/ox-core/src/settings/tests.rs::settings_lock_symlink_refused",
+        "native/crates/ox-core/src/settings/tests.rs::unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write"
       ]
     },
     "previousVersions": {
@@ -302,12 +342,9 @@
       "evidence": []
     },
     "rename": {
-      "status": "core-tested",
-      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
-      "evidence": [
-        "native/crates/ox-core/tests/transfer.rs",
-        "native/crates/ox-core/tests/gio_node.rs"
-      ]
+      "status": "pending",
+      "note": "Not ported. ox-core has the pieces (location::validate_name, transfer::check_write_tree, Node::move_native) but nothing that composes them like rename_item in desktop/gio_backend.py: name validation, the root and whole-SMB-share refusal, the same-name no-op, the snapshot write guard, then a move that never overwrites. desktop/tests/gio_integration.py test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected have no Rust port.",
+      "evidence": []
     },
     "revealDisable": {
       "status": "pending",
@@ -355,20 +392,14 @@
       "evidence": []
     },
     "transferConflicts": {
-      "status": "core-tested",
-      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
-      "evidence": [
-        "native/crates/ox-core/tests/transfer.rs",
-        "native/crates/ox-core/tests/gio_node.rs"
-      ]
+      "status": "pending",
+      "note": "Not ported. No ox-core function answers the paste-conflict query of desktop/winspace.py: 1 to 100,000 item URIs, a destination that must be a folder (\"Open a destination folder before pasting.\") and the items whose names already exist there. It needs a function and tests, including a dangling symlink as the taken name.",
+      "evidence": []
     },
     "trashSupport": {
-      "status": "core-tested",
-      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
-      "evidence": [
-        "native/crates/ox-core/tests/transfer.rs",
-        "native/crates/ox-core/tests/gio_node.rs"
-      ]
+      "status": "pending",
+      "note": "Not ported. GioNode::can_trash exists but no test calls it, and it maps every error to false, so a not-mounted share would skip the mount retry that trash_support in desktop/gio_backend.py relies on. It must propagate NOT_MOUNTED and be tested on a local folder, an unsupported location and a not-mounted one.",
+      "evidence": []
     },
     "uiReady": {
       "status": "pending",
