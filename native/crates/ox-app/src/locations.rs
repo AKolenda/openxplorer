@@ -98,9 +98,9 @@ pub(crate) fn is_home_alias(text: &str) -> bool {
 pub(crate) fn location_context(home: PathBuf, volumes: &[VolumeRow]) -> LocationContext {
     let devices = volumes
         .iter()
-        .filter(|row| row.mounted && row.kind == VolumeKind::Device)
+        .filter(|row| row.kind == VolumeKind::Device)
         .filter_map(|row| {
-            let uri = row.uri.clone()?;
+            let uri = row.uri()?.to_owned();
             let label = row.label.clone();
             Some(DeviceLabel { uri, label })
         })
@@ -115,7 +115,7 @@ pub(crate) fn location_context(home: PathBuf, volumes: &[VolumeRow]) -> Location
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::volumes::{locations, MountFacts};
+    use crate::volumes::{locations, MountFacts, VolumeState};
 
     const PHONE_FOLDER: &str = "mtp://[usb:001,010]/Internal%20storage/DCIM";
 
@@ -206,19 +206,18 @@ mod tests {
     fn drives_and_unmounted_devices_are_not_device_labels() {
         let unmounted_phone = VolumeRow {
             label: "Phone".into(),
-            uri: None,
-            id: Some("mtp://[usb:001,011]/".into()),
             kind: VolumeKind::Device,
-            mounted: false,
-            can_unmount: false,
+            state: VolumeState::Mountable {
+                id: "mtp://[usb:001,011]/".into(),
+            },
         };
         let disk = VolumeRow {
             label: "Disk".into(),
-            uri: Some("file:///media/u/Disk".into()),
-            id: None,
             kind: VolumeKind::Drive,
-            mounted: true,
-            can_unmount: true,
+            state: VolumeState::Mounted {
+                uri: "file:///media/u/Disk".into(),
+                can_unmount: true,
+            },
         };
         let context = location_context(PathBuf::from("/home/demo"), &[unmounted_phone, disk]);
         assert!(context.devices.is_empty());

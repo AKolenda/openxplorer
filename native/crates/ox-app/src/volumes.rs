@@ -32,29 +32,48 @@ pub enum VolumeKind {
     Device,
 }
 
+/// Whether a location can be browsed now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VolumeState {
+    /// Mounted and browsable.
+    Mounted {
+        /// The canonical root, spelled as tabs store it.
+        uri: String,
+        /// The mount offers a Disconnect command.
+        can_unmount: bool,
+    },
+    /// Not mounted yet; clicking the row mounts it.
+    Mountable {
+        /// Identifies the volume to mount (`volume_id` in
+        /// `desktop/volume_locations.py`).
+        id: String,
+    },
+}
+
 /// One mounted or mountable location.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VolumeRow {
     /// Name shown in the sidebar and on This PC.
     pub label: String,
-    /// The canonical mounted root; `None` for a volume that still has to be
-    /// mounted.
-    pub uri: Option<String>,
-    /// Identifier used to mount an unmounted volume.
-    pub id: Option<String>,
     /// Drive or device glyph.
     pub kind: VolumeKind,
-    /// The volume is mounted and can be browsed.
-    pub mounted: bool,
-    /// Offered a Disconnect command.
-    pub can_unmount: bool,
+    /// Mounted at a root, or waiting to be mounted.
+    pub state: VolumeState,
 }
 
 impl VolumeRow {
+    /// The mounted root, or `None` while the volume still has to be mounted.
+    pub fn uri(&self) -> Option<&str> {
+        match &self.state {
+            VolumeState::Mounted { uri, .. } => Some(uri),
+            VolumeState::Mountable { .. } => None,
+        }
+    }
+
     /// True for a mounted SMB share. It belongs under Network, never among
     /// the drives (`!m.uri?.startsWith('smb:')` in app.js).
     pub fn is_network(&self) -> bool {
-        self.uri.as_deref().is_some_and(|uri| uri.starts_with("smb:"))
+        self.uri().is_some_and(|uri| uri.starts_with("smb:"))
     }
 }
 
@@ -142,10 +161,10 @@ fn mounted_row(mount: &MountFacts) -> Option<VolumeRow> {
     Some(VolumeRow {
         label: mount.name.clone(),
         kind: kind_for(&uri),
-        uri: Some(uri),
-        id: None,
-        mounted: true,
-        can_unmount: mount.can_unmount,
+        state: VolumeState::Mounted {
+            uri,
+            can_unmount: mount.can_unmount,
+        },
     })
 }
 
@@ -163,11 +182,8 @@ fn mountable_row(volume: &VolumeFacts) -> Option<VolumeRow> {
     };
     Some(VolumeRow {
         label: volume.name.clone(),
-        uri: None,
-        id: Some(volume.id()),
         kind: activation.as_deref().map_or(VolumeKind::Drive, kind_for),
-        mounted: false,
-        can_unmount: false,
+        state: VolumeState::Mountable { id: volume.id() },
     })
 }
 
@@ -200,7 +216,8 @@ mod tests {
 
     fn row_uri(root_uri: &str) -> Option<String> {
         let rows = locations(&[mount("Disk", root_uri)], &[]);
-        rows.into_iter().next().and_then(|row| row.uri)
+        let row = rows.into_iter().next()?;
+        row.uri().map(str::to_owned)
     }
 
     /// Ported from `desktop/tests/test_volume_locations.py::test_mounted_mtp_phone_and_afc_device_are_visible`
@@ -216,7 +233,7 @@ mod tests {
         let kinds: Vec<VolumeKind> = rows.iter().map(|row| row.kind).collect();
         assert_eq!(labels, ["Pixel 9", "iPhone", "Disk"]);
         assert_eq!(kinds, [VolumeKind::Device, VolumeKind::Device, VolumeKind::Drive]);
-        assert!(rows.iter().all(|row| row.mounted));
+        assert!(rows.iter().all(|row| row.uri().is_some()), "every row is mounted");
     }
 
     /// Ported from `desktop/tests/test_volume_locations.py::test_unmounted_phone_is_click_to_connect_device`
@@ -233,11 +250,10 @@ mod tests {
             rows,
             [VolumeRow {
                 label: "Android Phone".into(),
-                uri: None,
-                id: Some("mtp://[usb:001,011]/".into()),
                 kind: VolumeKind::Device,
-                mounted: false,
-                can_unmount: false,
+                state: VolumeState::Mountable {
+                    id: "mtp://[usb:001,011]/".into()
+                },
             }]
         );
         assert_eq!(phone.id(), "mtp://[usb:001,011]/");

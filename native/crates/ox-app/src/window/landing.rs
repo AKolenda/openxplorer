@@ -22,7 +22,7 @@ use crate::icons::{self, ArtKind, Glyph};
 use crate::locations::Page;
 use crate::places::{Places, SavedShare};
 use crate::theme::Appearance;
-use crate::volumes::{VolumeKind, VolumeRow};
+use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
 use super::gestures;
 
@@ -156,25 +156,25 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
         VolumeKind::Device => Glyph::Phone,
         VolumeKind::Drive => Glyph::Drive,
     };
-    let subtitle = match (&row.uri, row.kind) {
-        (Some(_), VolumeKind::Device) => "Connected device".to_owned(),
-        (Some(uri), VolumeKind::Drive) => locations.display_location(uri),
-        (None, _) => "Click to connect".to_owned(),
+    let subtitle = match (&row.state, row.kind) {
+        (VolumeState::Mounted { .. }, VolumeKind::Device) => "Connected device".to_owned(),
+        (VolumeState::Mounted { uri, .. }, VolumeKind::Drive) => locations.display_location(uri),
+        (VolumeState::Mountable { .. }, _) => "Click to connect".to_owned(),
     };
     let info = texts(&row.label, &subtitle);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 15);
     content.append(&icons::glyph(glyph, 46));
     content.append(&info);
-    match (&row.uri, &row.id) {
-        (Some(uri), _) => {
+    match &row.state {
+        VolumeState::Mounted { uri, .. } => {
             show_capacity(&info, uri);
             location_card("drive-card", uri, &content)
         }
-        (None, id) => gtk::Button::builder()
+        VolumeState::Mountable { id } => gtk::Button::builder()
             .child(&content)
             .css_classes(["drive-card"])
             .action_name("win.mount-volume")
-            .action_target(&id.clone().unwrap_or_default().to_variant())
+            .action_target(&id.to_variant())
             .build(),
     }
 }
@@ -182,11 +182,11 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
 fn local_disk() -> VolumeRow {
     VolumeRow {
         label: "Local Disk".to_owned(),
-        uri: Some("file:///".to_owned()),
-        id: None,
         kind: VolumeKind::Drive,
-        mounted: true,
-        can_unmount: false,
+        state: VolumeState::Mounted {
+            uri: "file:///".to_owned(),
+            can_unmount: false,
+        },
     }
 }
 

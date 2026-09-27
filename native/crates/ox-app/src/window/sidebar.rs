@@ -23,7 +23,7 @@ use ox_core::places::{NetworkKind, NetworkLocation, Place};
 use crate::icons::{self, ArtKind, Glyph};
 use crate::places::Places;
 use crate::theme::Appearance;
-use crate::volumes::{VolumeKind, VolumeRow};
+use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
 use super::gestures;
 
@@ -113,10 +113,11 @@ fn drive_entry(row: &VolumeRow, locations: &LocationContext) -> SidebarEntry {
         VolumeKind::Device => Glyph::Phone,
         VolumeKind::Drive => Glyph::Drive,
     };
-    let (target, tooltip) = match (&row.uri, &row.id) {
-        (Some(uri), _) => (RowTarget::Location(uri.clone()), locations.display_location(uri)),
-        (None, Some(id)) => (RowTarget::MountVolume(id.clone()), row.label.clone()),
-        (None, None) => (RowTarget::Location(String::new()), row.label.clone()),
+    let (target, tooltip) = match &row.state {
+        VolumeState::Mounted { uri, .. } => {
+            (RowTarget::Location(uri.clone()), locations.display_location(uri))
+        }
+        VolumeState::Mountable { id } => (RowTarget::MountVolume(id.clone()), row.label.clone()),
     };
     SidebarEntry {
         section: Section::ThisPc,
@@ -282,8 +283,8 @@ fn location_at(list: &gtk::ListBox, entries: &[SidebarEntry], y: f64) -> Option<
     let row = list.row_at_y(y as i32)?;
     let index = usize::try_from(row.index()).ok()?;
     match &entries.get(index)?.target {
-        RowTarget::Location(uri) if !uri.is_empty() => Some(uri.clone()),
-        _ => None,
+        RowTarget::Location(uri) => Some(uri.clone()),
+        RowTarget::MountVolume(_) => None,
     }
 }
 
@@ -401,11 +402,11 @@ mod tests {
     fn mounted(label: &str, uri: &str, kind: VolumeKind) -> VolumeRow {
         VolumeRow {
             label: label.into(),
-            uri: Some(uri.into()),
-            id: None,
             kind,
-            mounted: true,
-            can_unmount: true,
+            state: VolumeState::Mounted {
+                uri: uri.into(),
+                can_unmount: true,
+            },
         }
     }
 
@@ -476,11 +477,8 @@ mod tests {
     fn an_unmounted_volume_mounts_when_clicked() {
         let volume = VolumeRow {
             label: "Backup".into(),
-            uri: None,
-            id: Some("uuid-1".into()),
             kind: VolumeKind::Drive,
-            mounted: false,
-            can_unmount: false,
+            state: VolumeState::Mountable { id: "uuid-1".into() },
         };
         let entries = entries_for(&SettingsData::default(), &[volume]);
         let backup = entries

@@ -10,7 +10,7 @@ use gtk::subclass::prelude::*;
 
 use crate::locations::location_context;
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
-use crate::volumes::{VolumeKind, VolumeRow};
+use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 use crate::window::address_bar::AddressMode;
 
 /// The window's minimum width.
@@ -153,11 +153,11 @@ fn the_title_crumbs_and_address_call_a_phone_by_its_mount_name() {
     let test = TestWindow::open(&fixture.uri());
     let phone = VolumeRow {
         label: "Pixel 7".into(),
-        uri: Some("mtp://[usb:001,010]/".into()),
-        id: None,
         kind: VolumeKind::Device,
-        mounted: true,
-        can_unmount: true,
+        state: VolumeState::Mounted {
+            uri: "mtp://[usb:001,010]/".into(),
+            can_unmount: true,
+        },
     };
     let context = location_context(gtk::glib::home_dir(), &[phone]);
     test.window.imp().locations.replace(context);

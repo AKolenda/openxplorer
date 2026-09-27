@@ -122,11 +122,11 @@ fn network_mounts(volumes: &[VolumeRow]) -> Vec<NetworkMount> {
         .iter()
         .filter(|row| row.is_network())
         .filter_map(|row| {
-            let uri = row.uri.clone()?;
+            let uri = row.uri()?.to_owned();
             Some(NetworkMount {
                 uri,
                 label: row.label.clone(),
-                mounted: row.mounted,
+                mounted: true,
             })
         })
         .collect()
@@ -138,8 +138,7 @@ pub(crate) fn is_share_connected(share_uri: &str, volumes: &[VolumeRow]) -> bool
     let share = gio::File::for_uri(share_uri);
     volumes
         .iter()
-        .filter(|row| row.mounted)
-        .filter_map(|row| row.uri.as_deref())
+        .filter_map(VolumeRow::uri)
         .map(gio::File::for_uri)
         .any(|root| share.equal(&root) || share.has_prefix(&root))
 }
@@ -169,16 +168,16 @@ mod tests {
     use ox_core::places::NetworkKind;
 
     use super::*;
-    use crate::volumes::VolumeKind;
+    use crate::volumes::{VolumeKind, VolumeState};
 
     fn mounted(label: &str, uri: &str) -> VolumeRow {
         VolumeRow {
             label: label.into(),
-            uri: Some(uri.into()),
-            id: None,
             kind: VolumeKind::Drive,
-            mounted: true,
-            can_unmount: true,
+            state: VolumeState::Mounted {
+                uri: uri.into(),
+                can_unmount: true,
+            },
         }
     }
 
