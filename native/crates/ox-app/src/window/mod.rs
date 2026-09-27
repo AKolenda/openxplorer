@@ -50,7 +50,7 @@ use gtk::{gio, glib};
 use crate::folder_view::model::FolderModel;
 use crate::locations::Page;
 use crate::shared::AppContext;
-use crate::theme::{Appearance, ListenerId, Skin};
+use crate::theme::{Appearance, ListenerId, Skin, SkinChange};
 use crate::typeahead;
 
 use chrome::Chrome;
@@ -65,7 +65,7 @@ pub(crate) use content::FolderView;
 /// Handlers this window registered on objects that outlive it.
 #[derive(Debug, Default)]
 struct ExternalHandlers {
-    appearance: Option<ListenerId>,
+    skin: Option<ListenerId>,
     places: Option<glib::SignalHandlerId>,
     volumes: Vec<glib::SignalHandlerId>,
 }
@@ -311,7 +311,7 @@ impl BrowserWindow {
         self.connect_filter();
         self.connect_address_entry();
         self.connect_view_activation();
-        self.connect_appearance();
+        self.connect_skin();
         gestures::connect_history_buttons(
             self,
             glib::clone!(
@@ -359,19 +359,27 @@ impl BrowserWindow {
         ));
     }
 
-    fn connect_appearance(&self) {
+    fn connect_skin(&self) {
         let listener = self.skin().connect_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |appearance| window.appearance_changed(appearance)
+            move |change| window.skin_changed(change)
         ));
-        self.imp().handlers.borrow_mut().appearance = Some(listener);
+        self.imp().handlers.borrow_mut().skin = Some(listener);
         self.show_appearance_choice();
+        self.content().set_text_size(self.skin().text_size());
         self.connect_scale_factor_notify(|window| {
             window.content().icons.redraw();
             window.render_places();
             window.update_details_pane();
         });
+    }
+
+    fn skin_changed(&self, change: SkinChange) {
+        match change {
+            SkinChange::Appearance(appearance) => self.appearance_changed(appearance),
+            SkinChange::TextSize(percent) => self.content().set_text_size(percent),
+        }
     }
 
     fn appearance_changed(&self, appearance: Appearance) {
@@ -396,7 +404,7 @@ impl BrowserWindow {
 
     fn disconnect_external_handlers(&self) {
         let handlers = self.imp().handlers.take();
-        if let Some(listener) = handlers.appearance {
+        if let Some(listener) = handlers.skin {
             self.skin().disconnect_changed(listener);
         }
         if let Some(handler) = handlers.places {

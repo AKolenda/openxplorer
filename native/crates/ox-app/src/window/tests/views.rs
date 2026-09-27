@@ -8,11 +8,13 @@ use crate::folder_view::cells::FileCell;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{
-    application, descendants, skin, wait_until, Fixture, TestWindow, ThemeGuard,
+    application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::text_size::Step;
 use crate::theme::Appearance;
 use crate::window::content::FolderView;
+
+use super::geometry::{pixels, Bounds};
 
 /// The sort direction each details header shows: `ascending`,
 /// `descending` or `unsorted`, in column order.
@@ -242,4 +244,60 @@ fn closing_a_window_disconnects_it_from_the_shared_skin() {
     );
     drop(first);
     assert_eq!(skin().listener_count(), listeners);
+}
+
+/// Where the icon view's tiles are, relative to the view's scroller.
+fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
+    let grid = &test.window.content().grid;
+    let scroll = grid.parent().expect("the icon view scrolls");
+    let tiles = descendants::<FileCell>(grid);
+    let bounds = tiles
+        .iter()
+        .filter_map(|cell| cell.parent())
+        .filter_map(|tile| tile.compute_bounds(&scroll))
+        .map(|rect| {
+            (
+                pixels(rect.x()),
+                pixels(rect.y()),
+                pixels(rect.width()),
+                pixels(rect.height()),
+            )
+        })
+        .collect();
+    (scroll.width(), bounds)
+}
+
+/// A window that opened in the icon view used to keep one column, because
+/// GTK ignored the column count set while it allocated the view. Tiles sit
+/// where `renderRows` in app.js puts them: `floor(width / 135)` columns
+/// sharing the width less 20 pixels, the first 10 pixels in and 5 down,
+/// 4 pixels apart, 128 pixels tall on a 130-pixel pitch.
+///
+/// parity: VIEW-005
+#[gtk::test]
+fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
+    let fixture = Fixture::with_files(12);
+    let test = TestWindow::without_tabs();
+    test.window.show_view(FolderView::Icons(IconSize::Large));
+    test.show(&fixture.uri());
+    wait_for_frames(&test.window, 4);
+    let (width, tiles) = tile_bounds(&test);
+    let columns = width / 135;
+    assert!(columns >= 2, "a {width}-pixel pane holds several columns");
+    let tile_width = (width - 20) / columns - 4;
+    assert_eq!(tiles[0], (10, 5, tile_width, 128), "the first tile");
+    let first_row: Vec<_> = tiles.iter().filter(|tile| tile.1 == 5).collect();
+    assert_eq!(first_row.len(), usize::try_from(columns).expect("a few columns"));
+    let next_row = tiles.iter().find(|tile| tile.1 != 5).expect("a second row");
+    assert_eq!(next_row.1, 5 + 130, "rows are 130 pixels apart");
+    let first_cell = descendants::<FileCell>(&test.window.content().grid)
+        .into_iter()
+        .next()
+        .expect("a tile");
+    let name = descendants::<gtk::Label>(&first_cell)
+        .into_iter()
+        .next()
+        .expect("a name");
+    let name_top = name.compute_bounds(&first_cell).map(|rect| pixels(rect.y()));
+    assert_eq!(name_top, Some(56 + 8), "the name starts 8 pixels under the icon");
 }

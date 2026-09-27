@@ -14,8 +14,9 @@ use crate::test_support::harness::{descendants, wait_for_frames, TestWindow};
 /// A widget's place in the window: x, y, width and height in pixels.
 pub(super) type Bounds = (i32, i32, i32, i32);
 
+/// Rounds a widget coordinate to whole pixels.
 #[expect(clippy::cast_possible_truncation, reason = "window coordinates are small")]
-fn pixels(value: f32) -> i32 {
+pub(super) fn pixels(value: f32) -> i32 {
     value.round() as i32
 }
 

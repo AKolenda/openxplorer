@@ -147,7 +147,6 @@ impl FileCell {
         label.set_lines(2);
         label.set_ellipsize(pango::EllipsizeMode::End);
         label.set_justify(gtk::Justification::Center);
-        label.set_max_width_chars(14);
     }
 
     /// Shows `item`, drawing its art through `icons`.

@@ -11,7 +11,7 @@ use std::rc::Rc;
 use gtk::prelude::*;
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners, IconCells};
-use crate::theme::narrowest_tile_width;
+use crate::text_size;
 
 /// Icon sizes of Explorer's icon layouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,23 +122,39 @@ pub(crate) fn set_icon_size(
     view.set_factory(Some(&factory(icons, owners, size)));
 }
 
-/// The most columns tiles of `size` can fill in `width` pixels.
+/// An icon-view cell in pixels: a tile plus the gap to its neighbours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CellSize {
+    /// The narrowest a cell may be.
+    pub width: i32,
+    /// The row pitch.
+    pub height: i32,
+}
+
+/// The cell of tiles of `size` at `text_size` percent: `gridWidth` ×
+/// `gridRow` from `metrics()` in text-size.js for large icons (135 × 130
+/// at 100%), widened and heightened with the icon for the other sizes,
+/// which the Python app does not have.
+pub(crate) fn cell_size(size: IconSize, text_size: u32) -> CellSize {
+    let metrics = text_size::metrics(text_size);
+    let growth = size.pixels() - IconSize::Large.pixels();
+    CellSize {
+        width: metrics.grid_width.max(size.pixels() + 79),
+        height: metrics.grid_row + growth,
+    }
+}
+
+/// How many columns of `cell_width` a `width`-pixel pane shows:
+/// `max(1, floor(clientWidth / gridWidth))`, as `renderRows` in app.js
+/// counts them. The tiles then share the pane's width less its 20 pixels
+/// of inset, so they can be a little narrower than a cell.
 ///
-/// GTK keeps tiles for about thirty rows of `max-columns` alive, so a
-/// generous fixed cap (64 columns) made every listing build thousands of
-/// tiles. Bounding it by the width keeps the live tiles near what is
-/// visible without ever limiting the columns a wide window shows.
-pub(crate) fn columns_for_width(size: IconSize, width: f64) -> u32 {
-    let tile = f64::from(narrowest_tile_width(size));
-    let columns = (width / tile).floor().max(1.0);
-    // At most a few hundred columns fit on any screen.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "bounded above"
-    )]
-    let columns = columns.min(512.0) as u32;
-    columns
+/// GTK keeps tiles for about thirty rows of `max-columns` alive, so the
+/// window sets exactly this many columns rather than a generous cap,
+/// which made every listing build thousands of tiles.
+pub(crate) fn columns_for_width(cell_width: i32, width: i32) -> u32 {
+    let columns = width / cell_width.max(1);
+    u32::try_from(columns.max(1)).unwrap_or(1)
 }
 
 #[cfg(test)]
@@ -156,11 +172,60 @@ mod tests {
     }
 
     #[test]
-    fn grid_columns_follow_the_width_and_never_reach_zero() {
-        let large = f64::from(narrowest_tile_width(IconSize::Large));
-        assert_eq!(columns_for_width(IconSize::Large, 0.0), 1);
-        assert_eq!(columns_for_width(IconSize::Large, large * 3.5), 3);
-        assert!(columns_for_width(IconSize::Small, 1920.0) > columns_for_width(IconSize::ExtraLarge, 1920.0));
-        assert!(columns_for_width(IconSize::Small, 1920.0) < 64);
+    fn large_icon_cells_are_the_web_grid_cells() {
+        let cell = cell_size(IconSize::Large, 100);
+        assert_eq!(
+            cell,
+            CellSize {
+                width: 135,
+                height: 130
+            }
+        );
+        let larger_text = cell_size(IconSize::Large, 150);
+        assert_eq!(
+            larger_text,
+            CellSize {
+                width: 180,
+                height: 153
+            }
+        );
+        assert!(cell_size(IconSize::ExtraLarge, 100).width > cell.width);
+    }
+
+    /// A pane width and the columns `renderRows` gives it.
+    struct ColumnCase {
+        width: i32,
+        columns: u32,
+    }
+
+    #[test]
+    fn grid_columns_follow_the_width_as_render_rows_counts_them() {
+        let cases = [
+            ColumnCase { width: 0, columns: 1 },
+            ColumnCase {
+                width: 134,
+                columns: 1,
+            },
+            ColumnCase {
+                width: 270,
+                columns: 2,
+            },
+            ColumnCase {
+                width: 944,
+                columns: 6,
+            },
+            ColumnCase {
+                width: 962,
+                columns: 7,
+            },
+        ];
+        for case in cases {
+            assert_eq!(
+                columns_for_width(135, case.width),
+                case.columns,
+                "{} pixels",
+                case.width
+            );
+        }
     }
 }

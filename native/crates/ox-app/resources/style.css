@@ -329,14 +329,21 @@ columnview.files rubberband, gridview.files rubberband {
   background-color: alpha(@ox_accent, .15);
   border-radius: 0;
 }
-gridview.files { background-color: @ox_bg; color: @ox_text; padding: 8px 10px; }
+/* Tiles as renderRows places them: the first 10px in and 5px down, 4px
+   apart across and 2px down, sharing the pane's width less 20px; the
+   last row ends 9px above the bottom. */
+gridview.files { background-color: @ox_bg; color: @ox_text; padding: 4px 12px 8px 8px; }
 gridview.files > child {
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 12px 10px;
-  margin: 2px;
+  margin: 1px 2px;
   outline: none;
   background: none;
 }
+/* GTK's own theme gives a tile's box a 12px margin and 8px of spacing on
+   top of the cell's own 8px gap; the padding above is all the room
+   .file-tile has. */
+gridview.files > child > box { margin: 0; border-spacing: 0; }
 gridview.files > child:hover { background-color: @ox_hover; }
 gridview.files > child:selected {
   background-color: @ox_selected;

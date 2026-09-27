@@ -8,7 +8,7 @@
 
 use std::fmt::Write as _;
 
-use crate::folder_view::grid::IconSize;
+use crate::folder_view::grid::{self, IconSize};
 use crate::text_size;
 
 /// Selector and font size in pixels at 100%.
@@ -138,14 +138,26 @@ pub fn css_for_text_size(percent: u32) -> String {
     );
     let _ = writeln!(css, "{}", menu_css(metrics.scale));
     for size in IconSize::ALL {
-        let (width, height) = tile_size(metrics, size);
-        let class = size.css_class();
-        let _ = writeln!(
-            css,
-            "gridview.files.{class} > child {{ min-width: {width}px; min-height: {height}px; }}"
-        );
+        let _ = writeln!(css, "{}", tile_css(size, percent));
     }
     css
+}
+
+/// Vertical pixels of a tile's cell outside its content box: 12 pixels
+/// of padding above and below (`.file-tile`) and the 2-pixel gap to the
+/// next row, a 1-pixel margin on each side (style.css).
+const TILE_VERTICAL_CHROME: i32 = 12 + 12 + 1 + 1;
+
+/// A tile's size for icons of `size`. Its height fills the cell less the
+/// padding and the gap. Its width comes from the column the window sets
+/// (`columns_for_width` in `folder_view/grid.rs`), so the minimum is only
+/// the icon, which lets GTK use every column the window asks for.
+fn tile_css(size: IconSize, percent: u32) -> String {
+    let cell = grid::cell_size(size, percent);
+    let height = cell.height - TILE_VERTICAL_CHROME;
+    let width = size.pixels();
+    let class = size.css_class();
+    format!("gridview.files.{class} > child {{ min-width: {width}px; min-height: {height}px; }}")
 }
 
 /// Menu rows and width (`.menu button{min-height:calc(22px * s + 11px)}`
@@ -160,27 +172,6 @@ fn menu_css(scale: f64) -> String {
     )
 }
 
-/// Icon-view tile size for an icon size: the web interface's 135 × 130
-/// cell for large icons, grown or shrunk with the icon, never narrower than
-/// the text needs. The 6 and 8 pixels are the tile margins.
-fn tile_size(metrics: text_size::Metrics, size: IconSize) -> (i32, i32) {
-    let growth = size.pixels() - IconSize::Large.pixels();
-    let width = metrics.grid_width.max(size.pixels() + 79) - 6;
-    let height = metrics.grid_row + growth - 8;
-    (width, height)
-}
-
-/// Padding and margins style.css adds around a tile's minimum width.
-const TILE_CHROME: i32 = 24;
-
-/// The narrowest an icon-view tile of `size` is at any text size, border
-/// box included. The icon view uses it to bound how many columns it needs.
-pub fn narrowest_tile_width(size: IconSize) -> i32 {
-    let smallest_text = text_size::metrics(text_size::LEVELS[0]);
-    let (width, _) = tile_size(smallest_text, size);
-    width + TILE_CHROME
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,7 +182,7 @@ mod tests {
         assert!(css.contains("window.ox { font-size: 13.00px; }"));
         assert!(css.contains(".statusbar { font-size: 11.00px; }"));
         assert!(css.contains("columnview.files > listview > row { min-height: 36px; }"));
-        assert!(css.contains("gridview.files.icons-large > child { min-width: 129px; min-height: 122px; }"));
+        assert!(css.contains("gridview.files.icons-large > child { min-width: 56px; min-height: 104px; }"));
         assert!(css
             .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 33px; }"));
         assert!(

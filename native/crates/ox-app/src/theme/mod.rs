@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use gtk::gdk;
 
-pub use fonts::{css_for_text_size, narrowest_tile_width};
+pub use fonts::css_for_text_size;
 
 use crate::icons::Glyph;
 
@@ -113,6 +113,16 @@ impl ThemePreference {
     }
 }
 
+/// What changed in a [`Skin`], as its listeners hear it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkinChange {
+    /// The palette or the theme preference changed; this appearance is
+    /// drawn now.
+    Appearance(Appearance),
+    /// Text is drawn at this size now, in percent.
+    TextSize(u32),
+}
+
 /// Identifies a callback registered with [`Skin::connect_changed`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ListenerId(usize);
@@ -129,12 +139,12 @@ pub struct Skin {
     preference: Cell<ThemePreference>,
     system_dark: Cell<bool>,
     next_listener: Cell<usize>,
-    listeners: RefCell<Vec<AppearanceListener>>,
+    listeners: RefCell<Vec<SkinListener>>,
 }
 
-struct AppearanceListener {
+struct SkinListener {
     id: ListenerId,
-    callback: Rc<dyn Fn(Appearance)>,
+    callback: Rc<dyn Fn(SkinChange)>,
 }
 
 impl std::fmt::Debug for Skin {
@@ -220,19 +230,19 @@ impl Skin {
         self.set_appearance(self.preference().resolve(dark));
     }
 
-    /// Registers a window's palette callback; disconnect it when the window
-    /// closes.
+    /// Registers a window's callback for palette and text-size changes;
+    /// disconnect it when the window closes.
     ///
     /// # Panics
     ///
     /// Only after `usize::MAX` registrations in one process.
-    pub fn connect_changed(&self, listener: impl Fn(Appearance) + 'static) -> ListenerId {
+    pub fn connect_changed(&self, listener: impl Fn(SkinChange) + 'static) -> ListenerId {
         let id = self.next_listener.get();
         let next = id
             .checked_add(1)
             .expect("appearance listener IDs cannot be exhausted");
         self.next_listener.set(next);
-        self.listeners.borrow_mut().push(AppearanceListener {
+        self.listeners.borrow_mut().push(SkinListener {
             id: ListenerId(id),
             callback: Rc::new(listener),
         });
@@ -250,6 +260,12 @@ impl Skin {
     }
 
     fn notify_appearance(&self) {
+        self.notify(SkinChange::Appearance(self.appearance()));
+    }
+
+    /// Calls every listener with `change`. They are copied out first, so a
+    /// listener may connect or disconnect others.
+    fn notify(&self, change: SkinChange) {
         let listeners: Vec<_> = self
             .listeners
             .borrow()
@@ -257,7 +273,7 @@ impl Skin {
             .map(|listener| Rc::clone(&listener.callback))
             .collect();
         for listener in listeners {
-            listener(self.appearance());
+            listener(change);
         }
     }
 
@@ -266,13 +282,15 @@ impl Skin {
         self.text_size.get()
     }
 
-    /// Applies a text size (percent). Returns false when nothing changed.
+    /// Applies a text size (percent) and tells the listeners. Returns false
+    /// when nothing changed.
     pub fn set_text_size(&self, percent: u32) -> bool {
         let percent = crate::text_size::normalize(percent);
         if self.text_size.replace(percent) == percent {
             return false;
         }
         self.text.load_from_string(&css_for_text_size(percent));
+        self.notify(SkinChange::TextSize(percent));
         true
     }
 }

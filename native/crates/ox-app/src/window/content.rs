@@ -141,7 +141,7 @@ pub(super) struct Content {
     /// The icon view.
     pub grid: gtk::GridView,
     grid_scroll: gtk::ScrolledWindow,
-    grid_size: Rc<Cell<IconSize>>,
+    grid_scale: Rc<Cell<GridScale>>,
     /// The active tab's filtered, sorted and selectable items.
     pub model: FolderModel,
     /// Bound item icons, redrawn when the theme or scale changes.
@@ -185,7 +185,10 @@ impl Content {
             details_scroll,
             grid,
             grid_scroll,
-            grid_size: Rc::new(Cell::new(IconSize::Large)),
+            grid_scale: Rc::new(Cell::new(GridScale {
+                icon_size: IconSize::Large,
+                text_size: crate::text_size::DEFAULT,
+            })),
             model,
             icons,
             owners,
@@ -228,7 +231,7 @@ impl Content {
 
     /// The view that lists items now.
     pub fn view(&self) -> FolderView {
-        let icons = FolderView::Icons(self.grid_size.get());
+        let icons = FolderView::Icons(self.grid_scale.get().icon_size);
         let shown = self.views.visible_child_name();
         if shown.as_deref() == Some(icons.stack_name()) {
             icons
@@ -246,12 +249,17 @@ impl Content {
                 self.details.set_model(Some(selection));
             }
             FolderView::Icons(size) => {
-                if self.grid_size.replace(size) != size {
+                let scale = self.grid_scale.get();
+                if scale.icon_size != size {
+                    self.grid_scale.set(GridScale {
+                        icon_size: size,
+                        ..scale
+                    });
                     grid::set_icon_size(&self.grid, &self.icons, &self.owners, size);
                 }
                 self.details.set_model(None::<&gtk::MultiSelection>);
                 self.grid.set_model(Some(selection));
-                self.update_grid_columns();
+                set_grid_columns(&self.grid, &self.grid_scroll, self.grid_scale.get());
             }
         }
         self.views.set_visible_child_name(view.stack_name());
@@ -312,24 +320,57 @@ impl Content {
         }
     }
 
-    /// Keeps the icon view's column cap near what fits (see
+    /// Draws the icon view's cells for text of `percent` size.
+    pub fn set_text_size(&self, percent: u32) {
+        let scale = self.grid_scale.get();
+        self.grid_scale.set(GridScale {
+            text_size: percent,
+            ..scale
+        });
+        set_grid_columns(&self.grid, &self.grid_scroll, self.grid_scale.get());
+    }
+
+    /// Keeps the icon view's columns at what fits its pane (see
     /// [`grid::columns_for_width`]).
     fn fit_grid_columns_to_width(&self) {
         let grid = self.grid.downgrade();
-        let grid_size = Rc::clone(&self.grid_size);
-        self.grid_scroll
-            .hadjustment()
-            .connect_page_size_notify(move |adjustment| {
-                if let Some(grid) = grid.upgrade() {
-                    let columns = grid::columns_for_width(grid_size.get(), adjustment.page_size());
-                    grid.set_max_columns(columns);
-                }
-            });
+        let scroll = self.grid_scroll.downgrade();
+        let scale = Rc::clone(&self.grid_scale);
+        self.grid_scroll.hadjustment().connect_page_size_notify(move |_| {
+            set_grid_columns_when_allocated(grid.clone(), scroll.clone(), Rc::clone(&scale));
+        });
     }
+}
 
-    fn update_grid_columns(&self) {
-        let width = self.grid_scroll.hadjustment().page_size();
-        let columns = grid::columns_for_width(self.grid_size.get(), width);
-        self.grid.set_max_columns(columns);
+/// What sizes the icon view's cells: the icon size and the text size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct GridScale {
+    icon_size: IconSize,
+    /// In percent.
+    text_size: u32,
+}
+
+/// Sets the icon view's columns for its pane's width, once GTK has
+/// finished allocating the pane. The page size changes while GTK
+/// allocates the grid, and GTK ignores a resize the grid queues then, so a
+/// window that opened in the icon view kept one column.
+fn set_grid_columns_when_allocated(
+    grid: glib::WeakRef<gtk::GridView>,
+    scroll: glib::WeakRef<gtk::ScrolledWindow>,
+    scale: Rc<Cell<GridScale>>,
+) {
+    glib::idle_add_local_once(move || {
+        if let (Some(grid), Some(scroll)) = (grid.upgrade(), scroll.upgrade()) {
+            set_grid_columns(&grid, &scroll, scale.get());
+        }
+    });
+}
+
+/// Gives `grid` the columns its scroller's width holds at `scale`.
+fn set_grid_columns(grid: &gtk::GridView, scroll: &gtk::ScrolledWindow, scale: GridScale) {
+    let cell = grid::cell_size(scale.icon_size, scale.text_size);
+    let columns = grid::columns_for_width(cell.width, scroll.width());
+    if grid.max_columns() != columns {
+        grid.set_max_columns(columns);
     }
 }
