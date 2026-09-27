@@ -143,6 +143,16 @@ class IsolatedRunTests(MarkedProcessTestCase):
         with contextlib.redirect_stdout(io.StringIO()):  # Hide the command echo.
             check.run_in_own_session(command, self.environment, timeout)
 
+    def run_through_driver(self, command: list[str], timeout: float) -> None:
+        """Run a command with run_isolated(), which makes its own root and environment.
+
+        The marker goes into this process's environment, which run_isolated()
+        copies, so that survivors can still be found.
+        """
+        with (patch.dict(os.environ, {MARKER_NAME: self.marker}),
+              contextlib.redirect_stdout(io.StringIO())):  # Hide the command echo.
+            check.run_isolated(command, timeout)
+
     def test_the_command_gets_a_private_display_bus_and_authority_file(self) -> None:
         """The command sees a new display and bus, never the ones of the live session."""
         self.run_isolated_shell(
@@ -163,6 +173,25 @@ class IsolatedRunTests(MarkedProcessTestCase):
         self.assertTrue((self.root / 'home/started').exists(), 'the command never started')
         self.assert_nothing_left_running()
         self.assertEqual(list(self.temporary_files.iterdir()), [])
+
+    def test_a_failing_test_is_reported_by_its_own_command(self) -> None:
+        """The failure names the test command and its status, not the isolation wrapper."""
+        command = ['sh', '-c', 'exit 3']
+        with self.assertRaises(subprocess.CalledProcessError) as raised:
+            self.run_through_driver(command, timeout=60)
+        self.assertEqual(raised.exception.cmd, command)
+        self.assertEqual(raised.exception.returncode, 3)
+        self.assert_nothing_left_running()
+
+    def test_a_hung_test_is_reported_by_its_own_command(self) -> None:
+        """The timeout names the test command, not the isolation wrapper."""
+        command = ['sh', '-c', 'exec sleep 300']
+        with self.assertRaises(check.CheckTimeoutError) as raised:
+            self.run_through_driver(command, timeout=3)
+        self.assertEqual(raised.exception.command, command)
+        self.assertTrue(str(raised.exception).startswith("sh -c 'exec sleep 300' did not"))
+        self.assertIn('--test-timeout', str(raised.exception))
+        self.assert_nothing_left_running()
 
 
 class EnvironmentTests(unittest.TestCase):
@@ -225,6 +254,56 @@ class OptionTests(unittest.TestCase):
         self.assertEqual(status, 2)
         run_all_checks.assert_not_called()
         self.assertIn('Required native check tools are missing: cargo, python3', stderr.getvalue())
+
+
+class FailureReportTests(unittest.TestCase):
+    """The driver's last line names what failed, in a form that can be rerun."""
+
+    def test_a_failed_command_is_shown_as_it_would_be_typed(self) -> None:
+        """Arguments are shell-quoted, and a signal is told apart from an exit status."""
+        cases = {
+            'exit status': (
+                subprocess.CalledProcessError(101, ('cargo', 'clippy', '--', '-D', 'warnings')),
+                'cargo clippy -- -D warnings exited with status 101',
+            ),
+            'signal': (
+                subprocess.CalledProcessError(-9, ['cargo', 'test']),
+                'cargo test was killed by signal 9',
+            ),
+            'path with a space': (
+                subprocess.CalledProcessError(1, [Path('/tmp/a b/browsing-1'), '--nocapture']),
+                "'/tmp/a b/browsing-1' --nocapture exited with status 1",
+            ),
+        }
+        for case, (error, description) in cases.items():
+            with self.subTest(case=case):
+                self.assertEqual(check.describe_failed_command(error), description)
+
+    def test_a_failed_step_ends_the_run_with_status_1_and_names_the_step(self) -> None:
+        """main() reports the failed command, not a Python repr of it, and returns 1."""
+        failure = subprocess.CalledProcessError(101, ('cargo', 'clippy', '--workspace'))
+        stderr = io.StringIO()
+        with (patch.object(check, 'missing_tools', return_value=[]),
+              patch.object(check, 'run_all_checks', side_effect=failure),
+              contextlib.redirect_stderr(stderr)):
+            status = check.main([])
+        self.assertEqual(status, 1)
+        self.assertEqual(stderr.getvalue(), 'Native checks failed: cargo clippy --workspace '
+                                            'exited with status 101; its output is above.\n')
+
+    def test_a_timeout_ends_the_run_with_status_1_and_says_how_to_recover(self) -> None:
+        """A timeout names the command and the option that allows more time."""
+        failure = check.CheckTimeoutError(['/target/debug/deps/browsing-1'], 180.0)
+        stderr = io.StringIO()
+        with (patch.object(check, 'missing_tools', return_value=[]),
+              patch.object(check, 'run_all_checks', side_effect=failure),
+              contextlib.redirect_stderr(stderr)):
+            status = check.main([])
+        self.assertEqual(status, 1)
+        self.assertEqual(stderr.getvalue(),
+                         'Native checks failed: /target/debug/deps/browsing-1 did not finish '
+                         'within 180 s; its processes were stopped. Rerun with a larger '
+                         '--test-timeout if the test is only slow.\n')
 
 
 if __name__ == '__main__':

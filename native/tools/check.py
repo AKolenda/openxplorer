@@ -87,7 +87,15 @@ class CheckError(Exception):
 
 
 class CheckTimeoutError(CheckError):
-    """A check exceeded its time limit; its processes have been stopped."""
+    """A command exceeded its time limit; its processes have been stopped."""
+
+    def __init__(self, command: Sequence[str], timeout: float) -> None:
+        super().__init__(
+            f'{shlex.join(command)} did not finish within {timeout:g} s; its processes '
+            'were stopped. Rerun with a larger --test-timeout if the test is only slow.'
+        )
+        self.command = list(command)
+        self.timeout = timeout
 
 
 def announce(command: Sequence[str]) -> None:
@@ -251,8 +259,7 @@ def run_in_own_session(command: Sequence[str], environment: dict[str, str], time
     try:
         returncode = process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        raise CheckTimeoutError(f'{shlex.join(command)} did not finish within {timeout:g} s; '
-                           'its processes were stopped.') from None
+        raise CheckTimeoutError(command, timeout) from None
     finally:
         stop_process_group(process, grace_seconds)
     if returncode != 0:
@@ -260,10 +267,22 @@ def run_in_own_session(command: Sequence[str], environment: dict[str, str], time
 
 
 def run_isolated(command: Sequence[str], timeout: float) -> None:
-    """Run a command on a private display and bus with disposable user data."""
+    """Run a command on a private display and bus with disposable user data.
+
+    A failure names the command itself, not the xvfb-run and dbus-run-session
+    wrapper around it: the wrapper hides which test failed, and its authority
+    file is deleted by the time the failure is reported. The log line printed
+    before the run still shows the full wrapped command.
+    """
     with tempfile.TemporaryDirectory(prefix='openxplorer-native-test-') as temporary:
         root = Path(temporary)
-        run_in_own_session(isolated_command(root, command), isolated_environment(root), timeout)
+        wrapped = isolated_command(root, command)
+        try:
+            run_in_own_session(wrapped, isolated_environment(root), timeout)
+        except CheckTimeoutError:
+            raise CheckTimeoutError(command, timeout) from None
+        except subprocess.CalledProcessError as error:
+            raise subprocess.CalledProcessError(error.returncode, list(command)) from None
 
 
 def check_inventories_and_driver() -> None:
@@ -329,6 +348,14 @@ def parse_arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def describe_failed_command(error: subprocess.CalledProcessError) -> str:
+    """Name a failed command and how it ended, quoted as it would be typed in a shell."""
+    command = shlex.join(str(part) for part in error.cmd)
+    if error.returncode < 0:
+        return f'{command} was killed by signal {-error.returncode}'
+    return f'{command} exited with status {error.returncode}'
+
+
 def missing_tools() -> list[str]:
     """Return the required tools that are not on PATH."""
     return [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
@@ -345,7 +372,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     try:
         run_all_checks(arguments.test_timeout)
-    except (CheckError, subprocess.CalledProcessError) as error:
+    except subprocess.CalledProcessError as error:
+        print(f'Native checks failed: {describe_failed_command(error)}; its output is above.',
+              file=sys.stderr)
+        return 1
+    except CheckError as error:
         print(f'Native checks failed: {error}', file=sys.stderr)
         return 1
     return 0
