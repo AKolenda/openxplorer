@@ -32,10 +32,10 @@ pub enum EntryError {
     /// The work was cancelled; not an error to show.
     #[error("Operation cancelled.")]
     Cancelled,
-    /// An address that is not a supported location, refused before GIO was
-    /// asked.
-    #[error("{0}")]
-    Invalid(String),
+    /// An address that is not a supported location, refused by the
+    /// `location` module before GIO was asked.
+    #[error(transparent)]
+    Invalid(#[from] LocationError),
     /// A file was offered for Quick access (`verify_pin` in Python).
     #[error("Only folders and network shares can be pinned to Quick access.")]
     NotPinnable,
@@ -81,13 +81,6 @@ impl From<glib::Error> for EntryError {
             Some(gio::IOErrorEnum::Cancelled) => Self::Cancelled,
             _ => Self::Other(message),
         }
-    }
-}
-
-impl From<LocationError> for EntryError {
-    /// An address refused by the `location` module, before GIO was asked.
-    fn from(error: LocationError) -> Self {
-        Self::Invalid(error.message().to_owned())
     }
 }
 
@@ -157,9 +150,13 @@ mod tests {
 
     /// parity: OPS-037
     #[test]
-    fn refused_addresses_keep_the_location_message() {
+    fn refused_addresses_keep_the_location_error() {
         let error = EntryError::from(LocationError::new("Enter a folder location."));
-        assert_eq!(error, EntryError::Invalid("Enter a folder location.".into()));
+        assert_eq!(
+            error,
+            EntryError::Invalid(LocationError::new("Enter a folder location."))
+        );
+        assert_eq!(error.to_string(), "Enter a folder location.");
         assert_eq!(error.code(), "error");
     }
 

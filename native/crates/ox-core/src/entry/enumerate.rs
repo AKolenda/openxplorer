@@ -9,7 +9,7 @@
 //! view is not re-sorted for every read.
 //!
 //! Unlike the Python backend, hidden items are listed too, with
-//! [`Entry::hidden`] set: the view filters them, so toggling Show hidden
+//! [`Entry::is_hidden`] set: the view filters them, so toggling Show hidden
 //! files does not read the folder again.
 
 use std::time::{Duration, Instant};
@@ -122,7 +122,7 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
-    use crate::entry::entry_for_uri;
+    use crate::entry::test_support::entry_for_uri;
 
     /// [`FIRST_BATCH_SIZE`] as a row count.
     fn first_batch_len() -> usize {

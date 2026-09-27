@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Locale-aware `strftime` patterns for numeric dates and clock times.
 //!
-//! The web UI called `toLocaleDateString(undefined, {year: 'numeric',
-//! month: '2-digit', day: '2-digit'})` and `toLocaleString()`.
+//! Ports the date options of `dateText` and `timestamp` in
+//! `desktop/ui/app.js`. The web UI called `toLocaleDateString(undefined,
+//! {year: 'numeric', month: '2-digit', day: '2-digit'})` and
+//! `toLocaleString()`.
 //! `g_date_time_format` has no such options, but its `%x` and `%X`
 //! conversions use the C library's `LC_TIME` formats. Those differ from the
 //! browser's in one way that matters: many locales write a two-digit year

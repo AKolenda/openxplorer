@@ -8,11 +8,10 @@
 
 use gio::prelude::*;
 
-use super::attributes::{optional_boolean, path_attribute, string_attribute};
+use super::attributes::{optional_boolean, path_attribute, string_attribute, time_attribute};
 use super::classify::{classify_entry, Classification, ItemMetadata};
 use super::type_label::type_label;
 use super::{Entry, EntryKind};
-use crate::location::split_location;
 
 /// Builds an entry for `file` from its queried `info`.
 ///
@@ -25,18 +24,14 @@ pub fn entry_from_info(file: &gio::File, info: &gio::FileInfo) -> Entry {
     build_entry(&uri, info, base_name)
 }
 
-/// Builds an entry for the item at `uri` from its queried `info`.
-///
-/// Takes the URI as text so the result does not depend on how GIO's
-/// virtual file system would rewrite it. When the backend reports no name
-/// at all, the last segment of the URI is used.
-pub fn entry_for_uri(uri: &str, info: &gio::FileInfo) -> Entry {
-    build_entry(uri, info, || last_uri_segment(uri))
-}
-
-/// The shared body of [`entry_from_info`] and [`entry_for_uri`];
-/// `fallback_name` is only called when the backend reported no name.
-fn build_entry(uri: &str, info: &gio::FileInfo, fallback_name: impl FnOnce() -> Option<String>) -> Entry {
+/// The body of [`entry_from_info`], shared with the test fixtures' entries
+/// for a URI given as text; `fallback_name` is only called when the backend
+/// reported no name.
+pub(super) fn build_entry(
+    uri: &str,
+    info: &gio::FileInfo,
+    fallback_name: impl FnOnce() -> Option<String>,
+) -> Entry {
     let kind = file_kind(info);
     let content_type = string_attribute(info, "standard::content-type");
     let classification = classify_info(uri, info, kind, content_type.as_deref());
@@ -58,9 +53,9 @@ fn build_entry(uri: &str, info: &gio::FileInfo, fallback_name: impl FnOnce() -> 
         size,
         type_label,
         content_type,
-        modified: info.attribute_uint64("time::modified"),
-        hidden: info.boolean("standard::is-hidden"),
-        symlink: info.boolean("standard::is-symlink"),
+        modified: time_attribute(info, "time::modified"),
+        is_hidden: info.boolean("standard::is-hidden"),
+        is_symlink: info.boolean("standard::is-symlink"),
         trash_orig_path: path_attribute(info, "trash::orig-path"),
         trash_deletion_date: deletion_date(info),
         can_rename: optional_boolean(info, "access::can-rename"),
@@ -116,14 +111,6 @@ fn display_name(uri: &str, info: &gio::FileInfo, fallback_name: impl FnOnce() ->
         .unwrap_or_else(|| uri.to_owned())
 }
 
-/// The decoded last path segment of `uri`, if it has one.
-fn last_uri_segment(uri: &str) -> Option<String> {
-    let parts = split_location(uri).ok()?;
-    let segment = parts.path.rsplit('/').find(|segment| !segment.is_empty())?;
-    let decoded = percent_encoding::percent_decode_str(segment).decode_utf8_lossy();
-    Some(decoded.into_owned())
-}
-
 /// `standard::size`; `None` when the backend reports none, which is unknown
 /// rather than zero bytes.
 fn reported_size(info: &gio::FileInfo) -> Option<u64> {
@@ -156,7 +143,10 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::entry::test_support::{file_info, smb_share_info, with_target, FOLDER_MIME_TYPE};
+    use crate::entry::test_support::{
+        entry_for_uri, file_info, smb_share_info, with_target, FOLDER_MIME_TYPE,
+    };
+    use crate::format::date_text;
 
     /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_mountable_network_share_has_directory_icon_flag_and_unknown_size`
     ///
@@ -169,7 +159,7 @@ mod tests {
         assert_eq!(share.kind, EntryKind::Mountable);
         assert_eq!(share.type_label, "Network share");
         assert_eq!(share.size, None);
-        assert_eq!(share.modified, 0);
+        assert_eq!(share.modified, None);
     }
 
     /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_gvfs_mountable_browse_uri_and_target_remain_distinct`
@@ -199,8 +189,21 @@ mod tests {
         let folder = entry_for_uri("smb://nas/work/Design", &info);
         assert!(folder.is_dir);
         assert_eq!(folder.size, None);
-        assert_eq!(folder.modified, 12345);
+        assert_eq!(folder.modified, Some(12345));
         assert_eq!(folder.type_label, "File folder");
+    }
+
+    /// The Python app sent 0 for a missing time, and the web interface
+    /// showed `—` for every 0 (`dateText` in `desktop/ui/app.js`).
+    ///
+    /// parity: VIEW-001, VIEW-002
+    #[test]
+    fn modification_time_of_zero_is_shown_as_unknown() {
+        let info = file_info(gio::FileType::Regular, "old.txt", Some("text/plain"));
+        info.set_attribute_uint64("time::modified", 0);
+        let file = entry_for_uri("file:///tmp/old.txt", &info);
+        assert_eq!(file.modified, None);
+        assert_eq!(date_text(file.modified), "—");
     }
 
     /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_zero_byte_file_remains_zero_bytes`

@@ -24,6 +24,20 @@ pub(super) fn optional_boolean(info: &gio::FileInfo, attribute: &str) -> Option<
     info.has_attribute(attribute).then(|| info.boolean(attribute))
 }
 
+/// A time attribute (`time::modified`) in seconds since the Unix epoch;
+/// `None` when the backend did not report it.
+///
+/// A reported 0 is unknown too. The Python app sent 0 for a missing time
+/// and the web interface showed every 0 as unknown (`dateText` and
+/// `timestamp` in `desktop/ui/app.js`), never as 1 January 1970.
+pub(super) fn time_attribute(info: &gio::FileInfo, attribute: &str) -> Option<u64> {
+    if !info.has_attribute(attribute) {
+        return None;
+    }
+    let seconds = info.attribute_uint64(attribute);
+    (seconds != 0).then_some(seconds)
+}
+
 /// A path attribute (`thumbnail::path`, `trash::orig-path`), byte for byte.
 ///
 /// These are byte strings and need not be UTF-8, so they are read through

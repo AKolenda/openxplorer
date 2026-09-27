@@ -36,7 +36,7 @@ mod type_label;
 
 pub use enumerate::enumerate_folder;
 pub use error::EntryError;
-pub use info::{entry_for_uri, entry_from_info};
+pub use info::entry_from_info;
 pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
 pub use thumbnail::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
 
@@ -133,14 +133,16 @@ pub struct Entry {
     pub type_label: String,
     /// MIME type, when known.
     pub content_type: Option<String>,
-    /// Seconds since the Unix epoch; 0 when unknown, as in the Python app.
-    pub modified: u64,
+    /// `time::modified` in seconds since the Unix epoch; `None` when the
+    /// backend reports no time, or 0, which the Python app also showed as
+    /// unknown.
+    pub modified: Option<u64>,
     /// Hidden by name, by the folder's `.hidden` list or by the backend
     /// (`standard::is-hidden`).
-    pub hidden: bool,
+    pub is_hidden: bool,
     /// A symbolic link, listed with its target's type
     /// (`standard::is-symlink`).
-    pub symlink: bool,
+    pub is_symlink: bool,
     /// For items in `trash:///`: where Restore puts them back.
     pub trash_orig_path: Option<PathBuf>,
     /// For items in `trash:///`: when they were deleted, in seconds since

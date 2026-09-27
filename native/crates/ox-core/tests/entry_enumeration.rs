@@ -52,7 +52,11 @@ fn listing_preserves_file_and_folder_metadata() {
     assert_eq!(file.size, Some(5));
     assert!(!file.is_dir);
     assert!(file.can_operate);
-    assert!(file.modified > 0);
+    assert!(
+        file.modified.is_some_and(|seconds| seconds > 0),
+        "{:?}",
+        file.modified
+    );
     assert_eq!(file.content_type.as_deref(), Some("text/plain"));
     let directory = find(&entries, "Projects");
     assert!(directory.is_dir);
@@ -67,8 +71,8 @@ fn hidden_items_are_listed_and_flagged() {
 
     let entries = list(folder.path()).expect("listing");
 
-    assert!(find(&entries, ".secret").hidden);
-    assert!(!find(&entries, "Plan.txt").hidden);
+    assert!(find(&entries, ".secret").is_hidden);
+    assert!(!find(&entries, "Plan.txt").is_hidden);
 }
 
 /// parity: VIEW-024
@@ -82,8 +86,8 @@ fn names_in_a_hidden_list_are_flagged_hidden() {
 
     let entries = list(folder.path()).expect("listing");
 
-    assert!(find(&entries, "Notes.txt").hidden);
-    assert!(!find(&entries, "Plan.txt").hidden);
+    assert!(find(&entries, "Notes.txt").is_hidden);
+    assert!(!find(&entries, "Plan.txt").is_hidden);
 }
 
 #[test]
@@ -103,7 +107,7 @@ fn symlink_to_a_folder_is_browsable_without_recursing_into_it() {
 
     assert_eq!(entries.len(), 2);
     let link = find(&entries, "Shortcut");
-    assert!(link.symlink);
+    assert!(link.is_symlink);
     assert!(link.is_dir);
 }
 

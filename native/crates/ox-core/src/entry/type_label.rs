@@ -11,14 +11,16 @@
 //! ("Microsoft Word Document", "Microsoft Excel Worksheet"), so they are
 //! shown unchanged, as in the Python app.
 
+use super::classify::FolderType;
+
 /// Label for an item whose content type is unknown or has no description.
 const UNKNOWN_TYPE: &str = "File";
 
-/// Type column text: `folder_type` for navigable items, otherwise GIO's
-/// description of `content_type`, otherwise "File".
-pub(super) fn type_label(folder_type: Option<&str>, content_type: Option<&str>) -> String {
+/// Type column text: the label of `folder_type` for navigable items,
+/// otherwise GIO's description of `content_type`, otherwise "File".
+pub(super) fn type_label(folder_type: Option<FolderType>, content_type: Option<&str>) -> String {
     if let Some(folder_type) = folder_type {
-        return folder_type.to_owned();
+        return folder_type.label().to_owned();
     }
     let Some(content_type) = content_type.filter(|mime| !mime.is_empty()) else {
         return UNKNOWN_TYPE.to_owned();
@@ -34,15 +36,16 @@ pub(super) fn type_label(folder_type: Option<&str>, content_type: Option<&str>) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entry::test_support::FOLDER_MIME_TYPE;
 
     /// parity: VIEW-002
     #[test]
     fn folder_wording_wins() {
         assert_eq!(
-            type_label(Some("Network share"), Some("inode/directory")),
+            type_label(Some(FolderType::NetworkShare), Some(FOLDER_MIME_TYPE)),
             "Network share"
         );
-        assert_eq!(type_label(Some("File folder"), None), "File folder");
+        assert_eq!(type_label(Some(FolderType::FileFolder), None), "File folder");
     }
 
     /// Regression: the port replaced GIO's localised descriptions of text and

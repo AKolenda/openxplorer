@@ -11,15 +11,30 @@
 use super::EntryKind;
 use crate::location::{normalise, split_location, LocationParts};
 
-/// Type column text for an SMB share in a server listing.
-const NETWORK_SHARE: &str = "Network share";
-/// Type column text for other navigable virtual items (servers, shortcuts).
-const NETWORK_LOCATION: &str = "Network location";
-/// Type column text for an ordinary folder.
-const FILE_FOLDER: &str = "File folder";
-
 /// The MIME type GIO reports for folders and folder-like items.
-const FOLDER_MIME_TYPE: &str = "inode/directory";
+pub(super) const FOLDER_MIME_TYPE: &str = "inode/directory";
+
+/// What the Type column calls a navigable item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FolderType {
+    /// An ordinary folder.
+    FileFolder,
+    /// An SMB share in a server listing.
+    NetworkShare,
+    /// Another navigable virtual item, such as a server or a shortcut.
+    NetworkLocation,
+}
+
+impl FolderType {
+    /// The Type column text, in the Python app's wording.
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::FileFolder => "File folder",
+            Self::NetworkShare => "Network share",
+            Self::NetworkLocation => "Network location",
+        }
+    }
+}
 
 /// The GIO metadata of one item, as [`classify_entry`] reads it.
 #[derive(Debug, Clone, Copy)]
@@ -56,9 +71,9 @@ pub(super) struct Classification {
     /// Where a navigable virtual item leads: the validated backend target,
     /// or the item's own URI when the backend gave none.
     pub target_uri: Option<String>,
-    /// Type column text for navigable items; `None` for files, whose type
-    /// comes from their content type.
-    pub folder_type: Option<&'static str>,
+    /// What the Type column calls a navigable item; `None` for files, whose
+    /// type comes from their content type.
+    pub folder_type: Option<FolderType>,
 }
 
 /// Classifies one item from its GIO metadata.
@@ -93,14 +108,14 @@ fn has_real_kind(kind: EntryKind) -> bool {
     matches!(kind, EntryKind::Directory | EntryKind::File | EntryKind::Symlink)
 }
 
-/// Type column text for a navigable item.
-fn folder_type(item: &ItemMetadata<'_>) -> &'static str {
+/// What the Type column calls a navigable item.
+fn folder_type(item: &ItemMetadata<'_>) -> FolderType {
     if item.kind == EntryKind::Mountable && is_smb(item.uri) {
-        NETWORK_SHARE
+        FolderType::NetworkShare
     } else if item.is_virtual() {
-        NETWORK_LOCATION
+        FolderType::NetworkLocation
     } else {
-        FILE_FOLDER
+        FolderType::FileFolder
     }
 }
 
@@ -177,8 +192,6 @@ mod tests {
     use super::*;
     use EntryKind::{Directory, File, Mountable, Shortcut, Unknown};
 
-    const DIRECTORY_MIME: Option<&str> = Some(FOLDER_MIME_TYPE);
-
     /// Classifies an item the backend did not flag as virtual.
     fn classify(
         kind: EntryKind,
@@ -203,14 +216,14 @@ mod tests {
         let share = classify(
             Mountable,
             "smb://nas/work",
-            DIRECTORY_MIME,
+            Some(FOLDER_MIME_TYPE),
             Some("smb://NAS/work"),
         );
         assert!(share.is_dir);
         assert!(share.is_virtual);
         assert!(!share.can_operate);
         assert_eq!(share.target_uri.as_deref(), Some("smb://nas/work"));
-        assert_eq!(share.folder_type, Some("Network share"));
+        assert_eq!(share.folder_type, Some(FolderType::NetworkShare));
     }
 
     /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_shortcut_server_uses_real_target`
@@ -221,12 +234,12 @@ mod tests {
         let server = classify(
             Shortcut,
             "smb://workgroup/ALPHA",
-            DIRECTORY_MIME,
+            Some(FOLDER_MIME_TYPE),
             Some("smb://ALPHA/"),
         );
         assert!(server.is_dir);
         assert_eq!(server.target_uri.as_deref(), Some("smb://alpha/"));
-        assert_eq!(server.folder_type, Some("Network location"));
+        assert_eq!(server.folder_type, Some(FolderType::NetworkLocation));
     }
 
     /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_normal_smb_directory`
@@ -234,12 +247,12 @@ mod tests {
     /// parity: NET-003
     #[test]
     fn folder_inside_a_share_is_an_ordinary_operable_folder() {
-        let folder = classify(Directory, "smb://nas/work/Design", DIRECTORY_MIME, None);
+        let folder = classify(Directory, "smb://nas/work/Design", Some(FOLDER_MIME_TYPE), None);
         assert!(folder.is_dir);
         assert!(!folder.is_virtual);
         assert!(folder.can_operate);
         assert_eq!(folder.target_uri, None);
-        assert_eq!(folder.folder_type, Some("File folder"));
+        assert_eq!(folder.folder_type, Some(FolderType::FileFolder));
     }
 
     /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_local_directory`
@@ -266,7 +279,7 @@ mod tests {
     /// parity: NAV-040
     #[test]
     fn empty_regular_file_with_directory_mime_does_not_become_folder() {
-        assert!(!classify(File, "file:///tmp/file", DIRECTORY_MIME, None).is_dir);
+        assert!(!classify(File, "file:///tmp/file", Some(FOLDER_MIME_TYPE), None).is_dir);
     }
 
     /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_unknown_directory_mime`
@@ -274,7 +287,7 @@ mod tests {
     /// parity: NAV-040
     #[test]
     fn unknown_kind_with_directory_mime_is_a_folder() {
-        assert!(classify(Unknown, "smb://nas/work/dir", DIRECTORY_MIME, None).is_dir);
+        assert!(classify(Unknown, "smb://nas/work/dir", Some(FOLDER_MIME_TYPE), None).is_dir);
     }
 
     /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_unknown_without_metadata_is_not_falsely_a_directory`
@@ -333,7 +346,7 @@ mod tests {
         let shortcut = classify(
             Shortcut,
             "smb://group/evil",
-            DIRECTORY_MIME,
+            Some(FOLDER_MIME_TYPE),
             Some("javascript:alert(1)"),
         );
         assert!(!shortcut.is_dir);
@@ -348,7 +361,7 @@ mod tests {
         let share = classify(
             Mountable,
             "smb://nas/work",
-            DIRECTORY_MIME,
+            Some(FOLDER_MIME_TYPE),
             Some("smb://u:secret@nas/work"),
         );
         assert!(!share.is_dir);
@@ -363,7 +376,7 @@ mod tests {
         let share = classify(
             Mountable,
             "smb://nas/Team%20files",
-            DIRECTORY_MIME,
+            Some(FOLDER_MIME_TYPE),
             Some("smb://nas/Team%20files/%C3%89t%C3%A9"),
         );
         assert_eq!(
@@ -400,7 +413,18 @@ mod tests {
         assert!(mount.is_virtual);
         assert!(!mount.can_operate);
         assert_eq!(mount.target_uri.as_deref(), Some("file:///run/media/usb"));
-        assert_eq!(mount.folder_type, Some("Network location"));
+        assert_eq!(mount.folder_type, Some(FolderType::NetworkLocation));
+    }
+
+    /// The wording is the `description` of `classify_entry` in
+    /// `desktop/entry_model.py`.
+    ///
+    /// parity: VIEW-002
+    #[test]
+    fn folder_types_use_the_python_wording() {
+        assert_eq!(FolderType::FileFolder.label(), "File folder");
+        assert_eq!(FolderType::NetworkShare.label(), "Network share");
+        assert_eq!(FolderType::NetworkLocation.label(), "Network location");
     }
 
     /// parity: NET-003

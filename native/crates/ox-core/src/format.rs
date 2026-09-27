@@ -72,9 +72,10 @@ fn round_half_up(numerator: u128, denominator: u128) -> u128 {
 
 /// Local date for the Date modified column, for example `09/26/2026` in
 /// the US, `26.09.2026` in Germany or `2026/09/26` in Japan; `—` when the
-/// time is unknown (zero) or out of range.
-pub fn date_text(unix_seconds: u64) -> String {
-    local_time(unix_seconds)
+/// time is unknown (`None`) or out of range.
+pub fn date_text(unix_seconds: Option<u64>) -> String {
+    unix_seconds
+        .and_then(local_time)
         .and_then(|time| format_date(&time))
         .unwrap_or_else(|| UNKNOWN_DATE.to_owned())
 }
@@ -82,9 +83,10 @@ pub fn date_text(unix_seconds: u64) -> String {
 /// Local date and time for the Properties dialog's Created, Modified and
 /// Accessed rows, for example `09/26/2026, 7:35:35 PM` in the US or
 /// `26.09.2026, 19:35:35` in Germany; `Not provided` when the time is
-/// unknown (zero) or out of range.
-pub fn date_time_text(unix_seconds: u64) -> String {
-    local_time(unix_seconds)
+/// unknown (`None`) or out of range.
+pub fn date_time_text(unix_seconds: Option<u64>) -> String {
+    unix_seconds
+        .and_then(local_time)
         .and_then(|time| format_date_time(&time))
         .unwrap_or_else(|| UNKNOWN_TIMESTAMP.to_owned())
 }
@@ -105,12 +107,9 @@ pub fn format_date_time(time: &DateTime) -> Option<String> {
     Some(format!("{date}, {clock}"))
 }
 
-/// The local time for a Unix timestamp; `None` for zero, which the file
-/// listing uses for "unknown", and for times a [`DateTime`] cannot hold.
+/// The local time for a Unix timestamp; `None` for times a [`DateTime`]
+/// cannot hold.
 fn local_time(unix_seconds: u64) -> Option<DateTime> {
-    if unix_seconds == 0 {
-        return None;
-    }
     let seconds = i64::try_from(unix_seconds).ok()?;
     DateTime::from_unix_local(seconds).ok()
 }
@@ -164,13 +163,17 @@ mod tests {
     }
 
     /// Ported from `desktop/ui/app.js::dateText` (`n ? … : '—'`) and
-    /// `timestamp` (`value ? … : 'Not provided'`).
+    /// `timestamp` (`value ? … : 'Not provided'`). The web interface got 0
+    /// for an unknown time; here it is `None`, and the entry module reads a
+    /// reported 0 as `None` too.
+    ///
+    /// parity: VIEW-001
     #[test]
     fn unknown_times_use_the_web_placeholders() {
-        assert_eq!(date_text(0), "—");
-        assert_eq!(date_time_text(0), "Not provided");
-        assert_eq!(date_text(u64::MAX), "—");
-        assert_eq!(date_time_text(u64::MAX), "Not provided");
+        assert_eq!(date_text(None), "—");
+        assert_eq!(date_time_text(None), "Not provided");
+        assert_eq!(date_text(Some(u64::MAX)), "—");
+        assert_eq!(date_time_text(Some(u64::MAX)), "Not provided");
     }
 
     /// Without `setlocale` the process uses the C locale, whose `%x` is
@@ -187,9 +190,9 @@ mod tests {
 
     #[test]
     fn local_dates_are_formatted() {
-        let text = date_text(1_790_000_000);
+        let text = date_text(Some(1_790_000_000));
         assert_eq!(text.len(), 10, "{text}");
         assert!(text.contains("2026"), "{text}");
-        assert!(date_time_text(1_790_000_000).starts_with(&text));
+        assert!(date_time_text(Some(1_790_000_000)).starts_with(&text));
     }
 }
