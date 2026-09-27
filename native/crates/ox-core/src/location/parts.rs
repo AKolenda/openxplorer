@@ -203,7 +203,7 @@ impl<'a> DeviceUriMatch<'a> {
 
     /// The match as [`LocationParts`] with the scheme lower-cased, as
     /// `split_location` in `core.py` builds its `SplitResult`.
-    fn to_parts(self) -> LocationParts {
+    pub(crate) fn to_parts(self) -> LocationParts {
         LocationParts {
             scheme: self.scheme.to_ascii_lowercase(),
             netloc: self.authority.to_string(),

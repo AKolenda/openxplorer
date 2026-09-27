@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the window shows for a location: titles, the address bar text,
-//! breadcrumbs, the Up target and whether new items can be created there.
+//! breadcrumbs and the Up target.
 //!
-//! Ports `baseName`, `parentUri`, `displayUri`, `titleFor`, `deviceParts`,
-//! `deviceRoot`, `deviceMountName`, `breadcrumbSegments` and `sameLocation`
-//! from `desktop/ui/app.js`, extended with the virtual places in
-//! [`VirtualPlace`]. Whether a location is writable, a snapshot or a
-//! network folder is decided in `classify.rs`.
+//! Ports `baseName`, `parentUri`, `displayUri`, `titleFor`, `locationParts`,
+//! `deviceParts`, `deviceRoot`, `deviceMountName`, `breadcrumbSegments` and
+//! `sameLocation` from `desktop/ui/app.js`, and the crumb dividers of its
+//! `renderNavigation`, extended with the virtual places in [`VirtualPlace`].
+//! Whether a location is writable, a snapshot or a network folder is
+//! decided in `classify.rs`.
 //!
 //! The web UI read the home folder, mounted devices, snapshot roots and
 //! network mounts from its `state.env`; here they live in a
@@ -16,10 +17,10 @@
 use std::path::PathBuf;
 
 use super::normalise::file_uri;
-use super::parts::{split_location, split_scheme, DeviceUriMatch, LocationParts};
+use super::parts::{split_location, split_scheme, DeviceUriMatch, LocationKind, LocationParts};
 use super::text::{decode_uri_component, strip_one_trailing_slash};
 use super::virtual_place::{VirtualFolder, VirtualPlace};
-use super::{Crumb, DEVICE_SCHEMES};
+use super::Crumb;
 
 /// Name of a device whose mount is not known.
 const UNKNOWN_DEVICE: &str = "Connected device";
@@ -129,11 +130,11 @@ impl LocationContext {
         let Some(path) = decode_uri_component(&parts.path) else {
             return uri.to_string();
         };
-        match parts.scheme.as_str() {
-            "smb" => format!("\\\\{}{}", parts.netloc, path.replace('/', "\\")),
-            "file" => path,
-            _ if parts.is_device() => with_subpath(&self.device_name(uri), path.trim_matches('/')),
-            _ => uri.to_string(),
+        match parts.kind() {
+            LocationKind::Local => path,
+            LocationKind::Smb => format!("\\\\{}{}", parts.netloc, path.replace('/', "\\")),
+            LocationKind::Device => with_subpath(&self.device_name(uri), path.trim_matches('/')),
+            LocationKind::Other => uri.to_string(),
         }
     }
 
@@ -183,11 +184,11 @@ impl LocationContext {
     /// The first crumb: `/` for local folders, the server for SMB and the
     /// device name for devices.
     fn root_crumb(&self, uri: &str, parts: &LocationParts) -> Option<Crumb> {
-        match parts.scheme.as_str() {
-            "file" => Some(Crumb::new("/", "file:///")),
-            "smb" => Some(Crumb::new(&parts.netloc, root_uri(parts))),
-            _ if parts.is_device() => Some(Crumb::new(self.device_name(uri), root_uri(parts))),
-            _ => None,
+        match parts.kind() {
+            LocationKind::Local => Some(Crumb::new("/", "file:///")),
+            LocationKind::Smb => Some(Crumb::new(&parts.netloc, root_uri(parts))),
+            LocationKind::Device => Some(Crumb::new(self.device_name(uri), root_uri(parts))),
+            LocationKind::Other => None,
         }
     }
 }
@@ -214,12 +215,13 @@ pub fn breadcrumbs(uri: &str) -> Vec<Crumb> {
 
 /// The separator the address bar draws before crumb `index` of `uri`:
 /// none before the first crumb or right after the `/` root, `\` on SMB and
-/// `/` elsewhere.
+/// `/` elsewhere, as the web UI's `renderNavigation`.
 pub fn crumb_divider(uri: &str, crumbs: &[Crumb], index: usize) -> Option<&'static str> {
     let after_local_root = index == 1 && crumbs.first().is_some_and(|crumb| crumb.label == "/");
     if index == 0 || after_local_root {
         None
     } else if uri.starts_with("smb:") {
+        // A text test, as in app.js: canonical URIs have lower-case schemes.
         Some("\\")
     } else {
         Some("/")
@@ -243,9 +245,9 @@ pub fn parent_location(uri: &str) -> Option<String> {
     if path.is_empty() {
         return None;
     }
-    let parent = match path.rfind('/') {
-        Some(0) | None => "/",
-        Some(slash) => &path[..slash],
+    let parent = match path.rsplit_once('/') {
+        Some((parent, _)) if !parent.is_empty() => parent,
+        _ => "/",
     };
     Some(format!("{}://{}{parent}", parts.scheme, parts.netloc))
 }
@@ -258,15 +260,13 @@ pub fn same_location(a: &str, b: &str) -> bool {
 /// The root of the device `uri` is on (`mtp://[usb:001,010]/`), or `None`
 /// for anything but `mtp:`, `gphoto2:` and `afc:` locations.
 pub fn device_root(uri: &str) -> Option<String> {
-    let device = DeviceUriMatch::parse(uri)?;
-    let scheme = device.scheme.to_ascii_lowercase();
-    DEVICE_SCHEMES
-        .contains(&scheme.as_str())
-        .then(|| format!("{scheme}://{}/", device.authority))
+    let device = DeviceUriMatch::parse(uri)?.to_parts();
+    device.is_device().then(|| root_uri(&device))
 }
 
-/// Splits a `scheme://` location for display; `None` for plain paths,
-/// authority-less URIs and malformed input, which are shown unchanged.
+/// Splits a `scheme://` location for display, like the web UI's
+/// `locationParts`; `None` for plain paths, authority-less URIs and
+/// malformed input, which are shown unchanged.
 pub(super) fn location_parts(uri: &str) -> Option<LocationParts> {
     let (_, after_scheme) = split_scheme(uri)?;
     if !after_scheme.starts_with("//") {

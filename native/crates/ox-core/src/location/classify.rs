@@ -36,6 +36,9 @@ impl LocationContext {
     /// an SMB server listing, a virtual place or a snapshot. The web UI's
     /// `writableLocation`.
     pub fn is_writable_location(&self, uri: &str) -> bool {
+        // Safety rule (app.js `writableLocation`): New and Paste never
+        // create items on a page, in a virtual folder, in a server's list
+        // of shares or in a read-only snapshot.
         !uri.is_empty()
             && VirtualPlace::from_uri(uri).is_none()
             && VirtualFolder::parse(uri).is_none()
@@ -47,13 +50,14 @@ impl LocationContext {
     /// CIFS/SMB3 share; such folders get the network icon. The web UI's
     /// `networkLocation`.
     pub fn is_network_location(&self, uri: &str) -> bool {
+        // Text tests, as in app.js: canonical URIs have lower-case schemes.
         if uri.starts_with("smb:") {
             return true;
         }
         if !uri.starts_with("file:") {
             return false;
         }
-        let Some(decoded) = location_parts(uri).and_then(|parts| decode_uri_component(&parts.path)) else {
+        let Some(decoded) = decoded_path(uri) else {
             return false;
         };
         let path = match strip_one_trailing_slash(&decoded) {
@@ -92,16 +96,21 @@ pub fn is_smb_share_root(uri: &str) -> bool {
     location_parts(uri).is_some_and(|parts| parts.is_smb() && parts.path_depth() <= 1)
 }
 
+/// The decoded path of a `scheme://` location, as the web UI's
+/// `decodeURIComponent(locationParts(uri).pathname)`; `None` when `uri`
+/// does not split or its path does not decode.
+fn decoded_path(uri: &str) -> Option<String> {
+    let parts = location_parts(uri)?;
+    decode_uri_component(&parts.path)
+}
+
 /// True when a decoded path component of `uri` marks a snapshot folder,
-/// or `uri` is inside `.zfs/snapshot`.
+/// or `uri` is inside `.zfs/snapshot`. A path that does not decode has no
+/// components, as in the web UI.
 fn has_snapshot_component(uri: &str) -> bool {
-    let decoded = location_parts(uri)
-        .and_then(|parts| decode_uri_component(&parts.path))
-        .unwrap_or_default();
+    let decoded = decoded_path(uri).unwrap_or_default();
     let components: Vec<&str> = decoded.split('/').collect();
-    let has_marked_directory = components
-        .iter()
-        .any(|component| is_snapshot_directory(component));
+    let has_marked_directory = components.iter().copied().any(is_snapshot_directory);
     let is_in_zfs_snapshot = components.windows(2).any(|pair| pair == [".zfs", "snapshot"]);
     has_marked_directory || is_in_zfs_snapshot
 }
