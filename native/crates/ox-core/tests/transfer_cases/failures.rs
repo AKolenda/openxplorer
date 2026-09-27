@@ -47,7 +47,7 @@ impl Faults {
 impl Provider for Faults {
     fn mkdir(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         node.local_mkdir(cancel)?;
-        if self.fault == Fault::UnownedStage && node.name().starts_with(".winspace-transfer-") {
+        if self.fault == Fault::UnownedStage && is_staging(node) {
             write(
                 &node.local_path().join("not-ours"),
                 "another creator owns this folder",
@@ -97,12 +97,12 @@ impl Provider for Faults {
         self.writes
             .lock()
             .unwrap()
-            .push(format!("{} -> {}", node.name(), target.name()));
+            .push(format!("{} -> {}", node.display_name(), target.display_name()));
         if self.fault == Fault::MoveUnsupported {
             return Err(TransferError::NotSupported("Native move unsupported.".into()));
         }
-        let aside = target.name().starts_with(".winspace-replaced-");
-        let restore = node.name().starts_with(".winspace-replaced-");
+        let aside = is_backup(target);
+        let restore = is_backup(node);
         let install = !aside && !restore;
         if install && self.fault == Fault::PublishRace {
             write(&local_path_of(target), "racing file");
@@ -153,9 +153,7 @@ impl Provider for Faults {
     }
 
     fn delete(&self, node: &LocalNode) -> Result<(), TransferError> {
-        if matches!(self.fault, Fault::BackupCleanup | Fault::CancelAndCleanup)
-            && node.name().starts_with(".winspace-replaced-")
-        {
+        if matches!(self.fault, Fault::BackupCleanup | Fault::CancelAndCleanup) && is_backup(node) {
             return Err(TransferError::failed("Backup deletion refused."));
         }
         node.local_delete()

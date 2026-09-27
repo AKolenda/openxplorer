@@ -11,8 +11,9 @@ use std::path::{Path, PathBuf};
 
 use percent_encoding::percent_decode_str;
 
+use super::error::TransferError;
 use super::names::child_node;
-use super::node::{Cancellation, Node, NodeKind, TransferError, WriteGuard};
+use super::node::{Cancellation, Node, NodeKind, WriteGuard};
 
 /// The deepest folder nesting the engine walks. Deeper trees are refused
 /// before anything is changed (preflight) or while copying, so a runaway
@@ -178,7 +179,7 @@ fn check_tree(
     }
     for child in source.children(Some(cancel))? {
         let child_destination = match destination {
-            Some(folder) => Some(child_node(folder, &child.name())?),
+            Some(folder) => Some(child_node(folder, child.name())?),
             None => None,
         };
         check_tree(

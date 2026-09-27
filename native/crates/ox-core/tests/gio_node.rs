@@ -2,6 +2,7 @@
 //! Production GIO adapter checks on isolated temporary local files.
 //! Device capabilities are inspected without contacting device backends.
 
+use std::ffi::OsString;
 use std::fs;
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
@@ -37,7 +38,7 @@ fn metadata_and_listing_preserve_hidden_files_and_do_not_follow_links() {
         .children(None)
         .unwrap()
         .iter()
-        .map(|child| child.name())
+        .map(|child| child.display_name())
         .collect();
     names.sort();
     assert_eq!(names, [".hidden", "dangling"]);
@@ -145,19 +146,26 @@ fn cancellation_prevents_copy_move_and_recursive_delete() {
     assert!(!target.exists());
 }
 
+/// Linux names need not be UTF-8. The adapter lists, inspects and copies
+/// them byte for byte; only labels replace invalid bytes.
 #[test]
-fn names_with_invalid_utf8_are_refused_before_they_can_be_changed() {
+fn names_that_are_not_utf8_are_listed_and_copied_byte_for_byte() {
     let temp = tempfile::tempdir().unwrap();
-    let name = std::ffi::OsString::from_vec(vec![b'a', 0xff]);
-    let source = temp.path().join(name);
-    fs::write(&source, b"untouched").unwrap();
-    assert!(node(&source)
-        .info(None)
-        .unwrap_err()
-        .to_string()
-        .contains("UTF-8"));
-    assert!(node(temp.path()).children(None).is_err());
-    assert_eq!(fs::read(source).unwrap(), b"untouched");
+    let name = OsString::from_vec(b"caf\xe9.mp3".to_vec());
+    let source = temp.path().join(&name);
+    fs::write(&source, b"song").unwrap();
+    let listed = node(temp.path()).children(None).unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].name(), name);
+    assert_eq!(listed[0].display_name(), "caf\u{fffd}.mp3");
+    assert_eq!(listed[0].info(None).unwrap().kind, NodeKind::File);
+    let copies = temp.path().join("copies");
+    fs::create_dir(&copies).unwrap();
+    let target = node(&copies).child(&name);
+    listed[0]
+        .copy_file(target.as_ref(), &Cancellation::new(), &mut |_, _| {})
+        .unwrap();
+    assert_eq!(fs::read(copies.join(&name)).unwrap(), b"song");
 }
 
 #[test]
@@ -269,6 +277,20 @@ fn device_capabilities_and_unsupported_renames_are_resolved_without_device_io() 
         source.replace_native(&renamed, None),
         Err(TransferError::ReplaceUnsupported(_))
     ));
+}
+
+/// Like `can_trash` in `desktop/gio_backend.py`: a share unmounted in the
+/// background is reported, so the caller mounts it and asks again instead
+/// of offering a permanent delete. Any other failure means "no Trash".
+#[test]
+fn trash_support_reports_an_unmounted_share_instead_of_denying_trash() {
+    let unmounted = GioNode::new("smb://example.invalid/share/folder").can_trash(None);
+    assert!(
+        matches!(unmounted, Err(TransferError::NotMounted(_))),
+        "{unmounted:?}"
+    );
+    let missing = tempfile::tempdir().unwrap().path().join("missing");
+    assert_eq!(node(&missing).can_trash(None), Ok(false));
 }
 
 #[test]

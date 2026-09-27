@@ -35,6 +35,7 @@
 mod commit;
 mod copy;
 mod engine;
+mod error;
 mod guard;
 mod labels;
 mod modes;
@@ -46,9 +47,10 @@ mod types;
 
 pub(crate) use commit::verify_installation;
 pub use engine::{TransferEngine, MAX_ITEMS};
+pub use error::TransferError;
 pub use guard::{check_write_tree, guard_destination, MAX_DEPTH};
 pub use modes::secure_local_staging;
 pub use names::{backup_name, is_own_staging_name, new_copy_name, staging_name};
-pub use node::{Cancellation, Node, NodeFactory, NodeInfo, NodeKind, TransferError, WriteGuard};
+pub use node::{Cancellation, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use staging::clean_staging;
 pub use types::{ConflictPolicy, Progress, TransferMode, TransferResult};

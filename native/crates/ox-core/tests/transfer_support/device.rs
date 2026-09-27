@@ -98,7 +98,7 @@ impl Provider for Device {
             if std::fs::symlink_metadata(&target_path).is_ok() {
                 return Err(TransferError::Exists(format!(
                     "An item named “{}” already exists.",
-                    target.name()
+                    target.display_name()
                 )));
             }
             return node.local_move_native(target, cancel);

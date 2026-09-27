@@ -9,7 +9,6 @@ use crate::transfer::{Cancellation, Node, NodeInfo, NodeKind, TransferError};
 impl GioNode {
     pub(super) fn query_info(&self, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
         check(cancel)?;
-        self.require_utf8_name()?;
         let info = self.file.query_info(
             "standard::type,standard::size,unix::mode",
             gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
@@ -71,20 +70,8 @@ impl GioNode {
                 break;
             };
             let child = Self::from_file(enumerator.child(&info));
-            child.require_utf8_name()?;
             children.push(Box::new(child));
         }
         Ok(children)
-    }
-
-    fn require_utf8_name(&self) -> Result<(), TransferError> {
-        if self.file.basename().is_some_and(|name| name.to_str().is_none()) {
-            // Node names are strings. Never silently replace invalid bytes
-            // and publish a copy under a different name.
-            return Err(TransferError::failed(
-                "This item's name is not valid UTF-8. Rename it before transferring.",
-            ));
-        }
-        Ok(())
     }
 }

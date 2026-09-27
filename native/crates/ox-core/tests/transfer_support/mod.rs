@@ -12,7 +12,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ox_core::transfer::{
-    Cancellation, ConflictPolicy, TransferEngine, TransferError, TransferMode, TransferResult,
+    is_own_staging_name, Cancellation, ConflictPolicy, Node, TransferEngine, TransferError, TransferMode,
+    TransferResult,
 };
 
 use local::{file_uri, LocalNode, Provider};
@@ -125,6 +126,19 @@ fn collect_leftovers(root: &Path, folder: &Path, found: &mut Vec<String>) {
             collect_leftovers(root, &path, found);
         }
     }
+}
+
+/// True for an item named like the engine's own staging
+/// (`.winspace-transfer-<32 hex>.part`), like `is_own_staging_name` in the
+/// Python tests.
+pub fn is_staging(node: &dyn Node) -> bool {
+    is_own_staging_name(&node.display_name())
+}
+
+/// True for an item named like the engine's replacement backups
+/// (`.winspace-replaced-<32 hex>.backup`).
+pub fn is_backup(node: &dyn Node) -> bool {
+    node.display_name().starts_with(".winspace-replaced-")
 }
 
 /// The URI of `path`.

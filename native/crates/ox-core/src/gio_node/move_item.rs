@@ -48,7 +48,14 @@ impl GioNode {
         if target.exists(cancel) {
             return Err(name_taken(target));
         }
-        match self.file.set_display_name(&target.name(), raw(cancel)) {
+        // MTP object names are text; never give an item a lossily converted
+        // name.
+        let Some(new_name) = target.name().to_str().map(str::to_owned) else {
+            return Err(TransferError::failed(
+                "This device only accepts names that are valid UTF-8. Nothing was changed.",
+            ));
+        };
+        match self.file.set_display_name(&new_name, raw(cancel)) {
             Ok(_) => Ok(()),
             Err(error) => {
                 // A device may finish a rename after the client timed out.
@@ -70,7 +77,7 @@ impl GioNode {
 fn name_taken(target: &dyn Node) -> TransferError {
     TransferError::Exists(format!(
         "An item named “{}” already exists. Nothing was overwritten.",
-        target.name()
+        target.display_name()
     ))
 }
 

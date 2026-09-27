@@ -21,11 +21,14 @@
 //! - Only staging this item created is recorded for cleanup; a failed
 //!   `mkdir` grants no right to delete anything.
 
+use std::ffi::OsString;
+
 use super::commit::{commit_replace, publish_staged, verify_installation};
 use super::copy::Copier;
+use super::error::TransferError;
 use super::modes::{secure_local_staging, DirectoryModes};
 use super::names::{child_node, staging_name, PAYLOAD_NAME};
-use super::node::{Cancellation, Node, TransferError, WriteGuard};
+use super::node::{Cancellation, Node, WriteGuard};
 use super::types::Progress;
 
 /// Staging the engine created for one item.
@@ -140,7 +143,7 @@ impl StagedCopy<'_> {
         let children = self.source.children(Some(self.cancel))?;
         let mut copier = Copier::new(self.cancel, token, modes, &mut *self.emit);
         for child in children {
-            let target = child_node(stage.item(), &child.name())?;
+            let target = child_node(stage.item(), child.name())?;
             copier.copy(child.as_ref(), target.as_ref(), 1)?;
         }
         Ok(())
@@ -164,7 +167,7 @@ impl StagedCopy<'_> {
             // Upload under the final name, safely inside our own namespace.
             self.destination.name()
         } else {
-            PAYLOAD_NAME.to_string()
+            OsString::from(PAYLOAD_NAME)
         };
         let item = child_node(folder.as_ref(), &item_name)?;
         // Reserve a private namespace. A failed mkdir never grants

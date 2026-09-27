@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Transfer request and progress types.
 
-use super::node::TransferError;
+use super::error::TransferError;
 use std::str::FromStr;
 
 /// What a run does with its items.

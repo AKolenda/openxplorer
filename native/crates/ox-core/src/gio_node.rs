@@ -15,6 +15,7 @@ mod move_item;
 mod query;
 mod removal;
 
+use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 use gio::prelude::*;
@@ -65,18 +66,18 @@ impl Node for GioNode {
         self.file.uri().to_string()
     }
 
-    fn name(&self) -> String {
-        self.file
-            .basename()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| self.uri())
+    fn name(&self) -> OsString {
+        match self.file.basename() {
+            Some(name) => name.into_os_string(),
+            None => OsString::from(self.uri()),
+        }
     }
 
     fn path(&self) -> Option<PathBuf> {
         self.file.path()
     }
 
-    fn child(&self, name: &str) -> Box<dyn Node> {
+    fn child(&self, name: &OsStr) -> Box<dyn Node> {
         Box::new(Self::from_file(self.file.child(name)))
     }
 
@@ -150,14 +151,20 @@ impl Node for GioNode {
         self.trash_item(cancel)
     }
 
-    fn can_trash(&self, cancel: Option<&Cancellation>) -> bool {
-        self.file
-            .query_info(
-                "access::can-trash",
-                gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-                raw(cancel),
-            )
-            .is_ok_and(|info| info.boolean("access::can-trash"))
+    fn can_trash(&self, cancel: Option<&Cancellation>) -> Result<bool, TransferError> {
+        let queried = self.file.query_info(
+            "access::can-trash",
+            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            raw(cancel),
+        );
+        match queried {
+            Ok(info) => Ok(info.boolean("access::can-trash")),
+            // A share unmounted in the background must reach the caller, so
+            // it can mount and ask again instead of offering a permanent
+            // delete for a location that has a Trash.
+            Err(error) if error.matches(gio::IOErrorEnum::NotMounted) => Err(error.into()),
+            Err(_) => Ok(false),
+        }
     }
 
     fn delete_tree(

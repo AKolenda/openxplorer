@@ -7,5 +7,7 @@ mod transfer_support;
 mod devices;
 #[path = "transfer_cases/failures.rs"]
 mod failures;
+#[path = "transfer_cases/gio_engine.rs"]
+mod gio_engine;
 #[path = "transfer_cases/operations.rs"]
 mod operations;

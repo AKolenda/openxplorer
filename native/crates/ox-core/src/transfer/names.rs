@@ -6,9 +6,12 @@
 //! program cannot predict (and pre-create or swap) them. A name the engine
 //! did not create successfully is never deleted by it.
 
+use std::ffi::OsStr;
 use std::io::Read;
+use std::os::unix::ffi::OsStrExt;
 
-use super::node::{Node, TransferError};
+use super::error::TransferError;
+use super::node::Node;
 
 const STAGING_PREFIX: &str = ".winspace-transfer-";
 const STAGING_SUFFIX: &str = ".part";
@@ -87,16 +90,30 @@ pub fn new_copy_name(name: &str, number: u32, is_directory: bool) -> Result<Stri
     Ok(format!("{stem}{marker}{suffix}"))
 }
 
-/// `dir.child(name)` after checking that `name` is exactly one path
+/// `directory.child(name)` after checking that `name` is exactly one path
 /// component. GIO resolves `..` and `a/b` relative to the folder, so an
-/// unchecked name could address an item outside the folder. Backslashes are
-/// allowed: they are ordinary characters in POSIX names.
-pub(crate) fn child_node(directory: &dyn Node, name: &str) -> Result<Box<dyn Node>, TransferError> {
-    let invalid = name.is_empty() || name == "." || name == ".." || name.contains(['/', '\0']);
-    if invalid {
+/// unchecked name could address an item outside the folder.
+///
+/// The check works on bytes, so names that are not valid UTF-8 pass through
+/// unchanged. Backslashes are allowed: they are ordinary characters in POSIX
+/// names.
+pub(crate) fn child_node(
+    directory: &dyn Node,
+    name: impl AsRef<OsStr>,
+) -> Result<Box<dyn Node>, TransferError> {
+    let name = name.as_ref();
+    if !is_single_component(name) {
         return Err(TransferError::failed("Invalid child name."));
     }
     Ok(directory.child(name))
+}
+
+/// True for a non-empty name that is not `.` or `..` and contains no `/` or
+/// NUL byte.
+fn is_single_component(name: &OsStr) -> bool {
+    let bytes = name.as_bytes();
+    let is_special = bytes.is_empty() || bytes == b"." || bytes == b"..";
+    !is_special && !bytes.contains(&b'/') && !bytes.contains(&0)
 }
 
 #[cfg(test)]
@@ -130,6 +147,16 @@ mod tests {
         ];
         for name in bad {
             assert!(!is_own_staging_name(&name), "{name}");
+        }
+    }
+
+    #[test]
+    fn child_names_are_single_components_checked_on_bytes() {
+        let latin1 = OsStr::from_bytes(b"caf\xe9.mp3");
+        assert!(is_single_component(latin1));
+        assert!(is_single_component(OsStr::new("back\\slash")));
+        for bad in ["", ".", "..", "a/b", "/", "nul\0byte"] {
+            assert!(!is_single_component(OsStr::new(bad)), "{bad:?}");
         }
     }
 

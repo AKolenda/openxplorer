@@ -14,11 +14,12 @@
 //! - Staged local folders are owner-only while being built; the source's
 //!   mode is recorded and applied only when publishing.
 
+use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::labels::copy_label;
 use super::modes::{secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
 use super::names::child_node;
-use super::node::{Cancellation, Node, NodeInfo, NodeKind, TransferError};
+use super::node::{Cancellation, Node, NodeInfo, NodeKind};
 use super::types::Progress;
 
 /// Copies one source tree into staging, reporting byte progress.
@@ -92,14 +93,14 @@ impl<'a> Copier<'a> {
             secure_local_staging(target)?;
         }
         for child in source.children(Some(self.cancel))? {
-            let child_target = child_node(target, &child.name())?;
+            let child_target = child_node(target, child.name())?;
             self.copy(child.as_ref(), child_target.as_ref(), depth + 1)?;
         }
         Ok(())
     }
 
     fn copy_file(&mut self, source: &dyn Node, target: &dyn Node) -> Result<(), TransferError> {
-        let name = source.name();
+        let name = source.display_name();
         let cancel = self.cancel;
         let emit = &mut *self.emit;
         let mut progress = |current: u64, total: u64| {

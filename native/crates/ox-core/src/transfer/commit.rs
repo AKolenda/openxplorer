@@ -18,12 +18,13 @@
 //!   a device can finish a rename after the client stopped waiting, and
 //!   stopping midway would leave the public name empty.
 
+use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::modes::{
     open_directory_nofollow, restore_directory_modes, set_mode, DirectoryModes, PRIVATE_DIRECTORY_MODE,
 };
 use super::names::{backup_name, child_node};
-use super::node::{Cancellation, Node, NodeKind, TransferError, WriteGuard};
+use super::node::{Cancellation, Node, NodeKind, WriteGuard};
 
 /// Attempts to find a free backup name before giving up.
 const BACKUP_NAME_ATTEMPTS: usize = 100;
@@ -124,7 +125,7 @@ fn replace_at_depth(
         // the now empty incoming folder (a plain delete cannot remove a
         // folder that still has contents).
         for child in source.children(Some(cancel))? {
-            let target = child_node(destination, &child.name())?;
+            let target = child_node(destination, child.name())?;
             replace_at_depth(
                 child.as_ref(),
                 target.as_ref(),

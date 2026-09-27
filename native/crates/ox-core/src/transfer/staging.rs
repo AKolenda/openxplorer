@@ -15,9 +15,10 @@
 
 use std::time::Duration;
 
+use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::modes::secure_local_staging;
-use super::node::{Node, NodeKind, TransferError};
+use super::node::{Node, NodeKind};
 
 /// Waits before each cleanup attempt on a device. Phones can reject the
 /// first request after an aborted transfer, so device staging is retried

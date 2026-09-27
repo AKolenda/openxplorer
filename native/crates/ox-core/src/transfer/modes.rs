@@ -19,7 +19,8 @@ use std::fs::{File, OpenOptions, Permissions};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use super::node::{Cancellation, Node, TransferError};
+use super::error::TransferError;
+use super::node::{Cancellation, Node};
 
 /// Owner-only access for staging folders.
 pub(crate) const PRIVATE_DIRECTORY_MODE: u32 = 0o700;

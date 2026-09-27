@@ -298,7 +298,7 @@ impl Provider for BrokenPhone {
     }
 
     fn delete(&self, node: &LocalNode) -> Result<(), TransferError> {
-        if node.name().starts_with(".winspace-transfer-") {
+        if is_staging(node) {
             let mut attempts = self.attempts.lock().unwrap();
             *attempts += 1;
             if matches!(self.fault, CleanupFault::TransientDelete) && *attempts < 3 {

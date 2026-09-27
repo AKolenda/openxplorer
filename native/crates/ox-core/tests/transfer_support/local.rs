@@ -10,6 +10,7 @@
 //! and every other method defers to [`Provider::base`] (the "superclass")
 //! and finally to the plain local behaviour on [`LocalNode`].
 
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
@@ -323,18 +324,15 @@ impl Node for LocalNode {
         self.provider.uri(self)
     }
 
-    fn name(&self) -> String {
-        self.path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default()
+    fn name(&self) -> OsString {
+        self.path.file_name().map(OsStr::to_os_string).unwrap_or_default()
     }
 
     fn path(&self) -> Option<PathBuf> {
         self.provider.path(self)
     }
 
-    fn child(&self, name: &str) -> Box<dyn Node> {
+    fn child(&self, name: &OsStr) -> Box<dyn Node> {
         Box::new(self.at(self.path.join(name)))
     }
 
@@ -398,8 +396,8 @@ impl Node for LocalNode {
         ))
     }
 
-    fn can_trash(&self, _cancel: Option<&Cancellation>) -> bool {
-        false
+    fn can_trash(&self, _cancel: Option<&Cancellation>) -> Result<bool, TransferError> {
+        Ok(false)
     }
 
     fn delete_tree(

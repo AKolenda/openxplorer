@@ -5,13 +5,15 @@
 //! in `staged_copy.rs`.
 
 use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::time::Duration;
 
 use super::commit::commit_replace;
+use super::error::TransferError;
 use super::guard::{check_write_tree, guard_destination};
 use super::labels::{completed_label, item_label};
 use super::names::{child_node, new_copy_name};
-use super::node::{Cancellation, Node, NodeFactory, NodeKind, TransferError, WriteGuard};
+use super::node::{Cancellation, Node, NodeFactory, NodeKind, WriteGuard};
 use super::staged_copy::{StageSlot, StagedCopy};
 use super::staging::discard_stage;
 use super::types::{ConflictPolicy, Progress, TransferMode, TransferResult};
@@ -197,7 +199,7 @@ impl TransferEngine {
             0.0
         };
         (self.emit)(Progress {
-            label: item_label(batch.mode, &source.name(), index + 1, batch.total),
+            label: item_label(batch.mode, &source.display_name(), index + 1, batch.total),
             fraction,
         });
         if batch.mode.is_removal() {
@@ -314,7 +316,7 @@ impl TransferEngine {
     /// resolved.
     fn display_name(&self, uri: &str) -> String {
         match (self.factory)(uri) {
-            Ok(node) => node.name(),
+            Ok(node) => node.display_name(),
             Err(_) => uri.to_string(),
         }
     }
@@ -333,10 +335,17 @@ fn deduplicate(uris: &[String]) -> Vec<String> {
 fn free_copy_name(
     dest_dir: &dyn Node,
     taken: Box<dyn Node>,
-    source_name: &str,
+    source_name: &OsStr,
     is_directory: bool,
     cancel: &Cancellation,
 ) -> Result<Box<dyn Node>, TransferError> {
+    // Duplicate names are text. A name that is not UTF-8 is refused rather
+    // than given a lossily converted "(copy N)" name.
+    let Some(source_name) = source_name.to_str() else {
+        return Err(TransferError::failed(
+            "This item's name is not valid UTF-8, so no duplicate name can be made. Rename it before choosing Keep both.",
+        ));
+    };
     let mut destination = taken;
     let mut number = 2;
     while destination.exists(Some(cancel)) {
