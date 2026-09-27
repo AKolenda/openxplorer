@@ -170,6 +170,21 @@ pub trait Node: Send + Sync {
     /// overwrites. [`TransferError::NotSupported`] when the backend cannot
     /// move natively, for example across filesystems.
     fn move_native(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError>;
+    /// Installs this completed staged copy under `target` without ever
+    /// overwriting: the step that makes a copy visible under its final name.
+    ///
+    /// Staged copies are the engine's own items, so a backend may use a
+    /// stricter rename than [`Node::move_native`], which also has to carry
+    /// the user's item along with its desktop metadata. The default is
+    /// [`Node::move_native`].
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::Exists`] when `target` exists, including when
+    /// another program created it a moment before; nothing is overwritten.
+    fn publish(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+        self.move_native(target, cancel)
+    }
     /// Move over an existing file after the user chose Replace.
     ///
     /// # Errors

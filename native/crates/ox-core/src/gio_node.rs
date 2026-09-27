@@ -3,7 +3,8 @@
 //!
 //! Ports `GioNode` in `desktop/gio_backend.py`. Calls belong on a worker,
 //! never the GTK main thread. Metadata queries and enumeration never follow
-//! symbolic links (`query`); MTP device restrictions live in `move_item`.
+//! symbolic links (`query`). Moves, the no-replace publishing of local
+//! copies and the MTP device restrictions live in `move_item`.
 //!
 //! Permanent deletion of a local item, and cleanup of local staging, run
 //! relative to pinned folder descriptors (`local_delete`), so a folder
@@ -153,6 +154,10 @@ impl Node for GioNode {
 
     fn move_native(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         self.move_item(target, cancel, move_item::Overwrite::Never)
+    }
+
+    fn publish(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+        self.publish_item(target, cancel)
     }
 
     fn replace_native(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError> {

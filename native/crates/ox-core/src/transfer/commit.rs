@@ -5,11 +5,12 @@
 //! `desktop/operations.py`.
 //!
 //! Rules enforced here:
-//! - Publishing is a native rename that never overwrites. If another program
-//!   took the name meanwhile, publishing fails and nothing is overwritten.
-//!   (On local disks GIO checks the name just before renaming, which leaves
-//!   a window of microseconds, as in the Python app; see
-//!   `gio_node::move_item`.)
+//! - Publishing ([`Node::publish`]) is a native rename that never
+//!   overwrites. If another program took the name meanwhile, publishing
+//!   fails and nothing is overwritten. On local disks the kernel checks the
+//!   name and renames in one step; filesystems without that fall back to
+//!   GIO's check-then-rename, which leaves a window of microseconds, as in
+//!   the Python app (see `gio_node::move_item`).
 //! - Replace (an explicit user choice) merges same-name folders, keeping
 //!   destination-only items, and overwrites files only through the
 //!   backend's explicit overwrite move. A file/folder type mismatch is left
@@ -60,7 +61,7 @@ pub(crate) fn publish_staged(
     // Only local staged folders have a recorded mode; everything else (files,
     // links, device and network items) is published by a plain rename.
     let Some(root) = modes.take(&source.uri()) else {
-        return source.move_native(destination, Some(cancel));
+        return source.publish(destination, Some(cancel));
     };
     let staged = StagedFolder {
         directory: open_directory_nofollow(&root.path)?,
@@ -93,7 +94,7 @@ fn move_with_owner_access(
     set_mode(&staged.directory, staged.mode | PRIVATE_DIRECTORY_MODE)?;
     // Never overwrites: another program that took the name meanwhile keeps
     // it, and the staged copy stays private for cleanup.
-    source.move_native(destination, Some(cancel))
+    source.publish(destination, Some(cancel))
 }
 
 /// Commits one completed item using Windows-like Replace semantics.

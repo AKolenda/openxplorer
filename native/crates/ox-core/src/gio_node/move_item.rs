@@ -6,17 +6,23 @@
 //!
 //! Rules enforced here:
 //! - No move ever falls back to copy-then-delete (`NO_FALLBACK_FOR_MOVE`).
-//! - A move without Replace never overwrites. GIO checks the target and
-//!   then renames, which leaves a tiny window for another program to create
-//!   the name in between; the Python app has the same window. A kernel
-//!   no-replace rename would close it, but it bypasses GIO's local move,
-//!   which also moves the item's `GVfs` metadata (emblems, icon positions).
+//! - A move without Replace never overwrites. For the user's own items GIO
+//!   checks the target and then renames, which leaves a tiny window for
+//!   another program to create the name in between; the Python app has the
+//!   same window. GIO's local move is kept anyway, because it also moves
+//!   the item's `GVfs` metadata (Nautilus emblems, custom icons), which a
+//!   plain kernel rename leaves behind.
+//! - Publishing a local staged copy closes that window: the kernel's atomic
+//!   no-replace rename refuses a taken name. A staged copy has no metadata
+//!   to carry (GIO copies without `ALL_METADATA`), so nothing is lost.
 //! - On MTP, a move within one folder is a rename (`set_display_name`, MTP
 //!   `SetObjectPropValue`), a move to another folder keeps the item's name
 //!   (MTP `MoveObject`), and Replace is never done in one step, because
 //!   `GVfs` deletes the existing item before it moves and cannot restore it.
 
 use gio::prelude::*;
+use rustix::fs::{renameat_with, RenameFlags, CWD};
+use rustix::io::Errno;
 
 use super::{check, raw, GioNode};
 use crate::transfer::{verify_installation, Cancellation, Node, TransferError};
@@ -69,6 +75,36 @@ impl GioNode {
         self.file
             .move_(&target_file, flags, raw(cancel), None)
             .map_err(|error| move_error(error, overwrite))
+    }
+
+    /// Installs this completed staged copy under `target` without ever
+    /// overwriting (see the module rules). Remote items, and local
+    /// filesystems that lack no-replace renames (some network and FUSE
+    /// filesystems), are published by the ordinary native move.
+    pub(super) fn publish_item(
+        &self,
+        target: &dyn Node,
+        cancel: Option<&Cancellation>,
+    ) -> Result<(), TransferError> {
+        check(cancel)?;
+        let target_path = GioNode::new(&target.uri()).local_path();
+        let (Some(staged_path), Some(target_path)) = (self.local_path(), target_path) else {
+            return self.move_item(target, cancel, Overwrite::Never);
+        };
+        self.require_item()?;
+        // XFER-007: the name check and the rename are one kernel step, so a
+        // name another program created a moment ago is never replaced.
+        match renameat_with(CWD, &staged_path, CWD, &target_path, RenameFlags::NOREPLACE) {
+            Ok(()) => Ok(()),
+            Err(Errno::EXIST) => Err(name_taken(target)),
+            Err(Errno::XDEV) => Err(native_move_unsupported()),
+            // The filesystem does not know the flag: publish the way the
+            // Python app always does, with GIO's check-then-rename.
+            Err(Errno::INVAL | Errno::NOSYS | Errno::OPNOTSUPP) => {
+                self.move_item(target, cancel, Overwrite::Never)
+            }
+            Err(errno) => Err(errno.into()),
+        }
     }
 
     fn has_same_parent(&self, target_file: &gio::File) -> bool {
@@ -136,11 +172,17 @@ fn move_error(error: glib::Error, overwrite: Overwrite) -> TransferError {
         return TransferError::ReplaceUnsupported("The backend does not support direct overwrite.".into());
     }
     if unsupported {
-        return TransferError::NotSupported(
-            "A native move is not supported here. Cross-filesystem/cross-share moves are \
-             deliberately disabled. Copy, verify, then trash the source separately."
-                .into(),
-        );
+        return native_move_unsupported();
     }
     error.into()
+}
+
+/// The refusal of a move the backend can only do by copying, word for word
+/// as `desktop/gio_backend.py` reports it.
+fn native_move_unsupported() -> TransferError {
+    TransferError::NotSupported(
+        "A native move is not supported here. Cross-filesystem/cross-share moves are \
+         deliberately disabled. Copy, verify, then trash the source separately."
+            .into(),
+    )
 }

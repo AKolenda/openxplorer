@@ -102,6 +102,63 @@ fn exclusive_copy_move_and_mkdir_preserve_existing_destinations() {
     assert_eq!(fs::read(target).unwrap(), b"retained");
 }
 
+/// Publishing a staged copy never replaces an item that took the final name
+/// first. On local disks the kernel's no-replace rename refuses it in the
+/// same step that would rename (GIO's move checks the name first and renames
+/// after, which leaves a window), so the refusal is the adapter's own
+/// "Nothing was overwritten" message rather than GIO's.
+///
+/// parity: XFER-007
+#[test]
+fn publishing_refuses_a_taken_name_atomically_and_overwrites_nothing() {
+    for kind in [NodeKind::File, NodeKind::Directory] {
+        let temp = tempfile::tempdir().unwrap();
+        let staged = temp.path().join("staged");
+        if kind == NodeKind::Directory {
+            fs::create_dir(&staged).unwrap();
+        } else {
+            fs::write(&staged, b"incoming").unwrap();
+        }
+        let taken = temp.path().join("report");
+        fs::write(&taken, b"another program").unwrap();
+
+        let published = node(&staged).publish(&node(&taken), Some(&Cancellation::new()));
+
+        assert_eq!(
+            published,
+            Err(TransferError::Exists(
+                "An item named “report” already exists. Nothing was overwritten.".into()
+            )),
+            "{kind:?}"
+        );
+        assert_eq!(fs::read(&taken).unwrap(), b"another program");
+        assert!(staged.exists(), "{kind:?}");
+    }
+}
+
+/// parity: XFER-001
+#[test]
+fn publishing_installs_a_staged_file_or_folder_under_a_free_name() {
+    let temp = tempfile::tempdir().unwrap();
+    let staged_file = temp.path().join("staged-file");
+    let staged_folder = temp.path().join("staged-folder");
+    fs::write(&staged_file, b"complete").unwrap();
+    fs::create_dir(&staged_folder).unwrap();
+    fs::write(staged_folder.join("inside"), b"inside").unwrap();
+    let cancel = Cancellation::new();
+
+    node(&staged_file)
+        .publish(&node(&temp.path().join("file")), Some(&cancel))
+        .unwrap();
+    node(&staged_folder)
+        .publish(&node(&temp.path().join("folder")), Some(&cancel))
+        .unwrap();
+
+    assert_eq!(fs::read(temp.path().join("file")).unwrap(), b"complete");
+    assert_eq!(fs::read(temp.path().join("folder/inside")).unwrap(), b"inside");
+    assert!(!staged_file.exists() && !staged_folder.exists());
+}
+
 #[test]
 fn copying_and_deleting_symbolic_links_never_traverses_the_target() {
     let temp = tempfile::tempdir().unwrap();
