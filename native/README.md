@@ -53,11 +53,13 @@ the minimum supported Rust version and the same driver. Its result is native
 GTK/GIO **local** validation; simulated MTP tests do not certify phone hardware,
 and no SMB server is exercised by these checks.
 
-`python3 native/parity/check.py --require-replacement` deliberately fails while
-legacy bridge workflows still lack native verification. The inventory covers
-the bridge, not every UI interaction or Dolphin feature; see [ROADMAP.md](ROADMAP.md)
-for the remaining acceptance work. The Python application remains the shipped
-desktop while this preview is incomplete.
+`python3 native/parity/check.py --require-replacement --gate replace --gate dolphin`
+deliberately fails while bridge operations, existing OpenXplorer behaviours or
+Dolphin must-haves still lack native verification. `parity/features.toml` lists
+every behaviour the native app must provide; [parity/README.md](parity/README.md)
+explains how a feature is marked done. See [ROADMAP.md](ROADMAP.md) for the
+manual acceptance work that local tests cannot cover. The Python application
+remains the shipped desktop while this preview is incomplete.
 
 The [browsing milestone validation record](VALIDATION.md) lists the local checks
 actually run and their limitations.

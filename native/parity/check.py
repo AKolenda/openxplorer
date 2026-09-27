@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Detect untracked legacy bridge behavior and prevent premature replacement claims.
+"""Check the parity inventories and gate replacement of the Python application.
 
-This inventories Python bridge operations, not every UI interaction or Dolphin
-feature. ROADMAP.md tracks those broader requirements. Evidence paths are checked
-for staleness; the native test runner must execute the tests separately.
+Two inventories live here. bridge.json tracks every operation of the Python
+bridge. features.toml lists every behaviour the native app must provide: the
+current app's behaviours, the Dolphin baseline and GNOME integration. This
+script validates both, checks that parity markers in native tests name real
+features, and applies the replacement gates. README.md explains the process.
+Evidence and tests are checked for existence; the native test runner executes
+the tests separately.
 """
 from __future__ import annotations
 
@@ -13,8 +17,13 @@ import ast
 import json
 from pathlib import Path
 
+from desktop_tests import Catalog, discover
+import features as feature_inventory
+import markers as parity_markers
+
 ROOT = Path(__file__).resolve().parents[2]
 STATUSES = frozenset({'pending', 'core-tested', 'native-tested'})
+FEATURES = 'native/parity/features.toml'
 
 
 def is_method(node: ast.AST) -> bool:
@@ -110,24 +119,75 @@ def replacement_blockers(inventory: dict) -> list[str]:
                   if entry['status'] != 'native-tested')
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+def parse_arguments() -> argparse.Namespace:
+    """Command-line options: extra reports and the replacement gates."""
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--require-replacement', action='store_true',
                         help='also fail if any legacy bridge workflow lacks native verification')
-    args = parser.parse_args()
-    inventory = json.loads((ROOT / 'native/parity/bridge.json').read_text())
-    errors = validate(ROOT, inventory)
+    parser.add_argument('--gate', action='append', default=[],
+                        choices=sorted(feature_inventory.GATES),
+                        help='fail unless every feature this gate covers is done or n-a: '
+                             '"replace" covers existing OpenXplorer behaviour, '
+                             '"dolphin" covers the Dolphin must-haves (repeatable)')
+    parser.add_argument('--python-tests', action='store_true',
+                        help='list desktop/tests tests that no feature cites')
+    return parser.parse_args()
+
+
+def check_inventories(root: Path) -> tuple[dict, list[dict], Catalog, list[str]]:
+    """Load both inventories and every problem found in them."""
+    inventory = json.loads((root / 'native/parity/bridge.json').read_text())
+    errors = validate(root, inventory)
+    catalog = Catalog(discover(root))
+    try:
+        features = feature_inventory.load(root / FEATURES)
+    except ValueError as error:  # tomllib.TOMLDecodeError is a ValueError.
+        return inventory, [], catalog, errors + [f'{FEATURES}: {error}']
+    markers, errors_in_markers = parity_markers.scan(root)
+    errors += errors_in_markers
+    operations = set(inventory.get('methods', {}))
+    errors += feature_inventory.validate(features, operations, catalog, markers)
+    return inventory, features, catalog, errors
+
+
+def report_unreferenced_tests(features: list[dict], catalog: Catalog) -> None:
+    """Print the desktop tests that no feature cites, in file order."""
+    cited = {reference for feature in features for reference in feature['python_tests']}
+    unreferenced = catalog.unreferenced(cited)
+    total = len(catalog.tests)
+    print(f'{len(unreferenced)} of {total} desktop tests are not cited by any feature:')
+    for test in unreferenced:
+        print(f'  {test.reference}')
+
+
+def main() -> int:
+    """Validate the inventories, print the reports and apply the requested gates."""
+    args = parse_arguments()
+    inventory, features, catalog, errors = check_inventories(ROOT)
     if errors:
         print('\n'.join(errors))
         return 1
     print(f"Legacy bridge inventory: {len(inventory['methods'])} operations accounted for.")
     blockers = replacement_blockers(inventory)
     print(f'{len(blockers)} still require native workflow verification before replacement.')
-    print('This does not certify complete UI parity, Dolphin parity, or device hardware behavior.')
+    print(f'Feature inventory: {len(features)} behaviours, native status by area:')
+    print('\n'.join('  ' + line for line in feature_inventory.summary(features)))
+    print('"done" requires a parity marker on a native test. Statuses do not certify SMB, '
+          'phone hardware or assistive-technology behaviour.')
+    if args.python_tests:
+        report_unreferenced_tests(features, catalog)
+    failed = False
     if args.require_replacement and blockers:
         print('Replacement blocked: ' + ', '.join(blockers))
-        return 1
-    return 0
+        failed = True
+    for gate in args.gate:
+        gate_blockers = feature_inventory.GATES[gate](features)
+        print(f'Gate "{gate}": {len(gate_blockers)} features are neither done nor n-a.')
+        if gate_blockers:
+            print('  ' + ', '.join(gate_blockers))
+            failed = True
+    return 1 if failed else 0
 
 
 if __name__ == '__main__':
