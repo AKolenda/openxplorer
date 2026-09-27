@@ -4,10 +4,9 @@
 # core.ignorecase is set. tests/test_release_source.py checks that Git and the
 # archive agree on a sample of paths.
 
-# Dependencies, build caches and compiled Python bytecode.
+# Dependencies, package-manager stores, TypeScript build info and compiled
+# Python bytecode.
 node_modules/
-.next/
-out/
 .pnpm-store/
 *.tsbuildinfo
 __pycache__/
@@ -39,8 +38,11 @@ service-account*.json
 .DS_Store
 
 # Build and release output, and files regenerated from their sources.
+# .next/ and out/ hold the Next.js website build and its static export.
+# dist/ matches at any depth, so it covers desktop/dist/ as well.
+.next/
+out/
 dist/
-desktop/dist/
 designs/
 apps/web/public/downloads/
 apps/web/public/app-preview.html

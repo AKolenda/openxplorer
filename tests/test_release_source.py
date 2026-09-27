@@ -82,6 +82,7 @@ GIT_IGNORED = {
     '.venv/pyvenv.cfg': True, 'nested/temp/private.txt': True, 'trace.log.1': True,
     'credentials.json': True, 'local.db-wal': True, 'private.pem': True,
     'desktop/test-results/native.json': True, 'desktop/preview.html': True,
+    'desktop/dist/SHA256SUMS': True, 'apps/web/out/index.html': True,
     'apps/web/public/downloads/SHA256SUMS': True, 'pnpm-lock.yaml': False,
     'wrangler.jsonc': False, 'desktop/ui/app.js': False,
     'licenses/Winspace-MIT.txt': False, '.github/workflows/checks.yml': False,
