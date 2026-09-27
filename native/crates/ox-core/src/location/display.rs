@@ -16,7 +16,7 @@
 use std::path::PathBuf;
 
 use super::normalise::{file_uri, is_smb_server};
-use super::parts::{split_location, url_scheme, DeviceMatch, LocationParts};
+use super::parts::{split_location, split_scheme, DeviceUriMatch, LocationParts};
 use super::text::{decode_uri_component, strip_one_trailing_slash};
 use super::virtual_place::{VirtualFolder, VirtualPlace};
 use super::{Crumb, DEVICE_SCHEMES};
@@ -315,7 +315,7 @@ pub fn is_smb_share_root(uri: &str) -> bool {
 /// The root of the device `uri` is on (`mtp://[usb:001,010]/`), or `None`
 /// for anything but `mtp:`, `gphoto2:` and `afc:` locations.
 pub fn device_root(uri: &str) -> Option<String> {
-    let device = DeviceMatch::parse(uri)?;
+    let device = DeviceUriMatch::parse(uri)?;
     let scheme = device.scheme.to_ascii_lowercase();
     DEVICE_SCHEMES
         .contains(&scheme.as_str())
@@ -325,7 +325,7 @@ pub fn device_root(uri: &str) -> Option<String> {
 /// Splits a `scheme://` location for display; `None` for plain paths,
 /// authority-less URIs and malformed input, which are shown unchanged.
 fn location_parts(uri: &str) -> Option<LocationParts> {
-    let (_, rest) = url_scheme(uri)?;
+    let (_, rest) = split_scheme(uri)?;
     if !rest.starts_with("//") {
         return None;
     }

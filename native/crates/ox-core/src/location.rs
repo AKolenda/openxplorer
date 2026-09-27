@@ -30,6 +30,15 @@
 //! Use [`normalise_location`] for anything stored in settings (it rejects
 //! virtual places, like the Python function) and [`normalise_navigation`]
 //! for tab history, the address bar and command-line arguments.
+//!
+//! | Module | Responsibility |
+//! |---|---|
+//! | `text` | Python's and JavaScript's escaping, stripping and path rules |
+//! | `parts` | Splitting a location like `urlsplit` |
+//! | `normalise` | One canonical URI for a typed or stored address |
+//! | `virtual_place` | The app's pages and GIO's virtual folders |
+//! | `names` | File names, "Keep both" names and sidebar labels |
+//! | `display` | Titles, address bar text, breadcrumbs and Up |
 
 mod display;
 mod names;
@@ -60,6 +69,10 @@ pub use virtual_place::{
 pub const DEVICE_SCHEMES: [&str; 3] = ["mtp", "gphoto2", "afc"];
 
 /// A user-facing validation error. The message is shown as-is.
+///
+/// Where the Rust port refuses what a `raise` in `desktop/core.py` refuses,
+/// the message is the Python app's, word for word; `location_python.rs`
+/// checks every one of them.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
 pub struct LocationError(pub String);
@@ -73,6 +86,12 @@ impl LocationError {
     /// The user-facing message.
     pub fn message(&self) -> &str {
         &self.0
+    }
+
+    /// A `?` or `#` in a URL. `urlsplit` would cut the path there, so the
+    /// user must escape them or type a plain path, which may hold both.
+    pub(crate) fn query_or_fragment() -> Self {
+        Self::new("In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.")
     }
 }
 
@@ -100,7 +119,7 @@ impl Crumb {
 /// before the first `:` must be a letter followed by letters, digits, `+`,
 /// `-` or `.`.
 pub fn scheme(uri: &str) -> String {
-    parts::url_scheme(uri)
+    parts::split_scheme(uri)
         .map(|(scheme, _)| scheme)
         .unwrap_or_default()
 }
@@ -108,8 +127,5 @@ pub fn scheme(uri: &str) -> String {
 /// True for phones, cameras and iOS devices (`mtp:`, `gphoto2:`, `afc:`).
 /// Unparseable input is not a device location.
 pub fn is_device_location(uri: &str) -> bool {
-    match split_location(uri) {
-        Ok(parts) => DEVICE_SCHEMES.contains(&parts.scheme.as_str()),
-        Err(_) => false,
-    }
+    split_location(uri).is_ok_and(|parts| parts.is_device())
 }

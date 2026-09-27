@@ -12,7 +12,7 @@ use std::path::Path;
 
 use percent_encoding::percent_encode;
 
-use super::parts::{split_location, url_scheme, urlsplit, DeviceMatch};
+use super::parts::{split_location, split_scheme, urlsplit, DeviceUriMatch};
 use super::text::{
     contains_python_space, has_control_character, normpath, python_strip, quote_component, quote_path,
     unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,
@@ -68,7 +68,7 @@ pub fn normalise_location(value: &str, base: Option<&str>, home: &Path) -> Resul
             "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share.",
         ));
     }
-    match url_scheme(value) {
+    match split_scheme(value) {
         None => normalise_plain_path(value, base, home),
         Some((scheme, _)) if DEVICE_SCHEMES.contains(&scheme.as_str()) => {
             normalise_device_location(value, &scheme)
@@ -106,7 +106,7 @@ pub fn file_uri(path: &Path) -> String {
 pub fn require_share(value: &str) -> Result<String, LocationError> {
     let uri = normalise(value)?;
     let parts = split_location(&uri)?;
-    if parts.scheme != "smb" || parts.path.trim_matches('/').is_empty() {
+    if !parts.is_smb() || parts.path_depth() == 0 {
         return Err(LocationError::new(
             "Enter a shared folder such as \\\\nas\\Projects, not only the server name.",
         ));
@@ -126,19 +126,13 @@ pub fn require_share(value: &str) -> Result<String, LocationError> {
 pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
     let uri = normalise(uri)?;
     let parts = split_location(&uri)?;
-    let segment_count = parts
-        .path
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .count();
-    if parts.scheme == "smb" && segment_count <= 1 {
+    if parts.is_smb() && parts.path_depth() <= 1 {
         return Err(LocationError::new(
             "Open the network share first, then select files or folders inside it. The share itself \
              cannot be renamed, moved, copied or trashed here.",
         ));
     }
-    let is_device = DEVICE_SCHEMES.contains(&parts.scheme.as_str());
-    if is_device && parts.path.trim_matches('/').is_empty() {
+    if parts.is_device() && parts.path_depth() == 0 {
         return Err(LocationError::new(
             "Open the device storage first, then select files or folders inside it. The device itself \
              cannot be moved or copied.",
@@ -153,10 +147,7 @@ pub fn is_smb_server(uri: &str) -> bool {
     let Ok(canonical) = normalise(uri) else {
         return false;
     };
-    match split_location(&canonical) {
-        Ok(parts) => parts.scheme == "smb" && parts.path.trim_matches('/').is_empty(),
-        Err(_) => false,
-    }
+    split_location(&canonical).is_ok_and(|parts| parts.is_smb() && parts.path_depth() == 0)
 }
 
 /// `\\NAS\Team files\Q3 #1` to `smb://NAS/Team%20files/Q3%20%231`. The host
@@ -213,10 +204,7 @@ fn expand_home(value: &str, home: &Path) -> String {
 /// True when relative paths should be appended to `base` as a URL: SMB
 /// and connected-device folders.
 fn is_remote_base(base: &str) -> bool {
-    match split_location(base) {
-        Ok(parts) => parts.scheme == "smb" || DEVICE_SCHEMES.contains(&parts.scheme.as_str()),
-        Err(_) => false,
-    }
+    split_location(base).is_ok_and(|parts| parts.is_smb() || parts.is_device())
 }
 
 /// `os.path.join(base, path)`: an absolute `path` replaces `base`.
@@ -259,9 +247,7 @@ fn normalise_url(value: &str) -> Result<String, LocationError> {
         ));
     }
     if !parts.query.is_empty() || !parts.fragment.is_empty() {
-        return Err(LocationError::new(
-            "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.",
-        ));
+        return Err(LocationError::query_or_fragment());
     }
     let decoded = unquote_without_controls(&parts.path)?;
     if parts.scheme == "file" {
@@ -316,7 +302,7 @@ fn normalise_smb_url(parts: &super::LocationParts, decoded_path: &str) -> Result
 /// Ports `_normalise_device_location`: keeps the device authority as
 /// written (GIO needs it exactly) and canonicalises the path.
 fn normalise_device_location(value: &str, scheme: &str) -> Result<String, LocationError> {
-    let device = DeviceMatch::parse(value).filter(|device| device.scheme.eq_ignore_ascii_case(scheme));
+    let device = DeviceUriMatch::parse(value).filter(|device| device.scheme.eq_ignore_ascii_case(scheme));
     let Some(device) = device else {
         return Err(LocationError::new(
             "A connected-device address must include a device identifier and path.",

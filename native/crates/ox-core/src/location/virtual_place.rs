@@ -30,7 +30,7 @@
 //! Python app rejects every virtual place there, so neither app may store
 //! one.
 
-use super::parts::url_scheme;
+use super::parts::split_scheme;
 use super::text::{python_strip, quote_component, unquote_without_controls};
 use super::{normalise_location, LocationError};
 use std::path::Path;
@@ -203,16 +203,14 @@ impl VirtualFolder {
     /// `None` when `uri` is not `trash:`, `recent:` or `network:`; an error
     /// when it is but cannot be canonicalised.
     pub fn parse(uri: &str) -> Option<Result<Self, LocationError>> {
-        let (scheme, rest) = url_scheme(uri)?;
+        let (scheme, rest) = split_scheme(uri)?;
         let place = VirtualPlace::from_gio_scheme(&scheme)?;
         Some(Self::parse_path(place, rest))
     }
 
     fn parse_path(place: VirtualPlace, rest: &str) -> Result<Self, LocationError> {
         if rest.contains(['?', '#']) {
-            return Err(LocationError::new(
-                "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.",
-            ));
+            return Err(LocationError::query_or_fragment());
         }
         let path = match rest.strip_prefix("//") {
             Some(after_slashes) => {

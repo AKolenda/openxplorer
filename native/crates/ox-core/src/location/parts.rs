@@ -12,6 +12,9 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use super::{LocationError, DEVICE_SCHEMES};
 
+/// Characters `urlsplit` removes wherever they occur.
+const UNSAFE_URL_CHARACTERS: [char; 3] = ['\t', '\r', '\n'];
+
 /// A location split into its URI components, like Python's `SplitResult`.
 ///
 /// Nothing is decoded: `path` keeps its percent escapes.
@@ -43,15 +46,10 @@ impl LocationParts {
             return None;
         }
         // An IPv6 zone (`%eth0`) keeps its case, as in Python.
-        let (address, zone) = match host.split_once('%') {
-            Some((address, zone)) => (address, Some(zone)),
-            None => (host, None),
+        let hostname = match host.split_once('%') {
+            Some((address, zone)) => format!("{}%{zone}", address.to_lowercase()),
+            None => host.to_lowercase(),
         };
-        let mut hostname = address.to_lowercase();
-        if let Some(zone) = zone {
-            hostname.push('%');
-            hostname.push_str(zone);
-        }
         Some(hostname)
     }
 
@@ -67,15 +65,36 @@ impl LocationParts {
         let Some(port) = port else {
             return Ok(None);
         };
-        let invalid = || LocationError::new(format!("Port could not be cast to integer value as {port:?}"));
-        if !port.bytes().all(|b| b.is_ascii_digit()) {
-            return Err(invalid());
+        let not_an_integer =
+            || LocationError::new(format!("Port could not be cast to integer value as {port:?}"));
+        if !port.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(not_an_integer());
         }
         // Leading zeros are allowed, so parse wider than u16 first.
-        let value: u128 = port.parse().map_err(|_| invalid())?;
+        let value: u128 = port.parse().map_err(|_| not_an_integer())?;
         u16::try_from(value)
             .map(Some)
             .map_err(|_| LocationError::new("Port out of range 0-65535"))
+    }
+
+    /// True for phones, cameras and iOS devices: `mtp:`, `gphoto2:` and
+    /// `afc:` locations.
+    pub(crate) fn is_device(&self) -> bool {
+        DEVICE_SCHEMES.contains(&self.scheme.as_str())
+    }
+
+    /// True for `smb:` locations.
+    pub(crate) fn is_smb(&self) -> bool {
+        self.scheme == "smb"
+    }
+
+    /// The number of non-empty path components: 0 at a local, server or
+    /// device root, 1 for an SMB share.
+    pub(crate) fn path_depth(&self) -> usize {
+        self.path
+            .split('/')
+            .filter(|component| !component.is_empty())
+            .count()
     }
 
     /// Python's `_hostinfo`: the host (brackets removed) and the non-empty
@@ -84,14 +103,13 @@ impl LocationParts {
         let host_info = after_user_info(&self.netloc);
         let (host, port) = match host_info.split_once('[') {
             Some((_, bracketed)) => {
-                let (host, after_bracket) = bracketed.split_once(']').unwrap_or((bracketed, ""));
-                let port = after_bracket.split_once(':').map_or("", |(_, port)| port);
+                let (host, after_bracket) = partition(bracketed, ']');
+                let (_, port) = partition(after_bracket, ':');
                 (host, port)
             }
-            None => host_info.split_once(':').unwrap_or((host_info, "")),
+            None => partition(host_info, ':'),
         };
-        let port = if port.is_empty() { None } else { Some(port) };
-        (host, port)
+        (host, (!port.is_empty()).then_some(port))
     }
 }
 
@@ -107,16 +125,10 @@ impl LocationParts {
 /// A [`LocationError`] with Python's wording for unbalanced or invalid
 /// bracketed hosts.
 pub fn split_location(value: &str) -> Result<LocationParts, LocationError> {
-    if let Some(device) = DeviceMatch::parse(value) {
-        let scheme = device.scheme.to_ascii_lowercase();
-        if DEVICE_SCHEMES.contains(&scheme.as_str()) {
-            return Ok(LocationParts {
-                scheme,
-                netloc: device.authority.to_string(),
-                path: device.path.to_string(),
-                query: String::new(),
-                fragment: String::new(),
-            });
+    if let Some(device) = DeviceUriMatch::parse(value) {
+        let parts = device.to_parts();
+        if parts.is_device() {
+            return Ok(parts);
         }
     }
     urlsplit(value)
@@ -125,24 +137,24 @@ pub fn split_location(value: &str) -> Result<LocationParts, LocationError> {
 /// A match of `DEVICE_URI` in `core.py`:
 /// `^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#]+)(/[^?#]*)?$`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct DeviceMatch<'a> {
+pub(crate) struct DeviceUriMatch<'a> {
     /// The scheme as written (not lower-cased).
-    pub scheme: &'a str,
+    pub(crate) scheme: &'a str,
     /// The non-empty authority, for example `[usb:001,002]`.
-    pub authority: &'a str,
+    pub(crate) authority: &'a str,
     /// The path; `/` when the URI has none.
-    pub path: &'a str,
+    pub(crate) path: &'a str,
 }
 
-impl<'a> DeviceMatch<'a> {
+impl<'a> DeviceUriMatch<'a> {
     /// Matches any scheme; callers check it against [`DEVICE_SCHEMES`].
-    pub fn parse(value: &'a str) -> Option<Self> {
-        let (scheme, rest) = value.split_once("://")?;
+    pub(crate) fn parse(value: &'a str) -> Option<Self> {
+        let (scheme, after_scheme) = value.split_once("://")?;
         if !is_scheme(scheme) {
             return None;
         }
-        let authority_end = rest.find('/').unwrap_or(rest.len());
-        let (authority, path) = rest.split_at(authority_end);
+        let authority_end = after_scheme.find('/').unwrap_or(after_scheme.len());
+        let (authority, path) = after_scheme.split_at(authority_end);
         if authority.is_empty() || authority.contains(['?', '#']) || path.contains(['?', '#']) {
             return None;
         }
@@ -153,20 +165,32 @@ impl<'a> DeviceMatch<'a> {
             path,
         })
     }
-}
 
-/// True for text matching `[A-Za-z][A-Za-z0-9+.-]*`.
-pub(crate) fn is_scheme(text: &str) -> bool {
-    let mut chars = text.chars();
-    let starts_with_letter = chars.next().is_some_and(|c| c.is_ascii_alphabetic());
-    starts_with_letter && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    /// The match as [`LocationParts`] with the scheme lower-cased, as
+    /// `split_location` in `core.py` builds its `SplitResult`.
+    fn to_parts(self) -> LocationParts {
+        LocationParts {
+            scheme: self.scheme.to_ascii_lowercase(),
+            netloc: self.authority.to_string(),
+            path: self.path.to_string(),
+            query: String::new(),
+            fragment: String::new(),
+        }
+    }
 }
 
 /// The scheme of `value` by `urlsplit`'s rule, lower-cased, and the text
 /// after its colon; `None` for a plain path.
-pub(crate) fn url_scheme(value: &str) -> Option<(String, &str)> {
-    let (scheme, rest) = value.split_once(':')?;
-    is_scheme(scheme).then(|| (scheme.to_ascii_lowercase(), rest))
+pub(crate) fn split_scheme(value: &str) -> Option<(String, &str)> {
+    let (scheme, after_scheme) = value.split_once(':')?;
+    is_scheme(scheme).then(|| (scheme.to_ascii_lowercase(), after_scheme))
+}
+
+/// True for text matching `[A-Za-z][A-Za-z0-9+.-]*`.
+fn is_scheme(text: &str) -> bool {
+    let mut chars = text.chars();
+    let starts_with_letter = chars.next().is_some_and(|c| c.is_ascii_alphabetic());
+    starts_with_letter && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
 }
 
 /// Python's `urllib.parse.urlsplit`, as shipped with Python 3.12.
@@ -177,20 +201,15 @@ pub(crate) fn url_scheme(value: &str) -> Option<(String, &str)> {
 /// normalisation turns into URL delimiters (`℀` becomes `a/c`).
 pub(crate) fn urlsplit(value: &str) -> Result<LocationParts, LocationError> {
     let cleaned = strip_whatwg_noise(value);
-    let (scheme, mut rest) = match url_scheme(&cleaned) {
-        Some((scheme, rest)) => (scheme, rest),
+    let (scheme, after_scheme) = match split_scheme(&cleaned) {
+        Some((scheme, after_scheme)) => (scheme, after_scheme),
         None => (String::new(), cleaned.as_ref()),
     };
-    let mut netloc = "";
-    if let Some(after_slashes) = rest.strip_prefix("//") {
-        let end = after_slashes.find(['/', '?', '#']).unwrap_or(after_slashes.len());
-        netloc = &after_slashes[..end];
-        rest = &after_slashes[end..];
-        check_brackets(netloc)?;
-    }
-    let (rest, fragment) = rest.split_once('#').unwrap_or((rest, ""));
-    let (path, query) = rest.split_once('?').unwrap_or((rest, ""));
-    check_nfkc_authority(netloc)?;
+    let (netloc, after_netloc) = split_netloc(after_scheme);
+    check_brackets(netloc)?;
+    let (before_fragment, fragment) = partition(after_netloc, '#');
+    let (path, query) = partition(before_fragment, '?');
+    check_nfkc_netloc(netloc)?;
     Ok(LocationParts {
         scheme,
         netloc: netloc.to_string(),
@@ -199,9 +218,6 @@ pub(crate) fn urlsplit(value: &str) -> Result<LocationParts, LocationError> {
         fragment: fragment.to_string(),
     })
 }
-
-/// Characters `urlsplit` removes wherever they occur.
-const UNSAFE_URL_CHARACTERS: [char; 3] = ['\t', '\r', '\n'];
 
 /// Drops leading C0 controls and spaces and removes tabs, carriage returns
 /// and line feeds anywhere, as `urlsplit` does before parsing.
@@ -214,10 +230,95 @@ fn strip_whatwg_noise(value: &str) -> Cow<'_, str> {
     }
 }
 
+/// Python's `_splitnetloc`: the authority after a leading `//`, up to the
+/// first `/`, `?` or `#`, and the text after it. Without `//` the
+/// authority is empty.
+fn split_netloc(text: &str) -> (&str, &str) {
+    let Some(after_slashes) = text.strip_prefix("//") else {
+        return ("", text);
+    };
+    let end = after_slashes.find(['/', '?', '#']).unwrap_or(after_slashes.len());
+    after_slashes.split_at(end)
+}
+
+/// `urlsplit`'s bracket rules: balanced brackets, and then
+/// [`check_bracketed_netloc`].
+fn check_brackets(netloc: &str) -> Result<(), LocationError> {
+    let has_open = netloc.contains('[');
+    let has_close = netloc.contains(']');
+    if has_open != has_close {
+        return Err(invalid_ipv6_url());
+    }
+    if !has_open {
+        return Ok(());
+    }
+    check_bracketed_netloc(netloc)
+}
+
+/// Python's `_check_bracketed_netloc`: nothing before `[`, only `:port`
+/// after `]`, and an IPv6 address or an RFC 3986 future address (`v1.x`)
+/// inside.
+fn check_bracketed_netloc(netloc: &str) -> Result<(), LocationError> {
+    let host_info = after_user_info(netloc);
+    let host = match host_info.split_once('[') {
+        Some((before_bracket, bracketed)) => {
+            let (host, after_bracket) = partition(bracketed, ']');
+            let has_only_port_after = after_bracket.is_empty() || after_bracket.starts_with(':');
+            if !before_bracket.is_empty() || !has_only_port_after {
+                return Err(invalid_ipv6_url());
+            }
+            host
+        }
+        // The only `[` is in the user part: Python checks the host text
+        // before the port as if it were bracketed.
+        None => partition(host_info, ':').0,
+    };
+    check_bracketed_host(host)
+}
+
+/// Python's `_check_bracketed_host`.
+fn check_bracketed_host(host: &str) -> Result<(), LocationError> {
+    if host.starts_with('v') {
+        if !is_ip_future_address(host) {
+            return Err(LocationError::new("IPvFuture address is invalid"));
+        }
+        return Ok(());
+    }
+    if host.parse::<Ipv4Addr>().is_ok() {
+        return Err(LocationError::new("An IPv4 address cannot be in brackets"));
+    }
+    if !is_ipv6_address(host) {
+        return Err(LocationError::new(format!(
+            "{host:?} does not appear to be an IPv4 or IPv6 address"
+        )));
+    }
+    Ok(())
+}
+
+/// `\Av[a-fA-F0-9]+\..+\z`: an RFC 3986 future address such as `v1.x`.
+fn is_ip_future_address(host: &str) -> bool {
+    let Some((version, rest)) = host.strip_prefix('v').and_then(|future| future.split_once('.')) else {
+        return false;
+    };
+    let is_hex_version = !version.is_empty() && version.bytes().all(|byte| byte.is_ascii_hexdigit());
+    is_hex_version && !rest.is_empty()
+}
+
+/// Python's `ipaddress.IPv6Address`, which accepts a non-empty zone such as
+/// `fe80::1%eth0`.
+fn is_ipv6_address(host: &str) -> bool {
+    let address = match host.split_once('%') {
+        Some((address, zone)) if !zone.is_empty() && !zone.contains('%') => address,
+        Some(_) => return false,
+        None => host,
+    };
+    address.parse::<Ipv6Addr>().is_ok()
+}
+
 /// Python's `_checknetloc`: a non-ASCII authority must not gain `/`, `?`,
 /// `#`, `@` or `:` under NFKC normalisation, because it would then split
 /// differently once a client converts it to ASCII.
-fn check_nfkc_authority(netloc: &str) -> Result<(), LocationError> {
+fn check_nfkc_netloc(netloc: &str) -> Result<(), LocationError> {
     if netloc.is_ascii() {
         return Ok(());
     }
@@ -226,8 +327,9 @@ fn check_nfkc_authority(netloc: &str) -> Result<(), LocationError> {
         .filter(|c| !matches!(c, '@' | ':' | '#' | '?'))
         .collect();
     let normalised = glib::normalize(&without_delimiters, glib::NormalizeMode::AllCompose);
-    let gains_delimiter = normalised.contains(['/', '?', '#', '@', ':']);
-    if normalised.as_str() == without_delimiters || !gains_delimiter {
+    // The authority holds no `/`, `?` or `#` (they end it) and `@` and `:`
+    // were removed, so any delimiter now present came from NFKC.
+    if !normalised.contains(['/', '?', '#', '@', ':']) {
         return Ok(());
     }
     Err(LocationError::new(format!(
@@ -235,75 +337,20 @@ fn check_nfkc_authority(netloc: &str) -> Result<(), LocationError> {
     )))
 }
 
-/// `urlsplit`'s bracket rules: balanced brackets, nothing before `[`,
-/// only `:port` after `]`, and an IPv6 address or an RFC 3986 future
-/// address (`v1.x`) inside.
-fn check_brackets(netloc: &str) -> Result<(), LocationError> {
-    let has_open = netloc.contains('[');
-    let has_close = netloc.contains(']');
-    if has_open != has_close {
-        return Err(invalid_ipv6());
-    }
-    if !has_open {
-        return Ok(());
-    }
-    let host_info = after_user_info(netloc);
-    let host = match host_info.split_once('[') {
-        Some((before, bracketed)) => {
-            if !before.is_empty() {
-                return Err(invalid_ipv6());
-            }
-            let (host, after) = bracketed.split_once(']').unwrap_or((bracketed, ""));
-            if !after.is_empty() && !after.starts_with(':') {
-                return Err(invalid_ipv6());
-            }
-            host
-        }
-        // The only `[` is in the user part: Python checks the host text
-        // before the port as if it were bracketed.
-        None => host_info.split_once(':').map_or(host_info, |(host, _)| host),
-    };
-    check_bracketed_host(host)
-}
-
-/// Python's `_check_bracketed_host`.
-fn check_bracketed_host(host: &str) -> Result<(), LocationError> {
-    if let Some(future) = host.strip_prefix('v') {
-        let valid = future.split_once('.').is_some_and(|(version, rest)| {
-            !version.is_empty() && version.bytes().all(|b| b.is_ascii_hexdigit()) && !rest.is_empty()
-        });
-        return if valid {
-            Ok(())
-        } else {
-            Err(LocationError::new("IPvFuture address is invalid"))
-        };
-    }
-    if host.parse::<Ipv4Addr>().is_ok() {
-        return Err(LocationError::new("An IPv4 address cannot be in brackets"));
-    }
-    // Python accepts a non-empty scope such as `fe80::1%eth0`.
-    let address = match host.split_once('%') {
-        Some((address, zone)) if !zone.is_empty() && !zone.contains('%') => address,
-        Some(_) => return Err(invalid_ipv6_address(host)),
-        None => host,
-    };
-    address
-        .parse::<Ipv6Addr>()
-        .map(|_| ())
-        .map_err(|_| invalid_ipv6_address(host))
-}
-
 /// The host and port part of an authority: the text after the last `@`.
 fn after_user_info(netloc: &str) -> &str {
     netloc.rsplit_once('@').map_or(netloc, |(_, host)| host)
 }
 
-fn invalid_ipv6() -> LocationError {
-    LocationError::new("Invalid IPv6 URL")
+/// Python's `str.partition` without the separator: the text before and
+/// after the first `separator`, or all of `text` and an empty string.
+fn partition(text: &str, separator: char) -> (&str, &str) {
+    text.split_once(separator).unwrap_or((text, ""))
 }
 
-fn invalid_ipv6_address(host: &str) -> LocationError {
-    LocationError::new(format!("{host:?} does not appear to be an IPv4 or IPv6 address"))
+/// Python's wording for unbalanced or misplaced brackets.
+fn invalid_ipv6_url() -> LocationError {
+    LocationError::new("Invalid IPv6 URL")
 }
 
 #[cfg(test)]
@@ -389,5 +436,19 @@ mod tests {
             split_location("smb:///share").expect("valid URL").hostname(),
             None
         );
+    }
+
+    #[test]
+    fn ipv6_zones_keep_their_case() {
+        let parts = split_location("smb://[FE80::1%Eth0]/share").expect("valid URL");
+        assert_eq!(parts.hostname().as_deref(), Some("fe80::1%Eth0"));
+    }
+
+    #[test]
+    fn path_depth_counts_folders_below_the_root() {
+        assert_eq!(parts("smb", "nas", "/").path_depth(), 0);
+        assert_eq!(parts("smb", "nas", "//").path_depth(), 0);
+        assert_eq!(parts("smb", "nas", "/share/").path_depth(), 1);
+        assert_eq!(parts("file", "", "/a//b").path_depth(), 2);
     }
 }
