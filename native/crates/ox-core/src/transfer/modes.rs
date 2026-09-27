@@ -48,9 +48,14 @@ pub(crate) fn local_directory_path(node: &dyn Node) -> Option<PathBuf> {
 }
 
 /// Makes an engine-created local staging folder owner-only (`0700`). Does
-/// nothing for GVfs backends (MTP, AFC, SMB), even when they expose a FUSE
-/// path. Also used by the ZIP extractor for its own staging folder
-/// (`desktop/zip_extraction.py`).
+/// nothing for `GVfs` backends (MTP, AFC, SMB), even when they expose a FUSE
+/// path. The Python ZIP extractor (`desktop/zip_extraction.py`) secures its
+/// staging folder the same way; its port will use this too.
+///
+/// # Errors
+///
+/// When the folder cannot be opened without following links, or its mode
+/// cannot be changed.
 pub fn secure_local_staging(node: &dyn Node) -> Result<(), TransferError> {
     match local_directory_path(node) {
         Some(path) => apply_mode(&path, PRIVATE_DIRECTORY_MODE),

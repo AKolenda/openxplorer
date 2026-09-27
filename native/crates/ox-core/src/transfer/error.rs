@@ -60,7 +60,7 @@ impl TransferError {
     }
 }
 
-/// Maps GLib errors the way `desktop/gio_backend.py` and
+/// Maps `GLib` errors the way `desktop/gio_backend.py` and
 /// `desktop/operations.py` interpret them: `NOT_FOUND` is a definite absence
 /// (see `is_not_found` in `operations.py`), `EXISTS` a taken name,
 /// `NOT_MOUNTED` a location to mount first and `NOT_SUPPORTED` an
@@ -118,7 +118,7 @@ impl From<LocationError> for TransferError {
 mod tests {
     use super::*;
 
-    /// One GLib error code and the transfer error it must become.
+    /// One `GLib` error code and the transfer error it must become.
     struct GlibCase {
         code: gio::IOErrorEnum,
         expected: TransferError,

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Names the engine generates or accepts: private staging names, replacement
-//! backups, Windows-style "Keep both" names and validated child names.
+//! backups and validated child names. "Keep both" names come from
+//! [`crate::location::try_new_copy_name`], shared with the rest of the app.
+//!
+//! Ports the `.winspace-transfer-` and `.winspace-replaced-` names and
+//! `is_own_staging_name` of `desktop/operations.py`.
 //!
 //! Staging and backup names carry 128 random bits from the kernel, so another
 //! program cannot predict (and pre-create or swap) them. A name the engine
@@ -19,8 +23,6 @@ const BACKUP_PREFIX: &str = ".winspace-replaced-";
 const BACKUP_SUFFIX: &str = ".backup";
 /// The payload item inside a local or network staging folder.
 pub(crate) const PAYLOAD_NAME: &str = "payload";
-/// Linux `NAME_MAX` in bytes.
-const NAME_MAX: usize = 255;
 
 /// 32 lowercase hexadecimal digits from `/dev/urandom` (like
 /// `uuid.uuid4().hex` in Python: unpredictable, not merely unique).
@@ -38,12 +40,20 @@ fn random_hex() -> Result<String, TransferError> {
 }
 
 /// A new `.winspace-transfer-<32 hex>.part` name for a private staging item.
+///
+/// # Errors
+///
+/// When the kernel's random source cannot be read; nothing was changed.
 pub fn staging_name() -> Result<String, TransferError> {
     Ok(format!("{STAGING_PREFIX}{}{STAGING_SUFFIX}", random_hex()?))
 }
 
 /// A new `.winspace-replaced-<32 hex>.backup` name that keeps the original
 /// file during a reversible replacement.
+///
+/// # Errors
+///
+/// When the kernel's random source cannot be read; nothing was changed.
 pub fn backup_name() -> Result<String, TransferError> {
     Ok(format!("{BACKUP_PREFIX}{}{BACKUP_SUFFIX}", random_hex()?))
 }
@@ -60,34 +70,6 @@ pub fn is_own_staging_name(name: &str) -> bool {
     };
     let lower_hex = |c: char| c.is_ascii_digit() || ('a'..='f').contains(&c);
     digits.len() == 32 && digits.chars().all(lower_hex)
-}
-
-/// The Windows-style duplicate name used by "Keep both":
-/// `file (copy 2).pdf`, `.env (copy 2)`, `Folder.v1 (copy 3)`.
-///
-/// Port of `new_copy_name` in `desktop/core.py`. Folders and names whose
-/// only dot is leading keep no extension. The stem is shortened (whole
-/// characters, never splitting UTF-8) to respect `NAME_MAX`; a name whose
-/// extension alone is too long is refused rather than renamed beyond
-/// recognition.
-pub fn new_copy_name(name: &str, number: u32, is_directory: bool) -> Result<String, TransferError> {
-    crate::location::validate_name(name).map_err(|error| TransferError::failed(error.to_string()))?;
-    let has_extension = name.trim_start_matches('.').contains('.');
-    let (stem, suffix) = match name.rfind('.') {
-        Some(dot) if !is_directory && has_extension => (&name[..dot], &name[dot..]),
-        _ => (name, ""),
-    };
-    let marker = format!(" (copy {number})");
-    let mut stem = stem.to_string();
-    while stem.len() + marker.len() + suffix.len() > NAME_MAX && !stem.is_empty() {
-        stem.pop();
-    }
-    if stem.is_empty() {
-        return Err(TransferError::failed(
-            "This file name is too long to generate a duplicate name.",
-        ));
-    }
-    Ok(format!("{stem}{marker}{suffix}"))
 }
 
 /// `directory.child(name)` after checking that `name` is exactly one path
@@ -158,26 +140,5 @@ mod tests {
         for bad in ["", ".", "..", "a/b", "/", "nul\0byte"] {
             assert!(!is_single_component(OsStr::new(bad)), "{bad:?}");
         }
-    }
-
-    /// Port of `test_validation` (copy names) in `desktop/tests/test_core.py`.
-    #[test]
-    fn copy_names_match_the_python_app() {
-        let name = |n: &str, number, dir| new_copy_name(n, number, dir).expect("valid name");
-        assert_eq!(name("file.pdf", 2, false), "file (copy 2).pdf");
-        assert_eq!(name(".env", 2, false), ".env (copy 2)");
-        assert_eq!(name("Folder.v1", 3, true), "Folder.v1 (copy 3)");
-        assert_eq!(name("archive.tar.gz", 2, false), "archive.tar (copy 2).gz");
-        assert_eq!(name("a.", 2, false), "a (copy 2).");
-        let long = format!("{}.txt", "é".repeat(120));
-        assert!(name(&long, 2, false).len() <= 255);
-        assert!(name(&long, 2, false).ends_with(" (copy 2).txt"));
-    }
-
-    #[test]
-    fn copy_name_with_an_oversized_extension_is_refused() {
-        let name = format!("a.{}", "x".repeat(250));
-        assert!(new_copy_name(&name, 2, false).is_err());
-        assert!(new_copy_name("..", 2, false).is_err());
     }
 }

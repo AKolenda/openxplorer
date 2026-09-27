@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Transfer request and progress types.
+//! Transfer request and progress types: the protocol names of modes and
+//! conflict policies accepted by `TransferEngine.run` in
+//! `desktop/operations.py`, its progress events and its `Result`.
+
+use std::str::FromStr;
 
 use super::error::TransferError;
-use std::str::FromStr;
 
 /// What a run does with its items.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +102,19 @@ pub struct Progress {
     pub label: String,
     /// Between 0 and 1.
     pub fraction: f64,
+}
+
+/// `part / whole` as a [`Progress::fraction`], at most 1; 0 when `whole` is
+/// 0 (a file whose size is unknown or empty).
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a progress bar needs far less precision than f64 keeps"
+)]
+pub(crate) fn progress_fraction(part: u64, whole: u64) -> f64 {
+    if whole == 0 {
+        return 0.0;
+    }
+    (part as f64 / whole as f64).min(1.0)
 }
 
 /// The outcome of one run. Every item ends in exactly one of `done`,

@@ -10,11 +10,11 @@
 //!   then renames, which leaves a tiny window for another program to create
 //!   the name in between; the Python app has the same window. A kernel
 //!   no-replace rename would close it, but it bypasses GIO's local move,
-//!   which also moves the item's GVfs metadata (emblems, icon positions).
+//!   which also moves the item's `GVfs` metadata (emblems, icon positions).
 //! - On MTP, a move within one folder is a rename (`set_display_name`, MTP
 //!   `SetObjectPropValue`), a move to another folder keeps the item's name
 //!   (MTP `MoveObject`), and Replace is never done in one step, because
-//!   GVfs deletes the existing item before it moves and cannot restore it.
+//!   `GVfs` deletes the existing item before it moves and cannot restore it.
 
 use gio::prelude::*;
 

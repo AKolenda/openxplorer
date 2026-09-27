@@ -4,8 +4,7 @@
 //! nesting depth limit.
 //!
 //! Ports `guard_destination` and `TransferEngine._check_write_tree` in
-//! `desktop/operations.py`, with the URI splitting of `split_location` in
-//! `desktop/core.py`.
+//! `desktop/operations.py`.
 
 use std::path::{Path, PathBuf};
 
@@ -14,6 +13,7 @@ use percent_encoding::percent_decode_str;
 use super::error::TransferError;
 use super::names::child_node;
 use super::node::{Cancellation, Node, NodeKind, WriteGuard};
+use crate::location::split_location;
 
 /// The deepest folder nesting the engine walks. Deeper trees are refused
 /// before anything is changed (preflight) or while copying, so a runaway
@@ -22,39 +22,9 @@ pub const MAX_DEPTH: usize = 128;
 
 /// The error for a tree deeper than [`MAX_DEPTH`].
 pub(crate) fn nesting_error() -> TransferError {
-    TransferError::failed("Folder nesting exceeds this build’s safety limit (128).")
-}
-
-/// A URI split into the parts the guard compares.
-#[derive(Debug, PartialEq, Eq)]
-struct SplitUri {
-    /// Lower-cased scheme.
-    scheme: String,
-    /// The authority (host, or a device identifier such as
-    /// `[usb:001,002]`), exactly as written.
-    authority: String,
-    /// The still-escaped path, without query or fragment.
-    path: String,
-}
-
-/// Splits `scheme://authority/path?query#fragment` like Python's `urlsplit`,
-/// but also accepts GVfs device authorities in brackets, which `urlsplit`
-/// rejects as malformed IPv6 addresses (see `split_location` in `core.py`).
-fn split_location(uri: &str) -> SplitUri {
-    let (scheme, rest) = uri.split_once(':').unwrap_or(("", uri));
-    let (authority, remainder) = match rest.strip_prefix("//") {
-        Some(after) => {
-            let end = after.find(['/', '?', '#']).unwrap_or(after.len());
-            (&after[..end], &after[end..])
-        }
-        None => ("", rest),
-    };
-    let path_end = remainder.find(['?', '#']).unwrap_or(remainder.len());
-    SplitUri {
-        scheme: scheme.to_ascii_lowercase(),
-        authority: authority.to_string(),
-        path: remainder[..path_end].to_string(),
-    }
+    TransferError::failed(format!(
+        "Folder nesting exceeds this build’s safety limit ({MAX_DEPTH})."
+    ))
 }
 
 /// Rejects placing a folder inside itself or one of its descendants.
@@ -64,6 +34,11 @@ fn split_location(uri: &str) -> SplitUri {
 /// (case-insensitively for SMB, which is conservative). Aliases that cannot
 /// be proven identical, such as two host names for one server, are caught
 /// during the copy by the staging-name check in the copier.
+///
+/// # Errors
+///
+/// A refusal when `directory` is `source` or inside it, or when either URI
+/// is not a valid location (as `split_location` raises in Python).
 pub fn guard_destination(source: &dyn Node, directory: &dyn Node) -> Result<(), TransferError> {
     if let (Some(source_path), Some(directory_path)) = (source.path(), directory.path()) {
         let resolved_source = resolve_links(&source_path);
@@ -75,16 +50,16 @@ pub fn guard_destination(source: &dyn Node, directory: &dyn Node) -> Result<(), 
             ));
         }
     }
-    let source_uri = split_location(&source.uri());
-    let directory_uri = split_location(&directory.uri());
-    let same_host = source_uri.scheme == directory_uri.scheme
-        && source_uri.authority.to_lowercase() == directory_uri.authority.to_lowercase();
+    let source_parts = split_location(&source.uri())?;
+    let directory_parts = split_location(&directory.uri())?;
+    let same_host = source_parts.scheme == directory_parts.scheme
+        && source_parts.netloc.to_lowercase() == directory_parts.netloc.to_lowercase();
     if !same_host {
         return Ok(());
     }
-    let is_smb = source_uri.scheme == "smb";
-    let source_path = comparable_path(&source_uri.path, is_smb);
-    let directory_path = comparable_path(&directory_uri.path, is_smb);
+    let is_smb = source_parts.scheme == "smb";
+    let source_path = comparable_path(&source_parts.path, is_smb);
+    let directory_path = comparable_path(&directory_parts.path, is_smb);
     let inside = directory_path == source_path || directory_path.starts_with(&format!("{source_path}/"));
     if inside {
         return Err(TransferError::failed("Cannot place a folder inside itself."));
@@ -110,8 +85,9 @@ fn fold_case(text: &str) -> String {
 
 /// Resolves symbolic links like Python's non-strict `os.path.realpath`: the
 /// longest existing ancestor is resolved and the rest is appended as given.
-/// A path that cannot be resolved at all (for example a GVfs FUSE path whose
-/// daemon is gone) is compared as given; the URI comparison still applies.
+/// A path that cannot be resolved at all (for example a `GVfs` FUSE path
+/// whose daemon is gone) is compared as given; the URI comparison still
+/// applies.
 fn resolve_links(path: &Path) -> PathBuf {
     let mut existing = path;
     let mut missing = Vec::new();
@@ -132,66 +108,89 @@ fn resolve_links(path: &Path) -> PathBuf {
     }
 }
 
+/// What an operation does to its source tree, which decides whether the
+/// write guard is asked about the source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceChange {
+    /// The source stays as it is (copy).
+    Kept,
+    /// The source is moved, renamed, trashed or deleted.
+    Changed,
+}
+
 /// Preflight for one top-level item: asks `guard` about every affected URI
 /// before anything changes, so a protected descendant (for example a
 /// `.snapshot` folder deep inside a selected folder) stops the whole item.
 ///
-/// `source_writable` also checks the source tree (move, Trash, delete,
-/// rename); `destination` is checked in parallel with the source tree (copy,
-/// move). Nothing is followed through symbolic links and nothing is
-/// modified. Without a guard this does nothing, exactly like the Python
-/// engine. Also used by rename (`rename_item` in `desktop/gio_backend.py`).
+/// The source tree is checked when `source_change` is
+/// [`SourceChange::Changed`]; `destination` is checked in parallel with the
+/// source tree (copy, move). Nothing is followed through symbolic links and
+/// nothing is modified. Without a guard this does nothing, exactly like the
+/// Python engine. The Python app also runs it before a rename (`rename_item`
+/// in `desktop/gio_backend.py`).
+///
+/// # Errors
+///
+/// The guard's refusal for the first protected URI, the nesting limit,
+/// [`TransferError::Cancelled`], or a failure to inspect or list the tree.
 pub fn check_write_tree(
     guard: Option<&WriteGuard>,
     source: &dyn Node,
     destination: Option<&dyn Node>,
     cancel: &Cancellation,
-    source_writable: bool,
+    source_change: SourceChange,
 ) -> Result<(), TransferError> {
-    match guard {
-        Some(guard) => check_tree(guard, source, destination, cancel, source_writable, 0),
-        None => Ok(()),
-    }
+    let Some(guard) = guard else {
+        return Ok(());
+    };
+    let check = TreeCheck {
+        guard,
+        cancel,
+        source_change,
+    };
+    check.check_tree(source, destination, 0)
 }
 
-fn check_tree(
-    guard: &WriteGuard,
-    source: &dyn Node,
-    destination: Option<&dyn Node>,
-    cancel: &Cancellation,
-    source_writable: bool,
-    depth: usize,
-) -> Result<(), TransferError> {
-    cancel.check()?;
-    if depth > MAX_DEPTH {
-        return Err(nesting_error());
+/// One preflight walk.
+struct TreeCheck<'a> {
+    guard: &'a WriteGuard,
+    cancel: &'a Cancellation,
+    source_change: SourceChange,
+}
+
+impl TreeCheck<'_> {
+    /// Checks `source` (at nesting `depth`), its counterpart in the
+    /// destination, and everything below them.
+    fn check_tree(
+        &self,
+        source: &dyn Node,
+        destination: Option<&dyn Node>,
+        depth: usize,
+    ) -> Result<(), TransferError> {
+        self.cancel.check()?;
+        if depth > MAX_DEPTH {
+            return Err(nesting_error());
+        }
+        if self.source_change == SourceChange::Changed {
+            (self.guard)(&source.uri())?;
+        }
+        if let Some(destination) = destination {
+            (self.guard)(&destination.uri())?;
+        }
+        // Inspected without following links: a link to a protected folder is
+        // checked as the link itself, and its target is never walked.
+        if source.info(Some(self.cancel))?.kind != NodeKind::Directory {
+            return Ok(());
+        }
+        for child in source.children(Some(self.cancel))? {
+            let child_destination = match destination {
+                Some(folder) => Some(child_node(folder, child.name())?),
+                None => None,
+            };
+            self.check_tree(child.as_ref(), child_destination.as_deref(), depth + 1)?;
+        }
+        Ok(())
     }
-    if source_writable {
-        guard(&source.uri())?;
-    }
-    if let Some(destination) = destination {
-        guard(&destination.uri())?;
-    }
-    // Inspected without following links: a link to a protected folder is
-    // checked as the link itself, and its target is never walked.
-    if source.info(Some(cancel))?.kind != NodeKind::Directory {
-        return Ok(());
-    }
-    for child in source.children(Some(cancel))? {
-        let child_destination = match destination {
-            Some(folder) => Some(child_node(folder, child.name())?),
-            None => None,
-        };
-        check_tree(
-            guard,
-            child.as_ref(),
-            child_destination.as_deref(),
-            cancel,
-            source_writable,
-            depth + 1,
-        )?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -199,15 +198,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn device_authorities_split_without_error() {
-        let parts = split_location("mtp://[usb:001,002]/Internal%20storage/x?y#z");
-        assert_eq!(parts.scheme, "mtp");
-        assert_eq!(parts.authority, "[usb:001,002]");
-        assert_eq!(parts.path, "/Internal%20storage/x");
-        let local = split_location("file:///home/demo");
+    fn nesting_error_names_the_limit() {
         assert_eq!(
-            (local.authority.as_str(), local.path.as_str()),
-            ("", "/home/demo")
+            nesting_error(),
+            TransferError::failed("Folder nesting exceeds this build’s safety limit (128).")
         );
     }
 

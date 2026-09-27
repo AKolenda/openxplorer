@@ -78,9 +78,14 @@ pub(crate) fn leftover_report(stage: &dyn Node, place: StagingPlace, problem: &T
 /// Recursively removes a staging tree the engine exclusively created.
 ///
 /// Folders are made owner-writable first (a restored restrictive mode must
-/// not block cleanup), then emptied, then removed. Also used by the ZIP
-/// extractor for its own staging folder. Never call this on a user-selected
-/// path.
+/// not block cleanup), then emptied, then removed. The Python ZIP extractor
+/// (`desktop/zip_extraction.py`) cleans its own staging folder the same way;
+/// its port will use this too. Never call this on a user-selected path.
+///
+/// # Errors
+///
+/// The first item that cannot be inspected, listed or removed; the rest of
+/// the tree stays for the caller to report.
 pub fn clean_staging(node: &dyn Node) -> Result<(), TransferError> {
     clean_at_depth(node, 0)
 }
@@ -145,7 +150,7 @@ fn remove_stage(stage: &dyn Node, place: StagingPlace) -> Result<(), TransferErr
     }
 }
 
-/// GVfs MTP answers "not found" for an uncached path it failed to look up,
+/// `GVfs` MTP answers "not found" for an uncached path it failed to look up,
 /// so only a successful listing of the parent without the stage proves the
 /// stage is gone.
 fn confirmed_absent(stage: &dyn Node) -> bool {

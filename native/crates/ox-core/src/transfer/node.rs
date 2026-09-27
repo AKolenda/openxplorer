@@ -210,7 +210,7 @@ pub trait Node: Send + Sync {
         false
     }
     /// A native copy into `target_dir` keeps this item's own name (MTP
-    /// CopyObject within one device).
+    /// `CopyObject` within one device).
     fn native_copy_keeps_name(&self, _target_dir: &dyn Node) -> bool {
         false
     }

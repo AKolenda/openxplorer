@@ -20,7 +20,7 @@ use super::labels::copy_label;
 use super::modes::{local_directory_path, secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
 use super::names::child_node;
 use super::node::{Cancellation, Node, NodeInfo, NodeKind};
-use super::types::Progress;
+use super::types::{progress_fraction, Progress};
 
 /// Copies one source tree into staging, reporting byte progress.
 pub(crate) struct Copier<'a> {
@@ -118,14 +118,9 @@ impl<'a> Copier<'a> {
             if cancel.is_cancelled() {
                 return;
             }
-            let fraction = if total > 0 {
-                (current as f64 / total as f64).min(1.0)
-            } else {
-                0.0
-            };
             emit(Progress {
                 label: copy_label(&name, current, total),
-                fraction,
+                fraction: progress_fraction(current, total),
             });
         };
         source.copy_file(target, cancel, &mut progress)

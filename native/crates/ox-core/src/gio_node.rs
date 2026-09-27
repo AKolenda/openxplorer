@@ -26,7 +26,7 @@ use gio::prelude::*;
 use crate::location::split_location;
 use crate::transfer::{Cancellation, Node, NodeInfo, TransferError, WriteGuard};
 
-/// A file or folder addressed through GIO, including GVfs remote backends.
+/// A file or folder addressed through GIO, including `GVfs` remote backends.
 #[derive(Clone, Debug)]
 pub struct GioNode {
     file: gio::File,
@@ -53,7 +53,7 @@ impl GioNode {
         self.file.has_uri_scheme("mtp")
     }
 
-    /// The path of a `file:` item. GVfs FUSE paths of remote items do not
+    /// The path of a `file:` item. `GVfs` FUSE paths of remote items do not
     /// count: their backends cannot pin folders or change Unix modes.
     fn local_path(&self) -> Option<PathBuf> {
         if self.file.has_uri_scheme("file") {

@@ -5,8 +5,11 @@
 //! `desktop/operations.py`.
 //!
 //! Rules enforced here:
-//! - Publishing is a native, non-overwriting rename. If another program
+//! - Publishing is a native rename that never overwrites. If another program
 //!   took the name meanwhile, publishing fails and nothing is overwritten.
+//!   (On local disks GIO checks the name just before renaming, which leaves
+//!   a window of microseconds, as in the Python app; see
+//!   `gio_node::move_item`.)
 //! - Replace (an explicit user choice) merges same-name folders, keeping
 //!   destination-only items, and overwrites files only through the
 //!   backend's explicit overwrite move. A file/folder type mismatch is left
@@ -18,6 +21,8 @@
 //!   a device can finish a rename after the client stopped waiting, and
 //!   stopping midway would leave the public name empty.
 
+use std::fs::File;
+
 use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::modes::{
@@ -28,6 +33,14 @@ use super::node::{Cancellation, Node, NodeKind, WriteGuard};
 
 /// Attempts to find a free backup name before giving up.
 const BACKUP_NAME_ATTEMPTS: usize = 100;
+
+/// A staged local folder, opened before publishing, and its final mode.
+struct StagedFolder {
+    /// Opened without following links, so the mode lands on the folder the
+    /// engine built even after it moved.
+    directory: File,
+    mode: u32,
+}
 
 /// Moves a completed staged item to `destination` without overwriting,
 /// then gives a staged local folder tree its final permissions.
@@ -49,12 +62,13 @@ pub(crate) fn publish_staged(
     let Some(root) = modes.take(&source.uri()) else {
         return source.move_native(destination, Some(cancel));
     };
-    // Opened before the rename and without following links, so the mode
-    // lands on the folder the engine built even after it moved.
-    let directory = open_directory_nofollow(&root.path)?;
-    let moved = move_with_owner_access(source, destination, modes, cancel, &directory, root.mode);
+    let staged = StagedFolder {
+        directory: open_directory_nofollow(&root.path)?,
+        mode: root.mode,
+    };
+    let moved = move_with_owner_access(source, destination, modes, cancel, &staged);
     // Always leave the exact final mode, whether or not the rename worked.
-    match set_mode(&directory, root.mode) {
+    match set_mode(&staged.directory, staged.mode) {
         Ok(()) => moved,
         Err(error) if moved.is_ok() => Err(TransferError::RecoveryRequired(format!(
             "The copied folder exists at {}, but its final permissions could not be restored. {error}",
@@ -71,13 +85,12 @@ fn move_with_owner_access(
     destination: &dyn Node,
     modes: &mut DirectoryModes,
     cancel: &Cancellation,
-    directory: &std::fs::File,
-    final_mode: u32,
+    staged: &StagedFolder,
 ) -> Result<(), TransferError> {
     if !modes.is_empty() {
         restore_directory_modes(source, modes, cancel)?;
     }
-    set_mode(directory, final_mode | PRIVATE_DIRECTORY_MODE)?;
+    set_mode(&staged.directory, staged.mode | PRIVATE_DIRECTORY_MODE)?;
     // Never overwrites: another program that took the name meanwhile keeps
     // it, and the staged copy stays private for cleanup.
     source.move_native(destination, Some(cancel))
@@ -86,7 +99,8 @@ fn move_with_owner_access(
 /// Commits one completed item using Windows-like Replace semantics.
 ///
 /// `modes` is `Some` for staged copies (their folders get final modes when
-/// published) and `None` for moves of the user's own items.
+/// published) and `None` for moves of the user's own items. `guard` is
+/// asked about every destination before it changes.
 pub(crate) fn commit_replace(
     source: &dyn Node,
     destination: &dyn Node,
@@ -94,67 +108,82 @@ pub(crate) fn commit_replace(
     guard: Option<&WriteGuard>,
     modes: Option<&mut DirectoryModes>,
 ) -> Result<(), TransferError> {
-    replace_at_depth(source, destination, cancel, guard, modes, 0)
+    Replacement { cancel, guard }.replace(source, destination, modes, 0)
 }
 
-fn replace_at_depth(
-    source: &dyn Node,
-    destination: &dyn Node,
-    cancel: &Cancellation,
-    guard: Option<&WriteGuard>,
-    mut modes: Option<&mut DirectoryModes>,
-    depth: usize,
-) -> Result<(), TransferError> {
-    cancel.check()?;
-    if depth > MAX_DEPTH {
-        return Err(nesting_error());
+/// One Replace commit of a top-level item.
+struct Replacement<'a> {
+    cancel: &'a Cancellation,
+    guard: Option<&'a WriteGuard>,
+}
+
+impl Replacement<'_> {
+    /// Commits `source` over `destination`, at nesting `depth`.
+    fn replace(
+        &self,
+        source: &dyn Node,
+        destination: &dyn Node,
+        modes: Option<&mut DirectoryModes>,
+        depth: usize,
+    ) -> Result<(), TransferError> {
+        self.cancel.check()?;
+        if depth > MAX_DEPTH {
+            return Err(nesting_error());
+        }
+        if let Some(guard) = self.guard {
+            guard(&destination.uri())?;
+        }
+        if !destination.exists(Some(self.cancel)) {
+            return match modes {
+                Some(modes) => publish_staged(source, destination, modes, self.cancel),
+                None => source.move_native(destination, Some(self.cancel)),
+            };
+        }
+        let incoming = source.info(Some(self.cancel))?.kind;
+        let existing = destination.info(Some(self.cancel))?.kind;
+        match (incoming, existing) {
+            (NodeKind::Directory, NodeKind::Directory) => self.merge(source, destination, modes, depth),
+            (NodeKind::Directory, _) | (_, NodeKind::Directory) => Err(TransferError::failed(
+                "A file and folder have the same name. Rename or remove one of them, then try again.",
+            )),
+            (NodeKind::File | NodeKind::Symlink, NodeKind::File | NodeKind::Symlink) => {
+                self.overwrite(source, destination)
+            }
+            _ => Err(TransferError::failed(
+                "This item type cannot be replaced automatically.",
+            )),
+        }
     }
-    if let Some(guard) = guard {
-        guard(&destination.uri())?;
-    }
-    if !destination.exists(Some(cancel)) {
-        return match modes {
-            Some(modes) => publish_staged(source, destination, modes, cancel),
-            None => source.move_native(destination, Some(cancel)),
-        };
-    }
-    let incoming = source.info(Some(cancel))?.kind;
-    let existing = destination.info(Some(cancel))?.kind;
-    if incoming == NodeKind::Directory && existing == NodeKind::Directory {
-        // Merge: commit each child, keep destination-only items, then remove
-        // the now empty incoming folder (a plain delete cannot remove a
-        // folder that still has contents).
-        for child in source.children(Some(cancel))? {
+
+    /// Merges the folder `source` into the existing folder `destination`:
+    /// each child is committed, destination-only items stay, and the then
+    /// empty incoming folder is removed (a plain delete cannot remove a
+    /// folder that still has contents).
+    fn merge(
+        &self,
+        source: &dyn Node,
+        destination: &dyn Node,
+        mut modes: Option<&mut DirectoryModes>,
+        depth: usize,
+    ) -> Result<(), TransferError> {
+        for child in source.children(Some(self.cancel))? {
             let target = child_node(destination, child.name())?;
-            replace_at_depth(
-                child.as_ref(),
-                target.as_ref(),
-                cancel,
-                guard,
-                modes.as_deref_mut(),
-                depth + 1,
-            )?;
+            self.replace(child.as_ref(), target.as_ref(), modes.as_deref_mut(), depth + 1)?;
         }
         source.delete()?;
         if let Some(modes) = modes {
             modes.take(&source.uri());
         }
-        return Ok(());
+        Ok(())
     }
-    if incoming == NodeKind::Directory || existing == NodeKind::Directory {
-        return Err(TransferError::failed(
-            "A file and folder have the same name. Rename or remove one of them, then try again.",
-        ));
-    }
-    let replaceable = |kind: NodeKind| matches!(kind, NodeKind::File | NodeKind::Symlink);
-    if !replaceable(incoming) || !replaceable(existing) {
-        return Err(TransferError::failed(
-            "This item type cannot be replaced automatically.",
-        ));
-    }
-    match source.replace_native(destination, Some(cancel)) {
-        Err(TransferError::ReplaceUnsupported(_)) => replace_via_backup(source, destination, cancel),
-        other => other,
+
+    /// Overwrites one file or link, reversibly where the backend cannot do
+    /// it in one step.
+    fn overwrite(&self, source: &dyn Node, destination: &dyn Node) -> Result<(), TransferError> {
+        match source.replace_native(destination, Some(self.cancel)) {
+            Err(TransferError::ReplaceUnsupported(_)) => replace_via_backup(source, destination, self.cancel),
+            other => other,
+        }
     }
 }
 
@@ -172,36 +201,17 @@ fn replace_via_backup(
         .parent()
         .ok_or_else(|| TransferError::failed("Filesystem roots cannot be replaced."))?;
     let backup = reserve_backup_name(parent.as_ref(), cancel)?;
-    // Last chance to stop: from here on, the renames run to completion. The
-    // move-aside gets no cancellation because a device can finish a rename
-    // after the client stopped waiting for it.
+    let backup = backup.as_ref();
+    // Last chance to stop: from here on, the renames run to completion.
     cancel.check()?;
-    let moved_aside = destination
-        .move_native(backup.as_ref(), None)
-        .and_then(|()| verify_installation(destination, backup.as_ref()));
-    if let Err(aside_error) = moved_aside {
-        let backup_info = backup.info(None);
-        let destination_info = destination.info(None);
-        match (backup_info, destination_info) {
-            (Ok(_), Err(error)) if error.is_not_found() => {
-                restore_backup(backup.as_ref(), destination)?;
-            }
-            (Err(error), Ok(_)) if error.is_not_found() => {}
-            (_, _) if matches!(aside_error, TransferError::Exists(_)) => {}
-            _ => return Err(TransferError::RecoveryRequired(format!(
-                "Replacement stopped before installation. Check {} and the possible recovery file at {} before retrying. {aside_error}",
-                destination.uri(), backup.uri()
-            ))),
-        }
-        return Err(aside_error);
-    }
+    move_aside(destination, backup)?;
     // Once the old file is aside, finish the tiny install step even if the
     // user cancels meanwhile: stopping here would leave the public name empty.
     let installed = source
         .move_native(destination, None)
         .and_then(|()| verify_installation(source, destination));
     if let Err(install_error) = installed {
-        restore_backup(backup.as_ref(), destination)?;
+        restore_backup(backup, destination)?;
         return Err(install_error);
     }
     // Only now, with the new file installed, is the old one discarded, as the
@@ -215,15 +225,49 @@ fn replace_via_backup(
     })
 }
 
+/// Renames the old file to its backup name. The rename gets no
+/// cancellation because a device can finish a rename after the client
+/// stopped waiting for it; a failure is checked against what actually
+/// happened, so the original never stays under the hidden backup name.
+fn move_aside(destination: &dyn Node, backup: &dyn Node) -> Result<(), TransferError> {
+    let moved = destination
+        .move_native(backup, None)
+        .and_then(|()| verify_installation(destination, backup));
+    let Err(aside_error) = moved else {
+        return Ok(());
+    };
+    match (backup.info(None), destination.info(None)) {
+        // The device finished the rename after all: put the original back.
+        (Ok(_), Err(error)) if error.is_not_found() => restore_backup(backup, destination)?,
+        // Nothing moved.
+        (Err(error), Ok(_)) if error.is_not_found() => {}
+        // The backup name was taken meanwhile; the original was not moved.
+        _ if matches!(aside_error, TransferError::Exists(_)) => {}
+        _ => {
+            return Err(TransferError::RecoveryRequired(format!(
+                "Replacement stopped before installation. Check {} and the possible \
+                 recovery file at {} before retrying. {aside_error}",
+                destination.uri(),
+                backup.uri()
+            )))
+        }
+    }
+    Err(aside_error)
+}
+
 /// Rollback uses the same non-overwriting move and explicit verification as
 /// installation. Never claim restoration solely from a backend success code.
 fn restore_backup(backup: &dyn Node, destination: &dyn Node) -> Result<(), TransferError> {
-    backup.move_native(destination, None)
+    backup
+        .move_native(destination, None)
         .and_then(|()| verify_installation(backup, destination))
-        .map_err(|error| TransferError::RecoveryRequired(format!(
-            "Replacement failed and restoration could not be verified. Check the original at {} and restore it manually before retrying. {error}",
-            backup.uri()
-        )))
+        .map_err(|error| {
+            TransferError::RecoveryRequired(format!(
+                "Replacement failed and restoration could not be verified. Check the original \
+                 at {} and restore it manually before retrying. {error}",
+                backup.uri()
+            ))
+        })
 }
 
 /// A device may report success without moving the requested item. Retain
@@ -246,7 +290,8 @@ pub(crate) fn verify_installation(source: &dyn Node, destination: &dyn Node) -> 
         Err(error) if error.is_not_found() => Ok(()),
         Err(error) => Err(error),
         Ok(_) => Err(TransferError::failed(
-            "The backend reported success, but the incoming item was not moved. The prior file was retained.",
+            "The backend reported success, but the incoming item was not moved. \
+             The prior file was retained.",
         )),
     }
 }
@@ -254,7 +299,7 @@ pub(crate) fn verify_installation(source: &dyn Node, destination: &dyn Node) -> 
 /// Finds a free `.winspace-replaced-<32 hex>.backup` name in `parent`.
 fn reserve_backup_name(parent: &dyn Node, cancel: &Cancellation) -> Result<Box<dyn Node>, TransferError> {
     for _ in 0..BACKUP_NAME_ATTEMPTS {
-        let candidate = child_node(parent, &backup_name()?)?;
+        let candidate = child_node(parent, backup_name()?)?;
         if !candidate.exists(Some(cancel)) {
             return Ok(candidate);
         }
