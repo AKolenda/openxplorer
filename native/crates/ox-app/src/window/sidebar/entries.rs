@@ -1,35 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The navigation pane (sidebar).
-//!
-//! Ports `renderSidebar` in `desktop/ui/app.js`, in its order: Home (the
-//! home folder), the Quick access folders and pins, This PC with Local Disk
-//! and the drives and devices, and Network with the merged network
-//! locations. Mounted SMB shares appear once, under Network. Groups are
-//! separated by list-row headers, so keyboard and screen-reader users never
-//! land on an empty separator row.
+//! The sidebar's rows as data, in the order of `renderSidebar` in
+//! `desktop/ui/app.js`: Home (the home folder), the Quick access folders
+//! and pins, This PC with Local Disk and the drives and devices, and
+//! Network with the merged network locations. Mounted SMB shares appear
+//! once, under Network.
 //!
 //! [`sidebar_entries`] turns composed [`Places`] into rows without GTK, so
-//! the order is tested on its own; rows activate `win.go-to` or
-//! `win.mount-volume`.
-
-use std::cell::RefCell;
-use std::rc::Rc;
+//! the order is tested on its own.
 
 use gtk::gdk;
-use gtk::prelude::*;
-use ox_core::location::{same_location, LocationContext, NETWORK_URI, PC_URI};
+use ox_core::location::{LocationContext, NETWORK_URI, PC_URI};
 use ox_core::places::{NetworkKind, NetworkLocation, Place};
 
-use crate::icons::{self, ArtKind, Glyph};
+use crate::icons::{ArtKind, Glyph};
 use crate::places::Places;
-use crate::theme::Appearance;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
-
-use super::gestures;
 
 /// A group of rows; a separator is drawn where the group changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Section {
+pub(crate) enum Section {
     /// The home folder.
     Home,
     /// Known folders and pins.
@@ -42,7 +31,7 @@ pub(super) enum Section {
 
 /// How a row sits in the tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RowLevel {
+pub(crate) enum RowLevel {
     /// A top-level place (Home, a Quick access folder).
     Place,
     /// A group head with an expander (This PC, Network).
@@ -53,7 +42,7 @@ pub(super) enum RowLevel {
 
 /// How a row's icon is drawn.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum RowIcon {
+pub(crate) enum RowIcon {
     /// A line glyph, in a fixed colour or the text colour.
     Glyph(Glyph, Option<gdk::RGBA>),
     /// Colour art (folders and network locations).
@@ -62,7 +51,7 @@ pub(super) enum RowIcon {
 
 /// What activating a row does.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum RowTarget {
+pub(crate) enum RowTarget {
     /// Opens a location.
     Location(String),
     /// Mounts the volume with this identifier, then opens it.
@@ -71,7 +60,7 @@ pub(super) enum RowTarget {
 
 /// One sidebar row.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct SidebarEntry {
+pub(crate) struct SidebarEntry {
     /// The group the row belongs to.
     pub section: Section,
     /// A place, a group head or an indented row.
@@ -198,7 +187,7 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
 }
 
 /// The sidebar rows, in the Python app's order.
-pub(super) fn sidebar_entries(places: &Places, locations: &LocationContext) -> Vec<SidebarEntry> {
+pub(crate) fn sidebar_entries(places: &Places, locations: &LocationContext) -> Vec<SidebarEntry> {
     let home_uri = locations.home_uri();
     let mut home = fixed_entry(Section::Home, "Home", Glyph::Home, HOME_COLOR, &home_uri);
     home.tooltip = locations.display_location(&home_uri);
@@ -226,177 +215,24 @@ pub(super) fn sidebar_entries(places: &Places, locations: &LocationContext) -> V
     entries
 }
 
-fn row_icon(icon: RowIcon, appearance: Appearance, scale: i32) -> gtk::Image {
-    match icon {
-        RowIcon::Glyph(glyph, Some(fixed)) => icons::colored_glyph(glyph, 18, fixed),
-        RowIcon::Glyph(glyph, None) => icons::glyph(glyph, 18),
-        RowIcon::Art(kind) => icons::art_image(kind, 19, appearance, scale),
-    }
+/// Where a row sits in its section, which decides its spacing: the
+/// Quick access rows sit in a box of their own in app.js.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SectionEdges {
+    /// The row is the first of its section.
+    pub first: bool,
+    /// The row is the last of its section.
+    pub last: bool,
 }
 
-fn row_content(entry: &SidebarEntry, appearance: Appearance, scale: i32) -> gtk::Box {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 11);
-    let pill = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    pill.add_css_class("pill");
-    pill.set_valign(gtk::Align::Center);
-    content.append(&pill);
-    if entry.level == RowLevel::Group {
-        let expander = icons::glyph(Glyph::Down, 9);
-        expander.add_css_class("expand");
-        content.append(&expander);
-    }
-    content.append(&row_icon(entry.icon, appearance, scale));
-    let label = gtk::Label::builder()
-        .label(&entry.label)
-        .xalign(0.0)
-        .hexpand(true)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
-        .build();
-    content.append(&label);
-    if entry.pinned {
-        let pin = icons::glyph(Glyph::Pin, 11);
-        pin.add_css_class("pin");
-        content.append(&pin);
-    }
-    content
-}
-
-fn sidebar_row(entry: &SidebarEntry, appearance: Appearance, scale: i32) -> gtk::ListBoxRow {
-    let row = gtk::ListBoxRow::new();
-    row.set_child(Some(&row_content(entry, appearance, scale)));
-    if entry.level == RowLevel::Child {
-        row.add_css_class("indent");
-    }
-    row.set_tooltip_text(Some(&entry.tooltip));
-    // The visible label names the row; the address is its description.
-    row.update_property(&[
-        gtk::accessible::Property::Label(&entry.label),
-        gtk::accessible::Property::Description(&entry.tooltip),
-    ]);
-    match &entry.target {
-        RowTarget::Location(uri) => {
-            row.set_action_name(Some("win.go-to"));
-            row.set_action_target_value(Some(&uri.to_variant()));
-        }
-        RowTarget::MountVolume(id) => {
-            row.set_action_name(Some("win.mount-volume"));
-            row.set_action_target_value(Some(&id.to_variant()));
-        }
-    }
-    row
-}
-
-/// The location of the row at `y` in `list`, for middle-clicks.
-fn location_at(list: &gtk::ListBox, entries: &[SidebarEntry], y: f64) -> Option<String> {
-    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
-    let row = list.row_at_y(y as i32)?;
-    let index = usize::try_from(row.index()).ok()?;
-    match &entries.get(index)?.target {
-        RowTarget::Location(uri) => Some(uri.clone()),
-        RowTarget::MountVolume(_) => None,
-    }
-}
-
-/// The sidebar's widgets and the rows it shows.
-#[derive(Debug)]
-pub(super) struct Sidebar {
-    /// The scrolling pane.
-    pub root: gtk::ScrolledWindow,
-    /// The rows.
-    pub list: gtk::ListBox,
-    entries: Rc<RefCell<Vec<SidebarEntry>>>,
-}
-
-impl Sidebar {
-    /// An empty navigation pane.
-    pub fn new() -> Self {
-        let list = gtk::ListBox::builder()
-            .selection_mode(gtk::SelectionMode::Single)
-            .activate_on_single_click(true)
-            .build();
-        list.update_property(&[gtk::accessible::Property::Label("Navigation pane")]);
-        let entries: Rc<RefCell<Vec<SidebarEntry>>> = Rc::default();
-        let sections = Rc::clone(&entries);
-        list.set_header_func(move |row, before| {
-            let section_of = |row: &gtk::ListBoxRow| {
-                let index = usize::try_from(row.index()).ok()?;
-                sections.borrow().get(index).map(|entry| entry.section)
-            };
-            let starts_group = before.is_some_and(|before| section_of(before) != section_of(row));
-            if !starts_group {
-                row.set_header(None::<&gtk::Widget>);
-                return;
-            }
-            let line = gtk::Separator::new(gtk::Orientation::Horizontal);
-            line.add_css_class("side-separator");
-            row.set_header(Some(&line));
-        });
-        let root = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .min_content_width(140)
-            .child(&list)
-            .build();
-        root.add_css_class("sidebar");
-        let sidebar = Self { root, list, entries };
-        sidebar.open_places_on_middle_click();
-        sidebar
-    }
-
-    /// A middle-click on a place opens it in a tab; volumes that still
-    /// have to be mounted do nothing.
-    fn open_places_on_middle_click(&self) {
-        let entries = Rc::clone(&self.entries);
-        let gesture = gestures::middle_click(move |gesture, _, y| {
-            let Some(list) = gesture.widget().and_downcast::<gtk::ListBox>() else {
-                return;
-            };
-            let Some(uri) = location_at(&list, &entries.borrow(), y) else {
-                return;
-            };
-            let action = gestures::open_action(gesture.current_event_state());
-            // The action exists on every browser window.
-            let _ = list.activate_action(action, Some(&uri.to_variant()));
-        });
-        self.list.add_controller(gesture);
-    }
-
-    /// Replaces the rows.
-    pub fn show(&self, entries: Vec<SidebarEntry>, appearance: Appearance, scale: i32) {
-        self.list.remove_all();
-        let rows: Vec<gtk::ListBoxRow> = entries
-            .iter()
-            .map(|entry| sidebar_row(entry, appearance, scale))
-            .collect();
-        self.entries.replace(entries);
-        for row in &rows {
-            self.list.append(row);
-        }
-    }
-
-    /// Highlights the row for `uri`, or none.
-    pub fn select(&self, uri: &str) {
-        let index = self
-            .entries
-            .borrow()
-            .iter()
-            .position(|entry| match &entry.target {
-                RowTarget::Location(candidate) => same_location(candidate, uri),
-                RowTarget::MountVolume(_) => false,
-            });
-        let row = index
-            .and_then(|index| i32::try_from(index).ok())
-            .and_then(|index| self.list.row_at_index(index));
-        self.list.select_row(row.as_ref());
-    }
-
-    /// The labels shown, for tests.
-    #[cfg(test)]
-    pub fn labels(&self) -> Vec<String> {
-        self.entries
-            .borrow()
-            .iter()
-            .map(|entry| entry.label.clone())
-            .collect()
+/// The section edges of row `index` of `entries`.
+pub(crate) fn section_edges(entries: &[SidebarEntry], index: usize) -> SectionEdges {
+    let section = entries.get(index).map(|entry| entry.section);
+    let before = index.checked_sub(1).and_then(|before| entries.get(before));
+    let after = entries.get(index + 1);
+    SectionEdges {
+        first: before.map(|entry| entry.section) != section,
+        last: after.map(|entry| entry.section) != section,
     }
 }
 
@@ -510,5 +346,29 @@ mod tests {
             let icon = place.icon.expect("known folders have a glyph");
             assert!(Glyph::for_known_folder(icon).is_some(), "{icon}");
         }
+    }
+
+    #[test]
+    fn a_section_knows_its_first_and_last_rows() {
+        let settings = SettingsData {
+            pins: vec![
+                Bookmark {
+                    uri: "file:///srv/work".into(),
+                    label: "Work".into(),
+                },
+                Bookmark {
+                    uri: "file:///srv/play".into(),
+                    label: "Play".into(),
+                },
+            ],
+            ..SettingsData::default()
+        };
+        let entries = entries_for(&settings, &[]);
+        let edges: Vec<(bool, bool)> = (0..4)
+            .map(|index| section_edges(&entries, index))
+            .map(|edges| (edges.first, edges.last))
+            .collect();
+        // Home alone; Work and Play in Quick access; This PC starts a group.
+        assert_eq!(edges, [(true, true), (true, false), (false, true), (true, false)]);
     }
 }

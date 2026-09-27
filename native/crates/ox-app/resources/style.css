@@ -187,31 +187,63 @@ window.ox.solid-csd {
 .commandbar button.details-toggle:checked,
 .commandbar button.details-toggle:checked:hover { background-color: @ox_selected; }
 
-/* ---- Sidebar (style.css .sidebar/.side-entry) ---- */
+/* ---- Sidebar (style.css .sidebar/.side-entry/.quick-access) ---- */
+/* Web rows are 35px with 1px margins that collapse to one pixel between
+   rows (a 36px pitch) and into the separators' 12px. GTK margins do not
+   collapse, so rows keep only the top one and separators give back a
+   pixel below. Quick access rows sit in a box of their own, inset 4px
+   (3px margin, 1px border) with no row margins and 4px below the last. */
 .sidebar { background-color: @ox_sidebar; }
 .sidebar list { background: none; padding: 13px 7px 0 7px; color: @ox_text; }
 .sidebar list > row {
   min-height: 35px;
   border-radius: 4px;
-  margin: 1px 0;
-  padding: 0 11px 0 0;
+  margin: 1px 0 0 0;
+  padding: 0;
   background: none;
   outline: none;
 }
+.sidebar list > row.quick-access { margin: 0 4px; }
+.sidebar list > row.quick-access.section-start { margin-top: 2px; }
+.sidebar list > row.quick-access.section-end { margin-bottom: 5px; }
 .sidebar list > row:hover { background-color: @ox_hover; }
-.sidebar list > row.current, .sidebar list > row:selected { background-color: @ox_selected; color: @ox_text; }
+.sidebar list > row:selected { background-color: @ox_selected; color: @ox_text; }
 .sidebar list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_accent; }
-/* Rows inside This PC and Network (.side-entry.indent in style.css). */
-.sidebar list > row.indent { padding-left: 23px; }
-.sidebar .pill { min-width: 3px; min-height: 15px; border-radius: 4px; }
-.sidebar list > row.current .pill { background-color: @ox_accent; }
-.sidebar .pin { color: @ox_pin; }
-.sidebar .side-separator { min-height: 1px; background-color: @ox_border; margin: 12px 13px; }
-.sidebar .expand { color: @ox_muted; }
-.sidebar-bottom { border-top: 1px solid @ox_border; padding: 9px 7px 11px 7px; background-color: @ox_sidebar; }
-.sidebar-bottom button { min-height: 34px; padding: 0 11px; }
-.sidebar-bottom image { color: @ox_accent; }
-paned.workspace > separator { min-width: 1px; background-color: @ox_border; background-image: none; }
+/* The row's parts sit 12px apart (`gap:12px`), as margins because the
+   web row pulls its chevron into the padding with negative margins,
+   which a GTK box cannot do. The icon box (.side-icon) is 20px around
+   an 18px glyph or 19px art; the glyph is centred on a half pixel, which
+   Chromium draws one pixel down. */
+.sidebar .side-entry { padding: 0 11px; }
+/* Rows inside This PC and Network (.side-entry.indent). */
+.sidebar list > row.indent .side-entry { padding-left: 32px; }
+/* This PC and Network: the 9px chevron starts 5px in and the icon 19px. */
+.sidebar list > row.group .side-entry { padding-left: 5px; }
+.sidebar .expand { margin-right: 5px; }
+.sidebar .side-glyph { margin: 1px 13px 0 1px; }
+.sidebar .side-art { margin: 0 12px 0 1px; }
+.sidebar .pin { color: @ox_pin; margin-left: 12px; }
+/* The accent bar of the selected row (.side-entry.selected:before). */
+.sidebar .pill { min-width: 3px; min-height: 15px; margin-top: 10px; border-radius: 4px; }
+.sidebar list > row:selected .pill { background-color: @ox_accent; }
+.sidebar .side-separator { min-height: 1px; background-color: @ox_border; margin: 12px 13px 11px 13px; }
+.sidebar-bottom { border-top: 1px solid @ox_border; margin: 0 7px; padding: 9px 0 11px 0; }
+window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
+/* The 17px glyph is centred on a half pixel as above. */
+.sidebar-bottom image { color: @ox_accent; margin-top: 1px; }
+
+/* The 6px resizer (.sidebar-resizer): sidebar colour with the border line
+   at its right; hovered, it shows a 2px accent line 2px in. */
+paned.workspace > separator {
+  min-width: 5px;
+  background-color: @ox_sidebar;
+  background-image: none;
+  border-right: 1px solid @ox_border;
+}
+paned.workspace > separator:hover {
+  background-color: @ox_selected;
+  box-shadow: inset 2px 0 @ox_selected, inset 4px 0 @ox_accent;
+}
 
 /* ---- Folder view: details (ColumnView) and icons (GridView) ---- */
 .folder-pane { background-color: @ox_bg; }

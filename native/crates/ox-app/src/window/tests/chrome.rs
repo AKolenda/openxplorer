@@ -1,49 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The frame's geometry and controls, measured against the current app.
 //!
-//! The expected numbers are the current app's layout as Chromium draws
-//! `desktop/ui/index.html` with `style.css` at 100% text size (the
-//! reference captures of `tools/capture-screenshots.py`): a 42-pixel title
-//! bar whose active tab starts 9 pixels in and runs into the navigation
-//! row, the "+" right after the last tab, 46-pixel caption buttons, and
-//! 34-pixel address and search boxes. Positions are window coordinates.
+//! The current app has a 42-pixel title bar whose active tab starts 9
+//! pixels in and runs into the navigation row, the "+" right after the
+//! last tab, 46-pixel caption buttons, and 34-pixel address and search
+//! boxes (see [`super::geometry`] for where the numbers come from).
 
-use gtk::graphene;
 use gtk::prelude::*;
 
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
-
-#[expect(clippy::cast_possible_truncation, reason = "window coordinates are small")]
-fn pixels(value: f32) -> i32 {
-    value.round() as i32
-}
-
-/// Where `widget` is in `test`'s window: x, y, width and height.
-fn bounds(test: &TestWindow, widget: &impl IsA<gtk::Widget>) -> (i32, i32, i32, i32) {
-    let rect = widget
-        .compute_bounds(&test.window)
-        .unwrap_or_else(graphene::Rect::zero);
-    (
-        pixels(rect.x()),
-        pixels(rect.y()),
-        pixels(rect.width()),
-        pixels(rect.height()),
-    )
-}
-
-fn laid_out(uri: &str) -> TestWindow {
-    let test = TestWindow::open(uri);
-    wait_for_frames(&test.window, 3);
-    test
-}
-
-/// The button in the window that runs `action`.
-fn button_for(test: &TestWindow, action: &str) -> gtk::Button {
-    descendants::<gtk::Button>(&test.window)
-        .into_iter()
-        .find(|button| button.action_name().as_deref() == Some(action))
-        .unwrap_or_else(|| panic!("a button runs {action}"))
-}
+use super::geometry::{bounds, button_for, laid_out};
+use crate::test_support::harness::{descendants, wait_for_frames, Fixture};
 
 /// parity: TAB-010
 #[gtk::test]
