@@ -1,3 +1,7 @@
+# tools/release.py leaves the same paths out of the corresponding-source
+# archive; tests/test_release_source.py checks that the two agree.
+
+# Dependencies, build caches and compiled Python bytecode.
 node_modules/
 .next/
 out/
@@ -5,15 +9,21 @@ out/
 *.tsbuildinfo
 __pycache__/
 *.py[cod]
+
+# Local secrets. The examples hold only public placeholders and are published.
 .env*
 !.env.example
 .dev.vars*
 !.dev.vars.example
+
+# Deployment tool state, other version-control systems and macOS metadata.
 .wrangler/
 .vercel/
 .hg/
 .svn/
 .DS_Store
+
+# Build and release output, and files regenerated from their sources.
 dist/
 desktop/dist/
 designs/
@@ -74,5 +84,5 @@ service-account*.json
 .private-demo-terms*
 private-terms.json
 
-# Rust build output
+# Rust build output.
 native/target/
