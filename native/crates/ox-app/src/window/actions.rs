@@ -263,8 +263,9 @@ impl BrowserWindow {
         }
     }
 
-    /// Shows `view` in the folder pane and the status bar.
-    pub(super) fn show_view(&self, view: FolderView) {
+    /// Shows `view` in the folder pane and the status bar, without saving
+    /// it as the preferred view.
+    pub(crate) fn show_view(&self, view: FolderView) {
         self.reset_typeahead();
         self.content().show_view(view);
         self.chrome().status.show_view(view);

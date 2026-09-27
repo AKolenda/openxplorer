@@ -9,6 +9,7 @@
 
 mod address_bar;
 mod captures;
+mod chrome;
 mod environment;
 mod input;
 mod listing;

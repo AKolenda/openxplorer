@@ -210,8 +210,10 @@ fn pane_label(css_class: &str) -> gtk::Label {
 /// The pane's widgets.
 #[derive(Debug)]
 pub(super) struct DetailsPane {
-    /// The pane, shown beside the folder pane.
-    pub root: gtk::Box,
+    /// The pane, shown beside the folder pane. It scrolls when the window
+    /// is too short for it (`.details{overflow:auto}`), so its wrapped
+    /// properties never set the window's height.
+    pub root: gtk::ScrolledWindow,
     preview: gtk::Image,
     name: gtk::Label,
     kind: gtk::Label,
@@ -225,36 +227,41 @@ pub(super) struct DetailsPane {
 impl DetailsPane {
     /// An empty pane drawing art in `appearance`.
     pub fn new(appearance: Appearance) -> Self {
-        // A fixed width: the property values expand within the pane, and
-        // without this the pane would take half the window from the list.
-        let root = gtk::Box::builder()
+        let inner = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(0)
+            .css_classes(["details-inner"])
+            .build();
+        // A fixed width: the property values expand within the pane, and
+        // without this the pane would take half the window from the list.
+        let root = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
             .width_request(PANE_WIDTH)
             .hexpand(false)
-            .css_classes(["details", "details-inner"])
+            .child(&inner)
+            .css_classes(["details"])
             .build();
-        root.append(&header());
+        inner.append(&header());
         let preview = icons::art_image(ArtKind::Folder, PREVIEW_SIZE, appearance, 1);
-        root.append(&preview_frame(&preview));
+        inner.append(&preview_frame(&preview));
         let name = pane_label("dname");
         name.set_selectable(true);
-        root.append(&name);
+        inner.append(&name);
         let kind = pane_label("dtype");
-        root.append(&kind);
+        inner.append(&kind);
         let open = pane_button("Open", Glyph::Share, "win.open");
-        root.append(&open);
+        inner.append(&open);
         let pin_item = pane_button("Pin to Quick access", Glyph::Pin, "win.pin-selected");
-        root.append(&pin_item);
+        inner.append(&pin_item);
         let pin_folder = pane_button("Pin to Quick access", Glyph::Pin, "win.pin-folder");
-        root.append(&pin_folder);
+        inner.append(&pin_folder);
         let section = pane_label("dsection");
         section.set_text("Properties");
-        root.append(&section);
+        inner.append(&section);
         let properties = gtk::Grid::builder().row_spacing(15).column_spacing(8).build();
-        root.append(&properties);
+        inner.append(&properties);
         let note = pane_label("note-text");
-        root.append(&note_row(&note));
+        inner.append(&note_row(&note));
         Self {
             root,
             preview,

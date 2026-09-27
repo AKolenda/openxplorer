@@ -302,22 +302,13 @@ pub(crate) fn capture(window: &BrowserWindow, filename: &str) {
     let directory = PathBuf::from(directory);
     fs::create_dir_all(&directory).expect("capture directory");
     wait_for_frames(window, 3);
-    let paintable = gtk::WidgetPaintable::new(Some(window));
-    let snapshot = gtk::Snapshot::new();
-    let width = f64::from(window.width());
-    let height = f64::from(window.height());
-    paintable.snapshot(&snapshot, width, height);
-    let node = snapshot.to_node().expect("a mapped window has a render node");
-    let renderer = window.renderer().expect("a mapped window has a renderer");
-    let texture = renderer.render_texture(&node, None);
-    texture
-        .save_to_png(directory.join(filename))
-        .expect("the capture directory is writable");
+    crate::snapshot::save_png(window.upcast_ref(), &directory.join(filename))
+        .expect("a shown window saves to the writable capture directory");
 }
 
 /// Waits until `window` has drawn `count` frames, so a capture shows the
 /// finished layout.
-fn wait_for_frames(window: &BrowserWindow, count: u32) {
+pub(crate) fn wait_for_frames(window: &BrowserWindow, count: u32) {
     let frames = Rc::new(Cell::new(0));
     let counter = Rc::clone(&frames);
     window.add_tick_callback(move |_, _| {

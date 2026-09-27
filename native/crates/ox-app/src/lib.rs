@@ -16,6 +16,7 @@ mod locations;
 mod places;
 mod settings_store;
 mod shared;
+mod snapshot;
 mod text_size;
 mod theme;
 mod typeahead;

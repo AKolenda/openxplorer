@@ -9,7 +9,7 @@
 //! tabs). Ctrl+N and `--new-window` open another window. New windows start
 //! in the home folder.
 
-use std::cell::OnceCell;
+use std::cell::{Cell, OnceCell};
 use std::ops::ControlFlow;
 use std::rc::Rc;
 
@@ -19,6 +19,7 @@ use ox_core::location::file_uri;
 use ox_core::settings::Settings;
 
 use crate::shared::AppContext;
+use crate::snapshot::{self, SnapshotRequest};
 use crate::theme::system::SystemScheme;
 use crate::theme::{Skin, ThemePreference};
 use crate::window::BrowserWindow;
@@ -65,6 +66,14 @@ impl Desktop {
 
     /// Opens a window whose first tab shows `start`, or the home folder.
     fn open_window(&self, app: &gtk::Application, start: Option<&str>) -> BrowserWindow {
+        let window = self.build_window(app, start);
+        window.present();
+        window
+    }
+
+    /// A window whose first tab shows `start`, or the home folder, not
+    /// shown yet.
+    fn build_window(&self, app: &gtk::Application, start: Option<&str>) -> BrowserWindow {
         let window = BrowserWindow::new(app, &self.context);
         let home = file_uri(&glib::home_dir());
         let start = start.unwrap_or(home.as_str());
@@ -76,8 +85,39 @@ impl Desktop {
         if let Some(warning) = self.context.settings_warning() {
             window.notify(&warning);
         }
-        window.present();
         window
+    }
+
+    /// Opens the window `request` describes, saves it once its first
+    /// listing is drawn and quits; `failed` records whether saving failed.
+    fn take_snapshot(&self, app: &gtk::Application, request: &SnapshotRequest, failed: &Rc<Cell<bool>>) {
+        if let Some(theme) = request.theme {
+            self.context.skin().set_preference(theme);
+        }
+        let window = self.build_window(app, request.start.as_deref());
+        if let Some(size) = request.size {
+            window.set_default_size(size.width, size.height);
+        }
+        if let Some(view) = request.view {
+            window.show_view(view);
+        }
+        window.present();
+        let failed = Rc::clone(failed);
+        snapshot::save_when_listed(
+            &window,
+            request,
+            glib::clone!(
+                #[weak]
+                app,
+                move |outcome| {
+                    if let Err(error) = outcome {
+                        eprintln!("OpenXplorer snapshot: {error}");
+                        failed.set(true);
+                    }
+                    app.quit();
+                }
+            ),
+        );
     }
 
     /// Presents the open window, or opens the first one.
@@ -188,19 +228,54 @@ fn handle_local_options(app: &gtk::Application, options: &glib::VariantDict) -> 
 
 /// Runs the preview under its own application ID, so installed
 /// file-manager defaults and the production app's D-Bus name are untouched.
+/// With `OPENXPLORER_SNAPSHOT` set it saves a picture of one window and
+/// quits instead ([`crate::snapshot`]).
+pub fn run() -> glib::ExitCode {
+    let snapshot = match SnapshotRequest::from_environment() {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            eprintln!("OpenXplorer snapshot: {error}");
+            return glib::ExitCode::FAILURE;
+        }
+    };
+    let app = build_application(snapshot.is_some());
+    add_new_window_option(&app);
+    let desktop: Rc<OnceCell<Desktop>> = Rc::default();
+    install_app_actions(&app, &desktop);
+    connect_startup(&app, &desktop);
+    let snapshot_failed = Rc::new(Cell::new(false));
+    match snapshot {
+        Some(request) => connect_snapshot(&app, &desktop, request, &snapshot_failed),
+        None => connect_launches(&app, &desktop),
+    }
+    let status = app.run();
+    if snapshot_failed.get() {
+        glib::ExitCode::FAILURE
+    } else {
+        status
+    }
+}
+
+/// The application. A snapshot runs as an instance of its own, so it never
+/// hands its window to a running preview.
+fn build_application(for_snapshot: bool) -> gtk::Application {
+    let mut flags = gio::ApplicationFlags::HANDLES_OPEN;
+    if for_snapshot {
+        flags |= gio::ApplicationFlags::NON_UNIQUE;
+    }
+    gtk::Application::builder()
+        .application_id(crate::config::APP_ID)
+        .flags(flags)
+        .build()
+}
+
+/// Creates the shared state once GTK has started.
 ///
 /// # Panics
 ///
 /// Never in practice: GTK emits `startup` once per application, and only
 /// `startup` creates the shared state.
-pub fn run() -> glib::ExitCode {
-    let app = gtk::Application::builder()
-        .application_id(crate::config::APP_ID)
-        .flags(gio::ApplicationFlags::HANDLES_OPEN)
-        .build();
-    add_new_window_option(&app);
-    let desktop: Rc<OnceCell<Desktop>> = Rc::default();
-    install_app_actions(&app, &desktop);
+fn connect_startup(app: &gtk::Application, desktop: &Rc<OnceCell<Desktop>>) {
     app.connect_startup(glib::clone!(
         #[strong]
         desktop,
@@ -210,6 +285,10 @@ pub fn run() -> glib::ExitCode {
             }
         }
     ));
+}
+
+/// Launching the app, or asking it to open files, shows a window.
+fn connect_launches(app: &gtk::Application, desktop: &Rc<OnceCell<Desktop>>) {
     app.connect_activate(glib::clone!(
         #[strong]
         desktop,
@@ -219,12 +298,35 @@ pub fn run() -> glib::ExitCode {
             }
         }
     ));
-    app.connect_open(move |app, files, _| {
-        if let Some(desktop) = desktop.get() {
-            desktop.open(app, files);
+    app.connect_open(glib::clone!(
+        #[strong]
+        desktop,
+        move |app, files, _| {
+            if let Some(desktop) = desktop.get() {
+                desktop.open(app, files);
+            }
         }
-    });
-    app.run()
+    ));
+}
+
+/// Launching the app takes the snapshot `request` asks for.
+fn connect_snapshot(
+    app: &gtk::Application,
+    desktop: &Rc<OnceCell<Desktop>>,
+    request: SnapshotRequest,
+    failed: &Rc<Cell<bool>>,
+) {
+    app.connect_activate(glib::clone!(
+        #[strong]
+        desktop,
+        #[strong]
+        failed,
+        move |app| {
+            if let Some(desktop) = desktop.get() {
+                desktop.take_snapshot(app, &request, &failed);
+            }
+        }
+    ));
 }
 
 #[cfg(test)]

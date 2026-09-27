@@ -223,6 +223,7 @@ impl BrowserWindow {
             self.restore_selection(id);
             self.update_content();
             self.update_details_pane();
+            self.focus_new_file_list();
         }
         if reload_again {
             self.folder_changed(id);

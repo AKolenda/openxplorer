@@ -57,6 +57,7 @@ use sidebar::Sidebar;
 use status_bar::StatusSubject;
 
 pub(crate) use actions::install_accelerators;
+pub(crate) use content::FolderView;
 
 /// Handlers this window registered on objects that outlive it.
 #[derive(Debug, Default)]
@@ -101,6 +102,9 @@ mod imp {
         /// Set while the window swaps or reloads the model, so the
         /// selection it restores is not saved over the tab's selection.
         pub(super) changing_model: Cell<bool>,
+        /// Set until the file list first takes keyboard focus; see
+        /// [`super::BrowserWindow::focus_new_file_list`].
+        pub(super) file_list_awaits_focus: Cell<bool>,
         pub(super) handlers: RefCell<ExternalHandlers>,
     }
 
@@ -174,7 +178,20 @@ impl BrowserWindow {
         window.connect_signals();
         window.watch_environment();
         window.apply_preferences();
+        imp.file_list_awaits_focus.set(true);
+        window.connect_map(BrowserWindow::focus_new_file_list);
         window
+    }
+
+    /// Gives a new window's file list keyboard focus once the window is
+    /// shown and its first listing has rows, as `#main` has focus when
+    /// app.js starts. Until then GTK would focus the first focusable
+    /// widget, and a focused crumb draws the address bar's editing line.
+    fn focus_new_file_list(&self) {
+        let ready = self.is_mapped() && self.is_listed() && self.content().model.n_items() > 0;
+        if ready && self.imp().file_list_awaits_focus.replace(false) {
+            self.content().focus();
+        }
     }
 
     fn lay_out_workspace(&self) {
@@ -247,6 +264,13 @@ impl BrowserWindow {
     pub fn current_uri(&self) -> Option<String> {
         let session = self.imp().session.borrow();
         session.active().map(|tab| tab.uri().to_owned())
+    }
+
+    /// Whether the active tab has finished its first listing (a landing
+    /// page counts as listed).
+    pub fn is_listed(&self) -> bool {
+        let session = self.imp().session.borrow();
+        session.active().is_some_and(|tab| tab.loaded && !tab.loading)
     }
 
     /// Whether the active tab is still receiving directory entries.

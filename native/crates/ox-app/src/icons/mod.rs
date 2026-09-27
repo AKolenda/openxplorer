@@ -43,9 +43,14 @@ pub fn set_glyph(image: &gtk::Image, glyph: Glyph, size: i32) {
     image.set_pixel_size(size);
 }
 
-/// An image showing colour art at `size` logical pixels.
+/// An image showing colour art at `size` logical pixels. It is centred in
+/// its allocation, because a `GtkImage` stretches its picture to fill a
+/// larger one, which blurs the art.
 pub fn art_image(kind: ArtKind, size: i32, appearance: Appearance, scale: i32) -> gtk::Image {
-    let image = gtk::Image::new();
+    let image = gtk::Image::builder()
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
+        .build();
     set_art(&image, kind, size, appearance, scale);
     image
 }

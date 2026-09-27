@@ -40,8 +40,11 @@ impl SearchBox {
         hide_leading_magnifier(&entry);
         let magnifier = icons::glyph(Glyph::Search, 15);
         magnifier.add_css_class("search-icon");
+        // Not expanding, although the entry inside does: the address bar
+        // takes the rest of the row.
         let root = gtk::Box::builder()
             .valign(gtk::Align::Center)
+            .hexpand(false)
             .css_classes(["search-wrap"])
             .build();
         root.append(&entry);
