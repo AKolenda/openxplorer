@@ -31,10 +31,18 @@ pub fn thumbnail_path(info: &gio::FileInfo) -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    fn thumbnail_info(path: &str, is_valid: bool) -> gio::FileInfo {
+    /// Whether the cached thumbnail was made from the current version of
+    /// the item (`thumbnail::is-valid`).
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Freshness {
+        Current,
+        Stale,
+    }
+
+    fn thumbnail_info(path: &str, freshness: Freshness) -> gio::FileInfo {
         let info = gio::FileInfo::new();
         info.set_attribute_byte_string("thumbnail::path", path);
-        info.set_attribute_boolean("thumbnail::is-valid", is_valid);
+        info.set_attribute_boolean("thumbnail::is-valid", freshness == Freshness::Current);
         info
     }
 
@@ -42,14 +50,15 @@ mod tests {
     fn valid_thumbnail_path_is_kept_byte_for_byte() {
         let path = "/home/José/.cache/thumbnails/normal/a\\b.png";
         assert_eq!(
-            thumbnail_path(&thumbnail_info(path, true)),
+            thumbnail_path(&thumbnail_info(path, Freshness::Current)),
             Some(PathBuf::from(path))
         );
     }
 
     #[test]
     fn stale_thumbnail_is_ignored() {
-        assert_eq!(thumbnail_path(&thumbnail_info("/tmp/thumb.png", false)), None);
+        let info = thumbnail_info("/tmp/thumb.png", Freshness::Stale);
+        assert_eq!(thumbnail_path(&info), None);
     }
 
     #[test]

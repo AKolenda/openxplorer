@@ -32,8 +32,16 @@ pub(super) struct ItemMetadata<'a> {
     pub content_type: Option<&'a str>,
     /// `standard::target-uri`: untrusted backend metadata.
     pub target_uri: Option<&'a str>,
-    /// `standard::is-virtual`.
-    pub is_virtual: bool,
+    /// `standard::is-virtual`: the backend flags the item as virtual.
+    pub has_virtual_flag: bool,
+}
+
+impl ItemMetadata<'_> {
+    /// Shares and shortcuts, and items the backend flags as virtual, stand
+    /// for another location rather than being one.
+    fn is_virtual(&self) -> bool {
+        has_virtual_kind(self.kind) || self.has_virtual_flag
+    }
 }
 
 /// How an item behaves in the list, independent of its size or dates.
@@ -57,7 +65,7 @@ pub(super) struct Classification {
 pub(super) fn classify_entry(item: &ItemMetadata<'_>) -> Classification {
     let target = followable_target(item);
     let is_dir = is_navigable(item, target.as_deref());
-    let is_virtual = has_virtual_kind(item.kind) || item.is_virtual;
+    let is_virtual = item.is_virtual();
     // A navigable share or server opens its validated target, or itself
     // when the backend named none.
     let target_uri = if is_dir && is_virtual {
@@ -70,11 +78,11 @@ pub(super) fn classify_entry(item: &ItemMetadata<'_>) -> Classification {
         is_virtual,
         can_operate: has_real_kind(item.kind) && !is_virtual,
         target_uri,
-        folder_type: is_dir.then(|| folder_type(item, is_virtual)),
+        folder_type: is_dir.then(|| folder_type(item)),
     }
 }
 
-/// Shares and shortcuts stand for another location rather than being one.
+/// Shares and shortcuts are kinds of item that stand for another location.
 fn has_virtual_kind(kind: EntryKind) -> bool {
     matches!(kind, EntryKind::Mountable | EntryKind::Shortcut)
 }
@@ -86,10 +94,10 @@ fn has_real_kind(kind: EntryKind) -> bool {
 }
 
 /// Type column text for a navigable item.
-fn folder_type(item: &ItemMetadata<'_>, is_virtual: bool) -> &'static str {
+fn folder_type(item: &ItemMetadata<'_>) -> &'static str {
     if item.kind == EntryKind::Mountable && is_smb(item.uri) {
         NETWORK_SHARE
-    } else if is_virtual {
+    } else if item.is_virtual() {
         NETWORK_LOCATION
     } else {
         FILE_FOLDER
@@ -183,7 +191,7 @@ mod tests {
             uri,
             content_type,
             target_uri: target,
-            is_virtual: false,
+            has_virtual_flag: false,
         })
     }
 
@@ -386,7 +394,7 @@ mod tests {
             uri: "file:///run/media/usb",
             content_type: None,
             target_uri: None,
-            is_virtual: true,
+            has_virtual_flag: true,
         });
         assert!(mount.is_dir);
         assert!(mount.is_virtual);

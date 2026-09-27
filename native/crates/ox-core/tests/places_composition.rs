@@ -17,10 +17,11 @@ fn bookmark(uri: &str, label: &str) -> Bookmark {
     }
 }
 
-fn saved_share(uri: &str, label: &str, connected: bool) -> SavedShare {
+/// A saved share that no current mount serves.
+fn saved_share(uri: &str, label: &str) -> SavedShare {
     SavedShare {
         bookmark: bookmark(uri, label),
-        connected,
+        connected: false,
     }
 }
 
@@ -135,7 +136,7 @@ fn network_identity_preserves_custom_ports_and_host_aliases() {
 /// parity: NET-018
 #[test]
 fn saved_labels_win_and_connected_state_merges() {
-    let saved = [saved_share("smb://nas/Work", "My Work", false)];
+    let saved = [saved_share("smb://nas/Work", "My Work")];
     let mounts = [active_mount("smb://NAS:445/work/", "work")];
     let rows = merge_network_locations(&saved, &mounts, &[], &[]);
     assert_eq!(rows.len(), 1);
@@ -164,8 +165,8 @@ fn a_mounted_share_is_listed_connected_but_not_saved() {
 #[test]
 fn rows_are_told_apart_by_location_not_label() {
     let saved = [
-        saved_share("smb://a/work", "Work", false),
-        saved_share("smb://b/work", "Work", false),
+        saved_share("smb://a/work", "Work"),
+        saved_share("smb://b/work", "Work"),
     ];
     assert_eq!(merge_network_locations(&saved, &[], &[], &[]).len(), 2);
 }
@@ -203,8 +204,11 @@ fn visited_servers_and_stable_mounts_need_no_saved_bookmark() {
 #[test]
 fn malformed_and_non_network_contributors_are_ignored() {
     let saved = [
-        saved_share("https://example.invalid", "Bad", false),
-        saved_share("smb://user:secret@nas/share", "Bad", true),
+        saved_share("https://example.invalid", "Bad"),
+        SavedShare {
+            connected: true,
+            ..saved_share("smb://user:secret@nas/share", "Bad")
+        },
     ];
     let mounts = [
         NetworkMount {

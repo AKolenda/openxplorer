@@ -45,9 +45,15 @@ fn build_entry(uri: &str, info: &gio::FileInfo, fallback_name: impl FnOnce() -> 
         uri,
         content_type: content_type.as_deref(),
         target_uri: backend_target.as_deref(),
-        is_virtual: info.boolean("standard::is-virtual"),
+        has_virtual_flag: info.boolean("standard::is-virtual"),
     });
     let type_label = type_label(classification.folder_type, content_type.as_deref());
+    // A folder's own size is not the size of its contents, so none is shown.
+    let size = if classification.is_dir {
+        None
+    } else {
+        reported_size(info)
+    };
     Entry {
         uri: uri.to_owned(),
         name: display_name(uri, info, fallback_name),
@@ -56,7 +62,7 @@ fn build_entry(uri: &str, info: &gio::FileInfo, fallback_name: impl FnOnce() -> 
         is_virtual: classification.is_virtual,
         can_operate: classification.can_operate,
         target_uri: classification.target_uri,
-        size: file_size(info, classification.is_dir),
+        size,
         type_label,
         content_type,
         modified: info.attribute_uint64("time::modified"),
@@ -107,11 +113,10 @@ fn last_uri_segment(uri: &str) -> Option<String> {
     Some(decoded.into_owned())
 }
 
-/// The size to show: `None` for folders, whose size is not their contents'
-/// size, and when the backend reports none, which is unknown rather than
-/// zero bytes.
-fn file_size(info: &gio::FileInfo, is_dir: bool) -> Option<u64> {
-    if is_dir || !info.has_attribute("standard::size") {
+/// `standard::size`; `None` when the backend reports none, which is unknown
+/// rather than zero bytes.
+fn reported_size(info: &gio::FileInfo) -> Option<u64> {
+    if !info.has_attribute("standard::size") {
         return None;
     }
     Some(info.attribute_uint64("standard::size"))
