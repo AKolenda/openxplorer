@@ -227,7 +227,7 @@ fn writable_locations_match_app_js() {
     assert_every_uri(
         "writableLocation",
         |case| case.writable,
-        LocationContext::writable_location,
+        LocationContext::is_writable_location,
     );
 }
 
@@ -266,7 +266,7 @@ fn network_locations_match_app_js() {
     assert_every_uri(
         "networkLocation",
         |case| case.network,
-        LocationContext::network_location,
+        LocationContext::is_network_location,
     );
 }
 

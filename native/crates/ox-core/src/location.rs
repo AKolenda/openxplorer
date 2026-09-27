@@ -39,7 +39,9 @@
 //! | `virtual_place` | The app's pages and GIO's virtual folders |
 //! | `names` | File names, "Keep both" names and sidebar labels |
 //! | `display` | Titles, address bar text, breadcrumbs and Up |
+//! | `classify` | Writable, snapshot and network folders, SMB share roots |
 
+mod classify;
 mod display;
 mod names;
 mod normalise;
@@ -49,9 +51,10 @@ mod virtual_place;
 
 pub(crate) use text::{python_strip, unquote_lossy};
 
+pub use classify::{is_network_filesystem, is_smb_share_root};
 pub use display::{
-    base_name, breadcrumbs, crumb_divider, device_root, display_location, is_network_filesystem,
-    is_smb_share_root, parent_location, same_location, title_for, DeviceLabel, LocationContext,
+    base_name, breadcrumbs, crumb_divider, device_root, display_location, parent_location, same_location,
+    title_for, DeviceLabel, LocationContext,
 };
 pub use names::{new_copy_name, safe_label, try_new_copy_name, validate_name, MAX_LABEL_CHARS};
 pub use normalise::{
