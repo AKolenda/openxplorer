@@ -32,6 +32,8 @@ mod preferences;
 mod read;
 mod save;
 pub mod storage;
+#[cfg(test)]
+mod test_support;
 
 use std::path::{Path, PathBuf};
 

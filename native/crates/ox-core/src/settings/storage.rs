@@ -2,12 +2,15 @@
 //! Private application state: owned 0700 directories and 0600 files that
 //! are never symlinks, hard links, FIFOs or devices.
 //!
-//! Ports `desktop/private_storage.py`; the lock and the atomic replace
-//! built on it are in the `save` module. This is defence in depth for misplaced or tampered XDG state, not
-//! isolation from another process running as the same user. Every open
-//! uses `O_NOFOLLOW` (a symlinked leaf fails with `ELOOP`) and
+//! Ports `desktop/private_storage.py`; the settings lock and the atomic
+//! replace built on it are in the `save` module. This is defence in depth
+//! against misplaced or tampered XDG state, not isolation from another
+//! process running as the same user.
+//!
+//! Every open uses `O_NOFOLLOW` (a symlinked leaf fails with `ELOOP`) and
 //! `O_NONBLOCK` (a FIFO never blocks), and the checks run on the opened
-//! descriptor before its mode is changed.
+//! descriptor before its mode is changed, so a refused file is never
+//! modified.
 
 use std::fs::{self, DirBuilder, File, Metadata, OpenOptions, Permissions};
 use std::io::{self, Read};
@@ -25,6 +28,9 @@ const DIRECTORY_MODE: u32 = 0o700;
 
 /// Mode of private files.
 pub(super) const FILE_MODE: u32 = 0o600;
+
+/// The sidecar files SQLite keeps next to a database.
+const SQLITE_SIDECAR_SUFFIXES: [&str; 3] = ["-wal", "-shm", "-journal"];
 
 /// How a private file is opened.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -54,8 +60,8 @@ pub fn private_directory(path: &Path) -> Result<(), SettingsError> {
         .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
         .open(path)
         .with_path(path)?;
-    let info = directory.metadata().with_path(path)?;
-    if !info.is_dir() || info.uid() != effective_uid() {
+    let metadata = directory.metadata().with_path(path)?;
+    if !metadata.is_dir() || metadata.uid() != effective_uid() {
         return Err(SettingsError::invalid(
             "Application state directory must be owned by this user.",
         ));
@@ -91,6 +97,23 @@ pub fn private_file(path: &Path, options: PrivateFileOptions) -> Result<File, Se
     }
 }
 
+/// [`private_file`] for a file that may be missing: `Ok(None)` if there is
+/// nothing at `path`, as Python's `except FileNotFoundError: pass`.
+///
+/// # Errors
+///
+/// Everything [`private_file`] refuses except a missing file.
+pub(super) fn private_file_if_present(
+    path: &Path,
+    options: PrivateFileOptions,
+) -> Result<Option<File>, SettingsError> {
+    match private_file(path, options) {
+        Ok(file) => Ok(Some(file)),
+        Err(error) if error.is_not_found() => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 /// Reads a private UTF-8 text file of at most `limit` bytes.
 ///
 /// # Errors
@@ -102,8 +125,11 @@ pub fn private_text(path: &Path, limit: u64) -> Result<String, SettingsError> {
     read_limited_text(file, path, limit)
 }
 
-/// Reads an opened file as UTF-8 text of at most `limit` bytes. A file that
-/// grows past the limit while it is read is refused too.
+/// Reads an opened file as UTF-8 text of at most `limit` bytes.
+///
+/// Safety rule "settings reads are bounded" (`private_text` in
+/// `private_storage.py`): a file over the limit is refused before it is
+/// read, and so is one that grows past the limit while it is read.
 ///
 /// # Errors
 ///
@@ -139,17 +165,14 @@ pub fn validate_sqlite_files(path: &Path) -> Result<(), SettingsError> {
         ..PrivateFileOptions::default()
     };
     private_file(path, database)?;
-    let sidecar_options = PrivateFileOptions {
+    let sidecar = PrivateFileOptions {
         allow_unlinked: true,
         ..database
     };
-    for suffix in ["-wal", "-shm", "-journal"] {
-        let mut sidecar = path.as_os_str().to_owned();
-        sidecar.push(suffix);
-        match private_file(Path::new(&sidecar), sidecar_options) {
-            Err(error) if !error.is_not_found() => return Err(error),
-            _ => {}
-        }
+    for suffix in SQLITE_SIDECAR_SUFFIXES {
+        let mut sidecar_path = path.as_os_str().to_owned();
+        sidecar_path.push(suffix);
+        private_file_if_present(Path::new(&sidecar_path), sidecar)?;
     }
     Ok(())
 }
@@ -177,17 +200,17 @@ enum Verdict {
 }
 
 impl OpenedFile {
-    fn inspect(info: &Metadata) -> Self {
+    fn inspect(metadata: &Metadata) -> Self {
         Self {
-            is_regular: info.file_type().is_file(),
-            is_owned: info.uid() == effective_uid(),
-            links: info.nlink(),
+            is_regular: metadata.file_type().is_file(),
+            is_owned: metadata.uid() == effective_uid(),
+            links: metadata.nlink(),
         }
     }
 
     /// Safety rule "private state is an owned regular file with one link"
-    /// (`private_file` in `private_storage.py`): a second link could expose the
-    /// contents elsewhere, and a FIFO or device is never state.
+    /// (`private_file` in `private_storage.py`): a second link could expose
+    /// the contents elsewhere, and a FIFO or device is never state.
     fn verdict(self, options: PrivateFileOptions) -> Verdict {
         if !self.is_regular || !self.is_owned {
             return Verdict::Refuse;
@@ -200,8 +223,11 @@ impl OpenedFile {
     }
 }
 
-/// Opens `path` without following a symlinked leaf and without blocking on
-/// a FIFO, creating it with mode 0600 if requested.
+/// Opens `path`, creating it with mode 0600 if requested.
+///
+/// Safety rule "never follow a link, never block on a FIFO": `O_NOFOLLOW`
+/// fails on a symlinked leaf instead of opening its target, and
+/// `O_NONBLOCK` returns at once for a FIFO, which the checks then refuse.
 fn open_without_following(path: &Path, options: PrivateFileOptions) -> io::Result<File> {
     let mut flags = libc::O_NOFOLLOW | libc::O_NONBLOCK;
     if options.create {
@@ -242,10 +268,7 @@ mod tests {
     use std::os::unix::fs::symlink;
 
     use super::*;
-
-    fn mode(path: &Path) -> u32 {
-        fs::metadata(path).unwrap().mode() & 0o777
-    }
+    use crate::settings::test_support::mode;
 
     fn writable() -> PrivateFileOptions {
         PrivateFileOptions {
@@ -262,6 +285,7 @@ mod tests {
         }
     }
 
+    /// parity: SAFE-009
     #[test]
     fn effective_uid_owns_new_files() {
         let own_file = tempfile::NamedTempFile::new().unwrap();
@@ -272,7 +296,7 @@ mod tests {
     /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_permissions`
     /// parity: SAFE-009
     #[test]
-    fn permissions() {
+    fn private_storage_gets_modes_0700_and_0600() {
         let root = tempfile::tempdir().unwrap();
         let directory = root.path().join("private");
         private_directory(&directory).unwrap();
@@ -348,7 +372,7 @@ mod tests {
     /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_read_bound`
     /// parity: SAFE-009, SET-013
     #[test]
-    fn settings_read_bound() {
+    fn reads_beyond_the_size_limit_are_refused() {
         let root = tempfile::tempdir().unwrap();
         let file = root.path().join("large");
         fs::write(&file, [b'x'; 33]).unwrap();
@@ -405,6 +429,7 @@ mod tests {
         assert_eq!(unlinked.verdict(writable()), Verdict::Refuse);
     }
 
+    /// parity: SAFE-009
     #[test]
     fn only_owned_regular_files_with_one_link_are_accepted() {
         let options = PrivateFileOptions {
@@ -428,6 +453,7 @@ mod tests {
         assert_eq!(fifo.verdict(options), Verdict::Refuse);
     }
 
+    /// parity: SAFE-009
     #[test]
     fn missing_parents_are_created_and_only_the_leaf_is_private() {
         let root = tempfile::tempdir().unwrap();
@@ -435,5 +461,19 @@ mod tests {
         private_directory(&leaf).unwrap();
         assert_eq!(mode(&leaf), 0o700);
         private_directory(&leaf).unwrap();
+    }
+
+    /// parity: SAFE-009
+    #[test]
+    fn a_missing_file_is_absent_but_a_symlink_is_still_refused() {
+        let root = tempfile::tempdir().unwrap();
+        let missing = root.path().join("missing");
+        let found = private_file_if_present(&missing, PrivateFileOptions::default()).unwrap();
+        assert!(found.is_none());
+
+        let link = root.path().join("link");
+        symlink(&missing, &link).unwrap();
+        let result = private_file_if_present(&link, PrivateFileOptions::default());
+        assert!(matches!(result, Err(SettingsError::Io { .. })));
     }
 }

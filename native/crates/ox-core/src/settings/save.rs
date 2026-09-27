@@ -177,13 +177,10 @@ fn unix_seconds() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::{symlink, MetadataExt};
+    use std::os::unix::fs::symlink;
 
     use super::*;
-
-    fn mode(path: &Path) -> u32 {
-        fs::metadata(path).unwrap().mode() & 0o777
-    }
+    use crate::settings::test_support::mode;
 
     /// parity: SET-012, SAFE-009
     #[test]

@@ -9,15 +9,12 @@ use tempfile::TempDir;
 
 mod preferences;
 
+use super::test_support::mode;
 use super::*;
 use crate::location::file_uri;
 
 fn temp() -> TempDir {
     tempfile::tempdir().expect("a temporary directory")
-}
-
-fn mode(path: &Path) -> u32 {
-    fs::metadata(path).expect("the path exists").mode() & 0o777
 }
 
 fn prefs(values: &serde_json::Value) -> PreferencesUpdate {
