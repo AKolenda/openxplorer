@@ -359,18 +359,29 @@ fn local_recursive_delete_removes_selected_tree_without_following_its_links() {
     assert_eq!(fs::read(outside).unwrap(), b"retained");
 }
 
+/// A folder opened through a symbolic link (`~/Music` pointing at a data
+/// drive) is where the user deletes: the items inside the real folder go,
+/// the link and the real folder's other items stay. The Python app deletes
+/// these items too.
+///
+/// parity: XFER-015
 #[test]
-fn local_delete_refuses_a_symbolic_link_in_the_selected_items_parent_path() {
+fn local_delete_works_inside_a_folder_reached_through_a_symbolic_link() {
     let temp = tempfile::tempdir().unwrap();
     let actual = temp.path().join("actual");
-    fs::create_dir(&actual).unwrap();
-    fs::write(actual.join("data"), b"retained").unwrap();
+    fs::create_dir_all(actual.join("sub/nested")).unwrap();
+    fs::write(actual.join("data"), b"delete me").unwrap();
+    fs::write(actual.join("sub/nested/deep"), b"delete me too").unwrap();
+    fs::write(actual.join("kept"), b"retained").unwrap();
     let alias = temp.path().join("alias");
     symlink(&actual, &alias).unwrap();
-    assert!(node(&alias.join("data"))
-        .delete_tree(&Cancellation::new(), None)
-        .is_err());
-    assert_eq!(fs::read(actual.join("data")).unwrap(), b"retained");
+    let cancel = Cancellation::new();
+    node(&alias.join("data")).delete_tree(&cancel, None).unwrap();
+    node(&alias.join("sub")).delete_tree(&cancel, None).unwrap();
+    assert!(!actual.join("data").exists());
+    assert!(!actual.join("sub").exists());
+    assert_eq!(fs::read(actual.join("kept")).unwrap(), b"retained");
+    assert!(fs::symlink_metadata(&alias).unwrap().file_type().is_symlink());
 }
 
 #[test]
