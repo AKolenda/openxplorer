@@ -74,14 +74,14 @@ pub fn pin_target(entry: &Entry, label: Option<&str>) -> Result<PinTarget, Entry
     Ok(PinTarget { uri, label })
 }
 
-/// [`verify_pin`] with the query supplied by the caller, so the flow can be
-/// tested without a filesystem.
+/// [`verify_pin`] with the query supplied by the caller as `inspect_item`,
+/// so the flow can be tested without a filesystem.
 fn verify_pin_with(
     uri: &str,
     label: Option<&str>,
-    inspect: impl FnOnce(&str) -> Result<Entry, EntryError>,
+    inspect_item: impl FnOnce(&str) -> Result<Entry, EntryError>,
 ) -> Result<PinTarget, EntryError> {
-    let entry = inspect(uri)?;
+    let entry = inspect_item(uri)?;
     pin_target(&entry, label)
 }
 
