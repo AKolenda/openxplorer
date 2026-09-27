@@ -1,5 +1,8 @@
-# tools/release.py leaves the same paths out of the corresponding-source
-# archive; tests/test_release_source.py checks that the two agree.
+# tools/release.py leaves these paths out of the corresponding-source archive
+# too. It matches file names case-insensitively, so it also leaves out
+# upper-case variants such as PRIVATE.KEY, which Git ignores only when
+# core.ignorecase is set. tests/test_release_source.py checks that Git and the
+# archive agree on a sample of paths.
 
 # Dependencies, build caches and compiled Python bytecode.
 node_modules/
@@ -10,11 +13,23 @@ out/
 __pycache__/
 *.py[cod]
 
-# Local secrets. The examples hold only public placeholders and are published.
+# Local secrets: environment files, private keys, certificates and credential
+# files. The .example files hold only public placeholders and are published.
 .env*
 !.env.example
 .dev.vars*
 !.dev.vars.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.credentials
+credentials.json
+credentials.toml
+credentials.yaml
+credentials.yml
+client_secret*.json
+service-account*.json
 
 # Deployment tool state, other version-control systems and macOS metadata.
 .wrangler/
@@ -32,7 +47,11 @@ apps/web/public/app-preview.html
 apps/web/public/assets/site.js
 desktop/preview.html
 
-# Local tools, runtime data and test captures are not editable release inputs.
+# Built packages and archives, in any directory.
+*.deb
+*.zip
+
+# Virtual environments, tool caches and coverage data.
 .venv/
 venv/
 .pytest_cache/
@@ -46,6 +65,8 @@ venv/
 .coverage*
 htmlcov/
 coverage/
+
+# Scratch directories, test results and test captures.
 tmp/
 .tmp/
 temp/
@@ -53,6 +74,8 @@ temp/
 test-results/
 playwright-report/
 blob-report/
+
+# Logs and local databases.
 *.log
 *.log.*
 *.sqlite
@@ -61,19 +84,8 @@ blob-report/
 *.sqlite3-*
 *.db
 *.db-*
-*.deb
-*.zip
-*.pem
-*.key
-*.p12
-*.pfx
-*.credentials
-credentials.json
-credentials.toml
-credentials.yaml
-credentials.yml
-client_secret*.json
-service-account*.json
+
+# Editor swap files, backups and temporary files.
 *.swp
 *.swo
 *.tmp
