@@ -20,7 +20,7 @@ use std::path::Path;
 use ox_core::gio_node::GioNode;
 use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeKind, Operation, TransferError};
 
-use shared::{gio_engine, mode_of, set_mode};
+use shared::{gio_engine, mode_of, set_mode, RestoreOwnerAccess};
 
 /// The adapter for the local item at `path`.
 fn node(path: &Path) -> GioNode {
@@ -245,6 +245,7 @@ fn names_that_are_not_utf8_are_listed_and_copied_byte_for_byte() {
 #[test]
 fn complete_engine_stages_and_publishes_a_recursive_local_copy() {
     let temp = tempfile::tempdir().unwrap();
+    let _access = RestoreOwnerAccess::new(temp.path());
     let source = temp.path().join("source");
     let target = temp.path().join("destination");
     fs::create_dir_all(source.join("nested")).unwrap();
@@ -271,9 +272,6 @@ fn complete_engine_stages_and_publishes_a_recursive_local_copy() {
     );
     assert_eq!(mode_of(&target.join("source/nested")), 0o500);
     assert_eq!(fs::read_dir(&target).unwrap().count(), 1);
-    // Restore owner access so the temporary folder can be removed.
-    set_mode(&source.join("nested"), 0o700);
-    set_mode(&target.join("source/nested"), 0o700);
 }
 
 /// parity: XFER-011

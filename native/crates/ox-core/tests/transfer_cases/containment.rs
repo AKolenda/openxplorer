@@ -10,7 +10,7 @@ use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ox_core::transfer::{ConflictPolicy, TransferMode};
+use ox_core::transfer::ConflictPolicy;
 
 use crate::transfer_support::{
     local::{self, LocalNode, Provider},
@@ -18,32 +18,31 @@ use crate::transfer_support::{
 };
 
 /// Ports `test_reject_self_descendant` and
-/// `test_reject_symlink_destination_inside_source`.
+/// `test_reject_symlink_destination_inside_source`: copies and moves of
+/// `tree` into itself, into its subfolder `nested` and into `alias`, a link
+/// to `nested`, are all refused and change nothing.
 ///
 /// parity: XFER-016
 #[test]
 fn self_and_descendant_destinations_are_rejected_including_symlink_aliases() {
-    for mode in [TransferMode::Copy, TransferMode::Move] {
-        let fixture = Fixture::new();
-        let folder = fixture.source_folder.join("tree");
-        let nested = folder.join("nested");
-        fs::create_dir_all(&nested).unwrap();
-        write(&folder.join("original"), "untouched");
-        let alias = fixture.root.join("alias");
-        symlink(&nested, &alias).unwrap();
-        for destination in [&folder, &nested, &alias] {
+    let fixture = Fixture::new();
+    let folder = fixture.source_folder.join("tree");
+    let nested = folder.join("nested");
+    fs::create_dir_all(&nested).unwrap();
+    write(&folder.join("original"), "untouched");
+    let alias = fixture.root.join("alias");
+    symlink(&nested, &alias).unwrap();
+    for destination in [&folder, &nested, &alias] {
+        for request in [
+            Request::CopyInto(destination, ConflictPolicy::Replace),
+            Request::MoveInto(destination, ConflictPolicy::Replace),
+        ] {
             let mut engine = fixture.engine(local::local());
 
-            let result = fixture.run(
-                &mut engine,
-                &[&folder],
-                mode,
-                ConflictPolicy::Replace,
-                Some(destination),
-            );
+            let result = fixture.run(&mut engine, &[&folder], request);
 
-            assert!(result.done.is_empty());
-            assert!(result.errors[0].contains("inside itself"));
+            assert!(result.done.is_empty(), "{request:?}");
+            assert!(result.errors[0].contains("inside itself"), "{request:?}");
             assert_eq!(read(&folder.join("original")), "untouched");
             assert!(list(&nested).is_empty());
         }
@@ -93,9 +92,7 @@ fn a_copy_into_its_own_subfolder_under_another_host_name_stops_at_its_staging() 
     let result = fixture.run(
         &mut engine,
         &[&tree],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        Some(&nested),
+        Request::CopyInto(&nested, ConflictPolicy::Skip),
     );
 
     assert!(result.done.is_empty(), "{result:?}");

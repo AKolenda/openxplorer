@@ -3,7 +3,6 @@
 //! implement `chmod`. Ports the remote-mode cases of
 //! `desktop/tests/test_operations.py`.
 
-use std::fs;
 use std::sync::{Arc, Mutex};
 
 use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeKind, TransferError};
@@ -66,6 +65,16 @@ impl Provider for FuseMountedDevice {
     }
 }
 
+/// A private source copied to a [`FuseMountedDevice`], and where its copy
+/// ends up.
+struct FuseCase {
+    kind: NodeKind,
+    /// The copied file that holds the content, below the destination folder.
+    copied_file: &'static str,
+    /// The published folder whose mode must stay the device's, if any.
+    published_folder: Option<&'static str>,
+}
+
 /// Ports `test_mtp_backed_copy_with_fuse_path_does_not_require_chmod`,
 /// `test_remote_directory_copy_never_applies_unix_modes` and
 /// `test_remote_staging_does_not_attempt_unix_chmod`: neither the staging
@@ -75,39 +84,40 @@ impl Provider for FuseMountedDevice {
 /// parity: XFER-004, XFER-005
 #[test]
 fn device_copies_with_a_fuse_path_never_change_unix_modes() {
-    for kind in [NodeKind::File, NodeKind::Directory] {
+    let cases = [
+        FuseCase {
+            kind: NodeKind::File,
+            copied_file: "private",
+            published_folder: None,
+        },
+        FuseCase {
+            kind: NodeKind::Directory,
+            copied_file: "private/inner",
+            published_folder: Some("private"),
+        },
+    ];
+    for case in cases {
         let fixture = Fixture::new();
         let source = fixture.source_folder.join("private");
-        if kind == NodeKind::Directory {
-            fs::create_dir(&source).expect("create the source folder");
-            set_mode(&source, 0o700);
-            write(&source.join("data"), "data");
-        } else {
-            write(&source, "android package fixture");
-        }
+        create_source(&source, case.kind, "android package fixture");
+        set_mode(&source, 0o700);
         let device = Arc::new(FuseMountedDevice::default());
 
         let result = fixture.copy(device.clone(), &[&source], ConflictPolicy::Skip);
 
-        assert!(result.errors.is_empty(), "{result:?}");
+        assert!(result.errors.is_empty(), "{:?}: {result:?}", case.kind);
         assert_eq!(result.done, [file_uri(&source)]);
         let staged_modes = device.staged_folder_modes();
-        assert!(!staged_modes.is_empty());
+        assert!(!staged_modes.is_empty(), "{:?}", case.kind);
         assert!(
             staged_modes.iter().all(|mode| *mode == DEVICE_FOLDER_MODE),
             "{staged_modes:?}"
         );
-        if kind == NodeKind::Directory {
-            assert_eq!(
-                mode_of(&fixture.destination_folder.join("private")),
-                DEVICE_FOLDER_MODE
-            );
-            assert_eq!(read(&fixture.destination_folder.join("private/data")), "data");
-        } else {
-            assert_eq!(
-                read(&fixture.destination_folder.join("private")),
-                "android package fixture"
-            );
+        let copied = read(&fixture.destination_folder.join(case.copied_file));
+        assert_eq!(copied, "android package fixture");
+        if let Some(folder) = case.published_folder {
+            let published_mode = mode_of(&fixture.destination_folder.join(folder));
+            assert_eq!(published_mode, DEVICE_FOLDER_MODE);
         }
         fixture.assert_no_staging();
     }

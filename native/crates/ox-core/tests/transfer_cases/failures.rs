@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeInfo, TransferError, TransferMode};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeInfo, TransferError};
 
 use crate::transfer_support::{
     faults::{Fault, Faults},
@@ -39,13 +39,7 @@ fn failed_or_backend_cancelled_copies_keep_the_original_and_remove_private_stagi
         write(&fixture.destination_folder.join("document"), "prior destination");
         let mut engine = fixture.engine(Faults::new(fault, &fixture.cancel));
 
-        let result = fixture.run(
-            &mut engine,
-            &[&source],
-            TransferMode::Copy,
-            ConflictPolicy::Replace,
-            None,
-        );
+        let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Replace));
 
         assert!(
             !result.cancelled,
@@ -71,13 +65,7 @@ fn native_move_failure_never_degrades_to_copy_then_delete() {
     write(&source, "original");
     let mut engine = fixture.engine(Faults::new(Fault::MoveUnsupported, &fixture.cancel));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Move,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
 
     assert_eq!(result.errors.len(), 1);
     assert!(result.done.is_empty());
@@ -97,13 +85,7 @@ fn a_name_taken_while_copying_is_not_overwritten_at_publication() {
     write(&source, "original");
     let mut engine = fixture.engine(Faults::new(Fault::PublishRace, &fixture.cancel));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert_eq!(result.errors.len(), 1);
     assert!(result.done.is_empty());
@@ -178,13 +160,7 @@ fn failed_stage_reservation_grants_no_cleanup_rights() {
     write(&source, "original");
     let mut engine = fixture.engine(Faults::new(Fault::UnownedStage, &fixture.cancel));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert_eq!(result.errors.len(), 1);
     let leftovers = list(&fixture.destination_folder);
@@ -203,12 +179,15 @@ fn failed_stage_reservation_grants_no_cleanup_rights() {
 #[test]
 fn replacement_install_failure_or_false_success_restores_the_old_name() {
     for fault in [Fault::Install, Fault::NoOpInstall, Fault::AsideAfterSuccess] {
-        for mode in [TransferMode::Copy, TransferMode::Move] {
+        for request in [
+            Request::Copy(ConflictPolicy::Replace),
+            Request::Move(ConflictPolicy::Replace),
+        ] {
             let fixture = Fixture::new();
             let source = fixture.replacement_source("document", "incoming", "original");
             let mut engine = fixture.engine(Faults::new(fault, &fixture.cancel));
 
-            let result = fixture.run(&mut engine, &[&source], mode, ConflictPolicy::Replace, None);
+            let result = fixture.run(&mut engine, &[&source], request);
 
             assert!(result.done.is_empty(), "{result:?}");
             assert_eq!(result.errors.len(), 1, "{result:?}");
@@ -229,13 +208,7 @@ fn rollback_failure_reports_the_exact_backup_and_preserves_its_contents() {
     let source = fixture.replacement_source("document", "incoming", "original");
     let mut engine = fixture.engine(Faults::new(Fault::InstallAndRestore, &fixture.cancel));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Replace,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Replace));
 
     let leftovers = list(&fixture.destination_folder);
     assert_eq!(leftovers.len(), 1);
@@ -261,9 +234,7 @@ fn cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_ol
     let result = fixture.run(
         &mut engine,
         &[&source, &later],
-        TransferMode::Copy,
-        ConflictPolicy::Replace,
-        None,
+        Request::Copy(ConflictPolicy::Replace),
     );
 
     assert!(result.cancelled);
@@ -283,13 +254,7 @@ fn backup_cleanup_failure_reports_the_original_and_keeps_the_new_file() {
     let source = fixture.replacement_source("document", "incoming", "original");
     let mut engine = fixture.engine(Faults::new(Fault::BackupCleanup, &fixture.cancel));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Replace,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Replace));
 
     assert_eq!(read(&fixture.destination_folder.join("document")), "incoming");
     let backup = backup_in(&fixture);
@@ -308,13 +273,7 @@ fn cancellation_never_hides_a_backup_that_requires_manual_recovery() {
         let source = fixture.replacement_source("document", "incoming", "original");
         let mut engine = fixture.engine(Faults::new(fault, &fixture.cancel));
 
-        let result = fixture.run(
-            &mut engine,
-            &[&source],
-            TransferMode::Copy,
-            ConflictPolicy::Replace,
-            None,
-        );
+        let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Replace));
 
         assert!(result.cancelled);
         assert_eq!(result.errors.len(), 1, "{result:?}");

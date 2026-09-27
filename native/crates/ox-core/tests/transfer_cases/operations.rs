@@ -8,9 +8,7 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{
-    Cancellation, ConflictPolicy, Node, Operation, TransferError, TransferMode, MAX_DEPTH,
-};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Node, Operation, TransferError, MAX_DEPTH};
 
 use crate::transfer_support::{
     local::{self, local_path_of, LocalNode, Provider},
@@ -57,13 +55,7 @@ fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
     set_mode(&nested, 0o500);
     let mut engine = fixture.engine(local::local());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&folder],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&folder], Request::Copy(ConflictPolicy::Skip));
 
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(result.done, [file_uri(&folder)]);
@@ -109,13 +101,7 @@ fn a_move_takes_the_item_out_of_its_folder() {
     write(&source, "a");
     let mut engine = fixture.engine(local::local());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Move,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
 
     assert_eq!(result.done, [file_uri(&source)]);
     assert!(!exists_without_following_links(&source));
@@ -135,24 +121,12 @@ fn delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete() {
     symlink(&original, &link).unwrap();
     let mut engine = fixture.engine(local::local());
 
-    let trash = fixture.run(
-        &mut engine,
-        &[&original],
-        TransferMode::Trash,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let trash = fixture.run(&mut engine, &[&original], Request::Trash);
 
     assert!(trash.done.is_empty());
     assert!(trash.errors[0].contains("no delete fallback"));
 
-    let deleted = fixture.run(
-        &mut engine,
-        &[&link],
-        TransferMode::Delete,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let deleted = fixture.run(&mut engine, &[&link], Request::Delete);
 
     assert_eq!(deleted.done, [file_uri(&link)]);
     assert!(!exists_without_following_links(&link));
@@ -202,15 +176,13 @@ fn deep_trees_and_special_files_are_not_published() {
     }
     fs::create_dir_all(nested).unwrap();
     let fifo = fixture.source_folder.join("pipe");
-    mkfifo(&fifo);
+    create_named_pipe(&fifo);
     let mut engine = fixture.engine(local::local());
 
     let result = fixture.run(
         &mut engine,
         &[&source, &fifo],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
+        Request::Copy(ConflictPolicy::Skip),
     );
 
     assert!(result.done.is_empty());
@@ -238,7 +210,7 @@ fn cancellation_during_copy_removes_partial_stage_and_stops_the_batch() {
     let updates = Arc::new(Mutex::new(Vec::new()));
     let recorded = Arc::clone(&updates);
     let mut engine = fixture.engine(local::local()).with_progress(move |progress| {
-        if progress.label.starts_with("Copying ") {
+        if is_byte_progress(&progress) {
             cancel.cancel();
         }
         recorded.lock().unwrap().push(progress);
@@ -247,9 +219,7 @@ fn cancellation_during_copy_removes_partial_stage_and_stops_the_batch() {
     let result = fixture.run(
         &mut engine,
         &[&first, &later],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
+        Request::Copy(ConflictPolicy::Skip),
     );
 
     assert!(result.cancelled);
@@ -262,7 +232,7 @@ fn cancellation_during_copy_removes_partial_stage_and_stops_the_batch() {
         .lock()
         .unwrap()
         .iter()
-        .filter(|event| event.label.starts_with("Copying "))
+        .filter(|event| is_byte_progress(event))
         .count();
     assert_eq!(byte_updates, 1);
 }
@@ -278,16 +248,10 @@ fn a_special_file_inside_a_folder_fails_the_whole_folder() {
     let tree = fixture.source_folder.join("tree");
     fs::create_dir(&tree).unwrap();
     write(&tree.join("a"), "hello");
-    mkfifo(&tree.join("pipe"));
+    create_named_pipe(&tree.join("pipe"));
     let mut engine = fixture.engine(local::local());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&tree],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&tree], Request::Copy(ConflictPolicy::Skip));
 
     assert!(result.done.is_empty(), "{result:?}");
     assert_eq!(result.errors.len(), 1, "{result:?}");
@@ -308,13 +272,7 @@ fn a_run_cancelled_before_it_starts_changes_nothing() {
     fixture.cancel.cancel();
     let mut engine = fixture.engine(local::local());
 
-    let refused = fixture.try_run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let refused = fixture.try_run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert_eq!(refused, Err(TransferError::Cancelled));
     assert!(list(&fixture.destination_folder).is_empty());

@@ -8,7 +8,7 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
-use ox_core::transfer::{ConflictPolicy, TransferMode};
+use ox_core::transfer::ConflictPolicy;
 
 use crate::transfer_support::*;
 
@@ -29,20 +29,9 @@ fn a_cancelled_copy_leaves_no_staging() {
     let fixture = Fixture::new();
     let source = fixture.source_folder.join("large");
     fs::write(&source, random_bytes(262_144)).expect("write the source");
-    let cancel = fixture.cancel.clone();
-    let mut engine = gio_engine().with_progress(move |progress| {
-        if progress.label.starts_with("Copying ") {
-            cancel.cancel();
-        }
-    });
+    let mut engine = gio_engine().with_progress(cancel_at_first_byte_progress(fixture.cancel.clone()));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert!(result.cancelled, "{result:?}");
     assert!(result.errors.is_empty(), "{result:?}");
@@ -63,20 +52,9 @@ fn staging_with_read_only_folders_inside_is_removed() {
     set_mode(&source.join("sub"), 0o555);
     set_mode(&source, 0o500);
     let racer = fixture.destination_folder.join("project");
-    let racer_path = racer.clone();
-    let mut engine = gio_engine().with_progress(move |progress| {
-        if progress.label.starts_with("Copying ") && !exists_without_following_links(&racer_path) {
-            write(&racer_path, "another program");
-        }
-    });
+    let mut engine = gio_engine().with_progress(take_name_while_copying(racer.clone()));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert_eq!(result.errors.len(), 1, "{result:?}");
     assert_eq!(list(&fixture.destination_folder), ["project"]);
@@ -95,19 +73,13 @@ fn staging_in_a_destination_reached_through_a_link_is_removed() {
     let source = fixture.source_folder.join("project");
     fs::create_dir(&source).expect("create the source folder");
     write(&source.join("data"), "contents");
-    let racer_path = fixture.destination_folder.join("project");
-    let mut engine = gio_engine().with_progress(move |progress| {
-        if progress.label.starts_with("Copying ") && !exists_without_following_links(&racer_path) {
-            write(&racer_path, "another program");
-        }
-    });
+    let racer = fixture.destination_folder.join("project");
+    let mut engine = gio_engine().with_progress(take_name_while_copying(racer));
 
     let result = fixture.run(
         &mut engine,
         &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        Some(&alias),
+        Request::CopyInto(&alias, ConflictPolicy::Skip),
     );
 
     assert_eq!(result.errors.len(), 1, "{result:?}");
@@ -133,7 +105,7 @@ fn a_folder_moved_in_under_the_staging_name_is_never_emptied() {
     let destination = fixture.destination_folder.clone();
     let mut engine = gio_engine().with_progress(move |progress| {
         let victim = destination.join("victim");
-        if !progress.label.starts_with("Copying ") || !exists_without_following_links(&victim) {
+        if !is_byte_progress(&progress) || !exists_without_following_links(&victim) {
             return;
         }
         let stage = staging_in(&destination).expect("the copy is staged");
@@ -141,13 +113,7 @@ fn a_folder_moved_in_under_the_staging_name_is_never_emptied() {
         fs::rename(&victim, &stage).expect("move the user's folder in");
     });
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert!(result.done.is_empty(), "{result:?}");
     let leftover = result.errors.last().expect("the leftover is reported");

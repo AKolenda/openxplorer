@@ -6,7 +6,7 @@
 use std::fs;
 use std::os::unix::fs::symlink;
 
-use ox_core::transfer::{ConflictPolicy, TransferMode};
+use ox_core::transfer::ConflictPolicy;
 
 use crate::transfer_support::{local, versions::PreviousVersions, *};
 
@@ -28,13 +28,7 @@ fn replace_never_overwrites_a_nested_snapshot() {
     let versions = PreviousVersions::new();
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Replace,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Replace));
 
     assert!(result.done.is_empty(), "{result:?}");
     assert!(result.errors[0].contains("read-only"), "{result:?}");
@@ -58,13 +52,7 @@ fn a_configured_snapshot_folder_inside_a_deleted_folder_survives() {
     versions.configure(&file_uri(&source), &file_uri(&backup));
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Delete,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Delete);
 
     assert!(result.done.is_empty(), "{result:?}");
     assert_eq!(result.errors.len(), 1, "{result:?}");
@@ -84,13 +72,7 @@ fn a_snapshot_file_can_be_copied_to_another_folder() {
     let versions = PreviousVersions::new();
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&saved],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&saved], Request::Copy(ConflictPolicy::Skip));
 
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(read(&fixture.destination_folder.join("document.txt")), "saved");
@@ -112,13 +94,7 @@ fn a_link_to_a_snapshot_is_deleted_without_entering_the_snapshot() {
     let versions = PreviousVersions::new();
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&link],
-        TransferMode::Delete,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&link], Request::Delete);
 
     assert!(result.errors.is_empty(), "{result:?}");
     assert!(!exists_without_following_links(&link));
@@ -130,7 +106,11 @@ fn a_link_to_a_snapshot_is_deleted_without_entering_the_snapshot() {
 /// parity: XFER-020
 #[test]
 fn protected_descendants_stop_mutations_before_any_item_changes() {
-    for mode in [TransferMode::Move, TransferMode::Trash, TransferMode::Delete] {
+    for request in [
+        Request::Move(ConflictPolicy::Replace),
+        Request::Trash,
+        Request::Delete,
+    ] {
         let fixture = Fixture::new();
         let folder = fixture.source_folder.join("tree");
         fs::create_dir_all(folder.join(".snapshot")).unwrap();
@@ -139,7 +119,7 @@ fn protected_descendants_stop_mutations_before_any_item_changes() {
         let versions = PreviousVersions::new();
         let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
 
-        let result = fixture.run(&mut engine, &[&folder], mode, ConflictPolicy::Replace, None);
+        let result = fixture.run(&mut engine, &[&folder], request);
 
         assert!(result.done.is_empty());
         assert!(result.errors[0].contains("read-only"));
@@ -165,22 +145,14 @@ fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed(
     );
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert_eq!(result.done, [file_uri(&source)]);
 
     let reverse = fixture.run(
         &mut engine,
         &[&fixture.destination_folder.join("photo.jpg")],
-        TransferMode::Copy,
-        ConflictPolicy::Replace,
-        Some(&fixture.source_folder),
+        Request::CopyInto(&fixture.source_folder, ConflictPolicy::Replace),
     );
 
     assert!(reverse.done.is_empty());

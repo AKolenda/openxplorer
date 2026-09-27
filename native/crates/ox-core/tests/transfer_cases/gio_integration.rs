@@ -5,7 +5,7 @@
 
 use std::fs;
 
-use ox_core::transfer::{ConflictPolicy, TransferMode};
+use ox_core::transfer::ConflictPolicy;
 
 use crate::transfer_support::{versions::PreviousVersions, *};
 
@@ -22,9 +22,7 @@ fn keep_both_through_gio_adds_a_copy_name() {
     let result = fixture.run(
         &mut gio_engine(),
         &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::KeepBoth,
-        None,
+        Request::Copy(ConflictPolicy::KeepBoth),
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
@@ -49,9 +47,7 @@ fn replace_through_gio_overwrites_the_existing_file() {
     let result = fixture.run(
         &mut gio_engine(),
         &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Replace,
-        None,
+        Request::Copy(ConflictPolicy::Replace),
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
@@ -87,9 +83,7 @@ fn copied_folders_keep_private_and_read_only_modes() {
     let result = fixture.run(
         &mut gio_engine(),
         &[&private, &read_only],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
+        Request::Copy(ConflictPolicy::Skip),
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
@@ -124,9 +118,7 @@ fn merging_a_read_only_folder_keeps_the_destination_folders_mode() {
     let result = fixture.run(
         &mut gio_engine(),
         &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Replace,
-        None,
+        Request::Copy(ConflictPolicy::Replace),
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
@@ -151,20 +143,9 @@ fn a_failed_publish_removes_staging_that_holds_a_read_only_folder() {
     set_mode(&source, 0o500);
     let _source_access = RestoreOwnerAccess::new(&source);
     let racer = fixture.destination_folder.join("project");
-    let racer_path = racer.clone();
-    let mut engine = gio_engine().with_progress(move |progress| {
-        if progress.label.starts_with("Copying ") && !exists_without_following_links(&racer_path) {
-            write(&racer_path, "another program");
-        }
-    });
+    let mut engine = gio_engine().with_progress(take_name_while_copying(racer.clone()));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert!(result.done.is_empty(), "{result:?}");
     assert_eq!(result.errors.len(), 1, "{result:?}");
@@ -191,21 +172,9 @@ fn replace_and_delete_through_gio_keep_a_snapshot_inside_the_folder() {
     let versions = PreviousVersions::new();
     let mut engine = gio_engine().with_write_guard(versions.guard());
 
-    let replaced = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Replace,
-        None,
-    );
+    let replaced = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Replace));
 
-    let removed = fixture.run(
-        &mut engine,
-        &[&target],
-        TransferMode::Delete,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let removed = fixture.run(&mut engine, &[&target], Request::Delete);
 
     assert!(replaced.errors[0].contains("read-only"), "{replaced:?}");
     assert!(removed.errors[0].contains("read-only"), "{removed:?}");

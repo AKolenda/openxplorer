@@ -3,7 +3,6 @@
 //! Ports the cleanup cases of `DeviceStagingTests` in
 //! `desktop/tests/test_device_staging.py`. No real devices.
 
-use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -322,35 +321,48 @@ fn a_devices_false_success_is_not_counted_as_a_published_copy() {
     assert!(list(&fixture.destination_folder).is_empty());
 }
 
+/// An upload whose staging name another program takes first, and where
+/// that program's content is.
+struct StageRaceCase {
+    kind: NodeKind,
+    /// The other program's file inside the taken staging name; `None` when
+    /// the taken name is that file itself.
+    foreign_file: Option<&'static str>,
+}
+
 /// A staging name another program created first is never used or removed:
-/// neither the folder a folder upload reserves with `create_directory`, nor the file a
-/// file upload creates without overwriting.
+/// neither the folder a folder upload reserves with `create_directory`, nor
+/// the file a file upload creates without overwriting.
 ///
 /// parity: XFER-002
 #[test]
 fn a_device_staging_name_created_by_someone_else_is_never_cleaned_up() {
-    for kind in [NodeKind::File, NodeKind::Directory] {
+    let cases = [
+        StageRaceCase {
+            kind: NodeKind::File,
+            foreign_file: None,
+        },
+        StageRaceCase {
+            kind: NodeKind::Directory,
+            foreign_file: Some("foreign"),
+        },
+    ];
+    for case in cases {
         let fixture = Fixture::new();
         let source = fixture.source_folder.join("photo");
-        if kind == NodeKind::Directory {
-            fs::create_dir(&source).expect("create the source folder");
-            write(&source.join("inner"), "complete");
-        } else {
-            write(&source, "complete");
-        }
+        create_source(&source, case.kind, "complete");
         let phone = BrokenPhone::new(PhoneFault::StageRace);
 
         let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 
-        assert_eq!(result.errors.len(), 1, "{result:?}");
+        assert_eq!(result.errors.len(), 1, "{:?}: {result:?}", case.kind);
         assert!(result.done.is_empty());
         let names = list(&fixture.destination_folder);
         assert_eq!(names.len(), 1);
-        let foreign = fixture.destination_folder.join(&names[0]);
-        let foreign_file = if kind == NodeKind::Directory {
-            foreign.join("foreign")
-        } else {
-            foreign
+        let taken_name = fixture.destination_folder.join(&names[0]);
+        let foreign_file = match case.foreign_file {
+            Some(name) => taken_name.join(name),
+            None => taken_name,
         };
         assert_eq!(read(&foreign_file), "belongs to another creator");
         assert_eq!(phone.stage_deletions(), 0);

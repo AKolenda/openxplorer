@@ -43,8 +43,14 @@ impl PreviousVersions {
             .push(snapshots.to_string());
     }
 
-    /// Refuses protected locations with [`READ_ONLY`].
-    pub fn assert_writable(&self, uri: &str) -> Result<(), TransferError> {
+    /// Refuses protected locations with [`READ_ONLY`]. Port of
+    /// `PreviousVersions.assert_writable` in `desktop/previous_versions.py`,
+    /// which raises the refusal where this returns it.
+    ///
+    /// # Errors
+    ///
+    /// [`READ_ONLY`] for a location inside a snapshot folder.
+    pub fn check_writable(&self, uri: &str) -> Result<(), TransferError> {
         let configured = self.snapshot_roots.lock().expect("snapshot roots");
         let is_in_configured_snapshot = configured.iter().any(|root| is_within(uri, root));
         if is_conventional_snapshot(uri) || is_in_configured_snapshot {
@@ -57,7 +63,7 @@ impl PreviousVersions {
     /// The guard as the engine takes it.
     pub fn guard(self: &Arc<Self>) -> impl Fn(&str) -> Result<(), TransferError> + Send + Sync + 'static {
         let versions = Arc::clone(self);
-        move |uri: &str| versions.assert_writable(uri)
+        move |uri: &str| versions.check_writable(uri)
     }
 }
 

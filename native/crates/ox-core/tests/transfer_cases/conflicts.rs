@@ -3,7 +3,7 @@
 //! side, and moves into the item's own folder. Ports the conflict cases of
 //! `TransferTests` in `desktop/tests/test_operations.py`.
 
-use ox_core::transfer::{ConflictPolicy, TransferMode};
+use ox_core::transfer::ConflictPolicy;
 
 use crate::transfer_support::{local, *};
 
@@ -51,9 +51,7 @@ fn moving_an_item_into_its_own_folder_changes_nothing() {
         let result = fixture.run(
             &mut engine,
             &[&source],
-            TransferMode::Move,
-            policy,
-            Some(&fixture.source_folder),
+            Request::MoveInto(&fixture.source_folder, policy),
         );
 
         assert!(result.errors.is_empty(), "{policy:?}: {result:?}");
@@ -75,13 +73,7 @@ fn a_move_onto_a_taken_name_with_skip_keeps_both_items() {
     write(&fixture.destination_folder.join("a"), "old");
     let mut engine = fixture.engine(local::local());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Move,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
 
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(result.skipped, [file_uri(&source)]);
@@ -137,13 +129,7 @@ fn conflict_policies_never_overwrite_without_replace() {
         write(&fixture.destination_folder.join("notes.txt"), "old");
         let mut engine = fixture.engine(local::local());
 
-        let result = fixture.run(
-            &mut engine,
-            &[&source, &source],
-            TransferMode::Copy,
-            case.policy,
-            None,
-        );
+        let result = fixture.run(&mut engine, &[&source, &source], Request::Copy(case.policy));
 
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(read(&source), "new");

@@ -25,13 +25,60 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ox_core::transfer::{
-    is_own_staging_name, Cancellation, ConflictPolicy, Node, Operation, TransferEngine, TransferError,
-    TransferMode, TransferResult,
+    is_own_staging_name, Cancellation, ConflictPolicy, Node, NodeKind, Operation, Progress, TransferEngine,
+    TransferError, TransferResult,
 };
 
 pub use local::file_uri;
 use local::{LocalNode, Provider};
-pub use shared::{gio_engine, mode_of, set_mode};
+pub use shared::{gio_engine, mode_of, set_mode, RestoreOwnerAccess};
+
+/// What a test run asks the engine to do. Copies and moves go into the
+/// fixture's destination folder unless the variant names another folder;
+/// Trash and permanent delete take neither a folder nor a policy.
+#[derive(Debug, Clone, Copy)]
+pub enum Request<'a> {
+    /// Copy into the fixture's destination folder.
+    Copy(ConflictPolicy),
+    /// Move into the fixture's destination folder.
+    Move(ConflictPolicy),
+    /// Copy into the given folder.
+    CopyInto(&'a Path, ConflictPolicy),
+    /// Move into the given folder.
+    MoveInto(&'a Path, ConflictPolicy),
+    /// Move to the Trash.
+    Trash,
+    /// Delete permanently.
+    Delete,
+}
+
+impl<'a> Request<'a> {
+    /// The folder this request names, when it is not the fixture's
+    /// destination folder.
+    fn named_folder(self) -> Option<&'a Path> {
+        match self {
+            Request::CopyInto(folder, _) | Request::MoveInto(folder, _) => Some(folder),
+            Request::Copy(_) | Request::Move(_) | Request::Trash | Request::Delete => None,
+        }
+    }
+
+    /// The engine operation; copies and moves go into the folder at
+    /// `destination_folder`, a URI.
+    fn to_operation(self, destination_folder: &str) -> Operation<'_> {
+        match self {
+            Request::Copy(policy) | Request::CopyInto(_, policy) => Operation::Copy {
+                destination_folder,
+                policy,
+            },
+            Request::Move(policy) | Request::MoveInto(_, policy) => Operation::Move {
+                destination_folder,
+                policy,
+            },
+            Request::Trash => Operation::Trash,
+            Request::Delete => Operation::Delete,
+        }
+    }
+}
 
 /// A temporary source folder and destination folder, like `setUp` in the
 /// Python transfer tests (`self.src` and `self.dst` there).
@@ -88,21 +135,21 @@ impl Fixture {
         sleeps.iter().map(Duration::as_secs_f64).collect()
     }
 
-    /// Runs a request for `mode` into `target` (the destination folder by
-    /// default), as the app's bridge sends it: Trash and delete ignore
-    /// `target` and `policy`.
+    /// Runs `request` over the items at `paths` with `engine`.
+    ///
+    /// # Errors
+    ///
+    /// The engine's refusal of the whole run, before any item is started.
     pub fn try_run(
         &self,
         engine: &mut TransferEngine,
         paths: &[&Path],
-        mode: TransferMode,
-        policy: ConflictPolicy,
-        target: Option<&Path>,
+        request: Request<'_>,
     ) -> Result<TransferResult, TransferError> {
         let uris: Vec<String> = paths.iter().map(|path| file_uri(path)).collect();
-        let target_uri = file_uri(target.unwrap_or(&self.destination_folder));
-        let operation = Operation::from_request(mode, Some(&target_uri), policy)?;
-        engine.run(operation, &uris, &self.cancel)
+        let folder = request.named_folder().unwrap_or(&self.destination_folder);
+        let folder_uri = file_uri(folder);
+        engine.run(request.to_operation(&folder_uri), &uris, &self.cancel)
     }
 
     /// A source `name` holding `incoming` and an existing item `name` in the
@@ -123,20 +170,12 @@ impl Fixture {
         policy: ConflictPolicy,
     ) -> TransferResult {
         let mut engine = self.engine(provider);
-        self.run(&mut engine, paths, TransferMode::Copy, policy, None)
+        self.run(&mut engine, paths, Request::Copy(policy))
     }
 
     /// Like [`Fixture::try_run`] for runs that must not be refused.
-    pub fn run(
-        &self,
-        engine: &mut TransferEngine,
-        paths: &[&Path],
-        mode: TransferMode,
-        policy: ConflictPolicy,
-        target: Option<&Path>,
-    ) -> TransferResult {
-        self.try_run(engine, paths, mode, policy, target)
-            .expect("the run is accepted")
+    pub fn run(&self, engine: &mut TransferEngine, paths: &[&Path], request: Request<'_>) -> TransferResult {
+        self.try_run(engine, paths, request).expect("the run is accepted")
     }
 
     /// Asserts no `.winspace-transfer-*` staging is left in the destination
@@ -174,40 +213,6 @@ fn collect_leftovers(root: &Path, folder: &Path, found: &mut Vec<String>) {
         if metadata.is_dir() {
             collect_leftovers(root, &path, found);
         }
-    }
-}
-
-/// Gives a folder and every folder below it owner access again when
-/// dropped, so the temporary folder can be removed even after a test that
-/// made folders read-only failed midway.
-pub struct RestoreOwnerAccess(PathBuf);
-
-impl RestoreOwnerAccess {
-    /// Restores owner access to `folder` and below when dropped.
-    pub fn new(folder: &Path) -> Self {
-        Self(folder.to_path_buf())
-    }
-}
-
-impl Drop for RestoreOwnerAccess {
-    fn drop(&mut self) {
-        restore_owner_access(&self.0);
-    }
-}
-
-/// Makes `folder`, if it is a folder, and every folder below it owner-only
-/// and writable.
-fn restore_owner_access(folder: &Path) {
-    let is_folder = fs::symlink_metadata(folder).is_ok_and(|metadata| metadata.is_dir());
-    if !is_folder {
-        return;
-    }
-    set_mode(folder, 0o700);
-    let Ok(entries) = fs::read_dir(folder) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        restore_owner_access(&entry.path());
     }
 }
 
@@ -273,10 +278,60 @@ pub fn random_bytes(count: usize) -> Vec<u8> {
 }
 
 /// Creates a named pipe (a special file) with the system `mkfifo`.
-pub fn mkfifo(path: &Path) {
+pub fn create_named_pipe(path: &Path) {
     let status = std::process::Command::new("mkfifo")
         .arg(path)
         .status()
         .expect("run mkfifo");
     assert!(status.success(), "mkfifo failed");
+}
+
+/// The file inside a folder made by [`create_source`].
+pub const INNER_FILE: &str = "inner";
+
+/// Creates the source of a test that runs for a file and for a folder: a
+/// file at `path` holding `content`, or a folder at `path` whose file
+/// [`INNER_FILE`] holds it.
+///
+/// # Panics
+///
+/// For a `kind` other than a file or a folder.
+pub fn create_source(path: &Path, kind: NodeKind, content: &str) {
+    match kind {
+        NodeKind::File => write(path, content),
+        NodeKind::Directory => {
+            fs::create_dir(path).expect("create the source folder");
+            write(&path.join(INNER_FILE), content);
+        }
+        NodeKind::Symlink | NodeKind::Special => {
+            panic!("a test source is a file or a folder, not {kind:?}")
+        }
+    }
+}
+
+/// True for the progress a copy reports while it transfers a file's bytes
+/// (`Copying a.txt · 8,192 / 35,000 bytes`), as opposed to the per-item
+/// progress of the batch.
+pub fn is_byte_progress(progress: &Progress) -> bool {
+    progress.label.starts_with("Copying ")
+}
+
+/// Progress that cancels the run at the first byte progress, like the
+/// user pressing Cancel while a file is being copied.
+pub fn cancel_at_first_byte_progress(cancel: Cancellation) -> impl FnMut(Progress) + Send + 'static {
+    move |progress| {
+        if is_byte_progress(&progress) {
+            cancel.cancel();
+        }
+    }
+}
+
+/// Progress that makes another program take `final_name` at the first
+/// byte progress, so publishing the copy finds its final name taken.
+pub fn take_name_while_copying(final_name: PathBuf) -> impl FnMut(Progress) + Send + 'static {
+    move |progress| {
+        if is_byte_progress(&progress) && !exists_without_following_links(&final_name) {
+            write(&final_name, "another program");
+        }
+    }
 }

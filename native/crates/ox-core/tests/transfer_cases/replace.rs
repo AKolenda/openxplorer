@@ -6,9 +6,7 @@
 use std::fs;
 use std::sync::Arc;
 
-use ox_core::transfer::{
-    Cancellation, ConflictPolicy, Node, NodeKind, TransferError, TransferMode, MAX_DEPTH,
-};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeKind, TransferError, MAX_DEPTH};
 
 use crate::transfer_support::{
     local::{self, LocalNode, Provider},
@@ -26,13 +24,7 @@ fn a_move_with_replace_overwrites_the_existing_file_and_removes_the_source() {
     write(&fixture.destination_folder.join("a"), "old");
     let mut engine = fixture.engine(local::local());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Move,
-        ConflictPolicy::Replace,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Replace));
 
     assert_eq!(result.done, [file_uri(&source)]);
     assert!(!exists_without_following_links(&source));
@@ -45,7 +37,10 @@ fn a_move_with_replace_overwrites_the_existing_file_and_removes_the_source() {
 /// parity: XFER-009
 #[test]
 fn replace_merges_folders_and_retains_destination_only_children() {
-    for mode in [TransferMode::Copy, TransferMode::Move] {
+    for request in [
+        Request::Copy(ConflictPolicy::Replace),
+        Request::Move(ConflictPolicy::Replace),
+    ] {
         let fixture = Fixture::new();
         let source = fixture.source_folder.join("tree");
         let target = fixture.destination_folder.join("tree");
@@ -56,13 +51,14 @@ fn replace_merges_folders_and_retains_destination_only_children() {
         write(&target.join("keep.txt"), "keep");
         let mut engine = fixture.engine(local::local());
 
-        let result = fixture.run(&mut engine, &[&source], mode, ConflictPolicy::Replace, None);
+        let result = fixture.run(&mut engine, &[&source], request);
 
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(result.done, [file_uri(&source)]);
         assert_eq!(read(&target.join("nested/shared.txt")), "new");
         assert_eq!(read(&target.join("keep.txt")), "keep");
-        assert_eq!(source.exists(), mode == TransferMode::Copy);
+        let is_copy = matches!(request, Request::Copy(_));
+        assert_eq!(source.exists(), is_copy, "{request:?}");
         fixture.assert_no_staging();
     }
 }
@@ -123,13 +119,7 @@ fn replacement_type_mismatch_preserves_both_items() {
         write(file, "file content");
         let mut engine = fixture.engine(local::local());
 
-        let result = fixture.run(
-            &mut engine,
-            &[&source],
-            TransferMode::Copy,
-            ConflictPolicy::Replace,
-            None,
-        );
+        let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Replace));
 
         assert!(result.done.is_empty());
         assert_eq!(result.errors.len(), 1);
@@ -159,13 +149,7 @@ fn a_deep_move_merge_is_bounded_even_without_a_write_guard() {
     write(&target_nested.join("original"), "original");
     let mut engine = fixture.engine(local::local());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Move,
-        ConflictPolicy::Replace,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Replace));
 
     assert!(result.done.is_empty());
     assert_eq!(result.errors.len(), 1);

@@ -9,7 +9,7 @@ use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
-use ox_core::transfer::{ConflictPolicy, TransferEngine, TransferError, TransferMode};
+use ox_core::transfer::{ConflictPolicy, TransferEngine, TransferError};
 
 use crate::transfer_support::*;
 
@@ -63,13 +63,7 @@ fn copy_keeps_names_that_are_not_utf8_byte_for_byte() {
         let fixture = Fixture::new();
         let album = latin1_album(&fixture.source_folder);
 
-        let result = fixture.run(
-            &mut engine,
-            &[&album],
-            TransferMode::Copy,
-            ConflictPolicy::Skip,
-            None,
-        );
+        let result = fixture.run(&mut engine, &[&album], Request::Copy(ConflictPolicy::Skip));
 
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(result.done, [file_uri(&album)]);
@@ -87,9 +81,7 @@ fn move_keeps_names_that_are_not_utf8_byte_for_byte() {
     let result = fixture.run(
         &mut guarded_gio_engine(),
         &[&album],
-        TransferMode::Move,
-        ConflictPolicy::Skip,
-        None,
+        Request::Move(ConflictPolicy::Skip),
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
@@ -109,19 +101,13 @@ fn trash_and_permanent_delete_remove_folders_with_names_that_are_not_utf8() {
         std::env::var_os("XDG_DATA_HOME").is_some(),
         "run through native/tools/check.py, which provides a disposable Trash"
     );
-    for mode in [TransferMode::Delete, TransferMode::Trash] {
+    for request in [Request::Delete, Request::Trash] {
         let fixture = Fixture::new();
         let album = latin1_album(&fixture.source_folder);
 
-        let result = fixture.run(
-            &mut guarded_gio_engine(),
-            &[&album],
-            mode,
-            ConflictPolicy::Skip,
-            None,
-        );
+        let result = fixture.run(&mut guarded_gio_engine(), &[&album], request);
 
-        assert!(result.errors.is_empty(), "{mode:?}: {result:?}");
+        assert!(result.errors.is_empty(), "{request:?}: {result:?}");
         assert_eq!(result.done, [file_uri(&album)]);
         assert!(!exists_without_following_links(&album));
     }
@@ -142,9 +128,7 @@ fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
     let result = fixture.run(
         &mut guarded_gio_engine(),
         &[&album],
-        TransferMode::Copy,
-        ConflictPolicy::Replace,
-        None,
+        Request::Copy(ConflictPolicy::Replace),
     );
 
     assert!(result.done.is_empty(), "{result:?}");
@@ -166,9 +150,7 @@ fn keep_both_copies_folders_with_names_that_are_not_utf8() {
     let result = fixture.run(
         &mut guarded_gio_engine(),
         &[&album],
-        TransferMode::Copy,
-        ConflictPolicy::KeepBoth,
-        None,
+        Request::Copy(ConflictPolicy::KeepBoth),
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
@@ -187,13 +169,7 @@ fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
     fs::write(&song, b"song").expect("write the song");
     let mut engine = guarded_gio_engine();
 
-    let copied = fixture.run(
-        &mut engine,
-        &[&song],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let copied = fixture.run(&mut engine, &[&song], Request::Copy(ConflictPolicy::Skip));
 
     assert!(copied.errors.is_empty(), "{copied:?}");
     assert_eq!(
@@ -201,13 +177,7 @@ fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
         [OsStr::from_bytes(LATIN1_NAME)]
     );
 
-    let kept = fixture.run(
-        &mut engine,
-        &[&song],
-        TransferMode::Copy,
-        ConflictPolicy::KeepBoth,
-        None,
-    );
+    let kept = fixture.run(&mut engine, &[&song], Request::Copy(ConflictPolicy::KeepBoth));
 
     assert!(kept.done.is_empty());
     assert!(kept.errors[0].contains("not valid UTF-8"), "{kept:?}");

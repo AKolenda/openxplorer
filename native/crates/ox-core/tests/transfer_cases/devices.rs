@@ -8,13 +8,22 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeKind, TransferError, TransferMode};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeKind, TransferError};
 
 use crate::transfer_support::{
     device::{Device, Phone},
     local::{local_path_of, LocalNode, Provider},
     *,
 };
+
+/// An upload of a file or a folder, and the uploaded file that must hold
+/// its content.
+struct UploadShapeCase {
+    kind: NodeKind,
+    /// The uploaded file that holds "photo", relative to the destination
+    /// folder.
+    content_file: &'static str,
+}
 
 /// Port of `test_file_copy_publishes_by_same_folder_rename` and
 /// `test_partial_copy_never_visible_under_final_name`: files and folders
@@ -24,28 +33,28 @@ use crate::transfer_support::{
 /// parity: XFER-021
 #[test]
 fn uploads_publish_by_one_same_folder_rename_from_a_staged_sibling() {
-    for kind in [NodeKind::File, NodeKind::Directory] {
+    let cases = [
+        UploadShapeCase {
+            kind: NodeKind::File,
+            content_file: "incoming",
+        },
+        UploadShapeCase {
+            kind: NodeKind::Directory,
+            content_file: "incoming/inner",
+        },
+    ];
+    for case in cases {
         let fixture = Fixture::with_destination("phone");
         let source = fixture.source_folder.join("incoming");
-        if kind == NodeKind::Directory {
-            fs::create_dir(&source).expect("create the source folder");
-            write(&source.join("photo.jpg"), "photo");
-        } else {
-            write(&source, "photo");
-        }
+        create_source(&source, case.kind, "photo");
         let phone = Arc::new(Phone::default());
 
         let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 
-        assert!(result.errors.is_empty(), "{result:?}");
+        assert!(result.errors.is_empty(), "{:?}: {result:?}", case.kind);
         assert_eq!(result.done, [file_uri(&source)]);
+        assert_eq!(read(&fixture.destination_folder.join(case.content_file)), "photo");
         let published = fixture.destination_folder.join("incoming");
-        let target = if kind == NodeKind::Directory {
-            published.join("photo.jpg")
-        } else {
-            published.clone()
-        };
-        assert_eq!(read(&target), "photo");
         let moves = phone.device.moves();
         assert_eq!(moves.len(), 1, "{moves:?}");
         let publication = &moves[0];
@@ -257,22 +266,11 @@ fn cancelling_an_upload_leaves_no_stage_and_no_final_name() {
     let fixture = Fixture::with_destination("phone");
     let source = fixture.source_folder.join("big");
     fs::write(&source, random_bytes(100_000)).expect("write the source");
-    let cancel = fixture.cancel.clone();
     let mut engine = fixture
         .engine(Arc::new(Device::default()))
-        .with_progress(move |progress| {
-            if progress.label.starts_with("Copying ") {
-                cancel.cancel();
-            }
-        });
+        .with_progress(cancel_at_first_byte_progress(fixture.cancel.clone()));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Copy,
-        ConflictPolicy::Skip,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert!(result.cancelled);
     assert!(result.errors.is_empty(), "{result:?}");
@@ -299,9 +297,7 @@ fn device_moves_relist_the_old_folder_once_per_batch() {
     let result = fixture.run(
         &mut engine,
         &[&first, &second],
-        TransferMode::Move,
-        ConflictPolicy::Skip,
-        None,
+        Request::Move(ConflictPolicy::Skip),
     );
 
     assert_eq!(result.done.len(), 2);
@@ -325,13 +321,7 @@ fn a_device_move_that_needs_a_new_name_is_refused_not_misnamed() {
     write(&fixture.destination_folder.join("a"), "old");
     let mut engine = fixture.engine(Arc::new(Device::default()));
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source],
-        TransferMode::Move,
-        ConflictPolicy::KeepBoth,
-        None,
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::KeepBoth));
 
     assert!(result.done.is_empty());
     assert!(result.errors[0].contains("not both"), "{result:?}");
