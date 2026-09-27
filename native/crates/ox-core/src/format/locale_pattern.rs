@@ -138,7 +138,16 @@ fn date_field(digits: &str) -> Option<Field> {
 /// A 12-hour clock drops the hour's leading zero, as browsers do
 /// (`7:35:35 PM`). `None` without an hour and minutes.
 fn time_pattern_from_sample(sample: &str, day_period: &str, zone: &str) -> Option<String> {
-    let words = [(day_period, Field::DayPeriod), (zone, Field::Zone)];
+    let words = [
+        KnownWord {
+            text: day_period,
+            field: Field::DayPeriod,
+        },
+        KnownWord {
+            text: zone,
+            field: Field::Zone,
+        },
+    ];
     let found = pattern_from_sample(sample, &words, time_field)?;
     let has_hour = found.has(Field::Hour24) || found.has(Field::Hour12);
     let is_complete = has_hour && found.has(Field::Minute);
@@ -196,6 +205,16 @@ impl Field {
     }
 }
 
+/// A known text in a sample, such as the locale's PM text, and the field
+/// it stands for.
+#[derive(Debug, Clone, Copy)]
+struct KnownWord<'a> {
+    /// The text as the sample shows it; an empty text never matches.
+    text: &'a str,
+    /// The field the text stands for.
+    field: Field,
+}
+
 /// A pattern rebuilt from a sample, and the fields found in it.
 #[derive(Debug, Default)]
 struct SamplePattern {
@@ -238,7 +257,7 @@ impl SamplePattern {
 /// digits is not recognised or a field appears twice.
 fn pattern_from_sample(
     sample: &str,
-    words: &[(&str, Field)],
+    words: &[KnownWord<'_>],
     field_of_digits: fn(&str) -> Option<Field>,
 ) -> Option<SamplePattern> {
     let mut found = SamplePattern::default();
@@ -276,7 +295,7 @@ enum Token<'a> {
 }
 
 /// The first token of `text` and the text after it; `None` at the end.
-fn next_token<'a>(text: &'a str, words: &[(&str, Field)]) -> Option<(Token<'a>, &'a str)> {
+fn next_token<'a>(text: &'a str, words: &[KnownWord<'_>]) -> Option<(Token<'a>, &'a str)> {
     let mut chars = text.chars();
     let first = chars.next()?;
     if first.is_ascii_digit() {
@@ -292,11 +311,13 @@ fn next_token<'a>(text: &'a str, words: &[(&str, Field)]) -> Option<(Token<'a>, 
 
 /// The field of the first of `words` that `text` starts with, and the text
 /// after that word. Empty words never match.
-fn strip_word<'a>(text: &'a str, words: &[(&str, Field)]) -> Option<(Field, &'a str)> {
-    words
-        .iter()
-        .filter(|(word, _)| !word.is_empty())
-        .find_map(|&(word, field)| text.strip_prefix(word).map(|rest| (field, rest)))
+fn strip_word<'a>(text: &'a str, words: &[KnownWord<'_>]) -> Option<(Field, &'a str)> {
+    for word in words.iter().filter(|word| !word.text.is_empty()) {
+        if let Some(after_word) = text.strip_prefix(word.text) {
+            return Some((word.field, after_word));
+        }
+    }
+    None
 }
 
 #[cfg(test)]

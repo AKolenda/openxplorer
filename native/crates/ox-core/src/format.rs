@@ -42,9 +42,35 @@ const UNKNOWN_DATE: &str = "—";
 /// Shown in the Properties dialog when a time is unknown.
 const UNKNOWN_TIMESTAMP: &str = "Not provided";
 
-/// The size units after bytes and the number of bytes in each. Sizes past
-/// 1024 TB stay in TB, as in the web UI.
-const SIZE_UNITS: [(&str, u64); 4] = [("KB", 1 << 10), ("MB", 1 << 20), ("GB", 1 << 30), ("TB", 1 << 40)];
+/// A size unit after bytes and the number of bytes in one of it.
+#[derive(Debug, Clone, Copy)]
+struct SizeUnit {
+    /// The text after the number: `KB`, `MB`, `GB` or `TB`.
+    symbol: &'static str,
+    /// The bytes in one unit, a power of 1024.
+    bytes: u64,
+}
+
+/// The size units from smallest to largest. Sizes past 1024 TB stay in TB,
+/// as in the web UI.
+const SIZE_UNITS: [SizeUnit; 4] = [
+    SizeUnit {
+        symbol: "KB",
+        bytes: 1 << 10,
+    },
+    SizeUnit {
+        symbol: "MB",
+        bytes: 1 << 20,
+    },
+    SizeUnit {
+        symbol: "GB",
+        bytes: 1 << 30,
+    },
+    SizeUnit {
+        symbol: "TB",
+        bytes: 1 << 40,
+    },
+];
 
 /// `912 bytes`, `71.0 KB`, `130 KB`, `1.1 MB`: one decimal below 100 and
 /// none from 100 up, in powers of 1024.
@@ -53,27 +79,25 @@ const SIZE_UNITS: [(&str, u64); 4] = [("KB", 1 << 10), ("MB", 1 << 20), ("GB", 1
 /// and the arithmetic is exact, so every size gets the same text as in the
 /// web interface.
 pub fn pretty_bytes(bytes: u64) -> String {
-    let Some((unit, unit_bytes)) = largest_unit(bytes) else {
+    let Some(unit) = largest_unit(bytes) else {
         return format!("{bytes} bytes");
     };
+    let symbol = unit.symbol;
     // Integer arithmetic wide enough for ten times `u64::MAX`.
     let bytes = u128::from(bytes);
-    let unit_bytes = u128::from(unit_bytes);
+    let unit_bytes = u128::from(unit.bytes);
     if bytes >= 100 * unit_bytes {
         let whole = round_half_up(bytes, unit_bytes);
-        return format!("{whole} {unit}");
+        return format!("{whole} {symbol}");
     }
     let tenths = round_half_up(bytes * 10, unit_bytes);
-    format!("{}.{} {unit}", tenths / 10, tenths % 10)
+    format!("{}.{} {symbol}", tenths / 10, tenths % 10)
 }
 
 /// The largest of [`SIZE_UNITS`] that `bytes` fills at least once, or
 /// `None` below 1 KB.
-fn largest_unit(bytes: u64) -> Option<(&'static str, u64)> {
-    SIZE_UNITS
-        .into_iter()
-        .rev()
-        .find(|&(_, unit_bytes)| bytes >= unit_bytes)
+fn largest_unit(bytes: u64) -> Option<SizeUnit> {
+    SIZE_UNITS.into_iter().rev().find(|unit| bytes >= unit.bytes)
 }
 
 /// `numerator / denominator` rounded to the nearest integer, halves up.
@@ -221,6 +245,9 @@ mod tests {
         },
     ];
 
+    /// [`september_21`] as Unix seconds, for the functions that take them.
+    const SEPTEMBER_21_UNIX_SECONDS: u64 = 1_790_000_000;
+
     fn september_21() -> DateTime {
         DateTime::from_utc(2026, 9, 21, 14, 13, 20.0).expect("valid date")
     }
@@ -316,12 +343,26 @@ mod tests {
         }
     }
 
+    /// A Date modified text in the test process's own time zone has ten
+    /// characters: a four-digit year and a two-digit month and day, with
+    /// their separators.
+    ///
     /// parity: VIEW-001
     #[test]
-    fn local_dates_are_formatted() {
-        let text = date_text(1_790_000_000);
+    fn column_dates_have_a_four_digit_year_and_two_digit_fields() {
+        let text = date_text(SEPTEMBER_21_UNIX_SECONDS);
         assert_eq!(text.len(), 10, "{text}");
         assert!(text.contains("2026"), "{text}");
-        assert!(date_time_text(1_790_000_000).starts_with(&text));
+    }
+
+    /// The Properties timestamp begins with the Date modified text of the
+    /// same time.
+    ///
+    /// parity: VIEW-001
+    #[test]
+    fn date_time_text_begins_with_the_column_date_text() {
+        let column_date = date_text(SEPTEMBER_21_UNIX_SECONDS);
+        let timestamp = date_time_text(SEPTEMBER_21_UNIX_SECONDS);
+        assert!(timestamp.starts_with(&column_date), "{timestamp}");
     }
 }
