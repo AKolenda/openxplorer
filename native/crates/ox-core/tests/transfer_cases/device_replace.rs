@@ -17,9 +17,9 @@ use crate::transfer_support::{
 
 /// A `photo` source with new content and an existing `photo` on the phone.
 fn replacement(fixture: &Fixture) -> PathBuf {
-    let source = fixture.src.join("photo");
+    let source = fixture.source_folder.join("photo");
     write(&source, "new");
-    write(&fixture.dst.join("photo"), "old");
+    write(&fixture.destination_folder.join("photo"), "old");
     source
 }
 
@@ -36,7 +36,7 @@ fn device_replace_uses_reversible_same_folder_renames() {
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Replace);
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(result.done, [uri(&source)]);
-    assert_eq!(read(&fixture.dst.join("photo")), "new");
+    assert_eq!(read(&fixture.destination_folder.join("photo")), "new");
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
     for (from, to) in phone.moves() {
         assert_eq!(from.parent(), to.parent(), "only renames in one folder");
@@ -85,7 +85,7 @@ fn a_failed_device_install_restores_the_original_and_removes_the_stage() {
         result.errors[0].contains("simulated device refusal"),
         "{result:?}"
     );
-    assert_eq!(read(&fixture.dst.join("photo")), "old");
+    assert_eq!(read(&fixture.destination_folder.join("photo")), "old");
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
 }
 
@@ -96,11 +96,11 @@ fn a_failed_device_install_restores_the_original_and_removes_the_stage() {
 #[test]
 fn device_replace_merges_folders_and_keeps_destination_only_items() {
     let fixture = Fixture::with_destination("phone");
-    let source = fixture.src.join("d");
+    let source = fixture.source_folder.join("d");
     fs::create_dir(&source).expect("create the source folder");
     write(&source.join("same"), "new");
     write(&source.join("added"), "added");
-    let existing = fixture.dst.join("d");
+    let existing = fixture.destination_folder.join("d");
     fs::create_dir(&existing).expect("create the existing folder");
     write(&existing.join("same"), "old");
     write(&existing.join("keep"), "keep");
@@ -112,7 +112,7 @@ fn device_replace_merges_folders_and_keeps_destination_only_items() {
     assert_eq!(read(&existing.join("added")), "added");
     assert_eq!(read(&existing.join("keep")), "keep");
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
-    phone.assert_only_same_folder_renames_across_names();
+    phone.assert_only_moves_a_device_can_do();
 }
 
 /// Records whether each move to a backup name could be cancelled.
@@ -156,7 +156,7 @@ fn the_device_move_aside_cannot_be_cancelled() {
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Replace);
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(*phone.cancellable_asides.lock().expect("aside log"), [false]);
-    assert_eq!(read(&fixture.dst.join("photo")), "new");
+    assert_eq!(read(&fixture.destination_folder.join("photo")), "new");
 }
 
 /// Finishes the first move to a backup name but reports an error, like a
@@ -202,7 +202,7 @@ fn a_move_aside_the_device_finished_after_an_error_is_restored() {
         ConflictPolicy::Replace,
     );
     assert_eq!(result.errors.len(), 1, "{result:?}");
-    assert_eq!(read(&fixture.dst.join("photo")), "old");
+    assert_eq!(read(&fixture.destination_folder.join("photo")), "old");
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
 }
 
@@ -237,7 +237,7 @@ impl Provider for RacingWriter {
 #[test]
 fn a_name_taken_during_an_upload_is_never_overwritten() {
     let fixture = Fixture::with_destination("phone");
-    let source = fixture.src.join("photo");
+    let source = fixture.source_folder.join("photo");
     write(&source, "new");
     let result = fixture.copy(
         Arc::new(RacingWriter::default()),
@@ -246,6 +246,6 @@ fn a_name_taken_during_an_upload_is_never_overwritten() {
     );
     assert!(result.done.is_empty());
     assert_eq!(result.errors.len(), 1, "{result:?}");
-    assert_eq!(read(&fixture.dst.join("photo")), "racing writer");
+    assert_eq!(read(&fixture.destination_folder.join("photo")), "racing writer");
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
 }

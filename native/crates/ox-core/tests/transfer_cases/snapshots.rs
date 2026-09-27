@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Previous-version (snapshot) folders stay read-only through every
-//! operation. Ports `ProtectedTransferTests` in
-//! `desktop/tests/test_operations.py` that are not in `operations.rs`.
+//! operation (XFER-020). Ports `ProtectedTransferTests` in
+//! `desktop/tests/test_operations.py`.
 
 use std::fs;
 use std::os::unix::fs::symlink;
@@ -18,8 +18,8 @@ use crate::transfer_support::{local, versions::PreviousVersions, *};
 #[test]
 fn replace_never_overwrites_a_nested_snapshot() {
     let fixture = Fixture::new();
-    let source = fixture.src.join("project");
-    let target = fixture.dst.join("project");
+    let source = fixture.source_folder.join("project");
+    let target = fixture.destination_folder.join("project");
     for (folder, content) in [(&source, "incoming"), (&target, "original")] {
         fs::create_dir_all(folder.join(".snapshot")).expect("create the snapshot folder");
         write(&folder.join("ordinary.txt"), content);
@@ -40,7 +40,7 @@ fn replace_never_overwrites_a_nested_snapshot() {
     assert!(result.errors[0].contains("read-only"), "{result:?}");
     assert_eq!(read(&target.join("ordinary.txt")), "original");
     assert_eq!(read(&target.join(".snapshot/version.txt")), "original");
-    fixture.no_stage();
+    fixture.assert_no_staging();
 }
 
 /// Port of `test_configured_backup_descendant_is_protected`: a configured
@@ -50,7 +50,7 @@ fn replace_never_overwrites_a_nested_snapshot() {
 #[test]
 fn a_configured_snapshot_folder_inside_a_deleted_folder_survives() {
     let fixture = Fixture::new();
-    let source = fixture.src.join("project");
+    let source = fixture.source_folder.join("project");
     let backup = source.join("history");
     fs::create_dir_all(&backup).expect("create the backup folder");
     write(&backup.join("version.txt"), "backup");
@@ -77,7 +77,7 @@ fn a_configured_snapshot_folder_inside_a_deleted_folder_survives() {
 #[test]
 fn a_snapshot_file_can_be_copied_to_another_folder() {
     let fixture = Fixture::new();
-    let snapshot = fixture.src.join(".snapshot");
+    let snapshot = fixture.source_folder.join(".snapshot");
     fs::create_dir(&snapshot).expect("create the snapshot folder");
     let saved = snapshot.join("document.txt");
     write(&saved, "saved");
@@ -93,7 +93,7 @@ fn a_snapshot_file_can_be_copied_to_another_folder() {
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
-    assert_eq!(read(&fixture.dst.join("document.txt")), "saved");
+    assert_eq!(read(&fixture.destination_folder.join("document.txt")), "saved");
 }
 
 /// Port of `test_symlink_to_snapshot_is_removed_without_traversal`: the
@@ -104,10 +104,10 @@ fn a_snapshot_file_can_be_copied_to_another_folder() {
 #[test]
 fn a_link_to_a_snapshot_is_deleted_without_entering_the_snapshot() {
     let fixture = Fixture::new();
-    let snapshot = fixture.src.join(".snapshot");
+    let snapshot = fixture.source_folder.join(".snapshot");
     fs::create_dir(&snapshot).expect("create the snapshot folder");
     write(&snapshot.join("version.txt"), "backup");
-    let link = fixture.src.join("shortcut");
+    let link = fixture.source_folder.join("shortcut");
     symlink(&snapshot, &link).expect("create the link");
     let versions = PreviousVersions::new();
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
@@ -123,4 +123,58 @@ fn a_link_to_a_snapshot_is_deleted_without_entering_the_snapshot() {
     assert!(result.errors.is_empty(), "{result:?}");
     assert!(!lexists(&link));
     assert_eq!(read(&snapshot.join("version.txt")), "backup");
+}
+
+/// Port of `test_removal_or_move_preserves_whole_tree_containing_snapshot`.
+///
+/// parity: XFER-020
+#[test]
+fn protected_descendants_stop_mutations_before_any_item_changes() {
+    for mode in [TransferMode::Move, TransferMode::Trash, TransferMode::Delete] {
+        let fixture = Fixture::new();
+        let folder = fixture.source_folder.join("tree");
+        fs::create_dir_all(folder.join(".snapshot")).unwrap();
+        write(&folder.join("a"), "live");
+        write(&folder.join(".snapshot/old"), "snapshot");
+        let versions = PreviousVersions::new();
+        let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
+        let result = fixture.run(&mut engine, &[&folder], mode, ConflictPolicy::Replace, None);
+        assert!(result.done.is_empty());
+        assert!(result.errors[0].contains("read-only"));
+        assert_eq!(read(&folder.join("a")), "live");
+        assert_eq!(read(&folder.join(".snapshot/old")), "snapshot");
+        assert!(list(&fixture.destination_folder).is_empty());
+    }
+}
+
+/// A configured snapshot folder is read-only as a destination, while a copy
+/// out of it is allowed.
+///
+/// parity: XFER-020
+#[test]
+fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed() {
+    let fixture = Fixture::new();
+    let source = fixture.source_folder.join("photo.jpg");
+    write(&source, "photo");
+    let versions = PreviousVersions::new();
+    versions.configure(&uri(&fixture.destination_folder), &uri(&fixture.source_folder));
+    let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
+    let result = fixture.run(
+        &mut engine,
+        &[&source],
+        TransferMode::Copy,
+        ConflictPolicy::Skip,
+        None,
+    );
+    assert_eq!(result.done, [uri(&source)]);
+    let reverse = fixture.run(
+        &mut engine,
+        &[&fixture.destination_folder.join("photo.jpg")],
+        TransferMode::Copy,
+        ConflictPolicy::Replace,
+        Some(&fixture.source_folder),
+    );
+    assert!(reverse.done.is_empty());
+    assert!(reverse.errors[0].contains("read-only"));
+    assert_eq!(read(&source), "photo");
 }

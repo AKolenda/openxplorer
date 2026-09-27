@@ -171,7 +171,7 @@ impl Provider for BrokenPhone {
 
 /// A `photo` source file with complete content.
 fn photo(fixture: &Fixture) -> std::path::PathBuf {
-    let source = fixture.src.join("photo");
+    let source = fixture.source_folder.join("photo");
     write(&source, "complete");
     source
 }
@@ -190,7 +190,7 @@ fn aborted_device_upload_cleanup_retries_transient_errors() {
     assert_eq!(phone.stage_deletions(), 3);
     assert_eq!(fixture.sleeps(), [0.5, 1.5]);
     assert_eq!(read(&source), "complete");
-    fixture.no_stage();
+    fixture.assert_no_staging();
 }
 
 /// Port of `test_persistent_cleanup_failure_reports_exact_location`: after
@@ -205,9 +205,9 @@ fn a_device_stage_that_cannot_be_deleted_is_reported_with_its_location() {
 
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 
-    let names = list(&fixture.dst);
+    let names = list(&fixture.destination_folder);
     assert_eq!(names.len(), 1, "{names:?}");
-    let stage = fixture.dst.join(&names[0]);
+    let stage = fixture.destination_folder.join(&names[0]);
     assert!(is_staging_path(&stage), "{}", stage.display());
     let report = format!("Incomplete staging item left at {}", uri(&stage));
     assert!(
@@ -236,8 +236,8 @@ fn a_discarded_device_upload_is_not_reported_as_a_leftover() {
     assert_eq!(result.errors.len(), 1, "{result:?}");
     assert!(fixture.sleeps().is_empty());
     assert_eq!(read(&source), "complete");
-    assert!(!fixture.dst.join("photo").exists());
-    fixture.no_stage();
+    assert!(!fixture.destination_folder.join("photo").exists());
+    fixture.assert_no_staging();
 }
 
 /// Port of `test_not_found_for_an_existing_stage_is_confirmed_by_listing`: a
@@ -259,7 +259,7 @@ fn a_false_not_found_for_a_device_stage_is_retried_until_it_is_removed() {
     assert_eq!(result.errors.len(), 1, "{result:?}");
     assert!(!result.errors[0].contains("Incomplete staging"), "{result:?}");
     assert_eq!(fixture.sleeps(), [0.5]);
-    assert!(list(&fixture.dst).is_empty());
+    assert!(list(&fixture.destination_folder).is_empty());
 }
 
 /// Ports `test_device_stage_query_error_is_retried_and_reported`: "not found"
@@ -277,9 +277,11 @@ fn device_not_found_requires_a_successful_parent_listing_without_the_stage() {
         let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 
         assert_eq!(read(&source), "complete");
-        assert!(!fixture.dst.join("photo").exists());
+        assert!(!fixture.destination_folder.join("photo").exists());
         assert_eq!(result.errors.len(), 2, "{fault:?}: {result:?}");
-        let stage = fixture.dst.join(&list(&fixture.dst)[0]);
+        let stage = fixture
+            .destination_folder
+            .join(&list(&fixture.destination_folder)[0]);
         assert_eq!(read(&stage), "partial upload");
         let report = format!("Incomplete staging item left at {}", uri(&stage));
         assert!(result.errors[1].contains(&report), "{result:?}");
@@ -303,7 +305,7 @@ fn a_devices_false_success_is_not_counted_as_a_published_copy() {
     assert!(result.done.is_empty());
     assert!(result.errors[0].contains("reported success"), "{result:?}");
     assert_eq!(read(&source), "complete");
-    assert!(list(&fixture.dst).is_empty());
+    assert!(list(&fixture.destination_folder).is_empty());
 }
 
 /// A staging name another program created first is never used or removed:
@@ -315,7 +317,7 @@ fn a_devices_false_success_is_not_counted_as_a_published_copy() {
 fn a_device_staging_name_created_by_someone_else_is_never_cleaned_up() {
     for kind in [NodeKind::File, NodeKind::Directory] {
         let fixture = Fixture::new();
-        let source = fixture.src.join("photo");
+        let source = fixture.source_folder.join("photo");
         if kind == NodeKind::Directory {
             fs::create_dir(&source).expect("create the source folder");
             write(&source.join("inner"), "complete");
@@ -326,9 +328,9 @@ fn a_device_staging_name_created_by_someone_else_is_never_cleaned_up() {
         let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
         assert_eq!(result.errors.len(), 1, "{result:?}");
         assert!(result.done.is_empty());
-        let names = list(&fixture.dst);
+        let names = list(&fixture.destination_folder);
         assert_eq!(names.len(), 1);
-        let foreign = fixture.dst.join(&names[0]);
+        let foreign = fixture.destination_folder.join(&names[0]);
         let foreign_file = if kind == NodeKind::Directory {
             foreign.join("foreign")
         } else {
@@ -351,7 +353,7 @@ fn an_unreachable_staged_name_is_not_mistaken_for_definite_absence() {
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
     assert!(result.done.is_empty());
     assert!(result.errors[0].contains("could not be verified"), "{result:?}");
-    assert_eq!(read(&fixture.dst.join("photo")), "complete");
+    assert_eq!(read(&fixture.destination_folder.join("photo")), "complete");
     assert_eq!(read(&source), "complete");
     assert_eq!(phone.stage_deletions(), 0);
 }

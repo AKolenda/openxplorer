@@ -8,22 +8,13 @@ use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
-use ox_core::gio_node::GioNode;
-use ox_core::transfer::{ConflictPolicy, Node, TransferEngine, TransferError, TransferMode};
+use ox_core::transfer::{ConflictPolicy, TransferEngine, TransferError, TransferMode};
 
 use crate::transfer_support::*;
 
 /// A Latin-1 file name, as old ZIP files, CD rips and NAS folders leave them.
 const LATIN1_NAME: &[u8] = b"caf\xe9.mp3";
-
-/// An engine resolving every URI with [`GioNode`], without a write guard.
-fn gio_engine() -> TransferEngine {
-    TransferEngine::new(Arc::new(|uri: &str| {
-        Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>)
-    }))
-}
 
 /// An engine with a write guard that allows everything, as production
 /// always passes one: the guard makes the engine list every tree first.
@@ -69,7 +60,7 @@ fn assert_latin1_album(album: &Path) {
 fn copy_keeps_names_that_are_not_utf8_byte_for_byte() {
     for mut engine in [gio_engine(), guarded_gio_engine()] {
         let fixture = Fixture::new();
-        let album = latin1_album(&fixture.src);
+        let album = latin1_album(&fixture.source_folder);
         let result = fixture.run(
             &mut engine,
             &[&album],
@@ -79,16 +70,16 @@ fn copy_keeps_names_that_are_not_utf8_byte_for_byte() {
         );
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(result.done, [uri(&album)]);
-        assert_latin1_album(&fixture.dst.join("album"));
+        assert_latin1_album(&fixture.destination_folder.join("album"));
         assert_latin1_album(&album);
-        fixture.no_stage();
+        fixture.assert_no_staging();
     }
 }
 
 #[test]
 fn move_keeps_names_that_are_not_utf8_byte_for_byte() {
     let fixture = Fixture::new();
-    let album = latin1_album(&fixture.src);
+    let album = latin1_album(&fixture.source_folder);
     let result = fixture.run(
         &mut guarded_gio_engine(),
         &[&album],
@@ -98,7 +89,7 @@ fn move_keeps_names_that_are_not_utf8_byte_for_byte() {
     );
     assert!(result.errors.is_empty(), "{result:?}");
     assert!(!album.exists());
-    assert_latin1_album(&fixture.dst.join("album"));
+    assert_latin1_album(&fixture.destination_folder.join("album"));
 }
 
 /// Trash lists the whole tree for the write guard first, so a name that is
@@ -115,7 +106,7 @@ fn trash_and_permanent_delete_remove_folders_with_names_that_are_not_utf8() {
     );
     for mode in [TransferMode::Delete, TransferMode::Trash] {
         let fixture = Fixture::new();
-        let album = latin1_album(&fixture.src);
+        let album = latin1_album(&fixture.source_folder);
         let result = fixture.run(
             &mut guarded_gio_engine(),
             &[&album],
@@ -135,8 +126,8 @@ fn trash_and_permanent_delete_remove_folders_with_names_that_are_not_utf8() {
 #[test]
 fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
     let fixture = Fixture::new();
-    let album = latin1_album(&fixture.src);
-    let existing = fixture.dst.join("album");
+    let album = latin1_album(&fixture.source_folder);
+    let existing = fixture.destination_folder.join("album");
     fs::create_dir(&existing).expect("create the existing album");
     fs::write(existing.join(OsStr::from_bytes(LATIN1_NAME)), b"old song").expect("write");
     write(&existing.join("keep.txt"), "keep");
@@ -153,15 +144,15 @@ fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
     assert_eq!(song, b"old song");
     assert_eq!(read(&existing.join("keep.txt")), "keep");
     assert_latin1_album(&album);
-    fixture.no_stage();
+    fixture.assert_no_staging();
 }
 
 /// parity: XFER-008
 #[test]
 fn keep_both_copies_folders_with_names_that_are_not_utf8() {
     let fixture = Fixture::new();
-    let album = latin1_album(&fixture.src);
-    fs::create_dir(fixture.dst.join("album")).expect("create the existing album");
+    let album = latin1_album(&fixture.source_folder);
+    fs::create_dir(fixture.destination_folder.join("album")).expect("create the existing album");
     let result = fixture.run(
         &mut guarded_gio_engine(),
         &[&album],
@@ -170,9 +161,9 @@ fn keep_both_copies_folders_with_names_that_are_not_utf8() {
         None,
     );
     assert!(result.errors.is_empty(), "{result:?}");
-    assert_latin1_album(&fixture.dst.join("album (copy 2)"));
-    assert!(list(&fixture.dst.join("album")).is_empty());
-    fixture.no_stage();
+    assert_latin1_album(&fixture.destination_folder.join("album (copy 2)"));
+    assert!(list(&fixture.destination_folder.join("album")).is_empty());
+    fixture.assert_no_staging();
 }
 
 /// A selected item whose own name is not UTF-8 is copied under exactly that
@@ -181,7 +172,7 @@ fn keep_both_copies_folders_with_names_that_are_not_utf8() {
 #[test]
 fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
     let fixture = Fixture::new();
-    let song = fixture.src.join(OsStr::from_bytes(LATIN1_NAME));
+    let song = fixture.source_folder.join(OsStr::from_bytes(LATIN1_NAME));
     fs::write(&song, b"song").expect("write the song");
     let mut engine = guarded_gio_engine();
     let copied = fixture.run(
@@ -192,7 +183,10 @@ fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
         None,
     );
     assert!(copied.errors.is_empty(), "{copied:?}");
-    assert_eq!(raw_names(&fixture.dst), [OsStr::from_bytes(LATIN1_NAME)]);
+    assert_eq!(
+        raw_names(&fixture.destination_folder),
+        [OsStr::from_bytes(LATIN1_NAME)]
+    );
     let kept = fixture.run(
         &mut engine,
         &[&song],
@@ -202,6 +196,9 @@ fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
     );
     assert!(kept.done.is_empty());
     assert!(kept.errors[0].contains("not valid UTF-8"), "{kept:?}");
-    assert_eq!(raw_names(&fixture.dst), [OsStr::from_bytes(LATIN1_NAME)]);
-    fixture.no_stage();
+    assert_eq!(
+        raw_names(&fixture.destination_folder),
+        [OsStr::from_bytes(LATIN1_NAME)]
+    );
+    fixture.assert_no_staging();
 }

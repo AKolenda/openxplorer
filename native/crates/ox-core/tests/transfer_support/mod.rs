@@ -1,18 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Shared test doubles and fixtures for the `transfer_*` integration tests.
+//!
+//! | Module | Test double |
+//! |---|---|
+//! | `local` | Local files behind the [`Node`] contract, with overridable behaviour |
+//! | `device` | A `GVfs` MTP destination built on `local` |
+//! | `faults` | Local files that fail at a chosen step of a copy or replacement |
+//! | `mtp_device` | A simulated phone behind real `mtp://` URIs for the production adapter |
+//! | `versions` | The previous-version write guard |
 
 pub mod device;
+pub mod faults;
 pub mod local;
 pub mod mtp_device;
 pub mod versions;
 
 use std::ffi::OsStr;
 use std::fs;
+use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use ox_core::gio_node::GioNode;
 use ox_core::transfer::{
     is_own_staging_name, Cancellation, ConflictPolicy, Node, TransferEngine, TransferError, TransferMode,
     TransferResult,
@@ -20,17 +31,17 @@ use ox_core::transfer::{
 
 use local::{file_uri, LocalNode, Provider};
 
-/// A temporary `source` folder and destination folder, like `setUp` in the
-/// Python transfer tests.
+/// A temporary source folder and destination folder, like `setUp` in the
+/// Python transfer tests (`self.src` and `self.dst` there).
 pub struct Fixture {
     /// Removes the temporary folder when the fixture is dropped.
     _temp: tempfile::TempDir,
     /// The temporary folder holding both of the others.
     pub root: PathBuf,
-    /// The folder the test's sources are created in.
-    pub src: PathBuf,
+    /// The folder the test's sources are created in, called `source`.
+    pub source_folder: PathBuf,
     /// The destination folder of copies and moves.
-    pub dst: PathBuf,
+    pub destination_folder: PathBuf,
     /// The cancellation every run of this fixture uses.
     pub cancel: Cancellation,
     /// The cleanup delays the engine asked for, recorded instead of slept.
@@ -47,15 +58,15 @@ impl Fixture {
     pub fn with_destination(name: &str) -> Self {
         let temp = tempfile::tempdir().expect("create a temporary folder");
         let root = temp.path().to_path_buf();
-        let src = root.join("source");
-        let dst = root.join(name);
-        fs::create_dir(&src).expect("create source");
-        fs::create_dir(&dst).expect("create destination");
+        let source_folder = root.join("source");
+        let destination_folder = root.join(name);
+        fs::create_dir(&source_folder).expect("create source");
+        fs::create_dir(&destination_folder).expect("create destination");
         Self {
             _temp: temp,
             root,
-            src,
-            dst,
+            source_folder,
+            destination_folder,
             cancel: Cancellation::new(),
             sleeps: Arc::default(),
         }
@@ -75,7 +86,7 @@ impl Fixture {
         sleeps.iter().map(Duration::as_secs_f64).collect()
     }
 
-    /// Runs an operation into `target` (the destination by default).
+    /// Runs an operation into `target` (the destination folder by default).
     pub fn try_run(
         &self,
         engine: &mut TransferEngine,
@@ -85,11 +96,11 @@ impl Fixture {
         target: Option<&Path>,
     ) -> Result<TransferResult, TransferError> {
         let uris: Vec<String> = paths.iter().map(|path| file_uri(path)).collect();
-        let target_uri = file_uri(target.unwrap_or(&self.dst));
+        let target_uri = file_uri(target.unwrap_or(&self.destination_folder));
         engine.run(mode, &uris, Some(&target_uri), policy, &self.cancel)
     }
 
-    /// Copies `paths` into the destination with a new engine over
+    /// Copies `paths` into the destination folder with a new engine over
     /// `provider`.
     pub fn copy(
         &self,
@@ -114,9 +125,10 @@ impl Fixture {
             .expect("the run is accepted")
     }
 
-    /// Asserts no `.winspace-transfer-*` staging is left in the destination.
-    pub fn no_stage(&self) {
-        let names = list(&self.dst);
+    /// Asserts no `.winspace-transfer-*` staging is left in the destination
+    /// folder (`no_stage` in the Python tests).
+    pub fn assert_no_staging(&self) {
+        let names = list(&self.destination_folder);
         let staged: Vec<&String> = names
             .iter()
             .filter(|name| name.starts_with(".winspace-transfer-"))
@@ -124,15 +136,18 @@ impl Fixture {
         assert!(staged.is_empty(), "staging left behind: {staged:?}");
     }
 
-    /// Engine-made names anywhere below the destination, relative to it.
+    /// Engine-made names anywhere below the destination folder, relative to
+    /// it: staging, backups and payloads.
     pub fn leftovers(&self) -> Vec<String> {
         let mut found = Vec::new();
-        collect_leftovers(&self.dst, &self.dst, &mut found);
+        collect_leftovers(&self.destination_folder, &self.destination_folder, &mut found);
         found.sort();
         found
     }
 }
 
+/// Adds the engine-made names in `folder` and below it to `found`, relative
+/// to `root`.
 fn collect_leftovers(root: &Path, folder: &Path, found: &mut Vec<String>) {
     for entry in fs::read_dir(folder).expect("list a folder") {
         let path = entry.expect("read an entry").path();
@@ -145,6 +160,48 @@ fn collect_leftovers(root: &Path, folder: &Path, found: &mut Vec<String>) {
         if metadata.is_dir() {
             collect_leftovers(root, &path, found);
         }
+    }
+}
+
+/// An engine resolving every URI with the production [`GioNode`], without
+/// a write guard.
+pub fn gio_engine() -> TransferEngine {
+    TransferEngine::new(Arc::new(|uri: &str| {
+        Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>)
+    }))
+}
+
+/// Gives a folder and every folder below it owner access again when
+/// dropped, so the temporary folder can be removed even after a test that
+/// made folders read-only failed midway.
+pub struct RestoreOwnerAccess(PathBuf);
+
+impl RestoreOwnerAccess {
+    /// Restores owner access to `folder` and below when dropped.
+    pub fn new(folder: &Path) -> Self {
+        Self(folder.to_path_buf())
+    }
+}
+
+impl Drop for RestoreOwnerAccess {
+    fn drop(&mut self) {
+        restore_owner_access(&self.0);
+    }
+}
+
+/// Makes `folder`, if it is a folder, and every folder below it owner-only
+/// and writable.
+fn restore_owner_access(folder: &Path) {
+    let is_folder = fs::symlink_metadata(folder).is_ok_and(|metadata| metadata.is_dir());
+    if !is_folder {
+        return;
+    }
+    set_mode(folder, 0o700);
+    let Ok(entries) = fs::read_dir(folder) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        restore_owner_access(&entry.path());
     }
 }
 
@@ -168,7 +225,7 @@ pub fn is_backup(node: &dyn Node) -> bool {
     node.display_name().starts_with(".winspace-replaced-")
 }
 
-/// The URI of `path`.
+/// The `file://` URI of `path`.
 pub fn uri(path: &Path) -> String {
     file_uri(path)
 }
@@ -214,10 +271,9 @@ pub fn set_mode(path: &Path, mode: u32) {
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).expect("chmod");
 }
 
-/// `n` random bytes from the kernel.
-pub fn random_bytes(n: usize) -> Vec<u8> {
-    use std::io::Read;
-    let mut bytes = vec![0u8; n];
+/// `count` random bytes from the kernel, so a copy cannot pass by accident.
+pub fn random_bytes(count: usize) -> Vec<u8> {
+    let mut bytes = vec![0u8; count];
     fs::File::open("/dev/urandom")
         .and_then(|mut source| source.read_exact(&mut bytes))
         .expect("read /dev/urandom");

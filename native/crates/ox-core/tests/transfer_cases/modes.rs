@@ -76,7 +76,7 @@ impl Provider for FuseMountedDevice {
 fn device_copies_with_a_fuse_path_never_change_unix_modes() {
     for kind in [NodeKind::File, NodeKind::Directory] {
         let fixture = Fixture::new();
-        let source = fixture.src.join("private");
+        let source = fixture.source_folder.join("private");
         if kind == NodeKind::Directory {
             fs::create_dir(&source).expect("create the source folder");
             set_mode(&source, 0o700);
@@ -95,11 +95,17 @@ fn device_copies_with_a_fuse_path_never_change_unix_modes() {
             "{staged_modes:?}"
         );
         if kind == NodeKind::Directory {
-            assert_eq!(mode_of(&fixture.dst.join("private")), DEVICE_FOLDER_MODE);
-            assert_eq!(read(&fixture.dst.join("private/data")), "data");
+            assert_eq!(
+                mode_of(&fixture.destination_folder.join("private")),
+                DEVICE_FOLDER_MODE
+            );
+            assert_eq!(read(&fixture.destination_folder.join("private/data")), "data");
         } else {
-            assert_eq!(read(&fixture.dst.join("private")), "android package fixture");
+            assert_eq!(
+                read(&fixture.destination_folder.join("private")),
+                "android package fixture"
+            );
         }
-        fixture.no_stage();
+        fixture.assert_no_staging();
     }
 }

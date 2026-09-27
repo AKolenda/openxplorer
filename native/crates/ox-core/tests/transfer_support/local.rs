@@ -6,9 +6,12 @@
 //! cannot validate the production GIO/GVfs adapter or SMB behaviour.
 //!
 //! The Python tests change behaviour by subclassing `LocalNode`. Here a
-//! [`Provider`] plays that role: it overrides only the methods a test needs,
-//! and every other method defers to [`Provider::base`] (the "superclass")
-//! and finally to the plain local behaviour on [`LocalNode`].
+//! [`Provider`] (in `local/provider.rs`) plays that role: it overrides only
+//! the methods a test needs, and every other method defers to
+//! [`Provider::base`] (the "superclass") and finally to the plain local
+//! behaviour on [`LocalNode`].
+
+mod provider;
 
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -20,6 +23,8 @@ use std::sync::Arc;
 use gio::prelude::*;
 use ox_core::transfer::{Cancellation, Node, NodeFactory, NodeInfo, NodeKind, TransferError, WriteGuard};
 use rustix::fs::{renameat_with, RenameFlags, CWD};
+
+pub use provider::{local, Provider};
 
 /// The `file://` URI of `path`.
 pub fn file_uri(path: &Path) -> String {
@@ -42,124 +47,26 @@ pub fn local_path_of(node: &dyn Node) -> PathBuf {
     node.path().unwrap_or_else(|| path_from_uri(&node.uri()))
 }
 
-fn check(cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+/// Stops before the next step when the user cancelled; without a
+/// cancellation there is nothing to check.
+fn check_cancelled(cancel: Option<&Cancellation>) -> Result<(), TransferError> {
     match cancel {
         Some(cancel) => cancel.check(),
         None => Ok(()),
     }
 }
 
-/// Overridable behaviour of [`LocalNode`], like a Python subclass.
-pub trait Provider: Send + Sync + 'static {
-    /// The provider this one extends; `None` means plain `LocalNode`.
-    fn base(&self) -> Option<&dyn Provider> {
-        None
+/// What `file_type` is, as the engine distinguishes items.
+fn node_kind(file_type: fs::FileType) -> NodeKind {
+    if file_type.is_dir() {
+        NodeKind::Directory
+    } else if file_type.is_symlink() {
+        NodeKind::Symlink
+    } else if file_type.is_file() {
+        NodeKind::File
+    } else {
+        NodeKind::Special
     }
-
-    fn uri(&self, node: &LocalNode) -> String {
-        match self.base() {
-            Some(base) => base.uri(node),
-            None => file_uri(node.local_path()),
-        }
-    }
-
-    fn path(&self, node: &LocalNode) -> Option<PathBuf> {
-        match self.base() {
-            Some(base) => base.path(node),
-            None => Some(node.local_path().to_path_buf()),
-        }
-    }
-
-    fn stage_as_sibling(&self) -> bool {
-        self.base().is_some_and(Provider::stage_as_sibling)
-    }
-
-    fn native_copy_keeps_name(&self, node: &LocalNode, target_dir: &dyn Node) -> bool {
-        self.base()
-            .is_some_and(|base| base.native_copy_keeps_name(node, target_dir))
-    }
-
-    fn refresh_listing(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-        match self.base() {
-            Some(base) => base.refresh_listing(node, cancel),
-            None => Ok(()),
-        }
-    }
-
-    fn exists(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> bool {
-        match self.base() {
-            Some(base) => base.exists(node, cancel),
-            None => node.local_exists(),
-        }
-    }
-
-    fn info(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
-        match self.base() {
-            Some(base) => base.info(node, cancel),
-            None => node.local_info(cancel),
-        }
-    }
-
-    fn mkdir(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-        match self.base() {
-            Some(base) => base.mkdir(node, cancel),
-            None => node.local_mkdir(cancel),
-        }
-    }
-
-    fn copy_file(
-        &self,
-        node: &LocalNode,
-        target: &dyn Node,
-        cancel: &Cancellation,
-        progress: &mut dyn FnMut(u64, u64),
-    ) -> Result<(), TransferError> {
-        match self.base() {
-            Some(base) => base.copy_file(node, target, cancel, progress),
-            None => node.local_copy_file(target, cancel, progress),
-        }
-    }
-
-    fn move_native(
-        &self,
-        node: &LocalNode,
-        target: &dyn Node,
-        cancel: Option<&Cancellation>,
-    ) -> Result<(), TransferError> {
-        match self.base() {
-            Some(base) => base.move_native(node, target, cancel),
-            None => node.local_move_native(target, cancel),
-        }
-    }
-
-    fn replace_native(
-        &self,
-        node: &LocalNode,
-        target: &dyn Node,
-        cancel: Option<&Cancellation>,
-    ) -> Result<(), TransferError> {
-        match self.base() {
-            Some(base) => base.replace_native(node, target, cancel),
-            None => node.local_replace_native(target, cancel),
-        }
-    }
-
-    fn delete(&self, node: &LocalNode) -> Result<(), TransferError> {
-        match self.base() {
-            Some(base) => base.delete(node),
-            None => node.local_delete(),
-        }
-    }
-}
-
-/// Plain `LocalNode` behaviour with no overrides.
-pub struct Local;
-
-impl Provider for Local {}
-
-/// A shared plain local provider.
-pub fn local() -> Arc<dyn Provider> {
-    Arc::new(Local)
 }
 
 /// One local file or folder, with behaviour from its [`Provider`].
@@ -206,20 +113,10 @@ impl LocalNode {
 
     /// `lstat`: the kind, size and permission bits without following links.
     pub fn local_info(&self, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
         let metadata = fs::symlink_metadata(&self.path)?;
-        let file_type = metadata.file_type();
-        let kind = if file_type.is_dir() {
-            NodeKind::Directory
-        } else if file_type.is_symlink() {
-            NodeKind::Symlink
-        } else if file_type.is_file() {
-            NodeKind::File
-        } else {
-            NodeKind::Special
-        };
         Ok(NodeInfo {
-            kind,
+            kind: node_kind(metadata.file_type()),
             size: metadata.len(),
             mode: Some(metadata.permissions().mode() & 0o7777),
         })
@@ -227,7 +124,7 @@ impl LocalNode {
 
     /// Exclusive `mkdir`.
     pub fn local_mkdir(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
         fs::create_dir(&self.path)?;
         Ok(())
     }
@@ -247,12 +144,22 @@ impl LocalNode {
             std::os::unix::fs::symlink(link, &target_path)?;
             return Ok(());
         }
+        self.copy_contents(&target_path, cancel, progress)
+    }
+
+    /// Copies this file's bytes into the new file `target_path`.
+    fn copy_contents(
+        &self,
+        target_path: &Path,
+        cancel: &Cancellation,
+        progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<(), TransferError> {
         let total = fs::metadata(&self.path)?.len();
         let mut input = fs::File::open(&self.path)?;
         let mut output = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
-            .open(&target_path)?;
+            .open(target_path)?;
         let mut buffer = [0u8; 8192];
         let mut current = 0u64;
         loop {
@@ -276,7 +183,7 @@ impl LocalNode {
         target: &dyn Node,
         cancel: Option<&Cancellation>,
     ) -> Result<(), TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
         let target_path = local_path_of(target);
         renameat_with(CWD, &self.path, CWD, &target_path, RenameFlags::NOREPLACE)?;
         Ok(())
@@ -288,7 +195,7 @@ impl LocalNode {
         target: &dyn Node,
         cancel: Option<&Cancellation>,
     ) -> Result<(), TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
         fs::rename(&self.path, local_path_of(target))?;
         Ok(())
     }
@@ -336,14 +243,14 @@ impl Node for LocalNode {
     }
 
     fn is_directory(&self, cancel: Option<&Cancellation>) -> Result<bool, TransferError> {
-        check(cancel)?;
+        check_cancelled(cancel)?;
         Ok(self.path.is_dir())
     }
 
     fn children(&self, cancel: Option<&Cancellation>) -> Result<Vec<Box<dyn Node>>, TransferError> {
         let mut children: Vec<Box<dyn Node>> = Vec::new();
         for entry in fs::read_dir(&self.path)? {
-            check(cancel)?;
+            check_cancelled(cancel)?;
             children.push(Box::new(self.at(entry?.path())));
         }
         Ok(children)
@@ -407,8 +314,8 @@ impl Node for LocalNode {
         self.provider.stage_as_sibling()
     }
 
-    fn native_copy_keeps_name(&self, target_dir: &dyn Node) -> bool {
-        self.provider.native_copy_keeps_name(self, target_dir)
+    fn native_copy_keeps_name(&self, target_folder: &dyn Node) -> bool {
+        self.provider.native_copy_keeps_name(self, target_folder)
     }
 
     fn refresh_listing(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
