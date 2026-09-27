@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Tests for the check driver's session isolation and process cleanup.
+"""Tests for the check driver's session isolation, process cleanup and options.
 
 The driver must stop every process a test run starts, including Xvfb and the
 D-Bus daemon, before that run's temporary HOME is deleted. These tests start
@@ -9,9 +9,11 @@ descendant inherits.
 """
 from __future__ import annotations
 
+import argparse
 import contextlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -32,6 +34,8 @@ ISOLATION_TOOLS = ('xvfb-run', 'Xvfb', 'xauth', 'dbus-run-session')
 def load_check_driver() -> types.ModuleType:
     """Import check.py by path, because native/parity has a check.py as well."""
     spec = importlib.util.spec_from_file_location('native_check_driver', CHECK_PATH)
+    if spec is None or spec.loader is None:
+        raise ImportError(f'cannot load the check driver from {CHECK_PATH}')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -96,22 +100,26 @@ class ProcessCleanupTests(MarkedProcessTestCase):
                                      grace_seconds=0.5)
 
     def test_a_timeout_stops_the_command_and_its_background_children(self) -> None:
-        with self.assertRaises(check.CheckTimeout):
+        """A timeout stops the grandchildren too, not only the direct child."""
+        with self.assertRaises(check.CheckTimeoutError):
             self.run_shell('sleep 300 & touch "$HOME/started"; wait', timeout=1)
         self.assertTrue((self.root / 'home/started').exists(), 'the script never started')
         self.assert_nothing_left_running()
 
     def test_processes_that_ignore_sigterm_are_killed(self) -> None:
-        with self.assertRaises(check.CheckTimeout):
+        """SIGKILL follows when a process survives SIGTERM for the grace period."""
+        with self.assertRaises(check.CheckTimeoutError):
             self.run_shell("trap '' TERM; sleep 300 & touch \"$HOME/started\"; wait", timeout=1)
         self.assertTrue((self.root / 'home/started').exists(), 'the script never started')
         self.assert_nothing_left_running()
 
     def test_background_children_are_stopped_after_a_successful_exit(self) -> None:
+        """A command that exits cleanly cannot leave a daemon running on a deleted HOME."""
         self.run_shell('sleep 300 &')
         self.assert_nothing_left_running()
 
     def test_a_failing_command_reports_its_exit_status(self) -> None:
+        """The failure carries the command's own exit status."""
         with self.assertRaises(subprocess.CalledProcessError) as raised:
             self.run_shell('exit 3')
         self.assertEqual(raised.exception.returncode, 3)
@@ -136,6 +144,7 @@ class IsolatedRunTests(MarkedProcessTestCase):
             check.run_in_own_session(command, self.environment, timeout)
 
     def test_the_command_gets_a_private_display_bus_and_authority_file(self) -> None:
+        """The command sees a new display and bus, never the ones of the live session."""
         self.run_isolated_shell(
             'printf "%s\\n" "$DISPLAY" "$DBUS_SESSION_BUS_ADDRESS" "$XAUTHORITY"'
             ' > "$HOME/session"', timeout=60)
@@ -148,7 +157,8 @@ class IsolatedRunTests(MarkedProcessTestCase):
         self.assert_nothing_left_running()
 
     def test_a_hung_test_leaves_no_display_bus_or_temporary_files(self) -> None:
-        with self.assertRaises(check.CheckTimeout):
+        """A timed-out run stops Xvfb and the bus and leaves nothing in TMPDIR."""
+        with self.assertRaises(check.CheckTimeoutError):
             self.run_isolated_shell('touch "$HOME/started"; exec sleep 300', timeout=5)
         self.assertTrue((self.root / 'home/started').exists(), 'the command never started')
         self.assert_nothing_left_running()
@@ -159,6 +169,7 @@ class EnvironmentTests(unittest.TestCase):
     """isolated_environment() hides the live session and redirects user data."""
 
     def test_the_live_session_is_removed_and_user_directories_are_private(self) -> None:
+        """No live-session variable survives, and every user directory is a new one in root."""
         live_session = {'DISPLAY': ':0', 'WAYLAND_DISPLAY': 'wayland-0',
                         'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1000/bus'}
         with tempfile.TemporaryDirectory(prefix='openxplorer-check-test-') as temporary:
@@ -173,6 +184,47 @@ class EnvironmentTests(unittest.TestCase):
                     self.assertTrue(Path(environment[name]).is_relative_to(root))
                     self.assertTrue(Path(environment[name]).is_dir())
             self.assertEqual(environment['GSETTINGS_BACKEND'], 'memory')
+
+
+class TestExecutableTests(unittest.TestCase):
+    """executables_in() picks the test executables out of Cargo's JSON messages."""
+
+    def test_only_executables_built_for_tests_are_returned(self) -> None:
+        """Libraries, non-test builds and diagnostics are not test executables."""
+        messages = [
+            {'reason': 'compiler-artifact', 'profile': {'test': True},
+             'executable': '/target/debug/deps/browsing-1'},
+            {'reason': 'compiler-artifact', 'profile': {'test': False},
+             'executable': '/target/debug/openxplorer-native'},
+            {'reason': 'compiler-artifact', 'profile': {'test': True}, 'executable': None},
+            {'reason': 'compiler-message', 'message': {'message': 'unused variable'}},
+            {'reason': 'build-finished', 'success': True},
+        ]
+        output = '\n'.join(json.dumps(message) for message in messages)
+        self.assertEqual(check.executables_in(output), {Path('/target/debug/deps/browsing-1')})
+
+
+class OptionTests(unittest.TestCase):
+    """The command-line options and the start-up check for required tools."""
+
+    def test_the_test_timeout_must_be_a_positive_number(self) -> None:
+        """Zero, negative, NaN and non-numeric timeouts are refused; others are parsed."""
+        self.assertEqual(check.positive_seconds('2.5'), 2.5)
+        refused = {'zero': '0', 'negative': '-1', 'not a number': 'nan', 'a word': 'soon'}
+        for case, text in refused.items():
+            with self.subTest(case=case), self.assertRaises(argparse.ArgumentTypeError):
+                check.positive_seconds(text)
+
+    def test_missing_tools_stop_the_driver_before_any_check(self) -> None:
+        """Without its tools the driver runs nothing and exits with status 2."""
+        stderr = io.StringIO()
+        with (patch.object(check.shutil, 'which', return_value=None),
+              patch.object(check, 'run_all_checks') as run_all_checks,
+              contextlib.redirect_stderr(stderr)):
+            status = check.main([])
+        self.assertEqual(status, 2)
+        run_all_checks.assert_not_called()
+        self.assertIn('Required native check tools are missing: cargo, python3', stderr.getvalue())
 
 
 if __name__ == '__main__':
