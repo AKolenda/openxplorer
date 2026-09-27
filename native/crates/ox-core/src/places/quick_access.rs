@@ -20,10 +20,26 @@ pub struct Place {
     pub uri: String,
     /// Known-folder glyph; `None` uses the ordinary folder artwork.
     pub glyph: Option<FolderGlyph>,
-    /// Whether the row can be unpinned, including built-in folders.
-    pub is_pinned: bool,
+    /// Whether the row is a standard folder or a user pin. Every row can be
+    /// unpinned either way.
+    pub origin: PlaceOrigin,
     /// Whether this location is on an SMB share or a local network mount.
     pub is_shared: bool,
+}
+
+/// Where a Quick access row comes from.
+///
+/// Python marks the row of a standard folder with its `folderKey`
+/// (`environment` in `desktop/winspace.py`), which Properties uses to find
+/// the folder's XDG entry (`findKnownFolder` in `desktop/ui/app.js`); a
+/// pin's row has none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaceOrigin {
+    /// A standard folder from [`known_folders`], shown unless the user hid
+    /// it. A pin of the same folder keeps this row.
+    KnownFolder,
+    /// A folder the user pinned.
+    Pin,
 }
 
 /// The coloured glyph a standard folder shows instead of the folder
@@ -43,7 +59,7 @@ impl Place {
             label: pin.label.clone(),
             uri: pin.uri.clone(),
             glyph: None,
-            is_pinned: true,
+            origin: PlaceOrigin::Pin,
             is_shared: false,
         }
     }
@@ -126,7 +142,7 @@ impl KnownFolder {
             label: self.label.to_owned(),
             uri: file_uri(&self.path()),
             glyph: Some(self.glyph),
-            is_pinned: true,
+            origin: PlaceOrigin::KnownFolder,
             is_shared: false,
         }
     }

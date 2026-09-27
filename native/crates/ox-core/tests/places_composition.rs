@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use ox_core::places::{
     compose_quick_access, known_folders, merge_network_locations, network_key, FolderGlyph, NetworkKind,
-    NetworkMount, Place, SavedShare, StableMount,
+    NetworkMount, Place, PlaceOrigin, SavedShare, StableMount,
 };
 use ox_core::settings::{Bookmark, SettingsData};
 
@@ -21,7 +21,7 @@ fn bookmark(uri: &str, label: &str) -> Bookmark {
 fn saved_share(uri: &str, label: &str) -> SavedShare {
     SavedShare {
         bookmark: bookmark(uri, label),
-        connected: false,
+        is_connected: false,
     }
 }
 
@@ -29,7 +29,7 @@ fn active_mount(uri: &str, label: &str) -> NetworkMount {
     NetworkMount {
         uri: uri.into(),
         label: label.into(),
-        mounted: true,
+        is_mounted: true,
     }
 }
 
@@ -39,13 +39,15 @@ const DOCUMENTS_GLYPH: FolderGlyph = FolderGlyph {
     color: "#4a94d1",
 };
 
-/// A known-folder row as [`known_folders`] makes it, at `uri`.
-fn place(uri: &str, label: &str) -> Place {
+/// A built-in Quick access row at `uri`. Every fixture row carries the
+/// Documents glyph, whatever its label, so a built-in row that survives
+/// composition is told apart from a pin, whose glyph is `None`.
+fn built_in_place(uri: &str, label: &str) -> Place {
     Place {
         uri: uri.into(),
         label: label.into(),
         glyph: Some(DOCUMENTS_GLYPH),
-        is_pinned: true,
+        origin: PlaceOrigin::KnownFolder,
         is_shared: false,
     }
 }
@@ -54,8 +56,8 @@ fn place(uri: &str, label: &str) -> Place {
 #[test]
 fn quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order() {
     let known = [
-        place("file:///home/demo/Desktop", "Desktop"),
-        place("file:///home/demo/Documents", "Documents"),
+        built_in_place("file:///home/demo/Desktop", "Desktop"),
+        built_in_place("file:///home/demo/Documents", "Documents"),
     ];
     let settings = SettingsData {
         hidden_quick: vec![known[0].uri.clone()],
@@ -73,7 +75,9 @@ fn quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order() {
         ["Work", "Documents", "Other"]
     );
     assert!(rows[0].is_shared);
+    assert_eq!(rows[0].origin, PlaceOrigin::Pin);
     assert_eq!(rows[1].glyph, Some(DOCUMENTS_GLYPH));
+    assert_eq!(rows[1].origin, PlaceOrigin::KnownFolder);
 }
 
 /// A standard folder and the glyph the Python app draws for it.
@@ -133,7 +137,7 @@ fn known_folders_use_the_standard_glyphs_and_colours() {
     for (folder, case) in folders.iter().zip(KNOWN_FOLDER_CASES) {
         assert_eq!(folder.label, case.label);
         assert_eq!(folder.glyph, Some(case.glyph), "{}", case.label);
-        assert!(folder.is_pinned, "{}", case.label);
+        assert_eq!(folder.origin, PlaceOrigin::KnownFolder, "{}", case.label);
         assert!(folder.uri.starts_with("file:///"), "{}", folder.uri);
     }
 }
@@ -142,8 +146,8 @@ fn known_folders_use_the_standard_glyphs_and_colours() {
 #[test]
 fn mount_badges_respect_path_boundaries_and_escaping() {
     let known = [
-        place("file:///mnt/Team%20%281%29/Docs", "Shared"),
-        place("file:///mnt/Team%20%281%29-other", "Local"),
+        built_in_place("file:///mnt/Team%20%281%29/Docs", "Shared"),
+        built_in_place("file:///mnt/Team%20%281%29-other", "Local"),
     ];
     let rows = compose_quick_access(
         &SettingsData::default(),
@@ -187,8 +191,8 @@ fn saved_labels_win_and_connected_state_merges() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].uri, "smb://nas/Work");
     assert_eq!(rows[0].label, "My Work");
-    assert!(rows[0].saved);
-    assert!(rows[0].connected);
+    assert!(rows[0].is_saved);
+    assert!(rows[0].is_connected);
 }
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_connected_unsaved_share`
@@ -200,8 +204,8 @@ fn a_mounted_share_is_listed_connected_but_not_saved() {
     let rows = merge_network_locations(&[], &mounts, &[], &[]);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].kind, NetworkKind::Share);
-    assert!(rows[0].connected);
-    assert!(!rows[0].saved);
+    assert!(rows[0].is_connected);
+    assert!(!rows[0].is_saved);
 }
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_uri_not_label_is_unique_key`
@@ -233,13 +237,13 @@ fn visited_servers_and_stable_mounts_need_no_saved_bookmark() {
         (rows[0].uri.as_str(), rows[0].label.as_str(), rows[0].kind),
         ("file:///mnt/Work", "Work", NetworkKind::Mount)
     );
-    assert!(rows[0].connected);
+    assert!(rows[0].is_connected);
     assert_eq!(
         (rows[1].label.as_str(), rows[1].kind),
         ("nas", NetworkKind::Server)
     );
-    assert!(!rows[1].connected);
-    assert!(rows.iter().all(|row| !row.saved));
+    assert!(!rows[1].is_connected);
+    assert!(rows.iter().all(|row| !row.is_saved));
 }
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_ignore_local_and_unmounted`
@@ -251,7 +255,7 @@ fn malformed_and_non_network_contributors_are_ignored() {
     let saved = [
         saved_share("https://example.invalid", "Bad"),
         SavedShare {
-            connected: true,
+            is_connected: true,
             ..saved_share("smb://user:secret@nas/share", "Bad")
         },
     ];
@@ -259,7 +263,7 @@ fn malformed_and_non_network_contributors_are_ignored() {
         NetworkMount {
             uri: "smb://nas/work".into(),
             label: String::new(),
-            mounted: false,
+            is_mounted: false,
         },
         active_mount("file:///mnt/disk", ""),
     ];

@@ -25,7 +25,7 @@ pub struct SavedShare {
     /// The share as saved in settings.
     pub bookmark: Bookmark,
     /// Whether a current mount serves the share.
-    pub connected: bool,
+    pub is_connected: bool,
 }
 
 /// An SMB mount reported by GIO. Disconnected and non-SMB mounts are ignored.
@@ -36,7 +36,7 @@ pub struct NetworkMount {
     /// Display name reported by the volume monitor.
     pub label: String,
     /// Whether the mount is active.
-    pub mounted: bool,
+    pub is_mounted: bool,
 }
 
 /// A stable mount: a share the kernel mounted at a fixed local path, as
@@ -72,9 +72,9 @@ pub struct NetworkLocation {
     /// Visible label; a saved bookmark takes precedence over a mount label.
     pub label: String,
     /// Whether a saved network bookmark contributes to this row.
-    pub saved: bool,
+    pub is_saved: bool,
     /// Whether a currently active mount contributes to this row.
-    pub connected: bool,
+    pub is_connected: bool,
     /// Server, share or local mount, determined by its first contributor.
     pub kind: NetworkKind,
 }
@@ -150,7 +150,7 @@ pub fn merge_network_locations(
 impl NetworkMount {
     /// Only active SMB mounts contribute a Network row.
     fn is_active_smb_mount(&self) -> bool {
-        self.mounted && self.uri.starts_with("smb:")
+        self.is_mounted && self.uri.starts_with("smb:")
     }
 }
 
@@ -178,9 +178,9 @@ struct Contribution<'a> {
     /// Empty to name the row after its location.
     label: Cow<'a, str>,
     /// A saved bookmark, whose URI and label replace a mount's spelling.
-    saved: bool,
+    is_saved: bool,
     /// An active mount serves the location.
-    connected: bool,
+    is_connected: bool,
     /// The row's kind, if this contribution creates it.
     kind: NetworkKind,
 }
@@ -190,8 +190,8 @@ impl<'a> Contribution<'a> {
         Self {
             uri: Cow::Borrowed(&share.bookmark.uri),
             label: Cow::Borrowed(&share.bookmark.label),
-            saved: true,
-            connected: share.connected,
+            is_saved: true,
+            is_connected: share.is_connected,
             kind: NetworkKind::Share,
         }
     }
@@ -200,8 +200,8 @@ impl<'a> Contribution<'a> {
         Self {
             uri: Cow::Borrowed(&mount.uri),
             label: Cow::Borrowed(&mount.label),
-            saved: false,
-            connected: true,
+            is_saved: false,
+            is_connected: true,
             kind: smb_location_kind(&mount.uri),
         }
     }
@@ -210,8 +210,8 @@ impl<'a> Contribution<'a> {
         Self {
             uri: Cow::Owned(file_uri(&mount.path)),
             label: mount.display_label(),
-            saved: false,
-            connected: true,
+            is_saved: false,
+            is_connected: true,
             kind: NetworkKind::Mount,
         }
     }
@@ -222,8 +222,8 @@ impl<'a> Contribution<'a> {
         Self {
             uri: Cow::Borrowed(&bookmark.uri),
             label: Cow::Borrowed(&bookmark.label),
-            saved: false,
-            connected: false,
+            is_saved: false,
+            is_connected: false,
             kind: smb_location_kind(&bookmark.uri),
         }
     }
@@ -244,8 +244,8 @@ impl<'a> Contribution<'a> {
         Some(NetworkLocation {
             uri,
             label,
-            saved: self.saved,
-            connected: self.connected,
+            is_saved: self.is_saved,
+            is_connected: self.is_connected,
             kind: self.kind,
         })
     }
@@ -307,11 +307,11 @@ impl NetworkLocation {
     /// and label win, the saved and connected flags add up, and the kind
     /// stays the first contributor's.
     fn merge(&mut self, later: NetworkLocation) {
-        if later.saved {
+        if later.is_saved {
             self.uri = later.uri;
             self.label = later.label;
         }
-        self.saved |= later.saved;
-        self.connected |= later.connected;
+        self.is_saved |= later.is_saved;
+        self.is_connected |= later.is_connected;
     }
 }

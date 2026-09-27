@@ -16,4 +16,4 @@ pub use network::{
     merge_network_locations, network_key, NetworkKey, NetworkKind, NetworkLocation, NetworkMount, SavedShare,
     StableMount,
 };
-pub use quick_access::{compose_quick_access, known_folders, quick_access, FolderGlyph, Place};
+pub use quick_access::{compose_quick_access, known_folders, quick_access, FolderGlyph, Place, PlaceOrigin};
