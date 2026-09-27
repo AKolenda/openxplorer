@@ -238,6 +238,16 @@ pub(crate) fn connect_columns_resized(
     }
 }
 
+/// Shows or hides the Date modified and Type columns, which a compact
+/// window has no room for (the 680-pixel rules in `style.css`).
+pub(crate) fn show_date_and_type(view: &gtk::ColumnView, shown: bool) {
+    for column in [SortColumn::Modified, SortColumn::Type] {
+        if let Some(view_column) = view_column(view, column) {
+            view_column.set_visible(shown);
+        }
+    }
+}
+
 /// Sorts by `column` in `direction`.
 pub(crate) fn sort_by(view: &gtk::ColumnView, column: SortColumn, direction: SortDirection) {
     let (current, _) = current_sort(view);

@@ -276,6 +276,12 @@ impl DetailsPane {
         }
     }
 
+    /// Makes the pane `width` pixels wide ([`PANE_WIDTH`], or 235 in a
+    /// narrower window).
+    pub fn set_width(&self, width: i32) {
+        self.root.set_width_request(width);
+    }
+
     /// Shows `content`, drawing art in `appearance` at `scale`.
     pub fn show(&self, content: &PaneContent, appearance: Appearance, scale: i32) {
         match content.preview {

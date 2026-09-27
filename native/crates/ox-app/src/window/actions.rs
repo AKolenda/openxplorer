@@ -217,7 +217,7 @@ impl BrowserWindow {
                 window.save_preference(Preference::ShowHidden(show));
             }),
             toggle("details-pane", preferences.details, |window, show| {
-                window.details_pane().root.set_visible(show);
+                window.place_details_pane(show);
                 window.save_preference(Preference::DetailsPane(show));
             }),
         ]);

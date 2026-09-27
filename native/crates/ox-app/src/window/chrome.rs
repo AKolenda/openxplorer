@@ -111,10 +111,10 @@ impl Drop for Chrome {
     }
 }
 
-/// Back, Forward, Up and Refresh (`.nav-buttons`).
+/// Back, Forward, Up and Refresh (`.nav-buttons`), 5 pixels apart by
+/// their CSS `border-spacing`.
 fn navigation_buttons() -> gtk::Box {
     let buttons = gtk::Box::builder()
-        .spacing(5)
         .valign(gtk::Align::Center)
         .css_classes(["nav-buttons"])
         .build();
@@ -135,9 +135,10 @@ fn navigation_buttons() -> gtk::Box {
     buttons
 }
 
-/// The navigation buttons, the address bar and the search box.
+/// The navigation buttons, the address bar and the search box, 14 pixels
+/// apart by their CSS `border-spacing`, which narrow windows shrink.
 fn navigation_row(address: &AddressBar, search: &SearchBox) -> gtk::Box {
-    let navigation = gtk::Box::builder().spacing(14).css_classes(["navrow"]).build();
+    let navigation = gtk::Box::builder().css_classes(["navrow"]).build();
     navigation.update_property(&[gtk::accessible::Property::Label("Navigation")]);
     navigation.append(&navigation_buttons());
     navigation.append(&address.root);

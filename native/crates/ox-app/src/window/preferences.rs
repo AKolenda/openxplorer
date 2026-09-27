@@ -91,7 +91,7 @@ impl BrowserWindow {
     pub(super) fn apply_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
         self.content().model.set_show_hidden(preferences.show_hidden);
-        self.details_pane().root.set_visible(preferences.details);
+        self.place_details_pane(preferences.details);
         self.show_view(FolderView::from_setting(&preferences.view));
         let workspace = &self.chrome().workspace;
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));

@@ -16,6 +16,7 @@ mod geometry;
 mod input;
 mod landing_pages;
 mod listing;
+mod narrow_windows;
 mod opening;
 mod panes_layout;
 mod sidebar_layout;

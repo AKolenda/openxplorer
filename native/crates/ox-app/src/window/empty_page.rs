@@ -45,7 +45,13 @@ impl EmptyPage {
             .build();
         let spinner = gtk::Spinner::new();
         let icon = icons::glyph(Glyph::FolderLine, 44);
-        let title = gtk::Label::builder().css_classes(["empty-title"]).build();
+        // Wrapping, so a narrow window keeps its size when a folder is
+        // empty (`.empty-state{text-align:center}` wraps in app.js too).
+        let title = gtk::Label::builder()
+            .wrap(true)
+            .justify(gtk::Justification::Center)
+            .css_classes(["empty-title"])
+            .build();
         let message = gtk::Label::builder()
             .wrap(true)
             .max_width_chars(65)

@@ -16,8 +16,18 @@ use crate::folder_view::sorting::SortColumn;
 use crate::icons::{self, Glyph};
 use crate::theme::Appearance;
 
+use super::breakpoints::WindowWidth;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::unported;
+
+/// Whether a command stays in a compact window (the 680-pixel rules).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InCompactWindow {
+    /// Shown at every width.
+    Kept,
+    /// Hidden at 680 pixels or less (`.commandbar #cut{display:none}`).
+    Hidden,
+}
 
 /// An icon-only command (`button.command` in index.html).
 struct IconCommand {
@@ -27,6 +37,7 @@ struct IconCommand {
     name: &'static str,
     /// The tooltip (`title`).
     tooltip: &'static str,
+    compact: InCompactWindow,
 }
 
 /// Cut to Move to Trash, as index.html lists them.
@@ -36,36 +47,42 @@ const EDIT_COMMANDS: [IconCommand; 6] = [
         action: "win.cut",
         name: "Cut",
         tooltip: "Cut (Ctrl+X)",
+        compact: InCompactWindow::Hidden,
     },
     IconCommand {
         glyph: Glyph::Copy,
         action: "win.copy",
         name: "Copy",
         tooltip: "Copy (Ctrl+C)",
+        compact: InCompactWindow::Kept,
     },
     IconCommand {
         glyph: Glyph::Paste,
         action: "win.paste",
         name: "Paste",
         tooltip: "Paste files (Ctrl+V)",
+        compact: InCompactWindow::Kept,
     },
     IconCommand {
         glyph: Glyph::Rename,
         action: "win.rename",
         name: "Rename",
         tooltip: "Rename (F2)",
+        compact: InCompactWindow::Hidden,
     },
     IconCommand {
         glyph: Glyph::Share,
         action: "win.copy-path",
         name: "Copy path",
         tooltip: "Copy path (does not change sharing permissions)",
+        compact: InCompactWindow::Hidden,
     },
     IconCommand {
         glyph: Glyph::Trash,
         action: "win.trash",
         name: "Move to Trash",
         tooltip: "Move to Trash (Delete)",
+        compact: InCompactWindow::Kept,
     },
 ];
 
@@ -75,46 +92,62 @@ pub(super) struct CommandBar {
     /// The bar.
     pub root: gtk::Box,
     theme: gtk::MenuButton,
+    theme_glyph: gtk::Image,
+    theme_label: gtk::Label,
+    /// Cut, Rename, Copy path and Details, which a compact window hides.
+    hidden_when_compact: Vec<gtk::Widget>,
 }
 
 impl CommandBar {
     /// The command bar, showing the light appearance until told otherwise.
     pub fn new() -> Self {
-        let root = gtk::Box::builder().spacing(4).css_classes(["commandbar"]).build();
+        // The gaps are CSS `border-spacing`, which narrow windows shrink.
+        let root = gtk::Box::builder().css_classes(["commandbar"]).build();
         root.update_property(&[gtk::accessible::Property::Label("File commands")]);
-        root.append(&text_menu_button("New", Glyph::Plus, new_menu()));
-        root.append(&separator());
-        for command in &EDIT_COMMANDS {
-            root.append(&icon_button(command));
-        }
-        root.append(&separator());
-        root.append(&text_menu_button("Sort", Glyph::Sort, sort_menu()));
-        root.append(&text_menu_button("View", Glyph::Grid, view_menu()));
-        root.append(&more_button());
-        root.append(&gtk::Box::builder().hexpand(true).build());
-        let theme = theme_button();
+        let mut hidden_when_compact = Vec::new();
+        root.append(&file_commands(&mut hidden_when_compact));
+        let theme_glyph = icons::glyph(Appearance::Light.glyph(), 17);
+        let theme_label = gtk::Label::new(Some(Appearance::Light.label()));
+        let theme = theme_button(&theme_glyph, &theme_label);
         root.append(&theme);
         let settings = icon_button(&IconCommand {
             glyph: Glyph::Settings,
             action: "win.settings",
             name: "Settings",
             tooltip: "Settings (Ctrl+,)",
+            compact: InCompactWindow::Kept,
         });
         settings.add_css_class("settings-button");
         root.append(&settings);
-        root.append(&details_toggle());
-        Self { root, theme }
+        let details = details_toggle();
+        hidden_when_compact.push(details.clone().upcast());
+        root.append(&details);
+        Self {
+            root,
+            theme,
+            theme_glyph,
+            theme_label,
+            hidden_when_compact,
+        }
     }
 
     /// Shows the drawn appearance on the theme button: a sun and "Light"
     /// or a moon and "Dark", with `tooltip` saying what was chosen
     /// (`applyTheme` in app.js).
     pub fn show_appearance(&self, appearance: Appearance, tooltip: &str) {
-        let content = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-        content.append(&icons::glyph(appearance.glyph(), 17));
-        content.append(&gtk::Label::new(Some(appearance.label())));
-        self.theme.set_child(Some(&content));
+        icons::set_glyph(&self.theme_glyph, appearance.glyph(), 17);
+        self.theme_label.set_text(appearance.label());
         self.theme.set_tooltip_text(Some(tooltip));
+    }
+
+    /// Hides what the web layout hides in a window of `band`'s width: the
+    /// appearance label from 1050 pixels, and Cut, Rename, Copy path and
+    /// Details from 680.
+    pub fn fit_to_width(&self, band: WindowWidth) {
+        self.theme_label.set_visible(band.shows_appearance_label());
+        for control in &self.hidden_when_compact {
+            control.set_visible(!band.is_compact());
+        }
     }
 
     /// The theme button's tooltip, for tests.
@@ -122,6 +155,35 @@ impl CommandBar {
     pub fn appearance_tooltip(&self) -> Option<String> {
         self.theme.tooltip_text().map(|text| text.to_string())
     }
+}
+
+/// New ▾ │ Cut … Move to Trash │ Sort ▾, View ▾ and More options, adding
+/// the commands a compact window hides to `hidden_when_compact`. They
+/// scroll without a scroll bar, so the window can be narrower than all the
+/// commands (the web bar clips them); the appearance, Settings and Details
+/// buttons stay at the right.
+fn file_commands(hidden_when_compact: &mut Vec<gtk::Widget>) -> gtk::ScrolledWindow {
+    let group = gtk::Box::builder().css_classes(["command-group"]).build();
+    group.append(&text_menu_button("New", Glyph::Plus, new_menu()));
+    group.append(&separator());
+    for command in &EDIT_COMMANDS {
+        let button = icon_button(command);
+        if command.compact == InCompactWindow::Hidden {
+            hidden_when_compact.push(button.clone().upcast());
+        }
+        group.append(&button);
+    }
+    group.append(&separator());
+    group.append(&text_menu_button("Sort", Glyph::Sort, sort_menu()));
+    group.append(&text_menu_button("View", Glyph::Grid, view_menu()));
+    group.append(&more_button());
+    gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::External)
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .propagate_natural_width(true)
+        .hexpand(true)
+        .child(&group)
+        .build()
 }
 
 fn separator() -> gtk::Separator {
@@ -282,10 +344,14 @@ fn more_button() -> gtk::MenuButton {
     button
 }
 
-/// The appearance toggle (`#theme-toggle`); [`CommandBar::show_appearance`]
-/// sets its glyph, label and tooltip.
-fn theme_button() -> gtk::MenuButton {
+/// The appearance toggle (`#theme-toggle`) showing `glyph` and `label`;
+/// [`CommandBar::show_appearance`] sets them and the tooltip.
+fn theme_button(glyph: &gtk::Image, label: &gtk::Label) -> gtk::MenuButton {
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 7);
+    content.append(glyph);
+    content.append(label);
     let button = gtk::MenuButton::builder()
+        .child(&content)
         .popover(&MenuPopover::new(appearance_items().to_vec()))
         .valign(gtk::Align::Center)
         .css_classes(["command", "text-command", "theme-toggle"])

@@ -30,13 +30,29 @@ fn control_name(control: &gtk::Widget) -> Option<String> {
     tooltip.lines().next().map(str::to_owned)
 }
 
-fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
-    let bar = &test.window.chrome().commands.root;
-    let mut controls = Vec::new();
-    let mut child = bar.first_child();
+fn children(widget: &gtk::Widget) -> Vec<gtk::Widget> {
+    let mut found = Vec::new();
+    let mut child = widget.first_child();
     while let Some(current) = child {
         child = current.next_sibling();
-        controls.push(current);
+        found.push(current);
+    }
+    found
+}
+
+/// The command bar's controls in order, the scrolling file commands
+/// included.
+fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
+    let bar: &gtk::Widget = test.window.chrome().commands.root.upcast_ref();
+    let mut controls = Vec::new();
+    for child in children(bar) {
+        let group = descendants::<gtk::Box>(&child)
+            .into_iter()
+            .find(|widget| widget.has_css_class("command-group"));
+        match group {
+            Some(group) => controls.extend(children(group.upcast_ref())),
+            None => controls.push(child),
+        }
     }
     controls
 }

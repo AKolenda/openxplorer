@@ -51,14 +51,16 @@ pub(super) struct TabStrip {
     pub root: gtk::ScrolledWindow,
     viewport: gtk::Viewport,
     tabs: gtk::Box,
+    layout: TabLayout,
 }
 
 impl TabStrip {
     /// An empty tab strip.
     pub fn new() -> Self {
+        let layout = TabLayout::new();
         let tabs = gtk::Box::builder()
             .accessible_role(gtk::AccessibleRole::TabList)
-            .layout_manager(&TabLayout::new())
+            .layout_manager(&layout)
             .css_classes(["tabs"])
             .build();
         tabs.update_property(&[gtk::accessible::Property::Label("Folder tabs")]);
@@ -75,7 +77,18 @@ impl TabStrip {
             .child(&viewport)
             .build();
         gestures::scroll_sideways_with_wheel(&root);
-        Self { root, viewport, tabs }
+        Self {
+            root,
+            viewport,
+            tabs,
+            layout,
+        }
+    }
+
+    /// Makes tabs `width` pixels wide when there is room: 215, or less in
+    /// a narrow window.
+    pub fn set_tab_width(&self, width: i32) {
+        self.layout.set_tab_width(width);
     }
 
     /// Replaces the tabs and scrolls the active one into view.

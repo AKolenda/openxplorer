@@ -12,6 +12,7 @@ mod about;
 mod actions;
 mod activation;
 mod address_bar;
+mod breakpoints;
 mod caption_buttons;
 mod card_grid;
 mod chrome;
@@ -83,6 +84,7 @@ mod imp {
     use gtk::{gio, glib};
     use ox_core::location::LocationContext;
 
+    use super::breakpoints::WindowWidth;
     use super::{Chrome, Content, DetailsPane, ExternalHandlers, Sidebar, TypeAhead};
     use crate::shared::AppContext;
     use crate::volumes::VolumeRow;
@@ -107,6 +109,8 @@ mod imp {
         /// Set until the file list first takes keyboard focus; see
         /// [`super::BrowserWindow::focus_new_file_list`].
         pub(super) file_list_awaits_focus: Cell<bool>,
+        /// The width band the layout was last fitted to.
+        pub(super) window_width: Cell<WindowWidth>,
         pub(super) handlers: RefCell<ExternalHandlers>,
     }
 
@@ -125,7 +129,13 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for BrowserWindow {}
+    impl WidgetImpl for BrowserWindow {
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.parent_size_allocate(width, height, baseline);
+            self.obj().follow_width(width);
+        }
+    }
+
     impl WindowImpl for BrowserWindow {
         fn close_request(&self) -> glib::Propagation {
             // Let go of keyboard focus first. On Wayland, GTK's input method

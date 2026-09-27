@@ -107,6 +107,8 @@ window.ox.solid-csd {
   padding: 12px 16px 10px 13px;
   min-height: 39px;
 }
+.navrow { border-spacing: 14px; }
+.navrow .nav-buttons { border-spacing: 5px; }
 .navrow .nav-buttons button { min-width: 34px; min-height: 34px; }
 .address, .search-wrap {
   background-color: @ox_bg;
@@ -166,6 +168,7 @@ window.ox.solid-csd {
   min-height: 54px;
   padding: 0 15px;
 }
+.commandbar, .commandbar .command-group { border-spacing: 4px; }
 /* 34px high; icon-only commands are 38px wide around an 18px glyph. */
 .commandbar button.command, .commandbar menubutton.command > button {
   min-height: 34px;
@@ -266,7 +269,10 @@ columnview.files > header > button {
   box-shadow: none;
 }
 columnview.files > header > button:hover { background-color: @ox_hover; }
-columnview.files > header > button:first-child { padding-left: 26px; }
+/* Name never gets narrower than 260px (`minmax(260px,1fr)`, the Name
+   default in app.js) plus the 14px end: a narrow window scrolls the list
+   sideways instead. A width the user sets overrides it. */
+columnview.files > header > button:first-child { padding-left: 26px; min-width: 235px; }
 /* Size's divider stands 14px before the column's end, where the web
    header's padding starts, drawn as a 1px band of the background. */
 columnview.files > header > button:last-child {
@@ -481,6 +487,25 @@ window.ox .statusbar button {
 window.ox .statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
 /* The 15px glyph is centred on a half pixel too. */
 .statusbar button image { margin-left: 1px; }
+
+/* ---- Narrow windows (the @media(max-width) rules; src/window/breakpoints.rs) ---- */
+window.ox.max-1190 .details-inner { padding: 18px; }
+window.ox.max-1190 .search-wrap { min-width: 193px; }
+window.ox.max-1190 .navrow { border-spacing: 10px; }
+window.ox.max-1190 .commandbar { padding: 0 10px; }
+window.ox.max-1190 .commandbar,
+window.ox.max-1190 .commandbar .command-group { border-spacing: 1px; }
+window.ox.max-1190 .commandbar separator { margin: 0 6px; }
+window.ox.max-1050 .commandbar menubutton.theme-toggle > button { padding: 0 9px; }
+window.ox.max-960 .search-wrap { min-width: 173px; }
+window.ox.max-960 .navrow { padding-left: 8px; }
+window.ox.max-960 .navrow .nav-buttons { border-spacing: 0; }
+window.ox.max-960 .commandbar button.command,
+window.ox.max-960 .commandbar menubutton.command > button { padding: 0 8px; min-width: 16px; }
+window.ox.max-680 .navrow { border-spacing: 5px; }
+window.ox.max-680 .navrow .nav-buttons button { min-width: 29px; }
+window.ox.max-680 .ox-titlebar { padding-left: 5px; }
+window.ox.max-680 .ox-titlebar button.caption { min-width: 32px; }
 
 /* ---- Menus (style.css .menu.win10, the classic style the app defaults to) ---- */
 popover.ox-menu > contents, popover.menu.ox-menu > contents, popover.ox-popover > contents {

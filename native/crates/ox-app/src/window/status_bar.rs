@@ -76,6 +76,7 @@ pub(super) struct StatusBar {
     selection: gtk::Label,
     /// The type-to-select hint.
     pub hint: gtk::Label,
+    build: gtk::Label,
     details_view: gtk::Button,
     icons_view: gtk::Button,
 }
@@ -116,9 +117,16 @@ impl StatusBar {
             count,
             selection,
             hint,
+            build,
             details_view,
             icons_view,
         }
+    }
+
+    /// Shows or hides the build text, which a compact window has no room
+    /// for (`.status-mode{display:none}` at 680 pixels).
+    pub fn show_build(&self, shown: bool) {
+        self.build.set_visible(shown);
     }
 
     /// Shows the item count and the selection.
