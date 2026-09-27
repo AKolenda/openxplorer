@@ -3,13 +3,46 @@
 //! each move, rename and deletion makes. Ports `GioMtpAdapterTests` in
 //! `desktop/tests/test_device_staging.py`.
 
-use ox_core::transfer::{Cancellation, Node, TransferError};
+use std::sync::{Arc, Mutex};
+
+use ox_core::gio_node::GioNode;
+use ox_core::transfer::{
+    Cancellation, ConflictPolicy, Node, TransferEngine, TransferError, TransferMode, TransferResult,
+};
 
 use crate::transfer_support::mtp_device::{DeviceCall, FakeDevice, RenameAnswer};
 
 /// The flags of every native move: `MOVE_FLAGS` in `desktop/gio_backend.py`.
 fn move_flags() -> gio::FileCopyFlags {
     gio::FileCopyFlags::NOFOLLOW_SYMLINKS | gio::FileCopyFlags::NO_FALLBACK_FOR_MOVE
+}
+
+/// Permanently deletes `uri` through the engine and the production GIO
+/// adapter, with a write guard that records every URI it is asked about
+/// and refuses `protected`, like the app's previous-version guard.
+fn delete_through_engine(uri: &str, protected: Option<String>) -> (TransferResult, Vec<String>) {
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&asked);
+    let guard = move |uri: &str| {
+        recorded.lock().expect("guard log").push(uri.to_owned());
+        if protected.as_deref() == Some(uri) {
+            return Err(TransferError::failed("Protected snapshot."));
+        }
+        Ok(())
+    };
+    let factory = Arc::new(|uri: &str| Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>));
+    let mut engine = TransferEngine::new(factory).with_write_guard(guard);
+    let result = engine
+        .run(
+            TransferMode::Delete,
+            &[uri.to_owned()],
+            None,
+            ConflictPolicy::Skip,
+            &Cancellation::new(),
+        )
+        .expect("a permanent delete needs no destination");
+    let asked = asked.lock().expect("guard log").clone();
+    (result, asked)
 }
 
 /// Port of `test_same_folder_move_is_set_display_name`.
@@ -187,4 +220,47 @@ fn a_folder_on_a_phone_is_deleted_permanently_children_first() {
         ]
     );
     assert_eq!(device.items(), ["kept.jpg"]);
+}
+
+/// The app's permanent delete of a phone folder: the engine asks the write
+/// guard about every item, then the folder goes, children first.
+///
+/// parity: XFER-015, XFER-020
+#[test]
+fn the_engine_deletes_a_phone_folder_after_checking_every_item() {
+    let device = FakeDevice::new();
+    device.add_file("album/a.jpg");
+    device.add_file("album/sub/b.jpg");
+    device.add_file("kept.jpg");
+
+    let (result, asked) = delete_through_engine(&device.uri("album"), None);
+
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert_eq!(result.done, [device.uri("album")]);
+    assert_eq!(device.items(), ["kept.jpg"]);
+    for item in ["album", "album/a.jpg", "album/sub", "album/sub/b.jpg"] {
+        assert!(asked.contains(&device.uri(item)), "{item} was not checked");
+    }
+}
+
+/// A protected item deep inside a phone folder stops the whole delete
+/// before the device is asked to remove anything.
+///
+/// parity: XFER-020
+#[test]
+fn a_protected_item_inside_a_phone_folder_stops_the_delete_before_any_device_call() {
+    let device = FakeDevice::new();
+    device.add_file("album/a.jpg");
+    device.add_file("album/sub/b.jpg");
+
+    let protected = device.uri("album/sub/b.jpg");
+    let (result, _) = delete_through_engine(&device.uri("album"), Some(protected));
+
+    assert!(result.done.is_empty(), "{result:?}");
+    assert!(result.errors[0].contains("Protected snapshot."), "{result:?}");
+    assert!(device.calls().is_empty(), "{:?}", device.calls());
+    assert_eq!(
+        device.items(),
+        ["album", "album/a.jpg", "album/sub", "album/sub/b.jpg"]
+    );
 }
