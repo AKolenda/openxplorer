@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Production GIO adapter checks on isolated temporary local files.
-//! Device capabilities are inspected without contacting device backends.
+//! The production GIO adapter ([`GioNode`]) on isolated temporary local
+//! files: listing, copying, moving, publishing and deleting, each without
+//! following links and without overwriting. Device capabilities are
+//! inspected without contacting device backends; the adapter on a simulated
+//! phone is tested in `transfer_cases/mtp_adapter.rs`.
 
 use std::ffi::OsString;
 use std::fs;
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use gio::prelude::VfsExt;
@@ -15,12 +19,27 @@ use ox_core::transfer::{
     Cancellation, ConflictPolicy, Node, NodeKind, TransferEngine, TransferError, TransferMode,
 };
 
+/// The adapter for the local item at `path`.
 fn node(path: &Path) -> GioNode {
     GioNode::from_file(gio::File::for_path(path))
 }
 
-fn engine() -> TransferEngine {
-    TransferEngine::new(Arc::new(|uri| Ok(Box::new(GioNode::new(uri)))))
+/// An engine resolving every URI with [`GioNode`], without a write guard.
+fn gio_engine() -> TransferEngine {
+    TransferEngine::new(Arc::new(|uri: &str| {
+        Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>)
+    }))
+}
+
+/// The permission bits of `path`, following a link.
+fn mode_of(path: &Path) -> u32 {
+    let metadata = fs::metadata(path).unwrap();
+    metadata.permissions().mode() & 0o7777
+}
+
+/// Sets the permission bits of `path`.
+fn set_mode(path: &Path, mode: u32) {
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
 }
 
 /// Port of the listing half of `test_enumeration_and_creation` in
@@ -32,7 +51,7 @@ fn metadata_and_listing_preserve_hidden_files_and_do_not_follow_links() {
     let temp = tempfile::tempdir().unwrap();
     let folder = temp.path().join("folder");
     fs::create_dir(&folder).unwrap();
-    fs::set_permissions(&folder, fs::Permissions::from_mode(0o750)).unwrap();
+    set_mode(&folder, 0o750);
     fs::write(folder.join(".hidden"), b"hello").unwrap();
     symlink("missing", folder.join("dangling")).unwrap();
     symlink(&folder, temp.path().join("alias")).unwrap();
@@ -55,6 +74,7 @@ fn metadata_and_listing_preserve_hidden_files_and_do_not_follow_links() {
     assert!(alias.children(None).is_err());
 }
 
+/// parity: XFER-009
 #[test]
 fn local_copy_move_and_explicit_replace_use_the_gio_adapter() {
     let temp = tempfile::tempdir().unwrap();
@@ -87,7 +107,7 @@ fn local_copy_move_and_explicit_replace_use_the_gio_adapter() {
 /// Port of the creation half of `test_enumeration_and_creation`: copies,
 /// moves and new folders never take a name that exists.
 ///
-/// parity: XFER-002
+/// parity: OPS-008, XFER-002
 #[test]
 fn exclusive_copy_move_and_mkdir_preserve_existing_destinations() {
     let temp = tempfile::tempdir().unwrap();
@@ -249,8 +269,8 @@ fn complete_engine_stages_and_publishes_a_recursive_local_copy() {
     fs::create_dir(&target).unwrap();
     fs::write(source.join("nested/data"), b"complete").unwrap();
     symlink("../missing", source.join("nested/link")).unwrap();
-    fs::set_permissions(source.join("nested"), fs::Permissions::from_mode(0o500)).unwrap();
-    let result = engine()
+    set_mode(&source.join("nested"), 0o500);
+    let result = gio_engine()
         .run(
             TransferMode::Copy,
             &[node(&source).uri()],
@@ -266,17 +286,11 @@ fn complete_engine_stages_and_publishes_a_recursive_local_copy() {
         fs::read_link(target.join("source/nested/link")).unwrap(),
         Path::new("../missing")
     );
-    assert_eq!(
-        fs::metadata(target.join("source/nested"))
-            .unwrap()
-            .permissions()
-            .mode()
-            & 0o7777,
-        0o500
-    );
+    assert_eq!(mode_of(&target.join("source/nested")), 0o500);
     assert_eq!(fs::read_dir(&target).unwrap().count(), 1);
-    fs::set_permissions(source.join("nested"), fs::Permissions::from_mode(0o700)).unwrap();
-    fs::set_permissions(target.join("source/nested"), fs::Permissions::from_mode(0o700)).unwrap();
+    // Restore owner access so the temporary folder can be removed.
+    set_mode(&source.join("nested"), 0o700);
+    set_mode(&target.join("source/nested"), 0o700);
 }
 
 /// parity: XFER-015, XFER-020
@@ -288,7 +302,7 @@ fn protected_descendants_are_preflighted_before_gio_permanent_deletion() {
     fs::write(source.join("a"), b"live").unwrap();
     fs::write(source.join("protected/data"), b"snapshot").unwrap();
     let protected = node(&source.join("protected")).uri();
-    let mut engine = engine().with_write_guard(move |uri| {
+    let mut engine = gio_engine().with_write_guard(move |uri| {
         if uri.starts_with(&protected) {
             Err(TransferError::failed("Protected snapshot."))
         } else {
@@ -384,7 +398,7 @@ fn trash_support_reports_an_unmounted_share_instead_of_denying_trash() {
     assert_eq!(node(&missing).can_trash(None), Ok(false));
 }
 
-/// parity: XFER-019
+/// parity: OPS-035, XFER-019
 #[test]
 fn roots_and_whole_network_shares_are_refused_before_mutation() {
     let cancel = Cancellation::new();
@@ -421,7 +435,7 @@ fn an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion() {
         fs::write(outside.join("victim"), b"must survive").unwrap();
         fs::create_dir(outside.join("nested")).unwrap();
         fs::write(outside.join("nested/victim"), b"must also survive").unwrap();
-        let swapped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let swapped = Arc::new(AtomicBool::new(false));
         let did_swap = swapped.clone();
         let ancestor = match swapped_folder {
             SwappedFolder::Selected => selected.clone(),
@@ -430,14 +444,15 @@ fn an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion() {
         let detached = temp.path().join("detached");
         let outside_for_guard = outside.clone();
         let guard = move |uri: &str| {
-            if uri.ends_with("/victim") && !did_swap.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            let first_victim = uri.ends_with("/victim") && !did_swap.swap(true, Ordering::SeqCst);
+            if first_victim {
                 fs::rename(&ancestor, &detached)?;
                 symlink(&outside_for_guard, &ancestor)?;
             }
             Ok(())
         };
         let result = node(&selected).delete_tree(&Cancellation::new(), Some(&guard));
-        assert!(swapped.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(swapped.load(Ordering::SeqCst));
         assert!(result
             .unwrap_err()
             .to_string()

@@ -4,7 +4,9 @@
 //! `desktop/tests/test_device_staging.py`. No real devices.
 
 use std::fs;
-use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeInfo, NodeKind, TransferError};
 
@@ -41,10 +43,12 @@ enum Fault {
 struct BrokenPhone {
     device: Device,
     fault: Fault,
-    upload_failed: Mutex<bool>,
+    /// Set once an upload failed; staged items misbehave from then on.
+    upload_failed: AtomicBool,
     /// Queries of staged items after the upload failed.
-    stage_lookups: Mutex<usize>,
-    stage_deletions: Mutex<usize>,
+    stage_lookups: AtomicUsize,
+    /// Attempts to delete a staged item.
+    stage_deletions: AtomicUsize,
 }
 
 impl BrokenPhone {
@@ -52,29 +56,33 @@ impl BrokenPhone {
         Arc::new(Self {
             device: Device::default(),
             fault,
-            upload_failed: Mutex::default(),
-            stage_lookups: Mutex::default(),
-            stage_deletions: Mutex::default(),
+            upload_failed: AtomicBool::default(),
+            stage_lookups: AtomicUsize::default(),
+            stage_deletions: AtomicUsize::default(),
         })
     }
 
+    /// How often the engine tried to delete a staged item.
     fn stage_deletions(&self) -> usize {
-        *self.stage_deletions.lock().expect("deletion count")
+        self.stage_deletions.load(Ordering::SeqCst)
     }
 
     /// Counts one query of a staged item and returns how many there were.
     fn count_stage_lookup(&self) -> usize {
-        let mut lookups = self.stage_lookups.lock().expect("lookup count");
-        *lookups += 1;
-        *lookups
+        self.stage_lookups.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// Counts one deletion of a staged item and returns how many there were.
+    fn count_stage_deletion(&self) -> usize {
+        self.stage_deletions.fetch_add(1, Ordering::SeqCst) + 1
     }
 
     fn mark_upload_failed(&self) {
-        *self.upload_failed.lock().expect("failure flag") = true;
+        self.upload_failed.store(true, Ordering::SeqCst);
     }
 
     fn has_upload_failed(&self) -> bool {
-        *self.upload_failed.lock().expect("failure flag")
+        self.upload_failed.load(Ordering::SeqCst)
     }
 }
 
@@ -154,10 +162,9 @@ impl Provider for BrokenPhone {
 
     fn delete(&self, node: &LocalNode) -> Result<(), TransferError> {
         if is_staging(node) {
-            let mut deletions = self.stage_deletions.lock().expect("deletion count");
-            *deletions += 1;
+            let deletions = self.count_stage_deletion();
             let busy = match self.fault {
-                Fault::TransientDelete => *deletions < 3,
+                Fault::TransientDelete => deletions < 3,
                 Fault::StuckDelete => true,
                 _ => false,
             };
@@ -170,7 +177,7 @@ impl Provider for BrokenPhone {
 }
 
 /// A `photo` source file with complete content.
-fn photo(fixture: &Fixture) -> std::path::PathBuf {
+fn photo(fixture: &Fixture) -> PathBuf {
     let source = fixture.source_folder.join("photo");
     write(&source, "complete");
     source
@@ -185,7 +192,9 @@ fn aborted_device_upload_cleanup_retries_transient_errors() {
     let fixture = Fixture::new();
     let source = photo(&fixture);
     let phone = BrokenPhone::new(Fault::TransientDelete);
+
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
+
     assert_eq!(result.errors.len(), 1, "{result:?}");
     assert_eq!(phone.stage_deletions(), 3);
     assert_eq!(fixture.sleeps(), [0.5, 1.5]);
@@ -297,11 +306,13 @@ fn device_not_found_requires_a_successful_parent_listing_without_the_stage() {
 fn a_devices_false_success_is_not_counted_as_a_published_copy() {
     let fixture = Fixture::new();
     let source = photo(&fixture);
+
     let result = fixture.copy(
         BrokenPhone::new(Fault::FalsePublication),
         &[&source],
         ConflictPolicy::Skip,
     );
+
     assert!(result.done.is_empty());
     assert!(result.errors[0].contains("reported success"), "{result:?}");
     assert_eq!(read(&source), "complete");
@@ -325,7 +336,9 @@ fn a_device_staging_name_created_by_someone_else_is_never_cleaned_up() {
             write(&source, "complete");
         }
         let phone = BrokenPhone::new(Fault::StageRace);
+
         let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
+
         assert_eq!(result.errors.len(), 1, "{result:?}");
         assert!(result.done.is_empty());
         let names = list(&fixture.destination_folder);
@@ -350,7 +363,9 @@ fn an_unreachable_staged_name_is_not_mistaken_for_definite_absence() {
     let fixture = Fixture::new();
     let source = photo(&fixture);
     let phone = BrokenPhone::new(Fault::UnverifiablePublication);
+
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
+
     assert!(result.done.is_empty());
     assert!(result.errors[0].contains("could not be verified"), "{result:?}");
     assert_eq!(read(&fixture.destination_folder.join("photo")), "complete");

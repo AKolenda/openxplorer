@@ -45,6 +45,7 @@ fn a_copied_file_arrives_complete_and_leaves_no_staging() {
 #[test]
 fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
     let fixture = Fixture::new();
+    let _access = RestoreOwnerAccess::new(&fixture.root);
     let folder = fixture.source_folder.join("tree");
     let nested = folder.join("nested");
     fs::create_dir_all(&nested).unwrap();
@@ -54,6 +55,7 @@ fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
     set_mode(&folder, 0o750);
     set_mode(&nested, 0o500);
     let mut engine = fixture.engine(local::local());
+
     let result = fixture.run(
         &mut engine,
         &[&folder],
@@ -61,6 +63,7 @@ fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
         ConflictPolicy::Skip,
         None,
     );
+
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(result.done, [uri(&folder)]);
     assert_eq!(read(&nested.join(".hidden")), "hidden content");
@@ -74,9 +77,6 @@ fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
     assert_eq!(mode_of(&fixture.destination_folder.join("tree")), 0o750);
     assert_eq!(mode_of(&copied), 0o500);
     fixture.assert_no_staging();
-    // Restore owner access so TempDir cleanup works for unprivileged users.
-    set_mode(&nested, 0o700);
-    set_mode(&copied, 0o700);
 }
 
 /// Port of `test_duplicate_sources_deduplicated`.
@@ -137,6 +137,7 @@ fn self_and_descendant_destinations_are_rejected_including_symlink_aliases() {
         symlink(&nested, &alias).unwrap();
         for destination in [&folder, &nested, &alias] {
             let mut engine = fixture.engine(local::local());
+
             let result = fixture.run(
                 &mut engine,
                 &[&folder],
@@ -144,6 +145,7 @@ fn self_and_descendant_destinations_are_rejected_including_symlink_aliases() {
                 ConflictPolicy::Replace,
                 Some(destination),
             );
+
             assert!(result.done.is_empty());
             assert!(result.errors[0].contains("inside itself"));
             assert_eq!(read(&folder.join("original")), "untouched");
@@ -164,6 +166,7 @@ fn delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete() {
     let link = fixture.source_folder.join("link");
     symlink(&original, &link).unwrap();
     let mut engine = fixture.engine(local::local());
+
     let trash = fixture.run(
         &mut engine,
         &[&original],
@@ -171,8 +174,10 @@ fn delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete() {
         ConflictPolicy::Skip,
         None,
     );
+
     assert!(trash.done.is_empty());
     assert!(trash.errors[0].contains("no delete fallback"));
+
     let deleted = fixture.run(
         &mut engine,
         &[&link],
@@ -180,6 +185,7 @@ fn delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete() {
         ConflictPolicy::Skip,
         None,
     );
+
     assert_eq!(deleted.done, [uri(&link)]);
     assert!(!lexists(&link));
     assert_eq!(read(&original), "keep");
@@ -232,6 +238,7 @@ fn deep_trees_and_special_files_are_not_published() {
     let fifo = fixture.source_folder.join("pipe");
     mkfifo(&fifo);
     let mut engine = fixture.engine(local::local());
+
     let result = fixture.run(
         &mut engine,
         &[&source, &fifo],
@@ -239,6 +246,7 @@ fn deep_trees_and_special_files_are_not_published() {
         ConflictPolicy::Skip,
         None,
     );
+
     assert!(result.done.is_empty());
     assert_eq!(result.errors.len(), 2);
     assert!(result.errors[0].contains("nesting"));
@@ -269,6 +277,7 @@ fn cancellation_during_copy_removes_partial_stage_and_stops_the_batch() {
         }
         recorded.lock().unwrap().push(progress);
     });
+
     let result = fixture.run(
         &mut engine,
         &[&first, &later],
@@ -276,6 +285,7 @@ fn cancellation_during_copy_removes_partial_stage_and_stops_the_batch() {
         ConflictPolicy::Skip,
         None,
     );
+
     assert!(result.cancelled);
     assert!(result.done.is_empty());
     assert!(result.errors.is_empty(), "{result:?}");
@@ -377,7 +387,9 @@ fn local_destinations_keep_a_private_staging_folder_with_a_payload() {
     let source = fixture.source_folder.join("a");
     write(&source, "a");
     let watched = Arc::new(WatchedLocal::default());
+
     let result = fixture.copy(watched.clone(), &[&source], ConflictPolicy::Skip);
+
     assert!(result.errors.is_empty(), "{result:?}");
     let targets = watched.targets.lock().expect("target log");
     assert_eq!(targets[0].file_name(), Some("payload".as_ref()));

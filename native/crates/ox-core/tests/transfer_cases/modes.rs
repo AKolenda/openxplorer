@@ -85,7 +85,9 @@ fn device_copies_with_a_fuse_path_never_change_unix_modes() {
             write(&source, "android package fixture");
         }
         let device = Arc::new(FuseMountedDevice::default());
+
         let result = fixture.copy(device.clone(), &[&source], ConflictPolicy::Skip);
+
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(result.done, [uri(&source)]);
         let staged_modes = device.staged_folder_modes();

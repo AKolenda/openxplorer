@@ -26,11 +26,19 @@ const DOWNLOAD_FOLDER: &str = "Internal%20shared%20storage/Download";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeviceCall {
     /// `set_display_name` (MTP `SetObjectPropValue`) of `from` to `name`.
-    Rename { from: String, name: String },
+    Rename {
+        /// The escaped URI of the renamed item.
+        from: String,
+        /// The new name, as text.
+        name: String,
+    },
     /// `g_file_move` (MTP `MoveObject`) with its flags.
     Move {
+        /// The escaped URI of the moved item.
         from: String,
+        /// The escaped URI it was moved to.
         to: String,
+        /// The flags of the move, which must never allow a copy fallback.
         flags: gio::FileCopyFlags,
     },
     /// `g_file_delete` (MTP `DeleteObject`).

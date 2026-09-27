@@ -25,7 +25,9 @@ fn same_device_keep_both_renames_inside_staging_and_refreshes_before_cleanup() {
     write(&source, "incoming");
     write(&fixture.destination_folder.join("photo.jpg"), "original");
     let phone = Arc::new(Phone::with_same_device_copies(Device::default()));
+
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::KeepBoth);
+
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(read(&fixture.destination_folder.join("photo.jpg")), "original");
     assert_eq!(

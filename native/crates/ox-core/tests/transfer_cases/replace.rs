@@ -55,7 +55,9 @@ fn replace_merges_folders_and_retains_destination_only_children() {
         write(&target.join("nested/shared.txt"), "old");
         write(&target.join("keep.txt"), "keep");
         let mut engine = fixture.engine(local::local());
+
         let result = fixture.run(&mut engine, &[&source], mode, ConflictPolicy::Replace, None);
+
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(result.done, [uri(&source)]);
         assert_eq!(read(&target.join("nested/shared.txt")), "new");
@@ -120,6 +122,7 @@ fn replacement_type_mismatch_preserves_both_items() {
         write(&folder.join("retained"), "folder content");
         write(file, "file content");
         let mut engine = fixture.engine(local::local());
+
         let result = fixture.run(
             &mut engine,
             &[&source],
@@ -127,6 +130,7 @@ fn replacement_type_mismatch_preserves_both_items() {
             ConflictPolicy::Replace,
             None,
         );
+
         assert!(result.done.is_empty());
         assert_eq!(result.errors.len(), 1);
         assert!(result.errors[0].contains("file and folder"));
@@ -154,6 +158,7 @@ fn a_deep_move_merge_is_bounded_even_without_a_write_guard() {
     write(&source_nested.join("incoming"), "incoming");
     write(&target_nested.join("original"), "original");
     let mut engine = fixture.engine(local::local());
+
     let result = fixture.run(
         &mut engine,
         &[&source],
@@ -161,6 +166,7 @@ fn a_deep_move_merge_is_bounded_even_without_a_write_guard() {
         ConflictPolicy::Replace,
         None,
     );
+
     assert!(result.done.is_empty());
     assert_eq!(result.errors.len(), 1);
     assert!(result.errors[0].contains("nesting"));

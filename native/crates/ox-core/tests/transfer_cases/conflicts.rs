@@ -107,7 +107,9 @@ fn conflict_policies_never_overwrite_without_replace() {
         write(&source, "new");
         write(&fixture.destination_folder.join("notes.txt"), "old");
         let mut engine = fixture.engine(local::local());
+
         let result = fixture.run(&mut engine, &[&source, &source], TransferMode::Copy, policy, None);
+
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(read(&source), "new");
         match policy {

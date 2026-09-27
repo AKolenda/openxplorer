@@ -61,6 +61,7 @@ fn copy_keeps_names_that_are_not_utf8_byte_for_byte() {
     for mut engine in [gio_engine(), guarded_gio_engine()] {
         let fixture = Fixture::new();
         let album = latin1_album(&fixture.source_folder);
+
         let result = fixture.run(
             &mut engine,
             &[&album],
@@ -68,6 +69,7 @@ fn copy_keeps_names_that_are_not_utf8_byte_for_byte() {
             ConflictPolicy::Skip,
             None,
         );
+
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(result.done, [uri(&album)]);
         assert_latin1_album(&fixture.destination_folder.join("album"));
@@ -80,6 +82,7 @@ fn copy_keeps_names_that_are_not_utf8_byte_for_byte() {
 fn move_keeps_names_that_are_not_utf8_byte_for_byte() {
     let fixture = Fixture::new();
     let album = latin1_album(&fixture.source_folder);
+
     let result = fixture.run(
         &mut guarded_gio_engine(),
         &[&album],
@@ -87,6 +90,7 @@ fn move_keeps_names_that_are_not_utf8_byte_for_byte() {
         ConflictPolicy::Skip,
         None,
     );
+
     assert!(result.errors.is_empty(), "{result:?}");
     assert!(!album.exists());
     assert_latin1_album(&fixture.destination_folder.join("album"));
@@ -107,6 +111,7 @@ fn trash_and_permanent_delete_remove_folders_with_names_that_are_not_utf8() {
     for mode in [TransferMode::Delete, TransferMode::Trash] {
         let fixture = Fixture::new();
         let album = latin1_album(&fixture.source_folder);
+
         let result = fixture.run(
             &mut guarded_gio_engine(),
             &[&album],
@@ -114,6 +119,7 @@ fn trash_and_permanent_delete_remove_folders_with_names_that_are_not_utf8() {
             ConflictPolicy::Skip,
             None,
         );
+
         assert!(result.errors.is_empty(), "{mode:?}: {result:?}");
         assert_eq!(result.done, [uri(&album)]);
         assert!(!lexists(&album));
@@ -131,6 +137,7 @@ fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
     fs::create_dir(&existing).expect("create the existing album");
     fs::write(existing.join(OsStr::from_bytes(LATIN1_NAME)), b"old song").expect("write");
     write(&existing.join("keep.txt"), "keep");
+
     let result = fixture.run(
         &mut guarded_gio_engine(),
         &[&album],
@@ -138,6 +145,7 @@ fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
         ConflictPolicy::Replace,
         None,
     );
+
     assert!(result.done.is_empty(), "{result:?}");
     assert!(result.errors[0].contains("valid UTF-8"), "{result:?}");
     let song = fs::read(existing.join(OsStr::from_bytes(LATIN1_NAME))).expect("read");
@@ -153,6 +161,7 @@ fn keep_both_copies_folders_with_names_that_are_not_utf8() {
     let fixture = Fixture::new();
     let album = latin1_album(&fixture.source_folder);
     fs::create_dir(fixture.destination_folder.join("album")).expect("create the existing album");
+
     let result = fixture.run(
         &mut guarded_gio_engine(),
         &[&album],
@@ -160,6 +169,7 @@ fn keep_both_copies_folders_with_names_that_are_not_utf8() {
         ConflictPolicy::KeepBoth,
         None,
     );
+
     assert!(result.errors.is_empty(), "{result:?}");
     assert_latin1_album(&fixture.destination_folder.join("album (copy 2)"));
     assert!(list(&fixture.destination_folder.join("album")).is_empty());
@@ -175,6 +185,7 @@ fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
     let song = fixture.source_folder.join(OsStr::from_bytes(LATIN1_NAME));
     fs::write(&song, b"song").expect("write the song");
     let mut engine = guarded_gio_engine();
+
     let copied = fixture.run(
         &mut engine,
         &[&song],
@@ -182,11 +193,13 @@ fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
         ConflictPolicy::Skip,
         None,
     );
+
     assert!(copied.errors.is_empty(), "{copied:?}");
     assert_eq!(
         raw_names(&fixture.destination_folder),
         [OsStr::from_bytes(LATIN1_NAME)]
     );
+
     let kept = fixture.run(
         &mut engine,
         &[&song],
@@ -194,6 +207,7 @@ fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
         ConflictPolicy::KeepBoth,
         None,
     );
+
     assert!(kept.done.is_empty());
     assert!(kept.errors[0].contains("not valid UTF-8"), "{kept:?}");
     assert_eq!(

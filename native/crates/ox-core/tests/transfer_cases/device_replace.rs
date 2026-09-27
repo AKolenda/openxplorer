@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use ox_core::transfer::{Cancellation, ConflictPolicy, Node, TransferError};
@@ -33,7 +34,9 @@ fn device_replace_uses_reversible_same_folder_renames() {
     let fixture = Fixture::with_destination("phone");
     let source = replacement(&fixture);
     let phone = Arc::new(Device::default());
+
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Replace);
+
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(result.done, [uri(&source)]);
     assert_eq!(read(&fixture.destination_folder.join("photo")), "new");
@@ -75,11 +78,13 @@ impl Provider for FailingInstall {
 fn a_failed_device_install_restores_the_original_and_removes_the_stage() {
     let fixture = Fixture::with_destination("phone");
     let source = replacement(&fixture);
+
     let result = fixture.copy(
         Arc::new(FailingInstall::default()),
         &[&source],
         ConflictPolicy::Replace,
     );
+
     assert!(result.done.is_empty());
     assert!(
         result.errors[0].contains("simulated device refusal"),
@@ -105,7 +110,9 @@ fn device_replace_merges_folders_and_keeps_destination_only_items() {
     write(&existing.join("same"), "old");
     write(&existing.join("keep"), "keep");
     let phone = Arc::new(Device::default());
+
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Replace);
+
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(list(&existing), ["added", "keep", "same"]);
     assert_eq!(read(&existing.join("same")), "new");
@@ -153,7 +160,9 @@ fn the_device_move_aside_cannot_be_cancelled() {
     let fixture = Fixture::with_destination("phone");
     let source = replacement(&fixture);
     let phone = Arc::new(WatchedAside::default());
+
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Replace);
+
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(*phone.cancellable_asides.lock().expect("aside log"), [false]);
     assert_eq!(read(&fixture.destination_folder.join("photo")), "new");
@@ -164,7 +173,8 @@ fn the_device_move_aside_cannot_be_cancelled() {
 #[derive(Default)]
 struct LateAside {
     device: Device,
-    reported: Mutex<bool>,
+    /// Set once the error was reported, so later moves succeed.
+    reported: AtomicBool,
 }
 
 impl Provider for LateAside {
@@ -179,9 +189,8 @@ impl Provider for LateAside {
         cancel: Option<&Cancellation>,
     ) -> Result<(), TransferError> {
         self.device.move_native(node, target, cancel)?;
-        let mut reported = self.reported.lock().expect("report flag");
-        if is_backup(target) && !*reported {
-            *reported = true;
+        let first_aside = is_backup(target) && !self.reported.swap(true, Ordering::SeqCst);
+        if first_aside {
             return Err(TransferError::failed("Operation was cancelled"));
         }
         Ok(())
@@ -196,11 +205,13 @@ impl Provider for LateAside {
 fn a_move_aside_the_device_finished_after_an_error_is_restored() {
     let fixture = Fixture::with_destination("phone");
     let source = replacement(&fixture);
+
     let result = fixture.copy(
         Arc::new(LateAside::default()),
         &[&source],
         ConflictPolicy::Replace,
     );
+
     assert_eq!(result.errors.len(), 1, "{result:?}");
     assert_eq!(read(&fixture.destination_folder.join("photo")), "old");
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
@@ -239,11 +250,13 @@ fn a_name_taken_during_an_upload_is_never_overwritten() {
     let fixture = Fixture::with_destination("phone");
     let source = fixture.source_folder.join("photo");
     write(&source, "new");
+
     let result = fixture.copy(
         Arc::new(RacingWriter::default()),
         &[&source],
         ConflictPolicy::Skip,
     );
+
     assert!(result.done.is_empty());
     assert_eq!(result.errors.len(), 1, "{result:?}");
     assert_eq!(read(&fixture.destination_folder.join("photo")), "racing writer");

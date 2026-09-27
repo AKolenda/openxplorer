@@ -138,7 +138,9 @@ fn protected_descendants_stop_mutations_before_any_item_changes() {
         write(&folder.join(".snapshot/old"), "snapshot");
         let versions = PreviousVersions::new();
         let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
+
         let result = fixture.run(&mut engine, &[&folder], mode, ConflictPolicy::Replace, None);
+
         assert!(result.done.is_empty());
         assert!(result.errors[0].contains("read-only"));
         assert_eq!(read(&folder.join("a")), "live");
@@ -159,6 +161,7 @@ fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed(
     let versions = PreviousVersions::new();
     versions.configure(&uri(&fixture.destination_folder), &uri(&fixture.source_folder));
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
+
     let result = fixture.run(
         &mut engine,
         &[&source],
@@ -166,7 +169,9 @@ fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed(
         ConflictPolicy::Skip,
         None,
     );
+
     assert_eq!(result.done, [uri(&source)]);
+
     let reverse = fixture.run(
         &mut engine,
         &[&fixture.destination_folder.join("photo.jpg")],
@@ -174,6 +179,7 @@ fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed(
         ConflictPolicy::Replace,
         Some(&fixture.source_folder),
     );
+
     assert!(reverse.done.is_empty());
     assert!(reverse.errors[0].contains("read-only"));
     assert_eq!(read(&source), "photo");

@@ -5,7 +5,8 @@
 //! The failing provider is [`Faults`].
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeInfo, TransferError, TransferMode};
 
@@ -124,12 +125,12 @@ fn a_name_taken_while_copying_is_not_overwritten_at_publication() {
 /// `Unreachable` in `test_local_stage_query_error_is_still_reported`.
 #[derive(Default)]
 struct UnreachableAfterFailure {
-    unreachable: Mutex<bool>,
+    unreachable: AtomicBool,
 }
 
 impl Provider for UnreachableAfterFailure {
     fn info(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
-        let unreachable = *self.unreachable.lock().expect("reachability");
+        let unreachable = self.unreachable.load(Ordering::SeqCst);
         if unreachable && is_staging(node) {
             return Err(TransferError::failed("Input/output error"));
         }
@@ -143,7 +144,7 @@ impl Provider for UnreachableAfterFailure {
         _cancel: &Cancellation,
         _progress: &mut dyn FnMut(u64, u64),
     ) -> Result<(), TransferError> {
-        *self.unreachable.lock().expect("reachability") = true;
+        self.unreachable.store(true, Ordering::SeqCst);
         Err(TransferError::failed("Input/output error"))
     }
 }

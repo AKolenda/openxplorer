@@ -34,7 +34,9 @@ fn uploads_publish_by_one_same_folder_rename_from_a_staged_sibling() {
             write(&source, "photo");
         }
         let phone = Arc::new(Phone::default());
+
         let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
+
         assert!(result.errors.is_empty(), "{result:?}");
         assert_eq!(result.done, [uri(&source)]);
         let published = fixture.destination_folder.join("incoming");
@@ -96,7 +98,9 @@ fn a_partial_folder_upload_is_never_visible_under_its_final_name() {
         watched_name: fixture.destination_folder.join("tree"),
         ..WatchedPhone::default()
     });
+
     let result = fixture.copy(phone.clone(), &[&tree], ConflictPolicy::Skip);
+
     assert!(result.errors.is_empty(), "{result:?}");
     let uploads = phone.uploads.lock().expect("upload log");
     assert_eq!(uploads.len(), 2);
@@ -178,7 +182,9 @@ fn file_uploads_work_on_devices_without_move_object() {
             write(&fixture.destination_folder.join("photo.jpg"), existing);
         }
         let phone = Arc::new(Device::without_move_object());
+
         let result = fixture.copy(phone.clone(), &[&source], case.policy);
+
         assert!(result.errors.is_empty(), "{:?}: {result:?}", case.policy);
         assert_eq!(read(&fixture.destination_folder.join(case.published)), "new");
         if case.policy == ConflictPolicy::KeepBoth {
@@ -197,11 +203,13 @@ fn folder_uploads_work_on_devices_without_move_object() {
     let album = fixture.source_folder.join("album");
     fs::create_dir(&album).expect("create the album");
     write(&album.join("photo.jpg"), "photo");
+
     let result = fixture.copy(
         Arc::new(Device::without_move_object()),
         &[&album],
         ConflictPolicy::Skip,
     );
+
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(read(&fixture.destination_folder.join("album/photo.jpg")), "photo");
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
@@ -217,7 +225,9 @@ fn skip_on_a_device_never_touches_the_existing_item() {
     write(&source, "new");
     write(&fixture.destination_folder.join("a"), "old");
     let phone = Arc::new(Device::default());
+
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
+
     assert_eq!(result.skipped, [uri(&source)]);
     assert_eq!(read(&fixture.destination_folder.join("a")), "old");
     assert!(phone.moves().is_empty());
@@ -239,6 +249,7 @@ fn cancelling_an_upload_leaves_no_stage_and_no_final_name() {
                 cancel.cancel();
             }
         });
+
     let result = fixture.run(
         &mut engine,
         &[&source],
@@ -246,6 +257,7 @@ fn cancelling_an_upload_leaves_no_stage_and_no_final_name() {
         ConflictPolicy::Skip,
         None,
     );
+
     assert!(result.cancelled);
     assert!(result.errors.is_empty(), "{result:?}");
     assert!(
@@ -267,6 +279,7 @@ fn device_moves_relist_the_old_folder_once_per_batch() {
     write(&second, "second");
     let device = Arc::new(Device::default());
     let mut engine = fixture.engine(device.clone());
+
     let result = fixture.run(
         &mut engine,
         &[&first, &second],
@@ -274,6 +287,7 @@ fn device_moves_relist_the_old_folder_once_per_batch() {
         ConflictPolicy::Skip,
         None,
     );
+
     assert_eq!(result.done.len(), 2);
     assert_eq!(
         device.refreshes().as_slice(),
@@ -294,6 +308,7 @@ fn a_device_move_that_needs_a_new_name_is_refused_not_misnamed() {
     write(&source, "new");
     write(&fixture.destination_folder.join("a"), "old");
     let mut engine = fixture.engine(Arc::new(Device::default()));
+
     let result = fixture.run(
         &mut engine,
         &[&source],
@@ -301,6 +316,7 @@ fn a_device_move_that_needs_a_new_name_is_refused_not_misnamed() {
         ConflictPolicy::KeepBoth,
         None,
     );
+
     assert!(result.done.is_empty());
     assert!(result.errors[0].contains("not both"), "{result:?}");
     assert_eq!(read(&source), "new");

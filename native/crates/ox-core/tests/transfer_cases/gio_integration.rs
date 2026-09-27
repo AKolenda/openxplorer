@@ -198,6 +198,7 @@ fn replace_and_delete_through_gio_keep_a_snapshot_inside_the_folder() {
         ConflictPolicy::Replace,
         None,
     );
+
     let removed = fixture.run(
         &mut engine,
         &[&target],
