@@ -28,11 +28,6 @@ const ISO_DATE: &str = "%Y-%m-%d";
 /// Used when the locale's time format cannot be mapped to numbers.
 const ISO_TIME: &str = "%H:%M:%S";
 
-/// The reference time: 22 November 2033, 13:44:55 UTC. Every field prints
-/// different digits, and the hour reads `13` in 24-hour locales and `01`
-/// or `1` in 12-hour ones.
-const REFERENCE: (i32, i32, i32, i32, i32, f64) = (2033, 11, 22, 13, 44, 55.0);
-
 /// The `strftime` patterns for dates and clock times in one locale.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct LocalePatterns {
@@ -81,8 +76,7 @@ impl LocaleSamples {
     /// The samples in the process's current `LC_TIME` locale. A sample
     /// that cannot be produced stays empty, which selects the ISO pattern.
     fn from_current_locale() -> Self {
-        let (year, month, day, hour, minute, seconds) = REFERENCE;
-        let Ok(reference) = DateTime::from_utc(year, month, day, hour, minute, seconds) else {
+        let Some(reference) = reference_time() else {
             return Self::default();
         };
         let sample = |conversion: &str| {
@@ -110,20 +104,33 @@ pub(super) fn current() -> &'static LocalePatterns {
     PATTERNS.get_or_init(LocalePatterns::from_current_locale)
 }
 
+/// The reference time: 22 November 2033, 13:44:55 UTC. Every field prints
+/// different digits, and the hour reads `13` in 24-hour locales and `01`
+/// or `1` in 12-hour ones. [`date_field`] and [`time_field`] map those
+/// digits back.
+fn reference_time() -> Option<DateTime> {
+    DateTime::from_utc(2033, 11, 22, 13, 44, 55.0).ok()
+}
+
 /// Maps the digits of a formatted reference date back to `%Y`, `%m` and
 /// `%d`. `None` unless each field appears exactly once and nothing else is
 /// numeric.
 fn date_pattern_from_sample(sample: &str) -> Option<String> {
-    let (pattern, fields) = pattern_from_sample(sample, &[], |digits| match digits {
+    let found = pattern_from_sample(sample, &[], date_field)?;
+    let is_complete = [Field::Year, Field::Month, Field::Day]
+        .into_iter()
+        .all(|field| found.has(field));
+    is_complete.then_some(found.pattern)
+}
+
+/// The field a run of digits in the reference date stands for.
+fn date_field(digits: &str) -> Option<Field> {
+    match digits {
         "2033" | "33" => Some(Field::Year),
         "11" => Some(Field::Month),
         "22" => Some(Field::Day),
         _ => None,
-    })?;
-    let complete = [Field::Year, Field::Month, Field::Day]
-        .iter()
-        .all(|field| fields.contains(field));
-    complete.then_some(pattern)
+    }
 }
 
 /// Maps the digits of a formatted reference time back to hours, minutes
@@ -132,28 +139,41 @@ fn date_pattern_from_sample(sample: &str) -> Option<String> {
 /// (`7:35:35 PM`). `None` without an hour and minutes.
 fn time_pattern_from_sample(sample: &str, day_period: &str, zone: &str) -> Option<String> {
     let words = [(day_period, Field::DayPeriod), (zone, Field::Zone)];
-    let (pattern, fields) = pattern_from_sample(sample, &words, |digits| match digits {
+    let found = pattern_from_sample(sample, &words, time_field)?;
+    let has_hour = found.has(Field::Hour24) || found.has(Field::Hour12);
+    let is_complete = has_hour && found.has(Field::Minute);
+    is_complete.then_some(found.pattern)
+}
+
+/// The field a run of digits in the reference time stands for.
+fn time_field(digits: &str) -> Option<Field> {
+    match digits {
         "13" => Some(Field::Hour24),
         "01" | "1" => Some(Field::Hour12),
         "44" => Some(Field::Minute),
         "55" => Some(Field::Second),
         _ => None,
-    })?;
-    let has_hour = fields.contains(&Field::Hour24) || fields.contains(&Field::Hour12);
-    let complete = has_hour && fields.contains(&Field::Minute);
-    complete.then_some(pattern)
+    }
 }
 
 /// A field recognised in a sample.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Field {
+    /// The year, with four or two digits.
     Year,
+    /// The month number.
     Month,
+    /// The day of the month.
     Day,
+    /// The hour on a 24-hour clock.
     Hour24,
+    /// The hour on a 12-hour clock.
     Hour12,
+    /// The minutes.
     Minute,
+    /// The seconds.
     Second,
+    /// The locale's AM or PM text.
     DayPeriod,
     /// A time zone name, which the pattern leaves out.
     Zone,
@@ -176,74 +196,216 @@ impl Field {
     }
 }
 
-/// Splits `sample` into digit runs, known `words` and literal text, and
-/// rebuilds it as a pattern with the fields it found. Literal `%` is
-/// escaped and surrounding spaces are trimmed. Fails when a digit run is
-/// not recognised or a field appears twice.
+/// A pattern rebuilt from a sample, and the fields found in it.
+#[derive(Debug, Default)]
+struct SamplePattern {
+    /// The `strftime` pattern.
+    pattern: String,
+    /// Each field the pattern prints, once.
+    fields: Vec<Field>,
+}
+
+impl SamplePattern {
+    /// True when the pattern prints `field`.
+    fn has(&self, field: Field) -> bool {
+        self.fields.contains(&field)
+    }
+
+    /// Appends the conversion of `field`. `None` when the pattern already
+    /// prints it: the sample is then ambiguous.
+    fn push_field(&mut self, field: Field) -> Option<()> {
+        if self.has(field) {
+            return None;
+        }
+        self.fields.push(field);
+        self.pattern.push_str(field.conversion());
+        Some(())
+    }
+
+    /// Appends a character the sample shows as written; `%` is escaped.
+    fn push_literal(&mut self, character: char) {
+        if character == '%' {
+            self.pattern.push_str("%%");
+        } else {
+            self.pattern.push(character);
+        }
+    }
+}
+
+/// Rebuilds `sample` as a pattern: `field_of_digits` names each run of
+/// digits, `words` name known texts such as the day period, and anything
+/// else stays literal. Surrounding spaces are trimmed. `None` when a run of
+/// digits is not recognised or a field appears twice.
 fn pattern_from_sample(
     sample: &str,
     words: &[(&str, Field)],
-    classify: impl Fn(&str) -> Option<Field>,
-) -> Option<(String, Vec<Field>)> {
-    let mut pattern = String::new();
-    let mut seen: Vec<Field> = Vec::new();
+    field_of_digits: fn(&str) -> Option<Field>,
+) -> Option<SamplePattern> {
+    let mut found = SamplePattern::default();
     let mut rest = sample;
-    while let Some(first) = rest.chars().next() {
-        let (field, length) = if first.is_ascii_digit() {
-            let length = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
-            (Some(classify(&rest[..length])?), length)
-        } else if let Some((word, field)) = find_word(rest, words) {
-            (Some(field), word.len())
-        } else {
-            (None, first.len_utf8())
-        };
-        match field {
-            Some(field) if seen.contains(&field) => return None,
-            Some(field) => {
-                seen.push(field);
-                pattern.push_str(field.conversion());
-            }
-            None if first == '%' => pattern.push_str("%%"),
-            None => pattern.push(first),
+    while let Some((token, after_token)) = next_token(rest, words) {
+        match token {
+            Token::Digits(digits) => found.push_field(field_of_digits(digits)?)?,
+            Token::Word(field) => found.push_field(field)?,
+            Token::Literal(character) => found.push_literal(character),
         }
-        rest = &rest[length..];
+        rest = after_token;
     }
-    Some((pattern.trim().to_string(), seen))
+    found.pattern = found.pattern.trim().to_string();
+    Some(found)
 }
 
-/// The first of `words` that `text` starts with; empty words never match.
-fn find_word<'a>(text: &str, words: &[(&'a str, Field)]) -> Option<(&'a str, Field)> {
+/// One piece of a sample.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Token<'a> {
+    /// A run of ASCII digits.
+    Digits(&'a str),
+    /// One of the known words.
+    Word(Field),
+    /// Any other character.
+    Literal(char),
+}
+
+/// The first token of `text` and the text after it; `None` at the end.
+fn next_token<'a>(text: &'a str, words: &[(&str, Field)]) -> Option<(Token<'a>, &'a str)> {
+    let mut chars = text.chars();
+    let first = chars.next()?;
+    if first.is_ascii_digit() {
+        let digits_end = text.find(|c: char| !c.is_ascii_digit()).unwrap_or(text.len());
+        let (digits, rest) = text.split_at(digits_end);
+        return Some((Token::Digits(digits), rest));
+    }
+    if let Some((field, rest)) = strip_word(text, words) {
+        return Some((Token::Word(field), rest));
+    }
+    Some((Token::Literal(first), chars.as_str()))
+}
+
+/// The field of the first of `words` that `text` starts with, and the text
+/// after that word. Empty words never match.
+fn strip_word<'a>(text: &'a str, words: &[(&str, Field)]) -> Option<(Field, &'a str)> {
     words
         .iter()
-        .copied()
-        .find(|(word, _)| !word.is_empty() && text.starts_with(word))
+        .filter(|(word, _)| !word.is_empty())
+        .find_map(|&(word, field)| Some((field, text.strip_prefix(word)?)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A locale's `%x` sample of 2033-11-22 and the date pattern it gives.
+    struct DateSampleCase {
+        /// Where the sample comes from: a glibc locale, or what it tests.
+        source: &'static str,
+        sample: &'static str,
+        pattern: &'static str,
+    }
+
+    /// A locale's `%X` sample of 13:44:55 UTC, its `%p` text and the time
+    /// pattern they give.
+    struct TimeSampleCase {
+        /// Where the sample comes from: a glibc locale, or what it tests.
+        source: &'static str,
+        sample: &'static str,
+        day_period: &'static str,
+        pattern: &'static str,
+    }
+
+    /// `%x` of 2033-11-22 as glibc locales print it, and one constructed
+    /// case with a literal `%`.
+    const DATE_SAMPLES: [DateSampleCase; 8] = [
+        DateSampleCase {
+            source: "C",
+            sample: "11/22/33",
+            pattern: "%m/%d/%Y",
+        },
+        DateSampleCase {
+            source: "en_US",
+            sample: "11/22/2033",
+            pattern: "%m/%d/%Y",
+        },
+        DateSampleCase {
+            source: "en_GB",
+            sample: "22/11/33",
+            pattern: "%d/%m/%Y",
+        },
+        DateSampleCase {
+            source: "de_DE",
+            sample: "22.11.2033",
+            pattern: "%d.%m.%Y",
+        },
+        DateSampleCase {
+            source: "en_CA, sv_SE",
+            sample: "2033-11-22",
+            pattern: "%Y-%m-%d",
+        },
+        DateSampleCase {
+            source: "ja_JP",
+            sample: "2033年11月22日",
+            pattern: "%Y年%m月%d日",
+        },
+        DateSampleCase {
+            source: "ko_KR",
+            sample: "2033. 11. 22.",
+            pattern: "%Y. %m. %d.",
+        },
+        DateSampleCase {
+            source: "a literal percent sign",
+            sample: "22%11%33",
+            pattern: "%d%%%m%%%Y",
+        },
+    ];
+
+    /// `%X` of 13:44:55 UTC as glibc locales print it, and constructed
+    /// cases for a space-padded hour and a day period before the time.
+    const TIME_SAMPLES: [TimeSampleCase; 6] = [
+        TimeSampleCase {
+            source: "C, de_DE",
+            sample: "13:44:55",
+            day_period: "PM",
+            pattern: "%H:%M:%S",
+        },
+        TimeSampleCase {
+            source: "en_US",
+            sample: "01:44:55 PM",
+            day_period: "PM",
+            pattern: "%-I:%M:%S %p",
+        },
+        TimeSampleCase {
+            source: "en_IN",
+            sample: "01:44:55 PM UTC",
+            day_period: "PM",
+            pattern: "%-I:%M:%S %p",
+        },
+        TimeSampleCase {
+            source: "a space-padded hour",
+            sample: " 1:44:55 pm",
+            day_period: "pm",
+            pattern: "%-I:%M:%S %p",
+        },
+        TimeSampleCase {
+            source: "a day period first",
+            sample: "午後01時44分55秒",
+            day_period: "午後",
+            pattern: "%p%-I時%M分%S秒",
+        },
+        TimeSampleCase {
+            source: "fi_FI",
+            sample: "13.44.55",
+            day_period: "",
+            pattern: "%H.%M.%S",
+        },
+    ];
+
     /// Samples are `%x` of 2033-11-22 as glibc locales print it.
     ///
     /// parity: LOOK-026
     #[test]
     fn date_patterns_keep_the_locale_order_with_a_full_year() {
-        let cases = [
-            ("11/22/33", "%m/%d/%Y"),           // C
-            ("11/22/2033", "%m/%d/%Y"),         // en_US
-            ("22/11/33", "%d/%m/%Y"),           // en_GB
-            ("22.11.2033", "%d.%m.%Y"),         // de_DE
-            ("2033-11-22", "%Y-%m-%d"),         // en_CA, sv_SE
-            ("2033年11月22日", "%Y年%m月%d日"), // ja_JP
-            ("2033. 11. 22.", "%Y. %m. %d."),   // ko_KR
-            ("22%11%33", "%d%%%m%%%Y"),         // a literal percent sign
-        ];
-        for (sample, expected) in cases {
-            assert_eq!(
-                date_pattern_from_sample(sample).as_deref(),
-                Some(expected),
-                "{sample}"
-            );
+        for case in &DATE_SAMPLES {
+            let pattern = date_pattern_from_sample(case.sample);
+            assert_eq!(pattern.as_deref(), Some(case.pattern), "{}", case.source);
         }
     }
 
@@ -266,20 +428,9 @@ mod tests {
     /// parity: LOOK-026
     #[test]
     fn time_patterns_follow_the_locale_clock() {
-        let cases = [
-            ("13:44:55", "PM", "%H:%M:%S"),                  // C, de_DE
-            ("01:44:55 PM", "PM", "%-I:%M:%S %p"),           // en_US
-            ("01:44:55 PM UTC", "PM", "%-I:%M:%S %p"),       // en_IN
-            (" 1:44:55 pm", "pm", "%-I:%M:%S %p"),           // space-padded hour
-            ("午後01時44分55秒", "午後", "%p%-I時%M分%S秒"), // a day period first
-            ("13.44.55", "", "%H.%M.%S"),
-        ];
-        for (sample, period, expected) in cases {
-            assert_eq!(
-                time_pattern_from_sample(sample, period, "UTC").as_deref(),
-                Some(expected),
-                "{sample}"
-            );
+        for case in &TIME_SAMPLES {
+            let pattern = time_pattern_from_sample(case.sample, case.day_period, "UTC");
+            assert_eq!(pattern.as_deref(), Some(case.pattern), "{}", case.source);
         }
         assert_eq!(time_pattern_from_sample("PM", "PM", "UTC"), None);
         assert_eq!(time_pattern_from_sample("13:44:55:13", "", "UTC"), None);
