@@ -9,8 +9,10 @@
 
 use gtk::prelude::*;
 use gtk::{gio, pango};
+use ox_core::format;
 
 use crate::folder_view::grid::IconSize;
+use crate::folder_view::model::SelectionSummary;
 use crate::folder_view::sorting::SortColumn;
 use crate::icons::{self, Glyph};
 use crate::theme::Appearance;
@@ -232,6 +234,53 @@ fn typeahead_hint() -> gtk::Label {
         .build()
 }
 
+/// What the status bar reports about the active tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum StatusSubject {
+    /// A landing page, which has nothing to count.
+    Page,
+    /// A folder listing.
+    Folder {
+        /// Items shown after filtering.
+        shown: u32,
+        /// The selection's count and size.
+        selected: SelectionSummary,
+        /// The folder is still being listed.
+        loading: bool,
+    },
+}
+
+/// The status-bar line (`updateStatus` in `desktop/ui/app.js`): "Ready" on
+/// a landing page; otherwise how many items are shown, how many are
+/// selected and how large the selected files are, and "Loading…" while
+/// the folder is listed.
+pub(super) fn status_text(subject: StatusSubject) -> String {
+    let StatusSubject::Folder {
+        shown,
+        selected,
+        loading,
+    } = subject
+    else {
+        return "Ready".to_owned();
+    };
+    let items = if shown == 1 {
+        "1 item".to_owned()
+    } else {
+        format!("{shown} items")
+    };
+    let mut parts = vec![items];
+    if selected.count > 0 {
+        parts.push(format!("{} selected", selected.count));
+    }
+    if selected.count > 0 && selected.has_files {
+        parts.push(format::pretty_bytes(selected.bytes));
+    }
+    if loading {
+        parts.push("Loading…".to_owned());
+    }
+    parts.join("  ·  ")
+}
+
 fn view_button(glyph: Glyph, tooltip: &str, view: FolderView) -> gtk::Button {
     let button = icon_button(glyph, tooltip, "win.view");
     button.set_action_target_value(Some(&view.key().to_variant()));
@@ -323,5 +372,40 @@ impl Chrome {
             .filter(|button| button.has_css_class("active"))
             .filter_map(|button| button.tooltip_text().map(|text| text.to_string()))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder(shown: u32, selected: SelectionSummary, loading: bool) -> String {
+        status_text(StatusSubject::Folder {
+            shown,
+            selected,
+            loading,
+        })
+    }
+
+    #[test]
+    fn the_status_counts_items_and_the_selection() {
+        let nothing = SelectionSummary::default();
+        assert_eq!(folder(1, nothing, false), "1 item");
+        assert_eq!(folder(4, nothing, true), "4 items  ·  Loading…");
+        let two_files = SelectionSummary {
+            count: 2,
+            bytes: 2048,
+            has_files: true,
+        };
+        let size = format::pretty_bytes(2048);
+        assert_eq!(
+            folder(4, two_files, false),
+            format!("4 items  ·  2 selected  ·  {size}")
+        );
+    }
+
+    #[test]
+    fn a_landing_page_is_ready() {
+        assert_eq!(status_text(StatusSubject::Page), "Ready");
     }
 }

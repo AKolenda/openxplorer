@@ -35,11 +35,12 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::folder_view::model::FolderModel;
+use crate::locations::Page;
 use crate::shared::AppContext;
 use crate::theme::{Appearance, ListenerId, Skin};
 use crate::typeahead;
 
-use chrome::Chrome;
+use chrome::{Chrome, StatusSubject};
 use content::Content;
 use details_pane::DetailsPane;
 use sidebar::Sidebar;
@@ -351,23 +352,17 @@ impl BrowserWindow {
     }
 
     fn update_status(&self) {
-        let count = self.content().model.n_items();
-        let selected = self.content().model.summary();
-        let mut parts = vec![if count == 1 {
-            "1 item".to_owned()
+        let on_page = self.current_uri().as_deref().and_then(Page::from_uri).is_some();
+        let subject = if on_page {
+            StatusSubject::Page
         } else {
-            format!("{count} items")
-        }];
-        if selected.count > 0 {
-            parts.push(format!("{} selected", selected.count));
-        }
-        if selected.count > 0 && selected.has_files {
-            parts.push(ox_core::format::pretty_bytes(selected.bytes));
-        }
-        if self.is_loading() {
-            parts.push("Loading…".to_owned());
-        }
-        self.chrome().status.set_text(&parts.join("  ·  "));
+            StatusSubject::Folder {
+                shown: self.content().model.n_items(),
+                selected: self.content().model.summary(),
+                loading: self.is_loading(),
+            }
+        };
+        self.chrome().status.set_text(&chrome::status_text(subject));
     }
 
     fn update_details_pane(&self) {
