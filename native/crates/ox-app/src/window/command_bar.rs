@@ -258,7 +258,7 @@ fn more_menu() -> Vec<MenuEntry> {
     entries.push(MenuItem::toggle("Show hidden files", Glyph::Eye, "win.hidden").into());
     entries.extend([
         MenuEntry::Divider,
-        MenuItem::new("Select all", Glyph::Check, "win.select-all")
+        MenuItem::new("Select all", Glyph::List, "win.select-all")
             .with_shortcut("Ctrl+A")
             .into(),
         MenuItem::new("Select none", Glyph::Cancel, "win.select-none").into(),

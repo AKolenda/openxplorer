@@ -15,6 +15,9 @@ use gtk::subclass::prelude::*;
 
 use crate::icons::{self, Glyph};
 
+/// The class of a row that follows a divider.
+const AFTER_DIVIDER: &str = "after-divider";
+
 /// Whether an item shows a check mark.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ItemCheck {
@@ -133,6 +136,15 @@ mod imp {
                 .activate_on_single_click(true)
                 .accessible_role(gtk::AccessibleRole::Menu)
                 .build();
+            // A divider is the header of the row after it, so the keyboard
+            // never lands on it. GTK clears the headers of a list without a
+            // header function, so rows only carry a class.
+            list.set_header_func(|row, _| {
+                let divider = row
+                    .has_css_class(super::AFTER_DIVIDER)
+                    .then(|| gtk::Separator::new(gtk::Orientation::Horizontal));
+                row.set_header(divider.as_ref());
+            });
             // A row runs its action itself; the menu then closes, as
             // `closeMenu()` before `it.fn()` in app.js.
             list.connect_row_activated(glib::clone!(
@@ -179,8 +191,6 @@ impl MenuPopover {
     }
 
     /// Rebuilds the rows, reading each action's state for its check mark.
-    /// A divider is drawn as the next row's header, so the keyboard never
-    /// lands on it.
     fn redraw(&self) {
         let list = self.list();
         list.remove_all();
@@ -192,7 +202,7 @@ impl MenuPopover {
             };
             let row = item_row(item, self.is_checked(item));
             if std::mem::take(&mut after_divider) {
-                row.set_header(Some(&gtk::Separator::new(gtk::Orientation::Horizontal)));
+                row.add_css_class(AFTER_DIVIDER);
             }
             list.append(&row);
         }
