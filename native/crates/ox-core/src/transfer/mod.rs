@@ -14,6 +14,7 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `engine` | The public API and the per-item loop (`run`, `_run_items`) |
+//! | `conflicts` | Skip, Keep both and Replace: the destination name |
 //! | `staged_copy` | Staging, publishing and device checks for one copy |
 //! | `copy` | The recursive copy into staging (`_copy`) |
 //! | `commit` | Publishing, Replace and reversible replacement |
@@ -34,6 +35,7 @@
 //! backend limitations are documented in [`crate::gio_node`].
 
 mod commit;
+mod conflicts;
 mod copy;
 mod engine;
 mod error;

@@ -1,31 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The transfer orchestration. Port of `TransferEngine.run` and
 //! `_run_items` in `desktop/operations.py`; see the module documentation for
-//! the rules. The copy of one item (staging, publishing, device checks) is
-//! in `staged_copy.rs`.
+//! the rules. The destination name is chosen in `conflicts.rs`, and the copy
+//! of one item (staging, publishing, device checks) is in `staged_copy.rs`.
 
 use std::collections::HashSet;
-use std::ffi::OsStr;
 use std::fmt;
 use std::time::Duration;
 
 use super::commit::commit_replace;
+use super::conflicts::Placement;
 use super::error::TransferError;
 use super::guard::{check_write_tree, guard_destination, SourceChange};
 use super::labels::{completed_label, item_label};
-use super::names::child_node;
 use super::node::{Cancellation, Node, NodeFactory, NodeKind, WriteGuard};
 use super::staged_copy::{StageSlot, StagedCopy};
 use super::staging::{discard_stage, leftover_report};
 use super::types::{progress_fraction, ConflictPolicy, Progress, TransferMode, TransferResult};
-use crate::location::try_new_copy_name;
 
 /// The most items one run accepts.
 pub const MAX_ITEMS: usize = 100_000;
-
-/// "Keep both" tries `(copy 2)` up to `(copy 9999)`, like the Python app,
-/// then gives up.
-const MAX_COPY_NUMBER: u32 = 10_000;
 
 type Emit = Box<dyn FnMut(Progress) + Send>;
 type Sleep = Box<dyn Fn(Duration) + Send + Sync>;
@@ -242,7 +236,13 @@ impl TransferEngine {
         if selected.kind == NodeKind::Directory {
             guard_destination(source, dest_dir)?;
         }
-        let Some(destination) = destination_for(batch, dest_dir, &selected)? else {
+        let placement = Placement {
+            mode: batch.mode,
+            policy: batch.policy,
+            dest_dir,
+            cancel: batch.cancel,
+        };
+        let Some(destination) = placement.destination_for(source, selected.kind)? else {
             return Ok(ItemOutcome::Skipped);
         };
         let destination = destination.as_ref();
@@ -393,62 +393,6 @@ fn deduplicate(uris: &[String]) -> Vec<String> {
         .filter(|uri| seen.insert(uri.as_str()))
         .cloned()
         .collect()
-}
-
-/// The item the source becomes in `dest_dir`, or `None` when it is skipped:
-/// a move into the folder it is already in, or a taken name with Skip.
-fn destination_for(
-    batch: &Batch,
-    dest_dir: &dyn Node,
-    source: &SelectedItem,
-) -> Result<Option<Box<dyn Node>>, TransferError> {
-    let source_name = source.node.name();
-    let destination = child_node(dest_dir, &source_name)?;
-    // Moving an item into its own folder would change nothing; with Keep
-    // both it would even rename the user's item.
-    if batch.mode == TransferMode::Move && destination.uri() == source.node.uri() {
-        return Ok(None);
-    }
-    if !destination.exists(Some(batch.cancel)) {
-        return Ok(Some(destination));
-    }
-    match batch.policy {
-        // Skip never touches the existing item.
-        ConflictPolicy::Skip => Ok(None),
-        ConflictPolicy::KeepBoth => {
-            free_copy_name(dest_dir, &source_name, source.kind, batch.cancel).map(Some)
-        }
-        ConflictPolicy::Replace => Ok(Some(destination)),
-    }
-}
-
-/// The first free Windows-style duplicate name, starting at `(copy 2)`.
-fn free_copy_name(
-    dest_dir: &dyn Node,
-    source_name: &OsStr,
-    kind: NodeKind,
-    cancel: &Cancellation,
-) -> Result<Box<dyn Node>, TransferError> {
-    // Duplicate names are text. A name that is not UTF-8 is refused rather
-    // than given a lossily converted "(copy N)" name.
-    let Some(source_name) = source_name.to_str() else {
-        return Err(TransferError::failed(
-            "This item's name is not valid UTF-8, so no duplicate name can be made. \
-             Rename it before choosing Keep both.",
-        ));
-    };
-    let is_folder = kind == NodeKind::Directory;
-    for number in 2..MAX_COPY_NUMBER {
-        cancel.check()?;
-        let name = try_new_copy_name(source_name, number, is_folder)?;
-        let candidate = child_node(dest_dir, &name)?;
-        if !candidate.exists(Some(cancel)) {
-            return Ok(candidate);
-        }
-    }
-    Err(TransferError::failed(
-        "Too many duplicate names. Rename the item before copying.",
-    ))
 }
 
 /// The folders moves took items from, each once, in first-use order.
