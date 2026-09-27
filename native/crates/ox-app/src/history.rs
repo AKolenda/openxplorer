@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! Per-tab navigation history.
+//!
+//! Ports the history handling of `navigate` and `goHistory` in
+//! `desktop/ui/app.js`: navigating somewhere new drops the forward entries,
+//! navigating to the current location does not add a duplicate, and Back and
+//! Forward move within the list without changing it.
+
+/// The locations a tab has visited, with the current position.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct History {
+    entries: Vec<String>,
+    index: usize,
+}
+
+impl History {
+    /// A history holding only `uri`.
+    pub fn new(uri: &str) -> Self {
+        Self {
+            entries: vec![uri.to_string()],
+            index: 0,
+        }
+    }
+
+    /// The location currently shown.
+    pub fn current(&self) -> &str {
+        &self.entries[self.index]
+    }
+
+    /// Records a navigation to `uri`. Returns false (and changes nothing)
+    /// when `uri` is already the current location.
+    pub fn push(&mut self, uri: &str) -> bool {
+        if self.current() == uri {
+            return false;
+        }
+        self.entries.truncate(self.index + 1);
+        self.entries.push(uri.to_string());
+        self.index = self.entries.len() - 1;
+        true
+    }
+
+    /// Replaces the current location without adding an entry, for example
+    /// when a location resolves to a different canonical URI.
+    pub fn replace_current(&mut self, uri: &str) {
+        self.entries[self.index] = uri.to_string();
+    }
+
+    /// True when Back has somewhere to go.
+    pub fn can_go_back(&self) -> bool {
+        self.index > 0
+    }
+
+    /// True when Forward has somewhere to go.
+    pub fn can_go_forward(&self) -> bool {
+        self.index + 1 < self.entries.len()
+    }
+
+    /// Moves `delta` steps (negative for Back) and returns the new current
+    /// location, or `None` (without moving) when that is out of range.
+    pub fn go(&mut self, delta: isize) -> Option<&str> {
+        let target = self.index.checked_add_signed(delta)?;
+        if target >= self.entries.len() {
+            return None;
+        }
+        self.index = target;
+        Some(self.current())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_new_history_has_nowhere_to_go() {
+        let history = History::new("file:///a");
+        assert_eq!(history.current(), "file:///a");
+        assert!(!history.can_go_back());
+        assert!(!history.can_go_forward());
+    }
+
+    #[test]
+    fn navigating_to_the_current_location_adds_nothing() {
+        let mut history = History::new("file:///a");
+        assert!(!history.push("file:///a"));
+        assert!(!history.can_go_back());
+    }
+
+    #[test]
+    fn back_and_forward_move_without_changing_entries() {
+        let mut history = History::new("file:///a");
+        history.push("file:///b");
+        history.push("file:///c");
+        assert_eq!(history.go(-1), Some("file:///b"));
+        assert_eq!(history.go(-1), Some("file:///a"));
+        assert_eq!(history.go(-1), None);
+        assert_eq!(history.current(), "file:///a");
+        assert_eq!(history.go(2), Some("file:///c"));
+        assert_eq!(history.go(1), None);
+    }
+
+    #[test]
+    fn navigating_after_back_drops_forward_entries() {
+        let mut history = History::new("file:///a");
+        history.push("file:///b");
+        history.push("file:///c");
+        history.go(-2);
+        history.push("file:///d");
+        assert!(!history.can_go_forward());
+        assert_eq!(history.go(-1), Some("file:///a"));
+        assert_eq!(history.go(1), Some("file:///d"));
+    }
+
+    #[test]
+    fn replacing_keeps_the_position() {
+        let mut history = History::new("file:///a");
+        history.push("smb://nas/share");
+        history.replace_current("smb://nas/share/");
+        assert_eq!(history.current(), "smb://nas/share/");
+        assert_eq!(history.go(-1), Some("file:///a"));
+    }
+}

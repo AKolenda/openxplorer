@@ -1,0 +1,35 @@
+name: Native Rust checks
+on:
+  pull_request:
+    paths: ['native/**', '.github/workflows/native-checks.yml', 'desktop/**']
+  push:
+    branches: [main]
+    paths: ['native/**', '.github/workflows/native-checks.yml', 'desktop/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    # Public code is checked on a hosted runner, never the production LAN host.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install GTK4 and isolated-display test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev xvfb xauth dbus-x11
+      - name: Install the minimum supported Rust toolchain
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt --component clippy
+          rustup override set 1.92.0
+      - name: Format, lint, test core behavior and exercise real GTK widgets
+        run: python3 native/tools/check.py
+      - name: Verify corresponding-source and public-data policies
+        run: |
+          python3 -m unittest discover -s tests -p 'test_release_source.py'
+          python3 -m unittest discover -s tests -p 'test_public_data.py'

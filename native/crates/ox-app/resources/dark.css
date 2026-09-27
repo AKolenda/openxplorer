@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Dark palette: the :root[data-theme="dark"] tokens in desktop/ui/style.css. */
+@define-color ox_bg #202020;
+@define-color ox_chrome #262626;
+@define-color ox_title #191919;
+@define-color ox_sidebar #252525;
+@define-color ox_text #f1f1f1;
+@define-color ox_muted #aaaaaa;
+@define-color ox_border #373737;
+@define-color ox_hover #343434;
+@define-color ox_pressed #3a3a3a;
+@define-color ox_selected #263c50;
+@define-color ox_selected_edge alpha(#80b4e0, .16);
+@define-color ox_accent #74beff;
+@define-color ox_error #ff9b96;
+@define-color ox_field_bottom #5a5a5a;
+@define-color ox_tab_hover alpha(white, .05);
+@define-color ox_crumb_divider #9a9a9a;
+@define-color ox_pin #80858a;
+@define-color ox_menu_shadow alpha(black, .4);

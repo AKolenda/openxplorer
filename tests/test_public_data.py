@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Publication privacy checks using fictional identifiers and temporary files."""
 import base64
+from contextlib import chdir
 import importlib.util
 import json
 import os
@@ -86,6 +87,33 @@ class PublicDataAuditTests(unittest.TestCase):
         self.audit.deny_terms(['Fictício Cliente'])
         path = self.put('inputs/example.txt', 'Example: FICTÍCIO CLIENTE.')
         self.assertFalse(self.audit.audit([path])['passed'])
+
+    def test_rust_sources_manifests_and_lockfiles_are_audited(self):
+        self.audit.deny_terms(['Fictional Private Customer'])
+        for suffix in ('.rs', '.toml', '.lock'):
+            with self.subTest(suffix=suffix):
+                path = self.put('native/example' + suffix, 'Fictional Private Customer')
+                result = self.audit.audit([path])
+                self.assertFalse(result['passed'])
+                self.assertEqual(result['uniqueTextFiles'], 1)
+
+    def test_rust_build_outputs_are_pruned_before_reading(self):
+        self.audit.deny_terms(['Fictional Private Customer'])
+        self.put('native/Cargo.toml', '[workspace]')
+        self.put('native/target/debug/build/output.rs', 'Fictional Private Customer')
+        seen = []
+        real_walk = os.walk
+
+        def walk(*args, **kwargs):
+            for directory, children, names in real_walk(*args, **kwargs):
+                seen.append(Path(directory).relative_to(self.root).as_posix())
+                yield directory, children, names
+
+        with chdir(self.root), patch.object(self.audit.os, 'walk', side_effect=walk):
+            result = self.audit.audit([Path('native')])
+        self.assertTrue(result['passed'], result['issues'])
+        self.assertEqual(result['uniqueTextFiles'], 1)
+        self.assertNotIn('native/target', seen)
 
     def test_each_filename_is_checked_even_when_payloads_match(self):
         self.audit.deny_terms(['privatecustomer'])

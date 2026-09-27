@@ -1,17 +1,58 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Location parsing and validation.
+//! Location parsing, validation and presentation.
 //!
-//! Ports `desktop/core.py` (`normalise_location`, `split_location`,
-//! `validate_name`, `new_copy_name`, `require_item_uri`, `is_smb_server`,
-//! `is_device_location`) and the display helpers from `desktop/ui/app.js`
-//! (`displayUri`, `baseName`, `parentUri`, `breadcrumbs`, `networkLocation`).
-//! Locations are always absolute URIs: `file://`, `smb://`, or a connected
-//! device (`mtp://`, `gphoto2://`, `afc://`), plus the virtual `trash:///`
-//! and `recent:///` folders.
+//! Ports `desktop/core.py` (`split_location`, `is_device_location`,
+//! `_normalise_device_location`, `validate_name`, `normalise_location`,
+//! `require_share`, `new_copy_name`, `safe_label`, `is_smb_server`,
+//! `require_item_uri`) and the display helpers from `desktop/ui/app.js`
+//! (`displayUri`, `baseName`, `parentUri`, `locationParts`, `deviceParts`,
+//! `deviceRoot`, `breadcrumbSegments`, `networkLocation`, `sameLocation`,
+//! `writableLocation`, `readonlyLocation`, `titleFor`).
+//!
+//! Folder locations are always absolute URIs: `file://`, `smb://`, or a
+//! connected device (`mtp://`, `gphoto2://`, `afc://`). Their canonical
+//! form is byte-for-byte what the Python app produces, because both apps
+//! share `~/.config/winspace/settings.json` and compare URIs as strings.
+//!
+//! Besides folders, the window can show the places in [`VirtualPlace`]:
+//!
+//! | Place | URI | Title |
+//! |---|---|---|
+//! | Home page | [`HOME_URI`] (`ox:home`) | Home |
+//! | This PC | [`PC_URI`] (`ox:pc`) | This PC |
+//! | Settings page | [`SETTINGS_URI`] (`ox:settings`) | Settings |
+//! | Network | [`NETWORK_URI`] (`network:///`) | Network |
+//! | Trash | [`TRASH_URI`] (`trash:///`) | Recycle Bin |
+//! | Recently used files | [`RECENT_URI`] (`recent:///`) | Recent |
+//!
+//! The web UI's spellings `home:`, `pc:`, `network:` and `settings:` are
+//! accepted as input by [`normalise_navigation`] and [`VirtualPlace::from_uri`].
+//! Use [`normalise_location`] for anything stored in settings (it rejects
+//! virtual places, like the Python function) and [`normalise_navigation`]
+//! for tab history, the address bar and command-line arguments.
 
-use std::path::Path;
+mod display;
+mod names;
+mod normalise;
+mod parts;
+mod text;
+mod virtual_place;
 
-use gio::prelude::*;
+pub(crate) use text::{python_strip, unquote_lossy};
+
+pub use display::{
+    base_name, breadcrumbs, crumb_divider, device_root, display_location, is_network_filesystem,
+    is_smb_share_root, parent_location, same_location, title_for, DeviceLabel, LocationContext,
+};
+pub use names::{new_copy_name, safe_label, try_new_copy_name, validate_name, MAX_LABEL_CHARS};
+pub use normalise::{
+    file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
+};
+pub use parts::{split_location, LocationParts};
+pub use virtual_place::{
+    is_virtual_location, normalise_navigation, virtual_place, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI,
+    RECENT_URI, SETTINGS_URI, TRASH_URI,
+};
 
 /// Portable-device GVfs schemes. Their authorities can contain brackets
 /// (`mtp://[usb:001,002]/`), which ordinary URL parsers reject.
@@ -22,114 +63,52 @@ pub const DEVICE_SCHEMES: [&str; 3] = ["mtp", "gphoto2", "afc"];
 #[error("{0}")]
 pub struct LocationError(pub String);
 
+impl LocationError {
+    /// An error with the given user-facing message.
+    pub fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+
+    /// The user-facing message.
+    pub fn message(&self) -> &str {
+        &self.0
+    }
+}
+
 /// One breadcrumb button in the address bar.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Crumb {
+    /// The decoded text on the button.
     pub label: String,
+    /// The location the button opens.
     pub uri: String,
 }
 
-/// Accepts Linux paths (`/x`, `~/x`, relative to `base`), `file://` and
-/// `smb://` URIs, UNC paths (`\\server\share`) and connected-device URIs, and
-/// returns one canonical URI. Never runs a shell or expands variables.
-pub fn normalise_location(value: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
-    let value = value.trim();
-    if value.is_empty() {
-        return Err(LocationError(
-            "Enter a local folder path or an SMB address.".into(),
-        ));
-    }
-    if value.starts_with('/') {
-        return Ok(gio::File::for_path(value).uri().to_string());
-    }
-    if let Some(rest) = value.strip_prefix("~/") {
-        return Ok(gio::File::for_path(home.join(rest)).uri().to_string());
-    }
-    let _ = base;
-    Ok(gio::File::for_uri(value).uri().to_string())
-}
-
-/// Validates a single file or folder name.
-pub fn validate_name(name: &str) -> Result<&str, LocationError> {
-    if name.is_empty() || name == "." || name == ".." {
-        return Err(LocationError(
-            "Enter a non-empty file name, not “.” or “..”.".into(),
-        ));
-    }
-    if name.contains('/') || name.contains('\\') || name.chars().any(char::is_control) {
-        return Err(LocationError(
-            "A name cannot contain slashes or control characters.".into(),
-        ));
-    }
-    if name.len() > 255 {
-        return Err(LocationError("This name is longer than 255 bytes.".into()));
-    }
-    Ok(name)
-}
-
-/// Windows-style duplicate name: `Report (2).txt`, `Folder (3)`.
-pub fn new_copy_name(name: &str, count: u32, is_dir: bool) -> String {
-    match name.rfind('.') {
-        Some(dot) if !is_dir && dot > 0 => format!("{} ({count}){}", &name[..dot], &name[dot..]),
-        _ => format!("{name} ({count})"),
+impl Crumb {
+    /// A crumb labelled `label` that opens `uri`.
+    pub fn new(label: impl Into<String>, uri: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            uri: uri.into(),
+        }
     }
 }
 
-/// The URI scheme, lower-cased (`file`, `smb`, `mtp`, ...).
+/// The URI scheme, lower-cased (`file`, `smb`, `mtp`, ...), or an empty
+/// string for a plain path. Follows Python's `urlsplit` rule: the text
+/// before the first `:` must be a letter followed by letters, digits, `+`,
+/// `-` or `.`.
 pub fn scheme(uri: &str) -> String {
-    uri.split_once(':')
-        .map(|(s, _)| s.to_ascii_lowercase())
+    parts::url_scheme(uri)
+        .map(|(scheme, _)| scheme)
         .unwrap_or_default()
 }
 
-/// True for phones, cameras and iOS devices.
+/// True for phones, cameras and iOS devices (`mtp:`, `gphoto2:`, `afc:`).
+/// Unparseable input is not a device location.
 pub fn is_device_location(uri: &str) -> bool {
-    DEVICE_SCHEMES.contains(&scheme(uri).as_str())
-}
-
-/// True for an SMB server listing (`smb://host/`), which holds shares.
-pub fn is_smb_server(uri: &str) -> bool {
-    scheme(uri) == "smb"
-        && uri
-            .splitn(4, '/')
-            .nth(3)
-            .map_or(true, |p| p.trim_matches('/').is_empty())
-}
-
-/// The parent folder, or `None` at a root.
-pub fn parent_location(uri: &str) -> Option<String> {
-    gio::File::for_uri(uri).parent().map(|p| p.uri().to_string())
-}
-
-/// The last path component for titles and tab labels.
-pub fn base_name(uri: &str) -> String {
-    let file = gio::File::for_uri(uri);
-    match file.basename() {
-        Some(name) if name.as_os_str() != "/" => name.to_string_lossy().into_owned(),
-        _ => "Local Disk".into(),
+    match split_location(uri) {
+        Ok(parts) => DEVICE_SCHEMES.contains(&parts.scheme.as_str()),
+        Err(_) => false,
     }
-}
-
-/// Text for the editable address bar: a plain path for local folders,
-/// `\\server\share\...` for SMB, otherwise the URI.
-pub fn display_location(uri: &str) -> String {
-    gio::File::for_uri(uri)
-        .path()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| uri.to_string())
-}
-
-/// Breadcrumb buttons from the root to `uri`.
-pub fn breadcrumbs(uri: &str) -> Vec<Crumb> {
-    let mut crumbs = Vec::new();
-    let mut current = Some(gio::File::for_uri(uri));
-    while let Some(file) = current {
-        crumbs.push(Crumb {
-            label: base_name(&file.uri()),
-            uri: file.uri().to_string(),
-        });
-        current = file.parent();
-    }
-    crumbs.reverse();
-    crumbs
 }

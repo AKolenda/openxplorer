@@ -34,6 +34,9 @@ class SourceArchiveTests(unittest.TestCase):
                     'apps/web/components/product.tsx', 'apps/web/public/assets/site.css',
                     'apps/web/public/assets/screenshots/manifest.json', 'docs/PRIVACY.md',
                     'apps/web/.env.example', 'apps/web/.dev.vars.example']
+        expected += ['native/Cargo.toml', 'native/Cargo.lock', 'native/rustfmt.toml',
+                     'native/crates/ox-app/src/main.rs', 'native/crates/ox-app/resources/style.css',
+                     'native/crates/ox-core/tests/entry_enumeration.rs']
         for path in reversed(expected):
             self.put(path)
         self.assertEqual(self.selected(), sorted(expected))
@@ -52,6 +55,8 @@ class SourceArchiveTests(unittest.TestCase):
                     '.tmp/note.txt', 'temp/note.txt', '.temp/note.txt',
                     'apps/web/public/downloads/SHA256SUMS', 'apps/web/public/app-preview.html',
                     'apps/web/public/assets/site.js', 'desktop/preview.html']
+        excluded += ['native/target/debug/openxplorer-native', 'native/target/debug/deps/object.o',
+                     'native/target/.rustc_info.json']
         for path in excluded:
             self.put(path)
         self.put('desktop/ui/index.html')
@@ -136,6 +141,8 @@ class SourceArchiveTests(unittest.TestCase):
                  'apps/web/public/downloads/SHA256SUMS': True, 'pnpm-lock.yaml': False,
                  'wrangler.jsonc': False, 'desktop/ui/app.js': False,
                  'licenses/Winspace-MIT.txt': False, '.github/workflows/checks.yml': False}
+        cases.update({'native/target/debug/openxplorer-native': True,
+                      'native/Cargo.toml': False, 'native/Cargo.lock': False})
         for name, expected in cases.items():
             self.put(name)
             with self.subTest(path=name):

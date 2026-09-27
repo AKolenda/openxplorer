@@ -1,0 +1,424 @@
+{
+  "schema": 1,
+  "scope": "Legacy bridge operations only. See ROADMAP.md for UI, Dolphin and native integration requirements.",
+  "methods": {
+    "activateItem": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "applications": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "archiveExtract": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "archiveInspect": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "archiveList": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "archiveOpenMember": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "authReply": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "beginFileDrag": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "beginTabDrag": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "bookmark": {
+      "status": "core-tested",
+      "note": "Stored pin/network preferences and GIO pin classification tested; complete pin/reorder/unpin UI remains pending.",
+      "evidence": [
+        "native/crates/ox-core/src/settings/tests.rs",
+        "native/crates/ox-core/src/entry/inspect.rs"
+      ]
+    },
+    "braveRestore": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "braveStatus": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "braveSync": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "cacheClear": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "cacheRefresh": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "cacheRemove": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "cacheSet": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "cacheStatus": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "cacheStop": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "cancel": {
+      "status": "core-tested",
+      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
+      "evidence": [
+        "native/crates/ox-core/tests/transfer.rs",
+        "native/crates/ox-core/tests/gio_node.rs"
+      ]
+    },
+    "chrome": {
+      "status": "pending",
+      "note": "Legacy WebKit transport mechanism. Native toolkit replacement still needs equivalent interaction/lifecycle verification; a deleted bridge is not proof of feature parity.",
+      "evidence": []
+    },
+    "clipboardConsume": {
+      "status": "core-tested",
+      "note": "Validated GNOME/KDE/custom formats and cut identity tested; native clipboard ownership and asynchronous reads are not wired.",
+      "evidence": [
+        "native/crates/ox-core/src/clipboard/tests.rs"
+      ]
+    },
+    "clipboardGet": {
+      "status": "core-tested",
+      "note": "Validated GNOME/KDE/custom formats and cut identity tested; native clipboard ownership and asynchronous reads are not wired.",
+      "evidence": [
+        "native/crates/ox-core/src/clipboard/tests.rs"
+      ]
+    },
+    "clipboardSet": {
+      "status": "core-tested",
+      "note": "Validated GNOME/KDE/custom formats and cut identity tested; native clipboard ownership and asynchronous reads are not wired.",
+      "evidence": [
+        "native/crates/ox-core/src/clipboard/tests.rs"
+      ]
+    },
+    "clipboardText": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "connect": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "create": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "createTemplate": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "desktopDefault": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "desktopRestore": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "desktopStatus": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "detachTab": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "discover": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "environment": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "fileDragLayout": {
+      "status": "pending",
+      "note": "Legacy WebKit transport mechanism. Native toolkit replacement still needs equivalent interaction/lifecycle verification; a deleted bridge is not proof of feature parity.",
+      "evidence": []
+    },
+    "focusWindow": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "folderSize": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "handoffReady": {
+      "status": "pending",
+      "note": "Legacy WebKit transport mechanism. Native toolkit replacement still needs equivalent interaction/lifecycle verification; a deleted bridge is not proof of feature parity.",
+      "evidence": []
+    },
+    "list": {
+      "status": "core-tested",
+      "note": "GIO enumeration covers batching, hidden files, symlinks and cancellation on temporary local folders. Remote authentication remains pending.",
+      "evidence": [
+        "native/crates/ox-core/tests/entry_enumeration.rs"
+      ]
+    },
+    "locationApply": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "locationCheck": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "mountPlan": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "mountVolume": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "moveTabToWindow": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "newWindow": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "normalise": {
+      "status": "core-tested",
+      "note": "Canonical locations tested against Python and external address fixtures; address-bar integration is separate.",
+      "evidence": [
+        "native/crates/ox-core/tests/location_external.rs"
+      ]
+    },
+    "open": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "openTerminal": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "openWith": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "operate": {
+      "status": "core-tested",
+      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
+      "evidence": [
+        "native/crates/ox-core/tests/transfer.rs",
+        "native/crates/ox-core/tests/gio_node.rs"
+      ]
+    },
+    "pin": {
+      "status": "core-tested",
+      "note": "Stored pin/network preferences and GIO pin classification tested; complete pin/reorder/unpin UI remains pending.",
+      "evidence": [
+        "native/crates/ox-core/src/settings/tests.rs",
+        "native/crates/ox-core/src/entry/inspect.rs"
+      ]
+    },
+    "preferences": {
+      "status": "core-tested",
+      "note": "Shared settings serialization and file locking implemented; complete native settings UI remains pending.",
+      "evidence": [
+        "native/crates/ox-core/src/settings/tests.rs"
+      ]
+    },
+    "previousVersions": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "properties": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "quit": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "rename": {
+      "status": "core-tested",
+      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
+      "evidence": [
+        "native/crates/ox-core/tests/transfer.rs",
+        "native/crates/ox-core/tests/gio_node.rs"
+      ]
+    },
+    "revealDisable": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "revealEnable": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "revealTest": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "search": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "signOut": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "snapshotSource": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "tabDragLayout": {
+      "status": "pending",
+      "note": "Legacy WebKit transport mechanism. Native toolkit replacement still needs equivalent interaction/lifecycle verification; a deleted bridge is not proof of feature parity.",
+      "evidence": []
+    },
+    "tabTransferReady": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "templates": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "transferConflicts": {
+      "status": "core-tested",
+      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
+      "evidence": [
+        "native/crates/ox-core/tests/transfer.rs",
+        "native/crates/ox-core/tests/gio_node.rs"
+      ]
+    },
+    "trashSupport": {
+      "status": "core-tested",
+      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
+      "evidence": [
+        "native/crates/ox-core/tests/transfer.rs",
+        "native/crates/ox-core/tests/gio_node.rs"
+      ]
+    },
+    "uiReady": {
+      "status": "pending",
+      "note": "Legacy WebKit transport mechanism. Native toolkit replacement still needs equivalent interaction/lifecycle verification; a deleted bridge is not proof of feature parity.",
+      "evidence": []
+    },
+    "unmount": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "updateCheck": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "updateInstall": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "updateRestart": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "window": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "windowMetadata": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "windows": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "zipDefault": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "zipRestore": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    }
+  }
+}

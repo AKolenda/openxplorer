@@ -51,6 +51,8 @@ def source_path_excluded(relative: Path, *, directory: bool = False) -> bool:
     Safe example filenames are intentional exceptions, not a content audit.
     """
     parts = tuple(part.casefold() for part in relative.parts)
+    if parts[:2] == ('native', 'target'):
+        return True
     if any(part in OMITTED_DIRECTORIES for part in parts):
         return True
     if parts[:4] == ('apps', 'web', 'public', 'downloads'):

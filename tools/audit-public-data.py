@@ -12,8 +12,18 @@ from pathlib import Path
 from urllib.parse import unquote
 ROOT=Path(__file__).resolve().parents[1]
 DENIED={}
-TEXT={'.py','.js','.cjs','.mjs','.ts','.tsx','.css','.html','.md','.txt','.json','.xml','.yml','.yaml','.sh','.svg','.desktop','.service'}
+TEXT={'.py','.js','.cjs','.mjs','.ts','.tsx','.css','.html','.md','.txt','.json','.xml','.yml','.yaml','.sh','.svg','.desktop','.service','.rs','.toml','.lock'}
 SKIP={'.git','node_modules','.next','.pnpm-store','__pycache__'}
+def audit_files(directory):
+    """Prune build caches before reading; Rust targets are not publication inputs."""
+    for current, children, names in os.walk(directory, followlinks=False):
+        current = Path(current)
+        children[:] = sorted(name for name in children
+                             if name not in SKIP and current / name != ROOT / 'native/target')
+        for name in sorted(names):
+            path = current / name
+            if name not in SKIP and path.is_file():
+                yield path
 def digest(data):return hashlib.sha256(data).hexdigest()
 def deny_terms(terms):
     """Keep supplied identifiers in memory only, including full names/addresses."""
@@ -69,9 +79,10 @@ def audit(paths):
                 if image_hash not in known_images:issues.append(name+': unregistered inline screenshot')
             if contains_private_term(s):issues.append(name+': rejected private-data fingerprint')
     for p in paths:
+        p = p.resolve()
         if p.is_file():visit(str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else p.name,p.read_bytes());continue
-        for f in sorted(p.rglob('*')):
-            if f.is_file() and not any(part in SKIP for part in f.parts):visit(str(f.relative_to(p)),f.read_bytes())
+        for f in audit_files(p):
+            visit(str(f.relative_to(p)),f.read_bytes())
     manifest_path=ROOT/'apps/web/public/assets/screenshots/manifest.json'
     provenance=[]
     if manifest_path.exists():

@@ -5,13 +5,11 @@ instead of an HTML page in WebKit. It replaces the Python/WebKit app in
 `desktop/` once it reaches parity; until then it is a preview that runs side by
 side with it.
 
-Why: every WebKit window starts its own web engine (about 1.3–1.8 s to a usable
-window even with the background service), menus are clipped to the window,
-list accessibility is poor, and about 1,300 lines of Python plus 60 KB of
-JavaScript exist only to bridge HTML to the desktop. A GTK4 window opens in
-tens of milliseconds inside a running process and gets keyboard navigation,
-rubber-band selection, drag and drop, clipboard, accessibility, fonts and
-scaling from the toolkit.
+The rewrite removes the HTML-to-Python command bridge and uses GTK's native
+models, selection, menus, fonts and scaling. The toolkit also supplies the
+building blocks for clipboard, drag-and-drop and accessibility; their complete
+application workflows still need implementation and acceptance testing. Startup
+and interaction performance must be measured before claiming an improvement.
 
 ## Layout
 
@@ -25,11 +23,12 @@ module names the Python file it ports; port its tests along with it.
 
 ## Build and run
 
-Needs Rust 1.80+ and GTK 4.14 development files:
+Needs Rust 1.92+ (the minimum required by the locked GTK/GIO crates), GTK
+4.14 development files, and Python 3 for compatibility tests:
 
 ```sh
 sudo apt install libgtk-4-dev
-cargo build --release --manifest-path native/Cargo.toml
+cargo build --release --locked --manifest-path native/Cargo.toml
 ./native/target/release/openxplorer-native
 ```
 
@@ -39,14 +38,29 @@ never talks to a running Python OpenXplorer. It shares
 
 ## Checks
 
-Run all of these before a change is done:
+Run the check driver from the repository root:
 
 ```sh
-cd native
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+sudo apt install libgtk-4-dev xvfb xauth dbus-x11
+python3 native/tools/check.py
 ```
+
+The driver checks inventory consistency, formatting and strict Clippy, compiles
+every test target, then runs the actual test binaries on Xvfb with private D-Bus
+sessions and disposable home/config/cache directories. It never connects tests
+to the user's desktop or remote volume monitors. The hosted CI workflow uses
+the minimum supported Rust version and the same driver. Its result is native
+GTK/GIO **local** validation; simulated MTP tests do not certify phone hardware,
+and no SMB server is exercised by these checks.
+
+`python3 native/parity/check.py --require-replacement` deliberately fails while
+legacy bridge workflows still lack native verification. The inventory covers
+the bridge, not every UI interaction or Dolphin feature; see [ROADMAP.md](ROADMAP.md)
+for the remaining acceptance work. The Python application remains the shipped
+desktop while this preview is incomplete.
+
+The [browsing milestone validation record](VALIDATION.md) lists the local checks
+actually run and their limitations.
 
 ## Code standards
 
