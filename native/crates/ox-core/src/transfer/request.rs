@@ -137,7 +137,18 @@ mod tests {
 
     /// parity: XFER-019
     #[test]
-    fn copies_and_moves_need_an_existing_destination_folder() {
+    fn copies_and_moves_need_a_destination_folder() {
+        for mode in [TransferMode::Copy, TransferMode::Move] {
+            let missing = Operation::from_request(mode, None, ConflictPolicy::Skip);
+
+            let choose = TransferError::failed("Choose a destination folder.");
+            assert_eq!(missing, Err(choose), "{mode:?}");
+        }
+    }
+
+    /// parity: XFER-019
+    #[test]
+    fn the_destination_must_be_an_existing_folder() {
         let temp = tempfile::tempdir().expect("a temp dir");
         let file = temp.path().join("file");
         std::fs::write(&file, b"not a folder").expect("write a file");
@@ -146,20 +157,16 @@ mod tests {
         let factory = gio_factory();
         let cancel = Cancellation::new();
 
-        for mode in [TransferMode::Copy, TransferMode::Move] {
-            let missing = Operation::from_request(mode, None, ConflictPolicy::Skip).err();
-            let empty = destination_folder(&factory, "", &cancel).err();
-            let not_folder = destination_folder(&factory, &file_uri, &cancel).err();
-            let folder = destination_folder(&factory, &folder_uri, &cancel);
+        let empty = destination_folder(&factory, "", &cancel).err();
+        let not_folder = destination_folder(&factory, &file_uri, &cancel).err();
+        let folder = destination_folder(&factory, &folder_uri, &cancel);
 
-            let choose = TransferError::failed("Choose a destination folder.");
-            assert_eq!(missing, Some(choose.clone()), "{mode:?}");
-            assert_eq!(empty, Some(choose), "{mode:?}");
-            let refusal = TransferError::failed("The destination is not a folder.");
-            assert_eq!(not_folder, Some(refusal), "{mode:?}");
-            let resolved = folder.expect("a folder is accepted");
-            assert_eq!(resolved.uri(), folder_uri);
-        }
+        let choose = TransferError::failed("Choose a destination folder.");
+        assert_eq!(empty, Some(choose));
+        let refusal = TransferError::failed("The destination is not a folder.");
+        assert_eq!(not_folder, Some(refusal));
+        let resolved = folder.expect("a folder is accepted");
+        assert_eq!(resolved.uri(), folder_uri);
     }
 
     /// parity: XFER-019

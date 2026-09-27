@@ -129,33 +129,55 @@ fn protected_descendants_stop_mutations_before_any_item_changes() {
     }
 }
 
-/// A configured snapshot folder is read-only as a destination, while a copy
-/// out of it is allowed.
+/// Restoring a copy out of a configured snapshot folder into its live
+/// folder is allowed.
 ///
 /// parity: XFER-020
 #[test]
-fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed() {
+fn restoring_a_copy_out_of_a_configured_snapshot_folder_is_allowed() {
     let fixture = Fixture::new();
-    let source = fixture.source_folder.join("photo.jpg");
-    write(&source, "photo");
+    let live = &fixture.destination_folder;
+    let snapshots = &fixture.source_folder;
+    let saved = snapshots.join("photo.jpg");
+    write(&saved, "saved version");
     let versions = PreviousVersions::new();
-    versions.configure(
-        &file_uri(&fixture.destination_folder),
-        &file_uri(&fixture.source_folder),
-    );
+    versions.configure(&file_uri(live), &file_uri(snapshots));
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
 
-    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
-
-    assert_eq!(result.done, [file_uri(&source)]);
-
-    let reverse = fixture.run(
+    let result = fixture.run(
         &mut engine,
-        &[&fixture.destination_folder.join("photo.jpg")],
-        Request::CopyInto(&fixture.source_folder, ConflictPolicy::Replace),
+        &[&saved],
+        Request::CopyInto(live, ConflictPolicy::Skip),
     );
 
-    assert!(reverse.done.is_empty());
-    assert!(reverse.errors[0].contains("read-only"));
-    assert_eq!(read(&source), "photo");
+    assert_eq!(result.done, [file_uri(&saved)]);
+    assert_eq!(read(&live.join("photo.jpg")), "saved version");
+}
+
+/// A configured snapshot folder is read-only as a destination: copying the
+/// live file over its saved version is refused.
+///
+/// parity: XFER-020
+#[test]
+fn a_configured_snapshot_folder_is_read_only_as_a_destination() {
+    let fixture = Fixture::new();
+    let live = &fixture.destination_folder;
+    let snapshots = &fixture.source_folder;
+    let saved = snapshots.join("photo.jpg");
+    write(&saved, "saved version");
+    let current = live.join("photo.jpg");
+    write(&current, "current version");
+    let versions = PreviousVersions::new();
+    versions.configure(&file_uri(live), &file_uri(snapshots));
+    let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
+
+    let result = fixture.run(
+        &mut engine,
+        &[&current],
+        Request::CopyInto(snapshots, ConflictPolicy::Replace),
+    );
+
+    assert!(result.done.is_empty());
+    assert!(result.errors[0].contains("read-only"));
+    assert_eq!(read(&saved), "saved version");
 }

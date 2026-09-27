@@ -14,45 +14,7 @@ use gio::prelude::VfsExt;
 use ox_core::gio_node::GioNode;
 use ox_core::transfer::{Cancellation, Node, Operation, TransferError};
 
-use super::{gio_engine, node};
-
-/// A folder `kept` holding `data`, and a symbolic link `link` to it.
-struct LinkedFolder {
-    kept: PathBuf,
-    link: PathBuf,
-}
-
-impl LinkedFolder {
-    /// Creates the folder and the link in `root`.
-    fn create(root: &Path) -> Self {
-        let kept = root.join("kept");
-        fs::create_dir(&kept).unwrap();
-        fs::write(kept.join("data"), b"retained").unwrap();
-        let link = root.join("link");
-        symlink(&kept, &link).unwrap();
-        Self { kept, link }
-    }
-
-    /// Asserts the folder kept its data and the link is still a link.
-    fn assert_untouched(&self) {
-        assert_eq!(fs::read(self.kept.join("data")).unwrap(), b"retained");
-        assert!(fs::symlink_metadata(&self.link).unwrap().file_type().is_symlink());
-    }
-}
-
-/// parity: XFER-015, XFER-017
-#[test]
-fn copying_a_link_copies_the_link_not_its_target() {
-    let temp = tempfile::tempdir().unwrap();
-    let linked = LinkedFolder::create(temp.path());
-    let copied = temp.path().join("copied");
-
-    let result = node(&linked.link).copy_file(&node(&copied), &Cancellation::new(), &mut |_, _| {});
-
-    assert_eq!(result, Ok(()));
-    assert_eq!(fs::read_link(&copied).unwrap(), linked.kept);
-    linked.assert_untouched();
-}
+use super::{gio_engine, node, LinkedFolder};
 
 /// parity: XFER-015, XFER-017
 #[test]

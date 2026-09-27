@@ -22,11 +22,19 @@ fn guarded_gio_engine() -> TransferEngine {
     gio_engine().with_write_guard(|_uri: &str| Ok::<(), TransferError>(()))
 }
 
+/// Writes a song named [`LATIN1_NAME`] holding `content` into `folder`;
+/// returns its path.
+fn latin1_song(folder: &Path, content: &str) -> PathBuf {
+    let song = folder.join(OsStr::from_bytes(LATIN1_NAME));
+    write(&song, content);
+    song
+}
+
 /// `album/` holding a Latin-1 named song and `ok.txt`, inside `folder`.
 fn latin1_album(folder: &Path) -> PathBuf {
     let album = folder.join("album");
     fs::create_dir(&album).expect("create the album folder");
-    fs::write(album.join(OsStr::from_bytes(LATIN1_NAME)), b"song").expect("write the song");
+    latin1_song(&album, "song");
     write(&album.join("ok.txt"), "ok");
     album
 }
@@ -122,7 +130,7 @@ fn replace_merge_stops_at_a_latin1_name_without_losing_the_existing_file() {
     let album = latin1_album(&fixture.source_folder);
     let existing = fixture.destination_folder.join("album");
     fs::create_dir(&existing).expect("create the existing album");
-    fs::write(existing.join(OsStr::from_bytes(LATIN1_NAME)), b"old song").expect("write");
+    latin1_song(&existing, "old song");
     write(&existing.join("keep.txt"), "keep");
 
     let result = fixture.run(
@@ -160,24 +168,40 @@ fn keep_both_copies_folders_with_names_that_are_not_utf8() {
 }
 
 /// A selected item whose own name is not UTF-8 is copied under exactly that
-/// name. Keep both cannot make a text "(copy N)" name from it and says so
-/// instead of renaming it lossily.
+/// name.
 #[test]
-fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
+fn a_selected_item_named_in_latin1_is_copied_under_exactly_that_name() {
     let fixture = Fixture::new();
-    let song = fixture.source_folder.join(OsStr::from_bytes(LATIN1_NAME));
-    fs::write(&song, b"song").expect("write the song");
-    let mut engine = guarded_gio_engine();
+    let song = latin1_song(&fixture.source_folder, "song");
 
-    let copied = fixture.run(&mut engine, &[&song], Request::Copy(ConflictPolicy::Skip));
+    let copied = fixture.run(
+        &mut guarded_gio_engine(),
+        &[&song],
+        Request::Copy(ConflictPolicy::Skip),
+    );
 
     assert!(copied.errors.is_empty(), "{copied:?}");
     assert_eq!(
         raw_names(&fixture.destination_folder),
         [OsStr::from_bytes(LATIN1_NAME)]
     );
+    fixture.assert_no_staging();
+}
 
-    let kept = fixture.run(&mut engine, &[&song], Request::Copy(ConflictPolicy::KeepBoth));
+/// Keep both cannot make a text "(copy N)" name from a name that is not
+/// UTF-8, so it says so instead of renaming the item lossily, and the item
+/// that holds the name is untouched.
+#[test]
+fn keep_both_refuses_a_latin1_name_instead_of_renaming_it_lossily() {
+    let fixture = Fixture::new();
+    let song = latin1_song(&fixture.source_folder, "song");
+    let existing = latin1_song(&fixture.destination_folder, "existing song");
+
+    let kept = fixture.run(
+        &mut guarded_gio_engine(),
+        &[&song],
+        Request::Copy(ConflictPolicy::KeepBoth),
+    );
 
     assert!(kept.done.is_empty());
     assert!(kept.errors[0].contains("not valid UTF-8"), "{kept:?}");
@@ -185,5 +209,6 @@ fn a_selected_item_named_in_latin1_is_copied_but_never_renamed_lossily() {
         raw_names(&fixture.destination_folder),
         [OsStr::from_bytes(LATIN1_NAME)]
     );
+    assert_eq!(read(&existing), "existing song");
     fixture.assert_no_staging();
 }

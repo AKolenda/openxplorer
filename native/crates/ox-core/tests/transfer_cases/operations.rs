@@ -108,23 +108,35 @@ fn a_move_takes_the_item_out_of_its_folder() {
     assert_eq!(read(&fixture.destination_folder.join("a")), "a");
 }
 
-/// Port of `test_trash_unsupported_no_delete`; deleting a link removes the
-/// link and never its target.
+/// Port of `test_trash_unsupported_no_delete`: where the backend has no
+/// Trash, the item is kept, never permanently deleted instead.
 ///
-/// parity: XFER-014, XFER-015, XFER-017
+/// parity: XFER-014
 #[test]
-fn delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete() {
+fn unsupported_trash_never_falls_back_to_delete() {
     let fixture = Fixture::new();
     let original = fixture.source_folder.join("original");
     write(&original, "keep");
-    let link = fixture.source_folder.join("link");
-    symlink(&original, &link).unwrap();
     let mut engine = fixture.engine(local::local());
 
     let trash = fixture.run(&mut engine, &[&original], Request::Trash);
 
     assert!(trash.done.is_empty());
     assert!(trash.errors[0].contains("no delete fallback"));
+    assert_eq!(read(&original), "keep");
+}
+
+/// Deleting a link removes the link and never its target.
+///
+/// parity: XFER-015, XFER-017
+#[test]
+fn deleting_a_link_keeps_its_target() {
+    let fixture = Fixture::new();
+    let original = fixture.source_folder.join("original");
+    write(&original, "keep");
+    let link = fixture.source_folder.join("link");
+    symlink(&original, &link).unwrap();
+    let mut engine = fixture.engine(local::local());
 
     let deleted = fixture.run(&mut engine, &[&link], Request::Delete);
 
@@ -162,12 +174,30 @@ fn permanent_delete_removes_folders_and_files_without_a_destination() {
     assert!(!exists_without_following_links(&loose));
 }
 
-/// Ports `test_special_file_rejected_cleanup`; a tree deeper than the
-/// nesting limit is refused the same way.
+/// Port of `test_special_file_rejected_cleanup`: a special file is never
+/// copied, and nothing is published or left staged.
 ///
 /// parity: XFER-018
 #[test]
-fn deep_trees_and_special_files_are_not_published() {
+fn a_special_file_is_refused_and_nothing_is_published() {
+    let fixture = Fixture::new();
+    let fifo = fixture.source_folder.join("pipe");
+    create_named_pipe(&fifo);
+    let mut engine = fixture.engine(local::local());
+
+    let result = fixture.run(&mut engine, &[&fifo], Request::Copy(ConflictPolicy::Skip));
+
+    assert!(result.done.is_empty());
+    assert_eq!(result.errors.len(), 1);
+    assert!(result.errors[0].contains("special files"));
+    assert!(list(&fixture.destination_folder).is_empty());
+    assert!(exists_without_following_links(&fifo));
+}
+
+/// A tree deeper than the nesting limit is refused, and nothing is
+/// published or left staged.
+#[test]
+fn a_tree_deeper_than_the_nesting_limit_is_not_published() {
     let fixture = Fixture::new();
     let source = fixture.source_folder.join("tree");
     let mut nested = source.clone();
@@ -175,22 +205,14 @@ fn deep_trees_and_special_files_are_not_published() {
         nested.push("d");
     }
     fs::create_dir_all(nested).unwrap();
-    let fifo = fixture.source_folder.join("pipe");
-    create_named_pipe(&fifo);
     let mut engine = fixture.engine(local::local());
 
-    let result = fixture.run(
-        &mut engine,
-        &[&source, &fifo],
-        Request::Copy(ConflictPolicy::Skip),
-    );
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
 
     assert!(result.done.is_empty());
-    assert_eq!(result.errors.len(), 2);
+    assert_eq!(result.errors.len(), 1);
     assert!(result.errors[0].contains("nesting"));
-    assert!(result.errors[1].contains("special files"));
     assert!(list(&fixture.destination_folder).is_empty());
-    assert!(exists_without_following_links(&fifo));
 }
 
 /// Port of `test_copy_cancel_removes_partial_stage`: the user's

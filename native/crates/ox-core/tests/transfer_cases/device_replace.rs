@@ -16,8 +16,9 @@ use crate::transfer_support::{
 };
 
 /// Port of `test_replace_file_uses_reversible_renames`: the device cannot
-/// overwrite, so the old file is renamed aside, the new one renamed in and
-/// the backup removed, all within the destination folder.
+/// overwrite safely (XFER-026), so the old file is renamed aside, the new
+/// one renamed in and the backup removed, all within the destination
+/// folder.
 ///
 /// parity: XFER-010
 #[test]
@@ -90,7 +91,8 @@ fn a_failed_device_install_restores_the_original_and_removes_the_stage() {
 }
 
 /// Port of `test_replace_merges_folders_and_keeps_destination_only_items`
-/// for devices.
+/// for devices: a folder merge on a phone behaves as on a local disk
+/// (XFER-026).
 ///
 /// parity: XFER-009
 #[test]

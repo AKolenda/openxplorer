@@ -15,7 +15,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::{symlink, MetadataExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ox_core::gio_node::GioNode;
 use ox_core::transfer::{Cancellation, ConflictPolicy, Node, NodeKind, Operation, TransferError};
@@ -25,6 +25,30 @@ use shared::{gio_engine, mode_of, set_mode, RestoreOwnerAccess};
 /// The adapter for the local item at `path`.
 fn node(path: &Path) -> GioNode {
     GioNode::from_file(gio::File::for_path(path))
+}
+
+/// A folder `kept` holding `data`, and a symbolic link `link` to it.
+struct LinkedFolder {
+    kept: PathBuf,
+    link: PathBuf,
+}
+
+impl LinkedFolder {
+    /// Creates the folder and the link in `root`.
+    fn create(root: &Path) -> Self {
+        let kept = root.join("kept");
+        fs::create_dir(&kept).unwrap();
+        fs::write(kept.join("data"), b"retained").unwrap();
+        let link = root.join("link");
+        symlink(&kept, &link).unwrap();
+        Self { kept, link }
+    }
+
+    /// Asserts the folder kept its data and the link is still a link.
+    fn assert_untouched(&self) {
+        assert_eq!(fs::read(self.kept.join("data")).unwrap(), b"retained");
+        assert!(fs::symlink_metadata(&self.link).unwrap().file_type().is_symlink());
+    }
 }
 
 /// Port of the listing half of `test_enumeration_and_creation` in
@@ -78,6 +102,20 @@ fn copy_file_writes_the_complete_content_and_keeps_the_source() {
     assert_eq!(fs::read(&target).unwrap(), b"complete content");
     assert_eq!(fs::read(&source).unwrap(), b"complete content");
     assert!(progress.iter().all(|(current, total)| current <= total));
+}
+
+/// parity: XFER-015, XFER-017
+#[test]
+fn copying_a_link_copies_the_link_not_its_target() {
+    let temp = tempfile::tempdir().unwrap();
+    let linked = LinkedFolder::create(temp.path());
+    let copied = temp.path().join("copied");
+
+    let result = node(&linked.link).copy_file(&node(&copied), &Cancellation::new(), &mut |_, _| {});
+
+    assert_eq!(result, Ok(()));
+    assert_eq!(fs::read_link(&copied).unwrap(), linked.kept);
+    linked.assert_untouched();
 }
 
 /// The adapter's native move on one filesystem.
@@ -298,32 +336,65 @@ fn cross_filesystem_move_is_refused_without_copying_or_removing_the_source() {
     assert!(!target.exists());
 }
 
-/// Ports `test_same_device_copies_are_detected` and
-/// `test_device_schemes_request_sibling_staging` in
-/// `desktop/tests/test_device_staging.py`: only MTP destinations stage
-/// beside the final name (cameras on gphoto2 keep folder staging), and only
-/// a copy within one MTP device keeps the source's name.
+/// A photo on an MTP device, for the device capability tests below. None
+/// of them contacts a device.
+const DEVICE_PHOTO: &str = "mtp://test-device/Internal/source/photo.jpg";
+
+/// Port of `test_device_schemes_request_sibling_staging` in
+/// `desktop/tests/test_device_staging.py`: only MTP locations stage beside
+/// the final name; cameras on gphoto2 keep folder staging.
 ///
-/// parity: XFER-021, XFER-023
+/// parity: XFER-021
 #[test]
-fn device_capabilities_and_unsupported_renames_are_resolved_without_device_io() {
-    let source = GioNode::new("mtp://test-device/Internal/source/photo.jpg");
+fn only_mtp_destinations_stage_beside_the_final_name() {
+    let others = ["gphoto2://cam/DCIM/x", "smb://host/share/x", "file:///tmp/x"];
+
+    let device_stages_beside = GioNode::new(DEVICE_PHOTO).has_sibling_staging();
+    let others_stage_beside: Vec<bool> = others
+        .iter()
+        .map(|uri| GioNode::new(uri).has_sibling_staging())
+        .collect();
+
+    assert!(device_stages_beside);
+    assert_eq!(others_stage_beside, [false, false, false], "{others:?}");
+}
+
+/// Port of `test_same_device_copies_are_detected` in
+/// `desktop/tests/test_device_staging.py`: MTP `CopyObject` keeps the
+/// source's name, which only matters for a copy within one device.
+///
+/// parity: XFER-023
+#[test]
+fn only_a_copy_within_one_mtp_device_keeps_the_source_name() {
+    let source = GioNode::new(DEVICE_PHOTO);
     let same_device = GioNode::new("mtp://test-device/Internal/destination");
     let other_device = GioNode::new("mtp://other-device/Internal/destination");
     let local = GioNode::new("file:///tmp/x");
+
+    let within_the_device = source.native_copy_keeps_name(&same_device);
+    let to_another_device = source.native_copy_keeps_name(&other_device);
+    let to_a_local_folder = source.native_copy_keeps_name(&local);
+    let from_a_local_file = local.native_copy_keeps_name(&same_device);
+
+    assert!(within_the_device);
+    assert!(!to_another_device);
+    assert!(!to_a_local_folder);
+    assert!(!from_a_local_file);
+}
+
+/// A device cannot move an item to another folder under a new name in one
+/// step, and it has no safe overwrite (XFER-026): both are refused before
+/// the device is contacted.
+///
+/// parity: XFER-024
+#[test]
+fn a_device_move_under_a_new_name_or_with_replace_is_refused_without_device_io() {
+    let source = GioNode::new(DEVICE_PHOTO);
     let renamed = GioNode::new("mtp://test-device/Internal/destination/other.jpg");
 
     let moved = source.move_native(&renamed, None);
     let replaced = source.replace_native(&renamed, None);
 
-    assert!(source.has_sibling_staging());
-    for folder in ["gphoto2://cam/DCIM/x", "smb://host/share/x", "file:///tmp/x"] {
-        assert!(!GioNode::new(folder).has_sibling_staging(), "{folder}");
-    }
-    assert!(source.native_copy_keeps_name(&same_device));
-    assert!(!source.native_copy_keeps_name(&other_device));
-    assert!(!source.native_copy_keeps_name(&local));
-    assert!(!local.native_copy_keeps_name(&same_device));
     assert!(moved.unwrap_err().to_string().contains("not both"));
     assert!(
         matches!(replaced, Err(TransferError::ReplaceUnsupported(_))),

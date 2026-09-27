@@ -33,9 +33,9 @@ fn keep_both_skips_every_taken_copy_name() {
 }
 
 /// Port of `test_move_same_directory_is_noop`, for every policy: moving an
-/// item into the folder it is already in is skipped. With Keep both it
-/// would otherwise be renamed to "(copy 2)"; with Replace it would be
-/// replaced by itself.
+/// item into the folder it is already in is skipped (XFER-012). With Keep
+/// both it would otherwise be renamed to "(copy 2)"; with Replace it would
+/// be replaced by itself.
 #[test]
 fn moving_an_item_into_its_own_folder_changes_nothing() {
     for policy in [
@@ -62,7 +62,7 @@ fn moving_an_item_into_its_own_folder_changes_nothing() {
 }
 
 /// Port of `test_move_collision_keeps_source`: Skip leaves both the source
-/// and the item that holds its name alone.
+/// and the item that holds its name alone (XFER-006, XFER-012).
 ///
 /// parity: XFER-006
 #[test]

@@ -117,8 +117,8 @@ fn a_move_to_another_folder_keeps_the_name_and_never_falls_back_to_copying() {
     );
 }
 
-/// Port of `test_replace_never_uses_device_overwrite`: `GVfs` deletes the
-/// existing item before it moves and cannot restore it.
+/// Port of `test_replace_never_uses_device_overwrite` (XFER-026): `GVfs`
+/// deletes the existing item before it moves and cannot restore it.
 ///
 /// parity: XFER-010
 #[test]
