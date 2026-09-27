@@ -250,69 +250,67 @@ mod tests {
         normal: &'static str,
     }
 
+    /// Paths and what `posixpath.normpath` makes of them.
+    const POSIX_PATHS: [PosixPathCase; 13] = [
+        PosixPathCase {
+            path: "",
+            normal: ".",
+        },
+        PosixPathCase {
+            path: "/",
+            normal: "/",
+        },
+        PosixPathCase {
+            path: "//",
+            normal: "//",
+        },
+        PosixPathCase {
+            path: "///",
+            normal: "/",
+        },
+        PosixPathCase {
+            path: "//tmp/x",
+            normal: "//tmp/x",
+        },
+        PosixPathCase {
+            path: "///tmp//x/",
+            normal: "/tmp/x",
+        },
+        PosixPathCase {
+            path: "/a/./b/../c",
+            normal: "/a/c",
+        },
+        PosixPathCase {
+            path: "/..",
+            normal: "/",
+        },
+        PosixPathCase {
+            path: "/../../x",
+            normal: "/x",
+        },
+        PosixPathCase {
+            path: "a/../..",
+            normal: "..",
+        },
+        PosixPathCase {
+            path: "../a",
+            normal: "../a",
+        },
+        PosixPathCase {
+            path: "a/b/..",
+            normal: "a",
+        },
+        PosixPathCase {
+            path: "a/..",
+            normal: ".",
+        },
+    ];
+
     #[test]
     fn paths_are_normalised_like_posixpath() {
-        let cases = [
-            PosixPathCase {
-                path: "",
-                normal: ".",
-            },
-            PosixPathCase {
-                path: "/",
-                normal: "/",
-            },
-            PosixPathCase {
-                path: "//",
-                normal: "//",
-            },
-            PosixPathCase {
-                path: "///",
-                normal: "/",
-            },
-            PosixPathCase {
-                path: "//tmp/x",
-                normal: "//tmp/x",
-            },
-            PosixPathCase {
-                path: "///tmp//x/",
-                normal: "/tmp/x",
-            },
-            PosixPathCase {
-                path: "/a/./b/../c",
-                normal: "/a/c",
-            },
-            PosixPathCase {
-                path: "/..",
-                normal: "/",
-            },
-            PosixPathCase {
-                path: "/../../x",
-                normal: "/x",
-            },
-            PosixPathCase {
-                path: "a/../..",
-                normal: "..",
-            },
-            PosixPathCase {
-                path: "../a",
-                normal: "../a",
-            },
-            PosixPathCase {
-                path: "a/b/..",
-                normal: "a",
-            },
-            PosixPathCase {
-                path: "a/..",
-                normal: ".",
-            },
-        ];
-        for case in cases {
-            assert_eq!(
-                normalise_posix_path(case.path),
-                case.normal,
-                "normpath({:?})",
-                case.path
-            );
+        for case in &POSIX_PATHS {
+            let normal = normalise_posix_path(case.path);
+            assert_eq!(normal, case.normal, "normpath({:?})", case.path);
         }
     }
 }

@@ -483,69 +483,112 @@ mod tests {
         }
     }
 
+    /// The refusal of a scheme the app cannot open.
+    const UNSUPPORTED: &str =
+        "Only local paths, smb:// locations and connected devices are supported in this build.";
+    /// The refusal of a `?` or `#` in a URL.
+    const QUERY_OR_FRAGMENT: &str =
+        "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.";
+    /// The refusal of credentials in a URL, which points to the sign-in dialog.
+    const SIGN_IN: &str =
+        "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.";
+    /// The refusal of credentials or a port in the server of a UNC path.
+    const UNC_CREDENTIALS: &str = "Use a server name without credentials, for example \\\\nas\\share.";
+
+    /// Each kind of invalid address and the Python app's guidance for it.
+    const GUIDANCE: [RefusalCase; 13] = [
+        RefusalCase {
+            address: "   ",
+            message: "Enter a local folder path or an SMB address.",
+        },
+        RefusalCase {
+            address: "/tmp/a\u{0}",
+            message: "Control characters are not allowed in an address.",
+        },
+        RefusalCase {
+            address: "smb://nas/a%00b",
+            message: "Encoded control characters are not allowed.",
+        },
+        RefusalCase {
+            address: "C:\\Windows",
+            message: "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share.",
+        },
+        RefusalCase {
+            address: "http://example.org",
+            message: UNSUPPORTED,
+        },
+        RefusalCase {
+            address: "javascript:alert(1)",
+            message: UNSUPPORTED,
+        },
+        RefusalCase {
+            address: "smb://nas/a?b",
+            message: QUERY_OR_FRAGMENT,
+        },
+        RefusalCase {
+            address: "file:///tmp/x#y",
+            message: QUERY_OR_FRAGMENT,
+        },
+        RefusalCase {
+            address: "file://nas/share",
+            message: "For network folders, use smb://server/share rather than file://server/…",
+        },
+        RefusalCase {
+            address: "file:tmp",
+            message: "A file URL must contain an absolute path.",
+        },
+        RefusalCase {
+            address: "smb:///share",
+            message: "Enter an SMB server name, for example smb://nas/Projects.",
+        },
+        RefusalCase {
+            address: "smb://nas:x/a",
+            message: "Invalid SMB port.",
+        },
+        RefusalCase {
+            address: "afc:///DCIM",
+            message: "A connected-device address must include a device identifier and path.",
+        },
+    ];
+
+    /// A user name or password in each address form, and its refusal.
+    const CREDENTIALS: [RefusalCase; 7] = [
+        RefusalCase {
+            address: "smb://u:p@nas/share",
+            message: SIGN_IN,
+        },
+        RefusalCase {
+            address: "smb://u@nas/share",
+            message: SIGN_IN,
+        },
+        RefusalCase {
+            address: "file://user@localhost/x",
+            message: SIGN_IN,
+        },
+        RefusalCase {
+            address: "\\\\u:p@nas\\share",
+            message: UNC_CREDENTIALS,
+        },
+        RefusalCase {
+            address: "//u@nas/share",
+            message: UNC_CREDENTIALS,
+        },
+        RefusalCase {
+            address: "smb://u%40nas/share",
+            message: "Use an unescaped server name without credentials or control characters.",
+        },
+        RefusalCase {
+            address: "mtp://user@device/DCIM",
+            message: "Invalid connected-device identifier.",
+        },
+    ];
+
     /// Each kind of invalid address gets the Python app's guidance.
     ///
     /// parity: NAV-034, NAV-035, DEV-005
     #[test]
     fn invalid_addresses_are_refused_with_specific_guidance() {
-        const UNSUPPORTED: &str =
-            "Only local paths, smb:// locations and connected devices are supported in this build.";
-        const QUERY_OR_FRAGMENT: &str =
-            "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.";
-        assert_each_refused(&[
-            RefusalCase {
-                address: "   ",
-                message: "Enter a local folder path or an SMB address.",
-            },
-            RefusalCase {
-                address: "/tmp/a\u{0}",
-                message: "Control characters are not allowed in an address.",
-            },
-            RefusalCase {
-                address: "smb://nas/a%00b",
-                message: "Encoded control characters are not allowed.",
-            },
-            RefusalCase {
-                address: "C:\\Windows",
-                message: "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share.",
-            },
-            RefusalCase {
-                address: "http://example.org",
-                message: UNSUPPORTED,
-            },
-            RefusalCase {
-                address: "javascript:alert(1)",
-                message: UNSUPPORTED,
-            },
-            RefusalCase {
-                address: "smb://nas/a?b",
-                message: QUERY_OR_FRAGMENT,
-            },
-            RefusalCase {
-                address: "file:///tmp/x#y",
-                message: QUERY_OR_FRAGMENT,
-            },
-            RefusalCase {
-                address: "file://nas/share",
-                message: "For network folders, use smb://server/share rather than file://server/…",
-            },
-            RefusalCase {
-                address: "file:tmp",
-                message: "A file URL must contain an absolute path.",
-            },
-            RefusalCase {
-                address: "smb:///share",
-                message: "Enter an SMB server name, for example smb://nas/Projects.",
-            },
-            RefusalCase {
-                address: "smb://nas:x/a",
-                message: "Invalid SMB port.",
-            },
-            RefusalCase {
-                address: "afc:///DCIM",
-                message: "A connected-device address must include a device identifier and path.",
-            },
-        ]);
+        assert_each_refused(&GUIDANCE);
     }
 
     /// Every address form refuses a user name or password with the Python
@@ -555,39 +598,7 @@ mod tests {
     /// parity: SAFE-010
     #[test]
     fn credentials_are_refused_in_every_address_form() {
-        const SIGN_IN: &str =
-            "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.";
-        const UNC: &str = "Use a server name without credentials, for example \\\\nas\\share.";
-        assert_each_refused(&[
-            RefusalCase {
-                address: "smb://u:p@nas/share",
-                message: SIGN_IN,
-            },
-            RefusalCase {
-                address: "smb://u@nas/share",
-                message: SIGN_IN,
-            },
-            RefusalCase {
-                address: "file://user@localhost/x",
-                message: SIGN_IN,
-            },
-            RefusalCase {
-                address: "\\\\u:p@nas\\share",
-                message: UNC,
-            },
-            RefusalCase {
-                address: "//u@nas/share",
-                message: UNC,
-            },
-            RefusalCase {
-                address: "smb://u%40nas/share",
-                message: "Use an unescaped server name without credentials or control characters.",
-            },
-            RefusalCase {
-                address: "mtp://user@device/DCIM",
-                message: "Invalid connected-device identifier.",
-            },
-        ]);
+        assert_each_refused(&CREDENTIALS);
         let inside_signed_in_folder = resolve("x", "smb://u@nas/a");
         let refusal = inside_signed_in_folder.as_deref().map_err(LocationError::message);
         assert_eq!(refusal, Err(SIGN_IN));
