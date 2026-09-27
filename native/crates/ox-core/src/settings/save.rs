@@ -12,7 +12,8 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::storage::{private_directory, private_file, PrivateFileOptions, WithPath, FILE_MODE};
+use super::error::WithPath;
+use super::storage::{private_directory, private_file, PrivateFileOptions, FILE_MODE};
 use super::SettingsError;
 
 /// An exclusive `flock` on `settings.lock`, released when dropped.

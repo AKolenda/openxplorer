@@ -14,6 +14,7 @@ use std::io::{self, Read};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
+use super::error::WithPath;
 use super::SettingsError;
 
 /// Largest settings file read, in bytes.
@@ -196,17 +197,6 @@ impl OpenedFile {
             0 if options.allow_unlinked => Verdict::AcceptUnlinked,
             _ => Verdict::Refuse,
         }
-    }
-}
-
-/// Adds the affected path to an I/O error, as Python's `OSError` does.
-pub(super) trait WithPath<T> {
-    fn with_path(self, path: &Path) -> Result<T, SettingsError>;
-}
-
-impl<T> WithPath<T> for io::Result<T> {
-    fn with_path(self, path: &Path) -> Result<T, SettingsError> {
-        self.map_err(|error| SettingsError::io(path, error))
     }
 }
 

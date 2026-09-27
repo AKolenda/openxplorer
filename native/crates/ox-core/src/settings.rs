@@ -24,6 +24,7 @@
 //! it.
 
 mod choices;
+mod error;
 mod model;
 mod mutate;
 mod read;
@@ -31,10 +32,10 @@ mod save;
 pub mod storage;
 mod validate;
 
-use std::io;
 use std::path::{Path, PathBuf};
 
 pub use choices::{ContextMenu, Theme, View};
+pub use error::SettingsError;
 pub use model::{
     Bookmark, Column, ColumnWidths, Preferences, PreferencesUpdate, RecentEntry, SettingsData,
     DEFAULT_TEXT_SIZE, NETWORK_INTERVALS, SETTINGS_VERSION, SIDEBAR_WIDTHS, TEXT_SIZES,
@@ -44,56 +45,6 @@ pub(crate) use validate::last_path_name;
 
 use save::{replace_private_file, OldFile, SettingsLock};
 use storage::{private_directory, private_file, read_limited_text, PrivateFileOptions, SETTINGS_SIZE_LIMIT};
-
-/// Why a settings change was refused.
-#[derive(Debug, thiserror::Error)]
-pub enum SettingsError {
-    /// The request or the stored data failed validation (Python's
-    /// `ValueError`). The message is user-facing.
-    #[error("{0}")]
-    Invalid(String),
-    /// The file system refused an operation on `path` (Python's `OSError`),
-    /// for example because `settings.lock` is a symlink.
-    #[error("{error}: {}", path.display())]
-    Io {
-        /// The file or directory the operation was on.
-        path: PathBuf,
-        /// What the operating system reported.
-        error: io::Error,
-    },
-}
-
-impl SettingsError {
-    /// A validation error with a user-facing message.
-    pub(crate) fn invalid(message: impl Into<String>) -> Self {
-        Self::Invalid(message.into())
-    }
-
-    /// A file-system error on `path`.
-    pub(crate) fn io(path: &Path, error: io::Error) -> Self {
-        Self::Io {
-            path: path.to_path_buf(),
-            error,
-        }
-    }
-
-    /// True if this is a missing file or directory.
-    fn is_not_found(&self) -> bool {
-        matches!(self, Self::Io { error, .. } if error.kind() == io::ErrorKind::NotFound)
-    }
-}
-
-impl From<crate::location::LocationError> for SettingsError {
-    fn from(error: crate::location::LocationError) -> Self {
-        Self::Invalid(error.0)
-    }
-}
-
-impl From<serde_json::Error> for SettingsError {
-    fn from(error: serde_json::Error) -> Self {
-        Self::Invalid(error.to_string())
-    }
-}
 
 /// Settings shared by every window of both applications.
 ///
