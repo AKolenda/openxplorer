@@ -67,6 +67,8 @@ fn context_menu_model() -> gio::Menu {
 }
 
 impl BrowserWindow {
+    /// Adds keyboard and pointer handling to both folder views and the
+    /// address entry.
     pub(super) fn install_input(&self) {
         let details = self.content().details.clone();
         let grid = self.content().grid.clone();
@@ -89,6 +91,7 @@ impl BrowserWindow {
         self.chrome().address.entry.add_controller(escape);
     }
 
+    /// Opens what was typed into the address bar when Enter is pressed.
     pub(super) fn connect_address_entry(&self) {
         self.chrome().address.entry.connect_activate(glib::clone!(
             #[weak(rename_to = window)]

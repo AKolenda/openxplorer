@@ -267,9 +267,13 @@ mod imp {
     /// Private state of [`super::GlyphPaintable`].
     #[derive(Default)]
     pub struct GlyphPaintable {
+        /// The glyph's stroke path in the 24-unit viewBox.
         pub path: OnceCell<gsk::Path>,
+        /// Stroke width in viewBox units.
         pub stroke_width: Cell<f32>,
+        /// Edge in logical pixels.
         pub size: Cell<i32>,
+        /// A fixed colour, or `None` to follow the CSS colour.
         pub color: Cell<Option<gdk::RGBA>>,
     }
 

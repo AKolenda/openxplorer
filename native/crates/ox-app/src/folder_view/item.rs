@@ -45,6 +45,7 @@ mod imp {
     /// Private state of [`super::FileItem`]; set once at construction.
     #[derive(Default)]
     pub struct FileItem {
+        /// The entry and what is computed from it, set by [`super::FileItem::new`].
         pub data: OnceCell<ItemData>,
     }
 

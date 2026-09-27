@@ -22,12 +22,19 @@ use super::tab_strip::TabStrip;
 /// The frame's widgets that the controller updates.
 #[derive(Debug)]
 pub(super) struct Chrome {
+    /// The tab strip in the title bar.
     pub tabs: TabStrip,
+    /// Breadcrumbs or the editable address.
     pub address: AddressBar,
+    /// The folder filter.
     pub search: gtk::SearchEntry,
+    /// Item and selection counts in the status bar.
     pub status: gtk::Label,
+    /// The type-to-select hint in the status bar.
     pub hint: gtk::Label,
+    /// A message above the workspace, hidden when empty.
     pub message: gtk::Label,
+    /// The sidebar beside the folder and details panes.
     pub workspace: gtk::Paned,
     details_view: gtk::Button,
     icons_view: gtk::Button,

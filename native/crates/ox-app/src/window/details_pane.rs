@@ -52,11 +52,17 @@ pub(super) enum PaneAction {
 /// Everything the pane shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct PaneContent {
+    /// The picture at the top.
     pub preview: Preview,
+    /// The item's or folder's name, or "N items selected".
     pub name: String,
+    /// The type line under the name.
     pub kind: String,
+    /// The buttons under the name.
     pub action: PaneAction,
+    /// Property names and values, in display order.
     pub properties: Vec<(&'static str, String)>,
+    /// The note at the bottom.
     pub note: &'static str,
 }
 
@@ -211,6 +217,7 @@ pub(super) struct DetailsPane {
 }
 
 impl DetailsPane {
+    /// An empty pane drawing art in `appearance`.
     pub fn new(appearance: Appearance) -> Self {
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)

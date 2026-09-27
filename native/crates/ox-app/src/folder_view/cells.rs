@@ -75,8 +75,11 @@ mod imp {
     /// Private state of [`super::FileCell`].
     #[derive(Debug, Default)]
     pub struct FileCell {
+        /// The item's icon art.
         pub image: gtk::Image,
+        /// The item's name.
         pub label: gtk::Label,
+        /// Icon edge in logical pixels.
         pub icon_size: Cell<i32>,
     }
 

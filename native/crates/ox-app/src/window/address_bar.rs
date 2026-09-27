@@ -62,6 +62,7 @@ pub(super) struct AddressBar {
 }
 
 impl AddressBar {
+    /// An address bar that shows no location yet.
     pub fn new() -> Self {
         let root = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         root.add_css_class("address");

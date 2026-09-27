@@ -26,11 +26,15 @@ pub(super) enum TabIcon {
 /// One tab as the strip shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct TabLabel {
+    /// The tab shown.
     pub id: TabId,
+    /// The tab's title.
     pub title: String,
     /// The full address.
     pub tooltip: String,
+    /// The tab's icon.
     pub icon: TabIcon,
+    /// The tab is in front.
     pub active: bool,
 }
 
@@ -43,6 +47,7 @@ pub(super) struct TabStrip {
 }
 
 impl TabStrip {
+    /// An empty tab strip.
     pub fn new() -> Self {
         let tabs = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)

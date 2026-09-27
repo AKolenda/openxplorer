@@ -91,6 +91,7 @@ fn toggle(
 }
 
 impl BrowserWindow {
+    /// Enables or disables the window action `name`.
     pub(super) fn set_action_enabled(&self, name: &str, enabled: bool) {
         let action = self.lookup_action(name).and_downcast::<gio::SimpleAction>();
         if let Some(action) = action {
@@ -98,6 +99,7 @@ impl BrowserWindow {
         }
     }
 
+    /// Sets the state of the stateful window action `name`.
     pub(super) fn set_action_state(&self, name: &str, state: &glib::Variant) {
         let action = self.lookup_action(name).and_downcast::<gio::SimpleAction>();
         if let Some(action) = action {
@@ -105,6 +107,7 @@ impl BrowserWindow {
         }
     }
 
+    /// Adds every window action (`win.*`).
     pub(super) fn install_actions(&self) {
         self.install_tab_actions();
         self.install_navigation_actions();

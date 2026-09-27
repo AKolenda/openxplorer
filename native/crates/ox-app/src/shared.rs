@@ -40,8 +40,11 @@ mod imp {
     /// Private state of [`super::AppContext`].
     #[derive(Debug, Default)]
     pub struct AppContext {
+        /// The skin every window draws with.
         pub(super) skin: OnceCell<Rc<Skin>>,
+        /// The shared settings file and its queue of changes.
         pub(super) settings: OnceCell<Rc<SettingsStore>>,
+        /// SMB servers and shares browsed this session, oldest first.
         pub(super) visited_network: RefCell<Vec<Bookmark>>,
         /// In tests, the files that would have been opened; tests must
         /// never start real applications.

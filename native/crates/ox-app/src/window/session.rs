@@ -44,21 +44,28 @@ pub enum TabPlacement {
 /// One tab: its history, its items and the state of its listing.
 #[derive(Debug)]
 pub(super) struct Tab {
+    /// The tab's identity for the window's lifetime.
     pub id: TabId,
+    /// The locations visited in this tab.
     pub history: History,
+    /// The tab's items, unfiltered and unsorted.
     pub store: gio::ListStore,
     /// Incremented by every load; results of an older load are ignored.
     pub generation: u64,
+    /// A listing is running.
     pub loading: bool,
     /// The current location has been listed (or is a page). A background
     /// tab stays unlisted until it is first shown.
     pub loaded: bool,
+    /// Why the last listing failed.
     pub error: Option<EnumerateError>,
     /// URIs of the selected items, restored after a reload or tab switch.
     pub selected: Vec<String>,
     /// The vertical scroll position, restored when the tab is shown again.
     pub scroll: f64,
+    /// The running listing; dropping it cancels it.
     pub listing: Option<Listing>,
+    /// The folder watch, kept while the tab shows the same folder.
     pub watch: Option<Watch>,
     /// The folder changed while it was being listed; list it again after.
     pub reload_pending: bool,
@@ -109,7 +116,9 @@ impl Tab {
 /// The tabs of one window and which one is active.
 #[derive(Debug, Default)]
 pub(super) struct Session {
+    /// The tabs, left to right.
     pub tabs: Vec<Tab>,
+    /// The tab in front.
     pub active: Option<TabId>,
     next_id: u64,
 }
@@ -134,23 +143,28 @@ impl Session {
         id
     }
 
+    /// The tab `id`, if it is open.
     pub fn tab(&self, id: TabId) -> Option<&Tab> {
         self.tabs.iter().find(|tab| tab.id == id)
     }
 
+    /// The tab `id`, to change it.
     pub fn tab_mut(&mut self, id: TabId) -> Option<&mut Tab> {
         self.tabs.iter_mut().find(|tab| tab.id == id)
     }
 
+    /// The tab in front.
     pub fn active(&self) -> Option<&Tab> {
         self.active.and_then(|id| self.tab(id))
     }
 
+    /// The tab in front, to change it.
     pub fn active_mut(&mut self) -> Option<&mut Tab> {
         let id = self.active?;
         self.tab_mut(id)
     }
 
+    /// True when tab `id` is in front.
     pub fn is_active(&self, id: TabId) -> bool {
         self.active == Some(id)
     }

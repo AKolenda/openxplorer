@@ -35,7 +35,9 @@ const NEARLY_FULL: f64 = 0.9;
 /// What a page needs to draw its art.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Drawing {
+    /// Light or dark art.
     pub appearance: Appearance,
+    /// The screen's scale factor.
     pub scale: i32,
 }
 

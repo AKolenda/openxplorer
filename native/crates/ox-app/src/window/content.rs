@@ -242,6 +242,7 @@ pub(super) struct Content {
 }
 
 impl Content {
+    /// An empty folder pane in the details view, drawing icons in `appearance`.
     pub fn new(appearance: Appearance) -> Self {
         let model = FolderModel::new();
         let icons = IconCells::new(appearance);

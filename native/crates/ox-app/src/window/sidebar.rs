@@ -30,9 +30,13 @@ use super::gestures;
 /// A group of rows; a separator is drawn where the group changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Section {
+    /// The home folder.
     Home,
+    /// Known folders and pins.
     QuickAccess,
+    /// This PC, Local Disk and the drives and devices.
     ThisPc,
+    /// Network and the network locations.
     Network,
 }
 
@@ -68,10 +72,15 @@ pub(super) enum RowTarget {
 /// One sidebar row.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct SidebarEntry {
+    /// The group the row belongs to.
     pub section: Section,
+    /// A place, a group head or an indented row.
     pub level: RowLevel,
+    /// The visible name, which is also the accessible name.
     pub label: String,
+    /// How the row's icon is drawn.
     pub icon: RowIcon,
+    /// What activating the row does.
     pub target: RowTarget,
     /// Hover text and accessible description.
     pub tooltip: String,
@@ -299,6 +308,7 @@ pub(super) struct Sidebar {
 }
 
 impl Sidebar {
+    /// An empty navigation pane.
     pub fn new() -> Self {
         let list = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::Single)

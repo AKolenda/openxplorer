@@ -28,12 +28,19 @@ const SIDEBAR_WIDTHS: (i32, i32) = (140, 560);
 /// One preference the user changed in this window.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Preference {
+    /// Details or an icon size (saved as the Python app's `grid`).
     View(FolderView),
+    /// Show hidden files.
     ShowHidden(bool),
+    /// Show the details pane.
     DetailsPane(bool),
+    /// System, Light or Dark.
     Theme(ThemePreference),
+    /// Text size in percent.
     TextSize(u32),
+    /// Sidebar width in pixels.
     SidebarWidth(i32),
+    /// The details columns the user sized, in pixels.
     ColumnWidths(Vec<(Column, f64)>),
 }
 
