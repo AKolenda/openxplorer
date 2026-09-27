@@ -299,6 +299,9 @@ fn normalise_smb_url(parts: &LocationParts, decoded_path: &str) -> Result<String
 /// The canonical `host[:port]` of an SMB URL: the host lower-cased, an
 /// IPv6 host in brackets and an explicit port kept without leading zeros.
 fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
+    // Safety rule (`core.py`: `'%' in u.netloc or CONTROL.search(u.netloc)`):
+    // an escaped server name could hide credentials (`u%40nas` is `u@nas`)
+    // or a control character from the checks on the decoded address.
     if parts.netloc.contains('%') || has_control_character(&parts.netloc) {
         return Err(LocationError::new(
             "Use an unescaped server name without credentials or control characters.",
@@ -378,77 +381,171 @@ mod tests {
         PathBuf::from("/home/test")
     }
 
-    fn normal(value: &str) -> Result<String, LocationError> {
+    /// The canonical URI of an address typed without a current folder.
+    fn canonical(value: &str) -> Result<String, LocationError> {
         normalise_location(value, None, &home())
+    }
+
+    /// The canonical URI of `name` typed while `folder` is open.
+    fn resolve(name: &str, folder: &str) -> Result<String, LocationError> {
+        normalise_location(name, Some(folder), &home())
+    }
+
+    /// An address and the message that refuses it.
+    struct RefusalCase {
+        address: &'static str,
+        message: &'static str,
+    }
+
+    /// Checks that [`canonical`] refuses each address with its message.
+    fn assert_each_refused(cases: &[RefusalCase]) {
+        for case in cases {
+            let result = canonical(case.address);
+            let refusal = result.as_deref().map_err(LocationError::message);
+            assert_eq!(refusal, Err(case.message), "{:?}", case.address);
+        }
     }
 
     /// parity: NAV-034
     #[test]
     fn plain_paths_are_escaped_like_python() {
         assert_eq!(
-            normal("/tmp/Été #1?.txt").as_deref(),
+            canonical("/tmp/Été #1?.txt").as_deref(),
             Ok("file:///tmp/%C3%89t%C3%A9%20%231%3F.txt")
         );
-        assert_eq!(normal("/tmp/a(1)!").as_deref(), Ok("file:///tmp/a%281%29%21"));
-        assert_eq!(normal("  /tmp/x/../y/  ").as_deref(), Ok("file:///tmp/y"));
-        assert_eq!(normal("/").as_deref(), Ok("file:///"));
-        assert_eq!(normal("~").as_deref(), Ok("file:///home/test"));
-        assert_eq!(normal("~//etc").as_deref(), Ok("file:///etc"));
-        assert_eq!(normal("~user").as_deref(), Ok("file:///home/test/~user"));
+        assert_eq!(canonical("/tmp/a(1)!").as_deref(), Ok("file:///tmp/a%281%29%21"));
+        assert_eq!(canonical("  /tmp/x/../y/  ").as_deref(), Ok("file:///tmp/y"));
+        assert_eq!(canonical("/").as_deref(), Ok("file:///"));
+        assert_eq!(canonical("~").as_deref(), Ok("file:///home/test"));
+        assert_eq!(canonical("~//etc").as_deref(), Ok("file:///etc"));
+        assert_eq!(canonical("~user").as_deref(), Ok("file:///home/test/~user"));
     }
 
     /// parity: NAV-034
     #[test]
     fn relative_paths_join_the_right_base() {
-        let base = |value: &str, base: &str| normalise_location(value, Some(base), &home());
         assert_eq!(
-            base("Plans", "file:///home/a").as_deref(),
+            resolve("Plans", "file:///home/a").as_deref(),
             Ok("file:///home/a/Plans")
         );
         assert_eq!(
-            base("x", "file:///tmp/a%20b/").as_deref(),
+            resolve("x", "file:///tmp/a%20b/").as_deref(),
             Ok("file:///tmp/a%20b/x")
         );
-        assert_eq!(base("..", "file:///home/a").as_deref(), Ok("file:///home"));
+        assert_eq!(resolve("..", "file:///home/a").as_deref(), Ok("file:///home"));
         assert_eq!(
-            base("Next plan", "smb://nas/share").as_deref(),
+            resolve("Next plan", "smb://nas/share").as_deref(),
             Ok("smb://nas/share/Next%20plan")
         );
-        assert_eq!(base("../../x", "smb://nas/share/").as_deref(), Ok("smb://nas/x"));
         assert_eq!(
-            base("a#b", "smb://nas/share").as_deref(),
+            resolve("../../x", "smb://nas/share/").as_deref(),
+            Ok("smb://nas/x")
+        );
+        assert_eq!(
+            resolve("a#b", "smb://nas/share").as_deref(),
             Ok("smb://nas/share/a%23b")
         );
         // Virtual and unknown bases fall back to the home folder.
-        assert_eq!(base("Docs", "trash:///").as_deref(), Ok("file:///home/test/Docs"));
-        assert_eq!(base("Docs", "ox:pc").as_deref(), Ok("file:///home/test/Docs"));
+        assert_eq!(
+            resolve("Docs", "trash:///").as_deref(),
+            Ok("file:///home/test/Docs")
+        );
+        assert_eq!(resolve("Docs", "ox:pc").as_deref(), Ok("file:///home/test/Docs"));
     }
 
     /// parity: NAV-034
     #[test]
     fn smb_urls_are_canonical() {
-        assert_eq!(normal("SMB://NAS/Projects/").as_deref(), Ok("smb://nas/Projects"));
-        assert_eq!(normal("smb://nas").as_deref(), Ok("smb://nas/"));
-        assert_eq!(normal("smb://nas:0445/a").as_deref(), Ok("smb://nas:445/a"));
-        assert_eq!(normal("smb://[FE80::1]/a").as_deref(), Ok("smb://[fe80::1]/a"));
-        assert_eq!(normal("smb://nas/a%5Cb").as_deref(), Ok("smb://nas/a/b"));
-        assert_eq!(normal("smb://nas/a?").as_deref(), Ok("smb://nas/a"));
-        assert!(normal("smb://nas:x/a").is_err());
-        assert!(normal("smb://my nas/a").is_err());
+        assert_eq!(
+            canonical("SMB://NAS/Projects/").as_deref(),
+            Ok("smb://nas/Projects")
+        );
+        assert_eq!(canonical("smb://nas").as_deref(), Ok("smb://nas/"));
+        assert_eq!(canonical("smb://nas:0445/a").as_deref(), Ok("smb://nas:445/a"));
+        assert_eq!(canonical("smb://[FE80::1]/a").as_deref(), Ok("smb://[fe80::1]/a"));
+        assert_eq!(canonical("smb://nas/a%5Cb").as_deref(), Ok("smb://nas/a/b"));
+        assert_eq!(canonical("smb://nas/a?").as_deref(), Ok("smb://nas/a"));
+        assert!(canonical("smb://nas:x/a").is_err());
+        assert!(canonical("smb://my nas/a").is_err());
     }
 
     /// parity: NAV-034
     #[test]
     fn unc_paths_become_smb() {
         assert_eq!(
-            normal("\\\\NAS\\Team files\\Q3 #1").as_deref(),
+            canonical("\\\\NAS\\Team files\\Q3 #1").as_deref(),
             Ok("smb://nas/Team%20files/Q3%20%231")
         );
-        assert_eq!(normal("\\\\nas").as_deref(), Ok("smb://nas/"));
-        assert_eq!(normal("\\\\nas\\").as_deref(), Ok("smb://nas/"));
+        assert_eq!(canonical("\\\\nas").as_deref(), Ok("smb://nas/"));
+        assert_eq!(canonical("\\\\nas\\").as_deref(), Ok("smb://nas/"));
         for bad in ["\\\\", "\\\\u:p@nas\\share", "\\\\nas:445\\share"] {
-            assert!(normal(bad).is_err(), "{bad} should be rejected");
+            assert!(canonical(bad).is_err(), "{bad} should be rejected");
         }
+    }
+
+    /// Each kind of invalid address gets the Python app's guidance.
+    ///
+    /// parity: NAV-034, NAV-035, DEV-005
+    #[test]
+    fn invalid_addresses_are_refused_with_specific_guidance() {
+        const UNSUPPORTED: &str =
+            "Only local paths, smb:// locations and connected devices are supported in this build.";
+        const QUERY_OR_FRAGMENT: &str =
+            "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.";
+        assert_each_refused(&[
+            RefusalCase {
+                address: "   ",
+                message: "Enter a local folder path or an SMB address.",
+            },
+            RefusalCase {
+                address: "/tmp/a\u{0}",
+                message: "Control characters are not allowed in an address.",
+            },
+            RefusalCase {
+                address: "smb://nas/a%00b",
+                message: "Encoded control characters are not allowed.",
+            },
+            RefusalCase {
+                address: "C:\\Windows",
+                message: "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share.",
+            },
+            RefusalCase {
+                address: "http://example.org",
+                message: UNSUPPORTED,
+            },
+            RefusalCase {
+                address: "javascript:alert(1)",
+                message: UNSUPPORTED,
+            },
+            RefusalCase {
+                address: "smb://nas/a?b",
+                message: QUERY_OR_FRAGMENT,
+            },
+            RefusalCase {
+                address: "file:///tmp/x#y",
+                message: QUERY_OR_FRAGMENT,
+            },
+            RefusalCase {
+                address: "file://nas/share",
+                message: "For network folders, use smb://server/share rather than file://server/…",
+            },
+            RefusalCase {
+                address: "file:tmp",
+                message: "A file URL must contain an absolute path.",
+            },
+            RefusalCase {
+                address: "smb:///share",
+                message: "Enter an SMB server name, for example smb://nas/Projects.",
+            },
+            RefusalCase {
+                address: "smb://nas:x/a",
+                message: "Invalid SMB port.",
+            },
+            RefusalCase {
+                address: "afc:///DCIM",
+                message: "A connected-device address must include a device identifier and path.",
+            },
+        ]);
     }
 
     /// Every address form refuses a user name or password with the Python
@@ -458,34 +555,53 @@ mod tests {
     /// parity: SAFE-010
     #[test]
     fn credentials_are_refused_in_every_address_form() {
-        let sign_in = "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.";
-        let unc = "Use a server name without credentials, for example \\\\nas\\share.";
-        let escaped = "Use an unescaped server name without credentials or control characters.";
-        let device = "Invalid connected-device identifier.";
-        let refused = |value: &str| normal(value).map_err(|error| error.message().to_string());
-        assert_eq!(refused("smb://u:p@nas/share"), Err(sign_in.to_string()));
-        assert_eq!(refused("smb://u@nas/share"), Err(sign_in.to_string()));
-        assert_eq!(refused("file://user@localhost/x"), Err(sign_in.to_string()));
-        assert_eq!(refused("\\\\u:p@nas\\share"), Err(unc.to_string()));
-        assert_eq!(refused("//u@nas/share"), Err(unc.to_string()));
-        assert_eq!(refused("smb://u%40nas/share"), Err(escaped.to_string()));
-        assert_eq!(refused("mtp://user@device/DCIM"), Err(device.to_string()));
-        let inside_signed_in_folder = normalise_location("x", Some("smb://u@nas/a"), &home());
-        assert_eq!(
-            inside_signed_in_folder.map_err(|error| error.message().to_string()),
-            Err(sign_in.to_string())
-        );
+        const SIGN_IN: &str =
+            "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.";
+        const UNC: &str = "Use a server name without credentials, for example \\\\nas\\share.";
+        assert_each_refused(&[
+            RefusalCase {
+                address: "smb://u:p@nas/share",
+                message: SIGN_IN,
+            },
+            RefusalCase {
+                address: "smb://u@nas/share",
+                message: SIGN_IN,
+            },
+            RefusalCase {
+                address: "file://user@localhost/x",
+                message: SIGN_IN,
+            },
+            RefusalCase {
+                address: "\\\\u:p@nas\\share",
+                message: UNC,
+            },
+            RefusalCase {
+                address: "//u@nas/share",
+                message: UNC,
+            },
+            RefusalCase {
+                address: "smb://u%40nas/share",
+                message: "Use an unescaped server name without credentials or control characters.",
+            },
+            RefusalCase {
+                address: "mtp://user@device/DCIM",
+                message: "Invalid connected-device identifier.",
+            },
+        ]);
+        let inside_signed_in_folder = resolve("x", "smb://u@nas/a");
+        let refusal = inside_signed_in_folder.as_deref().map_err(LocationError::message);
+        assert_eq!(refusal, Err(SIGN_IN));
     }
 
     /// parity: DEV-005
     #[test]
     fn device_uris_keep_their_authority() {
         assert_eq!(
-            normal("MTP://[usb:001,010]").as_deref(),
+            canonical("MTP://[usb:001,010]").as_deref(),
             Ok("mtp://[usb:001,010]/")
         );
         assert_eq!(
-            normal("afc://Device-ID/a/../b/").as_deref(),
+            canonical("afc://Device-ID/a/../b/").as_deref(),
             Ok("afc://Device-ID/b")
         );
         for bad in [
@@ -495,10 +611,10 @@ mod tests {
             "mtp://a%20b/",
             "mtp:///x",
         ] {
-            assert!(normal(bad).is_err(), "{bad} should be rejected");
+            assert!(canonical(bad).is_err(), "{bad} should be rejected");
         }
-        assert!(normal(&format!("mtp://{}/", "x".repeat(513))).is_err());
-        assert!(normal(&format!("mtp://{}/", "x".repeat(512))).is_ok());
+        assert!(canonical(&format!("mtp://{}/", "x".repeat(513))).is_err());
+        assert!(canonical(&format!("mtp://{}/", "x".repeat(512))).is_ok());
     }
 
     #[test]
