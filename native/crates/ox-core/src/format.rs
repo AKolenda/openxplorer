@@ -7,11 +7,11 @@
 //! Dates follow the user's `LC_TIME` locale as the web UI followed the
 //! browser locale: the order and separators of the locale's numeric date,
 //! with a four-digit year and two-digit month and day. The order and
-//! separators come from the C library; see [`locale_pattern`]. In most
-//! locales that is exactly the web UI's Date modified text (`09/21/2026`
-//! in `en_US`, `21.09.2026` in `de_DE`). Where the C library separates the
-//! fields differently from the browser, its separators win (`2026年09月21日`
-//! in `ja_JP`, where the browser wrote `2026/09/21`).
+//! separators come from the C library; see `format/locale_pattern.rs`. In
+//! most locales that is exactly the web UI's Date modified text
+//! (`09/21/2026` in `en_US`, `21.09.2026` in `de_DE`). Where the C library
+//! separates the fields differently from the browser, its separators win
+//! (`2026年09月21日` in `ja_JP`, where the browser wrote `2026/09/21`).
 //!
 //! The locale's patterns are read on the first call and kept for the life
 //! of the process. GTK sets the process locale in `gtk::init`, so format
@@ -42,8 +42,9 @@ const UNKNOWN_DATE: &str = "—";
 /// Shown in the Properties dialog when a time is unknown.
 const UNKNOWN_TIMESTAMP: &str = "Not provided";
 
-/// Size units after bytes; values past 1024 TB stay in TB.
-const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+/// The size units after bytes and the number of bytes in each. Sizes past
+/// 1024 TB stay in TB, as in the web UI.
+const SIZE_UNITS: [(&str, u64); 4] = [("KB", 1 << 10), ("MB", 1 << 20), ("GB", 1 << 30), ("TB", 1 << 40)];
 
 /// `912 bytes`, `71.0 KB`, `130 KB`, `1.1 MB`: one decimal below 100 and
 /// none from 100 up, in powers of 1024.
@@ -52,24 +53,27 @@ const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
 /// and the arithmetic is exact, so every size gets the same text as in the
 /// web interface.
 pub fn pretty_bytes(bytes: u64) -> String {
-    if bytes < 1024 {
+    let Some((unit, unit_bytes)) = largest_unit(bytes) else {
         return format!("{bytes} bytes");
-    }
+    };
+    // Integer arithmetic wide enough for ten times `u64::MAX`.
     let bytes = u128::from(bytes);
-    // The size in UNITS[unit] is bytes / divisor.
-    let mut unit = 0;
-    let mut divisor: u128 = 1024;
-    while unit + 1 < UNITS.len() && bytes >= divisor * 1024 {
-        unit += 1;
-        divisor *= 1024;
-    }
-    let unit = UNITS[unit];
-    if bytes >= 100 * divisor {
-        let whole = round_half_up(bytes, divisor);
+    let unit_bytes = u128::from(unit_bytes);
+    if bytes >= 100 * unit_bytes {
+        let whole = round_half_up(bytes, unit_bytes);
         return format!("{whole} {unit}");
     }
-    let tenths = round_half_up(bytes * 10, divisor);
+    let tenths = round_half_up(bytes * 10, unit_bytes);
     format!("{}.{} {unit}", tenths / 10, tenths % 10)
+}
+
+/// The largest of [`SIZE_UNITS`] that `bytes` fills at least once, or
+/// `None` below 1 KB.
+fn largest_unit(bytes: u64) -> Option<(&'static str, u64)> {
+    SIZE_UNITS
+        .into_iter()
+        .rev()
+        .find(|&(_, unit_bytes)| bytes >= unit_bytes)
 }
 
 /// `numerator / denominator` rounded to the nearest integer, halves up.
@@ -100,22 +104,26 @@ pub fn date_time_text(unix_seconds: u64) -> String {
 /// [`date_text`] for a time GIO already returned as a [`DateTime`], in the
 /// time zone it carries. `None` if it cannot be formatted.
 pub fn format_date(time: &DateTime) -> Option<String> {
-    date_with(time, locale_pattern::current())
+    format_date_with(time, locale_pattern::current())
 }
 
 /// [`date_time_text`] for a time GIO already returned as a [`DateTime`], in
 /// the time zone it carries. `None` if it cannot be formatted.
 pub fn format_date_time(time: &DateTime) -> Option<String> {
-    date_time_with(time, locale_pattern::current())
+    format_date_time_with(time, locale_pattern::current())
 }
 
-fn date_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
+/// [`format_date`] with the given locale `patterns`, which the tests
+/// choose per locale.
+fn format_date_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
     let date = time.format(&patterns.date).ok()?;
     Some(date.into())
 }
 
-fn date_time_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
-    let date = date_with(time, patterns)?;
+/// [`format_date_time`] with the given locale `patterns`: the date, a
+/// comma and the clock time.
+fn format_date_time_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
+    let date = format_date_with(time, patterns)?;
     let clock = time.format(&patterns.time).ok()?;
     Some(format!("{date}, {clock}"))
 }
@@ -154,6 +162,7 @@ mod tests {
     }
 
     impl LocaleCase {
+        /// The patterns this locale's samples give.
         fn patterns(&self) -> LocalePatterns {
             LocalePatterns::from_samples(&LocaleSamples {
                 date: self.date_sample.to_string(),
@@ -251,6 +260,8 @@ mod tests {
     }
 
     /// `prettyBytes` stops dividing at TB.
+    ///
+    /// parity: VIEW-003
     #[test]
     fn sizes_past_a_petabyte_stay_in_terabytes() {
         assert_eq!(pretty_bytes(1 << 50), "1024 TB");
@@ -260,6 +271,8 @@ mod tests {
 
     /// Ported from `desktop/ui/app.js::dateText` (`n ? … : '—'`) and
     /// `timestamp` (`value ? … : 'Not provided'`).
+    ///
+    /// parity: VIEW-001
     #[test]
     fn unknown_times_use_the_web_placeholders() {
         assert_eq!(date_text(0), "—");
@@ -286,7 +299,7 @@ mod tests {
     #[test]
     fn column_dates_match_the_web_ui_in_each_locale() {
         for case in &LOCALE_CASES {
-            let date = date_with(&september_21(), &case.patterns());
+            let date = format_date_with(&september_21(), &case.patterns());
             assert_eq!(date.as_deref(), Some(case.column), "{}", case.locale);
         }
     }
@@ -298,7 +311,7 @@ mod tests {
     #[test]
     fn properties_timestamps_add_the_locale_clock_to_the_column_date() {
         for case in &LOCALE_CASES {
-            let timestamp = date_time_with(&september_21(), &case.patterns());
+            let timestamp = format_date_time_with(&september_21(), &case.patterns());
             assert_eq!(timestamp.as_deref(), Some(case.properties), "{}", case.locale);
         }
     }
