@@ -87,6 +87,10 @@ pub enum NetworkKey {
     Other(String),
 }
 
+/// SMB's well-known port, which Python's `network_key` assumes when a
+/// location gives none.
+const DEFAULT_SMB_PORT: u16 = 445;
+
 /// Canonical display identity matching Python's `network_key`.
 ///
 /// # Errors
@@ -98,10 +102,11 @@ pub fn network_key(uri: &str) -> Result<NetworkKey, LocationError> {
     if parts.scheme != "smb" {
         return Ok(NetworkKey::Other(uri));
     }
+    let explicit_port = parts.port()?.filter(|port| *port != 0);
     let decoded_path = unquote_lossy(&parts.path);
     Ok(NetworkKey::Smb {
         host: parts.hostname().unwrap_or_default(),
-        port: parts.port()?.filter(|port| *port != 0).unwrap_or(445),
+        port: explicit_port.unwrap_or(DEFAULT_SMB_PORT),
         path: glib::casefold(decoded_path.trim_end_matches('/')).to_string(),
     })
 }
@@ -115,58 +120,72 @@ pub fn merge_network_locations(
     stable: &[StableMount],
     visited: &[Bookmark],
 ) -> Vec<NetworkLocation> {
-    let mut merged = NetworkRows::default();
-    for share in saved {
-        merged.add(&Contribution {
-            uri: &share.bookmark.uri,
-            label: &share.bookmark.label,
-            saved: true,
-            connected: share.connected,
-            kind: NetworkKind::Share,
-        });
-    }
     let active_smb_mounts = mounts
         .iter()
         .filter(|mount| mount.mounted && mount.uri.starts_with("smb:"));
-    for mount in active_smb_mounts {
-        merged.add(&Contribution {
-            uri: &mount.uri,
-            label: &mount.label,
-            saved: false,
-            connected: true,
-            kind: remote_kind(&mount.uri),
-        });
-    }
-    for mount in stable.iter().filter(|mount| is_network_mount(mount)) {
-        let uri = file_uri(&mount.path);
-        merged.add(&Contribution {
-            uri: &uri,
-            label: &mount_label(mount),
-            saved: false,
-            connected: true,
-            kind: NetworkKind::Mount,
-        });
-    }
-    for bookmark in visited {
-        merged.add(&Contribution {
-            uri: &bookmark.uri,
-            label: &bookmark.label,
-            saved: false,
-            connected: false,
-            kind: remote_kind(&bookmark.uri),
-        });
-    }
+    let network_kernel_mounts = stable.iter().filter(|mount| is_network_mount(mount));
+    let mut merged = NetworkRows::default();
+    merged.add_all(saved.iter().map(Contribution::saved_share));
+    merged.add_all(active_smb_mounts.map(Contribution::gio_mount));
+    merged.add_all(network_kernel_mounts.map(Contribution::kernel_mount));
+    merged.add_all(visited.iter().map(Contribution::visited));
     merged.rows
 }
 
 /// One source's view of a network location (the arguments of `add` in
 /// `network_locations.py`).
 struct Contribution<'a> {
-    uri: &'a str,
-    label: &'a str,
+    uri: Cow<'a, str>,
+    label: Cow<'a, str>,
     saved: bool,
     connected: bool,
     kind: NetworkKind,
+}
+
+impl<'a> Contribution<'a> {
+    /// A share saved in the settings; its URI and label win.
+    fn saved_share(share: &'a SavedShare) -> Self {
+        Self {
+            uri: Cow::Borrowed(&share.bookmark.uri),
+            label: Cow::Borrowed(&share.bookmark.label),
+            saved: true,
+            connected: share.connected,
+            kind: NetworkKind::Share,
+        }
+    }
+
+    /// An active SMB mount reported by GIO.
+    fn gio_mount(mount: &'a NetworkMount) -> Self {
+        Self {
+            uri: Cow::Borrowed(&mount.uri),
+            label: Cow::Borrowed(&mount.label),
+            saved: false,
+            connected: true,
+            kind: remote_kind(&mount.uri),
+        }
+    }
+
+    /// A CIFS or SMB3 kernel mount point, as a `file://` location.
+    fn kernel_mount(mount: &'a StableMount) -> Self {
+        Self {
+            uri: Cow::Owned(file_uri(&mount.path)),
+            label: mount_label(mount),
+            saved: false,
+            connected: true,
+            kind: NetworkKind::Mount,
+        }
+    }
+
+    /// An SMB server or share browsed in this session.
+    fn visited(bookmark: &'a Bookmark) -> Self {
+        Self {
+            uri: Cow::Borrowed(&bookmark.uri),
+            label: Cow::Borrowed(&bookmark.label),
+            saved: false,
+            connected: false,
+            kind: remote_kind(&bookmark.uri),
+        }
+    }
 }
 
 /// The merged rows so far, with the index of each row's key.
@@ -177,11 +196,19 @@ struct NetworkRows {
 }
 
 impl NetworkRows {
+    /// Adds every contribution of one source in order, each as
+    /// [`add`](Self::add) does.
+    fn add_all<'a>(&mut self, contributions: impl Iterator<Item = Contribution<'a>>) {
+        for contribution in contributions {
+            self.add(contribution);
+        }
+    }
+
     /// Adds a row, or merges into the row with the same [`NetworkKey`]:
     /// a saved contribution takes over the URI and label, and the saved and
     /// connected flags accumulate.
-    fn add(&mut self, contribution: &Contribution<'_>) {
-        let Ok(uri) = normalise(contribution.uri) else {
+    fn add(&mut self, contribution: Contribution<'_>) {
+        let Ok(uri) = normalise(&contribution.uri) else {
             return;
         };
         if !uri.starts_with("smb:") && contribution.kind != NetworkKind::Mount {
@@ -193,7 +220,7 @@ impl NetworkRows {
         let label = if contribution.label.is_empty() {
             fallback_label(&uri)
         } else {
-            contribution.label.to_owned()
+            contribution.label.into_owned()
         };
         let Some(&index) = self.indexes.get(&key) else {
             self.indexes.insert(key, self.rows.len());

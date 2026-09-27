@@ -155,23 +155,28 @@ impl FolderLocations {
     /// large, not UTF-8, not a regular file) also means every default,
     /// with a logged warning, where the Python app failed to build the
     /// sidebar at all.
-    pub fn paths(&self) -> KnownFolderPaths {
-        let mut configured = match user_dirs::read(&self.user_dirs_file, &self.home) {
+    pub fn read_paths(&self) -> KnownFolderPaths {
+        let mut configured = self.read_configured();
+        let mut paths = HashMap::new();
+        for folder in KnownFolder::ALL {
+            let default_path = self.home.join(folder.label());
+            let path = configured.remove(&folder).unwrap_or(default_path);
+            paths.insert(folder, path);
+        }
+        KnownFolderPaths { paths }
+    }
+
+    /// The folders `user-dirs.dirs` configures; none, with a logged
+    /// warning, if it cannot be read.
+    fn read_configured(&self) -> UserDirs {
+        match user_dirs::read(&self.user_dirs_file, &self.home) {
             Ok(configured) => configured,
             Err(error) => {
                 let file = self.user_dirs_file.display();
                 glib::g_warning!(LOG_DOMAIN, "{file}: {error} Using the default standard folders.");
                 UserDirs::new()
             }
-        };
-        let paths = KnownFolder::ALL
-            .into_iter()
-            .map(|folder| {
-                let default = || self.home.join(folder.label());
-                (folder, configured.remove(&folder).unwrap_or_else(default))
-            })
-            .collect();
-        KnownFolderPaths { paths }
+        }
     }
 }
 
@@ -186,11 +191,12 @@ impl KnownFolderPaths {
     ///
     /// # Panics
     ///
-    /// Never: [`FolderLocations::paths`] fills in every standard folder.
+    /// Never: [`FolderLocations::read_paths`] fills in every standard
+    /// folder.
     pub fn path(&self, folder: KnownFolder) -> &Path {
         self.paths
             .get(&folder)
-            .expect("FolderLocations::paths fills in every standard folder")
+            .expect("FolderLocations::read_paths fills in every standard folder")
     }
 
     /// The Quick access rows of the six standard folders it shows, before
@@ -199,9 +205,7 @@ impl KnownFolderPaths {
         let place = |folder: KnownFolder| Place {
             label: folder.label().to_owned(),
             uri: file_uri(self.path(folder)),
-            icon: Some(folder.glyph()),
-            color: folder.glyph_color(),
-            pinned: true,
+            known_folder: Some(folder),
             is_shared: false,
         };
         KnownFolder::QUICK_ACCESS.into_iter().map(place).collect()
@@ -250,10 +254,18 @@ mod tests {
         assert_eq!(KnownFolder::from_xdg_key("DOWNLOADS"), None);
     }
 
+    /// A `user-dirs.dirs` that cannot be read.
+    struct UnreadableCase {
+        /// Why it cannot be read.
+        name: &'static str,
+        /// The file's bytes.
+        contents: Vec<u8>,
+    }
+
     #[test]
     fn a_missing_file_gives_every_default() {
         let fixture = Fixture::new();
-        let paths = fixture.locations().paths();
+        let paths = fixture.locations().read_paths();
         for folder in KnownFolder::ALL {
             assert_eq!(paths.path(folder), fixture.home.join(folder.label()));
         }
@@ -266,9 +278,9 @@ mod tests {
         let fixture = Fixture::new();
         let locations = fixture.locations();
         fixture.write_user_dirs("XDG_DOWNLOAD_DIR=\"$HOME/Incoming\"\n");
-        let before = locations.paths();
+        let before = locations.read_paths();
         fixture.write_user_dirs("XDG_DOWNLOAD_DIR=\"/elsewhere/Downloads\"\n");
-        let after = locations.paths();
+        let after = locations.read_paths();
         assert_eq!(before.path(KnownFolder::Downloads), fixture.home.join("Incoming"));
         assert_eq!(
             after.path(KnownFolder::Downloads),
@@ -280,11 +292,21 @@ mod tests {
     fn an_unreadable_file_gives_every_default() {
         let fixture = Fixture::new();
         let oversized = format!("XDG_DESKTOP_DIR=\"/data/Desk\"\n{}", "#".repeat(128 * 1024));
-        let cases: [&[u8]; 2] = [oversized.as_bytes(), b"XDG_DESKTOP_DIR=\"/data/Caf\xe9\"\n"];
-        for contents in cases {
-            fixture.write_user_dirs(contents);
-            let desktop = fixture.locations().paths().path(KnownFolder::Desktop).to_owned();
-            assert_eq!(desktop, fixture.home.join("Desktop"));
+        let cases = [
+            UnreadableCase {
+                name: "over 128 KiB",
+                contents: oversized.into_bytes(),
+            },
+            UnreadableCase {
+                name: "not UTF-8",
+                contents: b"XDG_DESKTOP_DIR=\"/data/Caf\xe9\"\n".to_vec(),
+            },
+        ];
+        for case in cases {
+            fixture.write_user_dirs(&case.contents);
+            let paths = fixture.locations().read_paths();
+            let desktop = paths.path(KnownFolder::Desktop);
+            assert_eq!(desktop, fixture.home.join("Desktop"), "{}", case.name);
         }
     }
 
@@ -293,18 +315,20 @@ mod tests {
     fn quick_access_shows_six_folders_with_their_glyphs_and_colours() {
         let fixture = Fixture::new();
         fixture.write_user_dirs("XDG_PICTURES_DIR=\"/data//Photos (2024)/\"\n");
-        let places = fixture.locations().paths().quick_access_places();
+        let places = fixture.locations().read_paths().quick_access_places();
         let labels: Vec<&str> = places.iter().map(|place| place.label.as_str()).collect();
         assert_eq!(
             labels,
             ["Desktop", "Downloads", "Documents", "Pictures", "Music", "Videos"]
         );
+        let folders: Vec<Option<KnownFolder>> = places.iter().map(|place| place.known_folder).collect();
+        assert_eq!(folders, KnownFolder::QUICK_ACCESS.map(Some));
         let pictures = &places[3];
         assert_eq!(pictures.uri, "file:///data/Photos%20%282024%29");
         assert_eq!(
-            (pictures.icon, pictures.color),
+            (pictures.glyph(), pictures.glyph_color()),
             (Some("pictures"), Some("#9a79cb"))
         );
-        assert!(places.iter().all(|place| place.pinned && !place.is_shared));
+        assert!(places.iter().all(|place| !place.is_shared));
     }
 }

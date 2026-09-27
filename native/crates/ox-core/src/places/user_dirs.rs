@@ -83,11 +83,11 @@ pub(super) fn parse(text: &str, home: &Path) -> UserDirs {
 /// The whole file as UTF-8 text, refusing more than [`SIZE_LIMIT`] bytes
 /// even if it grows while it is read.
 fn read_limited_text(file: File) -> Result<String, UserDirsError> {
-    let info = file.metadata()?;
-    if !info.is_file() {
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
         return Err(UserDirsError::NotAFile);
     }
-    if info.len() > SIZE_LIMIT {
+    if metadata.len() > SIZE_LIMIT {
         return Err(UserDirsError::TooLarge);
     }
     let mut bytes = Vec::new();
@@ -215,7 +215,8 @@ fn normalise_absolute(path: &Path) -> PathBuf {
             Component::RootDir | Component::CurDir | Component::Prefix(_) => {}
         }
     }
-    let mut normalised = PathBuf::from(if keeps_two_slashes { "//" } else { "/" });
+    let root = if keeps_two_slashes { "//" } else { "/" };
+    let mut normalised = PathBuf::from(root);
     normalised.extend(names);
     normalised
 }
@@ -283,7 +284,10 @@ mod tests {
         }
     }
 
-    /// The refusals SET-018 describes (the feature is not yet marked).
+    /// The refusals SET-018 describes. `native/parity/features.toml` still
+    /// lists SET-018 as `native = "todo"`, and the parity check rejects a
+    /// marker on a `todo` feature, so `parity: SET-018` is added here
+    /// together with that status change.
     #[test]
     fn shell_syntax_control_characters_and_relative_paths_are_refused() {
         let lines = [

@@ -5,15 +5,18 @@
 //! Each Python script gets the settings directory as `sys.argv[1]`. Every
 //! file is inside a temporary directory; the user's settings are untouched.
 
+mod python_support;
+
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::path::Path;
+use std::process::{Child, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
 use ox_core::settings::{BookmarkAction, BookmarkKind, PreferencesUpdate, Settings, Theme};
+use python_support::{python, run_python};
 use serde_json::{json, Value};
 
 /// Changes preferences, a share and a pin through the Python app's
@@ -70,39 +73,12 @@ with (root / 'settings.lock').open('r+') as lock:
     store.save()
 ";
 
-/// `python3 -u -c <script> <directory>` with `desktop/` on the module path.
-fn python(script: &str, directory: &Path) -> Command {
-    let desktop = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../desktop");
-    let mut command = Command::new("python3");
-    command
-        .arg("-u")
-        .arg("-c")
-        .arg(script)
-        .arg(directory)
-        .env("PYTHONPATH", desktop);
-    command
-}
-
-/// Runs `script` to completion and returns what it printed; a failing
-/// script fails the test with its error output.
-fn run_python(script: &str, directory: &Path) -> String {
-    let output = python(script, directory)
-        .output()
-        .expect("Python 3 is required for settings interoperability tests");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).expect("Python emitted UTF-8")
-}
-
 /// parity: SET-014, SIDE-022
 #[test]
 fn python_and_rust_mutations_preserve_each_others_settings() {
     let temporary = tempfile::tempdir().unwrap();
     let directory = temporary.path().join("winspace");
-    run_python(PYTHON_CHANGES_SETTINGS, &directory);
+    run_python(PYTHON_CHANGES_SETTINGS, &[directory.as_path()]);
 
     let mut rust = Settings::open(&directory);
     assert!(rust.warning().is_none());
@@ -120,7 +96,7 @@ fn python_and_rust_mutations_preserve_each_others_settings() {
         "Work",
     )
     .unwrap();
-    let printed = run_python(PYTHON_CHANGES_TEXT_SIZE_AND_PRINTS, &directory);
+    let printed = run_python(PYTHON_CHANGES_TEXT_SIZE_AND_PRINTS, &[directory.as_path()]);
 
     let from_python: Value = serde_json::from_str(&printed).unwrap();
     assert_eq!(from_python, rust.snapshot().to_json());
@@ -147,7 +123,7 @@ fn python_flock_conflicts_with_a_rust_file_lock() {
         .unwrap();
     file.lock().unwrap();
 
-    let printed = run_python(PYTHON_TRIES_THE_LOCK, temporary.path());
+    let printed = run_python(PYTHON_TRIES_THE_LOCK, &[temporary.path()]);
 
     assert_eq!(printed.trim(), "blocked");
 }
@@ -162,7 +138,7 @@ struct LockingPython {
 impl LockingPython {
     /// Starts the script and returns once it holds `settings.lock`.
     fn start(directory: &Path) -> Self {
-        let process = python(PYTHON_SAVES_DARK_WHILE_LOCKED, directory)
+        let process = python(PYTHON_SAVES_DARK_WHILE_LOCKED, &[directory])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()

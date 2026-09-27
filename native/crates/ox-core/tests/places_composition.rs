@@ -4,16 +4,18 @@
 //! `desktop/folder_locations.py`, which runs on the same files as the Rust
 //! parser. Every file is inside a temporary directory.
 
+mod python_support;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use ox_core::places::{
     compose_quick_access, merge_network_locations, network_key, FolderLocations, KnownFolder, NetworkKind,
     NetworkMount, Place, SavedShare, StableMount,
 };
 use ox_core::settings::{Bookmark, SettingsData};
+use python_support::run_python;
 use serde_json::Value;
 
 fn bookmark(uri: &str, label: &str) -> Bookmark {
@@ -31,14 +33,12 @@ fn saved(uri: &str, label: &str) -> SavedShare {
     }
 }
 
-/// A known-folder row with the Documents glyph.
+/// A known-folder row of the Documents folder.
 fn place(uri: &str, label: &str) -> Place {
     Place {
         uri: uri.into(),
         label: label.into(),
-        icon: Some("documents"),
-        color: Some("#4a94d1"),
-        pinned: true,
+        known_folder: Some(KnownFolder::Documents),
         is_shared: false,
     }
 }
@@ -73,7 +73,7 @@ fn quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order() {
     let labels: Vec<&str> = rows.iter().map(|row| row.label.as_str()).collect();
     assert_eq!(labels, ["Work", "Documents", "Other"]);
     assert!(rows[0].is_shared);
-    assert_eq!(rows[1].icon, Some("documents"));
+    assert_eq!(rows[1].known_folder, Some(KnownFolder::Documents));
 }
 
 /// parity: NET-006
@@ -277,11 +277,10 @@ const USER_DIRS_CASES: [UserDirsCase; 10] = [
     },
 ];
 
-/// Runs `FolderLocations.paths()` from `desktop/folder_locations.py` on every
-/// case directory under `root` and returns `{case: {XDG key: path}}`.
-fn python_folder_paths(root: &Path, home: &Path) -> Value {
-    let desktop = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../desktop");
-    let script = r"
+/// Prints `FolderLocations.paths()` from `desktop/folder_locations.py` for
+/// every case directory under `sys.argv[1]`, with `sys.argv[2]` as the home
+/// folder, as `{case: {XDG key: path}}`.
+const PYTHON_PRINTS_FOLDER_PATHS: &str = r"
 import json, sys
 from pathlib import Path
 from folder_locations import FolderLocations
@@ -290,27 +289,19 @@ cases = {config.name: FolderLocations(root / 'unused', home=home, config=config)
          for config in sorted(root.iterdir()) if config.is_dir()}
 print(json.dumps(cases))
 ";
-    let output = Command::new("python3")
-        .arg("-c")
-        .arg(script)
-        .arg(root)
-        .arg(home)
-        .env("PYTHONPATH", desktop)
-        .output()
-        .expect("Python 3 is required for the user-dirs interoperability test");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).expect("Python printed JSON")
+
+/// The Python app's standard folders for every case directory under
+/// `root`.
+fn python_folder_paths(root: &Path, home: &Path) -> Value {
+    let printed = run_python(PYTHON_PRINTS_FOLDER_PATHS, &[root, home]);
+    serde_json::from_str(&printed).expect("Python printed JSON")
 }
 
-/// The same result from [`FolderLocations::paths`].
+/// The same result from [`FolderLocations::read_paths`].
 fn rust_folder_paths(root: &Path, home: &Path) -> Value {
     let mut cases = BTreeMap::new();
     for case in &USER_DIRS_CASES {
-        let paths = FolderLocations::new(home.to_path_buf(), &root.join(case.name)).paths();
+        let paths = FolderLocations::new(home.to_path_buf(), &root.join(case.name)).read_paths();
         let folders: BTreeMap<&str, String> = KnownFolder::ALL
             .into_iter()
             .map(|folder| (folder.xdg_key(), paths.path(folder).display().to_string()))

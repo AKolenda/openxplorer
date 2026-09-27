@@ -22,19 +22,17 @@ pub use network::{
     StableMount,
 };
 
-/// One Quick access sidebar row.
+/// One Quick access sidebar row. Every row can be unpinned, built-in
+/// folders included (a built-in folder is then hidden).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Place {
     /// Visible folder name or the user's custom label.
     pub label: String,
     /// Canonical location opened by the row.
     pub uri: String,
-    /// Known-folder glyph; `None` uses the ordinary folder artwork.
-    pub icon: Option<&'static str>,
-    /// Known-folder glyph colour, in CSS hex notation.
-    pub color: Option<&'static str>,
-    /// Whether the row can be unpinned, including built-in folders.
-    pub pinned: bool,
+    /// The standard folder the row shows, which decides its glyph and
+    /// colour; `None` for a user pin. Python's `folderKey`.
+    pub known_folder: Option<KnownFolder>,
     /// Whether this location is on an SMB share or a local network mount.
     pub is_shared: bool,
 }
@@ -46,18 +44,30 @@ impl Place {
         Self {
             label: pin.label.clone(),
             uri: pin.uri.clone(),
-            icon: None,
-            color: None,
-            pinned: true,
+            known_folder: None,
             is_shared: false,
         }
+    }
+
+    /// The row's glyph name; `None` draws the ordinary folder artwork.
+    pub fn glyph(&self) -> Option<&'static str> {
+        self.known_folder.map(KnownFolder::glyph)
+    }
+
+    /// The glyph colour in CSS hex notation; `None` leaves the artwork's
+    /// own colours.
+    pub fn glyph_color(&self) -> Option<&'static str> {
+        self.known_folder.and_then(KnownFolder::glyph_color)
     }
 }
 
 /// The six Quick access standard folders, read from `user-dirs.dirs` now
-/// (see [`FolderLocations::paths`]). Creates no folder and moves nothing.
+/// (see [`FolderLocations::read_paths`]). Creates no folder and moves
+/// nothing.
 pub fn known_folders() -> Vec<Place> {
-    FolderLocations::from_environment().paths().quick_access_places()
+    FolderLocations::from_environment()
+        .read_paths()
+        .quick_access_places()
 }
 
 /// Known folders and user pins, respecting hidden folders and saved order.
