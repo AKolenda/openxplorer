@@ -30,6 +30,10 @@ def audit_files(directory: Path) -> Iterator[Path]:
     holds Rust build output, which is not a publication input. Both are pruned
     before they are read. ROOT is read on each call because the tests point it
     at a fixture tree.
+
+    directory must be absolute and resolved, as audit() passes it: native/target
+    is recognised by its absolute path, so under a relative directory it would
+    not be pruned.
     """
     rust_build_output = ROOT / 'native/target'
     for current_name, children, names in os.walk(directory, followlinks=False):
@@ -97,9 +101,11 @@ def audit(paths):
                 except ValueError:issues.append(name+': invalid inline image');continue
                 if image_hash not in known_images:issues.append(name+': unregistered inline screenshot')
             if contains_private_term(s):issues.append(name+': rejected private-data fingerprint')
-    for p in paths:
-        # Resolve links so each file is named by its path in the repository.
-        p = p.resolve()
+    for given in paths:
+        # Make each input absolute and resolve links: files are named by their
+        # path relative to ROOT, and audit_files() recognises native/target by
+        # its absolute path.
+        p = given.resolve()
         if p.is_file():visit(str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else p.name,p.read_bytes());continue
         for file_path in audit_files(p):
             visit(str(file_path.relative_to(p)), file_path.read_bytes())
