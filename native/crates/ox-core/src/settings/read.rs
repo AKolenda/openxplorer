@@ -9,127 +9,50 @@
 //! stops reading with a warning; sections read before it are kept and the
 //! rest keep their defaults.
 
-use serde_json::{Map, Value};
+use serde_json::{Map, Number, Value};
 
-use super::choices::{ContextMenu, Theme, View};
 use super::labels::bookmark_fallback_label;
-use super::model::{Bookmark, Column, PreferencesUpdate, RecentEntry, SettingsData, NETWORK_INTERVALS};
+use super::model::{Bookmark, RecentEntry, SettingsData, MAX_BOOKMARKS, MAX_HIDDEN, MAX_ORDER, MAX_RECENT};
+use super::preferences::PreferencesUpdate;
 use super::SettingsError;
 use crate::location::{normalise, python_strip, require_share, safe_label, LocationError};
 
-/// Most pins and most shares kept.
-pub(super) const MAX_BOOKMARKS: usize = 200;
-/// Most recent files kept.
-pub(super) const MAX_RECENT: usize = 30;
-/// Most hidden Quick access locations kept.
-const MAX_HIDDEN: usize = 200;
-/// Longest Quick access order kept.
-pub(super) const MAX_ORDER: usize = 400;
-/// Longest recent-file name kept, in characters.
-pub(super) const MAX_NAME_CHARS: usize = 512;
-/// Longest recent-file type kept, in characters.
-pub(super) const MAX_TYPE_CHARS: usize = 200;
-
-/// Validates a parsed file into `data`, which starts as the defaults.
+/// Validates a parsed file into `settings`, which starts as the defaults.
 /// Sections read before a problem are kept, as in Python.
-pub(super) fn read_settings(source: &Value, data: &mut SettingsData) -> Result<(), SettingsError> {
-    let Some(object) = source.as_object() else {
+pub(super) fn read_settings(source: &Value, settings: &mut SettingsData) -> Result<(), SettingsError> {
+    let Some(sections) = source.as_object() else {
         return Err(SettingsError::invalid("Settings must be a JSON object."));
     };
-    data.pins = entry_section(object, "pins", MAX_BOOKMARKS)?
+    settings.pins = entry_section(sections, "pins", MAX_BOOKMARKS)?
         .iter()
         .filter_map(|item| read_bookmark(item, normalise))
         .collect();
-    data.shares = entry_section(object, "shares", MAX_BOOKMARKS)?
+    settings.shares = entry_section(sections, "shares", MAX_BOOKMARKS)?
         .iter()
         .filter_map(|item| read_bookmark(item, require_share))
         .collect();
-    data.recent = entry_section(object, "recent", MAX_RECENT)?
+    settings.recent = entry_section(sections, "recent", MAX_RECENT)?
         .iter()
         .filter_map(read_recent)
         .collect();
     // Hidden entries are not deduplicated, matching the Python reader.
-    data.hidden_quick = location_section(object, "hiddenQuick", MAX_HIDDEN)?
+    settings.hidden_quick = location_section(sections, "hiddenQuick", MAX_HIDDEN)?
         .iter()
-        .filter_map(|value| normalise(value).ok())
+        .filter_map(|location| normalise(location).ok())
         .collect();
-    for value in location_section(object, "quickOrder", MAX_ORDER)? {
-        let Ok(uri) = normalise(&value) else {
+    for location in location_section(sections, "quickOrder", MAX_ORDER)? {
+        let Ok(uri) = normalise(&location) else {
             continue;
         };
-        if !data.quick_order.contains(&uri) {
-            data.quick_order.push(uri);
+        if !settings.quick_order.contains(&uri) {
+            settings.quick_order.push(uri);
         }
     }
-    if let Some(values) = object.get("preferences") {
-        let update = PreferencesUpdate::from_json(values)?;
-        data.preferences.apply(&update);
+    if let Some(preferences) = sections.get("preferences") {
+        let update = PreferencesUpdate::from_json(preferences)?;
+        settings.preferences.apply(&update);
     }
     Ok(())
-}
-
-impl PreferencesUpdate {
-    /// Reads a preferences object from untrusted JSON (the file, or a
-    /// request from another window). Values of the wrong JSON type and
-    /// unknown choices are dropped here; numeric ranges are checked in
-    /// [`Preferences::apply`](super::Preferences::apply).
-    ///
-    /// # Errors
-    ///
-    /// [`SettingsError::Invalid`] if `value` is not an object.
-    pub fn from_json(value: &Value) -> Result<Self, SettingsError> {
-        let Some(values) = value.as_object() else {
-            return Err(SettingsError::invalid("Preferences must be an object."));
-        };
-        let text = |key: &str| values.get(key).and_then(Value::as_str);
-        let flag = |key: &str| values.get(key).and_then(Value::as_bool);
-        let column_widths = values
-            .get("columnWidths")
-            .and_then(Value::as_object)
-            .map(read_column_widths);
-        Ok(Self {
-            theme: text("theme").and_then(Theme::from_key),
-            view: text("view").and_then(View::from_key),
-            details: flag("details"),
-            show_hidden: flag("showHidden"),
-            auto_index: flag("autoIndex"),
-            text_size: values.get("textSize").and_then(read_text_size),
-            sidebar_width: values.get("sidebarWidth").and_then(Value::as_f64),
-            column_widths,
-            context_menu: text("contextMenu").and_then(ContextMenu::from_key),
-            network_interval: values.get("networkInterval").and_then(read_network_interval),
-        })
-    }
-}
-
-/// A text size given as a true integer. Python checks `type(size) is int`,
-/// so 150.0 and "150" are ignored.
-fn read_text_size(value: &Value) -> Option<u32> {
-    let size = value.as_u64()?;
-    u32::try_from(size).ok()
-}
-
-/// One of the offered network intervals. Python compares with
-/// `in (30, 60, 300)`, so 60.0 matches as well.
-#[expect(
-    clippy::float_cmp,
-    reason = "Python's `in` compares with ==, so only exact values match"
-)]
-fn read_network_interval(value: &Value) -> Option<u32> {
-    let seconds = value.as_f64()?;
-    NETWORK_INTERVALS
-        .into_iter()
-        .find(|&choice| f64::from(choice) == seconds)
-}
-
-/// The numeric widths of known columns; out-of-range widths are dropped
-/// when applied.
-fn read_column_widths(columns: &Map<String, Value>) -> Vec<(Column, f64)> {
-    let numeric_width = |column: Column| {
-        let width = columns.get(column.key())?.as_f64()?;
-        Some((column, width))
-    };
-    Column::ALL.into_iter().filter_map(numeric_width).collect()
 }
 
 /// The first `limit` items of a section of objects; a missing section is
@@ -137,11 +60,11 @@ fn read_column_widths(columns: &Map<String, Value>) -> Vec<(Column, f64)> {
 /// character is never an object, so a string also reads as empty. Any
 /// other type stops reading.
 fn entry_section<'a>(
-    object: &'a Map<String, Value>,
+    sections: &'a Map<String, Value>,
     key: &str,
     limit: usize,
 ) -> Result<&'a [Value], SettingsError> {
-    match object.get(key) {
+    match sections.get(key) {
         None | Some(Value::String(_)) => Ok(&[]),
         Some(Value::Array(items)) => Ok(&items[..items.len().min(limit)]),
         Some(_) => Err(wrong_type(key)),
@@ -155,16 +78,16 @@ fn entry_section<'a>(
 /// each character as a path relative to the home folder. That is
 /// reproduced so both applications read a damaged file the same way.
 fn location_section(
-    object: &Map<String, Value>,
+    sections: &Map<String, Value>,
     key: &str,
     limit: usize,
 ) -> Result<Vec<String>, SettingsError> {
-    match object.get(key) {
+    match sections.get(key) {
         None => Ok(Vec::new()),
         Some(Value::String(text)) => Ok(text.chars().take(limit).map(String::from).collect()),
         Some(Value::Array(items)) => {
-            let text = |item: &Value| item.as_str().unwrap_or_default().to_owned();
-            Ok(items.iter().take(limit).map(text).collect())
+            let as_text = |item: &Value| item.as_str().unwrap_or_default().to_owned();
+            Ok(items.iter().take(limit).map(as_text).collect())
         }
         Some(_) => Err(wrong_type(key)),
     }
@@ -175,7 +98,8 @@ fn wrong_type(key: &str) -> SettingsError {
     SettingsError::invalid(format!("“{key}” must be a list."))
 }
 
-/// A `{uri, label}` entry, or `None` if it is unusable.
+/// A `{uri, label}` entry whose location passes `check`, or `None` if it
+/// is unusable.
 fn read_bookmark(item: &Value, check: fn(&str) -> Result<String, LocationError>) -> Option<Bookmark> {
     let uri = check(item.get("uri")?.as_str()?).ok()?;
     let label = item.get("label").and_then(Value::as_str).unwrap_or_default();
@@ -183,20 +107,22 @@ fn read_bookmark(item: &Value, check: fn(&str) -> Result<String, LocationError>)
     Some(Bookmark { uri, label })
 }
 
-/// A recent-file entry, or `None` if it is unusable.
+/// A recent-file entry, or `None` if it is unusable. The fields convert
+/// with Python's `str()` and `int()`, as `Settings.__init__` does.
 fn read_recent(item: &Value) -> Option<RecentEntry> {
-    let entry = item.as_object()?;
-    let uri = normalise(entry.get("uri")?.as_str()?).ok()?;
-    let name = first_chars(&python_str(entry.get("name")?), MAX_NAME_CHARS);
-    let type_name = entry.get("type").map_or_else(|| "File".to_owned(), python_str);
-    Some(RecentEntry {
+    let fields = item.as_object()?;
+    let uri = normalise(fields.get("uri")?.as_str()?).ok()?;
+    let name = python_str(fields.get("name")?);
+    let type_name = fields.get("type").map_or_else(|| "File".to_owned(), python_str);
+    let entry = RecentEntry {
         uri,
         name,
-        type_name: first_chars(&type_name, MAX_TYPE_CHARS),
+        type_name,
         is_dir: false,
-        size: python_count(entry.get("size"))?,
-        modified: python_count(entry.get("modified"))?,
-    })
+        size: python_count(fields.get("size"))?,
+        modified: python_count(fields.get("modified"))?,
+    };
+    Some(entry.into_stored())
 }
 
 /// Python's `str(value)` for JSON scalars; lists, objects and fractional
@@ -211,13 +137,8 @@ fn python_str(value: &Value) -> String {
     }
 }
 
-/// Python's `max(0, int(value or 0))`; `None` where `int()` would raise,
-/// which makes the reader skip the entry.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "`as` truncates toward zero like int(), and max(0.0) plus saturation stand in for max(0, ...)"
-)]
+/// Python's `max(0, int(value or 0))` for a field that may be missing;
+/// `None` where `int()` would raise, which makes the reader skip the entry.
 fn python_count(value: Option<&Value>) -> Option<u64> {
     let Some(value) = value else {
         return Some(0);
@@ -225,12 +146,7 @@ fn python_count(value: Option<&Value>) -> Option<u64> {
     match value {
         Value::Null | Value::Bool(false) => Some(0),
         Value::Bool(true) => Some(1),
-        Value::Number(number) => Some(match (number.as_u64(), number.as_f64()) {
-            (Some(count), _) => count,
-            // Truncates toward zero, clamps negatives to zero and saturates.
-            (None, Some(float)) => float.max(0.0) as u64,
-            (None, None) => 0,
-        }),
+        Value::Number(number) => Some(number_count(number)),
         Value::String(text) if text.is_empty() => Some(0),
         Value::String(text) => parse_python_int(text),
         Value::Array(items) => items.is_empty().then_some(0),
@@ -238,24 +154,34 @@ fn python_count(value: Option<&Value>) -> Option<u64> {
     }
 }
 
+/// Python's `max(0, int(number))`: a fraction is truncated toward zero, a
+/// negative number becomes 0, and a huge one saturates at `u64::MAX`.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "`as` truncates toward zero like int(), and max(0.0) plus saturation stand in for max(0, ...)"
+)]
+fn number_count(number: &Number) -> u64 {
+    if let Some(count) = number.as_u64() {
+        return count;
+    }
+    number.as_f64().map_or(0, |float| float.max(0.0) as u64)
+}
+
 /// Parses a decimal integer the way Python's `int(str)` does (surrounding
 /// white space, a sign, and single underscores between digits), clamped to
 /// `0..=u64::MAX`.
 fn parse_python_int(text: &str) -> Option<u64> {
     let trimmed = python_strip(text);
-    let (negative, digits) = match trimmed.as_bytes().first() {
+    let (is_negative, digits) = match trimmed.as_bytes().first() {
         Some(b'-') => (true, &trimmed[1..]),
         Some(b'+') => (false, &trimmed[1..]),
         _ => (false, trimmed),
     };
-    let well_formed = !digits.is_empty()
-        && digits
-            .split('_')
-            .all(|group| !group.is_empty() && group.bytes().all(|b| b.is_ascii_digit()));
-    if !well_formed {
+    if !is_python_digit_string(digits) {
         return None;
     }
-    if negative {
+    if is_negative {
         return Some(0);
     }
     let value = digits
@@ -267,22 +193,25 @@ fn parse_python_int(text: &str) -> Option<u64> {
     Some(value)
 }
 
-/// The first `limit` characters of `text`.
-pub(super) fn first_chars(text: &str, limit: usize) -> String {
-    text.chars().take(limit).collect()
+/// Whether `digits` is ASCII digits in groups separated by single
+/// underscores, as Python's `int()` accepts (`1_000`, not `1__0` or `_1`).
+fn is_python_digit_string(digits: &str) -> bool {
+    let is_digit_group = |group: &str| !group.is_empty() && group.bytes().all(|byte| byte.is_ascii_digit());
+    !digits.is_empty() && digits.split('_').all(is_digit_group)
 }
 
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
-    use super::super::model::Preferences;
     use super::*;
+    use crate::settings::model::MAX_NAME_CHARS;
+    use crate::settings::{Column, Theme};
 
     fn read(value: &Value) -> (SettingsData, Option<SettingsError>) {
-        let mut data = SettingsData::default();
-        let problem = read_settings(value, &mut data).err();
-        (data, problem)
+        let mut settings = SettingsData::default();
+        let problem = read_settings(value, &mut settings).err();
+        (settings, problem)
     }
 
     /// parity: SET-012, SAFE-010, SAFE-018
@@ -324,6 +253,7 @@ mod tests {
         assert_eq!(data.recent.len(), MAX_RECENT);
     }
 
+    /// parity: SET-012
     #[test]
     fn quick_order_is_deduplicated_but_hidden_entries_are_not() {
         let (data, _) = read(&json!({
@@ -334,6 +264,7 @@ mod tests {
         assert_eq!(data.quick_order, ["file:///tmp/a", "file:///tmp/b"]);
     }
 
+    /// parity: SET-013
     #[test]
     fn a_string_location_section_reads_each_character_like_python() {
         let (data, problem) = read(&json!({"hiddenQuick": "/ ", "pins": "text"}));
@@ -368,30 +299,6 @@ mod tests {
 
     /// parity: SET-016
     #[test]
-    fn choices_outside_the_whitelist_are_ignored() {
-        let values = json!({
-            "theme": "dark", "view": "bogus", "contextMenu": "win11", "networkInterval": 1
-        });
-        let mut prefs = Preferences::default();
-        prefs.apply(&PreferencesUpdate::from_json(&values).unwrap());
-        assert_eq!(prefs.theme, Theme::Dark);
-        assert_eq!(prefs.view, View::Details);
-        assert_eq!(prefs.context_menu, ContextMenu::Win11);
-        assert_eq!(prefs.network_interval, 60);
-    }
-
-    #[test]
-    fn choices_are_case_sensitive_and_must_be_strings() {
-        let values = json!({"theme": "Dark", "view": ["grid"], "contextMenu": 11});
-        let update = PreferencesUpdate::from_json(&values).unwrap();
-        assert_eq!(
-            (update.theme, update.view, update.context_menu),
-            (None, None, None)
-        );
-    }
-
-    /// parity: SET-016
-    #[test]
     fn preference_types_follow_python() {
         let (data, _) = read(&json!({"preferences": {
             "textSize": 150.0, "networkInterval": 30.0, "sidebarWidth": true,
@@ -407,6 +314,7 @@ mod tests {
         assert_eq!(columns.get(Column::Type), None);
     }
 
+    /// parity: HOME-011, SAFE-018
     #[test]
     fn recent_entries_convert_like_python() {
         let (data, _) = read(&json!({"recent": [
@@ -428,8 +336,9 @@ mod tests {
         assert_eq!(second.type_name, "None");
     }
 
+    /// parity: HOME-011
     #[test]
-    fn python_int_parsing() {
+    fn text_counts_parse_like_python_int() {
         assert_eq!(parse_python_int(" +42 "), Some(42));
         assert_eq!(parse_python_int("-7"), Some(0));
         assert_eq!(parse_python_int("1__0"), None);

@@ -28,6 +28,7 @@ mod error;
 mod labels;
 mod model;
 mod mutate;
+mod preferences;
 mod read;
 mod save;
 pub mod storage;
@@ -37,11 +38,12 @@ use std::path::{Path, PathBuf};
 pub use choices::{ContextMenu, Theme, View};
 pub use error::SettingsError;
 pub(crate) use labels::last_path_name;
-pub use model::{
-    Bookmark, Column, ColumnWidths, Preferences, PreferencesUpdate, RecentEntry, SettingsData,
-    DEFAULT_TEXT_SIZE, NETWORK_INTERVALS, SETTINGS_VERSION, SIDEBAR_WIDTHS, TEXT_SIZES,
-};
+pub use model::{Bookmark, RecentEntry, SettingsData, SETTINGS_VERSION};
 pub use mutate::{BookmarkAction, BookmarkKind, PinRequest};
+pub use preferences::{
+    Column, ColumnWidths, Preferences, PreferencesUpdate, DEFAULT_TEXT_SIZE, NETWORK_INTERVALS,
+    SIDEBAR_WIDTHS, TEXT_SIZES,
+};
 
 use save::{replace_private_file, OldFile, SettingsLock};
 use storage::{private_directory, private_file, read_limited_text, PrivateFileOptions, SETTINGS_SIZE_LIMIT};
