@@ -26,7 +26,8 @@ use crate::folder_view::item::FileItem;
 use crate::folder_view::{loader, reconcile, watch};
 use crate::locations::Page;
 
-use super::content::{ContentPage, EmptyState};
+use super::content::ContentPage;
+use super::empty_page::EmptyState;
 use super::session::TabId;
 use super::BrowserWindow;
 

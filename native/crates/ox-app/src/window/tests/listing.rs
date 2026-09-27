@@ -243,16 +243,16 @@ fn a_missing_folder_says_it_is_unavailable_and_offers_try_again() {
     assert!(test.window.load_error().is_some());
     let content = test.window.content();
     assert_eq!(content.page(), Some(ContentPage::Empty));
-    assert_eq!(content.empty_title(), "This location is unavailable");
+    assert_eq!(content.empty.title(), "This location is unavailable");
     assert!(
-        content.offers_try_again(),
+        content.empty.offers_try_again(),
         "a visible Try again button runs win.refresh"
     );
     fs::create_dir(&missing).expect("the folder appears");
     test.activate("refresh", None);
     test.wait_for_listing("the retried listing");
     assert_eq!(test.window.load_error(), None);
-    assert_eq!(content.empty_title(), "This folder is empty");
+    assert_eq!(content.empty.title(), "This folder is empty");
 }
 
 /// parity: SRCH-003, VIEW-023
