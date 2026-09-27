@@ -55,6 +55,11 @@ impl ReadFailure {
     /// Reading an opened file fails either in the operating system, which
     /// says nothing about the contents, or on the contents themselves: too
     /// large, or not UTF-8 text.
+    ///
+    /// The split decides what the next change does with the file: a
+    /// damaged one is kept as a backup, a refused one is never touched
+    /// (see `Settings::save_while_locked`). The match names every variant
+    /// and reason, so a new one must be placed on one side deliberately.
     fn from_reading(error: SettingsError) -> Self {
         match error {
             SettingsError::Refused {
