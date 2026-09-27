@@ -2,27 +2,43 @@
 //! Presentation classification of a listed item.
 //!
 //! Ports `classify_entry` in `desktop/entry_model.py`. It never performs a
-//! stat, mount or transfer. GIO `DIRECTORY` is not the only navigable object:
-//! GVfs smb-browse emits `MOUNTABLE` shares and `SHORTCUT` servers with
-//! `standard::target-uri` and `inode/directory`. Navigability stays separate
-//! from mutability: a share can be opened from the server browser, but not
-//! renamed or sent to the Trash there.
+//! stat, mount or transfer. A GIO directory is not the only navigable
+//! object: gvfsd-smb-browse lists shares as mountables and servers as
+//! shortcuts, with a `standard::target-uri` and the `inode/directory` MIME
+//! type. Navigability stays separate from mutability: a share can be opened
+//! from the server browser, but not renamed or sent to the Trash there.
 
 use super::EntryKind;
 use crate::location::{normalise, split_location};
 
 /// Type column text for an SMB share in a server listing.
-pub const NETWORK_SHARE: &str = "Network share";
+const NETWORK_SHARE: &str = "Network share";
 /// Type column text for other navigable virtual items (servers, shortcuts).
-pub const NETWORK_LOCATION: &str = "Network location";
+const NETWORK_LOCATION: &str = "Network location";
 /// Type column text for an ordinary folder.
-pub const FILE_FOLDER: &str = "File folder";
+const FILE_FOLDER: &str = "File folder";
+
+/// The MIME type GIO reports for folders and folder-like items.
+const FOLDER_MIME_TYPE: &str = "inode/directory";
+
+/// The GIO metadata of one item, as [`classify_entry`] reads it.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ItemMetadata<'a> {
+    /// What GIO says the item is.
+    pub kind: EntryKind,
+    /// The item's own URI.
+    pub uri: &'a str,
+    /// `standard::content-type`, when reported.
+    pub content_type: Option<&'a str>,
+    /// `standard::target-uri`: untrusted backend metadata.
+    pub target_uri: Option<&'a str>,
+    /// `standard::is-virtual`.
+    pub is_virtual: bool,
+}
 
 /// How an item behaves in the list, independent of its size or dates.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Classification {
-    /// The GIO file type the classification started from.
-    pub kind: EntryKind,
+pub(super) struct Classification {
     /// Opens as a folder when activated.
     pub is_dir: bool,
     /// A network share, server or shortcut rather than a real item.
@@ -38,78 +54,104 @@ pub struct Classification {
 }
 
 /// Classifies one item from its GIO metadata.
-///
-/// `target_uri` is untrusted backend metadata: it is only followed when it
-/// normalises to a `file://`, `smb://` or device location without
-/// credentials, so a listing can never navigate to `javascript:` or persist
-/// a password. `is_virtual` is `standard::is-virtual`.
-pub fn classify_entry(
-    kind: EntryKind,
-    uri: &str,
-    content_type: Option<&str>,
-    target_uri: Option<&str>,
-    is_virtual: bool,
-) -> Classification {
-    let virtual_kind = matches!(kind, EntryKind::Mountable | EntryKind::Shortcut);
-    let target_uri = target_uri.filter(|target| !target.is_empty());
-    let target = match target_uri {
-        Some(raw) if virtual_kind => normalise(raw).ok(),
-        _ => None,
-    };
-    let folder_mime = content_type == Some("inode/directory");
-    let source = split_location(uri).ok();
-    let source_is_smb = source.as_ref().is_some_and(|parts| parts.scheme == "smb");
-
-    // Some SMB backends omit the content type and target. Limit that
-    // fallback to an actual mountable SMB share, not to every extensionless
-    // file or every shortcut.
-    let names_a_share = source
-        .as_ref()
-        .is_some_and(|parts| !parts.netloc.is_empty() && !parts.path.trim_matches('/').is_empty());
-    let target_is_usable = target_uri.is_none() || target.is_some();
-    let smb_mount = kind == EntryKind::Mountable && source_is_smb && names_a_share && target_is_usable;
-
-    let navigable = match kind {
-        EntryKind::Directory => true,
-        EntryKind::Unknown => folder_mime,
-        EntryKind::Mountable | EntryKind::Shortcut => (target.is_some() && folder_mime) || smb_mount,
-        EntryKind::File | EntryKind::Symlink | EntryKind::Special => false,
-    };
-    let is_virtual = virtual_kind || is_virtual;
-    let is_share = navigable && kind == EntryKind::Mountable && source_is_smb;
-
-    let folder_type = if is_share {
+pub(super) fn classify_entry(item: &ItemMetadata<'_>) -> Classification {
+    let target = followable_target(item);
+    let is_dir = is_navigable(item, target.as_deref());
+    let is_virtual = has_virtual_kind(item.kind) || item.is_virtual;
+    let is_real_item = matches!(
+        item.kind,
+        EntryKind::Directory | EntryKind::File | EntryKind::Symlink
+    );
+    let folder_type = if !is_dir {
+        None
+    } else if item.kind == EntryKind::Mountable && is_smb(item.uri) {
         Some(NETWORK_SHARE)
-    } else if navigable && is_virtual {
+    } else if is_virtual {
         Some(NETWORK_LOCATION)
-    } else if navigable {
+    } else {
         Some(FILE_FOLDER)
-    } else {
-        None
     };
-    let operable_kind = matches!(kind, EntryKind::Directory | EntryKind::File | EntryKind::Symlink);
-    let target_uri = if navigable && is_virtual {
-        Some(target.unwrap_or_else(|| uri.to_string()))
-    } else {
-        None
-    };
+    // A navigable share or server opens its validated target, or itself
+    // when the backend named none.
+    let target_uri = (is_dir && is_virtual).then(|| target.unwrap_or_else(|| item.uri.to_owned()));
     Classification {
-        kind,
-        is_dir: navigable,
+        is_dir,
         is_virtual,
-        can_operate: !is_virtual && operable_kind,
+        can_operate: is_real_item && !is_virtual,
         target_uri,
         folder_type,
     }
 }
 
+/// Shares and shortcuts stand for another location rather than being one.
+fn has_virtual_kind(kind: EntryKind) -> bool {
+    matches!(kind, EntryKind::Mountable | EntryKind::Shortcut)
+}
+
+fn is_smb(uri: &str) -> bool {
+    split_location(uri).is_ok_and(|parts| parts.scheme == "smb")
+}
+
+/// `standard::target-uri`, with an empty value counted as missing.
+fn backend_target<'a>(item: &ItemMetadata<'a>) -> Option<&'a str> {
+    item.target_uri.filter(|target| !target.is_empty())
+}
+
+/// The backend's target for a share or shortcut, when it is safe to follow.
+///
+/// Safety rule (untrusted backend targets): a target is only followed when
+/// it normalises to a `file://`, `smb://` or device location without
+/// credentials, so a listing can never navigate to `javascript:` or persist
+/// a password.
+fn followable_target(item: &ItemMetadata<'_>) -> Option<String> {
+    if !has_virtual_kind(item.kind) {
+        return None;
+    }
+    let target = backend_target(item)?;
+    normalise(target).ok()
+}
+
+/// Whether activating the item opens it as a folder. Decided from GIO's
+/// type and MIME type, never from the name.
+fn is_navigable(item: &ItemMetadata<'_>, target: Option<&str>) -> bool {
+    let has_folder_mime_type = item.content_type == Some(FOLDER_MIME_TYPE);
+    match item.kind {
+        EntryKind::Directory => true,
+        EntryKind::Unknown => has_folder_mime_type,
+        EntryKind::Mountable | EntryKind::Shortcut => {
+            (target.is_some() && has_folder_mime_type) || is_mountable_smb_share(item, target)
+        }
+        EntryKind::File | EntryKind::Symlink | EntryKind::Special => false,
+    }
+}
+
+/// A mountable item that names a share on an SMB server
+/// (`smb://server/share`).
+///
+/// Some SMB backends omit the content type and target, so such an item is a
+/// folder even without them. The fallback is limited to an actual share,
+/// not every extensionless file or shortcut, and never applies when the
+/// backend named a target that is not safe to follow.
+fn is_mountable_smb_share(item: &ItemMetadata<'_>, target: Option<&str>) -> bool {
+    if item.kind != EntryKind::Mountable {
+        return false;
+    }
+    let Ok(source) = split_location(item.uri) else {
+        return false;
+    };
+    let names_a_share =
+        source.scheme == "smb" && !source.netloc.is_empty() && !source.path.trim_matches('/').is_empty();
+    let target_was_refused = backend_target(item).is_some() && target.is_none();
+    names_a_share && !target_was_refused
+}
+
 #[cfg(test)]
 mod tests {
     //! Ported from `desktop/tests/test_entry_model.py`. Fixtures mirror
-    //! GVfs smb-browse metadata, not a connection to a real NAS.
+    //! gvfsd-smb-browse metadata, not a connection to a real NAS.
 
     use super::*;
-    use EntryKind::*;
+    use EntryKind::{Directory, File, Mountable, Shortcut, Unknown};
 
     const DIRECTORY_MIME: Option<&str> = Some("inode/directory");
 
@@ -119,10 +161,18 @@ mod tests {
         content_type: Option<&str>,
         target: Option<&str>,
     ) -> Classification {
-        classify_entry(kind, uri, content_type, target, false)
+        classify_entry(&ItemMetadata {
+            kind,
+            uri,
+            content_type,
+            target_uri: target,
+            is_virtual: false,
+        })
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_smb_share_is_navigable_not_a_mutable_regular_directory
+    /// Ported from `desktop/tests/test_entry_model.py::test_smb_share_is_navigable_not_a_mutable_regular_directory`
+    ///
+    /// parity: NET-003
     #[test]
     fn smb_share_is_navigable_not_a_mutable_regular_directory() {
         let e = classify(
@@ -138,7 +188,9 @@ mod tests {
         assert_eq!(e.folder_type, Some("Network share"));
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_shortcut_server_uses_real_target
+    /// Ported from `desktop/tests/test_entry_model.py::test_shortcut_server_uses_real_target`
+    ///
+    /// parity: NET-003
     #[test]
     fn shortcut_server_uses_real_target() {
         let e = classify(
@@ -152,7 +204,9 @@ mod tests {
         assert_eq!(e.folder_type, Some("Network location"));
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_normal_smb_directory
+    /// Ported from `desktop/tests/test_entry_model.py::test_normal_smb_directory`
+    ///
+    /// parity: NET-003
     #[test]
     fn normal_smb_directory() {
         let e = classify(Directory, "smb://nas/work/Design", DIRECTORY_MIME, None);
@@ -163,13 +217,17 @@ mod tests {
         assert_eq!(e.folder_type, Some("File folder"));
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_local_directory
+    /// Ported from `desktop/tests/test_entry_model.py::test_local_directory`
+    ///
+    /// parity: NAV-040
     #[test]
     fn local_directory() {
         assert!(classify(Directory, "file:///tmp/Test", None, None).is_dir);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_extensionless_smb_file_is_not_a_folder
+    /// Ported from `desktop/tests/test_entry_model.py::test_extensionless_smb_file_is_not_a_folder`
+    ///
+    /// parity: NAV-040
     #[test]
     fn extensionless_smb_file_is_not_a_folder() {
         let e = classify(File, "smb://nas/work/README", Some("text/plain"), None);
@@ -178,37 +236,49 @@ mod tests {
         assert_eq!(e.folder_type, None);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_empty_regular_file_with_directory_mime_does_not_become_folder
+    /// Ported from `desktop/tests/test_entry_model.py::test_empty_regular_file_with_directory_mime_does_not_become_folder`
+    ///
+    /// parity: NAV-040
     #[test]
     fn empty_regular_file_with_directory_mime_does_not_become_folder() {
         assert!(!classify(File, "file:///tmp/file", DIRECTORY_MIME, None).is_dir);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_unknown_directory_mime
+    /// Ported from `desktop/tests/test_entry_model.py::test_unknown_directory_mime`
+    ///
+    /// parity: NAV-040
     #[test]
     fn unknown_directory_mime() {
         assert!(classify(Unknown, "smb://nas/work/dir", DIRECTORY_MIME, None).is_dir);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_unknown_without_metadata_is_not_falsely_a_directory
+    /// Ported from `desktop/tests/test_entry_model.py::test_unknown_without_metadata_is_not_falsely_a_directory`
+    ///
+    /// parity: NAV-040
     #[test]
     fn unknown_without_metadata_is_not_falsely_a_directory() {
         assert!(!classify(Unknown, "smb://nas/work/unknown", None, None).is_dir);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_mountable_share_without_optional_metadata
+    /// Ported from `desktop/tests/test_entry_model.py::test_mountable_share_without_optional_metadata`
+    ///
+    /// parity: NAV-040, NET-003
     #[test]
     fn mountable_share_without_optional_metadata() {
         assert!(classify(Mountable, "smb://nas/work", None, None).is_dir);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_non_smb_mountable_not_assumed_to_be_directory
+    /// Ported from `desktop/tests/test_entry_model.py::test_non_smb_mountable_not_assumed_to_be_directory`
+    ///
+    /// parity: NAV-040
     #[test]
     fn non_smb_mountable_not_assumed_to_be_directory() {
         assert!(!classify(Mountable, "file:///tmp/thing", None, None).is_dir);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_mtp_directory_with_bracketed_usb_identifier
+    /// Ported from `desktop/tests/test_entry_model.py::test_mtp_directory_with_bracketed_usb_identifier`
+    ///
+    /// parity: DEV-005
     #[test]
     fn mtp_directory_with_bracketed_usb_identifier() {
         let e = classify(Directory, "mtp://[usb:001,010]/Internal%20storage", None, None);
@@ -216,7 +286,9 @@ mod tests {
         assert!(e.can_operate);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_file_shortcut_is_not_a_folder
+    /// Ported from `desktop/tests/test_entry_model.py::test_file_shortcut_is_not_a_folder`
+    ///
+    /// parity: NAV-040
     #[test]
     fn file_shortcut_is_not_a_folder() {
         let e = classify(
@@ -228,7 +300,9 @@ mod tests {
         assert!(!e.is_dir);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_virtual_bad_scheme_is_not_followed
+    /// Ported from `desktop/tests/test_entry_model.py::test_virtual_bad_scheme_is_not_followed`
+    ///
+    /// parity: NAV-040, SAFE-010
     #[test]
     fn virtual_bad_scheme_is_not_followed() {
         let e = classify(
@@ -241,7 +315,9 @@ mod tests {
         assert_eq!(e.target_uri, None);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_credentials_in_backend_target_not_used
+    /// Ported from `desktop/tests/test_entry_model.py::test_credentials_in_backend_target_not_used`
+    ///
+    /// parity: NAV-040, SAFE-010
     #[test]
     fn credentials_in_backend_target_not_used() {
         let e = classify(
@@ -254,7 +330,9 @@ mod tests {
         assert_eq!(e.target_uri, None);
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_unicode_target_and_spaces
+    /// Ported from `desktop/tests/test_entry_model.py::test_unicode_target_and_spaces`
+    ///
+    /// parity: NAV-040
     #[test]
     fn unicode_target_and_spaces() {
         let e = classify(
@@ -269,7 +347,9 @@ mod tests {
         );
     }
 
-    /// Ported from desktop/tests/test_entry_model.py::test_metadata_does_not_override_a_real_file_target
+    /// Ported from `desktop/tests/test_entry_model.py::test_metadata_does_not_override_a_real_file_target`
+    ///
+    /// parity: NAV-040
     #[test]
     fn metadata_does_not_override_a_real_file_target() {
         let e = classify(
@@ -284,7 +364,13 @@ mod tests {
 
     #[test]
     fn virtual_flag_blocks_operations_on_real_kinds() {
-        let e = classify_entry(Directory, "file:///run/media/usb", None, None, true);
+        let e = classify_entry(&ItemMetadata {
+            kind: Directory,
+            uri: "file:///run/media/usb",
+            content_type: None,
+            target_uri: None,
+            is_virtual: true,
+        });
         assert!(e.is_dir);
         assert!(e.is_virtual);
         assert!(!e.can_operate);

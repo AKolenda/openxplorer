@@ -6,6 +6,20 @@ use super::*;
 const ONE: &str = "file:///home/demo/Read%20me.txt";
 const TWO: &str = "file:///home/demo/Planning.pdf";
 
+fn selection(mode: ClipboardMode) -> ClipboardFiles {
+    ClipboardFiles::new(mode, &[ONE.into(), TWO.into()]).expect("valid selection")
+}
+
+fn published(files: &ClipboardFiles, mime_type: &str) -> Vec<u8> {
+    files
+        .encode()
+        .into_iter()
+        .find(|payload| payload.mime_type == mime_type)
+        .unwrap_or_else(|| panic!("{mime_type} is published"))
+        .bytes
+}
+
+/// parity: CLIP-008
 #[test]
 fn gnome_cut_keeps_identity_across_reads_and_consumes_only_successful_items() {
     let payload = format!("cut\n{ONE}\n{TWO}");
@@ -18,6 +32,7 @@ fn gnome_cut_keeps_identity_across_reads_and_consumes_only_successful_items() {
     assert!(files.encode().is_empty());
 }
 
+/// parity: CLIP-008
 #[test]
 fn old_cut_cannot_consume_a_changed_payload_or_a_copy() {
     let first = decode(GNOME, format!("cut\n{ONE}").as_bytes(), None).expect("cut");
@@ -28,6 +43,7 @@ fn old_cut_cannot_consume_a_changed_payload_or_a_copy() {
     }
 }
 
+/// parity: CLIP-006
 #[test]
 fn kde_requires_an_exact_short_cut_marker() {
     let payload = format!("{ONE}\r\n{TWO}\r\n");
@@ -50,6 +66,21 @@ fn kde_requires_an_exact_short_cut_marker() {
     assert_eq!(gnome.mode(), ClipboardMode::Copy);
 }
 
+/// Regression: the marker was published as `x-kde-cutselection`, a name KDE
+/// never reads, so a cut pasted in Dolphin became a copy. The literal is
+/// the one in KIO's `setClipboardDataCut` and `isClipboardDataCut`
+/// (`kio/src/widgets/paste.cpp`).
+///
+/// parity: CLIP-004, CLIP-006
+#[test]
+fn kde_cut_marker_uses_the_mime_type_kio_reads() {
+    let kio_mime_type = "application/x-kde-cutselection";
+    assert_eq!(KDE_CUT, kio_mime_type);
+    assert_eq!(published(&selection(ClipboardMode::Cut), kio_mime_type), b"1");
+    assert_eq!(published(&selection(ClipboardMode::Copy), kio_mime_type), b"0");
+}
+
+/// parity: CLIP-005
 #[test]
 fn uri_list_discards_comments_and_deduplicates_canonical_addresses() {
     let payload =
@@ -58,6 +89,7 @@ fn uri_list_discards_comments_and_deduplicates_canonical_addresses() {
     assert_eq!(files.uris(), &["file:///tmp/a", "smb://studio-nas/Shared/a"]);
 }
 
+/// parity: CLIP-005
 #[test]
 fn invalid_external_payloads_fail_closed() {
     let oversized = vec![b'x'; MAX_BYTES + 1];
@@ -79,6 +111,7 @@ fn invalid_external_payloads_fail_closed() {
     assert!(decode(URI_LIST, too_many.as_bytes(), None).is_none());
 }
 
+/// parity: CLIP-005
 #[test]
 fn custom_payload_preserves_token_and_rejects_invalid_operations() {
     let custom = format!(r#"{{"mode":"move","uris":["{ONE}"],"token":"previous-owner"}}"#);
@@ -92,29 +125,29 @@ fn custom_payload_preserves_token_and_rejects_invalid_operations() {
     assert_eq!(no_token.token().len(), 32);
 }
 
+/// parity: CLIP-004
 #[test]
 fn every_advertised_format_round_trips() {
     for mode in [ClipboardMode::Copy, ClipboardMode::Cut] {
-        let files = ClipboardFiles::new(mode, &[ONE.into(), TWO.into()]).expect("selection");
-        let formats = files.encode();
-        let marker = formats
-            .iter()
-            .find(|(mime, _)| *mime == KDE_CUT)
-            .expect("KDE marker");
-        for (mime, payload) in &formats {
-            if *mime == KDE_CUT {
-                continue;
-            }
-            let result = decode(mime, payload, Some(&marker.1)).expect("published format decodes");
+        let files = selection(mode);
+        let marker = published(&files, KDE_CUT);
+        let file_lists = files
+            .encode()
+            .into_iter()
+            .filter(|payload| payload.mime_type != KDE_CUT);
+        for payload in file_lists {
+            let result =
+                decode(payload.mime_type, &payload.bytes, Some(&marker)).expect("published format decodes");
             assert_eq!(result.mode(), mode);
             assert_eq!(result.uris(), files.uris());
-            if *mime == CUSTOM {
+            if payload.mime_type == CUSTOM {
                 assert_eq!(result.token(), files.token());
             }
         }
     }
 }
 
+/// parity: CLIP-008
 #[test]
 fn external_fingerprint_matches_the_python_clipboard() {
     // Use the actual shipped decoder so token changes cannot silently break
@@ -133,6 +166,7 @@ fn external_fingerprint_matches_the_python_clipboard() {
     );
 }
 
+/// parity: CLIP-005
 #[test]
 fn legacy_line_endings_do_not_drop_valid_selections() {
     for separator in ["\n", "\r\n", "\r", "\u{85}", "\u{2028}"] {
@@ -141,4 +175,13 @@ fn legacy_line_endings_do_not_drop_valid_selections() {
         assert_eq!(files.mode(), ClipboardMode::Cut);
         assert_eq!(files.uris(), &[ONE, TWO]);
     }
+}
+
+#[test]
+fn published_file_lists_match_the_python_encoding() {
+    let files = selection(ClipboardMode::Cut);
+    let gnome = format!("cut\n{ONE}\n{TWO}");
+    let uri_list = format!("{ONE}\r\n{TWO}\r\n");
+    assert_eq!(published(&files, GNOME), gnome.as_bytes());
+    assert_eq!(published(&files, URI_LIST), uri_list.as_bytes());
 }

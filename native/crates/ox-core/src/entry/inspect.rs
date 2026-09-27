@@ -11,7 +11,7 @@ use super::{entry_from_info, Entry, EnumerateError, ATTRIBUTES};
 use crate::location::normalise;
 
 /// Why an item cannot be pinned (`verify_pin` in Python).
-pub const NOT_PINNABLE: &str = "Only folders and network shares can be pinned to Quick access.";
+const NOT_PINNABLE: &str = "Only folders and network shares can be pinned to Quick access.";
 
 /// A validated Quick access pin.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,19 +24,28 @@ pub struct PinTarget {
 }
 
 /// Queries one item with GIO's synchronous API; call it on a worker
-/// thread. `uri` may be any form `normalise_location` accepts (a path, a
+/// thread. `uri` may be any form [`normalise_location`] accepts (a path, a
 /// UNC name, an `smb://` or device URI) and is normalised first.
+///
+/// [`normalise_location`]: crate::location::normalise_location
+///
+/// # Errors
+///
+/// [`EnumerateError::Invalid`] when `uri` is not a supported location, or
+/// the GIO failure sorted by [`EnumerateError`].
 pub fn inspect(uri: &str, cancellable: Option<&gio::Cancellable>) -> Result<Entry, EnumerateError> {
-    let uri = normalise(uri).map_err(|error| EnumerateError::Invalid(error.0))?;
+    let uri = normalise(uri)?;
     let file = gio::File::for_uri(&uri);
-    let info = file
-        .query_info(ATTRIBUTES, gio::FileQueryInfoFlags::NONE, cancellable)
-        .map_err(|error| EnumerateError::from_glib(&error))?;
+    let info = file.query_info(ATTRIBUTES, gio::FileQueryInfoFlags::NONE, cancellable)?;
     Ok(entry_from_info(&file, &info))
 }
 
 /// Inspects the item at `uri` and returns the pin to save for it. Runs GIO
 /// synchronously; call it on a worker thread.
+///
+/// # Errors
+///
+/// Everything [`inspect`] and [`pin_target`] return.
 pub fn verify_pin(
     uri: &str,
     label: &str,
@@ -47,15 +56,20 @@ pub fn verify_pin(
 
 /// The pin for an already inspected item: folders, shares and navigable
 /// shortcuts only, saved under their validated target.
+///
+/// # Errors
+///
+/// [`EnumerateError::Invalid`] for a file, or for a target that is not a
+/// location that can be saved.
 pub fn pin_target(entry: &Entry, label: &str) -> Result<PinTarget, EnumerateError> {
     if !entry.is_dir {
-        return Err(EnumerateError::Invalid(NOT_PINNABLE.to_string()));
+        return Err(EnumerateError::Invalid(NOT_PINNABLE.to_owned()));
     }
-    let uri = normalise(entry.navigation_uri()).map_err(|error| EnumerateError::Invalid(error.0))?;
+    let uri = normalise(entry.navigation_uri())?;
     let label = if label.is_empty() {
         entry.name.clone()
     } else {
-        label.to_string()
+        label.to_owned()
     };
     Ok(PinTarget { uri, label })
 }
@@ -89,7 +103,9 @@ mod tests {
         info
     }
 
-    /// Ported from desktop/tests/test_gio_serialization.py::test_pin_inspects_browse_item_but_saves_real_share_target
+    /// Ported from `desktop/tests/test_gio_serialization.py::test_pin_inspects_browse_item_but_saves_real_share_target`
+    ///
+    /// parity: SIDE-007
     #[test]
     fn pin_inspects_browse_item_but_saves_real_share_target() {
         let mut queried = Vec::new();
@@ -106,7 +122,9 @@ mod tests {
         assert_eq!(queried, ["smb://nas/._work"]);
     }
 
-    /// Ported from desktop/tests/test_gio_serialization.py::test_verify_pin_uses_validated_target_not_browse_uri
+    /// Ported from `desktop/tests/test_gio_serialization.py::test_verify_pin_uses_validated_target_not_browse_uri`
+    ///
+    /// parity: SIDE-007
     #[test]
     fn verify_pin_uses_validated_target_not_browse_uri() {
         let pin = verify_pin_with("smb://group/alpha", "Alpha", |uri| {
@@ -116,7 +134,9 @@ mod tests {
         assert_eq!(pin.map(|pin| pin.uri).as_deref(), Ok("smb://alpha/"));
     }
 
-    /// Ported from desktop/tests/test_gio_serialization.py::test_verify_pin_rejects_regular_file
+    /// Ported from `desktop/tests/test_gio_serialization.py::test_verify_pin_rejects_regular_file`
+    ///
+    /// parity: SIDE-007
     #[test]
     fn verify_pin_rejects_regular_file() {
         let pin = verify_pin_with("smb://nas/work/file", "", |uri| {

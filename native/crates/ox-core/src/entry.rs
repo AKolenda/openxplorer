@@ -7,38 +7,51 @@
 //! an SMB share in a server listing can be opened but not renamed or
 //! trashed.
 //!
-//! Beyond the Python backend, every entry also carries its cached thumbnail,
-//! its Trash origin and deletion date, the backend's rename/trash/delete/
-//! write permissions and its GIO icon.
+//! Beyond the Python backend, every entry also carries its Trash origin and
+//! deletion date, the backend's rename/trash/delete/write permissions and
+//! its GIO icon. Cached thumbnails are looked up separately, for the rows a
+//! view shows (see [`THUMBNAIL_ATTRIBUTES`]).
 //!
-//! - [`classify`]: folder, share and shortcut rules.
-//! - [`info`]: `GFileInfo` to [`Entry`].
-//! - [`type_label`](mod@type_label): Type column wording.
-//! - [`enumerate`](mod@enumerate): listing a folder on a worker thread.
-//! - [`error`]: why a folder or item could not be read.
-//! - [`inspect`](mod@inspect): one item, and Quick access pins.
+//! The submodules, in the order a listing uses them:
+//!
+//! - `enumerate`: reading a folder with GIO's asynchronous enumerator.
+//! - `info`: `GFileInfo` to [`Entry`], with `attributes` reading the
+//!   optional attributes and `classify` and `type_label` deciding what the
+//!   row is and what its Type column says.
+//! - `inspect`: one item on its own, and Quick access pins.
+//! - `thumbnail`: the lazy thumbnail lookup.
+//! - `error`: why a folder or item could not be read.
 
-pub mod classify;
-pub mod enumerate;
-pub mod error;
-pub mod info;
-pub mod inspect;
-pub mod type_label;
+mod attributes;
+mod classify;
+mod enumerate;
+mod error;
+mod info;
+mod inspect;
+mod thumbnail;
+mod type_label;
+
+pub use enumerate::enumerate_folder;
+pub use error::EnumerateError;
+pub use info::{entry_for_uri, entry_from_info};
+pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
+pub use thumbnail::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
 
 use std::path::PathBuf;
 
-pub use classify::{classify_entry, Classification};
-pub use enumerate::{enumerate, enumerate_blocking, EnumerationSummary, EnumerationTask, DEFAULT_BATCH_SIZE};
-pub use error::EnumerateError;
-pub use info::entry_for_uri;
-pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
-pub use type_label::type_label;
-
 /// Attributes requested for every listed item.
-pub const ATTRIBUTES: &str = "standard::name,standard::display-name,standard::type,standard::is-hidden,\
-standard::is-symlink,standard::size,standard::content-type,standard::target-uri,standard::is-virtual,\
-standard::icon,time::modified,thumbnail::path,thumbnail::is-valid,access::can-rename,access::can-trash,\
-access::can-delete,access::can-write,trash::orig-path,trash::deletion-date";
+///
+/// Thumbnails are deliberately left out. For `thumbnail::*` GIO hashes the
+/// URI and looks in the thumbnail cache for every row, rows never scrolled
+/// into view included, which made listing 20,000 local files about three
+/// times slower. Views ask for [`THUMBNAIL_ATTRIBUTES`] when they show a row.
+pub const ATTRIBUTES: &str = concat!(
+    "standard::name,standard::display-name,standard::type,standard::is-hidden,",
+    "standard::is-symlink,standard::size,standard::content-type,standard::target-uri,",
+    "standard::is-virtual,standard::icon,time::modified,",
+    "access::can-rename,access::can-trash,access::can-delete,access::can-write,",
+    "trash::orig-path,trash::deletion-date",
+);
 
 /// What GIO says an item is (`standard::type`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,9 +72,8 @@ pub enum EntryKind {
     Unknown,
 }
 
-impl EntryKind {
-    /// Maps a GIO file type.
-    pub fn from_file_type(file_type: gio::FileType) -> Self {
+impl From<gio::FileType> for EntryKind {
+    fn from(file_type: gio::FileType) -> Self {
         match file_type {
             gio::FileType::Directory => Self::Directory,
             gio::FileType::Regular => Self::File,
@@ -72,7 +84,9 @@ impl EntryKind {
             _ => Self::Unknown,
         }
     }
+}
 
+impl EntryKind {
     /// The name the Python backend and web interface use (`directory`,
     /// `file`, `mountable`, ...).
     pub fn as_str(self) -> &'static str {
@@ -91,6 +105,10 @@ impl EntryKind {
 /// One listed item. Plain data, so it can be built on a worker thread and
 /// sent to the main thread.
 #[derive(Debug, Clone, PartialEq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate GIO attribute or classifier result that views read on its own"
+)]
 pub struct Entry {
     /// The item's own URI.
     pub uri: String,
@@ -112,14 +130,14 @@ pub struct Entry {
     pub type_label: String,
     /// MIME type, when known.
     pub content_type: Option<String>,
-    /// Seconds since the Unix epoch; 0 when unknown.
+    /// Seconds since the Unix epoch; 0 when unknown, as in the Python app.
     pub modified: u64,
-    /// Hidden by name or by the backend.
+    /// Hidden by name, by the folder's `.hidden` list or by the backend
+    /// (`standard::is-hidden`).
     pub hidden: bool,
-    /// A symbolic link (listed with its target's type).
+    /// A symbolic link, listed with its target's type
+    /// (`standard::is-symlink`).
     pub symlink: bool,
-    /// A valid cached thumbnail in the shared freedesktop cache.
-    pub thumbnail_path: Option<PathBuf>,
     /// For items in `trash:///`: where Restore puts them back.
     pub trash_orig_path: Option<PathBuf>,
     /// For items in `trash:///`: when they were deleted, in seconds since
@@ -135,14 +153,14 @@ pub struct Entry {
     pub can_write: Option<bool>,
     /// `standard::icon`, serialized with `g_icon_serialize` because a
     /// `GIcon` cannot cross threads. Use [`Entry::icon`].
-    pub icon_data: Option<glib::Variant>,
+    pub serialized_icon: Option<glib::Variant>,
 }
 
 impl Entry {
     /// The GIO icon for the item's type, for when there is no thumbnail and
-    /// no OpenXplorer artwork for its type.
+    /// no Explorer-style artwork for its type.
     pub fn icon(&self) -> Option<gio::Icon> {
-        self.icon_data.as_ref().and_then(gio::Icon::deserialize)
+        self.serialized_icon.as_ref().and_then(gio::Icon::deserialize)
     }
 
     /// The URI to open when the item is activated: the validated target of
@@ -152,14 +170,6 @@ impl Entry {
     }
 }
 
-/// Builds an entry from a queried `FileInfo`.
-///
-/// Reads only the attributes in [`ATTRIBUTES`] that the backend reported;
-/// it never queries, stats or mounts anything itself.
-pub fn entry_from_info(file: &gio::File, info: &gio::FileInfo) -> Entry {
-    info::entry_for_file(file, info)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,37 +177,33 @@ mod tests {
     fn assert_send<T: Send>() {}
 
     #[test]
-    fn entries_can_cross_threads() {
+    fn entries_and_errors_can_cross_threads() {
         assert_send::<Entry>();
         assert_send::<Vec<Entry>>();
         assert_send::<EnumerateError>();
-        assert_send::<EnumerationTask>();
     }
 
     #[test]
     fn kinds_use_the_python_names() {
-        assert_eq!(
-            EntryKind::from_file_type(gio::FileType::Mountable).as_str(),
-            "mountable"
-        );
-        assert_eq!(
-            EntryKind::from_file_type(gio::FileType::SymbolicLink).as_str(),
-            "symlink"
-        );
-        assert_eq!(
-            EntryKind::from_file_type(gio::FileType::Unknown),
-            EntryKind::Unknown
-        );
+        assert_eq!(EntryKind::from(gio::FileType::Mountable).as_str(), "mountable");
+        assert_eq!(EntryKind::from(gio::FileType::SymbolicLink).as_str(), "symlink");
+        assert_eq!(EntryKind::from(gio::FileType::Unknown), EntryKind::Unknown);
+    }
+
+    /// Regression: the listing asked GIO for thumbnails of every row, which
+    /// made large folders about three times slower to list.
+    #[test]
+    fn listing_attributes_leave_thumbnails_to_the_lazy_lookup() {
+        assert!(!ATTRIBUTES.contains("thumbnail::"), "{ATTRIBUTES}");
+        assert!(THUMBNAIL_ATTRIBUTES.contains("thumbnail::path"));
+        assert!(THUMBNAIL_ATTRIBUTES.contains("thumbnail::is-valid"));
     }
 
     #[test]
-    fn entry_from_info_uses_the_file_uri() {
-        let info = gio::FileInfo::new();
-        info.set_file_type(gio::FileType::Directory);
-        let file = gio::File::for_path("/tmp/ox-entry-test");
-        let entry = entry_from_info(&file, &info);
-        assert_eq!(entry.uri, "file:///tmp/ox-entry-test");
-        assert!(entry.is_dir);
-        assert_eq!(entry.navigation_uri(), "file:///tmp/ox-entry-test");
+    fn listing_attributes_are_a_well_formed_list() {
+        let names: Vec<&str> = ATTRIBUTES.split(',').collect();
+        assert!(names.iter().all(|name| name.contains("::")), "{ATTRIBUTES}");
+        assert!(names.contains(&"trash::orig-path"));
+        assert!(names.contains(&"access::can-write"));
     }
 }

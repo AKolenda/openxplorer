@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Toolkit-independent core of the native OpenXplorer.
+//! Toolkit-independent core of the native Rust + GTK4 app.
 //!
 //! Nothing in this crate depends on GTK. Filesystem access goes through GIO,
 //! so local folders, SMB shares, phones (MTP) and the Trash behave the same
