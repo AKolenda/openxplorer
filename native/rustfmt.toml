@@ -1,1 +1,3 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# rustfmt's defaults, except that lines may be 110 columns wide instead of 100.
 max_width = 110

@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 [workspace]
+# A virtual workspace does not take its resolver from the edition, so name the
+# edition-2021 resolver explicitly.
 resolver = "2"
 members = ["crates/ox-core", "crates/ox-app"]
 
@@ -7,10 +9,14 @@ members = ["crates/ox-core", "crates/ox-app"]
 version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-only"
+# The oldest Rust the locked GTK and GIO crates build with. CI checks with
+# exactly this version.
 rust-version = "1.92"
 publish = false
 
 [workspace.dependencies]
+# GTK 4.14 is the version in Zorin OS 18 (Ubuntu 24.04), so newer GTK APIs stay
+# unavailable.
 gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
 gio = "0.22"
 glib = "0.22"
@@ -23,13 +29,31 @@ rustix = { version = "1", features = ["fs"] }
 tempfile = "3"
 ox-core = { path = "crates/ox-core" }
 
+# Every crate inherits these lints with `[lints] workspace = true`, so editors,
+# `cargo clippy` and native/tools/check.py report the same findings. The check
+# driver turns every warning into a failure.
 [workspace.lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# The pedantic lints below are allowed because they flag deliberate choices,
+# so their warnings would be noise rather than findings.
+#
+# Items are named for what they are, even when that repeats their module, as in
+# `entry::EntryKind` or `clipboard::ClipboardMode`. Clippy 1.84 moved this lint
+# from pedantic to restriction; the entry records the decision for anyone who
+# enables it by name.
+module_name_repetitions = "allow"
+# `#[must_use]` is written where ignoring a result is a real mistake. Adding it
+# to every pure function would hide those few among hundreds.
+must_use_candidate = "allow"
+# Related names such as `row` and `rows` are clearer than invented synonyms.
+similar_names = "allow"
 
 [profile.release]
 opt-level = 3
+# Thin LTO optimises across crates without the long link times of full LTO.
 lto = "thin"
