@@ -27,7 +27,8 @@ impl Desktop {
         let system_scheme = SystemScheme::new();
         let system_dark = system_scheme.is_dark();
         let skin = Rc::new(Skin::install(&display));
-        skin.set_preference(ThemePreference::parse(&data.preferences.theme), system_dark);
+        let theme = ThemePreference::parse(data.preferences.theme.as_str());
+        skin.set_preference(theme, system_dark);
         skin.set_text_size(data.preferences.text_size);
         crate::window::install_accelerators(app);
         let desktop = Rc::new(Self {
