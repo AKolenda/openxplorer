@@ -20,8 +20,9 @@ use crate::theme::Appearance;
 /// Width of the pane (`.details` in `desktop/ui/style.css`).
 pub(super) const PANE_WIDTH: i32 = 262;
 
-/// Preview size in the pane, as `fileIcon(e, 84)` in app.js.
-const PREVIEW_SIZE: i32 = 84;
+/// Preview size in the pane: app.js draws `fileIcon(e, 84)` and
+/// `.detail-preview svg` shows it at 83 pixels.
+const PREVIEW_SIZE: i32 = 83;
 
 /// The note for SMB folders.
 const NETWORK_NOTE: &str =

@@ -246,13 +246,18 @@ paned.workspace > separator:hover {
 }
 
 /* ---- Folder view: details (ColumnView) and icons (GridView) ---- */
+/* The web list pads its header 14px at both ends and insets its rows 12px
+   with 2px of padding, so the columns run from 14px to 14px before the
+   end. GTK lays columns out across the whole column view, so the 14px
+   ends belong to the Name and Size columns instead (see EDGE_GUTTER in
+   src/folder_view/details.rs), and their cells and titles pad for them. */
 .folder-pane { background-color: @ox_bg; }
 columnview.files { background-color: @ox_bg; color: @ox_text; }
 columnview.files > header { border-bottom: 1px solid @ox_border; padding: 0; }
 columnview.files > header > button {
   background: none;
   border-style: none;
-  border-right: 1px solid transparent;
+  border-right: 1px solid @ox_border;
   border-radius: 0;
   color: @ox_muted;
   font-weight: normal;
@@ -260,7 +265,18 @@ columnview.files > header > button {
   min-height: 37px;
   box-shadow: none;
 }
-columnview.files > header > button:hover { background-color: @ox_hover; border-right-color: @ox_border; }
+columnview.files > header > button:hover { background-color: @ox_hover; }
+columnview.files > header > button:first-child { padding-left: 26px; }
+/* Size's divider stands 14px before the column's end, where the web
+   header's padding starts, drawn as a 1px band of the background. */
+columnview.files > header > button:last-child {
+  border-right: none;
+  padding-right: 32px;
+  background-image: linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
+}
+columnview.files > header > button:last-child:hover {
+  background-color: @ox_hover;
+}
 columnview.files > header > button sort-indicator {
   min-width: 10px;
   min-height: 10px;
@@ -268,11 +284,20 @@ columnview.files > header > button sort-indicator {
   margin-left: 6px;
   color: @ox_muted;
 }
-/* GTK shares column widths between the header and rows. Horizontal padding
-   belongs inside cells, or the last column extends beyond the viewport. */
+/* Only the sorted column draws an arrow, and the others keep no room for
+   one, so the right-aligned Size title ends where its values end. */
+columnview.files > header > button sort-indicator.unsorted {
+  min-width: 0;
+  -gtk-icon-size: 0;
+  margin-left: 0;
+}
+/* Rows are inset 12px as in the web list. GTK places each cell at its
+   column's position within the row, so a cell moves back by the row's
+   inset (the negative left margin) and gives the pixels back on its
+   right, which keeps cells under their titles. */
 columnview.files > listview { background-color: @ox_bg; padding: 4px 0 8px 0; }
 columnview.files > listview > row {
-  margin: 1px 0;
+  margin: 1px 12px;
   border-radius: 4px;
   padding: 0;
   color: @ox_text;
@@ -286,9 +311,13 @@ columnview.files > listview > row:selected {
   box-shadow: inset 0 0 0 1px @ox_selected_edge;
 }
 columnview.files > listview > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_accent; }
-columnview.files > listview > row > cell { padding: 0 12px; }
-columnview.files > header > button:first-child,
-columnview.files > listview > row > cell:first-child { padding-left: 28px; }
+columnview.files > listview > row > cell { padding: 0 12px; margin: 0 12px 0 -12px; }
+columnview.files > listview > row > cell:first-child { padding-left: 26px; }
+columnview.files > listview > row > cell:last-child { padding-right: 26px; }
+/* The 21px icon is centred on a half pixel, which Chromium draws one
+   pixel down. */
+columnview.files .row-icon { margin-top: 1px; }
+
 columnview.files rubberband, gridview.files rubberband {
   border: 1px solid @ox_accent;
   background-color: alpha(@ox_accent, .15);
@@ -356,18 +385,38 @@ gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_accent; }
 .landing .recent-row:hover { background-color: @ox_hover; }
 .landing .recent-head { color: @ox_muted; padding: 0 8px; }
 
-/* ---- Details pane (style.css .details) ---- */
+/* ---- Details pane (style.css .details/.detail-*) ---- */
 .details { background-color: @ox_bg; border-left: 1px solid @ox_border; }
 .details-inner { padding: 22px 22px 16px 22px; }
+.details .detail-header { margin-bottom: 20px; }
 .details button.x { min-width: 24px; min-height: 24px; }
-.details .preview { background-color: @ox_chrome; border: 1px solid @ox_border; border-radius: 7px; min-height: 146px; }
-.details .dname { font-weight: 600; }
-.details .dtype { color: @ox_muted; }
-.details button.dbutton { border: 1px solid @ox_border; background-color: @ox_chrome; min-height: 30px; }
+.details .preview {
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 7px;
+  min-height: 146px;
+  margin-bottom: 18px;
+}
+.details .dname { font-weight: 600; margin-bottom: 4px; }
+.details .dtype { color: @ox_muted; margin-bottom: 17px; }
+.details button.dbutton {
+  border: 1px solid @ox_border;
+  background-color: @ox_chrome;
+  min-height: 30px;
+  margin-bottom: 24px;
+}
 .details button.dbutton:hover { background-color: @ox_hover; }
-.details .dsection { font-weight: 600; }
+.details .dsection { font-weight: 600; margin-bottom: 17px; }
 .details .dkey { color: @ox_muted; }
-.details .note { color: @ox_muted; border-top: 1px solid @ox_border; padding-top: 17px; }
+.details .note {
+  color: @ox_muted;
+  border-top: 1px solid @ox_border;
+  padding-top: 17px;
+  margin-top: 23px;
+}
+/* `line-height:1.65` is 18px at 11px. GTK multiplies the font's own line
+   height (16px for Noto Sans at 11px), not the font size: 18 / 16. */
+.details .note label { line-height: 1.13; }
 .details .note image { color: @ox_accent; }
 
 /* ---- Status bar (style.css .statusbar) ---- */
@@ -378,10 +427,20 @@ gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_accent; }
   padding: 0 13px 0 19px;
   color: @ox_muted;
 }
-/* 24px buttons 3px apart: the bar's 18px gap less `margin-left:-15px`. */
-.statusbar button { min-width: 24px; min-height: 24px; margin-left: -15px; color: @ox_muted; }
-.statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
+/* The 11px texts and the 24px buttons are centred on half pixels, which
+   Chromium draws one pixel down; the 10px build text is not. */
+.statusbar > label:not(.status-mode) { margin-top: 1px; }
 .statusbar .status-mode { letter-spacing: .01em; }
+/* 24px buttons 3px apart: the bar's 18px gap less `margin-left:-15px`. */
+window.ox .statusbar button {
+  min-width: 24px;
+  min-height: 24px;
+  margin: 1px 0 0 -15px;
+  color: @ox_muted;
+}
+window.ox .statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
+/* The 15px glyph is centred on a half pixel too. */
+.statusbar button image { margin-left: 1px; }
 
 /* ---- Menus (style.css .menu.win10, the classic style the app defaults to) ---- */
 popover.ox-menu > contents, popover.menu.ox-menu > contents, popover.ox-popover > contents {

@@ -15,6 +15,7 @@ mod geometry;
 mod input;
 mod listing;
 mod opening;
+mod panes_layout;
 mod sidebar_layout;
 mod tabs;
 mod views;

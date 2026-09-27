@@ -153,8 +153,22 @@ fn the_details_pane_lists_a_file_and_the_folder() {
     let test = TestWindow::open(&fixture.uri());
     let pane = test.window.details_pane();
     let folder = pane.shown_properties();
-    assert_eq!(property(&folder, "Items"), Some("5"), "hidden items count too");
+    // The Python backend lists hidden items only while they are shown
+    // (`enumerate_folder(uri, showHidden)`), and app.js counts that list.
+    assert_eq!(
+        property(&folder, "Items"),
+        Some("4"),
+        "hidden items are not listed"
+    );
     assert_eq!(property(&folder, "Storage"), Some("This computer"));
+    test.activate("hidden", None);
+    let with_hidden = pane.shown_properties();
+    assert_eq!(
+        property(&with_hidden, "Items"),
+        Some("5"),
+        "shown hidden items count"
+    );
+    test.activate("hidden", None);
     test.window.folder_model().select_only(1);
     let file = pane.shown_properties();
     let keys: Vec<&str> = file.iter().map(|(key, _)| key.as_str()).collect();

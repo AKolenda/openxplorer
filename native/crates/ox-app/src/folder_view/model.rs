@@ -142,6 +142,19 @@ impl FolderModel {
         self.sort_model.n_items()
     }
 
+    /// How many of `store`'s items the folder lists, searched or not: the
+    /// hidden ones count only while hidden files are shown, as the Python
+    /// backend lists them (`enumerate_folder(uri, showHidden)`).
+    pub fn listed_count(&self, store: &gio::ListStore) -> u32 {
+        let shows_hidden = self.filter_state.borrow().shows_hidden();
+        let listed = store
+            .iter::<FileItem>()
+            .filter_map(Result::ok)
+            .filter(|item| shows_hidden || !item.entry().hidden)
+            .count();
+        u32::try_from(listed).unwrap_or(u32::MAX)
+    }
+
     /// The item at a display position.
     pub fn item(&self, position: u32) -> Option<FileItem> {
         self.sort_model.item(position).and_downcast::<FileItem>()

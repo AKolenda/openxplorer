@@ -28,6 +28,11 @@ impl FilterState {
         changed
     }
 
+    /// True when hidden items are listed.
+    pub fn shows_hidden(&self) -> bool {
+        self.show_hidden
+    }
+
     /// True when a search is active.
     pub fn is_searching(&self) -> bool {
         !self.terms.is_empty()

@@ -129,6 +129,7 @@ impl FileCell {
     fn lay_out_as_row(&self) {
         self.set_orientation(gtk::Orientation::Horizontal);
         self.set_spacing(11);
+        self.imp().image.add_css_class("row-icon");
         let label = &self.imp().label;
         label.set_xalign(0.0);
         label.set_hexpand(true);

@@ -211,6 +211,8 @@ impl BrowserWindow {
             toggle("hidden", preferences.show_hidden, |window, show| {
                 window.content().model.set_show_hidden(show);
                 window.update_content();
+                // The folder's item count changes with it.
+                window.update_details_pane();
                 window.save_preference(Preference::ShowHidden(show));
             }),
             toggle("details-pane", preferences.details, |window, show| {

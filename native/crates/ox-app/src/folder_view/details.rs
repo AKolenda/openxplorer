@@ -6,7 +6,7 @@
 //! takes the remaining width until the user resizes it, the other columns
 //! default to 152, 135 and 90 pixels, and saved widths are clamped to the
 //! limits the Python app uses. Columns sort by clicking their headers;
-//! sizes are right-aligned.
+//! sizes and the Size title are right-aligned.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -35,6 +35,22 @@ pub(crate) const fn settings_column(column: SortColumn) -> Column {
         SortColumn::Modified => Column::Modified,
         SortColumn::Type => Column::Type,
         SortColumn::Size => Column::Size,
+    }
+}
+
+/// The web list pads its column header and rows 14 pixels at both ends
+/// (`.column-head{padding:0 14px}`), so its columns stop short of the
+/// list's edges. GTK lays columns out across the whole column view, so
+/// the first and last columns, Name and Size, hold those pixels: they are
+/// this much wider than the widths saved in settings, and their titles and
+/// cells pad for it (resources/style.css).
+const EDGE_GUTTER: u32 = 14;
+
+/// The part of `column`'s width that is the list's end padding.
+const fn edge_gutter(column: SortColumn) -> u32 {
+    match column {
+        SortColumn::Name | SortColumn::Size => EDGE_GUTTER,
+        SortColumn::Modified | SortColumn::Type => 0,
     }
 }
 
@@ -112,6 +128,7 @@ pub(crate) fn build(model: &FolderModel, icons: &Rc<IconCells>, owners: &Rc<Cell
         view.append_column(&view_column);
     }
     apply_column_widths(&view, None);
+    align_size_title_right(&view);
     if let Some(sorter) = view.sorter() {
         model.attach_column_sorter(&sorter);
     }
@@ -145,9 +162,20 @@ pub(crate) fn apply_column_widths(view: &gtk::ColumnView, saved: Option<&ColumnW
         };
         let width = start_width(column, saved);
         view_column.set_expand(width.is_none());
-        let pixels = width.and_then(|width| i32::try_from(width).ok()).unwrap_or(-1);
+        let with_gutter = width.map(|width| width + edge_gutter(column));
+        let pixels = with_gutter
+            .and_then(|width| i32::try_from(width).ok())
+            .unwrap_or(-1);
         view_column.set_fixed_width(pixels);
     }
+}
+
+/// The width settings save for a column `fixed_width` pixels wide, or
+/// `None` while it has no width of its own.
+fn saved_width(column: SortColumn, fixed_width: i32) -> Option<f64> {
+    let width = u32::try_from(fixed_width).ok().filter(|width| *width > 0)?;
+    let without_gutter = width.saturating_sub(edge_gutter(column));
+    Some(f64::from(without_gutter))
 }
 
 /// The widths the user set, in the form settings save them. Name counts
@@ -156,10 +184,26 @@ fn column_widths(view: &gtk::ColumnView) -> Vec<(Column, f64)> {
     SortColumn::ALL
         .into_iter()
         .filter_map(|column| {
-            let width = view_column(view, column)?.fixed_width();
-            (width > 0).then(|| (settings_column(column), f64::from(width)))
+            let fixed_width = view_column(view, column)?.fixed_width();
+            let width = saved_width(column, fixed_width)?;
+            Some((settings_column(column), width))
         })
         .collect()
+}
+
+/// Right-aligns the Size title over its right-aligned values
+/// (`.column:last-child .column-label{justify-content:flex-end}`). GTK has
+/// no alignment setting for a column title, so this aligns the box that
+/// GTK 4.14 puts inside each title button (label and sort arrow), which
+/// keeps the arrow beside the text.
+fn align_size_title_right(view: &gtk::ColumnView) {
+    let header = view.first_child().filter(|child| child.css_name() == "header");
+    let size_title = header.and_then(|header| header.last_child());
+    let title_content = size_title.and_then(|title| title.first_child());
+    match title_content {
+        Some(content) => content.set_halign(gtk::Align::End),
+        None => glib::g_warning!("openxplorer", "The Size column title has an unexpected structure"),
+    }
 }
 
 /// Calls `on_resized` with every column width once a resize settles.
@@ -245,5 +289,17 @@ mod tests {
         assert_eq!(start_width(SortColumn::Modified, Some(&saved)), Some(100));
         assert_eq!(start_width(SortColumn::Size, Some(&saved)), Some(600));
         assert_eq!(start_width(SortColumn::Type, Some(&saved)), Some(135));
+    }
+
+    #[test]
+    fn saved_widths_leave_out_the_end_columns_padding() {
+        assert_eq!(saved_width(SortColumn::Size, 104), Some(90.0));
+        assert_eq!(saved_width(SortColumn::Name, 314), Some(300.0));
+        assert_eq!(saved_width(SortColumn::Type, 135), Some(135.0));
+        assert_eq!(
+            saved_width(SortColumn::Name, -1),
+            None,
+            "Name still fills the space"
+        );
     }
 }

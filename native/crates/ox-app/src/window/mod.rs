@@ -417,12 +417,9 @@ impl BrowserWindow {
         let Some(folder_uri) = self.current_uri() else {
             return;
         };
-        let folder_item_count = self
-            .imp()
-            .session
-            .borrow()
-            .active()
-            .map_or(0, |tab| tab.store.n_items());
+        let store = self.imp().session.borrow().active().map(|tab| tab.store.clone());
+        let model = &self.content().model;
+        let folder_item_count = store.map_or(0, |store| model.listed_count(&store));
         let locations = self.imp().locations.borrow();
         let content = details_pane::pane_content(&details_pane::PaneFacts {
             selection: &selection,
