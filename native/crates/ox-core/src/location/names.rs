@@ -105,6 +105,9 @@ pub fn safe_label(value: &str, fallback: &str) -> Result<String, LocationError> 
     if value.is_empty() {
         return Ok(fallback.to_string());
     }
+    // Safety rule (SAFE-018, `core.py::safe_label`): settings.json keeps
+    // only bounded labels, and no control character that could break the
+    // sidebar row or hide part of the label.
     if has_control_character(value) || value.chars().count() > MAX_LABEL_CHARS {
         return Err(LocationError::new(
             "A sidebar label must be at most 120 characters and contain no control characters.",
