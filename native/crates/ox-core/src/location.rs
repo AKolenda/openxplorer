@@ -54,8 +54,9 @@ pub use virtual_place::{
     RECENT_URI, SETTINGS_URI, TRASH_URI,
 };
 
-/// Portable-device GVfs schemes. Their authorities can contain brackets
-/// (`mtp://[usb:001,002]/`), which ordinary URL parsers reject.
+/// GIO's schemes for phones, cameras and iOS devices. Their authorities can
+/// contain brackets (`mtp://[usb:001,002]/`), which ordinary URL parsers
+/// reject.
 pub const DEVICE_SCHEMES: [&str; 3] = ["mtp", "gphoto2", "afc"];
 
 /// A user-facing validation error. The message is shown as-is.

@@ -15,6 +15,11 @@ pub const MAX_LABEL_CHARS: usize = 120;
 
 /// Validates a single file or folder name: not empty, `.` or `..`, no
 /// slash, backslash or control character, and at most 255 UTF-8 bytes.
+///
+/// # Errors
+///
+/// A [`LocationError`] with the Python app's message when any of those
+/// rules is broken.
 pub fn validate_name(name: &str) -> Result<&str, LocationError> {
     if name.is_empty() || name == "." || name == ".." {
         return Err(LocationError::new(
@@ -37,9 +42,14 @@ pub fn validate_name(name: &str) -> Result<&str, LocationError> {
 ///
 /// Folders and names whose only dot is leading keep the marker at the end;
 /// files put it before the last extension. The stem is shortened a whole
-/// character at a time to stay within 255 bytes. Fails for an invalid name,
-/// or when the extension alone is too long to fit the marker: the name is
-/// then rejected rather than renamed beyond recognition.
+/// character at a time to stay within 255 bytes.
+///
+/// # Errors
+///
+/// The [`validate_name`] error for an invalid name, and "This file name is
+/// too long to generate a duplicate name." when the extension alone leaves
+/// no room for the marker: the name is then rejected rather than renamed
+/// beyond recognition.
 pub fn try_new_copy_name(name: &str, number: u32, is_dir: bool) -> Result<String, LocationError> {
     validate_name(name)?;
     let (mut stem, suffix) = split_extension(name, is_dir);
@@ -71,7 +81,11 @@ pub fn new_copy_name(name: &str, count: u32, is_dir: bool) -> String {
 }
 
 /// A user-supplied sidebar label, trimmed, or `fallback` when it is empty.
-/// Rejects labels over 120 characters or with control characters.
+///
+/// # Errors
+///
+/// A [`LocationError`] for a label over 120 characters or with a control
+/// character.
 pub fn safe_label(value: &str, fallback: &str) -> Result<String, LocationError> {
     let value = python_strip(value);
     if value.is_empty() {

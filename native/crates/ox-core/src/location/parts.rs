@@ -58,6 +58,11 @@ impl LocationParts {
 
     /// The port, or `None` when absent or empty. Mirrors Python's
     /// `SplitResult.port`: ASCII digits only, at most 65535.
+    ///
+    /// # Errors
+    ///
+    /// Python's `ValueError` wording for a port that is not all digits or
+    /// is above 65535; callers show their own message instead.
     pub fn port(&self) -> Result<Option<u16>, LocationError> {
         let (_, port) = self.host_and_port();
         let Some(port) = port else {
@@ -91,12 +96,17 @@ impl LocationParts {
     }
 }
 
-/// Splits a location, including GVfs's non-RFC USB authorities.
+/// Splits a location, including the non-RFC USB authorities of GIO's
+/// device URIs.
 ///
 /// `mtp://[usb:001,002]/DCIM` splits into scheme `mtp`, authority
 /// `[usb:001,002]` and path `/DCIM`; a device URI without a path gets `/`.
-/// Everything else follows Python's `urlsplit`, which rejects unbalanced
-/// or invalid bracketed hosts.
+/// Everything else follows Python's `urlsplit`.
+///
+/// # Errors
+///
+/// A [`LocationError`] with Python's wording for unbalanced or invalid
+/// bracketed hosts.
 pub fn split_location(value: &str) -> Result<LocationParts, LocationError> {
     if let Some(device) = DeviceMatch::parse(value) {
         let scheme = device.scheme.to_ascii_lowercase();
@@ -227,7 +237,8 @@ fn check_nfkc_authority(netloc: &str) -> Result<(), LocationError> {
 }
 
 /// `urlsplit`'s bracket rules: balanced brackets, nothing before `[`,
-/// only `:port` after `]`, and an IPv6 or IPvFuture address inside.
+/// only `:port` after `]`, and an IPv6 address or an RFC 3986 future
+/// address (`v1.x`) inside.
 fn check_brackets(netloc: &str) -> Result<(), LocationError> {
     let has_open = netloc.contains('[');
     let has_close = netloc.contains(']');

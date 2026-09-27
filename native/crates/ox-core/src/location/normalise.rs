@@ -38,6 +38,14 @@ const MAX_DEVICE_AUTHORITY_CHARS: usize = 512;
 /// variables or maps Windows drive letters. Virtual places (`trash:///`,
 /// `ox:home`, ...) are rejected here; see
 /// [`normalise_navigation`](super::normalise_navigation).
+///
+/// # Errors
+///
+/// A [`LocationError`] with the Python app's message for empty input,
+/// control characters, credentials, Windows drive letters, unsupported
+/// schemes, a query or fragment in a URL, a `file://` URL with a host or a
+/// relative path, an invalid SMB server name or port, or a malformed device
+/// address.
 pub fn normalise_location(value: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
     let value = python_strip(value);
     if value.is_empty() {
@@ -71,6 +79,10 @@ pub fn normalise_location(value: &str, base: Option<&str>, home: &Path) -> Resul
 
 /// [`normalise_location`] without a base, relative to the user's home
 /// folder. The equivalent of calling the Python function with one argument.
+///
+/// # Errors
+///
+/// As [`normalise_location`].
 pub fn normalise(value: &str) -> Result<String, LocationError> {
     normalise_location(value, None, &glib::home_dir())
 }
@@ -86,6 +98,11 @@ pub fn file_uri(path: &Path) -> String {
 
 /// Normalises a shared folder, rejecting a bare server (`smb://nas/`) and
 /// anything that is not SMB.
+///
+/// # Errors
+///
+/// As [`normalise`], and a message asking for a shared folder such as
+/// `\\nas\Projects` for anything but an SMB shared folder.
 pub fn require_share(value: &str) -> Result<String, LocationError> {
     let uri = normalise(value)?;
     let parts = split_location(&uri)?;
@@ -100,6 +117,12 @@ pub fn require_share(value: &str) -> Result<String, LocationError> {
 /// Normalises a location that is about to be renamed, moved, copied,
 /// trashed or put on the clipboard. A whole SMB server or share, or a
 /// device root, is not such an item.
+///
+/// # Errors
+///
+/// As [`normalise`], and a message telling the user to open the share or
+/// the device storage first for a whole SMB server or share or a device
+/// root.
 pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
     let uri = normalise(uri)?;
     let parts = split_location(&uri)?;
@@ -278,22 +301,23 @@ fn normalise_smb_url(parts: &super::LocationParts, decoded_path: &str) -> Result
     let port = parts
         .port()
         .map_err(|_| LocationError::new("Invalid SMB port."))?;
-    let mut host = if hostname.contains(':') {
+    let host = if hostname.contains(':') {
         format!("[{hostname}]")
     } else {
         hostname
     };
-    if let Some(port) = port {
-        host.push_str(&format!(":{port}"));
-    }
+    let authority = match port {
+        Some(port) => format!("{host}:{port}"),
+        None => host,
+    };
     // SMB uses / in a URI; literal backslashes are path separators.
     let forward = decoded_path.replace('\\', "/");
     let path = normpath(&format!("/{}", forward.trim_start_matches('/')));
-    Ok(format!("smb://{host}{}", quote_path(&path)))
+    Ok(format!("smb://{authority}{}", quote_path(&path)))
 }
 
 /// Ports `_normalise_device_location`: keeps the device authority as
-/// written (GVfs needs it exactly) and canonicalises the path.
+/// written (GIO needs it exactly) and canonicalises the path.
 fn normalise_device_location(value: &str, scheme: &str) -> Result<String, LocationError> {
     let device = DeviceMatch::parse(value).filter(|device| device.scheme.eq_ignore_ascii_case(scheme));
     let Some(device) = device else {

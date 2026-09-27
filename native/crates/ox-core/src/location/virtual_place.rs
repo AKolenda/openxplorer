@@ -173,6 +173,12 @@ pub fn is_virtual_location(uri: &str) -> bool {
 /// [`normalise_location`] accepts plus the virtual places. Use it for the
 /// tab history and command-line arguments; the port of `location()` in
 /// `desktop/window_state.py`.
+///
+/// # Errors
+///
+/// As [`normalise_location`]. A `trash:`, `recent:` or `network:` location
+/// fails when it has a query, fragment or server name, or a component that
+/// does not decode or decodes to a control character.
 pub fn normalise_navigation(value: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
     let trimmed = python_strip(value);
     if let Some(place) = VirtualPlace::from_uri(trimmed) {

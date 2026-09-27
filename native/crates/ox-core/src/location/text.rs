@@ -91,6 +91,10 @@ pub(crate) fn decode_uri_component(text: &str) -> Option<String> {
 /// Like POSIX (and Python), exactly two leading slashes are kept because
 /// their meaning is implementation-defined; three or more become one. An
 /// empty result is `.`.
+#[expect(
+    clippy::bool_to_int_with_if,
+    reason = "the three leading-slash cases read best side by side"
+)]
 pub(crate) fn normpath(path: &str) -> String {
     if path.is_empty() {
         return ".".into();
