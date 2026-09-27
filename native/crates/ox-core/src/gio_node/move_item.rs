@@ -107,6 +107,8 @@ impl GioNode {
         }
     }
 
+    /// True when `target_file` is in this item's folder: an MTP rename
+    /// rather than a move.
     fn has_same_parent(&self, target_file: &gio::File) -> bool {
         match (self.file.parent(), target_file.parent()) {
             (Some(source_parent), Some(target_parent)) => source_parent.equal(&target_parent),
@@ -151,6 +153,7 @@ impl GioNode {
     }
 }
 
+/// The refusal of a move or publication onto a name that is taken.
 fn name_taken(target: &dyn Node) -> TransferError {
     TransferError::Exists(format!(
         "An item named “{}” already exists. Nothing was overwritten.",

@@ -40,6 +40,7 @@ struct StagedFolder {
     /// Opened without following links, so the mode lands on the folder the
     /// engine built even after it moved.
     directory: File,
+    /// The source folder's permission bits, applied once it is published.
     mode: u32,
 }
 
@@ -81,6 +82,8 @@ pub(crate) fn publish_staged(
     }
 }
 
+/// Restores the descendants' final modes, gives the staged root owner write
+/// access for the rename, then publishes it.
 fn move_with_owner_access(
     source: &dyn Node,
     destination: &dyn Node,

@@ -97,6 +97,8 @@ pub fn clean_staging(node: &(impl Node + ?Sized)) -> Result<(), TransferError> {
     clean_at_depth(node, 0)
 }
 
+/// Removes `node`, at nesting `depth` below the staging root, and
+/// everything inside it.
 fn clean_at_depth(node: &(impl Node + ?Sized), depth: usize) -> Result<(), TransferError> {
     // An unexpected deeper backend tree must not exhaust the stack.
     if depth > MAX_DEPTH + STAGING_LEVELS {

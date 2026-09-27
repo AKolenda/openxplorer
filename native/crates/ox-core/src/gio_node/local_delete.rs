@@ -119,6 +119,7 @@ struct Deletion<'a> {
     guard: Option<&'a WriteGuard>,
     /// The deepest nesting walked.
     max_depth: usize,
+    /// Whether folders are made owner-only before they are emptied.
     folders: FolderAccess,
     /// The identity the deleted item itself must have, when known.
     root_identity: Option<ItemIdentity>,

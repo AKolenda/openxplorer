@@ -41,7 +41,9 @@ pub(crate) enum Stage {
     /// A private folder holding the item: `payload`, or the source's own
     /// name for a copy within one device.
     Folder {
+        /// The private `.winspace-transfer-<hex>.part` folder.
         folder: Box<dyn Node>,
+        /// The item being built inside it.
         item: Box<dyn Node>,
     },
 }
@@ -152,6 +154,9 @@ impl StagedCopy<'_> {
         Ok(())
     }
 
+    /// Where this copy is built: a same-device file copy must follow MTP
+    /// `CopyObject`, other device copies stage beside the final name, and
+    /// everything else uses a private folder.
     fn layout(&self) -> Layout {
         let is_file = self.source_kind != NodeKind::Directory;
         if is_file && self.source.native_copy_keeps_name(self.dest_dir) {

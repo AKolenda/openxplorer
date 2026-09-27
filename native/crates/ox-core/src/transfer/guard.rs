@@ -57,9 +57,9 @@ pub fn guard_destination(source: &dyn Node, directory: &dyn Node) -> Result<(), 
     if !same_host {
         return Ok(());
     }
-    let is_smb = source_parts.scheme == "smb";
-    let source_path = comparable_path(&source_parts.path, is_smb);
-    let directory_path = comparable_path(&directory_parts.path, is_smb);
+    let case = PathCase::of_scheme(&source_parts.scheme);
+    let source_path = comparable_path(&source_parts.path, case);
+    let directory_path = comparable_path(&directory_parts.path, case);
     let inside = directory_path == source_path || directory_path.starts_with(&format!("{source_path}/"));
     if inside {
         return Err(TransferError::failed("Cannot place a folder inside itself."));
@@ -67,14 +67,34 @@ pub fn guard_destination(source: &dyn Node, directory: &dyn Node) -> Result<(), 
     Ok(())
 }
 
-/// The decoded path without trailing slashes, case-folded for SMB.
-fn comparable_path(escaped: &str, fold: bool) -> String {
+/// Whether a location's paths tell upper and lower case apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PathCase {
+    /// Linux file systems and most backends.
+    Sensitive,
+    /// SMB shares, which are usually case-insensitive; comparing folded
+    /// paths errs on the side of refusing.
+    Insensitive,
+}
+
+impl PathCase {
+    fn of_scheme(scheme: &str) -> Self {
+        if scheme == "smb" {
+            PathCase::Insensitive
+        } else {
+            PathCase::Sensitive
+        }
+    }
+}
+
+/// The decoded path without trailing slashes, case-folded where `case`
+/// ignores case.
+fn comparable_path(escaped: &str, case: PathCase) -> String {
     let decoded = percent_decode_str(escaped).decode_utf8_lossy();
     let trimmed = decoded.trim_end_matches('/');
-    if fold {
-        fold_case(trimmed)
-    } else {
-        trimmed.to_string()
+    match case {
+        PathCase::Insensitive => fold_case(trimmed),
+        PathCase::Sensitive => trimmed.to_string(),
     }
 }
 
@@ -210,8 +230,16 @@ mod tests {
         assert_eq!(fold_case("Straße/ΣΟΦΟΣ"), "strasse/σοφοσ");
         assert_eq!(fold_case("Oﬃce"), "office");
         assert_eq!(fold_case("ﬓ"), "մն");
-        assert_eq!(comparable_path("/Share/A%20B/", true), "/share/a b");
-        assert_eq!(comparable_path("/Share/A%20B/", false), "/Share/A B");
+        assert_eq!(
+            comparable_path("/Share/A%20B/", PathCase::Insensitive),
+            "/share/a b"
+        );
+        assert_eq!(
+            comparable_path("/Share/A%20B/", PathCase::Sensitive),
+            "/Share/A B"
+        );
+        assert_eq!(PathCase::of_scheme("smb"), PathCase::Insensitive);
+        assert_eq!(PathCase::of_scheme("sftp"), PathCase::Sensitive);
     }
 
     #[test]

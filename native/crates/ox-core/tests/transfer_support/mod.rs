@@ -23,11 +23,17 @@ use local::{file_uri, LocalNode, Provider};
 /// A temporary `source` folder and destination folder, like `setUp` in the
 /// Python transfer tests.
 pub struct Fixture {
+    /// Removes the temporary folder when the fixture is dropped.
     _temp: tempfile::TempDir,
+    /// The temporary folder holding both of the others.
     pub root: PathBuf,
+    /// The folder the test's sources are created in.
     pub src: PathBuf,
+    /// The destination folder of copies and moves.
     pub dst: PathBuf,
+    /// The cancellation every run of this fixture uses.
     pub cancel: Cancellation,
+    /// The cleanup delays the engine asked for, recorded instead of slept.
     sleeps: Arc<Mutex<Vec<Duration>>>,
 }
 
