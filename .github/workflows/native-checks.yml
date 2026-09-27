@@ -1,10 +1,25 @@
 name: Native Rust checks
+# Pull requests are checked here on hosted runners. checks.yml runs only on
+# pushes to main, on the production host, so anything this workflow skips is
+# first checked after it has merged.
 on:
   pull_request:
-    paths: ['native/**', '.github/workflows/native-checks.yml', 'desktop/**']
+    paths: &checked-paths
+      # Native sources, and the Python app whose behaviour and settings they
+      # must match (parity inventory, bridge and settings interop tests).
+      # tools/release.py also imports desktop/core.py.
+      - 'native/**'
+      - 'desktop/**'
+      # The other inputs of the release-source and public-data policy tests.
+      - '.gitignore'
+      - 'tools/release.py'
+      - 'tools/audit-public-data.py'
+      - 'tests/test_release_source.py'
+      - 'tests/test_public_data.py'
+      - '.github/workflows/native-checks.yml'
   push:
     branches: [main]
-    paths: ['native/**', '.github/workflows/native-checks.yml', 'desktop/**']
+    paths: *checked-paths
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,6 +44,18 @@ jobs:
           rustup override set 1.92.0
       - name: Format, lint, test core behavior and exercise real GTK widgets
         run: python3 native/tools/check.py
+
+  release-policies:
+    # A separate job, so these quick tests need neither GTK nor Rust and report
+    # on their own. Path filters apply to the whole workflow, so a change to a
+    # policy input also runs the native job. checks.yml repeats these tests as
+    # the gate before publishing.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Verify corresponding-source and public-data policies
         run: |
           python3 -m unittest discover -s tests -p 'test_release_source.py'
