@@ -176,7 +176,8 @@ fn read_bookmarks(items: &[Value], check: LocationCheck) -> Vec<Bookmark> {
 /// A `{uri, label}` entry whose location passes `check`, or `None` if it
 /// is unusable.
 fn read_bookmark(item: &Value, check: LocationCheck) -> Option<Bookmark> {
-    let uri = check(item.get("uri")?.as_str()?).ok()?;
+    let stored_uri = item.get("uri")?.as_str()?;
+    let uri = check(stored_uri).ok()?;
     let label = item.get("label").and_then(Value::as_str).unwrap_or_default();
     let label = safe_label(label, &bookmark_fallback_label(&uri)).ok()?;
     Some(Bookmark { uri, label })
@@ -186,7 +187,8 @@ fn read_bookmark(item: &Value, check: LocationCheck) -> Option<Bookmark> {
 /// with Python's `str()` and `int()`, as `Settings.__init__` does.
 fn read_recent(item: &Value) -> Option<RecentEntry> {
     let fields = item.as_object()?;
-    let uri = normalise(fields.get("uri")?.as_str()?).ok()?;
+    let stored_uri = fields.get("uri")?.as_str()?;
+    let uri = normalise(stored_uri).ok()?;
     let name = python_str(fields.get("name")?);
     let type_name = fields.get("type").map_or_else(|| "File".to_owned(), python_str);
     let entry = RecentEntry {
@@ -334,7 +336,8 @@ mod tests {
         assert_eq!(preferences.text_size, 100);
         assert_eq!(preferences.network_interval, 30);
         assert_eq!(preferences.sidebar_width, None);
-        assert!(preferences.details && preferences.show_hidden);
+        assert!(preferences.show_details_pane);
+        assert!(preferences.show_hidden);
         let columns = preferences.column_widths.unwrap();
         assert_eq!(columns.get(Column::Name), Some(300));
         assert_eq!(columns.get(Column::Type), None);

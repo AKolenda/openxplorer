@@ -85,7 +85,9 @@ pub(super) fn replace_private_file(
 ) -> Result<Option<PathBuf>, SettingsError> {
     let directory = parent_directory(target);
     private_directory(directory)?;
-    // Only the check matters here; the opened file is closed at once.
+    // Safety rule "never write through a link": a symlinked or hard-linked
+    // target is refused here, before anything is written. Only the check
+    // matters; the opened file is closed at once.
     private_file_if_present(target, PrivateFileOptions::default())?;
     let mut temporary = UniqueFile::create(directory, prefix)?;
     let published = write_and_publish(&mut temporary, target, contents, old_file);
@@ -144,14 +146,16 @@ fn move_aside(path: &Path) -> Result<Option<PathBuf>, SettingsError> {
         path: backup,
     } = UniqueFile::create(parent_directory(path), &prefix)?;
     drop(placeholder);
-    let renamed = fs::rename(path, &backup);
-    if renamed.is_err() {
-        let _ = fs::remove_file(&backup);
-    }
-    match renamed {
-        Ok(()) => Ok(Some(backup)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(SettingsError::io(path, error)),
+    let Err(error) = fs::rename(path, &backup) else {
+        return Ok(Some(backup));
+    };
+    // The empty placeholder is useless without the rename; removing it is
+    // best effort.
+    let _ = fs::remove_file(&backup);
+    if error.kind() == io::ErrorKind::NotFound {
+        Ok(None)
+    } else {
+        Err(SettingsError::io(path, error))
     }
 }
 
@@ -211,21 +215,30 @@ mod tests {
 
     /// parity: SET-012, SAFE-009
     #[test]
-    fn replace_writes_a_private_file_and_refuses_symlinks() {
+    fn replace_writes_a_private_file_and_leaves_no_temporary_file() {
         let root = tempfile::tempdir().unwrap();
         let target = root.path().join("settings.json");
+
         replace_private_file(&target, ".settings-", b"one", OldFile::Discard).unwrap();
         replace_private_file(&target, ".settings-", b"two", OldFile::Discard).unwrap();
+
         assert_eq!(fs::read(&target).unwrap(), b"two");
         assert_eq!(mode(&target), 0o600);
         let leftovers = fs::read_dir(root.path()).unwrap().count();
         assert_eq!(leftovers, 1, "no temporary files remain");
+    }
 
+    /// parity: SET-012, SAFE-009
+    #[test]
+    fn replace_refuses_a_symlinked_target_and_leaves_its_target_unchanged() {
+        let root = tempfile::tempdir().unwrap();
         let other = root.path().join("other");
         fs::write(&other, "{}").unwrap();
         let link = root.path().join("linked.json");
         symlink(&other, &link).unwrap();
+
         let replaced = replace_private_file(&link, ".settings-", b"x", OldFile::KeepAsBackup);
+
         assert!(replaced.is_err());
         assert!(link.is_symlink());
         assert_eq!(fs::read_to_string(&other).unwrap(), "{}");

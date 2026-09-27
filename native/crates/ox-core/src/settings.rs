@@ -98,7 +98,9 @@ impl Settings {
 
     /// Loads settings from `directory`; never fails. A missing file gives
     /// the defaults; anything unreadable gives the defaults plus a warning.
-    /// Does not create the directory.
+    /// Does not create the directory, but an existing directory and
+    /// `settings.json` are made private (0700 / 0600) while they are read,
+    /// as `Settings.__init__` in core.py does.
     pub fn open(directory: &Path) -> Self {
         let mut data = SettingsData::default();
         let file_state = read::read_file(directory, &mut data);
@@ -216,8 +218,8 @@ impl Settings {
     ///
     /// [`SettingsError::Invalid`] for an invalid file location, and every
     /// error of [`update_preferences`](Self::update_preferences).
-    pub fn remember_open(&mut self, entry: &RecentEntry) -> Result<(), SettingsError> {
-        self.mutate(|data| mutate::remember_open(data, entry))
+    pub fn remember_open(&mut self, entry: RecentEntry) -> Result<(), SettingsError> {
+        self.mutate(move |data| mutate::remember_open(data, entry))
     }
 
     /// Locks, re-reads, changes a copy of the data, saves it, and only then
@@ -244,9 +246,11 @@ impl Settings {
     fn save_while_locked(&mut self) -> Result<(), SettingsError> {
         // Safety rule "never erase unreadable settings" (a gain over
         // `Settings.save` in core.py): damaged contents are kept as a backup.
+        // The match names every state, so a new one cannot fall into
+        // `Discard` unnoticed.
         let old_file = match self.file_state {
             FileState::Damaged(_) => OldFile::KeepAsBackup,
-            _ => OldFile::Discard,
+            FileState::Sound | FileState::Refused(_) | FileState::BackedUp(_) => OldFile::Discard,
         };
         let contents = self.data.to_file_text();
         let backup = replace_private_file(

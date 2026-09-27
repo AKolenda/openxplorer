@@ -204,7 +204,7 @@ fn two_windows_preserve_each_others_preferences() {
     save_preferences(&mut second, &json!({"details": false}));
     let merged = first.snapshot().preferences;
     assert_eq!(merged.theme, Theme::Dark);
-    assert!(!merged.details);
+    assert!(!merged.show_details_pane);
 }
 
 /// Ported from `desktop/tests/test_v05.py::SettingsWindowsTests::test_two_windows_pins_not_lost`

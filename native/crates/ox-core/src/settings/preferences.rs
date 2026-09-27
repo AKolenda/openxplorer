@@ -144,8 +144,9 @@ pub struct Preferences {
     pub theme: Theme,
     /// Details list or icon grid.
     pub view: View,
-    /// Details pane visible.
-    pub details: bool,
+    /// Details pane visible. Stored as `details`, the Python app's key.
+    #[serde(rename = "details")]
+    pub show_details_pane: bool,
     /// Hidden files shown.
     pub show_hidden: bool,
     /// Background search indexing enabled.
@@ -169,7 +170,7 @@ impl Default for Preferences {
         Self {
             theme: Theme::default(),
             view: View::default(),
-            details: true,
+            show_details_pane: true,
             show_hidden: false,
             auto_index: true,
             context_menu: ContextMenu::default(),
@@ -197,7 +198,7 @@ impl Preferences {
 
         replace_if_some(&mut self.theme, update.theme);
         replace_if_some(&mut self.view, update.view);
-        replace_if_some(&mut self.details, update.details);
+        replace_if_some(&mut self.show_details_pane, update.show_details_pane);
         replace_if_some(&mut self.show_hidden, update.show_hidden);
         replace_if_some(&mut self.auto_index, update.auto_index);
         replace_if_some(&mut self.context_menu, update.context_menu);
@@ -221,7 +222,7 @@ pub struct PreferencesUpdate {
     /// New view.
     pub view: Option<View>,
     /// Show or hide the details pane.
-    pub details: Option<bool>,
+    pub show_details_pane: Option<bool>,
     /// Show or hide hidden files.
     pub show_hidden: Option<bool>,
     /// Enable or disable background indexing.
@@ -256,7 +257,7 @@ impl PreferencesUpdate {
         Ok(Self {
             theme: text("theme").and_then(Theme::from_key),
             view: text("view").and_then(View::from_key),
-            details: flag("details"),
+            show_details_pane: flag("details"),
             show_hidden: flag("showHidden"),
             auto_index: flag("autoIndex"),
             text_size: values.get("textSize").and_then(read_text_size),
@@ -336,7 +337,9 @@ mod tests {
         assert_eq!(preferences.context_menu, ContextMenu::Win10);
         assert_eq!(preferences.network_interval, 60);
         assert_eq!(preferences.text_size, 100);
-        assert!(preferences.auto_index && preferences.details && !preferences.show_hidden);
+        assert!(preferences.auto_index);
+        assert!(preferences.show_details_pane);
+        assert!(!preferences.show_hidden);
     }
 
     /// The layout of `Settings.data['preferences']` in `desktop/core.py`.

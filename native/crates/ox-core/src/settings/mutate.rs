@@ -219,10 +219,10 @@ fn push_unique(order: &mut Vec<String>, uri: String) {
 /// Puts `entry` first in the recent files, removing an older entry for the
 /// same file and keeping at most 30. The entry is stored as it will read
 /// back: canonical URI, bounded name and type, never a folder.
-pub(super) fn remember_open(settings: &mut SettingsData, entry: &RecentEntry) -> Result<(), SettingsError> {
+pub(super) fn remember_open(settings: &mut SettingsData, entry: RecentEntry) -> Result<(), SettingsError> {
     let opened = RecentEntry {
         uri: normalise(&entry.uri)?,
-        ..entry.clone()
+        ..entry
     };
     let stored = opened.into_stored();
     settings.recent.retain(|recent| recent.uri != stored.uri);
@@ -431,14 +431,14 @@ mod tests {
                 size: i,
                 modified: 1,
             };
-            remember_open(&mut settings, &entry).unwrap();
+            remember_open(&mut settings, entry).unwrap();
         }
         let again = RecentEntry {
             uri: "file:///tmp/file20.txt".into(),
             ..settings.recent[14].clone()
         };
 
-        remember_open(&mut settings, &again).unwrap();
+        remember_open(&mut settings, again).unwrap();
 
         assert_eq!(settings.recent.len(), MAX_RECENT);
         assert_eq!(settings.recent[0].uri, "file:///tmp/file20.txt");
