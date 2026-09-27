@@ -5,8 +5,8 @@
 use std::path::PathBuf;
 
 use ox_core::places::{
-    compose_quick_access, known_folders, merge_network_locations, network_key, NetworkKind, NetworkMount,
-    Place, SavedShare, StableMount,
+    compose_quick_access, known_folders, merge_network_locations, network_key, FolderGlyph, NetworkKind,
+    NetworkMount, Place, SavedShare, StableMount,
 };
 use ox_core::settings::{Bookmark, SettingsData};
 
@@ -33,14 +33,19 @@ fn active_mount(uri: &str, label: &str) -> NetworkMount {
     }
 }
 
+/// The Documents folder's glyph.
+const DOCUMENTS_GLYPH: FolderGlyph = FolderGlyph {
+    name: "documents",
+    color: "#4a94d1",
+};
+
 /// A known-folder row as [`known_folders`] makes it, at `uri`.
 fn place(uri: &str, label: &str) -> Place {
     Place {
         uri: uri.into(),
         label: label.into(),
-        icon: Some("documents"),
-        color: Some("#4a94d1"),
-        pinned: true,
+        glyph: Some(DOCUMENTS_GLYPH),
+        is_pinned: true,
         is_shared: false,
     }
 }
@@ -68,27 +73,67 @@ fn quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order() {
         ["Work", "Documents", "Other"]
     );
     assert!(rows[0].is_shared);
-    assert_eq!(rows[1].icon, Some("documents"));
+    assert_eq!(rows[1].glyph, Some(DOCUMENTS_GLYPH));
 }
+
+/// A standard folder and the glyph the Python app draws for it.
+struct KnownFolderCase {
+    label: &'static str,
+    glyph: FolderGlyph,
+}
+
+/// The standard folders in sidebar order.
+const KNOWN_FOLDER_CASES: [KnownFolderCase; 6] = [
+    KnownFolderCase {
+        label: "Desktop",
+        glyph: FolderGlyph {
+            name: "desktop",
+            color: "#3b8ec7",
+        },
+    },
+    KnownFolderCase {
+        label: "Downloads",
+        glyph: FolderGlyph {
+            name: "downloads",
+            color: "#138266",
+        },
+    },
+    KnownFolderCase {
+        label: "Documents",
+        glyph: DOCUMENTS_GLYPH,
+    },
+    KnownFolderCase {
+        label: "Pictures",
+        glyph: FolderGlyph {
+            name: "pictures",
+            color: "#9a79cb",
+        },
+    },
+    KnownFolderCase {
+        label: "Music",
+        glyph: FolderGlyph {
+            name: "music",
+            color: "#c66b9c",
+        },
+    },
+    KnownFolderCase {
+        label: "Videos",
+        glyph: FolderGlyph {
+            name: "videos",
+            color: "#b48540",
+        },
+    },
+];
 
 /// parity: SIDE-005, LOOK-015
 #[test]
 fn known_folders_use_the_standard_glyphs_and_colours() {
-    let expected = [
-        ("Desktop", "desktop", "#3b8ec7"),
-        ("Downloads", "downloads", "#138266"),
-        ("Documents", "documents", "#4a94d1"),
-        ("Pictures", "pictures", "#9a79cb"),
-        ("Music", "music", "#c66b9c"),
-        ("Videos", "videos", "#b48540"),
-    ];
     let folders = known_folders();
-    assert_eq!(folders.len(), expected.len());
-    for (folder, (label, glyph, color)) in folders.iter().zip(expected) {
-        assert_eq!(folder.label, label);
-        assert_eq!(folder.icon, Some(glyph), "{label}");
-        assert_eq!(folder.color, Some(color), "{label}");
-        assert!(folder.pinned, "{label}");
+    assert_eq!(folders.len(), KNOWN_FOLDER_CASES.len());
+    for (folder, case) in folders.iter().zip(KNOWN_FOLDER_CASES) {
+        assert_eq!(folder.label, case.label);
+        assert_eq!(folder.glyph, Some(case.glyph), "{}", case.label);
+        assert!(folder.is_pinned, "{}", case.label);
         assert!(folder.uri.starts_with("file:///"), "{}", folder.uri);
     }
 }

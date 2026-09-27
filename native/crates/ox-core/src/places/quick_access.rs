@@ -19,13 +19,21 @@ pub struct Place {
     /// Canonical location opened by the row.
     pub uri: String,
     /// Known-folder glyph; `None` uses the ordinary folder artwork.
-    pub icon: Option<&'static str>,
-    /// Known-folder glyph colour, in CSS hex notation.
-    pub color: Option<&'static str>,
+    pub glyph: Option<FolderGlyph>,
     /// Whether the row can be unpinned, including built-in folders.
-    pub pinned: bool,
+    pub is_pinned: bool,
     /// Whether this location is on an SMB share or a local network mount.
     pub is_shared: bool,
+}
+
+/// The coloured glyph a standard folder shows instead of the folder
+/// artwork.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FolderGlyph {
+    /// The glyph's name in the app's icon set, for example `downloads`.
+    pub name: &'static str,
+    /// The glyph's colour, in CSS hex notation.
+    pub color: &'static str,
 }
 
 impl Place {
@@ -34,9 +42,8 @@ impl Place {
         Self {
             label: pin.label.clone(),
             uri: pin.uri.clone(),
-            icon: None,
-            color: None,
-            pinned: true,
+            glyph: None,
+            is_pinned: true,
             is_shared: false,
         }
     }
@@ -50,9 +57,7 @@ struct KnownFolder {
     /// names no directory.
     label: &'static str,
     /// The glyph drawn instead of the folder artwork.
-    glyph: &'static str,
-    /// The glyph's colour, in CSS hex notation.
-    color: &'static str,
+    glyph: FolderGlyph,
 }
 
 /// The standard folders in sidebar order, with the Python app's glyphs and
@@ -61,38 +66,50 @@ const KNOWN_FOLDERS: [KnownFolder; 6] = [
     KnownFolder {
         directory: glib::UserDirectory::Desktop,
         label: "Desktop",
-        glyph: "desktop",
-        color: "#3b8ec7",
+        glyph: FolderGlyph {
+            name: "desktop",
+            color: "#3b8ec7",
+        },
     },
     KnownFolder {
         directory: glib::UserDirectory::Downloads,
         label: "Downloads",
-        glyph: "downloads",
-        color: "#138266",
+        glyph: FolderGlyph {
+            name: "downloads",
+            color: "#138266",
+        },
     },
     KnownFolder {
         directory: glib::UserDirectory::Documents,
         label: "Documents",
-        glyph: "documents",
-        color: "#4a94d1",
+        glyph: FolderGlyph {
+            name: "documents",
+            color: "#4a94d1",
+        },
     },
     KnownFolder {
         directory: glib::UserDirectory::Pictures,
         label: "Pictures",
-        glyph: "pictures",
-        color: "#9a79cb",
+        glyph: FolderGlyph {
+            name: "pictures",
+            color: "#9a79cb",
+        },
     },
     KnownFolder {
         directory: glib::UserDirectory::Music,
         label: "Music",
-        glyph: "music",
-        color: "#c66b9c",
+        glyph: FolderGlyph {
+            name: "music",
+            color: "#c66b9c",
+        },
     },
     KnownFolder {
         directory: glib::UserDirectory::Videos,
         label: "Videos",
-        glyph: "videos",
-        color: "#b48540",
+        glyph: FolderGlyph {
+            name: "videos",
+            color: "#b48540",
+        },
     },
 ];
 
@@ -108,9 +125,8 @@ impl KnownFolder {
         Place {
             label: self.label.to_owned(),
             uri: file_uri(&self.path()),
-            icon: Some(self.glyph),
-            color: Some(self.color),
-            pinned: true,
+            glyph: Some(self.glyph),
+            is_pinned: true,
             is_shared: false,
         }
     }

@@ -39,7 +39,10 @@ pub struct NetworkMount {
     pub mounted: bool,
 }
 
-/// A kernel mount snapshot; only CIFS and SMB3 entries are included.
+/// A stable mount: a share the kernel mounted at a fixed local path, as
+/// the mount table lists it, unlike a [`NetworkMount`] from GIO. These are
+/// Python's `stable` mounts in `merge_network_locations`; only CIFS and
+/// SMB3 entries become rows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StableMount {
     /// Absolute local mount point.
@@ -57,7 +60,7 @@ pub enum NetworkKind {
     Server,
     /// A saved, browsed or mounted SMB shared folder.
     Share,
-    /// A local kernel CIFS/SMB3 mount point.
+    /// A stable mount: a local CIFS/SMB3 mount point.
     Mount,
 }
 
@@ -114,7 +117,7 @@ pub fn network_key(uri: &str) -> Result<NetworkKey, LocationError> {
     })
 }
 
-/// Merges saved shares, active GIO mounts, kernel mounts and visited SMB
+/// Merges saved shares, active GIO mounts, stable mounts and visited SMB
 /// locations in that order. Invalid inputs are ignored. Saved labels win,
 /// connection state is combined, and host aliases remain distinct.
 ///
@@ -124,7 +127,7 @@ pub fn network_key(uri: &str) -> Result<NetworkKey, LocationError> {
 pub fn merge_network_locations(
     saved: &[SavedShare],
     mounts: &[NetworkMount],
-    stable: &[StableMount],
+    stable_mounts: &[StableMount],
     visited: &[Bookmark],
 ) -> Vec<NetworkLocation> {
     let saved = saved.iter().map(Contribution::from_saved_share);
@@ -132,13 +135,13 @@ pub fn merge_network_locations(
         .iter()
         .filter(|mount| mount.is_active_smb_mount())
         .map(Contribution::from_gio_mount);
-    let kernel_mounts = stable
+    let stable_mounts = stable_mounts
         .iter()
         .filter(|mount| mount.is_smb_mount_point())
-        .map(Contribution::from_kernel_mount);
+        .map(Contribution::from_stable_mount);
     let visited = visited.iter().map(Contribution::from_visited);
     let mut merged = NetworkRows::default();
-    for contribution in saved.chain(gio_mounts).chain(kernel_mounts).chain(visited) {
+    for contribution in saved.chain(gio_mounts).chain(stable_mounts).chain(visited) {
         merged.add(&contribution);
     }
     merged.rows
@@ -203,7 +206,7 @@ impl<'a> Contribution<'a> {
         }
     }
 
-    fn from_kernel_mount(mount: &'a StableMount) -> Self {
+    fn from_stable_mount(mount: &'a StableMount) -> Self {
         Self {
             uri: Cow::Owned(file_uri(&mount.path)),
             label: mount.display_label(),
@@ -226,7 +229,7 @@ impl<'a> Contribution<'a> {
     }
 
     /// The validated row this contribution stands for; `None` for an
-    /// invalid location, or one that is neither SMB nor a kernel mount.
+    /// invalid location, or one that is neither SMB nor a stable mount.
     fn to_location(&self) -> Option<NetworkLocation> {
         let uri = normalise(&self.uri).ok()?;
         let is_network = uri.starts_with("smb:") || self.kind == NetworkKind::Mount;
