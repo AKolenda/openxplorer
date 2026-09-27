@@ -41,7 +41,7 @@
    if(target.closest('[data-search-close]'))closeSearch();
    const menu=target.closest('[data-menu-toggle]');if(menu){const nav=document.querySelector('[data-mobile-nav]');nav.hidden=!nav.hidden;menu.setAttribute('aria-expanded',String(!nav.hidden));}
    if(target.closest('[data-mobile-nav] a'))closeMobileMenu(false);
-   if(!target.closest('.site-header'))closeMobileMenu(false);
+   if(!target.closest('.header'))closeMobileMenu(false);
    const code=target.closest('[data-copy-code]');if(code)void copy(code.closest('.code-block').querySelector('code').textContent);
    const md=target.closest('[data-copy-markdown]');if(md){const text=window.__OX_MARKDOWN__?.[md.dataset.copyMarkdown];if(text)void copy(text);else toast('Markdown unavailable. Use the .md download below.');}
    const hash=target.closest('a[href^="#"]');if(hash){const dest=document.getElementById(hash.getAttribute('href').slice(1));if(dest){dest.classList.remove('search-highlight');void dest.offsetWidth;dest.classList.add('search-highlight');}}

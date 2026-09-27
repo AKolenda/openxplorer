@@ -10,9 +10,10 @@ export const site = {
   license: 'AGPL-3.0-only',
   repository: 'https://github.com/AKolenda/openxplorer',
   releases: 'https://github.com/AKolenda/openxplorer/releases',
-  defaultDesign: 'zorin' as 'vercel' | 'windows' | 'zorin',
 };
-export type Vibe = 'windows' | 'zorin' | 'vercel';
+/** The download button names a version, so it opens that exact release. */
+export const releaseUrl = `${site.releases}/tag/v${site.version}`;
+export const issuesUrl = `${site.repository}/issues`;
 
 export function pageMetadata(title:string,description:string,path:string):Metadata{
   const image={url:'/assets/screenshots/explorer-light.png',width:1440,height:900,

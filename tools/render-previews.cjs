@@ -33,8 +33,7 @@ function render(node){
 const C=load(path.join(web,'components/site.tsx'));
 const css=fs.readFileSync(path.join(web,'public/assets/site.css'),'utf8'),js=fs.readFileSync(path.join(web,'public/assets/site.js'),'utf8');
 const docs=JSON.parse(fs.readFileSync(path.join(web,'lib/docs.json'),'utf8'));
-const routes={'/':'index.html','/source/':'source.html','/concepts/':'concepts.html','/docs/':'docs-introduction.html'};
-for(const v of ['windows','zorin','vercel'])routes['/concepts/'+v+'/']='openxplorer-'+v+'.html';
+const routes={'/':'index.html','/source/':'source.html','/docs/':'docs-introduction.html'};
 for(const d of docs)routes['/docs/'+d.slug+'/']='docs-'+d.slug+'.html';
 function rewrite(html){return html.replace(/(href|src)="([^\"]+)"/g,(all,attr,url)=>{const [base,hash]=url.split('#');if(routes[base])return attr+'="'+routes[base]+(hash?'#'+hash:'')+'"';if(base.startsWith('/'))return attr+'="'+url.slice(1)+'"';return all;});}
 function page(name,component,title){
@@ -48,9 +47,7 @@ function page(name,component,title){
  });const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="OpenXplorer — Windows File Explorer-inspired files for Linux."><title>'+escape(title)+' | OpenXplorer</title><style>'+css+'</style></head><body>'+markup+'<script>window.__OX_OFFLINE__=true;'+js.replace(/<\/script/gi,'<\\/script')+'</script></body></html>';
  fs.writeFileSync(path.join(out,name),html);
 }
-page('index.html',runtime.jsx(C.Home,{vibe:'zorin'}),'Familiar files. Open possibilities.');
-page('concepts.html',runtime.jsx(C.Concepts,{}),'Three design directions');
-for(const v of ['windows','zorin','vercel'])page('openxplorer-'+v+'.html',runtime.jsx(C.Home,{vibe:v,lab:true}),'Design lab · '+v);
+page('index.html',runtime.jsx(C.Home,{}),'Familiar by design. Built for Linux.');
 for(const d of docs)page('docs-'+d.slug+'.html',runtime.jsx(C.DocPage,{slug:d.slug}),d.title);
 page('source.html',runtime.jsx(C.SourcePage,{}),'Source code');
 fs.copyFileSync(path.join(root,'LICENSE'),path.join(out,'LICENSE.txt'));
