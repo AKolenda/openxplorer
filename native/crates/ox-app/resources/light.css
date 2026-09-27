@@ -15,6 +15,6 @@
 @define-color ox_error #b32323;
 @define-color ox_field_bottom #c9c9c9;
 @define-color ox_tab_hover alpha(white, .33);
-@define-color ox_crumb_divider #626262;
+@define-color ox_placeholder #757575;
 @define-color ox_pin #92979b;
 @define-color ox_menu_shadow alpha(black, .13);

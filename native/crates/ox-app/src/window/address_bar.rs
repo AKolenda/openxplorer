@@ -2,11 +2,12 @@
 //! The address bar: breadcrumbs, or an editable address.
 //!
 //! Ports `renderNavigation`, `editAddress` and `finishAddress` in
-//! `desktop/ui/app.js` with §4.2 of `native/docs/ui-spec.md`: chevron
-//! dividers as in Windows 11, crumbs that scroll sideways (a plain mouse
-//! wheel scrolls them) and stay scrolled to the current folder, so a deep
-//! path never widens the window. Clicking blank space or pressing Ctrl+L
-//! edits the address; leaving the entry returns to the breadcrumbs.
+//! `desktop/ui/app.js`: the location's icon, then crumbs divided by `/`
+//! (`\` on SMB, none after the `/` root) as the current app draws them.
+//! The crumbs scroll sideways (a plain mouse wheel scrolls them) and stay
+//! scrolled to the current folder, so a deep path never widens the
+//! window. Clicking blank space or pressing Ctrl+L edits the address;
+//! leaving the entry returns to the breadcrumbs.
 //!
 //! Each crumb activates `win.go-to`, names itself "Go to …" for screen
 //! readers, shows its full address as a tooltip and opens in a background
@@ -17,7 +18,8 @@ use gtk::gdk;
 use gtk::prelude::*;
 use ox_core::location::Crumb;
 
-use crate::icons::{self, Glyph};
+use crate::icons::{self, ArtKind, Glyph};
+use crate::theme::Appearance;
 
 use super::gestures;
 
@@ -46,6 +48,27 @@ pub(super) struct CrumbButton {
     pub crumb: Crumb,
     /// The full address, for the tooltip.
     pub address: String,
+    /// The `/` or `\\` drawn before the crumb, if any
+    /// ([`ox_core::location::crumb_divider`]).
+    pub divider_before: Option<&'static str>,
+}
+
+/// The icon at the start of the address bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AddressIcon {
+    /// A line glyph: a page, a network location or a device.
+    Glyph(Glyph),
+    /// The colour folder of local folders.
+    Folder,
+}
+
+/// How art is drawn: the appearance and the screen's scale factor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct ArtStyle {
+    /// Light or dark art.
+    pub appearance: Appearance,
+    /// The screen's scale factor.
+    pub scale: i32,
 }
 
 /// The address bar's widgets.
@@ -64,13 +87,20 @@ pub(super) struct AddressBar {
 impl AddressBar {
     /// An address bar that shows no location yet.
     pub fn new() -> Self {
-        let root = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-        root.add_css_class("address");
-        root.set_hexpand(true);
+        let root = gtk::Box::builder()
+            .spacing(10)
+            .hexpand(true)
+            .valign(gtk::Align::Center)
+            .css_classes(["address"])
+            .build();
         let icon = icons::glyph(Glyph::FolderLine, 17);
+        icon.add_css_class("address-icon");
         let entry = gtk::Entry::builder().hexpand(true).build();
-        entry.update_property(&[gtk::accessible::Property::Label("Folder location")]);
-        let crumbs = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        entry.update_property(&[gtk::accessible::Property::Label("Location")]);
+        let crumbs = gtk::Box::builder()
+            .spacing(2)
+            .css_classes(["breadcrumbs"])
+            .build();
         // External: scrollable without a visible bar, and never asking the
         // window to be as wide as the path.
         let crumb_scroll = gtk::ScrolledWindow::builder()
@@ -84,11 +114,13 @@ impl AddressBar {
         stack.add_named(&crumb_scroll, Some(AddressMode::Crumbs.name()));
         stack.add_named(&entry, Some(AddressMode::Entry.name()));
         let history = gtk::Button::builder()
-            .child(&icons::glyph(Glyph::Down, 16))
+            .child(&icons::glyph(Glyph::Down, 12))
             .tooltip_text("Edit location (Ctrl+L)")
             .action_name("win.location")
+            .valign(gtk::Align::Center)
             .css_classes(["address-chevron"])
             .build();
+        history.update_property(&[gtk::accessible::Property::Label("Edit location")]);
         root.append(&icon);
         root.append(&stack);
         root.append(&history);
@@ -165,8 +197,13 @@ impl AddressBar {
 
     /// Shows the location's crumbs, address text and icon. Text the user
     /// is typing is left alone.
-    pub fn show_location(&self, crumbs: &[CrumbButton], address: &str, glyph: Glyph) {
-        icons::set_glyph(&self.icon, glyph, 17);
+    pub fn show_location(&self, crumbs: &[CrumbButton], address: &str, icon: AddressIcon, style: ArtStyle) {
+        match icon {
+            AddressIcon::Glyph(glyph) => icons::set_glyph(&self.icon, glyph, 17),
+            AddressIcon::Folder => {
+                icons::set_art(&self.icon, ArtKind::Folder, 17, style.appearance, style.scale);
+            }
+        }
         self.root.set_tooltip_text(Some(&format!(
             "{address} · Click blank space or press Ctrl+L to edit"
         )));
@@ -178,10 +215,8 @@ impl AddressBar {
         }
         let last = crumbs.len().saturating_sub(1);
         for (index, crumb) in crumbs.iter().enumerate() {
-            if index > 0 {
-                let divider = icons::glyph(Glyph::Chevron, 11);
-                divider.add_css_class("crumb-divider");
-                self.crumbs.append(&divider);
+            if let Some(divider) = crumb.divider_before {
+                self.crumbs.append(&divider_label(divider));
             }
             let button = crumb_button(crumb);
             if index == last {
@@ -223,6 +258,16 @@ impl AddressBar {
     pub fn crumb_adjustment(&self) -> gtk::Adjustment {
         self.crumb_scroll.hadjustment()
     }
+}
+
+/// The `/` or `\\` between crumbs, hidden from screen readers as
+/// `aria-hidden` hides it in app.js.
+fn divider_label(text: &str) -> gtk::Label {
+    gtk::Label::builder()
+        .label(text)
+        .accessible_role(gtk::AccessibleRole::Presentation)
+        .css_classes(["crumb-divider"])
+        .build()
 }
 
 /// A crumb that opens its folder, named "Go to …" for screen readers.

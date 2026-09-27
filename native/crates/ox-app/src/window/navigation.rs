@@ -17,23 +17,25 @@ use ox_core::location::{self, is_device_location, parent_location, LocationError
 use crate::icons::{ArtKind, Glyph};
 use crate::locations::{self, Page};
 
-use super::address_bar::CrumbButton;
+use super::address_bar::{AddressIcon, ArtStyle, CrumbButton};
 use super::loading::LoadMode;
 use super::session::{TabId, TabPlacement};
 use super::tab_strip::{TabIcon, TabLabel};
 use super::BrowserWindow;
 
-/// The address-bar icon for a location (`address-icon` in app.js).
-fn address_glyph(uri: &str) -> Glyph {
+/// The address-bar icon for a location (`address-icon` in
+/// `renderNavigation`): the page's glyph, the network glyph for SMB, a
+/// phone for devices, else the colour folder.
+fn address_icon(uri: &str) -> AddressIcon {
     if let Some(page) = Page::from_uri(uri) {
-        return page.glyph();
+        return AddressIcon::Glyph(page.glyph());
     }
     if uri.starts_with("smb:") {
-        Glyph::Network
+        AddressIcon::Glyph(Glyph::Network)
     } else if is_device_location(uri) {
-        Glyph::Phone
+        AddressIcon::Glyph(Glyph::Phone)
     } else {
-        Glyph::FolderLine
+        AddressIcon::Folder
     }
 }
 
@@ -295,19 +297,28 @@ impl BrowserWindow {
         self.set_action_enabled("back", can_go_back);
         self.set_action_enabled("forward", can_go_forward);
         self.set_action_enabled("up", parent_location(&uri).is_some());
-        let crumbs: Vec<CrumbButton> = locations
-            .breadcrumbs(&uri)
-            .into_iter()
-            .map(|crumb| CrumbButton {
+        let breadcrumbs = locations.breadcrumbs(&uri);
+        let crumbs: Vec<CrumbButton> = breadcrumbs
+            .iter()
+            .enumerate()
+            .map(|(index, crumb)| CrumbButton {
                 address: locations.display_location(&crumb.uri),
-                crumb,
+                divider_before: location::crumb_divider(&uri, &breadcrumbs, index),
+                crumb: crumb.clone(),
             })
             .collect();
         let address = locations.display_location(&uri);
+        let style = ArtStyle {
+            appearance: self.skin().appearance(),
+            scale: self.scale_factor(),
+        };
         self.chrome()
             .address
-            .show_location(&crumbs, &address, address_glyph(&uri));
-        self.chrome().search.set_sensitive(Page::from_uri(&uri).is_none());
+            .show_location(&crumbs, &address, address_icon(&uri), style);
+        let search = &self.chrome().search;
+        search.set_folder_title(&locations.title_for(&uri));
+        search.set_enabled(Page::from_uri(&uri).is_none() && !is_device_location(&uri));
+        self.set_action_enabled("pin-folder", Page::from_uri(&uri).is_none());
         self.render_tabs();
         self.sidebar().select(&uri);
         self.render_landing();

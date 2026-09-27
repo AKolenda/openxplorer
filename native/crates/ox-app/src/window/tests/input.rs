@@ -34,7 +34,7 @@ fn press(test: &TestWindow, key: gdk::Key) -> bool {
 }
 
 fn hint(test: &TestWindow) -> String {
-    test.window.chrome().hint.text().to_string()
+    test.window.chrome().status.hint.text().to_string()
 }
 
 /// parity: SEL-020
@@ -86,7 +86,7 @@ fn leaving_the_view_starts_a_new_prefix() {
     let test = TestWindow::open(&fixture.uri());
     test.window.content().focus();
     test.window.type_text("n");
-    test.window.chrome().search.grab_focus();
+    test.window.chrome().search.entry.grab_focus();
     assert_eq!(hint(&test), "", "the prefix ended with the focus");
     test.window.content().focus();
     test.window.type_text("r");

@@ -114,6 +114,7 @@ impl BrowserWindow {
         self.install_selection_actions();
         self.install_view_actions();
         self.install_appearance_actions();
+        self.install_unported_actions();
     }
 
     fn install_tab_actions(&self) {
@@ -149,7 +150,7 @@ impl BrowserWindow {
             plain("refresh", BrowserWindow::refresh),
             plain("location", BrowserWindow::edit_address),
             plain("search", |window| {
-                window.chrome().search.grab_focus();
+                window.chrome().search.entry.grab_focus();
             }),
             with_text("go-to", BrowserWindow::navigate_or_report),
             with_text("mount-volume", BrowserWindow::mount_volume),
@@ -172,6 +173,8 @@ impl BrowserWindow {
             }),
             plain("pin-selected", BrowserWindow::pin_selected),
             plain("pin-folder", BrowserWindow::pin_folder),
+            plain("copy-path", BrowserWindow::copy_path),
+            plain("about", BrowserWindow::show_about),
             plain("context-menu", BrowserWindow::open_context_menu_from_keyboard),
         ]);
         self.set_action_enabled("open", false);
@@ -264,7 +267,7 @@ impl BrowserWindow {
     pub(super) fn show_view(&self, view: FolderView) {
         self.reset_typeahead();
         self.content().show_view(view);
-        self.chrome().show_view(view);
+        self.chrome().status.show_view(view);
     }
 }
 

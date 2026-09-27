@@ -289,7 +289,7 @@ impl BrowserWindow {
         }
         let matched_name = position.map(|position| self.content().model.name_at(position));
         let hint = typeahead_hint(result, matched_name.as_deref());
-        let label = &self.chrome().hint;
+        let label = &self.chrome().status.hint;
         label.set_text(&hint);
         if position.is_some() {
             label.remove_css_class("miss");
@@ -328,7 +328,7 @@ impl BrowserWindow {
         if let Some(timer) = timer {
             timer.remove();
         }
-        self.chrome().hint.set_text("");
+        self.chrome().status.hint.set_text("");
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;

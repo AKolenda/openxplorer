@@ -129,7 +129,39 @@ fn install_app_actions(app: &gtk::Application, desktop: &Rc<OnceCell<Desktop>>) 
             }
         ))
         .build();
-    app.add_action_entries([new_window]);
+    let focus_window = gio::ActionEntry::builder("focus-window")
+        .parameter_type(Some(glib::VariantTy::UINT32))
+        .activate(|app: &gtk::Application, _, target| {
+            if let Some(id) = target.and_then(glib::Variant::get::<u32>) {
+                focus_window(app, id);
+            }
+        })
+        .build();
+    let quit = gio::ActionEntry::builder("quit")
+        .activate(|app: &gtk::Application, _, _| close_every_window(app))
+        .build();
+    app.add_action_entries([new_window, focus_window, quit]);
+}
+
+/// Brings the window with `id` to the front (`focusWindow`), or says that
+/// it closed while its menu was open.
+fn focus_window(app: &gtk::Application, id: u32) {
+    if let Some(window) = app.window_by_id(id) {
+        window.present();
+        return;
+    }
+    if let Some(window) = active_window(app) {
+        window.notify("That window is no longer open.");
+    }
+}
+
+/// "Quit OpenXplorer": closes every window through its close request, so
+/// each one lets go of its tabs as a closed window does, and the
+/// application ends with the last one.
+fn close_every_window(app: &gtk::Application) {
+    for window in app.windows() {
+        window.close();
+    }
 }
 
 /// Accepts `--new-window` on the command line.

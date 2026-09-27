@@ -263,7 +263,7 @@ fn the_filter_and_hidden_files_change_what_is_listed_until_the_folder_changes() 
     test.activate("hidden", None);
     assert!(test.names().contains(&".private".to_owned()));
     test.activate("hidden", None);
-    let search = &test.window.chrome().search;
+    let search = &test.window.chrome().search.entry;
     search.set_text("notes 10");
     wait_until("the name filter", || test.names() == ["Notes 10.txt"]);
     test.window

@@ -116,7 +116,7 @@ pub struct Metrics {
 /// Rounds a layout measure up to whole pixels. Measures are a few hundred
 /// pixels at most, far inside `i32`.
 #[expect(clippy::cast_possible_truncation, reason = "layout measures are small")]
-fn ceil_pixels(value: f64) -> i32 {
+pub(crate) fn ceil_pixels(value: f64) -> i32 {
     value.ceil() as i32
 }
 

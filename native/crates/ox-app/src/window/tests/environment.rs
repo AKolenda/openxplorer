@@ -81,6 +81,22 @@ fn this_pc_lists_quick_access_devices_and_network_locations() {
     assert_eq!(landing::section_titles(landing), ["Connected & saved locations"]);
 }
 
+#[gtk::test]
+fn the_status_bar_says_ready_on_a_page_and_counts_a_folder() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(Page::ThisPc.uri());
+    assert_eq!(
+        test.window.chrome().status.texts(),
+        ("Ready".to_owned(), String::new())
+    );
+    test.window.navigate(&fixture.uri()).expect("the fixture folder");
+    test.wait_for_listing("the fixture folder");
+    test.window.folder_model().select_only(0);
+    let (count, selection) = test.window.chrome().status.texts();
+    assert_eq!(count, "4 items");
+    assert_eq!(selection, "1 selected");
+}
+
 /// parity: SIDE-005, SIDE-007
 #[gtk::test]
 fn pinning_the_current_folder_adds_it_to_quick_access() {

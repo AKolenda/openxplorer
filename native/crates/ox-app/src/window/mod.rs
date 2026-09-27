@@ -8,12 +8,16 @@
 //! input. Widgets run window actions (`win.go-to`, `win.select-tab`, ...),
 //! so the controller code does not reach into widget trees.
 
+mod about;
 mod actions;
 mod activation;
 mod address_bar;
+mod caption_buttons;
 mod chrome;
+mod command_bar;
 mod content;
 mod context_menu;
+mod copy_path;
 mod details_pane;
 mod empty_page;
 mod environment;
@@ -21,11 +25,17 @@ mod gestures;
 mod input;
 mod landing;
 mod loading;
+mod menu_popover;
 mod navigation;
 mod preferences;
+mod search_box;
 mod session;
 mod sidebar;
+mod status_bar;
+mod tab_layout;
 mod tab_strip;
+mod title_bar;
+mod unported;
 
 #[cfg(test)]
 mod tests;
@@ -40,10 +50,11 @@ use crate::shared::AppContext;
 use crate::theme::{Appearance, ListenerId, Skin};
 use crate::typeahead;
 
-use chrome::{Chrome, StatusSubject};
+use chrome::Chrome;
 use content::Content;
 use details_pane::DetailsPane;
 use sidebar::Sidebar;
+use status_bar::StatusSubject;
 
 pub(crate) use actions::install_accelerators;
 
@@ -295,12 +306,14 @@ impl BrowserWindow {
         }
         self.update_status();
         self.update_details_pane();
-        let exactly_one = self.content().model.summary().count == 1;
-        self.set_action_enabled("open", exactly_one);
+        let selected = self.content().model.summary().count;
+        self.set_action_enabled("open", selected == 1);
+        // Copy path copies one item, or the folder when none is selected.
+        self.set_action_enabled("copy-path", selected <= 1);
     }
 
     fn connect_filter(&self) {
-        self.chrome().search.connect_search_changed(glib::clone!(
+        self.chrome().search.entry.connect_search_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |search| {
@@ -328,7 +341,8 @@ impl BrowserWindow {
     fn appearance_changed(&self, appearance: Appearance) {
         self.content().icons.set_appearance(appearance);
         self.render_places();
-        self.render_tabs();
+        // Redraws the tabs' and the address bar's colour art too.
+        self.render_location();
         self.update_details_pane();
         self.show_appearance_choice();
     }
@@ -339,6 +353,7 @@ impl BrowserWindow {
         let preference = self.skin().preference();
         let appearance = self.skin().appearance();
         self.chrome()
+            .commands
             .show_appearance(appearance, &preference.tooltip(appearance));
         self.set_action_state("theme", &preference.key().to_variant());
     }
@@ -366,11 +381,11 @@ impl BrowserWindow {
         } else {
             StatusSubject::Folder {
                 shown: self.content().model.n_items(),
-                selected: self.content().model.summary(),
                 loading: self.is_loading(),
             }
         };
-        self.chrome().status.set_text(&chrome::status_text(subject));
+        let selected = self.content().model.summary();
+        self.chrome().status.show(subject, selected);
     }
 
     fn update_details_pane(&self) {

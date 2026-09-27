@@ -72,19 +72,19 @@ fn switching_views_keeps_the_selection_and_shows_the_active_view() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let chrome = test.window.chrome();
-    assert_eq!(chrome.active_view_buttons(), ["Details view"]);
+    assert_eq!(chrome.status.active_view_buttons(), ["Details view"]);
     test.window.folder_model().select_only(1);
     test.activate("view", Some("large"));
     assert_eq!(test.selected_names(), ["Notes 2.txt"]);
-    assert_eq!(chrome.active_view_buttons(), ["Large icons"]);
+    assert_eq!(chrome.status.active_view_buttons(), ["Large icons"]);
     test.activate("view", Some("small"));
     assert_eq!(
-        chrome.active_view_buttons(),
+        chrome.status.active_view_buttons(),
         ["Large icons"],
         "every icon size is the icon view"
     );
     test.activate("view", Some("details"));
-    assert_eq!(chrome.active_view_buttons(), ["Details view"]);
+    assert_eq!(chrome.status.active_view_buttons(), ["Details view"]);
 }
 
 #[gtk::test]
@@ -222,7 +222,7 @@ fn a_theme_chosen_in_one_window_reaches_every_window() {
     first.activate("theme", Some("dark"));
     assert_eq!(skin().appearance(), Appearance::Dark);
     assert_eq!(second.action_state("theme").as_deref(), Some("dark"));
-    let button = second.window.chrome().appearance_tooltip();
+    let button = second.window.chrome().commands.appearance_tooltip();
     assert_eq!(button.as_deref(), Some("Appearance: dark. Click to change."));
 }
 

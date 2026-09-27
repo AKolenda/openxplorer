@@ -38,53 +38,90 @@ window.ox scrollbar slider { background-color: alpha(@ox_text, .35); min-width: 
 window.ox scrollbar:hover slider { min-width: 6px; min-height: 6px; }
 
 /* ---- Title bar with the Explorer tab strip (style.css .titlebar/.tab) ---- */
+/* GTK's own theme gives a window's title bar a 46px height, 6px padding at
+   both ends and a line along the bottom. The Explorer title bar has none of
+   these: it is 42px of @ox_title from edge to edge, and the active tab runs
+   straight into the navigation row. */
+window.ox > .titlebar, window.ox > .titlebar:backdrop {
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
 .ox-titlebar { background-color: @ox_title; min-height: 42px; padding-left: 9px; }
-.ox-titlebar .tabs { margin-top: 8px; }
 .tab {
-  min-height: 34px;
-  min-width: 80px;
+  min-height: 35px;
   border-radius: 8px 8px 0 0;
-  padding: 0 6px 0 13px;
-  margin-right: 2px;
+  padding: 0 10px 0 13px;
 }
 .tab.active { background-color: @ox_chrome; box-shadow: 0 -1px 2px alpha(black, .012); }
 .tab:not(.active):hover { background-color: @ox_tab_hover; }
 .tab:focus-visible { outline: 2px solid @ox_accent; outline-offset: -2px; }
+/* The icon sits in a 19px box (.tab-icon-wrap), so titles start at x=50. */
+.tab > image:first-child { min-width: 19px; }
 .tab button.tab-close { min-width: 22px; min-height: 22px; }
-.ox-titlebar button.newtab { min-width: 38px; min-height: 34px; margin: 8px 3px 0 5px; }
-.ox-titlebar button.windows-button { min-width: 38px; min-height: 30px; margin: 6px 6px 0 0; }
-.ox-titlebar button.caption { min-width: 46px; border-radius: 0; }
+.ox-titlebar button.newtab { min-width: 38px; min-height: 34px; margin: 0 3px 0 5px; }
+.ox-titlebar .title-drag { min-width: 16px; }
+.ox-titlebar button.windows-button, .ox-titlebar menubutton.windows-button > button {
+  min-width: 35px;
+  min-height: 30px;
+  color: @ox_muted;
+}
+.ox-titlebar button.caption { min-width: 46px; min-height: 42px; border-radius: 0; }
 .ox-titlebar button.caption.close:hover { background-color: #c42b1c; color: white; }
 .ox-titlebar button.caption.close:active { background-color: #b0281a; color: white; }
+/* Without a compositor (a bare X server) GTK draws a solid frame around a
+   client-side decorated window instead of a shadow. Its border and padding
+   are where the window is resized, so they stay 4px wide. Inset shadows
+   paint the padding @ox_title beside the title bar, so no strip shows
+   beside the tabs, and @ox_border below it, like a window edge. The
+   title-colour band follows the title bar's height, which follows the text
+   size (src/theme/fonts.rs). */
+window.ox.solid-csd {
+  padding: 3px;
+  border: 1px solid @ox_border;
+  border-radius: 0;
+  box-shadow: inset 0 45px @ox_title, inset 0 0 0 3px @ox_border;
+}
 
 /* ---- Navigation row (style.css .navigation/.address/.search-wrap) ---- */
+/* 61px plus its line: 11px above and below a 39px band in which the 34px
+   buttons and fields are centred, as `align-items:center` centres them. */
 .navrow {
   background-color: @ox_chrome;
   border-bottom: 1px solid @ox_border;
   padding: 11px 16px 11px 13px;
-  min-height: 40px;
+  min-height: 39px;
 }
 .navrow .nav-buttons button { min-width: 34px; min-height: 34px; }
-.address, entry.search {
+.address, .search-wrap {
   background-color: @ox_bg;
   border: 1px solid @ox_border;
   border-bottom-color: @ox_field_bottom;
   border-radius: 5px;
   min-height: 32px;
-  box-shadow: none;
-  outline: none;
   color: @ox_text;
 }
-.address { padding: 0 6px 0 11px; }
-.address.editing, entry.search:focus-within {
+.address { padding: 0 8px 0 11px; min-width: 140px; }
+/* A 2px accent line under the focused field, drawn without changing its
+   height (`border-bottom:2px solid var(--accent)` in style.css). */
+.address:focus-within, .search-wrap:focus-within {
   border-bottom-color: @ox_accent;
   box-shadow: inset 0 -1px @ox_accent;
 }
-.address button.crumb { min-height: 28px; padding: 0 8px; }
-.address button.crumb.current { font-weight: normal; }
-.address button.crumb-arrow { min-height: 28px; min-width: 16px; padding: 0 2px; color: @ox_crumb_divider; }
-.address .crumb-overflow { min-height: 28px; padding: 0 6px; }
-.address button.address-chevron { min-width: 24px; min-height: 26px; color: @ox_muted; }
+.address button.crumb {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.address button.crumb:hover { background-color: @ox_hover; border-color: @ox_border; }
+.address button.crumb:focus-visible { background-color: @ox_hover; border-color: @ox_accent; outline: none; }
+.address .crumb-divider { color: @ox_muted; opacity: .7; padding: 0 1px; }
+.address button.address-chevron { min-width: 22px; min-height: 24px; }
 .address entry {
   border: none;
   background: none;
@@ -94,10 +131,20 @@ window.ox scrollbar:hover slider { min-width: 6px; min-height: 6px; }
   padding: 0;
   color: @ox_text;
 }
-entry.search { padding: 0 11px 0 12px; }
-entry.search > image { color: @ox_muted; }
-entry.search > text > placeholder { color: @ox_muted; }
-entry.search:disabled { opacity: .6; }
+.search-wrap { min-width: 233px; }
+.search-wrap entry {
+  border: none;
+  background: none;
+  box-shadow: none;
+  outline: none;
+  min-height: 32px;
+  padding: 0 9px 0 12px;
+  color: @ox_text;
+}
+.search-wrap entry > text > placeholder { color: @ox_placeholder; }
+.search-wrap entry > image { color: @ox_muted; }
+.search-wrap .search-icon { color: @ox_muted; margin-right: 11px; }
+.search-wrap:disabled { opacity: .6; }
 
 /* ---- Command bar (style.css .commandbar/.command/.separator) ---- */
 .commandbar {
@@ -106,12 +153,26 @@ entry.search:disabled { opacity: .6; }
   min-height: 54px;
   padding: 0 15px;
 }
-.commandbar button, .commandbar menubutton > button { min-height: 34px; min-width: 18px; padding: 0 10px; }
+/* 34px high; icon-only commands are 38px wide around an 18px glyph. */
+.commandbar button.command, .commandbar menubutton.command > button {
+  min-height: 34px;
+  min-width: 18px;
+  padding: 0 10px;
+}
 .commandbar button.text-command, .commandbar menubutton.text-command > button { padding: 0 11px; }
 .commandbar menubutton.new-command > button { padding: 0 10px 0 8px; }
-.commandbar button.toggled, .commandbar button:checked { background-color: @ox_selected; }
+.commandbar .chevron { color: @ox_muted; margin-left: 4px; }
 .commandbar separator { min-height: 20px; min-width: 1px; background-color: @ox_border; margin: 0 10px; }
-.chev { color: @ox_muted; margin-left: 4px; }
+.commandbar menubutton.theme-toggle > button { color: @ox_muted; margin-right: 6px; }
+.commandbar menubutton.theme-toggle > button:hover { color: @ox_text; }
+.commandbar button.settings-button { color: @ox_muted; margin-right: 3px; }
+.commandbar button.settings-button:hover { color: @ox_text; }
+/* A menu's button looks pressed only while pressed, not while its menu
+   is open, as in the current app. */
+.commandbar menubutton > button:checked { background: none; }
+.commandbar menubutton > button:checked:hover { background-color: @ox_hover; }
+.commandbar button.details-toggle:checked,
+.commandbar button.details-toggle:checked:hover { background-color: @ox_selected; }
 
 /* ---- Sidebar (style.css .sidebar/.side-entry) ---- */
 .sidebar { background-color: @ox_sidebar; }
@@ -272,33 +333,34 @@ gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_accent; }
   padding: 0 13px 0 19px;
   color: @ox_muted;
 }
-.statusbar button { min-width: 24px; min-height: 24px; color: @ox_muted; }
+/* 24px buttons 3px apart: the bar's 18px gap less `margin-left:-15px`. */
+.statusbar button { min-width: 24px; min-height: 24px; margin-left: -15px; color: @ox_muted; }
 .statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
+.statusbar .status-mode { letter-spacing: .01em; }
 
-/* ---- Menus: Windows-style popovers (style.css .menu) ---- */
-popover.menu.ox-menu > contents, popover.ox-popover > contents {
+/* ---- Menus (style.css .menu.win10, the classic style the app defaults to) ---- */
+popover.ox-menu > contents, popover.menu.ox-menu > contents, popover.ox-popover > contents {
   background-color: @ox_chrome;
   color: @ox_text;
   border: 1px solid @ox_border;
-  border-radius: 8px;
-  padding: 5px;
-  box-shadow: 0 7px 26px @ox_menu_shadow;
+  border-radius: 2px;
+  padding: 3px;
+  box-shadow: 0 5px 16px @ox_menu_shadow;
 }
-popover.menu.ox-menu > contents { min-width: 215px; }
-popover.menu.ox-menu modelbutton { min-height: 33px; padding: 0 11px; border-radius: 4px; color: @ox_text; }
+popover.ox-menu list { background: none; color: @ox_text; }
+popover.ox-menu list > row { padding: 0 9px; border-radius: 0; background: none; outline: none; }
+popover.ox-menu list > row:hover { background-color: @ox_hover; }
+popover.ox-menu list > row:focus-visible { background-color: @ox_selected; box-shadow: inset 0 0 0 1px @ox_accent; }
+popover.ox-menu list > row:disabled { opacity: .34; }
+popover.ox-menu list > row .shortcut { color: @ox_muted; padding-left: 12px; }
+popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-color: @ox_border; }
+/* The folder views' context menu until it becomes an ox-menu popover. */
+popover.menu.ox-menu > contents { min-width: 256px; }
+popover.menu.ox-menu modelbutton { min-height: 33px; padding: 0 9px; border-radius: 0; color: @ox_text; }
 popover.menu.ox-menu modelbutton:hover, popover.menu.ox-menu modelbutton:selected { background-color: @ox_hover; }
-popover.menu.ox-menu modelbutton:disabled { color: alpha(@ox_text, .4); }
-popover.menu.ox-menu modelbutton accelerator { color: @ox_muted; margin-left: 25px; }
-popover.menu.ox-menu modelbutton check, popover.menu.ox-menu modelbutton radio {
-  background: none;
-  border: none;
-  box-shadow: none;
-  color: @ox_accent;
-  min-width: 16px;
-  min-height: 16px;
-  margin-right: 8px;
-}
-popover.menu.ox-menu separator { margin: 5px 6px; background-color: @ox_border; min-height: 1px; }
+popover.menu.ox-menu modelbutton:disabled { color: alpha(@ox_text, .34); }
+popover.menu.ox-menu modelbutton accelerator { color: @ox_muted; margin-left: 12px; }
+popover.menu.ox-menu separator { margin: 4px 5px; background-color: @ox_border; min-height: 1px; }
 popover.ox-popover button.crumb-item { min-height: 30px; padding: 0 12px 0 8px; border-radius: 4px; }
 popover.ox-popover button.crumb-item:hover { background-color: @ox_hover; }
 popover.ox-popover label.empty { color: @ox_muted; padding: 6px 12px; }
@@ -308,4 +370,14 @@ tooltip.background {
   border: 1px solid @ox_border;
   border-radius: 4px;
   box-shadow: 0 2px 8px alpha(black, .15);
+}
+
+/* ---- Toast (style.css .toast) ---- */
+.toast {
+  background-color: @ox_text;
+  color: @ox_bg;
+  border-radius: 7px;
+  padding: 12px 20px;
+  margin-bottom: 48px;
+  box-shadow: 0 4px 18px alpha(black, .13);
 }
