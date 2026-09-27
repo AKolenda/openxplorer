@@ -114,27 +114,99 @@ fn uri_list_discards_comments_and_deduplicates_canonical_addresses() {
 /// parity: CLIP-005, SAFE-010
 #[test]
 fn invalid_external_payloads_fail_closed() {
-    let oversized = vec![b'x'; MAX_BYTES + 1];
-    for payload in [
-        b"".as_slice(),
-        b"\xff",
-        b"https://example.test/file",
-        b"smb://studio-nas/Shared",
-        b"smb://user:pass@nas/share/a",
-        b"file:///tmp/a%0Ab",
-        oversized.as_slice(),
-    ] {
-        assert!(decode(URI_LIST, payload, Some(b"1")).is_none());
+    let cases = refused_uri_lists().into_iter().chain(refused_other_formats());
+    for case in cases {
+        let decoded = decode(case.mime_type, &case.bytes, case.kde_cut_marker);
+        assert!(
+            decoded.is_none(),
+            "{} decoded despite {}",
+            case.mime_type,
+            case.reason
+        );
     }
-    assert!(decode("text/plain", ONE.as_bytes(), Some(b"1")).is_none());
-    assert!(decode(GNOME, format!("move\n{ONE}").as_bytes(), None).is_none());
-    assert!(decode(GNOME, b"cut\nsmb://nas/share", None).is_none());
-    assert!(decode(CUSTOM, b"{", None).is_none());
-    assert!(decode(CUSTOM, &oversized, None).is_none());
-    let too_many = std::iter::repeat_n(ONE, MAX_ITEMS + 1)
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(decode(URI_LIST, too_many.as_bytes(), None).is_none());
+}
+
+/// A payload that must not decode as a file list.
+struct RefusedPayload {
+    /// Why it is refused; printed if it decodes after all.
+    reason: &'static str,
+    /// The format the payload claims to be.
+    mime_type: &'static str,
+    /// The KDE cut marker read beside it.
+    kde_cut_marker: Option<&'static [u8]>,
+    /// The payload itself.
+    bytes: Vec<u8>,
+}
+
+impl RefusedPayload {
+    /// A [`URI_LIST`] payload, read with `kde_cut_marker`.
+    fn uri_list(reason: &'static str, kde_cut_marker: Option<&'static [u8]>, bytes: Vec<u8>) -> Self {
+        Self {
+            reason,
+            mime_type: URI_LIST,
+            kde_cut_marker,
+            bytes,
+        }
+    }
+}
+
+/// A KDE cut marker, which must not turn an invalid payload into a cut.
+const CUT_MARKER: Option<&[u8]> = Some(b"1");
+
+/// A payload one byte over [`MAX_BYTES`].
+fn oversized_payload() -> Vec<u8> {
+    vec![b'x'; MAX_BYTES + 1]
+}
+
+/// URI lists that are no file list, cut marker or not.
+fn refused_uri_lists() -> Vec<RefusedPayload> {
+    let too_many_items = vec![ONE; MAX_ITEMS + 1].join("\n").into_bytes();
+    vec![
+        RefusedPayload::uri_list("an empty payload", CUT_MARKER, Vec::new()),
+        RefusedPayload::uri_list("bytes that are not UTF-8", CUT_MARKER, b"\xff".to_vec()),
+        RefusedPayload::uri_list("a web address", CUT_MARKER, b"https://example.test/file".to_vec()),
+        RefusedPayload::uri_list("a share root", CUT_MARKER, b"smb://studio-nas/Shared".to_vec()),
+        RefusedPayload::uri_list("credentials", CUT_MARKER, b"smb://user:pass@nas/share/a".to_vec()),
+        RefusedPayload::uri_list("an encoded line break", CUT_MARKER, b"file:///tmp/a%0Ab".to_vec()),
+        RefusedPayload::uri_list("its size", CUT_MARKER, oversized_payload()),
+        RefusedPayload::uri_list("more than 200 items", None, too_many_items),
+    ]
+}
+
+/// Payloads of the other formats that are no file list.
+fn refused_other_formats() -> Vec<RefusedPayload> {
+    vec![
+        RefusedPayload {
+            reason: "being plain text",
+            mime_type: "text/plain",
+            kde_cut_marker: CUT_MARKER,
+            bytes: ONE.as_bytes().to_vec(),
+        },
+        RefusedPayload {
+            reason: "the unknown operation `move`",
+            mime_type: GNOME,
+            kde_cut_marker: None,
+            bytes: format!("move\n{ONE}").into_bytes(),
+        },
+        RefusedPayload {
+            reason: "a share root",
+            mime_type: GNOME,
+            kde_cut_marker: None,
+            bytes: b"cut\nsmb://nas/share".to_vec(),
+        },
+        RefusedPayload {
+            reason: "malformed JSON",
+            mime_type: CUSTOM,
+            kde_cut_marker: None,
+            bytes: b"{".to_vec(),
+        },
+        RefusedPayload {
+            reason: "its size",
+            mime_type: CUSTOM,
+            kde_cut_marker: None,
+            bytes: oversized_payload(),
+        },
+    ]
 }
 
 /// Ported from `desktop/tests/test_file_clipboard_interop.py::ExternalClipboardTests::test_custom_payload_keeps_priority_and_its_token`
@@ -185,7 +257,10 @@ fn external_fingerprint_matches_the_python_clipboard() {
     // Use the actual shipped decoder so token changes cannot silently break
     // cut consumption between Python and native windows.
     let files = decode(GNOME, b"cut\nfile:///tmp/a", None).expect("cut");
-    let script = "from file_clipboard import decode_clipboard, GNOME; print(decode_clipboard(GNOME, b'cut\\nfile:///tmp/a')['token'])";
+    let script = concat!(
+        "from file_clipboard import decode_clipboard, GNOME\n",
+        "print(decode_clipboard(GNOME, b'cut\\nfile:///tmp/a')['token'])",
+    );
     let desktop = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../desktop");
     let output = std::process::Command::new("python3")
         .current_dir(desktop)

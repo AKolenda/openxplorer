@@ -184,9 +184,10 @@ impl ClipboardFiles {
     /// Removes successfully moved items only when the paste still owns this
     /// cut.
     ///
-    /// Returns true if anything was removed. An empty result means the
-    /// caller can clear the clipboard after confirming that its owner is
-    /// still current.
+    /// Returns `true` if any URI was removed. When [`ClipboardFiles::uris`]
+    /// is empty afterwards, [`ClipboardFiles::encode`] publishes nothing and
+    /// the caller should clear the clipboard after confirming that its
+    /// owner is still current.
     pub fn consume(&mut self, token: &str, moved: &[String]) -> bool {
         // Safety rule (cut identity): a copy, or a clipboard that now holds
         // another selection, is never altered by an older paste.
