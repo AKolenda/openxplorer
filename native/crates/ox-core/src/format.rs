@@ -17,8 +17,32 @@ const UNKNOWN_DATE: &str = "—";
 /// Shown in the Properties dialog when a time is unknown.
 const UNKNOWN_TIMESTAMP: &str = "Not provided";
 
-/// Size units after bytes; values past 1024 TB stay in TB.
-const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+/// A size unit and the number of bytes in one of it.
+struct SizeUnit {
+    name: &'static str,
+    bytes: u128,
+}
+
+/// The units after bytes, in powers of 1024, smallest first. Sizes past
+/// 1024 TB stay in TB, as in `prettyBytes`.
+const SIZE_UNITS: [SizeUnit; 4] = [
+    SizeUnit {
+        name: "KB",
+        bytes: 1 << 10,
+    },
+    SizeUnit {
+        name: "MB",
+        bytes: 1 << 20,
+    },
+    SizeUnit {
+        name: "GB",
+        bytes: 1 << 30,
+    },
+    SizeUnit {
+        name: "TB",
+        bytes: 1 << 40,
+    },
+];
 
 /// `912 bytes`, `71.0 KB`, `130 KB`, `1.1 MB`: one decimal below 100 and
 /// none from 100 up, in powers of 1024.
@@ -27,22 +51,17 @@ const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
 /// and the arithmetic is exact, so every size gets the same text as in the
 /// web interface.
 pub fn pretty_bytes(bytes: u64) -> String {
-    if bytes < 1024 {
-        return format!("{bytes} bytes");
-    }
-    // `unit` is the index into UNITS; the value is bytes / 1024^(unit + 1).
-    let mut unit = 0;
-    while unit + 1 < UNITS.len() && u128::from(bytes) >= 1024u128.pow(unit as u32 + 2) {
-        unit += 1;
-    }
-    let divisor = 1024u128.pow(unit as u32 + 1);
+    // u128 keeps `bytes * 10` and the rounding exact for every u64 size.
     let bytes = u128::from(bytes);
-    if bytes >= 100 * divisor {
-        let whole = round_half_up(bytes, divisor);
-        format!("{whole} {}", UNITS[unit])
+    let Some(unit) = SIZE_UNITS.iter().rev().find(|unit| bytes >= unit.bytes) else {
+        return format!("{bytes} bytes");
+    };
+    if bytes >= 100 * unit.bytes {
+        let whole = round_half_up(bytes, unit.bytes);
+        format!("{whole} {}", unit.name)
     } else {
-        let tenths = round_half_up(bytes * 10, divisor);
-        format!("{}.{} {}", tenths / 10, tenths % 10, UNITS[unit])
+        let tenths = round_half_up(bytes * 10, unit.bytes);
+        format!("{}.{} {}", tenths / 10, tenths % 10, unit.name)
     }
 }
 
@@ -57,7 +76,7 @@ fn round_half_up(numerator: u128, denominator: u128) -> u128 {
 pub fn date_text(unix_seconds: u64) -> String {
     local_time(unix_seconds)
         .and_then(|time| format_date(&time))
-        .unwrap_or_else(|| UNKNOWN_DATE.to_string())
+        .unwrap_or_else(|| UNKNOWN_DATE.to_owned())
 }
 
 /// Local date and time for the Properties dialog's Created, Modified and
@@ -67,18 +86,18 @@ pub fn date_text(unix_seconds: u64) -> String {
 pub fn date_time_text(unix_seconds: u64) -> String {
     local_time(unix_seconds)
         .and_then(|time| format_date_time(&time))
-        .unwrap_or_else(|| UNKNOWN_TIMESTAMP.to_string())
+        .unwrap_or_else(|| UNKNOWN_TIMESTAMP.to_owned())
 }
 
-/// [`date_text`] for a time GIO already returned as a `DateTime`, in the
-/// time zone it carries. `None` if GLib cannot format it.
+/// [`date_text`] for a time GIO already returned as a [`DateTime`], in the
+/// time zone it carries. `None` if [`DateTime::format`] fails.
 pub fn format_date(time: &DateTime) -> Option<String> {
     let pattern = locale_pattern::date_pattern();
     time.format(&pattern).ok().map(String::from)
 }
 
-/// [`date_time_text`] for a time GIO already returned as a `DateTime`, in
-/// the time zone it carries. `None` if GLib cannot format it.
+/// [`date_time_text`] for a time GIO already returned as a [`DateTime`], in
+/// the time zone it carries. `None` if [`DateTime::format`] fails.
 pub fn format_date_time(time: &DateTime) -> Option<String> {
     let date = format_date(time)?;
     let pattern = locale_pattern::time_pattern();
@@ -87,7 +106,7 @@ pub fn format_date_time(time: &DateTime) -> Option<String> {
 }
 
 /// The local time for a Unix timestamp; `None` for zero, which the file
-/// listing uses for "unknown", and for times GLib cannot represent.
+/// listing uses for "unknown", and for times a [`DateTime`] cannot hold.
 fn local_time(unix_seconds: u64) -> Option<DateTime> {
     if unix_seconds == 0 {
         return None;
@@ -101,6 +120,8 @@ mod tests {
     use super::*;
 
     /// Ported from the size examples in `desktop/ui/app.js::prettyBytes`.
+    ///
+    /// parity: VIEW-003
     #[test]
     fn sizes_match_the_web_interface() {
         assert_eq!(pretty_bytes(0), "0 bytes");
@@ -121,6 +142,8 @@ mod tests {
 
     /// JavaScript's `toFixed` rounds exact halves up; Rust's formatter
     /// would round them to even. Values from running `prettyBytes` in Node.
+    ///
+    /// parity: VIEW-003
     #[test]
     fn halves_round_up_like_to_fixed() {
         assert_eq!(pretty_bytes(1280), "1.3 KB");
@@ -131,6 +154,8 @@ mod tests {
     }
 
     /// `prettyBytes` stops dividing at TB.
+    ///
+    /// parity: VIEW-003
     #[test]
     fn sizes_past_a_petabyte_stay_in_terabytes() {
         assert_eq!(pretty_bytes(1 << 50), "1024 TB");
@@ -151,6 +176,8 @@ mod tests {
     /// Without `setlocale` the process uses the C locale, whose `%x` is
     /// `%m/%d/%y`: the result is the US order with a four-digit year, as
     /// `toLocaleDateString` gives for `en-US`.
+    ///
+    /// parity: LOOK-026
     #[test]
     fn dates_follow_the_c_locale_with_a_full_year() {
         let time = DateTime::from_utc(2026, 9, 6, 19, 5, 7.0).expect("valid date");
