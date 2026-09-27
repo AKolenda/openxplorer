@@ -1,13 +1,15 @@
 # Native rewrite status and next milestones
 
 The native application is a GTK4 preview alongside the Python/WebKit desktop.
-It is not ready to replace the installed desktop application. This is a scoped
-implementation plan, not an exhaustive parity audit or a claim of visual or
-performance equivalence with the Python app or Dolphin.
+It is not ready to replace the installed desktop application. This document is
+the plan for getting there. The exhaustive list of behaviours the native app
+must provide is [parity/features.toml](parity/features.toml), and
+`python3 native/parity/check.py` reports how many are done. Nothing here claims
+visual or performance equivalence with the Python app or Dolphin.
 
 ## Current milestone: browse folders with the native foundation
 
-The core ports are organized by responsibility:
+The core ports are organised by responsibility:
 
 - [Locations](crates/ox-core/src/location.rs): canonical local, SMB and device
   addresses, validation, virtual places, breadcrumbs and display names.
@@ -34,7 +36,7 @@ its UI workflow has been implemented or verified.
 
 Tests include synthetic Python/JavaScript location fixtures, real temporary
 files, and Python/Rust settings round trips and lock exclusion in both
-directions. Those tests establish the behaviors they exercise. They do not
+directions. Those tests establish the behaviours they exercise. They do not
 establish native SMB, phone, Wayland drag-and-drop or assistive-technology parity.
 
 ## Next: complete safe file-operation workflows
@@ -58,7 +60,7 @@ through symlink ancestors and permanent deletion of remote directories. Those
 limits must be resolved or given an explicit product decision before replacing
 the existing desktop; passing simulated transfer tests does not close them.
 
-Behavioral sources: [operations.py](../desktop/operations.py),
+Behavioural sources: [operations.py](../desktop/operations.py),
 [file_clipboard.py](../desktop/file_clipboard.py),
 [native_file_drag.py](../desktop/native_file_drag.py),
 [native_file_drop.py](../desktop/native_file_drop.py),
@@ -70,7 +72,7 @@ Behavioral sources: [operations.py](../desktop/operations.py),
 Track each service independently; an existing Rust data model is not a completed
 service or UI:
 
-| Area | Work still needed before replacement | Existing behavior |
+| Area | Work still needed before replacement | Existing behaviour |
 | --- | --- | --- |
 | Network and devices | Mount/auth dialogs, credentials and sign-out, reconnect/errors, live discovery, unmount/eject, phone-specific validation | [auth_bridge.py](../desktop/auth_bridge.py), [session_credentials.py](../desktop/session_credentials.py), [volume_locations.py](../desktop/volume_locations.py), [mount_share.py](../desktop/mount_share.py) |
 | Search and metadata | Indexed/cached search, index lifecycle, live changes, folder-size jobs, full properties and open-with flows | [search_index.py](../desktop/search_index.py), [index_service.py](../desktop/index_service.py), [folder_sizes.py](../desktop/folder_sizes.py), [file_services.py](../desktop/file_services.py), [app_catalog.py](../desktop/app_catalog.py) |
@@ -80,19 +82,23 @@ service or UI:
 | Distribution | Packaging, runtime/dependency diagnostics, update flow, migration and rollback | [runtime_guard.py](../desktop/runtime_guard.py), [updater.py](../desktop/updater.py), [README](README.md) |
 
 The [Python bridge](../desktop/winspace.py) and
-[desktop UI](../desktop/ui/app.js) remain the behavioral references. Reconcile
-this roadmap against the bridge inventory and actual user workflows as ports
-land; this table intentionally does not enumerate every bridge command.
+[desktop UI](../desktop/ui/app.js) remain the behavioural references. This table
+groups the work; [parity/features.toml](parity/features.toml) and
+[parity/bridge.json](parity/bridge.json) enumerate every behaviour and bridge
+operation, so update their native status as ports land.
 
 ## Desktop usability baseline
 
 The requested minimum is Dolphin's functionality, usability and native desktop
-integration, while retaining the current OpenXplorer appearance. Compare against
-Dolphin during acceptance and inventory its workflows before declaring parity.
-This checklist records requirements, not completed comparisons:
+integration, while retaining the current OpenXplorer appearance refined toward
+Windows 11 File Explorer as specified in [docs/ui-spec.md](docs/ui-spec.md).
+The Dolphin baseline is inventoried in [parity/features.toml](parity/features.toml)
+(features with origin `dolphin`); `--gate dolphin` passes only when each of its
+must-haves is done or does not apply (`n-a`). This checklist records what
+acceptance must also compare, not completed comparisons:
 
 - Predictable keyboard navigation, focus restoration, selection, sorting,
-  address entry, breadcrumb navigation and tab/window behavior.
+  address entry, breadcrumb navigation and tab/window behaviour.
 - Responsive large-folder browsing, cancellation, external change refresh and
   clear offline/permission errors; measure startup and interaction latency.
 - Consistent details/icon views, thumbnails, scaling, light/dark appearance,
@@ -101,19 +107,21 @@ This checklist records requirements, not completed comparisons:
   with actual assistive technology and keyboard-only use.
 - Interoperable clipboard and drag/drop with other desktop applications on
   both Wayland and X11; document backend-specific limitations.
-- Inventory and implement remaining gains such as split panes, batch rename,
-  shared system thumbnails/bookmarks and richer preview/terminal integration.
+- Implement the gains the inventory lists, such as split panes, batch rename,
+  shared system thumbnails and bookmarks, and richer preview and terminal
+  integration.
 - Compare light/dark, details/icon, menu, sidebar and narrow-window captures
   against the existing OpenXplorer skin. Preserve its layout and interactions;
-  document any deliberate refinement instead of silently redesigning a surface.
+  refine only as [docs/ui-spec.md](docs/ui-spec.md) specifies, and document any
+  other deliberate refinement instead of silently redesigning a surface.
 
 ## Replacement and release gates
 
 1. All required Python workflows have an implemented native path, regression
    coverage, and a documented decision for any intentional difference.
 2. Run `python3 native/tools/check.py` for inventory consistency, formatting,
-   strict Clippy, core tests and real GTK integration tests in disposable
-   sessions. Python 3 is required by settings interop tests. Require
+   Clippy with the workspace lints, core tests and real GTK integration tests
+   in disposable sessions. Python 3 is required by settings interop tests. Require
    `python3 native/parity/check.py --require-replacement --gate replace --gate dolphin`
    before replacement (see [parity/README.md](parity/README.md)), plus the
    manual UI and Dolphin acceptance checks above.
