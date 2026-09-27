@@ -211,15 +211,15 @@ impl SamplePattern {
         self.fields.contains(&field)
     }
 
-    /// Appends the conversion of `field`. `None` when the pattern already
-    /// prints it: the sample is then ambiguous.
-    fn push_field(&mut self, field: Field) -> Option<()> {
+    /// Appends the conversion of `field`. False, and nothing appended, when
+    /// the pattern already prints `field`: the sample is then ambiguous.
+    fn push_field(&mut self, field: Field) -> bool {
         if self.has(field) {
-            return None;
+            return false;
         }
         self.fields.push(field);
         self.pattern.push_str(field.conversion());
-        Some(())
+        true
     }
 
     /// Appends a character the sample shows as written; `%` is escaped.
@@ -245,8 +245,17 @@ fn pattern_from_sample(
     let mut rest = sample;
     while let Some((token, after_token)) = next_token(rest, words) {
         match token {
-            Token::Digits(digits) => found.push_field(field_of_digits(digits)?)?,
-            Token::Word(field) => found.push_field(field)?,
+            Token::Digits(digits) => {
+                let field = field_of_digits(digits)?;
+                if !found.push_field(field) {
+                    return None;
+                }
+            }
+            Token::Word(field) => {
+                if !found.push_field(field) {
+                    return None;
+                }
+            }
             Token::Literal(character) => found.push_literal(character),
         }
         rest = after_token;
@@ -287,7 +296,7 @@ fn strip_word<'a>(text: &'a str, words: &[(&str, Field)]) -> Option<(Field, &'a 
     words
         .iter()
         .filter(|(word, _)| !word.is_empty())
-        .find_map(|&(word, field)| Some((field, text.strip_prefix(word)?)))
+        .find_map(|&(word, field)| text.strip_prefix(word).map(|rest| (field, rest)))
 }
 
 #[cfg(test)]
