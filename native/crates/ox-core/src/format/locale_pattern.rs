@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Locale-aware `strftime` patterns for numeric dates and clock times.
 //!
-//! The web UI called `toLocaleDateString(undefined, {year: 'numeric',
-//! month: '2-digit', day: '2-digit'})` and `toLocaleString()`. GLib has no
-//! such API, but its `%x` and `%X` conversions use the C library's
-//! `LC_TIME` formats. Those differ from the browser's in one way that
-//! matters: many locales write a two-digit year (`en_GB` is `%d/%m/%y`).
+//! The web UI (`dateText` and `timestamp` in `desktop/ui/app.js`)
+//! formatted dates with the browser's `toLocaleDateString` and
+//! `toLocaleString`, which follow the CLDR formats of the browser locale.
+//! `glib::DateTime` has no CLDR formats, but its `%x` and `%X` conversions
+//! use the C library's `LC_TIME` formats. Those differ from the browser's
+//! in one way that matters for the Date modified column: many locales
+//! write a two-digit year (`en_GB` is `%d/%m/%y`).
 //!
 //! So instead of `%x` itself, each pattern is derived from a sample: a
 //! reference time is formatted with `%x` (or `%X`), and every run of digits
 //! in the result is mapped back to the field it came from. The reference
 //! values are chosen so no two fields print the same digits. The locale's
 //! order and separators survive; the year becomes four digits and the
-//! month and day two, as in the web UI. When the sample holds anything
-//! unexpected (month names, era years, native digits) the ISO pattern is
-//! used instead.
+//! month and day two, as in the web UI's Date modified column. When the
+//! sample holds anything unexpected (month names, era years, native
+//! digits) the ISO pattern is used instead.
+
+use std::sync::OnceLock;
 
 use glib::DateTime;
 
@@ -29,32 +33,81 @@ const ISO_TIME: &str = "%H:%M:%S";
 /// or `1` in 12-hour ones.
 const REFERENCE: (i32, i32, i32, i32, i32, f64) = (2033, 11, 22, 13, 44, 55.0);
 
-/// The `strftime` pattern for the current locale's numeric date, with a
-/// four-digit year and two-digit month and day: `%m/%d/%Y` for `C` and
-/// `en_US`, `%d.%m.%Y` for `de_DE`, `%Y年%m月%d日` for `ja_JP`.
-pub(super) fn date_pattern() -> String {
-    locale_sample("%x")
-        .and_then(|sample| date_pattern_from_sample(&sample))
-        .unwrap_or_else(|| ISO_DATE.to_string())
+/// The `strftime` patterns for dates and clock times in one locale.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct LocalePatterns {
+    /// The numeric date with a four-digit year and two-digit month and day:
+    /// `%m/%d/%Y` for `C` and `en_US`, `%d.%m.%Y` for `de_DE`,
+    /// `%Y年%m月%d日` for `ja_JP`.
+    pub(super) date: String,
+    /// The clock time with seconds: `%H:%M:%S` for `C` and `de_DE`,
+    /// `%-I:%M:%S %p` for `en_US`. A time zone name in the locale's format
+    /// (`en_IN` has one) is left out, as browsers leave it out.
+    pub(super) time: String,
 }
 
-/// The `strftime` pattern for the current locale's clock time with
-/// seconds: `%H:%M:%S` for `C` and `de_DE`, `%-I:%M:%S %p` for `en_US`.
-/// A time zone name in the locale's format (`en_IN` has one) is left out,
-/// as browsers leave it out.
-pub(super) fn time_pattern() -> String {
-    let day_period = locale_sample("%p").unwrap_or_default();
-    let zone = locale_sample("%Z").unwrap_or_default();
-    locale_sample("%X")
-        .and_then(|sample| time_pattern_from_sample(&sample, &day_period, &zone))
-        .unwrap_or_else(|| ISO_TIME.to_string())
+impl LocalePatterns {
+    /// The patterns of the process's current `LC_TIME` locale.
+    pub(super) fn from_current_locale() -> Self {
+        Self::from_samples(&LocaleSamples::from_current_locale())
+    }
+
+    /// The patterns that `samples` show, or the ISO patterns for samples
+    /// that cannot be mapped to numbers.
+    pub(super) fn from_samples(samples: &LocaleSamples) -> Self {
+        let date = date_pattern_from_sample(&samples.date);
+        let time = time_pattern_from_sample(&samples.time, &samples.day_period, &samples.zone);
+        Self {
+            date: date.unwrap_or_else(|| ISO_DATE.to_string()),
+            time: time.unwrap_or_else(|| ISO_TIME.to_string()),
+        }
+    }
 }
 
-/// The reference time formatted with `conversion` in the current locale.
-fn locale_sample(conversion: &str) -> Option<String> {
-    let (year, month, day, hour, minute, seconds) = REFERENCE;
-    let reference = DateTime::from_utc(year, month, day, hour, minute, seconds).ok()?;
-    reference.format(conversion).ok().map(String::from)
+/// The reference time as one locale prints it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(super) struct LocaleSamples {
+    /// `%x`, the numeric date: `11/22/2033` in `en_US`.
+    pub(super) date: String,
+    /// `%X`, the clock time: `01:44:55 PM` in `en_US`.
+    pub(super) time: String,
+    /// `%p`, the afternoon marker: `PM` in `en_US`, empty in `de_DE`.
+    pub(super) day_period: String,
+    /// `%Z`, the time zone name, which the time pattern leaves out.
+    pub(super) zone: String,
+}
+
+impl LocaleSamples {
+    /// The samples in the process's current `LC_TIME` locale. A sample
+    /// that cannot be produced stays empty, which selects the ISO pattern.
+    fn from_current_locale() -> Self {
+        let (year, month, day, hour, minute, seconds) = REFERENCE;
+        let Ok(reference) = DateTime::from_utc(year, month, day, hour, minute, seconds) else {
+            return Self::default();
+        };
+        let sample = |conversion: &str| {
+            let formatted = reference.format(conversion);
+            formatted.map(String::from).unwrap_or_default()
+        };
+        Self {
+            date: sample("%x"),
+            time: sample("%X"),
+            day_period: sample("%p"),
+            zone: sample("%Z"),
+        }
+    }
+}
+
+/// The patterns of the process's `LC_TIME` locale, derived on the first
+/// call and then kept, because deriving them costs more than formatting a
+/// date and the locale does not change while the app runs.
+///
+/// GTK sets the process locale from the environment in `gtk::init`,
+/// before any widget can show a date. A call before that would keep the
+/// C locale's patterns for the rest of the process.
+pub(super) fn current() -> &'static LocalePatterns {
+    static PATTERNS: OnceLock<LocalePatterns> = OnceLock::new();
+    PATTERNS.get_or_init(LocalePatterns::from_current_locale)
 }
 
 /// Maps the digits of a formatted reference date back to `%Y`, `%m` and
@@ -171,6 +224,8 @@ mod tests {
     use super::*;
 
     /// Samples are `%x` of 2033-11-22 as glibc locales print it.
+    ///
+    /// parity: LOOK-026
     #[test]
     fn date_patterns_keep_the_locale_order_with_a_full_year() {
         let cases = [
@@ -207,6 +262,8 @@ mod tests {
     }
 
     /// Samples are `%X` of 13:44:55 UTC with the locale's `%p`.
+    ///
+    /// parity: LOOK-026
     #[test]
     fn time_patterns_follow_the_locale_clock() {
         let cases = [
@@ -229,10 +286,24 @@ mod tests {
         assert_eq!(time_pattern_from_sample("13 Uhr", "", "UTC"), None);
     }
 
+    #[test]
+    fn samples_that_cannot_be_mapped_select_the_iso_patterns() {
+        let samples = LocaleSamples {
+            date: "22 Nov 2033".to_string(),
+            time: "13 Uhr".to_string(),
+            ..LocaleSamples::default()
+        };
+        let patterns = LocalePatterns::from_samples(&samples);
+        assert_eq!(patterns.date, ISO_DATE);
+        assert_eq!(patterns.time, ISO_TIME);
+    }
+
     /// The test process never calls `setlocale`, so it runs in the C locale.
     #[test]
     fn the_c_locale_gives_the_us_order() {
-        assert_eq!(date_pattern(), "%m/%d/%Y");
-        assert_eq!(time_pattern(), "%H:%M:%S");
+        let patterns = LocalePatterns::from_current_locale();
+        assert_eq!(patterns.date, "%m/%d/%Y");
+        assert_eq!(patterns.time, "%H:%M:%S");
+        assert_eq!(current(), &patterns);
     }
 }

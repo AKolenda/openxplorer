@@ -1,15 +1,40 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Text formatting shared by the list, status bar and dialogs.
 //!
-//! Ports `prettyBytes`, `dateText` and the Properties dialog's `timestamp`
-//! from `desktop/ui/app.js`. Dates follow the user's `LC_TIME` locale the
-//! way the web UI followed the browser locale: the order and separators of
-//! the locale's numeric date, with a four-digit year and two-digit month
-//! and day. See [`locale_pattern`] for how the pattern is found.
+//! Ports `prettyBytes` and `dateText` from `desktop/ui/app.js`, and
+//! replaces its Properties dialog `timestamp`.
+//!
+//! Dates follow the user's `LC_TIME` locale as the web UI followed the
+//! browser locale: the order and separators of the locale's numeric date,
+//! with a four-digit year and two-digit month and day. The order and
+//! separators come from the C library; see [`locale_pattern`]. In most
+//! locales that is exactly the web UI's Date modified text (`09/21/2026`
+//! in `en_US`, `21.09.2026` in `de_DE`). Where the C library separates the
+//! fields differently from the browser, its separators win (`2026年09月21日`
+//! in `ja_JP`, where the browser wrote `2026/09/21`).
+//!
+//! The locale's patterns are read on the first call and kept for the life
+//! of the process. GTK sets the process locale in `gtk::init`, so format
+//! dates only after that.
+//!
+//! # Properties timestamps: a deliberate change
+//!
+//! The web UI's `timestamp` used the browser's `toLocaleString()`. Its
+//! CLDR formats drop the zero padding in some locales
+//! (`9/21/2026, 2:13:20 PM` in `en-US`, `21.9.2026, 14:13:20` in `de-DE`),
+//! have no comma in others (`21/09/2026 14:13:20` in `fr-FR`) and spell the
+//! day period their own way (`p.m.` in `en-CA`). `glib::DateTime` and the C
+//! library have no CLDR data, so [`date_time_text`] shows the Date modified
+//! text, a comma and the locale's clock time instead:
+//! `09/21/2026, 2:13:20 PM`. The Properties dialog and the file list then
+//! show a date the same way. Matching the browser exactly would need CLDR
+//! data from ICU.
 
 mod locale_pattern;
 
 use glib::DateTime;
+
+use locale_pattern::LocalePatterns;
 
 /// Shown in the Date modified column when a time is unknown.
 const UNKNOWN_DATE: &str = "—";
@@ -30,20 +55,21 @@ pub fn pretty_bytes(bytes: u64) -> String {
     if bytes < 1024 {
         return format!("{bytes} bytes");
     }
-    // `unit` is the index into UNITS; the value is bytes / 1024^(unit + 1).
-    let mut unit = 0;
-    while unit + 1 < UNITS.len() && u128::from(bytes) >= 1024u128.pow(unit as u32 + 2) {
-        unit += 1;
-    }
-    let divisor = 1024u128.pow(unit as u32 + 1);
     let bytes = u128::from(bytes);
+    // The size in UNITS[unit] is bytes / divisor.
+    let mut unit = 0;
+    let mut divisor: u128 = 1024;
+    while unit + 1 < UNITS.len() && bytes >= divisor * 1024 {
+        unit += 1;
+        divisor *= 1024;
+    }
+    let unit = UNITS[unit];
     if bytes >= 100 * divisor {
         let whole = round_half_up(bytes, divisor);
-        format!("{whole} {}", UNITS[unit])
-    } else {
-        let tenths = round_half_up(bytes * 10, divisor);
-        format!("{}.{} {}", tenths / 10, tenths % 10, UNITS[unit])
+        return format!("{whole} {unit}");
     }
+    let tenths = round_half_up(bytes * 10, divisor);
+    format!("{}.{} {unit}", tenths / 10, tenths % 10)
 }
 
 /// `numerator / denominator` rounded to the nearest integer, halves up.
@@ -52,8 +78,8 @@ fn round_half_up(numerator: u128, denominator: u128) -> u128 {
 }
 
 /// Local date for the Date modified column, for example `09/26/2026` in
-/// the US, `26.09.2026` in Germany or `2026/09/26` in Japan; `—` when the
-/// time is unknown (zero) or out of range.
+/// the US, `26.09.2026` in Germany or `2026年09月26日` in Japan; `—` when
+/// the time is unknown (zero) or out of range.
 pub fn date_text(unix_seconds: u64) -> String {
     local_time(unix_seconds)
         .and_then(|time| format_date(&time))
@@ -61,33 +87,41 @@ pub fn date_text(unix_seconds: u64) -> String {
 }
 
 /// Local date and time for the Properties dialog's Created, Modified and
-/// Accessed rows, for example `09/26/2026, 7:35:35 PM` in the US or
-/// `26.09.2026, 19:35:35` in Germany; `Not provided` when the time is
-/// unknown (zero) or out of range.
+/// Accessed rows: the [`date_text`] date and the locale's clock time, for
+/// example `09/26/2026, 7:35:35 PM` in the US or `26.09.2026, 19:35:35` in
+/// Germany; `Not provided` when the time is unknown (zero) or out of range.
+/// See the module documentation for how this differs from the web UI.
 pub fn date_time_text(unix_seconds: u64) -> String {
     local_time(unix_seconds)
         .and_then(|time| format_date_time(&time))
         .unwrap_or_else(|| UNKNOWN_TIMESTAMP.to_string())
 }
 
-/// [`date_text`] for a time GIO already returned as a `DateTime`, in the
-/// time zone it carries. `None` if GLib cannot format it.
+/// [`date_text`] for a time GIO already returned as a [`DateTime`], in the
+/// time zone it carries. `None` if it cannot be formatted.
 pub fn format_date(time: &DateTime) -> Option<String> {
-    let pattern = locale_pattern::date_pattern();
-    time.format(&pattern).ok().map(String::from)
+    date_with(time, locale_pattern::current())
 }
 
-/// [`date_time_text`] for a time GIO already returned as a `DateTime`, in
-/// the time zone it carries. `None` if GLib cannot format it.
+/// [`date_time_text`] for a time GIO already returned as a [`DateTime`], in
+/// the time zone it carries. `None` if it cannot be formatted.
 pub fn format_date_time(time: &DateTime) -> Option<String> {
-    let date = format_date(time)?;
-    let pattern = locale_pattern::time_pattern();
-    let clock = time.format(&pattern).ok()?;
+    date_time_with(time, locale_pattern::current())
+}
+
+fn date_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
+    let date = time.format(&patterns.date).ok()?;
+    Some(date.into())
+}
+
+fn date_time_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
+    let date = date_with(time, patterns)?;
+    let clock = time.format(&patterns.time).ok()?;
     Some(format!("{date}, {clock}"))
 }
 
 /// The local time for a Unix timestamp; `None` for zero, which the file
-/// listing uses for "unknown", and for times GLib cannot represent.
+/// listing uses for "unknown", and for times `glib::DateTime` cannot represent.
 fn local_time(unix_seconds: u64) -> Option<DateTime> {
     if unix_seconds == 0 {
         return None;
@@ -98,9 +132,93 @@ fn local_time(unix_seconds: u64) -> Option<DateTime> {
 
 #[cfg(test)]
 mod tests {
+    use super::locale_pattern::LocaleSamples;
     use super::*;
 
+    /// One locale's samples of the reference time in [`locale_pattern`], as
+    /// glibc 2.39 prints them, and the texts for 2026-09-21 14:13:20 UTC.
+    struct LocaleCase {
+        locale: &'static str,
+        /// `%x`.
+        date_sample: &'static str,
+        /// `%X`.
+        time_sample: &'static str,
+        /// `%p`.
+        day_period: &'static str,
+        /// The web UI's `dateText` for this locale, from Node.js 24.21
+        /// (ICU 78.3, CLDR 48): the Date modified column.
+        column: &'static str,
+        /// [`date_time_text`]. The comment above each case has the web
+        /// UI's `timestamp`, from the same Node.js.
+        properties: &'static str,
+    }
+
+    impl LocaleCase {
+        fn patterns(&self) -> LocalePatterns {
+            LocalePatterns::from_samples(&LocaleSamples {
+                date: self.date_sample.to_string(),
+                time: self.time_sample.to_string(),
+                day_period: self.day_period.to_string(),
+                zone: "UTC".to_string(),
+            })
+        }
+    }
+
+    const LOCALE_CASES: [LocaleCase; 5] = [
+        // Web UI: 9/21/2026, 2:13:20 PM
+        LocaleCase {
+            locale: "en_US",
+            date_sample: "11/22/2033",
+            time_sample: "01:44:55 PM",
+            day_period: "PM",
+            column: "09/21/2026",
+            properties: "09/21/2026, 2:13:20 PM",
+        },
+        // Web UI: 2026-09-21, 2:13:20 p.m.
+        LocaleCase {
+            locale: "en_CA",
+            date_sample: "2033-11-22",
+            time_sample: "01:44:55 PM",
+            day_period: "PM",
+            column: "2026-09-21",
+            properties: "2026-09-21, 2:13:20 PM",
+        },
+        // Web UI: 21/09/2026, 14:13:20
+        LocaleCase {
+            locale: "en_GB",
+            date_sample: "22/11/33",
+            time_sample: "13:44:55",
+            day_period: "pm",
+            column: "21/09/2026",
+            properties: "21/09/2026, 14:13:20",
+        },
+        // Web UI: 21.9.2026, 14:13:20
+        LocaleCase {
+            locale: "de_DE",
+            date_sample: "22.11.2033",
+            time_sample: "13:44:55",
+            day_period: "",
+            column: "21.09.2026",
+            properties: "21.09.2026, 14:13:20",
+        },
+        // Web UI: 21/09/2026 14:13:20
+        LocaleCase {
+            locale: "fr_FR",
+            date_sample: "22/11/2033",
+            time_sample: "13:44:55",
+            day_period: "",
+            column: "21/09/2026",
+            properties: "21/09/2026, 14:13:20",
+        },
+    ];
+
+    fn september_21() -> DateTime {
+        DateTime::from_utc(2026, 9, 21, 14, 13, 20.0).expect("valid date")
+    }
+
     /// Ported from the size examples in `desktop/ui/app.js::prettyBytes`.
+    ///
+    /// parity: VIEW-003
     #[test]
     fn sizes_match_the_web_interface() {
         assert_eq!(pretty_bytes(0), "0 bytes");
@@ -121,6 +239,8 @@ mod tests {
 
     /// JavaScript's `toFixed` rounds exact halves up; Rust's formatter
     /// would round them to even. Values from running `prettyBytes` in Node.
+    ///
+    /// parity: VIEW-003
     #[test]
     fn halves_round_up_like_to_fixed() {
         assert_eq!(pretty_bytes(1280), "1.3 KB");
@@ -151,6 +271,8 @@ mod tests {
     /// Without `setlocale` the process uses the C locale, whose `%x` is
     /// `%m/%d/%y`: the result is the US order with a four-digit year, as
     /// `toLocaleDateString` gives for `en-US`.
+    ///
+    /// parity: VIEW-001
     #[test]
     fn dates_follow_the_c_locale_with_a_full_year() {
         let time = DateTime::from_utc(2026, 9, 6, 19, 5, 7.0).expect("valid date");
@@ -158,6 +280,30 @@ mod tests {
         assert_eq!(format_date_time(&time).as_deref(), Some("09/06/2026, 19:05:07"));
     }
 
+    /// The Date modified column shows what the web UI's `dateText` showed.
+    ///
+    /// parity: VIEW-001, LOOK-026
+    #[test]
+    fn column_dates_match_the_web_ui_in_each_locale() {
+        for case in &LOCALE_CASES {
+            let date = date_with(&september_21(), &case.patterns());
+            assert_eq!(date.as_deref(), Some(case.column), "{}", case.locale);
+        }
+    }
+
+    /// The deliberate change from the web UI's `timestamp`, described in
+    /// the module documentation.
+    ///
+    /// parity: LOOK-026
+    #[test]
+    fn properties_timestamps_add_the_locale_clock_to_the_column_date() {
+        for case in &LOCALE_CASES {
+            let timestamp = date_time_with(&september_21(), &case.patterns());
+            assert_eq!(timestamp.as_deref(), Some(case.properties), "{}", case.locale);
+        }
+    }
+
+    /// parity: VIEW-001
     #[test]
     fn local_dates_are_formatted() {
         let text = date_text(1_790_000_000);
