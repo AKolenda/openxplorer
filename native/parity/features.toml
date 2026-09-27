@@ -8507,6 +8507,24 @@ native = "todo"
 native_note = "Porting notes: OpenXplorer deliberately treats plain text as not a file clipboard. Must never turn arbitrary text into a file list (existing safety rule)."
 
 [[feature]]
+id = "CLIP-016"
+area = "CLIP"
+title = "A clipboard without files never crashes and leaves Paste disabled"
+behaviour = "Reading the desktop clipboard when it holds no file list (plain text, an image, or nothing) yields 'no file clipboard': Paste stays disabled and nothing is reported. A text/uri-list without an x-kde-cutselection marker is an ordinary copy. A failed or empty format conversion is treated as absent data and never dereferenced, so focusing the window or another application changing the clipboard can never crash the app. Regression for GitHub issue #20: 1.1.4 segfaulted inside PyGObject on KDE Plasma (Wayland) when GTK returned selection data with length -1."
+origin = ["openxplorer"]
+priority = "must"
+openxplorer = "partial"
+sources = [
+  "desktop/file_clipboard.py:126-149",
+  "https://github.com/AKolenda/openxplorer/issues/20",
+]
+python_tests = ["desktop/tests/test_v05.py::ClipboardTests::test_plain_text_is_not_file_clipboard"]
+bridge = ["clipboardGet"]
+gnome = "gdk::Clipboard: check formats() for a file-list MIME type, then read_future; a missing format or a read error means no file clipboard"
+native = "todo"
+native_note = "Native clipboard reading lands with the file-operations milestone. Its tests must cover a text-only clipboard, an empty clipboard, a uri-list without the KDE marker, and an owner change during the read."
+
+[[feature]]
 id = "DND-001"
 area = "DND"
 title = "Drag files and folders out to other applications"
