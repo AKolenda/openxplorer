@@ -9,7 +9,7 @@
 //! from the server browser, but not renamed or sent to the Trash there.
 
 use super::EntryKind;
-use crate::location::{normalise, split_location};
+use crate::location::{normalise, split_location, LocationParts};
 
 /// Type column text for an SMB share in a server listing.
 const NETWORK_SHARE: &str = "Network share";
@@ -58,28 +58,19 @@ pub(super) fn classify_entry(item: &ItemMetadata<'_>) -> Classification {
     let target = followable_target(item);
     let is_dir = is_navigable(item, target.as_deref());
     let is_virtual = has_virtual_kind(item.kind) || item.is_virtual;
-    let is_real_item = matches!(
-        item.kind,
-        EntryKind::Directory | EntryKind::File | EntryKind::Symlink
-    );
-    let folder_type = if !is_dir {
-        None
-    } else if item.kind == EntryKind::Mountable && is_smb(item.uri) {
-        Some(NETWORK_SHARE)
-    } else if is_virtual {
-        Some(NETWORK_LOCATION)
-    } else {
-        Some(FILE_FOLDER)
-    };
     // A navigable share or server opens its validated target, or itself
     // when the backend named none.
-    let target_uri = (is_dir && is_virtual).then(|| target.unwrap_or_else(|| item.uri.to_owned()));
+    let target_uri = if is_dir && is_virtual {
+        Some(target.unwrap_or_else(|| item.uri.to_owned()))
+    } else {
+        None
+    };
     Classification {
         is_dir,
         is_virtual,
-        can_operate: is_real_item && !is_virtual,
+        can_operate: has_real_kind(item.kind) && !is_virtual,
         target_uri,
-        folder_type,
+        folder_type: is_dir.then(|| folder_type(item, is_virtual)),
     }
 }
 
@@ -88,6 +79,24 @@ fn has_virtual_kind(kind: EntryKind) -> bool {
     matches!(kind, EntryKind::Mountable | EntryKind::Shortcut)
 }
 
+/// Folders, files and links are the items that copy, move, rename and
+/// trash act on; device nodes, shares and shortcuts are not.
+fn has_real_kind(kind: EntryKind) -> bool {
+    matches!(kind, EntryKind::Directory | EntryKind::File | EntryKind::Symlink)
+}
+
+/// Type column text for a navigable item.
+fn folder_type(item: &ItemMetadata<'_>, is_virtual: bool) -> &'static str {
+    if item.kind == EntryKind::Mountable && is_smb(item.uri) {
+        NETWORK_SHARE
+    } else if is_virtual {
+        NETWORK_LOCATION
+    } else {
+        FILE_FOLDER
+    }
+}
+
+/// True for an `smb://` address.
 fn is_smb(uri: &str) -> bool {
     split_location(uri).is_ok_and(|parts| parts.scheme == "smb")
 }
@@ -119,7 +128,8 @@ fn is_navigable(item: &ItemMetadata<'_>, target: Option<&str>) -> bool {
         EntryKind::Directory => true,
         EntryKind::Unknown => has_folder_mime_type,
         EntryKind::Mountable | EntryKind::Shortcut => {
-            (target.is_some() && has_folder_mime_type) || is_mountable_smb_share(item, target)
+            let leads_to_a_folder = target.is_some() && has_folder_mime_type;
+            leads_to_a_folder || is_mountable_smb_share(item, target)
         }
         EntryKind::File | EntryKind::Symlink | EntryKind::Special => false,
     }
@@ -136,13 +146,19 @@ fn is_mountable_smb_share(item: &ItemMetadata<'_>, target: Option<&str>) -> bool
     if item.kind != EntryKind::Mountable {
         return false;
     }
-    let Ok(source) = split_location(item.uri) else {
-        return false;
-    };
-    let names_a_share =
-        source.scheme == "smb" && !source.netloc.is_empty() && !source.path.trim_matches('/').is_empty();
     let target_was_refused = backend_target(item).is_some() && target.is_none();
-    names_a_share && !target_was_refused
+    if target_was_refused {
+        return false;
+    }
+    split_location(item.uri).is_ok_and(|source| names_an_smb_share(&source))
+}
+
+/// True for `smb://server/share` and the folders below it: an SMB address
+/// with both a server and a path.
+fn names_an_smb_share(source: &LocationParts) -> bool {
+    let has_server = !source.netloc.is_empty();
+    let has_share_name = !source.path.trim_matches('/').is_empty();
+    source.scheme == "smb" && has_server && has_share_name
 }
 
 #[cfg(test)]
@@ -153,8 +169,9 @@ mod tests {
     use super::*;
     use EntryKind::{Directory, File, Mountable, Shortcut, Unknown};
 
-    const DIRECTORY_MIME: Option<&str> = Some("inode/directory");
+    const DIRECTORY_MIME: Option<&str> = Some(FOLDER_MIME_TYPE);
 
+    /// Classifies an item the backend did not flag as virtual.
     fn classify(
         kind: EntryKind,
         uri: &str,
@@ -170,73 +187,73 @@ mod tests {
         })
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_smb_share_is_navigable_not_a_mutable_regular_directory`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_smb_share_is_navigable_not_a_mutable_regular_directory`
     ///
     /// parity: NET-003
     #[test]
     fn smb_share_is_navigable_not_a_mutable_regular_directory() {
-        let e = classify(
+        let share = classify(
             Mountable,
             "smb://nas/work",
             DIRECTORY_MIME,
             Some("smb://NAS/work"),
         );
-        assert!(e.is_dir);
-        assert!(e.is_virtual);
-        assert!(!e.can_operate);
-        assert_eq!(e.target_uri.as_deref(), Some("smb://nas/work"));
-        assert_eq!(e.folder_type, Some("Network share"));
+        assert!(share.is_dir);
+        assert!(share.is_virtual);
+        assert!(!share.can_operate);
+        assert_eq!(share.target_uri.as_deref(), Some("smb://nas/work"));
+        assert_eq!(share.folder_type, Some("Network share"));
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_shortcut_server_uses_real_target`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_shortcut_server_uses_real_target`
     ///
     /// parity: NET-003
     #[test]
     fn shortcut_server_uses_real_target() {
-        let e = classify(
+        let server = classify(
             Shortcut,
             "smb://workgroup/ALPHA",
             DIRECTORY_MIME,
             Some("smb://ALPHA/"),
         );
-        assert!(e.is_dir);
-        assert_eq!(e.target_uri.as_deref(), Some("smb://alpha/"));
-        assert_eq!(e.folder_type, Some("Network location"));
+        assert!(server.is_dir);
+        assert_eq!(server.target_uri.as_deref(), Some("smb://alpha/"));
+        assert_eq!(server.folder_type, Some("Network location"));
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_normal_smb_directory`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_normal_smb_directory`
     ///
     /// parity: NET-003
     #[test]
-    fn normal_smb_directory() {
-        let e = classify(Directory, "smb://nas/work/Design", DIRECTORY_MIME, None);
-        assert!(e.is_dir);
-        assert!(!e.is_virtual);
-        assert!(e.can_operate);
-        assert_eq!(e.target_uri, None);
-        assert_eq!(e.folder_type, Some("File folder"));
+    fn folder_inside_a_share_is_an_ordinary_operable_folder() {
+        let folder = classify(Directory, "smb://nas/work/Design", DIRECTORY_MIME, None);
+        assert!(folder.is_dir);
+        assert!(!folder.is_virtual);
+        assert!(folder.can_operate);
+        assert_eq!(folder.target_uri, None);
+        assert_eq!(folder.folder_type, Some("File folder"));
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_local_directory`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_local_directory`
     ///
     /// parity: NAV-040
     #[test]
-    fn local_directory() {
+    fn local_directory_is_a_folder() {
         assert!(classify(Directory, "file:///tmp/Test", None, None).is_dir);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_extensionless_smb_file_is_not_a_folder`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_extensionless_smb_file_is_not_a_folder`
     ///
     /// parity: NAV-040
     #[test]
     fn extensionless_smb_file_is_not_a_folder() {
-        let e = classify(File, "smb://nas/work/README", Some("text/plain"), None);
-        assert!(!e.is_dir);
-        assert!(e.can_operate);
-        assert_eq!(e.folder_type, None);
+        let file = classify(File, "smb://nas/work/README", Some("text/plain"), None);
+        assert!(!file.is_dir);
+        assert!(file.can_operate);
+        assert_eq!(file.folder_type, None);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_empty_regular_file_with_directory_mime_does_not_become_folder`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_empty_regular_file_with_directory_mime_does_not_become_folder`
     ///
     /// parity: NAV-040
     #[test]
@@ -244,15 +261,15 @@ mod tests {
         assert!(!classify(File, "file:///tmp/file", DIRECTORY_MIME, None).is_dir);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_unknown_directory_mime`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_unknown_directory_mime`
     ///
     /// parity: NAV-040
     #[test]
-    fn unknown_directory_mime() {
+    fn unknown_kind_with_directory_mime_is_a_folder() {
         assert!(classify(Unknown, "smb://nas/work/dir", DIRECTORY_MIME, None).is_dir);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_unknown_without_metadata_is_not_falsely_a_directory`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_unknown_without_metadata_is_not_falsely_a_directory`
     ///
     /// parity: NAV-040
     #[test]
@@ -260,15 +277,15 @@ mod tests {
         assert!(!classify(Unknown, "smb://nas/work/unknown", None, None).is_dir);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_mountable_share_without_optional_metadata`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_mountable_share_without_optional_metadata`
     ///
     /// parity: NAV-040, NET-003
     #[test]
-    fn mountable_share_without_optional_metadata() {
+    fn mountable_share_without_optional_metadata_is_a_folder() {
         assert!(classify(Mountable, "smb://nas/work", None, None).is_dir);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_non_smb_mountable_not_assumed_to_be_directory`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_non_smb_mountable_not_assumed_to_be_directory`
     ///
     /// parity: NAV-040
     #[test]
@@ -276,112 +293,113 @@ mod tests {
         assert!(!classify(Mountable, "file:///tmp/thing", None, None).is_dir);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_mtp_directory_with_bracketed_usb_identifier`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_mtp_directory_with_bracketed_usb_identifier`
     ///
     /// parity: DEV-005
     #[test]
-    fn mtp_directory_with_bracketed_usb_identifier() {
-        let e = classify(Directory, "mtp://[usb:001,010]/Internal%20storage", None, None);
-        assert!(e.is_dir);
-        assert!(e.can_operate);
+    fn mtp_directory_with_bracketed_usb_identifier_is_an_operable_folder() {
+        let folder = classify(Directory, "mtp://[usb:001,010]/Internal%20storage", None, None);
+        assert!(folder.is_dir);
+        assert!(folder.can_operate);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_file_shortcut_is_not_a_folder`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_file_shortcut_is_not_a_folder`
     ///
     /// parity: NAV-040
     #[test]
     fn file_shortcut_is_not_a_folder() {
-        let e = classify(
+        let shortcut = classify(
             Shortcut,
             "file:///tmp/shortcut",
             Some("text/plain"),
             Some("file:///tmp/file.txt"),
         );
-        assert!(!e.is_dir);
+        assert!(!shortcut.is_dir);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_virtual_bad_scheme_is_not_followed`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_virtual_bad_scheme_is_not_followed`
     ///
     /// parity: NAV-040, SAFE-010
     #[test]
     fn virtual_bad_scheme_is_not_followed() {
-        let e = classify(
+        let shortcut = classify(
             Shortcut,
             "smb://group/evil",
             DIRECTORY_MIME,
             Some("javascript:alert(1)"),
         );
-        assert!(!e.is_dir);
-        assert_eq!(e.target_uri, None);
+        assert!(!shortcut.is_dir);
+        assert_eq!(shortcut.target_uri, None);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_credentials_in_backend_target_not_used`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_credentials_in_backend_target_not_used`
     ///
     /// parity: NAV-040, SAFE-010
     #[test]
     fn credentials_in_backend_target_not_used() {
-        let e = classify(
+        let share = classify(
             Mountable,
             "smb://nas/work",
             DIRECTORY_MIME,
             Some("smb://u:secret@nas/work"),
         );
-        assert!(!e.is_dir);
-        assert_eq!(e.target_uri, None);
+        assert!(!share.is_dir);
+        assert_eq!(share.target_uri, None);
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_unicode_target_and_spaces`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_unicode_target_and_spaces`
     ///
     /// parity: NAV-040
     #[test]
-    fn unicode_target_and_spaces() {
-        let e = classify(
+    fn unicode_and_spaces_in_a_target_stay_encoded() {
+        let share = classify(
             Mountable,
             "smb://nas/Team%20files",
             DIRECTORY_MIME,
             Some("smb://nas/Team%20files/%C3%89t%C3%A9"),
         );
         assert_eq!(
-            e.target_uri.as_deref(),
+            share.target_uri.as_deref(),
             Some("smb://nas/Team%20files/%C3%89t%C3%A9")
         );
     }
 
-    /// Ported from `desktop/tests/test_entry_model.py::test_metadata_does_not_override_a_real_file_target`
+    /// Ported from `desktop/tests/test_entry_model.py::EntryModelTests::test_metadata_does_not_override_a_real_file_target`
     ///
     /// parity: NAV-040
     #[test]
     fn metadata_does_not_override_a_real_file_target() {
-        let e = classify(
+        let file = classify(
             File,
             "file:///tmp/file",
             Some("text/plain"),
             Some("smb://nas/other"),
         );
-        assert_eq!(e.target_uri, None);
-        assert!(!e.is_dir);
+        assert_eq!(file.target_uri, None);
+        assert!(!file.is_dir);
     }
 
     #[test]
     fn virtual_flag_blocks_operations_on_real_kinds() {
-        let e = classify_entry(&ItemMetadata {
+        let mount = classify_entry(&ItemMetadata {
             kind: Directory,
             uri: "file:///run/media/usb",
             content_type: None,
             target_uri: None,
             is_virtual: true,
         });
-        assert!(e.is_dir);
-        assert!(e.is_virtual);
-        assert!(!e.can_operate);
-        assert_eq!(e.target_uri.as_deref(), Some("file:///run/media/usb"));
-        assert_eq!(e.folder_type, Some("Network location"));
+        assert!(mount.is_dir);
+        assert!(mount.is_virtual);
+        assert!(!mount.can_operate);
+        assert_eq!(mount.target_uri.as_deref(), Some("file:///run/media/usb"));
+        assert_eq!(mount.folder_type, Some("Network location"));
     }
 
+    /// parity: NET-003
     #[test]
     fn empty_target_counts_as_missing() {
-        let e = classify(Mountable, "smb://nas/work", None, Some(""));
-        assert!(e.is_dir);
-        assert_eq!(e.target_uri.as_deref(), Some("smb://nas/work"));
+        let share = classify(Mountable, "smb://nas/work", None, Some(""));
+        assert!(share.is_dir);
+        assert_eq!(share.target_uri.as_deref(), Some("smb://nas/work"));
     }
 }

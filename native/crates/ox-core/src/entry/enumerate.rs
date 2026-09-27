@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use gio::prelude::*;
 
-use super::{entry_from_info, Entry, EnumerateError, ATTRIBUTES};
+use super::{entry_from_info, Entry, EntryError, ATTRIBUTES};
 
 /// Rows in the first batch, shown before the rest of the folder is read.
 const FIRST_BATCH_SIZE: i32 = 64;
@@ -40,9 +40,9 @@ const MERGE_WINDOW: Duration = Duration::from_millis(250);
 ///
 /// # Errors
 ///
-/// The GIO failure, sorted by [`EnumerateError`]. When it is
-/// [`EnumerateError::NotMounted`], mount the location and list it again.
-pub async fn enumerate_folder(uri: &str, on_batch: impl FnMut(Vec<Entry>)) -> Result<(), EnumerateError> {
+/// The GIO failure, sorted by [`EntryError`]. When it is
+/// [`EntryError::NotMounted`], mount the location and list it again.
+pub async fn enumerate_folder(uri: &str, on_batch: impl FnMut(Vec<Entry>)) -> Result<(), EntryError> {
     let folder = gio::File::for_uri(uri);
     let enumerator = folder
         .enumerate_children_future(ATTRIBUTES, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
@@ -57,7 +57,7 @@ pub async fn enumerate_folder(uri: &str, on_batch: impl FnMut(Vec<Entry>)) -> Re
 async fn read_rows(
     enumerator: &gio::FileEnumerator,
     mut batches: BatchCoalescer<impl FnMut(Vec<Entry>)>,
-) -> Result<(), EnumerateError> {
+) -> Result<(), EntryError> {
     let mut request_size = FIRST_BATCH_SIZE;
     loop {
         let infos = enumerator
@@ -124,10 +124,12 @@ mod tests {
     use super::*;
     use crate::entry::entry_for_uri;
 
+    /// [`FIRST_BATCH_SIZE`] as a row count.
     fn first_batch_len() -> usize {
         usize::try_from(FIRST_BATCH_SIZE).expect("the first batch size is a small positive number")
     }
 
+    /// A temporary folder holding `count` small files.
     fn folder_with_files(count: usize) -> tempfile::TempDir {
         let folder = tempfile::tempdir().expect("temporary folder");
         for index in 0..count {
@@ -140,13 +142,15 @@ mod tests {
         gio::File::for_path(folder.path()).uri().into()
     }
 
-    fn rows(count: usize) -> Vec<Entry> {
+    /// `count` rows without metadata; the coalescer only counts them.
+    fn placeholder_rows(count: usize) -> Vec<Entry> {
         let info = gio::FileInfo::new();
         (0..count)
             .map(|index| entry_for_uri(&format!("file:///tmp/{index}"), &info))
             .collect()
     }
 
+    /// parity: PERF-002
     #[test]
     fn the_top_of_a_large_folder_arrives_first() {
         let folder = folder_with_files(first_batch_len() + 10);
@@ -160,28 +164,29 @@ mod tests {
         assert_eq!(batch_sizes.iter().sum::<usize>(), first_batch_len() + 10);
     }
 
+    /// Lists `uri` on `context` until the first rows arrive, then drops the
+    /// listing and keeps the loop running long enough for a listing that
+    /// kept going to read and deliver the remaining rows.
+    fn drop_listing_after_first_batch(context: &glib::MainContext, uri: String, delivered: &Rc<Cell<usize>>) {
+        let counter = Rc::clone(delivered);
+        let count_rows = move |batch: Vec<Entry>| counter.set(counter.get() + batch.len());
+        let listing = context.spawn_local(async move { enumerate_folder(&uri, count_rows).await });
+        while delivered.get() == 0 {
+            context.iteration(true);
+        }
+        listing.abort();
+        context.block_on(glib::timeout_future(Duration::from_millis(200)));
+    }
+
     /// parity: NAV-016
     #[test]
     fn dropping_the_listing_stops_delivery() {
         let folder = folder_with_files(first_batch_len() + 10);
         let uri = folder_uri(&folder);
         let delivered = Rc::new(Cell::new(0));
-        let counter = Rc::clone(&delivered);
         let context = glib::MainContext::new();
         context
-            .with_thread_default(|| {
-                let listing = context.spawn_local(async move {
-                    let count_rows = |batch: Vec<Entry>| counter.set(counter.get() + batch.len());
-                    enumerate_folder(&uri, count_rows).await
-                });
-                while delivered.get() == 0 {
-                    context.iteration(true);
-                }
-                listing.abort();
-                // Long enough for a listing that kept running to read and
-                // deliver the remaining rows.
-                context.block_on(glib::timeout_future(Duration::from_millis(200)));
-            })
+            .with_thread_default(|| drop_listing_after_first_batch(&context, uri, &delivered))
             .expect("the test owns its main context");
         assert_eq!(delivered.get(), first_batch_len());
     }
@@ -192,10 +197,10 @@ mod tests {
         let start = Instant::now();
         let mut delivered = Vec::new();
         let mut batches = BatchCoalescer::new(|batch: Vec<Entry>| delivered.push(batch.len()));
-        batches.push(rows(3), start);
-        batches.push(rows(2), start + MERGE_WINDOW / 2);
-        batches.push(rows(4), start + MERGE_WINDOW);
-        batches.push(rows(1), start + MERGE_WINDOW);
+        batches.push(placeholder_rows(3), start);
+        batches.push(placeholder_rows(2), start + MERGE_WINDOW / 2);
+        batches.push(placeholder_rows(4), start + MERGE_WINDOW);
+        batches.push(placeholder_rows(1), start + MERGE_WINDOW);
         batches.finish();
         assert_eq!(delivered, [3, 6, 1]);
     }

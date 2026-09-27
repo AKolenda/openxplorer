@@ -1,15 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Real GIO listings of disposable local folders, awaited on a plain
 //! `glib::MainContext` without GTK or a display.
+//!
+//! Complements the hand-filled `GFileInfo` tests in `ox-core/src/entry`,
+//! which port `desktop/tests/test_gio_serialization.py`, with what the
+//! local GIO backend actually reports.
 
 use std::fs;
 use std::path::Path;
 
 use gio::prelude::*;
-use ox_core::entry::{enumerate_folder, Entry, EnumerateError};
+use ox_core::entry::{enumerate_folder, Entry, EntryError};
+use tempfile::TempDir;
+
+/// A temporary folder holding `files`, each written with `contents`.
+fn folder_with_files(files: &[(&str, &[u8])]) -> TempDir {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    for (name, contents) in files {
+        fs::write(folder.path().join(name), contents).expect("fixture file");
+    }
+    folder
+}
 
 /// Lists `folder` to the end and returns every row delivered.
-fn list(folder: &Path) -> Result<Vec<Entry>, EnumerateError> {
+fn list(folder: &Path) -> Result<Vec<Entry>, EntryError> {
     let uri = gio::File::for_path(folder).uri();
     let mut entries = Vec::new();
     let listing = enumerate_folder(&uri, |batch| entries.extend(batch));
@@ -17,6 +31,7 @@ fn list(folder: &Path) -> Result<Vec<Entry>, EnumerateError> {
     Ok(entries)
 }
 
+/// The row named `name`; the test fails when there is none.
 fn find<'a>(entries: &'a [Entry], name: &str) -> &'a Entry {
     entries
         .iter()
@@ -27,8 +42,7 @@ fn find<'a>(entries: &'a [Entry], name: &str) -> &'a Entry {
 /// parity: VIEW-002
 #[test]
 fn listing_preserves_file_and_folder_metadata() {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    fs::write(folder.path().join("Plan.txt"), b"draft").expect("fixture file");
+    let folder = folder_with_files(&[("Plan.txt", b"draft")]);
     fs::create_dir(folder.path().join("Projects")).expect("fixture directory");
 
     let entries = list(folder.path()).expect("listing");
@@ -49,9 +63,7 @@ fn listing_preserves_file_and_folder_metadata() {
 /// parity: VIEW-024
 #[test]
 fn hidden_items_are_listed_and_flagged() {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    fs::write(folder.path().join("Plan.txt"), b"draft").expect("fixture file");
-    fs::write(folder.path().join(".secret"), b"x").expect("dot-file fixture");
+    let folder = folder_with_files(&[("Plan.txt", b"draft"), (".secret", b"x")]);
 
     let entries = list(folder.path()).expect("listing");
 
@@ -62,10 +74,11 @@ fn hidden_items_are_listed_and_flagged() {
 /// parity: VIEW-024
 #[test]
 fn names_in_a_hidden_list_are_flagged_hidden() {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    fs::write(folder.path().join("Notes.txt"), b"x").expect("fixture file");
-    fs::write(folder.path().join("Plan.txt"), b"x").expect("fixture file");
-    fs::write(folder.path().join(".hidden"), b"Notes.txt\n").expect("hidden list");
+    let folder = folder_with_files(&[
+        ("Notes.txt", b"x"),
+        ("Plan.txt", b"x"),
+        (".hidden", b"Notes.txt\n"),
+    ]);
 
     let entries = list(folder.path()).expect("listing");
 
@@ -75,13 +88,14 @@ fn names_in_a_hidden_list_are_flagged_hidden() {
 
 #[test]
 fn an_empty_folder_finishes_without_rows() {
-    let folder = tempfile::tempdir().expect("temporary folder");
+    let folder = folder_with_files(&[]);
     assert_eq!(list(folder.path()), Ok(Vec::new()));
 }
 
+/// parity: VIEW-002, NAV-040
 #[test]
 fn symlink_to_a_folder_is_browsable_without_recursing_into_it() {
-    let folder = tempfile::tempdir().expect("temporary folder");
+    let folder = folder_with_files(&[]);
     fs::create_dir(folder.path().join("Projects")).expect("fixture directory");
     std::os::unix::fs::symlink("Projects", folder.path().join("Shortcut")).expect("symlink");
 
@@ -96,7 +110,7 @@ fn symlink_to_a_folder_is_browsable_without_recursing_into_it() {
 /// parity: OPS-037
 #[test]
 fn a_missing_folder_reports_not_found() {
-    let folder = tempfile::tempdir().expect("temporary folder");
+    let folder = folder_with_files(&[]);
     let error = list(&folder.path().join("gone")).expect_err("nothing to list");
     assert_eq!(error.code(), "not-found");
     assert!(!error.needs_mount());
@@ -105,9 +119,8 @@ fn a_missing_folder_reports_not_found() {
 /// parity: OPS-037
 #[test]
 fn listing_a_file_reports_not_directory() {
-    let folder = tempfile::tempdir().expect("temporary folder");
+    let folder = folder_with_files(&[("Plan.txt", b"draft")]);
     let file = folder.path().join("Plan.txt");
-    fs::write(&file, b"draft").expect("fixture file");
     let error = list(&file).expect_err("a file is not a folder");
     assert_eq!(error.code(), "not-directory");
 }

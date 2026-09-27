@@ -21,20 +21,21 @@ use crate::location::split_location;
 /// is used, as `gfile.get_basename()` is in Python.
 pub fn entry_from_info(file: &gio::File, info: &gio::FileInfo) -> Entry {
     let uri = file.uri();
-    build_entry(&uri, info, || {
-        file.basename().map(|name| name.to_string_lossy().into_owned())
-    })
+    let base_name = || file.basename().map(|name| name.to_string_lossy().into_owned());
+    build_entry(&uri, info, base_name)
 }
 
 /// Builds an entry for the item at `uri` from its queried `info`.
 ///
 /// Takes the URI as text so the result does not depend on how GIO's
-/// virtual file system would rewrite it. When the backend reports no name at all, the
-/// last segment of the URI is used.
+/// virtual file system would rewrite it. When the backend reports no name
+/// at all, the last segment of the URI is used.
 pub fn entry_for_uri(uri: &str, info: &gio::FileInfo) -> Entry {
     build_entry(uri, info, || last_uri_segment(uri))
 }
 
+/// The shared body of [`entry_from_info`] and [`entry_for_uri`];
+/// `fallback_name` is only called when the backend reported no name.
 fn build_entry(uri: &str, info: &gio::FileInfo, fallback_name: impl FnOnce() -> Option<String>) -> Entry {
     let kind = file_kind(info);
     let content_type = string_attribute(info, "standard::content-type");
@@ -71,6 +72,8 @@ fn build_entry(uri: &str, info: &gio::FileInfo, fallback_name: impl FnOnce() -> 
     }
 }
 
+/// `standard::type`, or [`EntryKind::Unknown`] when the backend did not
+/// report it.
 fn file_kind(info: &gio::FileInfo) -> EntryKind {
     if info.has_attribute("standard::type") {
         EntryKind::from(info.file_type())
@@ -134,130 +137,115 @@ fn serialized_icon(info: &gio::FileInfo) -> Option<glib::Variant> {
 
 #[cfg(test)]
 mod tests {
-    //! Real `GFileInfo` objects filled in by hand, without any filesystem
-    //! query, as `desktop/tests/test_gio_serialization.py` does with fakes.
-
     use std::path::PathBuf;
 
     use super::*;
+    use crate::entry::test_support::{file_info, smb_share_info, with_target, FOLDER_MIME_TYPE};
 
-    fn info(kind: gio::FileType, name: &str, content_type: Option<&str>) -> gio::FileInfo {
-        let info = gio::FileInfo::new();
-        info.set_file_type(kind);
-        info.set_display_name(name);
-        if let Some(content_type) = content_type {
-            info.set_content_type(content_type);
-        }
-        info
-    }
-
-    fn share(target: Option<&str>) -> gio::FileInfo {
-        let info = info(gio::FileType::Mountable, "work", Some("inode/directory"));
-        if let Some(target) = target {
-            info.set_attribute_string("standard::target-uri", target);
-        }
-        info
-    }
-
-    /// Ported from `desktop/tests/test_gio_serialization.py::test_mountable_network_share_has_directory_icon_flag_and_unknown_size`
+    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_mountable_network_share_has_directory_icon_flag_and_unknown_size`
     ///
     /// parity: VIEW-002, NET-003
     #[test]
     fn mountable_network_share_has_directory_flag_and_unknown_size() {
-        let e = entry_for_uri("smb://nas/work", &share(Some("smb://nas/work")));
-        assert!(e.is_dir);
-        assert_eq!(e.kind, EntryKind::Mountable);
-        assert_eq!(e.type_label, "Network share");
-        assert_eq!(e.size, None);
-        assert_eq!(e.modified, 0);
+        let info = with_target(smb_share_info(), "smb://nas/work");
+        let share = entry_for_uri("smb://nas/work", &info);
+        assert!(share.is_dir);
+        assert_eq!(share.kind, EntryKind::Mountable);
+        assert_eq!(share.type_label, "Network share");
+        assert_eq!(share.size, None);
+        assert_eq!(share.modified, 0);
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::test_gvfs_mountable_browse_uri_and_target_remain_distinct`
+    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_gvfs_mountable_browse_uri_and_target_remain_distinct`
     ///
     /// parity: NET-003
     #[test]
     fn gvfs_mountable_browse_uri_and_target_remain_distinct() {
         // GVfs smburi.c names a server-browser child `._share`; its
         // standard::target-uri points to the actual share mount.
-        let e = entry_for_uri("smb://nas/._work", &share(Some("smb://nas/work")));
-        assert_eq!(e.uri, "smb://nas/._work");
-        assert_eq!(e.target_uri.as_deref(), Some("smb://nas/work"));
-        assert_eq!(e.navigation_uri(), "smb://nas/work");
-        assert!(e.is_dir);
-        assert!(!e.can_operate);
+        let info = with_target(smb_share_info(), "smb://nas/work");
+        let share = entry_for_uri("smb://nas/._work", &info);
+        assert_eq!(share.uri, "smb://nas/._work");
+        assert_eq!(share.target_uri.as_deref(), Some("smb://nas/work"));
+        assert_eq!(share.navigation_uri(), "smb://nas/work");
+        assert!(share.is_dir);
+        assert!(!share.can_operate);
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::test_real_directory_metadata`
+    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_directory_metadata`
     ///
     /// parity: VIEW-002
     #[test]
-    fn real_directory_metadata() {
-        let info = info(gio::FileType::Directory, "Design", Some("inode/directory"));
+    fn real_directory_shows_no_size_but_keeps_its_date() {
+        let info = file_info(gio::FileType::Directory, "Design", Some(FOLDER_MIME_TYPE));
         info.set_attribute_uint64("standard::size", 8192);
         info.set_attribute_uint64("time::modified", 12345);
-        let e = entry_for_uri("smb://nas/work/Design", &info);
-        assert!(e.is_dir);
-        assert_eq!(e.size, None);
-        assert_eq!(e.modified, 12345);
-        assert_eq!(e.type_label, "File folder");
+        let folder = entry_for_uri("smb://nas/work/Design", &info);
+        assert!(folder.is_dir);
+        assert_eq!(folder.size, None);
+        assert_eq!(folder.modified, 12345);
+        assert_eq!(folder.type_label, "File folder");
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::test_real_zero_byte_file_remains_zero_bytes`
+    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_real_zero_byte_file_remains_zero_bytes`
     ///
     /// parity: VIEW-002
     #[test]
     fn real_zero_byte_file_remains_zero_bytes() {
-        let info = info(gio::FileType::Regular, "README", Some("text/plain"));
+        let info = file_info(gio::FileType::Regular, "README", Some("text/plain"));
         info.set_size(0);
-        let e = entry_for_uri("smb://nas/work/README", &info);
-        assert!(!e.is_dir);
-        assert_eq!(e.size, Some(0));
+        let file = entry_for_uri("smb://nas/work/README", &info);
+        assert!(!file.is_dir);
+        assert_eq!(file.size, Some(0));
         // The Python test stubs GIO; here the real description is shown.
         let description = gio::content_type_get_description("text/plain");
-        assert_eq!(e.type_label, description.as_str());
+        assert_eq!(file.type_label, description.as_str());
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::test_missing_file_size_does_not_claim_zero`
+    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_missing_file_size_does_not_claim_zero`
     ///
     /// parity: VIEW-002
     #[test]
     fn missing_file_size_does_not_claim_zero() {
-        let info = info(gio::FileType::Regular, "README", Some("text/plain"));
+        let info = file_info(gio::FileType::Regular, "README", Some("text/plain"));
         assert_eq!(entry_for_uri("smb://nas/work/README", &info).size, None);
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::test_server_shortcut_resolves_to_target_server`
+    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_server_shortcut_resolves_to_target_server`
     ///
     /// parity: NET-003
     #[test]
     fn server_shortcut_resolves_to_target_server() {
-        let info = info(gio::FileType::Shortcut, "alpha", Some("inode/directory"));
-        info.set_attribute_string("standard::target-uri", "smb://ALPHA/");
-        let e = entry_for_uri("smb://group/alpha", &info);
-        assert!(e.is_dir);
-        assert_eq!(e.target_uri.as_deref(), Some("smb://alpha/"));
-        assert!(!e.can_operate);
+        let shortcut = file_info(gio::FileType::Shortcut, "alpha", Some(FOLDER_MIME_TYPE));
+        let info = with_target(shortcut, "smb://ALPHA/");
+        let server = entry_for_uri("smb://group/alpha", &info);
+        assert!(server.is_dir);
+        assert_eq!(server.target_uri.as_deref(), Some("smb://alpha/"));
+        assert!(!server.can_operate);
     }
 
-    /// Ported from `desktop/tests/test_gio_serialization.py::test_serialization_requests_no_extra_filesystem_queries`
+    /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_serialization_requests_no_extra_filesystem_queries`
+    ///
+    /// parity: VIEW-002
     #[test]
     fn serialization_needs_only_the_uri_and_type() {
         // Only a URI and hand-filled metadata: no query, stat or mount.
-        let e = entry_for_uri("smb://nas/work", &share(None));
-        assert!(e.is_dir);
-        assert_eq!(e.name, "work");
-        assert_eq!(e.can_rename, None);
-        assert_eq!(e.serialized_icon, None);
+        let share = entry_for_uri("smb://nas/work", &smb_share_info());
+        assert!(share.is_dir);
+        assert_eq!(share.name, "work");
+        assert_eq!(share.can_rename, None);
+        assert_eq!(share.serialized_icon, None);
     }
 
+    /// parity: NET-003
     #[test]
     fn share_without_any_metadata_is_still_a_share() {
         let info = gio::FileInfo::new();
         info.set_file_type(gio::FileType::Mountable);
-        let e = entry_for_uri("smb://nas/work", &info);
-        assert!(e.is_dir);
-        assert_eq!(e.name, "work");
-        assert_eq!(e.type_label, "Network share");
+        let share = entry_for_uri("smb://nas/work", &info);
+        assert!(share.is_dir);
+        assert_eq!(share.name, "work");
+        assert_eq!(share.type_label, "Network share");
     }
 
     #[test]
@@ -271,6 +259,7 @@ mod tests {
         assert_eq!(entry.navigation_uri(), "file:///tmp/ox-entry-test");
     }
 
+    /// parity: VIEW-002
     #[test]
     fn name_falls_back_to_the_file_base_name() {
         let bare = gio::FileInfo::new();
@@ -278,6 +267,7 @@ mod tests {
         assert_eq!(entry_from_info(&file, &bare).name, "Plan 1.txt");
     }
 
+    /// parity: VIEW-002
     #[test]
     fn name_falls_back_from_display_name_to_name_to_uri() {
         let info = gio::FileInfo::new();
@@ -297,43 +287,44 @@ mod tests {
 
     #[test]
     fn trash_items_keep_their_origin_and_deletion_date() {
-        let info = info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
+        let info = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
         info.set_attribute_byte_string("trash::orig-path", "/home/demo/notes.txt");
         info.set_attribute_string("trash::deletion-date", "2026-09-26T10:11:12");
-        let e = entry_for_uri("trash:///notes.txt", &info);
-        assert_eq!(e.trash_orig_path, Some(PathBuf::from("/home/demo/notes.txt")));
-        let expected = glib::DateTime::from_iso8601("2026-09-26T10:11:12", Some(&glib::TimeZone::local()))
+        let item = entry_for_uri("trash:///notes.txt", &info);
+        assert_eq!(item.trash_orig_path, Some(PathBuf::from("/home/demo/notes.txt")));
+        let local_zone = glib::TimeZone::local();
+        let expected = glib::DateTime::from_iso8601("2026-09-26T10:11:12", Some(&local_zone))
             .expect("valid ISO 8601 date")
             .to_unix();
-        assert_eq!(e.trash_deletion_date, u64::try_from(expected).ok());
+        assert_eq!(item.trash_deletion_date, u64::try_from(expected).ok());
     }
 
     #[test]
     fn trash_origin_is_kept_byte_for_byte() {
-        let info = info(gio::FileType::Regular, "a\\b.txt", Some("text/plain"));
+        let info = file_info(gio::FileType::Regular, "a\\b.txt", Some("text/plain"));
         info.set_attribute_byte_string("trash::orig-path", "/home/José/a\\b.txt");
-        let e = entry_for_uri("trash:///a%5Cb.txt", &info);
-        assert_eq!(e.trash_orig_path, Some(PathBuf::from("/home/José/a\\b.txt")));
+        let item = entry_for_uri("trash:///a%5Cb.txt", &info);
+        assert_eq!(item.trash_orig_path, Some(PathBuf::from("/home/José/a\\b.txt")));
     }
 
     #[test]
     fn access_flags_distinguish_false_from_unknown() {
-        let info = info(gio::FileType::Regular, "a.txt", Some("text/plain"));
+        let info = file_info(gio::FileType::Regular, "a.txt", Some("text/plain"));
         info.set_attribute_boolean("access::can-rename", false);
         info.set_attribute_boolean("access::can-trash", true);
-        let e = entry_for_uri("file:///tmp/a.txt", &info);
-        assert_eq!(e.can_rename, Some(false));
-        assert_eq!(e.can_trash, Some(true));
-        assert_eq!(e.can_delete, None);
-        assert_eq!(e.can_write, None);
+        let file = entry_for_uri("file:///tmp/a.txt", &info);
+        assert_eq!(file.can_rename, Some(false));
+        assert_eq!(file.can_trash, Some(true));
+        assert_eq!(file.can_delete, None);
+        assert_eq!(file.can_write, None);
     }
 
     #[test]
     fn icon_survives_the_thread_safe_form() {
-        let info = info(gio::FileType::Regular, "a.txt", Some("text/plain"));
+        let info = file_info(gio::FileType::Regular, "a.txt", Some("text/plain"));
         info.set_icon(&gio::ThemedIcon::new("text-plain"));
-        let e = entry_for_uri("file:///tmp/a.txt", &info);
-        let icon = e.icon().expect("the themed icon deserializes");
+        let file = entry_for_uri("file:///tmp/a.txt", &info);
+        let icon = file.icon().expect("the themed icon deserializes");
         let themed = icon
             .downcast::<gio::ThemedIcon>()
             .expect("a themed icon stays themed");

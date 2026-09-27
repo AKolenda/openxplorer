@@ -72,6 +72,7 @@ fn escaped_byte_at(bytes: &[u8], index: usize) -> Option<u8> {
     Some(hex_value(high)? * 16 + hex_value(low)?)
 }
 
+/// The value of one hexadecimal digit, either case.
 fn hex_value(digit: u8) -> Option<u8> {
     let value = char::from(digit).to_digit(16)?;
     u8::try_from(value).ok()
@@ -96,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_and_missing_strings_are_none() {
+    fn empty_and_missing_attributes_are_none() {
         let info = gio::FileInfo::new();
         info.set_attribute_string("standard::content-type", "");
         assert_eq!(string_attribute(&info, "standard::content-type"), None);

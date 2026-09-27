@@ -20,7 +20,8 @@
 //!   row is and what its Type column says.
 //! - `inspect`: one item on its own, and Quick access pins.
 //! - `thumbnail`: the lazy thumbnail lookup.
-//! - `error`: why a folder or item could not be read.
+//! - `error`: why a folder could not be listed, or an item inspected or
+//!   pinned.
 
 mod attributes;
 mod classify;
@@ -28,11 +29,13 @@ mod enumerate;
 mod error;
 mod info;
 mod inspect;
+#[cfg(test)]
+mod test_support;
 mod thumbnail;
 mod type_label;
 
 pub use enumerate::enumerate_folder;
-pub use error::EnumerateError;
+pub use error::EntryError;
 pub use info::{entry_for_uri, entry_from_info};
 pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
 pub use thumbnail::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
@@ -180,7 +183,7 @@ mod tests {
     fn entries_and_errors_can_cross_threads() {
         assert_send::<Entry>();
         assert_send::<Vec<Entry>>();
-        assert_send::<EnumerateError>();
+        assert_send::<EntryError>();
     }
 
     #[test]

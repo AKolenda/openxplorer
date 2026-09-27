@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Why a folder or item could not be read.
+//! Why a folder could not be listed, or an item inspected or pinned.
 //!
 //! Ports `error_payload` in `desktop/gio_backend.py`: GIO failures are
 //! sorted into the cases the interface handles differently, and each has
@@ -7,12 +7,12 @@
 
 use crate::location::LocationError;
 
-/// Why a folder could not be listed, or an item inspected.
+/// Why a folder could not be listed, or an item inspected or pinned.
 ///
-/// Messages come from GIO, or from the `location` module's validation,
-/// and are shown to the user as they are.
+/// Messages come from GIO, from the `location` module's validation or from
+/// the Python app's wording, and are shown to the user as they are.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum EnumerateError {
+pub enum EntryError {
     /// The location belongs to a volume or share that is not mounted yet;
     /// mount it (asking for credentials if needed) and try again once.
     #[error("{0}")]
@@ -32,16 +32,19 @@ pub enum EnumerateError {
     /// The work was cancelled; not an error to show.
     #[error("Operation cancelled.")]
     Cancelled,
-    /// The request was refused before GIO was asked: an address that is
-    /// not a supported location, or an item that cannot be pinned.
+    /// An address that is not a supported location, refused before GIO was
+    /// asked.
     #[error("{0}")]
     Invalid(String),
+    /// A file was offered for Quick access (`verify_pin` in Python).
+    #[error("Only folders and network shares can be pinned to Quick access.")]
+    NotPinnable,
     /// Any other failure.
     #[error("{0}")]
     Other(String),
 }
 
-impl EnumerateError {
+impl EntryError {
     /// The code the Python backend reports for this error (`not-mounted`,
     /// `permission-denied`, ...). Validation failures are plain `error`s
     /// there too.
@@ -53,7 +56,7 @@ impl EnumerateError {
             Self::NotDirectory(_) => "not-directory",
             Self::NotSupported(_) => "not-supported",
             Self::Cancelled => "cancelled",
-            Self::Invalid(_) | Self::Other(_) => "error",
+            Self::Invalid(_) | Self::NotPinnable | Self::Other(_) => "error",
         }
     }
 
@@ -65,7 +68,7 @@ impl EnumerateError {
     }
 }
 
-impl From<glib::Error> for EnumerateError {
+impl From<glib::Error> for EntryError {
     /// Sorts a GIO error into the cases the interface handles differently.
     fn from(error: glib::Error) -> Self {
         let message = error.message().to_owned();
@@ -81,7 +84,7 @@ impl From<glib::Error> for EnumerateError {
     }
 }
 
-impl From<LocationError> for EnumerateError {
+impl From<LocationError> for EntryError {
     /// An address refused by the `location` module, before GIO was asked.
     fn from(error: LocationError) -> Self {
         Self::Invalid(error.message().to_owned())
@@ -92,8 +95,8 @@ impl From<LocationError> for EnumerateError {
 mod tests {
     use super::*;
 
-    fn io_error(kind: gio::IOErrorEnum) -> EnumerateError {
-        EnumerateError::from(glib::Error::new(kind, "message"))
+    fn io_error(kind: gio::IOErrorEnum) -> EntryError {
+        EntryError::from(glib::Error::new(kind, "message"))
     }
 
     struct Case {
@@ -149,13 +152,25 @@ mod tests {
     #[test]
     fn messages_are_shown_as_given() {
         assert_eq!(io_error(gio::IOErrorEnum::NotFound).to_string(), "message");
-        assert_eq!(EnumerateError::Cancelled.to_string(), "Operation cancelled.");
+        assert_eq!(EntryError::Cancelled.to_string(), "Operation cancelled.");
     }
 
+    /// parity: OPS-037
     #[test]
     fn refused_addresses_keep_the_location_message() {
-        let error = EnumerateError::from(LocationError::new("Enter a folder location."));
-        assert_eq!(error, EnumerateError::Invalid("Enter a folder location.".into()));
+        let error = EntryError::from(LocationError::new("Enter a folder location."));
+        assert_eq!(error, EntryError::Invalid("Enter a folder location.".into()));
+        assert_eq!(error.code(), "error");
+    }
+
+    /// parity: OPS-037
+    #[test]
+    fn refused_pins_are_plain_errors_in_the_python_wording() {
+        let error = EntryError::NotPinnable;
+        assert_eq!(
+            error.to_string(),
+            "Only folders and network shares can be pinned to Quick access."
+        );
         assert_eq!(error.code(), "error");
     }
 }
