@@ -29,8 +29,8 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).parent))
 
 from inputs import (  # noqa: E402
-    BASES, COPY_NAMES, EXTERNAL_HOME, EXTERNAL_LOCATIONS, HOME, ITEMS, LABELS, LOCATIONS, NAMES, SERVERS,
-    SHARES, SPLITS,
+    BASES, COPY_NAMES, EXTERNAL_HOME, EXTERNAL_LOCATIONS, HOME, ITEMS, LABELS, LOCATIONS, NAMES,
+    SERVERS, SHARES, SPLITS,
 )
 
 # require_item_uri, require_share and is_smb_server resolve relative input
@@ -59,9 +59,9 @@ def outcome(function, *args) -> dict:
         return {'rejected': str(error)}
 
 
-def split_parts(value: str) -> dict:
+def split_parts(address: str) -> dict:
     """core.split_location as named fields."""
-    parts = core.split_location(value)
+    parts = core.split_location(address)
     return {
         'scheme': parts.scheme,
         'netloc': parts.netloc,
@@ -71,32 +71,79 @@ def split_parts(value: str) -> dict:
     }
 
 
-def is_server(value: str) -> bool:
+def is_server(address: str) -> bool:
     """core.is_smb_server, where an address core.py refuses is not a server.
 
     Its callers in desktop/ only ask about locations that were already
     normalised; the Rust port answers false instead of failing.
     """
     try:
-        return core.is_smb_server(value)
+        return core.is_smb_server(address)
     except ValueError:
         return False
 
 
-def input_cases(function, values) -> list:
-    """One {input, outcome} case per value."""
-    return [{'input': value, 'outcome': outcome(function, value)} for value in values]
+def input_cases(function, inputs) -> list:
+    """One {input, outcome} case per text in inputs."""
+    cases = []
+    for text in inputs:
+        result = outcome(function, text)
+        cases.append({'input': text, 'outcome': result})
+    return cases
+
+
+def relative_cases(home: Path) -> list:
+    """normalise_location(input, base, home) for each (input, base) pair."""
+    cases = []
+    for address, base in BASES:
+        result = outcome(core.normalise_location, address, base, home)
+        cases.append({'input': address, 'base': base, 'outcome': result})
+    return cases
+
+
+def copy_name_cases() -> list:
+    """new_copy_name(name, number, is_dir) for each "Keep both" input."""
+    cases = []
+    for name, number, is_dir in COPY_NAMES:
+        result = outcome(core.new_copy_name, name, number, is_dir)
+        cases.append({'name': name, 'number': number, 'is_dir': is_dir, 'outcome': result})
+    return cases
+
+
+def label_cases() -> list:
+    """safe_label(input, fallback) for each sidebar label."""
+    cases = []
+    for label, fallback in LABELS:
+        result = outcome(core.safe_label, label, fallback)
+        cases.append({'input': label, 'fallback': fallback, 'outcome': result})
+    return cases
+
+
+def server_cases() -> list:
+    """is_server(input) for each address in SERVERS."""
+    cases = []
+    for address in SERVERS:
+        cases.append({'input': address, 'is_server': is_server(address)})
+    return cases
+
+
+def device_cases() -> list:
+    """is_device_location(input) for every split and normalise input."""
+    cases = []
+    for address in SPLITS + LOCATIONS:
+        cases.append({'input': address, 'is_device': core.is_device_location(address)})
+    return cases
 
 
 def external_cases() -> dict:
     """The location_external.rs tables, captured with EXTERNAL_HOME."""
     home = Path(EXTERNAL_HOME)
 
-    def normalise(value):
-        return core.normalise_location(value, None, home)
+    def normalise(address):
+        return core.normalise_location(address, None, home)
 
-    def normalised_item(value):
-        return core.require_item_uri(normalise(value))
+    def normalised_item(address):
+        return core.require_item_uri(normalise(address))
 
     return {
         'home': EXTERNAL_HOME,
@@ -106,29 +153,23 @@ def external_cases() -> dict:
 
 
 def capture() -> dict:
-    """Every table in python.json."""
+    """Every table in python.json, in the order the file lists them."""
     home = Path(HOME)
+
+    def normalise(address):
+        return core.normalise_location(address, None, home)
+
     return {
         'home': HOME,
-        'normalise': input_cases(lambda value: core.normalise_location(value, None, home), LOCATIONS),
-        'relative': [
-            {'input': value, 'base': base, 'outcome': outcome(core.normalise_location, value, base, home)}
-            for value, base in BASES
-        ],
+        'normalise': input_cases(normalise, LOCATIONS),
+        'relative': relative_cases(home),
         'names': input_cases(core.validate_name, NAMES),
-        'copies': [
-            {'name': name, 'number': number, 'is_dir': is_dir,
-             'outcome': outcome(core.new_copy_name, name, number, is_dir)}
-            for name, number, is_dir in COPY_NAMES
-        ],
-        'labels': [
-            {'input': value, 'fallback': fallback, 'outcome': outcome(core.safe_label, value, fallback)}
-            for value, fallback in LABELS
-        ],
+        'copies': copy_name_cases(),
+        'labels': label_cases(),
         'items': input_cases(core.require_item_uri, ITEMS),
         'shares': input_cases(core.require_share, SHARES),
-        'servers': [{'input': value, 'is_server': is_server(value)} for value in SERVERS],
-        'devices': [{'input': value, 'is_device': core.is_device_location(value)} for value in SPLITS + LOCATIONS],
+        'servers': server_cases(),
+        'devices': device_cases(),
         'splits': input_cases(split_parts, SPLITS),
         'external': external_cases(),
     }
