@@ -47,34 +47,34 @@ const MAX_DEVICE_AUTHORITY_CHARS: usize = 512;
 /// schemes, a query or fragment in a URL, a `file://` URL with a host or a
 /// relative path, an invalid SMB server name or port, or a malformed device
 /// address.
-pub fn normalise_location(value: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
-    let value = python_strip(value);
-    if value.is_empty() {
+pub fn normalise_location(address: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
+    let address = python_strip(address);
+    if address.is_empty() {
         return Err(LocationError::new("Enter a local folder path or an SMB address."));
     }
     // Safety rule (`core.py`: `CONTROL.search(value)`): no control
     // character in an address reaches GIO, a file name or settings.json.
-    if has_control_character(value) {
+    if has_control_character(address) {
         return Err(LocationError::new(
             "Control characters are not allowed in an address.",
         ));
     }
-    let value = if is_unc_path(value) {
-        Cow::Owned(unc_to_smb(value)?)
+    let address = if is_unc_path(address) {
+        Cow::Owned(unc_to_smb(address)?)
     } else {
-        Cow::Borrowed(value)
+        Cow::Borrowed(address)
     };
-    if is_windows_drive_path(&value) {
+    if is_windows_drive_path(&address) {
         return Err(LocationError::new(
             "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share.",
         ));
     }
-    match split_scheme(&value) {
-        None => normalise_plain_path(&value, base, home),
+    match split_scheme(&address) {
+        None => normalise_plain_path(&address, base, home),
         Some((scheme, _)) if DEVICE_SCHEMES.contains(&scheme.as_str()) => {
-            normalise_device_location(&value, &scheme)
+            normalise_device_location(&address, &scheme)
         }
-        Some(_) => normalise_url(&value),
+        Some(_) => normalise_url(&address),
     }
 }
 
@@ -84,8 +84,8 @@ pub fn normalise_location(value: &str, base: Option<&str>, home: &Path) -> Resul
 /// # Errors
 ///
 /// As [`normalise_location`].
-pub fn normalise(value: &str) -> Result<String, LocationError> {
-    normalise_location(value, None, &glib::home_dir())
+pub fn normalise(address: &str) -> Result<String, LocationError> {
+    normalise_location(address, None, &glib::home_dir())
 }
 
 /// The canonical `file://` URI of an absolute local path, exactly as
@@ -104,8 +104,8 @@ pub fn file_uri(path: &Path) -> String {
 ///
 /// As [`normalise`], and a message asking for a shared folder such as
 /// `\\nas\Projects` for anything but an SMB shared folder.
-pub fn require_share(value: &str) -> Result<String, LocationError> {
-    let uri = normalise(value)?;
+pub fn require_share(address: &str) -> Result<String, LocationError> {
+    let uri = normalise(address)?;
     let parts = split_location(&uri)?;
     if !parts.is_smb() || parts.path_depth() == 0 {
         return Err(LocationError::new(
@@ -155,14 +155,14 @@ pub fn is_smb_server(uri: &str) -> bool {
 }
 
 /// `\\server\share` or `//server/share`.
-fn is_unc_path(value: &str) -> bool {
-    value.starts_with("\\\\") || value.starts_with("//")
+fn is_unc_path(address: &str) -> bool {
+    address.starts_with("\\\\") || address.starts_with("//")
 }
 
 /// `\\NAS\Team files\Q3 #1` to `smb://NAS/Team%20files/Q3%20%231`. The host
 /// is lower-cased later with every other SMB URL.
-fn unc_to_smb(value: &str) -> Result<String, LocationError> {
-    let forward = value.replace('\\', "/");
+fn unc_to_smb(address: &str) -> Result<String, LocationError> {
+    let forward = address.replace('\\', "/");
     let mut components = forward.trim_start_matches('/').split('/');
     let server = components.next().unwrap_or_default();
     // Safety rule (SAFE-010): credentials never enter an address, so they
@@ -172,22 +172,22 @@ fn unc_to_smb(value: &str) -> Result<String, LocationError> {
             "Use a server name without credentials, for example \\\\nas\\share.",
         ));
     }
-    let path: Vec<String> = components.map(quote_component).collect();
-    Ok(format!("smb://{server}/{}", path.join("/")))
+    let escaped_components: Vec<String> = components.map(quote_component).collect();
+    Ok(format!("smb://{server}/{}", escaped_components.join("/")))
 }
 
 /// `^[A-Za-z]:[\\/]`, for example `C:\Windows`.
-fn is_windows_drive_path(value: &str) -> bool {
-    match value.as_bytes() {
+fn is_windows_drive_path(address: &str) -> bool {
+    match address.as_bytes() {
         [letter, b':', b'\\' | b'/', ..] => letter.is_ascii_alphabetic(),
         _ => false,
     }
 }
 
-/// A value without a scheme: `~`, an absolute path, or a path relative to
-/// `base` (SMB, device or local) or to `home`.
-fn normalise_plain_path(value: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
-    let expanded = expand_home(value, home);
+/// An address without a scheme: `~`, an absolute path, or a path relative
+/// to `base` (SMB, device or local) or to `home`.
+fn normalise_plain_path(address: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
+    let expanded = expand_home(address, home);
     if expanded.starts_with('/') {
         return local_path_uri(&expanded);
     }
@@ -204,13 +204,13 @@ fn normalise_plain_path(value: &str, base: Option<&str>, home: &Path) -> Result<
 }
 
 /// Expands `~` and `~/rest` like `str(home)` and `str(home / rest)`.
-fn expand_home(value: &str, home: &Path) -> String {
-    if value == "~" {
+fn expand_home(address: &str, home: &Path) -> String {
+    if address == "~" {
         return home.to_string_lossy().into_owned();
     }
-    match value.strip_prefix("~/") {
+    match address.strip_prefix("~/") {
         Some(rest) => join_path(&home.to_string_lossy(), rest),
-        None => value.to_string(),
+        None => address.to_string(),
     }
 }
 
@@ -247,8 +247,8 @@ fn local_path_uri(path: &str) -> Result<String, LocationError> {
 }
 
 /// A `file:` or `smb:` URL; any other scheme is rejected.
-fn normalise_url(value: &str) -> Result<String, LocationError> {
-    let parts = split_url(value)?;
+fn normalise_url(address: &str) -> Result<String, LocationError> {
+    let parts = split_url(address)?;
     if !parts.is_local() && !parts.is_smb() {
         return Err(LocationError::new(
             "Only local paths, smb:// locations and connected devices are supported in this build.",
@@ -269,14 +269,14 @@ fn normalise_url(value: &str) -> Result<String, LocationError> {
     if parts.is_smb() {
         normalise_smb_url(&parts, &decoded)
     } else {
-        normalise_file_url(&parts.netloc, &decoded)
+        normalise_file_url(&parts.authority, &decoded)
     }
 }
 
 /// A `file:` URL: no host but `localhost`, an absolute path, and the path
 /// canonical.
-fn normalise_file_url(netloc: &str, decoded_path: &str) -> Result<String, LocationError> {
-    if !netloc.is_empty() && !netloc.eq_ignore_ascii_case("localhost") {
+fn normalise_file_url(authority: &str, decoded_path: &str) -> Result<String, LocationError> {
+    if !authority.is_empty() && !authority.eq_ignore_ascii_case("localhost") {
         return Err(LocationError::new(
             "For network folders, use smb://server/share rather than file://server/…",
         ));
@@ -302,7 +302,7 @@ fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
     // Safety rule (`core.py`: `'%' in u.netloc or CONTROL.search(u.netloc)`):
     // an escaped server name could hide credentials (`u%40nas` is `u@nas`)
     // or a control character from the checks on the decoded address.
-    if parts.netloc.contains('%') || has_control_character(&parts.netloc) {
+    if parts.authority.contains('%') || has_control_character(&parts.authority) {
         return Err(LocationError::new(
             "Use an unescaped server name without credentials or control characters.",
         ));
@@ -312,9 +312,7 @@ fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
             "Enter an SMB server name, for example smb://nas/Projects.",
         ));
     };
-    let port = parts
-        .port()
-        .map_err(|_| LocationError::new("Invalid SMB port."))?;
+    let port = parts.port()?;
     let host = if hostname.contains(':') {
         format!("[{hostname}]")
     } else {
@@ -329,8 +327,8 @@ fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
 
 /// Ports `_normalise_device_location`: keeps the device authority as
 /// written (GIO needs it exactly) and canonicalises the path.
-fn normalise_device_location(value: &str, scheme: &str) -> Result<String, LocationError> {
-    let device = DeviceUriMatch::parse(value).filter(|device| device.scheme.eq_ignore_ascii_case(scheme));
+fn normalise_device_location(address: &str, scheme: &str) -> Result<String, LocationError> {
+    let device = DeviceUriMatch::parse(address).filter(|device| device.scheme.eq_ignore_ascii_case(scheme));
     let Some(device) = device else {
         return Err(LocationError::new(
             "A connected-device address must include a device identifier and path.",
@@ -382,8 +380,8 @@ mod tests {
     }
 
     /// The canonical URI of an address typed without a current folder.
-    fn canonical(value: &str) -> Result<String, LocationError> {
-        normalise_location(value, None, &home())
+    fn canonical(address: &str) -> Result<String, LocationError> {
+        normalise_location(address, None, &home())
     }
 
     /// The canonical URI of `name` typed while `folder` is open.

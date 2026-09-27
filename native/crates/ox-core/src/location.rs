@@ -52,18 +52,15 @@ mod virtual_place;
 pub(crate) use text::{python_strip, unquote_lossy};
 
 pub use classify::{is_network_filesystem, is_smb_share_root};
-pub use display::{
-    base_name, breadcrumbs, crumb_divider, device_root, display_location, parent_location, same_location,
-    title_for, DeviceLabel, LocationContext,
-};
-pub use names::{new_copy_name, safe_label, try_new_copy_name, validate_name, ItemKind, MAX_LABEL_CHARS};
+pub use display::{crumb_divider, device_root, parent_location, same_location, DeviceLabel, LocationContext};
+pub use names::{new_copy_name, safe_label, validate_name, ItemKind, MAX_LABEL_CHARS};
 pub use normalise::{
     file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
 };
-pub use parts::{split_location, LocationParts};
+pub use parts::{split_location, LocationKind, LocationParts};
 pub use virtual_place::{
-    is_virtual_location, normalise_navigation, virtual_place, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI,
-    RECENT_URI, SETTINGS_URI, TRASH_URI,
+    is_virtual_location, normalise_navigation, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI, RECENT_URI,
+    SETTINGS_URI, TRASH_URI,
 };
 
 /// GIO's schemes for phones, cameras and iOS devices. Their authorities can
@@ -77,18 +74,28 @@ pub const DEVICE_SCHEMES: [&str; 3] = ["mtp", "gphoto2", "afc"];
 /// the message is the Python app's, word for word; `location_python.rs`
 /// checks every one of them.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("{0}")]
-pub struct LocationError(pub String);
+#[error("{message}")]
+pub struct LocationError {
+    /// The text shown to the user.
+    message: String,
+}
 
 impl LocationError {
     /// An error with the given user-facing message.
     pub fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
+        Self {
+            message: message.into(),
+        }
     }
 
     /// The user-facing message.
     pub fn message(&self) -> &str {
-        &self.0
+        &self.message
+    }
+
+    /// The user-facing message, for errors that wrap this one.
+    pub fn into_message(self) -> String {
+        self.message
     }
 
     /// A `?` or `#` in a URL. `urlsplit` would cut the path there, so the
@@ -117,14 +124,17 @@ impl Crumb {
     }
 }
 
-/// The URI scheme, lower-cased (`file`, `smb`, `mtp`, ...), or an empty
-/// string for a plain path. Follows Python's `urlsplit` rule: the text
-/// before the first `:` must be a letter followed by letters, digits, `+`,
-/// `-` or `.`.
-pub fn scheme(uri: &str) -> String {
-    parts::split_scheme(uri)
-        .map(|(scheme, _)| scheme)
-        .unwrap_or_default()
+/// The URI scheme, lower-cased (`file`, `smb`, `mtp`, ...), or `None` for
+/// a plain path. Follows Python's `urlsplit` rule: the text before the
+/// first `:` must be a letter followed by letters, digits, `+`, `-` or `.`.
+pub fn scheme(uri: &str) -> Option<String> {
+    parts::split_scheme(uri).map(|(scheme, _)| scheme)
+}
+
+/// What kind of place `uri` names, by its scheme; [`LocationKind::Other`]
+/// for plain paths and schemes the app does not browse as folders.
+pub fn location_kind(uri: &str) -> LocationKind {
+    scheme(uri).map_or(LocationKind::Other, |scheme| LocationKind::from_scheme(&scheme))
 }
 
 /// True for phones, cameras and iOS devices (`mtp:`, `gphoto2:`, `afc:`).

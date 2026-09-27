@@ -16,9 +16,10 @@ use super::{LocationError, DEVICE_SCHEMES};
 /// `_UNSAFE_URL_BYTES_TO_REMOVE`).
 const UNSAFE_URL_CHARACTERS: [char; 3] = ['\t', '\r', '\n'];
 
-/// What kind of place the scheme of a location names.
+/// What kind of place the scheme of a location names; see
+/// [`location_kind`](super::location_kind).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LocationKind {
+pub enum LocationKind {
     /// `file:`: a folder on this computer.
     Local,
     /// `smb:`: a Windows or Samba server, share or shared folder.
@@ -46,10 +47,12 @@ impl LocationKind {
 /// Nothing is decoded: `path` keeps its percent escapes.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct LocationParts {
-    /// Lower-cased scheme, or empty for a plain path.
+    /// Lower-cased scheme, or empty for a plain path, as in Python's
+    /// `SplitResult`; [`kind`](Self::kind) gives it as a [`LocationKind`].
     pub scheme: String,
-    /// Everything between `//` and the path, including any user and port.
-    pub netloc: String,
+    /// Everything between `//` and the path, including any user and port
+    /// (Python's `SplitResult.netloc`).
+    pub authority: String,
     /// The escaped path. Device locations always have at least `/`.
     pub path: String,
     /// Text after `?`, without the `?`.
@@ -61,7 +64,7 @@ pub struct LocationParts {
 impl LocationParts {
     /// True when the authority carries a user name or password (`user@`).
     pub fn has_credentials(&self) -> bool {
-        self.netloc.contains('@')
+        self.authority.contains('@')
     }
 
     /// The host name, lower-cased, without brackets, user or port; `None`
@@ -79,32 +82,31 @@ impl LocationParts {
         Some(hostname)
     }
 
-    /// The port, or `None` when absent or empty. Mirrors Python's
-    /// `SplitResult.port`: ASCII digits only, at most 65535.
+    /// The port, or `None` when absent or empty. Accepts what Python's
+    /// `SplitResult.port` accepts: ASCII digits only, at most 65535.
     ///
     /// # Errors
     ///
-    /// Python's `ValueError` wording for a port that is not all digits or
-    /// is above 65535; callers show their own message instead.
+    /// "Invalid SMB port." for a port that is not all ASCII digits or is
+    /// above 65535: only SMB servers are asked for their port, and this is
+    /// the message `normalise_location` in `core.py` gives for both cases.
     pub fn port(&self) -> Result<Option<u16>, LocationError> {
         let (_, port) = self.host_and_port();
         let Some(port) = port else {
             return Ok(None);
         };
-        let not_an_integer =
-            || LocationError::new(format!("Port could not be cast to integer value as {port:?}"));
+        let invalid_port = || LocationError::new("Invalid SMB port.");
         if !port.bytes().all(|byte| byte.is_ascii_digit()) {
-            return Err(not_an_integer());
+            return Err(invalid_port());
         }
         // Leading zeros are allowed, so parse wider than u16 first.
-        let value: u128 = port.parse().map_err(|_| not_an_integer())?;
-        u16::try_from(value)
-            .map(Some)
-            .map_err(|_| LocationError::new("Port out of range 0-65535"))
+        let number: u128 = port.parse().map_err(|_| invalid_port())?;
+        let port = u16::try_from(number).map_err(|_| invalid_port())?;
+        Ok(Some(port))
     }
 
     /// What kind of place the scheme names.
-    pub(crate) fn kind(&self) -> LocationKind {
+    pub fn kind(&self) -> LocationKind {
         LocationKind::from_scheme(&self.scheme)
     }
 
@@ -136,7 +138,7 @@ impl LocationParts {
     /// Python's `_hostinfo`: the host (brackets removed) and the non-empty
     /// port text.
     fn host_and_port(&self) -> (&str, Option<&str>) {
-        let host_info = after_user_info(&self.netloc);
+        let host_info = after_user_info(&self.authority);
         let (host, port) = match host_info.split_once('[') {
             Some((_, bracketed)) => {
                 let (host, after_bracket) = partition(bracketed, ']');
@@ -160,11 +162,11 @@ impl LocationParts {
 ///
 /// A [`LocationError`] with Python's wording for unbalanced or invalid
 /// bracketed hosts.
-pub fn split_location(value: &str) -> Result<LocationParts, LocationError> {
-    let device_parts = DeviceUriMatch::parse(value).map(DeviceUriMatch::to_parts);
+pub fn split_location(location: &str) -> Result<LocationParts, LocationError> {
+    let device_parts = DeviceUriMatch::parse(location).map(DeviceUriMatch::to_parts);
     match device_parts {
         Some(parts) if parts.is_device() => Ok(parts),
-        _ => split_url(value),
+        _ => split_url(location),
     }
 }
 
@@ -182,8 +184,8 @@ pub(crate) struct DeviceUriMatch<'a> {
 
 impl<'a> DeviceUriMatch<'a> {
     /// Matches any scheme; callers check it against [`DEVICE_SCHEMES`].
-    pub(crate) fn parse(value: &'a str) -> Option<Self> {
-        let (scheme, after_scheme) = value.split_once("://")?;
+    pub(crate) fn parse(uri: &'a str) -> Option<Self> {
+        let (scheme, after_scheme) = uri.split_once("://")?;
         if !is_scheme(scheme) || after_scheme.contains(['?', '#']) {
             return None;
         }
@@ -206,7 +208,7 @@ impl<'a> DeviceUriMatch<'a> {
     pub(crate) fn to_parts(self) -> LocationParts {
         LocationParts {
             scheme: self.scheme.to_ascii_lowercase(),
-            netloc: self.authority.to_string(),
+            authority: self.authority.to_string(),
             path: self.path.to_string(),
             query: String::new(),
             fragment: String::new(),
@@ -214,10 +216,10 @@ impl<'a> DeviceUriMatch<'a> {
     }
 }
 
-/// The scheme of `value` by `urlsplit`'s rule, lower-cased, and the text
-/// after its colon; `None` for a plain path.
-pub(crate) fn split_scheme(value: &str) -> Option<(String, &str)> {
-    let (scheme, after_scheme) = value.split_once(':')?;
+/// The scheme of `location` by `urlsplit`'s rule, lower-cased, and the
+/// text after its colon; `None` for a plain path.
+pub(crate) fn split_scheme(location: &str) -> Option<(String, &str)> {
+    let (scheme, after_scheme) = location.split_once(':')?;
     is_scheme(scheme).then(|| (scheme.to_ascii_lowercase(), after_scheme))
 }
 
@@ -234,20 +236,20 @@ fn is_scheme(text: &str) -> bool {
 /// every tab, carriage return and line feed (the WHATWG rules), then checks
 /// bracketed hosts and rejects non-ASCII authorities that NFKC
 /// normalisation turns into URL delimiters (`℀` becomes `a/c`).
-pub(crate) fn split_url(value: &str) -> Result<LocationParts, LocationError> {
-    let cleaned = strip_ignored_url_characters(value);
+pub(crate) fn split_url(location: &str) -> Result<LocationParts, LocationError> {
+    let cleaned = strip_ignored_url_characters(location);
     let (scheme, after_scheme) = match split_scheme(&cleaned) {
         Some((scheme, after_scheme)) => (scheme, after_scheme),
         None => (String::new(), cleaned.as_ref()),
     };
-    let (netloc, after_netloc) = split_netloc(after_scheme);
-    check_brackets(netloc)?;
-    let (before_fragment, fragment) = partition(after_netloc, '#');
+    let (authority, after_authority) = split_netloc(after_scheme);
+    check_brackets(authority)?;
+    let (before_fragment, fragment) = partition(after_authority, '#');
     let (path, query) = partition(before_fragment, '?');
-    check_nfkc_netloc(netloc)?;
+    check_nfkc_netloc(authority)?;
     Ok(LocationParts {
         scheme,
-        netloc: netloc.to_string(),
+        authority: authority.to_string(),
         path: path.to_string(),
         query: query.to_string(),
         fragment: fragment.to_string(),
@@ -256,8 +258,8 @@ pub(crate) fn split_url(value: &str) -> Result<LocationParts, LocationError> {
 
 /// Drops leading C0 controls and spaces and removes tabs, carriage returns
 /// and line feeds anywhere, as `urlsplit` does before parsing.
-fn strip_ignored_url_characters(value: &str) -> Cow<'_, str> {
-    let trimmed = value.trim_start_matches(|c: char| c <= ' ');
+fn strip_ignored_url_characters(location: &str) -> Cow<'_, str> {
+    let trimmed = location.trim_start_matches(|c: char| c <= ' ');
     if trimmed.contains(UNSAFE_URL_CHARACTERS) {
         Cow::Owned(trimmed.replace(UNSAFE_URL_CHARACTERS, ""))
     } else {
@@ -278,23 +280,23 @@ fn split_netloc(text: &str) -> (&str, &str) {
 
 /// `urlsplit`'s bracket rules: balanced brackets, and then
 /// [`check_bracketed_netloc`].
-fn check_brackets(netloc: &str) -> Result<(), LocationError> {
-    let has_open = netloc.contains('[');
-    let has_close = netloc.contains(']');
+fn check_brackets(authority: &str) -> Result<(), LocationError> {
+    let has_open = authority.contains('[');
+    let has_close = authority.contains(']');
     if has_open != has_close {
         return Err(invalid_ipv6_url());
     }
     if !has_open {
         return Ok(());
     }
-    check_bracketed_netloc(netloc)
+    check_bracketed_netloc(authority)
 }
 
 /// Python's `_check_bracketed_netloc`: nothing before `[`, only `:port`
 /// after `]`, and an IPv6 address or an RFC 3986 future address (`v1.x`)
 /// inside.
-fn check_bracketed_netloc(netloc: &str) -> Result<(), LocationError> {
-    let host_info = after_user_info(netloc);
+fn check_bracketed_netloc(authority: &str) -> Result<(), LocationError> {
+    let host_info = after_user_info(authority);
     let host = match host_info.split_once('[') {
         Some((before_bracket, bracketed)) => {
             let (host, after_bracket) = partition(bracketed, ']');
@@ -353,11 +355,11 @@ fn is_ipv6_address(host: &str) -> bool {
 /// Python's `_checknetloc`: a non-ASCII authority must not gain `/`, `?`,
 /// `#`, `@` or `:` under NFKC normalisation, because it would then split
 /// differently once a client converts it to ASCII.
-fn check_nfkc_netloc(netloc: &str) -> Result<(), LocationError> {
-    if netloc.is_ascii() {
+fn check_nfkc_netloc(authority: &str) -> Result<(), LocationError> {
+    if authority.is_ascii() {
         return Ok(());
     }
-    let without_delimiters: String = netloc
+    let without_delimiters: String = authority
         .chars()
         .filter(|c| !matches!(c, '@' | ':' | '#' | '?'))
         .collect();
@@ -368,13 +370,13 @@ fn check_nfkc_netloc(netloc: &str) -> Result<(), LocationError> {
         return Ok(());
     }
     Err(LocationError::new(format!(
-        "The server name “{netloc}” contains characters that are not allowed in an address."
+        "The server name “{authority}” contains characters that are not allowed in an address."
     )))
 }
 
 /// The host and port part of an authority: the text after the last `@`.
-fn after_user_info(netloc: &str) -> &str {
-    netloc.rsplit_once('@').map_or(netloc, |(_, host)| host)
+fn after_user_info(authority: &str) -> &str {
+    authority.rsplit_once('@').map_or(authority, |(_, host)| host)
 }
 
 /// Python's `str.partition` without the separator: the text before and
@@ -392,18 +394,18 @@ fn invalid_ipv6_url() -> LocationError {
 mod tests {
     use super::*;
 
-    fn parts(scheme: &str, netloc: &str, path: &str) -> LocationParts {
+    fn parts(scheme: &str, authority: &str, path: &str) -> LocationParts {
         LocationParts {
             scheme: scheme.into(),
-            netloc: netloc.into(),
+            authority: authority.into(),
             path: path.into(),
             ..LocationParts::default()
         }
     }
 
     /// Splits a location the test knows to be valid.
-    fn split(value: &str) -> LocationParts {
-        split_location(value).expect("valid URL")
+    fn split(location: &str) -> LocationParts {
+        split_location(location).expect("valid URL")
     }
 
     /// parity: DEV-005

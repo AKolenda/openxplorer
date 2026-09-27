@@ -11,7 +11,7 @@
 use super::display::{location_parts, same_location, LocationContext};
 use super::normalise::is_smb_server;
 use super::text::{decode_uri_component, strip_one_trailing_slash};
-use super::virtual_place::{VirtualFolder, VirtualPlace};
+use super::virtual_place::{is_in_virtual_folder, VirtualPlace};
 
 /// Path components that mark a read-only snapshot (Btrfs/NAS snapshots
 /// and Windows "Previous versions" over SMB).
@@ -41,7 +41,7 @@ impl LocationContext {
         // of shares or in a read-only snapshot.
         !uri.is_empty()
             && VirtualPlace::from_uri(uri).is_none()
-            && VirtualFolder::parse(uri).is_none()
+            && !is_in_virtual_folder(uri)
             && !is_smb_server(uri)
             && !self.is_snapshot_location(uri)
     }
@@ -67,12 +67,6 @@ impl LocationContext {
         self.network_mounts
             .iter()
             .any(|mount| is_path_at_or_below(path, &mount.to_string_lossy()))
-    }
-
-    /// The former name of [`is_network_location`](Self::is_network_location),
-    /// kept until `places.rs` calls the new name.
-    pub fn network_location(&self, uri: &str) -> bool {
-        self.is_network_location(uri)
     }
 
     /// True for a configured snapshot root and everything below it.

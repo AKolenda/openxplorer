@@ -9,6 +9,7 @@
 use std::io::Read;
 
 use super::node::{Node, TransferError};
+use crate::location::{self, ItemKind};
 
 const STAGING_PREFIX: &str = ".winspace-transfer-";
 const STAGING_SUFFIX: &str = ".part";
@@ -16,8 +17,6 @@ const BACKUP_PREFIX: &str = ".winspace-replaced-";
 const BACKUP_SUFFIX: &str = ".backup";
 /// The payload item inside a local or network staging folder.
 pub(crate) const PAYLOAD_NAME: &str = "payload";
-/// Linux `NAME_MAX` in bytes.
-const NAME_MAX: usize = 255;
 
 /// 32 lowercase hexadecimal digits from `/dev/urandom` (like
 /// `uuid.uuid4().hex` in Python: unpredictable, not merely unique).
@@ -62,29 +61,16 @@ pub fn is_own_staging_name(name: &str) -> bool {
 /// The Windows-style duplicate name used by "Keep both":
 /// `file (copy 2).pdf`, `.env (copy 2)`, `Folder.v1 (copy 3)`.
 ///
-/// Port of `new_copy_name` in `desktop/core.py`. Folders and names whose
-/// only dot is leading keep no extension. The stem is shortened (whole
-/// characters, never splitting UTF-8) to respect `NAME_MAX`; a name whose
-/// extension alone is too long is refused rather than renamed beyond
-/// recognition.
-pub fn new_copy_name(name: &str, number: u32, is_directory: bool) -> Result<String, TransferError> {
-    crate::location::validate_name(name).map_err(|error| TransferError::failed(error.to_string()))?;
-    let has_extension = name.trim_start_matches('.').contains('.');
-    let (stem, suffix) = match name.rfind('.') {
-        Some(dot) if !is_directory && has_extension => (&name[..dot], &name[dot..]),
-        _ => (name, ""),
-    };
-    let marker = format!(" (copy {number})");
-    let mut stem = stem.to_string();
-    while stem.len() + marker.len() + suffix.len() > NAME_MAX && !stem.is_empty() {
-        stem.pop();
-    }
-    if stem.is_empty() {
-        return Err(TransferError::failed(
-            "This file name is too long to generate a duplicate name.",
-        ));
-    }
-    Ok(format!("{stem}{marker}{suffix}"))
+/// [`location::new_copy_name`], shared with the rest of the app, with its
+/// refusal as a [`TransferError`].
+///
+/// # Errors
+///
+/// A failure with the location error's message for an invalid name, or a
+/// name whose extension alone is too long: it is refused rather than
+/// renamed beyond recognition.
+pub fn new_copy_name(name: &str, number: u32, kind: ItemKind) -> Result<String, TransferError> {
+    location::new_copy_name(name, number, kind).map_err(|error| TransferError::failed(error.into_message()))
 }
 
 /// `dir.child(name)` after checking that `name` is exactly one path
@@ -136,21 +122,24 @@ mod tests {
     /// Port of `test_validation` (copy names) in `desktop/tests/test_core.py`.
     #[test]
     fn copy_names_match_the_python_app() {
-        let name = |n: &str, number, dir| new_copy_name(n, number, dir).expect("valid name");
-        assert_eq!(name("file.pdf", 2, false), "file (copy 2).pdf");
-        assert_eq!(name(".env", 2, false), ".env (copy 2)");
-        assert_eq!(name("Folder.v1", 3, true), "Folder.v1 (copy 3)");
-        assert_eq!(name("archive.tar.gz", 2, false), "archive.tar (copy 2).gz");
-        assert_eq!(name("a.", 2, false), "a (copy 2).");
+        let name = |n: &str, number, kind| new_copy_name(n, number, kind).expect("valid name");
+        assert_eq!(name("file.pdf", 2, ItemKind::File), "file (copy 2).pdf");
+        assert_eq!(name(".env", 2, ItemKind::File), ".env (copy 2)");
+        assert_eq!(name("Folder.v1", 3, ItemKind::Folder), "Folder.v1 (copy 3)");
+        assert_eq!(
+            name("archive.tar.gz", 2, ItemKind::File),
+            "archive.tar (copy 2).gz"
+        );
+        assert_eq!(name("a.", 2, ItemKind::File), "a (copy 2).");
         let long = format!("{}.txt", "é".repeat(120));
-        assert!(name(&long, 2, false).len() <= 255);
-        assert!(name(&long, 2, false).ends_with(" (copy 2).txt"));
+        assert!(name(&long, 2, ItemKind::File).len() <= 255);
+        assert!(name(&long, 2, ItemKind::File).ends_with(" (copy 2).txt"));
     }
 
     #[test]
     fn copy_name_with_an_oversized_extension_is_refused() {
         let name = format!("a.{}", "x".repeat(250));
-        assert!(new_copy_name(&name, 2, false).is_err());
-        assert!(new_copy_name("..", 2, false).is_err());
+        assert!(new_copy_name(&name, 2, ItemKind::File).is_err());
+        assert!(new_copy_name("..", 2, ItemKind::File).is_err());
     }
 }

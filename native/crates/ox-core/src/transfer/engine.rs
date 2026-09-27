@@ -15,6 +15,7 @@ use super::node::{Cancellation, Node, NodeFactory, NodeKind, TransferError, Writ
 use super::staged_copy::{StageSlot, StagedCopy};
 use super::staging::discard_stage;
 use super::types::{ConflictPolicy, Progress, TransferMode, TransferResult};
+use crate::location::ItemKind;
 
 /// The most items one run accepts.
 pub const MAX_ITEMS: usize = 100_000;
@@ -337,11 +338,16 @@ fn free_copy_name(
     is_directory: bool,
     cancel: &Cancellation,
 ) -> Result<Box<dyn Node>, TransferError> {
+    let kind = if is_directory {
+        ItemKind::Folder
+    } else {
+        ItemKind::File
+    };
     let mut destination = taken;
     let mut number = 2;
     while destination.exists(Some(cancel)) {
         cancel.check()?;
-        let name = new_copy_name(source_name, number, is_directory)?;
+        let name = new_copy_name(source_name, number, kind)?;
         destination = child_node(dest_dir, &name)?;
         number += 1;
         if number > MAX_COPY_NUMBER {

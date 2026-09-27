@@ -166,15 +166,19 @@ impl VirtualPlace {
     }
 }
 
-/// The virtual place `uri` is, or `None`. Same as [`VirtualPlace::from_uri`].
-pub fn virtual_place(uri: &str) -> Option<VirtualPlace> {
-    VirtualPlace::from_uri(uri)
-}
-
 /// True for the app's pages and for anything inside `trash:`, `recent:` or
 /// `network:`. Such locations are never writable folders.
 pub fn is_virtual_location(uri: &str) -> bool {
-    VirtualPlace::from_uri(uri).is_some() || VirtualFolder::parse(uri).is_some()
+    VirtualPlace::from_uri(uri).is_some() || is_in_virtual_folder(uri)
+}
+
+/// True for anything with a `trash:`, `recent:` or `network:` scheme, even
+/// an address that cannot be opened: such a location is never writable.
+pub(crate) fn is_in_virtual_folder(uri: &str) -> bool {
+    let Some((scheme, _)) = split_scheme(uri) else {
+        return false;
+    };
+    VirtualPlace::from_gio_scheme(&scheme).is_some()
 }
 
 /// Normalises a location the app can navigate to: everything
@@ -187,15 +191,15 @@ pub fn is_virtual_location(uri: &str) -> bool {
 /// As [`normalise_location`]. A `trash:`, `recent:` or `network:` location
 /// fails when it has a query, fragment or server name, or a component that
 /// does not decode or decodes to a control character.
-pub fn normalise_navigation(value: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
-    let trimmed = python_strip(value);
+pub fn normalise_navigation(address: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
+    let trimmed = python_strip(address);
     if let Some(place) = VirtualPlace::from_uri(trimmed) {
         return Ok(place.uri().to_string());
     }
     if let Some(folder) = VirtualFolder::parse(trimmed) {
         return folder.map(|folder| folder.uri());
     }
-    normalise_location(value, base, home)
+    normalise_location(address, base, home)
 }
 
 /// A location inside one of GIO's virtual folders, split into decoded path
@@ -212,8 +216,9 @@ impl VirtualFolder {
     /// Splits a `trash:`, `recent:` or `network:` location.
     ///
     /// `None` when `uri` has another scheme. `Some(Err(..))` when it is in
-    /// a virtual folder but cannot be canonicalised: callers still know it
-    /// is virtual, and so never writable, without being able to open it.
+    /// a virtual folder but cannot be canonicalised: navigation then shows
+    /// the error instead of treating `uri` as a folder path. To ask only
+    /// whether `uri` is virtual, use [`is_in_virtual_folder`].
     pub(crate) fn parse(uri: &str) -> Option<Result<Self, LocationError>> {
         let (scheme, after_scheme) = split_scheme(uri)?;
         let place = VirtualPlace::from_gio_scheme(&scheme)?;
@@ -281,8 +286,8 @@ fn decode_segments(path: &str) -> Result<Vec<String>, LocationError> {
 mod tests {
     use super::*;
 
-    fn navigate(value: &str) -> Result<String, LocationError> {
-        normalise_navigation(value, None, Path::new("/home/test"))
+    fn navigate(address: &str) -> Result<String, LocationError> {
+        normalise_navigation(address, None, Path::new("/home/test"))
     }
 
     #[test]
@@ -345,6 +350,19 @@ mod tests {
         assert!(is_virtual_location("trash:///a"));
         assert!(is_virtual_location(PC_URI));
         assert!(!is_virtual_location("file:///"));
+    }
+
+    /// A malformed address in a virtual folder cannot be opened, but it
+    /// still names a virtual folder, which is never writable.
+    #[test]
+    fn malformed_items_are_still_in_their_virtual_folder() {
+        for uri in ["trash:///a", "Recent:///%FF", "trash://host/", "network:x?y"] {
+            assert!(is_in_virtual_folder(uri), "{uri}");
+            assert!(is_virtual_location(uri), "{uri}");
+        }
+        for uri in [HOME_URI, "file:///", "/tmp", "smb://nas/"] {
+            assert!(!is_in_virtual_folder(uri), "{uri}");
+        }
     }
 
     #[test]

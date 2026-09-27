@@ -64,7 +64,7 @@ pub fn validate_name(name: &str) -> Result<&str, LocationError> {
 /// too long to generate a duplicate name." when the extension alone leaves
 /// no room for the marker: the name is then rejected rather than renamed
 /// beyond recognition.
-pub fn try_new_copy_name(name: &str, number: u32, kind: ItemKind) -> Result<String, LocationError> {
+pub fn new_copy_name(name: &str, number: u32, kind: ItemKind) -> Result<String, LocationError> {
     validate_name(name)?;
     let (mut stem, suffix) = split_extension(name, kind);
     let marker = format!(" (copy {number})");
@@ -80,40 +80,26 @@ pub fn try_new_copy_name(name: &str, number: u32, kind: ItemKind) -> Result<Stri
     Ok(format!("{stem}{marker}{suffix}"))
 }
 
-/// Infallible form of [`try_new_copy_name`] for callers that let the
-/// filesystem reject the result.
-///
-/// When no valid duplicate name exists it returns the unshortened
-/// `stem (copy N).ext`, which is either invalid or longer than 255 bytes,
-/// so creating it fails with an error instead of writing a surprising name.
-/// Prefer [`try_new_copy_name`] in new code.
-pub fn new_copy_name(name: &str, number: u32, kind: ItemKind) -> String {
-    try_new_copy_name(name, number, kind).unwrap_or_else(|_| {
-        let (stem, suffix) = split_extension(name, kind);
-        format!("{stem} (copy {number}){suffix}")
-    })
-}
-
 /// A user-supplied sidebar label, trimmed, or `fallback` when it is empty.
 ///
 /// # Errors
 ///
 /// A [`LocationError`] for a label over 120 characters or with a control
 /// character.
-pub fn safe_label(value: &str, fallback: &str) -> Result<String, LocationError> {
-    let value = python_strip(value);
-    if value.is_empty() {
+pub fn safe_label(label: &str, fallback: &str) -> Result<String, LocationError> {
+    let label = python_strip(label);
+    if label.is_empty() {
         return Ok(fallback.to_string());
     }
     // Safety rule (SAFE-018, `core.py::safe_label`): settings.json keeps
     // only bounded labels, and no control character that could break the
     // sidebar row or hide part of the label.
-    if has_control_character(value) || value.chars().count() > MAX_LABEL_CHARS {
+    if has_control_character(label) || label.chars().count() > MAX_LABEL_CHARS {
         return Err(LocationError::new(
             "A sidebar label must be at most 120 characters and contain no control characters.",
         ));
     }
-    Ok(value.to_string())
+    Ok(label.to_string())
 }
 
 /// Splits `report.final.pdf` into `report.final` and `.pdf`. Folders and
@@ -162,28 +148,28 @@ mod tests {
         assert!(validate_name("x\u{85}").is_ok());
     }
 
+    /// The "Keep both" name of a name the test knows has room for the
+    /// marker.
+    fn copy_name(name: &str, number: u32, kind: ItemKind) -> String {
+        new_copy_name(name, number, kind).expect("a valid name with room for the marker")
+    }
+
     /// parity: XFER-008
     #[test]
     fn copy_names_follow_python() {
-        assert_eq!(new_copy_name("file.pdf", 2, ItemKind::File), "file (copy 2).pdf");
-        assert_eq!(new_copy_name(".env", 2, ItemKind::File), ".env (copy 2)");
+        assert_eq!(copy_name("file.pdf", 2, ItemKind::File), "file (copy 2).pdf");
+        assert_eq!(copy_name(".env", 2, ItemKind::File), ".env (copy 2)");
+        assert_eq!(copy_name("Folder.v1", 3, ItemKind::Folder), "Folder.v1 (copy 3)");
         assert_eq!(
-            new_copy_name("Folder.v1", 3, ItemKind::Folder),
-            "Folder.v1 (copy 3)"
-        );
-        assert_eq!(
-            new_copy_name("archive.tar.gz", 2, ItemKind::File),
+            copy_name("archive.tar.gz", 2, ItemKind::File),
             "archive.tar (copy 2).gz"
         );
         assert_eq!(
-            new_copy_name("..hidden.txt", 4, ItemKind::File),
+            copy_name("..hidden.txt", 4, ItemKind::File),
             "..hidden (copy 4).txt"
         );
-        assert_eq!(
-            new_copy_name("trailing.", 2, ItemKind::File),
-            "trailing (copy 2)."
-        );
-        assert_eq!(new_copy_name("README", 10, ItemKind::File), "README (copy 10)");
+        assert_eq!(copy_name("trailing.", 2, ItemKind::File), "trailing (copy 2).");
+        assert_eq!(copy_name("README", 10, ItemKind::File), "README (copy 10)");
     }
 
     /// parity: XFER-008
@@ -191,11 +177,11 @@ mod tests {
     fn long_copy_names_are_shortened_by_whole_characters() {
         // The Python suite's case: 244 bytes plus the marker still fits.
         let name = format!("{}.txt", "é".repeat(120));
-        let copy = try_new_copy_name(&name, 2, ItemKind::File).expect("the name fits");
+        let copy = new_copy_name(&name, 2, ItemKind::File).expect("the name fits");
         assert!(copy.len() <= 255, "{} bytes", copy.len());
         // 254 bytes: four two-byte characters must go.
         let name = format!("{}.txt", "é".repeat(125));
-        let copy = try_new_copy_name(&name, 2, ItemKind::File).expect("the stem can be shortened");
+        let copy = new_copy_name(&name, 2, ItemKind::File).expect("the stem can be shortened");
         assert_eq!(copy, format!("{} (copy 2).txt", "é".repeat(121)));
         assert_eq!(copy.len(), 255);
     }
@@ -204,10 +190,12 @@ mod tests {
     #[test]
     fn impossible_copy_names_are_rejected() {
         let long_extension = format!("a.{}", "x".repeat(250));
-        assert!(try_new_copy_name(&long_extension, 2, ItemKind::File).is_err());
-        assert!(try_new_copy_name("a/b", 2, ItemKind::File).is_err());
-        // The infallible form yields a name the filesystem will refuse.
-        assert!(new_copy_name(&long_extension, 2, ItemKind::File).len() > 255);
+        let refusal = new_copy_name(&long_extension, 2, ItemKind::File);
+        assert_eq!(
+            refusal.as_ref().map_err(LocationError::message),
+            Err("This file name is too long to generate a duplicate name.")
+        );
+        assert!(new_copy_name("a/b", 2, ItemKind::File).is_err());
     }
 
     /// parity: SAFE-018

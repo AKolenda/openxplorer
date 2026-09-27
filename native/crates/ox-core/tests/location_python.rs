@@ -95,6 +95,7 @@ struct DeviceCase {
 #[derive(Debug, PartialEq, Deserialize)]
 struct SplitParts {
     scheme: String,
+    /// Python's name for [`LocationParts::authority`].
     netloc: String,
     path: String,
     query: String,
@@ -105,7 +106,7 @@ impl From<LocationParts> for SplitParts {
     fn from(parts: LocationParts) -> Self {
         Self {
             scheme: parts.scheme,
-            netloc: parts.netloc,
+            netloc: parts.authority,
             path: parts.path,
             query: parts.query,
             fragment: parts.fragment,
@@ -166,7 +167,7 @@ fn file_names_are_validated_like_core_py() {
 fn copy_names_are_chosen_like_core_py() {
     let mut mismatches = Mismatches::new("new_copy_name");
     for case in &fixture().copies {
-        let actual = location::try_new_copy_name(&case.name, case.number, case.kind());
+        let actual = location::new_copy_name(&case.name, case.number, case.kind());
         let input = (&case.name, case.number, case.is_dir);
         mismatches.expect_outcome(input, &case.outcome, &actual);
     }

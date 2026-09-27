@@ -11,8 +11,8 @@
 //!
 //! The web UI read the home folder, mounted devices, snapshot roots and
 //! network mounts from its `state.env`; here they live in a
-//! [`LocationContext`]. The free functions use an empty context: devices
-//! are then called "Connected device".
+//! [`LocationContext`]. `LocationContext::default()` knows no devices, so
+//! it calls every device "Connected device".
 
 use std::path::PathBuf;
 
@@ -20,7 +20,7 @@ use super::normalise::file_uri;
 use super::parts::{split_location, split_scheme, DeviceUriMatch, LocationKind, LocationParts};
 use super::text::{decode_uri_component, strip_one_trailing_slash};
 use super::virtual_place::{VirtualFolder, VirtualPlace};
-use super::Crumb;
+use super::{location_kind, Crumb};
 
 /// Name of a device whose mount is not known.
 const UNKNOWN_DEVICE: &str = "Connected device";
@@ -66,17 +66,17 @@ impl LocationContext {
     }
 
     /// The label of the mounted device `uri` is on, or "Connected device".
-    pub fn device_name(&self, uri: &str) -> String {
+    pub fn device_name(&self, uri: &str) -> &str {
         let Some(root) = device_root(uri) else {
-            return UNKNOWN_DEVICE.to_string();
+            return UNKNOWN_DEVICE;
         };
         let device = self
             .devices
             .iter()
             .find(|device| device_root(&device.uri).as_ref() == Some(&root));
         match device {
-            Some(device) if !device.label.is_empty() => device.label.clone(),
-            _ => UNKNOWN_DEVICE.to_string(),
+            Some(device) if !device.label.is_empty() => &device.label,
+            _ => UNKNOWN_DEVICE,
         }
     }
 
@@ -132,8 +132,8 @@ impl LocationContext {
         };
         match parts.kind() {
             LocationKind::Local => path,
-            LocationKind::Smb => format!("\\\\{}{}", parts.netloc, path.replace('/', "\\")),
-            LocationKind::Device => with_subpath(&self.device_name(uri), path.trim_matches('/')),
+            LocationKind::Smb => format!("\\\\{}{}", parts.authority, path.replace('/', "\\")),
+            LocationKind::Device => with_subpath(self.device_name(uri), path.trim_matches('/')),
             LocationKind::Other => uri.to_string(),
         }
     }
@@ -156,9 +156,9 @@ impl LocationContext {
     /// "Local Disk".
     fn root_name(&self, uri: &str, parts: LocationParts) -> String {
         if parts.is_device() {
-            self.device_name(uri)
-        } else if !parts.netloc.is_empty() {
-            parts.netloc
+            self.device_name(uri).to_string()
+        } else if !parts.authority.is_empty() {
+            parts.authority
         } else {
             LOCAL_DISK.to_string()
         }
@@ -186,45 +186,23 @@ impl LocationContext {
     fn root_crumb(&self, uri: &str, parts: &LocationParts) -> Option<Crumb> {
         match parts.kind() {
             LocationKind::Local => Some(Crumb::new("/", "file:///")),
-            LocationKind::Smb => Some(Crumb::new(&parts.netloc, root_uri(parts))),
+            LocationKind::Smb => Some(Crumb::new(&parts.authority, root_uri(parts))),
             LocationKind::Device => Some(Crumb::new(self.device_name(uri), root_uri(parts))),
             LocationKind::Other => None,
         }
     }
 }
 
-/// [`LocationContext::base_name`] without device names or a home folder.
-pub fn base_name(uri: &str) -> String {
-    LocationContext::default().base_name(uri)
-}
-
-/// [`LocationContext::title_for`] with the real home folder.
-pub fn title_for(uri: &str) -> String {
-    LocationContext::default().title_for(uri)
-}
-
-/// [`LocationContext::display_location`] without device names.
-pub fn display_location(uri: &str) -> String {
-    LocationContext::default().display_location(uri)
-}
-
-/// [`LocationContext::breadcrumbs`] without device names.
-pub fn breadcrumbs(uri: &str) -> Vec<Crumb> {
-    LocationContext::default().breadcrumbs(uri)
-}
-
-/// The separator the address bar draws before crumb `index` of `uri`:
-/// none before the first crumb or right after the `/` root, `\` on SMB and
-/// `/` elsewhere, as the web UI's `renderNavigation`.
-pub fn crumb_divider(uri: &str, crumbs: &[Crumb], index: usize) -> Option<&'static str> {
-    let after_local_root = index == 1 && crumbs.first().is_some_and(|crumb| crumb.label == "/");
-    if index == 0 || after_local_root {
-        None
-    } else if uri.starts_with("smb:") {
-        // A text test, as in app.js: canonical URIs have lower-case schemes.
-        Some("\\")
-    } else {
-        Some("/")
+/// The separator the address bar draws before crumb `index` of
+/// [`LocationContext::breadcrumbs`]: none before the first crumb or right
+/// after the `/` root of a local folder, `\` on SMB and `/` elsewhere, as
+/// the web UI's `renderNavigation`. The scheme decides, as app.js's
+/// `startsWith('smb:')` does for the canonical URIs the window shows.
+pub fn crumb_divider(uri: &str, index: usize) -> Option<&'static str> {
+    match (location_kind(uri), index) {
+        (_, 0) | (LocationKind::Local, 1) => None,
+        (LocationKind::Smb, _) => Some("\\"),
+        _ => Some("/"),
     }
 }
 
@@ -249,7 +227,7 @@ pub fn parent_location(uri: &str) -> Option<String> {
         Some((parent, _)) if !parent.is_empty() => parent,
         _ => "/",
     };
-    Some(format!("{}://{}{parent}", parts.scheme, parts.netloc))
+    Some(format!("{}://{}{parent}", parts.scheme, parts.authority))
 }
 
 /// True when two URIs differ at most by one trailing slash.
@@ -277,7 +255,7 @@ pub(super) fn location_parts(uri: &str) -> Option<LocationParts> {
 
 /// `scheme://authority/`: the root of an SMB server or a device.
 fn root_uri(parts: &LocationParts) -> String {
-    format!("{}://{}/", parts.scheme, parts.netloc)
+    format!("{}://{}/", parts.scheme, parts.authority)
 }
 
 /// `Pixel 7 / DCIM/Camera`, or just the name when `subpath` is empty.
@@ -399,13 +377,35 @@ mod tests {
     #[test]
     fn crumb_dividers_follow_the_address_style() {
         let local = "file:///home/test";
-        let local_crumbs = breadcrumbs(local);
-        assert_eq!(crumb_divider(local, &local_crumbs, 0), None);
-        assert_eq!(crumb_divider(local, &local_crumbs, 1), None);
-        assert_eq!(crumb_divider(local, &local_crumbs, 2), Some("/"));
+        let local_crumbs = context().breadcrumbs(local);
+        assert_eq!(local_crumbs[0], Crumb::new("/", "file:///"));
+        assert_eq!(crumb_divider(local, 0), None);
+        assert_eq!(crumb_divider(local, 1), None);
+        assert_eq!(crumb_divider(local, 2), Some("/"));
         let share = "smb://nas/share";
-        assert_eq!(crumb_divider(share, &breadcrumbs(share), 1), Some("\\"));
+        assert_eq!(crumb_divider(share, 0), None);
+        assert_eq!(crumb_divider(share, 1), Some("\\"));
+        assert_eq!(crumb_divider(share, 2), Some("\\"));
         let phone = "mtp://[usb:001,010]/DCIM";
-        assert_eq!(crumb_divider(phone, &breadcrumbs(phone), 1), Some("/"));
+        assert_eq!(crumb_divider(phone, 1), Some("/"));
+        let item = "trash:///Old%20plans/draft.txt";
+        assert_eq!(crumb_divider(item, 1), Some("/"));
+    }
+
+    /// A phone that is not among the mounted devices is shown as
+    /// "Connected device", never by its raw USB identifier.
+    ///
+    /// parity: NAV-017
+    #[test]
+    fn unknown_devices_are_called_connected_device() {
+        let without_devices = LocationContext::default();
+        assert_eq!(without_devices.device_name(PHONE_ROOT), "Connected device");
+        assert_eq!(without_devices.base_name(PHONE_ROOT), "Connected device");
+        assert_eq!(
+            without_devices.display_location("mtp://[usb:001,010]/DCIM"),
+            "Connected device / DCIM"
+        );
+        assert_eq!(context().device_name(PHONE_ROOT), "Pixel 7");
+        assert_eq!(context().device_name("file:///"), "Connected device");
     }
 }

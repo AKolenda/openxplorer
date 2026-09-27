@@ -65,7 +65,7 @@ pub fn classify_entry(
     // file or every shortcut.
     let names_a_share = source
         .as_ref()
-        .is_some_and(|parts| !parts.netloc.is_empty() && !parts.path.trim_matches('/').is_empty());
+        .is_some_and(|parts| !parts.authority.is_empty() && !parts.path.trim_matches('/').is_empty());
     let target_is_usable = target_uri.is_none() || target.is_some();
     let smb_mount = kind == EntryKind::Mountable && source_is_smb && names_a_share && target_is_usable;
 

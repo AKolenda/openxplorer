@@ -27,7 +27,7 @@ pub struct PinTarget {
 /// thread. `uri` may be any form `normalise_location` accepts (a path, a
 /// UNC name, an `smb://` or device URI) and is normalised first.
 pub fn inspect(uri: &str, cancellable: Option<&gio::Cancellable>) -> Result<Entry, EnumerateError> {
-    let uri = normalise(uri).map_err(|error| EnumerateError::Invalid(error.0))?;
+    let uri = normalise(uri).map_err(|error| EnumerateError::Invalid(error.into_message()))?;
     let file = gio::File::for_uri(&uri);
     let info = file
         .query_info(ATTRIBUTES, gio::FileQueryInfoFlags::NONE, cancellable)
@@ -51,7 +51,8 @@ pub fn pin_target(entry: &Entry, label: &str) -> Result<PinTarget, EnumerateErro
     if !entry.is_dir {
         return Err(EnumerateError::Invalid(NOT_PINNABLE.to_string()));
     }
-    let uri = normalise(entry.navigation_uri()).map_err(|error| EnumerateError::Invalid(error.0))?;
+    let uri =
+        normalise(entry.navigation_uri()).map_err(|error| EnumerateError::Invalid(error.into_message()))?;
     let label = if label.is_empty() {
         entry.name.clone()
     } else {

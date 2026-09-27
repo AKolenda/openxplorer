@@ -113,7 +113,7 @@ pub fn compose_quick_access(
         ..LocationContext::default()
     };
     for place in &mut places {
-        place.is_shared = context.network_location(&place.uri);
+        place.is_shared = context.is_network_location(&place.uri);
     }
     places
 }
