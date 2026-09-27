@@ -17,17 +17,22 @@ use std::os::unix::ffi::OsStrExt;
 use super::error::TransferError;
 use super::node::Node;
 
+/// Staging names are `.winspace-transfer-<32 hex>.part` (XFER-001).
 const STAGING_PREFIX: &str = ".winspace-transfer-";
 const STAGING_SUFFIX: &str = ".part";
+/// Backups of replaced files are `.winspace-replaced-<32 hex>.backup`
+/// (XFER-010).
 const BACKUP_PREFIX: &str = ".winspace-replaced-";
 const BACKUP_SUFFIX: &str = ".backup";
+/// The number of hexadecimal digits in a generated name: 128 random bits.
+const RANDOM_DIGITS: usize = 32;
 /// The payload item inside a local or network staging folder.
 pub(crate) const PAYLOAD_NAME: &str = "payload";
 
 /// 32 lowercase hexadecimal digits from `/dev/urandom` (like
 /// `uuid.uuid4().hex` in Python: unpredictable, not merely unique).
 fn random_hex() -> Result<String, TransferError> {
-    let mut bytes = [0u8; 16];
+    let mut bytes = [0u8; RANDOM_DIGITS / 2];
     std::fs::File::open("/dev/urandom")
         .and_then(|mut source| source.read_exact(&mut bytes))
         .map_err(|error| {
@@ -35,8 +40,8 @@ fn random_hex() -> Result<String, TransferError> {
                 "Could not reserve a private staging name. Nothing was changed. {error}"
             ))
         })?;
-    let digits: Vec<String> = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    Ok(digits.concat())
+    let pairs: Vec<String> = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+    Ok(pairs.concat())
 }
 
 /// A new `.winspace-transfer-<32 hex>.part` name for a private staging item.
@@ -68,26 +73,27 @@ pub fn is_own_staging_name(name: &str) -> bool {
     let Some(digits) = rest.strip_suffix(STAGING_SUFFIX) else {
         return false;
     };
-    let lower_hex = |c: char| c.is_ascii_digit() || ('a'..='f').contains(&c);
-    digits.len() == 32 && digits.chars().all(lower_hex)
+    let is_lower_hex = |digit: u8| matches!(digit, b'0'..=b'9' | b'a'..=b'f');
+    digits.len() == RANDOM_DIGITS && digits.bytes().all(is_lower_hex)
 }
 
-/// `directory.child(name)` after checking that `name` is exactly one path
+/// `folder.child(name)` after checking that `name` is exactly one path
 /// component. GIO resolves `..` and `a/b` relative to the folder, so an
 /// unchecked name could address an item outside the folder.
 ///
 /// The check works on bytes, so names that are not valid UTF-8 pass through
 /// unchanged. Backslashes are allowed: they are ordinary characters in POSIX
 /// names.
-pub(crate) fn child_node(
-    directory: &dyn Node,
-    name: impl AsRef<OsStr>,
-) -> Result<Box<dyn Node>, TransferError> {
+///
+/// # Errors
+///
+/// A name that is empty, `.`, `..`, or contains `/` or a NUL byte.
+pub(crate) fn child_node(folder: &dyn Node, name: impl AsRef<OsStr>) -> Result<Box<dyn Node>, TransferError> {
     let name = name.as_ref();
     if !is_single_component(name) {
         return Err(TransferError::failed("Invalid child name."));
     }
-    Ok(directory.child(name))
+    Ok(folder.child(name))
 }
 
 /// True for a non-empty name that is not `.` or `..` and contains no `/` or
@@ -102,14 +108,23 @@ fn is_single_component(name: &OsStr) -> bool {
 mod tests {
     use super::*;
 
+    /// parity: XFER-001
     #[test]
-    fn generated_staging_names_are_recognised() {
+    fn generated_staging_names_are_unpredictable_and_recognised() {
         let first = staging_name().expect("urandom is readable");
         let second = staging_name().expect("urandom is readable");
-        assert!(is_own_staging_name(&first));
+
+        assert!(is_own_staging_name(&first), "{first}");
         assert_ne!(first, second);
+    }
+
+    /// parity: XFER-002, XFER-010
+    #[test]
+    fn backup_names_are_never_taken_for_staging() {
         let backup = backup_name().expect("urandom is readable");
+
         assert!(backup.starts_with(".winspace-replaced-") && backup.ends_with(".backup"));
+        assert_eq!(backup.len(), ".winspace-replaced-".len() + 32 + ".backup".len());
         assert!(!is_own_staging_name(&backup));
     }
 

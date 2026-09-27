@@ -131,3 +131,50 @@ pub struct TransferResult {
     /// The user cancelled; later items were not started.
     pub cancelled: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Port of `test_unknown_operation_rejected` in
+    /// `desktop/tests/test_operations.py`. Only the parsing can be tested:
+    /// an unknown name never becomes a [`TransferMode`] or
+    /// [`ConflictPolicy`], so the engine cannot be asked to run one.
+    ///
+    /// parity: XFER-019
+    #[test]
+    fn protocol_names_round_trip_and_unknown_ones_are_refused() {
+        for mode in [
+            TransferMode::Copy,
+            TransferMode::Move,
+            TransferMode::Trash,
+            TransferMode::Delete,
+        ] {
+            assert_eq!(mode.as_str().parse::<TransferMode>(), Ok(mode));
+        }
+        for policy in [
+            ConflictPolicy::Skip,
+            ConflictPolicy::Replace,
+            ConflictPolicy::KeepBoth,
+        ] {
+            assert_eq!(policy.as_str().parse::<ConflictPolicy>(), Ok(policy));
+        }
+        assert_eq!(
+            "erase".parse::<TransferMode>(),
+            Err(TransferError::failed("Unknown operation."))
+        );
+        assert_eq!(
+            "overwrite".parse::<ConflictPolicy>(),
+            Err(TransferError::failed(
+                "Choose Skip duplicates, Keep both, or Replace existing."
+            ))
+        );
+    }
+
+    #[test]
+    fn progress_fractions_stay_between_zero_and_one() {
+        assert!(progress_fraction(0, 0).abs() < f64::EPSILON);
+        assert!((progress_fraction(1, 4) - 0.25).abs() < f64::EPSILON);
+        assert!((progress_fraction(9, 4) - 1.0).abs() < f64::EPSILON);
+    }
+}

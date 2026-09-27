@@ -4,34 +4,35 @@
 //! `desktop/operations.py`.
 //!
 //! Rules enforced here:
-//! - A copy is built under an unguessable `.winspace-transfer-<32 hex>.part`
-//!   name and published only when complete, so a partial copy is never
-//!   visible under its final name.
-//! - Local and network destinations get a private staging folder (created
+//! - XFER-001: a copy is built under an unguessable
+//!   `.winspace-transfer-<32 hex>.part` name and published only when
+//!   complete, so a partial copy is never visible under its final name.
+//!   Local and network destinations get a private staging folder (created
 //!   with an exclusive `mkdir`, owner-only when local) holding `payload`.
-//! - Device destinations (MTP) build the item itself under a hidden sibling
-//!   name and publish it with a same-folder rename (MTP `SetObjectPropValue`).
-//!   Uploads therefore never need MTP `MoveObject`, which devices such as
-//!   Android 7 and 8 do not offer.
-//! - A copy within one device (MTP `CopyObject`) keeps the source's name
-//!   whatever target is requested, so it is built under that name inside a
-//!   private folder, renamed there, and moved out under the same name. As
-//!   in the Python app, that last move needs MTP `MoveObject`; a device
-//!   without it gets an error that says so.
-//! - A device's success report is never trusted: the final name must exist
-//!   and the staged name must be gone.
-//! - Only staging this item created is recorded for cleanup: a failed
-//!   exclusive `mkdir`, or an upload refused because its name exists, grants
-//!   no right to delete anything.
+//! - XFER-021: device destinations (MTP) build the item itself under a
+//!   hidden sibling name and publish it with a same-folder rename (MTP
+//!   `SetObjectPropValue`). Uploads therefore never need MTP `MoveObject`,
+//!   which devices such as Android 7 and 8 do not offer. A device's success
+//!   report is never trusted: the final name must exist and the staged name
+//!   must be gone.
+//! - XFER-023: a copy within one device (MTP `CopyObject`) keeps the
+//!   source's name whatever target is requested, so it is built under that
+//!   name inside a private folder, renamed there, and moved out under the
+//!   same name. As in the Python app, that last move needs MTP
+//!   `MoveObject`; a device without it gets an error that says so.
+//! - XFER-002: only staging this item created is recorded for cleanup: a
+//!   failed exclusive `mkdir`, or an upload refused because its name
+//!   exists, grants no right to delete anything.
 
 use std::ffi::OsString;
 
+use super::cancellation::Cancellation;
 use super::commit::{commit_replace, publish_staged, verify_installation};
 use super::copy::Copier;
 use super::error::TransferError;
 use super::modes::{secure_local_staging, DirectoryModes};
 use super::names::{child_node, staging_name, PAYLOAD_NAME};
-use super::node::{Cancellation, ItemIdentity, Node, NodeKind, WriteGuard};
+use super::node::{ItemIdentity, Node, NodeKind, WriteGuard};
 use super::staging::StagingPlace;
 use super::types::{ConflictPolicy, Progress};
 
@@ -69,7 +70,7 @@ impl Stage {
 
 /// The staging one item owns, for cleanup after it finishes or fails.
 #[derive(Default)]
-pub(crate) struct StageSlot {
+pub(crate) struct ItemStaging {
     /// Set as soon as staging exists; cleared once nothing is left to remove.
     pub(crate) stage: Option<Stage>,
     /// Where the staging lives, which decides how cleanup is retried.
@@ -79,7 +80,7 @@ pub(crate) struct StageSlot {
     pub(crate) created: Option<ItemIdentity>,
 }
 
-impl StageSlot {
+impl ItemStaging {
     /// Removes the private folder of a published copy.
     ///
     /// The folder is empty by then. A plain delete removes only an empty
@@ -109,50 +110,63 @@ enum Layout {
     SameDeviceCopy,
 }
 
-/// One top-level copy into `dest_dir` under the name `destination`.
+/// One top-level copy into `destination_folder` under the name
+/// `destination`.
 pub(crate) struct StagedCopy<'a> {
+    /// The user's item; it is only read.
     pub(crate) source: &'a dyn Node,
+    /// What `source` is, inspected without following links.
     pub(crate) source_kind: NodeKind,
-    pub(crate) dest_dir: &'a dyn Node,
+    /// The folder the copy is published in.
+    pub(crate) destination_folder: &'a dyn Node,
+    /// The final name, chosen by the conflict policy.
     pub(crate) destination: &'a dyn Node,
     /// Replace overwrites files and merges folders; every other policy
     /// publishes without overwriting.
     pub(crate) policy: ConflictPolicy,
     pub(crate) cancel: &'a Cancellation,
+    /// Asked about every destination a Replace changes.
     pub(crate) guard: Option<&'a WriteGuard>,
+    /// Receives byte progress.
     pub(crate) emit: &'a mut dyn FnMut(Progress),
 }
 
 impl StagedCopy<'_> {
-    /// Builds, publishes and verifies the copy. `slot` receives the staging
-    /// as soon as it exists, so the caller can clean it up on any failure.
+    /// Builds, publishes and verifies the copy. `staging` receives the
+    /// staging as soon as it exists, so the caller can clean it up on any
+    /// failure.
     ///
     /// # Errors
     ///
     /// Any failure while staging, publishing or verifying. Nothing is
     /// visible under the final name unless publishing succeeded.
-    pub(crate) fn run(mut self, slot: &mut StageSlot) -> Result<(), TransferError> {
-        let token = staging_name()?;
+    pub(crate) fn run(mut self, staging: &mut ItemStaging) -> Result<(), TransferError> {
+        let stage_name = staging_name()?;
         let mut modes = DirectoryModes::default();
-        slot.place = StagingPlace::of(self.dest_dir);
+        staging.place = StagingPlace::of(self.destination_folder);
         let layout = self.layout();
         match layout {
-            Layout::Sibling => self.build_sibling(&token, &mut modes, slot)?,
-            _ => self.build_in_folder(&token, layout, &mut modes, slot)?,
+            Layout::Sibling => self.build_sibling(&stage_name, &mut modes, staging)?,
+            Layout::Payload | Layout::SameDeviceCopy => {
+                self.build_in_folder(&stage_name, layout, &mut modes, staging)?;
+            }
         }
         self.cancel.check()?;
-        let stage = slot
+        // Building succeeded, so the stage is recorded; this keeps that
+        // invariant without a panic.
+        let stage = staging
             .stage
             .as_ref()
             .ok_or_else(|| TransferError::failed("The copy was not staged. Nothing was published."))?;
         self.publish(stage, &mut modes)
             .map_err(|error| explain_publish_error(error, layout))?;
-        if slot.place == StagingPlace::Device {
+        if staging.place == StagingPlace::Device {
+            // XFER-021: a device's success report is not proof.
             verify_device_publication(stage, self.destination)?;
             if matches!(stage, Stage::Sibling(_)) {
                 // The staged item now is the published item: nothing is
                 // left to clean up.
-                slot.stage = None;
+                staging.stage = None;
             }
         }
         Ok(())
@@ -163,24 +177,24 @@ impl StagedCopy<'_> {
     /// everything else uses a private folder.
     fn layout(&self) -> Layout {
         let is_file = self.source_kind != NodeKind::Directory;
-        if is_file && self.source.native_copy_keeps_name(self.dest_dir) {
+        if is_file && self.source.native_copy_keeps_name(self.destination_folder) {
             Layout::SameDeviceCopy
-        } else if self.dest_dir.stage_as_sibling() {
+        } else if self.destination_folder.stage_as_sibling() {
             Layout::Sibling
         } else {
             Layout::Payload
         }
     }
 
-    /// Builds the item itself under the hidden name `token` beside its final
-    /// name.
+    /// XFER-021: builds the item itself under the hidden name `stage_name`
+    /// beside its final name.
     fn build_sibling(
         &mut self,
-        token: &str,
+        stage_name: &str,
         modes: &mut DirectoryModes,
-        slot: &mut StageSlot,
+        staging: &mut ItemStaging,
     ) -> Result<(), TransferError> {
-        let staged_item = child_node(self.dest_dir, token)?;
+        let staged_item = child_node(self.destination_folder, stage_name)?;
         // Nothing can exist under a fresh random name unless another program
         // created it, and then it is not ours to use or remove.
         if staged_item.exists(Some(self.cancel)) {
@@ -188,48 +202,52 @@ impl StagedCopy<'_> {
                 "Could not reserve a private staging name. Nothing was changed.",
             ));
         }
-        let mut copier = Copier::new(self.cancel, token, modes, &mut *self.emit);
+        let mut copier = Copier::new(self.cancel, stage_name, modes, &mut *self.emit);
         if self.source_kind == NodeKind::Directory {
-            // A failed exclusive mkdir grants no right to clean up this path.
+            // XFER-002: a failed exclusive mkdir grants no right to clean up
+            // this path.
             staged_item.mkdir(Some(self.cancel))?;
-            let stage = slot.stage.insert(Stage::Sibling(staged_item));
+            let stage = staging.stage.insert(Stage::Sibling(staged_item));
             return copier.copy_children(self.source, stage.item(), 1);
         }
         // Recorded before copying, so a failed or cancelled upload is removed.
-        let stage = slot.stage.insert(Stage::Sibling(staged_item));
+        let stage = staging.stage.insert(Stage::Sibling(staged_item));
         let uploaded = copier.copy(self.source, stage.item(), 0);
         if matches!(uploaded, Err(TransferError::Exists(_))) {
-            // The copy never overwrites: another program took the name after
-            // the check above, and its item must survive cleanup.
-            slot.stage = None;
+            // XFER-002: the copy never overwrites, so another program took
+            // the name after the check above, and its item must survive
+            // cleanup.
+            staging.stage = None;
         }
         uploaded
     }
 
-    /// Builds the item inside a new private folder named `token`.
+    /// Builds the item inside a new private folder named `stage_name`.
     fn build_in_folder(
         &mut self,
-        token: &str,
+        stage_name: &str,
         layout: Layout,
         modes: &mut DirectoryModes,
-        slot: &mut StageSlot,
+        staging: &mut ItemStaging,
     ) -> Result<(), TransferError> {
-        let folder = child_node(self.dest_dir, token)?;
-        // A copy within one MTP device runs as CopyObject, which keeps the
-        // SOURCE name whatever target is requested: copy under that name.
+        let folder = child_node(self.destination_folder, stage_name)?;
+        // XFER-023: a copy within one MTP device runs as CopyObject, which
+        // keeps the SOURCE name whatever target is requested: copy under
+        // that name.
         let item_name = if layout == Layout::SameDeviceCopy {
             self.source.name()
         } else {
             OsString::from(PAYLOAD_NAME)
         };
         let item = child_node(folder.as_ref(), item_name)?;
-        // Reserve a private namespace. A failed mkdir never grants
+        // XFER-002: reserve a private namespace. A failed mkdir never grants
         // permission to delete that name during cleanup.
         folder.mkdir(Some(self.cancel))?;
-        let stage = slot.stage.insert(Stage::Folder { folder, item });
-        // The folder that was made private is the only one cleanup may empty.
-        slot.created = secure_local_staging(stage.root())?;
-        let mut copier = Copier::new(self.cancel, token, modes, &mut *self.emit);
+        let stage = staging.stage.insert(Stage::Folder { folder, item });
+        // XFER-004: the folder that was made private is the only one cleanup
+        // may empty.
+        staging.created = secure_local_staging(stage.root())?;
+        let mut copier = Copier::new(self.cancel, stage_name, modes, &mut *self.emit);
         copier.copy(self.source, stage.item(), 0)?;
         if layout == Layout::SameDeviceCopy {
             self.rename_device_copy(stage)?;
@@ -258,10 +276,10 @@ impl StagedCopy<'_> {
         Ok(())
     }
 
-    /// Installs the completed item under its final name with a native
-    /// rename in the destination folder. Replace is only reached after the
-    /// user explicitly chose it; every other policy keeps the no-overwrite
-    /// race guard.
+    /// XFER-001: installs the completed item under its final name with a
+    /// native rename in the destination folder. Replace is only reached
+    /// after the user explicitly chose it; every other policy keeps the
+    /// no-overwrite race guard (XFER-007).
     fn publish(&self, stage: &Stage, modes: &mut DirectoryModes) -> Result<(), TransferError> {
         if self.policy == ConflictPolicy::Replace {
             commit_replace(
@@ -282,15 +300,16 @@ impl StagedCopy<'_> {
 /// offer. Their refusal is explained in those terms rather than as the
 /// generic unsupported move, which blames a cross-filesystem move.
 fn explain_publish_error(error: TransferError, layout: Layout) -> TransferError {
-    match error {
-        TransferError::NotSupported(_) if layout == Layout::SameDeviceCopy => TransferError::NotSupported(
-            "This device cannot move items between folders, so a copy within the device \
-             cannot be finished. Nothing was published. Copy the item to this computer \
-             first, then copy it back to the device."
-                .into(),
-        ),
-        other => other,
+    let is_move_object_refusal = matches!(error, TransferError::NotSupported(_));
+    if !is_move_object_refusal || layout != Layout::SameDeviceCopy {
+        return error;
     }
+    TransferError::NotSupported(
+        "This device cannot move items between folders, so a copy within the device \
+         cannot be finished. Nothing was published. Copy the item to this computer \
+         first, then copy it back to the device."
+            .into(),
+    )
 }
 
 /// Never trusts a device's success report for the final name.

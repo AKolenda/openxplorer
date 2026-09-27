@@ -3,23 +3,24 @@
 //! `desktop/operations.py`.
 //!
 //! Rules enforced here:
-//! - Items are inspected without following symbolic links; links are
-//!   copied as links and never traversed, so link loops are harmless.
-//! - Sockets, devices, FIFOs and other special files are refused.
+//! - XFER-017: items are inspected without following symbolic links; links
+//!   are copied as links and never traversed, so link loops are harmless.
+//! - XFER-018: sockets, devices, FIFOs and other special files are refused.
 //! - Nesting deeper than [`MAX_DEPTH`] stops the copy.
-//! - Meeting the engine's own staging name inside the source means the
-//!   destination is an alias of a folder inside the source (for example the
-//!   same share under another host name); the copy stops instead of copying
-//!   itself forever.
-//! - Staged local folders are owner-only while being built; the source's
-//!   mode is recorded and applied only when publishing.
+//! - XFER-016: meeting the engine's own staging name inside the source
+//!   means the destination is an alias of a folder inside the source (for
+//!   example the same share under another host name); the copy stops
+//!   instead of copying itself forever.
+//! - XFER-004 and XFER-005: staged local folders are owner-only while being
+//!   built; the source's mode is recorded and applied only when publishing.
 
+use super::cancellation::Cancellation;
 use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::labels::copy_label;
-use super::modes::{local_directory_path, secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
+use super::modes::{path_for_unix_modes, secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
 use super::names::child_node;
-use super::node::{Cancellation, Node, NodeInfo, NodeKind};
+use super::node::{Node, NodeInfo, NodeKind};
 use super::types::{progress_fraction, Progress};
 
 /// Copies one source tree into staging, reporting byte progress.
@@ -49,6 +50,12 @@ impl<'a> Copier<'a> {
     }
 
     /// Copies `source` (at nesting `depth`) to the new name `target`.
+    ///
+    /// # Errors
+    ///
+    /// The first item that cannot be copied, a refused special file, the
+    /// nesting limit, an alias of the destination inside the source, or
+    /// [`TransferError::Cancelled`].
     pub(crate) fn copy(
         &mut self,
         source: &dyn Node,
@@ -64,6 +71,7 @@ impl<'a> Copier<'a> {
                 "The destination resolves inside the source through an alias. Copy stopped.",
             ));
         }
+        // XFER-017: inspected without following a symbolic link.
         let info = source.info(Some(self.cancel))?;
         match info.kind {
             NodeKind::Directory => self.copy_directory(source, target, &info, depth),
@@ -74,6 +82,8 @@ impl<'a> Copier<'a> {
         }
     }
 
+    /// Creates the folder `target` for the folder `source`, whose metadata
+    /// is `info`, and copies its items.
     fn copy_directory(
         &mut self,
         source: &dyn Node,
@@ -82,20 +92,31 @@ impl<'a> Copier<'a> {
         depth: usize,
     ) -> Result<(), TransferError> {
         target.mkdir(Some(self.cancel))?;
-        if let Some(path) = local_directory_path(target) {
-            let mode = match info.mode {
-                Some(mode) => Some(mode),
-                None => target.info(Some(self.cancel))?.mode,
-            };
-            let final_mode = mode.unwrap_or(PRIVATE_DIRECTORY_MODE);
+        if let Some(path) = path_for_unix_modes(target) {
+            let final_mode = self.published_mode(info, target)?;
             self.modes.record(target.uri(), path, final_mode);
             secure_local_staging(target)?;
         }
         self.copy_children(source, target, depth + 1)
     }
 
+    /// The mode the staged local folder `target` gets when it is published:
+    /// the source folder's mode; else, for a source backend without Unix
+    /// modes, the mode the new folder was created with; else owner-only.
+    fn published_mode(&self, source_info: &NodeInfo, target: &dyn Node) -> Result<u32, TransferError> {
+        if let Some(source_mode) = source_info.mode {
+            return Ok(source_mode);
+        }
+        let created_mode = target.info(Some(self.cancel))?.mode;
+        Ok(created_mode.unwrap_or(PRIVATE_DIRECTORY_MODE))
+    }
+
     /// Copies every item of the folder `source` into the existing folder
     /// `target`, at nesting `depth`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Copier::copy`], for the first item that fails.
     pub(crate) fn copy_children(
         &mut self,
         source: &dyn Node,
@@ -109,6 +130,7 @@ impl<'a> Copier<'a> {
         Ok(())
     }
 
+    /// Copies one file, or one link as a link, reporting its byte progress.
     fn copy_file(&mut self, source: &dyn Node, target: &dyn Node) -> Result<(), TransferError> {
         let name = source.display_name();
         let cancel = self.cancel;

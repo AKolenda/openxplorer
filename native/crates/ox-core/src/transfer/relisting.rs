@@ -2,10 +2,10 @@
 //! Relisting the folders that moves took items from. Ports the
 //! `moved_from` handling of `TransferEngine.run` in `desktop/operations.py`.
 //!
-//! `GVfs` MTP keeps resolving a moved item's old path to the moved object
-//! until that folder is listed again, so a later delete of the old path
-//! would delete the moved file. Every source folder is relisted once at the
-//! end of a run.
+//! XFER-025: `GVfs` MTP keeps resolving a moved item's old path to the
+//! moved object until that folder is listed again, so a later delete of
+//! the old path would delete the moved file. Every source folder is
+//! relisted once at the end of a run.
 
 use super::node::Node;
 

@@ -124,6 +124,7 @@ mod tests {
         expected: TransferError,
     }
 
+    /// parity: OPS-037
     #[test]
     fn glib_errors_keep_their_meaning() {
         let cases = [
@@ -158,6 +159,7 @@ mod tests {
         }
     }
 
+    /// parity: OPS-037
     #[test]
     fn io_errors_keep_their_meaning() {
         let missing = std::io::Error::from(std::io::ErrorKind::NotFound);

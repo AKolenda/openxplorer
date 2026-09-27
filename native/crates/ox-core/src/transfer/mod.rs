@@ -1,29 +1,42 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Copy, move, Trash and permanent delete.
 //!
-//! Ports `desktop/operations.py` and preserves its transfer safety rules:
-//! - a copy is staged privately and published only when complete, so a
-//!   partial copy is never visible under its final name;
-//! - Replace never loses the existing item before the new one is installed;
-//! - a move never degrades to copy-then-delete;
-//! - Trash never falls back to permanent deletion;
-//! - the engine only deletes staging it created, and reports any it cannot.
+//! Ports `desktop/operations.py` and preserves its transfer safety rules.
+//! Each rule is named by the id of the feature in
+//! `native/parity/features.toml` that specifies it. The code that enforces a
+//! rule names that id in a comment, and the tests that prove it carry a
+//! parity marker with the same id. The main rules:
 //!
-//! Each rule is documented at the code that enforces it:
+//! - XFER-001: a copy is staged privately and published only when complete,
+//!   so a partial copy is never visible under its final name.
+//! - XFER-002: the engine only deletes staging it created itself, and
+//!   XFER-003: it reports any it cannot remove, with its location.
+//! - XFER-007: publishing never overwrites a name that appeared meanwhile.
+//! - XFER-009 and XFER-010: Replace never loses the existing item before
+//!   the new one is installed.
+//! - XFER-011: a move never degrades to copy-then-delete.
+//! - XFER-014: Trash never falls back to permanent deletion.
+//! - XFER-020: a protected location anywhere in an affected tree stops the
+//!   item before anything changes.
 //!
 //! | Module | Responsibility |
 //! |---|---|
 //! | `engine` | The public API and the per-item loop (`run`, `_run_items`) |
+//! | `request` | Validating a run's items and destination folder |
 //! | `conflicts` | Skip, Keep both and Replace: the destination name |
 //! | `staged_copy` | Staging, publishing and device checks for one copy |
 //! | `copy` | The recursive copy into staging (`_copy`) |
 //! | `commit` | Publishing, Replace and reversible replacement |
 //! | `staging` | Removing the engine's own staging (`_discard_stage`) |
-//! | `guard` | Self/descendant checks and the write preflight |
+//! | `containment` | Refusing to place a folder inside itself |
+//! | `guard` | The write-guard preflight and the nesting limit |
 //! | `modes` | Unix modes of local staging folders |
 //! | `names` | Staging, backup and validated child names |
 //! | `labels` | Progress text |
 //! | `relisting` | Relisting the folders moves took items from (MTP) |
+//! | `node` | The [`Node`] storage abstraction the engine works on |
+//! | `cancellation` | [`Cancellation`], the user's stop request |
+//! | `types` | Modes, conflict policies, progress and the run's result |
 //! | `error` | [`TransferError`] and how backend errors map onto it |
 //!
 //! Every test of `desktop/tests/test_operations.py` and
@@ -37,8 +50,10 @@
 //! extraction cases of `desktop/tests/test_zip_extract.py`. Native backend
 //! limitations are documented in [`crate::gio_node`].
 
+mod cancellation;
 mod commit;
 mod conflicts;
+mod containment;
 mod copy;
 mod engine;
 mod error;
@@ -48,18 +63,24 @@ mod modes;
 mod names;
 mod node;
 mod relisting;
+mod request;
 mod staged_copy;
 mod staging;
 mod types;
 
+pub(crate) use cancellation::check_cancelled;
+pub use cancellation::Cancellation;
 pub(crate) use commit::verify_installation;
-pub use engine::{TransferEngine, MAX_ITEMS};
+pub use containment::guard_destination;
+pub use engine::TransferEngine;
 pub use error::TransferError;
 pub(crate) use guard::nesting_error;
-pub use guard::{check_write_tree, guard_destination, SourceChange, MAX_DEPTH};
+pub use guard::{check_write_tree, SourceChange, MAX_DEPTH};
 pub use modes::secure_local_staging;
+pub(crate) use modes::PRIVATE_DIRECTORY_MODE;
 pub use names::{backup_name, is_own_staging_name, staging_name};
-pub use node::{Cancellation, ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
+pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
+pub use request::MAX_ITEMS;
 pub use staging::clean_staging;
 pub(crate) use staging::STAGING_LEVELS;
 pub use types::{ConflictPolicy, Progress, TransferMode, TransferResult};

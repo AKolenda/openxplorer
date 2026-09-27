@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The storage abstraction the transfer engine works on.
 //!
-//! Ports the `Node` protocol, `Info` and `Cancellation` of
-//! `desktop/operations.py`. Production uses [`crate::gio_node::GioNode`];
-//! tests use a local-disk fake with the same contract (the Rust counterpart
-//! of `desktop/tests/local_provider.py`, in `tests/transfer_support/`).
+//! Ports the `Node` protocol and `Info` of `desktop/operations.py`.
+//! Production uses [`crate::gio_node::GioNode`]; tests use a local-disk fake
+//! with the same contract (the Rust counterpart of
+//! `desktop/tests/local_provider.py`, in `tests/transfer_support/`).
 
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gio::prelude::*;
-
+use super::cancellation::Cancellation;
 use super::error::TransferError;
 use super::staging::clean_staging;
 
@@ -51,47 +50,6 @@ pub struct ItemIdentity {
     pub inode: u64,
 }
 
-/// Cooperative cancellation shared with in-flight GIO calls.
-#[derive(Debug, Clone, Default)]
-pub struct Cancellation {
-    cancellable: gio::Cancellable,
-}
-
-impl Cancellation {
-    /// A fresh, not yet cancelled token.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Requests cancellation. In-flight GIO calls using this token abort.
-    pub fn cancel(&self) {
-        self.cancellable.cancel();
-    }
-
-    /// True once [`Cancellation::cancel`] was called.
-    pub fn is_cancelled(&self) -> bool {
-        self.cancellable.is_cancelled()
-    }
-
-    /// Stops an operation between two steps once the user cancelled.
-    ///
-    /// # Errors
-    ///
-    /// [`TransferError::Cancelled`] once [`Cancellation::cancel`] was called.
-    pub fn check(&self) -> Result<(), TransferError> {
-        if self.is_cancelled() {
-            Err(TransferError::Cancelled)
-        } else {
-            Ok(())
-        }
-    }
-
-    /// The underlying cancellable for GIO calls.
-    pub fn cancellable(&self) -> &gio::Cancellable {
-        &self.cancellable
-    }
-}
-
 /// One file or folder in some backend. Mirrors the Python `Node` protocol in
 /// `desktop/operations.py`, plus the device capabilities added for MTP.
 ///
@@ -102,24 +60,32 @@ impl Cancellation {
 pub trait Node: Send + Sync {
     /// The canonical URI.
     fn uri(&self) -> String;
+
     /// The last path component, byte for byte. Linux file names need not be
     /// UTF-8, and a copy must publish exactly the name it read.
     fn name(&self) -> OsString;
+
     /// The name for labels and messages, with invalid UTF-8 replaced. Never
     /// use it to address an item.
     fn display_name(&self) -> String {
         self.name().to_string_lossy().into_owned()
     }
+
     /// A local filesystem path, when the item has one.
     fn path(&self) -> Option<PathBuf>;
+
     /// The item `name` inside this folder. `name` must be one path component;
     /// the engine validates generated and listed names before calling this.
     fn child(&self, name: &OsStr) -> Box<dyn Node>;
+
     /// The containing folder, or `None` at a root.
     fn parent(&self) -> Option<Box<dyn Node>>;
-    /// `false` also when the backend cannot answer; use [`Node::info`] to
-    /// tell "missing" from "unreachable".
+
+    /// True when the item exists. Also `false` when the backend cannot
+    /// answer; use [`Node::info`] to tell "missing" from "unreachable".
+    /// A dangling symbolic link exists: its name is taken.
     fn exists(&self, cancel: Option<&Cancellation>) -> bool;
+
     /// Kind, size and mode without following a symbolic link.
     ///
     /// # Errors
@@ -127,18 +93,21 @@ pub trait Node: Send + Sync {
     /// [`TransferError::NotFound`] only when the item definitely does not
     /// exist; any other error means its state is unknown.
     fn info(&self, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError>;
+
     /// True for a folder (a link to a folder counts, like the Python app).
     ///
     /// # Errors
     ///
     /// The backend's error when the item cannot be inspected.
     fn is_directory(&self, cancel: Option<&Cancellation>) -> Result<bool, TransferError>;
+
     /// The folder's items, including hidden ones, without following links.
     ///
     /// # Errors
     ///
     /// The backend's error when the folder cannot be listed completely.
     fn children(&self, cancel: Option<&Cancellation>) -> Result<Vec<Box<dyn Node>>, TransferError>;
+
     /// Creates this folder. Exclusive: it never reuses an existing item.
     ///
     /// # Errors
@@ -146,6 +115,7 @@ pub trait Node: Send + Sync {
     /// [`TransferError::Exists`] when the name is taken; the engine then has
     /// no right to clean up that name.
     fn mkdir(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError>;
+
     /// Copies one file, or one symbolic link as a link, to the new name
     /// `target`. `progress(current, total)` may be called often. The
     /// callback cannot abort the copy, so implementations must stop with an
@@ -162,6 +132,7 @@ pub trait Node: Send + Sync {
         cancel: &Cancellation,
         progress: &mut dyn FnMut(u64, u64),
     ) -> Result<(), TransferError>;
+
     /// A native move or rename with no copy/delete fallback.
     ///
     /// # Errors
@@ -170,6 +141,7 @@ pub trait Node: Send + Sync {
     /// overwrites. [`TransferError::NotSupported`] when the backend cannot
     /// move natively, for example across filesystems.
     fn move_native(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError>;
+
     /// Installs this completed staged copy under `target` without ever
     /// overwriting: the step that makes a copy visible under its final name.
     ///
@@ -185,6 +157,7 @@ pub trait Node: Send + Sync {
     fn publish(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         self.move_native(target, cancel)
     }
+
     /// Move over an existing file after the user chose Replace.
     ///
     /// # Errors
@@ -192,6 +165,7 @@ pub trait Node: Send + Sync {
     /// [`TransferError::ReplaceUnsupported`] when the backend cannot do this
     /// in one step; the engine then replaces through reversible renames.
     fn replace_native(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError>;
+
     /// Deletes one file or one empty folder. Only ever called on staging the
     /// engine created, or a replacement backup it owns.
     ///
@@ -199,6 +173,7 @@ pub trait Node: Send + Sync {
     ///
     /// The backend's error, for example for a folder that is not empty.
     fn delete(&self) -> Result<(), TransferError>;
+
     /// Moves the item to the Trash.
     ///
     /// # Errors
@@ -206,6 +181,7 @@ pub trait Node: Send + Sync {
     /// [`TransferError::NotSupported`] where there is no Trash. It never
     /// falls back to a permanent delete.
     fn trash(&self, cancel: &Cancellation) -> Result<(), TransferError>;
+
     /// Whether this location has a usable Trash, which decides whether the
     /// app offers "Move to Trash" or an explicit permanent delete.
     ///
@@ -216,6 +192,7 @@ pub trait Node: Send + Sync {
     /// failure answers `Ok(false)`, like `can_trash` in
     /// `desktop/gio_backend.py`.
     fn can_trash(&self, cancel: Option<&Cancellation>) -> Result<bool, TransferError>;
+
     /// Explicit, user-confirmed permanent delete of a whole tree. Symbolic
     /// links are removed as links; their targets are never traversed.
     /// `assert_writable` is asked about every item before it is removed.
@@ -229,6 +206,7 @@ pub trait Node: Send + Sync {
         cancel: &Cancellation,
         assert_writable: Option<&WriteGuard>,
     ) -> Result<(), TransferError>;
+
     /// Removes this staging tree, which the engine created. `created` is
     /// the identity recorded right after the engine made it, when the
     /// backend has one.
@@ -247,20 +225,25 @@ pub trait Node: Send + Sync {
     fn delete_staging(&self, _created: Option<ItemIdentity>) -> Result<(), TransferError> {
         clean_staging(self)
     }
-    /// Stage copies beside their final name (MTP). Asked of the destination
-    /// folder: its native move cannot rename across folders, and some
-    /// devices cannot move across folders at all. Files and folders are
-    /// built under a hidden sibling name and published by a same-folder
-    /// rename.
+
+    /// True when copies into this folder are staged beside their final name
+    /// (MTP). Asked of the destination folder: its native move cannot
+    /// rename across folders, and some devices cannot move across folders
+    /// at all. Files and folders are then built under a hidden sibling name
+    /// and published by a same-folder rename.
     fn stage_as_sibling(&self) -> bool {
         false
     }
-    /// A native copy into `target_dir` keeps this item's own name (MTP
-    /// `CopyObject` within one device).
-    fn native_copy_keeps_name(&self, _target_dir: &dyn Node) -> bool {
+
+    /// True when a native copy into `target_folder` keeps this item's own
+    /// name whatever target name is asked for (MTP `CopyObject` within one
+    /// device).
+    fn native_copy_keeps_name(&self, _target_folder: &dyn Node) -> bool {
         false
     }
-    /// Re-list this folder so a backend's stale path cache is rebuilt (MTP).
+
+    /// Re-lists this folder so a backend's stale path cache is rebuilt
+    /// (MTP). Other backends have no such cache and do nothing.
     ///
     /// # Errors
     ///
@@ -275,17 +258,3 @@ pub type WriteGuard = dyn Fn(&str) -> Result<(), TransferError> + Send + Sync;
 
 /// Resolves a URI to a node.
 pub type NodeFactory = Arc<dyn Fn(&str) -> Result<Box<dyn Node>, TransferError> + Send + Sync>;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cancellation_is_reported_by_check() {
-        let cancel = Cancellation::new();
-        assert_eq!(cancel.check(), Ok(()));
-        cancel.cancel();
-        assert!(cancel.is_cancelled());
-        assert_eq!(cancel.check(), Err(TransferError::Cancelled));
-    }
-}

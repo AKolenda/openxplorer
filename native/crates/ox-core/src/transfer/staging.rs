@@ -5,15 +5,17 @@
 //! `desktop/operations.py`.
 //!
 //! Rules enforced here:
-//! - Only a staging item this engine created (an exclusive `mkdir`, or a
-//!   `copy_file` to a free random name) is ever removed. Callers must never
-//!   pass a user-selected path.
-//! - Removal inspects items without following symbolic links, so a link
-//!   inside staging is removed as a link and its target is never touched.
-//! - A local staging folder is removed only while its name still leads to
-//!   the folder the engine created (see [`Node::delete_staging`]).
-//! - Every cleanup failure is returned, so the caller can report the exact
-//!   leftover location for the user to inspect.
+//! - XFER-002: only a staging item this engine created (an exclusive
+//!   `mkdir`, or a `copy_file` to a free random name) is ever removed.
+//!   Callers must never pass a user-selected path. Removal inspects items
+//!   without following symbolic links, so a link inside staging is removed
+//!   as a link and its target is never touched. A local staging folder is
+//!   removed only while its name still leads to the folder the engine
+//!   created (see [`Node::delete_staging`]).
+//! - XFER-003: every cleanup failure is returned, so the caller can report
+//!   the exact leftover location for the user to inspect.
+//! - XFER-022: device staging is retried, and a device stage counts as gone
+//!   only when a listing of its folder confirms it.
 
 use std::time::Duration;
 
@@ -26,9 +28,9 @@ use super::node::{ItemIdentity, Node, NodeKind};
 /// and the `payload` inside it.
 pub(crate) const STAGING_LEVELS: usize = 2;
 
-/// Waits before each cleanup attempt on a device. Phones can reject the
-/// first request after an aborted transfer, so device staging is retried
-/// after half a second and again after one and a half seconds.
+/// XFER-022: waits before each cleanup attempt on a device. Phones can
+/// reject the first request after an aborted transfer, so device staging
+/// is retried after half a second and again after one and a half seconds.
 const DEVICE_CLEANUP_DELAYS: [Duration; 3] = [
     Duration::ZERO,
     Duration::from_millis(500),
@@ -60,6 +62,7 @@ impl StagingPlace {
         }
     }
 
+    /// The waits before each cleanup attempt.
     fn cleanup_delays(self) -> &'static [Duration] {
         match self {
             StagingPlace::LocalOrNetwork => &LOCAL_CLEANUP_DELAYS,
@@ -68,8 +71,8 @@ impl StagingPlace {
     }
 }
 
-/// The message for staging that could not be removed, with its exact
-/// location, as `desktop/operations.py` reports it.
+/// XFER-003: the message for staging that could not be removed, with its
+/// exact location, as `desktop/operations.py` reports it.
 pub(crate) fn leftover_report(stage: &dyn Node, place: StagingPlace, problem: &TransferError) -> String {
     let what = match place {
         StagingPlace::LocalOrNetwork => "folder",
@@ -153,20 +156,16 @@ fn remove_stage(
 ) -> Result<(), TransferError> {
     match stage.info(None) {
         Ok(_) => stage.delete_staging(created),
-        Err(error) if place == StagingPlace::Device && error.is_not_found() => {
-            if confirmed_absent(stage) {
-                Ok(())
-            } else {
-                Err(error)
-            }
+        Err(error) if place == StagingPlace::Device && error.is_not_found() && confirmed_absent(stage) => {
+            Ok(())
         }
         Err(error) => Err(error),
     }
 }
 
-/// `GVfs` MTP answers "not found" for an uncached path it failed to look up,
-/// so only a successful listing of the parent without the stage proves the
-/// stage is gone.
+/// XFER-022: `GVfs` MTP answers "not found" for an uncached path it failed
+/// to look up, so only a successful listing of the parent without the
+/// stage proves the stage is gone.
 fn confirmed_absent(stage: &dyn Node) -> bool {
     let Some(parent) = stage.parent() else {
         return false;

@@ -5,32 +5,33 @@
 //! `desktop/operations.py`.
 //!
 //! Rules enforced here:
-//! - Publishing ([`Node::publish`]) is a native rename that never
+//! - XFER-007: publishing ([`Node::publish`]) is a native rename that never
 //!   overwrites. If another program took the name meanwhile, publishing
 //!   fails and nothing is overwritten. On local disks the kernel checks the
 //!   name and renames in one step; filesystems without that fall back to
 //!   GIO's check-then-rename, which leaves a window of microseconds, as in
 //!   the Python app (see `gio_node::move_item`).
-//! - Replace (an explicit user choice) merges same-name folders, keeping
-//!   destination-only items, and overwrites files only through the
+//! - XFER-009: Replace (an explicit user choice) merges same-name folders,
+//!   keeping destination-only items, and overwrites files only through the
 //!   backend's explicit overwrite move. A file/folder type mismatch is left
 //!   untouched rather than deleting a tree as a side effect of a batch
 //!   choice.
-//! - Where one-step overwrite is unsupported (MTP), the old file is renamed
-//!   aside to an unguessable backup name, the new one installed, and the old
-//!   name restored if installing fails. These renames are not interruptible:
-//!   a device can finish a rename after the client stopped waiting, and
-//!   stopping midway would leave the public name empty.
+//! - XFER-010: where one-step overwrite is unsupported (MTP), the old file
+//!   is renamed aside to an unguessable backup name, the new one installed,
+//!   and the old name restored if installing fails. These renames are not
+//!   interruptible: a device can finish a rename after the client stopped
+//!   waiting, and stopping midway would leave the public name empty.
 
 use std::fs::File;
 
+use super::cancellation::Cancellation;
 use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::modes::{
     open_directory_nofollow, restore_directory_modes, set_mode, DirectoryModes, PRIVATE_DIRECTORY_MODE,
 };
 use super::names::{backup_name, child_node};
-use super::node::{Cancellation, Node, NodeKind, WriteGuard};
+use super::node::{Node, NodeKind, WriteGuard};
 
 /// Attempts to find a free backup name before giving up.
 const BACKUP_NAME_ATTEMPTS: usize = 100;
@@ -44,8 +45,9 @@ struct StagedFolder {
     mode: u32,
 }
 
-/// Moves a completed staged item to `destination` without overwriting,
-/// then gives a staged local folder tree its final permissions.
+/// Moves a completed staged item to `destination` without overwriting
+/// (XFER-007), then gives a staged local folder tree its final permissions
+/// (XFER-005).
 ///
 /// Linux requires owner write access when moving a directory between
 /// parents, so the root keeps it just for the rename and gets its exact
@@ -53,6 +55,12 @@ struct StagedFolder {
 /// their exact modes before the rename. Group and other access only appears
 /// once the staging parent stops being the only way in (it is `0700`), so
 /// private contents are never exposed.
+///
+/// # Errors
+///
+/// [`TransferError::Exists`] when the name was taken meanwhile, any other
+/// failure to publish, or [`TransferError::RecoveryRequired`] when the
+/// published folder could not get its final mode.
 pub(crate) fn publish_staged(
     source: &dyn Node,
     destination: &dyn Node,
@@ -105,6 +113,13 @@ fn move_with_owner_access(
 /// `modes` is `Some` for staged copies (their folders get final modes when
 /// published) and `None` for moves of the user's own items. `guard` is
 /// asked about every destination before it changes.
+///
+/// # Errors
+///
+/// The guard's refusal, a file/folder type mismatch, the nesting limit,
+/// [`TransferError::Cancelled`] before the uninterruptible steps, or a
+/// failure to install; [`TransferError::RecoveryRequired`] names the backup
+/// that holds the old file when it could not be put back or removed.
 pub(crate) fn commit_replace(
     source: &dyn Node,
     destination: &dyn Node,
@@ -118,6 +133,7 @@ pub(crate) fn commit_replace(
 /// One Replace commit of a top-level item.
 struct Replacement<'a> {
     cancel: &'a Cancellation,
+    /// Asked about every destination before it changes (XFER-020).
     guard: Option<&'a WriteGuard>,
 }
 
@@ -147,6 +163,7 @@ impl Replacement<'_> {
         let existing = destination.info(Some(self.cancel))?.kind;
         match (incoming, existing) {
             (NodeKind::Directory, NodeKind::Directory) => self.merge(source, destination, modes, depth),
+            // XFER-009: never delete a tree as a side effect of Replace.
             (NodeKind::Directory, _) | (_, NodeKind::Directory) => Err(TransferError::failed(
                 "A file and folder have the same name. Rename or remove one of them, then try again.",
             )),
@@ -181,8 +198,9 @@ impl Replacement<'_> {
         Ok(())
     }
 
-    /// Overwrites one file or link, reversibly where the backend cannot do
-    /// it in one step.
+    /// Overwrites one file or link through the backend's explicit overwrite
+    /// move, or reversibly (XFER-010) where the backend cannot do it in one
+    /// step.
     fn overwrite(&self, source: &dyn Node, destination: &dyn Node) -> Result<(), TransferError> {
         match source.replace_native(destination, Some(self.cancel)) {
             Err(TransferError::ReplaceUnsupported(_)) => replace_via_backup(source, destination, self.cancel),
@@ -191,7 +209,8 @@ impl Replacement<'_> {
     }
 }
 
-/// Replaces a file on backends such as MTP using reversible renames.
+/// XFER-010: replaces a file on backends such as MTP using reversible
+/// renames.
 ///
 /// The old destination is kept under an unguessable sibling name until the
 /// completed incoming file is installed. If installing fails, the old name
@@ -240,23 +259,45 @@ fn move_aside(destination: &dyn Node, backup: &dyn Node) -> Result<(), TransferE
     let Err(aside_error) = moved else {
         return Ok(());
     };
-    match (backup.info(None), destination.info(None)) {
+    match AsideOutcome::of(destination, backup) {
         // The device finished the rename after all: put the original back.
-        (Ok(_), Err(error)) if error.is_not_found() => restore_backup(backup, destination)?,
-        // Nothing moved.
-        (Err(error), Ok(_)) if error.is_not_found() => {}
+        AsideOutcome::Finished => restore_backup(backup, destination)?,
+        AsideOutcome::NotMoved => {}
         // The backup name was taken meanwhile; the original was not moved.
-        _ if matches!(aside_error, TransferError::Exists(_)) => {}
-        _ => {
+        AsideOutcome::Unknown if matches!(aside_error, TransferError::Exists(_)) => {}
+        AsideOutcome::Unknown => {
             return Err(TransferError::RecoveryRequired(format!(
                 "Replacement stopped before installation. Check {} and the possible \
                  recovery file at {} before retrying. {aside_error}",
                 destination.uri(),
                 backup.uri()
-            )))
+            )));
         }
     }
     Err(aside_error)
+}
+
+/// What a move aside that reported an error actually did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AsideOutcome {
+    /// The old file is under the backup name only.
+    Finished,
+    /// The old file is still under its own name only.
+    NotMoved,
+    /// The two names do not answer definitely.
+    Unknown,
+}
+
+impl AsideOutcome {
+    /// Judges the move from both names. Only a definite "not found" counts
+    /// as absence: a query that fails otherwise proves nothing.
+    fn of(destination: &dyn Node, backup: &dyn Node) -> Self {
+        match (backup.info(None), destination.info(None)) {
+            (Ok(_), Err(error)) if error.is_not_found() => AsideOutcome::Finished,
+            (Err(error), Ok(_)) if error.is_not_found() => AsideOutcome::NotMoved,
+            _ => AsideOutcome::Unknown,
+        }
+    }
 }
 
 /// Rollback uses the same non-overwriting move and explicit verification as
@@ -274,21 +315,17 @@ fn restore_backup(backup: &dyn Node, destination: &dyn Node) -> Result<(), Trans
         })
 }
 
-/// A device may report success without moving the requested item. Retain
-/// the old file until both names have been checked after rebuilding caches.
+/// Checks that a move really happened: `destination` exists and `source`
+/// is definitely gone. A device may report success without moving the
+/// requested item, so the old file is retained until both names have been
+/// checked after rebuilding caches.
+///
+/// # Errors
+///
+/// `destination` cannot be found, `source` still exists, or either cannot
+/// be queried.
 pub(crate) fn verify_installation(source: &dyn Node, destination: &dyn Node) -> Result<(), TransferError> {
-    let source_parent = source.parent();
-    if let Some(parent) = &source_parent {
-        parent.refresh_listing(None)?;
-    }
-    if let Some(parent) = destination.parent() {
-        let already_refreshed = source_parent
-            .as_ref()
-            .is_some_and(|source| source.uri() == parent.uri());
-        if !already_refreshed {
-            parent.refresh_listing(None)?;
-        }
-    }
+    refresh_parent_listings(source, destination)?;
     destination.info(None)?;
     match source.info(None) {
         Err(error) if error.is_not_found() => Ok(()),
@@ -298,6 +335,25 @@ pub(crate) fn verify_installation(source: &dyn Node, destination: &dyn Node) -> 
              The prior file was retained.",
         )),
     }
+}
+
+/// Relists the folders of `source` and `destination`, each once, so a
+/// device's stale path cache cannot answer for either name.
+fn refresh_parent_listings(source: &dyn Node, destination: &dyn Node) -> Result<(), TransferError> {
+    let source_parent = source.parent();
+    if let Some(parent) = &source_parent {
+        parent.refresh_listing(None)?;
+    }
+    let Some(destination_parent) = destination.parent() else {
+        return Ok(());
+    };
+    let already_refreshed = source_parent
+        .as_ref()
+        .is_some_and(|parent| parent.uri() == destination_parent.uri());
+    if already_refreshed {
+        return Ok(());
+    }
+    destination_parent.refresh_listing(None)
 }
 
 /// Finds a free `.winspace-replaced-<32 hex>.backup` name in `parent`.
