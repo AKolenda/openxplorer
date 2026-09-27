@@ -188,11 +188,18 @@ mod tests {
         assert_eq!(format_date_time(&time).as_deref(), Some("09/06/2026, 19:05:07"));
     }
 
+    /// A known Unix time, in the process's own time zone: the Date modified
+    /// text is a ten-character date, and the Properties timestamp starts
+    /// with that same date.
+    ///
+    /// parity: LOOK-026
     #[test]
-    fn local_dates_are_formatted() {
-        let text = date_text(Some(1_790_000_000));
+    fn date_time_text_starts_with_the_ten_character_local_date() {
+        // 2026-09-21 14:13:20 UTC, still in 2026 in every time zone.
+        let modified = Some(1_790_000_000);
+        let text = date_text(modified);
         assert_eq!(text.len(), 10, "{text}");
         assert!(text.contains("2026"), "{text}");
-        assert!(date_time_text(Some(1_790_000_000)).starts_with(&text));
+        assert!(date_time_text(modified).starts_with(&text));
     }
 }
