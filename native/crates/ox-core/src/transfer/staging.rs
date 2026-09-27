@@ -156,11 +156,16 @@ fn remove_stage(
 ) -> Result<(), TransferError> {
     match stage.info(None) {
         Ok(_) => stage.delete_staging(created),
-        Err(error) if place == StagingPlace::Device && error.is_not_found() && confirmed_absent(stage) => {
-            Ok(())
-        }
+        Err(error) if is_discarded_device_stage(stage, place, &error) => Ok(()),
         Err(error) => Err(error),
     }
+}
+
+/// XFER-022: true for a device stage the device itself discarded (an aborted
+/// upload): the query answered "not found" and a listing of its folder
+/// confirms it.
+fn is_discarded_device_stage(stage: &dyn Node, place: StagingPlace, query_error: &TransferError) -> bool {
+    place == StagingPlace::Device && query_error.is_not_found() && confirmed_absent(stage)
 }
 
 /// XFER-022: `GVfs` MTP answers "not found" for an uncached path it failed
