@@ -36,7 +36,7 @@ pub enum BookmarkKind {
 /// folder name.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PinRequest {
-    /// The folder location, in any form `normalise_location` accepts.
+    /// The folder location, in any form [`normalise`] accepts.
     pub uri: String,
     /// The sidebar label, or empty for the folder name.
     pub label: String,
@@ -234,16 +234,7 @@ pub(super) fn remember_open(settings: &mut SettingsData, entry: &RecentEntry) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const QUICK: [&str; 3] = [
-        "file:///home/test/Desktop",
-        "file:///home/test/Downloads",
-        "file:///home/test/Documents",
-    ];
-
-    fn quick() -> Vec<String> {
-        QUICK.map(String::from).to_vec()
-    }
+    use crate::settings::test_support::{shown_quick_order, DESKTOP, DOCUMENTS, DOWNLOADS};
 
     fn pin(uri: &str) -> PinRequest {
         PinRequest::new(uri, "")
@@ -254,16 +245,27 @@ mod tests {
         (0..count).map(|i| pin(&format!("smb://nas/s/{i}"))).collect()
     }
 
+    /// Adds `uri` as a bookmark of `kind`; the request must be valid.
+    fn add(settings: &mut SettingsData, kind: BookmarkKind, uri: &str, label: &str) {
+        apply_bookmark(settings, BookmarkAction::Add, kind, uri, label).expect("a valid bookmark");
+    }
+
+    /// Unpins `uri`; the location must be valid.
+    fn unpin(settings: &mut SettingsData, uri: &str) {
+        apply_bookmark(settings, BookmarkAction::Remove, BookmarkKind::Pin, uri, "")
+            .expect("a valid location");
+    }
+
     /// Ported from `desktop/tests/test_pins.py::PinTests::test_insert_before_documents`
     /// parity: SIDE-007, SIDE-008
     #[test]
-    fn insert_before_documents() {
+    fn pins_dropped_on_a_folder_are_inserted_before_it() {
         let mut settings = SettingsData::default();
         let items = [PinRequest::new("smb://nas/work", "work")];
-        pin_many(&mut settings, &items, Some(QUICK[2]), Some(&quick())).unwrap();
+        pin_many(&mut settings, &items, Some(DOCUMENTS), Some(&shown_quick_order())).unwrap();
         assert_eq!(
             settings.quick_order,
-            [QUICK[0], QUICK[1], "smb://nas/work", QUICK[2]]
+            [DESKTOP, DOWNLOADS, "smb://nas/work", DOCUMENTS]
         );
     }
 
@@ -283,7 +285,7 @@ mod tests {
     fn repeat_drag_does_not_duplicate() {
         let mut settings = SettingsData::default();
         let items = [pin("smb://nas/work")];
-        pin_many(&mut settings, &items, None, Some(&quick())).unwrap();
+        pin_many(&mut settings, &items, None, Some(&shown_quick_order())).unwrap();
         let order = settings.quick_order.clone();
         pin_many(&mut settings, &items, None, Some(&order)).unwrap();
         assert_eq!(settings.pins.len(), 1);
@@ -295,9 +297,9 @@ mod tests {
     fn reorder_offline_pin_without_querying_nas() {
         let mut settings = SettingsData::default();
         let items = [pin("smb://offline/work")];
-        pin_many(&mut settings, &items, None, Some(&quick())).unwrap();
+        pin_many(&mut settings, &items, None, Some(&shown_quick_order())).unwrap();
         let order = settings.quick_order.clone();
-        pin_many(&mut settings, &items, Some(QUICK[0]), Some(&order)).unwrap();
+        pin_many(&mut settings, &items, Some(DESKTOP), Some(&order)).unwrap();
         assert_eq!(settings.quick_order[0], "smb://offline/work");
     }
 
@@ -307,7 +309,7 @@ mod tests {
     fn drop_on_self_keeps_order() {
         let mut settings = SettingsData::default();
         let items = [pin("smb://nas/work")];
-        pin_many(&mut settings, &items, None, Some(&quick())).unwrap();
+        pin_many(&mut settings, &items, None, Some(&shown_quick_order())).unwrap();
         let before = settings.quick_order.clone();
         pin_many(&mut settings, &items, Some("smb://nas/work"), Some(&before)).unwrap();
         assert_eq!(settings.quick_order, before);
@@ -319,17 +321,10 @@ mod tests {
     fn unpin_removes_order_only_not_share() {
         let mut settings = SettingsData::default();
         let work = "smb://nas/work";
-        apply_bookmark(
-            &mut settings,
-            BookmarkAction::Add,
-            BookmarkKind::Share,
-            work,
-            "Drive",
-        )
-        .unwrap();
-        pin_many(&mut settings, &[pin(work)], None, Some(&quick())).unwrap();
+        add(&mut settings, BookmarkKind::Share, work, "Drive");
+        pin_many(&mut settings, &[pin(work)], None, Some(&shown_quick_order())).unwrap();
 
-        apply_bookmark(&mut settings, BookmarkAction::Remove, BookmarkKind::Pin, work, "").unwrap();
+        unpin(&mut settings, work);
 
         assert!(!settings.quick_order.contains(&work.to_owned()));
         assert_eq!(settings.shares.len(), 1);
@@ -374,24 +369,10 @@ mod tests {
     fn unpinning_a_standard_folder_hides_it_until_it_is_pinned_again() {
         let mut settings = SettingsData::default();
         let desktop = "file:///home/a/Desktop";
-        apply_bookmark(
-            &mut settings,
-            BookmarkAction::Remove,
-            BookmarkKind::Pin,
-            desktop,
-            "",
-        )
-        .unwrap();
+        unpin(&mut settings, desktop);
         assert!(settings.hidden_quick.contains(&desktop.to_owned()));
 
-        apply_bookmark(
-            &mut settings,
-            BookmarkAction::Add,
-            BookmarkKind::Pin,
-            desktop,
-            "Desktop",
-        )
-        .unwrap();
+        add(&mut settings, BookmarkKind::Pin, desktop, "Desktop");
         assert!(!settings.hidden_quick.contains(&desktop.to_owned()));
     }
 
@@ -426,16 +407,9 @@ mod tests {
     #[test]
     fn re_adding_a_bookmark_moves_it_last_with_the_new_label() {
         let mut settings = SettingsData::default();
-        for (uri, label) in [("smb://nas/a", "A"), ("smb://nas/b", ""), ("smb://nas/a", "New")] {
-            apply_bookmark(
-                &mut settings,
-                BookmarkAction::Add,
-                BookmarkKind::Share,
-                uri,
-                label,
-            )
-            .unwrap();
-        }
+        add(&mut settings, BookmarkKind::Share, "smb://nas/a", "A");
+        add(&mut settings, BookmarkKind::Share, "smb://nas/b", "");
+        add(&mut settings, BookmarkKind::Share, "smb://nas/a", "New");
         let shares: Vec<(&str, &str)> = settings
             .shares
             .iter()

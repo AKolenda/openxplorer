@@ -1,53 +1,48 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Tests of [`Settings`] against real files in temporary directories.
+//!
+//! Ports the settings cases of `desktop/tests/test_core.py`,
+//! `test_pins.py`, `test_v05.py` and `test_terminal_security.py`; the
+//! preference cases are in `tests/preferences.rs`.
 
 use std::fs;
 use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 
-use serde_json::json;
+use serde_json::{json, Value};
 use tempfile::TempDir;
 
 mod preferences;
 
-use super::test_support::mode;
+use super::test_support::{mode, names_starting_with, shown_quick_order};
 use super::*;
 use crate::location::file_uri;
 
-fn temp() -> TempDir {
+fn temporary_directory() -> TempDir {
     tempfile::tempdir().expect("a temporary directory")
 }
 
-fn prefs(values: &serde_json::Value) -> PreferencesUpdate {
-    PreferencesUpdate::from_json(values).expect("an object")
+/// The update a window sends for `values`, read like any untrusted request.
+fn update_from(values: &Value) -> PreferencesUpdate {
+    PreferencesUpdate::from_json(values).expect("the values are an object")
+}
+
+/// Applies `values` with [`Settings::update_preferences`], which must save.
+fn save_preferences(store: &mut Settings, values: &Value) -> Preferences {
+    store
+        .update_preferences(&update_from(values))
+        .expect("the preferences are saved")
 }
 
 /// The names of the kept unreadable settings files in `directory`.
 fn backups(directory: &Path) -> Vec<String> {
-    let mut names: Vec<String> = fs::read_dir(directory)
-        .expect("the settings directory exists")
-        .map(|entry| entry.expect("a directory entry").file_name())
-        .map(|name| name.to_string_lossy().into_owned())
-        .filter(|name| name.starts_with("settings.json.unreadable-"))
-        .collect();
-    names.sort();
-    names
-}
-
-fn quick() -> Vec<String> {
-    [
-        "file:///home/test/Desktop",
-        "file:///home/test/Downloads",
-        "file:///home/test/Documents",
-    ]
-    .map(String::from)
-    .to_vec()
+    names_starting_with(directory, "settings.json.unreadable-")
 }
 
 /// Ported from `desktop/tests/test_core.py::CoreTests::test_settings_private_and_atomic`
 /// parity: SET-012, SET-016, SAFE-018, NET-017
 #[test]
 fn settings_private_and_atomic() {
-    let root = temp();
+    let root = temporary_directory();
     let directory = root.path().join("settings");
     let mut store = Settings::open(&directory);
     store
@@ -58,11 +53,10 @@ fn settings_private_and_atomic() {
             "Projects (Z:)",
         )
         .unwrap();
-    store
-        .update_preferences(&prefs(
-            &json!({"theme": "dark", "password": "not-stored", "view": "bogus"}),
-        ))
-        .unwrap();
+    save_preferences(
+        &mut store,
+        &json!({"theme": "dark", "password": "not-stored", "view": "bogus"}),
+    );
     let reread = Settings::open(&directory);
     assert_eq!(reread.data().shares[0].uri, "smb://nas/Projects");
     assert_eq!(reread.data().preferences.theme, Theme::Dark);
@@ -70,25 +64,15 @@ fn settings_private_and_atomic() {
     assert!(!fs::read_to_string(store.path()).unwrap().contains("not-stored"));
     assert_eq!(mode(&store.path()), 0o600);
     assert_eq!(mode(&directory), 0o700);
-    let leftovers = fs::read_dir(&directory)
-        .unwrap()
-        .filter(|entry| {
-            entry
-                .as_ref()
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .starts_with(".settings-")
-        })
-        .count();
-    assert_eq!(leftovers, 0);
+    let temporary_files = names_starting_with(&directory, ".settings-");
+    assert_eq!(temporary_files.len(), 0);
 }
 
 /// Ported from `desktop/tests/test_core.py::CoreTests::test_credential_bookmark_rejected`
 /// parity: SAFE-010
 #[test]
 fn credential_bookmark_rejected() {
-    let root = temp();
+    let root = temporary_directory();
     let mut store = Settings::open(root.path());
     let result = store.bookmark(
         BookmarkAction::Add,
@@ -103,8 +87,8 @@ fn credential_bookmark_rejected() {
 /// Ported from `desktop/tests/test_core.py::CoreTests::test_corrupt_settings`
 /// parity: SET-013
 #[test]
-fn corrupt_settings() {
-    let root = temp();
+fn corrupt_settings_fall_back_to_defaults_with_a_warning() {
+    let root = temporary_directory();
     fs::write(root.path().join("settings.json"), "{bad").unwrap();
     let store = Settings::open(root.path());
     assert!(store.warning().is_some());
@@ -115,13 +99,13 @@ fn corrupt_settings() {
 /// parity: SIDE-007
 #[test]
 fn add_pin_preserves_file_tree() {
-    let root = temp();
+    let root = temporary_directory();
     let actual = root.path().join("actual");
     fs::create_dir(&actual).unwrap();
     fs::write(actual.join("data.txt"), "unchanged").unwrap();
     let mut store = Settings::open(&root.path().join("config"));
     let items = [PinRequest::new(file_uri(&actual), "Work")];
-    store.pin_many(&items, None, Some(&quick())).unwrap();
+    store.pin_many(&items, None, Some(&shown_quick_order())).unwrap();
     assert_eq!(fs::read_to_string(actual.join("data.txt")).unwrap(), "unchanged");
     assert!(actual.is_dir());
 }
@@ -129,8 +113,8 @@ fn add_pin_preserves_file_tree() {
 /// Ported from `desktop/tests/test_pins.py::PinTests::test_bulk_pin_and_reload`
 /// parity: SIDE-007
 #[test]
-fn bulk_pin_and_reload() {
-    let root = temp();
+fn a_pinned_batch_is_read_back_after_the_shown_order() {
+    let root = temporary_directory();
     let directory = root.path().join("config");
     let mut store = Settings::open(&directory);
     let pins = [
@@ -147,10 +131,10 @@ fn bulk_pin_and_reload() {
         .iter()
         .map(|pin| PinRequest::new(&pin.uri, &pin.label))
         .collect();
-    store.pin_many(&items, None, Some(&quick())).unwrap();
+    store.pin_many(&items, None, Some(&shown_quick_order())).unwrap();
     let reread = Settings::open(&directory);
     assert_eq!(reread.data().pins, pins);
-    let mut expected = quick();
+    let mut expected = shown_quick_order();
     expected.extend(pins.iter().map(|pin| pin.uri.clone()));
     assert_eq!(reread.data().quick_order, expected);
 }
@@ -159,7 +143,7 @@ fn bulk_pin_and_reload() {
 /// parity: SIDE-007
 #[test]
 fn invalid_batch_writes_nothing() {
-    let root = temp();
+    let root = temporary_directory();
     let mut store = Settings::open(&root.path().join("config"));
     let before = store.snapshot();
     let items = [
@@ -175,12 +159,10 @@ fn invalid_batch_writes_nothing() {
 /// parity: SIDE-007
 #[test]
 fn save_error_rolls_back_in_memory() {
-    let root = temp();
+    let root = temporary_directory();
     let directory = root.path().join("config");
     let mut store = Settings::open(&directory);
-    store
-        .update_preferences(&prefs(&json!({"theme": "dark"})))
-        .unwrap();
+    save_preferences(&mut store, &json!({"theme": "dark"}));
     let before = store.snapshot();
     // A directory in place of settings.json makes the save fail.
     fs::remove_file(store.path()).unwrap();
@@ -193,8 +175,8 @@ fn save_error_rolls_back_in_memory() {
 /// Ported from `desktop/tests/test_pins.py::PinTests::test_system_theme_and_legacy_migration`
 /// parity: SET-017, LOOK-003
 #[test]
-fn system_theme_and_legacy_migration() {
-    let root = temp();
+fn a_version_1_file_is_read_and_can_switch_to_the_system_theme() {
+    let root = temporary_directory();
     let directory = root.path().join("config");
     fs::create_dir(&directory).unwrap();
     let legacy = json!({
@@ -207,9 +189,7 @@ fn system_theme_and_legacy_migration() {
     let mut store = Settings::open(&directory);
     assert_eq!(store.data().preferences.theme, Theme::Dark);
     assert_eq!(store.data().shares.len(), 1);
-    store
-        .update_preferences(&prefs(&json!({"theme": "system"})))
-        .unwrap();
+    save_preferences(&mut store, &json!({"theme": "system"}));
     assert_eq!(Settings::open(&directory).data().preferences.theme, Theme::System);
 }
 
@@ -217,15 +197,11 @@ fn system_theme_and_legacy_migration() {
 /// parity: SET-014
 #[test]
 fn two_windows_preserve_each_others_preferences() {
-    let root = temp();
+    let root = temporary_directory();
     let mut first = Settings::open(root.path());
     let mut second = Settings::open(root.path());
-    first
-        .update_preferences(&prefs(&json!({"theme": "dark"})))
-        .unwrap();
-    second
-        .update_preferences(&prefs(&json!({"details": false})))
-        .unwrap();
+    save_preferences(&mut first, &json!({"theme": "dark"}));
+    save_preferences(&mut second, &json!({"details": false}));
     let merged = first.snapshot().preferences;
     assert_eq!(merged.theme, Theme::Dark);
     assert!(!merged.details);
@@ -235,7 +211,7 @@ fn two_windows_preserve_each_others_preferences() {
 /// parity: SIDE-022
 #[test]
 fn two_windows_pins_not_lost() {
-    let root = temp();
+    let root = temporary_directory();
     let mut first = Settings::open(root.path());
     let mut second = Settings::open(root.path());
     first
@@ -251,14 +227,14 @@ fn two_windows_pins_not_lost() {
 /// parity: SAFE-009
 #[test]
 fn settings_lock_symlink_refused() {
-    let root = temp();
+    let root = temporary_directory();
     let directory = root.path().join("config");
     let mut store = Settings::open(&directory);
     fs::create_dir(&directory).unwrap();
     let target = root.path().join("target");
     fs::write(&target, "unchanged").unwrap();
     symlink(&target, directory.join("settings.lock")).unwrap();
-    let result = store.update_preferences(&prefs(&json!({"theme": "dark"})));
+    let result = store.update_preferences(&update_from(&json!({"theme": "dark"})));
     assert!(matches!(result, Err(SettingsError::Io { .. })));
     assert_eq!(fs::read_to_string(&target).unwrap(), "unchanged");
 }
@@ -270,7 +246,7 @@ fn settings_lock_symlink_refused() {
 /// parity: SAFE-009, SET-013
 #[test]
 fn settings_json_symlink_not_overwritten() {
-    let root = temp();
+    let root = temporary_directory();
     let directory = root.path().join("config");
     fs::create_dir(&directory).unwrap();
     let target = root.path().join("target");
@@ -288,20 +264,18 @@ fn settings_json_symlink_not_overwritten() {
 /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_still_persist`
 /// parity: SET-012, SAFE-009
 #[test]
-fn settings_still_persist() {
-    let root = temp();
+fn preferences_still_persist_in_private_storage() {
+    let root = temporary_directory();
     let directory = root.path().join("config");
     let mut store = Settings::open(&directory);
-    store
-        .update_preferences(&prefs(&json!({"textSize": 125})))
-        .unwrap();
+    save_preferences(&mut store, &json!({"textSize": 125}));
     assert_eq!(Settings::open(&directory).snapshot().preferences.text_size, 125);
 }
 
 /// parity: SAFE-009
 #[test]
 fn reading_makes_an_existing_directory_and_file_private() {
-    let root = temp();
+    let root = temporary_directory();
     let directory = root.path().join("config");
     fs::create_dir(&directory).unwrap();
     fs::set_permissions(&directory, fs::Permissions::from_mode(0o755)).unwrap();
@@ -314,7 +288,7 @@ fn reading_makes_an_existing_directory_and_file_private() {
 
 #[test]
 fn opening_a_missing_directory_does_not_create_it() {
-    let root = temp();
+    let root = temporary_directory();
     let directory = root.path().join("missing");
     let store = Settings::open(&directory);
     assert!(store.warning().is_none());
@@ -325,7 +299,7 @@ fn opening_a_missing_directory_does_not_create_it() {
 /// parity: SAFE-009, SET-013
 #[test]
 fn a_hard_linked_settings_file_is_refused_with_a_warning() {
-    let root = temp();
+    let root = temporary_directory();
     let directory = root.path().join("config");
     fs::create_dir(&directory).unwrap();
     let original = root.path().join("original.json");
@@ -339,7 +313,7 @@ fn a_hard_linked_settings_file_is_refused_with_a_warning() {
 /// parity: SAFE-018
 #[test]
 fn unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write() {
-    let root = temp();
+    let root = temporary_directory();
     let python_written = json!({
         "version": 2,
         "pins": [], "shares": [], "hiddenQuick": [], "quickOrder": [], "recent": [],
@@ -353,11 +327,12 @@ fn unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write() {
     });
     fs::write(root.path().join("settings.json"), python_written.to_string()).unwrap();
     let mut store = Settings::open(root.path());
+
     store
         .bookmark(BookmarkAction::Add, BookmarkKind::Pin, "/tmp/Rust", "")
         .unwrap();
-    let written: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(store.path()).unwrap()).unwrap();
+
+    let written: Value = serde_json::from_str(&fs::read_to_string(store.path()).unwrap()).unwrap();
     let mut expected_preferences = python_written["preferences"].clone();
     expected_preferences
         .as_object_mut()
@@ -373,16 +348,12 @@ fn unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write() {
 
 #[test]
 fn a_deleted_file_keeps_the_data_last_read() {
-    let root = temp();
+    let root = temporary_directory();
     let mut store = Settings::open(root.path());
-    store
-        .update_preferences(&prefs(&json!({"theme": "dark"})))
-        .unwrap();
+    save_preferences(&mut store, &json!({"theme": "dark"}));
     fs::remove_file(store.path()).unwrap();
     assert_eq!(store.snapshot().preferences.theme, Theme::Dark);
-    store
-        .update_preferences(&prefs(&json!({"view": "grid"})))
-        .unwrap();
+    save_preferences(&mut store, &json!({"view": "grid"}));
     let reread = Settings::open(root.path()).snapshot().preferences;
     assert_eq!((reread.theme, reread.view), (Theme::Dark, View::Grid));
 }
@@ -394,7 +365,7 @@ fn a_deleted_file_keeps_the_data_last_read() {
 /// parity: SET-014, SIDE-022
 #[test]
 fn a_change_holds_the_settings_lock_until_it_is_written() {
-    let root = temp();
+    let root = temporary_directory();
     let mut store = Settings::open(root.path());
     let lock_path = root.path().join(SettingsLock::FILE_NAME);
     store
@@ -412,15 +383,13 @@ fn a_change_holds_the_settings_lock_until_it_is_written() {
 /// parity: SET-013
 #[test]
 fn a_change_keeps_an_unreadable_file_as_a_backup() {
-    let root = temp();
+    let root = temporary_directory();
     let damaged = r#"{"pins": [{"uri": "file:///tmp/Kept"}],}"#;
     fs::write(root.path().join("settings.json"), damaged).unwrap();
     let mut store = Settings::open(root.path());
     assert!(store.warning().is_some());
 
-    store
-        .update_preferences(&prefs(&json!({"theme": "dark"})))
-        .unwrap();
+    save_preferences(&mut store, &json!({"theme": "dark"}));
 
     let kept = backups(root.path());
     assert_eq!(kept.len(), 1);
@@ -439,7 +408,7 @@ fn a_change_keeps_an_unreadable_file_as_a_backup() {
 /// parity: SET-013
 #[test]
 fn a_change_keeps_a_partly_read_file_as_a_backup() {
-    let root = temp();
+    let root = temporary_directory();
     // Python reads pins, then shares: the pin is kept, the hidden entry lost.
     let partial =
         r#"{"pins": [{"uri": "file:///tmp/Kept"}], "shares": 5, "hiddenQuick": ["file:///tmp/Hidden"]}"#;
@@ -461,14 +430,10 @@ fn a_change_keeps_a_partly_read_file_as_a_backup() {
 
 #[test]
 fn a_readable_file_is_replaced_without_a_backup() {
-    let root = temp();
+    let root = temporary_directory();
     let mut store = Settings::open(root.path());
-    store
-        .update_preferences(&prefs(&json!({"theme": "dark"})))
-        .unwrap();
-    store
-        .update_preferences(&prefs(&json!({"view": "grid"})))
-        .unwrap();
+    save_preferences(&mut store, &json!({"theme": "dark"}));
+    save_preferences(&mut store, &json!({"view": "grid"}));
     assert_eq!(backups(root.path()), Vec::<String>::new());
     assert!(store.warning().is_none());
 }
@@ -478,7 +443,7 @@ fn a_readable_file_is_replaced_without_a_backup() {
 /// parity: SAFE-009
 #[test]
 fn a_change_never_moves_a_refused_file() {
-    let root = temp();
+    let root = temporary_directory();
     let directory = root.path().join("config");
     fs::create_dir(&directory).unwrap();
     let original = root.path().join("original.json");
@@ -487,7 +452,7 @@ fn a_change_never_moves_a_refused_file() {
     let mut store = Settings::open(&directory);
     assert!(store.warning().is_some());
 
-    let result = store.update_preferences(&prefs(&json!({"theme": "dark"})));
+    let result = store.update_preferences(&update_from(&json!({"theme": "dark"})));
 
     assert!(matches!(result, Err(SettingsError::Invalid(_))));
     assert_eq!(
