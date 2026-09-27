@@ -63,6 +63,24 @@ impl Batch<'_> {
             0.0
         }
     }
+
+    /// How a copy or move into `dest_dir` names its items.
+    fn placement<'a>(&'a self, dest_dir: &'a dyn Node) -> Placement<'a> {
+        Placement {
+            mode: self.mode,
+            policy: self.policy,
+            dest_dir,
+            cancel: self.cancel,
+        }
+    }
+
+    /// Move, Trash and delete change their sources; a copy keeps them.
+    fn source_change(&self) -> SourceChange {
+        match self.mode {
+            TransferMode::Move | TransferMode::Trash | TransferMode::Delete => SourceChange::Changed,
+            TransferMode::Copy => SourceChange::Kept,
+        }
+    }
 }
 
 /// What one run has done so far.
@@ -225,33 +243,37 @@ impl TransferEngine {
         slot: &mut StageSlot,
     ) -> Result<ItemOutcome, TransferError> {
         let selected = self.start_item(batch, index, uri)?;
-        let source = selected.node.as_ref();
         if batch.mode.is_removal() {
-            self.remove(batch.mode, source, batch.cancel)?;
+            self.remove(batch.mode, selected.node.as_ref(), batch.cancel)?;
             return Ok(ItemOutcome::Done);
         }
+        self.transfer(batch, &selected, moved_from, slot)
+    }
+
+    /// Copies or moves one selected item into the destination folder, under
+    /// the name its conflict policy chooses.
+    fn transfer(
+        &mut self,
+        batch: &Batch,
+        selected: &SelectedItem,
+        moved_from: &mut SourceFolders,
+        slot: &mut StageSlot,
+    ) -> Result<ItemOutcome, TransferError> {
+        let source = selected.node.as_ref();
         let dest_dir = batch
             .dest_dir
             .ok_or_else(|| TransferError::failed("Choose a destination folder."))?;
         if selected.kind == NodeKind::Directory {
             guard_destination(source, dest_dir)?;
         }
-        let placement = Placement {
-            mode: batch.mode,
-            policy: batch.policy,
-            dest_dir,
-            cancel: batch.cancel,
-        };
+        let placement = batch.placement(dest_dir);
         let Some(destination) = placement.destination_for(source, selected.kind)? else {
             return Ok(ItemOutcome::Skipped);
         };
         let destination = destination.as_ref();
         // Check every affected path before changing this top-level item: a
         // writable parent can contain protected backup descendants.
-        let source_change = match batch.mode {
-            TransferMode::Move => SourceChange::Changed,
-            _ => SourceChange::Kept,
-        };
+        let source_change = batch.source_change();
         check_write_tree(
             self.guard(),
             source,
@@ -262,9 +284,9 @@ impl TransferEngine {
         if batch.mode == TransferMode::Move {
             moved_from.remember(source);
             self.move_item(source, destination, batch.policy, batch.cancel)?;
-            return Ok(ItemOutcome::Done);
+        } else {
+            self.copy_item(batch, selected, dest_dir, destination, slot)?;
         }
-        self.copy_item(batch, &selected, dest_dir, destination, slot)?;
         Ok(ItemOutcome::Done)
     }
 
