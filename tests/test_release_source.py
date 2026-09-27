@@ -4,13 +4,16 @@
 tools/release.py chooses the files of the corresponding-source archive. These
 tests build throwaway repository trees and check which files source_files()
 selects, that it never follows links or reads special files, and that its
-policy agrees with .gitignore. Run them from the repository root:
+policy agrees with .gitignore. They also check that a failed release ends in a
+one-line message. Run them from the repository root:
 
     python3 -m unittest discover -s tests -p 'test_release_source.py'
 """
 from __future__ import annotations
 
 from collections.abc import Iterator
+import contextlib
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -19,9 +22,23 @@ from typing import Any
 import unittest
 from unittest.mock import patch
 
+from tools import release
 from tools.release import source_files
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+
+# Git reads only the fixture's .gitignore: no system or global configuration
+# and no personal excludes file, which Git reads from ~/.config/git/ignore even
+# when no configuration names it. A personal rule such as Cargo.lock would
+# otherwise fail the agreement test.
+GIT_ENVIRONMENT = {
+    **os.environ,
+    'GIT_CONFIG_NOSYSTEM': '1',
+    'GIT_CONFIG_GLOBAL': os.devnull,
+    'GIT_CONFIG_COUNT': '1',
+    'GIT_CONFIG_KEY_0': 'core.excludesFile',
+    'GIT_CONFIG_VALUE_0': os.devnull,
+}
 
 # Editable inputs the archive must keep, including build and packaging files.
 EDITABLE_INPUTS = [
@@ -116,7 +133,7 @@ class SourceArchiveTests(unittest.TestCase):
     def git_ignores(self, relative: str) -> bool:
         """Return whether Git, with the fixture's .gitignore, ignores the path."""
         command = ['git', '-C', str(self.root), 'check-ignore', '--quiet', relative]
-        return subprocess.run(command, check=False).returncode == 0
+        return subprocess.run(command, check=False, env=GIT_ENVIRONMENT).returncode == 0
 
     def test_preserves_editable_build_inputs_not_just_runtime_code(self) -> None:
         """Build, packaging, licence and native files are kept, in sorted order."""
@@ -164,7 +181,8 @@ class SourceArchiveTests(unittest.TestCase):
             self.assertNotIn('downloads', relative.parts)
             return real_scandir(path)
 
-        with patch('tools.release.os.scandir', side_effect=scandir):
+        # os.walk() lists every directory it enters with os.scandir().
+        with patch.object(os, 'scandir', side_effect=scandir):
             self.assertEqual(self.selected(), ['desktop/ui/app.js'])
         self.assertIn('desktop/ui', visited)
 
@@ -193,19 +211,54 @@ class SourceArchiveTests(unittest.TestCase):
             options['onerror'](PermissionError('Synthetic inaccessible source directory'))
             return iter(())
 
-        with (patch('tools.release.os.walk', side_effect=inaccessible),
+        with (patch.object(os, 'walk', side_effect=inaccessible),
               self.assertRaises(PermissionError)):
             self.selected()
 
     def test_gitignore_and_source_policy_agree_for_publication_paths(self) -> None:
         """Git ignores a path exactly when the archive leaves it out."""
         (self.root / '.gitignore').write_bytes((REPOSITORY / '.gitignore').read_bytes())
-        subprocess.run(['git', 'init', '--quiet', str(self.root)], check=True)
+        subprocess.run(['git', 'init', '--quiet', str(self.root)], check=True,
+                       env=GIT_ENVIRONMENT)
         for name, expected in GIT_IGNORED.items():
             self.put(name)
             with self.subTest(path=name):
                 self.assertEqual(self.git_ignores(name), expected)
                 self.assertEqual(name not in self.selected(), expected)
+
+
+class ReleaseFailureTests(unittest.TestCase):
+    """main() ends a failed release with one line on stderr and exit status 1."""
+
+    def failure_message(self, error: Exception) -> str:
+        """Run main() with build_release() raising error and return what it printed."""
+        stderr = io.StringIO()
+        with (patch.object(release, 'build_release', side_effect=error),
+              contextlib.redirect_stderr(stderr)):
+            self.assertEqual(release.main([]), 1)
+        return stderr.getvalue()
+
+    def test_a_failed_build_step_is_named_with_its_exit_status(self) -> None:
+        """A script that fails is named by its command line, not by a traceback."""
+        command = ['python3', 'desktop/tools/verify_deb.py', 'dist/open xplorer.deb']
+        message = self.failure_message(subprocess.CalledProcessError(2, command))
+        self.assertEqual(message, 'Release failed: python3 desktop/tools/verify_deb.py '
+                                  "'dist/open xplorer.deb' exited with status 2; "
+                                  'its output is above.\n')
+
+    def test_a_build_step_killed_by_a_signal_names_the_signal(self) -> None:
+        """A negative return code is reported as the signal that ended the step."""
+        command = ['python3', 'desktop/tools/build_deb.py']
+        message = self.failure_message(subprocess.CalledProcessError(-9, command))
+        self.assertEqual(message, 'Release failed: python3 desktop/tools/build_deb.py '
+                                  'was killed by signal 9; its output is above.\n')
+
+    def test_an_unreadable_directory_is_reported_in_one_line(self) -> None:
+        """A filesystem error names the path and asks for a rerun."""
+        error = PermissionError(13, 'Permission denied', '/repository/private')
+        self.assertEqual(self.failure_message(error),
+                         "Release failed: [Errno 13] Permission denied: '/repository/private'. "
+                         'Fix this and rerun tools/release.py.\n')
 
 
 if __name__ == '__main__':

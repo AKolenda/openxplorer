@@ -18,6 +18,7 @@ import hashlib
 import importlib
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -95,6 +96,8 @@ def source_path_excluded(relative: Path, *, directory: bool = False) -> bool:
         return True
     if any(part in OMITTED_DIRECTORIES for part in parts):
         return True
+    # The website's download folder. The other two WEBSITE_DOWNLOADS folders
+    # lie inside the omitted designs/ and out/ directories.
     if parts[:4] == ('apps', 'web', 'public', 'downloads'):
         return True
     if '/'.join(parts) in GENERATED_SOURCE_PATHS:
@@ -203,10 +206,11 @@ def build_and_verify_package(debian_version: str) -> Path:
 def write_source_archive(archive: Path, root: Path = ROOT) -> None:
     """Write every editable input under root to a reproducible ZIP archive.
 
-    Entries use zlib's default compression level: an entry written from a
-    ZipInfo ignores the archive's compresslevel.
+    An entry written from a ZipInfo ignores the archive's compression method
+    and level, so each entry sets ZIP_DEFLATED itself and is compressed at
+    zlib's default level.
     """
-    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
+    with zipfile.ZipFile(archive, 'w') as bundle:
         for path, relative in source_files(root):
             entry = zipfile.ZipInfo(ARCHIVE_PREFIX + relative.as_posix(), ARCHIVE_TIMESTAMP)
             entry.compress_type = zipfile.ZIP_DEFLATED
@@ -235,9 +239,8 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main() -> None:
+def build_release() -> None:
     """Build the installer, the corresponding source and their checksums."""
-    parse_arguments()
     version, debian_version = release_versions()
     remove_website_downloads()
     prepare_output_directories()
@@ -247,9 +250,36 @@ def main() -> None:
     write_checksums((package, source), DIST / 'SHA256SUMS')
     shutil.copyfile(package, DESKTOP_DIST / package.name)
     publish_preview()
+
+
+def describe_failed_command(error: subprocess.CalledProcessError) -> str:
+    """Name a failed command and how it ended, quoted as it would be typed in a shell."""
+    command = shlex.join(str(part) for part in error.cmd)
+    if error.returncode < 0:
+        return f'{command} was killed by signal {-error.returncode}'
+    return f'{command} exited with status {error.returncode}'
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Build the release and return the exit status: 0 built, 1 failed.
+
+    A failure ends in one line that says what failed, instead of a traceback.
+    """
+    parse_arguments(argv)
+    try:
+        build_release()
+    except subprocess.CalledProcessError as error:
+        print(f'Release failed: {describe_failed_command(error)}; its output is above.',
+              file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f'Release failed: {error}. Fix this and rerun tools/release.py.',
+              file=sys.stderr)
+        return 1
     print('Built local installer, corresponding source and checksums. '
           'Website links remain on GitHub.')
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
