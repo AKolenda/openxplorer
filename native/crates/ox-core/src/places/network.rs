@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::location::{file_uri, normalise, split_location, unquote_lossy, LocationError};
-use crate::settings::{last_path_name, Bookmark};
+use crate::settings::Bookmark;
 
 /// An SMB mount reported by GIO. Disconnected and non-SMB mounts are ignored.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -245,7 +245,7 @@ fn fallback_label(uri: &str) -> String {
     let Ok(parts) = split_location(uri) else {
         return String::new();
     };
-    let name = last_path_name(&parts);
+    let name = parts.last_name();
     if name.is_empty() {
         parts.hostname().unwrap_or_default()
     } else {

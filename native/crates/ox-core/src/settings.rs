@@ -44,7 +44,6 @@ use std::path::{Path, PathBuf};
 
 pub use choices::{Appearance, ContextMenu, Theme, View};
 pub use error::SettingsError;
-pub(crate) use labels::last_path_name;
 pub use model::{Bookmark, RecentEntry, SettingsData, SETTINGS_VERSION};
 pub use mutate::{BookmarkAction, BookmarkKind, PinRequest};
 pub use preferences::{

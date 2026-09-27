@@ -10,7 +10,7 @@
 use std::borrow::Cow;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use super::text::is_python_space;
+use super::text::{is_python_space, unquote_lossy};
 use super::{LocationError, DEVICE_SCHEMES};
 
 /// A location split into its URI components, like Python's `SplitResult`.
@@ -72,6 +72,16 @@ impl LocationParts {
         u16::try_from(value)
             .map(Some)
             .map_err(|_| LocationError::new("Port out of range 0-65535"))
+    }
+
+    /// The decoded last name of the path, ignoring trailing slashes; empty
+    /// at a root. Python's `unquote(path).rstrip('/').split('/')[-1]`, which
+    /// the label fallbacks of pins (`pin_many` in `core.py`) and network
+    /// rows (`network_locations.py`) use.
+    pub(crate) fn last_name(&self) -> String {
+        let decoded_path = unquote_lossy(&self.path);
+        let name = decoded_path.trim_end_matches('/').rsplit('/').next();
+        name.unwrap_or_default().to_owned()
     }
 
     /// Python's `_hostinfo`: the host (brackets removed) and the non-empty
