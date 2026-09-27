@@ -73,3 +73,6 @@ service-account*.json
 # Local privacy-review identifiers must never be published.
 .private-demo-terms*
 private-terms.json
+
+# Rust build output
+native/target/
