@@ -13,6 +13,7 @@ use std::sync::Arc;
 use gio::prelude::*;
 
 use super::error::TransferError;
+use super::staging::clean_staging;
 
 /// What an item is, queried without following symbolic links.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +37,18 @@ pub struct NodeInfo {
     pub size: u64,
     /// Unix permission bits when the backend reports them (not on MTP).
     pub mode: Option<u32>,
+}
+
+/// Which local filesystem object an item is (`st_dev`, `st_ino`). The
+/// engine records it for a staging folder right after creating it, so
+/// cleanup can refuse a different folder that was moved in under the same
+/// name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ItemIdentity {
+    /// The device holding the item.
+    pub device: u64,
+    /// The item's inode on that device.
+    pub inode: u64,
 }
 
 /// Cooperative cancellation shared with in-flight GIO calls.
@@ -201,6 +214,24 @@ pub trait Node: Send + Sync {
         cancel: &Cancellation,
         assert_writable: Option<&WriteGuard>,
     ) -> Result<(), TransferError>;
+    /// Removes this staging tree, which the engine created. `created` is
+    /// the identity recorded right after the engine made it, when the
+    /// backend has one.
+    ///
+    /// The default walks the tree by path ([`clean_staging`]). Local
+    /// backends override it to walk relative to pinned folders and to refuse
+    /// a folder other than `created`, so a folder moved in under the staging
+    /// name before or during cleanup is never emptied.
+    ///
+    /// # Errors
+    ///
+    /// The first item that cannot be removed, or a staging name that now
+    /// leads to another item; the caller reports the leftover.
+    ///
+    /// [`clean_staging`]: super::clean_staging
+    fn delete_staging(&self, _created: Option<ItemIdentity>) -> Result<(), TransferError> {
+        clean_staging(self)
+    }
     /// Stage copies beside their final name (MTP). Asked of the destination
     /// folder: its native move cannot rename across folders, and some
     /// devices cannot move across folders at all. Files and folders are

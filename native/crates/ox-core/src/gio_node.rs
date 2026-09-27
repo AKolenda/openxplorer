@@ -5,12 +5,12 @@
 //! never the GTK main thread. Metadata queries and enumeration never follow
 //! symbolic links (`query`); MTP device restrictions live in `move_item`.
 //!
-//! Permanent deletion of a local item runs relative to pinned folder
-//! descriptors (`local_delete`), so a folder swapped for a symbolic link
-//! during the deletion cannot redirect it. Remote locations (SMB shares,
-//! phones) can only be deleted by path (`remote_delete`), exactly as the
-//! Python app, Nautilus and Dolphin do. MTP behaviour is regression-tested
-//! with simulated devices, not hardware.
+//! Permanent deletion of a local item, and cleanup of local staging, run
+//! relative to pinned folder descriptors (`local_delete`), so a folder
+//! swapped for a symbolic link during the deletion cannot redirect it.
+//! Remote locations (SMB shares, phones) can only be deleted by path
+//! (`remote_delete`), exactly as the Python app, Nautilus and Dolphin do.
+//! MTP behaviour is regression-tested with simulated devices, not hardware.
 
 mod local_delete;
 mod move_item;
@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use gio::prelude::*;
 
 use crate::location::split_location;
-use crate::transfer::{Cancellation, Node, NodeInfo, TransferError, WriteGuard};
+use crate::transfer::{clean_staging, Cancellation, ItemIdentity, Node, NodeInfo, TransferError, WriteGuard};
 
 /// A file or folder addressed through GIO, including `GVfs` remote backends.
 #[derive(Clone, Debug)]
@@ -190,6 +190,14 @@ impl Node for GioNode {
         assert_writable: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
         self.delete_item_tree(cancel, assert_writable)
+    }
+
+    fn delete_staging(&self, created: Option<ItemIdentity>) -> Result<(), TransferError> {
+        // Remote staging can only be removed by path, as in the Python app.
+        match self.local_path() {
+            Some(path) => local_delete::delete_staging(&path, created),
+            None => clean_staging(self),
+        }
     }
 
     fn stage_as_sibling(&self) -> bool {

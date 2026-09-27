@@ -16,11 +16,11 @@
 
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions, Permissions};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use super::error::TransferError;
-use super::node::{Cancellation, Node};
+use super::node::{Cancellation, ItemIdentity, Node};
 
 /// Owner-only access for staging folders.
 pub(crate) const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
@@ -39,7 +39,7 @@ pub(crate) fn set_mode(directory: &File, mode: u32) -> std::io::Result<()> {
 }
 
 /// The path to apply Unix modes to: only real local items qualify.
-pub(crate) fn local_directory_path(node: &dyn Node) -> Option<PathBuf> {
+pub(crate) fn local_directory_path(node: &(impl Node + ?Sized)) -> Option<PathBuf> {
     if node.uri().starts_with("file:") {
         node.path()
     } else {
@@ -47,26 +47,34 @@ pub(crate) fn local_directory_path(node: &dyn Node) -> Option<PathBuf> {
     }
 }
 
-/// Makes an engine-created local staging folder owner-only (`0700`). Does
-/// nothing for `GVfs` backends (MTP, AFC, SMB), even when they expose a FUSE
-/// path. The Python ZIP extractor (`desktop/zip_extraction.py`) secures its
-/// staging folder the same way; its port will use this too.
+/// Makes an engine-created local staging folder owner-only (`0700`) and
+/// returns the identity of the folder that got the mode. Does nothing for
+/// `GVfs` backends (MTP, AFC, SMB), even when they expose a FUSE path, and
+/// returns `None` for them. The Python ZIP extractor
+/// (`desktop/zip_extraction.py`) secures its staging folder the same way;
+/// its port will use this too.
 ///
 /// # Errors
 ///
 /// When the folder cannot be opened without following links, or its mode
 /// cannot be changed.
-pub fn secure_local_staging(node: &dyn Node) -> Result<(), TransferError> {
-    match local_directory_path(node) {
-        Some(path) => apply_mode(&path, PRIVATE_DIRECTORY_MODE),
-        None => Ok(()),
-    }
+pub fn secure_local_staging(node: &(impl Node + ?Sized)) -> Result<Option<ItemIdentity>, TransferError> {
+    let Some(path) = local_directory_path(node) else {
+        return Ok(None);
+    };
+    let directory = apply_mode(&path, PRIVATE_DIRECTORY_MODE)?;
+    let metadata = directory.metadata()?;
+    Ok(Some(ItemIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+    }))
 }
 
-fn apply_mode(path: &Path, mode: u32) -> Result<(), TransferError> {
+/// Sets `mode` on the folder at `path` and returns the folder, still open.
+fn apply_mode(path: &Path, mode: u32) -> Result<File, TransferError> {
     let directory = open_directory_nofollow(path)?;
     set_mode(&directory, mode)?;
-    Ok(())
+    Ok(directory)
 }
 
 /// A staged local folder's final mode, applied just before publishing.

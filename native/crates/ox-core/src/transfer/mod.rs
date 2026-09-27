@@ -53,6 +53,7 @@ pub(crate) use guard::nesting_error;
 pub use guard::{check_write_tree, guard_destination, SourceChange, MAX_DEPTH};
 pub use modes::secure_local_staging;
 pub use names::{backup_name, is_own_staging_name, staging_name};
-pub use node::{Cancellation, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
+pub use node::{Cancellation, ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use staging::clean_staging;
+pub(crate) use staging::STAGING_LEVELS;
 pub use types::{ConflictPolicy, Progress, TransferMode, TransferResult};

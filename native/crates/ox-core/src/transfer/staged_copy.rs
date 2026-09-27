@@ -29,7 +29,7 @@ use super::copy::Copier;
 use super::error::TransferError;
 use super::modes::{secure_local_staging, DirectoryModes};
 use super::names::{child_node, staging_name, PAYLOAD_NAME};
-use super::node::{Cancellation, Node, NodeKind, WriteGuard};
+use super::node::{Cancellation, ItemIdentity, Node, NodeKind, WriteGuard};
 use super::staging::StagingPlace;
 use super::types::{ConflictPolicy, Progress};
 
@@ -70,6 +70,9 @@ pub(crate) struct StageSlot {
     pub(crate) stage: Option<Stage>,
     /// Where the staging lives, which decides how cleanup is retried.
     pub(crate) place: StagingPlace,
+    /// The local staging folder the engine created, recorded when it was
+    /// made private; `None` for remote and device staging.
+    pub(crate) created: Option<ItemIdentity>,
 }
 
 impl StageSlot {
@@ -215,7 +218,8 @@ impl StagedCopy<'_> {
         // permission to delete that name during cleanup.
         folder.mkdir(Some(self.cancel))?;
         let stage = slot.stage.insert(Stage::Folder { folder, item });
-        secure_local_staging(stage.root())?;
+        // The folder that was made private is the only one cleanup may empty.
+        slot.created = secure_local_staging(stage.root())?;
         let mut copier = Copier::new(self.cancel, token, modes, &mut *self.emit);
         copier.copy(self.source, stage.item(), 0)?;
         if layout == Layout::SameDeviceCopy {

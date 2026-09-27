@@ -25,3 +25,5 @@ mod mtp_adapter;
 mod operations;
 #[path = "transfer_cases/snapshots.rs"]
 mod snapshots;
+#[path = "transfer_cases/staging_cleanup.rs"]
+mod staging_cleanup;

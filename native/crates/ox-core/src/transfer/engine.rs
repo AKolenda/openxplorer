@@ -367,7 +367,7 @@ impl TransferEngine {
             return;
         };
         let root = stage.root();
-        if let Err(problem) = discard_stage(root, slot.place, &*self.sleep) {
+        if let Err(problem) = discard_stage(root, slot.created, slot.place, &*self.sleep) {
             result.errors.push(leftover_report(root, slot.place, &problem));
         }
     }

@@ -10,6 +10,8 @@
 //!   pass a user-selected path.
 //! - Removal inspects items without following symbolic links, so a link
 //!   inside staging is removed as a link and its target is never touched.
+//! - A local staging folder is removed only while its name still leads to
+//!   the folder the engine created (see [`Node::delete_staging`]).
 //! - Every cleanup failure is returned, so the caller can report the exact
 //!   leftover location for the user to inspect.
 
@@ -18,7 +20,11 @@ use std::time::Duration;
 use super::error::TransferError;
 use super::guard::{nesting_error, MAX_DEPTH};
 use super::modes::secure_local_staging;
-use super::node::{Node, NodeKind};
+use super::node::{ItemIdentity, Node, NodeKind};
+
+/// The levels staging adds above a copied tree: the private staging folder
+/// and the `payload` inside it.
+pub(crate) const STAGING_LEVELS: usize = 2;
 
 /// Waits before each cleanup attempt on a device. Phones can reject the
 /// first request after an aborted transfer, so device staging is retried
@@ -75,7 +81,8 @@ pub(crate) fn leftover_report(stage: &dyn Node, place: StagingPlace, problem: &T
     )
 }
 
-/// Recursively removes a staging tree the engine exclusively created.
+/// Recursively removes a staging tree the engine exclusively created, by
+/// path. This is the default of [`Node::delete_staging`].
 ///
 /// Folders are made owner-writable first (a restored restrictive mode must
 /// not block cleanup), then emptied, then removed. The Python ZIP extractor
@@ -86,14 +93,13 @@ pub(crate) fn leftover_report(stage: &dyn Node, place: StagingPlace, problem: &T
 ///
 /// The first item that cannot be inspected, listed or removed; the rest of
 /// the tree stays for the caller to report.
-pub fn clean_staging(node: &dyn Node) -> Result<(), TransferError> {
+pub fn clean_staging(node: &(impl Node + ?Sized)) -> Result<(), TransferError> {
     clean_at_depth(node, 0)
 }
 
-fn clean_at_depth(node: &dyn Node, depth: usize) -> Result<(), TransferError> {
-    // The private staging folder and payload add two levels to the source
-    // tree. An unexpected deeper backend tree must not exhaust the stack.
-    if depth > MAX_DEPTH + 2 {
+fn clean_at_depth(node: &(impl Node + ?Sized), depth: usize) -> Result<(), TransferError> {
+    // An unexpected deeper backend tree must not exhaust the stack.
+    if depth > MAX_DEPTH + STAGING_LEVELS {
         return Err(nesting_error());
     }
     if node.info(None)?.kind == NodeKind::Directory {
@@ -105,7 +111,8 @@ fn clean_at_depth(node: &dyn Node, depth: usize) -> Result<(), TransferError> {
     node.delete()
 }
 
-/// Removes this engine's own staging item.
+/// Removes this engine's own staging item. `created` is its identity from
+/// when the engine made it, if the backend has one.
 ///
 /// Local and network staging gets one attempt, and every failure is
 /// reported. Device staging is retried (see [`DEVICE_CLEANUP_DELAYS`]); a
@@ -118,6 +125,7 @@ fn clean_at_depth(node: &dyn Node, depth: usize) -> Result<(), TransferError> {
 /// The problem of the last attempt when the stage could not be removed.
 pub(crate) fn discard_stage(
     stage: &dyn Node,
+    created: Option<ItemIdentity>,
     place: StagingPlace,
     sleep: &dyn Fn(Duration),
 ) -> Result<(), TransferError> {
@@ -126,7 +134,7 @@ pub(crate) fn discard_stage(
         if !delay.is_zero() {
             sleep(*delay);
         }
-        match remove_stage(stage, place) {
+        match remove_stage(stage, created, place) {
             Ok(()) => return Ok(()),
             Err(error) => problem = error,
         }
@@ -136,9 +144,13 @@ pub(crate) fn discard_stage(
 
 /// One cleanup attempt. A device stage that is definitely gone counts as
 /// removed; any other query error is a failed attempt.
-fn remove_stage(stage: &dyn Node, place: StagingPlace) -> Result<(), TransferError> {
+fn remove_stage(
+    stage: &dyn Node,
+    created: Option<ItemIdentity>,
+    place: StagingPlace,
+) -> Result<(), TransferError> {
     match stage.info(None) {
-        Ok(_) => clean_staging(stage),
+        Ok(_) => stage.delete_staging(created),
         Err(error) if place == StagingPlace::Device && error.is_not_found() => {
             if confirmed_absent(stage) {
                 Ok(())
