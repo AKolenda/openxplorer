@@ -7,12 +7,13 @@
 //! produces, because both apps store these URIs in the shared
 //! `settings.json` and compare them as strings.
 
+use std::borrow::Cow;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use percent_encoding::percent_encode;
 
-use super::parts::{split_location, split_scheme, urlsplit, DeviceUriMatch};
+use super::parts::{split_location, split_scheme, urlsplit, DeviceUriMatch, LocationParts};
 use super::text::{
     contains_python_space, has_control_character, normpath, python_strip, quote_component, quote_path,
     unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,
@@ -51,29 +52,29 @@ pub fn normalise_location(value: &str, base: Option<&str>, home: &Path) -> Resul
     if value.is_empty() {
         return Err(LocationError::new("Enter a local folder path or an SMB address."));
     }
+    // Safety rule (`core.py`: `CONTROL.search(value)`): no control
+    // character in an address reaches GIO, a file name or settings.json.
     if has_control_character(value) {
         return Err(LocationError::new(
             "Control characters are not allowed in an address.",
         ));
     }
-    let unc;
-    let value = if value.starts_with("\\\\") || value.starts_with("//") {
-        unc = unc_to_smb(value)?;
-        unc.as_str()
+    let value = if is_unc_path(value) {
+        Cow::Owned(unc_to_smb(value)?)
     } else {
-        value
+        Cow::Borrowed(value)
     };
-    if is_windows_drive_path(value) {
+    if is_windows_drive_path(&value) {
         return Err(LocationError::new(
             "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share.",
         ));
     }
-    match split_scheme(value) {
-        None => normalise_plain_path(value, base, home),
+    match split_scheme(&value) {
+        None => normalise_plain_path(&value, base, home),
         Some((scheme, _)) if DEVICE_SCHEMES.contains(&scheme.as_str()) => {
-            normalise_device_location(value, &scheme)
+            normalise_device_location(&value, &scheme)
         }
-        Some(_) => normalise_url(value),
+        Some(_) => normalise_url(&value),
     }
 }
 
@@ -126,6 +127,9 @@ pub fn require_share(value: &str) -> Result<String, LocationError> {
 pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
     let uri = normalise(uri)?;
     let parts = split_location(&uri)?;
+    // Safety rule (`core.py::require_item_uri`): a whole server, share or
+    // device is never renamed, moved, copied or trashed as if it were a
+    // folder.
     if parts.is_smb() && parts.path_depth() <= 1 {
         return Err(LocationError::new(
             "Open the network share first, then select files or folders inside it. The share itself \
@@ -150,12 +154,19 @@ pub fn is_smb_server(uri: &str) -> bool {
     split_location(&canonical).is_ok_and(|parts| parts.is_smb() && parts.path_depth() == 0)
 }
 
+/// `\\server\share` or `//server/share`.
+fn is_unc_path(value: &str) -> bool {
+    value.starts_with("\\\\") || value.starts_with("//")
+}
+
 /// `\\NAS\Team files\Q3 #1` to `smb://NAS/Team%20files/Q3%20%231`. The host
 /// is lower-cased later with every other SMB URL.
 fn unc_to_smb(value: &str) -> Result<String, LocationError> {
     let forward = value.replace('\\', "/");
     let mut components = forward.trim_start_matches('/').split('/');
     let server = components.next().unwrap_or_default();
+    // Safety rule (SAFE-010): credentials never enter an address, so they
+    // cannot reach settings.json, a tab title or the clipboard.
     if server.is_empty() || server.contains(['@', ':']) || has_control_character(server) {
         return Err(LocationError::new(
             "Use a server name without credentials, for example \\\\nas\\share.",
@@ -167,8 +178,10 @@ fn unc_to_smb(value: &str) -> Result<String, LocationError> {
 
 /// `^[A-Za-z]:[\\/]`, for example `C:\Windows`.
 fn is_windows_drive_path(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && matches!(bytes[2], b'\\' | b'/')
+    match value.as_bytes() {
+        [letter, b':', b'\\' | b'/', ..] => letter.is_ascii_alphabetic(),
+        _ => false,
+    }
 }
 
 /// A value without a scheme: `~`, an absolute path, or a path relative to
@@ -226,9 +239,9 @@ fn local_path_uri(path: &str) -> Result<String, LocationError> {
     } else {
         // Only reachable with a relative home or base; resolve it like
         // `os.path.abspath` against the working directory.
-        let cwd = std::env::current_dir()
+        let current_folder = std::env::current_dir()
             .map_err(|error| LocationError::new(format!("Could not resolve the current folder: {error}")))?;
-        normpath(&join_path(&cwd.to_string_lossy(), &normal))
+        normpath(&join_path(&current_folder.to_string_lossy(), &normal))
     };
     Ok(format!("file://{}", quote_path(&absolute)))
 }
@@ -236,11 +249,14 @@ fn local_path_uri(path: &str) -> Result<String, LocationError> {
 /// A `file:` or `smb:` URL; any other scheme is rejected.
 fn normalise_url(value: &str) -> Result<String, LocationError> {
     let parts = urlsplit(value)?;
-    if parts.scheme != "file" && parts.scheme != "smb" {
+    if parts.scheme != "file" && !parts.is_smb() {
         return Err(LocationError::new(
             "Only local paths, smb:// locations and connected devices are supported in this build.",
         ));
     }
+    // Safety rule (SAFE-010): credentials never enter an address, so they
+    // cannot reach settings.json, a tab title or the clipboard. Users sign
+    // in through the sign-in dialog instead.
     if parts.has_credentials() {
         return Err(LocationError::new(
             "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.",
@@ -250,13 +266,15 @@ fn normalise_url(value: &str) -> Result<String, LocationError> {
         return Err(LocationError::query_or_fragment());
     }
     let decoded = unquote_without_controls(&parts.path)?;
-    if parts.scheme == "file" {
-        normalise_file_url(&parts.netloc, &decoded)
-    } else {
+    if parts.is_smb() {
         normalise_smb_url(&parts, &decoded)
+    } else {
+        normalise_file_url(&parts.netloc, &decoded)
     }
 }
 
+/// A `file:` URL: no host but `localhost`, an absolute path, and the path
+/// canonical.
 fn normalise_file_url(netloc: &str, decoded_path: &str) -> Result<String, LocationError> {
     if !netloc.is_empty() && !netloc.eq_ignore_ascii_case("localhost") {
         return Err(LocationError::new(
@@ -269,14 +287,23 @@ fn normalise_file_url(netloc: &str, decoded_path: &str) -> Result<String, Locati
     Ok(format!("file://{}", quote_path(&normpath(decoded_path))))
 }
 
-fn normalise_smb_url(parts: &super::LocationParts, decoded_path: &str) -> Result<String, LocationError> {
+/// An `smb:` URL with its authority and path canonical.
+fn normalise_smb_url(parts: &LocationParts, decoded_path: &str) -> Result<String, LocationError> {
+    let authority = smb_authority(parts)?;
+    // SMB uses / in a URI; literal backslashes are path separators.
+    let path = absolute_normal_path(&decoded_path.replace('\\', "/"));
+    Ok(format!("smb://{authority}{}", quote_path(&path)))
+}
+
+/// The canonical `host[:port]` of an SMB URL: the host lower-cased, an
+/// IPv6 host in brackets and an explicit port kept without leading zeros.
+fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
     if parts.netloc.contains('%') || has_control_character(&parts.netloc) {
         return Err(LocationError::new(
             "Use an unescaped server name without credentials or control characters.",
         ));
     }
-    let hostname = parts.hostname().filter(|host| !contains_python_space(host));
-    let Some(hostname) = hostname else {
+    let Some(hostname) = parts.hostname().filter(|host| !contains_python_space(host)) else {
         return Err(LocationError::new(
             "Enter an SMB server name, for example smb://nas/Projects.",
         ));
@@ -293,10 +320,7 @@ fn normalise_smb_url(parts: &super::LocationParts, decoded_path: &str) -> Result
         Some(port) => format!("{host}:{port}"),
         None => host,
     };
-    // SMB uses / in a URI; literal backslashes are path separators.
-    let forward = decoded_path.replace('\\', "/");
-    let path = normpath(&format!("/{}", forward.trim_start_matches('/')));
-    Ok(format!("smb://{authority}{}", quote_path(&path)))
+    Ok(authority)
 }
 
 /// Ports `_normalise_device_location`: keeps the device authority as
@@ -310,32 +334,37 @@ fn normalise_device_location(value: &str, scheme: &str) -> Result<String, Locati
     };
     check_device_authority(device.authority)?;
     let decoded = unquote_without_controls(device.path)?;
-    let path = normpath(&format!("/{}", decoded.trim_start_matches('/')));
+    let path = absolute_normal_path(&decoded);
     Ok(format!("{scheme}://{}{}", device.authority, quote_path(&path)))
 }
 
-/// Rejects credentials, escapes, whitespace, controls, over-long
-/// identifiers and brackets other than one enclosing pair.
+/// Rejects over-long identifiers, credentials, escapes, whitespace,
+/// controls and brackets other than one enclosing pair.
 fn check_device_authority(authority: &str) -> Result<(), LocationError> {
-    let invalid = || LocationError::new("Invalid connected-device identifier.");
-    let too_long = authority.chars().count() > MAX_DEVICE_AUTHORITY_CHARS;
-    if too_long
-        || authority.contains(['@', '%'])
+    let is_too_long = authority.chars().count() > MAX_DEVICE_AUTHORITY_CHARS;
+    // `@` would carry credentials (SAFE-010).
+    let has_forbidden_character = authority.contains(['@', '%'])
         || contains_python_space(authority)
-        || has_control_character(authority)
-    {
-        return Err(invalid());
-    }
-    if authority.contains(['[', ']']) {
-        let inner = authority
-            .strip_prefix('[')
-            .and_then(|rest| rest.strip_suffix(']'));
-        let one_enclosing_pair = inner.is_some_and(|inner| !inner.contains(['[', ']']));
-        if !one_enclosing_pair {
-            return Err(invalid());
-        }
+        || has_control_character(authority);
+    let has_stray_bracket = authority.contains(['[', ']']) && !is_one_bracketed_identifier(authority);
+    if is_too_long || has_forbidden_character || has_stray_bracket {
+        return Err(LocationError::new("Invalid connected-device identifier."));
     }
     Ok(())
+}
+
+/// `[usb:001,002]`: one `[` at the start, one `]` at the end, none inside.
+fn is_one_bracketed_identifier(authority: &str) -> bool {
+    let inner = authority
+        .strip_prefix('[')
+        .and_then(|rest| rest.strip_suffix(']'));
+    inner.is_some_and(|inner| !inner.contains(['[', ']']))
+}
+
+/// `posixpath.normpath('/' + path.lstrip('/'))`: the canonical absolute
+/// form of a decoded URL path.
+fn absolute_normal_path(decoded_path: &str) -> String {
+    normpath(&format!("/{}", decoded_path.trim_start_matches('/')))
 }
 
 #[cfg(test)]
@@ -352,6 +381,7 @@ mod tests {
         normalise_location(value, None, &home())
     }
 
+    /// parity: NAV-034
     #[test]
     fn plain_paths_are_escaped_like_python() {
         assert_eq!(
@@ -366,6 +396,7 @@ mod tests {
         assert_eq!(normal("~user").as_deref(), Ok("file:///home/test/~user"));
     }
 
+    /// parity: NAV-034
     #[test]
     fn relative_paths_join_the_right_base() {
         let base = |value: &str, base: &str| normalise_location(value, Some(base), &home());
@@ -392,6 +423,7 @@ mod tests {
         assert_eq!(base("Docs", "ox:pc").as_deref(), Ok("file:///home/test/Docs"));
     }
 
+    /// parity: NAV-034
     #[test]
     fn smb_urls_are_canonical() {
         assert_eq!(normal("SMB://NAS/Projects/").as_deref(), Ok("smb://nas/Projects"));
@@ -404,6 +436,7 @@ mod tests {
         assert!(normal("smb://my nas/a").is_err());
     }
 
+    /// parity: NAV-034
     #[test]
     fn unc_paths_become_smb() {
         assert_eq!(
@@ -417,6 +450,33 @@ mod tests {
         }
     }
 
+    /// Every address form refuses a user name or password with the Python
+    /// app's message, including a relative name typed inside a folder whose
+    /// address carries one.
+    ///
+    /// parity: SAFE-010
+    #[test]
+    fn credentials_are_refused_in_every_address_form() {
+        let sign_in = "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.";
+        let unc = "Use a server name without credentials, for example \\\\nas\\share.";
+        let escaped = "Use an unescaped server name without credentials or control characters.";
+        let device = "Invalid connected-device identifier.";
+        let refused = |value: &str| normal(value).map_err(|error| error.message().to_string());
+        assert_eq!(refused("smb://u:p@nas/share"), Err(sign_in.to_string()));
+        assert_eq!(refused("smb://u@nas/share"), Err(sign_in.to_string()));
+        assert_eq!(refused("file://user@localhost/x"), Err(sign_in.to_string()));
+        assert_eq!(refused("\\\\u:p@nas\\share"), Err(unc.to_string()));
+        assert_eq!(refused("//u@nas/share"), Err(unc.to_string()));
+        assert_eq!(refused("smb://u%40nas/share"), Err(escaped.to_string()));
+        assert_eq!(refused("mtp://user@device/DCIM"), Err(device.to_string()));
+        let inside_signed_in_folder = normalise_location("x", Some("smb://u@nas/a"), &home());
+        assert_eq!(
+            inside_signed_in_folder.map_err(|error| error.message().to_string()),
+            Err(sign_in.to_string())
+        );
+    }
+
+    /// parity: DEV-005
     #[test]
     fn device_uris_keep_their_authority() {
         assert_eq!(
@@ -452,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn server_detection() {
+    fn smb_server_listings_are_detected() {
         assert!(is_smb_server("smb://nas/"));
         assert!(is_smb_server("\\\\nas"));
         assert!(!is_smb_server("smb://nas/work"));
