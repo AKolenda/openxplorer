@@ -12,9 +12,6 @@
 //! compile. (app.js looked names up at run time and silently drew the
 //! documents glyph for an unknown one.)
 
-use std::cell::{Cell, OnceCell};
-
-use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, gsk};
 
@@ -175,7 +172,6 @@ impl Glyph {
 
     /// The SVG path data, verbatim from app.js. An exhaustive table, hence
     /// its length.
-    #[expect(clippy::too_many_lines, reason = "one arm per glyph of the app.js table")]
     pub const fn path_data(self) -> &'static str {
         match self {
             Glyph::Terminal => "M3 5h18v14H3zM6 9l3 3-3 3M12 15h5",
@@ -262,7 +258,11 @@ impl Glyph {
 }
 
 mod imp {
-    use super::*;
+    use std::cell::{Cell, OnceCell};
+
+    use gtk::prelude::*;
+    use gtk::subclass::prelude::*;
+    use gtk::{gdk, glib, gsk};
 
     /// Private state of [`super::GlyphPaintable`].
     #[derive(Default)]

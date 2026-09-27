@@ -8,6 +8,7 @@ use gtk::subclass::prelude::*;
 
 use crate::locations::Page;
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
+use crate::window::session::Tab;
 
 fn can_go_back(test: &TestWindow) -> bool {
     let session = test.window.imp().session.borrow();
@@ -94,7 +95,7 @@ fn command_line_locations_open_in_the_current_tab_then_in_new_tabs() {
     });
     test.wait_for_listing("the new tab");
     let session = test.window.imp().session.borrow();
-    let uris: Vec<&str> = session.tabs.iter().map(|tab| tab.uri()).collect();
+    let uris: Vec<&str> = session.tabs.iter().map(Tab::uri).collect();
     assert_eq!(uris, [fixture.uri_of("Documents"), fixture.uri()]);
     assert!(
         session.tabs[0].history.can_go_back(),

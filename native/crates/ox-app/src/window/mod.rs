@@ -28,23 +28,18 @@ mod tab_strip;
 #[cfg(test)]
 mod tests;
 
-use std::cell::{Cell, OnceCell, RefCell};
-
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::location::LocationContext;
 
 use crate::folder_view::model::FolderModel;
 use crate::shared::AppContext;
 use crate::theme::{Appearance, ListenerId, Skin};
 use crate::typeahead;
-use crate::volumes::VolumeRow;
 
 use chrome::Chrome;
 use content::Content;
 use details_pane::DetailsPane;
-use session::Session;
 use sidebar::Sidebar;
 
 pub(crate) use actions::install_accelerators;
@@ -65,7 +60,16 @@ struct TypeAhead {
 }
 
 mod imp {
-    use super::*;
+    use std::cell::{Cell, OnceCell, RefCell};
+
+    use gtk::subclass::prelude::*;
+    use gtk::{gio, glib};
+    use ox_core::location::LocationContext;
+
+    use super::{Chrome, Content, DetailsPane, ExternalHandlers, Sidebar, TypeAhead};
+    use crate::shared::AppContext;
+    use crate::volumes::VolumeRow;
+    use crate::window::session::Session;
 
     /// Private state of [`super::BrowserWindow`].
     #[derive(Debug, Default)]

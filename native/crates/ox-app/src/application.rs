@@ -107,7 +107,7 @@ impl Desktop {
     }
 }
 
-/// The focused OpenXplorer window, else the most recent one.
+/// The focused browser window, else the most recent one.
 fn active_window(app: &gtk::Application) -> Option<BrowserWindow> {
     let focused = app.active_window().and_downcast::<BrowserWindow>();
     focused.or_else(|| {
@@ -132,6 +132,19 @@ fn install_app_actions(app: &gtk::Application, desktop: &Rc<OnceCell<Desktop>>) 
     app.add_action_entries([new_window]);
 }
 
+/// Accepts `--new-window` on the command line.
+fn add_new_window_option(app: &gtk::Application) {
+    app.add_main_option(
+        NEW_WINDOW_OPTION,
+        glib::Char::from(0),
+        glib::OptionFlags::NONE,
+        glib::OptionArg::None,
+        "Open a new window",
+        None,
+    );
+    app.connect_handle_local_options(handle_local_options);
+}
+
 /// `--new-window` asks the running instance (or this one, when it is the
 /// first) for another window, then continues like a normal launch.
 fn handle_local_options(app: &gtk::Application, options: &glib::VariantDict) -> ControlFlow<glib::ExitCode> {
@@ -143,20 +156,17 @@ fn handle_local_options(app: &gtk::Application, options: &glib::VariantDict) -> 
 
 /// Runs the preview under its own application ID, so installed
 /// file-manager defaults and the production app's D-Bus name are untouched.
+///
+/// # Panics
+///
+/// Never in practice: GTK emits `startup` once per application, and only
+/// `startup` creates the shared state.
 pub fn run() -> glib::ExitCode {
     let app = gtk::Application::builder()
         .application_id(crate::config::APP_ID)
         .flags(gio::ApplicationFlags::HANDLES_OPEN)
         .build();
-    app.add_main_option(
-        NEW_WINDOW_OPTION,
-        glib::Char::from(0),
-        glib::OptionFlags::NONE,
-        glib::OptionArg::None,
-        "Open a new window",
-        None,
-    );
-    app.connect_handle_local_options(handle_local_options);
+    add_new_window_option(&app);
     let desktop: Rc<OnceCell<Desktop>> = Rc::default();
     install_app_actions(&app, &desktop);
     app.connect_startup(glib::clone!(

@@ -3,7 +3,7 @@
 //!
 //! Glyphs ([`glyph`]) follow the widget's CSS colour; art ([`art_image`],
 //! [`set_art`]) is rasterised at the widget's scale factor so it stays sharp
-//! on HiDPI screens.
+//! on high-resolution screens.
 
 pub mod art;
 pub mod glyphs;
@@ -19,17 +19,17 @@ use crate::theme::Appearance;
 /// A centred image of `glyph` at `size` logical pixels, painted in the CSS
 /// colour of the image (so hover and disabled states apply).
 pub fn glyph(glyph: Glyph, size: i32) -> gtk::Image {
-    glyph_image(GlyphPaintable::new(glyph, size, None), size)
+    glyph_image(&GlyphPaintable::new(glyph, size, None), size)
 }
 
 /// A glyph in a fixed colour, for the coloured Quick access and sidebar
 /// glyphs.
 pub fn colored_glyph(glyph: Glyph, size: i32, color: gdk::RGBA) -> gtk::Image {
-    glyph_image(GlyphPaintable::new(glyph, size, Some(color)), size)
+    glyph_image(&GlyphPaintable::new(glyph, size, Some(color)), size)
 }
 
-fn glyph_image(paintable: GlyphPaintable, size: i32) -> gtk::Image {
-    let image = gtk::Image::from_paintable(Some(&paintable));
+fn glyph_image(paintable: &GlyphPaintable, size: i32) -> gtk::Image {
+    let image = gtk::Image::from_paintable(Some(paintable));
     image.set_pixel_size(size);
     image.set_halign(gtk::Align::Center);
     image.set_valign(gtk::Align::Center);

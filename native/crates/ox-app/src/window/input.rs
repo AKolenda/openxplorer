@@ -22,7 +22,7 @@ use super::gestures;
 use super::BrowserWindow;
 
 /// Keys that only modify another key; pressing one keeps the prefix, so
-/// capitals and AltGr characters can be typed.
+/// capitals and `AltGr` characters can be typed.
 fn is_modifier_key(key: gdk::Key) -> bool {
     matches!(
         key,
@@ -177,25 +177,8 @@ impl BrowserWindow {
             self.reset_typeahead();
             return glib::Propagation::Proceed;
         }
-        let now = glib::monotonic_time() / 1000;
-        let prefix_active = self.imp().type_ahead.borrow().controller.active(now);
-        match key {
-            gdk::Key::Escape if prefix_active => {
-                input.reset();
-                self.reset_typeahead();
-                return glib::Propagation::Stop;
-            }
-            gdk::Key::Escape => {
-                self.content().model.select_none();
-                return glib::Propagation::Stop;
-            }
-            gdk::Key::BackSpace if prefix_active => {
-                self.erase_typed_character(now);
-                return glib::Propagation::Stop;
-            }
-            // Space toggles the native selection unless a prefix is typed.
-            gdk::Key::space if !prefix_active => return glib::Propagation::Proceed,
-            _ => {}
+        if let Some(handled) = self.prefix_editing_key(input, key) {
+            return handled;
         }
         // The input method composes text before it reaches type-to-select.
         let consumed = controller
@@ -209,6 +192,26 @@ impl BrowserWindow {
             self.reset_typeahead();
         }
         glib::Propagation::Proceed
+    }
+
+    /// Escape, Backspace and Space, which act on a typed prefix first:
+    /// Escape clears the prefix, and only without one the selection.
+    /// `None` for every other key.
+    fn prefix_editing_key(&self, input: &gtk::IMMulticontext, key: gdk::Key) -> Option<glib::Propagation> {
+        let now = glib::monotonic_time() / 1000;
+        let prefix_active = self.imp().type_ahead.borrow().controller.active(now);
+        match key {
+            gdk::Key::Escape if prefix_active => {
+                input.reset();
+                self.reset_typeahead();
+            }
+            gdk::Key::Escape => self.content().model.select_none(),
+            gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
+            // Space toggles the native selection unless a prefix is typed.
+            gdk::Key::space if !prefix_active => return Some(glib::Propagation::Proceed),
+            _ => return None,
+        }
+        Some(glib::Propagation::Stop)
     }
 
     /// A pointer press in a view starts a new prefix; the click itself
@@ -436,7 +439,7 @@ mod tests {
         }
     }
 
-    /// Ported from desktop/tests/ui_type_select.py (the "Jump to" hint).
+    /// Ported from `desktop/tests/ui_type_select.py` (the "Jump to" hint).
     #[test]
     fn the_hint_names_the_item_it_jumped_to() {
         let hint = typeahead_hint(&result("SC", Some(3)), Some("scripts"));

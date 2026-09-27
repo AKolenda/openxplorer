@@ -9,7 +9,7 @@
 //! `org.freedesktop.appearance color-scheme` setting is read instead.
 
 use std::cell::{Cell, RefCell};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
@@ -107,58 +107,71 @@ impl SystemScheme {
     }
 
     fn watch(self: &Rc<Self>) {
-        if let Some(settings) = &self.settings {
-            for key in ["color-scheme", "gtk-theme"] {
-                let has_key = settings
-                    .settings_schema()
-                    .is_some_and(|schema| schema.has_key(key));
-                if !has_key {
-                    continue;
-                }
-                let weak = Rc::downgrade(self);
-                settings.connect_changed(Some(key), move |_, _| {
-                    if let Some(scheme) = weak.upgrade() {
-                        scheme.notify();
-                    }
-                });
+        match &self.settings {
+            Some(settings) => self.watch_gnome_keys(settings),
+            None => {
+                glib::spawn_future_local(follow_portal(Rc::downgrade(self)));
             }
-            return;
         }
-        let weak = Rc::downgrade(self);
-        glib::spawn_future_local(async move {
-            let Ok(connection) = gio::bus_get_future(gio::BusType::Session).await else {
-                return;
-            };
-            let changed = weak.clone();
-            let subscription = connection.subscribe_to_signal(
-                Some(PORTAL_NAME),
-                Some(PORTAL_SETTINGS),
-                Some("SettingChanged"),
-                Some(PORTAL_PATH),
-                Some(APPEARANCE_NAMESPACE),
-                gio::DBusSignalFlags::NONE,
-                move |signal| {
-                    let value = portal_change(signal.parameters);
-                    if let (Some(scheme), Some(value)) = (changed.upgrade(), value) {
-                        scheme.portal_signal_seen.set(true);
-                        scheme.portal_dark.replace(dark_from_portal(value));
-                        scheme.notify();
-                    }
-                },
-            );
-            if let Some(scheme) = weak.upgrade() {
-                scheme.portal_watch.replace(Some(subscription));
-            } else {
-                return;
-            }
-            if let (Some(value), Some(scheme)) = (read_portal(&connection).await, weak.upgrade()) {
-                // A newer SettingChanged signal wins over the initial reply.
-                if !scheme.portal_signal_seen.get() {
-                    scheme.portal_dark.replace(dark_from_portal(value));
+    }
+
+    /// Follows GNOME's own keys, when their schema is installed.
+    fn watch_gnome_keys(self: &Rc<Self>, settings: &gio::Settings) {
+        let Some(schema) = settings.settings_schema() else {
+            return;
+        };
+        let keys = ["color-scheme", "gtk-theme"].into_iter();
+        for key in keys.filter(|key| schema.has_key(key)) {
+            let weak = Rc::downgrade(self);
+            settings.connect_changed(Some(key), move |_, _| {
+                if let Some(scheme) = weak.upgrade() {
                     scheme.notify();
                 }
+            });
+        }
+    }
+
+    /// Records the portal's value and reports the scheme.
+    fn set_portal_value(&self, value: u32) {
+        self.portal_dark.replace(dark_from_portal(value));
+        self.notify();
+    }
+}
+
+/// Follows the XDG desktop portal's colour scheme: every change, and the
+/// current value unless a change arrived first.
+async fn follow_portal(scheme: Weak<SystemScheme>) {
+    let Ok(connection) = gio::bus_get_future(gio::BusType::Session).await else {
+        return;
+    };
+    let changed = scheme.clone();
+    let subscription = connection.subscribe_to_signal(
+        Some(PORTAL_NAME),
+        Some(PORTAL_SETTINGS),
+        Some("SettingChanged"),
+        Some(PORTAL_PATH),
+        Some(APPEARANCE_NAMESPACE),
+        gio::DBusSignalFlags::NONE,
+        move |signal| {
+            let value = portal_change(signal.parameters);
+            if let (Some(scheme), Some(value)) = (changed.upgrade(), value) {
+                scheme.portal_signal_seen.set(true);
+                scheme.set_portal_value(value);
             }
-        });
+        },
+    );
+    let Some(watching) = scheme.upgrade() else {
+        return;
+    };
+    watching.portal_watch.replace(Some(subscription));
+    drop(watching);
+    let current = read_portal(&connection).await;
+    let Some((value, scheme)) = current.zip(scheme.upgrade()) else {
+        return;
+    };
+    // A newer SettingChanged signal wins over the initial reply.
+    if !scheme.portal_signal_seen.get() {
+        scheme.set_portal_value(value);
     }
 }
 

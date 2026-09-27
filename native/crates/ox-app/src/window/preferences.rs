@@ -39,16 +39,16 @@ pub(super) enum Preference {
 
 impl Preference {
     /// The settings change that saves it.
-    fn to_update(&self) -> PreferencesUpdate {
+    fn into_update(self) -> PreferencesUpdate {
         let mut update = PreferencesUpdate::default();
         match self {
             Preference::View(view) => update.view = Some(view.setting().to_owned()),
-            Preference::ShowHidden(show) => update.show_hidden = Some(*show),
-            Preference::DetailsPane(show) => update.details = Some(*show),
+            Preference::ShowHidden(show) => update.show_hidden = Some(show),
+            Preference::DetailsPane(show) => update.details = Some(show),
             Preference::Theme(theme) => update.theme = Some(theme.key().to_owned()),
-            Preference::TextSize(size) => update.text_size = Some(*size),
-            Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(*width)),
-            Preference::ColumnWidths(widths) => update.column_widths = Some(widths.clone()),
+            Preference::TextSize(size) => update.text_size = Some(size),
+            Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
+            Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
         }
         update
     }
@@ -121,7 +121,7 @@ impl BrowserWindow {
     /// Saves one preference. A failure leaves the change in this window and
     /// says so, as the Python app's text-size toast does.
     pub(super) fn save_preference(&self, preference: Preference) {
-        let update = preference.to_update();
+        let update = preference.into_update();
         let reply = glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -155,9 +155,9 @@ mod tests {
 
     #[test]
     fn every_icon_size_is_saved_as_the_python_grid_view() {
-        let update = Preference::View(FolderView::Icons(IconSize::Small)).to_update();
+        let update = Preference::View(FolderView::Icons(IconSize::Small)).into_update();
         assert_eq!(update.view.as_deref(), Some("grid"));
-        let update = Preference::View(FolderView::Details).to_update();
+        let update = Preference::View(FolderView::Details).into_update();
         assert_eq!(update.view.as_deref(), Some("details"));
     }
 }

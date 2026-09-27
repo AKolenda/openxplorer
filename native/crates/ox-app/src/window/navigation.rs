@@ -77,7 +77,7 @@ impl BrowserWindow {
     ///
     /// # Errors
     ///
-    /// The address is not a location OpenXplorer can open; nothing changes.
+    /// The address is not a location the app can open; nothing changes.
     pub fn open_tab(&self, address: &str, placement: TabPlacement) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
         self.save_tab_view();
@@ -95,7 +95,7 @@ impl BrowserWindow {
     ///
     /// # Errors
     ///
-    /// The address is not a location OpenXplorer can open; nothing changes.
+    /// The address is not a location the app can open; nothing changes.
     pub fn add_tab(&self, address: &str) -> Result<(), LocationError> {
         self.open_tab(address, TabPlacement::Foreground)
     }
@@ -104,7 +104,7 @@ impl BrowserWindow {
     ///
     /// # Errors
     ///
-    /// The address is not a location OpenXplorer can open; the current
+    /// The address is not a location the app can open; the current
     /// folder stays.
     pub fn navigate(&self, address: &str) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;

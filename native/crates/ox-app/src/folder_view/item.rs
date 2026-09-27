@@ -5,8 +5,6 @@
 //! should compute once: the natural-order sort keys, the lower-cased name
 //! used by the search filter, and the icon art kind.
 
-use std::cell::OnceCell;
-
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
@@ -37,7 +35,12 @@ impl ItemData {
 }
 
 mod imp {
-    use super::*;
+    use std::cell::OnceCell;
+
+    use gtk::glib;
+    use gtk::subclass::prelude::*;
+
+    use super::ItemData;
 
     /// Private state of [`super::FileItem`]; set once at construction.
     #[derive(Default)]

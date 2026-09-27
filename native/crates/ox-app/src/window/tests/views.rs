@@ -138,10 +138,10 @@ fn changed_view_preferences_are_saved_for_new_windows() {
     assert!(second.names().contains(&".private".to_owned()));
 }
 
-/// Ported from desktop/tests/text_size.test.cjs::unmodified typing ignored,
-/// ::AltGraph ignored and ::Alt ignored: GTK matches an accelerator only
-/// with exactly its modifiers, and every text-size accelerator holds Ctrl
-/// alone, so plain, Alt and AltGr presses never resize text. (The web
+/// Ported from `desktop/tests/text_size.test.cjs` (unmodified typing
+/// ignored, `AltGraph` ignored and Alt ignored): GTK matches an accelerator
+/// only with exactly its modifiers, and every text-size accelerator holds
+/// Ctrl alone, so plain, Alt and `AltGr` presses never resize text. (The web
 /// app's "composing ignored" case is the input method's: it consumes keys
 /// before accelerators see them.)
 ///

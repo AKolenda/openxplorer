@@ -64,7 +64,13 @@ pub(crate) enum CellLayout {
 }
 
 mod imp {
-    use super::*;
+    use std::cell::Cell;
+
+    use gtk::glib;
+    use gtk::prelude::*;
+    use gtk::subclass::prelude::*;
+
+    use super::tooltip_when_truncated;
 
     /// Private state of [`super::FileCell`].
     #[derive(Debug, Default)]
@@ -304,7 +310,7 @@ impl CellOwners {
                 return None;
             }
             let first = widget.first_child();
-            let second = first.as_ref().and_then(|child| child.first_child());
+            let second = first.as_ref().and_then(WidgetExt::first_child);
             let candidates = [Some(widget.clone()), first, second];
             let owner = candidates
                 .iter()

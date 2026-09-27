@@ -38,7 +38,7 @@ pub(crate) struct PlaceSources<'a> {
     /// Rows from the volume monitor.
     pub volumes: &'a [VolumeRow],
     /// Kernel CIFS/SMB3 mounts. ox-core does not read the mount table yet
-    /// (`read_mounts` in desktop/mount_support.py), so the window passes
+    /// (`read_mounts` in `desktop/mount_support.py`), so the window passes
     /// none; the composition already handles them.
     pub stable_mounts: &'a [StableMount],
     /// SMB servers and shares browsed this session.

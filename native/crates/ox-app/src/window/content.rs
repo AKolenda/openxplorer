@@ -128,8 +128,7 @@ impl EmptyPage {
             .build();
         let spinner = gtk::Spinner::new();
         let icon = icons::glyph(Glyph::FolderLine, 44);
-        let title = gtk::Label::new(None);
-        title.add_css_class("empty-title");
+        let title = gtk::Label::builder().css_classes(["empty-title"]).build();
         let message = gtk::Label::builder()
             .wrap(true)
             .max_width_chars(65)
@@ -142,13 +141,9 @@ impl EmptyPage {
             .halign(gtk::Align::Center)
             .visible(false)
             .build();
-        for widget in [
-            spinner.upcast_ref::<gtk::Widget>(),
-            icon.upcast_ref(),
-            title.upcast_ref(),
-        ] {
-            root.append(widget);
-        }
+        root.append(&spinner);
+        root.append(&icon);
+        root.append(&title);
         root.append(&message);
         root.append(&retry);
         Self {
@@ -184,6 +179,32 @@ impl EmptyPage {
         self.retry
             .set_visible(matches!(state, EmptyState::Unavailable(_)));
     }
+}
+
+/// The details and icon views, one of them shown.
+fn view_stack(details_scroll: &gtk::ScrolledWindow, grid_scroll: &gtk::ScrolledWindow) -> gtk::Stack {
+    let views = gtk::Stack::new();
+    views.add_named(details_scroll, Some(FolderView::Details.stack_name()));
+    let icons = FolderView::Icons(IconSize::Large);
+    views.add_named(grid_scroll, Some(icons.stack_name()));
+    views
+}
+
+/// The landing page's contents and the scroller around them.
+fn landing_page() -> (gtk::Box, gtk::ScrolledWindow) {
+    let landing = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    landing.add_css_class("page");
+    let landing_scroll = scrolled(&landing);
+    landing_scroll.add_css_class("landing");
+    (landing, landing_scroll)
+}
+
+/// The thin line that runs above the items while a folder is listed.
+fn loading_line() -> gtk::ProgressBar {
+    gtk::ProgressBar::builder()
+        .css_classes(["loading-line"])
+        .visible(false)
+        .build()
 }
 
 fn scrolled(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
@@ -229,26 +250,15 @@ impl Content {
         let grid = grid::build(&icons, &owners, IconSize::Large);
         let details_scroll = scrolled(&details);
         let grid_scroll = scrolled(&grid);
-        let views = gtk::Stack::new();
-        views.add_named(&details_scroll, Some(FolderView::Details.stack_name()));
-        views.add_named(
-            &grid_scroll,
-            Some(FolderView::Icons(IconSize::Large).stack_name()),
-        );
+        let views = view_stack(&details_scroll, &grid_scroll);
         let empty = EmptyPage::new();
-        let landing = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        landing.add_css_class("page");
-        let landing_scroll = scrolled(&landing);
-        landing_scroll.add_css_class("landing");
+        let (landing, landing_scroll) = landing_page();
         let stack = gtk::Stack::builder().hexpand(true).vexpand(true).build();
         stack.add_css_class("folder-pane");
         stack.add_named(&views, Some(ContentPage::Listing.name()));
         stack.add_named(&empty.root, Some(ContentPage::Empty.name()));
         stack.add_named(&landing_scroll, Some(ContentPage::Landing.name()));
-        let loading_line = gtk::ProgressBar::builder()
-            .css_classes(["loading-line"])
-            .visible(false)
-            .build();
+        let loading_line = loading_line();
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.append(&loading_line);
         root.append(&stack);

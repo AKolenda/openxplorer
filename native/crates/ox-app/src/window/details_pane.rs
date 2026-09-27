@@ -117,31 +117,34 @@ fn note_for(uri: &str) -> &'static str {
     }
 }
 
+/// The picture, name and type line when no single item is selected.
+fn folder_heading(facts: &PaneFacts<'_>) -> (Preview, String, &'static str) {
+    let selected = facts.selection.len();
+    if selected > 1 {
+        let name = format!("{selected} items selected");
+        return (Preview::Several, name, "Multiple items");
+    }
+    let title = facts.locations.title_for(facts.folder_uri);
+    (Preview::Art(ArtKind::Folder), title, "Folder")
+}
+
+/// Where a folder's items are stored, as the Storage row says.
+fn storage_of(uri: &str) -> &'static str {
+    if is_network(uri) {
+        "Network share"
+    } else {
+        "This computer"
+    }
+}
+
 fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
     let uri = facts.folder_uri;
+    let (preview, name, kind) = folder_heading(facts);
     let selected = facts.selection.len();
-    let (preview, name, kind) = if selected > 1 {
-        (
-            Preview::Several,
-            format!("{selected} items selected"),
-            "Multiple items",
-        )
-    } else {
-        (
-            Preview::Art(ArtKind::Folder),
-            facts.locations.title_for(uri),
-            "Folder",
-        )
-    };
     let items = if selected > 0 {
         selected.to_string()
     } else {
         facts.folder_item_count.to_string()
-    };
-    let storage = if is_network(uri) {
-        "Network share"
-    } else {
-        "This computer"
     };
     let action = if Page::from_uri(uri).is_some() {
         PaneAction::None
@@ -156,7 +159,7 @@ fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
         properties: vec![
             ("Items", items),
             ("Location", facts.locations.display_location(uri)),
-            ("Storage", storage.to_owned()),
+            ("Storage", storage_of(uri).to_owned()),
         ],
         note: note_for(uri),
     }
@@ -217,36 +220,25 @@ impl DetailsPane {
             .build();
         root.append(&header());
         let preview = icons::art_image(ArtKind::Folder, PREVIEW_SIZE, appearance, 1);
-        let frame = gtk::CenterBox::new();
-        frame.add_css_class("preview");
-        frame.set_center_widget(Some(&preview));
-        root.append(&frame);
+        root.append(&preview_frame(&preview));
         let name = pane_label("dname");
         name.set_selectable(true);
+        root.append(&name);
         let kind = pane_label("dtype");
+        root.append(&kind);
         let open = pane_button("Open", Glyph::Share, "win.open");
+        root.append(&open);
         let pin_item = pane_button("Pin to Quick access", Glyph::Pin, "win.pin-selected");
+        root.append(&pin_item);
         let pin_folder = pane_button("Pin to Quick access", Glyph::Pin, "win.pin-folder");
+        root.append(&pin_folder);
         let section = pane_label("dsection");
         section.set_text("Properties");
+        root.append(&section);
         let properties = gtk::Grid::builder().row_spacing(15).column_spacing(8).build();
+        root.append(&properties);
         let note = pane_label("note-text");
-        let note_row = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-        note_row.add_css_class("note");
-        note_row.append(&icons::glyph(Glyph::Info, 14));
-        note_row.append(&note);
-        for widget in [
-            name.upcast_ref::<gtk::Widget>(),
-            kind.upcast_ref(),
-            open.upcast_ref(),
-            pin_item.upcast_ref(),
-            pin_folder.upcast_ref(),
-            section.upcast_ref(),
-            properties.upcast_ref(),
-            note_row.upcast_ref(),
-        ] {
-            root.append(widget);
-        }
+        root.append(&note_row(&note));
         Self {
             root,
             preview,
@@ -311,6 +303,23 @@ impl DetailsPane {
             .map_while(|row| Some((text(0, row)?, text(1, row)?)))
             .collect()
     }
+}
+
+/// The frame that centres the preview art.
+fn preview_frame(preview: &gtk::Image) -> gtk::CenterBox {
+    let frame = gtk::CenterBox::new();
+    frame.add_css_class("preview");
+    frame.set_center_widget(Some(preview));
+    frame
+}
+
+/// The note at the bottom of the pane, with its info glyph.
+fn note_row(note: &gtk::Label) -> gtk::Box {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+    row.add_css_class("note");
+    row.append(&icons::glyph(Glyph::Info, 14));
+    row.append(note);
+    row
 }
 
 /// "Details" with a close button bound to the pane's toggle action.

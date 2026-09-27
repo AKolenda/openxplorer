@@ -215,6 +215,16 @@ fn workspace() -> gtk::Paned {
     workspace
 }
 
+/// The status-bar text that shows a type-to-select prefix.
+fn typeahead_hint() -> gtk::Label {
+    gtk::Label::builder()
+        .xalign(0.0)
+        .hexpand(true)
+        .ellipsize(pango::EllipsizeMode::End)
+        .css_classes(["typeahead-hint"])
+        .build()
+}
+
 fn view_button(glyph: Glyph, tooltip: &str, view: FolderView) -> gtk::Button {
     let button = icon_button(glyph, tooltip, "win.view");
     button.set_action_target_value(Some(&view.key().to_variant()));
@@ -231,24 +241,15 @@ impl Chrome {
         let message = message_line();
         let workspace = workspace();
         let status = gtk::Label::builder().xalign(0.0).build();
-        let hint = gtk::Label::builder()
-            .xalign(0.0)
-            .hexpand(true)
-            .ellipsize(pango::EllipsizeMode::End)
-            .css_classes(["typeahead-hint"])
-            .build();
+        let hint = typeahead_hint();
         let details_view = view_button(Glyph::List, "Details view", FolderView::Details);
         let icons_view = view_button(Glyph::Grid, "Large icons", FolderView::Icons(IconSize::Large));
         let status_bar = gtk::Box::new(gtk::Orientation::Horizontal, 16);
         status_bar.add_css_class("statusbar");
-        for widget in [
-            status.upcast_ref::<gtk::Widget>(),
-            hint.upcast_ref(),
-            details_view.upcast_ref(),
-            icons_view.upcast_ref(),
-        ] {
-            status_bar.append(widget);
-        }
+        status_bar.append(&status);
+        status_bar.append(&hint);
+        status_bar.append(&details_view);
+        status_bar.append(&icons_view);
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.append(&navigation_row(&address, &search));
         let appearance = appearance_button();

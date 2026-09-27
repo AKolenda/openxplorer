@@ -8,11 +8,8 @@
 //! every window connects to, when a pin, a saved share, a visited server or
 //! a preference changes.
 
-use std::cell::{OnceCell, RefCell};
 use std::rc::Rc;
-use std::sync::OnceLock;
 
-use gtk::glib::subclass::Signal;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
@@ -27,7 +24,18 @@ use crate::theme::Skin;
 const PLACES_CHANGED: &str = "places-changed";
 
 mod imp {
-    use super::*;
+    use std::cell::{OnceCell, RefCell};
+    use std::rc::Rc;
+    use std::sync::OnceLock;
+
+    use gtk::glib;
+    use gtk::glib::subclass::Signal;
+    use gtk::subclass::prelude::*;
+    use ox_core::settings::Bookmark;
+
+    use super::PLACES_CHANGED;
+    use crate::settings_store::SettingsStore;
+    use crate::theme::Skin;
 
     /// Private state of [`super::AppContext`].
     #[derive(Debug, Default)]

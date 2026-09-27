@@ -114,7 +114,7 @@ impl VolumeFacts {
     }
 
     /// A stable-enough identifier for a single mount request, as
-    /// `volume_id` in volume_locations.py.
+    /// `volume_id` in `desktop/volume_locations.py`.
     pub fn id(&self) -> String {
         self.uuid
             .clone()
@@ -203,7 +203,7 @@ mod tests {
         rows.into_iter().next().and_then(|row| row.uri)
     }
 
-    /// Ported from desktop/tests/test_volume_locations.py::test_mounted_mtp_phone_and_afc_device_are_visible
+    /// Ported from `desktop/tests/test_volume_locations.py::test_mounted_mtp_phone_and_afc_device_are_visible`
     #[test]
     fn mounted_mtp_phone_and_afc_device_are_visible() {
         let mounts = [
@@ -219,7 +219,7 @@ mod tests {
         assert!(rows.iter().all(|row| row.mounted));
     }
 
-    /// Ported from desktop/tests/test_volume_locations.py::test_unmounted_phone_is_click_to_connect_device
+    /// Ported from `desktop/tests/test_volume_locations.py::test_unmounted_phone_is_click_to_connect_device`
     #[test]
     fn unmounted_phone_is_click_to_connect_device() {
         let phone = VolumeFacts {
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(phone.id(), "mtp://[usb:001,011]/");
     }
 
-    /// Ported from desktop/tests/test_volume_locations.py::test_unsupported_and_shadowed_mounts_stay_hidden
+    /// Ported from `desktop/tests/test_volume_locations.py::test_unsupported_and_shadowed_mounts_stay_hidden`
     #[test]
     fn unsupported_and_shadowed_mounts_stay_hidden() {
         let shadow = MountFacts {

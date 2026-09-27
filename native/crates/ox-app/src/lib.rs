@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The native OpenXplorer desktop application: its widgets, windows and
-//! application lifetime.
+//! The native desktop application: its widgets, windows and application
+//! lifetime.
 //!
 //! Only [`application::run`] is public; `main.rs` calls it. Every other
 //! module is private to the crate, so the compiler reports anything the

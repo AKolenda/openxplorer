@@ -24,50 +24,34 @@ use super::landing::{self, Drawing};
 use super::sidebar;
 use super::BrowserWindow;
 
+/// A volume monitor handler that tells `window` about any mount or volume
+/// change; it holds the window weakly, so it never keeps a closed window.
+fn redraw_on_change<Changed>(
+    window: &glib::WeakRef<BrowserWindow>,
+) -> impl Fn(&gio::VolumeMonitor, &Changed) + 'static {
+    let window = window.clone();
+    move |_, _| {
+        if let Some(window) = window.upgrade() {
+            window.volumes_changed();
+        }
+    }
+}
+
 impl BrowserWindow {
     /// Draws the sidebar, then redraws it whenever the volumes or the
     /// places change.
     pub(super) fn watch_environment(&self) {
         self.read_volumes();
         self.render_places();
-        let monitor = self.volume_monitor().clone();
-        let redraw = glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move || window.volumes_changed()
-        );
-        let redraw = std::rc::Rc::new(redraw);
+        let monitor = self.volume_monitor();
+        let window = self.downgrade();
         let handlers = [
-            monitor.connect_mount_added(glib::clone!(
-                #[strong]
-                redraw,
-                move |_, _| redraw()
-            )),
-            monitor.connect_mount_removed(glib::clone!(
-                #[strong]
-                redraw,
-                move |_, _| redraw()
-            )),
-            monitor.connect_mount_changed(glib::clone!(
-                #[strong]
-                redraw,
-                move |_, _| redraw()
-            )),
-            monitor.connect_volume_added(glib::clone!(
-                #[strong]
-                redraw,
-                move |_, _| redraw()
-            )),
-            monitor.connect_volume_removed(glib::clone!(
-                #[strong]
-                redraw,
-                move |_, _| redraw()
-            )),
-            monitor.connect_volume_changed(glib::clone!(
-                #[strong]
-                redraw,
-                move |_, _| redraw()
-            )),
+            monitor.connect_mount_added(redraw_on_change(&window)),
+            monitor.connect_mount_removed(redraw_on_change(&window)),
+            monitor.connect_mount_changed(redraw_on_change(&window)),
+            monitor.connect_volume_added(redraw_on_change(&window)),
+            monitor.connect_volume_removed(redraw_on_change(&window)),
+            monitor.connect_volume_changed(redraw_on_change(&window)),
         ];
         let places = self.context().connect_places_changed(glib::clone!(
             #[weak(rename_to = window)]

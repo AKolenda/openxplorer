@@ -197,7 +197,7 @@ impl Skin {
         true
     }
 
-    /// The display-wide preference shared by every OpenXplorer window.
+    /// The display-wide preference shared by every window.
     pub fn preference(&self) -> ThemePreference {
         self.preference.get()
     }

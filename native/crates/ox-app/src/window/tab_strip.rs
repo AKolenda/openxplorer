@@ -91,35 +91,10 @@ fn tab(label: &TabLabel, appearance: Appearance, scale: i32) -> gtk::Box {
     if label.active {
         row.add_css_class("active");
     }
-    let title = gtk::Label::builder()
-        .label(&label.title)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
-        .max_width_chars(19)
-        .build();
-    let id = label.id.to_variant();
-    // The focusable button is the tab itself for screen readers.
-    let select = gtk::Button::builder()
-        .child(&title)
-        .tooltip_text(&label.tooltip)
-        .accessible_role(gtk::AccessibleRole::Tab)
-        .action_name("win.select-tab")
-        .action_target(&id)
-        .build();
-    select.update_state(&[gtk::accessible::State::Selected(Some(label.active))]);
-    let close = gtk::Button::builder()
-        .child(&icons::glyph(Glyph::Close, 12))
-        .tooltip_text("Close tab")
-        .action_name("win.close-tab-by-id")
-        .action_target(&id)
-        .css_classes(["tab-close"])
-        .build();
-    close.update_property(&[gtk::accessible::Property::Label(&format!(
-        "Close {}",
-        label.title
-    ))]);
     row.append(&tab_icon(label.icon, appearance, scale));
-    row.append(&select);
-    row.append(&close);
+    row.append(&select_button(label));
+    row.append(&close_button(label));
+    let id = label.id.to_variant();
     let closer = gestures::middle_click(move |gesture, _, _| {
         if let Some(row) = gesture.widget() {
             // The action exists on every browser window.
@@ -128,4 +103,36 @@ fn tab(label: &TabLabel, appearance: Appearance, scale: i32) -> gtk::Box {
     });
     row.add_controller(closer);
     row
+}
+
+/// The focusable part of a tab, which screen readers announce as the tab.
+fn select_button(label: &TabLabel) -> gtk::Button {
+    let title = gtk::Label::builder()
+        .label(&label.title)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .max_width_chars(19)
+        .build();
+    let select = gtk::Button::builder()
+        .child(&title)
+        .tooltip_text(&label.tooltip)
+        .accessible_role(gtk::AccessibleRole::Tab)
+        .action_name("win.select-tab")
+        .action_target(&label.id.to_variant())
+        .build();
+    select.update_state(&[gtk::accessible::State::Selected(Some(label.active))]);
+    select
+}
+
+/// The tab's close button, named "Close <title>" for screen readers.
+fn close_button(label: &TabLabel) -> gtk::Button {
+    let close = gtk::Button::builder()
+        .child(&icons::glyph(Glyph::Close, 12))
+        .tooltip_text("Close tab")
+        .action_name("win.close-tab-by-id")
+        .action_target(&label.id.to_variant())
+        .css_classes(["tab-close"])
+        .build();
+    let name = format!("Close {}", label.title);
+    close.update_property(&[gtk::accessible::Property::Label(&name)]);
+    close
 }

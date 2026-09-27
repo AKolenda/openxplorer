@@ -165,7 +165,7 @@ impl BrowserWindow {
             plain("select-all", |window| window.content().model.select_all()),
             plain("select-none", |window| window.content().model.select_none()),
             plain("invert-selection", |window| {
-                window.content().model.invert_selection()
+                window.content().model.invert_selection();
             }),
             plain("pin-selected", BrowserWindow::pin_selected),
             plain("pin-folder", BrowserWindow::pin_folder),
