@@ -116,7 +116,7 @@ fn replace_native_overwrites_the_existing_file() {
 ///
 /// parity: OPS-008, XFER-002
 #[test]
-fn exclusive_copy_move_and_mkdir_preserve_existing_destinations() {
+fn exclusive_copy_move_and_folder_creation_preserve_existing_destinations() {
     let temp = tempfile::tempdir().unwrap();
     let source = temp.path().join("source");
     let target = temp.path().join("target");
@@ -128,7 +128,7 @@ fn exclusive_copy_move_and_mkdir_preserve_existing_destinations() {
 
     let copied = source_node.copy_file(&target_node, &cancel, &mut |_, _| {});
     let moved = source_node.move_native(&target_node, Some(&cancel));
-    let created = target_node.mkdir(None);
+    let created = target_node.create_directory(None);
 
     assert!(matches!(copied, Err(TransferError::Exists(_))), "{copied:?}");
     assert!(matches!(moved, Err(TransferError::Exists(_))), "{moved:?}");

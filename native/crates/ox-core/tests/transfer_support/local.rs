@@ -122,8 +122,8 @@ impl LocalNode {
         })
     }
 
-    /// Exclusive `mkdir`.
-    pub fn local_mkdir(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+    /// Creates the folder exclusively: an existing item is never reused.
+    pub fn local_create_directory(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         check_cancelled(cancel)?;
         fs::create_dir(&self.path)?;
         Ok(())
@@ -256,8 +256,8 @@ impl Node for LocalNode {
         Ok(children)
     }
 
-    fn mkdir(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-        self.provider.mkdir(self, cancel)
+    fn create_directory(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+        self.provider.create_directory(self, cancel)
     }
 
     fn copy_file(

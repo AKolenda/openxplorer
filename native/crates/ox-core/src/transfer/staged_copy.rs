@@ -8,7 +8,8 @@
 //!   `.winspace-transfer-<32 hex>.part` name and published only when
 //!   complete, so a partial copy is never visible under its final name.
 //!   Local and network destinations get a private staging folder (created
-//!   with an exclusive `mkdir`, owner-only when local) holding `payload`.
+//!   exclusively with `create_directory`, owner-only when local) holding
+//!   `payload`.
 //! - XFER-021: device destinations (MTP) build the item itself under a
 //!   hidden sibling name and publish it with a same-folder rename (MTP
 //!   `SetObjectPropValue`). Uploads therefore never need MTP `MoveObject`,
@@ -21,8 +22,8 @@
 //!   same name. As in the Python app, that last move needs MTP
 //!   `MoveObject`; a device without it gets an error that says so.
 //! - XFER-002: only staging this item created is recorded for cleanup: a
-//!   failed exclusive `mkdir`, or an upload refused because its name
-//!   exists, grants no right to delete anything.
+//!   failed exclusive `create_directory`, or an upload refused because its
+//!   name exists, grants no right to delete anything.
 
 use std::ffi::OsString;
 
@@ -204,9 +205,9 @@ impl StagedCopy<'_> {
         }
         let mut copier = Copier::new(self.cancel, stage_name, modes, &mut *self.emit);
         if self.source_kind == NodeKind::Directory {
-            // XFER-002: a failed exclusive mkdir grants no right to clean up
-            // this path.
-            staged_item.mkdir(Some(self.cancel))?;
+            // XFER-002: a failed exclusive folder creation grants no right to
+            // clean up this path.
+            staged_item.create_directory(Some(self.cancel))?;
             let stage = staging.stage.insert(Stage::Sibling(staged_item));
             return copier.copy_children(self.source, stage.item(), 1);
         }
@@ -240,9 +241,9 @@ impl StagedCopy<'_> {
             OsString::from(PAYLOAD_NAME)
         };
         let item = child_node(folder.as_ref(), item_name)?;
-        // XFER-002: reserve a private namespace. A failed mkdir never grants
-        // permission to delete that name during cleanup.
-        folder.mkdir(Some(self.cancel))?;
+        // XFER-002: reserve a private namespace. A failed folder creation
+        // never grants permission to delete that name during cleanup.
+        folder.create_directory(Some(self.cancel))?;
         let stage = staging.stage.insert(Stage::Folder { folder, item });
         // XFER-004: the folder that was made private is the only one cleanup
         // may empty.

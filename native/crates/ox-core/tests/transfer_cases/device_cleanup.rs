@@ -99,8 +99,8 @@ impl Provider for BrokenPhone {
         Some(&self.device)
     }
 
-    fn mkdir(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-        node.local_mkdir(cancel)?;
+    fn create_directory(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+        node.local_create_directory(cancel)?;
         if self.fault == PhoneFault::StageRace {
             write(&node.local_path().join("foreign"), "belongs to another creator");
             return Err(TransferError::Exists("The staging name was taken.".into()));
@@ -323,7 +323,7 @@ fn a_devices_false_success_is_not_counted_as_a_published_copy() {
 }
 
 /// A staging name another program created first is never used or removed:
-/// neither the folder a folder upload reserves with `mkdir`, nor the file a
+/// neither the folder a folder upload reserves with `create_directory`, nor the file a
 /// file upload creates without overwriting.
 ///
 /// parity: XFER-002

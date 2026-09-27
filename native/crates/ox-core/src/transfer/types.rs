@@ -32,11 +32,6 @@ impl TransferMode {
             TransferMode::Delete => "delete",
         }
     }
-
-    /// Trash and delete remove items and take no destination.
-    pub fn is_removal(self) -> bool {
-        matches!(self, TransferMode::Trash | TransferMode::Delete)
-    }
 }
 
 impl FromStr for TransferMode {

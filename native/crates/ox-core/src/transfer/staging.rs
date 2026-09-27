@@ -6,12 +6,12 @@
 //!
 //! Rules enforced here:
 //! - XFER-002: only a staging item this engine created (an exclusive
-//!   `mkdir`, or a `copy_file` to a free random name) is ever removed.
-//!   Callers must never pass a user-selected path. Removal inspects items
-//!   without following symbolic links, so a link inside staging is removed
-//!   as a link and its target is never touched. A local staging folder is
-//!   removed only while its name still leads to the folder the engine
-//!   created (see [`Node::delete_staging`]).
+//!   `create_directory`, or a `copy_file` to a free random name) is ever
+//!   removed. Callers must never pass a user-selected path. Removal
+//!   inspects items without following symbolic links, so a link inside
+//!   staging is removed as a link and its target is never touched. A local
+//!   staging folder is removed only while its name still leads to the
+//!   folder the engine created (see [`Node::delete_staging`]).
 //! - XFER-003: every cleanup failure is returned, so the caller can report
 //!   the exact leftover location for the user to inspect.
 //! - XFER-022: device staging is retried, and a device stage counts as gone

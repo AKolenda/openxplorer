@@ -38,8 +38,8 @@ impl Provider for FuseMountedDevice {
         file_uri(node.local_path()).replacen("file://", "mtp://test-device", 1)
     }
 
-    fn mkdir(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-        node.local_mkdir(cancel)?;
+    fn create_directory(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+        node.local_create_directory(cancel)?;
         set_mode(node.local_path(), DEVICE_FOLDER_MODE);
         Ok(())
     }

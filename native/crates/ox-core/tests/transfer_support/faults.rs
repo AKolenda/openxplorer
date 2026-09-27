@@ -172,8 +172,8 @@ impl Faults {
 }
 
 impl Provider for Faults {
-    fn mkdir(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
-        node.local_mkdir(cancel)?;
+    fn create_directory(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+        node.local_create_directory(cancel)?;
         if self.fault == Fault::UnownedStage && is_staging(node) {
             write(
                 &node.local_path().join("not-ours"),

@@ -94,7 +94,7 @@ impl<'a> Copier<'a> {
         info: &NodeInfo,
         depth: usize,
     ) -> Result<(), TransferError> {
-        target.mkdir(Some(self.cancel))?;
+        target.create_directory(Some(self.cancel))?;
         if let Some(path) = path_for_unix_modes(target) {
             let final_mode = self.published_mode(info, target)?;
             self.modes.record(target.uri(), path, final_mode);

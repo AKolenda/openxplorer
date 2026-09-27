@@ -44,8 +44,9 @@ impl Placement<'_> {
     ) -> Result<Option<Box<dyn Node>>, TransferError> {
         let source_name = source.name();
         let destination = child_node(self.destination_folder, &source_name)?;
-        // Moving an item into its own folder would change nothing; with Keep
-        // both it would even rename the user's item.
+        // XFER-012: moving an item into its own folder would change nothing,
+        // and with Keep both it would even rename the user's item, so it is
+        // skipped.
         if self.mode == TransferMode::Move && destination.uri() == source.uri() {
             return Ok(None);
         }

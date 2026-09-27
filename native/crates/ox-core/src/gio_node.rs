@@ -135,7 +135,7 @@ impl Node for GioNode {
         self.list_children(cancel)
     }
 
-    fn mkdir(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+    fn create_directory(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         check_cancelled(cancel)?;
         // XFER-002: `make_directory` is exclusive and fails on a taken name.
         self.file.make_directory(gio_cancellable(cancel))?;

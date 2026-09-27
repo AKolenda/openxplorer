@@ -68,11 +68,12 @@ pub trait Provider: Send + Sync + 'static {
         }
     }
 
-    /// [`Node::mkdir`]: [`LocalNode::local_mkdir`] by default.
-    fn mkdir(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
+    /// [`Node::create_directory`]: [`LocalNode::local_create_directory`] by
+    /// default.
+    fn create_directory(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         match self.base() {
-            Some(base) => base.mkdir(node, cancel),
-            None => node.local_mkdir(cancel),
+            Some(base) => base.create_directory(node, cancel),
+            None => node.local_create_directory(cancel),
         }
     }
 

@@ -114,7 +114,7 @@ pub trait Node: Send + Sync {
     ///
     /// [`TransferError::Exists`] when the name is taken; the engine then has
     /// no right to clean up that name.
-    fn mkdir(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError>;
+    fn create_directory(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError>;
 
     /// Copies one file, or one symbolic link as a link, to the new name
     /// `target`. `progress(current, total)` may be called often. The
