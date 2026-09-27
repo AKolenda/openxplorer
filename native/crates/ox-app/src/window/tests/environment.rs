@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The sidebar, the landing pages, pins and the details pane.
 
+use std::time::Duration;
+
 use gtk::prelude::*;
 use ox_core::settings::{PinRequest, Settings};
 
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
+use crate::window::details_pane::PANE_WIDTH;
 use crate::window::landing;
 
 fn property<'a>(properties: &'a [(String, String)], key: &str) -> Option<&'a str> {
@@ -98,6 +101,34 @@ fn pinning_the_current_folder_adds_it_to_quick_access() {
     test.activate("pin-folder", None);
     let message = test.window.chrome().message.text();
     assert_eq!(message.as_str(), "Already pinned to Quick access.");
+}
+
+#[gtk::test]
+fn the_details_pane_keeps_its_width_for_long_names() {
+    let fixture = Fixture::standard();
+    let long_name = format!("{}.txt", "A very long file name ".repeat(8));
+    fixture.write(&long_name);
+    let test = TestWindow::open(&fixture.uri());
+    if !test.window.details_pane().root.is_visible() {
+        test.activate("details-pane", None);
+    }
+    let position = test.names().iter().position(|name| *name == long_name);
+    let position = position.expect("the long name is listed");
+    test.window
+        .folder_model()
+        .select_only(u32::try_from(position).expect("a short listing"));
+    let pane = &test.window.details_pane().root;
+    wait_until("the pane to be laid out", || pane.width() > 0);
+    settle_layout(&test);
+    // Its stylesheet adds 44 pixels of padding and a 1-pixel border.
+    let widest = PANE_WIDTH + 45;
+    assert!(pane.width() <= widest, "the pane is {} pixels wide", pane.width());
+}
+
+/// Waits for the window to lay out what just changed.
+fn settle_layout(test: &TestWindow) {
+    test.window.queue_resize();
+    wait_for(Duration::from_millis(100));
 }
 
 #[gtk::test]

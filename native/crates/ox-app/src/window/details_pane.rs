@@ -17,6 +17,9 @@ use crate::icons::{self, ArtKind, Glyph};
 use crate::locations::Page;
 use crate::theme::Appearance;
 
+/// Width of the pane (`.details` in `desktop/ui/style.css`).
+pub(super) const PANE_WIDTH: i32 = 262;
+
 /// Preview size in the pane, as `fileIcon(e, 84)` in app.js.
 const PREVIEW_SIZE: i32 = 84;
 
@@ -192,11 +195,14 @@ fn pane_button(label: &str, glyph: Glyph, action: &str) -> gtk::Button {
         .build()
 }
 
+/// A wrapping label. Its natural width is a few words, so a long name or
+/// path wraps inside the pane instead of widening it.
 fn pane_label(css_class: &str) -> gtk::Label {
     gtk::Label::builder()
         .xalign(0.0)
         .wrap(true)
         .wrap_mode(gtk::pango::WrapMode::WordChar)
+        .max_width_chars(10)
         .css_classes([css_class])
         .build()
 }
@@ -219,10 +225,13 @@ pub(super) struct DetailsPane {
 impl DetailsPane {
     /// An empty pane drawing art in `appearance`.
     pub fn new(appearance: Appearance) -> Self {
+        // A fixed width: the property values expand within the pane, and
+        // without this the pane would take half the window from the list.
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(0)
-            .width_request(262)
+            .width_request(PANE_WIDTH)
+            .hexpand(false)
             .css_classes(["details", "details-inner"])
             .build();
         root.append(&header());
