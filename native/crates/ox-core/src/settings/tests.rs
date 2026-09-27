@@ -21,6 +21,11 @@ fn temporary_directory() -> TempDir {
     tempfile::tempdir().expect("a temporary directory")
 }
 
+/// A request to pin `uri` under its folder name.
+fn pin(uri: &str) -> BookmarkRequest {
+    BookmarkRequest::new(uri, "")
+}
+
 /// The update a window sends for `values`, read like any untrusted request.
 fn update_from(values: &Value) -> PreferencesUpdate {
     PreferencesUpdate::from_json(values).expect("the values are an object")
@@ -45,13 +50,9 @@ fn settings_private_and_atomic() {
     let root = temporary_directory();
     let directory = root.path().join("settings");
     let mut store = Settings::open(&directory);
+    let projects = BookmarkRequest::new(r"\\NAS\Projects", "Projects (Z:)");
     store
-        .bookmark(
-            BookmarkAction::Add,
-            BookmarkKind::Share,
-            r"\\NAS\Projects",
-            "Projects (Z:)",
-        )
+        .bookmark(BookmarkAction::Add, BookmarkKind::Share, &projects)
         .unwrap();
     save_preferences(
         &mut store,
@@ -74,13 +75,9 @@ fn settings_private_and_atomic() {
 fn credential_bookmark_rejected() {
     let root = temporary_directory();
     let mut store = Settings::open(root.path());
-    let result = store.bookmark(
-        BookmarkAction::Add,
-        BookmarkKind::Share,
-        "smb://u:secret@nas/share",
-        "",
-    );
-    assert!(matches!(result, Err(SettingsError::Invalid(_))));
+    let with_password = BookmarkRequest::new("smb://u:secret@nas/share", "");
+    let result = store.bookmark(BookmarkAction::Add, BookmarkKind::Share, &with_password);
+    assert!(matches!(result, Err(SettingsError::Location(_))));
     assert!(!store.path().exists());
 }
 
@@ -104,7 +101,7 @@ fn add_pin_preserves_file_tree() {
     fs::create_dir(&actual).unwrap();
     fs::write(actual.join("data.txt"), "unchanged").unwrap();
     let mut store = Settings::open(&root.path().join("config"));
-    let items = [PinRequest::new(file_uri(&actual), "Work")];
+    let items = [BookmarkRequest::new(file_uri(&actual), "Work")];
     store.pin_many(&items, None, Some(&shown_quick_order())).unwrap();
     assert_eq!(fs::read_to_string(actual.join("data.txt")).unwrap(), "unchanged");
     assert!(actual.is_dir());
@@ -127,9 +124,9 @@ fn a_pinned_batch_is_read_back_after_the_shown_order() {
             label: "Invoices".into(),
         },
     ];
-    let items: Vec<PinRequest> = pins
+    let items: Vec<BookmarkRequest> = pins
         .iter()
-        .map(|pin| PinRequest::new(&pin.uri, &pin.label))
+        .map(|pin| BookmarkRequest::new(&pin.uri, &pin.label))
         .collect();
     store.pin_many(&items, None, Some(&shown_quick_order())).unwrap();
     let reread = Settings::open(&directory);
@@ -147,8 +144,8 @@ fn invalid_batch_writes_nothing() {
     let mut store = Settings::open(&root.path().join("config"));
     let before = store.snapshot();
     let items = [
-        PinRequest::new("smb://nas/work", ""),
-        PinRequest::new("smb://u:secret@nas/work", ""),
+        BookmarkRequest::new("smb://nas/work", ""),
+        BookmarkRequest::new("smb://u:secret@nas/work", ""),
     ];
     assert!(store.pin_many(&items, None, None).is_err());
     assert_eq!(store.snapshot(), before);
@@ -167,7 +164,7 @@ fn save_error_rolls_back_in_memory() {
     // A directory in place of settings.json makes the save fail.
     fs::remove_file(store.path()).unwrap();
     fs::create_dir(store.path()).unwrap();
-    let result = store.pin_many(&[PinRequest::new("smb://nas/work", "")], None, None);
+    let result = store.pin_many(&[BookmarkRequest::new("smb://nas/work", "")], None, None);
     assert!(result.is_err());
     assert_eq!(store.data(), &before);
 }
@@ -214,11 +211,13 @@ fn two_windows_pins_not_lost() {
     let root = temporary_directory();
     let mut first = Settings::open(root.path());
     let mut second = Settings::open(root.path());
+    let folder_a = pin("file:///home/demo/A");
+    let folder_b = pin("file:///home/demo/B");
     first
-        .bookmark(BookmarkAction::Add, BookmarkKind::Pin, "file:///home/demo/A", "")
+        .bookmark(BookmarkAction::Add, BookmarkKind::Pin, &folder_a)
         .unwrap();
     second
-        .bookmark(BookmarkAction::Add, BookmarkKind::Pin, "file:///home/demo/B", "")
+        .bookmark(BookmarkAction::Add, BookmarkKind::Pin, &folder_b)
         .unwrap();
     assert_eq!(first.snapshot().pins.len(), 2);
 }
@@ -334,7 +333,7 @@ fn unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write() {
     let mut store = Settings::open(root.path());
 
     store
-        .bookmark(BookmarkAction::Add, BookmarkKind::Pin, "/tmp/Rust", "")
+        .bookmark(BookmarkAction::Add, BookmarkKind::Pin, &pin("/tmp/Rust"))
         .unwrap();
 
     let written: Value = serde_json::from_str(&fs::read_to_string(store.path()).unwrap()).unwrap();
@@ -422,7 +421,7 @@ fn a_change_keeps_a_partly_read_file_as_a_backup() {
     assert!(store.warning().is_some());
 
     store
-        .bookmark(BookmarkAction::Add, BookmarkKind::Pin, "/tmp/New", "")
+        .bookmark(BookmarkAction::Add, BookmarkKind::Pin, &pin("/tmp/New"))
         .unwrap();
 
     let kept = backups(root.path());

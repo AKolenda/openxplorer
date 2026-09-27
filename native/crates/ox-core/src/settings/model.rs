@@ -10,7 +10,7 @@ use serde::Serialize;
 use super::preferences::Preferences;
 
 /// Format version written to `settings.json`.
-pub const SETTINGS_VERSION: u32 = 2;
+const SETTINGS_VERSION: u32 = 2;
 
 /// Most Quick access pins, and most mapped shares, kept.
 pub(super) const MAX_BOOKMARKS: usize = 200;
@@ -108,7 +108,7 @@ impl SettingsData {
     /// # Panics
     ///
     /// Never: the data holds only strings, numbers, flags and lists.
-    pub fn to_file_text(&self) -> String {
+    pub(super) fn to_file_text(&self) -> String {
         let mut text = serde_json::to_string_pretty(&self.file_layout())
             .expect("settings data holds only strings, numbers and lists");
         text.push('\n');

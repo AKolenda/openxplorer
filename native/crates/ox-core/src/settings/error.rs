@@ -2,9 +2,10 @@
 //! The error of every settings change and private-storage check.
 //!
 //! Mirrors the exceptions `desktop/core.py` and `desktop/private_storage.py`
-//! raise. Python raises `ValueError` both for a request or stored data that
-//! fails validation and for a file private storage refuses; here they are
-//! [`SettingsError::Invalid`] and [`SettingsError::Refused`]. A refusal
+//! raise. Python raises `ValueError` for a request or stored data that fails
+//! validation, for a location or label it refuses, and for a file private
+//! storage refuses; here they are [`SettingsError::Invalid`],
+//! [`SettingsError::Location`] and [`SettingsError::Refused`]. A refusal
 //! names the refused path, as Python's `OSError` ([`SettingsError::Io`])
 //! does, so the settings warning can say which file was refused.
 
@@ -20,6 +21,11 @@ pub enum SettingsError {
     /// `ValueError` in `core.py`). The message is user-facing.
     #[error("{0}")]
     Invalid(String),
+    /// A location or label the location rules refuse, for example one with
+    /// credentials, an unsupported scheme or control characters. The
+    /// message is user-facing.
+    #[error(transparent)]
+    Location(#[from] LocationError),
     /// Private storage refused `path` (Python's `ValueError` in
     /// `private_storage.py`): it is not private, or its contents cannot be
     /// read safely.
@@ -86,12 +92,6 @@ impl SettingsError {
     /// `FileNotFoundError` and most callers treat as "nothing there yet".
     pub(super) fn is_not_found(&self) -> bool {
         matches!(self, Self::Io { error, .. } if error.kind() == io::ErrorKind::NotFound)
-    }
-}
-
-impl From<LocationError> for SettingsError {
-    fn from(error: LocationError) -> Self {
-        Self::Invalid(error.to_string())
     }
 }
 

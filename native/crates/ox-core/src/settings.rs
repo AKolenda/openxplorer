@@ -44,8 +44,8 @@ use std::path::{Path, PathBuf};
 
 pub use choices::{Appearance, ContextMenu, Theme, View};
 pub use error::{SettingsError, StorageRefusal};
-pub use model::{Bookmark, RecentEntry, SettingsData, SETTINGS_VERSION};
-pub use mutate::{BookmarkAction, BookmarkKind, PinRequest};
+pub use model::{Bookmark, RecentEntry, SettingsData};
+pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use preferences::{
     Column, ColumnWidths, Preferences, PreferencesUpdate, DEFAULT_TEXT_SIZE, NETWORK_INTERVALS,
     SIDEBAR_WIDTHS, TEXT_SIZES,
@@ -174,38 +174,39 @@ impl Settings {
 
     /// Adds or removes a Quick access pin or a mapped share. Removing a pin
     /// hides it from Quick access, which also works for known folders;
-    /// adding it shows it again.
+    /// adding it shows it again. Removing ignores the requested label.
     ///
     /// # Errors
     ///
-    /// [`SettingsError::Invalid`] for a location or label the Python app
+    /// [`SettingsError::Location`] for a location or label the Python app
     /// would reject (for example one with credentials), and every error of
     /// [`update_preferences`](Self::update_preferences).
     pub fn bookmark(
         &mut self,
         action: BookmarkAction,
         kind: BookmarkKind,
-        uri: &str,
-        label: &str,
+        request: &BookmarkRequest,
     ) -> Result<(), SettingsError> {
-        self.mutate(|data| mutate::apply_bookmark(data, action, kind, uri, label))
+        self.mutate(|data| mutate::apply_bookmark(data, action, kind, request))
     }
 
     /// Adds or reorders up to 200 Quick access pins in one change and
     /// returns the cleaned pins. The batch is validated as a whole, so an
-    /// invalid entry changes nothing. See [`PinRequest`].
+    /// invalid entry changes nothing. See [`BookmarkRequest`].
     ///
     /// `before` is the entry the folders were dropped on; `quick_order` is
     /// the order the sidebar showed (at most 400 entries).
     ///
     /// # Errors
     ///
-    /// [`SettingsError::Invalid`] for an empty or oversized batch, an
-    /// invalid location, label or order, or more than 200 pins in total;
-    /// and every error of [`update_preferences`](Self::update_preferences).
+    /// [`SettingsError::Invalid`] for an empty or oversized batch, an order
+    /// longer than 400 entries, or more than 200 pins in total;
+    /// [`SettingsError::Location`] for an invalid location or label in the
+    /// batch, `before` or the order; and every error of
+    /// [`update_preferences`](Self::update_preferences).
     pub fn pin_many(
         &mut self,
-        items: &[PinRequest],
+        items: &[BookmarkRequest],
         before: Option<&str>,
         quick_order: Option<&[String]>,
     ) -> Result<Vec<Bookmark>, SettingsError> {
@@ -216,7 +217,7 @@ impl Settings {
     ///
     /// # Errors
     ///
-    /// [`SettingsError::Invalid`] for an invalid file location, and every
+    /// [`SettingsError::Location`] for an invalid file location, and every
     /// error of [`update_preferences`](Self::update_preferences).
     pub fn remember_open(&mut self, entry: RecentEntry) -> Result<(), SettingsError> {
         self.mutate(move |data| mutate::remember_open(data, entry))

@@ -32,18 +32,22 @@ pub enum BookmarkKind {
     Share,
 }
 
-/// A folder dragged onto Quick access. An empty label is replaced by the
-/// folder name.
+/// A location the user asked to pin or map, with its label, before
+/// validation: a folder dragged onto Quick access, or a share connected
+/// as a drive. An empty label is replaced by the folder or host name.
+///
+/// Unlike [`Bookmark`], which holds a checked, canonical location, this is
+/// what the user supplied.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PinRequest {
-    /// The folder location, in any form [`normalise`] accepts.
+pub struct BookmarkRequest {
+    /// The location, in any form [`normalise`] accepts.
     pub uri: String,
-    /// The sidebar label, or empty for the folder name.
+    /// The sidebar label, or empty for the folder or host name.
     pub label: String,
 }
 
-impl PinRequest {
-    /// A pin request for `uri` with the given label.
+impl BookmarkRequest {
+    /// A request for `uri` with the given label.
     pub fn new(uri: impl Into<String>, label: impl Into<String>) -> Self {
         Self {
             uri: uri.into(),
@@ -59,20 +63,21 @@ pub(super) fn apply_bookmark(
     settings: &mut SettingsData,
     action: BookmarkAction,
     kind: BookmarkKind,
-    uri: &str,
-    label: &str,
+    request: &BookmarkRequest,
 ) -> Result<(), SettingsError> {
     let uri = match kind {
-        BookmarkKind::Share => require_share(uri)?,
-        BookmarkKind::Pin => normalise(uri)?,
+        BookmarkKind::Share => require_share(&request.uri)?,
+        BookmarkKind::Pin => normalise(&request.uri)?,
     };
     let added = match action {
         BookmarkAction::Add => Some(Bookmark {
-            label: safe_label(label, &bookmark_fallback_label(&uri))?,
+            label: safe_label(&request.label, &bookmark_fallback_label(&uri))?,
             uri: uri.clone(),
         }),
         BookmarkAction::Remove => None,
     };
+    // Safety rule "validate before changing": every fallible step is above
+    // this line; nothing below can fail.
     let bookmarks = match kind {
         BookmarkKind::Share => &mut settings.shares,
         BookmarkKind::Pin => &mut settings.pins,
@@ -108,7 +113,7 @@ fn show_or_hide_in_quick_access(settings: &mut SettingsData, action: BookmarkAct
 /// I/O: callers verify new folders exist before pinning them.
 pub(super) fn pin_many(
     settings: &mut SettingsData,
-    items: &[PinRequest],
+    items: &[BookmarkRequest],
     before: Option<&str>,
     quick_order: Option<&[String]>,
 ) -> Result<Vec<Bookmark>, SettingsError> {
@@ -127,6 +132,8 @@ pub(super) fn pin_many(
         shown_order
     };
     place_dragged(&mut order, &dragged, before.as_deref());
+    // Safety rule "validate before changing": every fallible step is above
+    // this line; nothing below can fail.
     settings.pins = pins;
     settings.quick_order = order;
     settings.hidden_quick.retain(|uri| !contains_uri(&dragged, uri));
@@ -134,7 +141,7 @@ pub(super) fn pin_many(
 }
 
 /// Normalises and labels a batch, keeping the first of any duplicates.
-fn clean_pins(items: &[PinRequest]) -> Result<Vec<Bookmark>, SettingsError> {
+fn clean_pins(items: &[BookmarkRequest]) -> Result<Vec<Bookmark>, SettingsError> {
     let mut clean: Vec<Bookmark> = Vec::with_capacity(items.len());
     for item in items {
         let uri = normalise(&item.uri)?;
@@ -225,6 +232,7 @@ pub(super) fn remember_open(settings: &mut SettingsData, entry: RecentEntry) -> 
         ..entry
     };
     let stored = opened.into_stored();
+    // Safety rule "validate before changing": nothing below can fail.
     settings.recent.retain(|recent| recent.uri != stored.uri);
     settings.recent.insert(0, stored);
     settings.recent.truncate(MAX_RECENT);
@@ -236,23 +244,24 @@ mod tests {
     use super::*;
     use crate::settings::test_support::{shown_quick_order, DESKTOP, DOCUMENTS, DOWNLOADS};
 
-    fn pin(uri: &str) -> PinRequest {
-        PinRequest::new(uri, "")
+    fn pin(uri: &str) -> BookmarkRequest {
+        BookmarkRequest::new(uri, "")
     }
 
     /// `count` distinct share folders, `smb://nas/s/0` onwards.
-    fn numbered_pins(count: usize) -> Vec<PinRequest> {
+    fn numbered_pins(count: usize) -> Vec<BookmarkRequest> {
         (0..count).map(|i| pin(&format!("smb://nas/s/{i}"))).collect()
     }
 
     /// Adds `uri` as a bookmark of `kind`; the request must be valid.
     fn add(settings: &mut SettingsData, kind: BookmarkKind, uri: &str, label: &str) {
-        apply_bookmark(settings, BookmarkAction::Add, kind, uri, label).expect("a valid bookmark");
+        let request = BookmarkRequest::new(uri, label);
+        apply_bookmark(settings, BookmarkAction::Add, kind, &request).expect("a valid bookmark");
     }
 
     /// Unpins `uri`; the location must be valid.
     fn unpin(settings: &mut SettingsData, uri: &str) {
-        apply_bookmark(settings, BookmarkAction::Remove, BookmarkKind::Pin, uri, "")
+        apply_bookmark(settings, BookmarkAction::Remove, BookmarkKind::Pin, &pin(uri))
             .expect("a valid location");
     }
 
@@ -261,7 +270,7 @@ mod tests {
     #[test]
     fn pins_dropped_on_a_folder_are_inserted_before_it() {
         let mut settings = SettingsData::default();
-        let items = [PinRequest::new("smb://nas/work", "work")];
+        let items = [BookmarkRequest::new("smb://nas/work", "work")];
         pin_many(&mut settings, &items, Some(DOCUMENTS), Some(&shown_quick_order())).unwrap();
         assert_eq!(
             settings.quick_order,
@@ -345,7 +354,7 @@ mod tests {
     #[test]
     fn bad_label_does_not_mutate() {
         let mut settings = SettingsData::default();
-        let items = [PinRequest::new("smb://nas/work", "bad\nlabel")];
+        let items = [BookmarkRequest::new("smb://nas/work", "bad\nlabel")];
         assert!(pin_many(&mut settings, &items, None, None).is_err());
         assert_eq!(settings, SettingsData::default());
     }
@@ -381,15 +390,14 @@ mod tests {
     #[test]
     fn credential_bookmark_rejected() {
         let mut settings = SettingsData::default();
-        let with_password = "smb://u:secret@nas/share";
+        let with_password = pin("smb://u:secret@nas/share");
         let result = apply_bookmark(
             &mut settings,
             BookmarkAction::Add,
             BookmarkKind::Share,
-            with_password,
-            "",
+            &with_password,
         );
-        assert!(result.is_err());
+        assert!(matches!(result, Err(SettingsError::Location(_))));
         assert_eq!(settings, SettingsData::default());
     }
 
@@ -433,9 +441,15 @@ mod tests {
             };
             remember_open(&mut settings, entry).unwrap();
         }
+        let older_copy = settings
+            .recent
+            .iter()
+            .find(|entry| entry.uri.ends_with("/file20.txt"))
+            .expect("file20 is among the 30 newest")
+            .clone();
         let again = RecentEntry {
             uri: "file:///tmp/file20.txt".into(),
-            ..settings.recent[14].clone()
+            ..older_copy
         };
 
         remember_open(&mut settings, again).unwrap();

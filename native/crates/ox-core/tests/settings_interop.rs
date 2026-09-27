@@ -15,7 +15,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use ox_core::settings::{BookmarkAction, BookmarkKind, PreferencesUpdate, Settings, Theme};
+use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, PreferencesUpdate, Settings, Theme};
 use python_support::{python, run_python};
 use serde_json::{json, Value};
 
@@ -89,13 +89,9 @@ fn python_and_rust_mutations_preserve_each_others_settings() {
         ..PreferencesUpdate::default()
     };
     rust.update_preferences(&show_hidden).unwrap();
-    rust.bookmark(
-        BookmarkAction::Add,
-        BookmarkKind::Pin,
-        "/home/demo/Work (1)",
-        "Work",
-    )
-    .unwrap();
+    let work = BookmarkRequest::new("/home/demo/Work (1)", "Work");
+    rust.bookmark(BookmarkAction::Add, BookmarkKind::Pin, &work)
+        .unwrap();
     let printed = run_python(PYTHON_CHANGES_TEXT_SIZE_AND_PRINTS, &[directory.as_path()]);
 
     let from_python: Value = serde_json::from_str(&printed).unwrap();
@@ -181,7 +177,8 @@ fn rust_settings_mutation_waits_for_python_and_reloads_after_unlock() {
 
     let (done, completed) = mpsc::channel();
     let mutation = thread::spawn(move || {
-        let result = rust.bookmark(BookmarkAction::Add, BookmarkKind::Pin, "/home/demo/Work", "Work");
+        let work = BookmarkRequest::new("/home/demo/Work", "Work");
+        let result = rust.bookmark(BookmarkAction::Add, BookmarkKind::Pin, &work);
         done.send(result).unwrap();
     });
     let while_locked = completed.recv_timeout(Duration::from_millis(100));

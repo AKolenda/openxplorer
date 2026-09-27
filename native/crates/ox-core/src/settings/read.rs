@@ -66,7 +66,8 @@ impl ReadFailure {
                 reason: StorageRefusal::TooLarge | StorageRefusal::NotText,
                 ..
             }
-            | SettingsError::Invalid(_) => Self::Damaged(error),
+            | SettingsError::Invalid(_)
+            | SettingsError::Location(_) => Self::Damaged(error),
             SettingsError::Refused {
                 reason: StorageRefusal::ForeignDirectory | StorageRefusal::NotPrivateFile,
                 ..
