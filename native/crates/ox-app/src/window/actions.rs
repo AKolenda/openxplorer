@@ -1,219 +1,274 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Window actions shared by toolbar buttons, menus and keyboard shortcuts.
-
-use std::rc::Rc;
+//! Window actions shared by buttons, menus, rows and keyboard shortcuts,
+//! and the application's keyboard accelerators.
+//!
+//! Ports the command handlers and the keyboard table of `desktop/ui/app.js`
+//! (`keydown` in `setupKeys`). Every action is a `gio::ActionEntry` on the
+//! window, so a widget only names the action and its target.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
-use crate::folder_view::{details, grid, sorting::SortColumn};
+use crate::folder_view::details;
+use crate::folder_view::grid::IconSize;
+use crate::folder_view::sorting::{SortColumn, SortDirection};
+use crate::text_size::Step;
 use crate::theme::ThemePreference;
-use crate::{locations, text_size};
 
+use super::content::FolderView;
+use super::preferences::Preference;
+use super::session::{TabId, TabPlacement};
 use super::BrowserWindow;
 
-impl BrowserWindow {
-    fn action(self: &Rc<Self>, name: &str, callback: impl Fn(&Rc<Self>) + 'static) {
-        let action = gio::SimpleAction::new(name, None);
-        let weak = Rc::downgrade(self);
-        action.connect_activate(move |_, _| {
-            if let Some(browser) = weak.upgrade() {
-                callback(&browser);
-            }
-        });
-        self.window.add_action(&action);
-    }
+/// An action without a target.
+fn plain(name: &str, run: impl Fn(&BrowserWindow) + 'static) -> gio::ActionEntry<BrowserWindow> {
+    gio::ActionEntry::builder(name)
+        .activate(move |window: &BrowserWindow, _, _| run(window))
+        .build()
+}
 
-    fn choice(
-        self: &Rc<Self>,
-        name: &str,
-        initial: &str,
-        callback: impl Fn(&Rc<Self>, &str) -> bool + 'static,
-    ) {
-        let action =
-            gio::SimpleAction::new_stateful(name, Some(glib::VariantTy::STRING), &initial.to_variant());
-        let weak = Rc::downgrade(self);
-        action.connect_activate(move |action, value| {
-            let Some(value) = value.and_then(|value| value.get::<String>()) else {
+/// An action whose target is a string (a location or a volume id).
+fn with_text(name: &str, run: impl Fn(&BrowserWindow, &str) + 'static) -> gio::ActionEntry<BrowserWindow> {
+    gio::ActionEntry::builder(name)
+        .parameter_type(Some(glib::VariantTy::STRING))
+        .activate(move |window: &BrowserWindow, _, target| {
+            if let Some(text) = target.and_then(glib::Variant::str) {
+                run(window, text);
+            }
+        })
+        .build()
+}
+
+/// An action whose target is a tab.
+fn with_tab(name: &str, run: impl Fn(&BrowserWindow, TabId) + 'static) -> gio::ActionEntry<BrowserWindow> {
+    gio::ActionEntry::builder(name)
+        .parameter_type(Some(glib::VariantTy::UINT64))
+        .activate(move |window: &BrowserWindow, _, target| {
+            if let Some(id) = target.and_then(TabId::from_variant) {
+                run(window, id);
+            }
+        })
+        .build()
+}
+
+/// A radio action: `apply` returns false for a value it does not accept,
+/// and the state changes only when it accepts it.
+fn choice(
+    name: &str,
+    initial: &str,
+    apply: impl Fn(&BrowserWindow, &str) -> bool + 'static,
+) -> gio::ActionEntry<BrowserWindow> {
+    gio::ActionEntry::builder(name)
+        .parameter_type(Some(glib::VariantTy::STRING))
+        .state(initial.to_variant())
+        .activate(move |window: &BrowserWindow, action, target| {
+            let Some(value) = target.and_then(glib::Variant::str) else {
                 return;
             };
-            if let Some(browser) = weak.upgrade() {
-                if callback(&browser, &value) {
-                    action.set_state(&value.to_variant());
-                }
-            }
-        });
-        self.window.add_action(&action);
-    }
-
-    fn toggle(self: &Rc<Self>, name: &str, initial: bool, callback: impl Fn(&Rc<Self>, bool) + 'static) {
-        let action = gio::SimpleAction::new_stateful(name, None, &initial.to_variant());
-        let weak = Rc::downgrade(self);
-        action.connect_activate(move |action, _| {
-            let value = !action
-                .state()
-                .and_then(|state| state.get::<bool>())
-                .unwrap_or(false);
-            if let Some(browser) = weak.upgrade() {
+            if apply(window, value) {
                 action.set_state(&value.to_variant());
-                callback(&browser, value);
             }
-        });
-        self.window.add_action(&action);
-    }
+        })
+        .build()
+}
 
-    pub(super) fn set_enabled(&self, name: &str, enabled: bool) {
-        if let Some(action) = self
-            .window
-            .lookup_action(name)
-            .and_downcast::<gio::SimpleAction>()
-        {
+/// A check action that calls `apply` with its new state.
+fn toggle(
+    name: &str,
+    initial: bool,
+    apply: impl Fn(&BrowserWindow, bool) + 'static,
+) -> gio::ActionEntry<BrowserWindow> {
+    gio::ActionEntry::builder(name)
+        .state(initial.to_variant())
+        .activate(move |window: &BrowserWindow, action, _| {
+            let current = action.state().and_then(|state| state.get::<bool>());
+            let next = !current.unwrap_or(false);
+            action.set_state(&next.to_variant());
+            apply(window, next);
+        })
+        .build()
+}
+
+impl BrowserWindow {
+    pub(super) fn set_action_enabled(&self, name: &str, enabled: bool) {
+        let action = self.lookup_action(name).and_downcast::<gio::SimpleAction>();
+        if let Some(action) = action {
             action.set_enabled(enabled);
         }
     }
 
-    pub(super) fn install_actions(self: &Rc<Self>) {
-        self.action("new-tab", |browser| {
-            if let Err(error) = browser.add_tab("home:") {
-                browser.show_message(error.message());
-            }
-        });
-        self.action("close-tab", |browser| {
-            let active = browser.session.borrow().active;
-            if let Some(id) = active {
-                browser.close_tab(id);
-            }
-        });
-        self.action("next-tab", |browser| browser.cycle_tabs(1));
-        self.action("previous-tab", |browser| browser.cycle_tabs(-1));
-        self.action("back", |browser| browser.go_history(-1));
-        self.action("forward", |browser| browser.go_history(1));
-        self.action("up", |browser| {
-            if let Some(parent) = browser.current_uri().as_deref().and_then(locations::parent) {
-                browser.navigate_or_report(&parent);
-            }
-        });
-        self.action("refresh", |browser| browser.refresh());
-        self.action("location", |browser| browser.edit_address());
-        self.action("search", |browser| {
-            browser.chrome.search.grab_focus();
-        });
-        self.action("open", |browser| {
-            if let Some(position) = browser.content.model.first_selected() {
-                browser.activate_item(position);
-            }
-        });
-        self.set_enabled("open", false);
-        self.action("select-all", |browser| browser.content.model.select_all());
-        self.action("select-none", |browser| browser.content.model.select_none());
-        self.action("invert-selection", |browser| {
-            browser.content.model.invert_selection()
-        });
-
-        let view = if self.settings.preferences.view == "grid" {
-            "large"
-        } else {
-            "details"
-        };
-        self.choice("view", view, |browser, value| {
-            if value == "details" {
-                browser.content.views.set_visible_child_name("details");
-            } else if let Some(size) = grid::IconSize::from_key(value) {
-                grid::set_icon_size(
-                    &browser.content.grid,
-                    &browser.content.icons,
-                    &browser.content.owners,
-                    size,
-                );
-                browser.content.views.set_visible_child_name("grid");
-            } else {
-                return false;
-            }
-            true
-        });
-        self.choice("sort", "name", |browser, value| {
-            let Some(column) = SortColumn::from_key(value) else {
-                return false;
-            };
-            let (_, descending) = details::current_sort(&browser.content.details);
-            details::sort_by(&browser.content.details, column, descending);
-            true
-        });
-        self.choice("direction", "ascending", |browser, value| {
-            if !matches!(value, "ascending" | "descending") {
-                return false;
-            }
-            let (column, _) = details::current_sort(&browser.content.details);
-            details::sort_by(&browser.content.details, column, value == "descending");
-            true
-        });
-        if let Some(sorter) = self.content.details.sorter() {
-            let weak = Rc::downgrade(self);
-            sorter.connect_changed(move |_, _| {
-                if let Some(browser) = weak.upgrade() {
-                    let (column, descending) = details::current_sort(&browser.content.details);
-                    for (name, value) in [
-                        ("sort", column.key()),
-                        ("direction", if descending { "descending" } else { "ascending" }),
-                    ] {
-                        if let Some(action) = browser
-                            .window
-                            .lookup_action(name)
-                            .and_downcast::<gio::SimpleAction>()
-                        {
-                            action.set_state(&value.to_variant());
-                        }
-                    }
-                }
-            });
-        }
-        self.toggle(
-            "hidden",
-            self.settings.preferences.show_hidden,
-            |browser, show| {
-                browser.content.model.set_show_hidden(show);
-                browser.update_content();
-            },
-        );
-        self.toggle(
-            "details-pane",
-            self.settings.preferences.details,
-            |browser, show| {
-                browser.content.inspector.set_visible(show);
-            },
-        );
-        self.choice("theme", self.skin.preference().key(), |browser, value| {
-            if !matches!(value, "system" | "light" | "dark") {
-                return false;
-            }
-            let preference = ThemePreference::parse(value);
-            browser
-                .skin
-                .set_preference(preference, browser.system_scheme.is_dark());
-            true
-        });
-        for (name, step) in [
-            ("text-larger", text_size::Step::Increase),
-            ("text-smaller", text_size::Step::Decrease),
-            ("text-reset", text_size::Step::Reset),
-        ] {
-            self.action(name, move |browser| {
-                browser.skin.set_text_size(step.apply(browser.skin.text_size()));
-            });
+    pub(super) fn set_action_state(&self, name: &str, state: &glib::Variant) {
+        let action = self.lookup_action(name).and_downcast::<gio::SimpleAction>();
+        if let Some(action) = action {
+            action.set_state(state);
         }
     }
 
-    fn cycle_tabs(self: &Rc<Self>, delta: isize) {
-        let next = self.session.borrow().adjacent(delta);
-        if let Some(id) = next {
-            self.switch_tab(id);
+    pub(super) fn install_actions(&self) {
+        self.install_tab_actions();
+        self.install_navigation_actions();
+        self.install_selection_actions();
+        self.install_view_actions();
+        self.install_appearance_actions();
+    }
+
+    fn install_tab_actions(&self) {
+        self.add_action_entries([
+            plain("new-tab", |window| {
+                let home = window.imp().locations.borrow().home_uri();
+                window.open_tab_or_report(&home, TabPlacement::Foreground);
+            }),
+            plain("close-tab", |window| {
+                let active = window.imp().session.borrow().active;
+                if let Some(id) = active {
+                    window.close_tab(id);
+                }
+            }),
+            plain("next-tab", |window| window.cycle_tabs(1)),
+            plain("previous-tab", |window| window.cycle_tabs(-1)),
+            with_tab("select-tab", BrowserWindow::switch_tab),
+            with_tab("close-tab-by-id", BrowserWindow::close_tab),
+            with_text("open-tab", |window, uri| {
+                window.open_tab_or_report(uri, TabPlacement::Foreground);
+            }),
+            with_text("open-tab-background", |window, uri| {
+                window.open_tab_or_report(uri, TabPlacement::Background);
+            }),
+        ]);
+    }
+
+    fn install_navigation_actions(&self) {
+        self.add_action_entries([
+            plain("back", |window| window.go_history(-1)),
+            plain("forward", |window| window.go_history(1)),
+            plain("up", BrowserWindow::go_up),
+            plain("refresh", BrowserWindow::refresh),
+            plain("location", BrowserWindow::edit_address),
+            plain("search", |window| {
+                window.chrome().search.grab_focus();
+            }),
+            with_text("go-to", BrowserWindow::navigate_or_report),
+            with_text("mount-volume", BrowserWindow::mount_volume),
+        ]);
+    }
+
+    fn install_selection_actions(&self) {
+        self.add_action_entries([
+            plain("open", |window| {
+                // Enter and Open act on exactly one item, as app.js does.
+                let positions = window.content().model.selected_positions();
+                if let [position] = positions.as_slice() {
+                    window.activate_item(*position);
+                }
+            }),
+            plain("select-all", |window| window.content().model.select_all()),
+            plain("select-none", |window| window.content().model.select_none()),
+            plain("invert-selection", |window| {
+                window.content().model.invert_selection()
+            }),
+            plain("pin-selected", BrowserWindow::pin_selected),
+            plain("pin-folder", BrowserWindow::pin_folder),
+            plain("context-menu", BrowserWindow::open_context_menu_from_keyboard),
+        ]);
+        self.set_action_enabled("open", false);
+    }
+
+    fn install_view_actions(&self) {
+        let preferences = self.context().settings_data().preferences;
+        let view = FolderView::from_setting(&preferences.view);
+        self.add_action_entries([
+            choice("view", view.key(), |window, key| {
+                let Some(view) = FolderView::from_key(key) else {
+                    return false;
+                };
+                window.show_view(view);
+                window.save_preference(Preference::View(view));
+                true
+            }),
+            choice("sort", SortColumn::Name.key(), |window, key| {
+                let Some(column) = SortColumn::from_key(key) else {
+                    return false;
+                };
+                let (_, direction) = details::current_sort(&window.content().details);
+                details::sort_by(&window.content().details, column, direction);
+                true
+            }),
+            choice("direction", SortDirection::Ascending.key(), |window, key| {
+                let Some(direction) = SortDirection::from_key(key) else {
+                    return false;
+                };
+                let (column, _) = details::current_sort(&window.content().details);
+                details::sort_by(&window.content().details, column, direction);
+                true
+            }),
+            toggle("hidden", preferences.show_hidden, |window, show| {
+                window.content().model.set_show_hidden(show);
+                window.update_content();
+                window.save_preference(Preference::ShowHidden(show));
+            }),
+            toggle("details-pane", preferences.details, |window, show| {
+                window.details_pane().root.set_visible(show);
+                window.save_preference(Preference::DetailsPane(show));
+            }),
+        ]);
+        self.follow_header_sorting();
+    }
+
+    /// Keeps the Sort menu in step with sorting by a column header.
+    fn follow_header_sorting(&self) {
+        let Some(sorter) = self.content().details.sorter() else {
+            return;
+        };
+        sorter.connect_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_, _| {
+                let (column, direction) = details::current_sort(&window.content().details);
+                window.set_action_state("sort", &column.key().to_variant());
+                window.set_action_state("direction", &direction.key().to_variant());
+            }
+        ));
+    }
+
+    fn install_appearance_actions(&self) {
+        let theme = self.skin().preference().key();
+        self.add_action_entries([choice("theme", theme, |window, key| {
+            let Some(preference) = ThemePreference::from_key(key) else {
+                return false;
+            };
+            window.skin().set_preference(preference);
+            window.save_preference(Preference::Theme(preference));
+            true
+        })]);
+        let steps = Step::ALL.map(|step| {
+            plain(step.action_name(), move |window| {
+                let size = step.apply(window.skin().text_size());
+                window.skin().set_text_size(size);
+                window.save_preference(Preference::TextSize(size));
+            })
+        });
+        self.add_action_entries(steps);
+    }
+
+    fn open_tab_or_report(&self, address: &str, placement: TabPlacement) {
+        if let Err(error) = self.open_tab(address, placement) {
+            self.chrome().show_message(error.message());
         }
+    }
+
+    /// Shows `view` in the folder pane and the status bar.
+    pub(super) fn show_view(&self, view: FolderView) {
+        self.reset_typeahead();
+        self.content().show_view(view);
+        self.chrome().show_view(view);
     }
 }
 
+/// Installs the keyboard shortcuts of every window action.
 pub(crate) fn install_accelerators(app: &gtk::Application) {
-    for (action, keys) in [
-        ("win.new-tab", &["<Primary>t"][..]),
+    let fixed: [(&str, &[&str]); 12] = [
+        ("win.new-tab", &["<Primary>t"]),
         ("win.close-tab", &["<Primary>w"]),
         ("win.next-tab", &["<Primary>Tab", "<Primary>Page_Down"]),
         ("win.previous-tab", &["<Primary><Shift>Tab", "<Primary>Page_Up"]),
@@ -224,13 +279,18 @@ pub(crate) fn install_accelerators(app: &gtk::Application) {
         ("win.location", &["<Primary>l", "<Alt>d"]),
         ("win.search", &["<Primary>f"]),
         ("win.hidden", &["<Primary>h"]),
-        (
-            "win.text-larger",
-            &["<Primary>plus", "<Primary>equal", "<Primary>KP_Add"],
-        ),
-        ("win.text-smaller", &["<Primary>minus", "<Primary>KP_Subtract"]),
-        ("win.text-reset", &["<Primary>0", "<Primary>KP_0"]),
-    ] {
+        ("app.new-window", &["<Primary>n"]),
+    ];
+    for (action, keys) in fixed {
         app.set_accels_for_action(action, keys);
+    }
+    for step in Step::ALL {
+        let keys = step.accelerators();
+        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+        app.set_accels_for_action(&format!("win.{}", step.action_name()), &keys);
+    }
+    for size in IconSize::ALL {
+        let detailed = format!("win.view::{}", size.key());
+        app.set_accels_for_action(&detailed, &[size.accelerator()]);
     }
 }

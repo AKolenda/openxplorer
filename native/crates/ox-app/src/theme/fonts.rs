@@ -86,6 +86,17 @@ fn tile_size(metrics: text_size::Metrics, size: IconSize) -> (i32, i32) {
     (width, height)
 }
 
+/// Padding and margins style.css adds around a tile's minimum width.
+const TILE_CHROME: i32 = 24;
+
+/// The narrowest an icon-view tile of `size` is at any text size, border
+/// box included. The icon view uses it to bound how many columns it needs.
+pub fn narrowest_tile_width(size: IconSize) -> i32 {
+    let smallest_text = text_size::metrics(text_size::LEVELS[0]);
+    let (width, _) = tile_size(smallest_text, size);
+    width + TILE_CHROME
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

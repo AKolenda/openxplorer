@@ -14,11 +14,11 @@ use std::fmt::Write as _;
 use gtk::{gdk, glib};
 use ox_core::entry::Entry;
 
-use crate::icons::glyphs;
+use crate::icons::Glyph;
 use crate::theme::Appearance;
 
 /// Which piece of art to draw.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ArtKind {
     /// The yellow folder.
     Folder,
@@ -28,10 +28,11 @@ pub enum ArtKind {
     SharedFolder,
     /// A folder on the green network pipe (a saved network location).
     NetworkFolder,
-    /// A stroke glyph (for example `server`) on the green network pipe.
-    NetworkGlyph(&'static str),
-    /// A document; the lower-cased extension picks colour and badge.
-    File(String),
+    /// A stroke glyph (for example [`Glyph::Server`]) on the green network
+    /// pipe.
+    NetworkGlyph(Glyph),
+    /// A document in the colour and badge of its type.
+    Document(DocumentStyle),
 }
 
 /// `.zip` names and ZIP content types, as `isZipEntry` in app.js.
@@ -56,7 +57,7 @@ pub fn kind_for_entry(entry: &Entry) -> ArtKind {
     if is_zip(&entry.name, entry.content_type.as_deref()) {
         return ArtKind::ZipFolder;
     }
-    ArtKind::File(extension(&entry.name))
+    ArtKind::Document(DocumentStyle::for_extension(&extension(&entry.name)))
 }
 
 /// The lower-cased text after the last dot (the whole name when there is
@@ -76,21 +77,73 @@ enum Badge {
     Lines,
 }
 
-/// Badge colour and style for an extension (the `map` in `fileIcon`).
-fn file_style(ext: &str) -> (&'static str, Badge) {
-    match ext {
-        "pdf" => ("#c84032", Badge::Letter("PDF")),
-        "docx" | "doc" => ("#2868bd", Badge::Letter("W")),
-        "xlsx" | "csv" => ("#258150", Badge::Letter("X")),
-        "pptx" => ("#ce6a35", Badge::Letter("P")),
-        "zip" => ("#a8833d", Badge::Letter("ZIP")),
-        "png" | "jpg" | "jpeg" | "webp" => ("#7d69bd", Badge::Picture),
-        "mp4" => ("#975abe", Badge::Letter("▶")),
-        "md" => ("#65747f", Badge::Lines),
-        "txt" => ("#748da8", Badge::Lines),
-        "py" => ("#3d849e", Badge::Lines),
-        "js" => ("#d0a522", Badge::Lines),
-        _ => ("#8092a3", Badge::Lines),
+/// The document looks of `fileIcon` in app.js, one per entry of its `map`.
+///
+/// Items are drawn by style rather than by raw extension, so every file
+/// type without a look of its own shares one cached texture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DocumentStyle {
+    /// `pdf`.
+    Pdf,
+    /// `docx`, `doc`.
+    Word,
+    /// `xlsx`, `csv`.
+    Spreadsheet,
+    /// `pptx`.
+    Presentation,
+    /// `zip` (an item named `.zip` is drawn as a ZIP folder instead).
+    Zip,
+    /// `png`, `jpg`, `jpeg`, `webp`.
+    Image,
+    /// `mp4`.
+    Video,
+    /// `md`.
+    Markdown,
+    /// `txt`.
+    Text,
+    /// `py`.
+    Python,
+    /// `js`.
+    JavaScript,
+    /// Every other extension.
+    Generic,
+}
+
+impl DocumentStyle {
+    /// The style for a lower-cased extension from [`extension`].
+    pub fn for_extension(extension: &str) -> Self {
+        match extension {
+            "pdf" => Self::Pdf,
+            "docx" | "doc" => Self::Word,
+            "xlsx" | "csv" => Self::Spreadsheet,
+            "pptx" => Self::Presentation,
+            "zip" => Self::Zip,
+            "png" | "jpg" | "jpeg" | "webp" => Self::Image,
+            "mp4" => Self::Video,
+            "md" => Self::Markdown,
+            "txt" => Self::Text,
+            "py" => Self::Python,
+            "js" => Self::JavaScript,
+            _ => Self::Generic,
+        }
+    }
+
+    /// Badge colour and look (the `map` in `fileIcon`).
+    fn badge(self) -> (&'static str, Badge) {
+        match self {
+            Self::Pdf => ("#c84032", Badge::Letter("PDF")),
+            Self::Word => ("#2868bd", Badge::Letter("W")),
+            Self::Spreadsheet => ("#258150", Badge::Letter("X")),
+            Self::Presentation => ("#ce6a35", Badge::Letter("P")),
+            Self::Zip => ("#a8833d", Badge::Letter("ZIP")),
+            Self::Image => ("#7d69bd", Badge::Picture),
+            Self::Video => ("#975abe", Badge::Letter("▶")),
+            Self::Markdown => ("#65747f", Badge::Lines),
+            Self::Text => ("#748da8", Badge::Lines),
+            Self::Python => ("#3d849e", Badge::Lines),
+            Self::JavaScript => ("#d0a522", Badge::Lines),
+            Self::Generic => ("#8092a3", Badge::Lines),
+        }
     }
 }
 
@@ -178,20 +231,20 @@ fn network_folder() -> String {
     format!(r#"<g transform="translate(3.84 -4.1) scale(.84)">{FOLDER}</g>{PIPE}"#)
 }
 
-fn network_glyph(glyph: &str, colors: &Palette) -> String {
+fn network_glyph(glyph: Glyph, colors: &Palette) -> String {
     format!(
         concat!(
             r#"<svg x="8" y="0" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="{color}" "#,
             r#"stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{data}"/></svg>{pipe}"#
         ),
         color = colors.text,
-        data = glyphs::path_data(glyph),
+        data = glyph.path_data(),
         pipe = PIPE
     )
 }
 
-fn document(ext: &str, colors: &Palette) -> String {
-    let (color, badge) = file_style(ext);
+fn document(style: DocumentStyle, colors: &Palette) -> String {
+    let (color, badge) = style.badge();
     let mut svg = format!(
         concat!(
             r#"<path d="M11 3h19l9 9v31a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" "#,
@@ -202,44 +255,41 @@ fn document(ext: &str, colors: &Palette) -> String {
         fold = colors.fold,
         stroke = colors.stroke
     );
-    match badge {
-        Badge::Letter(letter) => {
-            let font_size = if letter.chars().count() > 1 { 10 } else { 14 };
-            let _ = write!(
-                svg,
-                concat!(
-                    r#"<rect x="4" y="18" width="30" height="19" rx="2" fill="{color}"/>"#,
-                    r#"<text x="19" y="31" font-size="{size}" text-anchor="middle" fill="white" "#,
-                    r#"font-family="sans-serif" font-weight="600">{letter}</text>"#
-                ),
-                color = color,
-                size = font_size,
-                letter = letter
-            );
-        }
-        Badge::Picture => {
-            let _ = write!(
-                svg,
-                concat!(
-                    r##"<path d="M14 36V20h20v16Z" fill="#e3dcf7"/>"##,
-                    r##"<path d="m14 34 7-8 5 5 4-4 4 7Z" fill="{color}"/>"##,
-                    r##"<circle cx="29" cy="23" r="2" fill="#f0b253"/>"##
-                ),
-                color = color
-            );
-        }
-        Badge::Lines => {
-            let _ = write!(
-                svg,
-                r#"<path d="M15 22h17M15 27h17M15 32h12" stroke="{color}" stroke-width="2"/>"#
-            );
-        }
-    }
+    svg.push_str(&badge_svg(badge, color));
     svg
 }
 
+fn badge_svg(badge: Badge, color: &str) -> String {
+    match badge {
+        Badge::Letter(letter) => {
+            let font_size = if letter.chars().count() > 1 { 10 } else { 14 };
+            format!(
+                concat!(
+                    r#"<rect x="4" y="18" width="30" height="19" rx="2" fill="{color}"/>"#,
+                    r#"<text x="19" y="31" font-size="{font_size}" text-anchor="middle" fill="white" "#,
+                    r#"font-family="sans-serif" font-weight="600">{letter}</text>"#
+                ),
+                color = color,
+                font_size = font_size,
+                letter = letter
+            )
+        }
+        Badge::Picture => format!(
+            concat!(
+                r##"<path d="M14 36V20h20v16Z" fill="#e3dcf7"/>"##,
+                r##"<path d="m14 34 7-8 5 5 4-4 4 7Z" fill="{color}"/>"##,
+                r##"<circle cx="29" cy="23" r="2" fill="#f0b253"/>"##
+            ),
+            color = color
+        ),
+        Badge::Lines => {
+            format!(r#"<path d="M15 22h17M15 27h17M15 32h12" stroke="{color}" stroke-width="2"/>"#)
+        }
+    }
+}
+
 /// A complete SVG document for `kind` at `pixels` × `pixels`.
-pub fn svg(kind: &ArtKind, appearance: Appearance, pixels: i32) -> String {
+pub fn svg(kind: ArtKind, appearance: Appearance, pixels: i32) -> String {
     let colors = palette(appearance);
     let body = match kind {
         ArtKind::Folder => FOLDER.to_string(),
@@ -247,7 +297,7 @@ pub fn svg(kind: &ArtKind, appearance: Appearance, pixels: i32) -> String {
         ArtKind::SharedFolder => format!("{FOLDER}{}", share_badge(&colors)),
         ArtKind::NetworkFolder => network_folder(),
         ArtKind::NetworkGlyph(glyph) => network_glyph(glyph, &colors),
-        ArtKind::File(ext) => document(ext, &colors),
+        ArtKind::Document(style) => document(style, &colors),
     };
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="{pixels}" height="{pixels}">{body}</svg>"#
@@ -255,13 +305,14 @@ pub fn svg(kind: &ArtKind, appearance: Appearance, pixels: i32) -> String {
 }
 
 /// True when the art uses theme colours and must be cached per theme.
-fn depends_on_theme(kind: &ArtKind) -> bool {
+fn depends_on_theme(kind: ArtKind) -> bool {
     matches!(
         kind,
-        ArtKind::File(_) | ArtKind::SharedFolder | ArtKind::NetworkGlyph(_)
+        ArtKind::Document(_) | ArtKind::SharedFolder | ArtKind::NetworkGlyph(_)
     )
 }
 
+/// Art kind, device pixels and, for theme-dependent art, the appearance.
 type CacheKey = (ArtKind, i32, Option<Appearance>);
 
 thread_local! {
@@ -270,9 +321,12 @@ thread_local! {
 
 /// The art rasterised at `pixels` device pixels, cached. `None` only if the
 /// SVG loader is missing.
-pub fn texture(kind: &ArtKind, appearance: Appearance, pixels: i32) -> Option<gdk::Texture> {
+///
+/// The cache is keyed by [`ArtKind`], never by a file name or extension, so
+/// it stays bounded: a few dozen kinds at the sizes and scales in use.
+pub fn texture(kind: ArtKind, appearance: Appearance, pixels: i32) -> Option<gdk::Texture> {
     let theme_key = depends_on_theme(kind).then_some(appearance);
-    let key = (kind.clone(), pixels, theme_key);
+    let key = (kind, pixels, theme_key);
     if let Some(found) = TEXTURES.with(|cache| cache.borrow().get(&key).cloned()) {
         return Some(found);
     }
@@ -290,8 +344,14 @@ pub fn texture(kind: &ArtKind, appearance: Appearance, pixels: i32) -> Option<gd
 }
 
 #[cfg(test)]
+fn cached_textures() -> usize {
+    TEXTURES.with(|cache| cache.borrow().len())
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::file_entry as file;
     use gtk::gdk::prelude::TextureExt;
 
     #[test]
@@ -310,9 +370,37 @@ mod tests {
 
     #[test]
     fn file_badges_follow_the_extension_map() {
-        assert_eq!(file_style("docx"), ("#2868bd", Badge::Letter("W")));
-        assert_eq!(file_style("jpeg").1, Badge::Picture);
-        assert_eq!(file_style("unknown"), ("#8092a3", Badge::Lines));
+        assert_eq!(
+            DocumentStyle::for_extension("docx").badge(),
+            ("#2868bd", Badge::Letter("W"))
+        );
+        assert_eq!(DocumentStyle::for_extension("jpeg").badge().1, Badge::Picture);
+        assert_eq!(
+            DocumentStyle::for_extension("unknown").badge(),
+            ("#8092a3", Badge::Lines)
+        );
+    }
+
+    #[test]
+    fn names_without_a_known_extension_share_one_kind() {
+        assert_eq!(kind_for_entry(&file("ls")), kind_for_entry(&file("cargo")));
+        assert_eq!(
+            kind_for_entry(&file("ls")),
+            ArtKind::Document(DocumentStyle::Generic)
+        );
+        assert_eq!(
+            kind_for_entry(&file("Report.PDF")),
+            ArtKind::Document(DocumentStyle::Pdf)
+        );
+    }
+
+    #[test]
+    fn unknown_file_types_share_one_cached_texture() {
+        let first = texture(kind_for_entry(&file("ls")), Appearance::Light, 21);
+        let size = cached_textures();
+        let second = texture(kind_for_entry(&file("cargo")), Appearance::Light, 21);
+        assert_eq!(cached_textures(), size, "a second unknown name adds no texture");
+        assert_eq!(first, second);
     }
 
     #[test]
@@ -322,15 +410,15 @@ mod tests {
             ArtKind::ZipFolder,
             ArtKind::SharedFolder,
             ArtKind::NetworkFolder,
-            ArtKind::NetworkGlyph("server"),
-            ArtKind::File("pdf".into()),
-            ArtKind::File("png".into()),
-            ArtKind::File("mp4".into()),
-            ArtKind::File("md".into()),
+            ArtKind::NetworkGlyph(Glyph::Server),
+            ArtKind::Document(DocumentStyle::Pdf),
+            ArtKind::Document(DocumentStyle::Image),
+            ArtKind::Document(DocumentStyle::Video),
+            ArtKind::Document(DocumentStyle::Markdown),
         ];
         for kind in kinds {
             for appearance in [Appearance::Light, Appearance::Dark] {
-                let texture = texture(&kind, appearance, 48).expect("SVG art loads");
+                let texture = texture(kind, appearance, 48).expect("SVG art loads");
                 assert_eq!((texture.width(), texture.height()), (48, 48), "{kind:?}");
             }
         }
@@ -338,7 +426,8 @@ mod tests {
 
     #[test]
     fn documents_use_the_theme_paper() {
-        assert!(svg(&ArtKind::File("txt".into()), Appearance::Dark, 24).contains("#dbe3ec"));
-        assert!(svg(&ArtKind::File("txt".into()), Appearance::Light, 24).contains("#fafcfe"));
+        let text = ArtKind::Document(DocumentStyle::Text);
+        assert!(svg(text, Appearance::Dark, 24).contains("#dbe3ec"));
+        assert!(svg(text, Appearance::Light, 24).contains("#fafcfe"));
     }
 }

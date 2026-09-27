@@ -14,7 +14,9 @@ use std::rc::Rc;
 
 use gtk::gdk;
 
-pub use fonts::css_for_text_size;
+pub use fonts::{css_for_text_size, narrowest_tile_width};
+
+use crate::icons::Glyph;
 
 const BASE_CSS: &str = include_str!("../../resources/style.css");
 const LIGHT_CSS: &str = include_str!("../../resources/light.css");
@@ -39,10 +41,10 @@ impl Appearance {
     }
 
     /// Glyph of the theme button.
-    pub const fn glyph(self) -> &'static str {
+    pub const fn glyph(self) -> Glyph {
         match self {
-            Appearance::Light => "sun",
-            Appearance::Dark => "moon",
+            Appearance::Light => Glyph::Sun,
+            Appearance::Dark => Glyph::Moon,
         }
     }
 }
@@ -62,10 +64,16 @@ impl ThemePreference {
     /// Parses `system`, `light` or `dark`; anything else means `system`,
     /// as in `applyTheme`.
     pub fn parse(value: &str) -> Self {
-        match value {
-            "light" => ThemePreference::Light,
-            "dark" => ThemePreference::Dark,
-            _ => ThemePreference::System,
+        Self::from_key(value).unwrap_or(ThemePreference::System)
+    }
+
+    /// The preference for an action-state key, or `None` for another value.
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "system" => Some(ThemePreference::System),
+            "light" => Some(ThemePreference::Light),
+            "dark" => Some(ThemePreference::Dark),
+            _ => None,
         }
     }
 
@@ -105,20 +113,40 @@ impl ThemePreference {
     }
 }
 
-/// The CSS providers of one display.
+/// Identifies a callback registered with [`Skin::connect_changed`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ListenerId(usize);
+
+/// The CSS providers of one display, shared by every window.
+///
+/// The skin also remembers whether the desktop prefers dark, so a window
+/// can change the [`ThemePreference`] without asking the desktop again.
 pub struct Skin {
     palette: gtk::CssProvider,
     text: gtk::CssProvider,
     appearance: Cell<Appearance>,
     text_size: Cell<u32>,
     preference: Cell<ThemePreference>,
+    system_dark: Cell<bool>,
     next_listener: Cell<usize>,
     listeners: RefCell<Vec<AppearanceListener>>,
 }
 
 struct AppearanceListener {
-    id: usize,
+    id: ListenerId,
     callback: Rc<dyn Fn(Appearance)>,
+}
+
+impl std::fmt::Debug for Skin {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Skin")
+            .field("appearance", &self.appearance.get())
+            .field("preference", &self.preference.get())
+            .field("text_size", &self.text_size.get())
+            .field("listeners", &self.listener_count())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Skin {
@@ -141,6 +169,7 @@ impl Skin {
             appearance: Cell::new(Appearance::Light),
             text_size: Cell::new(crate::text_size::DEFAULT),
             preference: Cell::new(ThemePreference::System),
+            system_dark: Cell::new(false),
             next_listener: Cell::new(0),
             listeners: RefCell::new(Vec::new()),
         }
@@ -174,30 +203,50 @@ impl Skin {
     }
 
     /// Applies a shared preference and synchronizes all window palettes.
-    pub fn set_preference(&self, preference: ThemePreference, system_dark: bool) {
+    /// Listeners hear about it even when the drawn appearance stays the
+    /// same, so every window's Appearance menu shows the new choice.
+    pub fn set_preference(&self, preference: ThemePreference) {
         let changed = self.preference.replace(preference) != preference;
-        if !self.set_appearance(preference.resolve(system_dark)) && changed {
+        let redrawn = self.set_appearance(preference.resolve(self.system_dark.get()));
+        if changed && !redrawn {
             self.notify_appearance();
         }
     }
 
-    /// Registers a window's palette callback; disconnect it when the window closes.
-    pub fn connect_changed(&self, listener: impl Fn(Appearance) + 'static) -> usize {
+    /// Records the desktop's colour scheme and follows it when the
+    /// preference is [`ThemePreference::System`].
+    pub fn set_system_dark(&self, dark: bool) {
+        self.system_dark.set(dark);
+        self.set_appearance(self.preference().resolve(dark));
+    }
+
+    /// Registers a window's palette callback; disconnect it when the window
+    /// closes.
+    ///
+    /// # Panics
+    ///
+    /// Only after `usize::MAX` registrations in one process.
+    pub fn connect_changed(&self, listener: impl Fn(Appearance) + 'static) -> ListenerId {
         let id = self.next_listener.get();
-        self.next_listener.set(
-            id.checked_add(1)
-                .expect("appearance listener IDs cannot be exhausted"),
-        );
+        let next = id
+            .checked_add(1)
+            .expect("appearance listener IDs cannot be exhausted");
+        self.next_listener.set(next);
         self.listeners.borrow_mut().push(AppearanceListener {
-            id,
+            id: ListenerId(id),
             callback: Rc::new(listener),
         });
-        id
+        ListenerId(id)
     }
 
     /// Removes a callback returned by [`Self::connect_changed`].
-    pub fn disconnect_changed(&self, id: usize) {
+    pub fn disconnect_changed(&self, id: ListenerId) {
         self.listeners.borrow_mut().retain(|listener| listener.id != id);
+    }
+
+    /// Number of registered callbacks; closing a window must lower it.
+    pub fn listener_count(&self) -> usize {
+        self.listeners.borrow().len()
     }
 
     fn notify_appearance(&self) {

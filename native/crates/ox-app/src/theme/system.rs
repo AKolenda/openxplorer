@@ -40,30 +40,43 @@ pub fn dark_from_portal(value: u32) -> Option<bool> {
     }
 }
 
-type Listener = Box<dyn Fn(bool)>;
-
 /// Watches the desktop colour scheme and reports changes.
+///
+/// The application creates one and forwards changes to the shared
+/// [`Skin`](super::Skin); windows never register here, so closing a
+/// window leaves nothing behind.
 pub struct SystemScheme {
     settings: Option<gio::Settings>,
     portal_dark: RefCell<Option<bool>>,
-    listeners: RefCell<Vec<Listener>>,
+    on_change: Box<dyn Fn(bool)>,
     portal_watch: RefCell<Option<gio::SignalSubscription>>,
-    portal_revision: Cell<u64>,
+    portal_signal_seen: Cell<bool>,
+}
+
+impl std::fmt::Debug for SystemScheme {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SystemScheme")
+            .field("gnome_settings", &self.settings.is_some())
+            .field("portal_dark", &self.portal_dark)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SystemScheme {
-    /// Starts watching. With no GNOME schema the portal is queried
-    /// asynchronously and listeners hear its answer.
-    pub fn new() -> Rc<Self> {
+    /// Starts watching and calls `on_change` with the new value whenever the
+    /// scheme changes. With no GNOME schema the portal is queried
+    /// asynchronously, and `on_change` hears its answer.
+    pub fn new(on_change: impl Fn(bool) + 'static) -> Rc<Self> {
         let settings = gio::SettingsSchemaSource::default()
             .and_then(|source| source.lookup(INTERFACE_SCHEMA, true))
             .map(|schema| gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None));
         let scheme = Rc::new(Self {
             settings,
             portal_dark: RefCell::new(None),
-            listeners: RefCell::new(Vec::new()),
+            on_change: Box::new(on_change),
             portal_watch: RefCell::new(None),
-            portal_revision: Cell::new(0),
+            portal_signal_seen: Cell::new(false),
         });
         scheme.watch();
         scheme
@@ -80,16 +93,8 @@ impl SystemScheme {
         gtk::Settings::default().is_some_and(|settings| settings.is_gtk_application_prefer_dark_theme())
     }
 
-    /// Calls `listener` with the new value whenever the scheme changes.
-    pub fn connect_changed(&self, listener: impl Fn(bool) + 'static) {
-        self.listeners.borrow_mut().push(Box::new(listener));
-    }
-
     fn notify(&self) {
-        let dark = self.is_dark();
-        for listener in self.listeners.borrow().iter() {
-            listener(dark);
-        }
+        (self.on_change)(self.is_dark());
     }
 
     fn gnome_dark(&self) -> Option<bool> {
@@ -133,11 +138,9 @@ impl SystemScheme {
                 Some(APPEARANCE_NAMESPACE),
                 gio::DBusSignalFlags::NONE,
                 move |signal| {
-                    if let (Some(scheme), Some(value)) = (changed.upgrade(), portal_change(signal.parameters))
-                    {
-                        scheme
-                            .portal_revision
-                            .set(scheme.portal_revision.get().wrapping_add(1));
+                    let value = portal_change(signal.parameters);
+                    if let (Some(scheme), Some(value)) = (changed.upgrade(), value) {
+                        scheme.portal_signal_seen.set(true);
                         scheme.portal_dark.replace(dark_from_portal(value));
                         scheme.notify();
                     }
@@ -150,7 +153,7 @@ impl SystemScheme {
             }
             if let (Some(value), Some(scheme)) = (read_portal(&connection).await, weak.upgrade()) {
                 // A newer SettingChanged signal wins over the initial reply.
-                if scheme.portal_revision.get() == 0 {
+                if !scheme.portal_signal_seen.get() {
                     scheme.portal_dark.replace(dark_from_portal(value));
                     scheme.notify();
                 }

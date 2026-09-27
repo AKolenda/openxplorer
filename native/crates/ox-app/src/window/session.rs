@@ -1,26 +1,67 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Per-window tabs. Stable IDs and load generations reject stale callbacks.
+//!
+//! Ports the tab state of `desktop/ui/app.js` (`addTab`, `closeTab`,
+//! `switchTab` and each tab's `history`, `scroll`, `loaded` and `busy`).
 
 use gtk::gio;
+use gtk::glib;
+use gtk::prelude::*;
+use ox_core::entry::EnumerateError;
 
 use crate::folder_view::item::FileItem;
-use crate::folder_view::loader::{Listing, Watch};
+use crate::folder_view::loader::Listing;
+use crate::folder_view::watch::Watch;
 use crate::history::History;
 
+/// Identifies a tab for the lifetime of its window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct TabId(u64);
 
+impl TabId {
+    /// The id as a window action's target (`win.select-tab`).
+    pub fn to_variant(self) -> glib::Variant {
+        self.0.to_variant()
+    }
+
+    /// The id in a window action's target.
+    pub fn from_variant(variant: &glib::Variant) -> Option<Self> {
+        variant.get::<u64>().map(TabId)
+    }
+}
+
+/// Whether a new tab becomes the active one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TabPlacement {
+    /// Show the new tab now.
+    Foreground,
+    /// Keep the current tab in front. The new tab is listed only when it is
+    /// first shown, so an SMB sign-in never appears over the current tab
+    /// (`addTab(uri, {background: true})` in app.js).
+    Background,
+}
+
+/// One tab: its history, its items and the state of its listing.
+#[derive(Debug)]
 pub(super) struct Tab {
     pub id: TabId,
     pub history: History,
     pub store: gio::ListStore,
+    /// Incremented by every load; results of an older load are ignored.
     pub generation: u64,
     pub loading: bool,
+    /// The current location has been listed (or is a page). A background
+    /// tab stays unlisted until it is first shown.
     pub loaded: bool,
-    pub error: Option<String>,
+    pub error: Option<EnumerateError>,
+    /// URIs of the selected items, restored after a reload or tab switch.
     pub selected: Vec<String>,
+    /// The vertical scroll position, restored when the tab is shown again.
+    pub scroll: f64,
     pub listing: Option<Listing>,
     pub watch: Option<Watch>,
+    /// The folder changed while it was being listed; list it again after.
+    pub reload_pending: bool,
 }
 
 impl Tab {
@@ -34,23 +75,39 @@ impl Tab {
             loaded: false,
             error: None,
             selected: Vec::new(),
+            scroll: 0.0,
             listing: None,
             watch: None,
+            reload_pending: false,
         }
     }
 
+    /// The location the tab shows.
+    pub fn uri(&self) -> &str {
+        self.history.current()
+    }
+
+    /// Starts a load and returns its generation. The folder watch is kept:
+    /// the caller replaces it only when the location changed.
     pub fn begin_load(&mut self) -> u64 {
         self.listing = None;
-        self.watch = None;
         self.generation = self.generation.wrapping_add(1);
         self.loading = true;
-        self.loaded = false;
         self.error = None;
+        self.reload_pending = false;
         self.generation
+    }
+
+    /// Forgets what belonged to the previous location: the selection and
+    /// the scroll position, as `navigate()` does with `t.scroll = 0`.
+    pub fn forget_location_state(&mut self) {
+        self.selected.clear();
+        self.scroll = 0.0;
     }
 }
 
-#[derive(Default)]
+/// The tabs of one window and which one is active.
+#[derive(Debug, Default)]
 pub(super) struct Session {
     pub tabs: Vec<Tab>,
     pub active: Option<TabId>,
@@ -58,14 +115,22 @@ pub(super) struct Session {
 }
 
 impl Session {
-    pub fn add(&mut self, uri: &str) -> TabId {
+    /// Adds a tab at the end. A background tab becomes active only when it
+    /// is the first one.
+    ///
+    /// # Panics
+    ///
+    /// Only after `u64::MAX` tabs in one window.
+    pub fn add(&mut self, uri: &str, placement: TabPlacement) -> TabId {
         self.next_id = self
             .next_id
             .checked_add(1)
             .expect("tab IDs cannot be exhausted in one session");
         let id = TabId(self.next_id);
         self.tabs.push(Tab::new(id, uri));
-        self.active = Some(id);
+        if placement == TabPlacement::Foreground || self.active.is_none() {
+            self.active = Some(id);
+        }
         id
     }
 
@@ -81,23 +146,40 @@ impl Session {
         self.active.and_then(|id| self.tab(id))
     }
 
+    pub fn active_mut(&mut self) -> Option<&mut Tab> {
+        let id = self.active?;
+        self.tab_mut(id)
+    }
+
+    pub fn is_active(&self, id: TabId) -> bool {
+        self.active == Some(id)
+    }
+
+    /// True while `generation` is the latest load of tab `id`.
     pub fn accepts(&self, id: TabId, generation: u64) -> bool {
         self.tab(id).is_some_and(|tab| tab.generation == generation)
     }
 
+    /// Removes a tab. When it was active, the tab to its right becomes
+    /// active, or the new last tab (`Math.min(i, tabs.length - 1)` in
+    /// app.js, as in Windows Explorer and browsers).
     pub fn remove(&mut self, id: TabId) {
         let Some(index) = self.tabs.iter().position(|tab| tab.id == id) else {
             return;
         };
         self.tabs.remove(index);
         if self.active == Some(id) {
-            self.active = self.tabs.get(index.saturating_sub(1)).map(|tab| tab.id);
+            let next = self.tabs.get(index).or_else(|| self.tabs.last());
+            self.active = next.map(|tab| tab.id);
         }
     }
 
+    /// The tab `delta` places from the active one, wrapping around.
     pub fn adjacent(&self, delta: isize) -> Option<TabId> {
         let current = self.tabs.iter().position(|tab| Some(tab.id) == self.active)?;
-        let target = (current as isize + delta).rem_euclid(self.tabs.len() as isize) as usize;
+        let count = self.tabs.len();
+        let offset = delta.rem_euclid(count.cast_signed()).cast_unsigned();
+        let target = (current + offset) % count;
         Some(self.tabs[target].id)
     }
 }
@@ -106,11 +188,19 @@ impl Session {
 mod tests {
     use super::*;
 
+    fn three_tabs() -> (Session, [TabId; 3]) {
+        let mut session = Session::default();
+        let first = session.add("file:///one", TabPlacement::Foreground);
+        let second = session.add("file:///two", TabPlacement::Foreground);
+        let third = session.add("file:///three", TabPlacement::Foreground);
+        (session, [first, second, third])
+    }
+
     #[test]
     fn closing_a_background_tab_keeps_the_active_tab() {
         let mut session = Session::default();
-        let first = session.add("file:///one");
-        let second = session.add("file:///two");
+        let first = session.add("file:///one", TabPlacement::Foreground);
+        let second = session.add("file:///two", TabPlacement::Foreground);
         session.remove(first);
         assert_eq!(session.active, Some(second));
         session.remove(second);
@@ -120,17 +210,49 @@ mod tests {
     #[test]
     fn closing_the_active_tab_chooses_a_neighbor() {
         let mut session = Session::default();
-        let first = session.add("file:///one");
-        let second = session.add("file:///two");
+        let first = session.add("file:///one", TabPlacement::Foreground);
+        let second = session.add("file:///two", TabPlacement::Foreground);
         session.remove(second);
         assert_eq!(session.active, Some(first));
         assert_eq!(session.adjacent(1), Some(first));
     }
 
+    /// parity: TAB-002
+    #[test]
+    fn closing_the_active_middle_tab_activates_the_tab_to_its_right() {
+        let (mut session, [_, second, third]) = three_tabs();
+        session.active = Some(second);
+        session.remove(second);
+        assert_eq!(session.active, Some(third));
+    }
+
+    #[test]
+    fn closing_the_active_last_tab_activates_the_new_last_tab() {
+        let (mut session, [_, second, third]) = three_tabs();
+        session.remove(third);
+        assert_eq!(session.active, Some(second));
+    }
+
+    #[test]
+    fn a_background_tab_leaves_the_active_tab_in_front() {
+        let mut session = Session::default();
+        let first = session.add("file:///one", TabPlacement::Foreground);
+        let background = session.add("file:///two", TabPlacement::Background);
+        assert_eq!(session.active, Some(first));
+        assert!(!session.tab(background).expect("added tab").loaded);
+    }
+
+    #[test]
+    fn the_first_tab_is_active_even_when_opened_in_the_background() {
+        let mut session = Session::default();
+        let only = session.add("file:///one", TabPlacement::Background);
+        assert_eq!(session.active, Some(only));
+    }
+
     #[test]
     fn old_results_cannot_repopulate_a_navigated_or_closed_tab() {
         let mut session = Session::default();
-        let id = session.add("file:///one");
+        let id = session.add("file:///one", TabPlacement::Foreground);
         let first = session.tab_mut(id).expect("added tab").begin_load();
         assert!(session.accepts(id, first));
         let second = session.tab_mut(id).expect("added tab").begin_load();
@@ -143,8 +265,8 @@ mod tests {
     #[test]
     fn tab_cycling_wraps_in_both_directions() {
         let mut session = Session::default();
-        let first = session.add("file:///one");
-        let second = session.add("file:///two");
+        let first = session.add("file:///one", TabPlacement::Foreground);
+        let second = session.add("file:///two", TabPlacement::Foreground);
         assert_eq!(session.adjacent(1), Some(first));
         session.active = Some(first);
         assert_eq!(session.adjacent(-1), Some(second));

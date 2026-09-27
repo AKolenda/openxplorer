@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Drives, volumes and phones for This PC.
+//! Drives, volumes, phones and connected shares from the volume monitor.
 //!
 //! Ports `desktop/volume_locations.py` and its tests
 //! (`desktop/tests/test_volume_locations.py`). The volume monitor's current
-//! state is turned into sidebar rows without mounting, probing or listing
-//! anything. Mounted roots outside the supported schemes (for example a
-//! web location) and shadowed mounts are hidden; a volume that is not
-//! mounted yet becomes a click-to-connect row.
+//! state is turned into rows without mounting, probing or listing anything.
+//!
+//! Every root is canonicalised with [`location::normalise`], as the Python
+//! module runs `normalise_location` on each one. That matters twice:
+//!
+//! - A row's URI must equal the URI a tab stores after navigating there, or
+//!   the sidebar cannot highlight it. GIO's own spelling escapes fewer
+//!   characters (`Backup%20(2024)` instead of `Backup%20%282024%29`).
+//! - Normalisation is the scheme allowlist (local paths, `smb:` and the
+//!   device schemes) and rejects addresses carrying a user name. A root it
+//!   rejects is hidden, and so is a shadowed mount. A volume that is not
+//!   mounted yet becomes a click-to-connect row.
 //!
 //! The classification works on plain [`MountFacts`] and [`VolumeFacts`]
 //! so it can be tested without GIO; [`from_monitor`] reads them from a real
@@ -15,25 +23,22 @@
 use gio::prelude::*;
 use ox_core::location;
 
-/// Schemes a mount root may use. ox-core's `normalise_location` does not
-/// enforce the Python allowlist yet, so this module does.
-const SUPPORTED_SCHEMES: [&str; 5] = ["file", "smb", "mtp", "gphoto2", "afc"];
-
 /// What a row represents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VolumeKind {
-    /// A disk or partition.
+    /// A disk, partition or network mount.
     Drive,
     /// A phone, camera or iOS device.
     Device,
 }
 
-/// One This PC row.
+/// One mounted or mountable location.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VolumeRow {
     /// Name shown in the sidebar and on This PC.
     pub label: String,
-    /// The mounted root; `None` for a volume that still has to be mounted.
+    /// The canonical mounted root; `None` for a volume that still has to be
+    /// mounted.
     pub uri: Option<String>,
     /// Identifier used to mount an unmounted volume.
     pub id: Option<String>,
@@ -45,17 +50,37 @@ pub struct VolumeRow {
     pub can_unmount: bool,
 }
 
+impl VolumeRow {
+    /// True for a mounted SMB share. It belongs under Network, never among
+    /// the drives (`!m.uri?.startsWith('smb:')` in app.js).
+    pub fn is_network(&self) -> bool {
+        self.uri.as_deref().is_some_and(|uri| uri.starts_with("smb:"))
+    }
+}
+
 /// The parts of a `gio::Mount` this module reads.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MountFacts {
     /// Display name supplied by the volume monitor.
     pub name: String,
-    /// URI of the mounted filesystem root.
+    /// URI of the mounted filesystem root, as GIO spells it.
     pub root_uri: String,
     /// Hidden behind a replacement mount.
     pub shadowed: bool,
     /// The mount offers an unmount operation.
     pub can_unmount: bool,
+}
+
+impl MountFacts {
+    /// Reads the facts of a real mount.
+    pub fn from_mount(mount: &gio::Mount) -> Self {
+        Self {
+            name: mount.name().to_string(),
+            root_uri: mount.root().uri().to_string(),
+            shadowed: mount.is_shadowed(),
+            can_unmount: mount.can_unmount(),
+        }
+    }
 }
 
 /// The parts of a `gio::Volume` this module reads.
@@ -76,6 +101,18 @@ pub struct VolumeFacts {
 }
 
 impl VolumeFacts {
+    /// Reads the facts of a real volume.
+    pub fn from_volume(volume: &gio::Volume) -> Self {
+        Self {
+            name: volume.name().to_string(),
+            mounted: volume.get_mount().is_some(),
+            can_mount: volume.can_mount(),
+            uuid: volume.uuid().map(Into::into),
+            unix_device: volume.identifier("unix-device").map(Into::into),
+            activation_uri: volume.activation_root().map(|root| root.uri().into()),
+        }
+    }
+
     /// A stable-enough identifier for a single mount request, as
     /// `volume_id` in volume_locations.py.
     pub fn id(&self) -> String {
@@ -87,19 +124,6 @@ impl VolumeFacts {
     }
 }
 
-/// Canonical URI for a supported root, or `None` for anything else.
-fn supported_uri(uri: &str) -> Option<String> {
-    let scheme = location::scheme(uri);
-    if !SUPPORTED_SCHEMES.contains(&scheme.as_str()) {
-        return None;
-    }
-    if location::is_device_location(uri) {
-        // GIO would rewrite `mtp://[usb:001,010]/`; keep device roots as-is.
-        return Some(uri.to_string());
-    }
-    Some(gio::File::for_uri(uri).uri().to_string())
-}
-
 fn kind_for(uri: &str) -> VolumeKind {
     if location::is_device_location(uri) {
         VolumeKind::Device
@@ -108,79 +132,57 @@ fn kind_for(uri: &str) -> VolumeKind {
     }
 }
 
+/// The row for a mount, or `None` when it is shadowed or its root is not a
+/// supported, credential-free location.
+fn mounted_row(mount: &MountFacts) -> Option<VolumeRow> {
+    if mount.shadowed {
+        return None;
+    }
+    let uri = location::normalise(&mount.root_uri).ok()?;
+    Some(VolumeRow {
+        label: mount.name.clone(),
+        kind: kind_for(&uri),
+        uri: Some(uri),
+        id: None,
+        mounted: true,
+        can_unmount: mount.can_unmount,
+    })
+}
+
+/// The click-to-connect row for a volume that can be mounted.
+///
+/// Like the Python module, a volume whose activation root is refused by
+/// normalisation is skipped: once mounted, its root would be hidden anyway.
+fn mountable_row(volume: &VolumeFacts) -> Option<VolumeRow> {
+    if volume.mounted || !volume.can_mount {
+        return None;
+    }
+    let activation = match &volume.activation_uri {
+        Some(uri) => Some(location::normalise(uri).ok()?),
+        None => None,
+    };
+    Some(VolumeRow {
+        label: volume.name.clone(),
+        uri: None,
+        id: Some(volume.id()),
+        kind: activation.as_deref().map_or(VolumeKind::Drive, kind_for),
+        mounted: false,
+        can_unmount: false,
+    })
+}
+
 /// Mounted rows first, then unmounted volumes, as `locations()` does.
 pub fn locations(mounts: &[MountFacts], volumes: &[VolumeFacts]) -> Vec<VolumeRow> {
-    let mut rows = Vec::new();
-    for mount in mounts.iter().filter(|mount| !mount.shadowed) {
-        let Some(uri) = supported_uri(&mount.root_uri) else {
-            continue;
-        };
-        rows.push(VolumeRow {
-            label: mount.name.clone(),
-            kind: kind_for(&uri),
-            uri: Some(uri),
-            id: None,
-            mounted: true,
-            can_unmount: mount.can_unmount,
-        });
-    }
-    for volume in volumes
-        .iter()
-        .filter(|volume| !volume.mounted && volume.can_mount)
-    {
-        let activation = volume.activation_uri.as_deref().and_then(supported_uri);
-        let kind = activation.as_deref().map_or(VolumeKind::Drive, kind_for);
-        rows.push(VolumeRow {
-            label: volume.name.clone(),
-            uri: None,
-            id: Some(volume.id()),
-            kind,
-            mounted: false,
-            can_unmount: false,
-        });
-    }
-    rows
+    let mounted = mounts.iter().filter_map(mounted_row);
+    let mountable = volumes.iter().filter_map(mountable_row);
+    mounted.chain(mountable).collect()
 }
 
-/// Reads the facts from a real volume monitor.
+/// Reads the rows from a real volume monitor.
 pub fn from_monitor(monitor: &gio::VolumeMonitor) -> Vec<VolumeRow> {
-    let mounts: Vec<MountFacts> = monitor
-        .mounts()
-        .iter()
-        .map(|mount| MountFacts {
-            name: mount.name().to_string(),
-            root_uri: mount.root().uri().to_string(),
-            shadowed: mount.is_shadowed(),
-            can_unmount: mount.can_unmount(),
-        })
-        .collect();
-    let volumes: Vec<VolumeFacts> = monitor
-        .volumes()
-        .iter()
-        .map(|volume| VolumeFacts {
-            name: volume.name().to_string(),
-            mounted: volume.get_mount().is_some(),
-            can_mount: volume.can_mount(),
-            uuid: volume.uuid().map(|s| s.to_string()),
-            unix_device: volume.identifier("unix-device").map(|s| s.to_string()),
-            activation_uri: volume.activation_root().map(|root| root.uri().to_string()),
-        })
-        .collect();
+    let mounts: Vec<MountFacts> = monitor.mounts().iter().map(MountFacts::from_mount).collect();
+    let volumes: Vec<VolumeFacts> = monitor.volumes().iter().map(VolumeFacts::from_volume).collect();
     locations(&mounts, &volumes)
-}
-
-/// Finds the monitor's volume for a row identifier from [`from_monitor`].
-pub fn find_volume(monitor: &gio::VolumeMonitor, id: &str) -> Option<gio::Volume> {
-    monitor.volumes().into_iter().find(|volume| {
-        let facts = VolumeFacts {
-            name: volume.name().to_string(),
-            uuid: volume.uuid().map(|s| s.to_string()),
-            unix_device: volume.identifier("unix-device").map(|s| s.to_string()),
-            activation_uri: volume.activation_root().map(|root| root.uri().to_string()),
-            ..VolumeFacts::default()
-        };
-        facts.id() == id
-    })
 }
 
 #[cfg(test)]
@@ -194,6 +196,11 @@ mod tests {
             shadowed: false,
             can_unmount: true,
         }
+    }
+
+    fn row_uri(root_uri: &str) -> Option<String> {
+        let rows = locations(&[mount("Disk", root_uri)], &[]);
+        rows.into_iter().next().and_then(|row| row.uri)
     }
 
     /// Ported from desktop/tests/test_volume_locations.py::test_mounted_mtp_phone_and_afc_device_are_visible
@@ -268,5 +275,60 @@ mod tests {
         assert_eq!(volume.id(), "/dev/sdb1");
         volume.unix_device = None;
         assert_eq!(volume.id(), "USB");
+    }
+
+    #[test]
+    fn mount_roots_use_the_canonical_spelling_tabs_store() {
+        let gio_spelling = gio::File::for_path("/media/u/Backup (2024)").uri();
+        assert_eq!(
+            row_uri(&gio_spelling).as_deref(),
+            Some("file:///media/u/Backup%20%282024%29")
+        );
+        assert_eq!(
+            row_uri("file:///media/u/Bob's%20USB").as_deref(),
+            Some("file:///media/u/Bob%27s%20USB")
+        );
+    }
+
+    #[test]
+    fn mount_roots_with_a_user_name_are_hidden() {
+        assert_eq!(row_uri("smb://user@nas/share/"), None);
+    }
+
+    #[test]
+    fn smb_roots_lose_the_trailing_slash_and_the_host_case() {
+        assert_eq!(row_uri("smb://NAS/share/").as_deref(), Some("smb://nas/share"));
+    }
+
+    #[test]
+    fn device_roots_keep_their_authority() {
+        assert_eq!(
+            row_uri("mtp://[usb:001,010]/").as_deref(),
+            Some("mtp://[usb:001,010]/")
+        );
+    }
+
+    #[test]
+    fn a_volume_with_an_unsupported_activation_root_is_skipped() {
+        let web = VolumeFacts {
+            name: "Web".into(),
+            can_mount: true,
+            activation_uri: Some("https://example.invalid/".into()),
+            ..VolumeFacts::default()
+        };
+        assert!(locations(&[], &[web]).is_empty());
+    }
+
+    #[test]
+    fn only_mounted_smb_rows_count_as_network() {
+        let rows = locations(
+            &[
+                mount("share on nas", "smb://nas/share"),
+                mount("Disk", "file:///media/u/Disk"),
+            ],
+            &[],
+        );
+        let network: Vec<bool> = rows.iter().map(VolumeRow::is_network).collect();
+        assert_eq!(network, [true, false]);
     }
 }

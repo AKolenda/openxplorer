@@ -109,7 +109,7 @@ entry.search:disabled { opacity: .6; }
 .commandbar button, .commandbar menubutton > button { min-height: 34px; min-width: 18px; padding: 0 10px; }
 .commandbar button.text-command, .commandbar menubutton.text-command > button { padding: 0 11px; }
 .commandbar menubutton.new-command > button { padding: 0 10px 0 8px; }
-.commandbar button.toggled { background-color: @ox_selected; }
+.commandbar button.toggled, .commandbar button:checked { background-color: @ox_selected; }
 .commandbar separator { min-height: 20px; min-width: 1px; background-color: @ox_border; margin: 0 10px; }
 .chev { color: @ox_muted; margin-left: 4px; }
 
@@ -127,8 +127,8 @@ entry.search:disabled { opacity: .6; }
 .sidebar list > row:hover { background-color: @ox_hover; }
 .sidebar list > row.current, .sidebar list > row:selected { background-color: @ox_selected; color: @ox_text; }
 .sidebar list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_accent; }
-.sidebar list > row.separator-row { min-height: 0; padding: 0; margin: 0; }
-.sidebar list > row.separator-row:hover { background: none; }
+/* Rows inside This PC and Network (.side-entry.indent in style.css). */
+.sidebar list > row.indent { padding-left: 23px; }
 .sidebar .pill { min-width: 3px; min-height: 15px; border-radius: 4px; }
 .sidebar list > row.current .pill { background-color: @ox_accent; }
 .sidebar .pin { color: @ox_pin; }

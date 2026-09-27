@@ -73,34 +73,17 @@ pub struct TypeSelect {
     pub cycling: bool,
 }
 
-/// Accumulates typed characters into a prefix that expires after a pause.
-#[derive(Debug, Clone)]
+/// Accumulates typed characters into a prefix that expires after
+/// [`TIMEOUT_MS`] without typing.
+#[derive(Debug, Clone, Default)]
 pub struct Controller {
-    timeout_ms: i64,
     text: String,
     last_at: Option<i64>,
 }
 
-impl Default for Controller {
-    fn default() -> Self {
-        Self {
-            timeout_ms: TIMEOUT_MS,
-            text: String::new(),
-            last_at: None,
-        }
-    }
-}
-
 impl Controller {
-    /// A controller with a custom timeout; `None` for a zero or negative one.
-    pub fn with_timeout(timeout_ms: i64) -> Option<Self> {
-        (timeout_ms > 0).then(|| Self {
-            timeout_ms,
-            ..Self::default()
-        })
-    }
-
     /// The prefix typed so far.
+    #[cfg(test)]
     pub fn text(&self) -> &str {
         &self.text
     }
@@ -118,7 +101,7 @@ impl Controller {
             return false;
         };
         let elapsed = now_ms - last_at;
-        !self.text.is_empty() && (0..self.timeout_ms).contains(&elapsed)
+        !self.text.is_empty() && (0..TIMEOUT_MS).contains(&elapsed)
     }
 
     /// Adds `key` to the prefix and finds the row to select. Returns `None`
@@ -404,12 +387,5 @@ mod tests {
         push(&mut c, "s", None, 0);
         assert_eq!(push(&mut c, "Enter", Some(1), 10), None);
         assert_eq!(c.text(), "s");
-    }
-
-    #[test]
-    fn invalid_timeout_is_rejected() {
-        assert!(Controller::with_timeout(0).is_none());
-        assert!(Controller::with_timeout(-1).is_none());
-        assert!(Controller::with_timeout(500).is_some());
     }
 }

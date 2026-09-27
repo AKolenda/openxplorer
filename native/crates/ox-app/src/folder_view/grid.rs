@@ -1,32 +1,40 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The icon view: tiles with a large icon and up to two lines of name.
 //!
-//! Matches `.file-tile` in style.css ("Large icons": a 56 pixel icon in a
-//! 135 pixel cell). Explorer's other icon sizes (Ctrl+Shift+1..4) use the
-//! same tiles with a different icon size.
+//! Matches `.file-tile` in `desktop/ui/style.css` ("Large icons": a 56
+//! pixel icon in a 135 pixel cell). Explorer's other icon layouts use the
+//! same tiles with a different icon size; the window binds them to
+//! Ctrl+Shift+1..4 as Explorer does.
 
 use std::rc::Rc;
 
-use gtk::pango;
 use gtk::prelude::*;
 
-use crate::folder_view::cells::{self, CellOwners, IconCells};
-use crate::folder_view::model::FolderModel;
+use crate::folder_view::cells::{self, CellLayout, CellOwners, IconCells};
+use crate::theme::narrowest_tile_width;
 
 /// Icon sizes of Explorer's icon layouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IconSize {
-    /// Ctrl+Shift+1.
+    /// Explorer's "Extra large icons" (Ctrl+Shift+1).
     ExtraLarge,
-    /// Ctrl+Shift+2, the web interface's "Large icons".
+    /// "Large icons" (Ctrl+Shift+2), the Python app's only icon view.
     Large,
-    /// Ctrl+Shift+3.
+    /// "Medium icons" (Ctrl+Shift+3).
     Medium,
-    /// Ctrl+Shift+4.
+    /// "Small icons" (Ctrl+Shift+4).
     Small,
 }
 
 impl IconSize {
+    /// Every size, largest first.
+    pub const ALL: [IconSize; 4] = [
+        IconSize::ExtraLarge,
+        IconSize::Large,
+        IconSize::Medium,
+        IconSize::Small,
+    ];
+
     /// Icon edge in logical pixels.
     pub const fn pixels(self) -> i32 {
         match self {
@@ -57,13 +65,15 @@ impl IconSize {
         }
     }
 
-    /// Every size, largest first.
-    pub const ALL: [IconSize; 4] = [
-        IconSize::ExtraLarge,
-        IconSize::Large,
-        IconSize::Medium,
-        IconSize::Small,
-    ];
+    /// Explorer's shortcut for the layout.
+    pub const fn accelerator(self) -> &'static str {
+        match self {
+            IconSize::ExtraLarge => "<Primary><Shift>1",
+            IconSize::Large => "<Primary><Shift>2",
+            IconSize::Medium => "<Primary><Shift>3",
+            IconSize::Small => "<Primary><Shift>4",
+        }
+    }
 
     /// The size for an action-state key.
     pub fn from_key(key: &str) -> Option<IconSize> {
@@ -82,83 +92,53 @@ impl IconSize {
 }
 
 fn factory(icons: &Rc<IconCells>, owners: &Rc<CellOwners>, size: IconSize) -> gtk::SignalListItemFactory {
-    let pixels = size.pixels();
     let factory = gtk::SignalListItemFactory::new();
-    let registry = Rc::clone(owners);
-    factory.connect_setup(move |_, object| {
-        let tile = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        tile.set_valign(gtk::Align::Start);
-        let image = gtk::Image::new();
-        image.set_pixel_size(pixels);
-        let label = gtk::Label::new(None);
-        label.set_wrap(true);
-        label.set_wrap_mode(pango::WrapMode::WordChar);
-        label.set_lines(2);
-        label.set_ellipsize(pango::EllipsizeMode::End);
-        label.set_justify(gtk::Justification::Center);
-        label.set_max_width_chars(14);
-        cells::tooltip_when_truncated(&label);
-        tile.append(&image);
-        tile.append(&label);
-        let list_item = cells::list_item(object);
-        list_item.set_child(Some(&tile));
-        registry.register(&tile, list_item);
-    });
-    let binder = Rc::clone(icons);
-    factory.connect_bind(move |_, object| {
-        let list_item = cells::list_item(object);
-        let (Some(item), Some(tile)) = (cells::bound_item(list_item), list_item.child()) else {
-            return;
-        };
-        let image = tile.first_child().and_downcast::<gtk::Image>();
-        let label = image
-            .as_ref()
-            .and_then(|image| image.next_sibling())
-            .and_downcast::<gtk::Label>();
-        if let (Some(image), Some(label)) = (image, label) {
-            binder.bind(&image, &item, pixels);
-            label.set_text(&item.entry().name);
-        }
-    });
-    let binder = Rc::clone(icons);
-    factory.connect_unbind(move |_, object| {
-        let image = cells::list_item(object)
-            .child()
-            .and_then(|tile| tile.first_child())
-            .and_downcast::<gtk::Image>();
-        if let Some(image) = image {
-            binder.unbind(&image);
-        }
-    });
+    cells::connect_file_cells(&factory, CellLayout::IconTile, size.pixels(), icons, owners);
     factory
 }
 
-/// Builds the grid view over `model`.
-pub fn build(
-    model: &FolderModel,
-    icons: &Rc<IconCells>,
-    owners: &Rc<CellOwners>,
-    size: IconSize,
-) -> gtk::GridView {
-    let view = gtk::GridView::new(
-        Some(model.selection().clone()),
-        Some(factory(icons, owners, size)),
-    );
+/// Builds the icon view. It shows no model until the window makes it the
+/// visible view.
+pub(crate) fn build(icons: &Rc<IconCells>, owners: &Rc<CellOwners>, size: IconSize) -> gtk::GridView {
+    let view = gtk::GridView::new(None::<gtk::MultiSelection>, Some(factory(icons, owners, size)));
     view.add_css_class("files");
     view.add_css_class(size.css_class());
     view.set_enable_rubberband(true);
-    view.set_max_columns(64);
     view.set_tab_behavior(gtk::ListTabBehavior::Item);
     view
 }
 
 /// Switches the grid to another icon size.
-pub fn set_icon_size(view: &gtk::GridView, icons: &Rc<IconCells>, owners: &Rc<CellOwners>, size: IconSize) {
+pub(crate) fn set_icon_size(
+    view: &gtk::GridView,
+    icons: &Rc<IconCells>,
+    owners: &Rc<CellOwners>,
+    size: IconSize,
+) {
     for other in IconSize::ALL {
         view.remove_css_class(other.css_class());
     }
     view.add_css_class(size.css_class());
     view.set_factory(Some(&factory(icons, owners, size)));
+}
+
+/// The most columns tiles of `size` can fill in `width` pixels.
+///
+/// GTK keeps tiles for about thirty rows of `max-columns` alive, so a
+/// generous fixed cap (64 columns) made every listing build thousands of
+/// tiles. Bounding it by the width keeps the live tiles near what is
+/// visible without ever limiting the columns a wide window shows.
+pub(crate) fn columns_for_width(size: IconSize, width: f64) -> u32 {
+    let tile = f64::from(narrowest_tile_width(size));
+    let columns = (width / tile).floor().max(1.0);
+    // At most a few hundred columns fit on any screen.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "bounded above"
+    )]
+    let columns = columns.min(512.0) as u32;
+    columns
 }
 
 #[cfg(test)]
@@ -173,5 +153,14 @@ mod tests {
         let pixels: Vec<i32> = IconSize::ALL.iter().map(|size| size.pixels()).collect();
         assert!(pixels.windows(2).all(|pair| pair[0] > pair[1]));
         assert_eq!(IconSize::Large.pixels(), 56);
+    }
+
+    #[test]
+    fn grid_columns_follow_the_width_and_never_reach_zero() {
+        let large = f64::from(narrowest_tile_width(IconSize::Large));
+        assert_eq!(columns_for_width(IconSize::Large, 0.0), 1);
+        assert_eq!(columns_for_width(IconSize::Large, large * 3.5), 3);
+        assert!(columns_for_width(IconSize::Small, 1920.0) > columns_for_width(IconSize::ExtraLarge, 1920.0));
+        assert!(columns_for_width(IconSize::Small, 1920.0) < 64);
     }
 }
