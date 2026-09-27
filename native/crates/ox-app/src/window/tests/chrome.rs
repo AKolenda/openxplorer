@@ -9,7 +9,8 @@
 use gtk::prelude::*;
 
 use super::geometry::{bounds, button_for, laid_out};
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture};
+use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
+use crate::window::menu_popover::MenuPopover;
 
 /// parity: TAB-010
 #[gtk::test]
@@ -93,6 +94,59 @@ fn the_search_box_names_the_folder_it_searches() {
     let test = laid_out(&fixture.uri_of("Documents"));
     let placeholder = test.window.chrome().search.entry.placeholder_text();
     assert_eq!(placeholder.as_deref(), Some("Search Documents"));
+}
+
+#[gtk::test]
+fn the_open_windows_menu_lists_every_window_then_new_window_and_quit() {
+    let fixture = Fixture::standard();
+    let first = laid_out(&fixture.uri());
+    let second = first.open_beside(&fixture.uri_of("Documents"));
+    let button = descendants::<gtk::MenuButton>(&first.window)
+        .into_iter()
+        .find(|button| button.has_css_class("windows-button"))
+        .expect("the title bar has the open-windows button");
+    button.popup();
+    wait_for_frames(&first.window, 2);
+    let menu = button
+        .popover()
+        .and_downcast::<MenuPopover>()
+        .expect("an app menu");
+    let labels = menu.row_labels();
+    let checked = menu.checked_labels();
+    button.popdown();
+    let title_of = |test: &TestWindow| test.window.title().map(|title| title.to_string());
+    let first_title = title_of(&first).expect("a titled window");
+    let second_title = title_of(&second).expect("a titled window");
+    assert!(
+        labels.contains(&first_title) && labels.contains(&second_title),
+        "{labels:?}"
+    );
+    assert_eq!(
+        &labels[labels.len() - 3..],
+        ["-", "New window", "Quit OpenXplorer"]
+    );
+    assert_eq!(checked, [first_title], "this window is checked");
+    second.window.close();
+}
+
+#[gtk::test]
+fn a_disabled_menu_item_names_the_milestone_that_brings_it() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let new_button = descendants::<gtk::MenuButton>(&test.window)
+        .into_iter()
+        .find(|button| button.has_css_class("new-command"))
+        .expect("the command bar has New");
+    let menu = new_button
+        .popover()
+        .and_downcast::<MenuPopover>()
+        .expect("an app menu");
+    let folder = menu.rows().into_iter().next().expect("New lists Folder first");
+    let tooltip = folder.tooltip_text().unwrap_or_default();
+    assert_eq!(
+        tooltip.as_str(),
+        "Folder\nNot in the native preview yet: arrives with file operations."
+    );
 }
 
 #[gtk::test]

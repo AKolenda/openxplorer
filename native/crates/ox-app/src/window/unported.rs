@@ -79,15 +79,26 @@ pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 20] = [
     command("check-updates", Milestone::Distribution),
 ];
 
+/// The milestone that brings the command `action` (with or without its
+/// `win.` prefix), or `None` for a command that works.
+fn milestone_of(action: &str) -> Option<Milestone> {
+    let name = action.strip_prefix("win.").unwrap_or(action);
+    let unported = UNPORTED_COMMANDS.iter().find(|command| command.action == name);
+    unported.map(|command| command.milestone)
+}
+
+/// Whether `action` is a command that is shown but disabled.
+pub(super) fn is_unported(action: &str) -> bool {
+    milestone_of(action).is_some()
+}
+
 /// The tooltip of a disabled command's control: its usual tooltip, then
 /// the milestone that enables it. Other commands keep `tooltip` as it is.
 pub(super) fn tooltip(action: &str, tooltip: &str) -> String {
-    let name = action.strip_prefix("win.").unwrap_or(action);
-    let unported = UNPORTED_COMMANDS.iter().find(|command| command.action == name);
-    match unported {
-        Some(command) => format!(
+    match milestone_of(action) {
+        Some(milestone) => format!(
             "{tooltip}\nNot in the native preview yet: arrives with {}.",
-            command.milestone.description()
+            milestone.description()
         ),
         None => tooltip.to_owned(),
     }

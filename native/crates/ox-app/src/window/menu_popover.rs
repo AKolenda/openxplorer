@@ -15,6 +15,8 @@ use gtk::subclass::prelude::*;
 
 use crate::icons::{self, Glyph};
 
+use super::unported;
+
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
 
@@ -309,6 +311,10 @@ fn item_row(item: &MenuItem, checked: Option<bool>) -> gtk::ListBoxRow {
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
     row.set_action_target_value(item.target.as_ref());
+    // A disabled item says which milestone brings it.
+    if unported::is_unported(&item.action) {
+        row.set_tooltip_text(Some(&unported::tooltip(&item.action, &item.label)));
+    }
     if let Some(checked) = checked {
         let state = if checked {
             gtk::AccessibleTristate::True
