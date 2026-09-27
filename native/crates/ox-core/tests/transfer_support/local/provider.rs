@@ -33,9 +33,9 @@ pub trait Provider: Send + Sync + 'static {
         }
     }
 
-    /// [`Node::stage_as_sibling`]: `false` by default.
-    fn stage_as_sibling(&self) -> bool {
-        self.base().is_some_and(Provider::stage_as_sibling)
+    /// [`Node::has_sibling_staging`]: `false` by default.
+    fn has_sibling_staging(&self) -> bool {
+        self.base().is_some_and(Provider::has_sibling_staging)
     }
 
     /// [`Node::native_copy_keeps_name`]: `false` by default.

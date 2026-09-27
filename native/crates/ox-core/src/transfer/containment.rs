@@ -24,7 +24,10 @@ use crate::location::split_location;
 /// A refusal when `destination_folder` is `source` or inside it, or when
 /// either URI is not a valid location (as `split_location` raises in
 /// Python).
-pub fn guard_destination(source: &dyn Node, destination_folder: &dyn Node) -> Result<(), TransferError> {
+pub(crate) fn guard_destination(
+    source: &dyn Node,
+    destination_folder: &dyn Node,
+) -> Result<(), TransferError> {
     if resolved_paths_nest(source, destination_folder) {
         return Err(TransferError::failed(
             "Cannot place a folder inside itself (including through a symlink).",

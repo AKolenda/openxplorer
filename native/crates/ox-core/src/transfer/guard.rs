@@ -26,7 +26,7 @@ pub(crate) fn nesting_error() -> TransferError {
 /// What an operation does to its source tree, which decides whether the
 /// write guard is asked about the source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SourceChange {
+pub(crate) enum SourceChange {
     /// The source stays as it is (copy).
     Kept,
     /// The source is moved, renamed, trashed or deleted.
@@ -49,7 +49,7 @@ pub enum SourceChange {
 ///
 /// The guard's refusal for the first protected URI, the nesting limit,
 /// [`TransferError::Cancelled`], or a failure to inspect or list the tree.
-pub fn check_write_tree(
+pub(crate) fn check_write_tree(
     guard: Option<&WriteGuard>,
     source: &dyn Node,
     destination: Option<&dyn Node>,

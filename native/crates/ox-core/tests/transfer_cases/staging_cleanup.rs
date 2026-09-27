@@ -65,7 +65,7 @@ fn staging_with_read_only_folders_inside_is_removed() {
     let racer = fixture.destination_folder.join("project");
     let racer_path = racer.clone();
     let mut engine = gio_engine().with_progress(move |progress| {
-        if progress.label.starts_with("Copying ") && !lexists(&racer_path) {
+        if progress.label.starts_with("Copying ") && !exists_without_following_links(&racer_path) {
             write(&racer_path, "another program");
         }
     });
@@ -97,7 +97,7 @@ fn staging_in_a_destination_reached_through_a_link_is_removed() {
     write(&source.join("data"), "contents");
     let racer_path = fixture.destination_folder.join("project");
     let mut engine = gio_engine().with_progress(move |progress| {
-        if progress.label.starts_with("Copying ") && !lexists(&racer_path) {
+        if progress.label.starts_with("Copying ") && !exists_without_following_links(&racer_path) {
             write(&racer_path, "another program");
         }
     });
@@ -133,7 +133,7 @@ fn a_folder_moved_in_under_the_staging_name_is_never_emptied() {
     let destination = fixture.destination_folder.clone();
     let mut engine = gio_engine().with_progress(move |progress| {
         let victim = destination.join("victim");
-        if !progress.label.starts_with("Copying ") || !lexists(&victim) {
+        if !progress.label.starts_with("Copying ") || !exists_without_following_links(&victim) {
             return;
         }
         let stage = staging_in(&destination).expect("the copy is staged");

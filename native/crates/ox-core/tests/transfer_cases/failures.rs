@@ -16,15 +16,6 @@ use crate::transfer_support::{
     *,
 };
 
-/// A `document` source with new content and an existing `document` in the
-/// destination.
-fn replacement(fixture: &Fixture) -> PathBuf {
-    let source = fixture.source_folder.join("document");
-    write(&source, "incoming");
-    write(&fixture.destination_folder.join("document"), "original");
-    source
-}
-
 /// The replacement backup left in `fixture`'s destination.
 fn backup_in(fixture: &Fixture) -> PathBuf {
     let names = list(&fixture.destination_folder);
@@ -169,7 +160,7 @@ fn a_local_stage_that_cannot_be_queried_is_still_reported() {
     let names = list(&fixture.destination_folder);
     assert_eq!(names.len(), 1, "{names:?}");
     let stage = fixture.destination_folder.join(&names[0]);
-    let report = format!("Incomplete staging folder left at {}", uri(&stage));
+    let report = format!("Incomplete staging folder left at {}", file_uri(&stage));
     assert!(
         result.errors.iter().any(|error| error.contains(&report)),
         "{result:?}"
@@ -214,7 +205,7 @@ fn replacement_install_failure_or_false_success_restores_the_old_name() {
     for fault in [Fault::Install, Fault::NoOpInstall, Fault::AsideAfterSuccess] {
         for mode in [TransferMode::Copy, TransferMode::Move] {
             let fixture = Fixture::new();
-            let source = replacement(&fixture);
+            let source = fixture.replacement_source("document", "incoming", "original");
             let mut engine = fixture.engine(Faults::new(fault, &fixture.cancel));
 
             let result = fixture.run(&mut engine, &[&source], mode, ConflictPolicy::Replace, None);
@@ -235,7 +226,7 @@ fn replacement_install_failure_or_false_success_restores_the_old_name() {
 #[test]
 fn rollback_failure_reports_the_exact_backup_and_preserves_its_contents() {
     let fixture = Fixture::new();
-    let source = replacement(&fixture);
+    let source = fixture.replacement_source("document", "incoming", "original");
     let mut engine = fixture.engine(Faults::new(Fault::InstallAndRestore, &fixture.cancel));
 
     let result = fixture.run(
@@ -250,7 +241,7 @@ fn rollback_failure_reports_the_exact_backup_and_preserves_its_contents() {
     assert_eq!(leftovers.len(), 1);
     let backup = backup_in(&fixture);
     assert_eq!(read(&backup), "original");
-    assert!(result.errors[0].contains(&uri(&backup)));
+    assert!(result.errors[0].contains(&file_uri(&backup)));
     assert_eq!(read(&source), "incoming");
     fixture.assert_no_staging();
 }
@@ -262,7 +253,7 @@ fn rollback_failure_reports_the_exact_backup_and_preserves_its_contents() {
 #[test]
 fn cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_old_name() {
     let fixture = Fixture::new();
-    let source = replacement(&fixture);
+    let source = fixture.replacement_source("document", "incoming", "original");
     let later = fixture.source_folder.join("later");
     write(&later, "later");
     let mut engine = fixture.engine(Faults::new(Fault::CancelAfterAside, &fixture.cancel));
@@ -276,7 +267,7 @@ fn cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_ol
     );
 
     assert!(result.cancelled);
-    assert_eq!(result.done, [uri(&source)]);
+    assert_eq!(result.done, [file_uri(&source)]);
     assert_eq!(read(&fixture.destination_folder.join("document")), "incoming");
     assert!(!fixture.destination_folder.join("later").exists());
     assert!(fixture.leftovers().is_empty());
@@ -289,7 +280,7 @@ fn cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_ol
 #[test]
 fn backup_cleanup_failure_reports_the_original_and_keeps_the_new_file() {
     let fixture = Fixture::new();
-    let source = replacement(&fixture);
+    let source = fixture.replacement_source("document", "incoming", "original");
     let mut engine = fixture.engine(Faults::new(Fault::BackupCleanup, &fixture.cancel));
 
     let result = fixture.run(
@@ -303,7 +294,7 @@ fn backup_cleanup_failure_reports_the_original_and_keeps_the_new_file() {
     assert_eq!(read(&fixture.destination_folder.join("document")), "incoming");
     let backup = backup_in(&fixture);
     assert_eq!(read(&backup), "original");
-    assert!(result.errors[0].contains(&uri(&backup)));
+    assert!(result.errors[0].contains(&file_uri(&backup)));
     fixture.assert_no_staging();
 }
 
@@ -314,7 +305,7 @@ fn backup_cleanup_failure_reports_the_original_and_keeps_the_new_file() {
 fn cancellation_never_hides_a_backup_that_requires_manual_recovery() {
     for fault in [Fault::CancelAndCleanup, Fault::CancelAndRollback] {
         let fixture = Fixture::new();
-        let source = replacement(&fixture);
+        let source = fixture.replacement_source("document", "incoming", "original");
         let mut engine = fixture.engine(Faults::new(fault, &fixture.cancel));
 
         let result = fixture.run(
@@ -329,7 +320,7 @@ fn cancellation_never_hides_a_backup_that_requires_manual_recovery() {
         assert_eq!(result.errors.len(), 1, "{result:?}");
         let backup = backup_in(&fixture);
         assert_eq!(read(&backup), "original");
-        assert!(result.errors[0].contains(&uri(&backup)), "{result:?}");
+        assert!(result.errors[0].contains(&file_uri(&backup)), "{result:?}");
         assert_eq!(read(&source), "incoming");
         fixture.assert_no_staging();
     }

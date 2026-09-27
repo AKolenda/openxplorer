@@ -19,16 +19,24 @@ use std::sync::Mutex;
 
 use ox_core::transfer::{Cancellation, Node, TransferError};
 
-use super::local::{local_path_of, LocalNode, Provider};
-use super::uri;
+use super::local::{file_uri, local_path_of, LocalNode, Provider};
 
 /// One device call, for assertions (Python `CALLS`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Call {
-    /// `move_native` from the first path to the second.
-    Move(PathBuf, PathBuf),
+enum Call {
+    /// `move_native` of an item.
+    Move(RecordedMove),
     /// `refresh_listing` of a folder.
     Refresh(PathBuf),
+}
+
+/// One `move_native` the device was asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordedMove {
+    /// The item's path before the move.
+    pub from: PathBuf,
+    /// The path it was asked to move to.
+    pub to: PathBuf,
 }
 
 /// Whether a device implements MTP `MoveObject`, which cross-folder moves
@@ -60,17 +68,17 @@ impl Device {
     }
 
     /// Every recorded call, in order.
-    pub fn calls(&self) -> Vec<Call> {
+    fn calls(&self) -> Vec<Call> {
         self.calls.lock().expect("call log").clone()
     }
 
-    /// The recorded moves as `(from, to)`.
-    pub fn moves(&self) -> Vec<(PathBuf, PathBuf)> {
+    /// The recorded moves, in order.
+    pub fn moves(&self) -> Vec<RecordedMove> {
         let calls = self.calls();
         calls
             .into_iter()
             .filter_map(|call| match call {
-                Call::Move(from, to) => Some((from, to)),
+                Call::Move(recorded) => Some(recorded),
                 Call::Refresh(_) => None,
             })
             .collect()
@@ -83,7 +91,7 @@ impl Device {
             .into_iter()
             .filter_map(|call| match call {
                 Call::Refresh(folder) => Some(folder),
-                Call::Move(..) => None,
+                Call::Move(_) => None,
             })
             .collect()
     }
@@ -91,7 +99,7 @@ impl Device {
     /// Asserts the device was only asked for moves it can do: a rename in
     /// one folder, or a move to another folder under the same name.
     pub fn assert_only_moves_a_device_can_do(&self) {
-        for (from, to) in self.moves() {
+        for RecordedMove { from, to } in self.moves() {
             let same_folder = from.parent() == to.parent();
             let same_name = from.file_name() == to.file_name();
             assert!(
@@ -110,7 +118,7 @@ impl Device {
 }
 
 impl Provider for Device {
-    fn stage_as_sibling(&self) -> bool {
+    fn has_sibling_staging(&self) -> bool {
         true
     }
 
@@ -121,7 +129,10 @@ impl Provider for Device {
         cancel: Option<&Cancellation>,
     ) -> Result<(), TransferError> {
         let target_path = local_path_of(target);
-        self.record(Call::Move(node.local_path().to_path_buf(), target_path.clone()));
+        self.record(Call::Move(RecordedMove {
+            from: node.local_path().to_path_buf(),
+            to: target_path.clone(),
+        }));
         if let Some(cancel) = cancel {
             cancel.check()?;
         }
@@ -213,7 +224,7 @@ impl Provider for Phone {
     }
 
     fn uri(&self, node: &LocalNode) -> String {
-        uri(node.local_path()).replacen("file://", "mtp://test-device", 1)
+        file_uri(node.local_path()).replacen("file://", "mtp://test-device", 1)
     }
 
     fn path(&self, _node: &LocalNode) -> Option<PathBuf> {

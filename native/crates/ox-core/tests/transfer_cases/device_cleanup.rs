@@ -18,7 +18,7 @@ use crate::transfer_support::{
 
 /// How a [`BrokenPhone`] misbehaves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Fault {
+enum PhoneFault {
     /// Deleting the stage fails twice, then works.
     TransientDelete,
     /// Deleting the stage always fails.
@@ -42,7 +42,7 @@ enum Fault {
 /// A device whose uploads fail in the way `fault` describes.
 struct BrokenPhone {
     device: Device,
-    fault: Fault,
+    fault: PhoneFault,
     /// Set once an upload failed; staged items misbehave from then on.
     upload_failed: AtomicBool,
     /// Queries of staged items after the upload failed.
@@ -53,7 +53,7 @@ struct BrokenPhone {
 
 impl BrokenPhone {
     /// A phone failing with `fault`.
-    fn new(fault: Fault) -> Arc<Self> {
+    fn new(fault: PhoneFault) -> Arc<Self> {
         Arc::new(Self {
             device: Device::default(),
             fault,
@@ -89,8 +89,8 @@ impl BrokenPhone {
     }
 }
 
-/// True for `path` or any of its ancestors named like engine staging.
-fn inside_staging(node: &LocalNode) -> bool {
+/// True for `node` or any of its ancestors named like engine staging.
+fn is_inside_staging(node: &LocalNode) -> bool {
     node.local_path().ancestors().any(is_staging_path)
 }
 
@@ -101,7 +101,7 @@ impl Provider for BrokenPhone {
 
     fn mkdir(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         node.local_mkdir(cancel)?;
-        if self.fault == Fault::StageRace {
+        if self.fault == PhoneFault::StageRace {
             write(&node.local_path().join("foreign"), "belongs to another creator");
             return Err(TransferError::Exists("The staging name was taken.".into()));
         }
@@ -116,14 +116,14 @@ impl Provider for BrokenPhone {
         progress: &mut dyn FnMut(u64, u64),
     ) -> Result<(), TransferError> {
         match self.fault {
-            Fault::FalsePublication | Fault::UnverifiablePublication => {
+            PhoneFault::FalsePublication | PhoneFault::UnverifiablePublication => {
                 return node.local_copy_file(target, cancel, progress);
             }
-            Fault::StageRace => {
+            PhoneFault::StageRace => {
                 write(&local_path_of(target), "belongs to another creator");
                 return Err(TransferError::Exists("The staging name was taken.".into()));
             }
-            Fault::DiscardedUpload => {}
+            PhoneFault::DiscardedUpload => {}
             _ => write(&local_path_of(target), "partial upload"),
         }
         self.mark_upload_failed();
@@ -131,16 +131,16 @@ impl Provider for BrokenPhone {
     }
 
     fn info(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
-        if !self.has_upload_failed() || !inside_staging(node) {
+        if !self.has_upload_failed() || !is_inside_staging(node) {
             return node.local_info(cancel);
         }
         let lookup = self.count_stage_lookup();
         match self.fault {
-            Fault::FalseNotFound => Err(TransferError::NotFound("Uncached device path.".into())),
-            Fault::TransientNotFound if lookup == 1 => {
+            PhoneFault::FalseNotFound => Err(TransferError::NotFound("Uncached device path.".into())),
+            PhoneFault::TransientNotFound if lookup == 1 => {
                 Err(TransferError::NotFound("Uncached device path.".into()))
             }
-            Fault::Disconnected | Fault::UnverifiablePublication => {
+            PhoneFault::Disconnected | PhoneFault::UnverifiablePublication => {
                 Err(TransferError::failed("Device is disconnected."))
             }
             _ => node.local_info(cancel),
@@ -153,11 +153,11 @@ impl Provider for BrokenPhone {
         target: &dyn Node,
         cancel: Option<&Cancellation>,
     ) -> Result<(), TransferError> {
-        if self.fault == Fault::FalsePublication {
+        if self.fault == PhoneFault::FalsePublication {
             return Ok(());
         }
         self.device.move_native(node, target, cancel)?;
-        if self.fault == Fault::UnverifiablePublication {
+        if self.fault == PhoneFault::UnverifiablePublication {
             self.mark_upload_failed();
         }
         Ok(())
@@ -167,8 +167,8 @@ impl Provider for BrokenPhone {
         if is_staging(node) {
             let deletions = self.count_stage_deletion();
             let busy = match self.fault {
-                Fault::TransientDelete => deletions < 3,
-                Fault::StuckDelete => true,
+                PhoneFault::TransientDelete => deletions < 3,
+                PhoneFault::StuckDelete => true,
                 _ => false,
             };
             if busy {
@@ -194,7 +194,7 @@ fn photo(fixture: &Fixture) -> PathBuf {
 fn aborted_device_upload_cleanup_retries_transient_errors() {
     let fixture = Fixture::new();
     let source = photo(&fixture);
-    let phone = BrokenPhone::new(Fault::TransientDelete);
+    let phone = BrokenPhone::new(PhoneFault::TransientDelete);
 
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 
@@ -213,7 +213,7 @@ fn aborted_device_upload_cleanup_retries_transient_errors() {
 fn a_device_stage_that_cannot_be_deleted_is_reported_with_its_location() {
     let fixture = Fixture::new();
     let source = photo(&fixture);
-    let phone = BrokenPhone::new(Fault::StuckDelete);
+    let phone = BrokenPhone::new(PhoneFault::StuckDelete);
 
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 
@@ -221,7 +221,7 @@ fn a_device_stage_that_cannot_be_deleted_is_reported_with_its_location() {
     assert_eq!(names.len(), 1, "{names:?}");
     let stage = fixture.destination_folder.join(&names[0]);
     assert!(is_staging_path(&stage), "{}", stage.display());
-    let report = format!("Incomplete staging item left at {}", uri(&stage));
+    let report = format!("Incomplete staging item left at {}", file_uri(&stage));
     assert!(
         result.errors.iter().any(|error| error.contains(&report)),
         "{result:?}"
@@ -240,7 +240,7 @@ fn a_discarded_device_upload_is_not_reported_as_a_leftover() {
     let source = photo(&fixture);
 
     let result = fixture.copy(
-        BrokenPhone::new(Fault::DiscardedUpload),
+        BrokenPhone::new(PhoneFault::DiscardedUpload),
         &[&source],
         ConflictPolicy::Skip,
     );
@@ -263,7 +263,7 @@ fn a_false_not_found_for_a_device_stage_is_retried_until_it_is_removed() {
     let source = photo(&fixture);
 
     let result = fixture.copy(
-        BrokenPhone::new(Fault::TransientNotFound),
+        BrokenPhone::new(PhoneFault::TransientNotFound),
         &[&source],
         ConflictPolicy::Skip,
     );
@@ -281,7 +281,7 @@ fn a_false_not_found_for_a_device_stage_is_retried_until_it_is_removed() {
 /// parity: XFER-003, XFER-022
 #[test]
 fn device_not_found_requires_a_successful_parent_listing_without_the_stage() {
-    for fault in [Fault::FalseNotFound, Fault::Disconnected] {
+    for fault in [PhoneFault::FalseNotFound, PhoneFault::Disconnected] {
         let fixture = Fixture::new();
         let source = photo(&fixture);
         let phone = BrokenPhone::new(fault);
@@ -295,7 +295,7 @@ fn device_not_found_requires_a_successful_parent_listing_without_the_stage() {
             .destination_folder
             .join(&list(&fixture.destination_folder)[0]);
         assert_eq!(read(&stage), "partial upload");
-        let report = format!("Incomplete staging item left at {}", uri(&stage));
+        let report = format!("Incomplete staging item left at {}", file_uri(&stage));
         assert!(result.errors[1].contains(&report), "{result:?}");
         assert_eq!(fixture.sleeps(), [0.5, 1.5]);
         assert_eq!(phone.stage_deletions(), 0);
@@ -311,7 +311,7 @@ fn a_devices_false_success_is_not_counted_as_a_published_copy() {
     let source = photo(&fixture);
 
     let result = fixture.copy(
-        BrokenPhone::new(Fault::FalsePublication),
+        BrokenPhone::new(PhoneFault::FalsePublication),
         &[&source],
         ConflictPolicy::Skip,
     );
@@ -338,7 +338,7 @@ fn a_device_staging_name_created_by_someone_else_is_never_cleaned_up() {
         } else {
             write(&source, "complete");
         }
-        let phone = BrokenPhone::new(Fault::StageRace);
+        let phone = BrokenPhone::new(PhoneFault::StageRace);
 
         let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 
@@ -365,7 +365,7 @@ fn a_device_staging_name_created_by_someone_else_is_never_cleaned_up() {
 fn an_unreachable_staged_name_is_not_mistaken_for_definite_absence() {
     let fixture = Fixture::new();
     let source = photo(&fixture);
-    let phone = BrokenPhone::new(Fault::UnverifiablePublication);
+    let phone = BrokenPhone::new(PhoneFault::UnverifiablePublication);
 
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 

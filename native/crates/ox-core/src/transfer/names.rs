@@ -11,7 +11,7 @@
 //! did not create successfully is never deleted by it.
 
 use std::ffi::OsStr;
-use std::io::Read;
+use std::io::{self, Read};
 use std::os::unix::ffi::OsStrExt;
 
 use super::error::TransferError;
@@ -31,15 +31,15 @@ pub(crate) const PAYLOAD_NAME: &str = "payload";
 
 /// 32 lowercase hexadecimal digits from `/dev/urandom` (like
 /// `uuid.uuid4().hex` in Python: unpredictable, not merely unique).
-fn random_hex() -> Result<String, TransferError> {
+///
+/// # Errors
+///
+/// When the kernel's random source cannot be read. Each caller explains
+/// the failure in terms of the name it asked for.
+fn random_hex() -> io::Result<String> {
     let mut bytes = [0u8; RANDOM_DIGITS / 2];
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut source| source.read_exact(&mut bytes))
-        .map_err(|error| {
-            TransferError::failed(format!(
-                "Could not reserve a private staging name. Nothing was changed. {error}"
-            ))
-        })?;
+    let mut source = std::fs::File::open("/dev/urandom")?;
+    source.read_exact(&mut bytes)?;
     let pairs: Vec<String> = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
     Ok(pairs.concat())
 }
@@ -48,9 +48,11 @@ fn random_hex() -> Result<String, TransferError> {
 ///
 /// # Errors
 ///
-/// When the kernel's random source cannot be read; nothing was changed.
-pub fn staging_name() -> Result<String, TransferError> {
-    Ok(format!("{STAGING_PREFIX}{}{STAGING_SUFFIX}", random_hex()?))
+/// When the kernel's random source cannot be read. A copy asks for its
+/// staging name before it creates anything, so nothing was changed.
+pub(crate) fn staging_name() -> Result<String, TransferError> {
+    let digits = random_hex().map_err(|error| staging_name_failure(&error))?;
+    Ok(format!("{STAGING_PREFIX}{digits}{STAGING_SUFFIX}"))
 }
 
 /// A new `.winspace-replaced-<32 hex>.backup` name that keeps the original
@@ -58,9 +60,26 @@ pub fn staging_name() -> Result<String, TransferError> {
 ///
 /// # Errors
 ///
-/// When the kernel's random source cannot be read; nothing was changed.
-pub fn backup_name() -> Result<String, TransferError> {
-    Ok(format!("{BACKUP_PREFIX}{}{BACKUP_SUFFIX}", random_hex()?))
+/// When the kernel's random source cannot be read.
+pub(crate) fn backup_name() -> Result<String, TransferError> {
+    let digits = random_hex().map_err(|error| backup_name_failure(&error))?;
+    Ok(format!("{BACKUP_PREFIX}{digits}{BACKUP_SUFFIX}"))
+}
+
+/// The error when no staging name could be generated. The copy has not
+/// created anything yet, so the message can say that nothing changed.
+fn staging_name_failure(error: &io::Error) -> TransferError {
+    TransferError::failed(format!(
+        "Could not reserve a private staging name. Nothing was changed. {error}"
+    ))
+}
+
+/// The error when no backup name could be generated, worded like
+/// `_replace_via_backup` in `desktop/operations.py`. It says nothing about
+/// earlier changes: during a folder merge, other items may already have
+/// been replaced.
+fn backup_name_failure(error: &io::Error) -> TransferError {
+    TransferError::failed(format!("Could not reserve a temporary replacement name. {error}"))
 }
 
 /// True only for names exactly of the form this engine generates for
@@ -148,6 +167,25 @@ mod tests {
         for name in bad {
             assert!(!is_own_staging_name(&name), "{name}");
         }
+    }
+
+    /// parity: XFER-010
+    #[test]
+    fn a_backup_name_failure_names_the_replacement_not_the_staging() {
+        let unreadable = io::Error::other("no random source");
+
+        let backup = backup_name_failure(&unreadable).to_string();
+        let staging = staging_name_failure(&unreadable).to_string();
+
+        assert_eq!(
+            backup,
+            "Could not reserve a temporary replacement name. no random source"
+        );
+        assert!(!backup.contains("Nothing was changed"), "{backup}");
+        assert_eq!(
+            staging,
+            "Could not reserve a private staging name. Nothing was changed. no random source"
+        );
     }
 
     #[test]

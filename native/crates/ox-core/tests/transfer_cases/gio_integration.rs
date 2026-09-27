@@ -153,7 +153,7 @@ fn a_failed_publish_removes_staging_that_holds_a_read_only_folder() {
     let racer = fixture.destination_folder.join("project");
     let racer_path = racer.clone();
     let mut engine = gio_engine().with_progress(move |progress| {
-        if progress.label.starts_with("Copying ") && !lexists(&racer_path) {
+        if progress.label.starts_with("Copying ") && !exists_without_following_links(&racer_path) {
             write(&racer_path, "another program");
         }
     });

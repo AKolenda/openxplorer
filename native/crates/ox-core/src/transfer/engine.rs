@@ -9,9 +9,10 @@
 use std::fmt;
 use std::time::Duration;
 
-use super::batch::{Batch, Removal};
+use super::batch::{Batch, ItemAction, Removal};
 use super::cancellation::Cancellation;
 use super::commit::commit_replace;
+use super::conflicts::Placement;
 use super::containment::guard_destination;
 use super::error::TransferError;
 use super::guard::{check_write_tree, SourceChange};
@@ -21,7 +22,7 @@ use super::relisting::SourceFolders;
 use super::request::{destination_folder, distinct_items};
 use super::staged_copy::{ItemStaging, StagedCopy};
 use super::staging::{discard_stage, leftover_report};
-use super::types::{ConflictPolicy, Progress, TransferMode, TransferResult};
+use super::types::{ConflictPolicy, Operation, Progress, TransferMode, TransferResult};
 
 /// Receives the progress of a run for the transfer panel.
 type ProgressCallback = Box<dyn FnMut(Progress) + Send>;
@@ -107,8 +108,8 @@ impl TransferEngine {
         self
     }
 
-    /// Runs one operation over `uris`. `target` is the destination folder
-    /// for copies and moves and is ignored for Trash and delete.
+    /// Runs `operation` over `uris`. A caller holding the protocol names of
+    /// a request builds the operation with [`Operation::from_request`].
     ///
     /// Everything after the request was accepted is reported per item in
     /// the result.
@@ -116,22 +117,50 @@ impl TransferEngine {
     /// # Errors
     ///
     /// Invalid requests, before anything is changed: no items or too many,
-    /// no destination, a destination that is not a folder, or a failure or
-    /// cancellation while the destination is checked.
+    /// an empty destination, a destination that is not a folder, or a
+    /// failure or cancellation while the destination is checked.
     pub fn run(
         &mut self,
-        mode: TransferMode,
+        operation: Operation<'_>,
         uris: &[String],
-        target: Option<&str>,
-        policy: ConflictPolicy,
         cancel: &Cancellation,
     ) -> Result<TransferResult, TransferError> {
         let uris = distinct_items(uris)?;
-        let destination_folder = destination_folder(&self.factory, mode, target, cancel)?;
+        let result = match operation {
+            Operation::Copy {
+                destination_folder: folder_uri,
+                policy,
+            }
+            | Operation::Move {
+                destination_folder: folder_uri,
+                policy,
+            } => {
+                let folder = destination_folder(&self.factory, folder_uri, cancel)?;
+                let placement = Placement {
+                    mode: operation.mode(),
+                    policy,
+                    destination_folder: folder.as_ref(),
+                    cancel,
+                };
+                self.run_items(ItemAction::Transfer(placement), &uris, cancel)
+            }
+            Operation::Trash => {
+                let trash = ItemAction::Remove(Removal::Trash);
+                self.run_items(trash, &uris, cancel)
+            }
+            Operation::Delete => {
+                let permanent_delete = ItemAction::Remove(Removal::PermanentDelete);
+                self.run_items(permanent_delete, &uris, cancel)
+            }
+        };
+        Ok(result)
+    }
+
+    /// Runs `action` over the distinct `uris` of an accepted request, then
+    /// relists the folders that moves took items from.
+    fn run_items(&mut self, action: ItemAction<'_>, uris: &[&str], cancel: &Cancellation) -> TransferResult {
         let batch = Batch {
-            mode,
-            policy,
-            destination_folder: destination_folder.as_deref(),
+            action,
             cancel,
             total: uris.len(),
         };
@@ -149,7 +178,7 @@ impl TransferEngine {
             label: completed_label(state.result.done.len()),
             fraction: 1.0,
         });
-        Ok(state.result)
+        state.result
     }
 
     /// Runs one top-level item and records its outcome. Staging this item
@@ -183,11 +212,15 @@ impl TransferEngine {
         staging: &mut ItemStaging,
     ) -> Result<ItemOutcome, TransferError> {
         let selected = self.start_item(batch, index, uri)?;
-        if let Some(removal) = batch.removal() {
-            self.remove(removal, selected.node.as_ref(), batch.cancel)?;
-            return Ok(ItemOutcome::Done);
+        match &batch.action {
+            ItemAction::Remove(removal) => {
+                self.remove(*removal, selected.node.as_ref(), batch.cancel)?;
+                Ok(ItemOutcome::Done)
+            }
+            ItemAction::Transfer(placement) => {
+                self.transfer(batch, placement, &selected, moved_from, staging)
+            }
         }
-        self.transfer(batch, &selected, moved_from, staging)
     }
 
     /// Resolves the selected item at `uri` and announces it on the progress
@@ -203,7 +236,7 @@ impl TransferEngine {
         }
         let kind = node.info(Some(batch.cancel))?.kind;
         (self.emit)(Progress {
-            label: item_label(batch.mode, &node.display_name(), index + 1, batch.total),
+            label: item_label(batch.mode(), &node.display_name(), index + 1, batch.total),
             fraction: batch.start_fraction(index),
         });
         Ok(SelectedItem { node, kind })
@@ -229,25 +262,20 @@ impl TransferEngine {
         }
     }
 
-    /// Copies or moves one selected item into the destination folder, under
-    /// the name its conflict policy chooses.
+    /// Copies or moves one selected item into the destination folder of
+    /// `placement`, under the name its conflict policy chooses.
     fn transfer(
         &mut self,
         batch: &Batch,
+        placement: &Placement,
         selected: &SelectedItem,
         moved_from: &mut SourceFolders,
         staging: &mut ItemStaging,
     ) -> Result<ItemOutcome, TransferError> {
         let source = selected.node.as_ref();
-        // `run` resolved a folder for every copy and move; this keeps that
-        // invariant without a panic.
-        let destination_folder = batch
-            .destination_folder
-            .ok_or_else(|| TransferError::failed("Choose a destination folder."))?;
         if selected.kind == NodeKind::Directory {
-            guard_destination(source, destination_folder)?;
+            guard_destination(source, placement.destination_folder)?;
         }
-        let placement = batch.placement(destination_folder);
         let Some(destination) = placement.destination_for(source, selected.kind)? else {
             return Ok(ItemOutcome::Skipped);
         };
@@ -263,11 +291,11 @@ impl TransferEngine {
             batch.cancel,
             source_change,
         )?;
-        if batch.mode == TransferMode::Move {
+        if placement.mode == TransferMode::Move {
             moved_from.remember(source);
-            self.move_item(source, destination, batch.policy, batch.cancel)?;
+            self.move_item(source, destination, placement.policy, batch.cancel)?;
         } else {
-            self.copy_item(batch, selected, destination_folder, destination, staging)?;
+            self.copy_item(placement, selected, destination, staging)?;
         }
         Ok(ItemOutcome::Done)
     }
@@ -289,23 +317,23 @@ impl TransferEngine {
         }
     }
 
-    /// Copies one item through private staging; `staging` receives the
-    /// staging as soon as it exists.
+    /// Copies one item into the destination folder of `placement` through
+    /// private staging; `staging` receives the staging as soon as it
+    /// exists.
     fn copy_item(
         &mut self,
-        batch: &Batch,
+        placement: &Placement,
         selected: &SelectedItem,
-        destination_folder: &dyn Node,
         destination: &dyn Node,
         staging: &mut ItemStaging,
     ) -> Result<(), TransferError> {
         let copy = StagedCopy {
             source: selected.node.as_ref(),
             source_kind: selected.kind,
-            destination_folder,
+            destination_folder: placement.destination_folder,
             destination,
-            policy: batch.policy,
-            cancel: batch.cancel,
+            policy: placement.policy,
+            cancel: placement.cancel,
             guard: self.write_guard.as_deref(),
             emit: &mut *self.emit,
         };

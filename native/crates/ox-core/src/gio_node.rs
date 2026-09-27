@@ -54,11 +54,6 @@ impl GioNode {
         Self { file }
     }
 
-    /// The underlying file for other GIO operations.
-    pub fn file(&self) -> &gio::File {
-        &self.file
-    }
-
     /// True for an item on a phone or another MTP device.
     fn is_mtp(&self) -> bool {
         self.file.has_uri_scheme("mtp")
@@ -205,12 +200,8 @@ impl Node for GioNode {
         }
     }
 
-    fn delete_tree(
-        &self,
-        cancel: &Cancellation,
-        assert_writable: Option<&WriteGuard>,
-    ) -> Result<(), TransferError> {
-        self.delete_item_tree(cancel, assert_writable)
+    fn delete_tree(&self, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError> {
+        self.delete_item_tree(cancel, guard)
     }
 
     fn delete_staging(&self, created: Option<ItemIdentity>) -> Result<(), TransferError> {
@@ -221,7 +212,7 @@ impl Node for GioNode {
         }
     }
 
-    fn stage_as_sibling(&self) -> bool {
+    fn has_sibling_staging(&self) -> bool {
         self.is_mtp()
     }
 

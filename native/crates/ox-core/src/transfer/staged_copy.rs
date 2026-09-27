@@ -179,7 +179,7 @@ impl StagedCopy<'_> {
         let is_file = self.source_kind != NodeKind::Directory;
         if is_file && self.source.native_copy_keeps_name(self.destination_folder) {
             Layout::SameDeviceCopy
-        } else if self.destination_folder.stage_as_sibling() {
+        } else if self.destination_folder.has_sibling_staging() {
             Layout::Sibling
         } else {
             Layout::Payload
@@ -261,6 +261,8 @@ impl StagedCopy<'_> {
         let Stage::Folder { folder, item } = stage else {
             return Ok(());
         };
+        // XFER-023: a device's success report is not proof that the copy
+        // exists where the private folder expects it.
         if !item.exists(Some(self.cancel)) {
             return Err(TransferError::failed(
                 "The device did not place the copy in its private staging folder. \
@@ -300,8 +302,9 @@ impl StagedCopy<'_> {
 /// offer. Their refusal is explained in those terms rather than as the
 /// generic unsupported move, which blames a cross-filesystem move.
 fn explain_publish_error(error: TransferError, layout: Layout) -> TransferError {
-    let is_move_object_refusal = matches!(error, TransferError::NotSupported(_));
-    if !is_move_object_refusal || layout != Layout::SameDeviceCopy {
+    let is_move_object_refusal =
+        layout == Layout::SameDeviceCopy && matches!(error, TransferError::NotSupported(_));
+    if !is_move_object_refusal {
         return error;
     }
     TransferError::NotSupported(

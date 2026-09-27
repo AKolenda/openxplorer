@@ -46,8 +46,8 @@ impl PreviousVersions {
     /// Refuses protected locations with [`READ_ONLY`].
     pub fn assert_writable(&self, uri: &str) -> Result<(), TransferError> {
         let configured = self.snapshot_roots.lock().expect("snapshot roots");
-        let protected = conventional_snapshot(uri) || configured.iter().any(|root| within(uri, root));
-        if protected {
+        let is_in_configured_snapshot = configured.iter().any(|root| is_within(uri, root));
+        if is_conventional_snapshot(uri) || is_in_configured_snapshot {
             Err(TransferError::failed(READ_ONLY))
         } else {
             Ok(())
@@ -61,8 +61,8 @@ impl PreviousVersions {
     }
 }
 
-/// `conventional_snapshot` in `previous_versions.py`.
-fn conventional_snapshot(uri: &str) -> bool {
+/// Port of `conventional_snapshot` in `previous_versions.py`.
+fn is_conventional_snapshot(uri: &str) -> bool {
     let after_scheme = uri.split_once("://").map_or(uri, |(_, rest)| rest);
     let path = after_scheme.find('/').map_or("", |slash| &after_scheme[slash..]);
     let decoded = percent_decode_str(path).decode_utf8_lossy();
@@ -74,8 +74,8 @@ fn conventional_snapshot(uri: &str) -> bool {
     marked || zfs
 }
 
-/// `within` in `previous_versions.py`.
-fn within(uri: &str, root: &str) -> bool {
+/// Port of `within` in `previous_versions.py`.
+fn is_within(uri: &str, root: &str) -> bool {
     let root = root.trim_end_matches('/');
     uri.trim_end_matches('/') == root || uri.starts_with(&format!("{root}/"))
 }

@@ -5,11 +5,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use ox_core::gio_node::GioNode;
-use ox_core::transfer::{
-    Cancellation, ConflictPolicy, Node, TransferEngine, TransferError, TransferMode, TransferResult,
-};
+use ox_core::transfer::{Cancellation, Node, Operation, TransferError, TransferResult};
 
+use crate::transfer_support::gio_engine;
 use crate::transfer_support::mtp_device::{DeviceCall, FakeDevice, RenameAnswer};
 
 /// The flags of every native move: `MOVE_FLAGS` in `desktop/gio_backend.py`.
@@ -30,16 +28,9 @@ fn delete_through_engine(uri: &str, protected: Option<String>) -> (TransferResul
         }
         Ok(())
     };
-    let factory = Arc::new(|uri: &str| Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>));
-    let mut engine = TransferEngine::new(factory).with_write_guard(guard);
+    let mut engine = gio_engine().with_write_guard(guard);
     let result = engine
-        .run(
-            TransferMode::Delete,
-            &[uri.to_owned()],
-            None,
-            ConflictPolicy::Skip,
-            &Cancellation::new(),
-        )
+        .run(Operation::Delete, &[uri.to_owned()], &Cancellation::new())
         .expect("a permanent delete needs no destination");
     let asked = asked.lock().expect("guard log").clone();
     (result, asked)

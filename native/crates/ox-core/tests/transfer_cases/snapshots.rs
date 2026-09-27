@@ -55,7 +55,7 @@ fn a_configured_snapshot_folder_inside_a_deleted_folder_survives() {
     fs::create_dir_all(&backup).expect("create the backup folder");
     write(&backup.join("version.txt"), "backup");
     let versions = PreviousVersions::new();
-    versions.configure(&uri(&source), &uri(&backup));
+    versions.configure(&file_uri(&source), &file_uri(&backup));
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
 
     let result = fixture.run(
@@ -121,7 +121,7 @@ fn a_link_to_a_snapshot_is_deleted_without_entering_the_snapshot() {
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
-    assert!(!lexists(&link));
+    assert!(!exists_without_following_links(&link));
     assert_eq!(read(&snapshot.join("version.txt")), "backup");
 }
 
@@ -159,7 +159,10 @@ fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed(
     let source = fixture.source_folder.join("photo.jpg");
     write(&source, "photo");
     let versions = PreviousVersions::new();
-    versions.configure(&uri(&fixture.destination_folder), &uri(&fixture.source_folder));
+    versions.configure(
+        &file_uri(&fixture.destination_folder),
+        &file_uri(&fixture.source_folder),
+    );
     let mut engine = fixture.engine(local::local()).with_write_guard(versions.guard());
 
     let result = fixture.run(
@@ -170,7 +173,7 @@ fn configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed(
         None,
     );
 
-    assert_eq!(result.done, [uri(&source)]);
+    assert_eq!(result.done, [file_uri(&source)]);
 
     let reverse = fixture.run(
         &mut engine,

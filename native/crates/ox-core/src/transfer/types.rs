@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Transfer request and progress types: the protocol names of modes and
-//! conflict policies accepted by `TransferEngine.run` in
-//! `desktop/operations.py`, its progress events and its `Result`.
+//! Transfer request and progress types: the operation of a run, the
+//! protocol names of modes and conflict policies accepted by
+//! `TransferEngine.run` in `desktop/operations.py`, its progress events and
+//! its `Result`.
 
 use std::str::FromStr;
 
 use super::error::TransferError;
 
-/// What a run does with its items.
+/// The kind of [`Operation`] a run performs, by its protocol name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransferMode {
     /// Copy into the destination folder; sources are never changed.
@@ -89,6 +90,44 @@ impl FromStr for ConflictPolicy {
             _ => Err(TransferError::failed(
                 "Choose Skip duplicates, Keep both, or Replace existing.",
             )),
+        }
+    }
+}
+
+/// What one run does, with exactly the settings that operation takes:
+/// copies and moves go into a destination folder under a conflict policy;
+/// Trash and permanent delete take neither. A request in the app's
+/// protocol becomes an operation through [`Operation::from_request`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operation<'a> {
+    /// Copy into a folder; sources are never changed.
+    Copy {
+        /// The URI of the folder the items go into.
+        destination_folder: &'a str,
+        /// What happens when an item's name is taken there.
+        policy: ConflictPolicy,
+    },
+    /// Native move or rename into a folder, never a copy-then-delete.
+    Move {
+        /// The URI of the folder the items go into.
+        destination_folder: &'a str,
+        /// What happens when an item's name is taken there.
+        policy: ConflictPolicy,
+    },
+    /// Move to the Trash, never falling back to a permanent delete.
+    Trash,
+    /// Permanent delete, only after explicit confirmation.
+    Delete,
+}
+
+impl Operation<'_> {
+    /// The mode of this operation.
+    pub fn mode(self) -> TransferMode {
+        match self {
+            Operation::Copy { .. } => TransferMode::Copy,
+            Operation::Move { .. } => TransferMode::Move,
+            Operation::Trash => TransferMode::Trash,
+            Operation::Delete => TransferMode::Delete,
         }
     }
 }

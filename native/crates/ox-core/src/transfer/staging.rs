@@ -53,9 +53,9 @@ pub(crate) enum StagingPlace {
 }
 
 impl StagingPlace {
-    /// The place of staging created in `dest_dir`.
-    pub(crate) fn of(dest_dir: &dyn Node) -> Self {
-        if dest_dir.stage_as_sibling() {
+    /// The place of staging created in `destination_folder`.
+    pub(crate) fn of(destination_folder: &dyn Node) -> Self {
+        if destination_folder.has_sibling_staging() {
             StagingPlace::Device
         } else {
             StagingPlace::LocalOrNetwork
@@ -96,7 +96,7 @@ pub(crate) fn leftover_report(stage: &dyn Node, place: StagingPlace, problem: &T
 ///
 /// The first item that cannot be inspected, listed or removed; the rest of
 /// the tree stays for the caller to report.
-pub fn clean_staging(node: &(impl Node + ?Sized)) -> Result<(), TransferError> {
+pub(crate) fn clean_staging(node: &(impl Node + ?Sized)) -> Result<(), TransferError> {
     clean_at_depth(node, 0)
 }
 

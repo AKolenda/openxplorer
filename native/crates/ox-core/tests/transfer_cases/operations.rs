@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Copy, move and permanent delete on local files: staging, links, modes,
-//! special files, self-descendant destinations and cancellation. Ports the
-//! cases of `TransferTests` in `desktop/tests/test_operations.py` that the
-//! other case files do not.
+//! special files and cancellation. Ports the cases of `TransferTests` in
+//! `desktop/tests/test_operations.py` that the other case files do not.
 
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, TransferError, TransferMode, MAX_DEPTH};
+use ox_core::transfer::{
+    Cancellation, ConflictPolicy, Node, Operation, TransferError, TransferMode, MAX_DEPTH,
+};
 
 use crate::transfer_support::{
     local::{self, local_path_of, LocalNode, Provider},
@@ -29,7 +30,7 @@ fn a_copied_file_arrives_complete_and_leaves_no_staging() {
     let result = fixture.copy(local::local(), &[&source], ConflictPolicy::Skip);
 
     assert!(result.errors.is_empty(), "{result:?}");
-    assert_eq!(result.done, [uri(&source)]);
+    assert_eq!(result.done, [file_uri(&source)]);
     assert_eq!(
         fs::read(fixture.destination_folder.join("data.bin")).unwrap(),
         content
@@ -65,7 +66,7 @@ fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
     );
 
     assert!(result.errors.is_empty(), "{result:?}");
-    assert_eq!(result.done, [uri(&folder)]);
+    assert_eq!(result.done, [file_uri(&folder)]);
     assert_eq!(read(&nested.join(".hidden")), "hidden content");
     let copied = fixture.destination_folder.join("tree/nested");
     assert_eq!(read(&copied.join(".hidden")), "hidden content");
@@ -90,7 +91,7 @@ fn a_source_selected_twice_is_copied_once() {
 
     let result = fixture.copy(local::local(), &[&source, &source], ConflictPolicy::Skip);
 
-    assert_eq!(result.done, [uri(&source)]);
+    assert_eq!(result.done, [file_uri(&source)]);
     assert!(
         result.errors.is_empty() && result.skipped.is_empty(),
         "{result:?}"
@@ -116,42 +117,9 @@ fn a_move_takes_the_item_out_of_its_folder() {
         None,
     );
 
-    assert_eq!(result.done, [uri(&source)]);
-    assert!(!lexists(&source));
+    assert_eq!(result.done, [file_uri(&source)]);
+    assert!(!exists_without_following_links(&source));
     assert_eq!(read(&fixture.destination_folder.join("a")), "a");
-}
-
-/// Ports `test_reject_self_descendant` and
-/// `test_reject_symlink_destination_inside_source`.
-///
-/// parity: XFER-016
-#[test]
-fn self_and_descendant_destinations_are_rejected_including_symlink_aliases() {
-    for mode in [TransferMode::Copy, TransferMode::Move] {
-        let fixture = Fixture::new();
-        let folder = fixture.source_folder.join("tree");
-        let nested = folder.join("nested");
-        fs::create_dir_all(&nested).unwrap();
-        write(&folder.join("original"), "untouched");
-        let alias = fixture.root.join("alias");
-        symlink(&nested, &alias).unwrap();
-        for destination in [&folder, &nested, &alias] {
-            let mut engine = fixture.engine(local::local());
-
-            let result = fixture.run(
-                &mut engine,
-                &[&folder],
-                mode,
-                ConflictPolicy::Replace,
-                Some(destination),
-            );
-
-            assert!(result.done.is_empty());
-            assert!(result.errors[0].contains("inside itself"));
-            assert_eq!(read(&folder.join("original")), "untouched");
-            assert!(list(&nested).is_empty());
-        }
-    }
 }
 
 /// Port of `test_trash_unsupported_no_delete`; deleting a link removes the
@@ -186,8 +154,8 @@ fn delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete() {
         None,
     );
 
-    assert_eq!(deleted.done, [uri(&link)]);
-    assert!(!lexists(&link));
+    assert_eq!(deleted.done, [file_uri(&link)]);
+    assert!(!exists_without_following_links(&link));
     assert_eq!(read(&original), "keep");
 }
 
@@ -208,18 +176,16 @@ fn permanent_delete_removes_folders_and_files_without_a_destination() {
 
     let result = engine
         .run(
-            TransferMode::Delete,
-            &[uri(&tree), uri(&loose)],
-            None,
-            ConflictPolicy::Skip,
+            Operation::Delete,
+            &[file_uri(&tree), file_uri(&loose)],
             &fixture.cancel,
         )
         .expect("a permanent delete needs no destination");
 
     assert_eq!(result.done.len(), 2, "{result:?}");
     assert!(result.errors.is_empty(), "{result:?}");
-    assert!(!lexists(&tree));
-    assert!(!lexists(&loose));
+    assert!(!exists_without_following_links(&tree));
+    assert!(!exists_without_following_links(&loose));
 }
 
 /// Ports `test_special_file_rejected_cleanup`; a tree deeper than the
@@ -252,7 +218,7 @@ fn deep_trees_and_special_files_are_not_published() {
     assert!(result.errors[0].contains("nesting"));
     assert!(result.errors[1].contains("special files"));
     assert!(list(&fixture.destination_folder).is_empty());
-    assert!(lexists(&fifo));
+    assert!(exists_without_following_links(&fifo));
 }
 
 /// Port of `test_copy_cancel_removes_partial_stage`: the user's

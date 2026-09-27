@@ -38,7 +38,7 @@ fn uploads_publish_by_one_same_folder_rename_from_a_staged_sibling() {
         let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 
         assert!(result.errors.is_empty(), "{result:?}");
-        assert_eq!(result.done, [uri(&source)]);
+        assert_eq!(result.done, [file_uri(&source)]);
         let published = fixture.destination_folder.join("incoming");
         let target = if kind == NodeKind::Directory {
             published.join("photo.jpg")
@@ -48,12 +48,27 @@ fn uploads_publish_by_one_same_folder_rename_from_a_staged_sibling() {
         assert_eq!(read(&target), "photo");
         let moves = phone.device.moves();
         assert_eq!(moves.len(), 1, "{moves:?}");
-        let (staged, final_name) = &moves[0];
-        assert_eq!(staged.parent(), Some(fixture.destination_folder.as_path()));
-        assert!(is_staging_path(staged), "{}", staged.display());
-        assert_eq!(final_name, &published);
+        let publication = &moves[0];
+        assert_eq!(
+            publication.from.parent(),
+            Some(fixture.destination_folder.as_path())
+        );
+        assert!(
+            is_staging_path(&publication.from),
+            "{}",
+            publication.from.display()
+        );
+        assert_eq!(publication.to, published);
         assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
     }
+}
+
+/// One file the phone received.
+struct Upload {
+    /// The watched final name was already visible when the file arrived.
+    is_final_name_visible: bool,
+    /// Where the file was written.
+    written_to: PathBuf,
 }
 
 /// Records, for every file the device receives, whether the final name was
@@ -62,7 +77,7 @@ fn uploads_publish_by_one_same_folder_rename_from_a_staged_sibling() {
 struct WatchedPhone {
     device: Device,
     watched_name: PathBuf,
-    uploads: Mutex<Vec<(bool, PathBuf)>>,
+    uploads: Mutex<Vec<Upload>>,
 }
 
 impl Provider for WatchedPhone {
@@ -77,8 +92,10 @@ impl Provider for WatchedPhone {
         cancel: &Cancellation,
         progress: &mut dyn FnMut(u64, u64),
     ) -> Result<(), TransferError> {
-        let final_visible = lexists(&self.watched_name);
-        let upload = (final_visible, local_path_of(target));
+        let upload = Upload {
+            is_final_name_visible: exists_without_following_links(&self.watched_name),
+            written_to: local_path_of(target),
+        };
         self.uploads.lock().expect("upload log").push(upload);
         node.local_copy_file(target, cancel, progress)
     }
@@ -104,9 +121,10 @@ fn a_partial_folder_upload_is_never_visible_under_its_final_name() {
     assert!(result.errors.is_empty(), "{result:?}");
     let uploads = phone.uploads.lock().expect("upload log");
     assert_eq!(uploads.len(), 2);
-    for (final_visible, written) in uploads.iter() {
-        assert!(!final_visible);
-        let relative = written
+    for upload in uploads.iter() {
+        assert!(!upload.is_final_name_visible);
+        let relative = upload
+            .written_to
             .strip_prefix(&fixture.destination_folder)
             .expect("inside the phone");
         let first = relative.components().next().expect("a staged path");
@@ -130,14 +148,12 @@ fn a_second_upload_into_the_same_folder_succeeds() {
     write(&first, "a");
     write(&second, "b");
     let phone = Arc::new(Device::default());
-    assert!(fixture
-        .copy(phone.clone(), &[&first], ConflictPolicy::Skip)
-        .errors
-        .is_empty());
-    assert!(fixture
-        .copy(phone, &[&second], ConflictPolicy::Skip)
-        .errors
-        .is_empty());
+
+    let first_result = fixture.copy(phone.clone(), &[&first], ConflictPolicy::Skip);
+    let second_result = fixture.copy(phone, &[&second], ConflictPolicy::Skip);
+
+    assert!(first_result.errors.is_empty(), "{first_result:?}");
+    assert!(second_result.errors.is_empty(), "{second_result:?}");
     assert_eq!(list(&fixture.destination_folder), ["a.apk", "b.apk"]);
 }
 
@@ -228,7 +244,7 @@ fn skip_on_a_device_never_touches_the_existing_item() {
 
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Skip);
 
-    assert_eq!(result.skipped, [uri(&source)]);
+    assert_eq!(result.skipped, [file_uri(&source)]);
     assert_eq!(read(&fixture.destination_folder.join("a")), "old");
     assert!(phone.moves().is_empty());
 }

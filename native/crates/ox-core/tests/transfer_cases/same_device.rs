@@ -128,3 +128,57 @@ fn a_failed_copy_within_one_device_leaves_nothing_behind() {
     );
     assert_eq!(read(&source), "data");
 }
+
+/// A copy within one device that reports success without placing anything
+/// in the private folder.
+#[derive(Default)]
+struct FalseSuccessSameDeviceCopy {
+    device: Device,
+}
+
+impl Provider for FalseSuccessSameDeviceCopy {
+    fn base(&self) -> Option<&dyn Provider> {
+        Some(&self.device)
+    }
+
+    fn native_copy_keeps_name(&self, _node: &LocalNode, _target_folder: &dyn Node) -> bool {
+        true
+    }
+
+    fn copy_file(
+        &self,
+        _node: &LocalNode,
+        _target: &dyn Node,
+        _cancel: &Cancellation,
+        _progress: &mut dyn FnMut(u64, u64),
+    ) -> Result<(), TransferError> {
+        Ok(())
+    }
+}
+
+/// A device's success report for `CopyObject` is not proof: the copy must
+/// be in the private folder before it is renamed or published.
+///
+/// parity: XFER-023
+#[test]
+fn a_copy_within_one_device_that_was_never_placed_is_not_published() {
+    let fixture = Fixture::with_destination("phone");
+    let source = fixture.source_folder.join("photo.jpg");
+    write(&source, "photo");
+
+    let result = fixture.copy(
+        Arc::new(FalseSuccessSameDeviceCopy::default()),
+        &[&source],
+        ConflictPolicy::Skip,
+    );
+
+    assert!(result.done.is_empty(), "{result:?}");
+    assert_eq!(result.errors.len(), 1, "{result:?}");
+    assert!(result.errors[0].contains("did not place the copy"), "{result:?}");
+    assert!(
+        list(&fixture.destination_folder).is_empty(),
+        "{:?}",
+        list(&fixture.destination_folder)
+    );
+    assert_eq!(read(&source), "photo");
+}

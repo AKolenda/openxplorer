@@ -6,6 +6,7 @@
 //! | Case file | What it covers |
 //! |---|---|
 //! | `operations` | Copy, move and delete on local files |
+//! | `containment` | Refusing to place a folder inside itself |
 //! | `conflicts` | Skip, Keep both and moves into the item's own folder |
 //! | `replace` | Replace: overwriting files and merging folders |
 //! | `failures` | Failures injected at every step of a copy or replacement |
@@ -24,6 +25,8 @@ mod transfer_support;
 
 #[path = "transfer_cases/conflicts.rs"]
 mod conflicts;
+#[path = "transfer_cases/containment.rs"]
+mod containment;
 #[path = "transfer_cases/device_cleanup.rs"]
 mod device_cleanup;
 #[path = "transfer_cases/device_replace.rs"]

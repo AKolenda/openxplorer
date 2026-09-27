@@ -35,7 +35,7 @@ impl FuseMountedDevice {
 
 impl Provider for FuseMountedDevice {
     fn uri(&self, node: &LocalNode) -> String {
-        uri(node.local_path()).replacen("file://", "mtp://test-device", 1)
+        file_uri(node.local_path()).replacen("file://", "mtp://test-device", 1)
     }
 
     fn mkdir(&self, node: &LocalNode, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
@@ -90,7 +90,7 @@ fn device_copies_with_a_fuse_path_never_change_unix_modes() {
         let result = fixture.copy(device.clone(), &[&source], ConflictPolicy::Skip);
 
         assert!(result.errors.is_empty(), "{result:?}");
-        assert_eq!(result.done, [uri(&source)]);
+        assert_eq!(result.done, [file_uri(&source)]);
         let staged_modes = device.staged_folder_modes();
         assert!(!staged_modes.is_empty());
         assert!(

@@ -44,13 +44,14 @@ fn raw_names(folder: &Path) -> Vec<OsString> {
 /// Asserts `album` holds exactly the Latin-1 song and `ok.txt`, byte for
 /// byte, and that no name was converted to U+FFFD.
 fn assert_latin1_album(album: &Path) {
-    let expected = [OsString::from("caf\u{fffd}.mp3"), OsString::from("ok.txt")];
+    let lossy_name = OsString::from("caf\u{fffd}.mp3");
+    let expected = [
+        OsStr::from_bytes(LATIN1_NAME).to_os_string(),
+        OsString::from("ok.txt"),
+    ];
     let names = raw_names(album);
-    assert_ne!(names[0], expected[0], "the name was converted lossily");
-    assert_eq!(
-        names,
-        [OsStr::from_bytes(LATIN1_NAME).to_os_string(), expected[1].clone()]
-    );
+    assert!(!names.contains(&lossy_name), "the name was converted lossily");
+    assert_eq!(names, expected);
     let song = fs::read(album.join(OsStr::from_bytes(LATIN1_NAME))).expect("read the song");
     assert_eq!(song, b"song");
 }
@@ -71,7 +72,7 @@ fn copy_keeps_names_that_are_not_utf8_byte_for_byte() {
         );
 
         assert!(result.errors.is_empty(), "{result:?}");
-        assert_eq!(result.done, [uri(&album)]);
+        assert_eq!(result.done, [file_uri(&album)]);
         assert_latin1_album(&fixture.destination_folder.join("album"));
         assert_latin1_album(&album);
         fixture.assert_no_staging();
@@ -121,8 +122,8 @@ fn trash_and_permanent_delete_remove_folders_with_names_that_are_not_utf8() {
         );
 
         assert!(result.errors.is_empty(), "{mode:?}: {result:?}");
-        assert_eq!(result.done, [uri(&album)]);
-        assert!(!lexists(&album));
+        assert_eq!(result.done, [file_uri(&album)]);
+        assert!(!exists_without_following_links(&album));
     }
 }
 

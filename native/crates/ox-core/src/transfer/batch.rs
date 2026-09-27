@@ -1,24 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The settings shared by every item of one run, and what they imply for
-//! each item: its start progress, how it is named, whether the write guard
-//! checks its source, and how Trash and delete remove it. Ports the batch
+//! each item: whether it is copied, moved, trashed or deleted, its start
+//! progress, and whether the write guard checks its source. Ports the batch
 //! arguments of `TransferEngine._run_items` in `desktop/operations.py`.
 
 use super::cancellation::Cancellation;
 use super::conflicts::Placement;
 use super::guard::SourceChange;
-use super::node::Node;
-use super::types::{progress_fraction, ConflictPolicy, TransferMode};
+use super::types::{progress_fraction, TransferMode};
 
 /// The settings shared by every item of one run.
 pub(crate) struct Batch<'a> {
-    pub(crate) mode: TransferMode,
-    pub(crate) policy: ConflictPolicy,
-    /// The destination folder; `None` for Trash and delete.
-    pub(crate) destination_folder: Option<&'a dyn Node>,
+    /// What the run does with each item.
+    pub(crate) action: ItemAction<'a>,
     pub(crate) cancel: &'a Cancellation,
     /// The number of distinct items.
     pub(crate) total: usize,
+}
+
+/// What a run does with each item: its [`Operation`] once the destination
+/// folder of a copy or move has been resolved and checked.
+///
+/// [`Operation`]: super::Operation
+pub(crate) enum ItemAction<'a> {
+    /// Copy or move into the destination folder, under the name the
+    /// conflict policy chooses.
+    Transfer(Placement<'a>),
+    /// Trash or permanent delete.
+    Remove(Removal),
 }
 
 /// How Trash and delete remove an item.
@@ -31,42 +40,31 @@ pub(crate) enum Removal {
 }
 
 impl Batch<'_> {
+    /// The mode of the run, which names it on the progress panel.
+    pub(crate) fn mode(&self) -> TransferMode {
+        match &self.action {
+            ItemAction::Transfer(placement) => placement.mode,
+            ItemAction::Remove(Removal::Trash) => TransferMode::Trash,
+            ItemAction::Remove(Removal::PermanentDelete) => TransferMode::Delete,
+        }
+    }
+
     /// The progress shown when item `index` starts. Trash and delete have
     /// no byte progress, so the batch position is the only honest fraction
     /// to show for them.
     pub(crate) fn start_fraction(&self, index: usize) -> f64 {
-        if self.mode.is_removal() {
-            progress_fraction(index as u64, self.total as u64)
-        } else {
-            0.0
-        }
-    }
-
-    /// How a copy or move into `destination_folder` names its items.
-    pub(crate) fn placement<'a>(&'a self, destination_folder: &'a dyn Node) -> Placement<'a> {
-        Placement {
-            mode: self.mode,
-            policy: self.policy,
-            destination_folder,
-            cancel: self.cancel,
+        match self.action {
+            ItemAction::Remove(_) => progress_fraction(index as u64, self.total as u64),
+            ItemAction::Transfer(_) => 0.0,
         }
     }
 
     /// XFER-020: move, Trash and delete change their sources, so the write
     /// guard checks them; a copy keeps them.
     pub(crate) fn source_change(&self) -> SourceChange {
-        match self.mode {
+        match self.mode() {
             TransferMode::Move | TransferMode::Trash | TransferMode::Delete => SourceChange::Changed,
             TransferMode::Copy => SourceChange::Kept,
-        }
-    }
-
-    /// The removal this run makes; `None` for copies and moves.
-    pub(crate) fn removal(&self) -> Option<Removal> {
-        match self.mode {
-            TransferMode::Trash => Some(Removal::Trash),
-            TransferMode::Delete => Some(Removal::PermanentDelete),
-            TransferMode::Copy | TransferMode::Move => None,
         }
     }
 }
@@ -74,58 +72,66 @@ impl Batch<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gio_node::GioNode;
+    use crate::transfer::ConflictPolicy;
 
-    /// What a batch of one mode implies for its items.
-    struct ModeCase {
+    /// What a batch with one action implies for its items.
+    struct ActionCase<'a> {
+        action: ItemAction<'a>,
         mode: TransferMode,
         source_change: SourceChange,
-        removal: Option<Removal>,
         /// The progress when the second of four items starts.
         second_item_fraction: f64,
     }
 
     /// parity: XFER-014, XFER-020
     #[test]
-    fn each_mode_decides_source_checks_removal_and_start_progress() {
+    fn each_action_decides_its_mode_source_checks_and_start_progress() {
+        let cancel = Cancellation::new();
+        let folder = GioNode::new("file:///tmp/destination");
+        let placement = |mode: TransferMode| Placement {
+            mode,
+            policy: ConflictPolicy::Skip,
+            destination_folder: &folder,
+            cancel: &cancel,
+        };
         let cases = [
-            ModeCase {
+            ActionCase {
+                action: ItemAction::Transfer(placement(TransferMode::Copy)),
                 mode: TransferMode::Copy,
                 source_change: SourceChange::Kept,
-                removal: None,
                 second_item_fraction: 0.0,
             },
-            ModeCase {
+            ActionCase {
+                action: ItemAction::Transfer(placement(TransferMode::Move)),
                 mode: TransferMode::Move,
                 source_change: SourceChange::Changed,
-                removal: None,
                 second_item_fraction: 0.0,
             },
-            ModeCase {
+            ActionCase {
+                action: ItemAction::Remove(Removal::Trash),
                 mode: TransferMode::Trash,
                 source_change: SourceChange::Changed,
-                removal: Some(Removal::Trash),
                 second_item_fraction: 0.25,
             },
-            ModeCase {
+            ActionCase {
+                action: ItemAction::Remove(Removal::PermanentDelete),
                 mode: TransferMode::Delete,
                 source_change: SourceChange::Changed,
-                removal: Some(Removal::PermanentDelete),
                 second_item_fraction: 0.25,
             },
         ];
-        let cancel = Cancellation::new();
         for case in cases {
             let batch = Batch {
-                mode: case.mode,
-                policy: ConflictPolicy::Skip,
-                destination_folder: None,
+                action: case.action,
                 cancel: &cancel,
                 total: 4,
             };
 
-            assert_eq!(batch.source_change(), case.source_change, "{:?}", case.mode);
-            assert_eq!(batch.removal(), case.removal, "{:?}", case.mode);
             let fraction = batch.start_fraction(1);
+
+            assert_eq!(batch.mode(), case.mode);
+            assert_eq!(batch.source_change(), case.source_change, "{:?}", case.mode);
             let difference = (fraction - case.second_item_fraction).abs();
             assert!(difference < f64::EPSILON, "{:?}: {fraction}", case.mode);
         }

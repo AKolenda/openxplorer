@@ -8,28 +8,30 @@
 //! | `faults` | Local files that fail at a chosen step of a copy or replacement |
 //! | `mtp_device` | A simulated phone behind real `mtp://` URIs for the production adapter |
 //! | `versions` | The previous-version write guard |
+//! | `shared` | Helpers the `gio_node` test binary uses too |
 
 pub mod device;
 pub mod faults;
 pub mod local;
 pub mod mtp_device;
+mod shared;
 pub mod versions;
 
 use std::ffi::OsStr;
 use std::fs;
 use std::io::Read;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use ox_core::gio_node::GioNode;
 use ox_core::transfer::{
-    is_own_staging_name, Cancellation, ConflictPolicy, Node, TransferEngine, TransferError, TransferMode,
-    TransferResult,
+    is_own_staging_name, Cancellation, ConflictPolicy, Node, Operation, TransferEngine, TransferError,
+    TransferMode, TransferResult,
 };
 
-use local::{file_uri, LocalNode, Provider};
+pub use local::file_uri;
+use local::{LocalNode, Provider};
+pub use shared::{gio_engine, mode_of, set_mode};
 
 /// A temporary source folder and destination folder, like `setUp` in the
 /// Python transfer tests (`self.src` and `self.dst` there).
@@ -86,7 +88,9 @@ impl Fixture {
         sleeps.iter().map(Duration::as_secs_f64).collect()
     }
 
-    /// Runs an operation into `target` (the destination folder by default).
+    /// Runs a request for `mode` into `target` (the destination folder by
+    /// default), as the app's bridge sends it: Trash and delete ignore
+    /// `target` and `policy`.
     pub fn try_run(
         &self,
         engine: &mut TransferEngine,
@@ -97,7 +101,17 @@ impl Fixture {
     ) -> Result<TransferResult, TransferError> {
         let uris: Vec<String> = paths.iter().map(|path| file_uri(path)).collect();
         let target_uri = file_uri(target.unwrap_or(&self.destination_folder));
-        engine.run(mode, &uris, Some(&target_uri), policy, &self.cancel)
+        let operation = Operation::from_request(mode, Some(&target_uri), policy)?;
+        engine.run(operation, &uris, &self.cancel)
+    }
+
+    /// A source `name` holding `incoming` and an existing item `name` in the
+    /// destination folder holding `existing`; returns the source's path.
+    pub fn replacement_source(&self, name: &str, incoming: &str, existing: &str) -> PathBuf {
+        let source = self.source_folder.join(name);
+        write(&source, incoming);
+        write(&self.destination_folder.join(name), existing);
+        source
     }
 
     /// Copies `paths` into the destination folder with a new engine over
@@ -163,14 +177,6 @@ fn collect_leftovers(root: &Path, folder: &Path, found: &mut Vec<String>) {
     }
 }
 
-/// An engine resolving every URI with the production [`GioNode`], without
-/// a write guard.
-pub fn gio_engine() -> TransferEngine {
-    TransferEngine::new(Arc::new(|uri: &str| {
-        Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>)
-    }))
-}
-
 /// Gives a folder and every folder below it owner access again when
 /// dropped, so the temporary folder can be removed even after a test that
 /// made folders read-only failed midway.
@@ -225,11 +231,6 @@ pub fn is_backup(node: &dyn Node) -> bool {
     node.display_name().starts_with(".winspace-replaced-")
 }
 
-/// The `file://` URI of `path`.
-pub fn uri(path: &Path) -> String {
-    file_uri(path)
-}
-
 /// Writes `text` to a new or existing file.
 pub fn write(path: &Path, text: &str) {
     fs::write(path, text).expect("write a test file");
@@ -256,19 +257,10 @@ pub fn list(folder: &Path) -> Vec<String> {
     names
 }
 
-/// `lexists`: true for a dangling link too.
-pub fn lexists(path: &Path) -> bool {
+/// True when `path` exists, including a dangling link (Python's
+/// `os.path.lexists`).
+pub fn exists_without_following_links(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok()
-}
-
-/// The permission bits of `path`, without following a link.
-pub fn mode_of(path: &Path) -> u32 {
-    fs::symlink_metadata(path).expect("stat").permissions().mode() & 0o7777
-}
-
-/// Sets the permission bits of `path`.
-pub fn set_mode(path: &Path, mode: u32) {
-    fs::set_permissions(path, fs::Permissions::from_mode(mode)).expect("chmod");
 }
 
 /// `count` random bytes from the kernel, so a copy cannot pass by accident.

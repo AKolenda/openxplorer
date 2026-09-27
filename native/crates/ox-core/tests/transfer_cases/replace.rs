@@ -34,8 +34,8 @@ fn a_move_with_replace_overwrites_the_existing_file_and_removes_the_source() {
         None,
     );
 
-    assert_eq!(result.done, [uri(&source)]);
-    assert!(!lexists(&source));
+    assert_eq!(result.done, [file_uri(&source)]);
+    assert!(!exists_without_following_links(&source));
     assert_eq!(read(&fixture.destination_folder.join("a")), "new");
 }
 
@@ -59,7 +59,7 @@ fn replace_merges_folders_and_retains_destination_only_children() {
         let result = fixture.run(&mut engine, &[&source], mode, ConflictPolicy::Replace, None);
 
         assert!(result.errors.is_empty(), "{result:?}");
-        assert_eq!(result.done, [uri(&source)]);
+        assert_eq!(result.done, [file_uri(&source)]);
         assert_eq!(read(&target.join("nested/shared.txt")), "new");
         assert_eq!(read(&target.join("keep.txt")), "keep");
         assert_eq!(source.exists(), mode == TransferMode::Copy);
@@ -96,7 +96,7 @@ fn replace_without_direct_overwrite_renames_reversibly_and_leaves_no_backup() {
 
     let result = fixture.copy(Arc::new(NoDirectReplace), &[&source], ConflictPolicy::Replace);
 
-    assert_eq!(result.done, [uri(&source)]);
+    assert_eq!(result.done, [file_uri(&source)]);
     assert!(result.errors.is_empty(), "{result:?}");
     assert_eq!(read(&fixture.destination_folder.join("a")), "new");
     assert_eq!(read(&source), "new");

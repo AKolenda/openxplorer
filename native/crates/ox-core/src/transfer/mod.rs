@@ -22,8 +22,8 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `engine` | The public API and the per-item loop (`run`, `_run_items`) |
-//! | `request` | Validating a run's items and destination folder |
-//! | `batch` | The settings shared by every item of one run |
+//! | `request` | Validating a run's request: its operation, items and destination folder |
+//! | `batch` | What a run does with each item, and the settings its items share |
 //! | `conflicts` | Skip, Keep both and Replace: the destination name |
 //! | `staged_copy` | Staging, publishing and device checks for one copy |
 //! | `copy` | The recursive copy into staging (`_copy`) |
@@ -37,7 +37,7 @@
 //! | `relisting` | Relisting the folders moves took items from (MTP) |
 //! | `node` | The [`Node`] storage abstraction the engine works on |
 //! | `cancellation` | [`Cancellation`], the user's stop request |
-//! | `types` | Modes, conflict policies, progress and the run's result |
+//! | `types` | Operations, modes, conflict policies, progress and the run's result |
 //! | `error` | [`TransferError`] and how backend errors map onto it |
 //!
 //! Every test of `desktop/tests/test_operations.py` and
@@ -73,16 +73,13 @@ mod types;
 pub(crate) use cancellation::check_cancelled;
 pub use cancellation::Cancellation;
 pub(crate) use commit::verify_installation;
-pub use containment::guard_destination;
 pub use engine::TransferEngine;
 pub use error::TransferError;
 pub(crate) use guard::nesting_error;
-pub use guard::{check_write_tree, SourceChange, MAX_DEPTH};
-pub use modes::secure_local_staging;
+pub use guard::MAX_DEPTH;
 pub(crate) use modes::PRIVATE_DIRECTORY_MODE;
-pub use names::{backup_name, is_own_staging_name, staging_name};
+pub use names::is_own_staging_name;
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;
-pub use staging::clean_staging;
-pub(crate) use staging::STAGING_LEVELS;
-pub use types::{ConflictPolicy, Progress, TransferMode, TransferResult};
+pub(crate) use staging::{clean_staging, STAGING_LEVELS};
+pub use types::{ConflictPolicy, Operation, Progress, TransferMode, TransferResult};

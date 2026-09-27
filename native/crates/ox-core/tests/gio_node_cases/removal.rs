@@ -12,29 +12,64 @@ use std::sync::Arc;
 
 use gio::prelude::VfsExt;
 use ox_core::gio_node::GioNode;
-use ox_core::transfer::{Cancellation, ConflictPolicy, Node, TransferError, TransferMode};
+use ox_core::transfer::{Cancellation, Node, Operation, TransferError};
 
 use super::{gio_engine, node};
 
+/// A folder `kept` holding `data`, and a symbolic link `link` to it.
+struct LinkedFolder {
+    kept: PathBuf,
+    link: PathBuf,
+}
+
+impl LinkedFolder {
+    /// Creates the folder and the link in `root`.
+    fn create(root: &Path) -> Self {
+        let kept = root.join("kept");
+        fs::create_dir(&kept).unwrap();
+        fs::write(kept.join("data"), b"retained").unwrap();
+        let link = root.join("link");
+        symlink(&kept, &link).unwrap();
+        Self { kept, link }
+    }
+
+    /// Asserts the folder kept its data and the link is still a link.
+    fn assert_untouched(&self) {
+        assert_eq!(fs::read(self.kept.join("data")).unwrap(), b"retained");
+        assert!(fs::symlink_metadata(&self.link).unwrap().file_type().is_symlink());
+    }
+}
+
 /// parity: XFER-015, XFER-017
 #[test]
-fn copying_and_deleting_symbolic_links_never_traverses_the_target() {
+fn copying_a_link_copies_the_link_not_its_target() {
     let temp = tempfile::tempdir().unwrap();
-    let kept = temp.path().join("kept");
-    fs::create_dir(&kept).unwrap();
-    fs::write(kept.join("data"), b"retained").unwrap();
-    let link = temp.path().join("link");
+    let linked = LinkedFolder::create(temp.path());
     let copied = temp.path().join("copied");
-    symlink(&kept, &link).unwrap();
+
+    let result = node(&linked.link).copy_file(&node(&copied), &Cancellation::new(), &mut |_, _| {});
+
+    assert_eq!(result, Ok(()));
+    assert_eq!(fs::read_link(&copied).unwrap(), linked.kept);
+    linked.assert_untouched();
+}
+
+/// parity: XFER-015, XFER-017
+#[test]
+fn deleting_a_copied_link_keeps_its_target() {
+    let temp = tempfile::tempdir().unwrap();
+    let linked = LinkedFolder::create(temp.path());
+    let copied = temp.path().join("copied");
     let cancel = Cancellation::new();
-    node(&link)
+    node(&linked.link)
         .copy_file(&node(&copied), &cancel, &mut |_, _| {})
         .unwrap();
-    assert_eq!(fs::read_link(&copied).unwrap(), kept);
-    node(&copied).delete_tree(&cancel, None).unwrap();
+
+    let result = node(&copied).delete_tree(&cancel, None);
+
+    assert_eq!(result, Ok(()));
     assert!(fs::symlink_metadata(&copied).is_err());
-    assert_eq!(fs::read(kept.join("data")).unwrap(), b"retained");
-    assert!(fs::symlink_metadata(link).unwrap().file_type().is_symlink());
+    linked.assert_untouched();
 }
 
 /// parity: XFER-015, XFER-017
@@ -47,7 +82,10 @@ fn local_recursive_delete_removes_selected_tree_without_following_its_links() {
     let outside = temp.path().join("outside");
     fs::write(&outside, b"retained").unwrap();
     symlink(&outside, selected.join("link")).unwrap();
-    node(&selected).delete_tree(&Cancellation::new(), None).unwrap();
+
+    let result = node(&selected).delete_tree(&Cancellation::new(), None);
+
+    assert_eq!(result, Ok(()));
     assert!(!selected.exists());
     assert_eq!(fs::read(outside).unwrap(), b"retained");
 }
@@ -69,8 +107,12 @@ fn local_delete_works_inside_a_folder_reached_through_a_symbolic_link() {
     let alias = temp.path().join("alias");
     symlink(&actual, &alias).unwrap();
     let cancel = Cancellation::new();
-    node(&alias.join("data")).delete_tree(&cancel, None).unwrap();
-    node(&alias.join("sub")).delete_tree(&cancel, None).unwrap();
+
+    let file_deleted = node(&alias.join("data")).delete_tree(&cancel, None);
+    let folder_deleted = node(&alias.join("sub")).delete_tree(&cancel, None);
+
+    assert_eq!(file_deleted, Ok(()));
+    assert_eq!(folder_deleted, Ok(()));
     assert!(!actual.join("data").exists());
     assert!(!actual.join("sub").exists());
     assert_eq!(fs::read(actual.join("kept")).unwrap(), b"retained");
@@ -172,15 +214,11 @@ fn protected_descendants_are_preflighted_before_gio_permanent_deletion() {
             Ok(())
         }
     });
+
     let result = engine
-        .run(
-            TransferMode::Delete,
-            &[node(&source).uri()],
-            None,
-            ConflictPolicy::Skip,
-            &Cancellation::new(),
-        )
+        .run(Operation::Delete, &[node(&source).uri()], &Cancellation::new())
         .unwrap();
+
     assert!(result.done.is_empty());
     assert_eq!(result.errors.len(), 1);
     assert_eq!(fs::read(source.join("a")).unwrap(), b"live");
@@ -199,10 +237,10 @@ fn cancellation_during_local_delete_preflight_preserves_the_file() {
         requested.cancel();
         Ok(())
     };
-    assert_eq!(
-        node(&source).delete_tree(&cancel, Some(&guard)),
-        Err(TransferError::Cancelled)
-    );
+
+    let result = node(&source).delete_tree(&cancel, Some(&guard));
+
+    assert_eq!(result, Err(TransferError::Cancelled));
     assert_eq!(fs::read(source).unwrap(), b"retained");
 }
 
@@ -216,25 +254,33 @@ fn trash_support_reports_an_unmounted_share_instead_of_denying_trash() {
         schemes.iter().any(|scheme| scheme == "smb"),
         "this check needs GVfs with its SMB backend (gvfs-backends); found {schemes:?}"
     );
+    let temp = tempfile::tempdir().unwrap();
+    let missing = temp.path().join("missing");
+
     let unmounted = GioNode::new("smb://example.invalid/share/folder").can_trash(None);
+    let local_missing = node(&missing).can_trash(None);
+
     assert!(
         matches!(unmounted, Err(TransferError::NotMounted(_))),
         "{unmounted:?}"
     );
-    let missing = tempfile::tempdir().unwrap().path().join("missing");
-    assert_eq!(node(&missing).can_trash(None), Ok(false));
+    assert_eq!(local_missing, Ok(false));
 }
 
 /// parity: OPS-035, XFER-019
 #[test]
 fn roots_and_whole_network_shares_are_refused_before_mutation() {
     let cancel = Cancellation::new();
+    let unused_target = GioNode::new("file:///tmp/unused");
     for uri in ["file:///", "smb://example.invalid/Shared", "mtp://test-device/"] {
         let root = GioNode::new(uri);
-        assert!(root.delete_tree(&cancel, None).is_err());
-        assert!(root.trash(&cancel).is_err());
-        assert!(root
-            .move_native(&GioNode::new("file:///tmp/unused"), Some(&cancel))
-            .is_err());
+
+        let deleted = root.delete_tree(&cancel, None);
+        let trashed = root.trash(&cancel);
+        let moved = root.move_native(&unused_target, Some(&cancel));
+
+        assert!(deleted.is_err(), "{uri}");
+        assert!(trashed.is_err(), "{uri}");
+        assert!(moved.is_err(), "{uri}");
     }
 }

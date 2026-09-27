@@ -66,6 +66,9 @@ impl<'a> Copier<'a> {
         if depth > MAX_DEPTH {
             return Err(nesting_error());
         }
+        // XFER-016: the copy met its own staging, so the destination is an
+        // alias of a folder inside the source that `guard_destination`
+        // could not prove.
         if source.name() == self.own_stage_name {
             return Err(TransferError::failed(
                 "The destination resolves inside the source through an alias. Copy stopped.",

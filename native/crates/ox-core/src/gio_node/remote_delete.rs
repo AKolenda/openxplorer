@@ -99,17 +99,21 @@ mod tests {
     }
 
     /// Port of `_delete_recursive` in `desktop/gio_backend.py`: hidden items
-    /// and empty folders go too, children before their folder.
+    /// and empty folders go too. GIO removes only empty folders, so a tree
+    /// that is gone was emptied children first.
     ///
     /// parity: XFER-015
     #[test]
-    fn nested_folders_are_deleted_depth_first() {
+    fn nested_folders_hidden_items_and_empty_folders_are_all_deleted() {
         let temp = tempfile::tempdir().expect("a temp dir");
         let selected = temp.path().join("selected");
         fs::create_dir_all(selected.join("nested/empty")).expect("create the tree");
         fs::write(selected.join("nested/data"), b"delete me").expect("write");
         fs::write(selected.join(".hidden"), b"delete me too").expect("write");
-        delete(&selected, &Cancellation::new(), None).expect("the tree is deleted");
+
+        let result = delete(&selected, &Cancellation::new(), None);
+
+        assert_eq!(result, Ok(()));
         assert!(!selected.exists());
     }
 
@@ -123,7 +127,10 @@ mod tests {
         let selected = temp.path().join("selected");
         fs::create_dir(&selected).expect("create the selected folder");
         symlink(&outside, selected.join("link")).expect("create the link");
-        delete(&selected, &Cancellation::new(), None).expect("the tree is deleted");
+
+        let result = delete(&selected, &Cancellation::new(), None);
+
+        assert_eq!(result, Ok(()));
         assert!(!selected.exists());
         assert_eq!(fs::read(outside.join("kept")).expect("read"), b"kept");
     }
@@ -143,7 +150,9 @@ mod tests {
                 Ok(())
             }
         };
+
         let result = delete(&selected, &Cancellation::new(), Some(&guard));
+
         assert_eq!(result, Err(TransferError::failed("Protected snapshot.")));
         assert_eq!(fs::read(protected.join("version")).expect("read"), b"backup");
     }
@@ -155,7 +164,9 @@ mod tests {
         let selected = temp.path().join("selected");
         let deepest = (0..=MAX_DEPTH).fold(selected.clone(), |path, _| path.join("d"));
         fs::create_dir_all(&deepest).expect("create the deep tree");
+
         let result = delete(&selected, &Cancellation::new(), None);
+
         assert_eq!(result, Err(nesting_error()));
         assert!(deepest.exists());
     }
@@ -173,7 +184,9 @@ mod tests {
             requested.cancel();
             Ok(())
         };
+
         let result = delete(&selected, &cancel, Some(&cancelling_guard));
+
         assert_eq!(result, Err(TransferError::Cancelled));
         assert_eq!(fs::read(selected.join("data")).expect("read"), b"kept");
     }

@@ -4,7 +4,6 @@
 //! `desktop/tests/test_device_staging.py`. No real devices.
 
 use std::fs;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -16,14 +15,6 @@ use crate::transfer_support::{
     *,
 };
 
-/// A `photo` source with new content and an existing `photo` on the phone.
-fn replacement(fixture: &Fixture) -> PathBuf {
-    let source = fixture.source_folder.join("photo");
-    write(&source, "new");
-    write(&fixture.destination_folder.join("photo"), "old");
-    source
-}
-
 /// Port of `test_replace_file_uses_reversible_renames`: the device cannot
 /// overwrite, so the old file is renamed aside, the new one renamed in and
 /// the backup removed, all within the destination folder.
@@ -32,17 +23,21 @@ fn replacement(fixture: &Fixture) -> PathBuf {
 #[test]
 fn device_replace_uses_reversible_same_folder_renames() {
     let fixture = Fixture::with_destination("phone");
-    let source = replacement(&fixture);
+    let source = fixture.replacement_source("photo", "new", "old");
     let phone = Arc::new(Device::default());
 
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Replace);
 
     assert!(result.errors.is_empty(), "{result:?}");
-    assert_eq!(result.done, [uri(&source)]);
+    assert_eq!(result.done, [file_uri(&source)]);
     assert_eq!(read(&fixture.destination_folder.join("photo")), "new");
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
-    for (from, to) in phone.moves() {
-        assert_eq!(from.parent(), to.parent(), "only renames in one folder");
+    for recorded in phone.moves() {
+        assert_eq!(
+            recorded.from.parent(),
+            recorded.to.parent(),
+            "only renames in one folder"
+        );
     }
 }
 
@@ -77,7 +72,7 @@ impl Provider for FailingInstall {
 #[test]
 fn a_failed_device_install_restores_the_original_and_removes_the_stage() {
     let fixture = Fixture::with_destination("phone");
-    let source = replacement(&fixture);
+    let source = fixture.replacement_source("photo", "new", "old");
 
     let result = fixture.copy(
         Arc::new(FailingInstall::default()),
@@ -158,7 +153,7 @@ impl Provider for WatchedAside {
 #[test]
 fn the_device_move_aside_cannot_be_cancelled() {
     let fixture = Fixture::with_destination("phone");
-    let source = replacement(&fixture);
+    let source = fixture.replacement_source("photo", "new", "old");
     let phone = Arc::new(WatchedAside::default());
 
     let result = fixture.copy(phone.clone(), &[&source], ConflictPolicy::Replace);
@@ -204,7 +199,7 @@ impl Provider for LateAside {
 #[test]
 fn a_move_aside_the_device_finished_after_an_error_is_restored() {
     let fixture = Fixture::with_destination("phone");
-    let source = replacement(&fixture);
+    let source = fixture.replacement_source("photo", "new", "old");
 
     let result = fixture.copy(
         Arc::new(LateAside::default()),

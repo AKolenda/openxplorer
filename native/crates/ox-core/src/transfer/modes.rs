@@ -69,7 +69,9 @@ pub(crate) fn path_for_unix_modes(node: &(impl Node + ?Sized)) -> Option<PathBuf
 ///
 /// When the folder cannot be opened without following links, or its mode
 /// cannot be changed.
-pub fn secure_local_staging(node: &(impl Node + ?Sized)) -> Result<Option<ItemIdentity>, TransferError> {
+pub(crate) fn secure_local_staging(
+    node: &(impl Node + ?Sized),
+) -> Result<Option<ItemIdentity>, TransferError> {
     let Some(path) = path_for_unix_modes(node) else {
         return Ok(None);
     };

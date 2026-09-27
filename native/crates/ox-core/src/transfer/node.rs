@@ -195,33 +195,28 @@ pub trait Node: Send + Sync {
 
     /// Explicit, user-confirmed permanent delete of a whole tree. Symbolic
     /// links are removed as links; their targets are never traversed.
-    /// `assert_writable` is asked about every item before it is removed.
+    /// `guard` is asked about every item before it is removed.
     ///
     /// # Errors
     ///
     /// The first failure, the guard's refusal or [`TransferError::Cancelled`];
     /// items not yet reached are left in place.
-    fn delete_tree(
-        &self,
-        cancel: &Cancellation,
-        assert_writable: Option<&WriteGuard>,
-    ) -> Result<(), TransferError>;
+    fn delete_tree(&self, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError>;
 
     /// Removes this staging tree, which the engine created. `created` is
     /// the identity recorded right after the engine made it, when the
     /// backend has one.
     ///
-    /// The default walks the tree by path ([`clean_staging`]). Local
-    /// backends override it to walk relative to pinned folders and to refuse
-    /// a folder other than `created`, so a folder moved in under the staging
-    /// name before or during cleanup is never emptied.
+    /// The default walks the tree by path (`clean_staging` in the engine's
+    /// `staging` module). Local backends override it to walk relative to
+    /// pinned folders and to refuse a folder other than `created`, so a
+    /// folder moved in under the staging name before or during cleanup is
+    /// never emptied.
     ///
     /// # Errors
     ///
     /// The first item that cannot be removed, or a staging name that now
     /// leads to another item; the caller reports the leftover.
-    ///
-    /// [`clean_staging`]: super::clean_staging
     fn delete_staging(&self, _created: Option<ItemIdentity>) -> Result<(), TransferError> {
         clean_staging(self)
     }
@@ -231,7 +226,7 @@ pub trait Node: Send + Sync {
     /// rename across folders, and some devices cannot move across folders
     /// at all. Files and folders are then built under a hidden sibling name
     /// and published by a same-folder rename.
-    fn stage_as_sibling(&self) -> bool {
+    fn has_sibling_staging(&self) -> bool {
         false
     }
 

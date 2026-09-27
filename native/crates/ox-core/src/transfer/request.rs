@@ -1,60 +1,97 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Validating a run's request before anything changes: the number of items,
-//! items selected twice, and the destination folder. Ports the checks at the
-//! start of `TransferEngine.run` in `desktop/operations.py` (XFER-019).
+//! Validating a run's request before anything changes: the operation and
+//! its destination folder, the number of items, and items selected twice.
+//! Ports the checks at the start of `TransferEngine.run` in
+//! `desktop/operations.py` (XFER-019).
 
 use std::collections::HashSet;
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
 use super::node::{Node, NodeFactory};
-use super::types::TransferMode;
+use super::types::{ConflictPolicy, Operation, TransferMode};
 
 /// The most items one run accepts.
 pub const MAX_ITEMS: usize = 100_000;
+
+impl<'a> Operation<'a> {
+    /// The operation of a request in the app's protocol: a mode, the URI
+    /// of the destination folder (`target`) and a conflict policy, as the
+    /// Python bridge passes them to `TransferEngine.run`. Trash and delete
+    /// ignore `target` and `policy`, like the Python engine.
+    ///
+    /// The Python engine counts the items first, so a request with neither
+    /// items nor a destination is refused here with the destination's
+    /// message rather than the items' one.
+    ///
+    /// # Errors
+    ///
+    /// A copy or move without a destination folder.
+    pub fn from_request(
+        mode: TransferMode,
+        target: Option<&'a str>,
+        policy: ConflictPolicy,
+    ) -> Result<Self, TransferError> {
+        let operation = match (mode, target) {
+            (TransferMode::Trash, _) => Operation::Trash,
+            (TransferMode::Delete, _) => Operation::Delete,
+            (TransferMode::Copy | TransferMode::Move, None) => return Err(missing_destination()),
+            (TransferMode::Copy, Some(destination_folder)) => Operation::Copy {
+                destination_folder,
+                policy,
+            },
+            (TransferMode::Move, Some(destination_folder)) => Operation::Move {
+                destination_folder,
+                policy,
+            },
+        };
+        Ok(operation)
+    }
+}
+
+/// The refusal of a copy or move that names no destination folder.
+fn missing_destination() -> TransferError {
+    TransferError::failed("Choose a destination folder.")
+}
 
 /// The selected URIs in their original order, each once.
 ///
 /// # Errors
 ///
 /// No items, or more than [`MAX_ITEMS`].
-pub(crate) fn distinct_items(uris: &[String]) -> Result<Vec<String>, TransferError> {
+pub(crate) fn distinct_items(uris: &[String]) -> Result<Vec<&str>, TransferError> {
     if uris.is_empty() || uris.len() > MAX_ITEMS {
         return Err(TransferError::failed("Select between 1 and 100,000 items."));
     }
     let mut seen = HashSet::new();
     let distinct = uris
         .iter()
-        .filter(|uri| seen.insert(uri.as_str()))
-        .cloned()
+        .map(String::as_str)
+        .filter(|uri| seen.insert(*uri))
         .collect();
     Ok(distinct)
 }
 
-/// The destination folder of a copy or move, resolved with `factory`;
-/// `None` for Trash and delete, which take no destination.
+/// The destination folder of a copy or move at `uri`, resolved with
+/// `factory`.
 ///
 /// # Errors
 ///
-/// No destination, a destination that is not a folder, or a failure or
+/// An empty URI, a destination that is not a folder, or a failure or
 /// cancellation while it is checked.
 pub(crate) fn destination_folder(
     factory: &NodeFactory,
-    mode: TransferMode,
-    target: Option<&str>,
+    uri: &str,
     cancel: &Cancellation,
-) -> Result<Option<Box<dyn Node>>, TransferError> {
-    if mode.is_removal() {
-        return Ok(None);
+) -> Result<Box<dyn Node>, TransferError> {
+    if uri.is_empty() {
+        return Err(missing_destination());
     }
-    let Some(target) = target.filter(|target| !target.is_empty()) else {
-        return Err(TransferError::failed("Choose a destination folder."));
-    };
-    let folder = factory(target)?;
+    let folder = factory(uri)?;
     if !folder.is_directory(Some(cancel))? {
         return Err(TransferError::failed("The destination is not a folder."));
     }
-    Ok(Some(folder))
+    Ok(folder)
 }
 
 #[cfg(test)]
@@ -84,7 +121,7 @@ mod tests {
 
         let distinct = distinct_items(&selected);
 
-        assert_eq!(distinct, Ok(uris(&["b", "a", "c"])));
+        assert_eq!(distinct, Ok(vec!["b", "a", "c"]));
     }
 
     /// parity: XFER-019
@@ -110,33 +147,56 @@ mod tests {
         let cancel = Cancellation::new();
 
         for mode in [TransferMode::Copy, TransferMode::Move] {
-            let missing = destination_folder(&factory, mode, None, &cancel).err();
-            let empty = destination_folder(&factory, mode, Some(""), &cancel).err();
-            let not_folder = destination_folder(&factory, mode, Some(&file_uri), &cancel).err();
-            let folder = destination_folder(&factory, mode, Some(&folder_uri), &cancel);
+            let missing = Operation::from_request(mode, None, ConflictPolicy::Skip).err();
+            let empty = destination_folder(&factory, "", &cancel).err();
+            let not_folder = destination_folder(&factory, &file_uri, &cancel).err();
+            let folder = destination_folder(&factory, &folder_uri, &cancel);
 
             let choose = TransferError::failed("Choose a destination folder.");
             assert_eq!(missing, Some(choose.clone()), "{mode:?}");
             assert_eq!(empty, Some(choose), "{mode:?}");
             let refusal = TransferError::failed("The destination is not a folder.");
             assert_eq!(not_folder, Some(refusal), "{mode:?}");
-            let resolved = folder
-                .expect("a folder is accepted")
-                .expect("copies have a folder");
+            let resolved = folder.expect("a folder is accepted");
             assert_eq!(resolved.uri(), folder_uri);
         }
+    }
+
+    /// parity: XFER-019
+    #[test]
+    fn a_copy_or_move_request_keeps_its_destination_and_policy() {
+        let target = Some("file:///tmp");
+
+        let copy = Operation::from_request(TransferMode::Copy, target, ConflictPolicy::Replace);
+        let moved = Operation::from_request(TransferMode::Move, target, ConflictPolicy::KeepBoth);
+
+        let expected_copy = Operation::Copy {
+            destination_folder: "file:///tmp",
+            policy: ConflictPolicy::Replace,
+        };
+        let expected_move = Operation::Move {
+            destination_folder: "file:///tmp",
+            policy: ConflictPolicy::KeepBoth,
+        };
+        assert_eq!(copy, Ok(expected_copy));
+        assert_eq!(moved, Ok(expected_move));
     }
 
     /// parity: XFER-015, XFER-019
     #[test]
     fn trash_and_delete_take_no_destination() {
-        let factory = gio_factory();
-        let cancel = Cancellation::new();
-
         for mode in [TransferMode::Trash, TransferMode::Delete] {
-            let folder = destination_folder(&factory, mode, Some("file:///tmp"), &cancel);
+            let with_target = Operation::from_request(mode, Some("file:///tmp"), ConflictPolicy::Skip)
+                .expect("a removal is accepted with a target");
+            let without_target = Operation::from_request(mode, None, ConflictPolicy::Skip)
+                .expect("a removal is accepted without a target");
 
-            assert!(matches!(folder, Ok(None)), "{mode:?}");
+            assert!(
+                matches!(with_target, Operation::Trash | Operation::Delete),
+                "{mode:?}"
+            );
+            assert_eq!(with_target.mode(), mode);
+            assert_eq!(without_target, with_target, "{mode:?}");
         }
     }
 }

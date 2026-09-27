@@ -292,26 +292,22 @@ impl Node for LocalNode {
         Ok(false)
     }
 
-    fn delete_tree(
-        &self,
-        cancel: &Cancellation,
-        assert_writable: Option<&WriteGuard>,
-    ) -> Result<(), TransferError> {
+    fn delete_tree(&self, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError> {
         cancel.check()?;
-        if let Some(guard) = assert_writable {
+        if let Some(guard) = guard {
             guard(&self.uri())?;
         }
         let is_real_directory = fs::symlink_metadata(&self.path).is_ok_and(|metadata| metadata.is_dir());
         if is_real_directory {
             for child in self.children(Some(cancel))? {
-                child.delete_tree(cancel, assert_writable)?;
+                child.delete_tree(cancel, guard)?;
             }
         }
         self.delete()
     }
 
-    fn stage_as_sibling(&self) -> bool {
-        self.provider.stage_as_sibling()
+    fn has_sibling_staging(&self) -> bool {
+        self.provider.has_sibling_staging()
     }
 
     fn native_copy_keeps_name(&self, target_folder: &dyn Node) -> bool {

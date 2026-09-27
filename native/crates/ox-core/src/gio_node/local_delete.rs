@@ -82,9 +82,9 @@ pub(super) fn delete_staging(path: &Path, created: Option<ItemIdentity>) -> Resu
 /// path once, as the user's view of the path does. The descriptor is
 /// `O_PATH`: it only anchors the `*at` calls below it.
 fn open_parent(path: &Path) -> Result<OwnedFd, TransferError> {
-    // GIO paths are absolute and free of `..`. Anything else means the path
-    // is not the one the user saw, and `..` after a link would resolve to
-    // the link target's parent, not the folder shown.
+    // XFER-015: GIO paths are absolute and free of `..`. Anything else means
+    // the path is not the one the user saw, and `..` after a link would
+    // resolve to the link target's parent, not the folder shown.
     let has_parent_reference = path.components().any(|part| part == Component::ParentDir);
     if !path.is_absolute() || has_parent_reference {
         return Err(TransferError::failed(
@@ -156,6 +156,8 @@ impl Deletion<'_> {
         }
         let seen = fs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)?;
         if depth == 0 {
+            // XFER-002: cleanup refuses a folder moved in under the staging
+            // name; only the folder the engine created is removed.
             self.require_root_identity(&seen)?;
         }
         if FileType::from_raw_mode(seen.st_mode) == FileType::Directory {
@@ -181,6 +183,8 @@ impl Deletion<'_> {
         let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
         let folder = fs::openat(parent, name, flags, Mode::empty())?;
         let opened = fs::fstat(&folder)?;
+        // XFER-015: the name was swapped for another folder between the
+        // `lstat` and the open; stop before touching anything inside it.
         require_same_item(seen, &opened)?;
         if self.folders == FolderAccess::MadePrivate {
             // Through the pinned descriptor, so the mode lands on this folder.
@@ -242,4 +246,35 @@ fn require_same_item(expected: &Stat, actual: &Stat) -> Result<(), TransferError
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    //! GIO only produces absolute paths without `..`, so the integration
+    //! tests in `tests/gio_node_cases/removal.rs` cannot reach the refusal
+    //! of other paths; it is tested here.
+
+    use super::*;
+
+    /// parity: XFER-015
+    #[test]
+    fn a_relative_or_dotdot_path_is_refused_before_anything_is_opened() {
+        let refusal = TransferError::failed("Open the actual folder before deleting its contents.");
+
+        let relative = open_parent(Path::new("relative")).err();
+        let through_parent = open_parent(Path::new("/tmp/a/../b")).err();
+
+        assert_eq!(relative, Some(refusal.clone()));
+        assert_eq!(through_parent, Some(refusal));
+    }
+
+    /// parity: XFER-015
+    #[test]
+    fn an_absolute_folder_path_is_opened() {
+        let temp = tempfile::tempdir().expect("a temp dir");
+
+        let opened = open_parent(temp.path());
+
+        assert!(opened.is_ok(), "{:?}", opened.err());
+    }
 }
