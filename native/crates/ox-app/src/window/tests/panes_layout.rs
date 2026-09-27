@@ -5,7 +5,7 @@
 use gtk::prelude::*;
 
 use super::geometry::{bounds, laid_out, Bounds};
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
 
 /// The children of `widget`, in order.
 fn children(widget: &impl IsA<gtk::Widget>) -> Vec<gtk::Widget> {
@@ -152,4 +152,27 @@ fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted()
     test.activate("view", Some("large"));
     wait_for_frames(&test.window, 2);
     assert_eq!(test.window.chrome().status.active_view_buttons(), ["Large icons"]);
+}
+
+#[gtk::test]
+fn a_selected_tile_keeps_the_text_colour() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    test.activate("theme", Some("light"));
+    test.activate("view", Some("large"));
+    test.window.folder_model().select_only(1);
+    wait_for_frames(&test.window, 3);
+    let grid = &test.window.content().grid;
+    let labels = descendants::<gtk::Label>(grid);
+    let selected = labels.iter().find(|label| label.text() == "Notes 2.txt");
+    let other = labels.iter().find(|label| label.text() == "Notes 10.txt");
+    let (Some(selected), Some(other)) = (selected, other) else {
+        panic!("the grid shows both names");
+    };
+    assert_eq!(
+        selected.color().to_str(),
+        other.color().to_str(),
+        "not GTK's white selected text on the pale selection"
+    );
 }

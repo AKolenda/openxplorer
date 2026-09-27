@@ -14,7 +14,7 @@ window.ox.csd { border-radius: 8px; }
 window.ox.maximized, window.ox.fullscreen { border-radius: 0; }
 
 /* Reset GTK's button look: Explorer buttons are flat until hovered. */
-window.ox button, popover.ox-popover button {
+window.ox button {
   background: none;
   border: none;
   box-shadow: none;
@@ -338,14 +338,20 @@ gridview.files > child {
   background: none;
 }
 gridview.files > child:hover { background-color: @ox_hover; }
-gridview.files > child:selected { background-color: @ox_selected; box-shadow: inset 0 0 0 1px alpha(#80b4e0, .38); }
+gridview.files > child:selected {
+  background-color: @ox_selected;
+  color: @ox_text;
+  box-shadow: inset 0 0 0 1px alpha(#80b4e0, .38);
+}
 gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_accent; }
 .files .cell-dim { color: @ox_muted; }
 .loading-line { min-height: 2px; background-color: @ox_selected; }
 .loading-line > trough { min-height: 2px; background: none; border: none; }
 .loading-line > trough > progress { min-height: 2px; background-color: @ox_accent; border-radius: 0; border: none; }
-.typeahead-hint { color: @ox_muted; }
-.typeahead-hint.miss { color: @ox_error; }
+/* The type-to-select hint is accent-coloured, and muted when no name
+   matches (`.type-select-status[data-miss=true]`). */
+.typeahead-hint { color: @ox_accent; }
+.typeahead-hint.miss { color: @ox_muted; }
 
 /* Empty and error states (style.css .empty-state) */
 .empty-state { color: @ox_muted; padding: 25px; }
@@ -508,7 +514,7 @@ window.ox.max-680 .ox-titlebar { padding-left: 5px; }
 window.ox.max-680 .ox-titlebar button.caption { min-width: 32px; }
 
 /* ---- Menus (style.css .menu.win10, the classic style the app defaults to) ---- */
-popover.ox-menu > contents, popover.menu.ox-menu > contents, popover.ox-popover > contents {
+popover.ox-menu > contents, popover.menu.ox-menu > contents {
   background-color: @ox_chrome;
   color: @ox_text;
   border: 1px solid @ox_border;
@@ -530,9 +536,6 @@ popover.menu.ox-menu modelbutton:hover, popover.menu.ox-menu modelbutton:selecte
 popover.menu.ox-menu modelbutton:disabled { color: alpha(@ox_text, .34); }
 popover.menu.ox-menu modelbutton accelerator { color: @ox_muted; margin-left: 12px; }
 popover.menu.ox-menu separator { margin: 4px 5px; background-color: @ox_border; min-height: 1px; }
-popover.ox-popover button.crumb-item { min-height: 30px; padding: 0 12px 0 8px; border-radius: 4px; }
-popover.ox-popover button.crumb-item:hover { background-color: @ox_hover; }
-popover.ox-popover label.empty { color: @ox_muted; padding: 6px 12px; }
 tooltip.background {
   background-color: @ox_chrome;
   color: @ox_text;

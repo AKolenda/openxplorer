@@ -13,7 +13,7 @@ use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use crate::test_support::harness::{descendants, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, Fixture, TestWindow, ThemeGuard};
 
 /// Presses `key` in the details view, as far as the window's own key
 /// handling goes. Returns true when the window handled the key itself.
@@ -37,15 +37,33 @@ fn hint(test: &TestWindow) -> String {
     test.window.chrome().status.hint.text().to_string()
 }
 
+/// Whether the hint is drawn in the light palette's `hex` colour.
+fn hint_is_drawn_in(test: &TestWindow, hex: &str) -> bool {
+    let expected = gdk::RGBA::parse(hex).expect("a CSS colour");
+    let drawn = test.window.chrome().status.hint.color();
+    let channels = [
+        (drawn.red(), expected.red()),
+        (drawn.green(), expected.green()),
+        (drawn.blue(), expected.blue()),
+    ];
+    channels.iter().all(|(a, b)| (a - b).abs() < 0.01)
+}
+
 /// parity: SEL-020
 #[gtk::test]
 fn typing_selects_the_next_matching_name_and_names_it_in_the_hint() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    let _theme = ThemeGuard::keep();
+    test.activate("theme", Some("light"));
     test.window.content().focus();
     test.window.type_text("n");
     assert_eq!(test.selected_names(), ["Notes 2.txt"]);
     assert_eq!(hint(&test), "Jump to: n — Notes 2.txt");
+    assert!(
+        hint_is_drawn_in(&test, "#0067c0"),
+        "a match is shown in the accent colour"
+    );
     test.window.type_text("otes 1");
     assert_eq!(test.selected_names(), ["Notes 10.txt"]);
 }
@@ -55,10 +73,16 @@ fn typing_selects_the_next_matching_name_and_names_it_in_the_hint() {
 fn an_unmatched_prefix_keeps_the_selection_and_says_so() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    let _theme = ThemeGuard::keep();
+    test.activate("theme", Some("light"));
     test.window.type_text("d");
     test.window.type_text("zz");
     assert_eq!(test.selected_names(), ["Documents"]);
     assert_eq!(hint(&test), "No name starts with “dzz”");
+    assert!(
+        hint_is_drawn_in(&test, "#686b70"),
+        "a miss is muted, not an error"
+    );
 }
 
 #[gtk::test]
