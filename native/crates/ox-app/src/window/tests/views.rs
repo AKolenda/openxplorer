@@ -120,6 +120,23 @@ fn both_views_show_each_name_with_its_icon() {
     }
 }
 
+#[gtk::test]
+fn a_dragged_sidebar_stops_where_the_folder_pane_keeps_its_room() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let workspace = &test.window.chrome().workspace;
+    assert_eq!(workspace.position(), 210, "a new sidebar is 210 pixels wide");
+    workspace.set_position(5000);
+    let details = &test.window.details_pane().root;
+    let details_width = if details.is_visible() { details.width() } else { 0 };
+    let room_left = workspace.width() - workspace.position() - details_width;
+    assert!(workspace.position() <= 560);
+    assert!(
+        room_left >= 300,
+        "the folder pane keeps 300 pixels, not {room_left}"
+    );
+}
+
 /// parity: SET-015, SET-016
 #[gtk::test]
 fn changed_view_preferences_are_saved_for_new_windows() {

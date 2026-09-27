@@ -154,9 +154,11 @@ impl AddressBar {
 
     /// What the bar shows now.
     pub fn mode(&self) -> AddressMode {
-        match self.stack.visible_child_name().as_deref() {
-            Some("entry") => AddressMode::Entry,
-            _ => AddressMode::Crumbs,
+        let shown = self.stack.visible_child_name();
+        if shown.as_deref() == Some(AddressMode::Entry.name()) {
+            AddressMode::Entry
+        } else {
+            AddressMode::Crumbs
         }
     }
 

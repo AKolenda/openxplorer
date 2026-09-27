@@ -116,6 +116,21 @@ fn navigating_while_editing_returns_to_the_crumbs() {
 }
 
 #[gtk::test]
+fn left_and_right_move_focus_between_crumbs() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let crumbs = test.window.chrome().address.crumb_buttons();
+    let [.., parent, current] = crumbs.as_slice() else {
+        panic!("a folder has several crumbs");
+    };
+    parent.grab_focus();
+    test.window.emit_move_focus(gtk::DirectionType::Right);
+    assert_eq!(GtkWindowExt::focus(&test.window), Some(current.clone().upcast()));
+    test.window.emit_move_focus(gtk::DirectionType::Left);
+    assert_eq!(GtkWindowExt::focus(&test.window), Some(parent.clone().upcast()));
+}
+
+#[gtk::test]
 fn escape_discards_the_typed_address() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());

@@ -202,7 +202,22 @@ pub(crate) fn watch_folder(uri: &str, on_change: impl Fn() + 'static) -> Watch {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+    use std::fs;
+
+    use ox_core::location::file_uri;
+
     use super::*;
+    use crate::test_support::harness::{wait_for, wait_until};
+
+    /// The monitor threads of this process that are running now.
+    fn monitor_threads() -> usize {
+        let tasks = fs::read_dir("/proc/self/task").expect("Linux lists a process's threads");
+        let names = tasks
+            .filter_map(Result::ok)
+            .filter_map(|task| fs::read_to_string(task.path().join("comm")).ok());
+        names.filter(|name| name.trim() == "folder-watch").count()
+    }
 
     #[test]
     fn only_changes_to_the_listing_trigger_a_refresh() {
@@ -210,5 +225,33 @@ mod tests {
         assert!(changes_listing(gio::FileMonitorEvent::MovedOut));
         assert!(!changes_listing(gio::FileMonitorEvent::PreUnmount));
         assert!(!changes_listing(gio::FileMonitorEvent::Unmounted));
+    }
+
+    /// parity: PERF-003
+    #[gtk::test]
+    fn a_watch_monitors_on_a_thread_of_its_own_until_dropped() {
+        let folder = tempfile::tempdir().expect("the test home has room for a folder");
+        let before = monitor_threads();
+        let watch = watch_folder(&file_uri(folder.path()), || {});
+        wait_until("the monitor thread", || monitor_threads() == before + 1);
+        drop(watch);
+        wait_until("the monitor thread to end", || monitor_threads() == before);
+    }
+
+    /// parity: VIEW-055
+    #[gtk::test]
+    fn a_burst_of_changes_is_reported_once_it_settles() {
+        let folder = tempfile::tempdir().expect("the test home has room for a folder");
+        let reports = Rc::new(Cell::new(0));
+        let counter = Rc::clone(&reports);
+        let _watch = watch_folder(&file_uri(folder.path()), move || counter.set(counter.get() + 1));
+        // Give the monitor thread time to start watching before the burst.
+        wait_for(Duration::from_millis(200));
+        for name in ["one.txt", "two.txt", "three.txt"] {
+            fs::write(folder.path().join(name), b"burst").expect("fixture file");
+        }
+        wait_until("the change report", || reports.get() > 0);
+        wait_for(CHANGE_DEBOUNCE * 2);
+        assert_eq!(reports.get(), 1, "one report for the whole burst");
     }
 }

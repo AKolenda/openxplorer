@@ -327,8 +327,10 @@ impl Content {
 
     /// The view that lists items now.
     pub fn view(&self) -> FolderView {
-        if self.views.visible_child_name().as_deref() == Some("grid") {
-            FolderView::Icons(self.grid_size.get())
+        let icons = FolderView::Icons(self.grid_size.get());
+        let shown = self.views.visible_child_name();
+        if shown.as_deref() == Some(icons.stack_name()) {
+            icons
         } else {
             FolderView::Details
         }

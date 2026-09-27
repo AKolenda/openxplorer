@@ -54,6 +54,12 @@ impl Preference {
     }
 }
 
+/// Room the folder pane keeps beside the sidebar (`sidebarLimit` in app.js).
+const FOLDER_PANE_ROOM: i32 = 300;
+
+/// How far from the pane handle a double-click still resets the sidebar.
+const HANDLE_REACH: f64 = 6.0;
+
 /// The sidebar width to start with: the saved one within the Python app's
 /// limits, else 210.
 fn start_sidebar_width(saved: Option<u32>) -> i32 {
@@ -61,6 +67,15 @@ fn start_sidebar_width(saved: Option<u32>) -> i32 {
     saved
         .and_then(|width| i32::try_from(width).ok())
         .map_or(DEFAULT_SIDEBAR_WIDTH, |width| width.clamp(narrowest, widest))
+}
+
+/// The widest the sidebar may be in a workspace `workspace_width` pixels
+/// wide beside a details pane `details_width` wide, so the folder pane
+/// keeps its room (`sidebarLimit` in app.js).
+fn widest_sidebar(workspace_width: i32, details_width: i32) -> i32 {
+    let (narrowest, widest) = SIDEBAR_WIDTHS;
+    let room_left = workspace_width - details_width - FOLDER_PANE_ROOM;
+    room_left.clamp(narrowest, widest)
 }
 
 impl BrowserWindow {
@@ -84,6 +99,54 @@ impl BrowserWindow {
             ),
         );
         self.save_sidebar_width_after_drags();
+        self.keep_sidebar_within_limit();
+        self.reset_sidebar_on_double_click();
+    }
+
+    /// The widest the sidebar may be now, or `None` before the workspace
+    /// is laid out.
+    fn sidebar_limit(&self) -> Option<i32> {
+        let workspace_width = self.chrome().workspace.width();
+        if workspace_width == 0 {
+            return None;
+        }
+        let pane = &self.details_pane().root;
+        let details_width = if pane.is_visible() { pane.width() } else { 0 };
+        Some(widest_sidebar(workspace_width, details_width))
+    }
+
+    /// Stops a dragged sidebar where the folder pane would lose its room.
+    fn keep_sidebar_within_limit(&self) {
+        self.chrome().workspace.connect_position_notify(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |workspace| {
+                let limit = window.sidebar_limit();
+                if let Some(limit) = limit.filter(|limit| workspace.position() > *limit) {
+                    workspace.set_position(limit);
+                }
+            }
+        ));
+    }
+
+    /// A double-click on the pane handle returns the sidebar to 210 pixels
+    /// and saves that, as the Python app's resizer does.
+    fn reset_sidebar_on_double_click(&self) {
+        let click = gtk::GestureClick::new();
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        click.connect_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_, presses, x, _| {
+                let workspace = &window.chrome().workspace;
+                let on_handle = (x - f64::from(workspace.position())).abs() <= HANDLE_REACH;
+                if presses == 2 && on_handle {
+                    workspace.set_position(DEFAULT_SIDEBAR_WIDTH);
+                    window.save_preference(Preference::SidebarWidth(DEFAULT_SIDEBAR_WIDTH));
+                }
+            }
+        ));
+        self.chrome().workspace.add_controller(click);
     }
 
     /// Saves the sidebar width when the user finishes dragging it, never
@@ -151,6 +214,14 @@ mod tests {
         assert_eq!(start_sidebar_width(Some(300)), 300);
         assert_eq!(start_sidebar_width(Some(90)), 140);
         assert_eq!(start_sidebar_width(Some(9000)), 560);
+    }
+
+    /// parity: SIDE-023
+    #[test]
+    fn the_sidebar_leaves_the_folder_pane_300_pixels() {
+        assert_eq!(widest_sidebar(1320, 262), 560);
+        assert_eq!(widest_sidebar(900, 262), 338);
+        assert_eq!(widest_sidebar(600, 262), 140, "never narrower than 140");
     }
 
     #[test]

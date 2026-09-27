@@ -81,6 +81,19 @@ fn escape_clears_the_typed_prefix_before_the_selection() {
 }
 
 #[gtk::test]
+fn leaving_the_view_starts_a_new_prefix() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.content().focus();
+    test.window.type_text("n");
+    test.window.chrome().search.grab_focus();
+    assert_eq!(hint(&test), "", "the prefix ended with the focus");
+    test.window.content().focus();
+    test.window.type_text("r");
+    assert_eq!(test.selected_names(), ["Résumé.txt"]);
+}
+
+#[gtk::test]
 fn navigation_keys_start_a_new_prefix() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
