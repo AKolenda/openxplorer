@@ -48,6 +48,7 @@ mod types;
 pub(crate) use commit::verify_installation;
 pub use engine::{TransferEngine, MAX_ITEMS};
 pub use error::TransferError;
+pub(crate) use guard::nesting_error;
 pub use guard::{check_write_tree, guard_destination, MAX_DEPTH};
 pub use modes::secure_local_staging;
 pub use names::{backup_name, is_own_staging_name, new_copy_name, staging_name};

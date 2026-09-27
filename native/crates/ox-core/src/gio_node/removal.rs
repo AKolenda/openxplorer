@@ -1,42 +1,44 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Explicit Trash and permanent deletion, kept as separate operations.
+//!
+//! Ports `GioNode.trash` and `GioNode.delete_tree` in
+//! `desktop/gio_backend.py`.
 
 use gio::prelude::*;
 
-use super::GioNode;
-use crate::transfer::{Cancellation, Node, NodeKind, TransferError, WriteGuard};
+use super::{local_delete, remote_delete, GioNode};
+use crate::transfer::{Cancellation, TransferError, WriteGuard};
 
 impl GioNode {
+    /// Moves the item to the Trash. Never falls back to a permanent delete.
     pub(super) fn trash_item(&self, cancel: &Cancellation) -> Result<(), TransferError> {
         cancel.check()?;
         self.require_item()?;
-        self.file.trash(Some(cancel.cancellable())).map_err(|error| {
-            if error.kind::<gio::IOErrorEnum>() == Some(gio::IOErrorEnum::NotSupported) {
-                TransferError::NotSupported("Trash is not supported at this location. The original item was not permanently deleted. Delete it permanently instead, or use the server’s recycle-bin policy.".into())
-            } else {
-                error.into()
-            }
-        })
+        self.file
+            .trash(Some(cancel.cancellable()))
+            .map_err(|error| match error.kind::<gio::IOErrorEnum>() {
+                Some(gio::IOErrorEnum::NotSupported) => TransferError::NotSupported(
+                    "Trash is not supported at this location. The original item was not \
+                     permanently deleted. Delete it permanently instead, or use the server’s \
+                     recycle-bin policy."
+                        .into(),
+                ),
+                _ => error.into(),
+            })
     }
 
-    pub(super) fn delete_remote_item(
+    /// Permanently deletes the item and everything inside it. Local items
+    /// are deleted relative to pinned folder descriptors; every other
+    /// location is deleted by path, as the Python app does.
+    pub(super) fn delete_item_tree(
         &self,
         cancel: &Cancellation,
         guard: Option<&WriteGuard>,
     ) -> Result<(), TransferError> {
-        cancel.check()?;
-        if let Some(guard) = guard {
-            guard(&self.uri())?;
+        self.require_item()?;
+        match self.local_path() {
+            Some(path) => local_delete::delete_tree(&path, cancel, guard),
+            None => remote_delete::delete_tree(&self.file, cancel, guard),
         }
-        if self.query_info(Some(cancel))?.kind == NodeKind::Directory {
-            // GIO offers path-based recursion, not handles that pin each
-            // ancestor. Refuse until the remote adapter can guarantee that
-            // a concurrent rename cannot redirect deletion outside the tree.
-            return Err(TransferError::NotSupported(
-                "Safe permanent deletion of remote folders is not available in this native preview.".into(),
-            ));
-        }
-        cancel.check()?;
-        self.file.delete(Some(cancel.cancellable())).map_err(Into::into)
     }
 }
