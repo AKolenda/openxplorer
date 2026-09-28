@@ -119,7 +119,7 @@ impl BrowserWindow {
     pub(super) fn render_places(&self) {
         let places = self.places();
         let entries = sidebar::sidebar_entries(&places, &self.imp().locations.borrow());
-        self.sidebar().show(entries);
+        self.sidebar().set_entries(entries);
         if let Some(uri) = self.current_uri() {
             self.sidebar().select(&uri);
         }

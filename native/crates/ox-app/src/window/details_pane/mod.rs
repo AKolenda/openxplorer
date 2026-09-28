@@ -170,7 +170,7 @@ impl DetailsPane {
         WindowAction::PinFolder.assign_to(&*imp.pin_folder_button);
     }
 
-    /// Shows the folder art a pane shows before its first [`Self::show`].
+    /// Shows the folder art a pane shows before its first [`Self::set_content`].
     fn show_placeholder(&self) {
         self.imp().preview.set_art(Art::Folder, PREVIEW_SIZE);
     }
@@ -182,7 +182,7 @@ impl DetailsPane {
     }
 
     /// Shows `content`.
-    pub(super) fn show(&self, content: &PaneContent) {
+    pub(super) fn set_content(&self, content: &PaneContent) {
         let imp = self.imp();
         match content.preview {
             Preview::Art(art) => imp.preview.set_art(art, PREVIEW_SIZE),

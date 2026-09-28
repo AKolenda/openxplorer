@@ -76,7 +76,7 @@ impl BrowserWindow {
             }
         };
         let selected = self.folder_pane().model().summary();
-        self.status_bar().show(subject, selected);
+        self.status_bar().set_counts(subject, selected);
     }
 
     /// Shows the selection's properties, or the folder's, in the details
@@ -99,6 +99,6 @@ impl BrowserWindow {
             locations: &locations,
             network: &network,
         });
-        self.details_pane().show(&content);
+        self.details_pane().set_content(&content);
     }
 }

@@ -186,7 +186,7 @@ impl StatusBar {
     }
 
     /// Shows the item count and the selection.
-    pub(super) fn show(&self, subject: StatusSubject, selected: SelectionSummary) {
+    pub(super) fn set_counts(&self, subject: StatusSubject, selected: SelectionSummary) {
         let imp = self.imp();
         imp.count.set_text(&count_text(subject));
         let selection = match subject {

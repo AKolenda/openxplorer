@@ -172,7 +172,7 @@ impl BrowserWindow {
             let tab_views = session.tabs().iter().map(|tab| tab_view(tab, sources));
             tab_views.collect()
         };
-        self.tab_strip().show(&views);
+        self.tab_strip().set_tabs(&views);
     }
 
     /// Replaces the breadcrumbs with the editable address (Ctrl+L).

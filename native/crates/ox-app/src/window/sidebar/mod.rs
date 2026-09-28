@@ -162,7 +162,7 @@ impl Sidebar {
     }
 
     /// Replaces the rows.
-    pub(super) fn show(&self, entries: Vec<SidebarEntry>) {
+    pub(super) fn set_entries(&self, entries: Vec<SidebarEntry>) {
         let list = self.list();
         list.remove_all();
         let rows: Vec<gtk::ListBoxRow> = entries

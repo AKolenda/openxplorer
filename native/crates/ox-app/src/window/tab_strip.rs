@@ -123,7 +123,7 @@ impl TabStrip {
     }
 
     /// Replaces the tabs with `tabs` and scrolls the active one into view.
-    pub(super) fn show(&self, tabs: &[TabView]) {
+    pub(super) fn set_tabs(&self, tabs: &[TabView]) {
         let imp = self.imp();
         remove_children(&*imp.tab_list);
         let mut active = None;
