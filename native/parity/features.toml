@@ -8175,7 +8175,7 @@ bridge = ["clipboardSet", "clipboardGet", "transferConflicts", "operate"]
 dolphin = "edit_cut Ctrl+X/Shift+Del, edit_copy Ctrl+C/Ctrl+Ins, edit_paste Ctrl+V/Shift+Ins"
 gnome = "x-special/gnome-copied-files + text/uri-list on the Gdk clipboard.; x-special/gnome-copied-files + text/uri-list on GdkClipboard; x-special/gnome-copied-files + text/uri-list"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy); native/crates/ox-app/src/window/file_ops/clipboard.rs (copy_and_cut_say_how_many_items_are_ready_to_paste)."
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy, ctrl_c_on_an_item_that_is_no_file_or_folder_asks_to_open_the_share, ctrl_c_copies_while_an_operation_runs); native/crates/ox-app/src/window/file_ops/clipboard.rs (copy_and_cut_say_how_many_items_are_ready_to_paste). Ctrl+C and Ctrl+X run copySelection directly, as onKey does."
 
 [[feature]]
 id = "CLIP-002"
@@ -8197,8 +8197,8 @@ sources = [
 python_tests = ["desktop/tests/ui_release.py::Ctrl+X produces a cut payload"]
 bridge = ["clipboardSet", "clipboardGet"]
 dolphin = "Cut items shown semi-transparent; KFileItemClipboard"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (cut_then_paste_moves_the_items_and_empties_the_cut). Missing: showing cut items at 50% opacity."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (cut_then_paste_moves_the_items_and_empties_the_cut, a_cut_dims_its_items_in_both_views_until_the_clipboard_changes, ctrl_x_in_a_previous_version_is_refused_and_ctrl_c_copies). GTK gives rows and tiles no per-item class, so the cells of a cut item fade to 50% and the selection behind them stays clear."
 
 [[feature]]
 id = "CLIP-003"
@@ -8331,7 +8331,7 @@ python_tests = [
 bridge = ["clipboardGet"]
 dolphin = "KDE cut selection marker"
 native = "done"
-native_note = "native/crates/ox-core/src/clipboard/tests.rs (kde_requires_an_exact_short_cut_marker); native/crates/ox-app/src/window/tests/clipboard.rs (a_cut_from_dolphin_pastes_as_a_move). A read whose owner changed meanwhile is dropped (native/crates/ox-app/src/window/file_ops/clipboard.rs)."
+native_note = "native/crates/ox-core/src/clipboard/tests.rs (kde_requires_an_exact_short_cut_marker); native/crates/ox-app/src/window/tests/clipboard.rs (a_cut_from_dolphin_pastes_as_a_move); native/crates/ox-app/src/window/tests/clipboard_interop.rs (a_uri_list_without_a_kde_marker_pastes_as_a_copy, a_read_overtaken_by_an_owner_change_is_dropped): a read whose owner changed meanwhile is dropped and not remembered."
 
 [[feature]]
 id = "CLIP-007"
@@ -8415,7 +8415,7 @@ python_tests = [
 bridge = ["clipboardGet"]
 gnome = "GtkClipboard owner-change"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (text_on_the_clipboard_is_no_file_list_and_disables_paste); the window reads the clipboard when it changes and when it becomes active."
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (text_on_the_clipboard_is_no_file_list_and_disables_paste, a_cut_dims_its_items_in_both_views_until_the_clipboard_changes); the window reads the clipboard when it changes and when it becomes active, which updates Paste and the cut dimming."
 
 [[feature]]
 id = "CLIP-010"
@@ -8429,7 +8429,8 @@ sources = ["desktop/file_clipboard.py:123"]
 python_tests = []
 bridge = ["clipboardSet"]
 gnome = "GtkClipboard store / clipboard manager"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (every_published_format_is_offered_for_a_clipboard_manager_to_keep): the content is local and all four formats are storable; GtkApplication stores the display clipboard when it shuts down (gtk_main_sync). GNOME Shell 46 itself keeps only text and images, so on GNOME the files survive only with a clipboard manager, as for the Python app; that end-to-end check is manual."
 
 [[feature]]
 id = "CLIP-011"
@@ -8448,8 +8449,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["clipboardSet", "clipboardGet", "clipboardConsume", "clipboardText"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (paste_during_a_search_asks_to_open_the_destination_folder); native/crates/ox-app/src/window/file_ops/clipboard.rs words the share-root and previous-version refusals. Missing: tests of those two, and the unavailable-clipboard message (GTK always provides a clipboard)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (paste_during_a_search_asks_to_open_the_destination_folder, ctrl_c_on_an_item_that_is_no_file_or_folder_asks_to_open_the_share, ctrl_x_in_a_previous_version_is_refused_and_ctrl_c_copies). The unavailable-clipboard message has no trigger: every GDK display has a clipboard, and a failed claim says 'The desktop clipboard could not be claimed.'"
 
 [[feature]]
 id = "CLIP-012"
@@ -8468,7 +8469,8 @@ sources = [
 python_tests = []
 bridge = ["clipboardText"]
 dolphin = "Copy Location (Ctrl+Alt+C)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_copies_the_selected_items_address_or_the_folders, copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most); native/crates/ox-app/src/window/copy_path.rs (local_smb_and_device_items_copy_their_display_path, without_one_selected_item_the_folder_is_copied_and_a_page_has_none). Setting the display clipboard's text cannot fail in GTK 4, so the 'Location' fallback dialog has no trigger."
 
 [[feature]]
 id = "CLIP-013"
@@ -8488,8 +8490,8 @@ sources = [
 python_tests = []
 bridge = ["clipboardText"]
 dolphin = "copy_location: Ctrl+Alt+C"
-native = "todo"
-native_note = "Porting notes: OpenXplorer has 'Copy path' in the command bar and menu, falling back to the current folder when nothing is selected, but no shortcut. Explorer's Ctrl+Shift+C ('Copy as path') takes precedence; Ctrl+Alt+C may be added as an alias."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_runs_on_explorers_and_dolphins_keys): Ctrl+Shift+C and Ctrl+Alt+C run Copy path outside text fields, and the context menus show Ctrl+Shift+C."
 
 [[feature]]
 id = "CLIP-014"
@@ -8546,7 +8548,7 @@ python_tests = ["desktop/tests/test_v05.py::ClipboardTests::test_plain_text_is_n
 bridge = ["clipboardGet"]
 gnome = "gdk::Clipboard: check formats() for a file-list MIME type, then read_future; a missing format or a read error means no file clipboard"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (text_on_the_clipboard_is_no_file_list_and_disables_paste); every failed or empty read is \"no files\" in native/crates/ox-app/src/window/file_ops/clipboard.rs."
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (text_on_the_clipboard_is_no_file_list_and_disables_paste); native/crates/ox-app/src/window/tests/clipboard_interop.rs (a_uri_list_without_a_kde_marker_pastes_as_a_copy, an_empty_clipboard_disables_paste, an_image_on_the_clipboard_is_no_file_list, an_empty_file_list_payload_is_no_file_list, a_conversion_the_owner_refuses_is_no_file_list, a_read_overtaken_by_an_owner_change_is_dropped). Every failed or empty read is \"no files\" in native/crates/ox-app/src/window/file_ops/clipboard.rs."
 
 [[feature]]
 id = "DND-001"

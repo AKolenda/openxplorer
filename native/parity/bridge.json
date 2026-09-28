@@ -163,7 +163,9 @@
         "native/crates/ox-core/src/clipboard/tests.rs::external_fingerprint_matches_the_python_clipboard",
         "native/crates/ox-core/src/clipboard/tests.rs::legacy_line_endings_do_not_drop_valid_selections",
         "native/crates/ox-app/src/window/tests/clipboard.rs::text_on_the_clipboard_is_no_file_list_and_disables_paste",
-        "native/crates/ox-app/src/window/tests/clipboard.rs::a_cut_from_dolphin_pastes_as_a_move"
+        "native/crates/ox-app/src/window/tests/clipboard.rs::a_cut_from_dolphin_pastes_as_a_move",
+        "native/crates/ox-app/src/window/tests/clipboard_interop.rs::a_conversion_the_owner_refuses_is_no_file_list",
+        "native/crates/ox-app/src/window/tests/clipboard_interop.rs::a_read_overtaken_by_an_owner_change_is_dropped"
       ]
     },
     "clipboardSet": {
@@ -177,9 +179,13 @@
       ]
     },
     "clipboardText": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Native: Copy path (its button, its menu item and Ctrl+Shift+C or Ctrl+Alt+C) puts the display path on the display clipboard as text with gdk::Clipboard::set_text, which cannot fail, so the Python fallback dialog has no trigger. The copy buttons of Properties and the mount setup are proven with their own features.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_copies_the_selected_items_address_or_the_folders",
+        "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_runs_on_explorers_and_dolphins_keys",
+        "native/crates/ox-app/src/window/copy_path.rs::local_smb_and_device_items_copy_their_display_path"
+      ]
     },
     "connect": {
       "status": "pending",
