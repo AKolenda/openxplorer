@@ -98,7 +98,7 @@ def promised_files(tree: InstalledTree) -> list[PurePosixPath]:
     paths = tree.paths
     app_id = tree.channel.app_id
     share = paths.share
-    files = [paths.program, paths.command(tree.channel),
+    files = [paths.program, paths.command,
              share / 'applications' / f'{app_id}.desktop',
              share / 'metainfo' / f'{app_id}.metainfo.xml',
              share / 'icons/hicolor/scalable/apps' / f'{app_id}.svg',
@@ -118,7 +118,7 @@ def check_promised_files(report: Report, tree: InstalledTree) -> None:
     if missing:
         raise VerificationError(f'Promised files are missing: {", ".join(missing)}')
     report.check('Every promised file is installed', True)
-    command = tree.path_of(tree.paths.command(tree.channel))
+    command = tree.path_of(tree.paths.command)
     report.check('The command runs the program',
                  command.resolve() == tree.path_of(tree.paths.program).resolve()
                  and command.stat().st_mode & 0o111 != 0)
@@ -176,7 +176,7 @@ def check_service_file(report: Report, tree: InstalledTree) -> None:
     app_id = tree.channel.app_id
     path = tree.path_of(tree.paths.share / 'dbus-1/services' / f'{app_id}.service')
     section = key_file(path)['D-BUS Service']
-    command = tree.paths.command(tree.channel)
+    command = tree.paths.command
     report.check('The D-Bus service starts the app as a GApplication service',
                  section.get('Name') == app_id
                  and section.get('Exec') == f'{command} --gapplication-service')

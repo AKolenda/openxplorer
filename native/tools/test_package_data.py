@@ -82,7 +82,7 @@ class InstalledPathsTests(unittest.TestCase):
                 paths = package_data.installed_paths(case.channel, case.layout)
 
                 self.assertEqual(paths.program, PurePosixPath(case.program))
-                self.assertEqual(paths.command(case.channel), PurePosixPath(case.command))
+                self.assertEqual(paths.command, PurePosixPath(case.command))
                 expected_helper = case.mount_helper and PurePosixPath(case.mount_helper)
                 self.assertEqual(paths.mount_helper, expected_helper)
 
@@ -145,7 +145,7 @@ class InstallTests(StagingTestCase):
     def test_the_command_link_resolves_inside_the_staging_folder(self) -> None:
         tree = self.install(Channel.PREVIEW, Layout.DEBIAN)
 
-        command = tree.path_of(tree.paths.command(Channel.PREVIEW))
+        command = tree.path_of(tree.paths.command)
 
         self.assertTrue(command.is_symlink())
         self.assertFalse(Path(command.readlink()).is_absolute())

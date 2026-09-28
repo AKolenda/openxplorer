@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import unittest
 
 import flatpak_cargo_sources
@@ -12,21 +13,8 @@ from flatpak_cargo_sources import LockedCrate, LockFileError
 FLATPAK_FOLDER = flatpak_cargo_sources.NATIVE / 'packaging' / 'flatpak'
 PREVIEW_MANIFEST = FLATPAK_FOLDER / 'io.winspace.Development.Native.yml'
 STABLE_MANIFEST = FLATPAK_FOLDER / 'io.winspace.Development.yml'
-
-DOCUMENTED_PERMISSIONS = [
-    '--socket=wayland',
-    '--socket=fallback-x11',
-    '--share=ipc',
-    '--device=dri',
-    '--filesystem=host',
-    '--talk-name=org.gtk.vfs.*',
-    '--filesystem=xdg-run/gvfsd',
-    '--filesystem=xdg-run/gvfs',
-    '--talk-name=org.freedesktop.secrets',
-    '--own-name=org.freedesktop.FileManager1',
-    '--talk-name=org.freedesktop.Flatpak',
-    '--share=network',
-]
+PACKAGING_README = flatpak_cargo_sources.NATIVE / 'packaging' / 'README.md'
+PERMISSIONS_HEADING = '### Flatpak permissions'
 
 LOCK_WITH_A_MEMBER_AND_A_CRATE = '''
 version = 4
@@ -41,6 +29,15 @@ version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 '''
+
+
+def documented_permissions() -> list[str]:
+    """Return the permissions the README's permission table explains, in its order."""
+    section = PACKAGING_README.read_text(encoding='utf-8').split(PERMISSIONS_HEADING, 1)[1]
+    rows = [line for line in section.split('\n### ', 1)[0].splitlines()
+            if line.startswith('| `')]
+    first_cells = [row.split('|')[1] for row in rows]
+    return [permission for cell in first_cells for permission in re.findall(r'`(--[^`]+)`', cell)]
 
 
 def manifest_body(path: Path) -> str:
@@ -119,14 +116,12 @@ class ManifestTests(unittest.TestCase):
         self.assertIn('cargo build --release --locked --offline', manifest)
 
     def test_the_flatpak_grants_only_the_permissions_the_readme_explains(self) -> None:
-        # native/packaging/README.md, "Flatpak permissions", explains each of
-        # these; a new permission needs its reason there and here.
         lines = manifest_body(PREVIEW_MANIFEST).splitlines()
         block = lines[lines.index('finish-args:') + 1:lines.index('modules:')]
         permissions = [line.strip().removeprefix('- ') for line in block
                        if line.strip().startswith('- ')]
 
-        self.assertEqual(permissions, DOCUMENTED_PERMISSIONS)
+        self.assertEqual(permissions, documented_permissions())
 
 if __name__ == '__main__':
     unittest.main()

@@ -85,7 +85,8 @@ class SimulatedSystem:
         if argv[0] == PROMPT:
             return subprocess.CompletedProcess(argv, 0, '', '')
         if argv[0] == PACKAGE_QUERY:
-            return subprocess.CompletedProcess(argv, 0, f'install ok installed\n{self.version}', '')
+            installed = f'install ok installed\n{self.version}'
+            return subprocess.CompletedProcess(argv, 0, installed, '')
         result: subprocess.CompletedProcess[str] = subprocess.run(argv, **options)
         return result
 

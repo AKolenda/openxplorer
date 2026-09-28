@@ -36,9 +36,9 @@ finish-args:
   # Service under the Python app's schema io.winspace.SmbCredentials, so both
   # apps find each other's saved sign-ins.
   - --talk-name=org.freedesktop.secrets
-  # "Show in folder" (opt-in): the app answers org.freedesktop.FileManager1
-  # only after the user turns the integration on in Settings. Flatpak only
-  # permits owning the name; it never claims it by itself.
+  # "Show in folder" (opt-in): lets the running app answer
+  # org.freedesktop.FileManager1 after the user turns the integration on in
+  # Settings. Flatpak only permits owning the name; it never claims it itself.
   - --own-name=org.freedesktop.FileManager1
   # Host programs through flatpak-spawn --host: Open in Terminal starts the
   # host's terminal, and making OpenXplorer the default file manager (opt-in)

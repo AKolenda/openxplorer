@@ -104,7 +104,10 @@ class InstalledPaths:
     """Where one package's files are on the installed system."""
 
     program: PurePosixPath
+    # The folder of the commands on PATH.
     commands: PurePosixPath
+    # The command that starts the app, as the desktop and service files name it.
+    command: PurePosixPath
     share: PurePosixPath
     licences: PurePosixPath
     # The mount helper's folder where the package takes over the Python
@@ -112,10 +115,6 @@ class InstalledPaths:
     # the stable host packages do: the preview installs beside the Python
     # package, and a Flatpak cannot add commands to the host.
     mount_helper: PurePosixPath | None
-
-    def command(self, channel: Channel) -> PurePosixPath:
-        """Return the command that starts the app, as desktop and service files name it."""
-        return self.commands / channel.package
 
 
 def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
@@ -125,6 +124,7 @@ def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
         return InstalledPaths(
             program=PurePosixPath('/app/bin', package),
             commands=PurePosixPath('/app/bin'),
+            command=PurePosixPath('/app/bin', package),
             share=PurePosixPath('/app/share'),
             licences=PurePosixPath('/app/share/licenses', channel.app_id),
             mount_helper=None)
@@ -134,12 +134,14 @@ def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
         return InstalledPaths(
             program=home / 'bin' / package,
             commands=PurePosixPath('/usr/bin'),
+            command=PurePosixPath('/usr/bin', package),
             share=PurePosixPath('/usr/share'),
             licences=PurePosixPath('/usr/share/doc', package),
             mount_helper=home / 'mount-share' if has_helper else None)
     return InstalledPaths(
         program=PurePosixPath('/usr/bin', package),
         commands=PurePosixPath('/usr/bin'),
+        command=PurePosixPath('/usr/bin', package),
         share=PurePosixPath('/usr/share'),
         licences=PurePosixPath('/usr/share/licenses', package),
         mount_helper=PurePosixPath('/usr/share', package, 'mount-share') if has_helper else None)
@@ -207,7 +209,7 @@ def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
     """
     paths = installed_paths(request.channel, request.layout)
     staging = Staging(request.staging)
-    install_program(staging, request.channel, request.program, paths)
+    install_program(staging, request.program, paths)
     install_desktop_data(staging, request.channel, paths)
     install_licences(staging, paths.licences)
     install_crate_licences(staging, paths.licences / 'rust-crates', crates)
@@ -215,13 +217,11 @@ def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
         install_python_commands(staging, request.channel, paths.commands, paths.mount_helper)
 
 
-def install_program(staging: Staging, channel: Channel, program: Path,
-                    paths: InstalledPaths) -> None:
+def install_program(staging: Staging, program: Path, paths: InstalledPaths) -> None:
     """Install the program and, where it lives outside PATH, its command."""
     staging.copy(program, paths.program, PROGRAM_MODE)
-    command = paths.command(channel)
-    if command != paths.program:
-        staging.link(command, paths.program)
+    if paths.command != paths.program:
+        staging.link(paths.command, paths.program)
 
 
 def install_desktop_data(staging: Staging, channel: Channel, paths: InstalledPaths) -> None:
@@ -233,7 +233,7 @@ def install_desktop_data(staging: Staging, channel: Channel, paths: InstalledPat
     staging.copy(PACKAGING_DATA / f'{app_id}.metainfo.xml',
                  share / 'metainfo' / f'{app_id}.metainfo.xml', DATA_MODE)
     staging.copy(APP_ICON, share / 'icons/hicolor/scalable/apps' / f'{app_id}.svg', DATA_MODE)
-    service = build_service_file(app_id, paths.command(channel))
+    service = build_service_file(app_id, paths.command)
     staging.write(service, share / 'dbus-1/services' / f'{app_id}.service', DATA_MODE)
 
 

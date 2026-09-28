@@ -24,6 +24,27 @@ and interaction performance must be measured before claiming an improvement.
 The Python modules in `desktop/` are the behavioural specification. Each Rust
 module names the Python file it ports; port its tests along with it.
 
+## Install
+
+The preview installs beside the Python app, under its own application ID
+`io.winspace.Development.Native`, and changes no default applications,
+mounts or user data. Download the file for your distribution from the
+release, then:
+
+| Distribution | Install |
+|---|---|
+| Ubuntu 24.04 and newer, Zorin OS 18, Debian 13 and newer | `sudo apt install ./openxplorer-native_<version>_amd64.deb` |
+| Fedora | `sudo dnf install ./openxplorer-native-<version>-1.<dist>.x86_64.rpm` |
+| openSUSE Tumbleweed | `sudo zypper install ./openxplorer-native-<version>-1.<dist>.x86_64.rpm` |
+| Arch Linux | `sudo pacman -U openxplorer-native-<version>-1-x86_64.pkg.tar.zst` |
+| Debian 12 and any other distribution | `flatpak install --user io.winspace.Development.Native.flatpak` |
+
+The distribution packages need GTK 4.14; Debian 12 has GTK 4.8, so use the
+Flatpak there. The Flatpak keeps its settings in `~/.var/app/`, apart from a
+distribution package's. [packaging/README.md](packaging/README.md) describes
+every format, how to build it, its dependencies, the Flatpak's permissions
+and how the release that replaces the Python app moves existing users over.
+
 ## Build and run
 
 Needs Rust 1.92+ (the minimum required by the locked GTK/GIO crates), GTK
