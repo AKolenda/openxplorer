@@ -34,7 +34,7 @@ pub(super) fn plain_action(
 }
 
 /// An action whose target is a string (a location or a volume id).
-fn text_action(
+pub(super) fn text_action(
     window_action: WindowAction,
     run: impl Fn(&BrowserWindow, &str) + 'static,
 ) -> gio::ActionEntry<BrowserWindow> {
@@ -134,6 +134,11 @@ impl BrowserWindow {
         self.install_appearance_actions();
         self.install_settings_actions();
         self.install_unported_actions();
+        self.install_context_menu_actions();
+        let [journal, clipboard] = self.install_file_actions();
+        let mut handlers = self.imp().handlers.borrow_mut();
+        handlers.journal = Some(journal);
+        handlers.clipboard = Some(clipboard);
     }
 
     fn install_tab_actions(&self) {

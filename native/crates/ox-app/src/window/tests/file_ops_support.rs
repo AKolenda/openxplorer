@@ -1,0 +1,91 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! Helpers the file-operation tests share: finding the open dialog,
+//! answering it, selecting items by name, and the guard of every test that
+//! uses the Recycle Bin.
+
+use std::path::PathBuf;
+
+use gtk::prelude::*;
+use gtk::{gio, glib};
+
+use crate::test_support::harness::{descendants, wait_until, TestWindow};
+use crate::window::dialog::Dialog;
+
+/// The dialog open over `test`'s window, once it shows.
+///
+/// # Panics
+///
+/// When none opens in time.
+pub(super) fn open_dialog(test: &TestWindow) -> Dialog {
+    wait_until("a dialog to open", || dialog_over(test).is_some());
+    dialog_over(test).expect("wait_until returned only once a dialog showed")
+}
+
+/// The dialog over `test`'s window, if one shows.
+pub(super) fn dialog_over(test: &TestWindow) -> Option<Dialog> {
+    gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|window| window.downcast::<Dialog>().ok())
+        .find(|dialog| {
+            dialog.is_visible() && dialog.transient_for().as_ref() == Some(test.window.upcast_ref())
+        })
+}
+
+/// Waits until no dialog shows over `test`'s window.
+pub(super) fn wait_for_no_dialog(test: &TestWindow) {
+    wait_until("the dialog to close", || dialog_over(test).is_none());
+}
+
+/// The dialog's first text field.
+pub(super) fn text_field(dialog: &Dialog) -> gtk::Entry {
+    descendants::<gtk::Entry>(dialog)
+        .into_iter()
+        .next()
+        .expect("the dialog has a text field")
+}
+
+/// Selects the items called `names` in `test`'s folder view.
+pub(super) fn select_names(test: &TestWindow, names: &[&str]) {
+    let model = test.window.folder_model();
+    model.select_none();
+    for position in 0..model.n_items() {
+        let is_wanted = model
+            .name_at(position)
+            .is_some_and(|name| names.contains(&name.as_str()));
+        if is_wanted {
+            model.selection().select_item(position, false);
+        }
+    }
+    assert_eq!(test.selected_names().len(), names.len(), "every name is listed");
+}
+
+/// Whether the window action `name` is enabled.
+pub(super) fn is_enabled(test: &TestWindow, name: &str) -> bool {
+    test.window
+        .lookup_action(name)
+        .is_some_and(|action| action.is_enabled())
+}
+
+/// Panics unless the Recycle Bin is the private one of this test run, as
+/// `native/tools/check.py` sets it up: a test must never fill or empty the
+/// user's own. The same check as ox-core's Recycle Bin tests.
+pub(super) fn require_private_trash() {
+    let data_home = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from);
+    let temp = std::env::temp_dir();
+    let is_private = data_home.as_ref().is_some_and(|folder| folder.starts_with(&temp));
+    assert!(
+        is_private,
+        "Recycle Bin tests only run with a private XDG_DATA_HOME below {}; found {data_home:?}",
+        temp.display()
+    );
+    assert_eq!(
+        Some(glib::user_data_dir()),
+        data_home,
+        "GLib uses the private data folder"
+    );
+    let schemes = gio::Vfs::default().supported_uri_schemes();
+    assert!(
+        schemes.iter().any(|scheme| scheme == "trash"),
+        "this test needs GVfs with its Trash backend; found {schemes:?}"
+    );
+}

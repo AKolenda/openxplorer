@@ -13,6 +13,7 @@ name = "openxplorer-native"
 path = "src/main.rs"
 
 [dependencies]
+async-channel.workspace = true
 gtk.workspace = true
 gio.workspace = true
 glib.workspace = true

@@ -95,18 +95,38 @@ fn the_command_bar_has_the_current_controls_in_order() {
     );
 }
 
+/// The command bar button that runs `action`.
+fn command_button(test: &TestWindow, action: &str) -> gtk::Button {
+    descendants::<gtk::Button>(test.window.command_bar())
+        .into_iter()
+        .find(|button| button.action_name().as_deref() == Some(action))
+        .unwrap_or_else(|| panic!("a button runs {action}"))
+}
+
+/// parity: CMD-001, CMD-002, CMD-016
 #[gtk::test]
-fn unported_file_commands_are_disabled_and_name_their_milestone() {
+fn the_edit_commands_follow_the_selection_with_their_python_tooltips() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    for action in ["win.cut", "win.copy", "win.paste", "win.rename", "win.trash"] {
-        let button = descendants::<gtk::Button>(test.window.command_bar())
-            .into_iter()
-            .find(|button| button.action_name().as_deref() == Some(action))
-            .unwrap_or_else(|| panic!("a button runs {action}"));
-        assert!(!button.is_sensitive(), "{action} waits for its workflow");
-        let tooltip = button.tooltip_text().unwrap_or_default();
-        assert!(tooltip.ends_with("arrives with file operations."), "{tooltip}");
+    let edit_commands = [
+        ("win.cut", "Cut (Ctrl+X)"),
+        ("win.copy", "Copy (Ctrl+C)"),
+        ("win.rename", "Rename (F2)"),
+        ("win.trash", "Move to Trash (Delete)"),
+    ];
+    for (action, tooltip) in edit_commands {
+        let button = command_button(&test, action);
+        assert!(!button.is_sensitive(), "{action} needs a selection");
+        assert_eq!(button.tooltip_text().as_deref(), Some(tooltip));
+    }
+    let paste = command_button(&test, "win.paste");
+    assert_eq!(paste.tooltip_text().as_deref(), Some("Paste files (Ctrl+V)"));
+    test.window.folder_model().select_only(1);
+    for (action, _) in edit_commands {
+        assert!(
+            command_button(&test, action).is_sensitive(),
+            "{action} acts on one item"
+        );
     }
     assert!(
         WidgetExt::activate_action(&test.window, "win.copy-path", None).is_ok(),

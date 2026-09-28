@@ -4,7 +4,7 @@
    heights follow the text size (src/theme/fonts.rs). */
 
 /* ---- Menu surface (E03 classic, C07, C42) ---- */
-popover.ox-menu > contents, popover.menu.ox-menu > contents {
+popover.ox-menu > contents {
   background-color: @ox_flyout;
   color: @ox_text;
   border: 1px solid @ox_flyout_stroke;
@@ -30,17 +30,6 @@ popover.ox-menu list > row .shortcut { color: @ox_muted; padding-left: 12px; }
 /* A disabled row greys its shortcut too, as the web's opacity did. */
 popover.ox-menu list > row:disabled .shortcut { color: @ox_text_disabled; }
 popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-color: @ox_border; }
-
-/* ---- The folder views' context menu, still a GtkPopoverMenu; it becomes
-   an ox-menu popover (menu_popover.rs) with the file-operation commands
-   (native/ROADMAP.md, "Next: complete safe file-operation workflows") ---- */
-popover.menu.ox-menu modelbutton { min-height: 33px; padding: 0 9px; border-radius: 0; color: @ox_text; }
-popover.menu.ox-menu modelbutton:hover, popover.menu.ox-menu modelbutton:selected { background-color: @ox_hover; }
-popover.menu.ox-menu modelbutton:active { background-color: @ox_pressed; }
-popover.menu.ox-menu modelbutton:disabled { color: @ox_text_disabled; }
-popover.menu.ox-menu modelbutton accelerator { color: @ox_muted; margin-left: 12px; }
-popover.menu.ox-menu modelbutton:disabled accelerator { color: @ox_text_disabled; }
-popover.menu.ox-menu separator { margin: 4px 5px; background-color: @ox_border; min-height: 1px; }
 
 /* ---- Toast (§4.15, E08) ---- */
 .toast {

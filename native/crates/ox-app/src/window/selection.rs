@@ -47,6 +47,8 @@ impl BrowserWindow {
         self.set_action_enabled(WindowAction::Open, selected == 1);
         // Copy path copies one item, or the folder when none is selected.
         self.set_action_enabled(WindowAction::CopyPath, selected <= 1);
+        self.set_action_enabled(WindowAction::PinSelected, selected == 1);
+        self.update_file_commands();
     }
 
     /// Runs `change`, which swaps, reloads or clears the folder model,

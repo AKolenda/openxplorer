@@ -92,9 +92,9 @@ fn windows_group() -> SettingsGroup {
     group
 }
 
-/// Dragging tabs and files, which arrives with file operations.
+/// Dragging tabs and files, which arrives with drag and drop.
 fn dragging_group() -> SettingsGroup {
-    let pending = Availability::Unported(Milestone::FileOperations);
+    let pending = Availability::Unported(Milestone::DragAndDrop);
     let group = SettingsGroup::pending("Tabs and files", pending);
     for text in [MOVE_TABS, DRAG_TO_APPS, DROP_ON_FOLDERS] {
         let row = SettingRow::new(text);

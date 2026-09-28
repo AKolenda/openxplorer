@@ -23,8 +23,9 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuEntry {
     MenuItem::new(label, glyph, action).into()
 }
 
-/// The New menu (`openNewMenu`).
-pub(super) fn new_menu() -> Vec<MenuEntry> {
+/// The New menu (`openNewMenu`), which the folder background's "New…"
+/// opens too.
+pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
     vec![
         MenuItem::new("Folder", Icon::FolderAdd, WindowAction::NewFolder)
             .with_shortcut("Ctrl+Shift+N")

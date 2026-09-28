@@ -155,7 +155,18 @@
                         <property name="end-child">
                           <object class="GtkBox">
                             <child>
-                              <object class="OxFolderPane" id="folder_pane"/>
+                              <!-- The transfer panel floats over the bottom of
+                                   the folder pane, between the sidebar and
+                                   the details pane (`.transfer`). -->
+                              <object class="GtkOverlay">
+                                <property name="hexpand">true</property>
+                                <property name="child">
+                                  <object class="OxFolderPane" id="folder_pane"/>
+                                </property>
+                                <child type="overlay">
+                                  <object class="OxTransferPanel" id="transfer_panel"/>
+                                </child>
+                              </object>
                             </child>
                             <child>
                               <object class="OxDetailsPane" id="details_pane"/>

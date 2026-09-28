@@ -168,10 +168,14 @@ const SCALED_HEIGHTS: &[ScaledHeight] = &[TITLE_BAR, TAB];
 const SOLID_FRAME_PADDING: i32 = 3;
 
 /// The solid window frame's title-colour band, which ends where the title
-/// bar does: the frame's padding plus the title bar at `scale`.
+/// bar does: the frame's padding plus the title bar at `scale`. Dialogs
+/// have no title bar, so they have no band.
 fn solid_frame_rule(scale: f64) -> String {
     let band = SOLID_FRAME_PADDING + TITLE_BAR.height(scale);
-    format!("window.ox.solid-csd {{ box-shadow: inset 0 {band}px @ox_title, inset 0 0 0 3px @ox_border; }}")
+    format!(
+        "window.ox.solid-csd:not(.ox-dialog) {{ box-shadow: inset 0 {band}px @ox_title, inset 0 0 0 3px \
+         @ox_border; }}"
+    )
 }
 
 /// The details view's rows: `detail_row` pixels apart, less the 1-pixel

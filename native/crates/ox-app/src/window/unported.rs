@@ -18,16 +18,21 @@ use super::BrowserWindow;
 /// The `native/ROADMAP.md` milestone that brings a command or a setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Milestone {
-    /// "Complete safe file-operation workflows", which also brings file
-    /// and tab drag-and-drop between windows.
-    FileOperations,
+    /// The rest of "Complete safe file-operation workflows": file drag and
+    /// drop, and tabs moved between windows.
+    DragAndDrop,
     /// The "Network and devices" service.
     NetworkAndDevices,
-    /// The "Search and metadata" service: the search index and folder
-    /// sizes.
+    /// The "Search and metadata" service: the search index.
     SearchAndMetadata,
-    /// The "Desktop integration" service: default apps, Show in folder and
-    /// the Brave download folder.
+    /// The rest of "Search and metadata": properties, folder sizes and
+    /// Open with.
+    ItemDetails,
+    /// The "Archives and recovery" service: ZIP extraction and previous
+    /// versions.
+    ArchivesAndRecovery,
+    /// The "Desktop integration" service: default apps, Show in folder,
+    /// the terminal and the Brave download folder.
     DesktopIntegration,
     /// The "Distribution" service: packages, the source they ship with and
     /// the update flow.
@@ -38,16 +43,18 @@ impl Milestone {
     /// How tooltips and disabled settings name the milestone.
     pub(crate) const fn description(self) -> &'static str {
         match self {
-            Milestone::FileOperations => "file operations",
+            Milestone::DragAndDrop => "drag and drop between windows",
             Milestone::NetworkAndDevices => "network and device support",
             Milestone::SearchAndMetadata => "cached search",
+            Milestone::ItemDetails => "properties, folder sizes and Open with",
+            Milestone::ArchivesAndRecovery => "archives and previous versions",
             Milestone::DesktopIntegration => "desktop integration",
             Milestone::Distribution => "packaging and updates",
         }
     }
 
     /// The sentence a disabled control shows under its usual text: "Not in
-    /// the native preview yet: arrives with file operations."
+    /// the native preview yet: arrives with drag and drop between windows."
     pub(crate) fn notice(self) -> String {
         format!(
             "Not in the native preview yet: arrives with {}.",
@@ -70,23 +77,19 @@ const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand 
 }
 
 /// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 18] = [
-    command(WindowAction::NewFolder, Milestone::FileOperations),
-    command(WindowAction::NewTextDocument, Milestone::FileOperations),
-    command(WindowAction::NewFile, Milestone::FileOperations),
-    command(WindowAction::NewMarkdownDocument, Milestone::FileOperations),
-    command(WindowAction::NewCsvFile, Milestone::FileOperations),
-    command(WindowAction::NewJsonFile, Milestone::FileOperations),
-    command(WindowAction::NewHtmlDocument, Milestone::FileOperations),
-    command(WindowAction::NewFromTemplate, Milestone::FileOperations),
-    command(WindowAction::Cut, Milestone::FileOperations),
-    command(WindowAction::Copy, Milestone::FileOperations),
-    command(WindowAction::Paste, Milestone::FileOperations),
-    command(WindowAction::Rename, Milestone::FileOperations),
-    command(WindowAction::Trash, Milestone::FileOperations),
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 14] = [
+    command(WindowAction::MoveTabToNewWindow, Milestone::DragAndDrop),
+    command(WindowAction::MoveTabToWindow, Milestone::DragAndDrop),
     command(WindowAction::MapNetworkLocation, Milestone::NetworkAndDevices),
     command(WindowAction::DiscoverServers, Milestone::NetworkAndDevices),
+    command(WindowAction::SignOut, Milestone::NetworkAndDevices),
     command(WindowAction::CacheFolder, Milestone::SearchAndMetadata),
+    command(WindowAction::OpenWith, Milestone::ItemDetails),
+    command(WindowAction::CalculateFolderSize, Milestone::ItemDetails),
+    command(WindowAction::Properties, Milestone::ItemDetails),
+    command(WindowAction::ExtractAll, Milestone::ArchivesAndRecovery),
+    command(WindowAction::PreviousVersions, Milestone::ArchivesAndRecovery),
+    command(WindowAction::OpenInTerminal, Milestone::DesktopIntegration),
     // The dialog names where the installed source and the corresponding
     // source archive are, which packaging decides.
     command(WindowAction::License, Milestone::Distribution),
@@ -98,11 +101,6 @@ pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 18] = [
 fn milestone_of(action: WindowAction) -> Option<Milestone> {
     let unported = UNPORTED_COMMANDS.iter().find(|command| command.action == action);
     unported.map(|command| command.milestone)
-}
-
-/// Whether `action` is a command that is shown but disabled.
-pub(super) fn is_unported(action: WindowAction) -> bool {
-    milestone_of(action).is_some()
 }
 
 /// The tooltip of a disabled command's control: its usual tooltip, then
@@ -132,13 +130,15 @@ mod tests {
     #[test]
     fn a_disabled_command_names_the_milestone_that_brings_it() {
         assert_eq!(
-            tooltip(WindowAction::Cut, "Cut (Ctrl+X)"),
-            "Cut (Ctrl+X)\nNot in the native preview yet: arrives with file operations."
+            tooltip(WindowAction::MoveTabToNewWindow, "Move tab to new window"),
+            "Move tab to new window\nNot in the native preview yet: arrives with drag and drop between windows."
         );
     }
 
     #[test]
     fn a_working_command_keeps_its_tooltip() {
         assert_eq!(tooltip(WindowAction::CopyPath, "Copy path"), "Copy path");
+        assert_eq!(tooltip(WindowAction::Rename, "Rename (F2)"), "Rename (F2)");
+        assert_eq!(tooltip(WindowAction::Cut, "Cut (Ctrl+X)"), "Cut (Ctrl+X)");
     }
 }

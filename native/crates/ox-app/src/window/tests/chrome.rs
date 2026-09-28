@@ -140,14 +140,27 @@ fn the_open_windows_menu_lists_every_window_then_new_window_and_quit() {
 fn a_disabled_menu_item_names_the_milestone_that_brings_it() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let new_button = menu_button_with_class(&test, "new-command");
-    let menu = app_menu(&new_button);
-    let folder = menu.rows().into_iter().next().expect("New lists Folder first");
-    let tooltip = folder.tooltip_text().unwrap_or_default();
+    let more_button = menu_button_with_class(&test, "more-command");
+    let more = app_menu(&more_button);
+    more_button.popup();
+    let cache = more.row("Cache this folder for search");
+    let new_menu = app_menu(&menu_button_with_class(&test, "new-command"));
+    let folder = new_menu
+        .rows()
+        .into_iter()
+        .next()
+        .expect("New lists Folder first");
+    assert!(!cache.is_sensitive());
     assert_eq!(
-        tooltip.as_str(),
-        "Folder\nNot in the native preview yet: arrives with file operations."
+        cache.tooltip_text().unwrap_or_default().as_str(),
+        "Cache this folder for search\nNot in the native preview yet: arrives with cached search."
     );
+    assert_eq!(
+        folder.tooltip_text().unwrap_or_default().as_str(),
+        "Folder",
+        "a ported command names no milestone"
+    );
+    more_button.popdown();
 }
 
 /// A new window on a landing page has no file list to focus; GTK's first

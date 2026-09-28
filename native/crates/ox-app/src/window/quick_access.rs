@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Pinning folders to Quick access.
+//! Pinning folders to Quick access, and unpinning them.
 //!
-//! Ports `pinEntry` and `pinCurrent` in `desktop/ui/app.js`: the one
-//! selected folder, or the folder the tab shows, goes at the end of Quick
-//! access, with the Python app's messages. The pin is saved off the main
-//! thread through the Python app's own settings file and lock; no file is
-//! moved.
+//! Ports `pinEntry`, `pinCurrent` and the pin half of `removeBookmark` in
+//! `desktop/ui/app.js`: the one selected folder, or the folder the tab
+//! shows, goes at the end of Quick access, and "Unpin from Quick access"
+//! removes only the pin (a standard folder's pin is hidden), with the
+//! Python app's messages. The pins are saved off the main thread through
+//! the Python app's own settings file and lock; no file is moved or
+//! deleted.
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::pin_target;
 use ox_core::location::same_location;
-use ox_core::settings::{BookmarkRequest, SettingsError};
+use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
 use crate::locations::Page;
 use crate::settings_store::Change;
@@ -69,6 +71,28 @@ impl BrowserWindow {
                     let message = match result {
                         Ok(()) => "Pinned to Quick access. No files were moved.".to_owned(),
                         Err(error) => format!("Could not pin: {error}"),
+                    };
+                    window.show_message(&message);
+                }
+            ),
+        );
+    }
+
+    /// "Unpin from Quick access": removes the pin of `uri`; the folder
+    /// stays (SIDE-009).
+    pub(super) fn unpin(&self, uri: &str) {
+        let request = BookmarkRequest::new(uri.to_owned(), String::new());
+        let change: Change =
+            Box::new(move |settings| settings.bookmark(BookmarkAction::Remove, BookmarkKind::Pin, &request));
+        self.context().change_settings(
+            change,
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |result: Result<(), SettingsError>| {
+                    let message = match result {
+                        Ok(()) => "Unpinned. The folder was not deleted.".to_owned(),
+                        Err(error) => error.to_string(),
                     };
                     window.show_message(&message);
                 }

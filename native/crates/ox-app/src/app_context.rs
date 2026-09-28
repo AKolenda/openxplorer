@@ -9,11 +9,14 @@
 //! emits `places-changed`, which every window connects to, when a pin, a
 //! saved share, a visited server, a standard folder ([`known_folders`]) or
 //! a preference changes, and `layout-reset` when Settings restores the
-//! default pane widths.
+//! default pane widths. The file operations of every window share the
+//! undo journal and the previous-versions protection ([`file_operations`]).
 
+mod file_operations;
 mod known_folders;
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -21,6 +24,7 @@ use gtk::{gio, glib};
 use ox_core::entry::Entry;
 use ox_core::places::FolderLocations;
 use ox_core::settings::{Bookmark, PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
+use ox_core::versions::PreviousVersions;
 
 use crate::places;
 use crate::settings_store::{Change, Reply, SettingsStore};
@@ -33,18 +37,24 @@ const PLACES_CHANGED: &str = "places-changed";
 /// default widths ("Reset sidebar and column widths" in Settings).
 const LAYOUT_RESET: &str = "layout-reset";
 
+/// Emitted when Undo or Redo would now do something else, so every window
+/// relabels the commands.
+const JOURNAL_CHANGED: &str = "journal-changed";
+
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
     use std::rc::Rc;
-    use std::sync::OnceLock;
+    use std::sync::{Arc, OnceLock};
 
     use gtk::glib::subclass::Signal;
     use gtk::subclass::prelude::*;
     use gtk::{gio, glib};
+    use ox_core::ops::UndoJournal;
     use ox_core::places::Place;
     use ox_core::settings::Bookmark;
+    use ox_core::versions::PreviousVersions;
 
-    use super::{LAYOUT_RESET, PLACES_CHANGED};
+    use super::{JOURNAL_CHANGED, LAYOUT_RESET, PLACES_CHANGED};
     use crate::settings_store::SettingsStore;
     use crate::theme::Skin;
 
@@ -66,6 +76,12 @@ mod imp {
         /// The number of the latest reading of `user-dirs.dirs` started; a
         /// reading that finishes after a newer one started is dropped.
         pub(super) latest_folder_reading: Cell<u64>,
+        /// What Undo and Redo can do, shared by every window as Dolphin's
+        /// undo manager is.
+        pub(super) undo_journal: RefCell<UndoJournal>,
+        /// The previous-versions service, whose read-only rule every file
+        /// operation's worker asks, hence shared across threads.
+        pub(super) previous_versions: OnceCell<Arc<PreviousVersions>>,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,
@@ -84,6 +100,7 @@ mod imp {
                 vec![
                     Signal::builder(PLACES_CHANGED).build(),
                     Signal::builder(LAYOUT_RESET).build(),
+                    Signal::builder(JOURNAL_CHANGED).build(),
                 ]
             })
         }
@@ -113,6 +130,10 @@ impl AppContext {
         let context: Self = glib::Object::new();
         let imp = context.imp();
         imp.skin.set(skin).expect("a new AppContext has no skin yet");
+        let versions = PreviousVersions::new(settings.directory());
+        imp.previous_versions
+            .set(Arc::new(versions))
+            .expect("a new AppContext has no previous-versions service yet");
         imp.settings
             .set(SettingsStore::new(settings))
             .expect("a new AppContext has no settings yet");

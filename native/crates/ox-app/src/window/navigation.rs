@@ -10,7 +10,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::location::{self, parent_location, LocationError};
+use ox_core::location::{self, normalise_navigation, parent_location, LocationError, VirtualPlace};
 
 use crate::locations::{self, Page};
 
@@ -34,8 +34,8 @@ struct SavedTabView {
 impl BrowserWindow {
     /// The canonical location for an address: the home folder for its
     /// legacy page names, a landing page by URI, the home folder or a
-    /// landing page by title, else a folder relative to the current one
-    /// (see [`Self::resolve_relative`]).
+    /// landing page by title, the Recycle Bin or a folder in it, else a
+    /// folder relative to the current one (see [`Self::resolve_relative`]).
     ///
     /// # Errors
     ///
@@ -50,6 +50,9 @@ impl BrowserWindow {
         }
         if let Some(place) = self.place_titled(typed) {
             return Ok(place);
+        }
+        if let Some(recycle_bin) = recycle_bin_location(typed)? {
+            return Ok(recycle_bin);
         }
         self.resolve_relative(address)
     }
@@ -285,4 +288,24 @@ impl BrowserWindow {
             self.navigate_or_report(&parent);
         }
     }
+}
+
+/// The Recycle Bin by its title or URI, or a folder in it, for `typed`;
+/// `None` for any other address. The Python app could not show the Trash;
+/// the native app lists it like a folder (OPS-040).
+///
+/// # Errors
+///
+/// A `trash:` address that is not a canonical location.
+fn recycle_bin_location(typed: &str) -> Result<Option<String>, LocationError> {
+    let is_titled = VirtualPlace::from_title(typed) == Some(VirtualPlace::RecycleBin);
+    if !is_titled && !typed.starts_with("trash:") {
+        return Ok(None);
+    }
+    let address = if is_titled {
+        VirtualPlace::RecycleBin.uri()
+    } else {
+        typed
+    };
+    normalise_navigation(address, None, &glib::home_dir()).map(Some)
 }

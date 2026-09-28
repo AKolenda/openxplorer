@@ -311,5 +311,7 @@ impl BrowserWindow {
             pane.show_empty(&state);
         }
         self.update_status();
+        self.update_file_commands();
+        self.learn_trash_support();
     }
 }

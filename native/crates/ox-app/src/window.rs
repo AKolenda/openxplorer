@@ -9,8 +9,9 @@
 //! [`caption_buttons`]), the navigation row ([`navigation_buttons`],
 //! [`address_bar`], [`search_box`]), the [`command_bar`], the [`sidebar`],
 //! the [`folder_pane`], the [`details_pane`], the [`status_bar`] and the
-//! [`toast`]. On the Settings tab the [`SettingsPage`] takes the place of
-//! everything under the title bar ([`settings_tab`]).
+//! [`toast`], and over the folder pane the [`transfer_panel`] of the
+//! running file operation. On the Settings tab the [`SettingsPage`] takes
+//! the place of everything under the title bar ([`settings_tab`]).
 //!
 //! The controller lives in submodules, one job each: tab state
 //! ([`session`], read through [`active_tab`]), changing location
@@ -18,8 +19,9 @@
 //! ([`loading`]), the selection ([`selection`]), the desktop's volumes and
 //! places ([`environment`]), Quick access ([`quick_access`]), mounting
 //! ([`mounting`]), the skin ([`appearance`]), activation, actions, input
-//! ([`type_to_select`]), and what the window connects and lets go of
-//! ([`connections`]).
+//! ([`type_to_select`]), the file operations and their [`dialog`]s
+//! ([`file_ops`]), the context menus ([`context_menu`], [`tab_menu`]), and
+//! what the window connects and lets go of ([`connections`]).
 //! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
 //! [`search_box::SearchBox::connect_query_changed`]), so the controller
@@ -41,8 +43,10 @@ mod connections;
 mod context_menu;
 mod copy_path;
 mod details_pane;
+mod dialog;
 mod empty_page;
 mod environment;
+mod file_ops;
 mod folder_pane;
 mod gestures;
 mod input;
@@ -65,9 +69,11 @@ mod settings_tab;
 mod sidebar;
 mod status_bar;
 mod tab_layout;
+mod tab_menu;
 mod tab_strip;
 mod title_bar;
 mod toast;
+mod transfer_panel;
 mod type_to_select;
 mod unported;
 mod widget_tree;
@@ -115,6 +121,7 @@ mod imp {
     use super::command_bar::CommandBar;
     use super::connections::ExternalHandlers;
     use super::details_pane::DetailsPane;
+    use super::file_ops::FileOperations;
     use super::folder_pane::FolderPane;
     use super::search_box::SearchBox;
     use super::session::Session;
@@ -123,6 +130,7 @@ mod imp {
     use super::status_bar::StatusBar;
     use super::tab_strip::TabStrip;
     use super::toast::Toast;
+    use super::transfer_panel::TransferPanel;
     use super::type_to_select::Typeahead;
     use crate::app_context::AppContext;
     use crate::settings_page::SettingsPage;
@@ -173,6 +181,10 @@ mod imp {
         /// The details pane beside the folder pane.
         #[template_child]
         pub(super) details_pane: TemplateChild<DetailsPane>,
+        /// The running file operation's progress and Cancel, over the
+        /// folder pane.
+        #[template_child]
+        pub(super) transfer_panel: TemplateChild<TransferPanel>,
         /// The message at the bottom of the workspace.
         #[template_child]
         pub(super) toast: TemplateChild<Toast>,
@@ -211,6 +223,9 @@ mod imp {
         pub(super) window_width: Cell<WindowWidth>,
         /// What the window must disconnect when it goes away.
         pub(super) handlers: RefCell<ExternalHandlers>,
+        /// The running file operation, Trash support and the file
+        /// clipboard.
+        pub(super) file_operations: RefCell<FileOperations>,
     }
 
     #[glib::object_subclass]
@@ -230,6 +245,7 @@ mod imp {
             Sidebar::ensure_type();
             FolderPane::ensure_type();
             DetailsPane::ensure_type();
+            TransferPanel::ensure_type();
             Toast::ensure_type();
             StatusBar::ensure_type();
             SettingsPage::ensure_type();

@@ -111,10 +111,53 @@ pub(crate) enum WindowAction {
     Copy,
     /// Paste (Ctrl+V).
     Paste,
-    /// Rename (F2).
+    /// Rename (F2): asks for a new name for the one selected item.
     Rename,
-    /// Move to Trash (Delete).
+    /// Delete: Move to Trash, or Delete permanently where the folder has
+    /// no Trash, after asking.
     Trash,
+    /// Shift+Delete: deletes the selection permanently, after asking.
+    DeletePermanently,
+    /// Copies each selected item next to itself.
+    Duplicate,
+    /// Reverses the newest file operation (Ctrl+Z).
+    Undo,
+    /// Takes the newest Undo back (Ctrl+Shift+Z, Ctrl+Y).
+    Redo,
+    /// Stops the running file operation (the transfer panel's Cancel).
+    CancelOperation,
+    /// Puts the selected Recycle Bin items back where they came from.
+    Restore,
+    /// Deletes everything in the Recycle Bin, after asking.
+    EmptyRecycleBin,
+    /// Opens the New menu where the last context menu opened (the folder
+    /// background's "New…").
+    ShowNewMenu,
+    /// Opens the classic context menu where the compact one was ("Show
+    /// more options").
+    ShowMoreOptions,
+    /// Removes the Quick access pin of the location in the string target.
+    Unpin,
+    /// Shows the menu of open windows (the tab menu's "Open windows…").
+    OpenWindows,
+    /// Opens a terminal in the folder.
+    OpenInTerminal,
+    /// Chooses the application that opens the item.
+    OpenWith,
+    /// Unpacks the selected ZIP archive.
+    ExtractAll,
+    /// Measures the selected folders.
+    CalculateFolderSize,
+    /// Lists the item's snapshots and backups.
+    PreviousVersions,
+    /// Shows the item's properties (Alt+Enter).
+    Properties,
+    /// Forgets the credentials of an SMB server.
+    SignOut,
+    /// Moves a tab into a window of its own.
+    MoveTabToNewWindow,
+    /// Moves a tab into another open window.
+    MoveTabToWindow,
     /// Opens the connect dialog for a network share.
     MapNetworkLocation,
     /// Looks for SMB servers that advertise themselves.
@@ -186,6 +229,26 @@ impl WindowAction {
             WindowAction::Paste => "paste",
             WindowAction::Rename => "rename",
             WindowAction::Trash => "trash",
+            WindowAction::DeletePermanently => "delete-permanently",
+            WindowAction::Duplicate => "duplicate",
+            WindowAction::Undo => "undo",
+            WindowAction::Redo => "redo",
+            WindowAction::CancelOperation => "cancel-operation",
+            WindowAction::Restore => "restore",
+            WindowAction::EmptyRecycleBin => "empty-recycle-bin",
+            WindowAction::ShowNewMenu => "show-new-menu",
+            WindowAction::ShowMoreOptions => "show-more-options",
+            WindowAction::Unpin => "unpin",
+            WindowAction::OpenWindows => "open-windows",
+            WindowAction::OpenInTerminal => "open-in-terminal",
+            WindowAction::OpenWith => "open-with",
+            WindowAction::ExtractAll => "extract-all",
+            WindowAction::CalculateFolderSize => "calculate-folder-size",
+            WindowAction::PreviousVersions => "previous-versions",
+            WindowAction::Properties => "properties",
+            WindowAction::SignOut => "sign-out",
+            WindowAction::MoveTabToNewWindow => "move-tab-to-new-window",
+            WindowAction::MoveTabToWindow => "move-tab-to-window",
             WindowAction::MapNetworkLocation => "map-network-location",
             WindowAction::DiscoverServers => "discover-servers",
             WindowAction::CacheFolder => "cache-folder",

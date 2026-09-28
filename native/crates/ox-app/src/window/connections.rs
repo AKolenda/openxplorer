@@ -5,10 +5,11 @@
 //! Ports the event wiring of `setup` in `desktop/ui/app.js`. The window
 //! follows its widgets' own calls (the selection, the search box, the
 //! address, activating an item, the skin, the history buttons) for as long
-//! as it lives. Handlers it registers on objects that outlive it, the skin
-//! every window shares, the application's signals and the volume monitor,
-//! are kept in [`ExternalHandlers`] and disconnected in `dispose`, so a
-//! closed window leaves nothing connected behind.
+//! as it lives. Handlers it registers on objects that outlive it (the skin
+//! every window shares, the application's signals, the display's clipboard
+//! and the volume monitor) are kept in [`ExternalHandlers`] and
+//! disconnected in `dispose`, so a closed window leaves nothing connected
+//! behind.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -29,6 +30,11 @@ pub(super) struct ExternalHandlers {
     pub(super) layout: Option<glib::SignalHandlerId>,
     /// On the volume monitor's mount and volume signals.
     pub(super) volumes: Vec<glib::SignalHandlerId>,
+    /// On the application's `journal-changed` signal, which relabels Undo
+    /// and Redo.
+    pub(super) journal: Option<glib::SignalHandlerId>,
+    /// On the display clipboard's `changed` signal, which enables Paste.
+    pub(super) clipboard: Option<glib::SignalHandlerId>,
 }
 
 impl BrowserWindow {
@@ -68,8 +74,14 @@ impl BrowserWindow {
         for handler in handlers.skin {
             self.skin().disconnect(handler);
         }
-        for handler in [handlers.places, handlers.layout].into_iter().flatten() {
+        for handler in [handlers.places, handlers.layout, handlers.journal]
+            .into_iter()
+            .flatten()
+        {
             self.context().disconnect(handler);
+        }
+        if let Some(handler) = handlers.clipboard {
+            self.clipboard().disconnect(handler);
         }
         for handler in handlers.volumes {
             self.volume_monitor().disconnect(handler);

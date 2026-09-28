@@ -1,23 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The app's drop-down menus: a glyph, a label and a shortcut per item.
+//! The app's drop-down and context menus: a glyph, a label and a shortcut
+//! per item, in the classic or the compact style.
 //!
-//! Ports `openMenu` in `desktop/ui/app.js` with the classic Windows look of
-//! `.menu.win10` in `desktop/ui/style.css`. GTK's `PopoverMenu` hides the
+//! Ports `openMenu` in `desktop/ui/app.js` with `.menu.win10` and
+//! `.menu.win11` in `desktop/ui/style.css`. GTK's `PopoverMenu` hides the
 //! icon of a labelled item, so the items are rows of a `GtkListBox`, which
 //! also gives arrow-key movement and Enter activation. Each row runs a
-//! window or application action: a disabled action greys its row out, and
-//! a checked item shows the check glyph in place of its own, as app.js
-//! does.
+//! window or application action: a disabled action, or an item disabled
+//! in this menu, greys its row out, and a checked item shows the check
+//! glyph in place of its own, as app.js does. The compact style
+//! (CMD-008) puts a strip of icon buttons above the list: Cut, Copy,
+//! Paste, Rename and Delete in the context menus.
+
+mod items;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::application::AppAction;
 use crate::icons::{self, Icon};
 
 use super::unported;
-use super::window_action::WindowAction;
+
+pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
 
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
@@ -25,18 +30,6 @@ const AFTER_DIVIDER: &str = "after-divider";
 /// A menu row's glyph: 16 pixels, as Windows 11 draws menu icons (ui-spec.md I05;
 /// the web app's classic menus drew 15).
 const ROW_GLYPH: i32 = 16;
-
-/// Whether an item shows a check mark.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) enum ItemCheck {
-    /// Never checked.
-    Plain,
-    /// Checked or not, decided when the menu is built.
-    Fixed(bool),
-    /// Checked while the action's state equals the item's target (a
-    /// choice), or is `true` for an item without a target (a toggle).
-    FollowsAction,
-}
 
 /// The check mark a row shows when the menu opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,133 +62,29 @@ impl CheckMark {
     }
 }
 
-/// The action a menu item runs: the window's, or the application's.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum MenuAction {
-    /// A window action (`win.*`).
-    Window(WindowAction),
-    /// An application action (`app.*`).
-    Application(AppAction),
-}
-
-impl From<WindowAction> for MenuAction {
-    fn from(action: WindowAction) -> Self {
-        MenuAction::Window(action)
-    }
-}
-
-impl From<AppAction> for MenuAction {
-    fn from(action: AppAction) -> Self {
-        MenuAction::Application(action)
-    }
-}
-
-impl MenuAction {
-    /// The name a row runs the action by, such as `win.sort`.
-    fn detailed_name(self) -> String {
-        match self {
-            MenuAction::Window(action) => action.detailed_name(),
-            MenuAction::Application(action) => action.detailed_name(),
-        }
-    }
-
-    /// The action's state as `widget`'s window sees it.
-    fn state(self, widget: &gtk::Widget) -> Option<glib::Variant> {
-        let window = widget.root().and_downcast::<gtk::ApplicationWindow>()?;
-        match self {
-            MenuAction::Window(action) => window.action_state(action.name()),
-            MenuAction::Application(action) => window.application()?.action_state(action.name()),
-        }
-    }
-}
-
-/// One menu item.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct MenuItem {
-    /// The visible and accessible name.
-    pub label: String,
-    /// The glyph before the label.
-    pub glyph: Icon,
-    /// The action it runs.
-    pub action: MenuAction,
-    /// The action's parameter.
-    pub target: Option<glib::Variant>,
-    /// The keyboard shortcut shown at the right, such as `Ctrl+N`.
-    pub shortcut: Option<&'static str>,
-    /// How the item shows that it is chosen.
-    pub check: ItemCheck,
-}
-
-impl MenuItem {
-    /// An item that runs `action` without a parameter.
-    pub(super) fn new(label: &str, glyph: Icon, action: impl Into<MenuAction>) -> Self {
-        Self {
-            label: label.to_owned(),
-            glyph,
-            action: action.into(),
-            target: None,
-            shortcut: None,
-            check: ItemCheck::Plain,
-        }
-    }
-
-    /// A choice of the string action `action`, checked while it is chosen.
-    pub(super) fn choice(label: &str, glyph: Icon, action: WindowAction, value: &str) -> Self {
-        Self {
-            target: Some(value.to_variant()),
-            check: ItemCheck::FollowsAction,
-            ..Self::new(label, glyph, action)
-        }
-    }
-
-    /// An item for the boolean action `action`, checked while it is on.
-    pub(super) fn toggle(label: &str, glyph: Icon, action: WindowAction) -> Self {
-        Self {
-            check: ItemCheck::FollowsAction,
-            ..Self::new(label, glyph, action)
-        }
-    }
-
-    /// The same item showing `shortcut`.
-    pub(super) fn with_shortcut(self, shortcut: &'static str) -> Self {
-        Self {
-            shortcut: Some(shortcut),
-            ..self
-        }
-    }
-}
-
-/// A menu line: an item or a divider.
-#[derive(Debug, Clone, PartialEq)]
-pub(super) enum MenuEntry {
-    /// A clickable item.
-    Item(MenuItem),
-    /// A thin line between groups.
-    Divider,
-}
-
-impl From<MenuItem> for MenuEntry {
-    fn from(item: MenuItem) -> Self {
-        MenuEntry::Item(item)
-    }
-}
-
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::MenuEntry;
+    use super::{MenuEntry, MenuItem, MenuStyle};
 
     /// Private state of [`super::MenuPopover`].
     #[derive(Debug, Default)]
     pub(crate) struct MenuPopover {
+        /// The compact style's icon buttons, above the list.
+        pub(super) strip: OnceCell<gtk::Box>,
         /// The rows, built by `constructed`.
         pub(super) list: OnceCell<gtk::ListBox>,
         /// What the rows show, dividers included.
         pub(super) entries: RefCell<Vec<MenuEntry>>,
+        /// What the strip's buttons run; the strip shows only in the
+        /// compact style.
+        pub(super) strip_items: RefCell<Vec<MenuItem>>,
+        /// The classic or compact look.
+        pub(super) style: Cell<MenuStyle>,
     }
 
     #[glib::object_subclass]
@@ -215,29 +104,15 @@ mod imp {
             popover.set_halign(gtk::Align::Start);
             popover.set_offset(0, 4);
             popover.add_css_class("ox-menu");
-            let list = gtk::ListBox::builder()
-                .selection_mode(gtk::SelectionMode::None)
-                .activate_on_single_click(true)
-                .accessible_role(gtk::AccessibleRole::Menu)
-                .build();
-            // A divider is the header of the row after it, so the keyboard
-            // never lands on it. GTK clears the headers of a list without a
-            // header function, so rows only carry a class.
-            list.set_header_func(|row, _| {
-                let divider = row
-                    .has_css_class(super::AFTER_DIVIDER)
-                    .then(|| gtk::Separator::new(gtk::Orientation::Horizontal));
-                row.set_header(divider.as_ref());
-            });
-            // A row runs its action itself; the menu then closes, as
-            // `closeMenu()` before `it.fn()` in app.js.
-            list.connect_row_activated(glib::clone!(
-                #[weak(rename_to = popover)]
-                self.obj(),
-                move |_, _| popover.popdown()
-            ));
-            popover.set_child(Some(&list));
+            let strip = super::strip_box();
+            let list = super::item_list(&popover);
+            let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+            content.append(&strip);
+            content.append(&list);
+            popover.set_child(Some(&content));
+            self.strip.set(strip).expect("constructed runs once per object");
             self.list.set(list).expect("constructed runs once per object");
+            popover.set_style(MenuStyle::Classic);
             // Check marks follow the actions' state when the menu opens.
             popover.connect_show(super::MenuPopover::redraw);
         }
@@ -256,6 +131,42 @@ glib::wrapper! {
             gtk::Native, gtk::ShortcutManager;
 }
 
+/// The row of icon buttons of the compact style (`.context-strip`).
+fn strip_box() -> gtk::Box {
+    let strip = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .homogeneous(true)
+        .css_classes(["context-strip"])
+        .accessible_role(gtk::AccessibleRole::Group)
+        .build();
+    strip.update_property(&[gtk::accessible::Property::Label("File actions")]);
+    strip
+}
+
+/// The list of rows of `popover`.
+fn item_list(popover: &MenuPopover) -> gtk::ListBox {
+    let list = gtk::ListBox::builder()
+        .selection_mode(gtk::SelectionMode::None)
+        .activate_on_single_click(true)
+        .accessible_role(gtk::AccessibleRole::Menu)
+        .build();
+    // A divider is the header of the row after it, so the keyboard never
+    // lands on it. GTK clears the headers of a list without a header
+    // function, so rows only carry a class.
+    list.set_header_func(|row, _| {
+        let divider = row
+            .has_css_class(AFTER_DIVIDER)
+            .then(|| gtk::Separator::new(gtk::Orientation::Horizontal));
+        row.set_header(divider.as_ref());
+    });
+    list.connect_row_activated(glib::clone!(
+        #[weak]
+        popover,
+        move |_, row| popover.choose_row(row.index())
+    ));
+    list
+}
+
 impl MenuPopover {
     /// A menu showing `entries`.
     pub(super) fn new(entries: Vec<MenuEntry>) -> Self {
@@ -270,12 +181,34 @@ impl MenuPopover {
         self.redraw();
     }
 
+    /// Shows the menu in `style`, with `strip_items` as the compact
+    /// style's icon buttons (the classic style lists them as rows).
+    pub(super) fn set_style_and_strip(&self, style: MenuStyle, strip_items: Vec<MenuItem>) {
+        self.imp().strip_items.replace(strip_items);
+        self.set_style(style);
+        self.redraw();
+    }
+
+    /// Draws the menu in `style` and names it for screen readers.
+    fn set_style(&self, style: MenuStyle) {
+        let previous = self.imp().style.replace(style);
+        self.remove_css_class(previous.css_class());
+        self.add_css_class(style.css_class());
+        self.update_property(&[gtk::accessible::Property::Label(style.accessible_name())]);
+    }
+
     fn list(&self) -> &gtk::ListBox {
         self.imp().list.get().expect("constructed builds the list")
     }
 
-    /// Rebuilds the rows, reading each action's state for its check mark.
+    fn strip(&self) -> &gtk::Box {
+        self.imp().strip.get().expect("constructed builds the strip")
+    }
+
+    /// Rebuilds the strip and the rows, reading each action's state for
+    /// its check mark and whether it is enabled.
     fn redraw(&self) {
+        self.redraw_strip();
         let list = self.list();
         list.remove_all();
         let mut after_divider = false;
@@ -285,12 +218,82 @@ impl MenuPopover {
                 continue;
             };
             let row = item_row(item, self.check_mark(item));
+            row.set_sensitive(self.can_choose(item));
             if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
                 after_divider = false;
             }
             list.append(&row);
         }
+    }
+
+    /// Fills the strip with a button per strip item, in the compact style
+    /// only.
+    fn redraw_strip(&self) {
+        let strip = self.strip();
+        while let Some(child) = strip.first_child() {
+            strip.remove(&child);
+        }
+        let shows_strip = self.imp().style.get() == MenuStyle::Compact;
+        let items = self.imp().strip_items.borrow();
+        strip.set_visible(shows_strip && !items.is_empty());
+        if !shows_strip {
+            return;
+        }
+        for item in items.iter() {
+            strip.append(&self.strip_button(item));
+        }
+    }
+
+    /// An icon button of the strip.
+    fn strip_button(&self, item: &MenuItem) -> gtk::Button {
+        let button = gtk::Button::builder()
+            .child(&icons::image(item.glyph, ROW_GLYPH))
+            .tooltip_text(item_tooltip(item))
+            .sensitive(self.can_choose(item))
+            .build();
+        button.update_property(&[gtk::accessible::Property::Label(&item.label)]);
+        let item = item.clone();
+        button.connect_clicked(glib::clone!(
+            #[weak(rename_to = popover)]
+            self,
+            move |_| popover.choose(&item)
+        ));
+        button
+    }
+
+    /// True when `item` can be chosen now: it is not disabled in this menu
+    /// and its action is enabled.
+    fn can_choose(&self, item: &MenuItem) -> bool {
+        item.availability != ItemAvailability::Disabled && item.action.is_enabled(self.upcast_ref())
+    }
+
+    /// Runs the item of the row at `index`.
+    fn choose_row(&self, index: i32) {
+        let item = {
+            let entries = self.imp().entries.borrow();
+            let items = entries.iter().filter_map(|entry| match entry {
+                MenuEntry::Item(item) => Some(item),
+                MenuEntry::Divider => None,
+            });
+            let mut items = items;
+            usize::try_from(index)
+                .ok()
+                .and_then(|index| items.nth(index).cloned())
+        };
+        if let Some(item) = item {
+            self.choose(&item);
+        }
+    }
+
+    /// Closes the menu, then runs `item`'s action, as `closeMenu()` before
+    /// `it.fn()` in app.js, so an item may open another menu here.
+    fn choose(&self, item: &MenuItem) {
+        self.popdown();
+        // GTK fails only when no ancestor has the action. Every browser
+        // window and the application register them all, so that is a menu
+        // outside a window, which has nothing to run.
+        let _ = self.activate_action(&item.action.detailed_name(), item.target.as_ref());
     }
 
     /// The check mark `item` shows now.
@@ -327,11 +330,48 @@ impl MenuPopover {
             .collect()
     }
 
+    /// The row labelled `label`, for tests.
+    #[cfg(test)]
+    pub(crate) fn row(&self, label: &str) -> gtk::ListBoxRow {
+        self.rows()
+            .into_iter()
+            .find(|row| row_label(row).as_deref() == Some(label))
+            .unwrap_or_else(|| panic!("the menu has a {label} row"))
+    }
+
     /// The labels of the rows showing a check mark, for tests.
     #[cfg(test)]
     pub(crate) fn checked_labels(&self) -> Vec<String> {
         let checked = self.rows().into_iter().filter(|row| row.has_css_class("checked"));
         checked.filter_map(|row| row_label(&row)).collect()
+    }
+
+    /// The accessible names of the strip's buttons while it shows, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn strip_labels(&self) -> Vec<String> {
+        if !self.strip().is_visible() {
+            return Vec::new();
+        }
+        super::widget_tree::children(self.strip())
+            .filter_map(|child| child.tooltip_text())
+            .map(String::from)
+            .collect()
+    }
+
+    /// The classic or compact look, for tests.
+    #[cfg(test)]
+    pub(super) fn style(&self) -> MenuStyle {
+        self.imp().style.get()
+    }
+}
+
+/// The tooltip of `item`: its label, and for a command that another
+/// milestone brings, that milestone.
+fn item_tooltip(item: &MenuItem) -> String {
+    match item.action {
+        MenuAction::Window(action) => unported::tooltip(action, &item.label),
+        MenuAction::Application(_) => item.label.clone(),
     }
 }
 
@@ -371,16 +411,11 @@ fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
     let row = gtk::ListBoxRow::builder()
         .child(&item_content(item, check))
         .accessible_role(role)
-        .action_name(item.action.detailed_name())
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-    row.set_action_target_value(item.target.as_ref());
-    // A disabled item says which milestone brings it.
-    if let MenuAction::Window(action) = item.action {
-        if unported::is_unported(action) {
-            row.set_tooltip_text(Some(&unported::tooltip(action, &item.label)));
-        }
-    }
+    // Every item's title is its label (`b.title=it.label` in app.js); a
+    // disabled command adds the milestone that brings it.
+    row.set_tooltip_text(Some(&item_tooltip(item)));
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }

@@ -32,6 +32,8 @@ pub(crate) enum Icon {
     /// `arrow_clockwise_20_regular`: Refresh, Check for updates, and the
     /// Refresh and Reset buttons of Settings.
     ArrowClockwise,
+    /// `arrow_counterclockwise_20_regular`: Restore, in the Recycle Bin.
+    ArrowCounterclockwise,
     /// `arrow_down_20_regular`: the Descending sort.
     ArrowDown,
     /// `arrow_download_20_regular`: the Downloads folder and the Brave &
@@ -40,6 +42,8 @@ pub(crate) enum Icon {
     /// `arrow_left_20_regular`: Back, Back to files and a settings page's
     /// way back.
     ArrowLeft,
+    /// `arrow_redo_20_regular`: Redo.
+    ArrowRedo,
     /// `arrow_reset_20_regular`: Reset text size.
     ArrowReset,
     /// `arrow_right_20_regular`: Forward.
@@ -48,6 +52,8 @@ pub(crate) enum Icon {
     ArrowSort,
     /// `arrow_swap_20_regular`: Invert selection.
     ArrowSwap,
+    /// `arrow_undo_20_regular`: Undo.
+    ArrowUndo,
     /// `arrow_up_20_regular`: Up and the Ascending sort.
     ArrowUp,
     /// `braces_20_regular`: New JSON file.
@@ -80,6 +86,8 @@ pub(crate) enum Icon {
     Cut,
     /// `delete_20_regular`: Move to Trash.
     Delete,
+    /// `delete_dismiss_20_regular`: Empty Recycle Bin.
+    DeleteDismiss,
     /// `desktop_20_regular`: the Desktop folder, the open-windows button and
     /// its windows, Use system appearance, Discovered servers and Settings'
     /// Open windows….
@@ -135,6 +143,8 @@ pub(crate) enum Icon {
     HeadphonesColor32,
     /// `headphones_48_color`: the same at large sizes.
     HeadphonesColor48,
+    /// `history_20_regular`: Previous versions.
+    History,
     /// `home_20_regular`: Home.
     Home,
     /// `image_20_regular`: the Pictures folder.
@@ -150,6 +160,8 @@ pub(crate) enum Icon {
     Info,
     /// `laptop_20_regular`: This PC.
     Laptop,
+    /// `link_20_regular`: Copy path in the context menus.
+    Link,
     /// `markdown_20_regular`: New Markdown document.
     Markdown,
     /// `maximize_20_regular`: the window's maximise button.
@@ -188,6 +200,8 @@ pub(crate) enum Icon {
     Share,
     /// `shield_lock_20_regular`: the search index's privacy note.
     ShieldLock,
+    /// `sign_out_20_regular`: Sign out of server.
+    SignOut,
     /// `square_multiple_20_regular`: the window's restore button.
     SquareMultiple,
     /// `subtract_20_regular`: the window's minimise button and Smaller text.
@@ -214,6 +228,8 @@ pub(crate) enum Icon {
     WeatherMoon,
     /// `weather_sunny_20_regular`: the light appearance.
     WeatherSunny,
+    /// `window_console_20_regular`: Open in Terminal.
+    WindowConsole,
     /// `window_multiple_20_regular`: the Windows & tabs settings.
     WindowMultiple,
     /// `window_new_20_regular`: New window, in menus and in Settings.
@@ -229,13 +245,16 @@ impl Icon {
             Icon::Add => "ox-add-20-symbolic",
             Icon::Apps => "ox-apps-20-symbolic",
             Icon::ArrowClockwise => "ox-arrow-clockwise-20-symbolic",
+            Icon::ArrowCounterclockwise => "ox-arrow-counterclockwise-20-symbolic",
             Icon::ArrowDown => "ox-arrow-down-20-symbolic",
             Icon::ArrowDownload => "ox-arrow-download-20-symbolic",
             Icon::ArrowLeft => "ox-arrow-left-20-symbolic",
+            Icon::ArrowRedo => "ox-arrow-redo-20-symbolic",
             Icon::ArrowReset => "ox-arrow-reset-20-symbolic",
             Icon::ArrowRight => "ox-arrow-right-20-symbolic",
             Icon::ArrowSort => "ox-arrow-sort-20-symbolic",
             Icon::ArrowSwap => "ox-arrow-swap-20-symbolic",
+            Icon::ArrowUndo => "ox-arrow-undo-20-symbolic",
             Icon::ArrowUp => "ox-arrow-up-20-symbolic",
             Icon::Braces => "ox-braces-20-symbolic",
             Icon::Checkmark => "ox-checkmark-20-symbolic",
@@ -249,6 +268,7 @@ impl Icon {
             Icon::Copy => "ox-copy-20-symbolic",
             Icon::Cut => "ox-cut-20-symbolic",
             Icon::Delete => "ox-delete-20-symbolic",
+            Icon::DeleteDismiss => "ox-delete-dismiss-20-symbolic",
             Icon::Desktop => "ox-desktop-20-symbolic",
             Icon::Dismiss => "ox-dismiss-20-symbolic",
             Icon::Dismiss16 => "ox-dismiss-16-symbolic",
@@ -273,6 +293,7 @@ impl Icon {
             Icon::HeadphonesColor20 => "ox-headphones-20-color",
             Icon::HeadphonesColor32 => "ox-headphones-32-color",
             Icon::HeadphonesColor48 => "ox-headphones-48-color",
+            Icon::History => "ox-history-20-symbolic",
             Icon::Home => "ox-home-20-symbolic",
             Icon::Image => "ox-image-20-symbolic",
             Icon::ImageColor20 => "ox-image-20-color",
@@ -280,6 +301,7 @@ impl Icon {
             Icon::ImageColor48 => "ox-image-48-color",
             Icon::Info => "ox-info-20-symbolic",
             Icon::Laptop => "ox-laptop-20-symbolic",
+            Icon::Link => "ox-link-20-symbolic",
             Icon::Markdown => "ox-markdown-20-symbolic",
             Icon::Maximize => "ox-maximize-20-symbolic",
             Icon::MoreHorizontal => "ox-more-horizontal-20-symbolic",
@@ -298,6 +320,7 @@ impl Icon {
             Icon::Settings => "ox-settings-20-symbolic",
             Icon::Share => "ox-share-20-symbolic",
             Icon::ShieldLock => "ox-shield-lock-20-symbolic",
+            Icon::SignOut => "ox-sign-out-20-symbolic",
             Icon::SquareMultiple => "ox-square-multiple-20-symbolic",
             Icon::Subtract => "ox-subtract-20-symbolic",
             Icon::Table => "ox-table-20-symbolic",
@@ -311,6 +334,7 @@ impl Icon {
             Icon::VideoColor48 => "ox-video-48-color",
             Icon::WeatherMoon => "ox-weather-moon-20-symbolic",
             Icon::WeatherSunny => "ox-weather-sunny-20-symbolic",
+            Icon::WindowConsole => "ox-window-console-20-symbolic",
             Icon::WindowMultiple => "ox-window-multiple-20-symbolic",
             Icon::WindowNew => "ox-window-new-20-symbolic",
         }
@@ -335,17 +359,20 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 87] = [
+pub(crate) const ALL_ICONS: [Icon; 95] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowClockwise,
+    Icon::ArrowCounterclockwise,
     Icon::ArrowDown,
     Icon::ArrowDownload,
     Icon::ArrowLeft,
+    Icon::ArrowRedo,
     Icon::ArrowReset,
     Icon::ArrowRight,
     Icon::ArrowSort,
     Icon::ArrowSwap,
+    Icon::ArrowUndo,
     Icon::ArrowUp,
     Icon::Braces,
     Icon::Checkmark,
@@ -359,6 +386,7 @@ pub(crate) const ALL_ICONS: [Icon; 87] = [
     Icon::Copy,
     Icon::Cut,
     Icon::Delete,
+    Icon::DeleteDismiss,
     Icon::Desktop,
     Icon::Dismiss,
     Icon::Dismiss16,
@@ -383,6 +411,7 @@ pub(crate) const ALL_ICONS: [Icon; 87] = [
     Icon::HeadphonesColor20,
     Icon::HeadphonesColor32,
     Icon::HeadphonesColor48,
+    Icon::History,
     Icon::Home,
     Icon::Image,
     Icon::ImageColor20,
@@ -390,6 +419,7 @@ pub(crate) const ALL_ICONS: [Icon; 87] = [
     Icon::ImageColor48,
     Icon::Info,
     Icon::Laptop,
+    Icon::Link,
     Icon::Markdown,
     Icon::Maximize,
     Icon::MoreHorizontal,
@@ -408,6 +438,7 @@ pub(crate) const ALL_ICONS: [Icon; 87] = [
     Icon::Settings,
     Icon::Share,
     Icon::ShieldLock,
+    Icon::SignOut,
     Icon::SquareMultiple,
     Icon::Subtract,
     Icon::Table,
@@ -421,6 +452,7 @@ pub(crate) const ALL_ICONS: [Icon; 87] = [
     Icon::VideoColor48,
     Icon::WeatherMoon,
     Icon::WeatherSunny,
+    Icon::WindowConsole,
     Icon::WindowMultiple,
     Icon::WindowNew,
 ];
