@@ -17,6 +17,8 @@
 //! | [`format`](mod@format) | Size and date text | `ui/app.js` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
+//! | [`update`] | Update checks, installation, restart and the running-instance guard | `updater.py`, `runtime_guard.py`, `winspace.py` |
+//! | [`session`] | Tab handoff state and `FileManager1` request validation | `window_state.py` |
 
 pub mod clipboard;
 pub mod entry;

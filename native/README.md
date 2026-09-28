@@ -27,11 +27,12 @@ module names the Python file it ports; port its tests along with it.
 ## Build and run
 
 Needs Rust 1.92+ (the minimum required by the locked GTK/GIO crates), GTK
-4.14 development files, and Python 3.11+ for the parity checks and the
-compatibility tests:
+4.14 and libsoup 3 development files (libsoup is the updater's HTTPS
+client), and Python 3.11+ for the parity checks and the compatibility
+tests:
 
 ```sh
-sudo apt install libgtk-4-dev
+sudo apt install libgtk-4-dev libsoup-3.0-dev
 cargo build --release --locked --manifest-path native/Cargo.toml
 ./native/target/release/openxplorer-native
 ```
@@ -45,7 +46,7 @@ never talks to a running Python OpenXplorer. It shares
 Run the check driver from the repository root:
 
 ```sh
-sudo apt install libgtk-4-dev xvfb xauth dbus-x11
+sudo apt install libgtk-4-dev libsoup-3.0-dev xvfb xauth dbus-x11
 python3 native/tools/check.py
 ```
 

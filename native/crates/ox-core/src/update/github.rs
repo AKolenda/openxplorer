@@ -92,8 +92,9 @@ impl GitHubReleases {
 }
 
 impl ReleaseServer for GitHubReleases {
-    /// Sends a GET for `url`, following redirects with
-    /// [`follow_redirects`] rather than letting libsoup follow them.
+    /// Sends a GET for `url`. Redirects are followed here rather than by
+    /// libsoup, so that every target passes [`TrustedUrl::redirect`]
+    /// before it is contacted.
     fn open(&self, url: &TrustedUrl, cancel: &Cancellation) -> Result<Box<dyn Read>, FetchError> {
         let session = self.session();
         let send = |target: &TrustedUrl, media_type| send_once(&session, target, media_type, cancel);

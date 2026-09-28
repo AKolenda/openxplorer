@@ -17,7 +17,7 @@ percent-encoding.workspace = true
 thiserror.workspace = true
 libc.workspace = true
 # `process` gives `setsid`, which starts `openxplorer --restart` in its own
-# session as desktop/winspace.py does (`update::RestartCommand`).
+# session as desktop/winspace.py does (`update::SessionLauncher`).
 rustix = { workspace = true, features = ["process"] }
 # The updater's HTTPS client. libsoup is GNOME's HTTP library: it uses the
 # desktop's proxy settings and the system's certificate store through
