@@ -3,7 +3,7 @@
 //! type-to-select, middle-click to open a folder in a tab, and activation.
 //! The context menu has a module of its own ([`super::context_menu`]).
 //!
-//! Ports `setupKeys` and the type-select glue in `desktop/ui/app.js`
+//! Ports `onKey` and the type-select glue in `desktop/ui/app.js`
 //! (`desktop/tests/ui_type_select.py` is its specification): typed
 //! characters jump to the next name with that prefix; Escape first clears
 //! the prefix and only then the selection; arrows, clicks, shortcuts and
@@ -103,7 +103,7 @@ impl BrowserWindow {
             self,
             move |position: u32| {
                 let selected = window.content().model.selected_positions();
-                let is_the_selection = matches!(selected.as_slice(), []) || selected == [position];
+                let is_the_selection = selected.is_empty() || selected == [position];
                 if is_the_selection {
                     window.activate_item(position);
                 }
@@ -118,6 +118,8 @@ impl BrowserWindow {
             .connect_activate(move |_, position| activate(position));
     }
 
+    /// Gives `view` type-to-select, the window's key handling, prefix
+    /// resets on clicks, middle-click to open a folder and the context menu.
     fn folder_input(&self, view: &gtk::Widget) {
         let input = self.typing_input(view);
         let keys = gtk::EventControllerKey::new();

@@ -187,6 +187,12 @@ impl AddressBar {
         if self.mode() == AddressMode::Crumbs {
             self.entry.set_text(address);
         }
+        self.show_crumb_buttons(crumbs);
+    }
+
+    /// Replaces the crumb buttons, the last one announced as the current
+    /// location (`aria-current` in app.js).
+    fn show_crumb_buttons(&self, crumbs: &[CrumbButton]) {
         remove_children(&self.crumbs);
         let last = crumbs.len().saturating_sub(1);
         for (index, crumb) in crumbs.iter().enumerate() {

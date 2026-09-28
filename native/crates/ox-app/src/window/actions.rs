@@ -3,8 +3,9 @@
 //! and the application's keyboard accelerators.
 //!
 //! Ports the command handlers and the keyboard table of `desktop/ui/app.js`
-//! (`keydown` in `setupKeys`). Every action is a `gio::ActionEntry` on the
-//! window, so a widget only names the action and its target.
+//! (`onKey`, the `keydown` handler of `setup`). Every action is a
+//! `gio::ActionEntry` on the window, so a widget only names the action and
+//! its target.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -304,7 +305,7 @@ impl BrowserWindow {
     }
 }
 
-/// The keyboard shortcuts of `setupKeys` that never change: each detailed
+/// The keyboard shortcuts of `onKey` that never change: each detailed
 /// action and its accelerators, as GTK parses them.
 const FIXED_ACCELERATORS: [(&str, &[&str]); 12] = [
     ("win.new-tab", &["<Primary>t"]),

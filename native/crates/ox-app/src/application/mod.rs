@@ -129,6 +129,7 @@ mod imp {
             }
         }
 
+        /// Handles `--new-window`; the launch then goes on as usual.
         fn handle_local_options(&self, options: &glib::VariantDict) -> ControlFlow<glib::ExitCode> {
             self.obj().handle_new_window_option(options);
             ControlFlow::Continue(())

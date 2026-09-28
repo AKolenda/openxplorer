@@ -2,10 +2,11 @@
 //! The folder views' context menu: right-click, the Menu key and
 //! Shift+F10.
 //!
-//! Ports `contextMenu` and the `ContextMenu`/Shift+F10 keys of `setupKeys`
-//! in `desktop/ui/app.js`. A right-click on an unselected item selects only
-//! it first; on blank space it clears the selection. From the keyboard the
-//! menu points at the first selected item, as in Windows 11 and Dolphin.
+//! Ports the rows' `contextmenu` handlers and `entryMenu` in
+//! `desktop/ui/app.js`, and the `ContextMenu`/Shift+F10 keys of `onKey`.
+//! A right-click on an unselected item selects only it first; on blank
+//! space it clears the selection. From the keyboard the menu points at the
+//! first selected item, as in Windows 11 and Dolphin.
 
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib, graphene};
