@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The private folder an extraction is built in, and how it is published
 //! or removed. Ports the staging steps of `ZipExtractor.extract` in
-//! `desktop/zip_extraction.py`, with `_secure_local_staging` and
-//! `_clean_staging` of `desktop/operations.py`, which it calls.
+//! `desktop/zip_extraction.py`. Like the Python extractor, which calls
+//! `_secure_local_staging` and `_clean_staging` of `desktop/operations.py`,
+//! it applies the transfer engine's own staging rules: its random names,
+//! `secure_local_staging` and [`Node::delete_staging`].
 //!
 //! Safety rules (ARC-013, ARC-018):
 //!
@@ -15,18 +17,13 @@
 //!   with its location.
 
 use std::ffi::OsStr;
-use std::fs::{File, OpenOptions, Permissions};
-use std::io::Read;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
 use crate::archive::ArchiveError;
-use crate::transfer::{Cancellation, ItemIdentity, Node, TransferError, PRIVATE_DIRECTORY_MODE};
+use crate::transfer::{random_hex, secure_local_staging, Cancellation, ItemIdentity, Node, TransferError};
 
 /// Staging folders are `.openxplorer-extract-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-extract-";
 const STAGING_SUFFIX: &str = ".part";
-/// The random bytes in a staging name: 128 bits, like `uuid4().hex`.
-const RANDOM_BYTES: usize = 16;
 
 /// A staging folder this extraction created, which it alone may remove.
 pub(super) struct ExtractionStaging {
@@ -59,34 +56,21 @@ impl ExtractionStaging {
         self.folder.as_ref()
     }
 
-    /// ARC-018: makes a local staging folder owner-only (`0700`). Only
+    /// ARC-018: makes a local staging folder owner-only (`0700`) with the
+    /// transfer engine's rule for its own staging, as
+    /// `desktop/zip_extraction.py` calls `_secure_local_staging`. Only
     /// `file:` folders with a local path get Unix modes: MTP, AFC and many
     /// SMB backends expose a FUSE path but cannot `chmod` (XFER-004); their
     /// random staging name keeps the folder private instead. The mode is set
     /// through a descriptor opened without following links, so a folder
-    /// swapped for a link cannot redirect it. This mirrors the transfer
-    /// engine's `secure_local_staging`, which is private to its module.
+    /// swapped for a link cannot redirect it, and the folder's identity is
+    /// recorded for [`Self::discard`].
     ///
     /// # Errors
     ///
     /// When the folder cannot be opened that way or its mode cannot change.
     pub(super) fn make_private(&mut self) -> Result<(), ArchiveError> {
-        if !self.folder.uri().starts_with("file:") {
-            return Ok(());
-        }
-        let Some(path) = self.folder.path() else {
-            return Ok(());
-        };
-        let directory = OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
-            .open(path)?;
-        directory.set_permissions(Permissions::from_mode(PRIVATE_DIRECTORY_MODE))?;
-        let metadata = directory.metadata()?;
-        self.created = Some(ItemIdentity {
-            device: metadata.dev(),
-            inode: metadata.ino(),
-        });
+        self.created = secure_local_staging(self.folder.as_ref())?;
         Ok(())
     }
 
@@ -121,24 +105,18 @@ impl ExtractionStaging {
 }
 
 /// A new `.openxplorer-extract-<32 hex digits>.part` name. The digits come
-/// from the kernel's random source, so another program cannot predict the
-/// name and prepare an item under it.
+/// from the kernel's random source, like the transfer engine's staging
+/// names, so another program cannot predict the name and prepare an item
+/// under it.
 ///
 /// # Errors
 ///
 /// When the kernel's random source cannot be read.
 fn staging_name() -> Result<String, ArchiveError> {
-    let mut bytes = [0u8; RANDOM_BYTES];
-    File::open("/dev/urandom")
-        .and_then(|mut source| source.read_exact(&mut bytes))
-        .map_err(|error| {
-            TransferError::failed(format!("Could not reserve a private staging name. {error}"))
-        })?;
-    let digit_pairs: Vec<String> = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    Ok(format!(
-        "{STAGING_PREFIX}{}{STAGING_SUFFIX}",
-        digit_pairs.concat()
-    ))
+    let digits = random_hex().map_err(|error| {
+        TransferError::failed(format!("Could not reserve a private staging name. {error}"))
+    })?;
+    Ok(format!("{STAGING_PREFIX}{digits}{STAGING_SUFFIX}"))
 }
 
 #[cfg(test)]

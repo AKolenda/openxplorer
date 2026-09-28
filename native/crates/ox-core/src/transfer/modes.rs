@@ -61,9 +61,9 @@ pub(crate) fn path_for_unix_modes(node: &(impl Node + ?Sized)) -> Option<PathBuf
 /// Makes an engine-created local staging folder owner-only (`0700`) and
 /// returns the identity of the folder that got the mode. Does nothing for
 /// `GVfs` backends (MTP, AFC, SMB), even when they expose a FUSE path, and
-/// returns `None` for them. The Python ZIP extractor
-/// (`desktop/zip_extraction.py`) secures its staging folder the same way;
-/// its port will use this too.
+/// returns `None` for them. The ZIP extractor in [`crate::archive`]
+/// secures its staging folder with this too, as
+/// `desktop/zip_extraction.py` calls `_secure_local_staging`.
 ///
 /// # Errors
 ///

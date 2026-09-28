@@ -88,9 +88,10 @@ pub(crate) fn leftover_report(stage: &dyn Node, place: StagingPlace, problem: &T
 /// path. This is the default of [`Node::delete_staging`].
 ///
 /// Folders are made owner-writable first (a restored restrictive mode must
-/// not block cleanup), then emptied, then removed. The Python ZIP extractor
-/// (`desktop/zip_extraction.py`) cleans its own staging folder the same way;
-/// its port will use this too. Never call this on a user-selected path.
+/// not block cleanup), then emptied, then removed. The ZIP extractor in
+/// [`crate::archive`] removes its staging folder through
+/// [`Node::delete_staging`] too, as `desktop/zip_extraction.py` calls
+/// `_clean_staging`. Never call this on a user-selected path.
 ///
 /// # Errors
 ///
