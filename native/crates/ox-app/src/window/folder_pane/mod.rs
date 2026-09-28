@@ -11,7 +11,8 @@
 //! with the loading line laid over them), so the scale of the icon view's
 //! tiles lives in the widget that its resize handler reads.
 
-use std::rc::Rc;
+mod parts;
+mod view;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -19,11 +20,13 @@ use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::{CellOwners, IconCells};
 use crate::folder_view::grid::{self, IconSize};
-use crate::folder_view::{details, model::FolderModel};
+use crate::folder_view::model::FolderModel;
 use crate::theme::Appearance;
 
-use super::empty_page::{EmptyPage, EmptyState};
-use super::loading_line::LoadingLine;
+use super::empty_page::EmptyState;
+
+use parts::PaneParts;
+pub(crate) use view::FolderView;
 
 /// What the folder pane shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,64 +43,12 @@ impl PanePage {
     /// Every page, in the order the pane stacks them.
     const ALL: [PanePage; 3] = [PanePage::Listing, PanePage::Empty, PanePage::Landing];
 
+    /// The name of the page in the pane's stack.
     const fn name(self) -> &'static str {
         match self {
             PanePage::Listing => "listing",
             PanePage::Empty => "empty",
             PanePage::Landing => "landing",
-        }
-    }
-}
-
-/// Which view lists the items.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum FolderView {
-    /// Rows with Name, Date modified, Type and Size columns.
-    Details,
-    /// Icon tiles of one size.
-    Icons(IconSize),
-}
-
-impl FolderView {
-    /// The `win.view` action state: `details` or an icon size key.
-    pub fn key(self) -> &'static str {
-        match self {
-            FolderView::Details => "details",
-            FolderView::Icons(size) => size.key(),
-        }
-    }
-
-    /// The view for a `win.view` action state.
-    pub fn from_key(key: &str) -> Option<FolderView> {
-        if key == "details" {
-            return Some(FolderView::Details);
-        }
-        IconSize::from_key(key).map(FolderView::Icons)
-    }
-
-    /// The view saved in settings. The Python app knows one icon view,
-    /// "grid", which is Large icons.
-    pub fn from_setting(view: &str) -> FolderView {
-        if view == "grid" {
-            FolderView::Icons(IconSize::Large)
-        } else {
-            FolderView::Details
-        }
-    }
-
-    /// The value settings store: only `details` and `grid` are valid for
-    /// the Python app, so every icon size is saved as `grid`.
-    pub fn setting(self) -> &'static str {
-        match self {
-            FolderView::Details => "details",
-            FolderView::Icons(_) => "grid",
-        }
-    }
-
-    const fn stack_name(self) -> &'static str {
-        match self {
-            FolderView::Details => "details",
-            FolderView::Icons(_) => "grid",
         }
     }
 }
@@ -118,99 +69,6 @@ impl Default for GridScale {
             text_size: crate::text_size::DEFAULT,
         }
     }
-}
-
-/// The folder pane's widgets and the folder model they show.
-#[derive(Debug)]
-struct PaneParts {
-    /// The listing, the empty page or the landing page ([`PanePage`]).
-    stack: gtk::Stack,
-    /// The details or the icon view ([`FolderView`]).
-    views: gtk::Stack,
-    details: gtk::ColumnView,
-    details_scroll: gtk::ScrolledWindow,
-    grid: gtk::GridView,
-    grid_scroll: gtk::ScrolledWindow,
-    /// The active tab's filtered, sorted and selectable items.
-    model: FolderModel,
-    /// Bound item icons, redrawn when the theme or scale changes.
-    icons: Rc<IconCells>,
-    /// Maps cell widgets to their rows.
-    owners: Rc<CellOwners>,
-    /// The empty, loading and error page.
-    empty: EmptyPage,
-    /// The landing page's contents.
-    landing: gtk::Box,
-    /// The line over the pane while a folder is listed.
-    loading_line: LoadingLine,
-}
-
-impl PaneParts {
-    /// The pane's widgets, drawing item icons in `appearance`.
-    fn new(appearance: Appearance) -> Self {
-        let model = FolderModel::new();
-        let icons = IconCells::new(appearance);
-        let owners = CellOwners::new();
-        let details = details::build(&model, &icons, &owners);
-        let grid = grid::build(&icons, &owners, IconSize::Large);
-        let details_scroll = scrolled(&details);
-        let grid_scroll = scrolled(&grid);
-        let views = view_stack(&details_scroll, &grid_scroll);
-        let empty = EmptyPage::new();
-        let (landing, landing_scroll) = landing_page();
-        let stack = page_stack(&views, &empty, &landing_scroll);
-        Self {
-            stack,
-            views,
-            details,
-            details_scroll,
-            grid,
-            grid_scroll,
-            model,
-            icons,
-            owners,
-            empty,
-            landing,
-            loading_line: LoadingLine::new(),
-        }
-    }
-}
-
-/// The details and icon views, one of them shown.
-fn view_stack(details_scroll: &gtk::ScrolledWindow, grid_scroll: &gtk::ScrolledWindow) -> gtk::Stack {
-    let views = gtk::Stack::new();
-    views.add_named(details_scroll, Some(FolderView::Details.stack_name()));
-    let icons = FolderView::Icons(IconSize::Large);
-    views.add_named(grid_scroll, Some(icons.stack_name()));
-    views
-}
-
-/// The landing page's contents and the scroller around them.
-fn landing_page() -> (gtk::Box, gtk::ScrolledWindow) {
-    let landing = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    landing.add_css_class("page");
-    let landing_scroll = scrolled(&landing);
-    landing_scroll.add_css_class("landing");
-    (landing, landing_scroll)
-}
-
-/// The folder pane's pages, one of them shown: the listing, the empty
-/// or error page and the landing page.
-fn page_stack(views: &gtk::Stack, empty: &EmptyPage, landing_scroll: &gtk::ScrolledWindow) -> gtk::Stack {
-    let stack = gtk::Stack::builder().hexpand(true).vexpand(true).build();
-    stack.add_css_class("folder-pane");
-    stack.add_named(views, Some(PanePage::Listing.name()));
-    stack.add_named(&empty.root, Some(PanePage::Empty.name()));
-    stack.add_named(landing_scroll, Some(PanePage::Landing.name()));
-    stack
-}
-
-fn scrolled(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
-    gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::Automatic)
-        .vscrollbar_policy(gtk::PolicyType::Automatic)
-        .child(child)
-        .build()
 }
 
 mod imp {
@@ -339,20 +197,20 @@ impl FolderPane {
     }
 
     /// Shows the loading line over the items while `loading` lasts (see
-    /// [`LoadingLine::set_loading`]).
+    /// [`LoadingLine::set_loading`](super::loading_line::LoadingLine::set_loading)).
     pub(super) fn set_loading(&self, loading: bool) {
         self.parts().loading_line.set_loading(loading);
     }
 
     /// The loading line, for tests.
     #[cfg(test)]
-    pub(super) fn loading_line(&self) -> &LoadingLine {
+    pub(super) fn loading_line(&self) -> &super::loading_line::LoadingLine {
         &self.parts().loading_line
     }
 
     /// The empty, loading and error page, for tests.
     #[cfg(test)]
-    pub(super) fn empty_page(&self) -> &EmptyPage {
+    pub(super) fn empty_page(&self) -> &super::empty_page::EmptyPage {
         &self.parts().empty
     }
 

@@ -73,6 +73,12 @@ pub(crate) use actions::install_accelerators;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use location_kind::is_local_or_smb_location;
 
+/// A new window's size, as `set_default_size(1320, 810)` in
+/// `desktop/winspace.py`.
+const DEFAULT_WIDTH: i32 = 1320;
+/// See [`DEFAULT_WIDTH`].
+const DEFAULT_HEIGHT: i32 = 810;
+
 /// Handlers this window registered on objects that outlive it.
 #[derive(Debug, Default)]
 struct ExternalHandlers {
@@ -190,47 +196,58 @@ impl BrowserWindow {
         let window: Self = glib::Object::builder()
             .property("application", app)
             .property("title", "OpenXplorer")
-            .property("default-width", 1320)
-            .property("default-height", 810)
+            .property("default-width", DEFAULT_WIDTH)
+            .property("default-height", DEFAULT_HEIGHT)
             .build();
         window.add_css_class("ox");
-        let imp = window.imp();
-        let appearance = context.skin().appearance();
-        let chrome = Chrome::new(window.upcast_ref());
-        let folder_pane = FolderPane::new(appearance);
-        let details_pane = DetailsPane::new(appearance);
-        let sidebar = Sidebar::new();
-        imp.context
-            .set(context.clone())
-            .expect("a new window has no context yet");
-        imp.chrome.set(chrome).expect("a new window has no chrome yet");
-        imp.folder_pane
-            .set(folder_pane)
-            .expect("a new window has no folder pane yet");
-        imp.details_pane
-            .set(details_pane)
-            .expect("a new window has no details pane yet");
-        imp.sidebar.set(sidebar).expect("a new window has no sidebar yet");
-        imp.volume_monitor
-            .set(gio::VolumeMonitor::get())
-            .expect("a new window has no volume monitor yet");
+        window.build_parts(context);
         window.lay_out_workspace();
         window.install_actions();
         window.install_input();
         window.connect_signals();
         window.watch_environment();
         window.apply_preferences();
-        imp.file_list_awaits_focus.set(true);
-        // After GTK has finished showing the window, which ends by focusing
-        // the first focusable widget.
-        window.connect_map(|window| {
+        window.focus_file_list_once_shown();
+        window
+    }
+
+    /// Builds the frame, the panes and the sidebar, and keeps what the
+    /// window shares with the others. [`Self::new`] does this once.
+    fn build_parts(&self, context: &AppContext) {
+        let imp = self.imp();
+        let appearance = context.skin().appearance();
+        imp.context
+            .set(context.clone())
+            .expect("a new window has no context yet");
+        imp.chrome
+            .set(Chrome::new(self.upcast_ref()))
+            .expect("a new window has no chrome yet");
+        imp.folder_pane
+            .set(FolderPane::new(appearance))
+            .expect("a new window has no folder pane yet");
+        imp.details_pane
+            .set(DetailsPane::new(appearance))
+            .expect("a new window has no details pane yet");
+        imp.sidebar
+            .set(Sidebar::new())
+            .expect("a new window has no sidebar yet");
+        imp.volume_monitor
+            .set(gio::VolumeMonitor::get())
+            .expect("a new window has no volume monitor yet");
+    }
+
+    /// Focuses the file list once GTK has finished showing the window,
+    /// which ends by focusing the first focusable widget (see
+    /// [`Self::focus_new_file_list`]).
+    fn focus_file_list_once_shown(&self) {
+        self.imp().file_list_awaits_focus.set(true);
+        self.connect_map(|window| {
             glib::idle_add_local_once(glib::clone!(
                 #[weak]
                 window,
                 move || window.focus_new_file_list()
             ));
         });
-        window
     }
 
     /// Gives a new window's file list keyboard focus once the window is

@@ -70,7 +70,7 @@ pub(super) enum WindowAction {
     About,
     /// Opens the folder view's context menu from the keyboard.
     ContextMenu,
-    /// The folder view: `details` or an icon size (Ctrl+1 to Ctrl+4).
+    /// The folder view: `details`, or an icon size (Ctrl+Shift+1 to 4).
     View,
     /// Shows or hides hidden files (Ctrl+H).
     Hidden,
