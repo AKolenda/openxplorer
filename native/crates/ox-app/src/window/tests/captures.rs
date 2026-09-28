@@ -85,11 +85,6 @@ fn the_menus_are_captured_light_and_dark() {
     let test = TestWindow::open(&fixture.uri());
     let new_button = menu_button_with_class(&test, "new-command");
     let new_menu = app_menu(&new_button);
-    let view = test.window.folder_pane().view_widget();
-    let context_menu = descendants::<gtk::PopoverMenu>(&view)
-        .into_iter()
-        .next()
-        .expect("the file list has a context menu");
     for theme in THEMES {
         test.activate("theme", Some(theme));
         new_button.popup();
@@ -100,7 +95,8 @@ fn the_menus_are_captured_light_and_dark() {
         );
         new_button.popdown();
         wait_until("the New menu to close", || !new_menu.is_mapped());
-        context_menu.popup();
+        test.window.right_click(Some(0));
+        let context_menu = test.window.context_menu();
         capture_popover(
             &test.window,
             context_menu.upcast_ref(),

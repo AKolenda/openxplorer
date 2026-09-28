@@ -20,13 +20,13 @@ use super::choice_list::ChoiceButton;
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
-use super::row::{Availability, ControlName, RowLayout, SettingRow};
+use super::row::{ControlName, RowLayout, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
 use super::SettingsPage;
 use crate::icons::Icon;
 use crate::text_size::TextSize;
-use crate::window::{Milestone, WindowAction};
+use crate::window::WindowAction;
 
 const THEME: RowText = RowText {
     title: "Theme",
@@ -233,9 +233,8 @@ fn text_and_menus_group(page: &SettingsPage) -> SettingsGroup {
         &page.preference_choice(&MENU_STYLES, binding),
         ControlName::RowTitle,
     );
-    // The native context menu has one style until file operations bring
-    // the compact one (CMD-008); the choice is saved for the Python app.
-    menu.set_availability(Availability::SavedForLater(Milestone::FileOperations));
+    // The folder views' context menus follow the choice when they open
+    // (CMD-008, src/window/context_menu.rs).
     group.add_row(&menu);
     group
 }

@@ -222,6 +222,7 @@ impl BrowserWindow {
             self.update_content();
             self.update_details_pane();
             self.focus_new_file_list();
+            self.restore_scroll_after_listing(id);
         }
         if end == ListingEnd::ListAgain {
             self.folder_changed(id);
@@ -256,6 +257,20 @@ impl BrowserWindow {
             .map(|tab| tab.selected.clone())
             .unwrap_or_default();
         self.change_model(|| self.folder_pane().model().select_uris(&selected));
+    }
+
+    /// Scrolls to the position a moved tab brought along, now that its
+    /// items are listed (TAB-039).
+    fn restore_scroll_after_listing(&self, id: TabId) {
+        let scroll = {
+            let mut session = self.imp().session.borrow_mut();
+            session
+                .tab_mut(id)
+                .and_then(|tab| tab.scroll_after_listing.take())
+        };
+        if let Some(scroll) = scroll {
+            self.folder_pane().restore_scroll_position(scroll);
+        }
     }
 
     /// The tab's location is a file: show its folder (or home) in place of
@@ -311,5 +326,7 @@ impl BrowserWindow {
             pane.show_empty(&state);
         }
         self.update_status();
+        self.update_file_commands();
+        self.learn_trash_support();
     }
 }

@@ -36,6 +36,8 @@ window.ox.solid-csd {
   padding: 3px;
   border: 1px solid @ox_border;
   border-radius: 0;
+}
+window.ox.solid-csd:not(.ox-dialog) {
   box-shadow: inset 0 45px @ox_title, inset 0 0 0 3px @ox_border;
 }
 

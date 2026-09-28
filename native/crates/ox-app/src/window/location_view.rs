@@ -79,6 +79,7 @@ fn tab_view(
     }
     TabView {
         id: tab.id,
+        uri: uri.to_owned(),
         title: locations.title_for(uri),
         tooltip,
         icon: tab_icon(uri, network),

@@ -120,7 +120,8 @@ possible operation.
 
 A tested status must cite at least one test in `evidence`, as
 `path/to/file.rs::test_name` relative to the repository root. The check
-confirms that the file defines `fn test_name` under a `#[test]` attribute
+confirms that the file defines `fn test_name` under a `#[test]` or, for
+a window test, `#[gtk::test]` attribute
 (comments and other attributes may sit between them) and that it is not
 `#[ignore]`d. Cite the file that defines the function, not the file that
 includes it: the tests that `ox-core/tests/transfer.rs` pulls in through

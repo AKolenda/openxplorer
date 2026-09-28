@@ -15,8 +15,9 @@
 //!
 //! Beyond the Python app, from the Dolphin baseline: Duplicate, the
 //! Recycle Bin (list, restore, delete, empty), the created items of every
-//! operation for selecting them, and an undo journal (see [`UndoRecord`]
-//! for what can be undone).
+//! operation for selecting them, a new folder under the next free name,
+//! Shift+Delete, an answer per item to name conflicts, and an undo journal
+//! with Redo (see [`UndoRecord`] for what can be undone).
 //!
 //! Every operation that touches the filesystem is an `async fn`: its
 //! blocking GIO calls run on GIO's worker threads while the caller's main
@@ -37,22 +38,25 @@
 //! |---|---|
 //! | `context` | The cancellation and write protection of an operation, its worker, and GIO queries that honour the cancellation |
 //! | `error` | [`OpsError`] and the bridge's error codes |
-//! | `create` | New folder and New file |
+//! | `create` | New folder and New file, and New folder under the next free name |
 //! | `templates` | The built-in and user templates New offers |
 //! | `new_from_template` | New from template, staged privately and published without overwriting |
 //! | `rename` | Rename, and renaming back for Undo |
 //! | `conflicts` | The name-conflict check before a paste or drop |
-//! | `delete_plan` | Trash support and the Delete confirmation |
+//! | `delete_plan` | Trash support, and the Delete and Shift+Delete confirmations |
 //! | `run_transfer` | Copy, move, Trash and permanent delete through the engine |
+//! | `chosen_transfer` | A copy or move with an answer per name conflict |
 //! | `destinations` | Where a copy's or move's items are now |
 //! | `duplicate` | Duplicate in place |
+//! | `links` | Symbolic links to dropped items |
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
 //! | `results` | Adding up per-item results into one result |
 //! | `progress` | Progress labels and throttling |
 //! | `report` | The toast or result dialog at the end |
 //! | `recycle_bin` | Listing, restoring, deleting and emptying `trash:///` |
-//! | `undo` | The undo journal |
-//! | `undo_apply` | Carrying out an Undo |
+//! | `undo` | What reverses each operation, and what reverses a reversal |
+//! | `journal` | The Undo and Redo stacks |
+//! | `undo_apply` | Carrying out an Undo or a Redo |
 //! | `tab_transfer` | Moving a tab to another window |
 //!
 //! The tests of this service in `desktop/tests` are ported to
@@ -63,6 +67,7 @@
 //! `SnapshotProvider` of `desktop/file_services.py`, which belong to the
 //! Properties and Open with services.
 
+mod chosen_transfer;
 mod conflicts;
 mod context;
 mod create;
@@ -71,6 +76,8 @@ mod destinations;
 mod duplicate;
 mod error;
 mod folder_groups;
+mod journal;
+mod links;
 mod new_from_template;
 mod progress;
 mod recycle_bin;
@@ -83,14 +90,18 @@ mod templates;
 mod undo;
 mod undo_apply;
 
+pub use chosen_transfer::{run_chosen_transfer, ChosenTransfer, ItemChoice};
 pub use conflicts::find_conflicts;
 pub use context::{OperationContext, WriteProtection};
-pub use create::{create_item, CreatedItem};
+pub use create::{create_item, create_numbered_folder, CreatedItem};
 pub use delete_plan::{
-    delete_command_label, plan_delete, trash_support, DeleteConfirmation, DeleteItem, DeletePlan,
+    delete_command_label, permanent_delete_confirmation, plan_delete, trash_support, DeleteConfirmation,
+    DeleteItem, DeletePlan,
 };
 pub use duplicate::duplicate_items;
 pub use error::OpsError;
+pub use journal::{JournalDirection, JournalEntry, UndoJournal, UNDO_LIMIT};
+pub use links::{create_links, LinkRequest};
 pub use new_from_template::{create_from_template, NewFromTemplate};
 pub use progress::{starting_label, PROGRESS_INTERVAL};
 pub use recycle_bin::{
@@ -98,7 +109,10 @@ pub use recycle_bin::{
     restore_from_recycle_bin, RecycledItem,
 };
 pub use rename::{rename_item, RenamedItem};
-pub use report::{summarize, summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE};
+pub use report::{
+    summarize, summarize_duplicate, summarize_journal_step, summarize_links, summarize_restore,
+    summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
+};
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
 pub use tab_transfer::{
     Acceptance, Delivery, KeptReason, TabMessage, TabMoveOutcome, TabTransferError, TabTransferToken,
@@ -108,5 +122,5 @@ pub use templates::{
     list_templates, BuiltinTemplate, Template, TemplateId, TemplateList, MAX_TEMPLATE_BYTES,
     MAX_USER_TEMPLATES,
 };
-pub use undo::{MovedItem, UndoJournal, UndoRecord, UNDO_LIMIT};
-pub use undo_apply::undo;
+pub use undo::{MovedItem, UndoRecord};
+pub use undo_apply::{reverse, undo, Reversal};

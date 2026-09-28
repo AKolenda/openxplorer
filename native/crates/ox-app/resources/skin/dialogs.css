@@ -1,0 +1,117 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Dialogs, the transfer panel and the Windows 11 context menu
+   (ui-spec.md §4.9, §4.11, §4.15; style.css .modal, .transfer, .menu.win11
+   and .context-strip). */
+
+/* ---- Dialogs (§4.11, E02; src/window/dialog.rs) ---- */
+window.ox.ox-dialog {
+  background-color: @ox_bg;
+  color: @ox_text;
+  border: 1px solid @ox_flyout_stroke;
+  border-radius: 8px;
+  box-shadow: 0 0 8px @ox_shadow_ambient, 0 32px 64px @ox_shadow_key;
+}
+/* Without a compositor a dialog has no title bar, so its frame has no
+   title-colour band (base.css paints one for the browser window). */
+window.ox.ox-dialog.solid-csd {
+  border-radius: 0;
+  box-shadow: inset 0 0 0 3px @ox_border;
+}
+window.ox.ox-dialog .dialog-content { padding: 24px 24px 18px 24px; }
+window.ox.ox-dialog .dialog-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+window.ox.ox-dialog .dialog-message { color: @ox_muted; margin-bottom: 12px; }
+window.ox.ox-dialog .field-label { color: @ox_text; margin: 8px 0 4px 0; }
+/* A text input: 35 high, 4px corners, the chrome fill and the stronger
+   bottom edge that turns into a 2px accent line on focus. */
+window.ox.ox-dialog entry {
+  min-height: 33px;
+  border-radius: 4px;
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-bottom-color: @ox_input_bottom;
+  box-shadow: none;
+  outline: none;
+}
+window.ox.ox-dialog entry:focus-within {
+  border-bottom-color: @ox_accent;
+  box-shadow: inset 0 -1px @ox_accent;
+}
+window.ox.ox-dialog .dialog-note {
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 5px;
+  padding: 12px;
+  margin-top: 16px;
+  color: @ox_muted;
+}
+window.ox.ox-dialog .dialog-hint { color: @ox_muted; margin-top: 12px; }
+window.ox.ox-dialog .dialog-check { margin-top: 12px; }
+window.ox.ox-dialog .dialog-error { color: @ox_critical_fill; margin-top: 12px; }
+/* The footer of every dialog: a 1px line above the buttons on the chrome
+   fill (P3). */
+window.ox.ox-dialog .dialog-actions {
+  border-top: 1px solid @ox_border;
+  background-color: @ox_chrome;
+  border-radius: 0 0 8px 8px;
+  padding: 18px 24px;
+}
+window.ox.ox-dialog button.dialog-button {
+  min-height: 30px;
+  min-width: 90px;
+  padding: 0 17px;
+}
+/* The red button of a destructive question. */
+window.ox button.danger {
+  background-color: @ox_critical_fill;
+  border: 1px solid @ox_critical_fill;
+  color: @ox_on_critical;
+}
+window.ox button.danger:hover { background-color: alpha(@ox_critical_fill, .9); }
+window.ox button.danger:active { background-color: alpha(@ox_critical_fill, .8); color: @ox_on_critical; }
+
+/* ---- Transfer panel (§4.15 "Transfer", E08; src/window/transfer_panel.rs) ---- */
+.transfer {
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 8px;
+  padding: 14px;
+  margin: 0 12px 13px 12px;
+  box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
+}
+.transfer image { color: @ox_accent; }
+.transfer progressbar > trough { min-height: 4px; background-color: @ox_border; border-radius: 2px; border: none; }
+.transfer progressbar > trough > progress {
+  min-height: 4px;
+  min-width: 0;
+  margin: 0;
+  background-color: @ox_accent;
+  border-radius: 2px;
+  border: none;
+}
+window.ox .transfer button.bordered { padding: 4px 12px; }
+
+/* ---- Windows 11 style context menu (§4.9, CMD-008) ---- */
+popover.ox-menu.compact > contents {
+  border-radius: 8px;
+  padding: 2px 0;
+  box-shadow: 0 0 8px @ox_shadow_ambient, 0 14px 28px @ox_shadow_key;
+}
+/* Row height and menu width follow the text size (src/theme/fonts.rs). */
+popover.ox-menu.compact list > row {
+  margin: 2px 4px;
+  padding: 0 11px;
+  border-radius: 4px;
+}
+popover.ox-menu.compact list > separator { margin: 1px 0; }
+/* Five 34-high icon buttons, 20% of the width each, 2px apart. */
+popover.ox-menu .context-strip { padding: 2px; border-bottom: 1px solid @ox_border; margin-bottom: 2px; }
+window.ox popover.ox-menu .context-strip button,
+popover.ox-menu .context-strip button {
+  min-height: 34px;
+  margin: 0 1px;
+  border-radius: 4px;
+}

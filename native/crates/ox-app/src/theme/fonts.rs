@@ -168,10 +168,14 @@ const SCALED_HEIGHTS: &[ScaledHeight] = &[TITLE_BAR, TAB];
 const SOLID_FRAME_PADDING: i32 = 3;
 
 /// The solid window frame's title-colour band, which ends where the title
-/// bar does: the frame's padding plus the title bar at `scale`.
+/// bar does: the frame's padding plus the title bar at `scale`. Dialogs
+/// have no title bar, so they have no band.
 fn solid_frame_rule(scale: f64) -> String {
     let band = SOLID_FRAME_PADDING + TITLE_BAR.height(scale);
-    format!("window.ox.solid-csd {{ box-shadow: inset 0 {band}px @ox_title, inset 0 0 0 3px @ox_border; }}")
+    format!(
+        "window.ox.solid-csd:not(.ox-dialog) {{ box-shadow: inset 0 {band}px @ox_title, inset 0 0 0 3px \
+         @ox_border; }}"
+    )
 }
 
 /// The details view's rows: `detail_row` pixels apart, less the 1-pixel
@@ -183,13 +187,20 @@ fn details_row_rule(detail_row: i32) -> String {
 
 /// Menu rows and width (`.menu button{min-height:calc(22px * s + 11px)}`
 /// and `.menu.win10{width:max(264px, calc(235px * s))}`). The width rule
-/// sets the contents box, inside 3px of padding and a 1px border.
+/// sets the contents box, inside 3px of padding and a 1px border. The
+/// Windows 11 style (`.menu.win11{width:max(276px, calc(235px * s))}`,
+/// ui-spec.md §4.9) has no side padding, and its rows keep the same pitch
+/// with a 2px margin above and below.
 fn menu_rules(scale: f64) -> String {
     let row = 22.0 * scale + 11.0;
     let width = (235.0 * scale).max(264.0) - 8.0;
+    let compact_row = row - 4.0;
+    let compact_width = (235.0 * scale).max(276.0) - 2.0;
     format!(
         "popover.ox-menu list > row, popover.menu.ox-menu modelbutton {{ min-height: {row:.0}px; }}\n\
-         popover.ox-menu > contents, popover.menu.ox-menu > contents {{ min-width: {width:.0}px; }}"
+         popover.ox-menu > contents, popover.menu.ox-menu > contents {{ min-width: {width:.0}px; }}\n\
+         popover.ox-menu.compact list > row {{ min-height: {compact_row:.0}px; }}\n\
+         popover.ox-menu.compact > contents {{ min-width: {compact_width:.0}px; }}"
     )
 }
 
@@ -233,6 +244,8 @@ mod tests {
         assert!(
             css.contains("popover.ox-menu > contents, popover.menu.ox-menu > contents { min-width: 256px; }")
         );
+        assert!(css.contains("popover.ox-menu.compact list > row { min-height: 29px; }"));
+        assert!(css.contains("popover.ox-menu.compact > contents { min-width: 274px; }"));
     }
 
     /// parity: VIEW-044

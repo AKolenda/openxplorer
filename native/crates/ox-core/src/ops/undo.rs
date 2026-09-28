@@ -21,14 +21,15 @@
 //! folders cannot be separated again), and a move with Keep both (the new
 //! names are not known exactly). Every undo step runs with the same safety
 //! rules as the operation itself; `undo_apply` carries them out.
+//!
+//! Reversing a record has an effect of its own, which [`UndoRecord::inverse`]
+//! describes as another record: Redo reverses an Undo with it, and Undo a
+//! Redo. The journal that keeps both directions is `journal`.
 
-use std::collections::VecDeque;
 use std::path::PathBuf;
 
 use crate::location::ItemKind;
-
-/// How many operations the journal remembers; older ones are dropped.
-pub const UNDO_LIMIT: usize = 100;
+use crate::transfer::TransferResult;
 
 /// One operation Undo can reverse, with exactly what it needs to do so.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,48 +117,76 @@ impl UndoRecord {
     pub fn undo_label(&self) -> String {
         format!("Undo: {}", self.title())
     }
-}
 
-/// The operations Undo can still reverse, newest last.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct UndoJournal {
-    records: VecDeque<UndoRecord>,
-}
-
-impl UndoJournal {
-    /// An empty journal: Undo is disabled.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Remembers a finished operation. Beyond [`UNDO_LIMIT`] the oldest
-    /// one is forgotten.
-    pub fn record(&mut self, record: UndoRecord) {
-        if self.records.len() == UNDO_LIMIT {
-            self.records.pop_front();
+    /// The record that reverses what reversing this record did, given the
+    /// `result` of reversing it, which started at `reversed_since` (seconds
+    /// since the Unix epoch). `None` when nothing was reversed.
+    ///
+    /// Only the items the reversal finished count, so a Redo never touches
+    /// an item its Undo left alone:
+    ///
+    /// | Reversing | did | so the inverse |
+    /// |---|---|---|
+    /// | Rename | renamed the item back | renames it forward again |
+    /// | New item, Copy, Duplicate, Restore | moved items to the Trash | restores them from the Recycle Bin |
+    /// | Move | moved items back | moves them forward again |
+    /// | Move to Trash | restored items | moves them to the Trash again |
+    pub fn inverse(&self, result: &TransferResult, reversed_since: u64) -> Option<UndoRecord> {
+        let finished = &result.done;
+        if finished.is_empty() {
+            return None;
         }
-        self.records.push_back(record);
+        let inverse = match self {
+            UndoRecord::Rename {
+                original_uri,
+                renamed_uri,
+            } => UndoRecord::Rename {
+                original_uri: renamed_uri.clone(),
+                renamed_uri: original_uri.clone(),
+            },
+            UndoRecord::Create { .. }
+            | UndoRecord::Copy { .. }
+            | UndoRecord::Duplicate { .. }
+            | UndoRecord::Restore { .. } => trashed_again(finished, reversed_since)?,
+            UndoRecord::Move { items } => UndoRecord::Move {
+                items: moved_forward_again(items, finished),
+            },
+            UndoRecord::Trash { .. } => UndoRecord::Restore {
+                restored: finished.clone(),
+            },
+        };
+        Some(inverse)
     }
+}
 
-    /// The operation Undo would reverse next, which labels the command.
-    pub fn last(&self) -> Option<&UndoRecord> {
-        self.records.back()
+/// The record that restores `trashed` (the URIs a reversal moved to the
+/// Trash since `since`) from the Recycle Bin, by their local paths, which
+/// the Recycle Bin records as their original locations.
+fn trashed_again(trashed: &[String], since: u64) -> Option<UndoRecord> {
+    let original_paths: Vec<PathBuf> = trashed
+        .iter()
+        .filter_map(|uri| gio::prelude::FileExt::path(&gio::File::for_uri(uri)))
+        .collect();
+    if original_paths.is_empty() {
+        return None;
     }
+    Some(UndoRecord::Trash {
+        original_paths,
+        trashed_since: since,
+    })
+}
 
-    /// Removes and returns the operation to reverse now.
-    pub fn take_last(&mut self) -> Option<UndoRecord> {
-        self.records.pop_back()
-    }
-
-    /// True when there is nothing to undo, so the command is disabled.
-    pub fn is_empty(&self) -> bool {
-        self.records.is_empty()
-    }
-
-    /// The number of operations that can be undone.
-    pub fn len(&self) -> usize {
-        self.records.len()
-    }
+/// The moves that take the `items` a reversal put back (their moved URIs
+/// are in `moved_back`) to where the operation had moved them.
+fn moved_forward_again(items: &[MovedItem], moved_back: &[String]) -> Vec<MovedItem> {
+    items
+        .iter()
+        .filter(|item| moved_back.contains(&item.moved_uri))
+        .map(|item| MovedItem {
+            original_uri: item.moved_uri.clone(),
+            moved_uri: item.original_uri.clone(),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -169,33 +198,6 @@ mod tests {
             original_uri: format!("file:///tmp/{number}"),
             renamed_uri: format!("file:///tmp/{number}-renamed"),
         }
-    }
-
-    #[test]
-    fn undo_reverses_the_newest_operation_first() {
-        let mut journal = UndoJournal::new();
-        assert!(journal.is_empty());
-
-        journal.record(rename(1));
-        journal.record(rename(2));
-
-        assert_eq!(journal.last(), Some(&rename(2)));
-        assert_eq!(journal.take_last(), Some(rename(2)));
-        assert_eq!(journal.take_last(), Some(rename(1)));
-        assert_eq!(journal.take_last(), None);
-    }
-
-    #[test]
-    fn the_journal_forgets_the_oldest_operation_beyond_its_limit() {
-        let mut journal = UndoJournal::new();
-
-        for number in 0..=UNDO_LIMIT {
-            journal.record(rename(number));
-        }
-
-        assert_eq!(journal.len(), UNDO_LIMIT);
-        let oldest = std::iter::from_fn(|| journal.take_last()).last();
-        assert_eq!(oldest, Some(rename(1)));
     }
 
     /// One record and the label of its Undo command.
@@ -239,6 +241,86 @@ mod tests {
         ];
         for case in cases {
             assert_eq!(case.record.undo_label(), case.label);
+        }
+    }
+
+    /// A reversal that finished `done`.
+    fn finished(done: &[&str]) -> TransferResult {
+        TransferResult {
+            done: done.iter().map(ToString::to_string).collect(),
+            ..TransferResult::default()
+        }
+    }
+
+    /// One record, what reversing it finished, and the record that
+    /// reverses that in turn.
+    struct InverseCase {
+        record: UndoRecord,
+        reversal: TransferResult,
+        inverse: Option<UndoRecord>,
+    }
+
+    /// parity: OPS-031
+    #[test]
+    fn reversing_a_reversal_redoes_exactly_the_finished_items() {
+        let moved = |from: &str, to: &str| MovedItem {
+            original_uri: from.to_owned(),
+            moved_uri: to.to_owned(),
+        };
+        let cases = [
+            InverseCase {
+                record: rename(1),
+                reversal: finished(&["file:///tmp/1"]),
+                inverse: Some(UndoRecord::Rename {
+                    original_uri: "file:///tmp/1-renamed".into(),
+                    renamed_uri: "file:///tmp/1".into(),
+                }),
+            },
+            InverseCase {
+                record: UndoRecord::Copy {
+                    copies: vec!["file:///tmp/a".into(), "file:///tmp/b".into()],
+                },
+                reversal: finished(&["file:///tmp/b"]),
+                inverse: Some(UndoRecord::Trash {
+                    original_paths: vec![PathBuf::from("/tmp/b")],
+                    trashed_since: 7,
+                }),
+            },
+            InverseCase {
+                record: UndoRecord::Move {
+                    items: vec![
+                        moved("file:///a/1", "file:///b/1"),
+                        moved("file:///a/2", "file:///b/2"),
+                    ],
+                },
+                reversal: finished(&["file:///b/2"]),
+                inverse: Some(UndoRecord::Move {
+                    items: vec![moved("file:///b/2", "file:///a/2")],
+                }),
+            },
+            InverseCase {
+                record: UndoRecord::Trash {
+                    original_paths: vec![PathBuf::from("/tmp/a")],
+                    trashed_since: 1,
+                },
+                reversal: finished(&["file:///tmp/a"]),
+                inverse: Some(UndoRecord::Restore {
+                    restored: vec!["file:///tmp/a".into()],
+                }),
+            },
+            InverseCase {
+                record: rename(2),
+                reversal: TransferResult::default(),
+                inverse: None,
+            },
+        ];
+        for case in cases {
+            assert_eq!(
+                case.record.inverse(&case.reversal, 7),
+                case.inverse,
+                "{:?}",
+                case.record
+            );
         }
     }
 }

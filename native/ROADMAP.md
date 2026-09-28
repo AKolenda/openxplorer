@@ -39,18 +39,46 @@ files, and Python/Rust settings round trips and lock exclusion in both
 directions. Those tests establish the behaviours they exercise. They do not
 establish native SMB, phone, Wayland drag-and-drop or assistive-technology parity.
 
-## Next: complete safe file-operation workflows
+## In progress: complete safe file-operation workflows
 
-Connect GTK actions to the core only when their full interaction is available:
+The window runs the file operations on the core's ops service
+([`window/file_ops`](crates/ox-app/src/window/file_ops.rs)), one at a time and
+without freezing navigation:
 
-- New folder/file, rename, copy/cut/paste, move, Trash, permanent deletion and
-  duplicate. Respect virtual-item restrictions and backend access metadata.
-- Confirm destructive actions and conflicts; show progress, cancellation,
-  partial completion and recoverable errors without freezing navigation.
-- Claim and read the system clipboard asynchronously, reject owner changes,
-  and consume only successfully moved items from the matching cut payload.
-- Native file drag-and-drop, cross-window moves, and tabs moved between windows.
-- Trash browsing, restore to the original path, and explicit empty-Trash flow.
+- New folder and the New menu's files, Rename, Duplicate, Move to Trash,
+  Shift+Delete, copy, cut and paste, with the Python app's dialogs,
+  confirmations and completion reports, the transfer panel with Cancel, and
+  Undo and Redo on an application-wide journal.
+- The name-conflict dialog (Skip, Keep both, Replace, Apply to all).
+- The display clipboard, claimed in all four formats and read asynchronously;
+  a read that an owner change overtook is dropped, and a move-paste consumes
+  only its own cut.
+- The Recycle Bin as a folder, with Restore, Delete permanently and Empty.
+- The context menus of files, folders, blank space (both styles), tabs and
+  Quick access pins, with the enable rules of the command bar.
+- Drag and drop ([`window/file_drag`](crates/ox-app/src/window/file_drag.rs),
+  [`window/file_drop`](crates/ox-app/src/window/file_drop.rs)): items and
+  sidebar folders drag out to other apps and windows (copy only unless Shift
+  or Ctrl+Shift is held as the drag starts); drops on folder rows, blank
+  space, sidebar places, crumbs and tabs copy, Shift moves, Ctrl+Shift links
+  and Alt asks with a drop menu; folders dropped on Quick access are pinned;
+  items dropped on a program run it with their paths.
+- Tabs ([`window/tab_moves`](crates/ox-app/src/window/tab_moves.rs)) reorder
+  by drag, move onto another window's strip, tear out into a new window below
+  the strip or over the desktop, and move through the tab menu, keeping their
+  history, selection, scroll position, view and sort.
+- Real drags in a private headless GNOME Shell session, driven through
+  Mutter's RemoteDesktop API, confirmed copies to and from GNOME Files, a
+  Shift-move, pinning, the rubber band, tab reordering, merging, tear-out,
+  and that Escape keeps a dragged tab.
+
+Still to do:
+
+- Folders dropped on the empty tab bar opening as tabs, folders opening while
+  a drag hovers over them, scrolling while a drag nears a view's edge, the
+  Trash's drop rules, and `.desktop` launchers as drop targets.
+- The Recycle Bin's Original location and Date deleted columns and its
+  sidebar entry.
 - Preserve staging, replacement, cancellation and source-version safety rules
   under real local, remote and removable-device failures.
 

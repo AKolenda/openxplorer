@@ -18,10 +18,41 @@ use super::folder_groups::{FolderGroup, FolderGroups};
 use super::recycle_bin::restore_trashed_since;
 use super::rename::rename_back;
 use super::results::{merge_results, record_failure};
-use super::run_transfer::gio_transfer_engine;
+use super::run_transfer::{gio_transfer_engine, unix_seconds_now};
 use super::undo::{MovedItem, UndoRecord};
 use crate::gio_node::GioNode;
 use crate::transfer::{ConflictPolicy, Node, Operation, Progress, TransferEngine, TransferResult};
+
+/// What reversing a journal step did, and how to take that back.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Reversal {
+    /// Every item's outcome.
+    pub result: TransferResult,
+    /// The record that takes this reversal back: Redo after an Undo, Undo
+    /// after a Redo. `None` when nothing was reversed.
+    pub inverse: Option<UndoRecord>,
+}
+
+/// Reverses `record`, as Undo or Redo does, and works out how to take the
+/// reversal back. Take the step from the
+/// [`UndoJournal`](super::UndoJournal) first, and record the inverse
+/// there afterwards.
+///
+/// # Errors
+///
+/// As [`undo`].
+pub async fn reverse(
+    record: &UndoRecord,
+    context: &OperationContext,
+    progress: impl FnMut(Progress) + Send + 'static,
+) -> Result<Reversal, OpsError> {
+    // Taken before anything moves, so a Redo restores exactly the items
+    // this reversal moves to the Trash.
+    let reversed_since = unix_seconds_now();
+    let result = undo(record, context, progress).await?;
+    let inverse = record.inverse(&result, reversed_since);
+    Ok(Reversal { result, inverse })
+}
 
 /// Reverses the operation `record` describes, sending throttled progress
 /// to `progress` on the worker thread. Take the record from the

@@ -7,7 +7,10 @@
 //! View ▾, More options, then at the right the appearance toggle, Settings
 //! and the Details toggle. Every control runs a window or application
 //! action; commands whose workflow is not ported are disabled actions
-//! ([`super::unported`]), so they show greyed out with a tooltip.
+//! ([`super::unported`]), so they show greyed out with a tooltip. New is
+//! disabled where nothing can be created, and Delete is named after what
+//! it does in the folder: "Move to Trash" or "Delete permanently"
+//! (CMD-003).
 //!
 //! [`CommandBar`] is a `GtkBox` subclass. The template
 //! `resources/ui/command-bar.ui` lays out the bar and the three controls at
@@ -29,7 +32,8 @@ use super::menu_popover::{MenuEntry, MenuPopover};
 use super::unported;
 use super::window_action::WindowAction;
 
-use menus::{appearance_items, more_menu, new_menu, sort_menu, view_menu};
+pub(super) use menus::new_menu;
+use menus::{appearance_items, more_menu, sort_menu, view_menu};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -110,7 +114,7 @@ const EDIT_COMMANDS: [IconCommand; 6] = [
 const SETTINGS_TOOLTIP: &str = "Settings (Ctrl+,)";
 
 mod imp {
-    use std::cell::RefCell;
+    use std::cell::{OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::subclass::prelude::*;
@@ -143,6 +147,10 @@ mod imp {
         /// Cut, Rename, Copy path and Details, which a compact window
         /// hides.
         pub(super) hidden_when_compact: RefCell<Vec<gtk::Widget>>,
+        /// New ▾, disabled where nothing can be created.
+        pub(super) new_button: OnceCell<gtk::MenuButton>,
+        /// Delete, labelled for the folder.
+        pub(super) delete_button: OnceCell<gtk::Button>,
     }
 
     #[glib::object_subclass]
@@ -186,12 +194,21 @@ impl CommandBar {
     fn add_file_commands(&self) {
         let imp = self.imp();
         let group = &*imp.file_commands;
-        group.append(&text_menu_button("New", Icon::Add, "new-command", new_menu()));
+        let new_button = text_menu_button("New", Icon::Add, "new-command", new_menu());
+        group.append(&new_button);
+        imp.new_button
+            .set(new_button)
+            .expect("constructed runs once per object");
         group.append(&separator());
         for command in &EDIT_COMMANDS {
             let button = icon_button(command);
             if command.compact == InCompactWindow::Hidden {
                 imp.hidden_when_compact.borrow_mut().push(button.clone().upcast());
+            }
+            if command.action == WindowAction::Trash {
+                imp.delete_button
+                    .set(button.clone())
+                    .expect("the bar has one Delete");
             }
             group.append(&button);
         }
@@ -255,6 +272,23 @@ impl CommandBar {
     pub(super) fn show_appearance(&self, appearance: Appearance, tooltip: &str) {
         self.show_appearance_glyph(appearance);
         self.imp().appearance_button.set_tooltip_text(Some(tooltip));
+    }
+
+    /// Enables or disables New ▾ (`$('new').disabled` in app.js).
+    pub(super) fn set_new_enabled(&self, enabled: bool) {
+        if let Some(button) = self.imp().new_button.get() {
+            button.set_sensitive(enabled);
+        }
+    }
+
+    /// Names Delete `label`, "Move to Trash" or "Delete permanently", in
+    /// its tooltip and for screen readers (`updateToolbar`).
+    pub(super) fn show_delete_label(&self, label: &str) {
+        let Some(button) = self.imp().delete_button.get() else {
+            return;
+        };
+        button.set_tooltip_text(Some(&format!("{label} (Delete)")));
+        button.update_property(&[gtk::accessible::Property::Label(label)]);
     }
 
     /// Hides what the web layout hides in a window of `band`'s width: the

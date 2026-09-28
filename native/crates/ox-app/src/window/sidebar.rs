@@ -6,25 +6,30 @@
 //! list-row headers so keyboard and screen-reader users never land on an
 //! empty separator row, and the "Map network location" button pinned below
 //! the list (`.sidebar-bottom`). Rows run [`WindowAction::GoTo`] or
-//! [`WindowAction::MountVolume`]; a middle-click opens a place in a tab.
+//! [`WindowAction::MountVolume`]; a middle-click opens a place in a tab,
+//! and a right-click on a Quick access pin opens its menu ([`menu`]).
 //!
 //! [`Sidebar`] is a `GtkBox` subclass that keeps the entries its rows show,
 //! so the list's header function and middle-click handler read them
-//! through the pane itself.
+//! through the pane itself. Where a drop on it goes is [`drop_spots`]'s.
 
+mod drop_spots;
 mod entries;
+mod menu;
 mod row;
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gdk, glib};
 use ox_core::location::same_location;
 
 use crate::icons::{self, Icon};
 
+use super::menu_popover::MenuPopover;
 use super::window_action::WindowAction;
 use super::{gestures, preferences, unported};
 
+pub(super) use drop_spots::SidebarDropSpot;
 pub(super) use entries::sidebar_entries;
 use entries::{RowTarget, Section, SidebarEntry};
 
@@ -35,9 +40,10 @@ mod imp {
     use std::cell::{OnceCell, RefCell};
 
     use gtk::glib;
+    use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::SidebarEntry;
+    use super::{MenuPopover, SidebarEntry};
 
     /// Private state of [`super::Sidebar`].
     #[derive(Debug, Default)]
@@ -46,6 +52,8 @@ mod imp {
         pub(super) list: OnceCell<gtk::ListBox>,
         /// What each row shows and does, in row order.
         pub(super) entries: RefCell<Vec<SidebarEntry>>,
+        /// The pins' context menu, built by `constructed`.
+        pub(super) menu: OnceCell<MenuPopover>,
     }
 
     #[glib::object_subclass]
@@ -59,6 +67,12 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.obj().build_pane();
+        }
+
+        fn dispose(&self) {
+            if let Some(menu) = self.menu.get() {
+                menu.unparent();
+            }
         }
     }
 
@@ -91,6 +105,7 @@ impl Sidebar {
         list.update_property(&[gtk::accessible::Property::Label("Navigation pane")]);
         self.separate_sections(&list);
         self.open_places_on_middle_click(&list);
+        self.open_pin_menu_on_right_click(&list);
         let scroller = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
             // The list is never narrower than the narrowest saved sidebar.
@@ -147,8 +162,88 @@ impl Sidebar {
         list.add_controller(gesture);
     }
 
+    /// A right-click on a Quick access pin opens its menu there.
+    fn open_pin_menu_on_right_click(&self, list: &gtk::ListBox) {
+        let menu = MenuPopover::new(Vec::new());
+        menu.set_offset(0, 0);
+        menu.set_parent(self);
+        self.imp()
+            .menu
+            .set(menu)
+            .expect("constructed runs once per object");
+        let click = gtk::GestureClick::new();
+        click.set_button(gdk::BUTTON_SECONDARY);
+        click.connect_pressed(glib::clone!(
+            #[weak(rename_to = sidebar)]
+            self,
+            move |gesture, _, x, y| {
+                if sidebar.show_pin_menu(x, y) {
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                }
+            }
+        ));
+        list.add_controller(click);
+    }
+
+    /// Opens the menu of the pin at (`x`, `y`) of the list; false where no
+    /// pin is.
+    fn show_pin_menu(&self, x: f64, y: f64) -> bool {
+        let Some(uri) = self.pin_at(y) else {
+            return false;
+        };
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let in_list = gtk::graphene::Point::new(x as f32, y as f32);
+        let Some(point) = self.list().compute_point(self, &in_list) else {
+            return false;
+        };
+        let menu = self.imp().menu.get().expect("constructed builds the menu");
+        menu.set_entries(menu::pin_menu(&uri));
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let target = gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
+        menu.set_pointing_to(Some(&target));
+        menu.popup();
+        true
+    }
+
+    /// The location of the Quick access pin at `y` in the list, if one is
+    /// there.
+    fn pin_at(&self, y: f64) -> Option<String> {
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let row = self.list().row_at_y(y as i32)?;
+        let index = usize::try_from(row.index()).ok()?;
+        let entries = self.imp().entries.borrow();
+        let entry = entries.get(index).filter(|entry| entry.pinned)?;
+        match &entry.target {
+            RowTarget::Location(uri) => Some(uri.clone()),
+            RowTarget::MountVolume(_) => None,
+        }
+    }
+
+    /// Right-clicks the row labelled `label` and returns the pins' menu,
+    /// for tests.
+    #[cfg(test)]
+    pub(super) fn right_click_row(&self, label: &str) -> MenuPopover {
+        let index = self
+            .labels()
+            .iter()
+            .position(|shown| shown == label)
+            .unwrap_or_else(|| panic!("the sidebar shows {label}"));
+        let row = i32::try_from(index)
+            .ok()
+            .and_then(|index| self.list().row_at_index(index))
+            .expect("every entry has a row");
+        let bounds = row.compute_bounds(self.list()).expect("a shown row has bounds");
+        let middle = f64::from(bounds.y() + bounds.height() / 2.0);
+        self.show_pin_menu(1.0, middle);
+        self.imp()
+            .menu
+            .get()
+            .expect("constructed builds the menu")
+            .clone()
+    }
+
     /// The location of the row at `y` in the list, if it opens one.
-    fn location_at(&self, y: f64) -> Option<String> {
+    pub(super) fn location_at(&self, y: f64) -> Option<String> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let row = self.list().row_at_y(y as i32)?;
         let index = usize::try_from(row.index()).ok()?;

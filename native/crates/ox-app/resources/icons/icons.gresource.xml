@@ -13,12 +13,15 @@
     <file>scalable/actions/ox-add-20-symbolic.svg</file>
     <file>scalable/actions/ox-apps-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-clockwise-20-symbolic.svg</file>
+    <file>scalable/actions/ox-arrow-counterclockwise-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-down-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-left-20-symbolic.svg</file>
+    <file>scalable/actions/ox-arrow-redo-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-reset-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-right-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-sort-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-swap-20-symbolic.svg</file>
+    <file>scalable/actions/ox-arrow-undo-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-up-20-symbolic.svg</file>
     <file>scalable/actions/ox-braces-20-symbolic.svg</file>
     <file>scalable/actions/ox-checkmark-20-symbolic.svg</file>
@@ -30,6 +33,7 @@
     <file>scalable/actions/ox-copy-20-symbolic.svg</file>
     <file>scalable/actions/ox-cut-20-symbolic.svg</file>
     <file>scalable/actions/ox-delete-20-symbolic.svg</file>
+    <file>scalable/actions/ox-delete-dismiss-20-symbolic.svg</file>
     <file>scalable/actions/ox-dismiss-16-symbolic.svg</file>
     <file>scalable/actions/ox-dismiss-20-symbolic.svg</file>
     <file>scalable/actions/ox-document-add-20-symbolic.svg</file>
@@ -38,6 +42,8 @@
     <file>scalable/actions/ox-eye-20-symbolic.svg</file>
     <file>scalable/actions/ox-folder-add-20-symbolic.svg</file>
     <file>scalable/actions/ox-grid-20-symbolic.svg</file>
+    <file>scalable/actions/ox-history-20-symbolic.svg</file>
+    <file>scalable/actions/ox-link-20-symbolic.svg</file>
     <file>scalable/actions/ox-markdown-20-symbolic.svg</file>
     <file>scalable/actions/ox-maximize-20-symbolic.svg</file>
     <file>scalable/actions/ox-more-horizontal-20-symbolic.svg</file>
@@ -50,10 +56,12 @@
     <file>scalable/actions/ox-select-all-on-20-symbolic.svg</file>
     <file>scalable/actions/ox-settings-20-symbolic.svg</file>
     <file>scalable/actions/ox-share-20-symbolic.svg</file>
+    <file>scalable/actions/ox-sign-out-20-symbolic.svg</file>
     <file>scalable/actions/ox-square-multiple-20-symbolic.svg</file>
     <file>scalable/actions/ox-subtract-20-symbolic.svg</file>
     <file>scalable/actions/ox-table-20-symbolic.svg</file>
     <file>scalable/actions/ox-text-bullet-list-ltr-20-symbolic.svg</file>
+    <file>scalable/actions/ox-window-console-20-symbolic.svg</file>
     <file>scalable/actions/ox-window-multiple-20-symbolic.svg</file>
     <file>scalable/actions/ox-window-new-20-symbolic.svg</file>
     <file>scalable/devices/ox-hard-drive-20-symbolic.svg</file>

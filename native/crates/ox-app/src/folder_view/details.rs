@@ -55,10 +55,11 @@ fn name_factory(owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     factory
 }
 
-/// The cells of the Date modified, Type or Size column: one dim label.
+/// The cells of the Date modified, Type or Size column: one dim label,
+/// registered in `owners`, which dims the cells of cut items.
 fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
-    let owners = Rc::clone(owners);
+    let setup_owners = Rc::clone(owners);
     factory.connect_setup(move |_, object| {
         let label = cells::dim_cell_label();
         if column == SortColumn::Size {
@@ -67,13 +68,15 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
         }
         let list_item = cells::as_list_item(object);
         list_item.set_child(Some(&label));
-        owners.register(&label, list_item);
+        setup_owners.register(&label, list_item);
     });
+    let bind_owners = Rc::clone(owners);
     factory.connect_bind(move |_, object| {
         let list_item = cells::as_list_item(object);
         let label = list_item.child().and_downcast::<gtk::Label>();
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
             label.set_text(&cell_text(column, &item));
+            bind_owners.style_cell(&label, &item);
         }
     });
     factory

@@ -15,6 +15,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::activation::{activation_for, Activation};
+use super::file_drop::DropZone;
 use super::folder_pane::PanePage;
 use super::gestures;
 use super::type_to_select::monotonic_now;
@@ -112,6 +113,11 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             move |position: u32| {
+                // DND-007: the press or release of a drag never opens an
+                // item.
+                if window.are_item_clicks_paused() {
+                    return;
+                }
                 let selected = window.folder_pane().model().selected_positions();
                 let is_the_selection = selected.is_empty() || selected == [position];
                 if is_the_selection {
@@ -131,7 +137,8 @@ impl BrowserWindow {
     }
 
     /// Gives `view` type-to-select, the window's key handling, prefix
-    /// resets on clicks, middle-click to open a folder and the context menu.
+    /// resets on clicks, middle-click to open a folder, the context menu,
+    /// and file drag and drop.
     fn folder_input(&self, view: &gtk::Widget) {
         let input = self.typing_input(view);
         let keys = gtk::EventControllerKey::new();
@@ -147,6 +154,8 @@ impl BrowserWindow {
         view.add_controller(self.prefix_reset_on_click());
         view.add_controller(self.folder_middle_click(view));
         self.attach_context_menu(view);
+        self.attach_file_drag(view);
+        self.attach_file_drop_zone(view, DropZone::FolderView);
     }
 
     /// The input method that turns key presses in `view` into text for
@@ -207,6 +216,10 @@ impl BrowserWindow {
         key: gdk::Key,
         modifiers: gdk::ModifierType,
     ) -> glib::Propagation {
+        // Keys typed while an item is renamed in place belong to its field.
+        if self.focus_is_in_text_field() {
+            return glib::Propagation::Proceed;
+        }
         let shortcut =
             gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK;
         if modifiers.intersects(shortcut) {

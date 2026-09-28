@@ -34,7 +34,7 @@ pub(super) fn plain_action(
 }
 
 /// An action whose target is a string (a location or a volume id).
-fn text_action(
+pub(super) fn text_action(
     window_action: WindowAction,
     run: impl Fn(&BrowserWindow, &str) + 'static,
 ) -> gio::ActionEntry<BrowserWindow> {
@@ -49,7 +49,7 @@ fn text_action(
 }
 
 /// An action whose target is a tab.
-fn tab_action(
+pub(super) fn tab_action(
     window_action: WindowAction,
     run: impl Fn(&BrowserWindow, TabId) + 'static,
 ) -> gio::ActionEntry<BrowserWindow> {
@@ -127,6 +127,7 @@ impl BrowserWindow {
     /// Adds every window action (`win.*`).
     pub(super) fn install_actions(&self) {
         self.install_tab_actions();
+        self.install_tab_move_actions();
         self.install_navigation_actions();
         self.install_selection_actions();
         self.install_view_actions();
@@ -134,6 +135,11 @@ impl BrowserWindow {
         self.install_appearance_actions();
         self.install_settings_actions();
         self.install_unported_actions();
+        self.install_context_menu_actions();
+        let [journal, clipboard] = self.install_file_actions();
+        let mut handlers = self.imp().handlers.borrow_mut();
+        handlers.journal = Some(journal);
+        handlers.clipboard = Some(clipboard);
     }
 
     fn install_tab_actions(&self) {
@@ -162,6 +168,7 @@ impl BrowserWindow {
             text_action(WindowAction::OpenTabBackground, |window, uri| {
                 window.open_tab_or_report(uri, TabPlacement::Background);
             }),
+            text_action(WindowAction::DropChoice, BrowserWindow::answer_drop_menu),
         ]);
     }
 

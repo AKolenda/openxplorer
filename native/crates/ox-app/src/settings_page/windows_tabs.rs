@@ -7,8 +7,7 @@
 //! title bar's windows button (`windowsMenu`), and "New window" runs
 //! `app.new-window` (Ctrl+N). The Python
 //! section's paragraph about dragging tabs and files becomes three rows
-//! that wait for the file-operations milestone, which brings that
-//! dragging, and a note with the rest.
+//! and a note with the rest.
 
 use gtk::prelude::*;
 
@@ -20,7 +19,7 @@ use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
 use crate::application::AppAction;
 use crate::icons::Icon;
-use crate::window::{list_open_windows_on_click, Milestone};
+use crate::window::list_open_windows_on_click;
 
 const OPEN_WINDOWS: RowText = RowText {
     title: "Open windows",
@@ -50,8 +49,9 @@ const DRAG_TO_APPS: RowText = RowText {
 const DROP_ON_FOLDERS: RowText = RowText {
     title: "Drop files on folders",
     description: "Drop files on a writable folder to copy them, or drop folders in Quick access \
-                  to pin them.",
-    keywords: "drag drop copy pin",
+                  to pin them. Hold Shift to move, Ctrl+Shift to create links or Alt to choose; \
+                  drop files on a program to open them with it.",
+    keywords: "drag drop copy move link pin program run",
 };
 
 /// The rest of the Python section's paragraph.
@@ -92,13 +92,12 @@ fn windows_group() -> SettingsGroup {
     group
 }
 
-/// Dragging tabs and files, which arrives with file operations.
+/// Dragging tabs and files.
 fn dragging_group() -> SettingsGroup {
-    let pending = Availability::Unported(Milestone::FileOperations);
-    let group = SettingsGroup::pending("Tabs and files", pending);
+    let group = SettingsGroup::new("Tabs and files");
     for text in [MOVE_TABS, DRAG_TO_APPS, DROP_ON_FOLDERS] {
         let row = SettingRow::new(text);
-        row.set_availability(pending);
+        row.set_availability(Availability::Ready);
         group.add_row(&row);
     }
     group

@@ -36,6 +36,12 @@ const ICON_SIZE: i32 = 16;
 /// The glyph of the edit chevron.
 const CHEVRON_GLYPH: i32 = 12;
 
+/// The CSS class of a crumb button.
+const CRUMB_CLASS: &str = "crumb";
+
+/// The CSS class of the crumb a drop would go into (DND-011).
+const CRUMB_DROP_CLASS: &str = "file-drop-active";
+
 /// What the address bar shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AddressMode {
@@ -278,6 +284,35 @@ impl AddressBar {
         self.imp().entry.get()
     }
 
+    /// The folder of the crumb at (`x`, `y`) in the bar, where a drop
+    /// would go; `None` elsewhere and while the address is edited.
+    pub(super) fn crumb_location_at(&self, x: f64, y: f64) -> Option<String> {
+        if self.mode() != AddressMode::Crumbs {
+            return None;
+        }
+        let picked = self.pick(x, y, gtk::PickFlags::DEFAULT)?;
+        let crumb = std::iter::successors(Some(picked), WidgetExt::parent)
+            .find(|widget| widget.has_css_class(CRUMB_CLASS))?;
+        let target = crumb.downcast::<gtk::Button>().ok()?.action_target_value()?;
+        target.str().map(str::to_owned)
+    }
+
+    /// Highlights the crumb of `folder` as where a drop would go, or none
+    /// (DND-011).
+    pub(super) fn highlight_crumb(&self, folder: Option<&str>) {
+        let buttons = super::widget_tree::children(&*self.imp().crumbs)
+            .filter_map(|widget| widget.downcast::<gtk::Button>().ok());
+        for button in buttons {
+            let target = button.action_target_value();
+            let is_target = folder.is_some() && target.as_ref().and_then(glib::Variant::str) == folder;
+            if is_target {
+                button.add_css_class(CRUMB_DROP_CLASS);
+            } else {
+                button.remove_css_class(CRUMB_DROP_CLASS);
+            }
+        }
+    }
+
     /// The crumb buttons shown, for tests.
     #[cfg(test)]
     pub(super) fn crumb_buttons(&self) -> Vec<gtk::Button> {
@@ -311,7 +346,7 @@ fn crumb_button(crumb: &CrumbButton) -> gtk::Button {
         .tooltip_text(&crumb.address)
         .action_name(WindowAction::GoTo.detailed_name())
         .action_target(&uri.to_variant())
-        .css_classes(["crumb"])
+        .css_classes([CRUMB_CLASS])
         .build();
     button.update_property(&[gtk::accessible::Property::Label(&format!(
         "Go to {}",

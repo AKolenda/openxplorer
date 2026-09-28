@@ -39,6 +39,9 @@ pub(super) struct PaneParts {
     pub(super) landing: gtk::Box,
     /// The line over the pane while a folder is listed.
     pub(super) loading_line: LoadingLine,
+    /// The note over the pane that says what a drag would do there, such
+    /// as "Open with convert".
+    pub(super) drag_hint: gtk::Label,
 }
 
 impl PaneParts {
@@ -62,8 +65,22 @@ impl PaneParts {
             empty,
             landing,
             loading_line: LoadingLine::new(),
+            drag_hint: drag_hint(),
         }
     }
+}
+
+/// The note that says what a drag would do (`.tab-drag-hint` in
+/// style.css), hidden until a drag needs it. It never takes the pointer,
+/// so drops go to the view beneath it.
+fn drag_hint() -> gtk::Label {
+    gtk::Label::builder()
+        .halign(gtk::Align::Start)
+        .valign(gtk::Align::Start)
+        .can_target(false)
+        .visible(false)
+        .css_classes(["drag-hint"])
+        .build()
 }
 
 /// The details and icon views, one of them shown.

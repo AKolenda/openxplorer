@@ -26,6 +26,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 percent-encoding = "2.3"
 thiserror = "2"
+# Carries answers and progress from dialogs and GIO worker threads to the
+# GTK main loop, as the gtk-rs book does.
+async-channel = "2"
 rustix = { version = "1", features = ["fs"] }
 # The search cache is the SQLite database the Python app shares. It links the
 # system SQLite, as Python's sqlite3 module does, so building needs its

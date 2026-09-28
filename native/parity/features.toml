@@ -1494,7 +1494,8 @@ python_tests = [
 ]
 bridge = ["detachTab", "windows"]
 dolphin = "Dolphin tab menu (DolphinTabBar::contextMenuEvent): New Tab, Detach Tab, Close Other Tabs, Close Tab."
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tab_menu.rs (a_tab_menu_offers_the_python_items_in_order); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder). Duplicate tab, Open windows… and Close tab work; moving tabs comes with drag and drop."
 
 [[feature]]
 id = "TAB-013"
@@ -1600,8 +1601,8 @@ sources = [
 python_tests = []
 bridge = ["operate", "transferConflicts", "fileDragLayout"]
 dolphin = "DolphinTabBar drag/drop + auto-activation timer (800 ms)"
-native = "todo"
-native_note = "Porting notes: Explorer also switches tabs when a drag hovers over them."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab): items dropped on a tab go into its folder and an 800 ms hover shows the tab. Missing: folders dropped on the empty tab-bar area opening as new tabs."
 
 [[feature]]
 id = "TAB-019"
@@ -1869,7 +1870,8 @@ bridge = [
   "tabTransferReady",
 ]
 dolphin = "Dolphin: 'Detach Tab' moves the tab to a new window.; Dolphin: detach tab (Shift+Ctrl+N/drag tab out); Tab context menu 'Detach Tab'"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll, moving_the_only_tab_to_a_new_window_closes_the_old_one); native/crates/ox-app/src/window/tab_moves/drag.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out). The new window is built in this process before the tab leaves, so the Python 20 s readiness wait has no counterpart."
 
 [[feature]]
 id = "TAB-030"
@@ -1913,7 +1915,8 @@ python_tests = [
   "desktop/tests/test_rc3.py::TabTransferTests::test_non_integer_destination_rejected",
 ]
 bridge = ["windows", "moveTabToWindow", "tabTransferReady", "focusWindow"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_moves.rs (the_move_menu_lists_the_other_windows_and_a_new_window, without_other_windows_the_move_menu_says_so, a_tab_moved_into_another_window_goes_there_and_leaves_here, move_tab_to_window_lists_the_other_windows)."
 
 [[feature]]
 id = "TAB-031"
@@ -1938,7 +1941,8 @@ python_tests = [
   "desktop/tests/native_tab_transport.py::A real pointer gesture starts the production GTK drag",
 ]
 bridge = ["beginTabDrag", "tabDragLayout"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_busy_window_keeps_its_tabs_and_takes_none, a_window_with_an_open_dialog_keeps_its_tabs_and_takes_none); native/crates/ox-app/src/window/tab_moves/drag.rs (no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy). Moves finish at once, so no second move can be in progress."
 
 [[feature]]
 id = "TAB-032"
@@ -1974,7 +1978,8 @@ python_tests = [
 bridge = ["tabDragLayout", "beginTabDrag"]
 dolphin = "QTabBar::setMovable(true); Dolphin tab bar drag reorder"
 gnome = "Adw.TabBar/Adw.TabView provide reorder, cross-window drag and tear-out natively (create-window signal)."
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/session.rs (a_reordered_tab_goes_before_the_named_tab_or_to_the_end); native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a tab dragged along its strip moved to the end. A tab shows on release, as in app.js, so pressing an inactive tab can drag it."
 
 [[feature]]
 id = "TAB-033"
@@ -2013,7 +2018,8 @@ python_tests = [
   "desktop/tests/native_tab_transport.py::GTK source and destination callbacks completed without exceptions",
 ]
 bridge = ["beginTabDrag", "tabDragLayout", "tabTransferReady"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag); native/crates/ox-app/src/window/session.rs (a_moved_tab_keeps_its_history_and_goes_in_front_where_it_was_dropped). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: the only tab of one window dropped on another window's strip moved there and its window closed."
 
 [[feature]]
 id = "TAB-034"
@@ -2077,7 +2083,8 @@ python_tests = [
 bridge = ["beginTabDrag", "detachTab", "handoffReady", "tabDragLayout", "tabTransferReady"]
 dolphin = "Detach tab; Drag tab out to detach; drag between windows"
 gnome = "AdwTabBar/AdwTabView drag and detach"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: releasing below the strip and over the desktop each opened one window. GTK 4 cannot place a window, so the compositor places it."
 
 [[feature]]
 id = "TAB-035"
@@ -2115,7 +2122,8 @@ python_tests = [
   "desktop/tests/native_tab_transport.py::All production signal handlers remained exception free",
 ]
 bridge = ["beginTabDrag"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: Escape and a release in the 0-40 px gap kept the tab."
 
 [[feature]]
 id = "TAB-036"
@@ -2172,7 +2180,8 @@ python_tests = [
   "desktop/tests/test_rc4.py::TearOutTests::test_late_end_after_expiry_does_not_detach",
 ]
 bridge = ["moveTabToWindow", "tabTransferReady", "beginTabDrag", "detachTab"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_offers_the_tab_to_this_process_only): every window lives in one process, so the drag carries a process-local value naming the source window and tab, never a location; a drop after the drag ended takes nothing, and the source keeps its tab until the destination added it. Not ported: the 64-hex token, the 30 s expiry and the 64-move limit, which guarded the WebKit round trip."
 
 [[feature]]
 id = "TAB-037"
@@ -2190,7 +2199,8 @@ python_tests = [
   "desktop/tests/test_rc3.py::TabTransferTests::test_unready_destination_not_claimed",
 ]
 bridge = ["tabTransferReady", "moveTabToWindow"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_busy_window_keeps_its_tabs_and_takes_none, a_window_with_an_open_dialog_keeps_its_tabs_and_takes_none). A destination takes a tab at once, so there is no second incoming tab to wait for."
 
 [[feature]]
 id = "TAB-038"
@@ -2224,8 +2234,8 @@ python_tests = [
   "desktop/tests/ui_rc3_contract.py::Selection restored after listing",
 ]
 bridge = ["moveTabToWindow", "detachTab", "beginTabDrag"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/session_python.rs (tab_states_and_requests_match_the_python_window_state); native/crates/ox-core/tests/session_window_state.rs (a_tab_snapshot_survives_a_json_round_trip, password_fields_are_never_forwarded, a_location_with_an_unknown_scheme_is_refused, a_history_position_must_be_an_integer_inside_the_history, a_history_without_the_location_resets_to_the_location, a_history_holds_1_to_200_locations, an_infinite_scroll_position_is_refused_and_a_huge_one_clamped, a_selection_is_a_list_of_at_most_10000_items, selected_items_are_file_locations, a_settings_tab_keeps_its_known_section, unknown_view_and_sort_fall_back_to_the_defaults). Moving or detaching a tab is not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/session_python.rs (tab_states_and_requests_match_the_python_window_state); native/crates/ox-core/tests/session_window_state.rs (a_tab_snapshot_survives_a_json_round_trip, password_fields_are_never_forwarded, a_location_with_an_unknown_scheme_is_refused, a_history_position_must_be_an_integer_inside_the_history, a_history_without_the_location_resets_to_the_location, a_history_holds_1_to_200_locations, an_infinite_scroll_position_is_refused_and_a_huge_one_clamped, a_selection_is_a_list_of_at_most_10000_items, selected_items_are_file_locations, a_settings_tab_keeps_its_known_section, unknown_view_and_sort_fall_back_to_the_defaults); native/crates/ox-app/src/window/tab_moves.rs (a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll): a moved tab keeps its history, selection, scroll position, view, sort and Settings page."
 
 [[feature]]
 id = "TAB-039"
@@ -2251,8 +2261,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::Transferred tab restores selection and sort",
 ]
 bridge = ["list", "tabTransferReady", "handoffReady", "moveTabToWindow", "detachTab"]
-native = "todo"
-native_note = "Porting notes: View and sort are window-global in the Python app, so receiving a tab changes the destination window's view/sort."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll); native/crates/ox-app/src/window/session.rs (a_moved_tab_keeps_its_history_and_goes_in_front_where_it_was_dropped): the history, view and sort apply at once, the selection and scroll position once the folder is listed."
 
 [[feature]]
 id = "TAB-040"
@@ -2284,7 +2294,8 @@ python_tests = [
   "desktop/tests/test_rc4.py::TearOutTests::test_root_request_always_replies_empty",
 ]
 bridge = ["beginTabDrag"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_drag_offers_the_tab_to_this_process_only): the tab is offered as a GType value GDK never serializes, and GNOME Shell's root-window format with no data."
 
 [[feature]]
 id = "TAB-041"
@@ -5255,7 +5266,7 @@ python_tests = [
 bridge = ["bookmark", "environment"]
 dolphin = "Places context menu 'Remove'"
 native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (unpin_removes_order_only_not_share, hidden_builtin_pin); menu and toast not implemented."
+native_note = "native/crates/ox-core/src/settings/mutate.rs (unpin_removes_order_only_not_share, hidden_builtin_pin); native/crates/ox-app/src/window/tests/context_menus.rs (unpin_from_the_pin_menu_removes_only_the_pin). Missing: \"Remove saved location\" (SIDE-020)."
 
 [[feature]]
 id = "SIDE-010"
@@ -5366,8 +5377,8 @@ bridge = [
   "previousVersions",
 ]
 dolphin = "Places context menu 'Properties'"
-native = "todo"
-native_note = "Porting notes: sidebarMenu's share branch ('Remove saved location') is dead code, because renderSidebar never passes opts.share; network entries use the network location menu (SIDE-020)."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/sidebar/menu.rs (a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_pin_opens_its_menu). Open, Open in new tab and Unpin work; the other items show disabled until their milestones."
 
 [[feature]]
 id = "SIDE-015"
@@ -5731,7 +5742,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (the_command_bar_has_the_current_controls_in_order, the_edit_commands_follow_the_selection_with_their_python_tooltips); native/crates/ox-app/src/window/file_ops/trash_support.rs (delete_reads_delete_permanently_only_where_no_trash_is_known)."
 
 [[feature]]
 id = "CMD-002"
@@ -5756,7 +5768,8 @@ python_tests = [
 ]
 bridge = ["trashSupport"]
 dolphin = "updateFileAndEditActions / slotWriteStateChanged"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_ops/availability.rs (the updateToolbar rules, table-tested); native/crates/ox-app/src/window/tests/command_bar.rs and native/crates/ox-app/src/window/tests/file_operations.rs (new_is_disabled_where_nothing_can_be_created)."
 
 [[feature]]
 id = "CMD-003"
@@ -5778,7 +5791,8 @@ sources = [
 python_tests = []
 bridge = ["trashSupport"]
 gnome = "GIO access::can-trash / g_file_trash"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_ops/trash_support.rs (delete_reads_delete_permanently_only_where_no_trash_is_known): the window asks each folder it shows once, and the command bar, the menus and the Delete confirmation follow the answer."
 
 [[feature]]
 id = "CMD-004"
@@ -5798,7 +5812,8 @@ python_tests = [
 ]
 bridge = ["templates"]
 dolphin = "Create New submenu"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place); native/crates/ox-app/src/window/tests/file_operations.rs."
 
 [[feature]]
 id = "CMD-005"
@@ -5868,8 +5883,8 @@ python_tests = [
   "desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic",
 ]
 bridge = ["preferences"]
-native = "todo"
-native_note = "Only the stored preference is ported (native/crates/ox-core/src/settings/tests/preferences.rs, default_context_menu_classic); no menus exist yet."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one, right_clicking_a_file_selects_it_and_opens_the_classic_menu); native/crates/ox-app/src/window/context_menu/entries.rs. The compact menu's width follows the classic one's text-size rule (src/theme/fonts.rs)."
 
 [[feature]]
 id = "CMD-009"
@@ -5915,8 +5930,8 @@ bridge = [
   "properties",
 ]
 dolphin = "Item context menu; DolphinContextMenu::addItemContextMenu"
-native = "todo"
-native_note = "Porting notes: OpenXplorer lacks Duplicate, Open in New Window, Create New, Show Target and Open in New Tabs, and its Paste does not target the clicked folder. Each gap is its own feature: OPS-034, TAB-028, OPS-002, CMD-030, TAB-027 and CMD-019."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts, a_zip_file_on_a_share_offers_extraction_and_sign_out, several_selected_items_disable_what_acts_on_one); native/crates/ox-app/src/window/tests/context_menus.rs. Adds Duplicate. Missing: the \"Open in <editor>\" items, the \"Stop caching this folder\" label, and the commands of other milestones (Terminal, Open with, sizes, versions, Properties), which show disabled."
 
 [[feature]]
 id = "CMD-010"
@@ -5939,7 +5954,8 @@ python_tests = [
   "desktop/tests/ui_release.py::Show more options opens classic menu",
 ]
 bridge = ["clipboardSet", "operate", "rename", "previousVersions", "properties", "preferences"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (the_compact_menu_puts_the_edit_commands_in_its_strip); native/crates/ox-app/src/window/tests/context_menus.rs. Missing: the \"Open in <editor>\" items."
 
 [[feature]]
 id = "CMD-011"
@@ -5966,7 +5982,8 @@ bridge = [
   "properties",
 ]
 dolphin = "Viewport context menu"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (the_background_menu_acts_on_the_folder); native/crates/ox-app/src/window/tests/context_menus.rs. Adds Undo and Redo. Missing: Open in Terminal, the cache toggle, Calculate folder sizes, Previous versions and Properties work with their milestones and show disabled until then."
 
 [[feature]]
 id = "CMD-012"
@@ -5999,8 +6016,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "GTK4 'menu' key / Shift+F10 via Gtk.PopoverMenu on the focused item."
-native = "todo"
-native_note = "Porting notes: Menu is placed at pane corner, not at the selected row; native should anchor to the focused item. Menu is not anchored at the focused item; native should place it at the selected item (gain)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (the_menu_key_opens_the_classic_menu_of_the_selection); native/crates/ox-app/src/window/tests/input.rs (the_menu_key_opens_the_context_menu_with_or_without_a_selection)."
 
 [[feature]]
 id = "CMD-014"
@@ -6014,8 +6031,8 @@ sources = ["dolphin:src/kitemviews/kitemlistcontroller.cpp:426-447", "desktop/ui
 python_tests = []
 bridge = []
 dolphin = "Key_Menu"
-native = "todo"
-native_note = "Porting notes: OpenXplorer opens it at a fixed offset from the top-left of the file pane. Existing OpenXplorer part is protected by CMD-013."
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu.rs points the keyboard menu at the selected row (keyboard_menu_anchor); native/crates/ox-app/src/window/tests/context_menus.rs (the_menu_key_opens_the_classic_menu_of_the_selection)."
 
 [[feature]]
 id = "CMD-015"
@@ -6039,8 +6056,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "GtkPopoverMenu"
-native = "todo"
-native_note = "Porting notes: While a menu is open, other file shortcuts (Ctrl+C, Delete, ...) still act on the selection; Home/End inside menus are not handled."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/context_menus.rs: menus open at the pointer, a choice closes the menu before it runs, disabled items are insensitive, shortcuts show at the right, and the rows are menu items. Missing: tests of arrow-key wrapping, Escape returning focus and the 6 px clamping."
 
 [[feature]]
 id = "CMD-016"
@@ -6059,7 +6076,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts); native/crates/ox-app/src/window/tests/command_bar.rs (the_edit_commands_follow_the_selection_with_their_python_tooltips)."
 
 [[feature]]
 id = "CMD-017"
@@ -6081,8 +6099,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Ctrl+F still focuses Search and clears the prefix",
 ]
 bridge = []
-native = "todo"
-native_note = "Porting notes: Ctrl+, is handled before the modal-dialog branch (app.js:1008), so it opens Settings even while an ordinary modal dialog is open and leaves that dialog floating over the Settings tab. This is a bug to fix natively, not a behaviour to preserve."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_file_keys_leave_text_fields_and_the_settings_page_alone): the file keys (Ctrl+C/X/V, Ctrl+Shift+N, Delete, Shift+Delete, F2, Ctrl+Z/Y) act only outside text fields, the address bar and Settings. Missing: tests of the other keys and the resize handle."
 
 [[feature]]
 id = "CMD-018"
@@ -6433,8 +6451,8 @@ python_tests = [
 ]
 bridge = ["create", "list"]
 dolphin = "Dolphin: F10 opens New Folder dialog; Windows Ctrl+Shift+N creates 'New folder' and starts inline rename.; F10 / Ctrl+Shift+N creates and selects; create_dir: F10"
-native = "todo"
-native_note = "Porting notes: Folder is created only after naming (not created as 'New folder' then renamed). The new item is not selected afterwards; Dolphin/Explorer select it. The new folder is not selected afterwards; Windows creates immediately and enters rename. The new folder is not selected afterwards. Explorer creates 'New folder' directly in inline-rename mode. Shortcut conflict, Explorer wins: use Explorer's Ctrl+Shift+N (bound in OpenXplorer), not F10, which activates the menu/keytips in Explorer."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (new_folder_asks_for_a_name_then_creates_and_selects_the_folder, a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten, new_is_disabled_where_nothing_can_be_created); native/crates/ox-app/src/window/file_ops/shortcuts.rs binds Ctrl+Shift+N. Gain: the new folder is selected afterwards, as in Explorer and Dolphin. Explorer's create-then-rename-inline flow needs inline rename (OPS-010)."
 
 [[feature]]
 id = "OPS-002"
@@ -6468,7 +6486,8 @@ python_tests = [
 bridge = ["templates", "createTemplate", "list", "create"]
 dolphin = "Create New > templates (~/Templates); new_menu (KNewFileMenu)"
 gnome = "XDG_TEMPLATES_DIR; XDG_TEMPLATES_DIR (xdg-user-dir TEMPLATES), as Nautilus's 'New Document' uses"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (a_new_menu_file_starts_from_its_template_and_is_created_from_it); native/crates/ox-app/src/window/file_ops/template_dialog.rs (each_new_menu_item_starts_with_its_own_template_and_title, user_templates_are_marked_in_the_list); the template rules are OPS-048. The new file is selected afterwards."
 
 [[feature]]
 id = "OPS-003"
@@ -6544,7 +6563,7 @@ python_tests = [
 ]
 bridge = ["create", "rename", "createTemplate", "archiveExtract"]
 native = "partial"
-native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python)."
+native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs. Missing: the Extract dialog, which comes with the archives UI."
 
 [[feature]]
 id = "OPS-007"
@@ -6593,8 +6612,8 @@ python_tests = [
 ]
 bridge = ["create", "createTemplate", "rename"]
 dolphin = "Create New > Folder (F10); Rename (F2); KIO::moveAs + slotRenamingResult"
-native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (exclusive_copy_move_and_folder_creation_preserve_existing_destinations); dialogs not implemented."
+native = "done"
+native_note = "native/crates/ox-core/tests/ops_rename.rs and ops_create.rs cover the backend rules; native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows the refusal in the dialog."
 
 [[feature]]
 id = "OPS-009"
@@ -6620,8 +6639,8 @@ python_tests = [
 ]
 bridge = ["rename", "list"]
 dolphin = "Dolphin: F2 renames inline, selecting the name without extension; Shift+F2? (batch rename for multi-selection).; F2 rename"
-native = "todo"
-native_note = "Porting notes: Selects the whole name including extension and does not reselect the renamed item; Dolphin selects the stem and supports inline rename. Rename is a dialog, not in place, and selects the extension too. Windows/Dolphin rename inline selecting the base name; native should rename in place (gain) while keeping the same validation messages and F2 trigger."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try, an_item_that_is_not_on_screen_is_renamed_with_the_dialog, rename_does_nothing_with_several_items_selected); native/crates/ox-app/src/window/file_ops/availability.rs. F2 renames in place (OPS-010) with the dialog's checks and messages, which show in the toast while the field stays; an item whose cell is not on screen gets the Rename dialog. The renamed item stays selected."
 
 [[feature]]
 id = "OPS-010"
@@ -6644,8 +6663,8 @@ sources = [
 python_tests = ["desktop/tests/ui_type_select.py::Rename text is not intercepted"]
 bridge = ["rename"]
 dolphin = "renamefile: F2 (RenameInline default true)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer renames in a modal dialog and selects the whole name, extension included. Explorer renames inline with the base name selected. Existing OpenXplorer part is protected by OPS-009."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try); native/crates/ox-app/src/window/file_ops/name_dialog.rs (rename_selects_the_name_before_its_last_extension). The field is a GtkEntry in the row or tile: Enter or leaving it commits, Escape cancels, and the arrow, Home and End keys are the entry's own."
 
 [[feature]]
 id = "OPS-011"
@@ -6753,8 +6772,8 @@ python_tests = [
 bridge = ["trashSupport", "operate"]
 dolphin = "Move to Trash / Delete with confirmation; Dolphin: Delete moves to Trash without confirming by default; Shift+Delete deletes permanently.; Del → Trash, Shift+Del → delete; movetotrash: Delete; delete_shortcut (Delete mapped to delete when trash unavailable)"
 gnome = "g_file_trash / access::can-trash"
-native = "todo"
-native_note = "Porting notes: Shift+Delete (explicit permanent delete) is not bound in 1.1.4. No Shift+Delete and no undo (Ctrl+Z) in the Python app; both are Dolphin gains. Keep the explicit confirmation for no-Trash locations."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_undo_restores, cancelling_the_delete_confirmation_keeps_the_items); the wording of all three confirmations is tested in native/crates/ox-core/src/ops/delete_plan.rs."
 
 [[feature]]
 id = "OPS-016"
@@ -6778,8 +6797,8 @@ python_tests = [
 bridge = ["operate"]
 dolphin = "deletefile: Shift+Delete; Shift+Delete (KStandardAction::deleteFile)"
 gnome = "Nautilus Shift+Delete"
-native = "todo"
-native_note = "Porting notes: Explorer also uses Shift+Delete. OpenXplorer offers permanent deletion only where no Trash exists."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (shift_delete_deletes_permanently_after_its_own_confirmation); native/crates/ox-core/src/ops/delete_plan.rs words the confirmation."
 
 [[feature]]
 id = "OPS-017"
@@ -6792,7 +6811,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:485"]
 python_tests = ["desktop/tests/test_operations.py::TransferTests::test_trash_unsupported_no_delete"]
 bridge = ["trashSupport", "operate"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/tests/ops_delete_plan.rs (a_share_that_cannot_answer_counts_as_having_a_trash); the window plans every Delete with plan_delete, and a failed Trash is reported, never retried as a delete (XFER-014)."
 
 [[feature]]
 id = "OPS-018"
@@ -6818,7 +6838,8 @@ python_tests = [
 bridge = ["operate", "trashSupport"]
 dolphin = "KIO::trash (kio_trash implements the freedesktop Trash spec)"
 gnome = "g_file_trash + access::can-trash"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_undo_restores) trashes through GIO into the freedesktop Trash; the per-folder labels are CMD-003 and the engine never falls back to a delete (XFER-014)."
 
 [[feature]]
 id = "OPS-019"
@@ -6847,8 +6868,8 @@ python_tests = [
   "desktop/tests/test_operations.py::TransferTests::test_copy_cancel_removes_partial_stage",
 ]
 bridge = ["operate", "cancel"]
-native = "todo"
-native_note = "Only the label strings are ported (native/crates/ox-core/src/transfer/labels.rs, labels_match_the_python_strings); the panel is not implemented. Porting notes: Single inline panel, no per-job list or speed/ETA; Dolphin uses KJob notifications. Native may improve."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/transfer_panel.rs. Progress arrives per operation through a channel, so reports of another operation cannot reach the panel."
 
 [[feature]]
 id = "OPS-020"
@@ -6865,7 +6886,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["operate"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/transfer_panel.rs names the bar \"Operation progress\" and gives it the label as its value text; the engine's labels say whether they report one file or the batch. Missing: a test of the accessible state, and a batch bar separate from the file bar."
 
 [[feature]]
 id = "OPS-021"
@@ -6906,8 +6928,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_cancel_mid_copy_leaves_no_stage_and_no_final_name",
 ]
 bridge = ["cancel"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (cancellation_during_copy_removes_partial_stage_and_stops_the_batch); native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (cancellation_prevents_copy_move_and_recursive_delete)."
+native = "done"
+native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (cancellation_during_copy_removes_partial_stage_and_stops_the_batch); native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it)."
 
 [[feature]]
 id = "OPS-023"
@@ -6934,7 +6956,8 @@ python_tests = [
 ]
 bridge = ["operate", "list"]
 dolphin = "showCommand / slotJobResult"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs and native/crates/ox-app/src/window/tests/clipboard.rs check the toasts; native/crates/ox-core/src/ops/report.rs tests the Operation result lines. Gain: the created or moved items are selected after the reload instead of clearing the selection."
 
 [[feature]]
 id = "OPS-024"
@@ -6963,8 +6986,8 @@ python_tests = [
   "desktop/tests/test_rc2.py::DispatchTests::test_busy_writer_blocks_before_extract",
 ]
 bridge = ["operate", "archiveExtract"]
-native = "todo"
-native_note = "Porting notes: Dolphin allows concurrent jobs; native may queue, but must never interleave confirmations unsafely. A queue would be an improvement; see the operation history entry."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/file_ops/availability.rs (a_running_operation_or_a_share_root_disables_the_edit_commands). Missing: the refusals of disconnect, sign-out, extraction and update install, which come with those commands."
 
 [[feature]]
 id = "OPS-025"
@@ -7012,8 +7035,8 @@ python_tests = [
 ]
 bridge = ["transferConflicts", "operate"]
 dolphin = "KIO rename/overwrite/skip dialog"
-native = "todo"
-native_note = "Porting notes: No per-item choice, no 'Keep both' for user transfers and no 'Apply to all' granularity; Dolphin's dialog offers rename/skip/overwrite per item. Native must keep these three choices and may add more."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (pasting_onto_a_taken_name_asks_and_keep_both_keeps_both, cancelling_the_conflict_dialog_changes_nothing); native/crates/ox-app/src/window/file_ops/conflict_dialog.rs (the_conflict_message_keeps_the_python_wording). The dialog adds Keep both. Missing: drops (DND), and a test of \"Could not check destination\"."
 
 [[feature]]
 id = "OPS-027"
@@ -7039,7 +7062,7 @@ python_tests = [
 ]
 bridge = ["transferConflicts", "operate"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (conflict_policies_never_overwrite_without_replace)."
+native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (conflict_policies_never_overwrite_without_replace); native/crates/ox-app/src/window/file_ops/transfer.rs (without_conflicts_everything_copies_with_skip, items_without_a_conflict_keep_skip_beside_answered_ones); native/crates/ox-app/src/window/tests/clipboard.rs (copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy). Missing: drops."
 
 [[feature]]
 id = "OPS-028"
@@ -7065,8 +7088,8 @@ python_tests = [
 ]
 bridge = ["transferConflicts", "operate"]
 dolphin = "KIO::RenameDialog; KIO rename/overwrite dialog"
-native = "todo"
-native_note = "Porting notes: OpenXplorer asks once per batch: 'Skip duplicates' or 'Replace existing'. It has no per-item choice, no rename or keep-both, and no comparison. Explorer's dialog offers Replace, Skip, 'Compare info for both files' and 'Let me decide for each file'."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (clearing_apply_to_all_asks_about_each_conflict_in_turn); native/crates/ox-app/src/window/file_ops/transfer.rs. The dialog offers Skip, Keep both and Replace with Apply to all, and asks item by item when it is cleared. Missing: the side-by-side comparison, rename with an editable name, Overwrite older and Resume."
 
 [[feature]]
 id = "OPS-029"
@@ -7092,8 +7115,8 @@ python_tests = []
 bridge = ["operate", "rename", "create"]
 dolphin = "edit_undo: Ctrl+Z (KIO::FileUndoManager); Ctrl+Z undo; KIO::FileUndoManager (Edit → Undo, Ctrl+Z)"
 gnome = "Nautilus-style undo stack (NautilusFileUndoManager) using trash::orig-path for Trash undo"
-native = "todo"
-native_note = "Porting notes: Explorer also has Ctrl+Z, plus redo with Ctrl+Y. The OpenXplorer About text says undo is not implemented."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs undoes a rename, a Move to Trash and a duplicate; native/crates/ox-core/tests/ops_undo.rs covers copy, move and creation. The folder menu and the toasts name the step (\"Undo: Rename\", \"Rename undone.\"). Missing: links and batch rename, which the native app does not have yet."
 
 [[feature]]
 id = "OPS-030"
@@ -7125,7 +7148,8 @@ python_tests = []
 bridge = ["operate", "rename", "create"]
 dolphin = "n/a (KIO has no redo)"
 gnome = "NautilusFileUndoManager redo (also exposed via FileOperations2 Redo)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_selects_the_name_before_its_extension_and_undo_and_redo_walk_it); native/crates/ox-core/src/ops/journal.rs. Ctrl+Shift+Z and Ctrl+Y."
 
 [[feature]]
 id = "OPS-032"
@@ -7175,8 +7199,8 @@ python_tests = [
 ]
 bridge = ["operate"]
 dolphin = "duplicate: Ctrl+D"
-native = "todo"
-native_note = "Porting notes: Shortcut conflict, Explorer wins: Ctrl+D deletes (moves to the Recycle Bin) in Explorer. Explorer duplicates by copying and pasting in the same folder, which produces '<name> - Copy'. The backend already has a 'keep-both' policy, but the paste UI does not offer it."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy): Duplicate copies next to the item, selects the copy, and Undo reverses it. Differs: copies are named \"(copy N)\" as Keep both names them, not Dolphin's \"<name> copy\"."
 
 [[feature]]
 id = "OPS-035"
@@ -7201,8 +7225,8 @@ python_tests = [
   "desktop/tests/test_native_file_drop.py::DropTests::test_share_root_cannot_be_copied",
 ]
 bridge = ["operate", "rename", "transferConflicts", "clipboardSet"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node_cases/removal.rs (roots_and_whole_network_shares_are_refused_before_mutation)."
+native = "done"
+native_note = "native/crates/ox-core/tests/ops_transfer.rs and gio_node_cases/removal.rs refuse roots; native/crates/ox-app/src/window/file_ops/availability.rs (a_running_operation_or_a_share_root_disables_the_edit_commands) disables the commands for them in the window."
 
 [[feature]]
 id = "OPS-036"
@@ -7215,8 +7239,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:936-937", "desktop/winspace.py:856-857", "desktop/core.py:412-415"]
 python_tests = ["desktop/tests/test_pins.py::PinTests::test_server_detection"]
 bridge = ["operate", "archiveExtract"]
-native = "todo"
-native_note = "Only the server-listing detection is ported (native/crates/ox-core/src/location/normalise.rs, server_detection); the refusal itself is not implemented."
+native = "partial"
+native_note = "native/crates/ox-core/tests/ops_transfer.rs (requests_with_a_whole_share_or_a_server_listing_are_refused_before_anything_changes); Paste is disabled in a server listing (writableLocation). Missing: drops and extraction."
 
 [[feature]]
 id = "OPS-037"
@@ -7286,8 +7310,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "trash:/ context menus; Trash place, Restore"
 gnome = "GVfs trash:/// with the 'trash::orig-path' and 'trash::deletion-date' attributes; trash:/// GVfs backend"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's address normalisation rejects trash:///."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs: the Recycle Bin opens as a folder (address \"trash:///\" or \"Recycle Bin\") with its own item and background menus. Missing: the Original location and Date deleted columns, the \"Recycle Bin is empty\" text and a sidebar entry."
 
 [[feature]]
 id = "OPS-041"
@@ -7307,7 +7331,8 @@ python_tests = []
 bridge = ["operate", "list"]
 dolphin = "KIO::restoreFromTrash; Trash context “Restore” (KIO::RestoreJob)"
 gnome = "Move the trash:/// item to its 'trash::orig-path'; trash::orig-path + g_file_move from the trash:/// child (Nautilus Restore)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (the_recycle_bin_lists_trashed_items_and_restore_puts_them_back); native/crates/ox-core/tests/ops_recycle_bin.rs."
 
 [[feature]]
 id = "OPS-042"
@@ -7327,7 +7352,8 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "Trash::empty; Places “Empty Trash” (KIO::emptyTrash)"
 gnome = "Delete the children of trash:/// (as Nautilus 'Empty Trash'); Delete each top-level child of trash:/// (Nautilus EmptyTrash)"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (empty_recycle_bin_asks_then_deletes_everything_in_it); native/crates/ox-app/src/window/file_ops/availability.rs disables it while the Recycle Bin is empty. Missing: the sidebar entry."
 
 [[feature]]
 id = "OPS-043"
@@ -7342,7 +7368,8 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "deletefile in trash context; Trash view “Delete”"
 gnome = "g_file_delete on trash:/// children"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (delete_in_the_recycle_bin_deletes_only_the_chosen_items_for_good)."
 
 [[feature]]
 id = "OPS-044"
@@ -8157,8 +8184,8 @@ python_tests = [
 bridge = ["clipboardSet", "clipboardGet", "transferConflicts", "operate"]
 dolphin = "edit_cut Ctrl+X/Shift+Del, edit_copy Ctrl+C/Ctrl+Ins, edit_paste Ctrl+V/Shift+Ins"
 gnome = "x-special/gnome-copied-files + text/uri-list on the Gdk clipboard.; x-special/gnome-copied-files + text/uri-list on GdkClipboard; x-special/gnome-copied-files + text/uri-list"
-native = "todo"
-native_note = "Porting notes: Dolphin's alternate shortcuts Shift+Delete (cut), Ctrl+Insert and Shift+Insert are not bound. Shift+Delete must stay permanent delete, as in Explorer."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy, ctrl_c_on_an_item_that_is_no_file_or_folder_asks_to_open_the_share, ctrl_c_copies_while_an_operation_runs); native/crates/ox-app/src/window/file_ops/clipboard.rs (copy_and_cut_say_how_many_items_are_ready_to_paste). Ctrl+C and Ctrl+X run copySelection directly, as onKey does."
 
 [[feature]]
 id = "CLIP-002"
@@ -8180,7 +8207,8 @@ sources = [
 python_tests = ["desktop/tests/ui_release.py::Ctrl+X produces a cut payload"]
 bridge = ["clipboardSet", "clipboardGet"]
 dolphin = "Cut items shown semi-transparent; KFileItemClipboard"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (cut_then_paste_moves_the_items_and_empties_the_cut, a_cut_dims_its_items_in_both_views_until_the_clipboard_changes, ctrl_x_in_a_previous_version_is_refused_and_ctrl_c_copies). GTK gives rows and tiles no per-item class, so the cells of a cut item fade to 50% and the selection behind them stays clear."
 
 [[feature]]
 id = "CLIP-003"
@@ -8202,7 +8230,8 @@ python_tests = [
   "desktop/tests/ui_release.py::Cut/paste removes simulated source",
 ]
 bridge = ["clipboardGet", "transferConflicts", "operate", "clipboardConsume"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy, cut_then_paste_moves_the_items_and_empties_the_cut, paste_during_a_search_asks_to_open_the_destination_folder)."
 
 [[feature]]
 id = "CLIP-004"
@@ -8248,8 +8277,8 @@ python_tests = [
 bridge = ["clipboardSet", "clipboardGet", "clipboardConsume"]
 dolphin = "x-kde-cutselection; KIO paste (text/uri-list + application/x-kde-cutselection)"
 gnome = "x-special/gnome-copied-files + text/uri-list; GtkClipboard with x-special/gnome-copied-files; GdkClipboard / GdkContentProvider serialising x-special/gnome-copied-files (still used by Nautilus 46.4, verified in its binary) and text/uri-list; gdk_clipboard_store_async for persistence"
-native = "partial"
-native_note = "Payload formats: native/crates/ox-core/src/clipboard/tests.rs (every_advertised_format_round_trips, external_fingerprint_matches_the_python_clipboard); claiming the GDK clipboard is not implemented."
+native = "done"
+native_note = "native/crates/ox-core/src/clipboard/tests.rs (the formats); native/crates/ox-app/src/window/tests/clipboard.rs (a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type) claims the display clipboard with all four."
 
 [[feature]]
 id = "CLIP-005"
@@ -8288,8 +8317,8 @@ python_tests = [
   "desktop/tests/test_v05.py::ClipboardTests::test_deduplication",
 ]
 bridge = ["clipboardGet", "clipboardSet"]
-native = "partial"
-native_note = "native/crates/ox-core/src/clipboard/tests.rs (invalid_external_payloads_fail_closed, custom_payload_preserves_token_and_rejects_invalid_operations, uri_list_discards_comments_and_deduplicates_canonical_addresses)."
+native = "done"
+native_note = "native/crates/ox-core/src/clipboard/tests.rs; native/crates/ox-app/src/window/tests/clipboard.rs (text_on_the_clipboard_is_no_file_list_and_disables_paste, a_cut_from_dolphin_pastes_as_a_move) reads the formats in order, asynchronously."
 
 [[feature]]
 id = "CLIP-006"
@@ -8311,8 +8340,8 @@ python_tests = [
 ]
 bridge = ["clipboardGet"]
 dolphin = "KDE cut selection marker"
-native = "partial"
-native_note = "native/crates/ox-core/src/clipboard/tests.rs (kde_requires_an_exact_short_cut_marker); see the KDE MIME type fix, which also applies to the Rust port."
+native = "done"
+native_note = "native/crates/ox-core/src/clipboard/tests.rs (kde_requires_an_exact_short_cut_marker); native/crates/ox-app/src/window/tests/clipboard.rs (a_cut_from_dolphin_pastes_as_a_move); native/crates/ox-app/src/window/tests/clipboard_interop.rs (a_uri_list_without_a_kde_marker_pastes_as_a_copy, a_read_overtaken_by_an_owner_change_is_dropped): a read whose owner changed meanwhile is dropped and not remembered."
 
 [[feature]]
 id = "CLIP-007"
@@ -8339,8 +8368,8 @@ python_tests = [
 bridge = ["clipboardSet", "clipboardGet", "clipboardConsume"]
 dolphin = "KIO::setClipboardDataCut / isClipboardDataCut use “application/x-kde-cutselection” (string found in the installed libKF5KIOWidgets.so.5)"
 gnome = "KDE format carried over GdkClipboard"
-native = "todo"
-native_note = "native/crates/ox-core/src/clipboard.rs copies the wrong target name x-kde-cutselection; fix it together with the Python app. Porting notes: The listed tests reuse the same wrong constant, so they cannot catch this; add a test with the literal KDE MIME and, ideally, a real Dolphin interop check. The failure is safe (copy instead of move) but wrong. Existing OpenXplorer part is protected by CLIP-004 and CLIP-006."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type, a_cut_from_dolphin_pastes_as_a_move) use the literal application/x-kde-cutselection. The Python app still has the old name."
 
 [[feature]]
 id = "CLIP-008"
@@ -8371,8 +8400,8 @@ python_tests = [
 ]
 bridge = ["clipboardConsume", "operate"]
 dolphin = "KIO::PasteJob cut handling"
-native = "partial"
-native_note = "native/crates/ox-core/src/clipboard/tests.rs (gnome_cut_keeps_identity_across_reads_and_consumes_only_successful_items, old_cut_cannot_consume_a_changed_payload_or_a_copy)."
+native = "done"
+native_note = "native/crates/ox-core/src/clipboard/tests.rs; native/crates/ox-app/src/window/tests/clipboard.rs (cut_then_paste_moves_the_items_and_empties_the_cut)."
 
 [[feature]]
 id = "CLIP-009"
@@ -8395,7 +8424,8 @@ python_tests = [
 ]
 bridge = ["clipboardGet"]
 gnome = "GtkClipboard owner-change"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (text_on_the_clipboard_is_no_file_list_and_disables_paste, a_cut_dims_its_items_in_both_views_until_the_clipboard_changes); the window reads the clipboard when it changes and when it becomes active, which updates Paste and the cut dimming."
 
 [[feature]]
 id = "CLIP-010"
@@ -8409,7 +8439,8 @@ sources = ["desktop/file_clipboard.py:123"]
 python_tests = []
 bridge = ["clipboardSet"]
 gnome = "GtkClipboard store / clipboard manager"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (every_published_format_is_offered_for_a_clipboard_manager_to_keep): the content is local and all four formats are storable; GtkApplication stores the display clipboard when it shuts down (gtk_main_sync). GNOME Shell 46 itself keeps only text and images, so on GNOME the files survive only with a clipboard manager, as for the Python app; that end-to-end check is manual."
 
 [[feature]]
 id = "CLIP-011"
@@ -8428,7 +8459,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["clipboardSet", "clipboardGet", "clipboardConsume", "clipboardText"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (paste_during_a_search_asks_to_open_the_destination_folder, ctrl_c_on_an_item_that_is_no_file_or_folder_asks_to_open_the_share, ctrl_x_in_a_previous_version_is_refused_and_ctrl_c_copies). The unavailable-clipboard message has no trigger: every GDK display has a clipboard, and a failed claim says 'The desktop clipboard could not be claimed.'"
 
 [[feature]]
 id = "CLIP-012"
@@ -8447,7 +8479,8 @@ sources = [
 python_tests = []
 bridge = ["clipboardText"]
 dolphin = "Copy Location (Ctrl+Alt+C)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_copies_the_selected_items_address_or_the_folders, copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most); native/crates/ox-app/src/window/copy_path.rs (local_smb_and_device_items_copy_their_display_path, without_one_selected_item_the_folder_is_copied_and_a_page_has_none). Setting the display clipboard's text cannot fail in GTK 4, so the 'Location' fallback dialog has no trigger."
 
 [[feature]]
 id = "CLIP-013"
@@ -8467,8 +8500,8 @@ sources = [
 python_tests = []
 bridge = ["clipboardText"]
 dolphin = "copy_location: Ctrl+Alt+C"
-native = "todo"
-native_note = "Porting notes: OpenXplorer has 'Copy path' in the command bar and menu, falling back to the current folder when nothing is selected, but no shortcut. Explorer's Ctrl+Shift+C ('Copy as path') takes precedence; Ctrl+Alt+C may be added as an alias."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_runs_on_explorers_and_dolphins_keys): Ctrl+Shift+C and Ctrl+Alt+C run Copy path outside text fields, and the context menus show Ctrl+Shift+C."
 
 [[feature]]
 id = "CLIP-014"
@@ -8524,8 +8557,8 @@ sources = [
 python_tests = ["desktop/tests/test_v05.py::ClipboardTests::test_plain_text_is_not_file_clipboard"]
 bridge = ["clipboardGet"]
 gnome = "gdk::Clipboard: check formats() for a file-list MIME type, then read_future; a missing format or a read error means no file clipboard"
-native = "todo"
-native_note = "Native clipboard reading lands with the file-operations milestone. Its tests must cover a text-only clipboard, an empty clipboard, a uri-list without the KDE marker, and an owner change during the read."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (text_on_the_clipboard_is_no_file_list_and_disables_paste); native/crates/ox-app/src/window/tests/clipboard_interop.rs (a_uri_list_without_a_kde_marker_pastes_as_a_copy, an_empty_clipboard_disables_paste, an_image_on_the_clipboard_is_no_file_list, an_empty_file_list_payload_is_no_file_list, a_conversion_the_owner_refuses_is_no_file_list, a_read_overtaken_by_an_owner_change_is_dropped). Every failed or empty read is \"no files\" in native/crates/ox-app/src/window/file_ops/clipboard.rs."
 
 [[feature]]
 id = "DND-001"
@@ -8591,8 +8624,8 @@ python_tests = [
 bridge = ["beginFileDrag", "fileDragLayout"]
 dolphin = "Dolphin drags with Copy/Move/Link actions chosen by the target.; startDragging (Move|Copy|Link offered, Copy default); KIO drag with text/uri-list"
 gnome = "GtkDragSource with GdkFileList/text/uri-list; GTK4 Gtk.DragSource with Gdk.FileList content (portal FileTransfer via xdg-desktop-portal).; GTK DnD text/uri-list + xdg-desktop-portal FileTransfer; GTK DnD text/uri-list; xdg-desktop-portal FileTransfer; GtkDragSource with a GdkFileList / text/uri-list content provider (GTK4 adds the application/vnd.portal.filetransfer target automatically)"
-native = "todo"
-native_note = "Porting notes: Dolphin offers Move, Copy and Link to the receiver; OpenXplorer offers Copy only. Verify on both Wayland and X11."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (dragging_a_selected_item_carries_the_whole_selection, dragging_an_unselected_item_selects_and_carries_only_it, a_drag_fades_its_items_and_pauses_clicks_until_shortly_after_it_ends); native/crates/ox-app/src/window/file_drag.rs (a_sidebar_folder_can_be_dragged_and_a_page_cannot, dragging_an_unmounted_smb_item_says_which_apps_can_open_it). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a file dragged out of a folder view landed in GNOME Files. A press on an item turns the rubber band off for that gesture, so a quick drag drags the item and blank space still starts a rubber band."
 
 [[feature]]
 id = "DND-002"
@@ -8620,7 +8653,8 @@ python_tests = [
 ]
 bridge = ["beginFileDrag"]
 dolphin = "m_clearSelectionIfItemsAreNotDragged"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (dragging_a_selected_item_carries_the_whole_selection, dragging_an_unselected_item_selects_and_carries_only_it); native/crates/ox-app/src/window/file_drag.rs (a_drag_carries_every_selected_item_once_in_order)."
 
 [[feature]]
 id = "DND-003"
@@ -8650,7 +8684,8 @@ python_tests = [
   "desktop/tests/test_native_file_drag.py::PayloadTests::test_network_share_root_remains_a_reference_for_pinning",
 ]
 bridge = ["beginFileDrag", "fileDragLayout"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drag/payload.rs (a_drag_carries_every_selected_item_once_in_order, one_item_that_may_not_leave_refuses_the_whole_drag, only_local_and_smb_locations_below_a_server_may_leave, a_selection_over_one_mebibyte_of_addresses_is_refused); native/crates/ox-app/src/window/file_drag.rs (a_sidebar_folder_can_be_dragged_and_a_page_cannot). Addresses with a password or a control character fail the location rules and refuse the whole drag."
 
 [[feature]]
 id = "DND-004"
@@ -8681,8 +8716,8 @@ python_tests = [
 ]
 bridge = ["beginFileDrag"]
 gnome = "Gio.File.get_path() on GVfs FUSE (/run/user/UID/gvfs) for mounted SMB."
-native = "todo"
-native_note = "Porting notes: The gap remains for receivers that need local files when no mount exists."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drag/payload.rs (a_mounted_share_exports_its_local_path_and_keeps_its_own_address, local_files_never_consult_the_mount_resolver); native/crates/ox-app/src/window/file_drag.rs (dragging_an_unmounted_smb_item_says_which_apps_can_open_it); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_openxplorer_window_receives_the_items_own_addresses)."
 
 [[feature]]
 id = "DND-005"
@@ -8714,8 +8749,8 @@ python_tests = [
   "desktop/tests/native_file_transport.py::URI payload uses standards-compatible CRLF line endings",
 ]
 bridge = ["beginFileDrag", "fileDragLayout"]
-native = "todo"
-native_note = "Porting notes: Bug fix in 1.1.4 (CHANGELOG: parentheses and unescaped punctuation)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drag.rs (a_drag_carries_every_selected_item_once_in_order) exports the listed items' exact GIO URIs, names with spaces, parentheses, & and % included; GTK encodes the file list."
 
 [[feature]]
 id = "DND-006"
@@ -8751,7 +8786,8 @@ python_tests = [
   "desktop/tests/ui_file_drag.py::Large-icon view publishes file source rectangles",
 ]
 bridge = ["fileDragLayout", "beginFileDrag"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (no_drag_starts_while_a_file_operation_runs). GTK drag sources answer the primary button only, a press on blank space prepares no content, and modal dialogs and open menus hold the pointer. Missing: tests for an open menu and the sign-in prompt, which the network track owns."
 
 [[feature]]
 id = "DND-007"
@@ -8786,7 +8822,8 @@ python_tests = [
   "desktop/tests/test_native_file_drag.py::FileDragTests::test_close_cancels_active_drag_and_disconnects_all_signals",
 ]
 bridge = ["beginFileDrag"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_drag_fades_its_items_and_pauses_clicks_until_shortly_after_it_ends): the dragged items fade until the drag ends, and clicks that open items are ignored from the start until 400 ms after the end. Type-to-select resets when the drag starts."
 
 [[feature]]
 id = "DND-008"
@@ -8815,8 +8852,8 @@ python_tests = [
   "desktop/tests/native_file_transport.py::Cancellation was reported without deleting files",
 ]
 bridge = ["beginFileDrag"]
-native = "todo"
-native_note = "Porting notes: Dolphin offers Move/Copy/Link on drop; OpenXplorer outgoing drags are copy-only by design."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drag/payload.rs (local_files_never_consult_the_mount_resolver). A plain drag offers Copy and Ask only; Shift or Ctrl+Shift held as it starts adds Move or Link. The window never deletes what it offered, whatever the receiver answers."
 
 [[feature]]
 id = "DND-009"
@@ -8877,8 +8914,8 @@ python_tests = [
 bridge = ["fileDragLayout", "transferConflicts", "operate", "pin"]
 dolphin = "Dolphin drop: menu Move Here / Copy Here / Link Here; Shift=move, Ctrl=copy, Ctrl+Shift=link; spring-loaded folders.; Dolphin drop menu (Move/Copy/Link); DolphinView::slotItemDropEvent / dropUrls; Dolphin accepts any KIO URL drop and shows a drop menu"
 gnome = "GTK4 Gtk.DropTarget(Gdk.FileList, COPY).; GtkDropTarget (GdkFileList); GtkDropTarget (GdkFileList, text/uri-list; portal FileTransfer for sandboxed sources)"
-native = "todo"
-native_note = "Porting notes: Copy-only is a deliberate safety rule. Dolphin's drop menu and modifier moves are gains; any native move-on-drop must stay opt-in and never be the silent default. Drop is copy-only; Dolphin offers a Move/Copy/Link menu. Native may add that, but must keep the copy-safe default and never delete the source silently. Dolphin offers a Move/Copy/Link menu on drop; OpenXplorer only proposes copy. Partial against Dolphin: device and remote GVfs URIs from other apps are rejected."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (files_dropped_on_blank_space_are_copied_into_the_folder_shown, files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check); native/crates/ox-app/src/window/file_drop/targets.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows); native/crates/ox-app/src/window/file_drop/action.rs (another_apps_drag_that_offered_no_copy_is_refused). A drop is finished before any dialog, as a copy whenever the source allows one. Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a file dragged from GNOME Files onto a folder row was copied and the source kept."
 
 [[feature]]
 id = "DND-010"
@@ -8894,7 +8931,8 @@ python_tests = [
   "desktop/tests/test_native_file_drop.py::DropTests::test_late_drop_never_substitutes_another_selection",
 ]
 bridge = ["fileDragLayout"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_openxplorer_window_receives_the_items_own_addresses): a window reads the drag's own items, a value only this process can see, never the local paths other apps get."
 
 [[feature]]
 id = "DND-011"
@@ -8938,7 +8976,8 @@ python_tests = [
 ]
 bridge = ["fileDragLayout"]
 dolphin = "urlListMatchesUrl"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown, only_the_folder_under_a_drag_is_highlighted, sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, a_crumb_takes_drops_for_its_folder); native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_folder_dropped_onto_itself_is_refused, links_and_drops_during_a_search_or_an_operation_are_refused). The row or tile under the pointer, a sidebar place, a crumb, a tab or the whole view gets the accent outline."
 
 [[feature]]
 id = "DND-012"
@@ -8960,7 +8999,8 @@ python_tests = [
   "desktop/tests/ui_file_drag.py::Web links are rejected as file payloads",
 ]
 bridge = ["fileDragLayout"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop.rs (a_drop_takes_local_and_smb_items_once_in_order, links_text_and_whole_shares_are_not_dropped); native/crates/ox-app/src/window/tests/drag_and_drop.rs (links_and_drops_during_a_search_or_an_operation_are_refused). Each item passes require_item_uri, which refuses credentials, other hosts and control characters."
 
 [[feature]]
 id = "DND-013"
@@ -8991,7 +9031,8 @@ python_tests = [
   "desktop/tests/test_native_file_drop.py::PayloadTests::test_rejects_invalid_layout",
 ]
 bridge = ["fileDragLayout"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (links_and_drops_during_a_search_or_an_operation_are_refused): a drop during an operation is refused with Finish the current operation before dropping files. A drop whose tab moved to another folder while its items were read is refused with The destination changed. Drop the files again., and reading waits at most 10 s. Missing: tests for those two."
 
 [[feature]]
 id = "DND-014"
@@ -9036,7 +9077,8 @@ python_tests = [
 ]
 bridge = ["pin", "fileDragLayout"]
 dolphin = "Dolphin: drop folders on the Places panel to add them.; KFilePlacesView drop of folders"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, folders_dropped_on_quick_access_are_pinned_and_files_are_not). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a folder dropped between two Quick access rows was pinned there with the Python toast. Missing: the dashed drop tail of an empty Quick access."
 
 [[feature]]
 id = "DND-015"
@@ -9091,8 +9133,8 @@ python_tests = [
   "desktop/tests/ui_file_drag.py::Source geometry stays bounded to the viewport",
 ]
 bridge = ["fileDragLayout"]
-native = "todo"
-native_note = "Porting notes: A native GTK widget tree makes published geometry unnecessary; the observable rule is correct hit-testing at any scale."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (a_crumb_takes_drops_for_its_folder, a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab): each part hit-tests a point in its own coordinates at its real size, so scaling and clipping need no published geometry."
 
 [[feature]]
 id = "DND-017"
@@ -9115,8 +9157,8 @@ python_tests = [
 ]
 bridge = ["operate", "transferConflicts"]
 dolphin = "Drop menu Move/Copy/Link, Shift/Ctrl modifiers; DropJob MoveAction"
-native = "todo"
-native_note = "Porting notes: The manual lists drag-to-move as not supported."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_shift_drop_moves_the_items_into_the_folder, moving_items_into_the_folder_they_are_in_changes_nothing); native/crates/ox-app/src/window/file_drag.rs (a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link); native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, another_apps_drag_that_offered_no_copy_is_refused). The move runs through the transfer engine and its conflict check. Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a Shift-drag moved a file into a folder."
 
 [[feature]]
 id = "DND-018"
@@ -9142,8 +9184,8 @@ python_tests = [
 bridge = ["operate", "transferConflicts"]
 dolphin = "KIO::DropJob / DropMenu; Dolphin drop popup (Move Here / Copy Here / Link Here) and modifier keys"
 gnome = "GdkDragAction negotiation (COPY|MOVE|LINK|ASK) in GtkDropTarget; Nautilus moves within a filesystem and copies across"
-native = "todo"
-native_note = "Porting notes: Explorer wins on the defaults: a plain drag moves within the same volume and copies across volumes, Shift forces move, Ctrl forces copy, Alt (or Ctrl+Shift) links, and a right-button drag shows Copy here, Move here, Create shortcuts here and Cancel. OpenXplorer always copies. A gain; keep a copy-only mode available per the current safety policy. Existing OpenXplorer part is protected by DND-009."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, the_drop_menu_offers_copy_move_link_and_cancel); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer). A plain drop copies (the current app's default); Shift moves, Ctrl copies, Ctrl+Shift links and Alt opens Copy here, Move here, Create links here and Cancel. Missing: Dolphin's Trash rules, since the Recycle Bin neither gives nor takes drags yet."
 
 [[feature]]
 id = "DND-019"
@@ -9157,8 +9199,8 @@ sources = ["kio:src/widgets/dropjob.cpp:317-337", "kio:src/widgets/dropjob.cpp:5
 python_tests = []
 bridge = ["create"]
 dolphin = "DropMenu 'Link Here' (Ctrl+Shift)"
-native = "todo"
-native_note = "Porting notes: Explorer's link modifier is Alt (Create shortcut)."
+native = "done"
+native_note = "native/crates/ox-core/src/ops/links.rs (a_link_points_to_the_item_and_is_named_after_it, a_taken_name_is_reported_and_never_replaced, items_and_folders_that_are_not_local_get_no_links); native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_ctrl_shift_drop_creates_links_to_the_items)."
 
 [[feature]]
 id = "DND-020"
@@ -9176,7 +9218,8 @@ sources = [
 python_tests = []
 bridge = ["openWith"]
 dolphin = "DropJob local executable / desktop file"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (items_dropped_on_a_program_are_given_to_it_as_arguments): programs and scripts, see DND-026. Missing: .desktop launchers."
 
 [[feature]]
 id = "DND-021"
@@ -9291,8 +9334,8 @@ sources = [
 python_tests = []
 bridge = []
 gnome = "GtkDropTarget on file rows; g_file_query_info access::can-execute; GAppInfo from the executable (g_app_info_create_from_commandline) or the terminal via xdg-terminal-exec / the configured terminal"
-native = "todo"
-native_note = "Requested feature the owner committed to publicly. Lands with native drag and drop. Needs tests for: drop onto an executable runs it with the paths, drop onto a non-executable does nothing, quoting of paths with spaces and quotes, confirmation for programs on remote or removable storage."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop/program.rs (only_executable_regular_files_are_programs_and_scripts_are_text, a_binary_gets_each_path_as_one_argument_whatever_its_name, a_script_runs_in_the_terminal_through_the_fixed_hold_script, the_hold_script_passes_names_through_as_arguments, only_programs_on_this_computers_own_disks_run_without_asking); native/crates/ox-app/src/window/file_drop/targets.rs (items_dropped_on_a_program_are_given_to_it_as_arguments, a_file_that_is_not_executable_is_no_program)."
 
 [[feature]]
 id = "SRCH-001"
