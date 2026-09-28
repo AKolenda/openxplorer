@@ -170,6 +170,7 @@ fn is_desktop_id_character(character: char) -> bool {
 mod tests {
     use super::*;
 
+    /// parity: SAFE-020
     #[test]
     fn plain_desktop_ids_are_accepted_and_anything_else_refused() {
         let accepted = [

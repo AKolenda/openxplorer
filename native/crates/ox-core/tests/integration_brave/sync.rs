@@ -32,7 +32,7 @@ fn syncing_needs_explicit_consent() {
 }
 
 /// Ported from `desktop/tests/test_v07.py::BraveTests::test_requires_quit`
-/// parity: INT-020
+/// parity: INT-020, SAFE-020
 #[test]
 fn syncing_waits_until_brave_is_closed() {
     let fixture = Fixture::new();
@@ -77,7 +77,7 @@ fn syncing_keeps_unrelated_decimal_preferences_exactly() {
 }
 
 /// Ported from `desktop/tests/test_v07.py::BraveTests::test_private_backups_and_prefs`
-/// parity: INT-020
+/// parity: INT-020, SAFE-020
 #[test]
 fn backups_records_and_preferences_are_private() {
     let fixture = Fixture::new();
@@ -152,7 +152,7 @@ fn an_smb_address_is_not_a_download_folder() {
 }
 
 /// Ported from `desktop/tests/test_v07.py::BraveTests::test_symlink_pref_refused`
-/// parity: INT-020
+/// parity: INT-020, SAFE-020
 #[test]
 fn symlinked_preferences_are_never_written() {
     let fixture = Fixture::new();

@@ -50,7 +50,7 @@ fn without_a_terminal_the_message_says_how_to_install_one() {
 }
 
 /// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_only_trusted_path_searched`
-/// parity: OPEN-018
+/// parity: OPEN-018, SAFE-015
 #[test]
 fn only_the_system_folders_are_searched() {
     let root = temporary_folder();
@@ -64,7 +64,7 @@ fn only_the_system_folders_are_searched() {
 }
 
 /// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_debian_gnome_alternative`
-/// parity: OPEN-018, OPEN-019
+/// parity: OPEN-018
 #[test]
 fn debians_gnome_wrapper_alternative_runs_the_real_gnome_terminal() {
     let root = temporary_folder();
@@ -90,7 +90,7 @@ fn debians_gnome_wrapper_alternative_runs_the_real_gnome_terminal() {
     assert_eq!(terminal, expected);
 }
 
-/// parity: OPEN-018, OPEN-019
+/// parity: OPEN-018
 #[test]
 fn the_debian_alternative_wins_over_the_preference_order() {
     let root = temporary_folder();
@@ -165,7 +165,7 @@ fn each_terminal_gets_its_own_working_directory_option() {
 }
 
 /// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_unknown_executable_kind_rejected`
-/// parity: OPEN-007, OPEN-018
+/// parity: OPEN-018, SAFE-015
 #[test]
 fn only_known_terminals_with_absolute_programs_are_started() {
     let refused = Terminal::new("sh".into(), TerminalKind::XTerm);
@@ -178,7 +178,7 @@ fn only_known_terminals_with_absolute_programs_are_started() {
 }
 
 /// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_real_process_preserves_literal_shell_metacharacters`
-/// parity: OPEN-018, OPEN-020
+/// parity: OPEN-018, OPEN-020, SAFE-015
 #[test]
 fn a_folder_named_like_shell_code_stays_a_name() {
     let root = temporary_folder();

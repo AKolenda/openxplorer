@@ -132,7 +132,7 @@ fn a_long_startup_id_is_cut_to_4096_characters() {
 }
 
 /// Ported from `desktop/tests/test_v07.py::BusTests::test_bad_scheme_error_not_launch`
-/// parity: INT-013
+/// parity: INT-013, SAFE-017
 #[test]
 fn an_unsupported_location_is_refused_without_reaching_the_app() {
     let mut fixture = Fixture::new(Ok(()));
@@ -149,7 +149,7 @@ fn an_unsupported_location_is_refused_without_reaching_the_app() {
 }
 
 /// Ported from `desktop/tests/test_v07.py::BusTests::test_bad_method_error`
-/// parity: INT-013
+/// parity: INT-013, SAFE-017
 #[test]
 fn an_unknown_method_is_refused() {
     let mut fixture = Fixture::new(Ok(()));
@@ -162,7 +162,7 @@ fn an_unknown_method_is_refused() {
 }
 
 /// Ported from `desktop/tests/test_v07.py::BusTests::test_no_request_executes_shell`
-/// parity: INT-013
+/// parity: INT-013, SAFE-017
 #[test]
 fn a_path_that_looks_like_a_command_stays_an_escaped_location() {
     let mut fixture = Fixture::new(Ok(()));

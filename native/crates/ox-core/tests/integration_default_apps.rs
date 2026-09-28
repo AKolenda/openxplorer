@@ -278,7 +278,7 @@ fn restoring_everything_puts_every_recorded_handler_back() {
 }
 
 /// Ported from `desktop/tests/test_rc3.py::DefaultsTests::test_bad_previous_handler_rejected`
-/// parity: INT-008
+/// parity: INT-008, SAFE-020
 #[test]
 fn a_handler_that_cannot_be_recorded_is_refused_before_any_change() {
     let fixture = Fixture::new();

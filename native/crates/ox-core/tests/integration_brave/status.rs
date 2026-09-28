@@ -35,7 +35,7 @@ fn native_profiles_are_detected_with_their_names() {
 }
 
 /// Ported from `desktop/tests/test_v07.py::BraveTests::test_nonregular_pref_file_rejected`
-/// parity: INT-019
+/// parity: INT-019, SAFE-020
 #[test]
 fn a_profile_whose_preferences_are_not_a_file_is_not_offered() {
     let fixture = Fixture::new();
@@ -93,7 +93,7 @@ fn other_processes_are_not_brave() {
     assert!(!ProcessTable::at(&proc_root).is_running());
 }
 
-/// parity: INT-019
+/// parity: INT-019, SAFE-020
 #[test]
 fn a_process_table_that_cannot_be_read_counts_as_brave_running() {
     let root = tempfile::tempdir().expect("temporary folder");

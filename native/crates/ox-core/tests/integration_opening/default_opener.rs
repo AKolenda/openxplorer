@@ -5,6 +5,7 @@
 //! had no unit tests for.
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -122,6 +123,43 @@ fn the_application_is_looked_up_by_content_type_never_by_uri_scheme() {
         asked.iter().all(|asked| !asked.starts_with("x-scheme-handler/")),
         "{asked:?}"
     );
+}
+
+/// An executable script opens in the application registered for its
+/// content type, a text editor, with its path; nothing ever runs it.
+/// parity: OPEN-005, OPEN-007
+#[test]
+fn an_executable_script_opens_in_its_editor_and_is_never_run() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let script = folder.path().join("run.sh");
+    let ran_marker = folder.path().join("ran");
+    fs::write(&script, format!("#!/bin/sh\ntouch '{}'\n", ran_marker.display())).expect("script");
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("executable");
+    let applications = TestApplications {
+        default: Some(app("org.gnome.TextEditor.desktop", "Text Editor")),
+        ..TestApplications::default()
+    };
+    let opener = DefaultOpener::with_applications(local_file_path, applications.clone(), Sandbox::Host);
+
+    let prepared = opener
+        .prepare(&file_uri(&script), &Cancellation::new())
+        .expect("prepared");
+
+    let expected_launcher = Launcher::Application {
+        id: "org.gnome.TextEditor.desktop".to_owned(),
+        name: "Text Editor".to_owned(),
+    };
+    assert_eq!(prepared.launcher, expected_launcher);
+    assert_eq!(prepared.target, OpenTarget::LocalPath(script));
+    let content_type = prepared.entry.content_type.as_deref();
+    assert_eq!(content_type, Some("application/x-shellscript"));
+    let asked = applications.asked_types();
+    assert!(!asked.is_empty());
+    assert!(
+        asked.iter().all(|asked| asked == "application/x-shellscript"),
+        "{asked:?}"
+    );
+    assert!(!ran_marker.exists());
 }
 
 /// parity: OPEN-005

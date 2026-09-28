@@ -33,7 +33,7 @@ fn a_video_opens_as_a_file() {
 }
 
 /// Ported from `desktop/tests/test_v05.py::OpeningTests::test_directory_with_extension`
-/// parity: OPEN-001, OPEN-005
+/// parity: OPEN-001, OPEN-005, NAV-040
 #[test]
 fn a_folder_named_like_a_video_opens_as_a_folder() {
     assert_eq!(
@@ -43,7 +43,7 @@ fn a_folder_named_like_a_video_opens_as_a_folder() {
 }
 
 /// Ported from `desktop/tests/test_v05.py::OpeningTests::test_directory_named_zip`
-/// parity: OPEN-001, OPEN-005
+/// parity: OPEN-001, OPEN-005, ARC-002, NAV-040
 #[test]
 fn a_folder_named_like_a_zip_opens_as_a_folder() {
     assert_eq!(
@@ -53,7 +53,7 @@ fn a_folder_named_like_a_zip_opens_as_a_folder() {
 }
 
 /// Ported from `desktop/tests/test_v05.py::OpeningTests::test_zip_by_mime`
-/// parity: OPEN-001, OPEN-005
+/// parity: OPEN-001, OPEN-005, ARC-002
 #[test]
 fn a_zip_by_content_type_is_browsed() {
     let archive = Entry {
@@ -65,7 +65,7 @@ fn a_zip_by_content_type_is_browsed() {
 }
 
 /// Ported from `desktop/tests/test_v05.py::OpeningTests::test_zip_by_extension`
-/// parity: OPEN-001, OPEN-005
+/// parity: OPEN-001, OPEN-005, ARC-002
 #[test]
 fn a_zip_by_name_in_any_case_is_browsed() {
     assert_eq!(
@@ -100,7 +100,7 @@ fn a_share_that_navigates_opens_as_a_folder() {
 }
 
 /// Ported from `desktop/tests/test_v05.py::OpeningTests::test_regular_overrides_stale_bool`
-/// parity: OPEN-001, OPEN-005
+/// parity: OPEN-001, OPEN-005, NAV-040
 #[test]
 fn a_regular_file_is_opened_even_if_flagged_as_a_folder() {
     let stale = Entry {
@@ -124,7 +124,7 @@ fn openxplorer_is_skipped_for_the_next_application() {
 }
 
 /// Ported from `desktop/tests/test_v05.py::OpeningTests::test_no_recursion_without_external_app`
-/// parity: OPEN-005, OPEN-007
+/// parity: OPEN-005
 #[test]
 fn without_another_application_nothing_opens() {
     let own = app(OWN_ID, "OpenXplorer");
