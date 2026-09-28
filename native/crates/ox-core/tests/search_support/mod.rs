@@ -255,6 +255,26 @@ impl MemoryShare {
         self.add(folder, name, EntryKind::Directory)
     }
 
+    /// Adds a folder `name` to `folder` whose own listing fails, as a
+    /// NAS's `@eaDir` or `#recycle` folder can, and returns its URI.
+    pub fn add_unreadable_folder(&self, folder: &str, name: &str) -> String {
+        let uri = self.add_folder(folder, name);
+        self.contents().folders.remove(&uri);
+        uri
+    }
+
+    /// Deletes the item `uri` from `folder`, and its contents if it is a
+    /// folder.
+    pub fn remove(&self, folder: &str, uri: &str) {
+        let mut contents = self.contents();
+        contents.folders.remove(uri);
+        let parent = contents
+            .folders
+            .get_mut(folder)
+            .expect("the parent folder exists");
+        parent.retain(|item| item.uri != uri);
+    }
+
     fn add(&self, folder: &str, name: &str, kind: EntryKind) -> String {
         let item = listed_item(folder, name, kind);
         let uri = item.uri.clone();

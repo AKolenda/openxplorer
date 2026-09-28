@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use ox_core::search::{Caching, HiddenItems, IndexService, IndexSettings, RootStatus, UpdateMode};
 use search_support::{
-    find_root, found_names, root_state, tick_until, wait_for_status, MemoryShare, TemporaryCache,
+    find_root, found_names, root_state, tick_for, tick_until, wait_for_status, MemoryShare, TemporaryCache,
 };
 
 /// Ticks with a short network check interval, so a test sees a check.
@@ -180,6 +180,32 @@ fn signing_out_pauses_a_server_and_can_clear_its_names() {
     service.resume_server("nas").unwrap();
 
     wait_for_status(&service, MemoryShare::URI, RootStatus::Ready);
+    assert_eq!(found_names(&cache.index, "bank"), ["bank.pdf"]);
+}
+
+/// Safety rule "avoid hammering the NAS": signing in again rescans only a
+/// share whose last scan stored nothing. One that stays incomplete because
+/// a folder cannot be read keeps its timed checks, so no sign-in to its
+/// server crawls it again in full.
+///
+/// parity: SRCH-030, NET-022
+#[test]
+fn signing_in_does_not_rescan_a_partly_unreadable_share() {
+    let cache = TemporaryCache::new();
+    let share = MemoryShare::new();
+    share.add_file(MemoryShare::URI, "bank.pdf");
+    share.add_unreadable_folder(MemoryShare::URI, "@eaDir");
+    let service = cache.start_service(share.clone());
+    service
+        .configure(MemoryShare::URI, Caching::Enabled, "", HiddenItems::Skip)
+        .unwrap();
+    wait_for_status(&service, MemoryShare::URI, RootStatus::Incomplete);
+    let generation = root_state(&cache.index, MemoryShare::URI).generation;
+
+    service.resume_server("nas").unwrap();
+    tick_for(&service, &IndexSettings::default(), Duration::from_millis(600));
+
+    assert_eq!(root_state(&cache.index, MemoryShare::URI).generation, generation);
     assert_eq!(found_names(&cache.index, "bank"), ["bank.pdf"]);
 }
 

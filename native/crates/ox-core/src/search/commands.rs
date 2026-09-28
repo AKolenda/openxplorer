@@ -14,7 +14,7 @@ use std::time::Instant;
 use super::error::SearchError;
 use super::index::indexable_root;
 use super::requests::IndexRequest;
-use super::root::{Caching, HiddenItems, RootStatus};
+use super::root::{Caching, HiddenItems, IndexRoot, RootStatus};
 use super::service::{IndexService, ScanTrigger};
 use super::text::{host_of, is_at_or_below};
 use crate::location::normalise;
@@ -187,10 +187,10 @@ impl IndexService {
 
     /// Indexes SMB server `host` again after the user signed in to it.
     ///
-    /// Its enabled roots whose last scan did not complete are scanned
-    /// again, so a pinned share that needed sign-in is indexed once the
-    /// user signs in (SRCH-040). The Python app waited for the next
-    /// network check instead.
+    /// Its enabled roots whose last scan stored nothing are scanned again,
+    /// so a pinned share that needed sign-in is indexed once the user signs
+    /// in (SRCH-040). The Python app waited for the next network check
+    /// instead, as the other roots still do.
     ///
     /// # Errors
     ///
@@ -201,20 +201,32 @@ impl IndexService {
         if !self.is_owner() {
             return self.index().enqueue(&IndexRequest::ResumeServer { host });
         }
-        self.rescan_unfinished_roots(&host)
+        self.rescan_unread_roots(&host)
     }
 
-    /// Scans again the enabled roots on `host` whose last scan did not
-    /// complete.
-    fn rescan_unfinished_roots(&self, host: &str) -> Result<(), SearchError> {
+    /// Scans again the enabled roots on `host` whose last scan read
+    /// nothing (see [`needs_scan_after_sign_in`]).
+    fn rescan_unread_roots(&self, host: &str) -> Result<(), SearchError> {
         let roots = self.index().roots()?;
-        let unfinished = roots.iter().filter(|root| {
+        let unread = roots.iter().filter(|root| {
             let is_on_host = host_of(&root.uri).as_deref() == Some(host);
-            is_on_host && root.is_enabled() && root.status != RootStatus::Ready
+            is_on_host && root.is_enabled() && needs_scan_after_sign_in(root)
         });
-        for root in unfinished {
+        for root in unread {
             self.start_scan(&root.uri, ScanTrigger::Automatic)?;
         }
         Ok(())
     }
+}
+
+/// Whether `root`'s last scan did not complete and stored nothing: it
+/// never ran, was cleared at sign-out, or could not read the root folder,
+/// as for a share that needs sign-in.
+///
+/// Safety rule "avoid hammering the NAS" (SRCH-030): a root that stays
+/// incomplete for another reason, such as an unreadable `@eaDir` folder or
+/// the entry limit, keeps its timed checks, so no sign-in to its server
+/// crawls it again in full.
+fn needs_scan_after_sign_in(root: &IndexRoot) -> bool {
+    root.status != RootStatus::Ready && root.scanned == 0
 }
