@@ -64,23 +64,14 @@ fn tab_icon(uri: &str, network: &[NetworkLocation]) -> Art {
     }
 }
 
-/// What every tab of the strip is drawn from.
-#[derive(Debug, Clone, Copy)]
-struct TabSources<'a> {
-    session: &'a Session,
-    locations: &'a LocationContext,
-    /// The Network list, for the icons of SMB tabs.
-    network: &'a [NetworkLocation],
-}
-
 /// How the strip shows `tab`: its title, its address (with "Network
-/// location" for SMB) and its icon.
-fn tab_view(tab: &Tab, sources: TabSources<'_>) -> TabView {
-    let TabSources {
-        session,
-        locations,
-        network,
-    } = sources;
+/// location" for SMB) and its icon, which for SMB comes from `network`.
+fn tab_view(
+    tab: &Tab,
+    session: &Session,
+    locations: &LocationContext,
+    network: &[NetworkLocation],
+) -> TabView {
     let uri = tab.uri();
     let mut tooltip = locations.display_location(uri);
     if is_smb_location(uri) {
@@ -164,12 +155,10 @@ impl BrowserWindow {
         let views: Vec<TabView> = {
             let session = self.imp().session.borrow();
             let locations = self.imp().locations.borrow();
-            let sources = TabSources {
-                session: &session,
-                locations: &locations,
-                network: &network,
-            };
-            let tab_views = session.tabs().iter().map(|tab| tab_view(tab, sources));
+            let tab_views = session
+                .tabs()
+                .iter()
+                .map(|tab| tab_view(tab, &session, &locations, &network));
             tab_views.collect()
         };
         self.tab_strip().set_tabs(&views);

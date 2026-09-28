@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Which kind of location a URI names, for the rules that treat network
-//! shares and real folders differently.
+//! shares and real folders differently, and the art an SMB location shows
+//! in its tab and in the details pane.
 //!
 //! Ports the scheme tests of `desktop/ui/app.js`
 //! (`uri.startsWith('smb:')`, and `startsWith('file:')` for a new window).

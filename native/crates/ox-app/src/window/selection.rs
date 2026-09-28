@@ -15,6 +15,7 @@ use gtk::subclass::prelude::*;
 use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts};
+use super::location_kind::is_smb_location;
 use super::status_bar::StatusSubject;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -90,7 +91,13 @@ impl BrowserWindow {
         let store = active.and_then(|id| self.tab_store(id));
         let model = self.folder_pane().model();
         let folder_item_count = store.map_or(0, |store| model.listed_count(&store));
-        let network = self.network_locations();
+        // Only an SMB folder's picture needs the Network list, and the pane
+        // follows every change of the selection.
+        let network = if is_smb_location(&folder_uri) {
+            self.network_locations()
+        } else {
+            Vec::new()
+        };
         let locations = self.imp().locations.borrow();
         let content = details_pane::pane_content(&PaneFacts {
             selection: &selection,
