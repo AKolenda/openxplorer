@@ -161,8 +161,9 @@ fn mounted_row(mount: &MountFacts) -> Option<VolumeRow> {
     if mount.shadowed {
         return None;
     }
-    // Safety: normalisation is the scheme allowlist and refuses user names,
-    // so a root it rejects is hidden instead of shown or opened.
+    // Data safety (SAFE-010): normalisation is the scheme allowlist and
+    // refuses user names, so a root it rejects is hidden instead of shown
+    // or opened.
     let uri = location::normalise(&mount.root_uri).ok()?;
     Some(VolumeRow {
         label: mount.name.clone(),
