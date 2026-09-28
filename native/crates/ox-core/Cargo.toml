@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 [package]
 name = "ox-core"
-description = "OpenXplorer toolkit-independent core: locations, settings, entries and the transfer engine"
+description = "OpenXplorer toolkit-independent core: locations, settings, entries, the transfer engine and the backend services"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

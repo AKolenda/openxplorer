@@ -15,7 +15,7 @@ and interaction performance must be measured before claiming an improvement.
 
 | Path | Responsibility |
 |---|---|
-| `crates/ox-core` | Toolkit-independent core: locations, settings, entries, places, clipboard formats, the transfer engine, network sign-in and mounts, and the desktop integration service (default apps, Show in folder, Brave's download folder, opening files, Open in Terminal), all on GIO. No GTK. |
+| `crates/ox-core` | Toolkit-independent core: locations, settings, entries, places, clipboard formats, the transfer engine and file operations, and the backend services (search, network sign-in and mounts, ZIP archives, previous versions, folder sizes, desktop integration, updates and tab handoff), all on GIO. No GTK. The module table in `crates/ox-core/src/lib.rs` names the Python file each module ports. |
 | `crates/ox-app` | The GTK4 application (`openxplorer-native`). |
 | `parity/` | What the native app must do: every behaviour (`features.toml`) and every Python bridge operation (`bridge.json`), with their checker. |
 | `docs/ui-spec.md` | The visual specification: the current skin, refined toward Windows 11 File Explorer. |
@@ -46,10 +46,12 @@ never talks to a running Python OpenXplorer. It shares
 Run the check driver from the repository root:
 
 ```sh
-sudo apt install libgtk-4-dev libsqlite3-dev libsoup-3.0-dev xvfb xauth dbus-x11 python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1
+sudo apt install libgtk-4-dev libsqlite3-dev libsoup-3.0-dev xvfb xauth dbus-x11 gvfs gvfs-backends python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1
 python3 native/tools/check.py
 ```
 
+`gvfs` provides the `trash:///` backend the Recycle Bin and Undo tests use, and
+`gvfs-backends` the `smb://` backend of the not-mounted share tests.
 `python3-gi` lets the interoperability tests import the Python app's GIO
 modules. With `gnome-keyring` and `gir1.2-secret-1`, the keyring tests use a
 disposable GNOME Keyring on the private bus and the Python app's libsecret
