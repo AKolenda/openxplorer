@@ -103,7 +103,9 @@ theme at startup.
   `gtk::Overlay` and small boxes the skin colours (`resources/skin/icons.css`).
 - To add an icon, copy the upstream file byte for byte under the `ox-` name,
   list it in `icons.gresource.xml` and `SOURCES.md`, and add an `Icon` variant.
-  Never draw one: the check driver fails on SVG path data in Rust or CSS.
+  Never draw one: the check driver fails on SVG path data, GTK or Cairo drawing
+  calls and pictures embedded in the code, stylesheets and templates, and on
+  any image file under `crates/` outside `resources/icons/hicolor/`.
 
 ## Code standards
 

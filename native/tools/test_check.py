@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import importlib.util
 import io
 import json
@@ -314,8 +315,16 @@ class FailureReportTests(unittest.TestCase):
                          '--test-timeout if the test is only slow.\n')
 
 
+@dataclasses.dataclass(frozen=True)
+class SourceLine:
+    """One line of one file under crates/, as the drawn-icon guard reads it."""
+
+    file: str
+    text: str
+
+
 class DrawnIconTests(unittest.TestCase):
-    """Icons are bundled files: SVG path data in Rust or CSS sources fails the check."""
+    """Icons are bundled files: drawing one in code, or shipping another image, fails the check."""
 
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory(prefix='openxplorer-drawn-icons-')
@@ -323,54 +332,139 @@ class DrawnIconTests(unittest.TestCase):
         self.root = Path(temporary.name)
 
     def write(self, name: str, text: str) -> None:
-        """Write one source file under the temporary crates directory."""
+        """Write one file under the temporary crates directory."""
         path = self.root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text + '\n', encoding='utf-8')
 
-    def test_svg_path_data_in_rust_or_css_is_found(self) -> None:
-        """Each way the old hand-drawn icons were written is reported with its line."""
-        cases = {
-            'a d attribute': ('art/svg.rs', 'const FOLDER: &str = r##"<path d="M4 12a3 3 0 0 1 3-3Z"/>"##;'),
-            'an escaped d attribute': ('art.rs', 'let folder = "<path d=\\"M4 12h3\\"/>";'),
-            'a path table': ('glyphs.rs', 'Glyph::Terminal => "M3 5h18v14H3zM6 9l3 3-3 3M12 15h5",'),
-            'a relative move': ('glyphs.rs', 'Glyph::Close => "m6 6 12 12M18 6 6 18",'),
-            'a parsed path': ('glyphs.rs', 'let path = gsk::Path::parse(glyph.path_data());'),
-            'a data URI': ('skin.css', 'image { -gtk-icon-source: url("data:image/svg+xml,<svg/>"); }'),
-        }
-        for case, (name, line) in cases.items():
+    def assert_each_line_is_found(self, cases: dict[str, SourceLine]) -> None:
+        """Each case, alone in its file, is reported with its file and line."""
+        for case, source in cases.items():
             with self.subTest(case=case):
-                self.write(name, line)
-                self.assertEqual(check.drawn_icon_lines(self.root), [f'{name}:1: {line}'])
-                (self.root / name).unlink()
+                self.write(source.file, source.text)
+                expected = [f'{source.file}:1: {source.text}']
+                self.assertEqual(check.drawn_icon_lines(self.root), expected)
+                (self.root / source.file).unlink()
+
+    def test_svg_path_data_in_code_stylesheets_or_templates_is_found(self) -> None:
+        """Each way of writing path data, the old hand-drawn icons' included, is reported."""
+        self.assert_each_line_is_found({
+            'a d attribute': SourceLine(
+                'art/svg.rs', 'const FOLDER: &str = r##"<path d="M4 12a3 3 0 0 1 3-3Z"/>"##;'),
+            'an escaped d attribute': SourceLine('art.rs', 'let folder = "<path d=\\"M4 12h3\\"/>";'),
+            'a path table': SourceLine(
+                'glyphs.rs', 'Glyph::Terminal => "M3 5h18v14H3zM6 9l3 3-3 3M12 15h5",'),
+            'a relative move': SourceLine('glyphs.rs', 'Glyph::Close => "m6 6 12 12M18 6 6 18",'),
+            'numbers without a leading zero': SourceLine(
+                'glyphs.rs', 'const COMPACT: &str = "M.5 2h3v4z";'),
+            'a sign as the separator': SourceLine('glyphs.rs', 'const SIGNED: &str = "M2-3h4v4z";'),
+            'a path formatted from numbers': SourceLine(
+                'glyphs.rs', 'let path = format!("M{x} {y}h{w}");'),
+            'a path split by concat!': SourceLine(
+                'glyphs.rs', 'const PATH: &str = concat!("M", "3 5h18v14H3z");'),
+            'a path continued on the next line': SourceLine(
+                'glyphs.rs', 'const PATH: &str = "M3 5\\'),
+            'a path in a template': SourceLine(
+                'resources/ui/art.ui',
+                '<property name="data">&lt;path d=&quot;M4 12h3&quot;/&gt;</property>'),
+        })
+
+    def test_drawing_apis_are_found(self) -> None:
+        """GTK's and Cairo's ways to draw a shape are reported, also under another name."""
+        self.assert_each_line_is_found({
+            'a parsed path': SourceLine(
+                'glyphs.rs', 'let path = gsk::Path::parse(glyph.path_data());'),
+            'the path type renamed': SourceLine('glyphs.rs', 'use gtk::gsk::Path as P;'),
+            'the path type imported': SourceLine('glyphs.rs', 'use gtk::gsk::{self, Path};'),
+            'a path builder': SourceLine('glyphs.rs', 'let path = gsk::PathBuilder::new();'),
+            'a Cairo context': SourceLine('glyphs.rs', 'fn draw(context: &cairo::Context) {'),
+            'Cairo imported': SourceLine('glyphs.rs', 'use gtk::cairo;'),
+            'a drawing area': SourceLine('glyphs.rs', 'let area = gtk::DrawingArea::new();'),
+            'a drawing area in a template': SourceLine(
+                'resources/ui/art.ui', '<object class="GtkDrawingArea" id="art"/>'),
+            'a draw function': SourceLine('glyphs.rs', 'area.set_draw_func(draw_folder);'),
+            'a filled shape': SourceLine(
+                'glyphs.rs', 'snapshot.append_fill(&shape, rule, &colour);'),
+            'a stroked shape': SourceLine(
+                'glyphs.rs', 'snapshot.append_stroke(&shape, &stroke, &colour);'),
+            'a coloured rectangle': SourceLine(
+                'glyphs.rs', 'snapshot.append_color(&colour, &bounds);'),
+            'a gradient': SourceLine(
+                'glyphs.rs', 'snapshot.append_linear_gradient(&bounds, &start, &end, &stops);'),
+        })
+
+    def test_pictures_embedded_in_code_are_found(self) -> None:
+        """A data: URI, or an image file compiled into the binary, is reported."""
+        self.assert_each_line_is_found({
+            'a data URI in a stylesheet': SourceLine(
+                'skin.css', 'image { -gtk-icon-source: url("data:image/svg+xml,<svg/>"); }'),
+            'a data URI in a template': SourceLine(
+                'resources/ui/art.ui',
+                '<property name="file">data:image/svg+xml,&lt;svg/&gt;</property>'),
+            'an SVG file compiled in': SourceLine(
+                'art.rs', 'const FOLDER: &[u8] = include_bytes!("../resources/art/folder.svg");'),
+            'a PNG file compiled in': SourceLine(
+                'art.rs', 'const FOLDER: &[u8] = include_bytes!("folder.PNG");'),
+        })
 
     def test_named_icons_and_other_text_pass(self) -> None:
-        """Icon names, CSS rules and text that only looks a little like a path are fine."""
+        """Icon names, CSS rules and text that only looks a little like a drawing are fine."""
         self.write('window/tab_strip.rs', '\n'.join([
             'let close = icons::image(Icon::Dismiss16, CLOSE_GLYPH);',
             'image.set_icon_name(Some("ox-add-20-symbolic"));',
             'let chip = "M3 Pro";',
+            'let d = "Music";',
+            'let d = distance(start, end);',
             'assert_eq!(label, "Media (M:)");',
+            'let label = concat!("Media", " (M:)");',
+            'include_str!("../../resources/skin/base.css"),',
+            'gio::resources_register_include!("icons.gresource")',
         ]))
-        self.write('skin/title-bar.css', '.tab > .tab-icon { margin-left: 2px; }')
+        self.write('skin/title-bar.css', '\n'.join([
+            '.tab > .tab-icon { margin-left: 2px; }',
+            "/* GTK's cairo renderer drops a shadow this faint. */",
+        ]))
+        self.write('resources/ui/address-bar.ui', '<object class="GtkImage" id="icon"/>')
+        self.write('resources/icons/icons.gresource.xml',
+                   '<file>scalable/actions/ox-add-20-symbolic.svg</file>')
         self.assertEqual(check.drawn_icon_lines(self.root), [])
 
     def test_the_vendored_svg_files_are_not_read(self) -> None:
         """The bundled icons are SVG files with path data of their own."""
-        self.write('resources/icons/ox-add-20-symbolic.svg', '<svg><path d="M10 2.5v15"/></svg>')
+        self.write('ox-app/resources/icons/hicolor/scalable/actions/ox-add-20-symbolic.svg',
+                   '<svg><path d="M10 2.5v15"/></svg>')
         self.assertEqual(check.drawn_icon_lines(self.root), [])
+        self.assertEqual(check.stray_images(self.root), [])
+
+    def test_images_outside_the_bundled_icons_are_found(self) -> None:
+        """A hand-made picture cannot hide as a file next to the code or the icons."""
+        self.write('ox-app/resources/art/folder.svg', '<svg/>')
+        self.write('ox-app/resources/icons/folder.svg', '<svg/>')
+        self.write('ox-app/src/folder.PNG', 'a picture')
+        outside = 'an image outside ox-app/resources/icons/hicolor'
+        self.assertEqual(check.stray_images(self.root), [
+            f'ox-app/resources/art/folder.svg: {outside}',
+            f'ox-app/resources/icons/folder.svg: {outside}',
+            f'ox-app/src/folder.PNG: {outside}',
+        ])
 
     def test_the_check_fails_and_lists_every_drawn_icon(self) -> None:
-        """The failure names each file and line, so the drawing can be found."""
+        """The failure names each file and line, and each stray image, so they can be found."""
         self.write('crates/ox-app/src/glyphs.rs', 'let path = gsk::Path::parse("M5 12h14");')
+        self.write('crates/ox-app/resources/art/folder.svg', '<svg/>')
         with (patch.object(check, 'NATIVE', self.root),
               contextlib.redirect_stdout(io.StringIO())):
-            with self.assertRaisesRegex(check.CheckError, r'ox-app/src/glyphs\.rs:1: '):
+            with self.assertRaises(check.CheckError) as raised:
                 check.check_no_drawn_icons()
+        report = str(raised.exception)
+        self.assertRegex(report, r'ox-app/src/glyphs\.rs:1: ')
+        self.assertRegex(report, r'ox-app/resources/art/folder\.svg: an image outside')
 
     def test_the_native_crates_draw_no_icons(self) -> None:
         """The real sources pass the guard."""
-        self.assertEqual(check.drawn_icon_lines(check.NATIVE / 'crates'), [])
+        crates = check.NATIVE / 'crates'
+        self.assertEqual(check.drawn_icon_lines(crates), [])
+        self.assertEqual(check.stray_images(crates), [])
 
 
 if __name__ == '__main__':
