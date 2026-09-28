@@ -20,18 +20,8 @@ use ox_core::network::{
     fuse_export_path, mount_plan, parse_mount_table, resolve_smb_path, split_identity, DesktopUser,
     MountEntry, MountPlan, ServerKey,
 };
-use python_support::{python, run_python};
+use python_support::{as_array, python_answers, python_answers_with};
 use serde_json::{json, Value};
-
-/// Runs `script` with `inputs` written to a JSON file and returns what it
-/// printed, parsed as JSON.
-fn python_answers(script: &str, inputs: &Value) -> Value {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    let input_file = folder.path().join("inputs.json");
-    fs::write(&input_file, inputs.to_string()).expect("inputs written");
-    let printed = run_python(script, &[&input_file]);
-    serde_json::from_str(&printed).expect("the script prints JSON")
-}
 
 /// Prints `server_key(uri)` for every input, or `error` where it raises.
 const PYTHON_SERVER_KEYS: &str = r"
@@ -316,22 +306,10 @@ fn fuse_export_paths_match_native_opening_py() {
     }
 }
 
+/// Python's `local_path` of every one of `uris`, with `runtime` as the
+/// runtime directory that holds the FUSE root.
 fn python_local_paths(runtime: &Path, uris: &[&str]) -> Value {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    let input_file = folder.path().join("inputs.json");
-    fs::write(&input_file, json!(uris).to_string()).expect("inputs written");
-    let output = python(PYTHON_LOCAL_PATHS, &[&input_file])
-        .env("XDG_RUNTIME_DIR", runtime)
-        .output()
-        .expect("Python 3 is required for the interoperability tests");
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).expect("the script prints JSON")
-}
-
-fn as_array(value: &Value) -> &[Value] {
-    value.as_array().expect("the script prints a list")
+    python_answers_with(PYTHON_LOCAL_PATHS, &json!(uris), |command| {
+        command.env("XDG_RUNTIME_DIR", runtime);
+    })
 }

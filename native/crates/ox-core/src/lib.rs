@@ -13,6 +13,7 @@
 //! | [`settings`] | The settings file shared with the Python app | `core.py`, `private_storage.py` |
 //! | [`entry`] | Folder listings, single items and Quick access pins | `entry_model.py`, `gio_backend.py` |
 //! | [`places`] | The Quick access and Network sidebar sections | `winspace.py`, `network_locations.py` |
+//! | [`network`] | SMB sign-in, credentials, mounts, sign-out and discovery | `session_credentials.py`, `auth_bridge.py`, `mount_support.py`, `winspace.py` |
 //! | [`clipboard`] | File clipboard formats shared with GNOME and KDE | `file_clipboard.py` |
 //! | [`format`](mod@format) | Size and date text | `ui/app.js` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |

@@ -12,8 +12,11 @@
 //! first, and clears delete every matching item in every collection.
 
 use std::future::Future;
+use std::io;
+use std::sync::Arc;
 
 use oo7::dbus::{Collection, Item, Service};
+use oo7::zbus;
 
 use super::keyring::{Keyring, KeyringCollection, KeyringError, NewSecret, SecretAttributes};
 
@@ -78,10 +81,33 @@ impl Keyring for SecretService {
 }
 
 impl From<oo7::dbus::Error> for KeyringError {
-    /// A service error, such as a dismissed unlock prompt, in the
-    /// service's own words.
+    /// The error in the app's words: a dismissed unlock prompt and a D-Bus
+    /// timeout are named, anything else keeps the client's error as its
+    /// source.
     fn from(error: oo7::dbus::Error) -> Self {
-        KeyringError::Failed(error.to_string())
+        match error {
+            oo7::dbus::Error::Dismissed => KeyringError::UnlockDismissed,
+            error if is_timeout(&error) => KeyringError::TimedOut,
+            error => KeyringError::Failed {
+                source: Arc::new(error),
+            },
+        }
+    }
+}
+
+/// True when a D-Bus call to the service timed out: `zbus`'s own method
+/// timeout, or the bus reporting that no reply came in time.
+fn is_timeout(error: &oo7::dbus::Error) -> bool {
+    let oo7::dbus::Error::ZBus(error) = error else {
+        return false;
+    };
+    match error {
+        zbus::Error::InputOutput(io_error) => io_error.kind() == io::ErrorKind::TimedOut,
+        zbus::Error::FDO(bus_error) => matches!(
+            **bus_error,
+            zbus::fdo::Error::TimedOut(_) | zbus::fdo::Error::NoReply(_)
+        ),
+        _ => false,
     }
 }
 
@@ -125,4 +151,71 @@ async fn first_unlocked_or_locked(items: Vec<Item>) -> Result<Option<Item>, Keyr
 /// The attributes in the form `oo7` sends them.
 fn attribute_pairs(attributes: &SecretAttributes) -> Vec<(&str, &str)> {
     attributes.iter().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct ServiceErrorCase {
+        what: &'static str,
+        error: oo7::dbus::Error,
+        message: &'static str,
+    }
+
+    fn io_error(kind: io::ErrorKind) -> oo7::dbus::Error {
+        let error = io::Error::new(kind, "developer text");
+        oo7::dbus::Error::ZBus(zbus::Error::InputOutput(Arc::new(error)))
+    }
+
+    fn bus_error(error: zbus::fdo::Error) -> oo7::dbus::Error {
+        oo7::dbus::Error::ZBus(zbus::Error::FDO(Box::new(error)))
+    }
+
+    /// Sign out shows these messages after "Disconnected, but saved
+    /// credentials could not be removed.", so they are the app's words,
+    /// never the client's.
+    #[test]
+    fn service_errors_are_reported_in_the_apps_words() {
+        let cases = [
+            ServiceErrorCase {
+                what: "dismissed unlock prompt",
+                error: oo7::dbus::Error::Dismissed,
+                message: "The keyring unlock was cancelled.",
+            },
+            ServiceErrorCase {
+                what: "zbus method timeout",
+                error: io_error(io::ErrorKind::TimedOut),
+                message: "The system keyring did not answer in time.",
+            },
+            ServiceErrorCase {
+                what: "no reply from the bus",
+                error: bus_error(zbus::fdo::Error::NoReply("developer text".into())),
+                message: "The system keyring did not answer in time.",
+            },
+            ServiceErrorCase {
+                what: "broken connection",
+                error: io_error(io::ErrorKind::BrokenPipe),
+                message: "The system keyring reported an error.",
+            },
+            ServiceErrorCase {
+                what: "deleted item",
+                error: oo7::dbus::Error::Deleted,
+                message: "The system keyring reported an error.",
+            },
+        ];
+        for case in cases {
+            let error = KeyringError::from(case.error);
+            assert_eq!(error.to_string(), case.message, "{}", case.what);
+        }
+    }
+
+    #[test]
+    fn an_unexpected_service_error_keeps_the_clients_error_as_its_source() {
+        let error = KeyringError::from(io_error(io::ErrorKind::BrokenPipe));
+
+        let source = std::error::Error::source(&error).expect("the client's error");
+
+        assert!(source.to_string().contains("developer text"), "{source}");
+    }
 }

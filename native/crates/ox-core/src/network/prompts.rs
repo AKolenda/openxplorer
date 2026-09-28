@@ -25,10 +25,12 @@
 //!   not after Sign out raced the mount (SAFE-012).
 //! - An unanswered challenge expires after 180 seconds; a new challenge
 //!   from the same mount replaces the old one (NET-012).
+//! - Closing the window wipes its [`SessionCredentials`] from memory
+//!   (SAFE-011, TAB-050).
 //!
-//! Unlike Python, [`MountPrompts::close`] leaves the [`SessionCredentials`]
-//! memory alone: every window shares it, so the app clears it when its
-//! last window closes.
+//! A successful mount of an SMB location is reported to the handlers of
+//! [`MountPrompts::connect_server_mounted`], where the window resumes the
+//! server's indexing, as `mount` in `desktop/winspace.py` does (NET-022).
 //!
 //! | Module | Responsibility |
 //! |---|---|
@@ -162,13 +164,24 @@ impl MountPrompts {
     }
 
     /// Ends the mount that used `operation`: dismisses its challenges, and
-    /// after a successful mount keeps the account it signed in with.
+    /// after a successful mount keeps the account it signed in with and
+    /// reports an SMB server to the
+    /// [`connect_server_mounted`](Self::connect_server_mounted) handlers.
     pub fn finish(&self, operation: &gio::MountOperation, outcome: MountOutcome) {
         self.inner.finish(operation, outcome);
     }
 
+    /// Calls `handler` with the lower-case host of every SMB server that a
+    /// mount through these prompts reached, including one that was already
+    /// mounted. The window resumes the server's indexing there, which Sign
+    /// out paused (NET-022). The handler lives as long as the prompts.
+    pub fn connect_server_mounted(&self, handler: impl Fn(&str) + 'static) {
+        self.inner.connect_server_mounted(Rc::new(handler));
+    }
+
     /// Closes the window's prompts: every open challenge is dismissed and
-    /// its mount aborted, and no password stays on an operation.
+    /// its mount aborted, no password stays on an operation, and the
+    /// window's credentials are wiped from memory.
     pub fn close(&self) {
         self.inner.close();
     }

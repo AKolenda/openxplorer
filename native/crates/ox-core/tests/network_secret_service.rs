@@ -7,26 +7,31 @@
 //! starts its own GNOME Keyring with a disposable home folder; anywhere
 //! else they return at once, so the user's keyring is never touched.
 //! Where no keyring daemon can be started (a machine without GNOME
-//! Keyring), they check that the client says so instead.
+//! Keyring), they check that the client says so instead, unless
+//! `OX_REQUIRE_KEYRING=1` demands the real keyring, as CI does.
 
 mod python_support;
 
 use std::env;
-use std::fs;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
 
 use ox_core::network::{
-    Credential, CredentialScope, ForgetScope, Keyring, KeyringError, Password, SecretAttributes,
-    SecretService, SessionCredentials, SMB_CREDENTIAL_SCHEMA,
+    Credential, CredentialScope, CredentialStore, ForgetScope, Keyring, KeyringError, Password,
+    SecretAttributes, SecretService, SessionCredentials, SMB_CREDENTIAL_SCHEMA,
 };
-use python_support::{python, run_python};
+use python_support::{python, python_answers};
 use serde_json::{json, Value};
 
 /// The prefix of the temporary folder `native/tools/check.py` puts the
 /// test's home folder in.
 const ISOLATED_ROOT_PREFIX: &str = "openxplorer-native-test-";
+
+/// Set to `1` where the keyring tests must run against GNOME Keyring and
+/// the Python app's libsecret binding: a missing one then fails the test
+/// instead of skipping it.
+const REQUIRE_KEYRING_VARIABLE: &str = "OX_REQUIRE_KEYRING";
 
 /// True inside the check driver's isolated session: its home folder is
 /// `<temporary folder>/home`.
@@ -36,6 +41,10 @@ fn in_isolated_session() -> bool {
     };
     let root = Path::new(&home).parent().and_then(Path::file_name);
     root.is_some_and(|name| name.to_string_lossy().starts_with(ISOLATED_ROOT_PREFIX))
+}
+
+fn is_keyring_required() -> bool {
+    env::var_os(REQUIRE_KEYRING_VARIABLE).is_some_and(|value| value == "1")
 }
 
 /// Whether the tests can use the keyring daemon of the private bus.
@@ -55,7 +64,14 @@ fn keyring_daemon() -> KeyringDaemon {
     }
     let probe = SecretAttributes::for_schema(SMB_CREDENTIAL_SCHEMA).with("server", "probe.invalid");
     match SecretService.lookup(&probe) {
-        Err(KeyringError::Unavailable) => KeyringDaemon::Missing,
+        Err(KeyringError::Unavailable) => {
+            assert!(
+                !is_keyring_required(),
+                "{REQUIRE_KEYRING_VARIABLE}=1, but no Secret Service started on the private bus; install \
+                 gnome-keyring"
+            );
+            KeyringDaemon::Missing
+        }
         Ok(_) => KeyringDaemon::Running,
         Err(error) => panic!("the test keyring failed: {error}"),
     }
@@ -70,8 +86,9 @@ fn account(username: &str) -> Credential {
     }
 }
 
-fn secret_service_store() -> SessionCredentials {
-    SessionCredentials::new(Arc::new(SecretService))
+/// The credentials of a window of a new native process.
+fn secret_service_window() -> SessionCredentials {
+    SessionCredentials::new(Arc::new(CredentialStore::new(Arc::new(SecretService))))
 }
 
 /// Ported from `desktop/tests/test_v05.py::CredentialsTests::test_other_window_load`
@@ -85,27 +102,32 @@ fn a_credential_saved_in_the_session_keyring_serves_another_process_until_forgot
     match keyring_daemon() {
         KeyringDaemon::NotIsolated => return,
         KeyringDaemon::Missing => {
-            let store = secret_service_store();
-            let saved = store.persist(uri, &account("sam"), store.generation(uri));
-            assert_eq!(saved, Err(KeyringError::Unavailable), "no plaintext fallback");
+            let window = secret_service_window();
+            let saved = window.persist(uri, &account("sam"), window.generation(uri));
+            assert!(
+                matches!(saved, Err(KeyringError::Unavailable)),
+                "no plaintext fallback: {saved:?}"
+            );
             return;
         }
         KeyringDaemon::Running => {}
     }
-    let saving = secret_service_store();
+    let saving = secret_service_window();
     saving
         .persist(uri, &account("sam"), saving.generation(uri))
         .expect("GNOME Keyring saves in its session collection");
 
-    let other_process = secret_service_store();
+    let other_process = secret_service_window();
     let loaded = other_process
         .load("smb://KEYRING-TEST-NAS/Other")
         .expect("the keyring is searched");
     let forgotten = other_process.forget(uri, ForgetScope::AllScopes);
-    let after_forgetting = secret_service_store().load(uri).expect("the keyring is searched");
+    let after_forgetting = secret_service_window()
+        .load(uri)
+        .expect("the keyring is searched");
 
     assert_eq!(loaded, Some(account("sam")));
-    assert_eq!(forgotten, Ok(true));
+    assert!(matches!(forgotten, Ok(true)), "{forgotten:?}");
     assert_eq!(after_forgetting, None);
 }
 
@@ -143,11 +165,7 @@ fn python_has_libsecret() -> bool {
 
 /// Runs [`PYTHON_LIBSECRET`] with `inputs` and returns what it printed.
 fn python_libsecret(inputs: &Value) -> Value {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    let input_file = folder.path().join("inputs.json");
-    fs::write(&input_file, inputs.to_string()).expect("inputs written");
-    let printed = run_python(PYTHON_LIBSECRET, &[&input_file]);
-    serde_json::from_str(&printed).expect("the script prints JSON")
+    python_answers(PYTHON_LIBSECRET, inputs)
 }
 
 /// The keyring schema `io.winspace.SmbCredentials` is a compatibility
@@ -160,12 +178,17 @@ fn both_apps_find_each_others_credentials_in_the_keyring() {
         return;
     };
     if !python_has_libsecret() {
+        assert!(
+            !is_keyring_required(),
+            "{REQUIRE_KEYRING_VARIABLE}=1, but the Python app's libsecret binding is missing; install \
+             python3-gi and gir1.2-secret-1"
+        );
         eprintln!("skipped: the Python app's libsecret binding (gir1.2-secret-1) is not installed");
         return;
     }
     let native_uri = "smb://native-saved-nas/share";
     let python_uri = "smb://python-saved-nas/share";
-    let native = secret_service_store();
+    let native = secret_service_window();
     native
         .persist(native_uri, &account("native"), native.generation(native_uri))
         .expect("GNOME Keyring saves");
@@ -173,7 +196,7 @@ fn both_apps_find_each_others_credentials_in_the_keyring() {
 
     let loaded_by_python = python_libsecret(&json!({"action": "load", "uri": native_uri}));
     python_libsecret(&json!({"action": "save", "uri": python_uri, "value": python_value}));
-    let loaded_natively = secret_service_store()
+    let loaded_natively = secret_service_window()
         .load(python_uri)
         .expect("the keyring is searched");
 

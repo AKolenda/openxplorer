@@ -185,6 +185,9 @@ fn smb_server(entry: AdvertisedEntry) -> Option<DiscoveredServer> {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
     use super::*;
 
     fn entry(target_uri: &str, display_name: &str) -> AdvertisedEntry {
@@ -228,6 +231,24 @@ mod tests {
         let servers = servers_among([entry("smb://nas:1445/", "")]);
 
         assert_eq!(servers, [server("smb://nas:1445/", "nas", "nas")]);
+    }
+
+    /// Discovery never asks for a password: `GVfs`'s request is aborted
+    /// and no password is set on the operation.
+    ///
+    /// parity: NET-024
+    #[test]
+    fn discovery_aborts_every_password_request() {
+        let operation = silent_operation();
+        let replies = Rc::new(RefCell::new(Vec::new()));
+        let recorded = Rc::clone(&replies);
+        operation.connect_reply(move |_, result| recorded.borrow_mut().push(result));
+
+        let flags = gio::AskPasswordFlags::NEED_USERNAME | gio::AskPasswordFlags::NEED_PASSWORD;
+        operation.emit_by_name::<()>("ask-password", &[&"Sign in to nas", &"user", &"", &flags]);
+
+        assert_eq!(*replies.borrow(), [gio::MountOperationResult::Aborted]);
+        assert_eq!(operation.password(), None);
     }
 
     #[test]

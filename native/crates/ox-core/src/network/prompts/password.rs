@@ -11,8 +11,8 @@ use std::sync::Arc;
 use super::challenge::{ChallengeKind, PasswordChallenge};
 use super::operation::{send_reply, MountReply, PasswordRequest};
 use super::state::{Candidate, CandidateSource, Inner, OperationRecord, PendingRequest};
-use crate::location::split_location;
 use crate::network::credential::Credential;
+use crate::network::server::host_name;
 
 impl Inner {
     /// Handles `GVfs` asking `operation` for a password.
@@ -145,15 +145,9 @@ impl PasswordDialog {
             is_retry: record.attempts > 1,
         };
         Self {
-            host: host_of(&record.uri),
+            host: host_name(&record.uri).unwrap_or_default(),
             kind: ChallengeKind::Password(fields),
             request: request.clone(),
         }
     }
-}
-
-/// The host name of a canonical location, or empty.
-pub(super) fn host_of(uri: &str) -> String {
-    let parts = split_location(uri).ok();
-    parts.and_then(|parts| parts.hostname()).unwrap_or_default()
 }

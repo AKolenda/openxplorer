@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 /// The attribute libsecret stores an item's schema name in.
 pub const SCHEMA_ATTRIBUTE: &str = "xdg:schema";
@@ -100,11 +101,12 @@ impl fmt::Debug for NewSecret<'_> {
     }
 }
 
-/// Why the keyring could not be used.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+/// Why the keyring could not be used. The message is shown to the user.
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum KeyringError {
     /// No Secret Service answers on the session bus. Credentials still work
-    /// from memory; there is deliberately no plaintext fallback.
+    /// from the window's memory; there is deliberately no plaintext
+    /// fallback.
     #[error(
         "The system keyring is unavailable. Credentials are reused in this window only; they cannot \
          survive closing it."
@@ -114,10 +116,18 @@ pub enum KeyringError {
     /// prompt was left open.
     #[error("The system keyring did not answer in time.")]
     TimedOut,
-    /// The Secret Service reported an error, for example a dismissed unlock
-    /// prompt; the message is the service's.
-    #[error("{0}")]
-    Failed(String),
+    /// The user dismissed the keyring's unlock prompt.
+    #[error("The keyring unlock was cancelled.")]
+    UnlockDismissed,
+    /// The Secret Service reported another error. Its own description is
+    /// developer text, so it is kept as the source, for logs, and not
+    /// shown.
+    #[error("The system keyring reported an error.")]
+    Failed {
+        /// What the Secret Service client reported.
+        #[source]
+        source: Arc<oo7::dbus::Error>,
+    },
 }
 
 /// A keyring holding text secrets, such as the Secret Service.

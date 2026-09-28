@@ -8,10 +8,11 @@
 //!
 //! The helper's interactive command line (`main` in `mount_share.py`:
 //! review, `SETUP`/`REMOVE` confirmation, `systemctl` and rollback) is a
-//! separate `sudo` program, so it is ported with the native package
-//! (ROADMAP.md, "Distribution"). Until then the packaged
+//! separate `sudo` program, ported with the rest of the network service
+//! (ROADMAP.md, "Network and devices"). Until then the packaged
 //! `openxplorer-mount-share` keeps running `mount_share.py`, which needs
-//! only `mount_support.py` and the standard library.
+//! only `mount_support.py` and the standard library, and these rules are
+//! crate-private and called only by their tests.
 
 use std::fs::{self, DirBuilder, OpenOptions};
 use std::io::{self, Write};
@@ -27,7 +28,7 @@ const PARENT_MODE: u32 = 0o755;
 
 /// Why the helper refused a path or the credentials typed in its terminal.
 #[derive(Debug, thiserror::Error)]
-pub enum MountHelperError {
+pub(crate) enum MountHelperError {
     /// A relative path, or one with `..`.
     #[error("Administrative paths must be absolute, without parent traversal.")]
     NotAbsolute,
@@ -72,7 +73,7 @@ impl MountHelperError {
 ///
 /// [`MountHelperError::NotAbsolute`], [`MountHelperError::UnsafeDirectory`]
 /// naming the first unsafe directory, or the I/O error of creating one.
-pub fn secure_directory(path: &Path, mode: u32) -> Result<(), MountHelperError> {
+pub(crate) fn secure_directory(path: &Path, mode: u32) -> Result<(), MountHelperError> {
     let has_parent_traversal = path
         .components()
         .any(|component| component == Component::ParentDir);
@@ -111,7 +112,7 @@ pub fn secure_directory(path: &Path, mode: u32) -> Result<(), MountHelperError> 
 ///
 /// The I/O error, including `AlreadyExists` for an existing path and
 /// `ELOOP` for a symlink.
-pub fn write_new_file(path: &Path, text: &str, mode: u32) -> Result<(), MountHelperError> {
+pub(crate) fn write_new_file(path: &Path, text: &str, mode: u32) -> Result<(), MountHelperError> {
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -132,7 +133,7 @@ pub fn write_new_file(path: &Path, text: &str, mode: u32) -> Result<(), MountHel
 /// [`MountHelperError::InvalidCredentials`] for an empty user name or a
 /// line break or NUL in either, and [`MountHelperError::MissingUsername`]
 /// for `DOMAIN\` alone.
-pub fn credential_file_text(typed_username: &str, password: &str) -> Result<String, MountHelperError> {
+pub(crate) fn credential_file_text(typed_username: &str, password: &str) -> Result<String, MountHelperError> {
     let username = python_strip(typed_username);
     let is_line_safe = |text: &str| !text.contains(['\r', '\n', '\0']);
     if username.is_empty() || !is_line_safe(username) || !is_line_safe(password) {

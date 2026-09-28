@@ -16,12 +16,17 @@
 //! GIO's asynchronous calls on the main loop. Dropping the future of an
 //! operation cancels it and aborts any sign-in dialog it opened.
 //!
+//! The app creates one [`CredentialStore`] and one [`SignOutRegistry`];
+//! each window gets its own [`SessionCredentials`] over that store and its
+//! own [`MountPrompts`].
+//!
 //! | Module | Responsibility | Ports |
 //! |---|---|---|
 //! | `server` | Which SMB server a location belongs to | `session_credentials.py` |
 //! | `credential` | One SMB account and how long it is remembered | `session_credentials.py`, `auth_bridge.py` |
 //! | `keyring`, `secret_service` | The desktop keyring (Secret Service) | `session_credentials.py` |
-//! | `session_credentials` | Credentials per server, in memory and in the keyring | `session_credentials.py` |
+//! | `credential_store` | The keyring, sign-out generations and keyring locks every window shares | `session_credentials.py` |
+//! | `session_credentials` | One window's credentials per server, in memory and in the keyring | `session_credentials.py` |
 //! | `prompts` | `GVfs`'s sign-in questions, answered by the window's dialog | `auth_bridge.py` |
 //! | `mounting` | Mount on demand and Map network location | `winspace.py`, `gio_backend.py` |
 //! | `volumes` | Connect drives and phones, and Disconnect | `winspace.py`, `volume_locations.py` |
@@ -37,16 +42,29 @@
 //! - Passwords go only to the mount operation and the keyring. They never
 //!   reach a [`Challenge`], a log message or the settings, and there is no
 //!   plaintext fallback without a keyring (SAFE-011).
+//! - A window's in-memory credentials are its own and are wiped when it
+//!   closes (SAFE-011, TAB-050); Sign out wipes them in every window
+//!   (NET-021).
 //! - Credentials are kept per server ([`ServerKey`]), never guessed from
 //!   host aliases, DNS or redirects (NET-014).
 //! - Credentials are saved only after a successful mount (NET-015), and a
 //!   save racing a Sign out is discarded (SAFE-012).
 
 mod credential;
+mod credential_store;
 mod discovery;
 mod error;
 mod keyring;
 mod local_path;
+// The helper program that uses these file rules is ported in the "Network
+// and devices" milestone of ROADMAP.md; until then only the tests call them.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "used by the openxplorer-mount-share helper, not ported yet"
+    )
+)]
 mod mount_helper;
 mod mount_plan;
 mod mount_table;
@@ -62,11 +80,11 @@ mod visited;
 mod volumes;
 
 pub use credential::{Credential, CredentialScope, Password};
+pub use credential_store::{CredentialGeneration, CredentialStore, ForgetScope, SMB_CREDENTIAL_SCHEMA};
 pub use discovery::{discover_servers, DiscoveredServer, Discovery, DISCOVERY_NOTE};
 pub use error::NetworkError;
 pub use keyring::{Keyring, KeyringCollection, KeyringError, NewSecret, SecretAttributes};
 pub use local_path::{fuse_export_path, local_path};
-pub use mount_helper::{credential_file_text, secure_directory, write_new_file, MountHelperError};
 pub use mount_plan::{mount_plan, DesktopUser, MountPlan, MountPlanError};
 pub use mount_table::{mount_for_path, parse_mount_table, read_mount_table, resolve_smb_path, MountEntry};
 pub use mounting::{
@@ -79,7 +97,9 @@ pub use prompts::{
 };
 pub use secret_service::SecretService;
 pub use server::{ServerKey, DEFAULT_SMB_PORT};
-pub use session_credentials::{CredentialGeneration, ForgetScope, SessionCredentials, SMB_CREDENTIAL_SCHEMA};
-pub use sign_out::{sign_out, SignOutRegistry, SignOutReport, SignOutRequest};
+pub use session_credentials::SessionCredentials;
+pub use sign_out::{
+    begin_sign_out, finish_sign_out, SignOutRegistry, SignOutReport, SignOutRequest, SigningOut,
+};
 pub use visited::{session_network_root, VisitedNetwork};
-pub use volumes::{mount_volume, unmount_location, volume_id};
+pub use volumes::{mount_volume, unmount_location, volume_id, volume_id_from};

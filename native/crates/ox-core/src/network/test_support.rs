@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Fixtures shared by the network tests: an in-memory keyring standing in
 //! for the Secret Service as `FakeSecret` in `desktop/tests/test_v05.py`
-//! does for libsecret, a sign-in dialog that records what it was asked to
-//! show, and sign-in prompts on a private main context.
+//! does for libsecret, a credential store on it with its windows'
+//! credentials, a sign-in dialog that records what it was asked to show,
+//! and one window's sign-in prompts on a private main context.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -10,6 +11,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use super::credential_store::CredentialStore;
 use super::keyring::{Keyring, KeyringCollection, KeyringError, NewSecret, SecretAttributes};
 use super::prompts::{Challenge, ChallengeId, MountPrompts, SignInPrompter, CHALLENGE_LIFETIME};
 use super::session_credentials::SessionCredentials;
@@ -21,17 +23,28 @@ struct Item {
     text: String,
 }
 
-/// Called at the start of a keyring call, for tests that hold a save in
+/// Called at the start of a keyring call, for tests that hold a call in
 /// flight or race a lookup.
 type Hook = Box<dyn Fn() + Send + Sync>;
+
+/// A keyring call that changed the stored items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum KeyringChange {
+    /// A store finished: the item is saved.
+    Stored,
+    /// A clear finished.
+    Cleared,
+}
 
 /// A keyring that keeps its items in memory and records every save.
 #[derive(Default)]
 pub(crate) struct MemoryKeyring {
     items: Mutex<Vec<Item>>,
     saves: Mutex<Vec<(KeyringCollection, SecretAttributes)>>,
+    changes: Mutex<Vec<KeyringChange>>,
     store_hook: Mutex<Option<Hook>>,
     lookup_hook: Mutex<Option<Hook>>,
+    clear_hook: Mutex<Option<Hook>>,
 }
 
 impl MemoryKeyring {
@@ -72,6 +85,16 @@ impl MemoryKeyring {
     pub(crate) fn set_lookup_hook(&self, hook: impl Fn() + Send + Sync + 'static) {
         *locked(&self.lookup_hook) = Some(Box::new(hook));
     }
+
+    /// Runs `hook` at the start of every clear.
+    pub(crate) fn set_clear_hook(&self, hook: impl Fn() + Send + Sync + 'static) {
+        *locked(&self.clear_hook) = Some(Box::new(hook));
+    }
+
+    /// Every store and clear, in the order they finished.
+    pub(crate) fn changes(&self) -> Vec<KeyringChange> {
+        locked(&self.changes).clone()
+    }
 }
 
 impl Keyring for MemoryKeyring {
@@ -95,13 +118,18 @@ impl Keyring for MemoryKeyring {
             text: secret.text.to_owned(),
         });
         locked(&self.saves).push((secret.collection, secret.attributes.clone()));
+        locked(&self.changes).push(KeyringChange::Stored);
         Ok(())
     }
 
     fn clear(&self, query: &SecretAttributes) -> Result<bool, KeyringError> {
+        if let Some(hook) = locked(&self.clear_hook).as_ref() {
+            hook();
+        }
         let mut items = locked(&self.items);
         let before = items.len();
         items.retain(|item| !query.matches(&item.attributes));
+        locked(&self.changes).push(KeyringChange::Cleared);
         Ok(items.len() < before)
     }
 }
@@ -151,10 +179,26 @@ impl RecordingPrompter {
     }
 }
 
-/// Sign-in prompts on an in-memory keyring, run on a private main context.
+/// A credential store on a fresh in-memory keyring, and the keyring.
+pub(crate) fn store_with_keyring() -> (Arc<CredentialStore>, Arc<MemoryKeyring>) {
+    let keyring = Arc::new(MemoryKeyring::default());
+    let store = Arc::new(CredentialStore::new(keyring.clone()));
+    (store, keyring)
+}
+
+/// The credentials of a new window over `store`.
+pub(crate) fn window_credentials(store: &Arc<CredentialStore>) -> Arc<SessionCredentials> {
+    Arc::new(SessionCredentials::new(Arc::clone(store)))
+}
+
+/// One window's sign-in prompts on an in-memory keyring, run on a private
+/// main context.
 pub(crate) struct PromptsFixture {
     pub(crate) context: glib::MainContext,
     pub(crate) keyring: Arc<MemoryKeyring>,
+    /// The store every window of the fixture's app shares.
+    pub(crate) store: Arc<CredentialStore>,
+    /// The window's credentials.
     pub(crate) credentials: Arc<SessionCredentials>,
     pub(crate) prompter: Rc<RecordingPrompter>,
     pub(crate) prompts: MountPrompts,
@@ -163,9 +207,8 @@ pub(crate) struct PromptsFixture {
 /// Runs `test` with fresh prompts whose challenges live `lifetime`, on a
 /// new main context made the thread default.
 pub(crate) fn with_prompts_living(lifetime: Duration, test: impl FnOnce(&PromptsFixture)) {
-    let keyring = Arc::new(MemoryKeyring::default());
-    let credentials = Arc::new(SessionCredentials::new(keyring.clone()));
-    with_credentials_and_lifetime(keyring, credentials, lifetime, test);
+    let (store, keyring) = store_with_keyring();
+    with_store_and_lifetime(keyring, store, lifetime, test);
 }
 
 /// Runs `test` with fresh prompts on an in-memory keyring.
@@ -177,18 +220,19 @@ pub(crate) fn with_prompts(test: impl FnOnce(&PromptsFixture)) {
 /// fixture's keyring stays empty.
 pub(crate) fn with_memory_only_prompts(test: impl FnOnce(&PromptsFixture)) {
     let keyring = Arc::new(MemoryKeyring::default());
-    let credentials = Arc::new(SessionCredentials::memory_only());
-    with_credentials_and_lifetime(keyring, credentials, CHALLENGE_LIFETIME, test);
+    let store = Arc::new(CredentialStore::memory_only());
+    with_store_and_lifetime(keyring, store, CHALLENGE_LIFETIME, test);
 }
 
-fn with_credentials_and_lifetime(
+fn with_store_and_lifetime(
     keyring: Arc<MemoryKeyring>,
-    credentials: Arc<SessionCredentials>,
+    store: Arc<CredentialStore>,
     lifetime: Duration,
     test: impl FnOnce(&PromptsFixture),
 ) {
     let context = glib::MainContext::new();
     let prompter = Rc::new(RecordingPrompter::default());
+    let credentials = window_credentials(&store);
     context
         .with_thread_default(|| {
             let prompts =
@@ -196,6 +240,7 @@ fn with_credentials_and_lifetime(
             let fixture = PromptsFixture {
                 context: context.clone(),
                 keyring,
+                store,
                 credentials,
                 prompter,
                 prompts,

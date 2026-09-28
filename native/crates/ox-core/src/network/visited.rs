@@ -6,6 +6,7 @@
 //! list, never every subfolder, and never saves anything: only the user
 //! keeps a share in settings. Sign out removes the server's entries.
 
+use super::server::host_name;
 use crate::location::split_location;
 use crate::settings::Bookmark;
 
@@ -32,7 +33,7 @@ impl VisitedNetwork {
 
     /// Forgets every root on `host`, when signing out of it.
     pub fn forget_host(&mut self, host: &str) {
-        self.roots.retain(|root| host_of(root).as_deref() != Some(host));
+        self.roots.retain(|root| host_name(root).as_deref() != Some(host));
     }
 
     /// The remembered roots, oldest first.
@@ -61,10 +62,6 @@ pub fn session_network_root(uri: &str) -> Option<String> {
     let parts = split_location(uri).ok()?;
     let share = parts.path.trim_matches('/').split('/').next().unwrap_or_default();
     Some(format!("smb://{}/{share}", parts.authority))
-}
-
-fn host_of(uri: &str) -> Option<String> {
-    split_location(uri).ok()?.hostname()
 }
 
 #[cfg(test)]

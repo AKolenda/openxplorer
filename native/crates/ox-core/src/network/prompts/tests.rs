@@ -470,6 +470,50 @@ fn closing_aborts_every_pending_prompt() {
     });
 }
 
+/// Closing the window wipes the credentials it accepted from memory
+/// (`close` in `auth_bridge.py`); other windows keep theirs.
+///
+/// parity: SAFE-011, TAB-050
+#[test]
+fn closing_wipes_the_windows_credentials_from_memory() {
+    with_memory_only_prompts(|fixture| {
+        let other_window = SessionCredentials::new(Arc::clone(&fixture.store));
+        other_window.accept_memory("smb://nas/a", &sam("other-window"));
+        let (operation, _replies, id) = prompt(fixture);
+        answer_as_sam(fixture, id, "test", CredentialScope::Session);
+        fixture.prompts.finish(&operation, MountOutcome::Mounted);
+        assert!(fixture.credentials.peek("smb://nas/a").is_some());
+
+        fixture.prompts.close();
+
+        assert_eq!(fixture.credentials.peek("smb://nas/a"), None);
+        assert_eq!(other_window.peek("smb://nas/a"), Some(sam("other-window")));
+    });
+}
+
+/// A successful mount reports its SMB server, where the window resumes
+/// the server's indexing (`mount` in `winspace.py`); a failed mount and a
+/// location on no SMB server report nothing.
+#[test]
+fn a_successful_mount_reports_its_smb_server() {
+    with_prompts(|fixture| {
+        let reported = Rc::new(RefCell::new(Vec::new()));
+        let recorded = Rc::clone(&reported);
+        fixture
+            .prompts
+            .connect_server_mounted(move |host| recorded.borrow_mut().push(host.to_owned()));
+        let (failed, _) = operation(fixture, "smb://other/a");
+        let (mounted, _) = operation(fixture, "smb://NAS/Projects");
+        let (local, _) = operation(fixture, "file:///tmp");
+
+        fixture.prompts.finish(&failed, MountOutcome::Failed);
+        fixture.prompts.finish(&mounted, MountOutcome::Mounted);
+        fixture.prompts.finish(&local, MountOutcome::Mounted);
+
+        assert_eq!(*reported.borrow(), ["nas"]);
+    });
+}
+
 /// Sign out during a mount wins: the account it signed in with is not
 /// kept (NET-021).
 ///

@@ -11,25 +11,14 @@
 mod python_support;
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ox_core::network::{
-    Credential, CredentialScope, Keyring, KeyringCollection, KeyringError, NewSecret, Password,
-    SecretAttributes, SessionCredentials, SMB_CREDENTIAL_SCHEMA,
+    Credential, CredentialScope, CredentialStore, Keyring, KeyringCollection, KeyringError, NewSecret,
+    Password, SecretAttributes, SessionCredentials, SMB_CREDENTIAL_SCHEMA,
 };
-use python_support::run_python;
+use python_support::{as_array, python_answers};
 use serde_json::{json, Value};
-
-/// Runs `script` with `inputs` written to a JSON file and returns what it
-/// printed, parsed as JSON.
-fn python_answers(script: &str, inputs: &Value) -> Value {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    let input_file = folder.path().join("inputs.json");
-    fs::write(&input_file, inputs.to_string()).expect("inputs written");
-    let printed = run_python(script, &[&input_file]);
-    serde_json::from_str(&printed).expect("the script prints JSON")
-}
 
 /// `FakeSecret` of `desktop/tests/test_v05.py`: libsecret's calls on a
 /// dictionary. Prepended to the credential scripts, so they need none of
@@ -132,6 +121,11 @@ fn account(username: &str, scope: CredentialScope) -> Credential {
     }
 }
 
+/// The credentials of a window of a native app whose keyring is `keyring`.
+fn window_credentials(keyring: Arc<RecordedKeyring>) -> SessionCredentials {
+    SessionCredentials::new(Arc::new(CredentialStore::new(keyring)))
+}
+
 /// Credentials saved by the native app are found by the Python app, so
 /// signing in once serves both while both exist.
 ///
@@ -139,14 +133,14 @@ fn account(username: &str, scope: CredentialScope) -> Credential {
 #[test]
 fn credentials_saved_natively_load_in_the_python_app() {
     let keyring = Arc::new(RecordedKeyring::default());
-    let store = SessionCredentials::new(keyring.clone());
+    let credentials = window_credentials(Arc::clone(&keyring));
     let saves = [
         ("smb://nas/a", account("remembered", CredentialScope::Permanent)),
         ("smb://nas:1445/b", account("session", CredentialScope::Session)),
     ];
     for (uri, credential) in &saves {
-        store
-            .persist(uri, credential, store.generation(uri))
+        credentials
+            .persist(uri, credential, credentials.generation(uri))
             .expect("the recorded keyring saves");
     }
     let inputs = json!({"items": keyring.items_as_json(), "uris": ["smb://NAS/other", "smb://nas:1445/c", "smb://nas:1445/"]});
@@ -181,14 +175,18 @@ fn credentials_saved_by_the_python_app_load_natively() {
         keyring.store(&secret).expect("the recorded keyring saves");
     }
 
-    let store = SessionCredentials::new(keyring);
+    let credentials = window_credentials(keyring);
 
-    let remembered = store.load("smb://NAS/other").expect("the keyring is searched");
+    let remembered = credentials
+        .load("smb://NAS/other")
+        .expect("the keyring is searched");
     assert_eq!(
         remembered,
         Some(account("remembered", CredentialScope::Permanent))
     );
-    let session = store.load("smb://nas:1445/c").expect("the keyring is searched");
+    let session = credentials
+        .load("smb://nas:1445/c")
+        .expect("the keyring is searched");
     assert_eq!(session, Some(account("session", CredentialScope::Session)));
 }
 
@@ -200,8 +198,4 @@ fn with_schema(attributes: &Value) -> SecretAttributes {
     pairs.iter().fold(schema, |all, (name, value)| {
         all.with(name, value.as_str().expect("attribute values are strings"))
     })
-}
-
-fn as_array(value: &Value) -> &[Value] {
-    value.as_array().expect("the script prints a list")
 }

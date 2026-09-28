@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Server-scoped SMB credentials in memory and in the keyring.
+//! One window's server-scoped SMB credentials, in memory and in the
+//! keyring.
 //!
 //! Ports `SessionCredentials` in `desktop/session_credentials.py`. There is
 //! no settings, database or plaintext-file fallback: without a keyring,
@@ -7,87 +8,64 @@
 //! `OpenXplorer` but end at logout; remembered ones go to the default
 //! keyring.
 //!
-//! The Python class kept its sign-out generations and keyring locks at
-//! class level, shared by every window of the process. Here one
-//! [`SessionCredentials`] is shared by every window instead (behind an
-//! `Arc`), so the in-memory credentials are shared too: a window may reuse
-//! a credential another window accepted, and the app clears the memory
-//! when its last window closes ([`SessionCredentials::clear_memory`]).
+//! As in Python, each window keeps the credentials it accepted in its own
+//! memory and wipes them when it closes, while the sign-out generations
+//! and keyring locks, class attributes in Python, are shared by every
+//! window through the [`CredentialStore`]. Sign out in one window advances
+//! the server's generation, so every other window's copy becomes stale and
+//! is wiped instead of reused.
 //!
-//! Every method may block on the keyring; call them off the GTK main
-//! thread.
+//! [`load`](SessionCredentials::load), [`persist`](SessionCredentials::persist)
+//! and [`forget`](SessionCredentials::forget) may block on the keyring;
+//! call them off the GTK main thread.
 
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use super::credential::{Credential, CredentialScope};
-use super::keyring::{Keyring, KeyringError, NewSecret, SecretAttributes};
+use super::credential_store::{locked, CredentialGeneration, CredentialStore, ForgetScope};
+use super::keyring::{Keyring, KeyringError};
 use super::server::ServerKey;
 
-/// The libsecret schema of `OpenXplorer`'s SMB credentials. A compatibility
-/// contract with the Python app (`AGENTS.md`): never rename it.
-pub const SMB_CREDENTIAL_SCHEMA: &str = "io.winspace.SmbCredentials";
-
-/// How often a server's credentials were forgotten. A keyring read or
-/// write that started under an older generation is discarded.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct CredentialGeneration(u64);
-
-/// Which saved credentials [`SessionCredentials::forget`] deletes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ForgetScope {
-    /// Session and permanent entries: Sign out with "Forget saved
-    /// credentials for this server" checked.
-    AllScopes,
-    /// Session entries only: Sign out keeping the saved credentials.
-    SessionOnly,
+/// One window's SMB credentials by server: those it accepted, in memory,
+/// and those saved in the shared [`CredentialStore`].
+pub struct SessionCredentials {
+    /// The keyring, generations and locks every window shares.
+    store: Arc<CredentialStore>,
+    /// Credentials accepted by a mount and not yet saved, or not savable.
+    memory: Mutex<HashMap<ServerKey, KeptCredential>>,
 }
 
-/// SMB credentials by server, shared by every window of the app.
-pub struct SessionCredentials {
-    /// The keyring, or `None` to keep credentials in memory only.
-    keyring: Option<Arc<dyn Keyring>>,
-    /// Credentials accepted by a mount and not yet saved, or not savable.
-    memory: Mutex<HashMap<ServerKey, Credential>>,
-    /// Sign-out generations by server.
-    generations: Mutex<HashMap<ServerKey, CredentialGeneration>>,
-    /// Serialises keyring writes and clears per server, so Sign out waits
-    /// for a save that is in flight.
-    server_locks: Mutex<HashMap<ServerKey, Arc<Mutex<()>>>>,
+/// A credential in a window's memory.
+struct KeptCredential {
+    credential: Credential,
+    /// The server's sign-out generation when the credential was kept.
+    generation: CredentialGeneration,
 }
 
 impl SessionCredentials {
-    /// A store that saves credentials in `keyring`.
-    pub fn new(keyring: Arc<dyn Keyring>) -> Self {
-        Self::with_keyring(Some(keyring))
-    }
-
-    /// A store without a keyring: credentials are kept in memory only.
-    pub fn memory_only() -> Self {
-        Self::with_keyring(None)
-    }
-
-    fn with_keyring(keyring: Option<Arc<dyn Keyring>>) -> Self {
+    /// A new window's credentials over the shared `store`, with nothing in
+    /// memory yet.
+    pub fn new(store: Arc<CredentialStore>) -> Self {
         Self {
-            keyring,
+            store,
             memory: Mutex::default(),
-            generations: Mutex::default(),
-            server_locks: Mutex::default(),
         }
     }
 
     /// The current sign-out generation of the server of `uri`.
     pub fn generation(&self, uri: &str) -> CredentialGeneration {
-        ServerKey::for_location(uri)
-            .map_or_else(CredentialGeneration::default, |key| self.generation_of(&key))
+        ServerKey::for_location(uri).map_or_else(CredentialGeneration::default, |key| {
+            self.store.generation_of(&key)
+        })
     }
 
-    /// The credential held in memory for the server of `uri`, without
-    /// asking the keyring.
+    /// The credential this window holds in memory for the server of
+    /// `uri`, without asking the keyring.
     pub fn peek(&self, uri: &str) -> Option<Credential> {
         let key = ServerKey::for_location(uri)?;
-        locked(&self.memory).get(&key).cloned()
+        self.current_in_memory(&key)
     }
 
     /// The credential for the server of `uri`: from memory, else from the
@@ -101,36 +79,23 @@ impl SessionCredentials {
         let Some(key) = ServerKey::for_location(uri) else {
             return Ok(None);
         };
-        let generation = self.generation_of(&key);
-        if let Some(credential) = locked(&self.memory).get(&key) {
-            return Ok(Some(credential.clone()));
-        }
-        let Some(keyring) = self.keyring.as_deref() else {
-            return Ok(None);
-        };
-        for scope in [CredentialScope::Session, CredentialScope::Permanent] {
-            let Some(text) = keyring.lookup(&credential_attributes(&key, Some(scope)))? else {
-                continue;
-            };
-            // Safety rule (NET-021): a lookup that raced Sign out never
-            // brings the forgotten credential back.
-            if self.generation_of(&key) != generation {
-                continue;
-            }
-            let Some(credential) = Credential::from_keyring_text(&text, scope) else {
-                continue;
-            };
-            locked(&self.memory).insert(key, credential.clone());
+        let generation = self.store.generation_of(&key);
+        if let Some(credential) = self.current_in_memory(&key) {
             return Ok(Some(credential));
         }
-        Ok(None)
+        let Some(credential) = self.store.lookup(&key, generation)? else {
+            return Ok(None);
+        };
+        self.keep(key, &credential, generation);
+        Ok(Some(credential))
     }
 
-    /// Keeps `credential` in memory for the server of `uri`, for example
-    /// after a mount accepted it.
+    /// Keeps `credential` in this window's memory for the server of `uri`,
+    /// for example after a mount accepted it.
     pub fn accept_memory(&self, uri: &str, credential: &Credential) {
         if let Some(key) = ServerKey::for_location(uri) {
-            locked(&self.memory).insert(key, credential.clone());
+            let generation = self.store.generation_of(&key);
+            self.keep(key, credential, generation);
         }
     }
 
@@ -150,26 +115,26 @@ impl SessionCredentials {
         let Some(key) = ServerKey::for_location(uri) else {
             return Ok(());
         };
-        let server_lock = self.server_lock(&key);
+        let server_lock = self.store.server_lock(&key);
         let _serialised = locked(&server_lock);
         // Safety rule (NET-021): a save that started before Sign out is
         // discarded, so signing out cannot be undone by a late write.
-        if self.generation_of(&key) != generation {
+        if self.store.generation_of(&key) != generation {
             return Ok(());
         }
         self.persist_current(&key, credential)
     }
 
-    /// Forgets the in-memory credential of the server of `uri` and makes
-    /// every keyring read or write in flight for it stale.
+    /// Forgets the in-memory credential of the server of `uri`, in this
+    /// window and every other, and makes every keyring read or write in
+    /// flight for it stale.
     pub fn forget_memory(&self, uri: &str) {
         let Some(key) = ServerKey::for_location(uri) else {
             return;
         };
-        let mut generations = locked(&self.generations);
-        let generation = generations.entry(key.clone()).or_default();
-        generation.0 += 1;
-        drop(generations);
+        // Safety rule (NET-021, SAFE-012): the new generation makes the
+        // other windows' copies and the keyring calls in flight stale.
+        self.store.advance_generation(&key);
         locked(&self.memory).remove(&key);
     }
 
@@ -182,63 +147,64 @@ impl SessionCredentials {
     /// The keyring's error when its entries cannot be deleted.
     pub fn forget(&self, uri: &str, scope: ForgetScope) -> Result<bool, KeyringError> {
         self.forget_memory(uri);
-        let (Some(key), Some(keyring)) = (ServerKey::for_location(uri), self.keyring.as_deref()) else {
+        let Some(key) = ServerKey::for_location(uri) else {
             return Ok(false);
         };
-        let server_lock = self.server_lock(&key);
+        let server_lock = self.store.server_lock(&key);
+        // Safety rule (SAFE-012): wait for a save in flight for this
+        // server, so the clear below also deletes what it wrote.
         let _serialised = locked(&server_lock);
-        let scope = match scope {
-            ForgetScope::AllScopes => None,
-            ForgetScope::SessionOnly => Some(CredentialScope::Session),
-        };
-        keyring.clear(&credential_attributes(&key, scope))
+        self.store.clear(&key, scope)
     }
 
-    /// Forgets every in-memory credential.
+    /// Forgets every credential in this window's memory, when the window
+    /// closes.
     pub fn clear_memory(&self) {
         locked(&self.memory).clear();
     }
 
     /// The keyring credentials are saved in, if any.
     pub(crate) fn keyring(&self) -> Option<&dyn Keyring> {
-        self.keyring.as_deref()
+        self.store.keyring()
     }
 
-    fn generation_of(&self, key: &ServerKey) -> CredentialGeneration {
-        locked(&self.generations).get(key).copied().unwrap_or_default()
+    /// The credential in memory for `key`, unless a Sign out made it stale.
+    fn current_in_memory(&self, key: &ServerKey) -> Option<Credential> {
+        let current = self.store.generation_of(key);
+        let mut memory = locked(&self.memory);
+        let kept = memory.get(key)?;
+        // Safety rule (NET-021): Sign out in any window advanced the
+        // generation; the stale copy is wiped instead of reused.
+        if kept.generation != current {
+            memory.remove(key);
+            return None;
+        }
+        Some(kept.credential.clone())
     }
 
-    fn server_lock(&self, key: &ServerKey) -> Arc<Mutex<()>> {
-        let mut server_locks = locked(&self.server_locks);
-        Arc::clone(server_locks.entry(key.clone()).or_default())
+    /// Keeps `credential` for `key`, read or accepted under `generation`.
+    fn keep(&self, key: ServerKey, credential: &Credential, generation: CredentialGeneration) {
+        let kept = KeptCredential {
+            credential: credential.clone(),
+            generation,
+        };
+        locked(&self.memory).insert(key, kept);
     }
 
     /// Saves `credential` for `key`; the caller holds the server's lock.
     fn persist_current(&self, key: &ServerKey, credential: &Credential) -> Result<(), KeyringError> {
-        // Privacy rule (session_credentials.py): no settings, database or
-        // plaintext-file fallback when there is no keyring.
-        let keyring = self.keyring.as_deref().ok_or(KeyringError::Unavailable)?;
-        let scope = credential.scope;
-        let attributes = credential_attributes(key, Some(scope));
-        let label = format!("OpenXplorer SMB: {}", key.host());
-        let text = credential.to_keyring_text();
-        keyring.store(&NewSecret {
-            collection: scope.keyring_collection(),
-            label: &label,
-            attributes: &attributes,
-            text: &text,
-        })?;
+        self.store.save(key, credential)?;
         // The next challenge reads the keyring again, so Sign out in
         // another process also invalidates this credential here. Memory
         // keeps it only while saving is in flight or impossible.
         let mut memory = locked(&self.memory);
-        if memory.get(key) == Some(credential) {
+        if memory.get(key).is_some_and(|kept| kept.credential == *credential) {
             memory.remove(key);
         }
         drop(memory);
         // An explicitly remembered account replaces a stale session entry.
-        if scope == CredentialScope::Permanent {
-            keyring.clear(&credential_attributes(key, Some(CredentialScope::Session)))?;
+        if credential.scope == CredentialScope::Permanent {
+            self.store.clear(key, ForgetScope::SessionOnly)?;
         }
         Ok(())
     }
@@ -251,29 +217,10 @@ impl fmt::Debug for SessionCredentials {
         let servers: Vec<String> = locked(&self.memory).keys().map(ToString::to_string).collect();
         formatter
             .debug_struct("SessionCredentials")
-            .field("has_keyring", &self.keyring.is_some())
+            .field("store", &self.store)
             .field("servers_in_memory", &servers)
-            .finish_non_exhaustive()
+            .finish()
     }
-}
-
-/// The keyring attributes of the credentials of `key`: those of one scope,
-/// or of every scope for `None`.
-fn credential_attributes(key: &ServerKey, scope: Option<CredentialScope>) -> SecretAttributes {
-    let attributes = SecretAttributes::for_schema(SMB_CREDENTIAL_SCHEMA)
-        .with("server", key.host())
-        .with("port", &key.port().to_string());
-    match scope {
-        Some(scope) => attributes.with("scope", scope.as_str()),
-        None => attributes,
-    }
-}
-
-/// Locks `mutex`, recovering the data if a thread panicked while holding
-/// it: every guarded map stays consistent between statements, so the data
-/// is still valid.
-fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]

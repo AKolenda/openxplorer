@@ -2,15 +2,21 @@
 //! Sign out of an SMB server: disconnect its mounts and forget its
 //! credentials.
 //!
-//! Ports `sign_out` in `desktop/winspace.py`. [`sign_out`] does the
-//! server's part: it checks the preconditions, marks the server in the
-//! [`SignOutRegistry`], forgets the in-memory credential, unmounts every
-//! mount of the server and deletes the saved credentials. The window does
-//! the rest of the Python method around it: before, it tells every window
-//! (`serverSigningOut`), forgets the server's [`VisitedNetwork`] roots,
-//! cancels the loads and folder monitors on the server and pauses its
-//! indexing; after, it clears the server's search cache if asked and
-//! refreshes every window.
+//! Ports `sign_out` in `desktop/winspace.py`, which checks every
+//! precondition before it changes anything. The server's part comes in two
+//! steps, and the window does the rest of the Python method between and
+//! after them:
+//!
+//! 1. [`begin_sign_out`] checks the preconditions, marks the server in the
+//!    [`SignOutRegistry`] and forgets its in-memory credential in every
+//!    window. It changes nothing when it refuses.
+//! 2. The window tells every window (`serverSigningOut`), forgets the
+//!    server's [`VisitedNetwork`] roots, cancels the loads and folder
+//!    monitors on the server and pauses its indexing.
+//! 3. [`finish_sign_out`] unmounts every mount of the server and deletes
+//!    the saved credentials.
+//! 4. The window clears the server's search cache if asked, then drops the
+//!    [`SigningOut`], which ends the sign-out, and refreshes every window.
 //!
 //! [`VisitedNetwork`]: super::VisitedNetwork
 
@@ -20,12 +26,14 @@ use std::time::Duration;
 
 use gio::prelude::*;
 
+use super::credential_store::ForgetScope;
 use super::error::NetworkError;
 use super::keyring::{KeyringError, SecretAttributes};
 use super::mounting::{PromptedOperation, WriteActivity};
 use super::prompts::MountPrompts;
-use super::session_credentials::{ForgetScope, SessionCredentials};
-use crate::location::{normalise, split_location};
+use super::server::smb_host;
+use super::session_credentials::SessionCredentials;
+use crate::location::normalise;
 
 /// The `protocol` attribute of the SMB passwords `GVfs` remembers under
 /// GNOME's `org.gnome.keyring.NetworkPassword` schema. Those items are
@@ -67,14 +75,14 @@ impl SignOutRegistry {
         Ok(())
     }
 
-    /// Marks `host` as being signed out until the returned guard is
+    /// Marks `host` as being signed out until the returned entry is
     /// dropped.
-    fn begin(&self, host: &str) -> Result<SigningOut<'_>, NetworkError> {
+    fn begin(&self, host: &str) -> Result<RegistryEntry<'_>, NetworkError> {
         let is_new = self.hosts().insert(host.to_owned());
         if !is_new {
             return Err(NetworkError::SignOutAlreadyRunning);
         }
-        Ok(SigningOut {
+        Ok(RegistryEntry {
             registry: self,
             host: host.to_owned(),
         })
@@ -87,20 +95,21 @@ impl SignOutRegistry {
     }
 }
 
-/// A server marked in the registry; dropping it ends the sign-out, also
+/// A server marked in the registry; dropping it removes the mark, also
 /// when the sign-out fails or its future is dropped.
-struct SigningOut<'a> {
+#[derive(Debug)]
+struct RegistryEntry<'a> {
     registry: &'a SignOutRegistry,
     host: String,
 }
 
-impl Drop for SigningOut<'_> {
+impl Drop for RegistryEntry<'_> {
     fn drop(&mut self) {
         self.registry.hosts().remove(&self.host);
     }
 }
 
-/// What the user chose in the "Sign out of <host>?" dialog.
+/// What the user chose in the "Sign out of `<host>`?" dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SignOutRequest<'a> {
     /// A location on the server.
@@ -110,6 +119,24 @@ pub struct SignOutRequest<'a> {
     pub forget: ForgetScope,
     /// Whether any window is writing files. Sign out is refused then.
     pub writes: WriteActivity,
+}
+
+/// A sign-out that [`begin_sign_out`] started. The server stays marked in
+/// the [`SignOutRegistry`] until this is dropped.
+#[derive(Debug)]
+pub struct SigningOut<'a> {
+    entry: RegistryEntry<'a>,
+    prompts: &'a MountPrompts,
+    /// The canonical location the user chose.
+    uri: String,
+    forget: ForgetScope,
+}
+
+impl SigningOut<'_> {
+    /// The server being signed out, lower-case.
+    pub fn host(&self) -> &str {
+        &self.entry.host
+    }
 }
 
 /// What Sign out did.
@@ -126,26 +153,22 @@ pub struct SignOutReport {
     pub forget: ForgetScope,
 }
 
-/// Signs out of the server of `request.uri`: disconnects every one of its
-/// mounts among `mounts` (the volume monitor's), in every application of
-/// the session, then deletes its saved credentials in the chosen scope.
-///
-/// Unmounting may show the programs that keep a mount busy through
-/// `prompts`; it never kills a program or forces an unmount.
+/// Starts signing out of the server of `request.uri`: checks every
+/// precondition, marks the server in `registry` and forgets its in-memory
+/// credential in every window. Then do the window's part and call
+/// [`finish_sign_out`].
 ///
 /// # Errors
 ///
-/// [`NetworkError::SignOutDuringWrites`], [`NetworkError::NotAnSmbLocation`]
-/// or [`NetworkError::SignOutAlreadyRunning`] before anything is changed;
-/// [`NetworkError::MountCannotBeDisconnected`] or GIO's error when a mount
-/// stays connected; [`NetworkError::CredentialsNotRemoved`] when the
-/// server was disconnected but the keyring could not delete its entries.
-pub async fn sign_out(
-    prompts: &MountPrompts,
-    registry: &SignOutRegistry,
-    mounts: &[gio::Mount],
+/// [`NetworkError::SignOutDuringWrites`], a
+/// [`LocationError`](crate::location::LocationError),
+/// [`NetworkError::NotAnSmbLocation`] or
+/// [`NetworkError::SignOutAlreadyRunning`]; nothing is changed then.
+pub fn begin_sign_out<'a>(
+    prompts: &'a MountPrompts,
+    registry: &'a SignOutRegistry,
     request: SignOutRequest<'_>,
-) -> Result<SignOutReport, NetworkError> {
+) -> Result<SigningOut<'a>, NetworkError> {
     // Safety rule (NET-023): unmounting under a running copy or move
     // could leave half-written files.
     if request.writes == WriteActivity::Writing {
@@ -153,40 +176,70 @@ pub async fn sign_out(
     }
     let uri = normalise(request.uri)?;
     let host = smb_host(&uri).ok_or(NetworkError::NotAnSmbLocation)?;
-    let _signing_out = registry.begin(&host)?;
-    let credentials = prompts.credentials();
-    // Safety rule (SAFE-012): a keyring save still in flight for this
-    // server is discarded from here on.
-    credentials.forget_memory(&uri);
-    let server_mounts = mounts_of_host(mounts, &host);
-    for mount in server_mounts.iter().rev() {
-        disconnect(prompts, mount).await?;
-    }
-    let credentials_removed = forget_saved_credentials(credentials, &uri, &host, request.forget).await?;
-    Ok(SignOutReport {
-        host,
-        disconnected: server_mounts.len(),
-        credentials_removed,
+    let entry = registry.begin(&host)?;
+    // Safety rule (NET-021, SAFE-012): every window's in-memory copy and
+    // every keyring save still in flight for this server are discarded
+    // from here on.
+    prompts.credentials().forget_memory(&uri);
+    Ok(SigningOut {
+        entry,
+        prompts,
+        uri,
         forget: request.forget,
     })
 }
 
-/// The lower-case host of SMB location `uri`, or `None` for anything else.
-fn smb_host(uri: &str) -> Option<String> {
-    let parts = split_location(uri).ok()?;
-    if !parts.is_smb() {
-        return None;
-    }
-    parts.hostname()
+/// Finishes `signing_out`: disconnects every mount of its server among
+/// `mounts` (the volume monitor's), in every application of the session,
+/// then deletes the saved credentials in the chosen scope.
+///
+/// Unmounting may show the programs that keep a mount busy through the
+/// prompts; it never kills a program or forces an unmount.
+///
+/// # Errors
+///
+/// [`NetworkError::MountCannotBeDisconnected`] or GIO's error when a mount
+/// stays connected; [`NetworkError::CredentialsNotRemoved`] when the
+/// server was disconnected but the keyring could not delete its entries.
+pub async fn finish_sign_out(
+    signing_out: &SigningOut<'_>,
+    mounts: &[gio::Mount],
+) -> Result<SignOutReport, NetworkError> {
+    finish_within(signing_out, mounts, KEYRING_DEADLINE).await
 }
 
-/// The SMB mounts whose root is on `host`.
+/// [`finish_sign_out`], giving up on the keyring after `keyring_deadline`.
+async fn finish_within(
+    signing_out: &SigningOut<'_>,
+    mounts: &[gio::Mount],
+    keyring_deadline: Duration,
+) -> Result<SignOutReport, NetworkError> {
+    let host = signing_out.host();
+    let server_mounts = mounts_of_host(mounts, host);
+    // The newest mount first, as `mounts.pop()` in winspace.py.
+    for mount in server_mounts.iter().rev() {
+        disconnect(signing_out.prompts, mount).await?;
+    }
+    let credentials_removed = forget_saved_credentials(signing_out, keyring_deadline).await?;
+    Ok(SignOutReport {
+        host: host.to_owned(),
+        disconnected: server_mounts.len(),
+        credentials_removed,
+        forget: signing_out.forget,
+    })
+}
+
+/// The mounts among `mounts` whose root is on `host`.
 fn mounts_of_host(mounts: &[gio::Mount], host: &str) -> Vec<gio::Mount> {
-    let is_on_host = |mount: &&gio::Mount| {
-        let root = mount.root().uri();
-        root.starts_with("smb:") && smb_host(&root).as_deref() == Some(host)
-    };
-    mounts.iter().filter(is_on_host).cloned().collect()
+    let is_on_this_host = |mount: &&gio::Mount| is_on_host(&mount.root().uri(), host);
+    mounts.iter().filter(is_on_this_host).cloned().collect()
+}
+
+/// True when the mount root `root_uri` is an SMB location on `host`, on
+/// any port. Sign out disconnects exactly these mounts, including those of
+/// other applications.
+fn is_on_host(root_uri: &str, host: &str) -> bool {
+    root_uri.starts_with("smb:") && smb_host(root_uri).as_deref() == Some(host)
 }
 
 /// Unmounts `mount`, answering its questions through `prompts`.
@@ -203,20 +256,19 @@ async fn disconnect(prompts: &MountPrompts, mount: &gio::Mount) -> Result<(), Ne
     Ok(())
 }
 
-/// Deletes the saved credentials of the server of `uri` off the main
-/// thread; returns whether the keyring deleted anything.
+/// Deletes the saved credentials of the server off the main thread;
+/// returns whether the keyring deleted anything.
 async fn forget_saved_credentials(
-    credentials: &Arc<SessionCredentials>,
-    uri: &str,
-    host: &str,
-    forget: ForgetScope,
+    signing_out: &SigningOut<'_>,
+    deadline: Duration,
 ) -> Result<bool, NetworkError> {
-    let credentials = Arc::clone(credentials);
-    let uri = uri.to_owned();
-    let host = host.to_owned();
+    let credentials = Arc::clone(signing_out.prompts.credentials());
+    let uri = signing_out.uri.clone();
+    let host = signing_out.host().to_owned();
+    let forget = signing_out.forget;
     // The keyring may show an unlock prompt: never block the main thread.
     let worker = gio::spawn_blocking(move || delete_saved_credentials(&credentials, &uri, &host, forget));
-    let Ok(finished) = glib::future_with_timeout(KEYRING_DEADLINE, worker).await else {
+    let Ok(finished) = glib::future_with_timeout(deadline, worker).await else {
         return Err(NetworkError::CredentialsNotRemoved(KeyringError::TimedOut));
     };
     // A panic in the worker is a bug; report it where it happened.

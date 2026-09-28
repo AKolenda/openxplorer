@@ -7,9 +7,15 @@
 //! loop; dropping its future cancels the GIO call and aborts any sign-in
 //! dialog it opened.
 //!
-//! After a successful SMB mount the window resumes indexing that server,
-//! which a Sign out paused (NET-022); after Map network location it saves
-//! the share if the user asked and remembers it for the Network list.
+//! The window does the rest of the Python methods:
+//!
+//! - Every successful mount of an SMB location, also the one of
+//!   [`read_mounting_once`], reaches the window's
+//!   [`MountPrompts::connect_server_mounted`] handlers, where it resumes
+//!   indexing that server, which a Sign out paused (NET-022).
+//! - After [`connect_share`] it saves the share in the sidebar if the user
+//!   asked and remembers it for the Network list
+//!   ([`VisitedNetwork`](super::VisitedNetwork)).
 
 use std::future::Future;
 
@@ -66,7 +72,9 @@ pub enum MountedReadError<E> {
 }
 
 /// Mounts the volume that holds `uri`, answering `GVfs`'s sign-in through
-/// `prompts`. A location that is already mounted succeeds.
+/// `prompts`. A location that is already mounted succeeds. On success,
+/// `prompts` keep the account it signed in with and report an SMB server
+/// to their [`MountPrompts::connect_server_mounted`] handlers.
 ///
 /// # Errors
 ///
@@ -89,8 +97,8 @@ pub async fn mount_location(prompts: &MountPrompts, uri: &str) -> Result<(), Net
 }
 
 /// Runs `read` on `uri`; when it fails because the location is not
-/// mounted, mounts it once (asking for credentials if needed) and runs
-/// `read` again (NET-004).
+/// mounted, mounts it once with [`mount_location`] (asking for credentials
+/// if needed) and runs `read` again (NET-004).
 ///
 /// Only for reads, such as listing a folder, reading properties or opening
 /// a file. Safety rule (NET-004): a write (paste, create, rename, extract)

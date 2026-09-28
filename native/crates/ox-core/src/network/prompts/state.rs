@@ -5,7 +5,8 @@
 //! `desktop/auth_bridge.py` and the methods that change them (`create`,
 //! `_ask_question`, `_show_processes`, `_new`, `_consume`, `_dismiss`,
 //! `_expire`, `finish` and `close`). Password requests are answered in
-//! `password`.
+//! `password`. A successful SMB mount is reported to the window, which
+//! resumes the server's indexing as `mount` in `desktop/winspace.py` does.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
@@ -18,10 +19,11 @@ use gio::prelude::*;
 
 use super::challenge::{Challenge, ChallengeId, ChallengeKind, QuestionChallenge, SignInError};
 use super::operation::{send_reply, MountReply, PasswordRequest, QuestionSource};
-use super::password::host_of;
 use super::{MountOutcome, SignInPrompter, KEYRING_SAVE_NOTICE};
 use crate::network::credential::Credential;
-use crate::network::session_credentials::{CredentialGeneration, SessionCredentials};
+use crate::network::credential_store::CredentialGeneration;
+use crate::network::server::{host_name, smb_host};
+use crate::network::session_credentials::SessionCredentials;
 
 /// The shared state of one window's prompts. The operations' signal
 /// handlers hold it weakly, and the `RefCell` is borrowed only between
@@ -35,7 +37,12 @@ pub(super) struct Inner {
     challenge_lifetime: Duration,
     /// The mounts in progress and their open challenges.
     pub(super) state: RefCell<State>,
+    /// Called with the host of every SMB server a mount reached.
+    server_mounted: RefCell<Vec<ServerMountedHandler>>,
 }
+
+/// A handler of [`MountPrompts::connect_server_mounted`](super::MountPrompts::connect_server_mounted).
+pub(super) type ServerMountedHandler = Rc<dyn Fn(&str)>;
 
 /// The mutable part of [`Inner`].
 #[derive(Default)]
@@ -121,7 +128,12 @@ impl Inner {
             prompter,
             challenge_lifetime,
             state: RefCell::default(),
+            server_mounted: RefCell::default(),
         }
+    }
+
+    pub(super) fn connect_server_mounted(&self, handler: ServerMountedHandler) {
+        self.server_mounted.borrow_mut().push(handler);
     }
 
     pub(super) fn credentials(&self) -> &Arc<SessionCredentials> {
@@ -179,7 +191,9 @@ impl Inner {
     fn host_of_operation(&self, operation: &gio::MountOperation) -> String {
         let state = self.state.borrow();
         let record = state.operations.get(operation);
-        record.map(|record| host_of(&record.uri)).unwrap_or_default()
+        record
+            .and_then(|record| host_name(&record.uri))
+            .unwrap_or_default()
     }
 
     /// Shows a new challenge for `operation`, replacing its previous one.
@@ -278,21 +292,43 @@ impl Inner {
         let Some(record) = record else {
             return;
         };
-        let Some(candidate) = record.candidate else {
-            return;
-        };
         // Safety rule (NET-015): credentials are kept only after a
         // successful mount.
         if outcome != MountOutcome::Mounted {
             return;
         }
+        self.keep_signed_in_account(&record);
+        self.report_server_mounted(&record.uri);
+    }
+
+    /// Keeps the account that the successful mount `record` signed in
+    /// with, and saves it in the keyring if it was typed into the dialog.
+    fn keep_signed_in_account(&self, record: &OperationRecord) {
+        let Some(candidate) = &record.candidate else {
+            return;
+        };
         // Safety rule (SAFE-012): Sign out during the mount wins.
         if self.credentials.generation(&record.uri) != record.generation {
             return;
         }
         self.credentials.accept_memory(&record.uri, &candidate.credential);
         if candidate.source == CandidateSource::Entered {
-            self.save_in_background(record.uri, candidate.credential, record.generation);
+            let credential = candidate.credential.clone();
+            self.save_in_background(record.uri.clone(), credential, record.generation);
+        }
+    }
+
+    /// Tells the server-mounted handlers that the mount of `uri`
+    /// succeeded, when it is on an SMB server (`mount` in `winspace.py`
+    /// resumes that server's indexing).
+    fn report_server_mounted(&self, uri: &str) {
+        let Some(host) = smb_host(uri) else {
+            return;
+        };
+        // Cloned, so that a handler may connect another one.
+        let handlers = self.server_mounted.borrow().clone();
+        for handler in handlers {
+            handler(&host);
         }
     }
 
@@ -327,6 +363,11 @@ impl Inner {
         for operation in operations.keys() {
             operation.set_password(None);
         }
+        // Privacy rule (SAFE-011, TAB-050): a closed window keeps no
+        // password in memory (`close` in auth_bridge.py).
+        self.credentials.clear_memory();
+        // A handler that holds the window must not keep it alive.
+        self.server_mounted.borrow_mut().clear();
     }
 }
 

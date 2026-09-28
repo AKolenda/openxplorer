@@ -73,7 +73,9 @@ fn removal_advice(error: &KeyringError) -> String {
         KeyringError::Unavailable => {
             "Make sure the system keyring is running and try Sign out again.".to_owned()
         }
-        KeyringError::TimedOut | KeyringError::Failed(_) => error.to_string(),
+        KeyringError::TimedOut | KeyringError::UnlockDismissed | KeyringError::Failed { .. } => {
+            error.to_string()
+        }
     }
 }
 
@@ -113,12 +115,12 @@ mod tests {
     /// parity: NET-021
     #[test]
     fn a_failed_credential_removal_says_the_server_was_disconnected() {
-        let refused = NetworkError::CredentialsNotRemoved(KeyringError::Failed("Prompt dismissed".into()));
+        let refused = NetworkError::CredentialsNotRemoved(KeyringError::UnlockDismissed);
         let missing = NetworkError::CredentialsNotRemoved(KeyringError::Unavailable);
 
         assert_eq!(
             refused.to_string(),
-            "Disconnected, but saved credentials could not be removed. Prompt dismissed"
+            "Disconnected, but saved credentials could not be removed. The keyring unlock was cancelled."
         );
         assert_eq!(
             missing.to_string(),

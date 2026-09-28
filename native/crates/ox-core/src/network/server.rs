@@ -6,6 +6,11 @@
 //! sign-in. Host names compare case-insensitively, but ports and aliases
 //! stay distinct: `nas.local` and `10.0.0.1` are different servers even if
 //! they resolve to the same machine.
+//!
+//! `host_name` and `smb_host` are the `urlsplit(uri).hostname` of
+//! `desktop/winspace.py` and `desktop/auth_bridge.py`: the host the sign-in
+//! dialog names, the server Sign out disconnects and the server of a
+//! Network list entry.
 
 use std::fmt;
 
@@ -54,6 +59,22 @@ impl ServerKey {
     }
 }
 
+/// The lower-case host name of `uri`, whatever its scheme, or `None` when
+/// it names no host.
+pub(super) fn host_name(uri: &str) -> Option<String> {
+    split_location(uri).ok()?.hostname()
+}
+
+/// The lower-case host name of SMB location `uri`, or `None` for any other
+/// location.
+pub(super) fn smb_host(uri: &str) -> Option<String> {
+    let parts = split_location(uri).ok()?;
+    if !parts.is_smb() {
+        return None;
+    }
+    parts.hostname()
+}
+
 impl fmt::Display for ServerKey {
     /// `host:port`, for messages and keyring item labels.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -100,6 +121,42 @@ mod tests {
         let server = key("smb://nas:0/a").expect("an SMB location");
         assert_eq!(server.port(), DEFAULT_SMB_PORT);
         assert_eq!(server.to_string(), "nas:445");
+    }
+
+    struct HostCase {
+        uri: &'static str,
+        host_name: Option<&'static str>,
+        smb_host: Option<&'static str>,
+    }
+
+    #[test]
+    fn host_names_are_lower_case_and_only_smb_locations_have_an_smb_host() {
+        let cases = [
+            HostCase {
+                uri: "smb://NAS/Projects",
+                host_name: Some("nas"),
+                smb_host: Some("nas"),
+            },
+            HostCase {
+                uri: "smb://nas:1445/",
+                host_name: Some("nas"),
+                smb_host: Some("nas"),
+            },
+            HostCase {
+                uri: "sftp://Build-Host/home",
+                host_name: Some("build-host"),
+                smb_host: None,
+            },
+            HostCase {
+                uri: "file:///mnt/nas",
+                host_name: None,
+                smb_host: None,
+            },
+        ];
+        for case in &cases {
+            assert_eq!(host_name(case.uri).as_deref(), case.host_name, "{}", case.uri);
+            assert_eq!(smb_host(case.uri).as_deref(), case.smb_host, "{}", case.uri);
+        }
     }
 
     #[test]

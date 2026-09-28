@@ -13,15 +13,41 @@ use super::error::NetworkError;
 use super::mounting::WriteActivity;
 use crate::location::normalise;
 
-/// The identifier of `volume` for a single mount request: its UUID, else
-/// its device path, else its activation root, else its name.
+/// The identifier of `volume` for a single mount request; see
+/// [`volume_id_from`].
 pub fn volume_id(volume: &gio::Volume) -> String {
-    let activation_uri = || volume.activation_root().map(|root| root.uri());
-    let id = volume
-        .uuid()
-        .or_else(|| volume.identifier("unix-device"))
-        .or_else(activation_uri);
-    id.map_or_else(|| volume.name().into(), Into::into)
+    let uuid = volume.uuid();
+    let unix_device = volume.identifier("unix-device");
+    let activation_uri = volume.activation_root().map(|root| root.uri());
+    let name = volume.name();
+    let id = volume_id_from(
+        uuid.as_deref(),
+        unix_device.as_deref(),
+        activation_uri.as_deref(),
+        &name,
+    );
+    id.to_owned()
+}
+
+/// The identifier of a volume for a single mount request, from what the
+/// volume monitor reports: its UUID, else its device path, else its
+/// activation root, else its name.
+///
+/// The one implementation of `volume_id` in `desktop/volume_locations.py`:
+/// the rows the app lists and [`mount_volume`] must agree on it, or
+/// Connect would not find the volume. An empty value counts as missing, as
+/// Python's `or` does.
+pub fn volume_id_from<'a>(
+    uuid: Option<&'a str>,
+    unix_device: Option<&'a str>,
+    activation_uri: Option<&'a str>,
+    name: &'a str,
+) -> &'a str {
+    [uuid, unix_device, activation_uri]
+        .into_iter()
+        .flatten()
+        .find(|id| !id.is_empty())
+        .unwrap_or(name)
 }
 
 /// Connects a drive or phone: mounts the volume `id` among `volumes` (the
@@ -88,6 +114,48 @@ pub async fn unmount_location(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct VolumeIdCase {
+        uuid: Option<&'static str>,
+        unix_device: Option<&'static str>,
+        activation_uri: Option<&'static str>,
+        expected: &'static str,
+    }
+
+    /// parity: DEV-003
+    #[test]
+    fn volume_ids_prefer_uuid_then_device_then_activation_root_then_name() {
+        let cases = [
+            VolumeIdCase {
+                uuid: Some("1234-ABCD"),
+                unix_device: Some("/dev/sdb1"),
+                activation_uri: Some("mtp://[usb:001,011]/"),
+                expected: "1234-ABCD",
+            },
+            VolumeIdCase {
+                uuid: None,
+                unix_device: Some("/dev/sdb1"),
+                activation_uri: Some("mtp://[usb:001,011]/"),
+                expected: "/dev/sdb1",
+            },
+            VolumeIdCase {
+                uuid: Some(""),
+                unix_device: None,
+                activation_uri: Some("mtp://[usb:001,011]/"),
+                expected: "mtp://[usb:001,011]/",
+            },
+            VolumeIdCase {
+                uuid: None,
+                unix_device: Some(""),
+                activation_uri: None,
+                expected: "USB",
+            },
+        ];
+        for case in &cases {
+            let id = volume_id_from(case.uuid, case.unix_device, case.activation_uri, "USB");
+            assert_eq!(id, case.expected);
+        }
+    }
 
     /// parity: DEV-006
     #[test]
