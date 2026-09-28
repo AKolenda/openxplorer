@@ -24,6 +24,7 @@ pub mod format;
 pub mod gio_node;
 pub mod location;
 pub mod places;
+pub mod search;
 pub mod settings;
 pub mod transfer;
 
