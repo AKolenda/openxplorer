@@ -5,6 +5,11 @@
 //! (`desktop/tests/text_size.test.cjs`). Ctrl+plus makes text larger,
 //! Ctrl+minus smaller and Ctrl+0 resets it; row heights and icon-view cells
 //! follow the text so large text never clips.
+//!
+//! The keys live in one table ([`Step::keys`]) that the window installs as
+//! GTK application accelerators. GTK matches accelerators with exactly the
+//! listed modifiers, so Ctrl+Alt and `AltGr` combinations never resize text,
+//! as `action()` in text-size.js requires.
 
 /// Supported text sizes, in percent.
 pub const LEVELS: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
@@ -33,6 +38,9 @@ pub enum Step {
 }
 
 impl Step {
+    /// Every command, in menu order.
+    pub const ALL: [Step; 3] = [Step::Increase, Step::Decrease, Step::Reset];
+
     /// The size after applying this step to `current`, bounded by the levels.
     pub fn apply(self, current: u32) -> u32 {
         match self {
@@ -41,10 +49,47 @@ impl Step {
             Step::Reset => DEFAULT,
         }
     }
+
+    /// The window action that performs the step.
+    pub const fn action_name(self) -> &'static str {
+        match self {
+            Step::Increase => "text-larger",
+            Step::Decrease => "text-smaller",
+            Step::Reset => "text-reset",
+        }
+    }
+
+    /// The GDK key names that perform the step with Ctrl held, from
+    /// `action()` in text-size.js: `+`, `=` and keypad Add; `-`, `_` and
+    /// keypad Subtract; `0` and keypad 0. `KP_Insert` is keypad 0 with
+    /// `NumLock` off, which the web app matched by its physical code.
+    ///
+    /// The first key is the one menus show.
+    pub const fn keys(self) -> &'static [&'static str] {
+        match self {
+            Step::Increase => &["plus", "equal", "KP_Add"],
+            Step::Decrease => &["minus", "underscore", "KP_Subtract"],
+            Step::Reset => &["0", "KP_0", "KP_Insert"],
+        }
+    }
+
+    /// The GTK accelerators for [`Self::keys`].
+    ///
+    /// Application accelerators run before the focused widget sees the
+    /// key, so `<Primary>KP_Insert` also wins over the address entry's
+    /// Ctrl+Insert copy binding. The web app's capture-phase handler did
+    /// the same.
+    pub fn accelerators(self) -> Vec<String> {
+        self.keys().iter().map(|key| format!("<Primary>{key}")).collect()
+    }
 }
 
 /// Moves `direction` levels from `value`, stopping at the smallest and
 /// largest levels.
+///
+/// # Panics
+///
+/// Never: [`normalize`] always returns one of the [`LEVELS`].
 pub fn step(value: u32, direction: isize) -> u32 {
     let index = LEVELS
         .iter()
@@ -68,12 +113,19 @@ pub struct Metrics {
     pub grid_width: i32,
 }
 
+/// Rounds a layout measure up to whole pixels. Measures are a few hundred
+/// pixels at most, far inside `i32`.
+#[expect(clippy::cast_possible_truncation, reason = "layout measures are small")]
+pub(crate) fn ceil_pixels(value: f64) -> i32 {
+    value.ceil() as i32
+}
+
 /// Metrics for a text size, matching `metrics()` in text-size.js.
 pub fn metrics(value: u32) -> Metrics {
     let scale = f64::from(normalize(value)) / 100.0;
-    let detail_row = ((24.0 * scale + 14.0).ceil() as i32).max(38);
-    let grid_growth = (((scale - 1.0) * 46.0).ceil() as i32).max(0);
-    let grid_width = ((90.0 * scale + 45.0).ceil() as i32).max(135);
+    let detail_row = ceil_pixels(24.0 * scale + 14.0).max(38);
+    let grid_growth = ceil_pixels((scale - 1.0) * 46.0).max(0);
+    let grid_width = ceil_pixels(90.0 * scale + 45.0).max(135);
     Metrics {
         scale,
         detail_row,
@@ -82,48 +134,17 @@ pub fn metrics(value: u32) -> Metrics {
     }
 }
 
-/// A key press reduced to what text sizing needs, so the mapping can be
-/// tested without a display.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct KeyPress<'a> {
-    /// Ctrl (or Super, as Meta in the web app) is held.
-    pub control: bool,
-    /// Alt is held.
-    pub alt: bool,
-    /// AltGr is held (a third-level shift on many layouts).
-    pub alt_graph: bool,
-    /// An input method is composing text.
-    pub composing: bool,
-    /// The GDK key name, for example `plus`, `KP_Add` or `0`.
-    pub key: &'a str,
-}
-
-/// The text-size command for a key press, if it is one.
-pub fn action(press: KeyPress<'_>) -> Option<Step> {
-    if !press.control || press.alt || press.alt_graph || press.composing {
-        return None;
-    }
-    match press.key {
-        "plus" | "equal" | "KP_Add" => Some(Step::Increase),
-        "minus" | "underscore" | "KP_Subtract" => Some(Step::Decrease),
-        "0" | "KP_0" | "KP_Insert" => Some(Step::Reset),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn ctrl(key: &str) -> KeyPress<'_> {
-        KeyPress {
-            control: true,
-            key,
-            ..KeyPress::default()
-        }
+    /// The step whose table lists `key`, as `action()` in text-size.js
+    /// would classify a Ctrl press of that key.
+    fn step_for(key: &str) -> Option<Step> {
+        Step::ALL.into_iter().find(|step| step.keys().contains(&key))
     }
 
-    /// Ported from desktop/tests/text_size.test.cjs::supported
+    /// Ported from `desktop/tests/text_size.test.cjs::supported`
     #[test]
     fn supported_levels_are_kept() {
         for value in LEVELS {
@@ -131,7 +152,7 @@ mod tests {
         }
     }
 
-    /// Ported from desktop/tests/text_size.test.cjs::fallback
+    /// Ported from `desktop/tests/text_size.test.cjs::fallback`
     #[test]
     fn other_values_fall_back_to_the_default() {
         for value in [0, 99, 125 + 1, 1000, u32::MAX] {
@@ -139,71 +160,45 @@ mod tests {
         }
     }
 
-    /// Ported from desktop/tests/text_size.test.cjs::Ctrl + / Ctrl - / Ctrl 0
+    /// Ported from `desktop/tests/text_size.test.cjs::Ctrl + / Ctrl - / Ctrl 0`
     #[test]
     fn control_plus_minus_and_zero_are_recognised() {
         for key in ["plus", "equal"] {
-            assert_eq!(action(ctrl(key)), Some(Step::Increase), "{key}");
+            assert_eq!(step_for(key), Some(Step::Increase), "{key}");
         }
         for key in ["minus", "underscore"] {
-            assert_eq!(action(ctrl(key)), Some(Step::Decrease), "{key}");
+            assert_eq!(step_for(key), Some(Step::Decrease), "{key}");
         }
-        assert_eq!(action(ctrl("0")), Some(Step::Reset));
+        assert_eq!(step_for("0"), Some(Step::Reset));
     }
 
-    /// Ported from desktop/tests/text_size.test.cjs::keypad add / keypad
-    /// subtract / keypad zero
+    /// Ported from `desktop/tests/text_size.test.cjs` (keypad add, keypad
+    /// subtract and keypad zero)
     #[test]
     fn keypad_keys_are_recognised() {
-        assert_eq!(action(ctrl("KP_Add")), Some(Step::Increase));
-        assert_eq!(action(ctrl("KP_Subtract")), Some(Step::Decrease));
-        assert_eq!(action(ctrl("KP_0")), Some(Step::Reset));
+        assert_eq!(step_for("KP_Add"), Some(Step::Increase));
+        assert_eq!(step_for("KP_Subtract"), Some(Step::Decrease));
+        assert_eq!(step_for("KP_0"), Some(Step::Reset));
+        assert_eq!(step_for("KP_Insert"), Some(Step::Reset));
     }
 
-    /// Ported from desktop/tests/text_size.test.cjs::unmodified typing ignored
-    #[test]
-    fn unmodified_typing_is_ignored() {
-        let press = KeyPress {
-            key: "plus",
-            ..KeyPress::default()
-        };
-        assert_eq!(action(press), None);
-    }
-
-    /// Ported from desktop/tests/text_size.test.cjs::AltGraph ignored and
-    /// Alt ignored
-    #[test]
-    fn alt_and_alt_graph_are_ignored() {
-        let alt = KeyPress {
-            alt: true,
-            ..ctrl("plus")
-        };
-        let alt_graph = KeyPress {
-            alt_graph: true,
-            ..ctrl("plus")
-        };
-        assert_eq!(action(alt), None);
-        assert_eq!(action(alt_graph), None);
-    }
-
-    /// Ported from desktop/tests/text_size.test.cjs::composing ignored and
-    /// provisional IME ignored
-    #[test]
-    fn input_method_composition_is_ignored() {
-        let composing = KeyPress {
-            composing: true,
-            ..ctrl("plus")
-        };
-        assert_eq!(action(composing), None);
-    }
-
-    /// Ported from desktop/tests/text_size.test.cjs::Ctrl+C not captured
+    /// Ported from `desktop/tests/text_size.test.cjs::Ctrl+C not captured`
     #[test]
     fn other_shortcuts_are_not_captured() {
-        assert_eq!(action(ctrl("c")), None);
+        assert_eq!(step_for("c"), None);
     }
 
-    /// Ported from desktop/tests/text_size.test.cjs::bounded stepping
+    #[test]
+    fn every_accelerator_holds_ctrl_and_menus_show_ctrl_plus_first() {
+        for step in Step::ALL {
+            let accelerators = step.accelerators();
+            assert_eq!(accelerators.len(), step.keys().len());
+            assert!(accelerators.iter().all(|accel| accel.starts_with("<Primary>")));
+        }
+        assert_eq!(Step::Increase.accelerators()[0], "<Primary>plus");
+    }
+
+    /// Ported from `desktop/tests/text_size.test.cjs::bounded stepping`
     #[test]
     fn stepping_is_bounded() {
         assert_eq!(step(80, -1), 80);
@@ -213,7 +208,7 @@ mod tests {
         assert_eq!(Step::Reset.apply(175), DEFAULT);
     }
 
-    /// Ported from desktop/tests/text_size.test.cjs::default metrics unchanged
+    /// Ported from `desktop/tests/text_size.test.cjs::default metrics unchanged`
     #[test]
     fn default_metrics_are_unchanged() {
         let expected = Metrics {
@@ -225,7 +220,7 @@ mod tests {
         assert_eq!(metrics(100), expected);
     }
 
-    /// Ported from desktop/tests/text_size.test.cjs::large text row clearance
+    /// Ported from `desktop/tests/text_size.test.cjs::large text row clearance`
     #[test]
     fn large_text_keeps_row_clearance() {
         for value in LEVELS {

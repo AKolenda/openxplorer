@@ -5,26 +5,48 @@
 //! should compute once: the natural-order sort keys, the lower-cased name
 //! used by the search filter, and the icon art kind.
 
-use std::cell::OnceCell;
-
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
 
 use crate::folder_view::sorting;
-use crate::icons::ArtKind;
+use crate::icons::{art, ArtKind};
+
+/// Everything a [`FileItem`] holds, computed once when it is created.
+#[derive(Debug)]
+pub struct ItemData {
+    name_key: String,
+    type_key: String,
+    lower_name: String,
+    art: ArtKind,
+    entry: Entry,
+}
+
+impl ItemData {
+    fn new(entry: Entry) -> Self {
+        Self {
+            name_key: sorting::sort_key(&entry.name),
+            type_key: sorting::sort_key(&entry.type_label),
+            lower_name: entry.name.to_lowercase(),
+            art: art::kind_for_entry(&entry),
+            entry,
+        }
+    }
+}
 
 mod imp {
-    use super::*;
+    use std::cell::OnceCell;
+
+    use gtk::glib;
+    use gtk::subclass::prelude::*;
+
+    use super::ItemData;
 
     /// Private state of [`super::FileItem`]; set once at construction.
     #[derive(Default)]
     pub struct FileItem {
-        pub entry: OnceCell<Entry>,
-        pub name_key: OnceCell<String>,
-        pub type_key: OnceCell<String>,
-        pub lower_name: OnceCell<String>,
-        pub art: OnceCell<ArtKind>,
+        /// The entry and what is computed from it, set by [`super::FileItem::new`].
+        pub data: OnceCell<ItemData>,
     }
 
     #[glib::object_subclass]
@@ -43,40 +65,49 @@ glib::wrapper! {
 
 impl FileItem {
     /// Wraps a listed entry.
+    ///
+    /// # Panics
+    ///
+    /// Never: a new object has no data yet.
     pub fn new(entry: Entry) -> Self {
         let item: Self = glib::Object::new();
-        let imp = item.imp();
-        let _ = imp.name_key.set(sorting::sort_key(&entry.name));
-        let _ = imp.type_key.set(sorting::sort_key(&entry.type_label));
-        let _ = imp.lower_name.set(entry.name.to_lowercase());
-        let _ = imp.art.set(crate::icons::art::kind_for_entry(&entry));
-        let _ = imp.entry.set(entry);
+        item.imp()
+            .data
+            .set(ItemData::new(entry))
+            .expect("a new FileItem has no data yet");
         item
+    }
+
+    fn data(&self) -> &ItemData {
+        self.imp()
+            .data
+            .get()
+            .expect("FileItem::new is the only constructor and sets the data")
     }
 
     /// The listed entry.
     pub fn entry(&self) -> &Entry {
-        self.imp().entry.get().expect("set in FileItem::new")
+        &self.data().entry
     }
 
     /// Natural-order key of the name.
     pub fn name_key(&self) -> &str {
-        self.imp().name_key.get().expect("set in FileItem::new")
+        &self.data().name_key
     }
 
     /// Natural-order key of the type label.
     pub fn type_key(&self) -> &str {
-        self.imp().type_key.get().expect("set in FileItem::new")
+        &self.data().type_key
     }
 
     /// Lower-cased name for the search filter.
     pub fn lower_name(&self) -> &str {
-        self.imp().lower_name.get().expect("set in FileItem::new")
+        &self.data().lower_name
     }
 
     /// The icon art for the item.
-    pub fn art(&self) -> &ArtKind {
-        self.imp().art.get().expect("set in FileItem::new")
+    pub fn art(&self) -> ArtKind {
+        self.data().art
     }
 
     /// Where activating the item goes: a virtual folder's target, or the

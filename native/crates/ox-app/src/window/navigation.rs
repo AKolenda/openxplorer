@@ -1,413 +1,288 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Location changes and cancellation-safe asynchronous directory loading.
-
-use std::rc::Rc;
+//! Changing location: tabs, history and Up.
+//!
+//! Ports `addTab`, `closeTab`, `switchTab`, `navigate` and `goHistory` in
+//! `desktop/ui/app.js`. Each tab keeps its own history, selection and
+//! scroll position; moving to another location forgets the selection and
+//! the scroll position, and showing another tab puts its own back.
+//! [`super::location_view`] draws the result into the frame.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::location::{self, LocationError};
+use ox_core::location::{self, parent_location, LocationError};
 
-use crate::folder_view::{item::FileItem, loader};
-use crate::locations::Page;
-use crate::{icons, locations};
+use crate::locations::{self, Page};
 
-use super::session::TabId;
+use super::loading::LoadMode;
+use super::session::{Direction, TabId, TabPlacement};
 use super::BrowserWindow;
 
+/// What a tab needs to be put back on screen.
+#[derive(Debug)]
+struct SavedTabView {
+    /// The tab's items.
+    store: gio::ListStore,
+    /// The URIs of the items it had selected.
+    selected: Vec<String>,
+    /// Its vertical scroll position.
+    scroll: f64,
+    /// It was opened in the background and has not been listed yet.
+    needs_listing: bool,
+}
+
 impl BrowserWindow {
-    fn normalize_address(&self, text: &str) -> Result<String, LocationError> {
-        if let Some(page) = Page::from_address(text) {
-            return Ok(page.uri().to_string());
+    /// The canonical location for an address: the home folder for its
+    /// legacy page names, a landing page by URI, the home folder or a
+    /// landing page by title, else a folder relative to the current one
+    /// (see [`Self::resolve_relative`]).
+    ///
+    /// # Errors
+    ///
+    /// The address is not a location the app can open.
+    pub(super) fn resolve_address(&self, address: &str) -> Result<String, LocationError> {
+        let typed = address.trim();
+        if locations::is_home_alias(typed) {
+            return Ok(self.imp().locations.borrow().home_uri());
         }
-        let base = self.current_uri();
-        let base = base
-            .as_deref()
-            .filter(|uri| Page::from_uri(uri).is_none())
-            .unwrap_or(&self.home_uri);
-        location::normalise_location(text, Some(base), &glib::home_dir())
+        if let Some(page) = Page::from_uri(typed) {
+            return Ok(page.uri().to_owned());
+        }
+        if let Some(place) = self.place_titled(typed) {
+            return Ok(place);
+        }
+        self.resolve_relative(address)
     }
 
-    /// Adds and activates a tab after validating its location.
-    pub fn add_tab(self: &Rc<Self>, address: &str) -> Result<(), LocationError> {
-        let uri = self.normalize_address(address)?;
-        self.save_selection();
-        let id = self.session.borrow_mut().add(&uri);
-        self.show_tab(id);
-        self.load_tab(id);
+    /// The home folder or landing page whose title is `typed` ("Home",
+    /// "This PC", "Network"), as the address bar shows them.
+    pub(super) fn place_titled(&self, typed: &str) -> Option<String> {
+        if typed.trim().eq_ignore_ascii_case("home") {
+            return Some(self.imp().locations.borrow().home_uri());
+        }
+        Page::from_title(typed).map(|page| page.uri().to_owned())
+    }
+
+    /// `address` as a location, relative to the current folder, or to the
+    /// home folder on a landing page.
+    ///
+    /// # Errors
+    ///
+    /// The address is not a location the app can open.
+    pub(super) fn resolve_relative(&self, address: &str) -> Result<String, LocationError> {
+        let base = self.address_base();
+        location::normalise_location(address, Some(&base), &glib::home_dir())
+    }
+
+    /// Where a relative address starts: the current folder, or the home
+    /// folder on a landing page and before the first tab.
+    fn address_base(&self) -> String {
+        let folder = self.current_uri().filter(|uri| Page::from_uri(uri).is_none());
+        folder.unwrap_or_else(|| self.imp().locations.borrow().home_uri())
+    }
+
+    /// Adds a tab for `address`, in front or in the background. A
+    /// background tab is listed when it is first shown.
+    ///
+    /// # Errors
+    ///
+    /// The address is not a location the app can open; nothing changes.
+    pub(super) fn open_tab(&self, address: &str, placement: TabPlacement) -> Result<(), LocationError> {
+        let uri = self.resolve_address(address)?;
+        self.save_tab_view();
+        let id = self.imp().session.borrow_mut().add(&uri, placement);
+        self.context().remember_network(&uri);
+        if self.imp().session.borrow().is_active(id) {
+            self.show_tab(id);
+        } else {
+            self.render_tabs();
+        }
         Ok(())
     }
 
-    /// Navigates the active tab. Invalid addresses leave the current folder intact.
-    pub fn navigate(self: &Rc<Self>, address: &str) -> Result<(), LocationError> {
-        let uri = self.normalize_address(address)?;
-        let id = {
-            let mut session = self.session.borrow_mut();
-            let Some(id) = session.active else {
-                drop(session);
-                return self.add_tab(&uri);
-            };
-            let tab = session.tab_mut(id).expect("active tab exists");
-            tab.history.push(&uri);
-            tab.selected.clear();
-            id
+    /// Adds a tab for `address` and shows it.
+    ///
+    /// # Errors
+    ///
+    /// The address is not a location the app can open; nothing changes.
+    pub(crate) fn add_tab(&self, address: &str) -> Result<(), LocationError> {
+        self.open_tab(address, TabPlacement::Foreground)
+    }
+
+    /// Navigates the active tab, or opens a first tab.
+    ///
+    /// # Errors
+    ///
+    /// The address is not a location the app can open; the current
+    /// folder stays.
+    pub(super) fn navigate(&self, address: &str) -> Result<(), LocationError> {
+        let uri = self.resolve_address(address)?;
+        let Some(id) = self.push_location(&uri) else {
+            return self.add_tab(&uri);
         };
-        self.content.model.select_none();
-        self.chrome.search.set_text("");
-        self.content.model.set_query("");
+        self.leave_location();
+        self.context().remember_network(&uri);
         self.render_navigation();
-        self.load_tab(id);
+        self.load_tab(id, LoadMode::Navigate);
         Ok(())
     }
 
-    pub(super) fn navigate_or_report(self: &Rc<Self>, address: &str) {
+    /// Navigates, showing a refused address in the message line.
+    pub(super) fn navigate_or_report(&self, address: &str) {
         if let Err(error) = self.navigate(address) {
             self.show_message(error.message());
         }
     }
 
-    pub(super) fn save_selection(&self) {
-        let selected = self
-            .content
-            .model
-            .selected_items()
-            .iter()
-            .map(|item| item.entry().uri.clone())
-            .collect();
-        let mut session = self.session.borrow_mut();
-        if let Some(tab) = session.active.and_then(|id| session.tab_mut(id)) {
-            tab.selected = selected;
+    /// Adds `uri` to the active tab's history; the tab, or `None` before
+    /// the window has one.
+    fn push_location(&self, uri: &str) -> Option<TabId> {
+        let mut session = self.imp().session.borrow_mut();
+        let tab = session.active_mut()?;
+        tab.history.push(uri);
+        tab.forget_location_state();
+        Some(tab.id)
+    }
+
+    /// Clears what belonged to the folder the active tab leaves: the
+    /// filter, the selection and the type-to-select prefix.
+    fn leave_location(&self) {
+        self.change_model(|| {
+            self.search_box().clear();
+            self.folder_pane().model().set_query("");
+            self.folder_pane().model().select_none();
+        });
+        self.reset_typeahead();
+    }
+
+    /// Remembers the active tab's selection and scroll position before
+    /// another tab is shown.
+    fn save_tab_view(&self) {
+        self.save_selection();
+        let scroll = self.folder_pane().scroll_position();
+        if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
+            tab.scroll = scroll;
         }
     }
 
-    pub(super) fn switch_tab(self: &Rc<Self>, id: TabId) {
-        self.save_selection();
-        if self.session.borrow().tab(id).is_none() {
+    /// Shows another tab.
+    pub(super) fn switch_tab(&self, id: TabId) {
+        let can_switch = self.imp().session.borrow().can_activate(id);
+        if !can_switch {
             return;
         }
-        self.session.borrow_mut().active = Some(id);
+        // The tab in front keeps its selection and scroll position first.
+        self.save_tab_view();
+        self.imp().session.borrow_mut().activate(id);
         self.show_tab(id);
     }
 
-    fn show_tab(self: &Rc<Self>, id: TabId) {
+    /// Puts the active tab's items, selection and scroll position on
+    /// screen, and lists a tab that was opened in the background.
+    fn show_tab(&self, id: TabId) {
         self.reset_typeahead();
-        self.show_message("");
-        let (store, selected) = {
-            let session = self.session.borrow();
-            let Some(tab) = session.tab(id) else { return };
-            (tab.store.clone(), tab.selected.clone())
+        self.hide_message();
+        let Some(view) = self.saved_tab_view(id) else {
+            return;
         };
-        self.changing_model.set(true);
-        self.chrome.search.set_text("");
-        self.content.model.set_query("");
-        self.content.model.set_store(Some(&store));
-        self.content.model.select_uris(&selected);
-        self.changing_model.set(false);
+        let had_focus = self.folder_pane().view_has_focus();
+        self.change_model(|| {
+            let model = self.folder_pane().model();
+            self.search_box().clear();
+            model.set_query("");
+            model.set_store(Some(&view.store));
+            model.select_uris(&view.selected);
+        });
         self.render_navigation();
         self.update_content();
-        self.update_inspector();
+        self.update_details_pane();
+        self.folder_pane().restore_scroll_position(view.scroll);
+        if had_focus {
+            self.folder_pane().focus_view();
+        }
+        if view.needs_listing {
+            self.load_tab(id, LoadMode::Navigate);
+        }
     }
 
-    pub(super) fn close_tab(self: &Rc<Self>, id: TabId) {
-        self.save_selection();
-        let was_active = self.session.borrow().active == Some(id);
-        self.session.borrow_mut().remove(id);
+    /// What tab `id` needs to be shown again, while it is open.
+    fn saved_tab_view(&self, id: TabId) -> Option<SavedTabView> {
+        let session = self.imp().session.borrow();
+        let tab = session.tab(id)?;
+        Some(SavedTabView {
+            store: tab.store.clone(),
+            selected: tab.selected.clone(),
+            scroll: tab.scroll,
+            needs_listing: tab.listing_state.needs_listing(),
+        })
+    }
+
+    /// Closes a tab; closing the last one closes the window.
+    pub(super) fn close_tab(&self, id: TabId) {
+        if self.tab_count() <= 1 {
+            self.close();
+            return;
+        }
+        self.save_tab_view();
+        let was_active = self.imp().session.borrow().is_active(id);
+        self.imp().session.borrow_mut().remove(id);
         if !was_active {
             self.render_tabs();
             return;
         }
-        let active = self.session.borrow().active;
-        match active {
-            Some(id) => self.show_tab(id),
-            None => self.window.close(),
+        let next = self.imp().session.borrow().active_id();
+        match next {
+            Some(next) => self.show_tab(next),
+            None => self.close(),
         }
     }
 
-    /// Reloads the active folder, preserving selection by URI.
-    pub fn refresh(self: &Rc<Self>) {
+    /// Shows the tab next to the active one in `direction`, wrapping
+    /// around at either end.
+    pub(super) fn cycle_tabs(&self, direction: Direction) {
+        let next = self.imp().session.borrow().adjacent(direction);
+        if let Some(id) = next {
+            self.switch_tab(id);
+        }
+    }
+
+    /// Lists the active folder again, keeping its rows, selection and
+    /// scroll position, and re-reads the shared settings.
+    pub(super) fn refresh(&self) {
+        self.context().reload_settings();
         self.save_selection();
-        let active = self.session.borrow().active;
+        let active = self.imp().session.borrow().active_id();
         if let Some(id) = active {
-            self.load_tab(id);
+            self.load_tab(id, LoadMode::Reload);
         }
     }
 
-    /// Moves through the current tab's history; out-of-range movement is ignored.
-    pub fn go_history(self: &Rc<Self>, delta: isize) {
-        let id = {
-            let mut session = self.session.borrow_mut();
-            let Some(id) = session.active else { return };
-            let tab = session.tab_mut(id).expect("active tab exists");
-            if tab.history.go(delta).is_none() {
-                return;
-            }
-            tab.selected.clear();
-            id
+    /// Moves one step through the active tab's history; at either end of
+    /// it nothing happens.
+    pub(super) fn go_history(&self, direction: Direction) {
+        let Some(id) = self.step_history(direction) else {
+            return;
         };
-        self.chrome.search.set_text("");
-        self.content.model.set_query("");
-        self.content.model.select_none();
+        self.leave_location();
         self.render_navigation();
-        self.load_tab(id);
+        self.load_tab(id, LoadMode::Navigate);
     }
 
-    fn load_tab(self: &Rc<Self>, id: TabId) {
-        let is_active = self.session.borrow().active == Some(id);
-        if is_active {
-            self.reset_typeahead();
-            self.show_message("");
-        }
-        let (uri, store, generation) = {
-            let mut session = self.session.borrow_mut();
-            let Some(tab) = session.tab_mut(id) else { return };
-            let generation = tab.begin_load();
-            (tab.history.current().to_string(), tab.store.clone(), generation)
-        };
-        self.changing_model.set(true);
-        store.remove_all();
-        self.changing_model.set(false);
-        if Page::from_uri(&uri).is_some() {
-            if let Some(tab) = self.session.borrow_mut().tab_mut(id) {
-                tab.loading = false;
-                tab.loaded = true;
-            }
-            if is_active {
-                self.render_landing();
-                self.update_content();
-            }
-            return;
-        }
-        if is_active {
-            self.update_content();
-        }
-        let batch_window = Rc::downgrade(self);
-        let done_window = Rc::downgrade(self);
-        let listing = loader::list_folder(
-            &uri,
-            move |entries| {
-                let Some(browser) = batch_window.upgrade() else {
-                    return;
-                };
-                if !browser.session.borrow().accepts(id, generation) {
-                    return;
-                }
-                let items: Vec<FileItem> = entries.into_iter().map(FileItem::new).collect();
-                store.splice(store.n_items(), 0, &items);
-                if browser.session.borrow().active == Some(id) {
-                    browser.update_content();
-                }
-            },
-            move |result| {
-                let Some(browser) = done_window.upgrade() else {
-                    return;
-                };
-                browser.finish_load(id, generation, result);
-            },
-        );
-        if let Some(tab) = self.session.borrow_mut().tab_mut(id) {
-            tab.listing = Some(listing);
-        }
+    /// Moves the active tab's history one step in `direction`; the tab, or
+    /// `None` when there is no step to take.
+    fn step_history(&self, direction: Direction) -> Option<TabId> {
+        let mut session = self.imp().session.borrow_mut();
+        let tab = session.active_mut()?;
+        tab.history.go(direction.offset())?;
+        tab.forget_location_state();
+        Some(tab.id)
     }
 
-    fn finish_load(self: &Rc<Self>, id: TabId, generation: u64, result: Result<(), loader::LoadError>) {
-        let (uri, selected, watch) = {
-            let mut session = self.session.borrow_mut();
-            if !session.accepts(id, generation) {
-                return;
-            }
-            let tab = session.tab_mut(id).expect("accepted tab exists");
-            tab.loading = false;
-            tab.loaded = true;
-            tab.error = result.err().map(|error| error.message);
-            (
-                tab.history.current().to_string(),
-                tab.selected.clone(),
-                tab.error.is_none(),
-            )
-        };
-        if watch {
-            let weak = Rc::downgrade(self);
-            let monitor = loader::watch_folder(&uri, move || {
-                if let Some(browser) = weak.upgrade() {
-                    if browser.session.borrow().active == Some(id) {
-                        browser.save_selection();
-                    }
-                    browser.load_tab(id);
-                }
-            });
-            if let Some(tab) = self.session.borrow_mut().tab_mut(id) {
-                tab.watch = monitor;
-            }
+    /// Opens the folder that contains the current one.
+    pub(super) fn go_up(&self) {
+        let parent = self.current_uri().as_deref().and_then(parent_location);
+        if let Some(parent) = parent {
+            self.navigate_or_report(&parent);
         }
-        if self.session.borrow().active == Some(id) {
-            self.content.model.select_uris(&selected);
-            self.update_content();
-            self.update_inspector();
-        }
-    }
-
-    pub(super) fn update_content(&self) {
-        let (page, loading, error) = {
-            let session = self.session.borrow();
-            let Some(tab) = session.active() else { return };
-            (
-                Page::from_uri(tab.history.current()),
-                tab.loading,
-                tab.error.clone(),
-            )
-        };
-        self.chrome.search.set_sensitive(page.is_none());
-        self.content.spinner.set_spinning(loading);
-        self.content.spinner.set_visible(loading);
-        if page.is_some() {
-            self.content.stack.set_visible_child_name("landing");
-        } else if self.content.model.n_items() > 0 {
-            self.content.stack.set_visible_child_name("listing");
-            if let Some(error) = error {
-                self.show_message(&error);
-            }
-        } else {
-            let (title, message) = match error {
-                Some(error) => ("Could not open this folder", error),
-                None if loading => ("Loading…", String::new()),
-                None if self.content.model.is_searching() => {
-                    ("No matching items", "Try a different filter.".to_string())
-                }
-                None => ("This folder is empty", String::new()),
-            };
-            self.content.empty_title.set_text(title);
-            self.content.empty_message.set_text(&message);
-            self.content.stack.set_visible_child_name("empty");
-        }
-        self.update_status();
-    }
-
-    pub(super) fn render_navigation(self: &Rc<Self>) {
-        let (uri, back, forward) = {
-            let session = self.session.borrow();
-            let Some(tab) = session.active() else { return };
-            (
-                tab.history.current().to_string(),
-                tab.history.can_go_back(),
-                tab.history.can_go_forward(),
-            )
-        };
-        self.window.set_title(Some(&format!(
-            "{} — OpenXplorer",
-            locations::title_for(&uri, &self.home_uri)
-        )));
-        self.chrome.entry.set_text(&locations::address_text(&uri));
-        self.set_enabled("back", back);
-        self.set_enabled("forward", forward);
-        self.set_enabled("up", locations::parent(&uri).is_some());
-        while let Some(child) = self.chrome.crumbs.first_child() {
-            self.chrome.crumbs.remove(&child);
-        }
-        for (index, crumb) in locations::crumbs(&uri).into_iter().enumerate() {
-            if index > 0 {
-                self.chrome.crumbs.append(&icons::glyph("chevron", 11));
-            }
-            let button = gtk::Button::with_label(&crumb.label);
-            button.add_css_class("crumb");
-            let weak = Rc::downgrade(self);
-            button.connect_clicked(move |_| {
-                if let Some(browser) = weak.upgrade() {
-                    browser.navigate_or_report(&crumb.uri);
-                }
-            });
-            self.chrome.crumbs.append(&button);
-        }
-        self.render_tabs();
-        self.select_sidebar(&uri);
-        if Page::from_uri(&uri).is_some() {
-            self.render_landing();
-        }
-    }
-
-    fn render_tabs(self: &Rc<Self>) {
-        while let Some(child) = self.chrome.tabs.first_child() {
-            self.chrome.tabs.remove(&child);
-        }
-        let tabs: Vec<_> = self
-            .session
-            .borrow()
-            .tabs
-            .iter()
-            .map(|tab| (tab.id, tab.history.current().to_string()))
-            .collect();
-        let active = self.session.borrow().active;
-        for (id, uri) in tabs {
-            let row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-            row.add_css_class("tab");
-            if active == Some(id) {
-                row.add_css_class("active");
-            }
-            let title = locations::title_for(&uri, &self.home_uri);
-            let label = gtk::Label::builder()
-                .label(&title)
-                .ellipsize(gtk::pango::EllipsizeMode::End)
-                .max_width_chars(19)
-                .build();
-            let select = gtk::Button::builder()
-                .child(&label)
-                .tooltip_text(locations::address_text(&uri))
-                .build();
-            let weak = Rc::downgrade(self);
-            select.connect_clicked(move |_| {
-                if let Some(browser) = weak.upgrade() {
-                    browser.switch_tab(id);
-                }
-            });
-            row.append(&icons::glyph(
-                Page::from_uri(&uri).map_or("folderline", Page::glyph),
-                16,
-            ));
-            row.append(&select);
-            let close = gtk::Button::builder()
-                .child(&icons::glyph("close", 12))
-                .tooltip_text(format!("Close {title}"))
-                .build();
-            close.add_css_class("tab-close");
-            let weak = Rc::downgrade(self);
-            close.connect_clicked(move |_| {
-                if let Some(browser) = weak.upgrade() {
-                    browser.close_tab(id);
-                }
-            });
-            row.append(&close);
-            self.chrome.tabs.append(&row);
-        }
-    }
-
-    pub(super) fn edit_address(&self) {
-        self.chrome.address.set_visible_child_name("entry");
-        self.chrome.entry.grab_focus();
-        self.chrome.entry.select_region(0, -1);
-    }
-
-    pub(super) fn finish_address(&self) {
-        self.chrome.address.set_visible_child_name("crumbs");
-        self.content.focus();
-    }
-
-    pub(super) fn activate_item(self: &Rc<Self>, position: u32) {
-        let Some(item) = self.content.model.item(position) else {
-            return;
-        };
-        if item.entry().is_dir {
-            self.navigate_or_report(item.open_uri());
-            return;
-        }
-        // Reaching this path requires an explicit activation (Enter, double
-        // click or Open). Listing and selecting files never launches an app.
-        let uri = item.open_uri().to_string();
-        let context = gtk::prelude::WidgetExt::display(&self.window).app_launch_context();
-        let weak = Rc::downgrade(self);
-        glib::spawn_future_local(async move {
-            if let Err(error) = gio::AppInfo::launch_default_for_uri_future(&uri, Some(&context)).await {
-                if let Some(browser) = weak.upgrade() {
-                    browser.show_message(error.message());
-                }
-            }
-        });
     }
 }

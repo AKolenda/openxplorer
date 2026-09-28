@@ -1,17 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Native OpenXplorer widgets and the desktop application.
+//! The native desktop application: its widgets, windows and application
+//! lifetime.
 //!
-//! Keeping the widgets in a library makes the restored components part of
-//! every build and gives integration tests the same entry points as the app.
+//! Only [`application::run`] is public; `main.rs` calls it. Every other
+//! module is private to the crate, so the compiler reports anything the
+//! app no longer uses. The GTK tests of the window live beside it in
+//! `window::tests` and reach its internals directly.
 
 pub mod application;
 mod config;
-pub mod folder_view;
-pub mod history;
-pub mod icons;
-pub mod locations;
-pub mod text_size;
-pub mod theme;
-pub mod typeahead;
-pub mod volumes;
-pub mod window;
+mod folder_view;
+mod history;
+mod icons;
+mod locations;
+mod places;
+mod settings_store;
+mod shared;
+mod snapshot;
+mod text_size;
+mod theme;
+mod typeahead;
+mod volumes;
+mod window;
+
+#[cfg(test)]
+mod test_support;

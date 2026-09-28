@@ -8,7 +8,7 @@
 
 use std::fmt::Write as _;
 
-use crate::folder_view::grid::IconSize;
+use crate::folder_view::grid::{self, IconSize};
 use crate::text_size;
 
 /// Selector and font size in pixels at 100%.
@@ -16,23 +16,26 @@ const FONT_SIZES: &[(&str, f64)] = &[
     ("window.ox", 13.0),
     (".ox-titlebar .tab label", 12.0),
     (".address", 13.0),
+    (".address button.crumb", 12.0),
     (".address entry", 13.0),
-    ("entry.search", 12.0),
-    (".commandbar button.text-command", 12.0),
+    (".search-wrap entry", 12.0),
+    (".commandbar .text-command", 12.0),
     (".sidebar list > row", 12.0),
     (".sidebar-bottom button", 12.0),
     ("columnview.files", 12.0),
     ("columnview.files > header > button", 12.0),
     ("gridview.files", 12.0),
     (".details .detail-header", 13.0),
-    (".details .dname", 16.0),
-    (".details .dtype", 12.0),
-    (".details button.dbutton", 12.0),
-    (".details .dsection", 12.0),
-    (".details .dkey", 11.0),
-    (".details .dval", 11.0),
-    (".details .note", 11.0),
+    (".details .detail-name", 16.0),
+    (".details .detail-type", 12.0),
+    (".details button.detail-button", 12.0),
+    (".details .detail-section", 12.0),
+    (".details .detail-key", 11.0),
+    (".details .detail-value", 11.0),
+    (".details .detail-note", 11.0),
     (".statusbar", 11.0),
+    (".statusbar .status-mode", 10.0),
+    (".toast", 12.0),
     (".landing .page-title", 24.0),
     (".landing .page-subtitle", 12.0),
     (".landing .section-title", 13.0),
@@ -43,13 +46,70 @@ const FONT_SIZES: &[(&str, f64)] = &[
     (".landing .connected", 10.0),
     (".landing .quiet", 12.0),
     (".landing .notice", 12.0),
-    (".landing .recent-row", 12.0),
+    (".landing .banner-hint", 12.0),
+    (".landing .primary", 12.0),
+    (".landing .network-manual button", 11.0),
+    (".landing .network-manual entry", 12.0),
+    (".landing .network-count", 11.0),
+    (".landing .discovery-note", 11.0),
     (".empty-state .empty-title", 16.0),
     (".empty-state", 12.0),
+    ("popover.ox-menu list > row", 12.0),
+    ("popover.ox-menu .shortcut", 10.0),
     ("popover.menu.ox-menu modelbutton", 12.0),
     ("popover.menu.ox-menu accelerator", 10.0),
     ("tooltip", 12.0),
 ];
+
+/// A bar or row height that grows with the text, as the
+/// `min-height: max(floor, calc(N * var(--text-scale) + M))` rules at the
+/// end of `desktop/ui/style.css`. Heights are border boxes, as in the web
+/// stylesheet; `border` is subtracted because GTK's `min-height` is the
+/// content box.
+struct ScaledHeight {
+    selector: &'static str,
+    /// The height at small text sizes.
+    floor: i32,
+    /// Pixels added per unit of text scale.
+    per_scale: f64,
+    /// Pixels added regardless of the text scale.
+    fixed: f64,
+    /// Border and padding pixels inside the height.
+    border: i32,
+}
+
+impl ScaledHeight {
+    /// The border-box height at `scale`.
+    fn height(&self, scale: f64) -> i32 {
+        text_size::ceil_pixels(self.per_scale * scale + self.fixed).max(self.floor)
+    }
+}
+
+/// The title bar (`.titlebar`).
+const TITLE_BAR: ScaledHeight = ScaledHeight {
+    selector: ".ox-titlebar",
+    floor: 42,
+    per_scale: 25.0,
+    fixed: 12.0,
+    border: 0,
+};
+
+/// Every height that follows the text size.
+const SCALED_HEIGHTS: &[ScaledHeight] = &[
+    TITLE_BAR,
+    ScaledHeight {
+        selector: ".tab",
+        floor: 35,
+        per_scale: 25.0,
+        fixed: 7.0,
+        border: 0,
+    },
+];
+
+/// The title bar's height at `scale`.
+fn title_bar_height(scale: f64) -> i32 {
+    TITLE_BAR.height(scale)
+}
 
 /// The stylesheet for a text size (percent).
 pub fn css_for_text_size(percent: u32) -> String {
@@ -59,31 +119,57 @@ pub fn css_for_text_size(percent: u32) -> String {
         let size = base * metrics.scale;
         let _ = writeln!(css, "{selector} {{ font-size: {size:.2}px; }}");
     }
+    for rule in SCALED_HEIGHTS {
+        let height = rule.height(metrics.scale) - rule.border;
+        let _ = writeln!(css, "{} {{ min-height: {height}px; }}", rule.selector);
+    }
+    // The solid window frame's title-colour band ends where the title bar
+    // does: 3px of frame padding plus the title bar (style.css).
+    let band = 3 + title_bar_height(metrics.scale);
+    let _ = writeln!(
+        css,
+        "window.ox.solid-csd {{ box-shadow: inset 0 {band}px @ox_title, inset 0 0 0 3px @ox_border; }}"
+    );
     // Rows keep a 1px margin above and below, as .file-row in style.css.
     let row = metrics.detail_row - 2;
     let _ = writeln!(
         css,
         "columnview.files > listview > row {{ min-height: {row}px; }}"
     );
+    let _ = writeln!(css, "{}", menu_css(metrics.scale));
     for size in IconSize::ALL {
-        let (width, height) = tile_size(metrics, size);
-        let class = size.css_class();
-        let _ = writeln!(
-            css,
-            "gridview.files.{class} > child {{ min-width: {width}px; min-height: {height}px; }}"
-        );
+        let _ = writeln!(css, "{}", tile_css(size, percent));
     }
     css
 }
 
-/// Icon-view tile size for an icon size: the web interface's 135 × 130
-/// cell for large icons, grown or shrunk with the icon, never narrower than
-/// the text needs. The 6 and 8 pixels are the tile margins.
-fn tile_size(metrics: text_size::Metrics, size: IconSize) -> (i32, i32) {
-    let growth = size.pixels() - IconSize::Large.pixels();
-    let width = metrics.grid_width.max(size.pixels() + 79) - 6;
-    let height = metrics.grid_row + growth - 8;
-    (width, height)
+/// Vertical pixels of a tile's cell outside its content box: 12 pixels
+/// of padding above and below (`.file-tile`) and the 2-pixel gap to the
+/// next row, a 1-pixel margin on each side (style.css).
+const TILE_VERTICAL_CHROME: i32 = 12 + 12 + 1 + 1;
+
+/// A tile's size for icons of `size`. Its height fills the cell less the
+/// padding and the gap. Its width comes from the column the window sets
+/// (`columns_for_width` in `folder_view/grid.rs`), so the minimum is only
+/// the icon, which lets GTK use every column the window asks for.
+fn tile_css(size: IconSize, percent: u32) -> String {
+    let cell = grid::cell_size(size, percent);
+    let height = cell.height - TILE_VERTICAL_CHROME;
+    let width = size.pixels();
+    let class = size.css_class();
+    format!("gridview.files.{class} > child {{ min-width: {width}px; min-height: {height}px; }}")
+}
+
+/// Menu rows and width (`.menu button{min-height:calc(22px * s + 11px)}`
+/// and `.menu.win10{width:max(264px, calc(235px * s))}`). The width rule
+/// sets the contents box, inside 3px of padding and a 1px border.
+fn menu_css(scale: f64) -> String {
+    let row = 22.0 * scale + 11.0;
+    let width = (235.0 * scale).max(264.0) - 8.0;
+    format!(
+        "popover.ox-menu list > row, popover.menu.ox-menu modelbutton {{ min-height: {row:.0}px; }}\n\
+         popover.ox-menu > contents, popover.menu.ox-menu > contents {{ min-width: {width:.0}px; }}"
+    )
 }
 
 #[cfg(test)]
@@ -96,7 +182,12 @@ mod tests {
         assert!(css.contains("window.ox { font-size: 13.00px; }"));
         assert!(css.contains(".statusbar { font-size: 11.00px; }"));
         assert!(css.contains("columnview.files > listview > row { min-height: 36px; }"));
-        assert!(css.contains("gridview.files.icons-large > child { min-width: 129px; min-height: 122px; }"));
+        assert!(css.contains("gridview.files.icons-large > child { min-width: 56px; min-height: 104px; }"));
+        assert!(css
+            .contains("popover.ox-menu list > row, popover.menu.ox-menu modelbutton { min-height: 33px; }"));
+        assert!(
+            css.contains("popover.ox-menu > contents, popover.menu.ox-menu > contents { min-width: 256px; }")
+        );
     }
 
     #[test]

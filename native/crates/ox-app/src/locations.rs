@@ -1,244 +1,252 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Locations as the window presents them.
 //!
-//! Real folders are handled by `ox_core::location`. This module adds what
-//! the window needs on top: the virtual pages (`home:`, `pc:`, `network:`)
-//! from `desktop/ui/app.js`, tab and window titles (`titleFor`), the
-//! breadcrumb divider and small comparisons. ox-core does not model the
-//! virtual pages, so they live here.
+//! Titles, the address text, breadcrumbs and the Up target come from
+//! ox-core's [`LocationContext`], the port of `titleFor`, `displayUri`,
+//! `breadcrumbSegments` and `deviceMountName` in `desktop/ui/app.js`, which
+//! the app's JavaScript fixtures check. This module adds only what the
+//! window draws itself:
 //!
-//! Names come from `LocationContext::default()`: this window does not
-//! collect the mounted devices a [`LocationContext`] can name, so every
-//! phone is called "Connected device".
+//! - the landing pages ([`Page`]) with their subtitle and glyph, a subset
+//!   of ox-core's [`VirtualPlace`]s;
+//! - the context for one window, built from the volume monitor's rows
+//!   ([`location_context`]), so a phone is called by its mount name.
 
-use ox_core::location::{self, Crumb, LocationContext, LocationKind};
+use std::path::PathBuf;
 
-/// A virtual page shown instead of a folder listing.
+use ox_core::location::{DeviceLabel, LocationContext, VirtualPlace};
+
+use crate::icons::Glyph;
+use crate::volumes::{VolumeKind, VolumeRow};
+
+/// A place the window draws as a landing page instead of a folder listing.
+///
+/// Only these of ox-core's [`VirtualPlace`]s have a page yet; the Recycle
+/// Bin, Recent and Settings arrive with their milestones. The legacy
+/// Home page is not one of them: as in the Python app, `home:` opens the
+/// home folder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Page {
-    /// Quick access, network locations and recently opened files.
-    Home,
-    /// Quick access plus devices and drives.
+pub(crate) enum Page {
+    /// Quick access, devices and drives, and saved network locations.
     ThisPc,
-    /// Saved network locations.
+    /// Connected and saved network locations.
     Network,
 }
 
 impl Page {
     /// Every page, in sidebar order.
-    pub const ALL: [Page; 3] = [Page::Home, Page::ThisPc, Page::Network];
+    pub const ALL: [Page; 2] = [Page::ThisPc, Page::Network];
 
-    /// The pseudo-URI that identifies the page in tab history.
-    pub const fn uri(self) -> &'static str {
+    fn place(self) -> VirtualPlace {
         match self {
-            Page::Home => location::HOME_URI,
-            Page::ThisPc => location::PC_URI,
-            Page::Network => location::NETWORK_URI,
+            Page::ThisPc => VirtualPlace::ThisPc,
+            Page::Network => VirtualPlace::Network,
         }
     }
 
-    /// The page for a pseudo-URI, if it is one.
+    /// The canonical URI that identifies the page in tab history.
+    pub fn uri(self) -> &'static str {
+        self.place().uri()
+    }
+
+    /// The page for a URI, including the web UI's spellings (`pc:`,
+    /// `network:`).
     pub fn from_uri(uri: &str) -> Option<Page> {
-        match location::VirtualPlace::from_uri(uri) {
-            Some(location::VirtualPlace::Home) => Some(Self::Home),
-            Some(location::VirtualPlace::ThisPc) => Some(Self::ThisPc),
-            Some(location::VirtualPlace::Network) => Some(Self::Network),
+        match VirtualPlace::from_uri(uri)? {
+            VirtualPlace::ThisPc => Some(Page::ThisPc),
+            VirtualPlace::Network => Some(Page::Network),
             _ => None,
         }
     }
 
-    /// The page typed into the address bar, by pseudo-URI or by title
-    /// ("This PC"), ignoring case and surrounding spaces.
-    pub fn from_address(text: &str) -> Option<Page> {
-        let text = text.trim();
-        Self::from_uri(text).or_else(|| {
-            Self::ALL
-                .into_iter()
-                .find(|page| page.title().eq_ignore_ascii_case(text))
-        })
+    /// The page whose title was typed into the address bar ("this pc").
+    pub fn from_title(text: &str) -> Option<Page> {
+        let place = VirtualPlace::from_title(text)?;
+        Self::ALL.into_iter().find(|page| page.place() == place)
     }
 
     /// Heading, tab title and breadcrumb label.
-    pub const fn title(self) -> &'static str {
-        match self {
-            Page::Home => "Home",
-            Page::ThisPc => "This PC",
-            Page::Network => "Network",
-        }
+    pub fn title(self) -> &'static str {
+        self.place().title()
     }
 
-    /// The line under the heading.
+    /// The line under the heading (`renderLanding` and `renderNetwork`).
     pub const fn subtitle(self) -> &'static str {
         match self {
-            Page::Home => "Your folders and network locations, in one place.",
             Page::ThisPc => "Folders, devices, and connected storage.",
-            Page::Network => "Connect to your NAS, Windows PC, or shared folders.",
+            Page::Network => "Find shared storage on your local network, or enter an address.",
         }
     }
 
-    /// Glyph for the address bar and tab.
-    pub const fn glyph(self) -> &'static str {
+    /// Glyph for the sidebar, the address bar and the tab.
+    pub const fn glyph(self) -> Glyph {
         match self {
-            Page::Home => "home",
-            Page::ThisPc => "desktop",
-            Page::Network => "network",
+            Page::ThisPc => Glyph::Desktop,
+            Page::Network => Glyph::Network,
         }
     }
 }
 
-/// True for SMB locations, which are drawn with the green network pipe.
-pub fn is_network(uri: &str) -> bool {
-    location::location_kind(uri) == LocationKind::Smb
+/// True for the home folder's legacy page spellings (`home:` and
+/// `ox:home`), which open the home folder, as `realLocation` in app.js.
+pub(crate) fn is_home_alias(text: &str) -> bool {
+    VirtualPlace::from_uri(text.trim()) == Some(VirtualPlace::Home)
 }
 
-/// Compares two locations, ignoring a trailing slash.
-pub fn same_location(a: &str, b: &str) -> bool {
-    fn trimmed(uri: &str) -> &str {
-        let without = uri.trim_end_matches('/');
-        if without.ends_with(':') || without.ends_with("://") {
-            uri
-        } else {
-            without
-        }
+/// The display context of a window: its home folder and the devices that
+/// are mounted now. Only mounted devices count, as in `deviceMountName`.
+pub(crate) fn location_context(home: PathBuf, volumes: &[VolumeRow]) -> LocationContext {
+    let devices = volumes
+        .iter()
+        .filter(|row| row.kind == VolumeKind::Device)
+        .filter_map(|row| {
+            let uri = row.uri()?.to_owned();
+            let label = row.label.clone();
+            Some(DeviceLabel { uri, label })
+        })
+        .collect();
+    LocationContext {
+        home: Some(home),
+        devices,
+        ..LocationContext::default()
     }
-    trimmed(a) == trimmed(b)
-}
-
-/// Tab and window title: the page title, "Home" for the home folder,
-/// otherwise the folder name.
-pub fn title_for(uri: &str, home_uri: &str) -> String {
-    if let Some(page) = Page::from_uri(uri) {
-        return page.title().to_string();
-    }
-    if same_location(uri, home_uri) {
-        return Page::Home.title().to_string();
-    }
-    if location::location_kind(uri) != LocationKind::Local && is_root(uri) {
-        return host(uri).unwrap_or_else(|| LocationContext::default().base_name(uri));
-    }
-    LocationContext::default().base_name(uri)
-}
-
-/// Text for the editable address bar.
-pub fn address_text(uri: &str) -> String {
-    match Page::from_uri(uri) {
-        Some(page) => page.title().to_string(),
-        None => LocationContext::default().display_location(uri),
-    }
-}
-
-/// Breadcrumbs from the root to `uri`; a page has a single crumb.
-pub fn crumbs(uri: &str) -> Vec<Crumb> {
-    if let Some(page) = Page::from_uri(uri) {
-        return vec![Crumb {
-            label: page.title().to_string(),
-            uri: uri.to_string(),
-        }];
-    }
-    let mut crumbs = LocationContext::default().breadcrumbs(uri);
-    // A remote root has no file name; label it with the host, as app.js does.
-    let is_local = location::location_kind(uri) == LocationKind::Local;
-    if let (Some(first), false) = (crumbs.first_mut(), is_local) {
-        if let Some(name) = host(&first.uri) {
-            first.label = name;
-        }
-    }
-    crumbs
-}
-
-/// The separator drawn between breadcrumbs: `\` for SMB like Windows.
-pub fn crumb_divider(uri: &str) -> &'static str {
-    if is_network(uri) {
-        "\\"
-    } else {
-        "/"
-    }
-}
-
-/// The parent location for Up, or `None` for pages and roots.
-pub fn parent(uri: &str) -> Option<String> {
-    if Page::from_uri(uri).is_some() {
-        return None;
-    }
-    location::parent_location(uri)
-}
-
-/// The host of a remote URI (`nas` for `smb://nas/share`).
-fn host(uri: &str) -> Option<String> {
-    let rest = uri.split_once("://")?.1;
-    let authority = rest.split('/').next()?;
-    let without_user = authority.rsplit('@').next()?;
-    (!without_user.is_empty()).then(|| without_user.to_string())
-}
-
-fn is_root(uri: &str) -> bool {
-    uri.split_once("://")
-        .map(|(_, rest)| rest.trim_end_matches('/').split('/').count() <= 1)
-        .unwrap_or(false)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::volumes::{locations, MountFacts, VolumeState};
 
-    const HOME: &str = "file:///home/demo";
+    const PHONE_FOLDER: &str = "mtp://[usb:001,010]/Internal%20storage/DCIM";
+
+    fn phone_context() -> LocationContext {
+        let mount = MountFacts {
+            name: "Pixel 7".into(),
+            root_uri: "mtp://[usb:001,010]/".into(),
+            shadowed: false,
+            can_unmount: true,
+        };
+        location_context(PathBuf::from("/home/demo"), &locations(&[mount], &[]))
+    }
+
+    fn labels(context: &LocationContext, uri: &str) -> Vec<String> {
+        context
+            .breadcrumbs(uri)
+            .into_iter()
+            .map(|crumb| crumb.label)
+            .collect()
+    }
 
     #[test]
     fn pages_round_trip_through_their_uris() {
         for page in Page::ALL {
             assert_eq!(Page::from_uri(page.uri()), Some(page));
         }
+        assert_eq!(Page::from_uri("pc:"), Some(Page::ThisPc));
         assert_eq!(Page::from_uri("file:///"), None);
+        assert_eq!(Page::from_uri("trash:///"), None);
     }
 
     #[test]
-    fn pages_can_be_typed_by_title() {
-        assert_eq!(Page::from_address(" this pc "), Some(Page::ThisPc));
-        assert_eq!(Page::from_address("network:"), Some(Page::Network));
-        assert_eq!(Page::from_address("/tmp"), None);
-        assert_eq!(address_text("pc:"), "This PC");
+    fn only_drawn_pages_can_be_typed_by_title() {
+        assert_eq!(Page::from_title(" this pc "), Some(Page::ThisPc));
+        assert_eq!(Page::from_title("Network"), Some(Page::Network));
+        assert_eq!(Page::from_uri("network:"), Some(Page::Network));
+        assert_eq!(Page::from_title("Settings"), None);
+        assert_eq!(Page::from_title("/tmp"), None);
     }
 
     #[test]
     fn titles_follow_app_js() {
-        assert_eq!(title_for("pc:", HOME), "This PC");
-        assert_eq!(title_for(HOME, HOME), "Home");
-        assert_eq!(title_for("file:///home/demo/", HOME), "Home");
-        assert_eq!(title_for("file:///srv/Brand%20assets", HOME), "Brand assets");
-        assert_eq!(title_for("smb://nas/", HOME), "nas");
+        let context = location_context(PathBuf::from("/home/demo"), &[]);
+        assert_eq!(context.title_for("pc:"), "This PC");
+        assert_eq!(context.title_for("file:///home/demo"), "Home");
+        assert_eq!(context.title_for("file:///home/demo/"), "Home");
+        assert_eq!(context.title_for("file:///srv/Brand%20assets"), "Brand assets");
+        assert_eq!(context.display_location("pc:"), "This PC");
     }
 
     #[test]
-    fn trailing_slashes_do_not_matter() {
+    fn one_trailing_slash_does_not_matter() {
+        use ox_core::location::same_location;
         assert!(same_location("smb://nas/share/", "smb://nas/share"));
         assert!(!same_location("file:///a", "file:///b"));
         assert!(same_location("file:///", "file:///"));
     }
 
     #[test]
-    fn remote_roots_are_labelled_with_the_host() {
-        let crumbs = crumbs("smb://studio-nas/projects/Design");
-        let labels: Vec<&str> = crumbs.iter().map(|c| c.label.as_str()).collect();
-        assert_eq!(labels.first(), Some(&"studio-nas"));
-        assert_eq!(labels.last(), Some(&"Design"));
+    fn the_legacy_home_page_means_the_home_folder() {
+        assert!(is_home_alias("home:"));
+        assert!(is_home_alias("ox:home"));
+        assert!(!is_home_alias("pc:"));
+    }
+
+    #[test]
+    fn a_mounted_phone_is_called_by_its_mount_name() {
+        let context = phone_context();
+        assert_eq!(context.title_for("mtp://[usb:001,010]/"), "Pixel 7");
+        assert_eq!(
+            labels(&context, PHONE_FOLDER),
+            ["Pixel 7", "Internal storage", "DCIM"]
+        );
+        assert_eq!(
+            context.display_location(PHONE_FOLDER),
+            "Pixel 7 / Internal storage/DCIM"
+        );
+    }
+
+    #[test]
+    fn an_unknown_device_is_a_connected_device() {
+        let context = location_context(PathBuf::from("/home/demo"), &[]);
+        assert_eq!(context.title_for("mtp://[usb:001,010]/"), "Connected device");
+        assert_eq!(labels(&context, PHONE_FOLDER)[0], "Connected device");
+    }
+
+    #[test]
+    fn drives_and_unmounted_devices_are_not_device_labels() {
+        let unmounted_phone = VolumeRow {
+            label: "Phone".into(),
+            kind: VolumeKind::Device,
+            state: VolumeState::Mountable {
+                id: "mtp://[usb:001,011]/".into(),
+            },
+        };
+        let disk = VolumeRow {
+            label: "Disk".into(),
+            kind: VolumeKind::Drive,
+            state: VolumeState::Mounted {
+                uri: "file:///media/u/Disk".into(),
+                can_unmount: true,
+            },
+        };
+        let context = location_context(PathBuf::from("/home/demo"), &[unmounted_phone, disk]);
+        assert!(context.devices.is_empty());
+    }
+
+    #[test]
+    fn a_home_folder_with_reserved_characters_is_titled_home() {
+        let context = location_context(PathBuf::from("/home/o'brien (x)"), &[]);
+        assert_eq!(context.title_for("file:///home/o%27brien%20%28x%29"), "Home");
+    }
+
+    #[test]
+    fn smb_roots_are_labelled_with_the_server() {
+        let context = location_context(PathBuf::from("/home/demo"), &[]);
+        assert_eq!(context.title_for("smb://nas/"), "nas");
+        let crumbs = labels(&context, "smb://studio-nas/projects/Design");
+        assert_eq!(crumbs.first().map(String::as_str), Some("studio-nas"));
+        assert_eq!(crumbs.last().map(String::as_str), Some("Design"));
     }
 
     #[test]
     fn pages_have_one_crumb_and_no_parent() {
-        assert_eq!(crumbs("network:").len(), 1);
-        assert_eq!(parent("pc:"), None);
-        assert_eq!(parent("file:///srv/data").as_deref(), Some("file:///srv"));
-    }
-
-    #[test]
-    fn smb_breadcrumbs_use_a_backslash() {
-        assert_eq!(crumb_divider("smb://nas/share"), "\\");
-        assert_eq!(crumb_divider("file:///srv"), "/");
-    }
-
-    #[test]
-    fn host_ignores_user_names() {
-        assert_eq!(host("smb://ana@nas/share").as_deref(), Some("nas"));
-        assert_eq!(host("file:///x"), None);
+        let context = location_context(PathBuf::from("/home/demo"), &[]);
+        assert_eq!(context.breadcrumbs(Page::Network.uri()).len(), 1);
+        assert_eq!(context.display_location(Page::ThisPc.uri()), "This PC");
+        assert_eq!(ox_core::location::parent_location(Page::ThisPc.uri()), None);
+        assert_eq!(
+            ox_core::location::parent_location("file:///srv/data").as_deref(),
+            Some("file:///srv")
+        );
     }
 }

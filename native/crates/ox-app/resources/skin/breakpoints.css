@@ -1,0 +1,22 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Narrow windows: the @media(max-width) rules of style.css, switched by
+   window classes (src/window/breakpoints.rs). Last, so they win over the
+   rules for wide windows. */
+
+window.ox.max-1190 .details-inner { padding: 18px; }
+window.ox.max-1190 .search-wrap { min-width: 193px; }
+window.ox.max-1190 .navigation { border-spacing: 10px; }
+window.ox.max-1190 .commandbar { padding: 0 10px; }
+window.ox.max-1190 .commandbar,
+window.ox.max-1190 .commandbar .command-group { border-spacing: 1px; }
+window.ox.max-1190 .commandbar separator { margin: 0 6px; }
+window.ox.max-1050 .commandbar menubutton.theme-toggle > button { padding: 0 9px; }
+window.ox.max-960 .search-wrap { min-width: 173px; }
+window.ox.max-960 .navigation { padding-left: 8px; }
+window.ox.max-960 .navigation .nav-buttons { border-spacing: 0; }
+window.ox.max-960 .commandbar button.command,
+window.ox.max-960 .commandbar menubutton.command > button { padding: 0 8px; min-width: 16px; }
+window.ox.max-680 .navigation { border-spacing: 5px; }
+window.ox.max-680 .navigation .nav-buttons button { min-width: 29px; }
+window.ox.max-680 .ox-titlebar { padding-left: 5px; }
+window.ox.max-680 .ox-titlebar button.caption { min-width: 32px; }

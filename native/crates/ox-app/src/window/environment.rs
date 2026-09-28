@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! What the window knows about the desktop: mounted volumes, device names,
+//! pins and network locations, drawn into the sidebar and landing pages.
+//!
+//! Ports `refreshEnvironment` in `desktop/ui/app.js` and `environment` in
+//! `desktop/winspace.py`. The volume monitor's changes and the
+//! application's `places-changed` signal (a pin, a saved share, a visited
+//! server or the settings file changed) redraw the sidebar, the landing
+//! page and every label that names a device. Pinning a folder is in
+//! [`super::quick_access`] and mounting a volume in [`super::mounting`].
+
+use gtk::prelude::*;
+use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
+
+use crate::locations::{self, Page};
+use crate::places::{self, PlaceSources, Places};
+use crate::volumes;
+
+use super::landing;
+use super::sidebar;
+use super::BrowserWindow;
+
+/// A volume monitor handler that tells `window` about any mount or volume
+/// change; it holds the window weakly, so it never keeps a closed window.
+fn redraw_on_change<Changed>(
+    window: &glib::WeakRef<BrowserWindow>,
+) -> impl Fn(&gio::VolumeMonitor, &Changed) + 'static {
+    let window = window.clone();
+    move |_, _| {
+        if let Some(window) = window.upgrade() {
+            window.volumes_changed();
+        }
+    }
+}
+
+impl BrowserWindow {
+    /// Draws the sidebar, then redraws it whenever the volumes or the
+    /// places change.
+    pub(super) fn watch_environment(&self) {
+        self.read_volumes();
+        self.render_places();
+        let monitor = self.volume_monitor();
+        let window = self.downgrade();
+        let handlers = [
+            monitor.connect_mount_added(redraw_on_change(&window)),
+            monitor.connect_mount_removed(redraw_on_change(&window)),
+            monitor.connect_mount_changed(redraw_on_change(&window)),
+            monitor.connect_volume_added(redraw_on_change(&window)),
+            monitor.connect_volume_removed(redraw_on_change(&window)),
+            monitor.connect_volume_changed(redraw_on_change(&window)),
+        ];
+        let places = self.context().connect_places_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.render_places()
+        ));
+        let mut external = self.imp().handlers.borrow_mut();
+        external.volumes.extend(handlers);
+        external.places = Some(places);
+    }
+
+    /// Reads the volume monitor and rebuilds the device names.
+    fn read_volumes(&self) {
+        let rows = volumes::from_monitor(self.volume_monitor());
+        let context = locations::location_context(glib::home_dir(), &rows);
+        self.imp().volumes.replace(rows);
+        self.imp().locations.replace(context);
+    }
+
+    /// A device was plugged in, renamed or removed: every title, crumb and
+    /// place may name it. The settings are read again too, as the Python
+    /// app's `environment()` does on every change, so pins the Python app
+    /// saved meanwhile appear.
+    fn volumes_changed(&self) {
+        self.read_volumes();
+        self.render_places();
+        self.render_location();
+        self.update_details_pane();
+        self.context().reload_settings();
+    }
+
+    /// The sidebar and landing sections for the current settings and volumes.
+    pub(super) fn places(&self) -> Places {
+        let settings = self.context().settings_data();
+        let known_folders = ox_core::places::known_folders();
+        let volumes = self.imp().volumes.borrow();
+        let visited_network = self.context().visited_network();
+        places::compose(PlaceSources {
+            settings: &settings,
+            known_folders: &known_folders,
+            volumes: &volumes,
+            stable_mounts: &[],
+            visited_network: &visited_network,
+        })
+    }
+
+    /// Redraws the sidebar and the landing page.
+    pub(super) fn render_places(&self) {
+        let places = self.places();
+        let entries = sidebar::sidebar_entries(&places, &self.imp().locations.borrow());
+        self.sidebar().show(entries, self.art_style());
+        if let Some(uri) = self.current_uri() {
+            self.sidebar().select(&uri);
+        }
+        self.render_landing_with(&places);
+    }
+
+    /// Redraws the landing page when the active tab shows one.
+    pub(super) fn render_landing(&self) {
+        self.render_landing_with(&self.places());
+    }
+
+    fn render_landing_with(&self, places: &Places) {
+        let Some(page) = self.current_uri().as_deref().and_then(Page::from_uri) else {
+            return;
+        };
+        let body = self.folder_pane().landing();
+        let locations = self.imp().locations.borrow();
+        landing::render(body, page, places, &locations, self.art_style());
+    }
+}

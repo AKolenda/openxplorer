@@ -32,7 +32,7 @@ impl SortColumn {
         SortColumn::Size,
     ];
 
-    /// Key used in action targets (`win.sort-by::modified`), as in app.js.
+    /// Key used in action targets (`win.sort::modified`), as in app.js.
     pub const fn key(self) -> &'static str {
         match self {
             SortColumn::Name => "name",
@@ -54,6 +54,50 @@ impl SortColumn {
             SortColumn::Modified => "Date modified",
             SortColumn::Type => "Type",
             SortColumn::Size => "Size",
+        }
+    }
+}
+
+/// Which way the chosen column sorts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortDirection {
+    /// A to Z, oldest first, smallest first.
+    Ascending,
+    /// Z to A, newest first, largest first.
+    Descending,
+}
+
+impl SortDirection {
+    /// Key used in action targets (`win.direction::descending`).
+    pub const fn key(self) -> &'static str {
+        match self {
+            SortDirection::Ascending => "ascending",
+            SortDirection::Descending => "descending",
+        }
+    }
+
+    /// The direction for an action target key.
+    pub fn from_key(key: &str) -> Option<SortDirection> {
+        match key {
+            "ascending" => Some(SortDirection::Ascending),
+            "descending" => Some(SortDirection::Descending),
+            _ => None,
+        }
+    }
+
+    /// GTK's sort type for this direction.
+    pub(crate) fn to_sort_type(self) -> gtk::SortType {
+        match self {
+            SortDirection::Ascending => gtk::SortType::Ascending,
+            SortDirection::Descending => gtk::SortType::Descending,
+        }
+    }
+
+    /// The direction of GTK's sort type.
+    pub(crate) fn from_sort_type(sort_type: gtk::SortType) -> SortDirection {
+        match sort_type {
+            gtk::SortType::Descending => SortDirection::Descending,
+            _ => SortDirection::Ascending,
         }
     }
 }
@@ -196,5 +240,15 @@ mod tests {
             assert_eq!(SortColumn::from_key(column.key()), Some(column));
         }
         assert_eq!(SortColumn::from_key("colour"), None);
+    }
+
+    #[test]
+    fn directions_round_trip_through_their_keys() {
+        for direction in [SortDirection::Ascending, SortDirection::Descending] {
+            assert_eq!(SortDirection::from_key(direction.key()), Some(direction));
+            let sort_type = direction.to_sort_type();
+            assert_eq!(SortDirection::from_sort_type(sort_type), direction);
+        }
+        assert_eq!(SortDirection::from_key("sideways"), None);
     }
 }

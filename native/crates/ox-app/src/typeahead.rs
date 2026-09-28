@@ -4,7 +4,7 @@
 //! Ports `desktop/ui/type-select.js` and its tests
 //! (`desktop/tests/type_select.test.cjs`). The search runs over the list in
 //! display order, wraps around and never activates anything. Apart from
-//! GLib's Unicode normalisation this module is plain Rust, so the behaviour
+//! `GLib`'s Unicode normalisation this module is plain Rust, so the behaviour
 //! is unit-tested without a display.
 
 /// How long a typed prefix keeps growing before the next key starts over.
@@ -73,34 +73,17 @@ pub struct TypeSelect {
     pub cycling: bool,
 }
 
-/// Accumulates typed characters into a prefix that expires after a pause.
-#[derive(Debug, Clone)]
+/// Accumulates typed characters into a prefix that expires after
+/// [`TIMEOUT_MS`] without typing.
+#[derive(Debug, Clone, Default)]
 pub struct Controller {
-    timeout_ms: i64,
     text: String,
     last_at: Option<i64>,
 }
 
-impl Default for Controller {
-    fn default() -> Self {
-        Self {
-            timeout_ms: TIMEOUT_MS,
-            text: String::new(),
-            last_at: None,
-        }
-    }
-}
-
 impl Controller {
-    /// A controller with a custom timeout; `None` for a zero or negative one.
-    pub fn with_timeout(timeout_ms: i64) -> Option<Self> {
-        (timeout_ms > 0).then(|| Self {
-            timeout_ms,
-            ..Self::default()
-        })
-    }
-
     /// The prefix typed so far.
+    #[cfg(test)]
     pub fn text(&self) -> &str {
         &self.text
     }
@@ -118,7 +101,7 @@ impl Controller {
             return false;
         };
         let elapsed = now_ms - last_at;
-        !self.text.is_empty() && (0..self.timeout_ms).contains(&elapsed)
+        !self.text.is_empty() && (0..TIMEOUT_MS).contains(&elapsed)
     }
 
     /// Adds `key` to the prefix and finds the row to select. Returns `None`
@@ -200,12 +183,12 @@ mod tests {
         c.push(key, LIST.len(), |i| LIST[i], current, now)
     }
 
-    fn result(text: &str, index: Option<usize>, cycling: bool) -> Option<TypeSelect> {
-        Some(TypeSelect {
+    fn result(text: &str, index: Option<usize>, cycling: bool) -> TypeSelect {
+        TypeSelect {
             text: text.into(),
             index,
             cycling,
-        })
+        }
     }
 
     #[test]
@@ -230,7 +213,10 @@ mod tests {
     fn sc_refines_to_scripts() {
         let mut c = Controller::default();
         let first = push(&mut c, "S", Some(0), 0).unwrap();
-        assert_eq!(push(&mut c, "C", first.index, 100), result("SC", Some(3), false));
+        assert_eq!(
+            push(&mut c, "C", first.index, 100),
+            Some(result("SC", Some(3), false))
+        );
     }
 
     #[test]
@@ -256,7 +242,7 @@ mod tests {
     fn repeated_letters_are_case_insensitive() {
         let mut c = Controller::default();
         push(&mut c, "s", Some(0), 0);
-        assert_eq!(push(&mut c, "S", Some(1), 100), result("S", Some(2), true));
+        assert_eq!(push(&mut c, "S", Some(1), 100), Some(result("S", Some(2), true)));
     }
 
     #[test]
@@ -277,7 +263,7 @@ mod tests {
     fn unmatched_text_is_retained() {
         let mut c = Controller::default();
         push(&mut c, "s", Some(0), 0);
-        assert_eq!(push(&mut c, "z", Some(1), 100), result("sz", None, false));
+        assert_eq!(push(&mut c, "z", Some(1), 100), Some(result("sz", None, false)));
     }
 
     #[test]
@@ -295,7 +281,7 @@ mod tests {
         let mut c = Controller::default();
         push(&mut c, "s", Some(0), 0);
         let emptied = c.backspace(LIST.len(), |i| LIST[i], Some(1), 10);
-        assert_eq!(emptied, result("", None, false));
+        assert_eq!(emptied, Some(result("", None, false)));
     }
 
     #[test]
@@ -360,8 +346,8 @@ mod tests {
         let mut c = Controller::default();
         push(&mut c, "s", Some(0), 0);
         push(&mut c, "h", Some(1), 10);
-        for (i, key) in ["a", "r", "e", "d", " "].iter().enumerate() {
-            push(&mut c, key, Some(1), 20 + i as i64);
+        for (now, key) in (20..).zip(["a", "r", "e", "d", " "]) {
+            push(&mut c, key, Some(1), now);
         }
         assert_eq!(c.text(), "shared ");
         assert_eq!(push(&mut c, "d", Some(1), 40).unwrap().index, Some(1));
@@ -404,12 +390,5 @@ mod tests {
         push(&mut c, "s", None, 0);
         assert_eq!(push(&mut c, "Enter", Some(1), 10), None);
         assert_eq!(c.text(), "s");
-    }
-
-    #[test]
-    fn invalid_timeout_is_rejected() {
-        assert!(Controller::with_timeout(0).is_none());
-        assert!(Controller::with_timeout(-1).is_none());
-        assert!(Controller::with_timeout(500).is_some());
     }
 }

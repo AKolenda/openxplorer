@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- The command bar (section.commandbar in desktop/ui/index.html): the
+     file commands, then at the right the appearance toggle, Settings and
+     the Details toggle (src/window/command_bar/mod.rs). The gaps are CSS
+     border-spacing, which narrow windows shrink. -->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxCommandBar" parent="GtkBox">
+    <style>
+      <class name="commandbar"/>
+    </style>
+    <accessibility>
+      <property name="label">File commands</property>
+    </accessibility>
+    <child>
+      <!-- New, Cut to Move to Trash, Sort, View and More options, added
+           from the tables in Rust. They scroll without a scroll bar, so
+           the window can be narrower than all the commands (the web bar
+           clips them); the buttons after them stay at the right. -->
+      <object class="GtkScrolledWindow">
+        <property name="hscrollbar-policy">external</property>
+        <property name="vscrollbar-policy">never</property>
+        <property name="propagate-natural-width">true</property>
+        <property name="hexpand">true</property>
+        <property name="child">
+          <object class="GtkBox" id="file_commands">
+            <style>
+              <class name="command-group"/>
+            </style>
+          </object>
+        </property>
+      </object>
+    </child>
+    <child>
+      <!-- #theme-toggle: the drawn appearance and its menu. -->
+      <object class="GtkMenuButton" id="appearance_button">
+        <property name="valign">center</property>
+        <style>
+          <class name="command"/>
+          <class name="text-command"/>
+          <class name="theme-toggle"/>
+        </style>
+        <accessibility>
+          <property name="label">Appearance</property>
+        </accessibility>
+        <property name="child">
+          <object class="GtkBox">
+            <property name="spacing">7</property>
+            <child>
+              <object class="GtkImage" id="appearance_glyph">
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <style>
+                  <class name="glyph"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="appearance_label"/>
+            </child>
+          </object>
+        </property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkButton" id="settings_button">
+        <property name="valign">center</property>
+        <style>
+          <class name="command"/>
+          <class name="settings-button"/>
+        </style>
+        <accessibility>
+          <property name="label">Settings</property>
+        </accessibility>
+      </object>
+    </child>
+    <child>
+      <!-- Shows whether the details pane is open: a toggle bound to the
+           boolean win.details-pane action. -->
+      <object class="GtkToggleButton" id="details_toggle">
+        <property name="valign">center</property>
+        <style>
+          <class name="command"/>
+          <class name="text-command"/>
+          <class name="details-toggle"/>
+        </style>
+        <property name="child">
+          <object class="GtkBox">
+            <property name="spacing">9</property>
+            <child>
+              <object class="GtkImage" id="details_glyph">
+                <property name="halign">center</property>
+                <property name="valign">center</property>
+                <style>
+                  <class name="glyph"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label">Details</property>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </child>
+  </template>
+</interface>

@@ -6,7 +6,9 @@
 //! forced underneath the skin so the desktop theme (Zorin's) cannot leak
 //! into it; only this application's GTK settings change, never GNOME's.
 
+pub mod contrast;
 mod fonts;
+mod stylesheets;
 pub mod system;
 
 use std::cell::{Cell, RefCell};
@@ -16,9 +18,9 @@ use gtk::gdk;
 
 pub use fonts::css_for_text_size;
 
-const BASE_CSS: &str = include_str!("../../resources/style.css");
-const LIGHT_CSS: &str = include_str!("../../resources/light.css");
-const DARK_CSS: &str = include_str!("../../resources/dark.css");
+use contrast::Contrast;
+
+use crate::icons::Glyph;
 
 /// The appearance actually drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -39,10 +41,10 @@ impl Appearance {
     }
 
     /// Glyph of the theme button.
-    pub const fn glyph(self) -> &'static str {
+    pub const fn glyph(self) -> Glyph {
         match self {
-            Appearance::Light => "sun",
-            Appearance::Dark => "moon",
+            Appearance::Light => Glyph::Sun,
+            Appearance::Dark => Glyph::Moon,
         }
     }
 }
@@ -62,10 +64,16 @@ impl ThemePreference {
     /// Parses `system`, `light` or `dark`; anything else means `system`,
     /// as in `applyTheme`.
     pub fn parse(value: &str) -> Self {
-        match value {
-            "light" => ThemePreference::Light,
-            "dark" => ThemePreference::Dark,
-            _ => ThemePreference::System,
+        Self::from_key(value).unwrap_or(ThemePreference::System)
+    }
+
+    /// The preference for an action-state key, or `None` for another value.
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "system" => Some(ThemePreference::System),
+            "light" => Some(ThemePreference::Light),
+            "dark" => Some(ThemePreference::Dark),
+            _ => None,
         }
     }
 
@@ -105,20 +113,52 @@ impl ThemePreference {
     }
 }
 
-/// The CSS providers of one display.
+/// What changed in a [`Skin`], as its listeners hear it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkinChange {
+    /// The palette or the theme preference changed; this appearance is
+    /// drawn now.
+    Appearance(Appearance),
+    /// Text is drawn at this size now, in percent.
+    TextSize(u32),
+}
+
+/// Identifies a callback registered with [`Skin::connect_changed`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ListenerId(usize);
+
+/// The CSS providers of one display, shared by every window.
+///
+/// The skin also remembers whether the desktop prefers dark, so a window
+/// can change the [`ThemePreference`] without asking the desktop again.
 pub struct Skin {
     palette: gtk::CssProvider,
     text: gtk::CssProvider,
+    contrast_rules: gtk::CssProvider,
     appearance: Cell<Appearance>,
+    contrast: Cell<Contrast>,
     text_size: Cell<u32>,
     preference: Cell<ThemePreference>,
+    system_dark: Cell<bool>,
     next_listener: Cell<usize>,
-    listeners: RefCell<Vec<AppearanceListener>>,
+    listeners: RefCell<Vec<SkinListener>>,
 }
 
-struct AppearanceListener {
-    id: usize,
-    callback: Rc<dyn Fn(Appearance)>,
+struct SkinListener {
+    id: ListenerId,
+    callback: Rc<dyn Fn(SkinChange)>,
+}
+
+impl std::fmt::Debug for Skin {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Skin")
+            .field("appearance", &self.appearance.get())
+            .field("preference", &self.preference.get())
+            .field("text_size", &self.text_size.get())
+            .field("listeners", &self.listener_count())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Skin {
@@ -126,21 +166,26 @@ impl Skin {
     pub fn install(display: &gdk::Display) -> Self {
         force_builtin_theme(&gtk::Settings::for_display(display));
         let base = gtk::CssProvider::new();
-        base.load_from_string(BASE_CSS);
+        base.load_from_string(stylesheets::RULES);
         let palette = gtk::CssProvider::new();
-        palette.load_from_string(LIGHT_CSS);
+        palette.load_from_string(stylesheets::palette(Appearance::Light));
         let text = gtk::CssProvider::new();
         text.load_from_string(&css_for_text_size(crate::text_size::DEFAULT));
+        let contrast_rules = gtk::CssProvider::new();
         let priority = gtk::STYLE_PROVIDER_PRIORITY_APPLICATION;
         gtk::style_context_add_provider_for_display(display, &base, priority);
         gtk::style_context_add_provider_for_display(display, &text, priority + 1);
         gtk::style_context_add_provider_for_display(display, &palette, priority + 2);
+        gtk::style_context_add_provider_for_display(display, &contrast_rules, priority + 3);
         Self {
             palette,
             text,
+            contrast_rules,
             appearance: Cell::new(Appearance::Light),
+            contrast: Cell::new(Contrast::Normal),
             text_size: Cell::new(crate::text_size::DEFAULT),
             preference: Cell::new(ThemePreference::System),
+            system_dark: Cell::new(false),
             next_listener: Cell::new(0),
             listeners: RefCell::new(Vec::new()),
         }
@@ -156,11 +201,7 @@ impl Skin {
         if self.appearance.replace(appearance) == appearance {
             return false;
         }
-        let css = match appearance {
-            Appearance::Light => LIGHT_CSS,
-            Appearance::Dark => DARK_CSS,
-        };
-        self.palette.load_from_string(css);
+        self.palette.load_from_string(stylesheets::palette(appearance));
         if let Some(settings) = gtk::Settings::default() {
             settings.set_gtk_application_prefer_dark_theme(appearance == Appearance::Dark);
         }
@@ -168,39 +209,65 @@ impl Skin {
         true
     }
 
-    /// The display-wide preference shared by every OpenXplorer window.
+    /// The display-wide preference shared by every window.
     pub fn preference(&self) -> ThemePreference {
         self.preference.get()
     }
 
     /// Applies a shared preference and synchronizes all window palettes.
-    pub fn set_preference(&self, preference: ThemePreference, system_dark: bool) {
+    /// Listeners hear about it even when the drawn appearance stays the
+    /// same, so every window's Appearance menu shows the new choice.
+    pub fn set_preference(&self, preference: ThemePreference) {
         let changed = self.preference.replace(preference) != preference;
-        if !self.set_appearance(preference.resolve(system_dark)) && changed {
+        let redrawn = self.set_appearance(preference.resolve(self.system_dark.get()));
+        if changed && !redrawn {
             self.notify_appearance();
         }
     }
 
-    /// Registers a window's palette callback; disconnect it when the window closes.
-    pub fn connect_changed(&self, listener: impl Fn(Appearance) + 'static) -> usize {
+    /// Records the desktop's colour scheme and follows it when the
+    /// preference is [`ThemePreference::System`].
+    pub fn set_system_dark(&self, dark: bool) {
+        self.system_dark.set(dark);
+        self.set_appearance(self.preference().resolve(dark));
+    }
+
+    /// Registers a window's callback for palette and text-size changes;
+    /// disconnect it when the window closes.
+    ///
+    /// # Panics
+    ///
+    /// Only after `usize::MAX` registrations in one process.
+    pub fn connect_changed(&self, listener: impl Fn(SkinChange) + 'static) -> ListenerId {
         let id = self.next_listener.get();
-        self.next_listener.set(
-            id.checked_add(1)
-                .expect("appearance listener IDs cannot be exhausted"),
-        );
-        self.listeners.borrow_mut().push(AppearanceListener {
-            id,
+        let next = id
+            .checked_add(1)
+            .expect("appearance listener IDs cannot be exhausted");
+        self.next_listener.set(next);
+        self.listeners.borrow_mut().push(SkinListener {
+            id: ListenerId(id),
             callback: Rc::new(listener),
         });
-        id
+        ListenerId(id)
     }
 
     /// Removes a callback returned by [`Self::connect_changed`].
-    pub fn disconnect_changed(&self, id: usize) {
+    pub fn disconnect_changed(&self, id: ListenerId) {
         self.listeners.borrow_mut().retain(|listener| listener.id != id);
     }
 
+    /// Number of registered callbacks; closing a window must lower it.
+    pub fn listener_count(&self) -> usize {
+        self.listeners.borrow().len()
+    }
+
     fn notify_appearance(&self) {
+        self.notify(SkinChange::Appearance(self.appearance()));
+    }
+
+    /// Calls every listener with `change`. They are copied out first, so a
+    /// listener may connect or disconnect others.
+    fn notify(&self, change: SkinChange) {
         let listeners: Vec<_> = self
             .listeners
             .borrow()
@@ -208,7 +275,7 @@ impl Skin {
             .map(|listener| Rc::clone(&listener.callback))
             .collect();
         for listener in listeners {
-            listener(self.appearance());
+            listener(change);
         }
     }
 
@@ -217,13 +284,33 @@ impl Skin {
         self.text_size.get()
     }
 
-    /// Applies a text size (percent). Returns false when nothing changed.
+    /// The contrast drawn now.
+    pub fn contrast(&self) -> Contrast {
+        self.contrast.get()
+    }
+
+    /// Adds the high-contrast rules for [`Contrast::High`] and removes
+    /// them for [`Contrast::Normal`].
+    pub fn set_contrast(&self, contrast: Contrast) {
+        if self.contrast.replace(contrast) == contrast {
+            return;
+        }
+        let rules = match contrast {
+            Contrast::Normal => "",
+            Contrast::High => stylesheets::HIGH_CONTRAST_RULES,
+        };
+        self.contrast_rules.load_from_string(rules);
+    }
+
+    /// Applies a text size (percent) and tells the listeners. Returns false
+    /// when nothing changed.
     pub fn set_text_size(&self, percent: u32) -> bool {
         let percent = crate::text_size::normalize(percent);
         if self.text_size.replace(percent) == percent {
             return false;
         }
         self.text.load_from_string(&css_for_text_size(percent));
+        self.notify(SkinChange::TextSize(percent));
         true
     }
 }
@@ -263,12 +350,5 @@ mod tests {
             ThemePreference::Light.tooltip(Appearance::Light),
             "Appearance: light. Click to change."
         );
-    }
-
-    #[test]
-    fn stylesheets_are_embedded() {
-        assert!(BASE_CSS.contains(".ox-titlebar"));
-        assert!(LIGHT_CSS.contains("@define-color ox_bg #ffffff"));
-        assert!(DARK_CSS.contains("@define-color ox_bg #202020"));
     }
 }

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- The search box: the field, then a thin magnifier at its right end
+     (src/window/search_box.rs). -->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxSearchBox" parent="GtkBox">
+    <property name="valign">center</property>
+    <!-- Not expanding, although the entry inside does: the address bar
+         takes the rest of the row. -->
+    <property name="hexpand">false</property>
+    <style>
+      <class name="search-wrap"/>
+    </style>
+    <child>
+      <object class="GtkSearchEntry" id="entry">
+        <property name="hexpand">true</property>
+        <!-- queueSearch: the folder is filtered after typing pauses for
+             120 milliseconds. -->
+        <property name="search-delay">120</property>
+        <property name="tooltip-text">Search file names in this folder</property>
+        <!-- The box has a fixed width (.search-wrap{width:235px}), so the
+             entry asks for no more than one character. -->
+        <property name="width-chars">1</property>
+        <property name="max-width-chars">1</property>
+        <accessibility>
+          <property name="label">Search filenames and paths</property>
+        </accessibility>
+      </object>
+    </child>
+    <child>
+      <object class="GtkImage" id="magnifier">
+        <property name="halign">center</property>
+        <property name="valign">center</property>
+        <style>
+          <class name="glyph"/>
+          <class name="search-icon"/>
+        </style>
+      </object>
+    </child>
+  </template>
+</interface>
