@@ -5,8 +5,8 @@
 //!
 //! Ports `desktop/reveal_integration.py`. Enabling writes exactly a D-Bus
 //! service file and a hidden autostart entry, both running
-//! `/usr/bin/winspace --filemanager-service`, which serves requests
-//! without opening a window (INT-015, INT-017). Nothing else changes: no
+//! `/usr/bin/winspace --filemanager-service` (INT-015); serving requests
+//! without a window (INT-017) is the app's job. Nothing else changes: no
 //! other file manager is stopped, no portal is replaced and nothing is
 //! installed system-wide. Disabling removes only files that still hold
 //! exactly what the app wrote.

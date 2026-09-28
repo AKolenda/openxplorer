@@ -9,8 +9,10 @@
 //! gives the application startup notification and focus (INT-023).
 //!
 //! The local path of a share (`local_path` in `native_opening.py`) is
-//! supplied by the caller, from the network service's mount lookup; the
-//! archive reader of `native_opening.py` belongs to the archive service.
+//! supplied by the caller, from the network service's mount lookup, and
+//! the caller runs the previous-versions write guard first, as
+//! `resolve_activation` in `desktop/winspace.py` does. The archive reader
+//! of `native_opening.py` belongs to the archive service.
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -104,6 +106,13 @@ where
     /// (`prepare_default` in `native_opening.py`): asking for the handler of
     /// an `smb://` URI would return the app, the `smb://` scheme
     /// handler, which would reopen a PDF or video as a folder.
+    ///
+    /// Safety rule "previous versions stay read-only" is the caller's: run
+    /// the previous-versions write guard on `uri` before this, as
+    /// `resolve_activation` in `desktop/winspace.py` runs
+    /// `assert_writable` before `prepare_default`, so that no file inside
+    /// a snapshot or backup is handed to an application that could change
+    /// it.
     ///
     /// # Errors
     ///

@@ -223,6 +223,26 @@ fn the_autostart_entry_keeps_the_legacy_name() {
     assert!(AUTOSTART_FILE.contains("Name=Winspace Show in Folder integration\n"));
 }
 
+/// The whole text of `AUTOSTART` in `desktop/reveal_integration.py`:
+/// enabling and disabling compare the file byte for byte, so any change
+/// would make an entry the Python app wrote look like a foreign override.
+/// parity: INT-015, INT-029
+#[test]
+fn the_autostart_entry_is_byte_for_byte_the_legacy_one() {
+    let expected = format!(
+        "{MANAGED_MARKER}[Desktop Entry]\n\
+         Type=Application\n\
+         Name=Winspace Show in Folder integration\n\
+         Comment=Handle explicit file-reveal requests without opening a window at login\n\
+         Exec=/usr/bin/winspace --filemanager-service\n\
+         Icon=io.winspace.Development\n\
+         NoDisplay=true\n\
+         X-GNOME-Autostart-enabled=true\n"
+    );
+
+    assert_eq!(AUTOSTART_FILE, expected);
+}
+
 /// parity: INT-015
 #[test]
 fn a_failed_write_removes_the_files_already_written() {

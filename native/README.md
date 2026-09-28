@@ -15,7 +15,7 @@ and interaction performance must be measured before claiming an improvement.
 
 | Path | Responsibility |
 |---|---|
-| `crates/ox-core` | Toolkit-independent core: locations, settings, entries, places, clipboard formats and the transfer engine, all on GIO. No GTK. |
+| `crates/ox-core` | Toolkit-independent core: locations, settings, entries, places, clipboard formats, the transfer engine and the desktop integration service (default apps, Show in folder, Brave's download folder, opening files, Open in Terminal), all on GIO. No GTK. |
 | `crates/ox-app` | The GTK4 application (`openxplorer-native`). |
 | `parity/` | What the native app must do: every behaviour (`features.toml`) and every Python bridge operation (`bridge.json`), with their checker. |
 | `docs/ui-spec.md` | The visual specification: the current skin, refined toward Windows 11 File Explorer. |
