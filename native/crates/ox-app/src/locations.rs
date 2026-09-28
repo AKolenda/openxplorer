@@ -37,11 +37,17 @@ impl Page {
     /// Every page, in sidebar order.
     pub const ALL: [Page; 2] = [Page::ThisPc, Page::Network];
 
-    fn place(self) -> VirtualPlace {
+    /// The ox-core place the page draws.
+    const fn place(self) -> VirtualPlace {
         match self {
             Page::ThisPc => VirtualPlace::ThisPc,
             Page::Network => VirtualPlace::Network,
         }
+    }
+
+    /// The page that draws `place`, or `None` for a place without a page.
+    fn from_place(place: VirtualPlace) -> Option<Page> {
+        Self::ALL.into_iter().find(|page| page.place() == place)
     }
 
     /// The canonical URI that identifies the page in tab history.
@@ -52,17 +58,12 @@ impl Page {
     /// The page for a URI, including the web UI's spellings (`pc:`,
     /// `network:`).
     pub fn from_uri(uri: &str) -> Option<Page> {
-        match VirtualPlace::from_uri(uri)? {
-            VirtualPlace::ThisPc => Some(Page::ThisPc),
-            VirtualPlace::Network => Some(Page::Network),
-            _ => None,
-        }
+        VirtualPlace::from_uri(uri).and_then(Self::from_place)
     }
 
     /// The page whose title was typed into the address bar ("this pc").
     pub fn from_title(text: &str) -> Option<Page> {
-        let place = VirtualPlace::from_title(text)?;
-        Self::ALL.into_iter().find(|page| page.place() == place)
+        VirtualPlace::from_title(text).and_then(Self::from_place)
     }
 
     /// Heading, tab title and breadcrumb label.
@@ -96,24 +97,28 @@ pub(crate) fn is_home_alias(text: &str) -> bool {
 /// The display context of a window: its home folder and the devices that
 /// are mounted now. Only mounted devices count, as in `deviceMountName`.
 pub(crate) fn location_context(home: PathBuf, volumes: &[VolumeRow]) -> LocationContext {
-    let devices = volumes
-        .iter()
-        .filter(|row| row.kind == VolumeKind::Device)
-        .filter_map(|row| {
-            let uri = row.uri()?.to_owned();
-            let label = row.label.clone();
-            Some(DeviceLabel { uri, label })
-        })
-        .collect();
     LocationContext {
         home: Some(home),
-        devices,
+        devices: volumes.iter().filter_map(device_label).collect(),
         ..LocationContext::default()
     }
 }
 
+/// The label of a mounted phone, camera or iOS device; `None` for drives
+/// and for devices that still have to be mounted.
+fn device_label(row: &VolumeRow) -> Option<DeviceLabel> {
+    if row.kind != VolumeKind::Device {
+        return None;
+    }
+    let uri = row.uri()?.to_owned();
+    let label = row.label.clone();
+    Some(DeviceLabel { uri, label })
+}
+
 #[cfg(test)]
 mod tests {
+    use ox_core::location::{parent_location, same_location};
+
     use super::*;
     use crate::volumes::{locations, MountFacts, VolumeState};
 
@@ -156,6 +161,7 @@ mod tests {
         assert_eq!(Page::from_title("/tmp"), None);
     }
 
+    /// parity: TAB-010
     #[test]
     fn titles_follow_app_js() {
         let context = location_context(PathBuf::from("/home/demo"), &[]);
@@ -168,7 +174,6 @@ mod tests {
 
     #[test]
     fn one_trailing_slash_does_not_matter() {
-        use ox_core::location::same_location;
         assert!(same_location("smb://nas/share/", "smb://nas/share"));
         assert!(!same_location("file:///a", "file:///b"));
         assert!(same_location("file:///", "file:///"));
@@ -181,6 +186,7 @@ mod tests {
         assert!(!is_home_alias("pc:"));
     }
 
+    /// parity: NAV-017, TAB-010
     #[test]
     fn a_mounted_phone_is_called_by_its_mount_name() {
         let context = phone_context();
@@ -195,6 +201,7 @@ mod tests {
         );
     }
 
+    /// parity: NAV-017
     #[test]
     fn an_unknown_device_is_a_connected_device() {
         let context = location_context(PathBuf::from("/home/demo"), &[]);
@@ -223,12 +230,14 @@ mod tests {
         assert!(context.devices.is_empty());
     }
 
+    /// parity: TAB-010
     #[test]
     fn a_home_folder_with_reserved_characters_is_titled_home() {
         let context = location_context(PathBuf::from("/home/o'brien (x)"), &[]);
         assert_eq!(context.title_for("file:///home/o%27brien%20%28x%29"), "Home");
     }
 
+    /// parity: NAV-017
     #[test]
     fn smb_roots_are_labelled_with_the_server() {
         let context = location_context(PathBuf::from("/home/demo"), &[]);
@@ -238,14 +247,15 @@ mod tests {
         assert_eq!(crumbs.last().map(String::as_str), Some("Design"));
     }
 
+    /// parity: NAV-010
     #[test]
     fn pages_have_one_crumb_and_no_parent() {
         let context = location_context(PathBuf::from("/home/demo"), &[]);
         assert_eq!(context.breadcrumbs(Page::Network.uri()).len(), 1);
         assert_eq!(context.display_location(Page::ThisPc.uri()), "This PC");
-        assert_eq!(ox_core::location::parent_location(Page::ThisPc.uri()), None);
+        assert_eq!(parent_location(Page::ThisPc.uri()), None);
         assert_eq!(
-            ox_core::location::parent_location("file:///srv/data").as_deref(),
+            parent_location("file:///srv/data").as_deref(),
             Some("file:///srv")
         );
     }
