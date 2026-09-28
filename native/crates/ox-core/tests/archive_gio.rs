@@ -9,7 +9,9 @@ mod archive_support;
 
 use std::fs;
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
+use std::thread;
+use std::time::Duration;
 
 use gio::prelude::*;
 use ox_core::archive::{
@@ -19,7 +21,7 @@ use ox_core::archive::{
 use ox_core::transfer::Cancellation;
 
 use archive_support::{
-    file_type, file_uri, gio_factory, mode_of, opener, zip_bytes, ExtractionFixture, TestMember,
+    file_type, file_uri, gio_factory, make_fifo, mode_of, opener, zip_bytes, ExtractionFixture, TestMember,
 };
 use short_reads::{Seeking, ShortReadStream};
 use unsized_file::UnsizedFile;
@@ -379,6 +381,32 @@ fn the_production_opener_reads_local_archives() {
 
     assert_eq!(listing.entries[0].name, "a.txt");
     assert_eq!(listing.archive_uri, file_uri(&archive));
+}
+
+/// ARC-007: the production opener opens local files without blocking, so
+/// a FIFO named like an archive fails at once instead of holding the
+/// worker thread until some program writes to it.
+///
+/// parity: ARC-007
+#[test]
+fn a_fifo_named_like_an_archive_fails_instead_of_blocking() {
+    let folder = tempfile::tempdir().expect("create a temporary folder");
+    let fifo = folder.path().join("pipe.zip");
+    make_fifo(&fifo);
+    let browser = ArchiveBrowser::new(opener(), folder.path().join("previews"));
+    let uri = file_uri(&fifo);
+    let (sender, receiver) = mpsc::channel();
+
+    thread::spawn(move || {
+        let listing = browser.list(&uri, "", &Cancellation::new());
+        // The receiver is gone only after the test has already failed.
+        let _ = sender.send(listing);
+    });
+    let listing = receiver
+        .recv_timeout(Duration::from_secs(10))
+        .expect("listing a FIFO returns instead of blocking");
+
+    assert!(listing.is_err(), "{listing:?}");
 }
 
 /// ARC-018: through the production GIO adapters, files are new and

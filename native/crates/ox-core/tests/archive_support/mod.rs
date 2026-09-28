@@ -97,6 +97,23 @@ pub fn file_uri(path: &Path) -> String {
     gio::File::for_path(path).uri().to_string()
 }
 
+/// Creates a named pipe (FIFO) at `path` with the system `mkfifo`, for the
+/// tests that check that a FIFO named like an archive never blocks.
+///
+/// # Panics
+///
+/// When `mkfifo` is missing or fails.
+pub fn make_fifo(path: &Path) {
+    let status = Command::new("mkfifo")
+        .arg(path)
+        .status()
+        .expect("mkfifo (GNU coreutils) is required for the FIFO safety tests");
+    assert!(
+        status.success(),
+        "mkfifo failed to create the FIFO fixture: {status}"
+    );
+}
+
 /// The permission bits of `path`, without following a link.
 ///
 /// # Panics
