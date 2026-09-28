@@ -183,6 +183,7 @@ mod tests {
         assert_eq!(store.data().preferences.text_size, 100);
     }
 
+    /// parity: SIDE-022
     #[gtk::test]
     fn a_reload_reports_whether_another_process_changed_the_file() {
         let directory = tempfile::tempdir().expect("a settings directory");
@@ -199,6 +200,7 @@ mod tests {
         assert_eq!(store.data().preferences.text_size, 150);
     }
 
+    /// parity: VIEW-045
     #[gtk::test]
     fn changes_run_one_after_another_in_the_order_queued() {
         let directory = tempfile::tempdir().expect("a settings directory");

@@ -19,7 +19,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
-use crate::snapshot::{self, SnapshotRequest};
+use crate::snapshot::{self, SnapshotError, SnapshotRequest};
 
 use state::{active_window, AppState};
 
@@ -223,21 +223,22 @@ impl Application {
     /// listing is drawn and quits, recording whether saving failed.
     fn take_snapshot(&self, state: &AppState, request: &SnapshotRequest) {
         let window = state.open_snapshot_window(self.upcast_ref(), request);
-        snapshot::save_when_listed(
-            &window,
-            request,
-            glib::clone!(
-                #[weak(rename_to = app)]
-                self,
-                move |outcome| {
-                    if let Err(error) = outcome {
-                        eprintln!("OpenXplorer snapshot: {error}");
-                        app.imp().snapshot_failed.set(true);
-                    }
-                    app.quit();
-                }
-            ),
+        let finish = glib::clone!(
+            #[weak(rename_to = app)]
+            self,
+            move |outcome| app.finish_snapshot(outcome)
         );
+        snapshot::save_when_listed(&window, request, finish);
+    }
+
+    /// Reports a snapshot that could not be saved, so the process exits
+    /// with an error, and quits.
+    fn finish_snapshot(&self, outcome: Result<(), SnapshotError>) {
+        if let Err(error) = outcome {
+            eprintln!("OpenXplorer snapshot: {error}");
+            self.imp().snapshot_failed.set(true);
+        }
+        self.quit();
     }
 }
 

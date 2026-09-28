@@ -165,59 +165,6 @@ pub(crate) enum Glyph {
 }
 
 impl Glyph {
-    /// Every glyph, in the order of the app.js table.
-    #[cfg(test)]
-    const ALL: [Glyph; 48] = [
-        Glyph::Terminal,
-        Glyph::Settings,
-        Glyph::Plus,
-        Glyph::Close,
-        Glyph::Minus,
-        Glyph::Maximize,
-        Glyph::Restore,
-        Glyph::Back,
-        Glyph::Forward,
-        Glyph::Up,
-        Glyph::Refresh,
-        Glyph::Down,
-        Glyph::Chevron,
-        Glyph::Search,
-        Glyph::Home,
-        Glyph::Desktop,
-        Glyph::Downloads,
-        Glyph::Documents,
-        Glyph::Pictures,
-        Glyph::Music,
-        Glyph::Videos,
-        Glyph::Pin,
-        Glyph::Cut,
-        Glyph::Copy,
-        Glyph::Paste,
-        Glyph::Rename,
-        Glyph::Share,
-        Glyph::Trash,
-        Glyph::Sort,
-        Glyph::Grid,
-        Glyph::List,
-        Glyph::Details,
-        Glyph::More,
-        Glyph::Network,
-        Glyph::Server,
-        Glyph::Drive,
-        Glyph::Phone,
-        Glyph::Check,
-        Glyph::Shield,
-        Glyph::Info,
-        Glyph::Sun,
-        Glyph::Moon,
-        Glyph::Eject,
-        Glyph::Clock,
-        Glyph::Link,
-        Glyph::Eye,
-        Glyph::FolderLine,
-        Glyph::Cancel,
-    ];
-
     /// The SVG path data, verbatim from app.js. An exhaustive table, hence
     /// its length.
     pub(super) const fn path_data(self) -> &'static str {
@@ -422,6 +369,58 @@ impl GlyphPaintable {
 mod tests {
     use super::*;
 
+    /// Every glyph, in the order of the app.js table.
+    const ALL_GLYPHS: [Glyph; 48] = [
+        Glyph::Terminal,
+        Glyph::Settings,
+        Glyph::Plus,
+        Glyph::Close,
+        Glyph::Minus,
+        Glyph::Maximize,
+        Glyph::Restore,
+        Glyph::Back,
+        Glyph::Forward,
+        Glyph::Up,
+        Glyph::Refresh,
+        Glyph::Down,
+        Glyph::Chevron,
+        Glyph::Search,
+        Glyph::Home,
+        Glyph::Desktop,
+        Glyph::Downloads,
+        Glyph::Documents,
+        Glyph::Pictures,
+        Glyph::Music,
+        Glyph::Videos,
+        Glyph::Pin,
+        Glyph::Cut,
+        Glyph::Copy,
+        Glyph::Paste,
+        Glyph::Rename,
+        Glyph::Share,
+        Glyph::Trash,
+        Glyph::Sort,
+        Glyph::Grid,
+        Glyph::List,
+        Glyph::Details,
+        Glyph::More,
+        Glyph::Network,
+        Glyph::Server,
+        Glyph::Drive,
+        Glyph::Phone,
+        Glyph::Check,
+        Glyph::Shield,
+        Glyph::Info,
+        Glyph::Sun,
+        Glyph::Moon,
+        Glyph::Eject,
+        Glyph::Clock,
+        Glyph::Link,
+        Glyph::Eye,
+        Glyph::FolderLine,
+        Glyph::Cancel,
+    ];
+
     /// A stroke width in pixels for `glyph` drawn `size` pixels wide.
     fn stroke_pixels(glyph: Glyph, size: i32) -> f32 {
         let size_in_pixels = f32::from(u8::try_from(size).expect("a small icon"));
@@ -431,7 +430,7 @@ mod tests {
     /// parity: LOOK-015
     #[test]
     fn every_glyph_parses_as_a_gsk_path() {
-        for glyph in Glyph::ALL {
+        for glyph in ALL_GLYPHS {
             assert!(gsk::Path::parse(glyph.path_data()).is_ok(), "{glyph:?}");
         }
     }
@@ -443,6 +442,7 @@ mod tests {
         assert!((Glyph::Copy.stroke_width(12) - 1.35).abs() < f32::EPSILON);
     }
 
+    /// parity: LOOK-015
     #[test]
     fn glyphs_from_16_pixels_draw_at_least_a_one_pixel_line() {
         for size in [16, 17, 18, 24, 46] {

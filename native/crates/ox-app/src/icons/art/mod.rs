@@ -204,6 +204,7 @@ mod tests {
         assert_eq!(kind_for_entry(&file("Archive.zip")), ArtKind::ZipFolder);
     }
 
+    /// parity: LOOK-015
     #[test]
     fn extensions_are_lower_cased() {
         assert_eq!(extension("Quarterly report.DOCX"), "docx");

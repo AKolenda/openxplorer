@@ -282,6 +282,7 @@ mod tests {
         assert!(markup(text, Appearance::Light, 24).contains("#fafcfe"));
     }
 
+    /// parity: ARC-001
     #[test]
     fn the_zipper_has_six_alternating_teeth() {
         let zipper = zipper();

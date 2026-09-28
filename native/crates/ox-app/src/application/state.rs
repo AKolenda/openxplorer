@@ -241,6 +241,7 @@ mod tests {
         close_all_windows();
     }
 
+    /// parity: TAB-042
     #[gtk::test]
     fn a_new_window_starts_in_the_home_folder() {
         let (state, _settings) = app_state();
