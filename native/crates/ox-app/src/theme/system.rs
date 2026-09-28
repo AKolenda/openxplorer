@@ -322,7 +322,7 @@ mod tests {
 
     /// parity: LOOK-004
     #[test]
-    fn portal_values_follow_the_specification() {
+    fn portal_values_one_and_two_prefer_dark_and_light() {
         assert_eq!(appearance_from_portal(1), Some(Appearance::Dark));
         assert_eq!(appearance_from_portal(2), Some(Appearance::Light));
         assert_eq!(appearance_from_portal(0), None);

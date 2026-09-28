@@ -102,7 +102,7 @@ mod tests {
 
     /// parity: LOOK-003
     #[test]
-    fn preferences_parse_like_apply_theme() {
+    fn saved_themes_parse_and_anything_else_means_system() {
         assert_eq!(ThemePreference::parse("dark"), ThemePreference::Dark);
         assert_eq!(ThemePreference::parse("light"), ThemePreference::Light);
         assert_eq!(ThemePreference::parse("sepia"), ThemePreference::System);
@@ -127,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn tooltips_match_the_web_interface() {
+    fn the_tooltip_names_the_choice_and_the_system_appearance() {
         assert_eq!(
             ThemePreference::System.tooltip(Appearance::Dark),
             "Appearance: System (dark). Click to change."

@@ -202,7 +202,7 @@ mod tests {
 
     /// parity: VIEW-044
     #[test]
-    fn default_size_matches_the_web_stylesheet() {
+    fn the_default_text_size_draws_13_pixel_text_and_36_pixel_rows() {
         let css = css_at(100);
         assert!(css.contains("window.ox { font-size: 13.00px; }"));
         assert!(css.contains(".statusbar { font-size: 11.00px; }"));
