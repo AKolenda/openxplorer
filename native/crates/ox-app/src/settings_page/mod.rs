@@ -38,6 +38,7 @@ mod row;
 mod search;
 mod section;
 mod status_card;
+mod troubleshooting;
 mod windows_tabs;
 
 #[cfg(test)]

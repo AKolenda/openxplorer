@@ -17,8 +17,9 @@
 //! ([`navigation`]) and drawing it ([`location_view`]), listing
 //! ([`loading`]), the selection ([`selection`]), the desktop's volumes and
 //! places ([`environment`]), Quick access ([`quick_access`]), mounting
-//! ([`mounting`]), the skin ([`appearance`]), activation, actions and
-//! input. Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
+//! ([`mounting`]), the skin ([`appearance`]), activation, actions,
+//! input, and what the window connects and lets go of ([`connections`]).
+//! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
 //! [`search_box::SearchBox::connect_query_changed`]), so the controller
 //! never reaches into another widget's children; it connects directly only
@@ -40,6 +41,7 @@ mod button_style;
 mod caption_buttons;
 mod card_grid;
 mod command_bar;
+mod connections;
 mod context_menu;
 mod copy_path;
 mod details_pane;
@@ -78,7 +80,6 @@ mod window_action;
 #[cfg(test)]
 mod tests;
 
-use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
@@ -106,20 +107,6 @@ pub(crate) use unported::Milestone;
 pub(crate) use widget_tree::children;
 pub(crate) use window_action::WindowAction;
 
-/// Handlers this window registered on objects that outlive it.
-#[derive(Debug, Default)]
-struct ExternalHandlers {
-    /// On the skin shared by every window: its appearance and text size
-    /// signals.
-    skin: Vec<glib::SignalHandlerId>,
-    /// On the application's `places-changed` signal.
-    places: Option<glib::SignalHandlerId>,
-    /// On the application's `layout-reset` signal.
-    layout: Option<glib::SignalHandlerId>,
-    /// On the volume monitor's mount and volume signals.
-    volumes: Vec<glib::SignalHandlerId>,
-}
-
 /// The type-to-select prefix and the timer that clears its hint.
 #[derive(Debug, Default)]
 struct Typeahead {
@@ -141,6 +128,7 @@ mod imp {
     use super::breakpoints::WindowWidth;
     use super::caption_buttons::CaptionButtons;
     use super::command_bar::CommandBar;
+    use super::connections::ExternalHandlers;
     use super::details_pane::DetailsPane;
     use super::folder_pane::FolderPane;
     use super::search_box::SearchBox;
@@ -150,7 +138,7 @@ mod imp {
     use super::status_bar::StatusBar;
     use super::tab_strip::TabStrip;
     use super::toast::Toast;
-    use super::{ExternalHandlers, Typeahead};
+    use super::Typeahead;
     use crate::settings_page::SettingsPage;
     use crate::shared::AppContext;
     use crate::volumes::VolumeRow;
@@ -426,51 +414,5 @@ impl BrowserWindow {
     #[cfg(test)]
     fn shown_message(&self) -> glib::GString {
         self.imp().toast.text()
-    }
-
-    fn connect_signals(&self) {
-        self.follow_selection();
-        self.connect_filter();
-        self.connect_address_entry();
-        self.connect_view_activation();
-        self.follow_skin();
-        gestures::connect_history_buttons(
-            self,
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |direction| window.go_history(direction)
-            ),
-        );
-    }
-
-    /// Filters the folder as the user types in the search box.
-    fn connect_filter(&self) {
-        self.search_box().connect_query_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |query| {
-                window.folder_pane().model().set_query(query);
-                window.update_content();
-            }
-        ));
-    }
-
-    /// Lets go of what the window registered on objects that outlive it:
-    /// the skin, places and volume handlers and the type-to-select timer.
-    fn disconnect_external_handlers(&self) {
-        let handlers = self.imp().handlers.take();
-        for handler in handlers.skin {
-            self.skin().disconnect(handler);
-        }
-        for handler in [handlers.places, handlers.layout].into_iter().flatten() {
-            self.context().disconnect(handler);
-        }
-        for handler in handlers.volumes {
-            self.volume_monitor().disconnect(handler);
-        }
-        if let Some(timer) = self.imp().typeahead.borrow_mut().timer.take() {
-            timer.remove();
-        }
     }
 }

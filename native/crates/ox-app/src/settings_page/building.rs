@@ -15,7 +15,9 @@ use gtk::subclass::prelude::*;
 use super::pages::{Category, SettingsView, Subpage};
 use super::section::SettingsSection;
 use super::SettingsPage;
-use super::{about, appearance, brave, default_apps, indexed_folders, indexing, windows_tabs};
+use super::{
+    about, appearance, brave, default_apps, indexed_folders, indexing, troubleshooting, windows_tabs,
+};
 
 impl SettingsPage {
     /// Builds every category, sub-page and the category list, the first
@@ -64,7 +66,7 @@ impl SettingsPage {
         let subpages = [
             (Subpage::IndexedFolders, indexed_page),
             (Subpage::FolderSizes, indexing::build_folder_sizes()),
-            (Subpage::Troubleshooting, default_apps::build_troubleshooting()),
+            (Subpage::Troubleshooting, troubleshooting::build()),
         ];
         for (subpage, section) in subpages {
             if let Some(back) = section.back_button() {

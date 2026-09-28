@@ -7,7 +7,8 @@
 //! `appendV07Settings` in `desktop/ui/app.js` (INT-030, SET-009), laid out
 //! as the settings mockup's Default apps page: a status card that says
 //! whether `OpenXplorer` is the default file explorer, what opens each
-//! route, one row for Show in folder, and the guide as a page of its own.
+//! route, one row for Show in folder, and the guide as a page of its own
+//! ([`super::troubleshooting`]).
 //! Which app opens each route is read from GIO each time Settings opens,
 //! off the main thread, and again with "Refresh status".
 //!
@@ -29,6 +30,7 @@ use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
 use super::status_card::{StatusCard, StatusText};
+use super::troubleshooting::GUIDE_TITLE;
 use super::SettingsPage;
 use crate::icons::Icon;
 use crate::window::{ButtonStyle, Milestone};
@@ -112,32 +114,6 @@ const DISABLE_SHOW_IN_FOLDER: RowText = RowText {
     description: "OpenXplorer stops answering Show in folder requests.",
     keywords: "undo brave reveal filemanager1",
 };
-
-/// The title of the Zorin + Brave guide, as the Python app named it.
-const GUIDE_TITLE: &str = "Zorin + Brave setup and troubleshooting";
-
-/// The steps of the Python app's "Zorin + Brave setup and
-/// troubleshooting", numbered again (the Python list had two fourth
-/// steps) and pointing at where the controls are now.
-const GUIDE: [&str; 7] = [
-    "1. Click Make OpenXplorer default, then Enable in Show in folder from browsers. Both \
-     folder/SMB handlers and the optional FileManager1 service are configured for your account.",
-    "2. Close other file-manager windows. If Show in folder says waiting, log out of Zorin and log \
-     back in. OpenXplorer does not terminate Files or Dolphin.",
-    "3. Clicking a ZIP filename in Brave opens its ZIP handler, not your folder handler. Turn on \
-     ZIP files in Default apps to change that association. Restart Brave after changing it.",
-    "4. Downloads → Show in folder is a different action. Test, in Show in folder from browsers, \
-     checks FileManager1, not Brave or its portal. The status must show OpenXplorer as the owner, \
-     not just enabled.",
-    "5. Flatpak/Snap Brave or a remembered portal choice may still use another handler. In a \
-     chooser, select OpenXplorer. Do not disable your desktop portal: file-picker dialogs remain \
-     system dialogs.",
-    "6. Pin the installed OpenXplorer folder icon to your Zorin panel. Right-click it → Open \
-     windows… lists existing windows; New window creates another. Super+E is a separate system \
-     keyboard shortcut.",
-    "Restore previous removes OpenXplorer's unmodified per-user reveal/autostart files and restores \
-     recorded file handlers. No system packages are removed.",
-];
 
 /// The Default apps page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
@@ -393,21 +369,6 @@ fn advanced_group(pending: Availability) -> SettingsGroup {
         group.add_row(&row);
     }
     group
-}
-
-/// The Zorin + Brave setup and troubleshooting page.
-pub(super) fn build_troubleshooting() -> SettingsSection {
-    let guide = SettingsSection::new(
-        GUIDE_TITLE,
-        "Make OpenXplorer Zorin's file explorer and Brave's Show in folder, and undo it.",
-        PageKind::Subpage,
-    );
-    let (restore, steps) = GUIDE.split_last().expect("the guide has steps");
-    for step in steps {
-        guide.append_text(&parts::paragraph(step));
-    }
-    guide.append_text(&parts::note(Icon::Info, restore));
-    guide
 }
 
 #[cfg(test)]
