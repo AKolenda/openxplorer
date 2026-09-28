@@ -132,8 +132,7 @@ impl Skin {
 
     /// Records the desktop's colour scheme and follows it when the
     /// preference is [`ThemePreference::System`].
-    pub(crate) fn set_system_dark(&self, dark: bool) {
-        let desktop = if dark { Appearance::Dark } else { Appearance::Light };
+    pub(crate) fn set_desktop_appearance(&self, desktop: Appearance) {
         self.desktop_appearance.set(desktop);
         self.draw(self.preference().resolve(desktop));
     }

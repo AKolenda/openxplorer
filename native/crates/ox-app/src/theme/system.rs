@@ -14,6 +14,8 @@ use std::rc::{Rc, Weak};
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
+use super::Appearance;
+
 const INTERFACE_SCHEMA: &str = "org.gnome.desktop.interface";
 const COLOR_SCHEME_KEY: &str = "color-scheme";
 const GTK_THEME_KEY: &str = "gtk-theme";
@@ -26,24 +28,42 @@ const APPEARANCE_NAMESPACE: &str = "org.freedesktop.appearance";
 /// How long the portal may take to answer the first read, in milliseconds.
 const PORTAL_TIMEOUT_MS: i32 = 2000;
 
-/// Dark or not, from GNOME's keys. `None` when they do not decide.
-fn dark_from_gnome_keys(color_scheme: Option<&str>, gtk_theme: Option<&str>) -> Option<bool> {
+/// The appearance GNOME's keys ask for, or `None` when they do not decide.
+fn appearance_from_gnome_keys(color_scheme: Option<&str>, gtk_theme: Option<&str>) -> Option<Appearance> {
     match color_scheme {
-        Some("prefer-dark") => return Some(true),
-        Some("prefer-light") => return Some(false),
+        Some("prefer-dark") => return Some(Appearance::Dark),
+        Some("prefer-light") => return Some(Appearance::Light),
         _ => {}
     }
-    gtk_theme.map(|name| name.to_lowercase().contains("dark"))
+    gtk_theme.map(appearance_of_theme_name)
 }
 
-/// Dark or not, from the portal's value (1 prefers dark, 2 prefers light,
-/// 0 has no preference).
-fn dark_from_portal(value: u32) -> Option<bool> {
+/// Dark for a GTK theme whose name contains "dark" (`ZorinBlue-Dark`), as
+/// `system_dark` in winspace.py decides; light otherwise.
+fn appearance_of_theme_name(name: &str) -> Appearance {
+    if name.to_lowercase().contains("dark") {
+        Appearance::Dark
+    } else {
+        Appearance::Light
+    }
+}
+
+/// The appearance the portal's value asks for (1 prefers dark, 2 prefers
+/// light), or `None` for 0, which has no preference.
+fn appearance_from_portal(value: u32) -> Option<Appearance> {
     match value {
-        1 => Some(true),
-        2 => Some(false),
+        1 => Some(Appearance::Dark),
+        2 => Some(Appearance::Light),
         _ => None,
     }
+}
+
+/// The string value of `key`, when the installed `schema` has it.
+fn string_key(settings: &gio::Settings, schema: &gio::SettingsSchema, key: &str) -> Option<String> {
+    if !schema.has_key(key) {
+        return None;
+    }
+    Some(settings.string(key).to_string())
 }
 
 /// Watches the desktop colour scheme and reports changes.
@@ -55,8 +75,9 @@ pub(crate) struct SystemScheme {
     /// GNOME's interface settings, when the schema is installed.
     gnome_settings: Option<gio::Settings>,
     /// The portal's last answer, when there is no GNOME schema.
-    portal_dark: Cell<Option<bool>>,
-    on_change: Box<dyn Fn(bool)>,
+    portal_appearance: Cell<Option<Appearance>>,
+    /// Hears the desktop's appearance whenever it may have changed.
+    on_change: Box<dyn Fn(Appearance)>,
     /// Keeps the portal's `SettingChanged` subscription alive.
     portal_subscription: RefCell<Option<gio::SignalSubscription>>,
     /// A `SettingChanged` signal arrived; it is newer than the first read.
@@ -68,22 +89,22 @@ impl std::fmt::Debug for SystemScheme {
         formatter
             .debug_struct("SystemScheme")
             .field("gnome_settings", &self.gnome_settings.is_some())
-            .field("portal_dark", &self.portal_dark)
+            .field("portal_appearance", &self.portal_appearance)
             .finish_non_exhaustive()
     }
 }
 
 impl SystemScheme {
-    /// Starts watching and calls `on_change` with the new value whenever the
-    /// scheme changes. With no GNOME schema the portal is queried
-    /// asynchronously, and `on_change` hears its answer.
-    pub(crate) fn new(on_change: impl Fn(bool) + 'static) -> Rc<Self> {
+    /// Starts watching and calls `on_change` with the desktop's appearance
+    /// whenever the scheme changes. With no GNOME schema the portal is
+    /// queried asynchronously, and `on_change` hears its answer.
+    pub(crate) fn new(on_change: impl Fn(Appearance) + 'static) -> Rc<Self> {
         let gnome_settings = gio::SettingsSchemaSource::default()
             .and_then(|source| source.lookup(INTERFACE_SCHEMA, true))
             .map(|schema| gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None));
         let scheme = Rc::new(Self {
             gnome_settings,
-            portal_dark: Cell::new(None),
+            portal_appearance: Cell::new(None),
             on_change: Box::new(on_change),
             portal_subscription: RefCell::new(None),
             portal_signal_seen: Cell::new(false),
@@ -97,31 +118,36 @@ impl SystemScheme {
         scheme
     }
 
-    /// True when the desktop prefers dark: GNOME's keys decide, else the
+    /// The appearance the desktop asks for: GNOME's keys decide, else the
     /// portal, else GTK's own dark preference.
-    pub(crate) fn is_dark(&self) -> bool {
-        if let Some(dark) = self.gnome_dark() {
-            return dark;
+    pub(crate) fn appearance(&self) -> Appearance {
+        if let Some(appearance) = self.gnome_appearance() {
+            return appearance;
         }
-        if let Some(dark) = self.portal_dark.get() {
-            return dark;
+        if let Some(appearance) = self.portal_appearance.get() {
+            return appearance;
         }
-        gtk::Settings::default().is_some_and(|settings| settings.is_gtk_application_prefer_dark_theme())
+        let prefers_dark =
+            gtk::Settings::default().is_some_and(|settings| settings.is_gtk_application_prefer_dark_theme());
+        if prefers_dark {
+            Appearance::Dark
+        } else {
+            Appearance::Light
+        }
     }
 
     fn notify(&self) {
-        (self.on_change)(self.is_dark());
+        (self.on_change)(self.appearance());
     }
 
-    /// Dark or not from GNOME's keys, reading only the keys the installed
-    /// schema has.
-    fn gnome_dark(&self) -> Option<bool> {
+    /// The appearance GNOME's keys ask for, reading only the keys the
+    /// installed schema has.
+    fn gnome_appearance(&self) -> Option<Appearance> {
         let settings = self.gnome_settings.as_ref()?;
         let schema = settings.settings_schema()?;
-        let read = |key: &str| schema.has_key(key).then(|| settings.string(key).to_string());
-        let color_scheme = read(COLOR_SCHEME_KEY);
-        let gtk_theme = read(GTK_THEME_KEY);
-        dark_from_gnome_keys(color_scheme.as_deref(), gtk_theme.as_deref())
+        let color_scheme = string_key(settings, &schema, COLOR_SCHEME_KEY);
+        let gtk_theme = string_key(settings, &schema, GTK_THEME_KEY);
+        appearance_from_gnome_keys(color_scheme.as_deref(), gtk_theme.as_deref())
     }
 
     /// Follows GNOME's own keys, when their schema is installed.
@@ -131,18 +157,20 @@ impl SystemScheme {
         };
         let keys = [COLOR_SCHEME_KEY, GTK_THEME_KEY];
         for key in keys.into_iter().filter(|key| schema.has_key(key)) {
-            let scheme = Rc::downgrade(self);
-            settings.connect_changed(Some(key), move |_, _| {
-                if let Some(scheme) = scheme.upgrade() {
-                    scheme.notify();
-                }
-            });
+            settings.connect_changed(
+                Some(key),
+                glib::clone!(
+                    #[weak(rename_to = scheme)]
+                    self,
+                    move |_, _| scheme.notify()
+                ),
+            );
         }
     }
 
     /// Records the portal's value and reports the scheme.
     fn set_portal_value(&self, value: u32) {
-        self.portal_dark.set(dark_from_portal(value));
+        self.portal_appearance.set(appearance_from_portal(value));
         self.notify();
     }
 }
@@ -187,7 +215,10 @@ fn subscribe_to_portal_changes(
         Some(APPEARANCE_NAMESPACE),
         gio::DBusSignalFlags::NONE,
         move |signal| {
-            let (Some(scheme), Some(value)) = (scheme.upgrade(), portal_change(signal.parameters)) else {
+            let Some(scheme) = scheme.upgrade() else {
+                return;
+            };
+            let Some(value) = portal_change(signal.parameters) else {
                 return;
             };
             scheme.portal_signal_seen.set(true);
@@ -236,12 +267,12 @@ mod tests {
     #[test]
     fn color_scheme_decides_first() {
         assert_eq!(
-            dark_from_gnome_keys(Some("prefer-dark"), Some("Adwaita")),
-            Some(true)
+            appearance_from_gnome_keys(Some("prefer-dark"), Some("Adwaita")),
+            Some(Appearance::Dark)
         );
         assert_eq!(
-            dark_from_gnome_keys(Some("prefer-light"), Some("ZorinBlue-Dark")),
-            Some(false)
+            appearance_from_gnome_keys(Some("prefer-light"), Some("ZorinBlue-Dark")),
+            Some(Appearance::Light)
         );
     }
 
@@ -249,22 +280,22 @@ mod tests {
     #[test]
     fn default_scheme_falls_back_to_the_theme_name() {
         assert_eq!(
-            dark_from_gnome_keys(Some("default"), Some("ZorinBlue-Dark")),
-            Some(true)
+            appearance_from_gnome_keys(Some("default"), Some("ZorinBlue-Dark")),
+            Some(Appearance::Dark)
         );
         assert_eq!(
-            dark_from_gnome_keys(Some("default"), Some("ZorinBlue-Light")),
-            Some(false)
+            appearance_from_gnome_keys(Some("default"), Some("ZorinBlue-Light")),
+            Some(Appearance::Light)
         );
-        assert_eq!(dark_from_gnome_keys(None, None), None);
+        assert_eq!(appearance_from_gnome_keys(None, None), None);
     }
 
     /// parity: LOOK-004
     #[test]
     fn portal_values_follow_the_specification() {
-        assert_eq!(dark_from_portal(1), Some(true));
-        assert_eq!(dark_from_portal(2), Some(false));
-        assert_eq!(dark_from_portal(0), None);
+        assert_eq!(appearance_from_portal(1), Some(Appearance::Dark));
+        assert_eq!(appearance_from_portal(2), Some(Appearance::Light));
+        assert_eq!(appearance_from_portal(0), None);
     }
 
     /// One `SettingChanged` signal and the colour-scheme value expected

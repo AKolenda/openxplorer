@@ -154,9 +154,9 @@ fn follow_system_scheme(skin: &Rc<Skin>) -> Rc<SystemScheme> {
     let scheme = SystemScheme::new(glib::clone!(
         #[weak]
         skin,
-        move |dark| skin.set_system_dark(dark)
+        move |appearance| skin.set_desktop_appearance(appearance)
     ));
-    skin.set_system_dark(scheme.is_dark());
+    skin.set_desktop_appearance(scheme.appearance());
     scheme
 }
 
