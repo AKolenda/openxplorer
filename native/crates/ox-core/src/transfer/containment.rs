@@ -59,7 +59,7 @@ fn uris_nest(source: &dyn Node, destination_folder: &dyn Node) -> Result<bool, T
     let source_parts = split_location(&source.uri())?;
     let folder_parts = split_location(&destination_folder.uri())?;
     let same_host = source_parts.scheme == folder_parts.scheme
-        && source_parts.netloc.to_lowercase() == folder_parts.netloc.to_lowercase();
+        && source_parts.authority.to_lowercase() == folder_parts.authority.to_lowercase();
     if !same_host {
         return Ok(false);
     }

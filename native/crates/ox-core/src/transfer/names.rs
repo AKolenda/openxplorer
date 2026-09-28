@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Names the engine generates or accepts: private staging names, replacement
 //! backups and validated child names. "Keep both" names come from
-//! [`crate::location::try_new_copy_name`], shared with the rest of the app.
+//! [`crate::location::new_copy_name`], shared with the rest of the app.
 //!
 //! Ports the `.winspace-transfer-` and `.winspace-replaced-` names and
 //! `is_own_staging_name` of `desktop/operations.py`.

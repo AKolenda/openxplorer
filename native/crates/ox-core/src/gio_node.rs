@@ -234,7 +234,7 @@ impl Node for GioNode {
 /// `uri.split('/')[2]` in `desktop/gio_backend.py`.
 fn same_authority(first: &str, second: &str) -> bool {
     match (split_location(first), split_location(second)) {
-        (Ok(first), Ok(second)) => first.netloc == second.netloc,
+        (Ok(first), Ok(second)) => first.authority == second.authority,
         _ => false,
     }
 }

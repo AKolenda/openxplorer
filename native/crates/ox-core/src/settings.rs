@@ -63,7 +63,7 @@ impl SettingsError {
 
 impl From<crate::location::LocationError> for SettingsError {
     fn from(error: crate::location::LocationError) -> Self {
-        Self::Invalid(error.0)
+        Self::Invalid(error.into_message())
     }
 }
 

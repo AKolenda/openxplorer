@@ -1,5 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Inputs for the location parity check. Shared by the Python oracle.
+"""Inputs that generate_python.py runs through desktop/core.py.
+
+Synthetic addresses only: nothing here names or reads a real file.
+"""
+
+# The home folder for every table except EXTERNAL_LOCATIONS.
+HOME = '/home/test'
+
 LOCATIONS = [
     # test_core.py cases
     r'\\NAS\Team files\Q3 #1', '//NAS/Projects', 'smb://NAS/Team%20files/100%25.pdf', '/tmp/Été #1?.txt',
@@ -97,3 +104,39 @@ SPLITS = ['mtp://[usb:001,010]/Internal%20storage/DCIM', 'GPhoto2://[usb:001,002
           '\x00\x1f smb://h/p', 'smb://h/p\r\n', 'é://x', 'smb://[fe80::1%a%b]/', 'smb://[::1%25eth0]/', 'smb://[v1.x]:8/',
           'smb://[V1.x]/', 'smb://[vA.x]/', 'smb://[v.x]/', 'smb://[:::]/', 'smb://[1::2::3]/', 'smb://ｘ℀/',
           'smb://a℀@b/', 'mtp://ａ℀/x']
+
+# The home folder for EXTERNAL_LOCATIONS.
+EXTERNAL_HOME = '/home/demo'
+
+# Differential cases for location_external.rs, first captured by hand with
+# HOME=/home/demo. Each is normalised, and the result is then checked as an
+# item for file operations (require_item_uri).
+EXTERNAL_LOCATIONS = [
+    # local paths, home and relative names
+    '/tmp/file', '/tmp/a/../b/', '/tmp/(a) b', '/tmp/Q3 #1?.txt', '/', '~', '~/', '~/Docs', '~//etc', 'Plans',
+    '../../etc', './x/./y',
+    # UNC paths
+    '\\\\NAS\\Team files\\Q3 #1', '//nas/share', '\\\\nas', '\\\\u@nas\\share', '\\\\nas:445\\share',
+    # file URLs
+    'file:///tmp/x', 'file://localhost/tmp/x', 'file://LOCALHOST/tmp', 'file:////tmp/x', 'file:///tmp/(a)!',
+    'file:///tmp/%C3%89t%C3%A9%20%231%3F.txt', 'file:///tmp/Read me.txt', 'file:///', 'file:///tmp/%zz',
+    'file:///a/b/%2F', 'file:', 'file:relative', 'file://nas/share', 'file:///tmp/a%0Ab', 'file:///tmp/%FF',
+    ' file:///tmp/x ', 'file:///tmp/x\x1f',
+    # SMB URLs
+    'smb://NAS/Team%20files/100%25.pdf', 'smb://ALPHA/', 'smb://nas/work/', 'smb://nas/a/./b/../c',
+    'smb://nas:445/share', 'smb://nas:0445/s', 'smb://nas:/s', 'smb://[FE80::1]/share', 'smb://[FE80::1]:445/s',
+    'smb://[::ffff:1.2.3.4]/s', 'smb://nas', 'smb://NAS/a\\b', 'smb://nas/%2e%2e/x', 'smb://nas/a%2Fb', 'smb://ÄB/x',
+    'smb://nas/a?', 'smb://nas/a#', 'smb://nas/Team%20files/%C3%89t%C3%A9', 'smb://u:p@nas/share',
+    'smb://u@nas/share', 'smb://u%40nas/share', 'smb:///share', 'smb://nas/a%00b', 'smb://nas/a#b', 'smb://nas/a?b',
+    'smb://nas%0a/share', 'smb://nas:99999/share', 'smb://nas:44x/share', 'smb://nas:+1/s', 'smb://a:b:c/s',
+    'smb://[not-v6]/share', 'smb://[1.2.3.4]/s', 'smb://x[fe80::1]/s', 'smb://[fe80::1]x/s', 'smb://na s/x',
+    'smb://a\uff0fb/x', 'smb:nas/share', 'smb://[fe80::1%25eth0]/s',
+    # connected devices
+    'mtp://[usb:001,010]/Internal storage/DCIM', 'gphoto2://[usb:001,002]/DCIM', 'afc://00008020-001C/',
+    'MTP://[usb:001,010]', 'mtp://[usb:001,010]//a/../b', 'afc://x', 'mtp://user@device/DCIM',
+    'mtp://[usb:001,002/DCIM', 'mtp://[usb:001,002]/DCIM?mode=write', 'afc:///DCIM', 'mtp://[usb:001,002]/a%00b',
+    'mtp://a b/x', 'mtp://[a]b]/x', 'mtp:/x',
+    # refused input
+    '', '   ', 'http://example.org', 'javascript:alert(1)', 'C:\\Windows', 'c:/x', 'trash:///',
+    'archive:///tmp/a.zip/file', 'a:b',
+]

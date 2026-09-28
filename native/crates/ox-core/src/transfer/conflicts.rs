@@ -11,7 +11,7 @@ use super::error::TransferError;
 use super::names::child_node;
 use super::node::{Node, NodeKind};
 use super::types::{ConflictPolicy, TransferMode};
-use crate::location::try_new_copy_name;
+use crate::location::{new_copy_name, ItemKind};
 
 /// XFER-008: "Keep both" tries `(copy 2)` up to `(copy 9999)`, like the
 /// Python app, then gives up.
@@ -72,10 +72,14 @@ impl Placement<'_> {
                  Rename it before choosing Keep both.",
             ));
         };
-        let is_folder = kind == NodeKind::Directory;
+        let item_kind = if kind == NodeKind::Directory {
+            ItemKind::Folder
+        } else {
+            ItemKind::File
+        };
         for number in 2..MAX_COPY_NUMBER {
             self.cancel.check()?;
-            let name = try_new_copy_name(source_name, number, is_folder)?;
+            let name = new_copy_name(source_name, number, item_kind)?;
             let candidate = child_node(self.destination_folder, &name)?;
             if !candidate.exists(Some(self.cancel)) {
                 return Ok(candidate);

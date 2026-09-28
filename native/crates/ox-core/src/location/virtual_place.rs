@@ -30,10 +30,11 @@
 //! Python app rejects every virtual place there, so neither app may store
 //! one.
 
-use super::parts::url_scheme;
-use super::text::{has_control, python_strip, quote_component, unquote_strict};
-use super::{normalise_location, LocationError};
 use std::path::Path;
+
+use super::parts::split_scheme;
+use super::text::{python_strip, quote_component, unquote_without_controls};
+use super::{normalise_location, LocationError};
 
 /// URI of the Home page: Quick access, shares and recently opened files.
 pub const HOME_URI: &str = "ox:home";
@@ -120,13 +121,12 @@ impl VirtualPlace {
     /// `trash:`. Schemes are case-insensitive, as in every URI. `None` for
     /// items inside a virtual folder.
     pub fn from_uri(uri: &str) -> Option<Self> {
-        match uri.to_ascii_lowercase().as_str() {
-            HOME_URI | "home:" => return Some(VirtualPlace::Home),
-            PC_URI | "pc:" => return Some(VirtualPlace::ThisPc),
-            SETTINGS_URI | "settings:" => return Some(VirtualPlace::Settings),
-            _ => {}
+        if let Some(page) = Self::page_from_uri(uri) {
+            return Some(page);
         }
-        let folder = VirtualFolder::parse(uri)?.ok()?;
+        let Ok(Some(folder)) = VirtualFolder::parse(uri) else {
+            return None;
+        };
         folder.segments.is_empty().then_some(folder.place)
     }
 
@@ -148,99 +148,108 @@ impl VirtualPlace {
             .find(|place| place.title().to_lowercase() == typed)
     }
 
-    fn from_gio_scheme(scheme: &str) -> Option<Self> {
-        match scheme {
-            "network" => Some(VirtualPlace::Network),
-            "trash" => Some(VirtualPlace::RecycleBin),
-            "recent" => Some(VirtualPlace::Recent),
+    /// The app page `uri` names, in the native (`ox:home`) or the web UI's
+    /// (`home:`) spelling.
+    fn page_from_uri(uri: &str) -> Option<Self> {
+        match uri.to_ascii_lowercase().as_str() {
+            HOME_URI | "home:" => Some(VirtualPlace::Home),
+            PC_URI | "pc:" => Some(VirtualPlace::ThisPc),
+            SETTINGS_URI | "settings:" => Some(VirtualPlace::Settings),
             _ => None,
         }
     }
-}
 
-/// The virtual place `uri` is, or `None`. Same as [`VirtualPlace::from_uri`].
-pub fn virtual_place(uri: &str) -> Option<VirtualPlace> {
-    VirtualPlace::from_uri(uri)
+    /// The virtual folder GIO lists under `scheme`, which must be
+    /// lower-case: the inverse of [`gio_scheme`](Self::gio_scheme).
+    fn from_gio_scheme(scheme: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|place| place.gio_scheme() == Some(scheme))
+    }
 }
 
 /// True for the app's pages and for anything inside `trash:`, `recent:` or
 /// `network:`. Such locations are never writable folders.
 pub fn is_virtual_location(uri: &str) -> bool {
-    VirtualPlace::from_uri(uri).is_some() || VirtualFolder::parse(uri).is_some()
+    VirtualPlace::from_uri(uri).is_some() || is_in_virtual_folder(uri)
+}
+
+/// True for anything with a `trash:`, `recent:` or `network:` scheme, even
+/// an address that cannot be opened: such a location is never writable.
+pub(crate) fn is_in_virtual_folder(uri: &str) -> bool {
+    let Some((scheme, _)) = split_scheme(uri) else {
+        return false;
+    };
+    VirtualPlace::from_gio_scheme(&scheme).is_some()
 }
 
 /// Normalises a location the app can navigate to: everything
 /// [`normalise_location`] accepts plus the virtual places. Use it for the
 /// tab history and command-line arguments; the port of `location()` in
 /// `desktop/window_state.py`.
-pub fn normalise_navigation(value: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
-    let trimmed = python_strip(value);
+///
+/// # Errors
+///
+/// As [`normalise_location`]. A `trash:`, `recent:` or `network:` location
+/// fails when it has a query, fragment or server name, or a component that
+/// does not decode or decodes to a control character.
+pub fn normalise_navigation(address: &str, base: Option<&str>, home: &Path) -> Result<String, LocationError> {
+    let trimmed = python_strip(address);
     if let Some(place) = VirtualPlace::from_uri(trimmed) {
         return Ok(place.uri().to_string());
     }
-    if let Some(folder) = VirtualFolder::parse(trimmed) {
-        return folder.map(|folder| folder.uri());
+    if let Some(folder) = VirtualFolder::parse(trimmed)? {
+        return Ok(folder.uri());
     }
-    normalise_location(value, base, home)
+    normalise_location(address, base, home)
 }
 
 /// A location inside one of GIO's virtual folders, split into decoded path
 /// components.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VirtualFolder {
-    pub place: VirtualPlace,
+    /// The Network, Recycle Bin or Recent folder the location is in.
+    pub(crate) place: VirtualPlace,
     /// Decoded components; `.` and `..` already resolved.
-    pub segments: Vec<String>,
+    pub(crate) segments: Vec<String>,
 }
 
 impl VirtualFolder {
-    /// `None` when `uri` is not `trash:`, `recent:` or `network:`; an error
-    /// when it is but cannot be canonicalised.
-    pub fn parse(uri: &str) -> Option<Result<Self, LocationError>> {
-        let (scheme, rest) = url_scheme(uri)?;
-        let place = VirtualPlace::from_gio_scheme(&scheme)?;
-        Some(Self::parse_path(place, rest))
+    /// Splits a `trash:`, `recent:` or `network:` location.
+    ///
+    /// `Ok(None)` when `uri` has another scheme. To ask only whether `uri`
+    /// is virtual, use [`is_in_virtual_folder`].
+    ///
+    /// # Errors
+    ///
+    /// When `uri` is in a virtual folder but cannot be canonicalised: it
+    /// has a query, fragment or server name, or a component that does not
+    /// decode or decodes to a control character. Navigation then shows the
+    /// error instead of treating `uri` as a folder path.
+    pub(crate) fn parse(uri: &str) -> Result<Option<Self>, LocationError> {
+        let Some((scheme, after_scheme)) = split_scheme(uri) else {
+            return Ok(None);
+        };
+        let Some(place) = VirtualPlace::from_gio_scheme(&scheme) else {
+            return Ok(None);
+        };
+        Self::parse_path(place, after_scheme).map(Some)
     }
 
-    fn parse_path(place: VirtualPlace, rest: &str) -> Result<Self, LocationError> {
-        if rest.contains(['?', '#']) {
-            return Err(LocationError::new(
-                "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.",
-            ));
+    /// The folder of `after_scheme`, the text after `trash:`, `recent:` or
+    /// `network:`.
+    fn parse_path(place: VirtualPlace, after_scheme: &str) -> Result<Self, LocationError> {
+        if after_scheme.contains(['?', '#']) {
+            return Err(LocationError::query_or_fragment());
         }
-        let path = match rest.strip_prefix("//") {
-            Some(after_slashes) => {
-                let authority_end = after_slashes.find('/').unwrap_or(after_slashes.len());
-                if authority_end > 0 {
-                    return Err(LocationError::new(format!(
-                        "Use {} without a server name.",
-                        place.uri()
-                    )));
-                }
-                after_slashes
-            }
-            None => rest,
-        };
-        let mut segments: Vec<String> = Vec::new();
-        for raw in path.split('/').filter(|raw| !raw.is_empty()) {
-            let segment = unquote_strict(raw)?;
-            if has_control(&segment) {
-                return Err(LocationError::new("Encoded control characters are not allowed."));
-            }
-            match segment.as_str() {
-                "." => {}
-                ".." => {
-                    segments.pop();
-                }
-                _ => segments.push(segment),
-            }
-        }
+        let path = strip_empty_authority(place, after_scheme)?;
+        let segments = decode_segments(path)?;
         Ok(Self { place, segments })
     }
 
     /// The canonical URI, each component escaped with Python's
     /// `quote(component, safe='')`.
-    pub fn uri(&self) -> String {
+    pub(crate) fn uri(&self) -> String {
         let escaped: Vec<String> = self
             .segments
             .iter()
@@ -250,12 +259,46 @@ impl VirtualFolder {
     }
 }
 
+/// The path of `trash:///a` or `trash:a`. GIO's virtual folders have no
+/// server, so `trash://host/a` is refused.
+fn strip_empty_authority(place: VirtualPlace, after_scheme: &str) -> Result<&str, LocationError> {
+    let Some(after_slashes) = after_scheme.strip_prefix("//") else {
+        return Ok(after_scheme);
+    };
+    let has_authority = !after_slashes.is_empty() && !after_slashes.starts_with('/');
+    if has_authority {
+        return Err(LocationError::new(format!(
+            "Use {} without a server name.",
+            place.uri()
+        )));
+    }
+    Ok(after_slashes)
+}
+
+/// Decodes the non-empty components of `path` and resolves `.` and `..`.
+/// Each component is decoded on its own, so an escaped `/` inside one (as
+/// in `recent:///` item names) stays part of it.
+fn decode_segments(path: &str) -> Result<Vec<String>, LocationError> {
+    let mut segments = Vec::new();
+    for escaped in path.split('/').filter(|escaped| !escaped.is_empty()) {
+        let segment = unquote_without_controls(escaped)?;
+        match segment.as_str() {
+            "." => {}
+            ".." => {
+                segments.pop();
+            }
+            _ => segments.push(segment),
+        }
+    }
+    Ok(segments)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn navigate(value: &str) -> Result<String, LocationError> {
-        normalise_navigation(value, None, Path::new("/home/test"))
+    fn navigate(address: &str) -> Result<String, LocationError> {
+        normalise_navigation(address, None, Path::new("/home/test"))
     }
 
     #[test]
@@ -266,6 +309,16 @@ mod tests {
         }
         assert!(VirtualPlace::Home.is_page());
         assert!(!VirtualPlace::RecycleBin.is_page());
+    }
+
+    #[test]
+    fn gio_folders_round_trip_through_their_schemes() {
+        for place in VirtualPlace::ALL {
+            let from_scheme = place.gio_scheme().and_then(VirtualPlace::from_gio_scheme);
+            let expected = (!place.is_page()).then_some(place);
+            assert_eq!(from_scheme, expected, "{place:?}");
+        }
+        assert_eq!(VirtualPlace::from_gio_scheme("file"), None);
     }
 
     #[test]
@@ -308,6 +361,19 @@ mod tests {
         assert!(is_virtual_location("trash:///a"));
         assert!(is_virtual_location(PC_URI));
         assert!(!is_virtual_location("file:///"));
+    }
+
+    /// A malformed address in a virtual folder cannot be opened, but it
+    /// still names a virtual folder, which is never writable.
+    #[test]
+    fn malformed_items_are_still_in_their_virtual_folder() {
+        for uri in ["trash:///a", "Recent:///%FF", "trash://host/", "network:x?y"] {
+            assert!(is_in_virtual_folder(uri), "{uri}");
+            assert!(is_virtual_location(uri), "{uri}");
+        }
+        for uri in [HOME_URI, "file:///", "/tmp", "smb://nas/"] {
+            assert!(!is_in_virtual_folder(uri), "{uri}");
+        }
     }
 
     #[test]

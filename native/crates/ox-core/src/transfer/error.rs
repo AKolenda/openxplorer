@@ -110,7 +110,7 @@ impl From<rustix::io::Errno> for TransferError {
 /// user-facing message (Python raises the same `ValueError` inside the item).
 impl From<LocationError> for TransferError {
     fn from(error: LocationError) -> Self {
-        TransferError::Failed(error.0)
+        TransferError::Failed(error.into_message())
     }
 }
 

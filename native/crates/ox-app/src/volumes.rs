@@ -89,8 +89,9 @@ impl VolumeFacts {
 
 /// Canonical URI for a supported root, or `None` for anything else.
 fn supported_uri(uri: &str) -> Option<String> {
-    let scheme = location::scheme(uri);
-    if !SUPPORTED_SCHEMES.contains(&scheme.as_str()) {
+    let is_supported =
+        location::scheme(uri).is_some_and(|scheme| SUPPORTED_SCHEMES.contains(&scheme.as_str()));
+    if !is_supported {
         return None;
     }
     if location::is_device_location(uri) {

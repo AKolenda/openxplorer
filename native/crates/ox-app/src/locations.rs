@@ -6,8 +6,12 @@
 //! from `desktop/ui/app.js`, tab and window titles (`titleFor`), the
 //! breadcrumb divider and small comparisons. ox-core does not model the
 //! virtual pages, so they live here.
+//!
+//! Names come from `LocationContext::default()`: this window does not
+//! collect the mounted devices a [`LocationContext`] can name, so every
+//! phone is called "Connected device".
 
-use ox_core::location::{self, Crumb};
+use ox_core::location::{self, Crumb, LocationContext, LocationKind};
 
 /// A virtual page shown instead of a folder listing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,7 +39,7 @@ impl Page {
 
     /// The page for a pseudo-URI, if it is one.
     pub fn from_uri(uri: &str) -> Option<Page> {
-        match location::virtual_place(uri) {
+        match location::VirtualPlace::from_uri(uri) {
             Some(location::VirtualPlace::Home) => Some(Self::Home),
             Some(location::VirtualPlace::ThisPc) => Some(Self::ThisPc),
             Some(location::VirtualPlace::Network) => Some(Self::Network),
@@ -84,7 +88,7 @@ impl Page {
 
 /// True for SMB locations, which are drawn with the green network pipe.
 pub fn is_network(uri: &str) -> bool {
-    location::scheme(uri) == "smb"
+    location::location_kind(uri) == LocationKind::Smb
 }
 
 /// Compares two locations, ignoring a trailing slash.
@@ -109,17 +113,17 @@ pub fn title_for(uri: &str, home_uri: &str) -> String {
     if same_location(uri, home_uri) {
         return Page::Home.title().to_string();
     }
-    if !location::scheme(uri).eq_ignore_ascii_case("file") && is_root(uri) {
-        return host(uri).unwrap_or_else(|| location::base_name(uri));
+    if location::location_kind(uri) != LocationKind::Local && is_root(uri) {
+        return host(uri).unwrap_or_else(|| LocationContext::default().base_name(uri));
     }
-    location::base_name(uri)
+    LocationContext::default().base_name(uri)
 }
 
 /// Text for the editable address bar.
 pub fn address_text(uri: &str) -> String {
     match Page::from_uri(uri) {
         Some(page) => page.title().to_string(),
-        None => location::display_location(uri),
+        None => LocationContext::default().display_location(uri),
     }
 }
 
@@ -131,9 +135,10 @@ pub fn crumbs(uri: &str) -> Vec<Crumb> {
             uri: uri.to_string(),
         }];
     }
-    let mut crumbs = location::breadcrumbs(uri);
+    let mut crumbs = LocationContext::default().breadcrumbs(uri);
     // A remote root has no file name; label it with the host, as app.js does.
-    if let (Some(first), false) = (crumbs.first_mut(), location::scheme(uri) == "file") {
+    let is_local = location::location_kind(uri) == LocationKind::Local;
+    if let (Some(first), false) = (crumbs.first_mut(), is_local) {
         if let Some(name) = host(&first.uri) {
             first.label = name;
         }

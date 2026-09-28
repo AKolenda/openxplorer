@@ -30,7 +30,18 @@
 //! Use [`normalise_location`] for anything stored in settings (it rejects
 //! virtual places, like the Python function) and [`normalise_navigation`]
 //! for tab history, the address bar and command-line arguments.
+//!
+//! | Module | Responsibility |
+//! |---|---|
+//! | `text` | Python's and JavaScript's escaping, stripping and path rules |
+//! | `parts` | Splitting a location like `urlsplit` |
+//! | `normalise` | One canonical URI for a typed or stored address |
+//! | `virtual_place` | The app's pages and GIO's virtual folders |
+//! | `names` | File names, "Keep both" names and sidebar labels |
+//! | `display` | Titles, address bar text, breadcrumbs and Up |
+//! | `classify` | Writable, snapshot and network folders, SMB share roots |
 
+mod classify;
 mod display;
 mod names;
 mod normalise;
@@ -40,38 +51,54 @@ mod virtual_place;
 
 pub(crate) use text::{python_strip, unquote_lossy};
 
-pub use display::{
-    base_name, breadcrumbs, crumb_divider, device_root, display_location, is_network_filesystem,
-    is_smb_share_root, parent_location, same_location, title_for, DeviceLabel, LocationContext,
-};
-pub use names::{new_copy_name, safe_label, try_new_copy_name, validate_name, MAX_LABEL_CHARS};
+pub use classify::{is_network_filesystem, is_smb_share_root};
+pub use display::{crumb_divider, device_root, parent_location, same_location, DeviceLabel, LocationContext};
+pub use names::{new_copy_name, safe_label, validate_name, ItemKind, MAX_LABEL_CHARS};
 pub use normalise::{
     file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
 };
-pub use parts::{split_location, LocationParts};
+pub use parts::{split_location, LocationKind, LocationParts};
 pub use virtual_place::{
-    is_virtual_location, normalise_navigation, virtual_place, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI,
-    RECENT_URI, SETTINGS_URI, TRASH_URI,
+    is_virtual_location, normalise_navigation, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI, RECENT_URI,
+    SETTINGS_URI, TRASH_URI,
 };
 
-/// Portable-device GVfs schemes. Their authorities can contain brackets
-/// (`mtp://[usb:001,002]/`), which ordinary URL parsers reject.
-pub const DEVICE_SCHEMES: [&str; 3] = ["mtp", "gphoto2", "afc"];
-
 /// A user-facing validation error. The message is shown as-is.
+///
+/// Where the Rust port refuses what a `raise` in `desktop/core.py` refuses,
+/// the message is the Python app's, word for word; `location_python.rs`
+/// checks every one of them. Where Python's standard library refused an
+/// address in its own words, the message is in the app's wording instead.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("{0}")]
-pub struct LocationError(pub String);
+#[error("{message}")]
+pub struct LocationError {
+    /// The text shown to the user.
+    message: String,
+}
 
 impl LocationError {
-    /// An error with the given user-facing message.
-    pub fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
+    /// An error with the given user-facing message. Only this crate
+    /// creates location errors, so every message is one of its own.
+    pub(crate) fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
     }
 
     /// The user-facing message.
     pub fn message(&self) -> &str {
-        &self.0
+        &self.message
+    }
+
+    /// The user-facing message, for errors that wrap this one.
+    pub fn into_message(self) -> String {
+        self.message
+    }
+
+    /// A `?` or `#` in a URL. `urlsplit` would cut the path there, so the
+    /// user must escape them or type a plain path, which may hold both.
+    pub(crate) fn query_or_fragment() -> Self {
+        Self::new("In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path.")
     }
 }
 
@@ -94,21 +121,21 @@ impl Crumb {
     }
 }
 
-/// The URI scheme, lower-cased (`file`, `smb`, `mtp`, ...), or an empty
-/// string for a plain path. Follows Python's `urlsplit` rule: the text
-/// before the first `:` must be a letter followed by letters, digits, `+`,
-/// `-` or `.`.
-pub fn scheme(uri: &str) -> String {
-    parts::url_scheme(uri)
-        .map(|(scheme, _)| scheme)
-        .unwrap_or_default()
+/// The URI scheme, lower-cased (`file`, `smb`, `mtp`, ...), or `None` for
+/// a plain path. Follows Python's `urlsplit` rule: the text before the
+/// first `:` must be a letter followed by letters, digits, `+`, `-` or `.`.
+pub fn scheme(uri: &str) -> Option<String> {
+    parts::split_scheme(uri).map(|(scheme, _)| scheme)
+}
+
+/// What kind of place `uri` names, by its scheme; [`LocationKind::Other`]
+/// for plain paths and schemes the app does not browse as folders.
+pub fn location_kind(uri: &str) -> LocationKind {
+    scheme(uri).map_or(LocationKind::Other, |scheme| LocationKind::from_scheme(&scheme))
 }
 
 /// True for phones, cameras and iOS devices (`mtp:`, `gphoto2:`, `afc:`).
 /// Unparseable input is not a device location.
 pub fn is_device_location(uri: &str) -> bool {
-    match split_location(uri) {
-        Ok(parts) => DEVICE_SCHEMES.contains(&parts.scheme.as_str()),
-        Err(_) => false,
-    }
+    split_location(uri).is_ok_and(|parts| parts.is_device())
 }
