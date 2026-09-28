@@ -3,10 +3,10 @@
 //! the network locations visited this session and the way files are opened.
 //!
 //! The Python app kept these on its `Gtk.Application` (`settings_store`,
-//! `visited_network`, `launch_default`) and broadcast `environmentChanged`
-//! to every window. Here an [`AppContext`] emits `places-changed`, which
-//! every window connects to, when a pin, a saved share, a visited server or
-//! a preference changes.
+//! `visited_network`, `launch_default` in `desktop/winspace.py`) and
+//! broadcast `environmentChanged` to every window. Here an [`AppContext`]
+//! emits `places-changed`, which every window connects to, when a pin, a
+//! saved share, a visited server or a preference changes.
 
 use std::rc::Rc;
 
@@ -46,8 +46,7 @@ mod imp {
         pub(super) settings: OnceCell<Rc<SettingsStore>>,
         /// SMB servers and shares browsed this session, oldest first.
         pub(super) visited_network: RefCell<Vec<Bookmark>>,
-        /// In tests, the files that would have been opened; tests must
-        /// never start real applications.
+        /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,
     }
@@ -80,8 +79,10 @@ impl AppContext {
     pub fn new(skin: Rc<Skin>, settings: Settings) -> Self {
         let context: Self = glib::Object::new();
         let imp = context.imp();
-        let is_new = imp.skin.set(skin).is_ok() && imp.settings.set(SettingsStore::new(settings)).is_ok();
-        assert!(is_new, "a new AppContext has no skin or settings yet");
+        imp.skin.set(skin).expect("a new AppContext has no skin yet");
+        imp.settings
+            .set(SettingsStore::new(settings))
+            .expect("a new AppContext has no settings yet");
         context
     }
 
@@ -133,9 +134,12 @@ impl AppContext {
     ) {
         let context = self.downgrade();
         let after: Reply = Box::new(move |result| {
-            let changed = result.is_ok();
+            let succeeded = result.is_ok();
             reply(result);
-            if let (true, Some(context)) = (changed, context.upgrade()) {
+            if !succeeded {
+                return;
+            }
+            if let Some(context) = context.upgrade() {
                 context.notify_places_changed();
             }
         });
@@ -164,7 +168,7 @@ impl AppContext {
     }
 
     /// Tells every window to redraw its sidebar and landing page.
-    pub(crate) fn notify_places_changed(&self) {
+    fn notify_places_changed(&self) {
         self.emit_by_name::<()>(PLACES_CHANGED, &[]);
     }
 
@@ -187,6 +191,8 @@ impl AppContext {
     ) {
         let recent = recent_entry(entry);
         let uri = entry.navigation_uri().to_owned();
+        // Test safety: tests record the file instead of starting a real
+        // application on the developer's desktop.
         #[cfg(test)]
         if let Some(launches) = self.imp().recorded_launches.borrow_mut().as_mut() {
             launches.push(uri);
@@ -204,6 +210,7 @@ impl AppContext {
         });
     }
 
+    /// Records `recent` at the top of the recently opened files.
     fn remember_open(&self, recent: RecentEntry) {
         let change: Change = Box::new(move |settings| settings.remember_open(&recent));
         // Recording a recent file is best effort, as in the Python app: the
@@ -225,7 +232,8 @@ impl AppContext {
     }
 }
 
-/// The recent-files record of an opened entry.
+/// The recent-files record of an opened entry (`remember_open` in
+/// `desktop/core.py` keeps these fields).
 fn recent_entry(entry: &Entry) -> RecentEntry {
     RecentEntry {
         uri: entry.uri.clone(),
