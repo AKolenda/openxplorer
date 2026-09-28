@@ -14,6 +14,9 @@ use crate::integration::host_command::{CommandFailure, HostCommand};
 use crate::integration::mime_type::MimeType;
 use crate::integration::sandbox::Sandbox;
 
+/// The program that reads and sets the default handlers.
+const XDG_MIME: &str = "xdg-mime";
+
 /// How long one `xdg-mime` call may take, as in the Python app.
 const XDG_MIME_TIMEOUT: Duration = Duration::from_secs(8);
 
@@ -60,20 +63,30 @@ impl XdgMime {
 
 impl MimeDefaults for XdgMime {
     fn default_handler(&self, mime_type: MimeType) -> Result<String, DefaultAppsError> {
-        let query = HostCommand::new("xdg-mime")
-            .arg("query")
-            .arg("default")
-            .arg(mime_type.as_str());
-        self.run(&query)
+        self.run(&query_command(mime_type))
     }
 
     fn set_default_handler(&self, handler: &DesktopId, mime_type: MimeType) -> Result<(), DefaultAppsError> {
-        let change = HostCommand::new("xdg-mime")
-            .arg("default")
-            .arg(handler.as_str())
-            .arg(mime_type.as_str());
-        self.run(&change).map(drop)
+        self.run(&change_command(handler, mime_type)).map(drop)
     }
+}
+
+/// `xdg-mime query default <type>`: asks for the default handler of
+/// `mime_type`.
+fn query_command(mime_type: MimeType) -> HostCommand {
+    HostCommand::new(XDG_MIME)
+        .arg("query")
+        .arg("default")
+        .arg(mime_type.as_str())
+}
+
+/// `xdg-mime default <handler> <type>`: makes `handler` the default of
+/// `mime_type`. The handler comes first, as `xdg-mime` expects.
+fn change_command(handler: &DesktopId, mime_type: MimeType) -> HostCommand {
+    HostCommand::new(XDG_MIME)
+        .arg("default")
+        .arg(handler.as_str())
+        .arg(mime_type.as_str())
 }
 
 impl From<CommandFailure> for DefaultAppsError {
@@ -83,6 +96,81 @@ impl From<CommandFailure> for DefaultAppsError {
             CommandFailure::Failed(_) => Self::NotAccepted,
             CommandFailure::TimedOut => Self::TimedOut,
             CommandFailure::Io(error) => Self::CommandFailed(error),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
+    use super::*;
+    use crate::integration::host_command::argv;
+
+    /// One way running `xdg-mime` can fail, and the message the Settings
+    /// card shows for it.
+    struct FailureCase {
+        failure: CommandFailure,
+        message: &'static str,
+    }
+
+    /// Ported from the `run` double of `desktop/tests/test_rc3.py::DefaultsTests::setUp`,
+    /// which checked `args[1:3] == ['query', 'default']`.
+    /// parity: INT-010, SAFE-020
+    #[test]
+    fn the_query_asks_xdg_mime_for_the_default_of_one_type() {
+        let query = query_command(MimeType::Directory).to_command(Sandbox::Host);
+
+        assert_eq!(argv(&query), ["xdg-mime", "query", "default", "inode/directory"]);
+    }
+
+    /// Ported from the `run` double of `desktop/tests/test_rc3.py::DefaultsTests::setUp`,
+    /// which took the handler from `args[2]` and the type from `args[3]`.
+    /// parity: INT-008, SAFE-020
+    #[test]
+    fn the_change_names_the_handler_before_the_type() {
+        let change = change_command(&DesktopId::openxplorer(), MimeType::Zip).to_command(Sandbox::Host);
+
+        assert_eq!(
+            argv(&change),
+            [
+                "xdg-mime",
+                "default",
+                "io.winspace.Development.desktop",
+                "application/zip"
+            ]
+        );
+    }
+
+    /// parity: INT-010
+    #[test]
+    fn each_failure_of_xdg_mime_has_the_python_apps_message() {
+        let cases = [
+            FailureCase {
+                failure: CommandFailure::NotInstalled,
+                message: "Install xdg-utils to manage the default file explorer.",
+            },
+            FailureCase {
+                failure: CommandFailure::Failed(ExitStatus::from_raw(4 << 8)),
+                message: "The desktop did not accept the file-association change.",
+            },
+            FailureCase {
+                failure: CommandFailure::TimedOut,
+                message: "The desktop took too long to update the default. Try again.",
+            },
+            FailureCase {
+                failure: CommandFailure::Io(io::Error::from(io::ErrorKind::PermissionDenied)),
+                message: "xdg-mime could not be run: permission denied",
+            },
+        ];
+        for case in cases {
+            let expected = case.message;
+
+            let error = DefaultAppsError::from(case.failure);
+
+            assert_eq!(error.to_string(), expected);
         }
     }
 }

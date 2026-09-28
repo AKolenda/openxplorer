@@ -9,7 +9,8 @@ use std::path::PathBuf;
 /// the message the Settings card shows.
 #[derive(Debug, thiserror::Error)]
 pub enum DefaultAppsError {
-    /// `xdg-mime` is not installed (INT-010).
+    /// `xdg-mime` is not installed (INT-010); inside Flatpak, not on the
+    /// host.
     #[error("Install xdg-utils to manage the default file explorer.")]
     XdgUtilsMissing,
     /// `xdg-mime` exited unsuccessfully.
@@ -18,8 +19,9 @@ pub enum DefaultAppsError {
     /// `xdg-mime` did not finish within 8 seconds and was stopped.
     #[error("The desktop took too long to update the default. Try again.")]
     TimedOut,
-    /// `xdg-mime` could not be started or waited for.
-    #[error("{0}")]
+    /// `xdg-mime` could not be started or waited for; the operating
+    /// system's reason follows the program's name.
+    #[error("xdg-mime could not be run: {0}")]
     CommandFailed(io::Error),
     /// The handler the app would replace is not a plain desktop ID, so
     /// it cannot be put back later (INT-008).
