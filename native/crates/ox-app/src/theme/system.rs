@@ -161,8 +161,10 @@ async fn follow_portal(scheme: Weak<SystemScheme>) {
     // Hold no strong reference across the read, so the application can
     // drop the scheme while the portal is slow to answer.
     drop(watching);
-    let current = read_portal(&connection).await;
-    let Some((value, scheme)) = current.zip(scheme.upgrade()) else {
+    let Some(value) = read_portal(&connection).await else {
+        return;
+    };
+    let Some(scheme) = scheme.upgrade() else {
         return;
     };
     // A newer SettingChanged signal wins over the initial reply.

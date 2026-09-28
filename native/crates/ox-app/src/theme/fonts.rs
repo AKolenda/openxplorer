@@ -25,6 +25,7 @@ pub(crate) fn css_for_text_size(percent: u32) -> String {
 }
 
 /// A selector's font size, in pixels at 100%.
+#[derive(Debug)]
 struct FontSize {
     selector: &'static str,
     pixels: f64,
@@ -98,6 +99,7 @@ const FONT_SIZES: &[FontSize] = &[
 /// end of `desktop/ui/style.css`. The web heights are border boxes and
 /// GTK's `min-height` is the content box; the two agree because these bars
 /// have no vertical border or padding.
+#[derive(Debug)]
 struct ScaledHeight {
     selector: &'static str,
     /// The height at small text sizes.

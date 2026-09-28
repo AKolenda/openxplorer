@@ -55,14 +55,20 @@ pub struct Skin {
     text_size_provider: gtk::CssProvider,
     /// The high-contrast rules, empty at normal contrast.
     contrast_provider: gtk::CssProvider,
+    /// The appearance the palette draws.
     appearance: Cell<Appearance>,
+    /// Whether the high-contrast rules are loaded.
     contrast: Cell<Contrast>,
+    /// The text size in percent, always one of the levels.
     text_size: Cell<u32>,
+    /// The user's theme choice.
     preference: Cell<ThemePreference>,
     /// The desktop's colour scheme, which [`ThemePreference::System`]
     /// follows.
     desktop_appearance: Cell<Appearance>,
+    /// The number the next [`ListenerId`] gets.
     next_listener: Cell<usize>,
+    /// The windows' callbacks, in registration order.
     listeners: RefCell<Vec<SkinListener>>,
 }
 
@@ -79,18 +85,16 @@ impl std::fmt::Debug for Skin {
 }
 
 impl Skin {
-    /// Forces GTK's built-in theme and installs the skin on `display`.
-    ///
-    /// The providers stack above the application priority in this order,
-    /// so each one wins over the ones before it: the rules, the text-size
-    /// rules generated from them, the palette that colours them, and the
-    /// high-contrast rules.
+    /// Forces GTK's built-in theme and installs the skin on `display`, one
+    /// provider per [`Layer`].
     pub(crate) fn install(display: &gdk::Display) -> Self {
         force_builtin_theme(&gtk::Settings::for_display(display));
-        add_provider(display, stylesheets::RULES, 0);
-        let text_size_provider = add_provider(display, &css_for_text_size(text_size::DEFAULT), 1);
-        let palette_provider = add_provider(display, stylesheets::palette(Appearance::Light), 2);
-        let contrast_provider = add_provider(display, "", 3);
+        add_provider(display, stylesheets::RULES, Layer::Rules);
+        let default_text_size = css_for_text_size(text_size::DEFAULT);
+        let text_size_provider = add_provider(display, &default_text_size, Layer::TextSize);
+        let light_palette = stylesheets::palette(Appearance::Light);
+        let palette_provider = add_provider(display, light_palette, Layer::Palette);
+        let contrast_provider = add_provider(display, "", Layer::HighContrast);
         Self {
             palette_provider,
             text_size_provider,
@@ -195,11 +199,12 @@ impl Skin {
     ///
     /// Only after `usize::MAX` registrations in one process.
     pub(crate) fn connect_changed(&self, callback: impl Fn(SkinChange) + 'static) -> ListenerId {
-        let id = ListenerId(self.next_listener.get());
-        let next =
-            id.0.checked_add(1)
-                .expect("appearance listener IDs cannot be exhausted");
+        let number = self.next_listener.get();
+        let next = number
+            .checked_add(1)
+            .expect("appearance listener IDs cannot be exhausted");
         self.next_listener.set(next);
+        let id = ListenerId(number);
         self.listeners.borrow_mut().push(SkinListener {
             id,
             callback: Rc::new(callback),
@@ -217,6 +222,7 @@ impl Skin {
         self.listeners.borrow().len()
     }
 
+    /// Tells the listeners which appearance is drawn now.
     fn notify_appearance(&self) {
         self.notify(SkinChange::Appearance(self.appearance()));
     }
@@ -243,12 +249,39 @@ fn force_builtin_theme(settings: &gtk::Settings) {
     settings.set_gtk_application_prefer_dark_theme(false);
 }
 
-/// Adds a provider with `css` to `display`, `rank` steps above the
-/// application priority, and returns it so it can be reloaded.
-fn add_provider(display: &gdk::Display, css: &str, rank: u32) -> gtk::CssProvider {
+/// A provider's place in the skin's cascade. Each layer sits one step
+/// above the one before it, above the application priority, so it wins
+/// over the layers before it.
+#[derive(Debug, Clone, Copy)]
+enum Layer {
+    /// The rules of every region of the window.
+    Rules,
+    /// Font sizes and heights generated for the text size.
+    TextSize,
+    /// The colour tokens the rules use.
+    Palette,
+    /// The high-contrast rules.
+    HighContrast,
+}
+
+impl Layer {
+    /// The GTK style priority of this layer.
+    fn priority(self) -> u32 {
+        let steps_above_application = match self {
+            Layer::Rules => 0,
+            Layer::TextSize => 1,
+            Layer::Palette => 2,
+            Layer::HighContrast => 3,
+        };
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + steps_above_application
+    }
+}
+
+/// Adds a provider with `css` to `display` at `layer`, and returns it so
+/// it can be reloaded.
+fn add_provider(display: &gdk::Display, css: &str, layer: Layer) -> gtk::CssProvider {
     let provider = gtk::CssProvider::new();
     provider.load_from_string(css);
-    let priority = gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + rank;
-    gtk::style_context_add_provider_for_display(display, &provider, priority);
+    gtk::style_context_add_provider_for_display(display, &provider, layer.priority());
     provider
 }
