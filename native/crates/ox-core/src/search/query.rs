@@ -36,17 +36,6 @@ const MIN_TRIGRAM_WORD_CHARS: usize = 3;
 /// SQLite virtual machine steps between two cancellation checks (SRCH-017).
 const STEPS_PER_CANCEL_CHECK: i32 = 4000;
 
-/// Every [`EntryKind`], to read the stored kind words back.
-const ENTRY_KINDS: [EntryKind; 7] = [
-    EntryKind::Directory,
-    EntryKind::File,
-    EntryKind::Symlink,
-    EntryKind::Special,
-    EntryKind::Mountable,
-    EntryKind::Shortcut,
-    EntryKind::Unknown,
-];
-
 /// What to search for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchQuery {
@@ -334,7 +323,7 @@ fn opens_as_folder(kind: EntryKind, stored_is_dir: bool) -> bool {
 
 /// The kind a stored word names; unknown words are [`EntryKind::Unknown`].
 fn entry_kind_from_stored(word: &str) -> EntryKind {
-    ENTRY_KINDS
+    EntryKind::ALL
         .into_iter()
         .find(|kind| kind.as_str() == word)
         .unwrap_or(EntryKind::Unknown)
@@ -366,6 +355,16 @@ mod tests {
             scope: Some(scope.to_owned()),
             ..SearchQuery::new(text)
         }
+    }
+
+    /// The kind words of both apps read back as the kind that wrote them;
+    /// a word neither app writes reads as [`EntryKind::Unknown`].
+    #[test]
+    fn stored_kind_words_read_back_as_the_same_kind() {
+        for kind in EntryKind::ALL {
+            assert_eq!(entry_kind_from_stored(kind.as_str()), kind);
+        }
+        assert_eq!(entry_kind_from_stored("fifo"), EntryKind::Unknown);
     }
 
     /// parity: SRCH-008

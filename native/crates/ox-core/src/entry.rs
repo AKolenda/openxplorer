@@ -90,6 +90,19 @@ impl From<gio::FileType> for EntryKind {
 }
 
 impl EntryKind {
+    /// Every kind, so that a stored [`EntryKind::as_str`] name can be read
+    /// back. Kept next to `as_str`, which names each variant, so a new kind
+    /// is added to both.
+    pub(crate) const ALL: [Self; 7] = [
+        Self::Directory,
+        Self::File,
+        Self::Symlink,
+        Self::Special,
+        Self::Mountable,
+        Self::Shortcut,
+        Self::Unknown,
+    ];
+
     /// The name the Python backend and web interface use (`directory`,
     /// `file`, `mountable`, ...).
     pub fn as_str(self) -> &'static str {
