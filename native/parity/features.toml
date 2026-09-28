@@ -9275,6 +9275,23 @@ native = "todo"
 native_note = "Porting notes: Native file drops stop WebKit's drag-motion handling (native_file_drop.py), so the file list does not scroll during a drop today. DND-015 covers only sidebar autoscroll during the pointer pin drag, and SEL-012 covers rubber-band autoscroll."
 
 [[feature]]
+id = "DND-026"
+area = "DND"
+title = "Dropping files onto a program or script runs it with those files"
+behaviour = "Dropping one or more items onto an executable file (a program, an AppImage or a script with the execute permission) runs that program with the dropped items' paths as arguments, as Windows Explorer does when a file is dropped onto an .exe. Scripts meant for a terminal run in the user's terminal so their output stays visible. The drop target shows 'Open with <name>' while hovering. Nothing runs from a drop onto a file that is not executable, and a program on a network share or removable device asks for confirmation first."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "https://www.reddit.com/ (owner's post comment by krader33, 2026-09-27: 'When you drag a file (A) onto another file (B), run ... in a console with path ... as the first argument'; owner replied it will be added once the Rust port is complete)",
+]
+python_tests = []
+bridge = []
+gnome = "GtkDropTarget on file rows; g_file_query_info access::can-execute; GAppInfo from the executable (g_app_info_create_from_commandline) or the terminal via xdg-terminal-exec / the configured terminal"
+native = "todo"
+native_note = "Requested feature the owner committed to publicly. Lands with native drag and drop. Needs tests for: drop onto an executable runs it with the paths, drop onto a non-executable does nothing, quoting of paths with spaces and quotes, confirmation for programs on remote or removable storage."
+
+[[feature]]
 id = "SRCH-001"
 area = "SRCH"
 title = "Search box and Ctrl+F"
@@ -13774,6 +13791,23 @@ sources = ["desktop/folder_locations.py:27-64"]
 python_tests = []
 bridge = ["environment", "locationCheck"]
 native = "todo"
+
+[[feature]]
+id = "SET-019"
+area = "SET"
+title = "Settings are organised by category, one category at a time"
+behaviour = "The settings page has a category list on the left (for example General, Appearance, Search & indexing, Default file explorer, Windows & tabs, Brave & downloads, Updates & about) and shows only the selected category on the right. Each setting is one row: a title and a one-line description on the left and a compact control (switch, dropdown or button) on the right, separated by thin dividers. Long lists such as the search cache folders open from a row instead of filling the page. The settings search filters rows across all categories and jumps to the match. Every setting the current app offers stays available."
+origin = ["openxplorer"]
+priority = "must"
+openxplorer = "partial"
+sources = [
+  "desktop/ui/app.js (settings page)",
+  "owner request 2026-09-27: make settings more usable, laid out like the ChatGPT and T3 Code settings",
+]
+python_tests = []
+bridge = []
+native = "todo"
+native_note = "Owner-requested usability improvement over the current single long settings page; it must keep every current setting (see the other SET features)."
 
 [[feature]]
 id = "LOOK-001"
