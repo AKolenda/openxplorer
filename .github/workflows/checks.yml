@@ -17,6 +17,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     name: Release package (${{ matrix.name }})
     runs-on: ubuntu-24.04
+    env:
+      # Skips the few tests whose results depend on the distribution's
+      # GVfs, Python or Node versions; the Native Rust checks job runs them.
+      OX_DISTRO_CI: "1"
     timeout-minutes: 75
     container:
       image: ${{ matrix.image }}

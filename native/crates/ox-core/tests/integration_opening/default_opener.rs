@@ -152,7 +152,15 @@ fn an_executable_script_opens_in_its_editor_and_is_never_run() {
     assert_eq!(prepared.launcher, expected_launcher);
     assert_eq!(prepared.target, OpenTarget::LocalPath(script));
     let content_type = prepared.entry.content_type.as_deref();
-    assert_eq!(content_type, Some("application/x-shellscript"));
+    // shared-mime-info names shell scripts application/x-shellscript; some
+    // distributions ship the older alias text/x-shellscript.
+    assert!(
+        matches!(
+            content_type,
+            Some("application/x-shellscript" | "text/x-shellscript")
+        ),
+        "{content_type:?}"
+    );
     let asked = applications.asked_types();
     assert!(!asked.is_empty());
     assert!(
