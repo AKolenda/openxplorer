@@ -32,6 +32,7 @@
 //! | `schema` | The shared tables and their upgrades | `search_index.py` |
 //! | `root` | Roots, their status words and the cache status | `search_index.py`, `index_service.py` |
 //! | `query` | Searching | `search_index.py` |
+//! | `hit` | A search hit as a listed item | `app.js` |
 //! | `scan` | How scans and live updates write | `search_index.py` |
 //! | `requests` | Requests other processes leave for the owner | `search_index.py`, `index_service.py` |
 //! | `service` | The coordinator, its worker and ownership | `index_service.py` |
@@ -53,6 +54,7 @@
 mod commands;
 mod crawl;
 mod error;
+mod hit;
 mod index;
 mod limits;
 mod mounts;

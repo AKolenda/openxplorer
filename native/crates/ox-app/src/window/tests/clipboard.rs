@@ -265,9 +265,7 @@ fn paste_during_a_search_asks_to_open_the_destination_folder() {
     select_names(&test, &["Notes 2.txt"]);
     test.activate("copy", None);
     test.window.search_box().entry().set_text("Notes");
-    wait_until("the search to filter", || {
-        test.window.folder_model().is_searching()
-    });
+    wait_until("the search to filter", || test.window.is_searching());
 
     test.window.paste_from_keyboard();
 

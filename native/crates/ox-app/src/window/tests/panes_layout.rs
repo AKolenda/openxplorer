@@ -14,7 +14,8 @@ fn column_titles(test: &TestWindow) -> Vec<gtk::Widget> {
     let header = children(details)
         .find(|child| child.css_name() == "header")
         .expect("the details view has a header");
-    children(&header).collect()
+    // The Folder path title of a search is there but hidden.
+    children(&header).filter(WidgetExt::is_visible).collect()
 }
 
 /// The first row of the details view.

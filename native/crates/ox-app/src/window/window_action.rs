@@ -187,8 +187,12 @@ pub(crate) enum WindowAction {
     Eject,
     /// Powers off the drive that holds the location in the string target.
     SafelyRemove,
-    /// Adds the current folder to the search cache.
+    /// Caches the current folder for search, or stops caching it (a
+    /// check item).
     CacheFolder,
+    /// Opens the folder of the one selected search result, with the
+    /// result selected.
+    OpenFileLocation,
     /// Opens the Settings page (Ctrl+,), as a tab of its own.
     Settings,
     /// Shows the licence and where the source is.
@@ -286,6 +290,7 @@ impl WindowAction {
             WindowAction::Eject => "eject",
             WindowAction::SafelyRemove => "safely-remove",
             WindowAction::CacheFolder => "cache-folder",
+            WindowAction::OpenFileLocation => "open-file-location",
             WindowAction::Settings => "settings",
             WindowAction::License => "license",
             WindowAction::DefaultFileExplorer => "default-file-explorer",

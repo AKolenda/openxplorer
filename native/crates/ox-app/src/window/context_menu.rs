@@ -168,6 +168,7 @@ impl BrowserWindow {
             location: item_location(&entry.uri),
             is_read_only: self.imp().locations.borrow().is_snapshot_location(&entry.uri),
             is_single,
+            is_search_result: self.is_searching(),
             delete_label: self.delete_label(),
         }
     }

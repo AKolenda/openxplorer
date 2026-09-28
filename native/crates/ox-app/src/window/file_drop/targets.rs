@@ -277,8 +277,7 @@ impl BrowserWindow {
                 .active()
                 .is_some_and(|tab| tab.error.is_none() && !tab.listing_state.is_listing())
         };
-        let takes_drops =
-            is_listed_cleanly && !self.folder_pane().model().is_searching() && self.takes_drops(&shown);
+        let takes_drops = is_listed_cleanly && !self.is_searching() && self.takes_drops(&shown);
         takes_drops.then_some(shown)
     }
 
@@ -437,9 +436,7 @@ mod tests {
         let on_file = destination_of(&test, Some("Notes 2.txt"));
         let on_blank = destination_of(&test, None);
         test.window.search_box().entry().set_text("Notes");
-        wait_until("the search to filter", || {
-            test.window.folder_model().is_searching()
-        });
+        wait_until("the search to filter", || test.window.is_searching());
         let while_searching = destination_of(&test, None);
 
         assert_eq!(

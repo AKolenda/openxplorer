@@ -54,6 +54,9 @@ pub(crate) struct ItemFacts {
     pub(crate) is_read_only: bool,
     /// At most one item is selected (`state.selection.size<=1`).
     pub(crate) is_single: bool,
+    /// It is a search result, listed away from its folder
+    /// (`state.query`).
+    pub(crate) is_search_result: bool,
     /// Delete's label: "Move to Trash" or "Delete permanently".
     pub(crate) delete_label: &'static str,
 }
@@ -74,7 +77,8 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
 }
 
 /// The Open group: Open, Extract all…, the Terminal entry, Open with,
-/// and for folders Open in new tab and Pin to Quick access.
+/// for folders Open in new tab and Pin to Quick access, and for a search
+/// result Open file location (SRCH-015).
 fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let several = !facts.is_single;
     let is_folder = facts.shape == ItemShape::Folder;
@@ -110,6 +114,10 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         let pin = item("Pin to Quick access", Icon::Pin, WindowAction::PinSelected);
         entries.push(new_tab.disabled_when(several).into());
         entries.push(pin.disabled_when(several).into());
+    }
+    if facts.is_search_result {
+        let open_location = item("Open file location", Icon::Folder, WindowAction::OpenFileLocation);
+        entries.push(open_location.disabled_when(several).into());
     }
     entries
 }
@@ -315,6 +323,7 @@ mod tests {
             location: ItemLocation::Local,
             is_read_only: false,
             is_single: true,
+            is_search_result: false,
             delete_label: "Move to Trash",
         }
     }
@@ -451,6 +460,29 @@ mod tests {
                 "Properties",
             ]
         );
+    }
+
+    /// parity: SRCH-015
+    #[test]
+    fn a_search_result_offers_open_file_location_after_the_open_group() {
+        let facts = ItemFacts {
+            is_search_result: true,
+            ..file()
+        };
+
+        let entries = labels(&item_menu(&facts, MenuStyle::Classic).entries);
+
+        assert_eq!(
+            entries[..4],
+            [
+                "Open",
+                "Open containing folder in Terminal",
+                "Open with…",
+                "Open file location"
+            ]
+        );
+        assert!(!labels(&item_menu(&file(), MenuStyle::Classic).entries)
+            .contains(&"Open file location".to_owned()));
     }
 
     /// parity: CMD-008, CMD-010

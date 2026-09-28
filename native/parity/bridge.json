@@ -112,34 +112,49 @@
       "evidence": []
     },
     "cacheClear": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Clearing a root's names is ported; \"Clear cached names only\" uses it. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/src/search/index.rs::clearing_a_root_keeps_it_as_not_indexed"
+      ]
     },
     "cacheRefresh": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Refreshing one root or all of them is ported; Refresh cache, Refresh all and F5 during a search use it. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/tests/search_live.rs::refresh_all_rescans_every_enabled_root"
+      ]
     },
     "cacheRemove": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Removing a root is ported and tested in ox-core. As in the Python app, no control calls it: \"Remove from index\" switches a folder off, as the Python check box did.",
+      "evidence": [
+        "native/crates/ox-core/src/search/index.rs::removing_a_root_deletes_it_and_its_entries"
+      ]
     },
     "cacheSet": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Enabling and disabling a root is ported, with the device and server-list refusals; the window's cache toggle and the Indexed folders page use it. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/tests/search_service.rs::enabling_a_root_scans_it_and_disabling_removes_its_names",
+        "native/crates/ox-core/src/search/index.rs::a_root_is_labelled_with_its_path_unless_named",
+        "native/crates/ox-app/src/settings_page/indexed_folders/commands.rs::a_typed_folder_is_read_relative_to_the_folder_shown_before"
+      ]
     },
     "cacheStatus": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "The cache status (roots, counts, update modes, errors) is ported; the app reads it after changes, every 5 s while a window is shown and on focus. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/src/search/index.rs::the_status_counts_the_entries_of_enabled_roots",
+        "native/crates/ox-app/src/settings_page/indexed_folders/root_row.rs::a_folder_says_how_many_names_it_holds_and_how_it_keeps_current"
+      ]
     },
     "cacheStop": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Stopping a running scan is ported and keeps the earlier results; the Indexed folders page offers Stop indexing while a folder is indexing, which no GTK test clicks yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/search_service.rs::stopping_a_scan_keeps_the_earlier_results"
+      ]
     },
     "cancel": {
       "status": "native-tested",
@@ -467,9 +482,14 @@
       "evidence": []
     },
     "search": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "The cache search is ported (words, scope, hidden items, limit, cancellation) and the window merges the listing's matches with it. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/src/search/query.rs::every_word_must_occur_in_the_name_or_parent_path",
+        "native/crates/ox-core/src/search/query.rs::a_running_search_stops_when_cancelled",
+        "native/crates/ox-app/src/search/results.rs::the_folders_own_matches_come_first_then_cached_ones_once",
+        "native/crates/ox-app/src/search/folder_search.rs::an_edit_cancels_the_running_search_and_drops_its_results"
+      ]
     },
     "signOut": {
       "status": "native-tested",

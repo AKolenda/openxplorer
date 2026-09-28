@@ -40,6 +40,7 @@ impl FilterState {
     }
 
     /// True when a search is active.
+    #[cfg(test)]
     pub(crate) fn is_searching(&self) -> bool {
         !self.terms.is_empty()
     }

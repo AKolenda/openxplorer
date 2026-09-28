@@ -123,9 +123,7 @@ fn links_and_drops_during_a_search_or_an_operation_are_refused() {
     let busy_message = test.window.shown_message();
     test.window.end_operation();
     test.window.search_box().entry().set_text("Notes");
-    wait_until("the search to filter", || {
-        test.window.folder_model().is_searching()
-    });
+    wait_until("the search to filter", || test.window.is_searching());
     let searching = test
         .window
         .drop_files(&[fixture.uri_of("Notes 2.txt")], None, DropAction::Copy);

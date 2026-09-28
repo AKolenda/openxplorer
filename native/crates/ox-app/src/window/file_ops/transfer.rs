@@ -91,7 +91,7 @@ impl BrowserWindow {
     /// the folder shown (`paste`).
     pub(crate) async fn paste(&self) {
         let clipboard = self.refresh_file_clipboard().await;
-        if self.folder_pane().model().is_searching() {
+        if self.is_searching() {
             self.show_message("Open the destination folder before pasting.");
             return;
         }

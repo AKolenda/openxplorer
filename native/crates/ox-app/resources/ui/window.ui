@@ -155,16 +155,26 @@
                         <property name="end-child">
                           <object class="GtkBox">
                             <child>
-                              <!-- The transfer panel floats over the bottom of
-                                   the folder pane, between the sidebar and
-                                   the details pane (`.transfer`). -->
-                              <object class="GtkOverlay">
+                              <!-- The search strip sits above the columns
+                                   (#search-info in index.html). -->
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
                                 <property name="hexpand">true</property>
-                                <property name="child">
-                                  <object class="OxFolderPane" id="folder_pane"/>
-                                </property>
-                                <child type="overlay">
-                                  <object class="OxTransferPanel" id="transfer_panel"/>
+                                <child>
+                                  <object class="OxSearchInfoStrip" id="search_strip"/>
+                                </child>
+                                <child>
+                                  <!-- The transfer panel floats over the bottom
+                                       of the folder pane, between the sidebar
+                                       and the details pane (`.transfer`). -->
+                                  <object class="GtkOverlay">
+                                    <property name="child">
+                                      <object class="OxFolderPane" id="folder_pane"/>
+                                    </property>
+                                    <child type="overlay">
+                                      <object class="OxTransferPanel" id="transfer_panel"/>
+                                    </child>
+                                  </object>
                                 </child>
                               </object>
                             </child>

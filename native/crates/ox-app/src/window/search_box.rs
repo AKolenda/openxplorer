@@ -11,8 +11,10 @@
 //! search shows the bundled glyphs the same way.
 //!
 //! [`SearchBox`] is a `GtkBox` subclass laid out by the template
-//! `resources/ui/search-box.ui`. The window hears the typed text through
-//! [`SearchBox::connect_query_changed`], never through the entry itself.
+//! `resources/ui/search-box.ui`. The window hears every edit through
+//! [`SearchBox::connect_query_edited`] and the text once typing pauses
+//! through [`SearchBox::connect_query_changed`], never through the entry
+//! itself.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -84,6 +86,9 @@ impl SearchBox {
         hide_leading_magnifier(&imp.entry);
         show_bundled_clear_icon(&imp.entry);
         icons::set_icon(&imp.magnifier, Icon::Search, MAGNIFIER_GLYPH);
+        // Escape in the box empties it, as a web search field does
+        // (SRCH-001); GTK's search entry only reports the key.
+        imp.entry.connect_stop_search(|entry| entry.set_text(""));
     }
 
     /// Calls `on_query_changed` with the text once typing pauses, and at
@@ -94,9 +99,20 @@ impl SearchBox {
             .connect_search_changed(move |entry| on_query_changed(entry.text().as_str()));
     }
 
-    /// Moves keyboard focus into the box (Ctrl+F).
+    /// Calls `on_query_edited` with the text at every change, before the
+    /// typing pause (the `input` event of `queueSearch`).
+    pub(super) fn connect_query_edited(&self, on_query_edited: impl Fn(&str) + 'static) {
+        self.imp()
+            .entry
+            .connect_changed(move |entry| on_query_edited(entry.text().as_str()));
+    }
+
+    /// Moves keyboard focus into the box and selects its text (Ctrl+F,
+    /// `focus()` and `select()` in app.js).
     pub(super) fn focus(&self) {
-        self.imp().entry.grab_focus();
+        let entry = &self.imp().entry;
+        entry.grab_focus();
+        entry.select_region(0, -1);
     }
 
     /// Names the folder the box searches: "Search Documents".
@@ -113,6 +129,11 @@ impl SearchBox {
     /// Empties the box, which ends the filter.
     pub(super) fn clear(&self) {
         self.imp().entry.set_text("");
+    }
+
+    /// Types `text` into the box, as the snapshot hook asks.
+    pub(super) fn set_query(&self, text: &str) {
+        self.imp().entry.set_text(text);
     }
 
     /// The field the user types in, for tests.

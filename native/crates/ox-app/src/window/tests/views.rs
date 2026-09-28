@@ -16,16 +16,23 @@ use crate::test_support::harness::{
 use crate::text_size::Step;
 use crate::theme::Skin;
 use crate::window::folder_pane::FolderView;
+use crate::window::widget_tree::children;
 
 use super::geometry::{pixels, Bounds};
 
-/// The sort direction each details header shows: `ascending`,
-/// `descending` or `unsorted`, in column order.
+/// The sort direction each shown details header shows: `ascending`,
+/// `descending` or `unsorted`, in column order. The Folder path title of
+/// a search is left out while it is hidden.
 fn header_arrows(test: &TestWindow) -> Vec<String> {
     let details = test.window.folder_pane().details().column_view();
-    let indicators = descendants::<gtk::Widget>(details)
-        .into_iter()
-        .filter(|widget| widget.css_name() == "sort-indicator");
+    let header = children(details)
+        .find(|child| child.css_name() == "header")
+        .expect("the details view has a header");
+    let shown_titles = children(&header).filter(WidgetExt::is_visible);
+    let indicators = shown_titles.filter_map(|title| {
+        let parts = descendants::<gtk::Widget>(&title).into_iter();
+        parts.into_iter().find(|part| part.css_name() == "sort-indicator")
+    });
     let direction_of = |indicator: gtk::Widget| {
         ["ascending", "descending"]
             .into_iter()

@@ -3,12 +3,17 @@
 //!
 //! Wraps an [`ox_core::entry::Entry`] with what the views need often and
 //! should compute once: the natural-order sort keys, the lower-cased name
-//! used by the search filter, and the icon art. A row of `renderRows`
-//! in `desktop/ui/app.js` reads the same fields from the entry.
+//! used by the search filter, and the icon art, and while searching the
+//! folder the item is in. A row of `renderRows` in `desktop/ui/app.js`
+//! reads the same fields from the entry.
+
+use std::cell::OnceCell;
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
+use ox_core::location::parent_location;
+use ox_core::search::display_path;
 
 use crate::folder_view::filter::Visibility;
 use crate::folder_view::sorting::{SortKey, SortName};
@@ -23,6 +28,28 @@ struct PreparedEntry {
     lowercase_name: String,
     art: Art,
     entry: Entry,
+    /// Worked out the first time a search shows the item's folder.
+    folder_path: OnceCell<FolderPath>,
+}
+
+/// Where an item is, as the Folder path column of a search shows it.
+#[derive(Debug)]
+pub(crate) struct FolderPath {
+    /// The folder's display path, a UNC path for SMB
+    /// (`displayUri(e.parentUri||parentUri(e.uri))` in app.js).
+    pub text: String,
+    /// Its natural-order key, as the column sorts it.
+    pub key: SortKey,
+}
+
+impl FolderPath {
+    /// The folder `entry` is in.
+    fn of(entry: &Entry) -> Self {
+        let folder = parent_location(&entry.uri).unwrap_or_else(|| entry.uri.clone());
+        let text = display_path(&folder);
+        let key = SortKey::new(&text);
+        Self { text, key }
+    }
 }
 
 impl PreparedEntry {
@@ -33,6 +60,7 @@ impl PreparedEntry {
             lowercase_name: entry.name.to_lowercase(),
             art: Art::for_entry(&entry),
             entry,
+            folder_path: OnceCell::new(),
         }
     }
 }
@@ -116,6 +144,16 @@ impl FileItem {
         } else {
             Visibility::Visible
         }
+    }
+
+    /// The folder the item is in, for the Folder path column of a search
+    /// (VIEW-042). Worked out when first asked, as a folder listing never
+    /// shows it.
+    pub(crate) fn folder_path(&self) -> &FolderPath {
+        let prepared = self.prepared();
+        prepared
+            .folder_path
+            .get_or_init(|| FolderPath::of(&prepared.entry))
     }
 
     /// The icon art for the item.

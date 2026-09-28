@@ -104,6 +104,9 @@ pub(super) struct Tab {
     pub listing: Option<Listing>,
     /// The folder watch, kept while the tab shows the same folder.
     pub watch: Option<Watch>,
+    /// An item to scroll into view once the folder is listed, as "Open
+    /// file location" asks.
+    pub revealed_item: Option<String>,
 }
 
 impl Tab {
@@ -120,6 +123,7 @@ impl Tab {
             scroll_after_listing: None,
             listing: None,
             watch: None,
+            revealed_item: None,
         }
     }
 

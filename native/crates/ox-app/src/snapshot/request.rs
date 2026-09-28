@@ -29,6 +29,8 @@ const SIZE_VARIABLE: &str = "OPENXPLORER_SIZE";
 const SETTINGS_VARIABLE: &str = "OPENXPLORER_SETTINGS";
 /// What to type into the settings search.
 const SETTINGS_SEARCH_VARIABLE: &str = "OPENXPLORER_SETTINGS_SEARCH";
+/// What to type into the window's search box.
+const SEARCH_VARIABLE: &str = "OPENXPLORER_SEARCH";
 
 /// The size of a window's title bar and contents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +68,8 @@ pub(crate) struct SnapshotRequest {
     pub settings: Option<SettingsView>,
     /// What to type into the settings search, or `None` for nothing.
     pub settings_search: Option<String>,
+    /// What to type into the window's search box, or `None` for nothing.
+    pub search: Option<String>,
 }
 
 impl SnapshotRequest {
@@ -107,6 +111,7 @@ impl SnapshotRequest {
             size,
             settings,
             settings_search: non_empty(&lookup, SETTINGS_SEARCH_VARIABLE),
+            search: non_empty(&lookup, SEARCH_VARIABLE),
         }))
     }
 }
@@ -182,6 +187,7 @@ mod tests {
             }),
             settings: None,
             settings_search: None,
+            search: None,
         };
         assert_eq!(asked.expect("valid variables"), Some(expected));
     }
@@ -202,6 +208,7 @@ mod tests {
             ))
         );
         assert_eq!(asked.settings_search.as_deref(), Some("zoom"));
+        assert_eq!(asked.search, None);
         let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SETTINGS_VARIABLE, "general")]);
         assert!(refused.is_err(), "general is not a settings page");
     }

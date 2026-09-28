@@ -49,14 +49,17 @@ impl BrowserWindow {
         self.set_action_enabled(WindowAction::CopyPath, selected <= 1);
         self.set_action_enabled(WindowAction::PinSelected, selected == 1);
         self.update_file_commands();
+        self.update_open_location_action(selected);
     }
 
     /// Runs `change`, which swaps, reloads or clears the folder model,
     /// without saving the selection changes it causes as the tab's own.
     pub(super) fn change_model(&self, change: impl FnOnce()) {
-        self.imp().changing_model.set(true);
+        // A change may run inside another, as ending a search does while
+        // the window leaves a folder.
+        let was_changing = self.imp().changing_model.replace(true);
         change();
-        self.imp().changing_model.set(false);
+        self.imp().changing_model.set(was_changing);
     }
 
     /// Remembers the active tab's selection, for a reload or tab switch.
@@ -70,11 +73,14 @@ impl BrowserWindow {
     /// Shows the item count and the selection in the status bar.
     pub(super) fn update_status(&self) {
         let on_page = self.current_uri().as_deref().and_then(Page::from_uri).is_some();
+        let shown = self.folder_pane().model().n_items();
         let subject = if on_page {
             StatusSubject::Page
+        } else if let Some(count) = self.search_count(shown) {
+            StatusSubject::Search(count)
         } else {
             StatusSubject::Folder {
-                shown: self.folder_pane().model().n_items(),
+                shown,
                 loading: self.is_loading(),
             }
         };

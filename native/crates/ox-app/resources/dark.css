@@ -70,6 +70,7 @@
 @define-color ox_critical_fill #c42b1c;            /* C33 close hover, full drives */
 @define-color ox_on_critical #ffffff;              /* the close glyph on C33 */
 @define-color ox_success #6ccb5f;                  /* C34 connected */
+@define-color ox_caution #fce100;                  /* WinUI SystemFillColorCaution */
 
 /* Scroll bars and shadows */
 @define-color ox_scrollbar_thumb alpha(white, .55);        /* C40 */

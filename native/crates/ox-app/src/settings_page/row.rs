@@ -25,9 +25,6 @@ pub(crate) enum Availability {
     Ready,
     /// Shown but disabled until the milestone brings it.
     Unported(Milestone),
-    /// Saved in the settings file now, which the Python app follows; the
-    /// native preview follows it from the milestone on.
-    SavedForLater(Milestone),
 }
 
 impl Availability {
@@ -36,10 +33,6 @@ impl Availability {
         match self {
             Availability::Ready => None,
             Availability::Unported(milestone) => Some(milestone.notice()),
-            Availability::SavedForLater(milestone) => Some(format!(
-                "Saved for the installed OpenXplorer; this preview follows it once it has {}.",
-                milestone.description()
-            )),
         }
     }
 
@@ -296,11 +289,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_saved_setting_says_the_installed_app_follows_it_now() {
-        let saved = Availability::SavedForLater(Milestone::SearchAndMetadata);
+    fn an_unported_setting_names_its_milestone_and_a_working_one_nothing() {
+        let unported = Availability::Unported(Milestone::Distribution);
         assert_eq!(
-            saved.notice().as_deref(),
-            Some("Saved for the installed OpenXplorer; this preview follows it once it has cached search.")
+            unported.notice().as_deref(),
+            Some("Not in the native preview yet: arrives with packaging and updates.")
         );
         assert_eq!(Availability::Ready.notice(), None);
     }

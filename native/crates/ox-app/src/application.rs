@@ -158,6 +158,15 @@ mod imp {
             }
         }
 
+        /// Stops the search index before the process ends, so another
+        /// instance can take it over at once.
+        fn shutdown(&self) {
+            if let Some(state) = self.state.get() {
+                state.shut_down();
+            }
+            self.parent_shutdown();
+        }
+
         /// Handles `--new-window`; the launch then goes on as usual.
         fn handle_local_options(&self, options: &glib::VariantDict) -> ControlFlow<glib::ExitCode> {
             self.obj().handle_new_window_option(options);

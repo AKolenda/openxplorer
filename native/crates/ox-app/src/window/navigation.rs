@@ -149,8 +149,7 @@ impl BrowserWindow {
     /// filter, the selection and the type-to-select prefix.
     fn leave_location(&self) {
         self.change_model(|| {
-            self.search_box().clear();
-            self.folder_pane().model().set_query("");
+            self.end_search();
             self.folder_pane().model().select_none();
         });
         self.reset_typeahead();
@@ -248,8 +247,12 @@ impl BrowserWindow {
     }
 
     /// Lists the active folder again, keeping its rows, selection and
-    /// scroll position, and re-reads the shared settings.
+    /// scroll position, and re-reads the shared settings. While searching
+    /// it refreshes the search instead ([`Self::refresh_search`]).
     pub(super) fn refresh(&self) {
+        if self.refresh_search() {
+            return;
+        }
         self.context().reload_settings();
         self.save_selection();
         let active = self.imp().session.borrow().active_id();

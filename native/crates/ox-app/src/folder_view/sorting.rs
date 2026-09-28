@@ -19,6 +19,9 @@ pub(crate) enum SortColumn {
     Name,
     /// Modification timestamp.
     Modified,
+    /// The folder a search result is in, shown instead of Date modified
+    /// while searching (VIEW-042).
+    FolderPath,
     /// Human-readable content type.
     Type,
     /// File size in bytes.
@@ -26,8 +29,19 @@ pub(crate) enum SortColumn {
 }
 
 impl SortColumn {
-    /// Every column, in display order.
-    pub(crate) const ALL: [SortColumn; 4] = [
+    /// Every column, in display order. A folder shows Date modified and a
+    /// search Folder path, in the same place (`columnFields` in app.js).
+    pub(crate) const ALL: [SortColumn; 5] = [
+        SortColumn::Name,
+        SortColumn::Modified,
+        SortColumn::FolderPath,
+        SortColumn::Type,
+        SortColumn::Size,
+    ];
+
+    /// The columns the Sort menu offers, as app.js's Sort menu does; a
+    /// search sorts by Folder path through its column title.
+    pub(crate) const IN_SORT_MENU: [SortColumn; 4] = [
         SortColumn::Name,
         SortColumn::Modified,
         SortColumn::Type,
@@ -39,6 +53,7 @@ impl SortColumn {
         match self {
             SortColumn::Name => "name",
             SortColumn::Modified => "modified",
+            SortColumn::FolderPath => "parentUri",
             SortColumn::Type => "type",
             SortColumn::Size => "size",
         }
@@ -54,6 +69,7 @@ impl SortColumn {
         match self {
             SortColumn::Name => "Name",
             SortColumn::Modified => "Date modified",
+            SortColumn::FolderPath => "Folder path",
             SortColumn::Type => "Type",
             SortColumn::Size => "Size",
         }

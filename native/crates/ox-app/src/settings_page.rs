@@ -47,6 +47,7 @@ mod tests;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::search::IndexRoot;
 use ox_core::settings::Preferences;
 
 use crate::app_context::AppContext;
@@ -54,6 +55,7 @@ use crate::icons::{self, Icon};
 use crate::locations::Page;
 use crate::window::{show_bundled_clear_icon, show_bundled_magnifier};
 
+pub(crate) use choice_list::ChoiceButton;
 pub(crate) use indexed_folders::{index_candidates, CandidateSources, IndexCandidate};
 #[cfg(test)]
 pub(crate) use pages::Subpage;
@@ -100,7 +102,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::indexed_folders::FolderList;
+    use super::indexed_folders::IndexedFolders;
     use super::pages::{Category, SettingsView, Subpage};
     use super::row::PageWidth;
     use super::search::SearchQuery;
@@ -149,8 +151,11 @@ mod imp {
         pub(super) view: Cell<SettingsView>,
         /// What the settings search looks for.
         pub(super) query: RefCell<SearchQuery>,
-        /// The folders the search index can take.
-        pub(super) indexed_folders: OnceCell<FolderList>,
+        /// The folders the search index keeps and can take.
+        pub(super) indexed_folders: OnceCell<IndexedFolders>,
+        /// The folder shown before Settings opened, where a typed folder
+        /// to index starts.
+        pub(super) index_origin: RefCell<Option<String>>,
         /// Controls that show a preference.
         pub(super) followers: RefCell<Vec<PreferenceFollower>>,
         /// Set while the controls show the current preferences, so their
@@ -316,11 +321,25 @@ impl SettingsPage {
         self.imp().back_button.get()
     }
 
-    /// Lists `candidates` on the Indexed folders page.
-    pub(crate) fn show_index_candidates(&self, candidates: &[IndexCandidate]) {
-        if let Some(list) = self.imp().indexed_folders.get() {
-            list.show(candidates);
+    /// Lists the indexed `roots` and the other `candidates` on the Indexed
+    /// folders page; a folder typed there starts at `origin`, the folder
+    /// shown before Settings.
+    pub(crate) fn show_indexed_folders(
+        &self,
+        candidates: &[IndexCandidate],
+        roots: &[IndexRoot],
+        origin: Option<&str>,
+    ) {
+        let imp = self.imp();
+        imp.index_origin.replace(origin.map(str::to_owned));
+        if let Some(folders) = imp.indexed_folders.get() {
+            folders.show(candidates, roots, self);
         }
+    }
+
+    /// The folder shown before Settings opened, if any.
+    pub(super) fn index_origin(&self) -> Option<String> {
+        self.imp().index_origin.borrow().clone()
     }
 
     /// Lays every page out for a window `width` wide, and the pages built

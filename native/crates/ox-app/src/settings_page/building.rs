@@ -58,10 +58,10 @@ impl SettingsPage {
     }
 
     fn add_subpages(&self) {
-        let (indexed_page, folder_list) = indexed_folders::build();
+        let (indexed_page, folders) = indexed_folders::build(self);
         self.imp()
             .indexed_folders
-            .set(folder_list)
+            .set(folders)
             .expect("the sub-pages are built once");
         let subpages = [
             (Subpage::IndexedFolders, indexed_page),

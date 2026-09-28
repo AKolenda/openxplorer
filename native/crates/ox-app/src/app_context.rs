@@ -12,9 +12,11 @@
 //! a preference changes, and `layout-reset` when Settings restores the
 //! default pane widths. The file operations of every window share the
 //! undo journal and the previous-versions protection ([`file_operations`]).
+//! It also holds the search cache the windows share ([`search_cache`]).
 
 mod file_operations;
 mod known_folders;
+mod search_cache;
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -62,6 +64,7 @@ mod imp {
 
     use super::{JOURNAL_CHANGED, LAYOUT_RESET, PLACES_CHANGED, SERVER_SIGNED_OUT};
     use crate::network::NetworkServices;
+    use crate::search::SearchCache;
     use crate::settings_store::SettingsStore;
     use crate::theme::Skin;
 
@@ -90,6 +93,8 @@ mod imp {
         /// The previous-versions service, whose read-only rule every file
         /// operation's worker asks, hence shared across threads.
         pub(super) previous_versions: OnceCell<Arc<PreviousVersions>>,
+        /// The search cache and its index service.
+        pub(super) search_cache: SearchCache,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,

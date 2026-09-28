@@ -117,6 +117,7 @@ impl BrowserWindow {
         let search = self.search_box();
         search.set_folder_title(&title);
         search.set_enabled(!on_page && !is_device_location(uri));
+        self.update_cache_folder_action();
         self.render_tabs();
         self.sidebar().select(uri);
         self.render_landing();

@@ -202,22 +202,26 @@ impl BrowserWindow {
         self.show_index_candidates();
     }
 
-    /// Offers the search index the folder shown before Settings, Quick
-    /// access as the sidebar last drew it, the saved shares and the drives.
-    fn show_index_candidates(&self) {
+    /// Offers the search index the folder shown before Settings, the
+    /// folders it knows, Quick access as the sidebar last drew it, the
+    /// saved shares and the drives, and shows the folders it keeps.
+    pub(super) fn show_index_candidates(&self) {
         let imp = self.imp();
         let state = imp.settings_tab.borrow();
         let shares = self.context().settings_data().shares;
         let volumes = imp.volumes.borrow();
         let locations = imp.locations.borrow();
+        let roots = self.context().search_cache().roots();
         let sources = CandidateSources {
             origin: state.origin.as_deref(),
+            roots: &roots,
             quick_access: &state.quick_access,
             shares: &shares,
             volumes: &volumes,
             locations: &locations,
         };
+        let candidates = index_candidates(&sources);
         self.settings_page()
-            .show_index_candidates(&index_candidates(&sources));
+            .show_indexed_folders(&candidates, &roots, state.origin.as_deref());
     }
 }

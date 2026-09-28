@@ -24,6 +24,8 @@ use crate::test_support::harness::{descendants, skin, wait_until, Fixture, TestW
 use crate::test_support::python::{python_preference, python_saves_preferences};
 use crate::text_size::TextSize;
 
+mod indexing;
+
 /// A window on the standard fixture with Settings open in front.
 struct SettingsTest {
     /// The window and its settings directory.
@@ -502,10 +504,6 @@ fn assert_row_follows_its_availability(row: &SettingRow, group: &SettingsGroup) 
         }
         Availability::Unported(milestone) => {
             assert!(disabled, "{title} waits for its milestone");
-            milestone
-        }
-        Availability::SavedForLater(milestone) => {
-            assert!(enabled, "{title} saves its preference now");
             milestone
         }
     };

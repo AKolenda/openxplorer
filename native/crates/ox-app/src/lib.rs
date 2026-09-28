@@ -24,6 +24,7 @@ mod icons;
 mod locations;
 mod network;
 mod places;
+mod search;
 mod settings_page;
 mod settings_store;
 mod snapshot;

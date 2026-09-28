@@ -340,7 +340,7 @@ python_tests = ["desktop/tests/ui_rc3_contract.py::Selection restored after list
 bridge = ["list", "environment", "cacheRefresh", "search", "cancel"]
 dolphin = "View > Reload (F5); Dolphin: F5 reload.; view_redisplay: F5, Refresh key"
 native = "partial"
-native_note = "refresh() exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes); F5/Ctrl+R accelerators and search-cache refresh untested. Porting notes: app.js:1026 is an unreachable duplicate F5 branch."
+native_note = "refresh() exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes); native/crates/ox-app/src/window/tests/search.rs (refresh_while_searching_runs_the_search_again): during a search, F5 rescans the first indexed folder around this one and runs the search again. Missing: a test of the F5/Ctrl+R accelerators themselves. Porting notes: app.js:1026 is an unreachable duplicate F5 branch."
 
 [[feature]]
 id = "NAV-014"
@@ -3604,7 +3604,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Search Folder path column resizes independently",
 ]
 bridge = ["search"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/folder_view/details.rs (search_results_show_folder_path_in_place_of_date_modified, a_settled_resize_reports_the_widths_settings_save); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). Folder path replaces Date modified while searching (Name and Folder path in a compact window) and saves its width as parentUri. Missing: the full path shows as the Folder path cell's tooltip, not the whole row's."
 
 [[feature]]
 id = "VIEW-043"
@@ -3829,7 +3830,8 @@ sources = ["desktop/ui/app.js:434", "desktop/ui/index.html:66", "desktop/ui/inde
 python_tests = []
 bridge = []
 dolphin = "Dolphin status bar: 'N Folders, M Files (size)' and selection summary."
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/status_bar.rs (the_status_counts_items_and_says_when_it_is_loading, the_selection_shows_its_count_and_file_size, a_landing_page_is_ready); native/crates/ox-app/src/search/report.rs (the_status_bar_counts_results); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). The selection also shows the selected files' total size, as Windows does."
 
 [[feature]]
 id = "VIEW-051"
@@ -4453,8 +4455,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/ui_rc4.py::Source selection is not changed by middle-click"]
 bridge = ["list"]
-native = "todo"
-native_note = "Porting notes: Renamed or newly created items are not re-selected afterwards; Dolphin selects them (a gain for native)."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (typing_clears_the_selection_and_scrolls_to_the_top): typing in the search box clears the selection. Missing: tests of the navigation, tab switch and reload rules, and the file-operation rules. Porting notes: Renamed or newly created items are not re-selected afterwards; Dolphin selects them (a gain for native)."
 
 [[feature]]
 id = "SEL-016"
@@ -9369,8 +9371,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "Dolphin: Ctrl+F opens search; Ctrl+I filter bar."
-native = "todo"
-native_note = "win.search (Ctrl+F) is bound in native/crates/ox-app/src/window/actions.rs; the SearchEntry is used by the browsing test for filtering only. Porting notes: WebKit's type=search provides Escape and × (both fire input); a GtkSearchEntry gives the same natively. No desktop test covers them."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, escape_empties_the_box_and_brings_the_listing_back, ctrl_f_moves_focus_to_the_box_and_selects_its_text). The placeholder and the pages and devices that disable the box are drawn in window/location_view.rs. Deliberate difference: the tooltip names the native category, \"Settings → Search & indexing\", where the Python app named its old \"Search cache\" section. Escape inside an open menu closes the menu, as GTK popovers do."
 
 [[feature]]
 id = "SRCH-002"
@@ -9393,7 +9395,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Text entered into Search remains ordinary search input",
 ]
 bridge = ["search", "cancel"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results, blanks_search_nothing); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, typing_clears_the_selection_and_scrolls_to_the_top, escape_empties_the_box_and_brings_the_listing_back). Each edit filters the listing at once; the search runs after the entry's 120 ms search delay. A query of only blanks searches nothing, where the Python strip showed \"Current folder only\"."
 
 [[feature]]
 id = "SRCH-003"
@@ -9415,8 +9418,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "Ctrl+F search / Ctrl+I filter"
-native = "partial"
-native_note = "native/crates/ox-app/src/folder_view/filter.rs (every_term_must_match_somewhere, empty_search_shows_everything_visible); filtering exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes)."
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/filter.rs (every_term_must_match_somewhere, empty_search_shows_everything_visible); native/crates/ox-app/src/search/source.rs (the_source_follows_the_indexed_folders_around_the_folder); native/crates/ox-app/src/search/folder_search.rs (a_folder_nobody_indexed_is_only_filtered); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so); filtering also exercised in native/crates/ox-app/tests/browsing.rs."
 
 [[feature]]
 id = "SRCH-004"
@@ -9508,8 +9511,8 @@ python_tests = [
 bridge = ["search", "cancel"]
 dolphin = "Filter bar + Baloo search"
 gnome = "Local SQLite index; Tracker/LocalSearch not used"
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (results_carry_their_full_parent_folder, query_syntax_in_a_search_is_plain_text); native/crates/ox-core/src/search/query.rs (a_scope_limits_results_to_its_folder_and_subfolders, hidden_items_are_found_only_when_shown). The native search does not query the cache yet, so merging cached with live matches and discarding stale results are missing."
+native = "done"
+native_note = "native/crates/ox-app/src/search/results.rs (the_folders_own_matches_come_first_then_cached_ones_once, at_most_500_rows_are_shown); native/crates/ox-app/src/search/folder_search.rs (the_latest_run_shows_its_results, an_edit_cancels_the_running_search_and_drops_its_results); native/crates/ox-app/src/window/tests/search.rs (an_indexed_folder_is_searched_in_the_cache_with_its_subfolders, a_folder_with_an_indexed_subfolder_shows_both, all_cached_folders_searches_only_the_cache); ox-core: native/crates/ox-core/src/search/cache_tests.rs, query.rs."
 
 [[feature]]
 id = "SRCH-008"
@@ -9525,8 +9528,8 @@ python_tests = [
   "desktop/tests/test_v05.py::IndexTests::test_fts_special_characters_bound",
 ]
 bridge = ["search"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (query_syntax_in_a_search_is_plain_text); native/crates/ox-core/src/search/query.rs (query_words_are_folded_distinct_and_limited, every_word_must_occur_in_the_name_or_parent_path, a_query_longer_than_512_characters_is_refused, an_empty_query_finds_nothing); native/crates/ox-core/src/search/text.rs (folding_matches_python). The native search does not query the cache yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (query_syntax_in_a_search_is_plain_text); native/crates/ox-core/src/search/query.rs (query_words_are_folded_distinct_and_limited, every_word_must_occur_in_the_name_or_parent_path, a_query_longer_than_512_characters_is_refused, an_empty_query_finds_nothing); native/crates/ox-core/src/search/text.rs (folding_matches_python); the window searches the cache through it (native/crates/ox-app/src/window/folder_search.rs) and matches the listing's own items by name and folder path (native/crates/ox-app/src/search/results.rs, words_match_the_name_or_the_folder)."
 
 [[feature]]
 id = "SRCH-009"
@@ -9543,8 +9546,8 @@ python_tests = [
   "desktop/tests/ui_release.py::Search results include a Folder path column",
 ]
 bridge = ["search"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (a_cached_regular_file_is_never_a_folder, results_carry_their_full_parent_folder); native/crates/ox-core/src/search/query.rs (folders_come_first_then_names_ignoring_case, results_beyond_the_limit_are_cut_off_and_flagged, the_limit_stays_between_1_and_2000, a_hit_carries_its_metadata_and_root_state, only_real_folders_open_as_folders). The native search results do not show cached items yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (a_cached_regular_file_is_never_a_folder, results_carry_their_full_parent_folder); native/crates/ox-core/src/search/query.rs (folders_come_first_then_names_ignoring_case, results_beyond_the_limit_are_cut_off_and_flagged, the_limit_stays_between_1_and_2000, a_hit_carries_its_metadata_and_root_state, only_real_folders_open_as_folders); native/crates/ox-core/src/search/hit.rs (a_hit_lists_as_the_item_it_found); the window shows hits as rows, folders first (native/crates/ox-app/src/window/tests/search.rs, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders)."
 
 [[feature]]
 id = "SRCH-010"
@@ -9557,8 +9560,8 @@ openxplorer = "has"
 sources = ["desktop/search_index.py:72-85", "desktop/search_index.py:211-218"]
 python_tests = ["desktop/tests/test_v05.py::IndexTests::test_fts_special_characters_bound"]
 bridge = ["search", "cacheStatus"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (query_syntax_in_a_search_is_plain_text); native/crates/ox-core/src/search/query.rs (the_engine_is_the_trigram_index, short_and_long_words_both_match_inside_names, short_words_skip_the_trigram_prefilter, the_substring_fallback_never_uses_the_full_text_table); native/crates/ox-core/src/search/schema.rs (entries_cached_before_the_full_text_index_are_found). The native search does not query the cache yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (query_syntax_in_a_search_is_plain_text); native/crates/ox-core/src/search/query.rs (the_engine_is_the_trigram_index, short_and_long_words_both_match_inside_names, short_words_skip_the_trigram_prefilter, the_substring_fallback_never_uses_the_full_text_table); native/crates/ox-core/src/search/schema.rs (entries_cached_before_the_full_text_index_are_found). The window's search box searches the cache through it."
 
 [[feature]]
 id = "SRCH-011"
@@ -9581,8 +9584,8 @@ python_tests = [
 ]
 bridge = ["search", "preferences"]
 dolphin = "SearchSettings::Location (FromHere/Everywhere)"
-native = "partial"
-native_note = "native/crates/ox-core/src/search/query.rs (a_scope_limits_results_to_its_folder_and_subfolders). The Search scope selector is not in the native UI yet. Porting notes: OpenXplorer's scope is the current folder or all cached folders."
+native = "done"
+native_note = "native/crates/ox-core/src/search/query.rs (a_scope_limits_results_to_its_folder_and_subfolders); native/crates/ox-app/src/search/source.rs (the_source_follows_the_indexed_folders_around_the_folder); native/crates/ox-app/src/window/tests/search.rs (all_cached_folders_searches_only_the_cache). The \"Search scope\" list is in the search strip. Porting notes: OpenXplorer's scope is the current folder or all cached folders."
 
 [[feature]]
 id = "SRCH-012"
@@ -9597,7 +9600,8 @@ python_tests = [
   "desktop/tests/ui_regressions.cjs::Partial cache coverage is stated and offers parent indexing",
 ]
 bridge = ["cacheSet", "search"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/search/report.rs (the_strip_says_where_the_search_looked); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders, a_folder_with_an_indexed_subfolder_shows_both, the_strips_clear_button_ends_the_search, all_cached_folders_searches_only_the_cache). The strip is native/crates/ox-app/src/search/info_strip.rs with resources/ui/search-info-strip.ui; its scope list is the settings drop-down with bundled glyphs."
 
 [[feature]]
 id = "SRCH-013"
@@ -9615,7 +9619,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["search", "cacheRefresh"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/search/report.rs (an_empty_result_says_why); native/crates/ox-app/src/window/tests/search.rs (a_search_that_finds_nothing_says_why)."
 
 [[feature]]
 id = "SRCH-014"
@@ -9643,7 +9648,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Middle-opening a search result does not erase the search",
 ]
 bridge = ["activateItem", "search"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (open_file_location_selects_the_result_in_its_folder: opening a folder from a search leaves the search). Folder results navigate and leave the search and file results open in their app (window/activation.rs). Missing: ZIP results open the archive browser only once the archive dialog is ported (they open in the default app now); middle-click on a folder result keeping the search has no test."
 
 [[feature]]
 id = "SRCH-015"
@@ -9657,7 +9663,8 @@ sources = ["desktop/ui/app.js:779", "desktop/ui/app.js:1350"]
 python_tests = []
 bridge = ["list"]
 dolphin = "Dolphin search results: 'Open Path' / 'Open Containing Folder'."
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (open_file_location_selects_the_result_in_its_folder). The item menu shows \"Open file location\" only while one search result is selected (window/context_menu.rs); the result is selected and scrolled into view once its folder is listed."
 
 [[feature]]
 id = "SRCH-016"
@@ -9694,8 +9701,8 @@ openxplorer = "has"
 sources = ["desktop/search_index.py:229-237"]
 python_tests = []
 bridge = ["search", "cancel"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/query.rs (a_cancelled_search_does_not_run, a_running_search_stops_when_cancelled). The native search does not cancel superseded queries through this yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/query.rs (a_cancelled_search_does_not_run, a_running_search_stops_when_cancelled); native/crates/ox-app/src/search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results): every edit cancels the running search's gio::Cancellable."
 
 [[feature]]
 id = "SRCH-018"
@@ -9715,8 +9722,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["cacheStatus", "search"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/search_service.rs (the_app_is_told_when_the_cache_changed). The native UI does not refresh the cache status, re-run the search or poll yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/search_service.rs (the_app_is_told_when_the_cache_changed); native/crates/ox-app/src/window/tests/search.rs (a_new_file_in_an_indexed_folder_appears_in_the_shown_search, a_folder_another_process_indexed_is_searched_in_the_cache). native/crates/ox-app/src/search/cache.rs reads the status 200 ms after the service reports a change and runs shown searches again, every 5 s while a window is shown and when a window gains focus."
 
 [[feature]]
 id = "SRCH-019"
@@ -9746,8 +9753,8 @@ python_tests = [
 bridge = ["cacheSet", "cacheStatus", "normalise"]
 dolphin = "Baloo indexed folders (KDE); Baloo indexed folders"
 gnome = "Tracker/LocalSearch indexed locations"
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (disabling_a_root_deletes_its_entries); native/crates/ox-core/src/search/index.rs (a_root_is_labelled_with_its_path_unless_named); native/crates/ox-core/tests/search_service.rs (enabling_a_root_scans_it_and_disabling_removes_its_names). The Search & indexing settings page is not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (disabling_a_root_deletes_its_entries); native/crates/ox-core/src/search/index.rs (a_root_is_labelled_with_its_path_unless_named); native/crates/ox-core/tests/search_service.rs (enabling_a_root_scans_it_and_disabling_removes_its_names); native/crates/ox-app/src/settings_page/tests/indexing.rs (a_typed_folder_is_indexed_relative_to_the_folder_shown_before, clearing_and_removing_act_on_one_folder). Settings are typed Rust values, so \"Cache settings must be true or false.\" cannot occur natively. \"Remove from index\" on the Indexed folders page switches a folder off as the Python check box did."
 
 [[feature]]
 id = "SRCH-020"
@@ -9760,7 +9767,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:774-783"]
 python_tests = ["desktop/tests/test_v05.py::IndexTests::test_disable_clears_metadata"]
 bridge = ["cacheSet", "cacheStatus"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (caching_the_folder_from_the_strip_searches_the_cache); native/crates/ox-app/src/window/cache_folder.rs (pages_devices_and_servers_are_not_offered_for_caching). More > \"Cache this folder for search\" is a check item that caches the folder or stops caching it, with the Python toasts, and the strip's \"Cache this folder\" runs it too; an active search runs again. Missing: the folder, background, sidebar pin and drive context menus, which do not exist natively yet; the check item keeps its label where Python said \"Stop caching this folder\"."
 
 [[feature]]
 id = "SRCH-021"
@@ -9783,8 +9791,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["cacheSet"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/index.rs (phones_cameras_and_server_share_lists_cannot_be_indexed); native/crates/ox-core/tests/search_pins.rs (pinned_devices_and_server_lists_are_not_indexed). The native settings page does not show these errors yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/index.rs (phones_cameras_and_server_share_lists_cannot_be_indexed); native/crates/ox-core/tests/search_pins.rs (pinned_devices_and_server_lists_are_not_indexed); native/crates/ox-app/src/window/cache_folder.rs (pages_devices_and_servers_are_not_offered_for_caching). Menus leave these locations out; a typed one shows the cache's message in the window's message line."
 
 [[feature]]
 id = "SRCH-022"
@@ -9808,8 +9816,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Full-page settings includes drives and cache controls",
 ]
 bridge = ["cacheStatus", "cacheRefresh", "cacheStop", "cacheClear", "cacheRemove"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/index.rs (a_root_is_labelled_with_its_path_unless_named, the_status_counts_the_entries_of_enabled_roots, the_update_mode_and_watch_error_are_recorded); native/crates/ox-core/src/search/service_tests.rs (a_folder_beyond_the_watch_limit_falls_back_to_timed_checks); native/crates/ox-core/tests/search_index.rs (a_new_cache_is_empty). The cache status page is not in the native UI yet. Porting notes: cacheRemove exists in the bridge but the UI never calls it."
+native = "done"
+native_note = "native/crates/ox-core/src/search/index.rs (a_root_is_labelled_with_its_path_unless_named, the_status_counts_the_entries_of_enabled_roots, the_update_mode_and_watch_error_are_recorded); native/crates/ox-core/src/search/service_tests.rs (a_folder_beyond_the_watch_limit_falls_back_to_timed_checks); native/crates/ox-core/tests/search_index.rs (a_new_cache_is_empty); native/crates/ox-app/src/settings_page/indexed_folders/root_row.rs (a_folder_says_how_many_names_it_holds_and_how_it_keeps_current); native/crates/ox-app/src/settings_page/indexing.rs (the_status_card_counts_folders_and_names); native/crates/ox-app/src/settings_page/tests/indexing.rs (an_indexed_folder_shows_its_state_and_leaves_the_suggestions). The Indexed folders page shows each folder's status chip, names and update mode, with the watch error, error or last full refresh as its tooltip, as renderSettingsCache did; the engine and database path stay in the status, which the Python page did not show either. Porting notes: cacheRemove exists in the bridge but the UI never calls it."
 
 [[feature]]
 id = "SRCH-023"
@@ -9822,8 +9830,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:676-693", "desktop/search_index.py:187-197"]
 python_tests = []
 bridge = ["cacheRefresh", "cacheClear", "cacheRemove", "cacheStop"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/index.rs (clearing_a_root_keeps_it_as_not_indexed, removing_a_root_deletes_it_and_its_entries); native/crates/ox-core/tests/search_live.rs (refresh_all_rescans_every_enabled_root); native/crates/ox-core/tests/search_service.rs (stopping_a_scan_keeps_the_earlier_results, clearing_and_removing_a_root_through_the_service). The Refresh, Clear, Remove and Stop buttons are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/index.rs (clearing_a_root_keeps_it_as_not_indexed, removing_a_root_deletes_it_and_its_entries); native/crates/ox-core/tests/search_live.rs (refresh_all_rescans_every_enabled_root); native/crates/ox-core/tests/search_service.rs (stopping_a_scan_keeps_the_earlier_results, clearing_and_removing_a_root_through_the_service); native/crates/ox-app/src/settings_page/tests/indexing.rs (clearing_and_removing_act_on_one_folder, refresh_all_rescans_while_watching_is_off). Each indexed folder has Refresh (Stop while indexing), \"Clear cached names only\" and \"Remove from index\"; the status card has \"Refresh all\"."
 
 [[feature]]
 id = "SRCH-024"
@@ -9836,8 +9844,8 @@ openxplorer = "has"
 sources = ["desktop/search_index.py:138-185", "desktop/index_service.py:129-172"]
 python_tests = ["desktop/tests/test_v05.py::IndexTests::test_failed_scan_preserves_last_data"]
 bridge = ["cacheRefresh"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (a_failed_scan_keeps_the_last_results, a_superseded_scan_neither_stores_nor_prunes, a_complete_scan_prunes_what_it_did_not_see); native/crates/ox-core/tests/search_service.rs (stopping_a_scan_keeps_the_earlier_results). The native UI does not show the root status yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (a_failed_scan_keeps_the_last_results, a_superseded_scan_neither_stores_nor_prunes, a_complete_scan_prunes_what_it_did_not_see); native/crates/ox-core/tests/search_service.rs (stopping_a_scan_keeps_the_earlier_results). The Indexed folders page shows \"Incomplete / offline\" with the error as its tooltip (native/crates/ox-app/src/settings_page/indexed_folders/root_row.rs, a_folder_says_how_many_names_it_holds_and_how_it_keeps_current)."
 
 [[feature]]
 id = "SRCH-025"
@@ -9854,8 +9862,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["cacheStatus"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/service_tests.rs (the_next_owner_marks_a_scan_left_running_as_interrupted, a_second_process_leaves_the_owners_scan_alone). The native app does not start the index service yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/service_tests.rs (the_next_owner_marks_a_scan_left_running_as_interrupted, a_second_process_leaves_the_owners_scan_alone). The app starts the service at start-up (native/crates/ox-app/src/search/indexer.rs), which elects the owner and recovers interrupted scans."
 
 [[feature]]
 id = "SRCH-026"
@@ -9874,8 +9882,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["preferences", "cacheStatus"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/service.rs (the_settings_follow_the_users_preferences); native/crates/ox-core/tests/search_live.rs (a_paused_auto_index_catches_up_when_switched_back_on); native/crates/ox-core/tests/search_service.rs (each_root_is_rescanned_once_at_start_up). The native app does not start the index service and has no Auto-index switch yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/service.rs (the_settings_follow_the_users_preferences); native/crates/ox-core/tests/search_live.rs (a_paused_auto_index_catches_up_when_switched_back_on); native/crates/ox-core/tests/search_service.rs (each_root_is_rescanned_once_at_start_up); native/crates/ox-app/src/settings_page/tests/indexing.rs (refresh_all_rescans_while_watching_is_off). The app hands the service the Auto-index preference at start-up and whenever it changes."
 
 [[feature]]
 id = "SRCH-027"
@@ -9900,8 +9908,8 @@ python_tests = [
   "desktop/tests/test_v05.py::IndexTests::test_separate_process_connection_reads_updates",
 ]
 bridge = ["cacheRefresh", "cacheStop", "cacheSet"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (another_connection_reads_what_a_scan_stored); native/crates/ox-core/src/search/ownership.rs (only_one_candidate_becomes_owner_until_it_releases); native/crates/ox-core/src/search/requests.rs (repeated_requests_are_queued_once); native/crates/ox-core/src/search/service_tests.rs (a_second_process_leaves_the_owners_scan_alone); native/crates/ox-core/tests/search_live.rs (a_second_window_passes_its_refresh_to_the_owner). The native app does not start the index service yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (another_connection_reads_what_a_scan_stored); native/crates/ox-core/src/search/ownership.rs (only_one_candidate_becomes_owner_until_it_releases); native/crates/ox-core/src/search/requests.rs (repeated_requests_are_queued_once); native/crates/ox-core/src/search/service_tests.rs (a_second_process_leaves_the_owners_scan_alone); native/crates/ox-core/tests/search_live.rs (a_second_window_passes_its_refresh_to_the_owner); native/crates/ox-app/src/window/tests/search.rs (a_folder_another_process_indexed_is_searched_in_the_cache). Every window of a process shares one service; the app stops it at shutdown so another process can own the index at once."
 
 [[feature]]
 id = "SRCH-028"
@@ -9936,8 +9944,8 @@ python_tests = [
 ]
 bridge = ["cacheSet", "preferences", "cacheStatus"]
 gnome = "inotify"
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (a_live_update_adds_a_new_item, a_live_update_removes_a_deleted_item, deleting_a_folder_prunes_only_its_descendants, a_new_folder_is_returned_for_reading, a_folder_that_became_a_file_loses_its_children, items_of_another_folder_are_ignored); native/crates/ox-core/src/search/service_tests.rs (a_folder_beyond_the_watch_limit_falls_back_to_timed_checks); native/crates/ox-core/src/search/watch.rs (a_new_file_reports_its_folder, deleting_a_watched_folder_ends_its_watch); native/crates/ox-core/tests/search_live.rs (a_new_file_is_indexed_without_a_full_scan, a_new_nested_folder_is_watched, renames_and_deletions_update_the_cache, the_uri_of_a_deleted_file_keeps_live_events). The native app does not start the index service yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (a_live_update_adds_a_new_item, a_live_update_removes_a_deleted_item, deleting_a_folder_prunes_only_its_descendants, a_new_folder_is_returned_for_reading, a_folder_that_became_a_file_loses_its_children, items_of_another_folder_are_ignored); native/crates/ox-core/src/search/service_tests.rs (a_folder_beyond_the_watch_limit_falls_back_to_timed_checks); native/crates/ox-core/src/search/watch.rs (a_new_file_reports_its_folder, deleting_a_watched_folder_ends_its_watch); native/crates/ox-core/tests/search_live.rs (a_new_file_is_indexed_without_a_full_scan, a_new_nested_folder_is_watched, renames_and_deletions_update_the_cache, the_uri_of_a_deleted_file_keeps_live_events); native/crates/ox-app/src/window/tests/search.rs (a_new_file_in_an_indexed_folder_appears_in_the_shown_search)."
 
 [[feature]]
 id = "SRCH-029"
@@ -9955,8 +9963,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/test_v05.py::LiveTests::test_watch_limit_fallback_is_reported"]
 bridge = ["cacheStatus"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/service_tests.rs (a_folder_beyond_the_watch_limit_falls_back_to_timed_checks, too_many_changed_folders_force_a_full_rescan); native/crates/ox-core/src/search/tick.rs (a_queue_overflow_rescans_every_root); native/crates/ox-core/src/search/watch.rs (directories_beyond_the_limit_are_refused). The native app does not start the index service or show the fallback reason yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/service_tests.rs (a_folder_beyond_the_watch_limit_falls_back_to_timed_checks, too_many_changed_folders_force_a_full_rescan); native/crates/ox-core/src/search/tick.rs (a_queue_overflow_rescans_every_root); native/crates/ox-core/src/search/watch.rs (directories_beyond_the_limit_are_refused). The Indexed folders page shows \"Live + timed fallback\" with the reason as its tooltip (native/crates/ox-app/src/settings_page/indexed_folders/root_row.rs)."
 
 [[feature]]
 id = "SRCH-030"
@@ -9982,8 +9990,8 @@ python_tests = [
   "desktop/tests/ui_release.py::Network fallback is explicitly distinguished from push",
 ]
 bridge = ["preferences", "cacheStatus"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/policy.rs (smb_and_network_mounts_are_network_roots, other_remote_locations_are_network_roots, a_local_root_counts_as_network_without_the_mount_table); native/crates/ox-core/src/search/service.rs (the_settings_follow_the_users_preferences); native/crates/ox-core/src/search/service_tests.rs (a_live_update_leaves_a_folder_beyond_the_entry_limit_as_it_was, a_live_update_stops_at_the_new_folder_limit); native/crates/ox-core/tests/search_service.rs (a_network_root_is_checked_on_a_timer, a_failed_network_check_keeps_the_last_results, signing_in_does_not_rescan_a_partly_unreadable_share). The native app does not start the index service yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/policy.rs (smb_and_network_mounts_are_network_roots, other_remote_locations_are_network_roots, a_local_root_counts_as_network_without_the_mount_table); native/crates/ox-core/src/search/service.rs (the_settings_follow_the_users_preferences); native/crates/ox-core/src/search/service_tests.rs (a_live_update_leaves_a_folder_beyond_the_entry_limit_as_it_was, a_live_update_stops_at_the_new_folder_limit); native/crates/ox-core/tests/search_service.rs (a_network_root_is_checked_on_a_timer, a_failed_network_check_keeps_the_last_results, signing_in_does_not_rescan_a_partly_unreadable_share). The app hands the service the Network check interval at start-up and whenever it changes."
 
 [[feature]]
 id = "SRCH-031"
@@ -10013,8 +10021,8 @@ python_tests = [
   "desktop/tests/test_v05.py::LiveTests::test_snapshot_folders_not_indexed",
 ]
 bridge = ["cacheSet"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (links_and_virtual_items_are_never_stored); native/crates/ox-core/src/search/mounts.rs (a_mount_point_that_is_not_utf8_is_read); native/crates/ox-core/src/search/policy.rs (whole_disk_still_excludes_tmp, explicit_tmp_subtree_is_indexable, selected_var_excludes_its_tmp_child, index_database_remains_excluded, nested_mounts_remain_excluded, root_exclusions, an_unreadable_mount_table_fails_only_local_scopes); native/crates/ox-core/src/search/watch.rs (a_symlink_to_a_folder_is_not_watched); native/crates/ox-core/tests/search_live.rs (hidden_items_and_symlinks_are_not_indexed, snapshot_folders_are_not_indexed, snapshot_folders_are_not_indexed_even_with_hidden_items). The native app does not start the index service yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (links_and_virtual_items_are_never_stored); native/crates/ox-core/src/search/mounts.rs (a_mount_point_that_is_not_utf8_is_read); native/crates/ox-core/src/search/policy.rs (whole_disk_still_excludes_tmp, explicit_tmp_subtree_is_indexable, selected_var_excludes_its_tmp_child, index_database_remains_excluded, nested_mounts_remain_excluded, root_exclusions, an_unreadable_mount_table_fails_only_local_scopes); native/crates/ox-core/src/search/watch.rs (a_symlink_to_a_folder_is_not_watched); native/crates/ox-core/tests/search_live.rs (hidden_items_and_symlinks_are_not_indexed, snapshot_folders_are_not_indexed, snapshot_folders_are_not_indexed_even_with_hidden_items). The app runs the service with the GIO reader these tests use."
 
 [[feature]]
 id = "SRCH-032"
@@ -10045,8 +10053,8 @@ python_tests = [
   "desktop/tests/test_v05.py::LiveTests::test_hidden_and_symlinks_not_traversed",
 ]
 bridge = ["cacheRefresh", "cacheSet"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/service_tests.rs (a_scan_stops_storing_at_the_entry_limit, a_live_update_leaves_a_folder_beyond_the_entry_limit_as_it_was, a_live_update_stops_at_the_new_folder_limit); native/crates/ox-core/tests/search_service.rs (folders_deeper_than_128_levels_are_reported). The native UI does not show these messages yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/service_tests.rs (a_scan_stops_storing_at_the_entry_limit, a_live_update_leaves_a_folder_beyond_the_entry_limit_as_it_was, a_live_update_stops_at_the_new_folder_limit); native/crates/ox-core/tests/search_service.rs (folders_deeper_than_128_levels_are_reported). The Indexed folders page shows the message as the folder's tooltip (native/crates/ox-app/src/settings_page/indexed_folders/root_row.rs)."
 
 [[feature]]
 id = "SRCH-033"
@@ -10065,7 +10073,7 @@ sources = [
 python_tests = []
 bridge = ["operate", "create", "rename", "createTemplate", "archiveExtract"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/search_live.rs (the_uri_of_a_deleted_file_keeps_live_events); native/crates/ox-core/tests/search_service.rs (a_folder_the_app_changed_is_read_again, the_uri_of_a_deleted_file_re_reads_its_folder). The native UI does not report its file operations to the index service yet."
+native_note = "native/crates/ox-core/tests/search_live.rs (the_uri_of_a_deleted_file_keeps_live_events); native/crates/ox-core/tests/search_service.rs (a_folder_the_app_changed_is_read_again, the_uri_of_a_deleted_file_re_reads_its_folder). Local indexed folders already follow the app's own changes through their live watches. Missing: the file-operation UI (another track) must report changed folders on shares through IndexService::folder_changed, reached as the app context's search cache."
 
 [[feature]]
 id = "SRCH-034"
@@ -10078,8 +10086,8 @@ openxplorer = "has"
 sources = ["desktop/search_index.py:65-71"]
 python_tests = []
 bridge = ["cacheStatus"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/schema.rs (an_older_database_is_upgraded_in_place, entries_cached_before_the_full_text_index_are_found, opening_an_upgraded_database_again_keeps_it). The native app does not open the search cache yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/schema.rs (an_older_database_is_upgraded_in_place, entries_cached_before_the_full_text_index_are_found, opening_an_upgraded_database_again_keeps_it). The app opens the shared cache at start-up."
 
 [[feature]]
 id = "SRCH-035"
@@ -10209,7 +10217,7 @@ sources = [
 python_tests = []
 bridge = ["pin", "bookmark"]
 native = "partial"
-native_note = "native/crates/ox-core/src/search/pins.rs (a_pin_gets_a_root_only_when_no_enabled_root_indexes_it); native/crates/ox-core/tests/search_pins.rs (pinning_a_folder_indexes_it_with_a_pinned_tag, unpinning_removes_only_roots_that_pinning_added, the_users_choice_outlasts_pinning, folders_pinned_earlier_are_indexed_once, a_removed_pinned_root_stays_removed_after_the_switch_was_turned_on, pinning_a_folder_inside_an_indexed_root_adds_no_root, a_pin_on_a_server_being_signed_out_of_waits_for_sign_in, the_switch_turns_indexing_of_pinned_folders_off_and_on, a_pinned_share_that_needs_sign_in_is_indexed_after_sign_in, pinned_devices_and_server_lists_are_not_indexed). New behaviour decided by the owner. The native UI does not tell the index service about pins, and the switch and the 'Pinned' tag are not in it yet."
+native_note = "native/crates/ox-core/src/search/pins.rs (a_pin_gets_a_root_only_when_no_enabled_root_indexes_it, the_switch_is_on_until_turned_off_and_is_remembered); native/crates/ox-core/tests/search_pins.rs (pinning_a_folder_indexes_it_with_a_pinned_tag, unpinning_removes_only_roots_that_pinning_added, the_users_choice_outlasts_pinning, folders_pinned_earlier_are_indexed_once, a_removed_pinned_root_stays_removed_after_the_switch_was_turned_on, pinning_a_folder_inside_an_indexed_root_adds_no_root, a_pin_on_a_server_being_signed_out_of_waits_for_sign_in, the_switch_turns_indexing_of_pinned_folders_off_and_on, a_pinned_share_that_needs_sign_in_is_indexed_after_sign_in, pinned_devices_and_server_lists_are_not_indexed); native/crates/ox-app/src/search/pin_sync.rs (a_pin_is_reported_once_when_it_appears_and_once_when_it_goes, settings_that_fell_back_to_defaults_unpin_nothing); native/crates/ox-app/src/window/tests/search.rs (pinning_a_folder_indexes_it); native/crates/ox-app/src/settings_page/tests/indexing.rs (the_pinned_folders_switch_removes_what_pinning_added). New behaviour decided by the owner. Every pin change in any window or process reaches the service; folders pinned earlier are indexed once at start-up; the switch lives in the search cache (index_options), because both apps rewrite settings.json with only the keys they know; pinned folders carry a \"Pinned\" tag on the Indexed folders page. Missing: the sign-in and sign-out flows (network track) must call IndexService::resume_server and pause_server so a pinned share that needed sign-in is indexed after it."
 
 [[feature]]
 id = "NET-001"
@@ -13700,7 +13708,8 @@ python_tests = [
   "desktop/tests/test_release.py::IndexPolicyTests::test_nested_mounts_remain_excluded",
 ]
 bridge = ["cacheStatus", "cacheSet", "cacheRefresh", "cacheStop", "cacheClear"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/settings_page/indexed_folders/candidates.rs (candidates_are_the_origin_home_pins_shares_disk_and_drives_once_each, folders_indexed_before_follow_the_folder_shown_before); native/crates/ox-app/src/settings_page/indexed_folders/root_row.rs (a_folder_says_how_many_names_it_holds_and_how_it_keeps_current); native/crates/ox-app/src/settings_page/tests/indexing.rs (an_indexed_folder_shows_its_state_and_leaves_the_suggestions, index_selected_indexes_every_checked_folder, clearing_and_removing_act_on_one_folder). Laid out as the owner's mockup asks (SET-019): indexed folders with a status chip, names and update mode, Refresh cache / Stop indexing, \"Clear cached names only\" and \"Remove from index\"; the other candidates in the \"Add folders to the index\" table with a check box named \"Cache <label>\", why each is suggested, its location, Index and \"Index selected\". The status card has \"Refresh all\"."
 
 [[feature]]
 id = "SET-007"
@@ -13723,7 +13732,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::Custom row does not overflow section",
 ]
 bridge = ["normalise", "cacheSet", "preferences"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/settings_page/indexed_folders/commands.rs (a_typed_folder_is_read_relative_to_the_folder_shown_before); native/crates/ox-app/src/settings_page/tests/indexing.rs (a_typed_folder_is_indexed_relative_to_the_folder_shown_before). The field keeps the Python placeholder and accessible name, is 36 characters wide and never truncates what is typed; errors show in the window's message line."
 
 [[feature]]
 id = "SET-008"
@@ -13741,8 +13751,8 @@ python_tests = [
   "desktop/tests/test_v05.py::LiveTests::test_watch_limit_fallback_is_reported",
 ]
 bridge = ["preferences"]
-native = "todo"
-native_note = "Only the stored interval is ported (native/crates/ox-core/src/settings/tests/preferences.rs, network_interval_whitelist); the controls are not implemented."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/tests/preferences.rs (network_interval_whitelist); native/crates/ox-app/src/settings_page/tests.rs (the_menu_watch_and_interval_rows_save_the_python_keys, the_rows_show_what_the_python_app_saved); native/crates/ox-app/src/settings_page/tests/indexing.rs (refresh_all_rescans_while_watching_is_off): the index service follows both options at once. The help and privacy texts are the page's notes and the Indexed folders page's limits note."
 
 [[feature]]
 id = "SET-009"
@@ -13950,7 +13960,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "partial"
-native_note = "Owner-requested usability improvement over the current single long settings page; it must keep every current setting (see the other SET features). Design target: the mockup /tmp/ox-work/settings-mock/index.html (open it with ?page=search, appearance or default, and &theme=dark) and its renders /tmp/ox-shots/progress/settings-mock-*.png: category list with coloured icons, a status summary card per category where useful, flat grouped rows, and the Search & indexing page as a list of indexed folders with status chips (Ready, Indexing with progress, Sign-in needed), per-folder refresh and remove, suggested folders as add-chips, then Options. Shares use the green network bar. Native: native/crates/ox-app/src/settings_page/ builds the page the first time Settings is shown: categories Appearance, Search & indexing, Default apps, Windows & tabs, Brave & downloads and About; rows with a one-line description; status cards that state the result, such as whether OpenXplorer is the default file explorer; a settings search over titles, descriptions, keywords, control labels, group headings and status cards, with counts, Enter jumps and Escape leaves; keyboard focus in the page when Settings opens; Indexed folders, Folder sizes and the Zorin + Brave troubleshooting guide as sub-pages with a back arrow; every Python setting keeps a row that a search for its Python wording finds. Tests: native/crates/ox-app/src/settings_page/tests.rs (choosing_a_category_shows_only_that_category, arrow_keys_move_through_the_categories, the_search_filters_rows_across_every_category, the_search_finds_what_buttons_options_and_headings_show, enter_in_the_search_jumps_to_the_first_match, default_file_explorer_during_a_search_shows_all_of_default_apps, every_setting_of_the_python_page_has_a_row, rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone, the_arrow_keys_move_between_the_theme_cards_and_choose_them, and the theme, text size, menu, watch and interval rows round-tripping with desktop/core.py), native/crates/ox-app/src/settings_page/group.rs (a milestone is named once whatever the order rows are marked in) and native/crates/ox-app/src/window/tests/settings.rs (opening_settings_moves_keyboard_focus_into_the_page, back_to_files_gives_the_file_list_keyboard_focus_again). Missing: the indexed-folder status chips, per-folder refresh and remove and the suggested folders need cached search (the Search and metadata milestone); the Default apps actions, the Show in folder status chip and the Brave sync need desktop integration; the licence dialog and updates need distribution. Those rows are shown disabled and name their milestone."
+native_note = "Owner-requested usability improvement over the current single long settings page; it must keep every current setting (see the other SET features). Design target: the mockup /tmp/ox-work/settings-mock/index.html (open it with ?page=search, appearance or default, and &theme=dark) and its renders /tmp/ox-shots/progress/settings-mock-*.png: category list with coloured icons, a status summary card per category where useful, flat grouped rows, and the Search & indexing page as a list of indexed folders with status chips (Ready, Indexing with progress, Sign-in needed), per-folder refresh and remove, suggested folders as add-chips, then Options. Shares use the green network bar. Native: native/crates/ox-app/src/settings_page/ builds the page the first time Settings is shown: categories Appearance, Search & indexing, Default apps, Windows & tabs, Brave & downloads and About; rows with a one-line description; status cards that state the result, such as whether OpenXplorer is the default file explorer; a settings search over titles, descriptions, keywords, control labels, group headings and status cards, with counts, Enter jumps and Escape leaves; keyboard focus in the page when Settings opens; Indexed folders, Folder sizes and the Zorin + Brave troubleshooting guide as sub-pages with a back arrow; every Python setting keeps a row that a search for its Python wording finds. Tests: native/crates/ox-app/src/settings_page/tests.rs (choosing_a_category_shows_only_that_category, arrow_keys_move_through_the_categories, the_search_filters_rows_across_every_category, the_search_finds_what_buttons_options_and_headings_show, enter_in_the_search_jumps_to_the_first_match, default_file_explorer_during_a_search_shows_all_of_default_apps, every_setting_of_the_python_page_has_a_row, rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone, the_arrow_keys_move_between_the_theme_cards_and_choose_them, and the theme, text size, menu, watch and interval rows round-tripping with desktop/core.py), native/crates/ox-app/src/settings_page/group.rs (a milestone is named once whatever the order rows are marked in) and native/crates/ox-app/src/window/tests/settings.rs (opening_settings_moves_keyboard_focus_into_the_page, back_to_files_gives_the_file_list_keyboard_focus_again). The Indexed folders page has the status chips, per-folder refresh and remove and the suggested-folders table (native/crates/ox-app/src/settings_page/tests/indexing.rs). Missing: the Default apps actions, the Show in folder status chip and the Brave sync need desktop integration; the licence dialog and updates need distribution. Those rows are shown disabled and name their milestone."
 
 [[feature]]
 id = "LOOK-001"
@@ -16314,7 +16324,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["search", "previousVersions", "archiveList"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/search/results.rs (at_most_500_rows_are_shown): a search shows at most 500 results; cache status polling pauses while every window is hidden or minimised (native/crates/ox-app/src/search/cache.rs). Missing: the column auto-fit, drag, previous-versions and archive-listing bounds, which belong to features not ported yet."
 
 [[feature]]
 id = "PERF-006"
@@ -16348,8 +16359,8 @@ python_tests = [
   "desktop/tests/test_v05.py::IndexTests::test_separate_process_connection_reads_updates",
 ]
 bridge = ["search"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (another_connection_reads_what_a_scan_stored). The native UI does not search the cache yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (another_connection_reads_what_a_scan_stored); native/crates/ox-app/src/window/tests/search.rs (a_new_file_in_an_indexed_folder_appears_in_the_shown_search). Every search runs on a GIO worker thread with a connection of its own while the index service scans on its own thread."
 
 [[feature]]
 id = "PERF-008"
@@ -16703,7 +16714,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/ui_regressions.cjs::Navigation supersedes a delayed activation"]
 bridge = ["cancel"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results): a search answer for an older edit, tab or folder is dropped; listings use load generations (native/crates/ox-app/src/window/session.rs). Missing: discovery, archive listings, extraction preflight, activation, Map-location connect and Properties lookups, which are not ported yet."
 
 [[feature]]
 id = "SAFE-014"
@@ -16809,8 +16821,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/test_v05.py::IndexTests::test_private_database_modes"]
 bridge = ["cacheSet", "search"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/cache_tests.rs (the_database_and_its_directory_are_private, links_and_virtual_items_are_never_stored); native/crates/ox-core/tests/search_index.rs (a_symlink_planted_after_opening_is_refused); native/crates/ox-core/tests/search_live.rs (hidden_items_and_symlinks_are_not_indexed). The native app does not start the index service yet."
+native = "done"
+native_note = "native/crates/ox-core/src/search/cache_tests.rs (the_database_and_its_directory_are_private, links_and_virtual_items_are_never_stored); native/crates/ox-core/tests/search_index.rs (a_symlink_planted_after_opening_is_refused); native/crates/ox-core/tests/search_live.rs (hidden_items_and_symlinks_are_not_indexed). The app starts the service with these rules at start-up."
 
 [[feature]]
 id = "SAFE-020"

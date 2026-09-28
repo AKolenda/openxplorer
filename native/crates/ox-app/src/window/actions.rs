@@ -135,6 +135,7 @@ impl BrowserWindow {
         self.install_appearance_actions();
         self.install_settings_actions();
         self.install_network_actions();
+        self.install_search_actions();
         self.install_unported_actions();
         self.install_context_menu_actions();
         let [journal, clipboard] = self.install_file_actions();

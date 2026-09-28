@@ -15,7 +15,9 @@
 //!   `search`, `default-apps`, `windows`, `brave`, `about`) or a page one
 //!   of them opens (`indexed-folders`, `folder-sizes`, `troubleshooting`);
 //! - `OPENXPLORER_SETTINGS_SEARCH`: types this into the settings search,
-//!   opening Settings when it is not open.
+//!   opening Settings when it is not open;
+//! - `OPENXPLORER_SEARCH`: types this into the window's search box, and
+//!   waits for the search to show its results.
 //!
 //! The picture is the window's title bar and contents without the frame
 //! GTK draws around a window on a display without a compositor, so it
@@ -128,9 +130,10 @@ enum Listing {
 }
 
 impl Listing {
-    /// Where the listing of `window`'s active tab is now.
+    /// Where the listing of `window`'s active tab is now; a search typed
+    /// into the window counts as part of it until it shows its results.
     fn of(window: &BrowserWindow) -> Self {
-        if window.is_listed() {
+        if window.is_listed() && !window.is_search_running() {
             Listing::Drawn
         } else {
             Listing::Running
