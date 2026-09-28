@@ -45,6 +45,12 @@ fn is_modifier_key(key: gdk::Key) -> bool {
     )
 }
 
+/// The time the type-to-select rules count in: milliseconds on the
+/// monotonic clock.
+fn now_in_milliseconds() -> i64 {
+    glib::monotonic_time() / 1000
+}
+
 /// The status-bar hint for a type-to-select result.
 pub(super) fn typeahead_hint(result: &TypeSelect, matched_name: Option<&str>) -> String {
     match (result.text.is_empty(), matched_name) {
@@ -215,7 +221,7 @@ impl BrowserWindow {
     /// Escape clears the prefix, and only without one the selection.
     /// `None` for every other key.
     fn prefix_editing_key(&self, input: &gtk::IMMulticontext, key: gdk::Key) -> Option<glib::Propagation> {
-        let now = glib::monotonic_time() / 1000;
+        let now = now_in_milliseconds();
         let prefix_active = self.imp().type_ahead.borrow().controller.active(now);
         match key {
             gdk::Key::Escape if prefix_active => {
@@ -245,13 +251,15 @@ impl BrowserWindow {
         click
     }
 
+    /// Backspace: removes the last typed character and selects what the
+    /// shorter prefix matches.
     fn erase_typed_character(&self, now: i64) {
         let model = &self.content().model;
         let count = model.n_items() as usize;
-        let current = model.first_selected().map(|index| index as usize);
+        let current = model.first_selected().map(|position| position as usize);
         let result = self.imp().type_ahead.borrow_mut().controller.backspace(
             count,
-            |index| model.name_at(u32::try_from(index).unwrap_or(u32::MAX)),
+            |index| self.name_at_index(index),
             current,
             now,
         );
@@ -263,23 +271,33 @@ impl BrowserWindow {
     /// Adds text the input method committed to the typed prefix and
     /// selects the next matching name.
     pub(super) fn type_text(&self, text: &str) {
-        let model = &self.content().model;
         for character in text.chars() {
-            let now = glib::monotonic_time() / 1000;
-            let current = model.first_selected().map(|index| index as usize);
-            let count = model.n_items() as usize;
-            let typed = character.to_string();
-            let result = self.imp().type_ahead.borrow_mut().controller.push(
-                &typed,
-                count,
-                |index| model.name_at(u32::try_from(index).unwrap_or(u32::MAX)),
-                current,
-                now,
-            );
-            if let Some(result) = result {
-                self.apply_typeahead(&result);
-            }
+            self.type_character(character);
         }
+    }
+
+    fn type_character(&self, character: char) {
+        let model = &self.content().model;
+        let count = model.n_items() as usize;
+        let current = model.first_selected().map(|position| position as usize);
+        let typed = character.to_string();
+        let result = self.imp().type_ahead.borrow_mut().controller.push(
+            &typed,
+            count,
+            |index| self.name_at_index(index),
+            current,
+            now_in_milliseconds(),
+        );
+        if let Some(result) = result {
+            self.apply_typeahead(&result);
+        }
+    }
+
+    /// The name shown at `index` of the list, as the type-to-select rules
+    /// count positions.
+    fn name_at_index(&self, index: usize) -> String {
+        let position = u32::try_from(index).unwrap_or(u32::MAX);
+        self.content().model.name_at(position)
     }
 
     fn apply_typeahead(&self, result: &TypeSelect) {

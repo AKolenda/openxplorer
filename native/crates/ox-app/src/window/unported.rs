@@ -8,8 +8,10 @@
 //! (`native/ROADMAP.md`). Porting a command means replacing its entry here
 //! with a working action.
 
-use super::BrowserWindow;
+use gtk::gio;
 use gtk::prelude::*;
+
+use super::BrowserWindow;
 
 /// The `native/ROADMAP.md` milestone that brings a command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,7 +110,7 @@ impl BrowserWindow {
     /// Adds every unported command as a disabled window action.
     pub(super) fn install_unported_actions(&self) {
         for command in UNPORTED_COMMANDS {
-            let action = gtk::gio::SimpleAction::new(command.action, None);
+            let action = gio::SimpleAction::new(command.action, None);
             action.set_enabled(false);
             self.add_action(&action);
         }

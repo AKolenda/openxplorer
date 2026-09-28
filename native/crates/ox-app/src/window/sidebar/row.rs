@@ -45,7 +45,7 @@ fn name_label(text: &str) -> gtk::Label {
 /// The chevron, icon, name and pin of `entry`.
 fn row_content(entry: &SidebarEntry, style: ArtStyle) -> gtk::Box {
     // The gaps are CSS margins on the parts (see `.side-entry` in
-    // resources/style.css), so no box spacing.
+    // resources/skin/sidebar.css), so no box spacing.
     let content = gtk::Box::builder().css_classes(["side-entry"]).build();
     if entry.level == RowLevel::Group {
         let expander = icons::glyph(Glyph::Down, 9);

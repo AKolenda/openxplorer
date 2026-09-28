@@ -3,7 +3,7 @@
 //!
 //! Ports `renderTabs` in `desktop/ui/app.js` and `.tab` in `style.css`:
 //! each tab is 215 pixels wide with its icon, title and close button, and
-//! tabs shrink toward 80 pixels and then scroll sideways ([`TabLayout`]),
+//! tabs shrink toward 100 pixels and then scroll sideways ([`TabLayout`]),
 //! so opening many tabs never widens the window. The whole tab is the
 //! click target, as in app.js: it is one focusable widget announced as a
 //! tab of the "Folder tabs" list with its selected state; a click or Enter

@@ -132,12 +132,16 @@ fn scrolled(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
         .build()
 }
 
-/// The folder pane's widgets and the shared folder model.
+/// The folder pane's widgets and the shared folder model. Its root is a
+/// `GtkOverlay`, which GTK does not let applications subclass, so the pane
+/// is a plain struct that the window owns.
 #[derive(Debug)]
 pub(super) struct Content {
     /// The folder pane, with the loading line over it.
     pub root: gtk::Overlay,
+    /// The listing, the empty page or the landing page ([`ContentPage`]).
     stack: gtk::Stack,
+    /// The details or the icon view ([`FolderView`]).
     views: gtk::Stack,
     /// The details view.
     pub details: gtk::ColumnView,
@@ -145,6 +149,8 @@ pub(super) struct Content {
     /// The icon view.
     pub grid: gtk::GridView,
     grid_scroll: gtk::ScrolledWindow,
+    /// What sizes the icon view's tiles; shared with the handler that fits
+    /// the columns to the pane's width.
     grid_scale: Rc<Cell<GridScale>>,
     /// The active tab's filtered, sorted and selectable items.
     pub model: FolderModel,
@@ -156,6 +162,7 @@ pub(super) struct Content {
     pub empty: EmptyPage,
     /// The landing page's contents.
     pub landing: gtk::Box,
+    /// The line over the pane while a folder is listed.
     loading_line: LoadingLine,
 }
 
@@ -248,20 +255,26 @@ impl Content {
                 self.details.set_model(Some(selection));
             }
             FolderView::Icons(size) => {
-                let scale = self.grid_scale.get();
-                if scale.icon_size != size {
-                    self.grid_scale.set(GridScale {
-                        icon_size: size,
-                        ..scale
-                    });
-                    grid::set_icon_size(&self.grid, &self.icons, &self.owners, size);
-                }
+                self.use_icon_size(size);
                 self.details.set_model(None::<&gtk::MultiSelection>);
                 self.grid.set_model(Some(selection));
                 set_grid_columns(&self.grid, &self.grid_scroll, self.grid_scale.get());
             }
         }
         self.views.set_visible_child_name(view.stack_name());
+    }
+
+    /// Draws the icon view's tiles at `size`, when they are not already.
+    fn use_icon_size(&self, size: IconSize) {
+        let scale = self.grid_scale.get();
+        if scale.icon_size == size {
+            return;
+        }
+        self.grid_scale.set(GridScale {
+            icon_size: size,
+            ..scale
+        });
+        grid::set_icon_size(&self.grid, &self.icons, &self.owners, size);
     }
 
     fn visible_scroll(&self) -> &gtk::ScrolledWindow {

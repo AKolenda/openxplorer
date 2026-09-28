@@ -19,7 +19,7 @@ use crate::places::Places;
 
 use super::button_style::ButtonStyle;
 use super::card_grid::{card_grid, DRIVE_GRID};
-use super::landing::{location_card, section_title, texts};
+use super::landing::{location_card, section_title, texts, CARD_ICON_GAP};
 use super::{unported, BrowserWindow};
 
 /// Starts looking for advertised SMB servers (`discoverNetwork`).
@@ -147,7 +147,7 @@ fn discovered_servers(body: &gtk::Box) {
 }
 
 fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk::Button {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 15);
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
     content.append(&icons::glyph(Glyph::Network, 34));
     let address = locations.display_location(&location.uri);
     content.append(&texts(&location.label, &address));

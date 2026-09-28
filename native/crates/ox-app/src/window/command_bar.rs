@@ -24,6 +24,9 @@ use super::unported;
 /// command bar (ui-spec.md I01; the web app's were 18).
 const ICON_COMMAND_GLYPH: i32 = 16;
 
+/// The glyph of a command with a label, and the chevron of a menu.
+const TEXT_COMMAND_GLYPH: i32 = 17;
+
 /// Whether a command stays in a compact window (the 680-pixel rules).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InCompactWindow {
@@ -34,6 +37,7 @@ enum InCompactWindow {
 }
 
 /// An icon-only command (`button.command` in index.html).
+#[derive(Debug)]
 struct IconCommand {
     glyph: Glyph,
     action: &'static str,
@@ -110,7 +114,7 @@ impl CommandBar {
         root.update_property(&[gtk::accessible::Property::Label("File commands")]);
         let mut hidden_when_compact = Vec::new();
         root.append(&file_commands(&mut hidden_when_compact));
-        let theme_glyph = icons::glyph(Appearance::Light.glyph(), 17);
+        let theme_glyph = icons::glyph(Appearance::Light.glyph(), TEXT_COMMAND_GLYPH);
         let theme_label = gtk::Label::new(Some(Appearance::Light.label()));
         let theme = theme_button(&theme_glyph, &theme_label);
         root.append(&theme);
@@ -139,7 +143,7 @@ impl CommandBar {
     /// or a moon and "Dark", with `tooltip` saying what was chosen
     /// (`applyTheme` in app.js).
     pub fn show_appearance(&self, appearance: Appearance, tooltip: &str) {
-        icons::set_glyph(&self.theme_glyph, appearance.glyph(), 17);
+        icons::set_glyph(&self.theme_glyph, appearance.glyph(), TEXT_COMMAND_GLYPH);
         self.theme_label.set_text(appearance.label());
         self.theme.set_tooltip_text(Some(tooltip));
     }
@@ -213,9 +217,9 @@ fn icon_button(command: &IconCommand) -> gtk::Button {
 /// `arrow`).
 fn text_menu_content(label: &str, glyph: Glyph) -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&icons::glyph(glyph, 17));
+    content.append(&icons::glyph(glyph, TEXT_COMMAND_GLYPH));
     content.append(&gtk::Label::new(Some(label)));
-    let chevron = icons::glyph(Glyph::Down, 17);
+    let chevron = icons::glyph(Glyph::Down, TEXT_COMMAND_GLYPH);
     chevron.add_css_class("chevron");
     content.append(&chevron);
     content
@@ -368,7 +372,7 @@ fn theme_button(glyph: &gtk::Image, label: &gtk::Label) -> gtk::MenuButton {
 /// the boolean `win.details-pane` action.
 fn details_toggle() -> gtk::ToggleButton {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&icons::glyph(Glyph::Details, 17));
+    content.append(&icons::glyph(Glyph::Details, TEXT_COMMAND_GLYPH));
     content.append(&gtk::Label::new(Some("Details")));
     gtk::ToggleButton::builder()
         .child(&content)

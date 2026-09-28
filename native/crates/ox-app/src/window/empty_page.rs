@@ -10,6 +10,9 @@ use crate::icons::{self, Glyph};
 
 use super::button_style::ButtonStyle;
 
+/// The folder or network glyph above the title.
+const STATE_GLYPH: i32 = 44;
+
 /// What the empty page says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum EmptyState {
@@ -56,7 +59,7 @@ impl EmptyPage {
             .css_classes(["empty-state"])
             .build();
         let spinner = gtk::Spinner::new();
-        let icon = icons::glyph(Glyph::FolderLine, 44);
+        let icon = icons::glyph(Glyph::FolderLine, STATE_GLYPH);
         let title = centred_text();
         title.add_css_class("empty-title");
         let message = centred_text();
@@ -94,7 +97,7 @@ impl EmptyPage {
             EmptyState::Unavailable(_) => Glyph::Network,
             _ => Glyph::FolderLine,
         };
-        icons::set_glyph(&self.icon, glyph, 44);
+        icons::set_glyph(&self.icon, glyph, STATE_GLYPH);
         let (title, message) = match state {
             EmptyState::Loading => ("Loading…", ""),
             EmptyState::Unavailable(error) => ("This location is unavailable", error.as_str()),

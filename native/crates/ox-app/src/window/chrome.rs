@@ -22,6 +22,46 @@ use super::toast::Toast;
 /// The glyphs of the Back, Forward, Up and Refresh buttons.
 const NAVIGATION_GLYPH: i32 = 16;
 
+/// One of the buttons before the address bar (`.nav-buttons` in
+/// index.html).
+#[derive(Debug)]
+struct NavigationButton {
+    glyph: Glyph,
+    /// The accessible name (`aria-label`).
+    name: &'static str,
+    /// The tooltip, with the keyboard shortcut (`title`).
+    tooltip: &'static str,
+    action: &'static str,
+}
+
+/// Back, Forward, Up and Refresh, in that order.
+const NAVIGATION_BUTTONS: [NavigationButton; 4] = [
+    NavigationButton {
+        glyph: Glyph::Back,
+        name: "Back",
+        tooltip: "Back (Alt+Left)",
+        action: "win.back",
+    },
+    NavigationButton {
+        glyph: Glyph::Forward,
+        name: "Forward",
+        tooltip: "Forward (Alt+Right)",
+        action: "win.forward",
+    },
+    NavigationButton {
+        glyph: Glyph::Up,
+        name: "Up",
+        tooltip: "Up (Alt+Up)",
+        action: "win.up",
+    },
+    NavigationButton {
+        glyph: Glyph::Refresh,
+        name: "Refresh",
+        tooltip: "Refresh (F5)",
+        action: "win.refresh",
+    },
+];
+
 /// The frame's widgets that the controller updates.
 #[derive(Debug)]
 pub(super) struct Chrome {
@@ -85,21 +125,20 @@ fn navigation_buttons() -> gtk::Box {
         .valign(gtk::Align::Center)
         .css_classes(["nav-buttons"])
         .build();
-    for (glyph, name, tooltip, action) in [
-        (Glyph::Back, "Back", "Back (Alt+Left)", "win.back"),
-        (Glyph::Forward, "Forward", "Forward (Alt+Right)", "win.forward"),
-        (Glyph::Up, "Up", "Up (Alt+Up)", "win.up"),
-        (Glyph::Refresh, "Refresh", "Refresh (F5)", "win.refresh"),
-    ] {
-        let button = gtk::Button::builder()
-            .child(&icons::glyph(glyph, NAVIGATION_GLYPH))
-            .tooltip_text(tooltip)
-            .action_name(action)
-            .build();
-        button.update_property(&[gtk::accessible::Property::Label(name)]);
-        buttons.append(&button);
+    for command in &NAVIGATION_BUTTONS {
+        buttons.append(&navigation_button(command));
     }
     buttons
+}
+
+fn navigation_button(command: &NavigationButton) -> gtk::Button {
+    let button = gtk::Button::builder()
+        .child(&icons::glyph(command.glyph, NAVIGATION_GLYPH))
+        .tooltip_text(command.tooltip)
+        .action_name(command.action)
+        .build();
+    button.update_property(&[gtk::accessible::Property::Label(command.name)]);
+    button
 }
 
 /// The navigation buttons, the address bar and the search box, 14 pixels

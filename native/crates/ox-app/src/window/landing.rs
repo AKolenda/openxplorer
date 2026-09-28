@@ -37,6 +37,48 @@ const SHARE_GLYPH_COLOR: &str = "#4b96c0";
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
 
+/// The glyph before a section title.
+const SECTION_GLYPH: i32 = 14;
+/// The folder art of a Quick access card (`folderIcon(43)`).
+const QUICK_CARD_ART: i32 = 43;
+/// The glyph of a drive, device or network card.
+const DRIVE_CARD_GLYPH: i32 = 46;
+/// Pixels between a card's picture and its texts.
+pub(super) const CARD_ICON_GAP: i32 = 15;
+
+/// The file system attributes a drive card reads.
+const CAPACITY_ATTRIBUTES: &str = "filesystem::size,filesystem::free";
+
+/// How full a file system is, in bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Capacity {
+    /// The file system's size; never zero.
+    size: u64,
+    /// The space still free; at most `size`.
+    free: u64,
+}
+
+impl Capacity {
+    /// The share of the file system in use, from 0 to 1.
+    fn used_share(self) -> f64 {
+        #[expect(clippy::cast_precision_loss, reason = "a bar needs no byte precision")]
+        let share = (self.size - self.free) as f64 / self.size as f64;
+        share
+    }
+
+    /// Whether the bar turns red (`.capacity.full`).
+    fn is_nearly_full(self) -> bool {
+        self.used_share() >= NEARLY_FULL
+    }
+
+    /// "N free of M", as the drive cards of app.js say it.
+    fn text(self) -> String {
+        let free = format::pretty_bytes(self.free);
+        let size = format::pretty_bytes(self.size);
+        format!("{free} free of {size}")
+    }
+}
+
 fn label(text: &str, css_class: &str) -> gtk::Label {
     gtk::Label::builder()
         .label(text)
@@ -50,7 +92,7 @@ fn label(text: &str, css_class: &str) -> gtk::Label {
 pub(super) fn section_title(text: &str, glyph: Glyph) -> gtk::Box {
     let title = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     title.add_css_class("section-title");
-    title.append(&icons::glyph(glyph, 14));
+    title.append(&icons::glyph(glyph, SECTION_GLYPH));
     title.append(&gtk::Label::new(Some(text)));
     title
 }
@@ -90,8 +132,8 @@ fn quick_card(place: &Place, style: ArtStyle) -> gtk::Button {
     } else {
         (ArtKind::Folder, "Stored on this PC")
     };
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 15);
-    content.append(&style.image(art, 43));
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
+    content.append(&style.image(art, QUICK_CARD_ART));
     // "Stored on this PC" is never cut short: in a narrow card it runs
     // into the padding, as `.quick-card .card-sub` lets it.
     let whole_subtitle = gtk::Label::builder()
@@ -118,37 +160,40 @@ fn show_capacity(info: &gtk::Box, uri: &str) {
     let file = gio::File::for_uri(uri);
     let info = info.downgrade();
     glib::spawn_future_local(async move {
-        let attributes = "filesystem::size,filesystem::free";
-        let Ok(filesystem) = file
-            .query_filesystem_info_future(attributes, glib::Priority::LOW)
-            .await
-        else {
+        let Some(capacity) = measure_capacity(&file).await else {
             return;
         };
-        let size = filesystem.attribute_uint64("filesystem::size");
-        let free = filesystem.attribute_uint64("filesystem::free").min(size);
-        // A card replaced while GIO measured shows nothing; neither does a
-        // file system without a size, as `if(m.total)` in app.js.
-        let Some(info) = info.upgrade().filter(|_| size > 0) else {
+        // A card replaced while GIO measured shows nothing.
+        let Some(info) = info.upgrade() else {
             return;
         };
-        #[expect(clippy::cast_precision_loss, reason = "a bar needs no byte precision")]
-        let used = (size - free) as f64 / size as f64;
-        let bar = gtk::ProgressBar::builder()
-            .fraction(used)
-            .css_classes(["capacity"])
-            .build();
-        if used >= NEARLY_FULL {
-            bar.add_css_class("full");
-        }
-        let text = format!(
-            "{} free of {}",
-            format::pretty_bytes(free),
-            format::pretty_bytes(size)
-        );
-        info.append(&bar);
-        info.append(&label(&text, "card-sub"));
+        info.append(&capacity_bar(capacity));
+        info.append(&label(&capacity.text(), "card-sub"));
     });
+}
+
+/// How full the file system of `file` is, or `None` when GIO cannot tell
+/// or it has no size (`if(m.total)` in app.js).
+async fn measure_capacity(file: &gio::File) -> Option<Capacity> {
+    let filesystem = file
+        .query_filesystem_info_future(CAPACITY_ATTRIBUTES, glib::Priority::LOW)
+        .await
+        .ok()?;
+    let size = filesystem.attribute_uint64("filesystem::size");
+    let free = filesystem.attribute_uint64("filesystem::free").min(size);
+    (size > 0).then_some(Capacity { size, free })
+}
+
+/// The bar that shows how full a drive is, red when it is nearly full.
+fn capacity_bar(capacity: Capacity) -> gtk::ProgressBar {
+    let bar = gtk::ProgressBar::builder()
+        .fraction(capacity.used_share())
+        .css_classes(["capacity"])
+        .build();
+    if capacity.is_nearly_full() {
+        bar.add_css_class("full");
+    }
+    bar
 }
 
 /// A drive card: Local Disk, a drive, a device, or a volume to connect.
@@ -163,8 +208,8 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
         (VolumeState::Mountable { .. }, _) => "Click to connect".to_owned(),
     };
     let info = texts(&row.label, &subtitle);
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 15);
-    content.append(&icons::glyph(glyph, 46));
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
+    content.append(&icons::glyph(glyph, DRIVE_CARD_GLYPH));
     content.append(&info);
     match &row.state {
         VolumeState::Mounted { uri, .. } => {
@@ -205,8 +250,20 @@ fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::But
     let bookmark = &share.bookmark;
     let glyph_color = gtk::gdk::RGBA::parse(SHARE_GLYPH_COLOR).expect("a valid CSS colour literal");
     let info = texts(&bookmark.label, &locations.display_location(&bookmark.uri));
-    let state = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-    state.add_css_class("connected");
+    info.append(&share_state(share));
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
+    content.append(&icons::colored_glyph(
+        Glyph::Server,
+        DRIVE_CARD_GLYPH,
+        glyph_color,
+    ));
+    content.append(&info);
+    location_card("drive-card", &bookmark.uri, &content)
+}
+
+/// A saved share's state line: a status dot, marked offline while the
+/// share is not mounted, and what opening it does.
+fn share_state(share: &SavedShare) -> gtk::Box {
     let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     dot.add_css_class("status-dot");
     dot.set_valign(gtk::Align::Center);
@@ -216,13 +273,11 @@ fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::But
         dot.add_css_class("offline");
         "Connect on open"
     };
+    let state = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+    state.add_css_class("connected");
     state.append(&dot);
     state.append(&gtk::Label::new(Some(state_text)));
-    info.append(&state);
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 15);
-    content.append(&icons::colored_glyph(Glyph::Server, 46, glyph_color));
-    content.append(&info);
-    location_card("drive-card", &bookmark.uri, &content)
+    state
 }
 
 /// "Map network location" at the right of the Network locations heading,
@@ -309,4 +364,29 @@ fn section_title_text(title: &gtk::Widget) -> Option<String> {
     let glyph = title.first_child()?;
     let label = glyph.next_sibling().and_downcast::<gtk::Label>()?;
     Some(label.text().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_capacity_bar_turns_red_from_ninety_percent_used() {
+        let nearly_full = Capacity { size: 100, free: 10 };
+        let roomy = Capacity { size: 100, free: 11 };
+        assert!(nearly_full.is_nearly_full());
+        assert!(!roomy.is_nearly_full());
+        assert!((roomy.used_share() - 0.89).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn the_capacity_line_says_how_much_is_free_of_the_size() {
+        let capacity = Capacity {
+            size: 2048,
+            free: 1024,
+        };
+        let free = format::pretty_bytes(1024);
+        let size = format::pretty_bytes(2048);
+        assert_eq!(capacity.text(), format!("{free} free of {size}"));
+    }
 }

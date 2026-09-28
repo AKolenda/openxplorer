@@ -8,10 +8,14 @@
 //! menu points at the first selected item, as in Windows 11 and Dolphin.
 
 use gtk::prelude::*;
-use gtk::{gdk, gio, glib};
+use gtk::{gdk, gio, glib, graphene};
 
 use super::widget_tree::children;
 use super::BrowserWindow;
+
+/// How far into a row, and from the view's corner without one, a menu
+/// opened from the keyboard points.
+const KEYBOARD_MENU_INSET: i32 = 40;
 
 /// The right-click and keyboard context menu of one view.
 fn context_menu_model() -> gio::Menu {
@@ -85,18 +89,28 @@ impl BrowserWindow {
         }
         let row = selected.and_then(|position| self.content().owners.widget_at(position));
         let bounds = row.and_then(|row| row.compute_bounds(&view));
-        #[expect(clippy::cast_possible_truncation, reason = "widget bounds are small")]
-        let point = bounds.map_or(gdk::Rectangle::new(40, 40, 1, 1), |bounds| {
-            gdk::Rectangle::new(
-                bounds.x() as i32 + 40,
-                bounds.y() as i32,
-                1,
-                bounds.height() as i32,
-            )
-        });
-        popover.set_pointing_to(Some(&point));
+        popover.set_pointing_to(Some(&keyboard_menu_anchor(bounds)));
         popover.popup();
     }
+}
+
+/// Where a menu opened from the keyboard points: into the selected row,
+/// [`KEYBOARD_MENU_INSET`] from its start, or near the top of the view
+/// without one.
+fn keyboard_menu_anchor(row_bounds: Option<graphene::Rect>) -> gdk::Rectangle {
+    let Some(bounds) = row_bounds else {
+        return gdk::Rectangle::new(KEYBOARD_MENU_INSET, KEYBOARD_MENU_INSET, 1, 1);
+    };
+    let x = whole_pixels(bounds.x()) + KEYBOARD_MENU_INSET;
+    let y = whole_pixels(bounds.y());
+    let height = whole_pixels(bounds.height());
+    gdk::Rectangle::new(x, y, 1, height)
+}
+
+/// A widget coordinate cut to whole pixels.
+#[expect(clippy::cast_possible_truncation, reason = "widget bounds are small")]
+fn whole_pixels(coordinate: f32) -> i32 {
+    coordinate as i32
 }
 
 /// The context menu popover attached to `view`.
