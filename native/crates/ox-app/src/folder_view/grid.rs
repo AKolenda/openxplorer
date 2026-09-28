@@ -109,6 +109,21 @@ pub(crate) struct CellSize {
     pub height: i32,
 }
 
+impl CellSize {
+    /// How many columns of these cells a pane `pane_width` pixels wide
+    /// shows: `max(1, floor(clientWidth / gridWidth))`, as `renderRows` in
+    /// app.js counts them. The tiles then share the pane's width less its
+    /// 20 pixels of inset, so they can be a little narrower than a cell.
+    ///
+    /// GTK keeps tiles for about thirty rows of `max-columns` alive, so the
+    /// window sets exactly this many columns rather than a generous cap,
+    /// which made every listing build thousands of tiles.
+    pub(crate) fn columns_in(self, pane_width: i32) -> u32 {
+        let columns = pane_width / self.width.max(1);
+        u32::try_from(columns.max(1)).unwrap_or(1)
+    }
+}
+
 /// The cell of tiles of `size` at `text_size` percent: `gridWidth` ×
 /// `gridRow` from `metrics()` in text-size.js for large icons (135 × 130
 /// at 100%), widened and heightened with the icon for the other sizes,
@@ -121,19 +136,6 @@ pub(crate) fn cell_size(size: IconSize, text_size: u32) -> CellSize {
         width: metrics.grid_width.max(width_for_icon),
         height: metrics.grid_row + icon_growth,
     }
-}
-
-/// How many columns of `cell_width` a `width`-pixel pane shows:
-/// `max(1, floor(clientWidth / gridWidth))`, as `renderRows` in app.js
-/// counts them. The tiles then share the pane's width less its 20 pixels
-/// of inset, so they can be a little narrower than a cell.
-///
-/// GTK keeps tiles for about thirty rows of `max-columns` alive, so the
-/// window sets exactly this many columns rather than a generous cap,
-/// which made every listing build thousands of tiles.
-pub(crate) fn columns_for_width(cell_width: i32, width: i32) -> u32 {
-    let columns = width / cell_width.max(1);
-    u32::try_from(columns.max(1)).unwrap_or(1)
 }
 
 /// The registries the views' cells share, which every tile factory the
@@ -290,11 +292,11 @@ impl IconView {
     }
 
     /// Gives the grid the columns its width holds at the current icon and
-    /// text size (see [`columns_for_width`]).
+    /// text size (see [`CellSize::columns_in`]).
     pub(crate) fn fit_columns(&self) {
         let imp = self.imp();
         let cell = cell_size(imp.icon_size.get(), imp.text_size.get());
-        let columns = columns_for_width(cell.width, imp.scroller.width());
+        let columns = cell.columns_in(imp.scroller.width());
         if imp.grid.max_columns() != columns {
             imp.grid.set_max_columns(columns);
         }
@@ -391,38 +393,43 @@ mod tests {
 
     /// A pane width and the columns `renderRows` gives it.
     struct ColumnCase {
-        width: i32,
+        pane_width: i32,
         columns: u32,
     }
 
     /// parity: VIEW-005
     #[test]
     fn grid_columns_follow_the_width_as_render_rows_counts_them() {
+        let large_icon_cell = cell_size(IconSize::Large, 100);
+        assert_eq!(large_icon_cell.width, 135, "the web's gridWidth");
         let cases = [
-            ColumnCase { width: 0, columns: 1 },
             ColumnCase {
-                width: 134,
+                pane_width: 0,
                 columns: 1,
             },
             ColumnCase {
-                width: 270,
+                pane_width: 134,
+                columns: 1,
+            },
+            ColumnCase {
+                pane_width: 270,
                 columns: 2,
             },
             ColumnCase {
-                width: 944,
+                pane_width: 944,
                 columns: 6,
             },
             ColumnCase {
-                width: 962,
+                pane_width: 962,
                 columns: 7,
             },
         ];
         for case in cases {
             assert_eq!(
-                columns_for_width(135, case.width),
+                large_icon_cell.columns_in(case.pane_width),
                 case.columns,
                 "{} pixels",
-                case.width
+                case.pane_width
             );
         }
     }
