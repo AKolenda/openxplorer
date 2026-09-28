@@ -4,12 +4,14 @@
 //! Ports `split_location` from `desktop/core.py` together with the parts of
 //! Python's `urllib.parse.urlsplit` it relies on, including the `hostname`
 //! and `port` properties and the bracketed-IPv6 checks. Portable-device URIs
-//! (`mtp://[usb:001,002]/`) use their own narrow parser because their
-//! bracketed bus identifiers are not IPv6 addresses.
+//! (`mtp://[usb:001,002]/`) use their own narrow parser
+//! ([`super::device_uri`]) because their bracketed bus identifiers are not
+//! IPv6 addresses.
 
 use std::borrow::Cow;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
+use super::device_uri::DeviceUriMatch;
 use super::text::unquote_lossy;
 use super::LocationError;
 
@@ -187,53 +189,6 @@ pub fn split_location(location: &str) -> Result<LocationParts, LocationError> {
     }
 }
 
-/// A match of `DEVICE_URI` in `core.py`:
-/// `^([A-Za-z][A-Za-z0-9+.-]*)://([^/?#]+)(/[^?#]*)?$`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct DeviceUriMatch<'a> {
-    /// The scheme as written (not lower-cased).
-    pub(crate) scheme: &'a str,
-    /// The non-empty authority, for example `[usb:001,002]`.
-    pub(crate) authority: &'a str,
-    /// The path; `/` when the URI has none.
-    pub(crate) path: &'a str,
-}
-
-impl<'a> DeviceUriMatch<'a> {
-    /// Matches any scheme; callers check that the scheme names a
-    /// [`LocationKind::Device`].
-    pub(crate) fn parse(uri: &'a str) -> Option<Self> {
-        let (scheme, after_scheme) = uri.split_once("://")?;
-        if !is_scheme(scheme) || after_scheme.contains(['?', '#']) {
-            return None;
-        }
-        let (authority, path) = match after_scheme.find('/') {
-            Some(slash) => after_scheme.split_at(slash),
-            None => (after_scheme, "/"),
-        };
-        if authority.is_empty() {
-            return None;
-        }
-        Some(Self {
-            scheme,
-            authority,
-            path,
-        })
-    }
-
-    /// The match as [`LocationParts`] with the scheme lower-cased, as
-    /// `split_location` in `core.py` builds its `SplitResult`.
-    pub(crate) fn to_parts(self) -> LocationParts {
-        LocationParts {
-            scheme: self.scheme.to_ascii_lowercase(),
-            authority: self.authority.to_string(),
-            path: self.path.to_string(),
-            query: String::new(),
-            fragment: String::new(),
-        }
-    }
-}
-
 /// The scheme of `location` by `urlsplit`'s rule, lower-cased, and the
 /// text after its colon; `None` for a plain path.
 pub(crate) fn split_scheme(location: &str) -> Option<(String, &str)> {
@@ -242,7 +197,7 @@ pub(crate) fn split_scheme(location: &str) -> Option<(String, &str)> {
 }
 
 /// True for text matching `[A-Za-z][A-Za-z0-9+.-]*`.
-fn is_scheme(text: &str) -> bool {
+pub(super) fn is_scheme(text: &str) -> bool {
     let mut chars = text.chars();
     let starts_with_letter = chars.next().is_some_and(|c| c.is_ascii_alphabetic());
     starts_with_letter && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))

@@ -35,6 +35,7 @@
 //! |---|---|
 //! | `text` | Python's and JavaScript's escaping, stripping and path rules |
 //! | `parts` | Splitting a location like `urlsplit` |
+//! | `device_uri` | GIO's device URIs with bracketed bus identifiers |
 //! | `normalise` | One canonical URI for a typed or stored address |
 //! | `virtual_place` | The app's pages and GIO's virtual folders |
 //! | `names` | File names, "Keep both" names and sidebar labels |
@@ -42,6 +43,7 @@
 //! | `classify` | Writable, snapshot and network folders, SMB share roots |
 
 mod classify;
+mod device_uri;
 mod display;
 mod names;
 mod normalise;

@@ -13,7 +13,8 @@ use std::path::Path;
 
 use percent_encoding::percent_encode;
 
-use super::parts::{split_location, split_scheme, split_url, DeviceUriMatch, LocationKind, LocationParts};
+use super::device_uri::DeviceUriMatch;
+use super::parts::{split_location, split_scheme, split_url, LocationKind, LocationParts};
 use super::text::{
     contains_python_space, has_control_character, normalise_posix_path, python_strip, quote_component,
     quote_path, unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,

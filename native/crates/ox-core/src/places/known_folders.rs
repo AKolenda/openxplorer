@@ -276,6 +276,7 @@ mod tests {
         contents: Vec<u8>,
     }
 
+    /// parity: SIDE-006
     #[test]
     fn a_missing_file_gives_every_default() {
         let fixture = Fixture::new();
@@ -301,6 +302,8 @@ mod tests {
 
     /// Python's `paths()` re-reads the file on every call, so a folder moved
     /// by another program shows up without a restart.
+    ///
+    /// parity: SIDE-006
     #[test]
     fn every_call_reads_the_file_again() {
         let fixture = Fixture::new();
@@ -316,6 +319,7 @@ mod tests {
         );
     }
 
+    /// parity: SIDE-006
     #[test]
     fn an_unreadable_file_gives_every_default() {
         let fixture = Fixture::new();
@@ -338,7 +342,7 @@ mod tests {
         }
     }
 
-    /// parity: SIDE-005
+    /// parity: SIDE-005, SIDE-006
     #[test]
     fn quick_access_shows_six_folders_with_their_glyphs_and_colours() {
         let fixture = Fixture::new();

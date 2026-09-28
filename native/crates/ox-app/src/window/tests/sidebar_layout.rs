@@ -98,6 +98,7 @@ fn the_sidebar_is_210_pixels_with_a_6_pixel_resizer() {
     assert_eq!(list.x, 216, "the file list starts after the resizer");
 }
 
+/// parity: SIDE-001
 #[gtk::test]
 fn map_network_location_waits_below_the_list_for_its_milestone() {
     let fixture = Fixture::standard();

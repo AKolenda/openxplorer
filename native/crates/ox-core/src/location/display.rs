@@ -16,8 +16,9 @@
 
 use std::path::PathBuf;
 
+use super::device_uri::DeviceUriMatch;
 use super::normalise::file_uri;
-use super::parts::{split_location, split_scheme, DeviceUriMatch, LocationKind, LocationParts};
+use super::parts::{split_location, split_scheme, LocationKind, LocationParts};
 use super::text::{decode_uri_component, strip_one_trailing_slash};
 use super::virtual_place::{VirtualFolder, VirtualPlace};
 use super::{location_kind, Crumb};

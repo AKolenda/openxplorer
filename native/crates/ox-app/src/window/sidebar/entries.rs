@@ -241,6 +241,7 @@ mod tests {
         entries.iter().map(|entry| entry.label.as_str()).collect()
     }
 
+    /// parity: SIDE-001, SIDE-019
     #[test]
     fn rows_follow_the_python_order_and_smb_mounts_appear_once_under_network() {
         let settings = SettingsData {
@@ -301,6 +302,7 @@ mod tests {
         assert_eq!(backup.level, RowLevel::Child);
     }
 
+    /// parity: SIDE-001
     #[test]
     fn home_this_pc_and_network_show_their_glyphs_in_their_own_colours() {
         let entries = entries_for(&SettingsData::default(), &[]);
@@ -320,6 +322,7 @@ mod tests {
         assert_eq!(icon_of("Local Disk"), Some(Art::Glyph(Icon::HardDrive)));
     }
 
+    /// parity: SIDE-006
     #[test]
     fn every_quick_access_folder_has_a_glyph_in_its_colour() {
         for folder in KnownFolder::QUICK_ACCESS {
@@ -329,7 +332,7 @@ mod tests {
         }
     }
 
-    /// parity: LOOK-016
+    /// parity: LOOK-016, SIDE-019
     #[test]
     fn a_saved_share_that_is_not_mounted_shows_the_red_cross() {
         let settings = SettingsData {
@@ -349,6 +352,38 @@ mod tests {
         assert_eq!(share.icon, disconnected_drive);
     }
 
+    /// Each network row's tooltip is its UNC address and its state, as
+    /// `renderSidebar` titles it.
+    ///
+    /// parity: SIDE-019
+    #[test]
+    fn network_rows_say_whether_they_are_connected_saved_or_visited() {
+        let connected = NetworkLocation {
+            uri: "smb://nas/media".to_owned(),
+            label: "Media".to_owned(),
+            is_saved: true,
+            is_connected: true,
+            kind: ox_core::places::NetworkKind::Share,
+        };
+        let saved = NetworkLocation {
+            is_connected: false,
+            ..connected.clone()
+        };
+        let visited = NetworkLocation {
+            is_saved: false,
+            ..saved.clone()
+        };
+        let locations = LocationContext::default();
+        let tooltip_of = |location: &NetworkLocation| network_entry(location, &locations).tooltip;
+        assert_eq!(tooltip_of(&connected), "\\\\nas\\media · Connected");
+        assert_eq!(tooltip_of(&saved), "\\\\nas\\media · Saved · connect on open");
+        assert_eq!(tooltip_of(&visited), "\\\\nas\\media · Opened this session");
+    }
+
+    /// Home, Quick access, This PC and Network are sections of their own,
+    /// which the sidebar separates.
+    ///
+    /// parity: SIDE-001
     #[test]
     fn a_section_knows_its_first_and_last_rows() {
         let settings = SettingsData {

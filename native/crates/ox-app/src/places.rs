@@ -199,7 +199,7 @@ mod tests {
         })
     }
 
-    /// parity: NET-018
+    /// parity: NET-018, SIDE-001, SIDE-019
     #[test]
     fn an_smb_mount_is_listed_under_network_and_not_among_the_drives() {
         let volumes = [

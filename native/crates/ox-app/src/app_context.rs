@@ -19,6 +19,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
+use ox_core::places::FolderLocations;
 use ox_core::settings::{Bookmark, PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
 
 use crate::places;
@@ -92,19 +93,27 @@ glib::wrapper! {
 }
 
 impl AppContext {
-    /// Shares `skin` and the settings read at startup between windows.
+    /// Shares `skin` and the settings read at startup between windows, and
+    /// the user's standard folders.
+    pub(crate) fn new(skin: Skin, settings: Settings) -> Self {
+        Self::with_folder_locations(skin, settings, FolderLocations::from_environment())
+    }
+
+    /// [`Self::new`] with the standard folders of `folder_locations`, so
+    /// tests can move them without touching the user's own
+    /// `user-dirs.dirs`.
     ///
     /// # Panics
     ///
     /// Never: a new object has no skin or settings yet.
-    pub(crate) fn new(skin: Skin, settings: Settings) -> Self {
+    fn with_folder_locations(skin: Skin, settings: Settings, folder_locations: FolderLocations) -> Self {
         let context: Self = glib::Object::new();
         let imp = context.imp();
         imp.skin.set(skin).expect("a new AppContext has no skin yet");
         imp.settings
             .set(SettingsStore::new(settings))
             .expect("a new AppContext has no settings yet");
-        context.watch_known_folders();
+        context.watch_known_folders(folder_locations);
         context
     }
 

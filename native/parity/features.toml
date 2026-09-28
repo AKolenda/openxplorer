@@ -5039,7 +5039,8 @@ python_tests = [
 ]
 bridge = ["environment", "bookmark", "pin"]
 dolphin = "Places panel; show_places_panel: F9"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, home_this_pc_and_network_show_their_glyphs_in_their_own_colours, a_section_knows_its_first_and_last_rows); native/crates/ox-app/src/places.rs (an_smb_mount_is_listed_under_network_and_not_among_the_drives); native/crates/ox-app/src/window/tests/sidebar_layout.rs (map_network_location_waits_below_the_list_for_its_milestone). The order, the blue Home glyph, the section separators, non-SMB volumes and devices under This PC and the Map network location bar are tested. Not tested yet: that the This PC and Network chevrons never collapse their sections, and that Quick access shows no heading or counter."
 
 [[feature]]
 id = "SIDE-002"
@@ -5139,8 +5140,8 @@ python_tests = ["desktop/tests/test_core.py::CoreTests::test_hidden_builtin_pin"
 bridge = ["environment", "locationCheck", "locationApply"]
 dolphin = "KDE Places defaults from QStandardPaths (xdg-user-dirs); Dolphin Places panel defaults"
 gnome = "xdg-user-dirs (~/.config/user-dirs.dirs); xdg-user-dirs (user-dirs.dirs, xdg-user-dirs-update); g_get_user_special_dir is cached per process; xdg-user-dirs (user-dirs.dirs)"
-native = "todo"
-native_note = "Porting notes: No automated test for FolderLocations or read_user_dirs."
+native = "partial"
+native_note = "native/crates/ox-core/src/places/known_folders.rs (a_missing_file_gives_every_default, every_call_reads_the_file_again, an_unreadable_file_gives_every_default, quick_access_shows_six_folders_with_their_glyphs_and_colours); native/crates/ox-core/tests/places_composition.rs (user_dirs_resolve_like_the_python_app, known_folders_use_the_standard_glyphs_and_colours); native/crates/ox-app/src/app_context/known_folders.rs (a_standard_folder_moved_in_user_dirs_shows_without_a_restart); native/crates/ox-app/src/window/sidebar/entries.rs (every_quick_access_folder_has_a_glyph_in_its_colour). The native app reads user-dirs.dirs off the main thread at start and again whenever the file changes, instead of on every sidebar redraw; a moved folder still shows at once. Not tested natively yet: a standard folder relocated onto a CIFS mount drawn on the network pipe in the sidebar, and hidden built-ins in the window (ox-core's quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order covers the composition)."
 
 [[feature]]
 id = "SIDE-007"
@@ -5472,7 +5473,8 @@ python_tests = [
   "desktop/tests/test_v07.py::NetworkTests::test_host_aliases_not_merged",
 ]
 bridge = ["environment"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/places_composition.rs (network_identity_preserves_custom_ports_and_host_aliases, saved_labels_win_and_connected_state_merges, visited_servers_and_stable_mounts_need_no_saved_bookmark); native/crates/ox-app/src/places.rs (an_smb_mount_is_listed_under_network_and_not_among_the_drives); native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, network_rows_say_whether_they_are_connected_saved_or_visited, a_saved_share_that_is_not_mounted_shows_the_red_cross). Merging, the three tooltips and the green-bar and red-cross art are tested. Not tested natively yet: browsing an SMB location in a window adds its Network row without saving a bookmark (needs a share; AppContext::remember_network does it)."
 
 [[feature]]
 id = "SIDE-020"

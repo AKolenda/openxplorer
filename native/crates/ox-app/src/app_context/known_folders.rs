@@ -32,10 +32,9 @@ fn may_change_the_file(event: gio::FileMonitorEvent) -> bool {
 }
 
 impl AppContext {
-    /// Starts at the default folders, then reads `user-dirs.dirs` and
-    /// watches it for changes.
-    pub(super) fn watch_known_folders(&self) {
-        let locations = FolderLocations::from_environment();
+    /// Starts at the default folders of `locations`, then reads their
+    /// `user-dirs.dirs` and watches it for changes.
+    pub(super) fn watch_known_folders(&self, locations: FolderLocations) {
         let defaults = locations.default_paths().quick_access_places();
         self.imp().known_folders.replace(defaults);
         self.monitor_user_dirs(&locations);
@@ -45,6 +44,7 @@ impl AppContext {
     /// Reads the standard folders again whenever `user-dirs.dirs` is
     /// written, replaced or removed. A local file monitor never blocks.
     fn monitor_user_dirs(&self, locations: &FolderLocations) {
+        let watched = locations.clone();
         let file = gio::File::for_path(locations.user_dirs_file());
         let monitor = match file.monitor_file(gio::FileMonitorFlags::WATCH_MOVES, gio::Cancellable::NONE) {
             Ok(monitor) => monitor,
@@ -59,7 +59,7 @@ impl AppContext {
             self,
             move |_, _, _, event| {
                 if may_change_the_file(event) {
-                    context.read_known_folders(FolderLocations::from_environment());
+                    context.read_known_folders(watched.clone());
                 }
             }
         ));
@@ -89,5 +89,66 @@ impl AppContext {
     /// The Quick access rows of the standard folders, as last read.
     pub(crate) fn known_folders(&self) -> Vec<Place> {
         self.imp().known_folders.borrow().clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::fs;
+    use std::path::Path;
+    use std::rc::Rc;
+
+    use ox_core::location::file_uri;
+    use ox_core::places::KnownFolder;
+    use ox_core::settings::Settings;
+
+    use super::*;
+    use crate::test_support::harness::{skin, wait_until};
+
+    /// Where `context` shows the Downloads folder.
+    fn downloads_uri(context: &AppContext) -> Option<String> {
+        let places = context.known_folders();
+        let downloads = places
+            .into_iter()
+            .find(|place| place.known_folder == Some(KnownFolder::Downloads));
+        downloads.map(|place| place.uri)
+    }
+
+    /// The URI of `name` in `home`.
+    fn uri_in(home: &Path, name: &str) -> String {
+        file_uri(&home.join(name))
+    }
+
+    /// The Python app re-read `user-dirs.dirs` for every sidebar; the
+    /// native app watches it, so a folder moved with
+    /// `xdg-user-dirs-update` still shows without a restart, and every
+    /// window hears `places-changed`.
+    ///
+    /// parity: SIDE-006
+    #[gtk::test]
+    fn a_standard_folder_moved_in_user_dirs_shows_without_a_restart() {
+        let folder = tempfile::tempdir().expect("the test home has room for a temporary folder");
+        let home = folder.path().join("home");
+        let config = folder.path().join("config");
+        fs::create_dir(&config).expect("the config folder is created");
+        let settings = Settings::open(&folder.path().join("settings"));
+        let locations = FolderLocations::new(home.clone(), &config);
+        let context = AppContext::with_folder_locations(skin(), settings, locations);
+        let announcements = Rc::new(Cell::new(0));
+        let counter = Rc::clone(&announcements);
+        context.connect_places_changed(move || counter.set(counter.get() + 1));
+        assert_eq!(downloads_uri(&context), Some(uri_in(&home, "Downloads")));
+
+        fs::write(
+            config.join("user-dirs.dirs"),
+            "XDG_DOWNLOAD_DIR=\"$HOME/Incoming\"\n",
+        )
+        .expect("user-dirs.dirs is written");
+
+        wait_until("the moved Downloads folder", || {
+            downloads_uri(&context) == Some(uri_in(&home, "Incoming"))
+        });
+        assert!(announcements.get() >= 1, "the windows were told");
     }
 }

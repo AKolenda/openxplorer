@@ -359,8 +359,8 @@
         "native/crates/ox-core/src/settings/tests.rs::settings_private_and_atomic",
         "native/crates/ox-core/src/settings/tests.rs::two_windows_preserve_each_others_preferences",
         "native/crates/ox-core/src/settings/tests.rs::a_version_1_file_is_read_and_can_switch_to_the_system_theme",
-        "native/crates/ox-core/src/settings/tests.rs::preferences_still_persist_in_private_storage",
-        "native/crates/ox-core/src/settings/tests.rs::settings_lock_symlink_refused",
+        "native/crates/ox-core/src/settings/tests/storage.rs::preferences_still_persist_in_private_storage",
+        "native/crates/ox-core/src/settings/tests/storage.rs::settings_lock_symlink_refused",
         "native/crates/ox-core/src/settings/tests.rs::unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write"
       ]
     },

@@ -10,7 +10,7 @@ use super::*;
 /// parity: SET-016
 #[test]
 fn the_default_context_menu_is_the_classic_one() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let preferences = Settings::open(root.path()).snapshot().preferences;
     assert_eq!(preferences.context_menu, ContextMenu::Win10);
 }
@@ -19,7 +19,7 @@ fn the_default_context_menu_is_the_classic_one() {
 /// parity: SET-016
 #[test]
 fn a_network_interval_outside_the_whitelist_is_not_saved() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     save_preferences(&mut store, &json!({"networkInterval": 30}));
     save_preferences(&mut store, &json!({"networkInterval": 1}));
@@ -30,7 +30,7 @@ fn a_network_interval_outside_the_whitelist_is_not_saved() {
 /// parity: SIDE-023, VIEW-028
 #[test]
 fn sidebar_and_column_widths_persist() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     save_preferences(
         &mut store,
@@ -46,7 +46,7 @@ fn sidebar_and_column_widths_persist() {
 /// parity: SIDE-023
 #[test]
 fn sidebar_widths_out_of_bounds_are_ignored() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     let rejected = [
         json!(-1),
@@ -72,7 +72,7 @@ fn sidebar_widths_out_of_bounds_are_ignored() {
 /// parity: SIDE-023, VIEW-028
 #[test]
 fn sidebar_widths_are_rounded_when_saved() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     save_preferences(&mut store, &json!({"sidebarWidth": 280.4}));
     assert_eq!(store.snapshot().preferences.sidebar_width, Some(280));
@@ -82,7 +82,7 @@ fn sidebar_widths_are_rounded_when_saved() {
 /// parity: VIEW-028, SAFE-018
 #[test]
 fn only_known_in_range_column_widths_are_saved() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     let update = json!({"columnWidths": {"name": 150, "css": "url(bad)", "size": 99999, "type": true}});
     save_preferences(&mut store, &update);
@@ -94,7 +94,7 @@ fn only_known_in_range_column_widths_are_saved() {
 /// parity: VIEW-028
 #[test]
 fn an_empty_column_widths_object_resets_every_column() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     save_preferences(&mut store, &json!({"columnWidths": {"name": 700}}));
     save_preferences(&mut store, &json!({"columnWidths": {}}));
@@ -106,7 +106,7 @@ fn an_empty_column_widths_object_resets_every_column() {
 /// parity: SET-014, SIDE-023
 #[test]
 fn changing_the_sidebar_width_keeps_other_preferences() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     save_preferences(&mut store, &json!({"theme": "dark", "contextMenu": "win11"}));
     save_preferences(&mut store, &json!({"sidebarWidth": 300}));
@@ -121,7 +121,7 @@ fn changing_the_sidebar_width_keeps_other_preferences() {
 /// parity: SET-014, VIEW-028
 #[test]
 fn partial_window_updates_do_not_remove_other_preferences() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     let mut other = Settings::open(root.path());
     save_preferences(&mut store, &json!({"sidebarWidth": 270}));
@@ -135,7 +135,7 @@ fn partial_window_updates_do_not_remove_other_preferences() {
 /// parity: VIEW-045
 #[test]
 fn text_size_defaults_to_100_and_persists() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     assert_eq!(store.snapshot().preferences.text_size, 100);
     save_preferences(&mut store, &json!({"textSize": 150}));
@@ -146,7 +146,7 @@ fn text_size_defaults_to_100_and_persists() {
 /// parity: VIEW-045
 #[test]
 fn invalid_text_sizes_are_ignored() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     save_preferences(&mut store, &json!({"textSize": 125}));
     let rejected = [
@@ -172,7 +172,7 @@ fn invalid_text_sizes_are_ignored() {
 /// parity: VIEW-045
 #[test]
 fn every_offered_text_size_is_saved() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     for size in TEXT_SIZES {
         let saved = save_preferences(&mut store, &json!({"textSize": size}));
@@ -184,7 +184,7 @@ fn every_offered_text_size_is_saved() {
 /// parity: VIEW-045
 #[test]
 fn changing_the_text_size_keeps_other_preferences() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut store = Settings::open(root.path());
     save_preferences(
         &mut store,
@@ -201,7 +201,7 @@ fn changing_the_text_size_keeps_other_preferences() {
 /// parity: VIEW-045, SET-014
 #[test]
 fn text_size_changes_from_two_windows_merge() {
-    let root = temporary_directory();
+    let root = temporary_folder();
     let mut first = Settings::open(root.path());
     let mut second = Settings::open(root.path());
     save_preferences(&mut first, &json!({"textSize": 175}));

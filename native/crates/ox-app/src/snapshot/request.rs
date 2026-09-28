@@ -17,11 +17,17 @@ use crate::window::FolderView;
 
 /// The variable naming the PNG to write; its presence turns the hook on.
 const SNAPSHOT_VARIABLE: &str = "OPENXPLORER_SNAPSHOT";
+/// The first tab's location, a path or URI.
 const START_VARIABLE: &str = "OPENXPLORER_START";
+/// The theme to draw: `light`, `dark` or `system`.
 const THEME_VARIABLE: &str = "OPENXPLORER_THEME";
+/// The folder view: `details` or an icon size.
 const VIEW_VARIABLE: &str = "OPENXPLORER_VIEW";
+/// The window size, `<width>x<height>`.
 const SIZE_VARIABLE: &str = "OPENXPLORER_SIZE";
+/// The Settings category or page to open.
 const SETTINGS_VARIABLE: &str = "OPENXPLORER_SETTINGS";
+/// What to type into the settings search.
 const SETTINGS_SEARCH_VARIABLE: &str = "OPENXPLORER_SETTINGS_SEARCH";
 
 /// The size of a window's title bar and contents.

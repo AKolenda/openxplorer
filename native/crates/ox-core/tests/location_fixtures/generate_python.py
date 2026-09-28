@@ -139,10 +139,12 @@ def external_cases() -> dict:
     """The location_external.rs tables, captured with EXTERNAL_HOME."""
     home = Path(EXTERNAL_HOME)
 
-    def normalise(address):
+    def normalise(address: str) -> str:
+        """core.normalise_location of address, resolved against EXTERNAL_HOME."""
         return core.normalise_location(address, None, home)
 
-    def normalised_item(address):
+    def normalised_item(address: str) -> str:
+        """core.require_item_uri of the normalised address."""
         return core.require_item_uri(normalise(address))
 
     return {
@@ -156,7 +158,8 @@ def capture() -> dict:
     """Every table in python.json, in the order the file lists them."""
     home = Path(HOME)
 
-    def normalise(address):
+    def normalise(address: str) -> str:
+        """core.normalise_location of address, resolved against HOME."""
         return core.normalise_location(address, None, home)
 
     return {

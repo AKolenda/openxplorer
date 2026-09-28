@@ -122,7 +122,7 @@ const KNOWN_FOLDER_CASES: [KnownFolderCase; 6] = [
     },
 ];
 
-/// parity: SIDE-005, LOOK-015
+/// parity: SIDE-005, SIDE-006, LOOK-015
 #[test]
 fn known_folders_use_the_standard_glyphs_and_colours() {
     let folders = FolderLocations::from_environment()
@@ -161,7 +161,7 @@ fn mount_badges_respect_path_boundaries_and_escaping() {
 /// `desktop/tests/test_v07.py::NetworkTests::test_custom_port_distinct` and
 /// `desktop/tests/test_v07.py::NetworkTests::test_host_aliases_not_merged`
 ///
-/// parity: NET-018
+/// parity: NET-018, SIDE-019
 #[test]
 fn network_identity_preserves_custom_ports_and_host_aliases() {
     assert_eq!(
@@ -181,7 +181,7 @@ fn network_identity_preserves_custom_ports_and_host_aliases() {
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_saved_label_preserved_and_mount_deduplicated`
 ///
-/// parity: NET-018
+/// parity: NET-018, SIDE-019
 #[test]
 fn saved_labels_win_and_connected_state_merges() {
     let saved = [saved_share("smb://nas/Work", "My Work")];
@@ -222,7 +222,7 @@ fn rows_are_told_apart_by_location_not_label() {
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_unsaved_host_session_entry`
 /// and `desktop/tests/test_v07.py::NetworkTests::test_stable_cifs_mount`
 ///
-/// parity: NET-006, NET-018
+/// parity: NET-006, NET-018, SIDE-019
 #[test]
 fn visited_servers_and_stable_mounts_need_no_saved_bookmark() {
     let stable = [StableMount {
@@ -392,6 +392,8 @@ fn rust_folder_paths(root: &Path, home: &Path) -> Value {
 
 /// Both applications must resolve the same standard folders, because
 /// Quick access matches their URIs against `hiddenQuick` and `quickOrder`.
+///
+/// parity: SIDE-006
 #[test]
 fn user_dirs_resolve_like_the_python_app() {
     let temporary = tempfile::tempdir().unwrap();
