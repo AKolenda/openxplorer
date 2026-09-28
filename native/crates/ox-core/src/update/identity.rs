@@ -4,8 +4,8 @@
 //! `identity`, `PROTOCOL` and `same_build` in `desktop/runtime_guard.py`,
 //! and the `runtime-info` action state of `desktop/winspace.py`.
 
-use std::fs;
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -57,7 +57,7 @@ impl RuntimeIdentity {
         for relative in inputs {
             checksum.update(relative.as_os_str().as_encoded_bytes());
             checksum.update(b"\0");
-            checksum.update(&fs::read(root.join(&relative))?);
+            add_file_contents(&mut checksum, &root.join(&relative))?;
         }
         Ok(Self::with_digest(version, checksum))
     }
@@ -72,7 +72,7 @@ impl RuntimeIdentity {
     /// Any error reading the file.
     pub fn of_executable(path: &Path, version: &str) -> io::Result<Self> {
         let mut checksum = sha256_checksum();
-        checksum.update(&fs::read(path)?);
+        add_file_contents(&mut checksum, path)?;
         Ok(Self::with_digest(version, checksum))
     }
 
@@ -142,6 +142,29 @@ impl InstalledBuild {
     }
 }
 
+/// Adds the contents of the file at `path` to `checksum`, streamed: a
+/// release executable is tens of megabytes, and is never held in memory
+/// whole.
+fn add_file_contents(checksum: &mut glib::Checksum, path: &Path) -> io::Result<()> {
+    let mut file = File::open(path)?;
+    io::copy(&mut file, &mut ChecksumWriter(checksum))?;
+    Ok(())
+}
+
+/// Adds everything written to it to a checksum.
+struct ChecksumWriter<'a>(&'a mut glib::Checksum);
+
+impl Write for ChecksumWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 /// The names of the regular files in `folder` whose suffix is one of
 /// `suffixes`, in name order. A missing folder has none, as Python's
 /// `glob` finds none.
@@ -208,5 +231,18 @@ mod tests {
 
         assert_eq!(first.build.len(), 64);
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn a_streamed_executable_digest_is_the_digest_of_the_whole_file() {
+        let folder = tempfile::tempdir().unwrap();
+        let executable = folder.path().join("openxplorer");
+        let contents: Vec<u8> = (0..300_000_u32).map(|index| index.to_le_bytes()[0]).collect();
+        fs::write(&executable, &contents).unwrap();
+
+        let identity = RuntimeIdentity::of_executable(&executable, "2.0.0").unwrap();
+
+        let whole = glib::compute_checksum_for_data(glib::ChecksumType::Sha256, &contents).unwrap();
+        assert_eq!(identity.build, whole.as_str());
     }
 }

@@ -48,23 +48,30 @@ impl PackageCommand {
     /// The whole command line, program first. No shell ever reads it.
     pub fn argv(&self) -> Vec<OsString> {
         let mut argv = vec![OsString::from(self.program())];
+        argv.extend(self.arguments());
+        argv
+    }
+
+    /// The command line after the program.
+    pub(super) fn arguments(&self) -> Vec<OsString> {
+        let mut arguments = Vec::new();
         match self {
             Self::InspectInstaller(installer) => {
-                argv.push("-f".into());
-                argv.push(installer.into());
-                argv.extend(["Package", "Version", "Architecture"].map(OsString::from));
+                arguments.push("-f".into());
+                arguments.push(installer.into());
+                arguments.extend(["Package", "Version", "Architecture"].map(OsString::from));
             }
             Self::Install(installer) => {
                 // --no-remove refuses a dependency resolution that would
                 // remove packages.
-                argv.extend(["/usr/bin/apt-get", "-y", "--no-remove", "install"].map(OsString::from));
-                argv.push(installer.into());
+                arguments.extend(["/usr/bin/apt-get", "-y", "--no-remove", "install"].map(OsString::from));
+                arguments.push(installer.into());
             }
             Self::QueryInstalled => {
-                argv.extend(["-W", "-f=${Status}\n${Version}", PACKAGE_NAME].map(OsString::from));
+                arguments.extend(["-W", "-f=${Status}\n${Version}", PACKAGE_NAME].map(OsString::from));
             }
         }
-        argv
+        arguments
     }
 
     /// How long the command may run before it is stopped.
@@ -261,7 +268,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap_err().to_string(),
-            "/usr/bin/dpkg-query returned non-zero exit status 1."
+            "The package tool /usr/bin/dpkg-query failed (exit status 1)."
         );
     }
 }

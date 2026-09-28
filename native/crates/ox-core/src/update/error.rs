@@ -104,18 +104,23 @@ pub enum UpdateError {
     InstallNotConfirmed,
     /// `dpkg-deb` or `dpkg-query` failed. Python showed `subprocess`'s own
     /// message.
-    #[error("{program} returned non-zero exit status {status}.")]
+    ///
+    /// The message does not say whether anything was installed:
+    /// `dpkg-query` runs after APT, which may have changed the system.
+    #[error("The package tool {program} failed (exit status {status}).")]
     PackageToolFailed {
         /// The tool's path.
         program: &'static str,
-        /// Its exit status, or -1 if a signal ended it.
+        /// Its exit status, or minus the signal number if a signal ended
+        /// it.
         status: i32,
     },
     /// `dpkg-deb` or `dpkg-query` did not finish in time and was stopped.
-    #[error("{program} did not finish within {} seconds.", limit.as_secs())]
+    /// Python showed `subprocess`'s own message.
+    #[error("The package tool {program} did not finish within {} seconds.", limit.as_secs())]
     PackageToolTimedOut {
         /// The tool's path.
-        program: String,
+        program: &'static str,
         /// Its time limit.
         limit: Duration,
     },

@@ -4,6 +4,7 @@
 //! of `desktop/updater.py` and `desktop/winspace.py`.
 
 use std::ffi::{OsStr, OsString};
+use std::iter;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -18,28 +19,30 @@ pub struct SystemPackageManager;
 
 impl PackageManager for SystemPackageManager {
     fn run(&self, command: &PackageCommand) -> Result<CommandOutput, UpdateError> {
-        run_to_completion(&command.argv(), command.time_limit())
+        run_to_completion(command.program(), &command.arguments(), command.time_limit())
     }
 }
 
-/// Runs `argv` with the parent's standard input, as Python's
-/// `subprocess.run(..., capture_output=True)`, and collects its output.
-/// With a `time_limit`, a command still running then is killed.
+/// Runs `program` with `arguments` and the parent's standard input, as
+/// Python's `subprocess.run(..., capture_output=True)`, and collects its
+/// output. With a `time_limit`, a command still running then is killed.
 ///
 /// # Errors
 ///
 /// [`UpdateError::Io`] if it cannot start or be waited for, and
 /// [`UpdateError::PackageToolTimedOut`] if it was killed at its limit.
 pub(super) fn run_to_completion(
-    argv: &[OsString],
+    program: &'static str,
+    arguments: &[OsString],
     time_limit: Option<Duration>,
 ) -> Result<CommandOutput, UpdateError> {
-    let program = program_name(argv);
-    let arguments: Vec<&OsStr> = argv.iter().map(OsString::as_os_str).collect();
+    let argv: Vec<&OsStr> = iter::once(OsStr::new(program))
+        .chain(arguments.iter().map(OsString::as_os_str))
+        .collect();
     let flags = gio::SubprocessFlags::STDIN_INHERIT
         | gio::SubprocessFlags::STDOUT_PIPE
         | gio::SubprocessFlags::STDERR_PIPE;
-    let process = gio::Subprocess::newv(&arguments, flags).map_err(|error| process_error(program, &error))?;
+    let process = gio::Subprocess::newv(&argv, flags).map_err(|error| process_error(program, &error))?;
     let cancellable = gio::Cancellable::new();
     let watchdog = time_limit.map(|limit| Watchdog::start(cancellable.clone(), limit));
     let communicated = process.communicate(None, Some(&cancellable));
@@ -55,7 +58,7 @@ pub(super) fn run_to_completion(
             // Reap the killed process; it is already gone either way.
             let _ = process.wait(gio::Cancellable::NONE);
             Err(UpdateError::PackageToolTimedOut {
-                program: program.to_string_lossy().into_owned(),
+                program,
                 limit: time_limit.unwrap_or_default(),
             })
         }
@@ -63,18 +66,19 @@ pub(super) fn run_to_completion(
     }
 }
 
-/// Starts `argv` in a new session and does not wait for it, as Python's
-/// `subprocess.Popen(argv, start_new_session=True)`: the launcher outlives
-/// this process, which it asks to quit.
+/// Starts `argv` in a new session with the subprocess `flags` and does not
+/// wait for it, as Python's `subprocess.Popen(argv,
+/// start_new_session=True)`: the launcher outlives this process, which it
+/// asks to quit.
 ///
 /// # Errors
 ///
 /// [`UpdateError::Io`] if it cannot start.
 pub(super) fn start_in_new_session(
     argv: &[&str],
-    stdout: gio::SubprocessFlags,
+    flags: gio::SubprocessFlags,
 ) -> Result<gio::Subprocess, UpdateError> {
-    let launcher = gio::SubprocessLauncher::new(stdout);
+    let launcher = gio::SubprocessLauncher::new(flags);
     launcher.set_child_setup(|| {
         // Runs in the child between fork and exec. setsid fails only for a
         // process group leader, which a freshly forked child never is.
@@ -84,7 +88,7 @@ pub(super) fn start_in_new_session(
     let program = argv.first().copied().unwrap_or_default();
     launcher
         .spawn(&arguments)
-        .map_err(|error| process_error(OsStr::new(program), &error))
+        .map_err(|error| process_error(program, &error))
 }
 
 /// Cancels a cancellable when a time limit passes, unless dropped first.
@@ -135,13 +139,8 @@ fn text(bytes: Option<&glib::Bytes>) -> String {
         .unwrap_or_default()
 }
 
-/// The program of `argv`, for error messages.
-fn program_name(argv: &[OsString]) -> &OsStr {
-    argv.first().map_or(OsStr::new(""), OsString::as_os_str)
-}
-
 /// A GIO error starting or waiting for `program`.
-fn process_error(program: &OsStr, error: &glib::Error) -> UpdateError {
+fn process_error(program: &str, error: &glib::Error) -> UpdateError {
     UpdateError::io(program, std::io::Error::other(error.message().to_owned()))
 }
 
@@ -151,13 +150,19 @@ mod tests {
 
     use super::*;
 
-    fn shell(script: &str) -> Vec<OsString> {
-        ["/bin/sh", "-c", script].map(OsString::from).to_vec()
+    /// The shell that runs the test scripts.
+    const SHELL: &str = "/bin/sh";
+
+    /// The shell's arguments that run `script`.
+    fn script_arguments(script: &str) -> Vec<OsString> {
+        ["-c", script].map(OsString::from).to_vec()
     }
 
     #[test]
     fn output_and_exit_status_are_collected() {
-        let output = run_to_completion(&shell("echo out; echo err >&2; exit 3"), None).unwrap();
+        let arguments = script_arguments("echo out; echo err >&2; exit 3");
+
+        let output = run_to_completion(SHELL, &arguments, None).unwrap();
 
         assert_eq!(output.exit_status, 3);
         assert_eq!(output.stdout, "out\n");
@@ -165,18 +170,35 @@ mod tests {
     }
 
     #[test]
+    fn a_command_ended_by_a_signal_reports_minus_the_signal_number() {
+        let arguments = script_arguments("kill -TERM $$");
+
+        let output = run_to_completion(SHELL, &arguments, None).unwrap();
+
+        assert_eq!(output.exit_status, -libc::SIGTERM);
+    }
+
+    #[test]
     fn a_command_past_its_time_limit_is_killed() {
         let started = Instant::now();
 
-        let result = run_to_completion(&shell("sleep 30"), Some(Duration::from_millis(100)));
+        let result = run_to_completion(
+            SHELL,
+            &script_arguments("sleep 30"),
+            Some(Duration::from_millis(100)),
+        );
 
-        assert!(matches!(result, Err(UpdateError::PackageToolTimedOut { .. })));
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, UpdateError::PackageToolTimedOut { program: SHELL, .. }),
+            "{error:?}"
+        );
         assert!(started.elapsed() < Duration::from_secs(10));
     }
 
     #[test]
     fn a_missing_program_is_an_io_error() {
-        let result = run_to_completion(&[OsString::from("/nonexistent/fixture-tool")], None);
+        let result = run_to_completion("/nonexistent/fixture-tool", &[], None);
 
         assert!(matches!(result, Err(UpdateError::Io { .. })));
     }
