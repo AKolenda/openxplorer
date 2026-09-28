@@ -262,12 +262,31 @@ pub(crate) fn connect_columns_resized(
     }
 }
 
-/// Shows or hides the Date modified and Type columns, which a compact
-/// window has no room for (the 680-pixel rules in `style.css`).
-pub(crate) fn show_date_and_type(view: &gtk::ColumnView, shown: bool) {
-    for column in [SortColumn::Modified, SortColumn::Type] {
+/// The details columns a window has room for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DetailsColumns {
+    /// Name, Date modified, Type and Size.
+    All,
+    /// Name and Size only, in a compact window (the 680-pixel rules in
+    /// `style.css` hide Date modified and Type).
+    NameAndSize,
+}
+
+impl DetailsColumns {
+    /// True when `column` is one of these columns.
+    const fn contains(self, column: SortColumn) -> bool {
+        match self {
+            DetailsColumns::All => true,
+            DetailsColumns::NameAndSize => matches!(column, SortColumn::Name | SortColumn::Size),
+        }
+    }
+}
+
+/// Shows `columns` and hides the others.
+pub(crate) fn show_columns(view: &gtk::ColumnView, columns: DetailsColumns) {
+    for column in SortColumn::ALL {
         if let Some(view_column) = view_column(view, column) {
-            view_column.set_visible(shown);
+            view_column.set_visible(columns.contains(column));
         }
     }
 }
@@ -325,6 +344,19 @@ mod tests {
         assert_eq!(start_width(SortColumn::Modified, Some(&saved)), Some(100));
         assert_eq!(start_width(SortColumn::Size, Some(&saved)), Some(600));
         assert_eq!(start_width(SortColumn::Type, Some(&saved)), Some(135));
+    }
+
+    #[test]
+    fn a_compact_window_keeps_only_name_and_size() {
+        let kept: Vec<SortColumn> = SortColumn::ALL
+            .into_iter()
+            .filter(|column| DetailsColumns::NameAndSize.contains(*column))
+            .collect();
+        assert_eq!(kept, [SortColumn::Name, SortColumn::Size]);
+        let all_kept = SortColumn::ALL
+            .into_iter()
+            .all(|column| DetailsColumns::All.contains(column));
+        assert!(all_kept, "a wider window shows every column");
     }
 
     #[test]

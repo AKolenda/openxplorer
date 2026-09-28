@@ -17,6 +17,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use crate::folder_view::details::{self, DetailsColumns};
+
 use super::BrowserWindow;
 
 /// The band of widths the window is in, narrowest last.
@@ -132,7 +134,12 @@ impl BrowserWindow {
         chrome.search.root.set_visible(!compact);
         chrome.commands.fit_to_width(band);
         chrome.status.show_build(!compact);
-        crate::folder_view::details::show_date_and_type(&self.content().details, !compact);
+        let details_columns = if compact {
+            DetailsColumns::NameAndSize
+        } else {
+            DetailsColumns::All
+        };
+        details::show_columns(&self.content().details, details_columns);
         self.render_landing();
     }
 
