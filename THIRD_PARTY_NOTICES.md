@@ -23,7 +23,7 @@ The native preview (`native/crates/ox-app`) bundles unmodified SVG icons from tw
 
 ## Art and documentation
 
-The folder icon comes from the original project. Website inline line icons and CSS geometry were created for this project. There are no bundled Windows/Zorin/Vercel logos, proprietary typefaces, stock photographs or copied third-party screenshots. Website UI illustrations use explicitly fictional sample files. AppStream metadata continues to use CC0-1.0 as declared in the file. GNU license text is reproduced for its stated purpose and must not be changed.
+The desktop app's folder icon comes from the original project (the native app's is Fluent Emoji, see above). Website inline line icons and CSS geometry were created for this project. There are no bundled Windows/Zorin/Vercel logos, proprietary typefaces, stock photographs or copied third-party screenshots. Website UI illustrations use explicitly fictional sample files. AppStream metadata continues to use CC0-1.0 as declared in the file. GNU license text is reproduced for its stated purpose and must not be changed.
 
 ## Reference sources
 

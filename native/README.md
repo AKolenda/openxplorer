@@ -101,6 +101,13 @@ theme at startup.
 - Pictures made of several icons (the zip badge, the green network bar, the red
   cross of a disconnected share) are `ArtImage`s: real icons layered with
   `gtk::Overlay` and small boxes the skin colours (`resources/skin/icons.css`).
+  A network location shows the same art everywhere: sidebar, cards, tabs and
+  the details pane.
+- Icons are hidden from screen readers, as app.js marks them `aria-hidden`;
+  the control around an icon names it.
+- The loading spinner is the one picture GTK takes from the desktop theme: it
+  is an animation, and the vendored Fluent set has no spinner. GTK's own
+  images, such as the search box's clear button, show bundled icons.
 - To add an icon, copy the upstream file byte for byte under the `ox-` name,
   list it in `icons.gresource.xml` and `SOURCES.md`, and add an `Icon` variant.
   Never draw one: the check driver fails on SVG path data, GTK or Cairo drawing

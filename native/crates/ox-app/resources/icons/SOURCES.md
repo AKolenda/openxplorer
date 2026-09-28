@@ -17,6 +17,11 @@ in the CSS `color` of their widget; colour art keeps its own colours.
 | [Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons) | npm `@fluentui/svg-icons` 1.1.343 (tarball SHA-1 `2b74740b18af25923a00061d80a00245a207f5f9`) | MIT, © 2020 Microsoft Corporation | `licenses/Fluent-UI-System-Icons-MIT.txt` |
 | [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) | commit `1ffb34c752ecf5d402f04cfb4b392c77f57c54bc` | MIT, © Microsoft Corporation | `licenses/Fluent-Emoji-MIT.txt` |
 
+The npm package ships no licence file, so the Fluent UI System Icons licence
+text is the repository's
+([LICENSE](https://github.com/microsoft/fluentui-system-icons/blob/main/LICENSE)),
+copied unedited; the Fluent Emoji text is `LICENSE` at the commit above.
+
 An app file name is the upstream file name with `ox-` in front and dashes for
 underscores, with the style in GTK's convention: `_regular` becomes
 `-symbolic`, `_filled` becomes `-filled-symbolic`, and `_color` and `_flat`
