@@ -55,7 +55,8 @@ pub(super) fn typeahead_hint(result: &PrefixMatch, matched_name: Option<&str>) -
 }
 
 /// The current time on `GLib`'s monotonic clock, which type-to-select
-/// times its prefix with. The clock starts at zero and never goes back.
+/// times its prefix with. The clock never reads below zero and never goes
+/// backwards.
 fn monotonic_now() -> Duration {
     Duration::from_micros(glib::monotonic_time().unsigned_abs())
 }
