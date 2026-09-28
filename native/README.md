@@ -17,6 +17,9 @@ and interaction performance must be measured before claiming an improvement.
 |---|---|
 | `crates/ox-core` | Toolkit-independent core: locations, settings, entries, places, clipboard formats and the transfer engine, all on GIO. No GTK. |
 | `crates/ox-app` | The GTK4 application (`openxplorer-native`). |
+| `parity/` | What the native app must do: every behaviour (`features.toml`) and every Python bridge operation (`bridge.json`), with their checker. |
+| `docs/ui-spec.md` | The visual specification: the current skin, refined toward Windows 11 File Explorer. |
+| `tools/check.py` | The check driver described below. |
 
 The Python modules in `desktop/` are the behavioural specification. Each Rust
 module names the Python file it ports; port its tests along with it.
@@ -24,7 +27,8 @@ module names the Python file it ports; port its tests along with it.
 ## Build and run
 
 Needs Rust 1.92+ (the minimum required by the locked GTK/GIO crates), GTK
-4.14 development files, and Python 3 for compatibility tests:
+4.14 development files, and Python 3.11+ for the parity checks and the
+compatibility tests:
 
 ```sh
 sudo apt install libgtk-4-dev
@@ -45,13 +49,26 @@ sudo apt install libgtk-4-dev xvfb xauth dbus-x11
 python3 native/tools/check.py
 ```
 
-The driver checks inventory consistency, formatting and strict Clippy, compiles
-every test target, then runs the actual test binaries on Xvfb with private D-Bus
-sessions and disposable home/config/cache directories. It never connects tests
-to the user's desktop or remote volume monitors. The hosted CI workflow uses
-the minimum supported Rust version and the same driver. Its result is native
-GTK/GIO **local** validation; simulated MTP tests do not certify phone hardware,
-and no SMB server is exercised by these checks.
+The driver runs the parity inventory checks, its own tests, rustfmt and Clippy
+with the workspace lints, and compiles every test target. It then runs each
+test binary, and the doctests, on its own Xvfb display with a private D-Bus
+session and disposable home, config, cache and runtime directories, so tests
+never see the user's display, session bus, settings or remote volume monitors.
+Each run starts in a new process session. When it finishes, fails or exceeds
+`--test-timeout` (180 seconds by default), every process it started, including
+Xvfb and the bus daemon, is stopped before its temporary directories are
+deleted.
+
+This isolates the desktop session, not the filesystem: tests can still reach
+absolute paths, so they must write only inside temporary directories. GIO keeps
+using GVfs, because the app relies on its `smb://` and `mtp://` handling. Tests
+must not mount or do I/O on remote locations; transfer tests use simulated
+devices.
+
+The hosted CI workflow uses the minimum supported Rust version and the same
+driver, and runs the release-source and public-data policy tests in a separate
+job. Its result is native GTK/GIO **local** validation; simulated MTP tests do
+not certify phone hardware, and no SMB server is exercised by these checks.
 
 `python3 native/parity/check.py --require-replacement --gate replace --gate dolphin`
 deliberately fails while bridge operations, existing OpenXplorer behaviours or
@@ -66,17 +83,48 @@ actually run and their limitations.
 
 ## Code standards
 
-- `rustfmt` formatting (`rustfmt.toml`) and zero `clippy` warnings.
+Code must be clean, readable and idiomatic. `python3 native/tools/check.py`
+enforces formatting and the Rust lints; reviews enforce the rest.
+
+Rust:
+
+- `rustfmt` formatting (`rustfmt.toml`) and zero warnings from the workspace
+  lints in `Cargo.toml`: Clippy's `all` and `pedantic` groups with three
+  documented allowances, `missing_docs`, and no `unsafe` code. Fix a finding
+  rather than silencing it; an `#[allow]` that is truly needed says why.
 - Small modules with one responsibility; split a file before it passes about
   500 lines. No dense one-line logic: name intermediate values.
-- No `unsafe`. No `unwrap()` outside tests; use `expect("why this holds")`
-  for real invariants and return errors for everything else.
-- Every public item has a doc comment saying what it is for.
+- No `unwrap()` outside tests; use `expect("why this holds")` for real
+  invariants and return errors for everything else.
+- Every public item has a doc comment saying what it is for, with `# Errors`
+  and `# Panics` sections where they apply.
+- Code and tests ported from Python say so: "Ported from `desktop/core.py`".
+- Tests accompany behaviour. A test that proves an inventory feature carries a
+  parity marker such as `// parity: NAV-001` (see
+  [parity/README.md](parity/README.md)).
+- The transfer engine is ported test-first from the Python suite and must keep
+  every safety rule in `desktop/operations.py`.
+
+Python tooling (`native/tools`, `native/parity`, and the repository tools and
+tests the native work changes):
+
+- PEP 8, with lines of at most 99 characters.
+- Type hints on every function, and a docstring saying what it does and why.
+- Functions of about 40 lines at most. No dense one-liners and no statements
+  joined with semicolons.
+- `pathlib` for paths, `argparse` with help text for command-line options, and
+  error messages that say what failed and what to do about it.
+- The standard library only.
+- Tests named for the behaviour they prove, with `subTest` for named cases.
+
+Everything else:
+
 - User-facing text keeps the existing app's wording (see `desktop/ui/app.js`
   and `apps/web/lib/docs.json`).
-- Each source file starts with `// SPDX-License-Identifier: AGPL-3.0-only`.
-- Tests accompany behaviour. The transfer engine is ported test-first from the
-  Python suite and must keep every safety rule in `desktop/operations.py`.
+- Each source file starts with an `SPDX-License-Identifier: AGPL-3.0-only`
+  comment.
+- CI workflows and documentation have clear step names and headings, comment
+  every non-obvious choice, and make no claim that is no longer true.
 
 ## Compatibility contracts
 

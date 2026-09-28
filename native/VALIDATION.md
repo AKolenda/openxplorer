@@ -2,10 +2,12 @@
 
 This records the checks run for the native browsing checkpoint. It does not
 certify the unfinished replacement workflows listed in [ROADMAP.md](ROADMAP.md).
+It is a dated record: the counts are those of that run, and the lint set and
+test suites have grown since, so rerun the commands for current results.
 
 | Check | Result |
 | --- | --- |
-| `python3 native/tools/check.py` | Passed: formatting, strict workspace Clippy, 8 bridge-inventory tests, 345 Rust tests across 12 executables, and doctest invocation (no doctests defined). |
+| `python3 native/tools/check.py` | Passed: formatting, Clippy with the workspace lints of the time (the `all` group), 8 bridge-inventory tests, 345 Rust tests across 12 executables, and doctest invocation (no doctests defined). |
 | `cargo build --workspace --locked --manifest-path native/Cargo.toml` | Passed for the debug executable. |
 | Existing desktop Python regression suite | 649 tests passed with disposable home and XDG directories. |
 | `python3 -m unittest discover -s tests -p 'test_release_source.py'` | 9 tests passed. |
@@ -26,7 +28,7 @@ The GTK scenario exercises asynchronous listing, cancellation and stale results,
 sorting, native selection, filters, tab histories, refresh, filesystem monitor
 updates, shared appearance and errors. Separate tests cover controller release,
 Python/Rust settings locking, clipboard compatibility and transfer failure
-recovery. Device transfer tests use simulated backends. Real SMB/phone behavior,
+recovery. Device transfer tests use simulated backends. Real SMB/phone behaviour,
 Wayland, assistive technology and startup performance remain unverified.
 
 The public-data audit reports `Screenshot fixture source has changed since

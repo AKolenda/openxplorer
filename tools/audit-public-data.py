@@ -8,22 +8,45 @@ Image byte provenance is verified separately; this is not an OCR claim.
 """
 from __future__ import annotations
 import argparse,base64,hashlib,html,io,json,os,re,subprocess,tarfile,tempfile,zipfile
+from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import unquote
 ROOT=Path(__file__).resolve().parents[1]
 DENIED={}
-TEXT={'.py','.js','.cjs','.mjs','.ts','.tsx','.css','.html','.md','.txt','.json','.xml','.yml','.yaml','.sh','.svg','.desktop','.service','.rs','.toml','.lock'}
+# Suffixes audited as UTF-8 text; .rs, .toml and .lock cover the native Rust
+# sources, manifests and lockfile.
+TEXT = {
+    '.py', '.js', '.cjs', '.mjs', '.ts', '.tsx', '.css', '.html', '.md', '.txt',
+    '.json', '.xml', '.yml', '.yaml', '.sh', '.svg', '.desktop', '.service',
+    '.rs', '.toml', '.lock',
+}
 SKIP={'.git','node_modules','.next','.pnpm-store','__pycache__'}
-def audit_files(directory):
-    """Prune build caches before reading; Rust targets are not publication inputs."""
-    for current, children, names in os.walk(directory, followlinks=False):
-        current = Path(current)
+
+
+def audit_files(directory: Path) -> Iterator[Path]:
+    """Yield the files under directory in sorted order, without entering skipped trees.
+
+    SKIP names dependency, cache and version-control folders. native/target
+    holds Rust build output, which is not a publication input. Both are pruned
+    before they are read. ROOT is read on each call because the tests point it
+    at a fixture tree.
+
+    directory must be absolute and resolved, as audit() passes it: native/target
+    is recognised by its absolute path, so under a relative directory it would
+    not be pruned.
+    """
+    rust_build_output = ROOT / 'native/target'
+    for current_name, children, names in os.walk(directory, followlinks=False):
+        current = Path(current_name)
+        # Replacing the list in place is how os.walk() is told what to enter.
         children[:] = sorted(name for name in children
-                             if name not in SKIP and current / name != ROOT / 'native/target')
+                             if name not in SKIP and current / name != rust_build_output)
         for name in sorted(names):
             path = current / name
             if name not in SKIP and path.is_file():
                 yield path
+
+
 def digest(data):return hashlib.sha256(data).hexdigest()
 def deny_terms(terms):
     """Keep supplied identifiers in memory only, including full names/addresses."""
@@ -78,11 +101,14 @@ def audit(paths):
                 except ValueError:issues.append(name+': invalid inline image');continue
                 if image_hash not in known_images:issues.append(name+': unregistered inline screenshot')
             if contains_private_term(s):issues.append(name+': rejected private-data fingerprint')
-    for p in paths:
-        p = p.resolve()
+    for given in paths:
+        # Make each input absolute and resolve links: files are named by their
+        # path relative to ROOT, and audit_files() recognises native/target by
+        # its absolute path.
+        p = given.resolve()
         if p.is_file():visit(str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else p.name,p.read_bytes());continue
-        for f in audit_files(p):
-            visit(str(f.relative_to(p)),f.read_bytes())
+        for file_path in audit_files(p):
+            visit(str(file_path.relative_to(p)), file_path.read_bytes())
     manifest_path=ROOT/'apps/web/public/assets/screenshots/manifest.json'
     provenance=[]
     if manifest_path.exists():
