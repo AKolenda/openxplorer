@@ -3,8 +3,8 @@
 //!
 //! With `OX_NATIVE_CAPTURE_DIR` set (passed through the isolated check
 //! environment), these save `native-dialog-delete-*.png`,
-//! `native-dialog-conflict-*.png`, `native-transfer-*.png` and
-//! `native-menu-compact-*.png` there. Without it, they only prove the
+//! `native-dialog-conflict-*.png`, `native-transfer-*.png`,
+//! `native-rename-in-place-*.png` and `native-menu-compact-*.png` there. Without it, they only prove the
 //! surfaces open in both themes.
 
 use std::path::PathBuf;
@@ -90,6 +90,10 @@ fn the_transfer_panel_and_the_compact_menu_are_captured_light_and_dark() {
             .show_progress("Copy: Notes 2.txt (1/3)", 0.4);
         capture(&test.window, &format!("native-transfer-{theme}.png"));
         test.window.end_operation();
+        test.window.folder_model().select_only(1);
+        test.activate("rename", None);
+        capture(&test.window, &format!("native-rename-in-place-{theme}.png"));
+        test.window.folder_pane().focus_view();
         test.window.right_click(Some(0));
         let menu = test.window.context_menu();
         capture_popover(

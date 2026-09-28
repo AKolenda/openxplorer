@@ -75,13 +75,16 @@ impl BrowserWindow {
     /// False on the Settings page, in a text field and in the address
     /// bar, where the keys edit text or move between crumbs.
     pub(in crate::window) fn file_keys_apply(&self) -> bool {
-        if self.shows_settings() {
+        if self.shows_settings() || self.focus_is_in_text_field() {
             return false;
         }
-        let Some(focus) = GtkWindowExt::focus(self) else {
-            return true;
-        };
-        let in_text = focus.is::<gtk::Text>() || focus.dynamic_cast_ref::<gtk::Editable>().is_some();
-        !in_text && !focus.is_ancestor(self.address_bar())
+        let focus = GtkWindowExt::focus(self);
+        !focus.is_some_and(|focus| focus.is_ancestor(self.address_bar()))
+    }
+
+    /// True while keyboard focus is in a text field: the search box, the
+    /// address, or a name being renamed in place.
+    pub(in crate::window) fn focus_is_in_text_field(&self) -> bool {
+        GtkWindowExt::focus(self).is_some_and(|focus| focus.dynamic_cast_ref::<gtk::Editable>().is_some())
     }
 }

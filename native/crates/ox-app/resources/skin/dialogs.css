@@ -84,7 +84,14 @@ window.ox button.danger:active { background-color: alpha(@ox_critical_fill, .8);
 }
 .transfer image { color: @ox_accent; }
 .transfer progressbar > trough { min-height: 4px; background-color: @ox_border; border-radius: 2px; border: none; }
-.transfer progressbar > trough > progress { min-height: 4px; background-color: @ox_accent; border-radius: 2px; border: none; }
+.transfer progressbar > trough > progress {
+  min-height: 4px;
+  min-width: 0;
+  margin: 0;
+  background-color: @ox_accent;
+  border-radius: 2px;
+  border: none;
+}
 window.ox .transfer button.bordered { padding: 4px 12px; }
 
 /* ---- Windows 11 style context menu (§4.9, CMD-008) ---- */

@@ -4,8 +4,9 @@
 //! Both views show an item as its icon art beside or above its name
 //! ([`FileCell`]), as the name cell of `renderRows` in `desktop/ui/app.js`
 //! does. Names that are cut off show the full name in a tooltip, as
-//! `row.title` does. [`CellOwners`] follows the cells the views bind and
-//! turns a click position back into a row. The art is an [`ArtImage`] of
+//! `row.title` does. While the item is renamed in place, a text field
+//! takes the name's place. [`CellOwners`] follows the cells the views
+//! bind and turns a click position back into a row. The art is an [`ArtImage`] of
 //! bundled icons, which GTK renders again by itself when the theme or the
 //! screen scale changes.
 
@@ -82,7 +83,7 @@ pub(crate) enum CellLayout {
 }
 
 mod imp {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
@@ -100,6 +101,8 @@ mod imp {
         pub(super) label: gtk::Label,
         /// Icon edge in logical pixels.
         pub(super) icon_size: Cell<i32>,
+        /// The text field in the name's place while the item is renamed.
+        pub(super) name_editor: RefCell<Option<gtk::Entry>>,
     }
 
     #[glib::object_subclass]
@@ -172,11 +175,32 @@ impl FileCell {
         label.set_justify(gtk::Justification::Center);
     }
 
-    /// Shows `item`: its art and its name.
+    /// Shows `item`: its art and its name. A rename in place ends: the
+    /// cell now shows another item, or the same one listed again.
     pub(crate) fn bind(&self, item: &FileItem) {
+        self.hide_name_editor();
         let imp = self.imp();
         imp.image.set_art(item.art(), imp.icon_size.get());
         imp.label.set_text(&item.entry().name);
+    }
+
+    /// Puts `editor` in the name's place, to rename the item in place.
+    pub(crate) fn show_name_editor(&self, editor: &gtk::Entry) {
+        self.hide_name_editor();
+        let imp = self.imp();
+        self.insert_child_after(editor, Some(&imp.label));
+        imp.label.set_visible(false);
+        imp.name_editor.replace(Some(editor.clone()));
+    }
+
+    /// Shows the name again in place of the text field, if one shows.
+    pub(crate) fn hide_name_editor(&self) {
+        let imp = self.imp();
+        let Some(editor) = imp.name_editor.take() else {
+            return;
+        };
+        self.remove(&editor);
+        imp.label.set_visible(true);
     }
 
     /// The name label, for tests of what a view shows.

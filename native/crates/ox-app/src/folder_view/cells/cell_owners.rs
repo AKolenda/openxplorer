@@ -13,6 +13,8 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 
+use super::FileCell;
+
 /// A cell's content widget and the list item that shows it.
 #[derive(Debug)]
 struct CellOwner {
@@ -87,6 +89,17 @@ impl CellOwners {
             .borrow()
             .iter()
             .find_map(|owner| owner.cell_showing(position))
+    }
+
+    /// The icon-and-name cell showing `position` inside `view`, if it is
+    /// on screen.
+    pub(crate) fn file_cell_at(&self, position: u32, view: &impl IsA<gtk::Widget>) -> Option<FileCell> {
+        self.owners
+            .borrow()
+            .iter()
+            .filter_map(|owner| owner.cell_showing(position))
+            .filter(|cell| cell.is_ancestor(view))
+            .find_map(|cell| cell.downcast::<FileCell>().ok())
     }
 
     /// The list item whose content widget is `widget`.

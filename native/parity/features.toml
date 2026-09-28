@@ -6630,7 +6630,7 @@ python_tests = [
 bridge = ["rename", "list"]
 dolphin = "Dolphin: F2 renames inline, selecting the name without extension; Shift+F2? (batch rename for multi-selection).; F2 rename"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_selects_the_name_before_its_extension_and_undo_and_redo_walk_it, rename_does_nothing_with_several_items_selected); native/crates/ox-app/src/window/file_ops/availability.rs (rename_needs_exactly_one_item_and_nothing_needs_none, a_read_only_item_can_be_copied_but_not_changed, a_running_operation_or_a_share_root_disables_the_edit_commands). Deliberate gains: a file's name is selected without its extension (OPS-010) and the renamed item stays selected."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try, an_item_that_is_not_on_screen_is_renamed_with_the_dialog, rename_does_nothing_with_several_items_selected); native/crates/ox-app/src/window/file_ops/availability.rs. F2 renames in place (OPS-010) with the dialog's checks and messages, which show in the toast while the field stays; an item whose cell is not on screen gets the Rename dialog. The renamed item stays selected."
 
 [[feature]]
 id = "OPS-010"
@@ -6653,8 +6653,8 @@ sources = [
 python_tests = ["desktop/tests/ui_type_select.py::Rename text is not intercepted"]
 bridge = ["rename"]
 dolphin = "renamefile: F2 (RenameInline default true)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/file_ops/name_dialog.rs (rename_selects_the_name_before_its_last_extension) and native/crates/ox-app/src/window/tests/file_operations.rs select the base name in the Rename dialog. Missing: editing the name in place in the views."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try); native/crates/ox-app/src/window/file_ops/name_dialog.rs (rename_selects_the_name_before_its_last_extension). The field is a GtkEntry in the row or tile: Enter or leaving it commits, Escape cancels, and the arrow, Home and End keys are the entry's own."
 
 [[feature]]
 id = "OPS-011"

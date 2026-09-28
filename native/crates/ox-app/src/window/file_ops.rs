@@ -13,7 +13,8 @@
 //! (OPS-024), with the transfer panel and Cancel.
 //!
 //! Gains over the Python app, from Windows 11 and the Dolphin baseline:
-//! Rename selects the name without its extension, Shift+Delete deletes
+//! Rename edits the name in place with the name before its extension
+//! selected, Shift+Delete deletes
 //! permanently, Duplicate, the Recycle Bin's Restore and Empty, Keep both
 //! and an answer per item for name conflicts, the created items are
 //! selected afterwards, and Undo and Redo.
@@ -27,7 +28,8 @@
 //! | `name_dialog` | The dialog that asks for a name (`nameDialog`) |
 //! | `new_items` | New folder, and New file from a template |
 //! | `template_dialog` | The New file and New from template dialog |
-//! | `rename` | Rename |
+//! | `rename` | Rename: in place, or with the dialog |
+//! | `inline_rename` | Renaming in the item's row or tile |
 //! | `delete` | Move to Trash and permanent delete, with their confirmations |
 //! | `recycle_bin` | Restore, Delete permanently and Empty in the Recycle Bin |
 //! | `duplicate` | Duplicate |
@@ -44,6 +46,7 @@ mod clipboard;
 mod conflict_dialog;
 mod delete;
 mod duplicate;
+mod inline_rename;
 mod journal;
 mod name_dialog;
 mod names;

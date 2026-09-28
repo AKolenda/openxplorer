@@ -210,6 +210,10 @@ impl BrowserWindow {
         key: gdk::Key,
         modifiers: gdk::ModifierType,
     ) -> glib::Propagation {
+        // Keys typed while an item is renamed in place belong to its field.
+        if self.focus_is_in_text_field() {
+            return glib::Propagation::Proceed;
+        }
         let shortcut =
             gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK;
         if modifiers.intersects(shortcut) {

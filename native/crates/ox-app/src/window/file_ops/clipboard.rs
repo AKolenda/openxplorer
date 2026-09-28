@@ -170,6 +170,8 @@ impl BrowserWindow {
         }
         let clipboard = self.clipboard();
         if current.uris().is_empty() {
+            // Clearing fails only when another owner took the clipboard
+            // meanwhile, and then there is nothing of this cut to clear.
             clipboard.set_content(None::<&gdk::ContentProvider>).ok();
             self.remember_clipboard(None);
         } else if publish(&clipboard, &current).is_ok() {

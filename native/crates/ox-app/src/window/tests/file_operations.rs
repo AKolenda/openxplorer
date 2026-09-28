@@ -14,7 +14,7 @@ use super::file_ops_support::{
     is_enabled, open_dialog, require_private_trash, select_names, text_field, wait_for_no_dialog,
 };
 use crate::locations::Page;
-use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
 
 /// parity: OPS-001, CMD-004
 #[gtk::test]
@@ -114,18 +114,34 @@ fn new_is_disabled_where_nothing_can_be_created() {
     assert!(!is_enabled(&test, "paste"));
 }
 
+/// The field that edits a name in place in `test`'s view, once it shows.
+fn name_editor(test: &TestWindow) -> gtk::Entry {
+    let find = || {
+        descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
+            .into_iter()
+            .find(|field| field.has_css_class("rename-field"))
+    };
+    wait_until("the name to become editable", || find().is_some());
+    find().expect("wait_until returned only once the field showed")
+}
+
+/// Whether `test`'s view edits a name in place.
+fn is_renaming_in_place(test: &TestWindow) -> bool {
+    descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
+        .iter()
+        .any(|field| field.has_css_class("rename-field"))
+}
+
 /// parity: OPS-009, OPS-010, OPS-029, OPS-031
 #[gtk::test]
-fn rename_selects_the_name_before_its_extension_and_undo_and_redo_walk_it() {
+fn rename_edits_the_name_in_place_and_undo_and_redo_walk_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt"]);
 
     test.activate("rename", None);
-    let dialog = open_dialog(&test);
-    let field = text_field(&dialog);
+    let field = name_editor(&test);
 
-    assert_eq!(dialog.title_text(), "Rename");
     assert_eq!(field.text(), "Notes 2.txt");
     assert_eq!(
         field.selection_bounds(),
@@ -133,11 +149,11 @@ fn rename_selects_the_name_before_its_extension_and_undo_and_redo_walk_it() {
         "the extension stays unselected"
     );
     field.set_text("Plans.txt");
-    dialog.press("Save");
-    wait_for_no_dialog(&test);
+    field.emit_activate();
     wait_until("the renamed file to be selected", || {
         test.selected_names() == ["Plans.txt"]
     });
+    assert!(!is_renaming_in_place(&test));
     assert!(fixture.path("Plans.txt").is_file());
     assert!(!fixture.path("Notes 2.txt").exists());
 
@@ -176,6 +192,53 @@ fn the_file_keys_leave_text_fields_and_the_settings_page_alone() {
         "the search field keeps Delete, F2 and the clipboard keys"
     );
     assert!(!on_settings);
+}
+
+/// parity: OPS-006, OPS-008, OPS-010
+#[gtk::test]
+fn a_refused_name_in_place_keeps_the_field_for_another_try() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+
+    field.set_text("Notes 10.txt");
+    field.emit_activate();
+    let taken = "An item named “Notes 10.txt” already exists. Nothing was overwritten.";
+    wait_until("the refusal", || test.window.shown_message() == taken);
+    wait_until("the field to come back", || field.is_sensitive());
+    field.set_text("a/b");
+    field.emit_activate();
+    let invalid = test.window.shown_message();
+    field.set_text("Notes 2.txt");
+    field.emit_activate();
+
+    wait_until("the unchanged name to end the rename", || {
+        !is_renaming_in_place(&test)
+    });
+    assert_eq!(invalid, "Use a name without slashes or control characters.");
+    assert!(fixture.path("Notes 2.txt").is_file());
+    let kept = fs::read(fixture.path("Notes 10.txt")).expect("the other file stays");
+    assert_eq!(kept, b"Synthetic test data\n");
+}
+
+/// parity: OPS-009
+#[gtk::test]
+fn an_item_that_is_not_on_screen_is_renamed_with_the_dialog() {
+    let fixture = Fixture::with_files(400);
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["file 0399.txt"]);
+
+    test.activate("rename", None);
+    let dialog = open_dialog(&test);
+
+    assert_eq!(dialog.title_text(), "Rename");
+    assert_eq!(dialog.message_text(), "Names must not contain slashes.");
+    assert_eq!(text_field(&dialog).text(), "file 0399.txt");
+    assert_eq!(dialog.button_labels(), ["Cancel", "Save"]);
+    dialog.press("Cancel");
+    wait_for_no_dialog(&test);
 }
 
 /// parity: OPS-009

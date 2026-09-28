@@ -394,14 +394,14 @@
     },
     "rename": {
       "status": "native-tested",
-      "note": "ox_core::ops::rename_item ports rename_item in desktop/gio_backend.py: name validation, the refusal of roots and whole SMB shares, the same-name no-op, the whole-tree snapshot write check, then a same-folder move that never overwrites. test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected of desktop/tests/gio_integration.py are ported. Native: The Rename dialog runs it with the base name selected; the renamed item stays selected and Undo and Redo walk the rename.",
+      "note": "ox_core::ops::rename_item ports rename_item in desktop/gio_backend.py: name validation, the refusal of roots and whole SMB shares, the same-name no-op, the whole-tree snapshot write check, then a same-folder move that never overwrites. test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected of desktop/tests/gio_integration.py are ported. Native: F2 runs it on the name edited in place (or in the Rename dialog when the item is not on screen) with the base name selected; the renamed item stays selected and Undo and Redo walk the rename.",
       "evidence": [
         "native/crates/ox-core/tests/ops_rename.rs::rename_onto_a_taken_name_changes_nothing",
         "native/crates/ox-core/tests/ops_rename.rs::a_folder_holding_a_protected_backup_is_not_renamed",
         "native/crates/ox-core/tests/ops_rename.rs::a_folder_holding_a_configured_snapshot_folder_is_not_renamed",
         "native/crates/ox-core/tests/ops_rename.rs::renaming_to_the_same_name_changes_nothing_and_leaves_nothing_to_undo",
         "native/crates/ox-core/tests/ops_rename.rs::invalid_names_roots_and_whole_shares_are_refused",
-        "native/crates/ox-app/src/window/tests/file_operations.rs::rename_selects_the_name_before_its_extension_and_undo_and_redo_walk_it"
+        "native/crates/ox-app/src/window/tests/file_operations.rs::rename_edits_the_name_in_place_and_undo_and_redo_walk_it"
       ]
     },
     "revealDisable": {
