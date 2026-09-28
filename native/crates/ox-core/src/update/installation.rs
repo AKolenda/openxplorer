@@ -3,12 +3,14 @@
 //! update itself. Ports `can_install` in `desktop/updater.py`; the
 //! Flatpak and other-package cases are new.
 
+use std::ffi::OsStr;
 use std::path::Path;
 
 use rustix::fs::Access;
 
-/// Where the Debian package installs the application.
-const PACKAGE_ROOT: &str = "/opt/openxplorer";
+/// Where the Debian package installs the application, relative to the
+/// file-system root.
+const PACKAGE_ROOT: &str = "opt/openxplorer";
 
 /// The programs an in-app installation runs, relative to the file-system
 /// root: the polkit prompt, APT, the package inspector and the launcher
@@ -24,8 +26,17 @@ const INSTALL_TOOLS: [&str; 4] = [
 const FLATPAK_MARKER: &str = ".flatpak-info";
 
 /// Folders only a system package manager installs into, relative to the
-/// file-system root.
-const SYSTEM_PREFIXES: [&str; 3] = ["usr", "opt", "snap"];
+/// file-system root: `/usr` for Debian packages and `/snap` for Snaps.
+const PACKAGE_MANAGED_PREFIXES: [&str; 2] = ["usr", "snap"];
+
+/// The administrator's own prefix inside `/usr`, relative to the
+/// file-system root. `make install` and `cargo install --root /usr/local`
+/// install here; no package manager does.
+const LOCAL_PREFIX: &str = "usr/local";
+
+/// The folder of an installation prefix that holds its programs, as in
+/// `/opt/openxplorer/bin/openxplorer`.
+const PROGRAM_FOLDER: &str = "bin";
 
 /// How this build was installed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,10 +50,11 @@ pub enum Installation {
     /// A Flatpak. Flatpak updates it (GNOME Software or `flatpak update`),
     /// never the app itself.
     Flatpak,
-    /// Installed under `/usr`, `/opt` or `/snap` by another package
-    /// manager, which also updates it.
+    /// Installed under `/usr` (but not `/usr/local`) or `/snap` by another
+    /// package manager, which also updates it.
     OtherPackage,
-    /// Built from source or unpacked by hand.
+    /// Built from source, installed into `/usr/local`, or unpacked by hand,
+    /// for example into another folder of `/opt`.
     Unpackaged,
 }
 
@@ -61,21 +73,34 @@ impl Installation {
         if filesystem_root.join(FLATPAK_MARKER).is_file() {
             return Self::Flatpak;
         }
-        if app_root == filesystem_root.join(PACKAGE_ROOT.trim_start_matches('/')) {
+        if app_root == filesystem_root.join(PACKAGE_ROOT) {
             return if has_install_tools(filesystem_root) {
                 Self::DebianPackage
             } else {
                 Self::DebianPackageWithoutTools
             };
         }
-        let is_system_folder = SYSTEM_PREFIXES
-            .iter()
-            .any(|prefix| app_root.starts_with(filesystem_root.join(prefix)));
-        if is_system_folder {
+        if is_package_managed(app_root, filesystem_root) {
             Self::OtherPackage
         } else {
             Self::Unpackaged
         }
+    }
+
+    /// Detects how the native app whose executable is at `executable` was
+    /// installed, as [`Installation::detect`] does for its installation
+    /// folder. Pass the resolved path, as [`std::env::current_exe`] gives
+    /// it, not the path of a symbolic link to it.
+    ///
+    /// The installation folder of `<prefix>/bin/<program>` is `<prefix>`;
+    /// of any other executable, the folder it is in. So the native Debian
+    /// package must keep its executable in `/opt/openxplorer` or
+    /// `/opt/openxplorer/bin`, with `/usr/bin/openxplorer` as a link or
+    /// launcher, as the Python package does; an executable directly in
+    /// `/usr/bin` counts as [`Installation::OtherPackage`]. That layout is
+    /// decided with the native packaging (UPD-017).
+    pub fn detect_for_executable(executable: &Path, filesystem_root: &Path) -> Self {
+        Self::detect(installation_folder(executable), filesystem_root)
     }
 
     /// Whether the app may download and install updates itself.
@@ -99,6 +124,29 @@ impl Installation {
                  for example in GNOME Software."
             }
         }
+    }
+}
+
+/// Whether `app_root` is in a folder only a system package manager
+/// installs into.
+fn is_package_managed(app_root: &Path, filesystem_root: &Path) -> bool {
+    let in_managed_prefix = PACKAGE_MANAGED_PREFIXES
+        .iter()
+        .any(|prefix| app_root.starts_with(filesystem_root.join(prefix)));
+    let in_local_prefix = app_root.starts_with(filesystem_root.join(LOCAL_PREFIX));
+    in_managed_prefix && !in_local_prefix
+}
+
+/// The installation folder of the executable at `executable`: `<prefix>`
+/// for `<prefix>/bin/<program>`, otherwise the folder it is in.
+fn installation_folder(executable: &Path) -> &Path {
+    let Some(folder) = executable.parent() else {
+        return executable;
+    };
+    let is_program_folder = folder.file_name() == Some(OsStr::new(PROGRAM_FOLDER));
+    match folder.parent() {
+        Some(prefix) if is_program_folder => prefix,
+        _ => folder,
     }
 }
 
@@ -139,5 +187,41 @@ mod tests {
         let refusal = Installation::Flatpak.install_refusal();
 
         assert!(refusal.contains("flatpak update"), "{refusal}");
+    }
+
+    #[test]
+    fn the_installation_folder_of_a_program_in_bin_is_its_prefix() {
+        struct FolderCase {
+            executable: &'static str,
+            folder: &'static str,
+        }
+        let cases = [
+            FolderCase {
+                executable: "/opt/openxplorer/bin/openxplorer",
+                folder: "/opt/openxplorer",
+            },
+            FolderCase {
+                executable: "/opt/openxplorer/openxplorer",
+                folder: "/opt/openxplorer",
+            },
+            FolderCase {
+                executable: "/usr/bin/openxplorer",
+                folder: "/usr",
+            },
+            FolderCase {
+                executable: "/bin/openxplorer",
+                folder: "/",
+            },
+            FolderCase {
+                executable: "/openxplorer",
+                folder: "/",
+            },
+        ];
+
+        for case in cases {
+            let folder = installation_folder(Path::new(case.executable));
+
+            assert_eq!(folder, Path::new(case.folder), "{}", case.executable);
+        }
     }
 }

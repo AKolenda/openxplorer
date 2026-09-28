@@ -343,3 +343,109 @@ fn flatpaks_and_other_packages_update_through_their_package_manager() {
     assert!(!flatpak.can_install());
     assert!(!Installation::OtherPackage.can_install());
 }
+
+/// Only folders a package manager owns hold another package. `/usr/local`
+/// and folders unpacked by hand into `/opt` are the administrator's, and
+/// are told to use GitHub Releases, as the Python app tells them.
+/// parity: UPD-004
+#[test]
+fn only_package_managed_folders_hold_other_packages() {
+    struct FolderCase {
+        /// The installation folder, relative to the fake file-system root.
+        app_root: &'static str,
+        expected: Installation,
+    }
+    let system = tempfile::tempdir().unwrap();
+    install_tools(system.path(), 0o755);
+    let cases = [
+        FolderCase {
+            app_root: "opt/openxplorer",
+            expected: Installation::DebianPackage,
+        },
+        FolderCase {
+            app_root: "usr/lib/openxplorer",
+            expected: Installation::OtherPackage,
+        },
+        FolderCase {
+            app_root: "snap/openxplorer/1",
+            expected: Installation::OtherPackage,
+        },
+        FolderCase {
+            app_root: "usr/local/bin",
+            expected: Installation::Unpackaged,
+        },
+        FolderCase {
+            app_root: "usr/local/lib/openxplorer",
+            expected: Installation::Unpackaged,
+        },
+        FolderCase {
+            app_root: "opt/other",
+            expected: Installation::Unpackaged,
+        },
+        FolderCase {
+            app_root: "opt/openxplorer-2",
+            expected: Installation::Unpackaged,
+        },
+    ];
+
+    for case in cases {
+        let app_root = system.path().join(case.app_root);
+
+        let detected = Installation::detect(&app_root, system.path());
+
+        assert_eq!(detected, case.expected, "{}", case.app_root);
+    }
+}
+
+/// The native executable is detected by its installation folder: the
+/// prefix of `<prefix>/bin/<program>`, otherwise its own folder. The
+/// Debian package's executable belongs in `/opt/openxplorer`.
+/// parity: UPD-004
+#[test]
+fn the_native_executable_is_detected_by_its_installation_folder() {
+    struct ExecutableCase {
+        /// The executable, relative to the fake file-system root.
+        executable: &'static str,
+        expected: Installation,
+    }
+    let system = tempfile::tempdir().unwrap();
+    install_tools(system.path(), 0o755);
+    let cases = [
+        ExecutableCase {
+            executable: "opt/openxplorer/bin/openxplorer",
+            expected: Installation::DebianPackage,
+        },
+        ExecutableCase {
+            executable: "opt/openxplorer/openxplorer",
+            expected: Installation::DebianPackage,
+        },
+        ExecutableCase {
+            executable: "usr/bin/openxplorer",
+            expected: Installation::OtherPackage,
+        },
+        ExecutableCase {
+            executable: "snap/openxplorer/1/bin/openxplorer",
+            expected: Installation::OtherPackage,
+        },
+        ExecutableCase {
+            executable: "usr/local/bin/openxplorer",
+            expected: Installation::Unpackaged,
+        },
+        ExecutableCase {
+            executable: "home/demo/.cargo/bin/openxplorer",
+            expected: Installation::Unpackaged,
+        },
+        ExecutableCase {
+            executable: "home/demo/openxplorer/native/target/release/openxplorer-native",
+            expected: Installation::Unpackaged,
+        },
+    ];
+
+    for case in cases {
+        let executable = system.path().join(case.executable);
+
+        let detected = Installation::detect_for_executable(&executable, system.path());
+
+        assert_eq!(detected, case.expected, "{}", case.executable);
+    }
+}

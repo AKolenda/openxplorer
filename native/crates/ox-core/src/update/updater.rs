@@ -116,12 +116,13 @@ impl Updater {
         }
     }
 
-    /// The updater of the application installed in `app_root`: GitHub,
-    /// the system's package tools and `~/.cache/winspace/updates`.
-    pub fn for_installed_app(current_version: ReleaseVersion, app_root: &Path) -> Self {
+    /// The updater of the native app whose executable is at `executable`
+    /// (see [`Installation::detect_for_executable`]): GitHub, the system's
+    /// package tools and `~/.cache/winspace/updates`.
+    pub fn for_executable(current_version: ReleaseVersion, executable: &Path) -> Self {
         Self::new(UpdaterParts {
             current_version,
-            installation: Installation::detect(app_root, Path::new("/")),
+            installation: Installation::detect_for_executable(executable, Path::new("/")),
             updates_folder: default_updates_folder(),
             server: Box::new(GitHubReleases::new(current_version)),
             package_manager: Box::new(SystemPackageManager),
