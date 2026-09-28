@@ -12,13 +12,19 @@ Browse local folders and SMB shares with tabs, clickable paths, pinned folders, 
 
 ## Install
 
-Get the Debian package from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases), then follow the [installation guide](docs/installation.md). Finish file operations and run `openxplorer --quit` before upgrading.
+Version **2.0.0** is a native GTK 4 application written in Rust (`native/`). It keeps the same look, settings, pins and saved passwords as 1.x. Get it from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases):
 
-Version **1.1.4** keeps in-app updates working after the repository moves to the `openxplorer` GitHub organization. Install it from **Check for updates** beside the bottom-right view controls. See the [changelog](desktop/CHANGELOG.md), [test report](TEST-REPORT.md) and [release checklist](docs/RELEASE-CHECKLIST.md) for verification and remaining target-machine checks.
+- **Zorin OS 18, Ubuntu 24.04 and newer, Debian 13:** `openxplorer_2.0.0_all.deb` (x86-64). OpenXplorer 1.1.x offers it in **Check for updates**.
+- **Fedora, openSUSE Tumbleweed, Arch Linux:** the `.rpm` or `.pkg.tar.zst` of the release, when the release lists one.
+- **Any distribution with Flatpak**, including Debian 12 and others with GTK older than 4.14: `io.winspace.Development.flatpak`.
+
+Follow the [installation guide](docs/installation.md), and finish file operations and run `openxplorer --quit` before upgrading. See the [changelog](CHANGELOG.md), the [known gaps and backlog](native/BACKLOG.md), the [packaging guide](native/packaging/README.md) and the [release checklist](docs/RELEASE-CHECKLIST.md).
 
 ## Develop
 
-The native Python/GTK/WebKitGTK app lives in `desktop/`; the Next.js website lives in `apps/web/`. The installed app does not depend on Node or pnpm.
+The app lives in `native/` (Rust, GTK 4, GIO/GVfs); see [native/README.md](native/README.md). The Next.js website lives in `apps/web/`. The installed app does not depend on Node or pnpm.
+
+**Deprecated:** `desktop/` holds the Python/GTK 3/WebKitGTK app of OpenXplorer 1.x. It stays in the repository as the behavioural specification the native app is checked against (`native/parity/`), for its tests and for the mount helper the packages still ship, but it is no longer released or maintained.
 
 For the website, use Node.js 22.13+ and pnpm 10.34.5:
 
@@ -27,7 +33,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-See [desktop setup](desktop/README.md), [website setup](apps/web/README.md) and the [development guide](docs/development.md) for prerequisites, builds and checks.
+See [native setup](native/README.md), [website setup](apps/web/README.md) and the [development guide](docs/development.md) for prerequisites, builds and checks.
 
 ## Contribute
 

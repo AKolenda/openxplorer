@@ -1,0 +1,1793 @@
+{
+  "environment": {
+    "home": "file:///home/test",
+    "mounts": [
+      {
+        "label": "Sample Phone",
+        "uri": "mtp://[usb:001,010]/",
+        "mounted": true
+      },
+      {
+        "label": "Unplugged",
+        "uri": "mtp://[usb:009,009]/",
+        "mounted": false
+      },
+      {
+        "label": "",
+        "uri": "afc://blank/",
+        "mounted": true
+      }
+    ],
+    "snapshotRoots": [
+      "file:///srv/snaps",
+      "smb://nas/backup/"
+    ],
+    "stableMounts": [
+      {
+        "path": "/mnt/nas",
+        "fstype": "cifs"
+      },
+      {
+        "path": "/mnt/other",
+        "fstype": "nfs"
+      },
+      {
+        "path": "/mnt/s3/",
+        "fstype": "smb3"
+      },
+      {
+        "path": "/mnt/plain"
+      },
+      {
+        "path": "",
+        "fstype": "cifs"
+      }
+    ]
+  },
+  "uris": [
+    {
+      "uri": "file:///",
+      "baseName": "Local Disk",
+      "parentUri": null,
+      "displayUri": "/",
+      "titleFor": "Local Disk",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///home/test",
+      "baseName": "test",
+      "parentUri": "file:///home",
+      "displayUri": "/home/test",
+      "titleFor": "Home",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "home",
+          "uri": "file:///home"
+        },
+        {
+          "label": "test",
+          "uri": "file:///home/test"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///home/test/",
+      "baseName": "test",
+      "parentUri": "file:///home",
+      "displayUri": "/home/test/",
+      "titleFor": "Home",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "home",
+          "uri": "file:///home"
+        },
+        {
+          "label": "test",
+          "uri": "file:///home/test"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///home/test/Documents",
+      "baseName": "Documents",
+      "parentUri": "file:///home/test",
+      "displayUri": "/home/test/Documents",
+      "titleFor": "Documents",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "home",
+          "uri": "file:///home"
+        },
+        {
+          "label": "test",
+          "uri": "file:///home/test"
+        },
+        {
+          "label": "Documents",
+          "uri": "file:///home/test/Documents"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///tmp/a%20b/%23c",
+      "baseName": "#c",
+      "parentUri": "file:///tmp/a%20b",
+      "displayUri": "/tmp/a b/#c",
+      "titleFor": "#c",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "tmp",
+          "uri": "file:///tmp"
+        },
+        {
+          "label": "a b",
+          "uri": "file:///tmp/a%20b"
+        },
+        {
+          "label": "#c",
+          "uri": "file:///tmp/a%20b/%23c"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///tmp/%E2%82%AC",
+      "baseName": "€",
+      "parentUri": "file:///tmp",
+      "displayUri": "/tmp/€",
+      "titleFor": "€",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "tmp",
+          "uri": "file:///tmp"
+        },
+        {
+          "label": "€",
+          "uri": "file:///tmp/%E2%82%AC"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///tmp/bad%zz",
+      "baseName": "file:///tmp/bad%zz",
+      "parentUri": "file:///tmp",
+      "displayUri": "file:///tmp/bad%zz",
+      "titleFor": "file:///tmp/bad%zz",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "file:///tmp/bad%zz",
+          "uri": "file:///tmp/bad%zz"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///tmp/100%25",
+      "baseName": "100%",
+      "parentUri": "file:///tmp",
+      "displayUri": "/tmp/100%",
+      "titleFor": "100%",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "tmp",
+          "uri": "file:///tmp"
+        },
+        {
+          "label": "100%",
+          "uri": "file:///tmp/100%25"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///tmp/%C3",
+      "baseName": "file:///tmp/%C3",
+      "parentUri": "file:///tmp",
+      "displayUri": "file:///tmp/%C3",
+      "titleFor": "file:///tmp/%C3",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "file:///tmp/%C3",
+          "uri": "file:///tmp/%C3"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas/",
+      "baseName": "nas",
+      "parentUri": null,
+      "displayUri": "\\\\nas\\",
+      "titleFor": "nas",
+      "writable": false,
+      "shareRoot": true,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "nas",
+          "uri": "smb://nas/"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas",
+      "baseName": "nas",
+      "parentUri": null,
+      "displayUri": "\\\\nas",
+      "titleFor": "nas",
+      "writable": false,
+      "shareRoot": true,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "nas",
+          "uri": "smb://nas/"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas/share",
+      "baseName": "share",
+      "parentUri": "smb://nas/",
+      "displayUri": "\\\\nas\\share",
+      "titleFor": "share",
+      "writable": true,
+      "shareRoot": true,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "nas",
+          "uri": "smb://nas/"
+        },
+        {
+          "label": "share",
+          "uri": "smb://nas/share"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas/share/",
+      "baseName": "share",
+      "parentUri": "smb://nas/",
+      "displayUri": "\\\\nas\\share\\",
+      "titleFor": "share",
+      "writable": true,
+      "shareRoot": true,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "nas",
+          "uri": "smb://nas/"
+        },
+        {
+          "label": "share",
+          "uri": "smb://nas/share"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas:1445/share/one/two/three/four/a%20b/%23snapshot",
+      "baseName": "#snapshot",
+      "parentUri": "smb://nas:1445/share/one/two/three/four/a%20b",
+      "displayUri": "\\\\nas:1445\\share\\one\\two\\three\\four\\a b\\#snapshot",
+      "titleFor": "#snapshot",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "nas:1445",
+          "uri": "smb://nas:1445/"
+        },
+        {
+          "label": "share",
+          "uri": "smb://nas:1445/share"
+        },
+        {
+          "label": "one",
+          "uri": "smb://nas:1445/share/one"
+        },
+        {
+          "label": "two",
+          "uri": "smb://nas:1445/share/one/two"
+        },
+        {
+          "label": "three",
+          "uri": "smb://nas:1445/share/one/two/three"
+        },
+        {
+          "label": "four",
+          "uri": "smb://nas:1445/share/one/two/three/four"
+        },
+        {
+          "label": "a b",
+          "uri": "smb://nas:1445/share/one/two/three/four/a%20b"
+        },
+        {
+          "label": "#snapshot",
+          "uri": "smb://nas:1445/share/one/two/three/four/a%20b/%23snapshot"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://archive-nas/Shared/Launch%20planning",
+      "baseName": "Launch planning",
+      "parentUri": "smb://archive-nas/Shared",
+      "displayUri": "\\\\archive-nas\\Shared\\Launch planning",
+      "titleFor": "Launch planning",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "archive-nas",
+          "uri": "smb://archive-nas/"
+        },
+        {
+          "label": "Shared",
+          "uri": "smb://archive-nas/Shared"
+        },
+        {
+          "label": "Launch planning",
+          "uri": "smb://archive-nas/Shared/Launch%20planning"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://NAS/Share",
+      "baseName": "Share",
+      "parentUri": "smb://NAS/",
+      "displayUri": "\\\\NAS\\Share",
+      "titleFor": "Share",
+      "writable": true,
+      "shareRoot": true,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "NAS",
+          "uri": "smb://NAS/"
+        },
+        {
+          "label": "Share",
+          "uri": "smb://NAS/Share"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas/%zz",
+      "baseName": "smb://nas/%zz",
+      "parentUri": "smb://nas/",
+      "displayUri": "smb://nas/%zz",
+      "titleFor": "smb://nas/%zz",
+      "writable": true,
+      "shareRoot": true,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "smb://nas/%zz",
+          "uri": "smb://nas/%zz"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://[fe80::1]/share/x",
+      "baseName": "x",
+      "parentUri": "smb://[fe80::1]/share",
+      "displayUri": "\\\\[fe80::1]\\share\\x",
+      "titleFor": "x",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "[fe80::1]",
+          "uri": "smb://[fe80::1]/"
+        },
+        {
+          "label": "share",
+          "uri": "smb://[fe80::1]/share"
+        },
+        {
+          "label": "x",
+          "uri": "smb://[fe80::1]/share/x"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "mtp://[usb:001,010]/",
+      "baseName": "Sample Phone",
+      "parentUri": null,
+      "displayUri": "Sample Phone",
+      "titleFor": "Sample Phone",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Sample Phone",
+          "uri": "mtp://[usb:001,010]/"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "mtp://[usb:001,010]/"
+    },
+    {
+      "uri": "mtp://[usb:001,010]/Internal%20storage",
+      "baseName": "Internal storage",
+      "parentUri": "mtp://[usb:001,010]/",
+      "displayUri": "Sample Phone / Internal storage",
+      "titleFor": "Internal storage",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Sample Phone",
+          "uri": "mtp://[usb:001,010]/"
+        },
+        {
+          "label": "Internal storage",
+          "uri": "mtp://[usb:001,010]/Internal%20storage"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "mtp://[usb:001,010]/"
+    },
+    {
+      "uri": "mtp://[usb:001,010]/Internal%20storage/DCIM",
+      "baseName": "DCIM",
+      "parentUri": "mtp://[usb:001,010]/Internal%20storage/",
+      "displayUri": "Sample Phone / Internal storage/DCIM",
+      "titleFor": "DCIM",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Sample Phone",
+          "uri": "mtp://[usb:001,010]/"
+        },
+        {
+          "label": "Internal storage",
+          "uri": "mtp://[usb:001,010]/Internal%20storage"
+        },
+        {
+          "label": "DCIM",
+          "uri": "mtp://[usb:001,010]/Internal%20storage/DCIM"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "mtp://[usb:001,010]/"
+    },
+    {
+      "uri": "mtp://[usb:001,010]/Internal%20storage/DCIM/",
+      "baseName": "DCIM",
+      "parentUri": "mtp://[usb:001,010]/Internal%20storage/",
+      "displayUri": "Sample Phone / Internal storage/DCIM",
+      "titleFor": "DCIM",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Sample Phone",
+          "uri": "mtp://[usb:001,010]/"
+        },
+        {
+          "label": "Internal storage",
+          "uri": "mtp://[usb:001,010]/Internal%20storage"
+        },
+        {
+          "label": "DCIM",
+          "uri": "mtp://[usb:001,010]/Internal%20storage/DCIM"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "mtp://[usb:001,010]/"
+    },
+    {
+      "uri": "mtp://[usb:009,009]/x",
+      "baseName": "x",
+      "parentUri": "mtp://[usb:009,009]/",
+      "displayUri": "Connected device / x",
+      "titleFor": "x",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Connected device",
+          "uri": "mtp://[usb:009,009]/"
+        },
+        {
+          "label": "x",
+          "uri": "mtp://[usb:009,009]/x"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "mtp://[usb:009,009]/"
+    },
+    {
+      "uri": "MTP://[usb:001,010]/DCIM",
+      "baseName": "DCIM",
+      "parentUri": "mtp://[usb:001,010]/",
+      "displayUri": "Sample Phone / DCIM",
+      "titleFor": "DCIM",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Sample Phone",
+          "uri": "mtp://[usb:001,010]/"
+        },
+        {
+          "label": "DCIM",
+          "uri": "mtp://[usb:001,010]/DCIM"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "mtp://[usb:001,010]/"
+    },
+    {
+      "uri": "gphoto2://[usb:001,002]/",
+      "baseName": "Connected device",
+      "parentUri": null,
+      "displayUri": "Connected device",
+      "titleFor": "Connected device",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Connected device",
+          "uri": "gphoto2://[usb:001,002]/"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "gphoto2://[usb:001,002]/"
+    },
+    {
+      "uri": "afc://abc/",
+      "baseName": "Connected device",
+      "parentUri": null,
+      "displayUri": "Connected device",
+      "titleFor": "Connected device",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Connected device",
+          "uri": "afc://abc/"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "afc://abc/"
+    },
+    {
+      "uri": "afc://abc",
+      "baseName": "Connected device",
+      "parentUri": null,
+      "displayUri": "Connected device",
+      "titleFor": "Connected device",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Connected device",
+          "uri": "afc://abc/"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "afc://abc/"
+    },
+    {
+      "uri": "afc://blank/Photos",
+      "baseName": "Photos",
+      "parentUri": "afc://blank/",
+      "displayUri": "Connected device / Photos",
+      "titleFor": "Photos",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "Connected device",
+          "uri": "afc://blank/"
+        },
+        {
+          "label": "Photos",
+          "uri": "afc://blank/Photos"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "afc://blank/"
+    },
+    {
+      "uri": "mtp://[usb:001,010]/bad%zz",
+      "baseName": "mtp://[usb:001,010]/bad%zz",
+      "parentUri": "mtp://[usb:001,010]/",
+      "displayUri": "mtp://[usb:001,010]/bad%zz",
+      "titleFor": "mtp://[usb:001,010]/bad%zz",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "mtp://[usb:001,010]/bad%zz",
+          "uri": "mtp://[usb:001,010]/bad%zz"
+        }
+      ],
+      "network": false,
+      "deviceRoot": "mtp://[usb:001,010]/"
+    },
+    {
+      "uri": "file:///srv/snaps",
+      "baseName": "snaps",
+      "parentUri": "file:///srv",
+      "displayUri": "/srv/snaps",
+      "titleFor": "snaps",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "srv",
+          "uri": "file:///srv"
+        },
+        {
+          "label": "snaps",
+          "uri": "file:///srv/snaps"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///srv/snaps/",
+      "baseName": "snaps",
+      "parentUri": "file:///srv",
+      "displayUri": "/srv/snaps/",
+      "titleFor": "snaps",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "srv",
+          "uri": "file:///srv"
+        },
+        {
+          "label": "snaps",
+          "uri": "file:///srv/snaps"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///srv/snaps/x",
+      "baseName": "x",
+      "parentUri": "file:///srv/snaps",
+      "displayUri": "/srv/snaps/x",
+      "titleFor": "x",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "srv",
+          "uri": "file:///srv"
+        },
+        {
+          "label": "snaps",
+          "uri": "file:///srv/snaps"
+        },
+        {
+          "label": "x",
+          "uri": "file:///srv/snaps/x"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///srv/snapshots",
+      "baseName": "snapshots",
+      "parentUri": "file:///srv",
+      "displayUri": "/srv/snapshots",
+      "titleFor": "snapshots",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "srv",
+          "uri": "file:///srv"
+        },
+        {
+          "label": "snapshots",
+          "uri": "file:///srv/snapshots"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///data/.snapshot/x",
+      "baseName": "x",
+      "parentUri": "file:///data/.snapshot",
+      "displayUri": "/data/.snapshot/x",
+      "titleFor": "x",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "data",
+          "uri": "file:///data"
+        },
+        {
+          "label": ".snapshot",
+          "uri": "file:///data/.snapshot"
+        },
+        {
+          "label": "x",
+          "uri": "file:///data/.snapshot/x"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///data/.snapshots",
+      "baseName": ".snapshots",
+      "parentUri": "file:///data",
+      "displayUri": "/data/.snapshots",
+      "titleFor": ".snapshots",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "data",
+          "uri": "file:///data"
+        },
+        {
+          "label": ".snapshots",
+          "uri": "file:///data/.snapshots"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas/s/@GMT-2024.01.01-00.00.00/x",
+      "baseName": "x",
+      "parentUri": "smb://nas/s/@GMT-2024.01.01-00.00.00",
+      "displayUri": "\\\\nas\\s\\@GMT-2024.01.01-00.00.00\\x",
+      "titleFor": "x",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "nas",
+          "uri": "smb://nas/"
+        },
+        {
+          "label": "s",
+          "uri": "smb://nas/s"
+        },
+        {
+          "label": "@GMT-2024.01.01-00.00.00",
+          "uri": "smb://nas/s/@GMT-2024.01.01-00.00.00"
+        },
+        {
+          "label": "x",
+          "uri": "smb://nas/s/@GMT-2024.01.01-00.00.00/x"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///p/.zfs/snapshot/a",
+      "baseName": "a",
+      "parentUri": "file:///p/.zfs/snapshot",
+      "displayUri": "/p/.zfs/snapshot/a",
+      "titleFor": "a",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "p",
+          "uri": "file:///p"
+        },
+        {
+          "label": ".zfs",
+          "uri": "file:///p/.zfs"
+        },
+        {
+          "label": "snapshot",
+          "uri": "file:///p/.zfs/snapshot"
+        },
+        {
+          "label": "a",
+          "uri": "file:///p/.zfs/snapshot/a"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///p/.zfs/x",
+      "baseName": "x",
+      "parentUri": "file:///p/.zfs",
+      "displayUri": "/p/.zfs/x",
+      "titleFor": "x",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "p",
+          "uri": "file:///p"
+        },
+        {
+          "label": ".zfs",
+          "uri": "file:///p/.zfs"
+        },
+        {
+          "label": "x",
+          "uri": "file:///p/.zfs/x"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///p/.zfs",
+      "baseName": ".zfs",
+      "parentUri": "file:///p",
+      "displayUri": "/p/.zfs",
+      "titleFor": ".zfs",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "p",
+          "uri": "file:///p"
+        },
+        {
+          "label": ".zfs",
+          "uri": "file:///p/.zfs"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas/backup",
+      "baseName": "backup",
+      "parentUri": "smb://nas/",
+      "displayUri": "\\\\nas\\backup",
+      "titleFor": "backup",
+      "writable": false,
+      "shareRoot": true,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "nas",
+          "uri": "smb://nas/"
+        },
+        {
+          "label": "backup",
+          "uri": "smb://nas/backup"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas/backup/x",
+      "baseName": "x",
+      "parentUri": "smb://nas/backup",
+      "displayUri": "\\\\nas\\backup\\x",
+      "titleFor": "x",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "nas",
+          "uri": "smb://nas/"
+        },
+        {
+          "label": "backup",
+          "uri": "smb://nas/backup"
+        },
+        {
+          "label": "x",
+          "uri": "smb://nas/backup/x"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas/backupx",
+      "baseName": "backupx",
+      "parentUri": "smb://nas/",
+      "displayUri": "\\\\nas\\backupx",
+      "titleFor": "backupx",
+      "writable": true,
+      "shareRoot": true,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "nas",
+          "uri": "smb://nas/"
+        },
+        {
+          "label": "backupx",
+          "uri": "smb://nas/backupx"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///mnt/nas",
+      "baseName": "nas",
+      "parentUri": "file:///mnt",
+      "displayUri": "/mnt/nas",
+      "titleFor": "nas",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "mnt",
+          "uri": "file:///mnt"
+        },
+        {
+          "label": "nas",
+          "uri": "file:///mnt/nas"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///mnt/nas/",
+      "baseName": "nas",
+      "parentUri": "file:///mnt",
+      "displayUri": "/mnt/nas/",
+      "titleFor": "nas",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "mnt",
+          "uri": "file:///mnt"
+        },
+        {
+          "label": "nas",
+          "uri": "file:///mnt/nas"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///mnt/nas/folder",
+      "baseName": "folder",
+      "parentUri": "file:///mnt/nas",
+      "displayUri": "/mnt/nas/folder",
+      "titleFor": "folder",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "mnt",
+          "uri": "file:///mnt"
+        },
+        {
+          "label": "nas",
+          "uri": "file:///mnt/nas"
+        },
+        {
+          "label": "folder",
+          "uri": "file:///mnt/nas/folder"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///mnt/nas-other/folder",
+      "baseName": "folder",
+      "parentUri": "file:///mnt/nas-other",
+      "displayUri": "/mnt/nas-other/folder",
+      "titleFor": "folder",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "mnt",
+          "uri": "file:///mnt"
+        },
+        {
+          "label": "nas-other",
+          "uri": "file:///mnt/nas-other"
+        },
+        {
+          "label": "folder",
+          "uri": "file:///mnt/nas-other/folder"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///mnt/other/x",
+      "baseName": "x",
+      "parentUri": "file:///mnt/other",
+      "displayUri": "/mnt/other/x",
+      "titleFor": "x",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "mnt",
+          "uri": "file:///mnt"
+        },
+        {
+          "label": "other",
+          "uri": "file:///mnt/other"
+        },
+        {
+          "label": "x",
+          "uri": "file:///mnt/other/x"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///mnt/s3/x",
+      "baseName": "x",
+      "parentUri": "file:///mnt/s3",
+      "displayUri": "/mnt/s3/x",
+      "titleFor": "x",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "mnt",
+          "uri": "file:///mnt"
+        },
+        {
+          "label": "s3",
+          "uri": "file:///mnt/s3"
+        },
+        {
+          "label": "x",
+          "uri": "file:///mnt/s3/x"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///mnt/s3",
+      "baseName": "s3",
+      "parentUri": "file:///mnt",
+      "displayUri": "/mnt/s3",
+      "titleFor": "s3",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "mnt",
+          "uri": "file:///mnt"
+        },
+        {
+          "label": "s3",
+          "uri": "file:///mnt/s3"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///mnt/plain/x",
+      "baseName": "x",
+      "parentUri": "file:///mnt/plain",
+      "displayUri": "/mnt/plain/x",
+      "titleFor": "x",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "mnt",
+          "uri": "file:///mnt"
+        },
+        {
+          "label": "plain",
+          "uri": "file:///mnt/plain"
+        },
+        {
+          "label": "x",
+          "uri": "file:///mnt/plain/x"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///tmp/%23snapshot",
+      "baseName": "#snapshot",
+      "parentUri": "file:///tmp",
+      "displayUri": "/tmp/#snapshot",
+      "titleFor": "#snapshot",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "tmp",
+          "uri": "file:///tmp"
+        },
+        {
+          "label": "#snapshot",
+          "uri": "file:///tmp/%23snapshot"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///tmp/a%2Fb",
+      "baseName": "a/b",
+      "parentUri": "file:///tmp",
+      "displayUri": "/tmp/a/b",
+      "titleFor": "a/b",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "tmp",
+          "uri": "file:///tmp"
+        },
+        {
+          "label": "a/b",
+          "uri": "file:///tmp/a%2Fb"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///tmp/%40GMT-x",
+      "baseName": "@GMT-x",
+      "parentUri": "file:///tmp",
+      "displayUri": "/tmp/@GMT-x",
+      "titleFor": "@GMT-x",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": true,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "tmp",
+          "uri": "file:///tmp"
+        },
+        {
+          "label": "@GMT-x",
+          "uri": "file:///tmp/%40GMT-x"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas:445/",
+      "baseName": "nas:445",
+      "parentUri": null,
+      "displayUri": "\\\\nas:445\\",
+      "titleFor": "nas:445",
+      "writable": false,
+      "shareRoot": true,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "nas:445",
+          "uri": "smb://nas:445/"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///a/b/c/d",
+      "baseName": "d",
+      "parentUri": "file:///a/b/c",
+      "displayUri": "/a/b/c/d",
+      "titleFor": "d",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "a",
+          "uri": "file:///a"
+        },
+        {
+          "label": "b",
+          "uri": "file:///a/b"
+        },
+        {
+          "label": "c",
+          "uri": "file:///a/b/c"
+        },
+        {
+          "label": "d",
+          "uri": "file:///a/b/c/d"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "smb://nas//",
+      "baseName": "nas",
+      "parentUri": "smb://nas/",
+      "displayUri": "\\\\nas\\\\",
+      "titleFor": "nas",
+      "writable": false,
+      "shareRoot": true,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "nas",
+          "uri": "smb://nas/"
+        }
+      ],
+      "network": true,
+      "deviceRoot": null
+    },
+    {
+      "uri": "file:///tmp/x%2F",
+      "baseName": "x/",
+      "parentUri": "file:///tmp",
+      "displayUri": "/tmp/x/",
+      "titleFor": "x/",
+      "writable": true,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "/",
+          "uri": "file:///"
+        },
+        {
+          "label": "tmp",
+          "uri": "file:///tmp"
+        },
+        {
+          "label": "x/",
+          "uri": "file:///tmp/x%2F"
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    },
+    {
+      "uri": "",
+      "baseName": "",
+      "parentUri": null,
+      "displayUri": "",
+      "titleFor": "",
+      "writable": false,
+      "shareRoot": false,
+      "readonly": false,
+      "crumbs": [
+        {
+          "label": "",
+          "uri": ""
+        }
+      ],
+      "network": false,
+      "deviceRoot": null
+    }
+  ],
+  "pairs": [
+    {
+      "first": "file:///a",
+      "second": "file:///a/",
+      "same": true
+    },
+    {
+      "first": "file:///a//",
+      "second": "file:///a",
+      "same": false
+    },
+    {
+      "first": "file:///a/",
+      "second": "file:///a/",
+      "same": true
+    },
+    {
+      "first": "smb://nas",
+      "second": "smb://nas/",
+      "same": true
+    },
+    {
+      "first": "file:///",
+      "second": "file://",
+      "same": false
+    },
+    {
+      "first": "a",
+      "second": "b",
+      "same": false
+    },
+    {
+      "first": "",
+      "second": "/",
+      "same": true
+    },
+    {
+      "first": "file:///A",
+      "second": "file:///a",
+      "same": false
+    }
+  ],
+  "sizes": [
+    {
+      "bytes": 0,
+      "text": "0 bytes"
+    },
+    {
+      "bytes": 1,
+      "text": "1 bytes"
+    },
+    {
+      "bytes": 912,
+      "text": "912 bytes"
+    },
+    {
+      "bytes": 1023,
+      "text": "1023 bytes"
+    },
+    {
+      "bytes": 1024,
+      "text": "1.0 KB"
+    },
+    {
+      "bytes": 1280,
+      "text": "1.3 KB"
+    },
+    {
+      "bytes": 1536,
+      "text": "1.5 KB"
+    },
+    {
+      "bytes": 72704,
+      "text": "71.0 KB"
+    },
+    {
+      "bytes": 102400,
+      "text": "100 KB"
+    },
+    {
+      "bytes": 102912,
+      "text": "101 KB"
+    },
+    {
+      "bytes": 102913,
+      "text": "101 KB"
+    },
+    {
+      "bytes": 133120,
+      "text": "130 KB"
+    },
+    {
+      "bytes": 1048063,
+      "text": "1023 KB"
+    },
+    {
+      "bytes": 1048064,
+      "text": "1024 KB"
+    },
+    {
+      "bytes": 1048576,
+      "text": "1.0 MB"
+    },
+    {
+      "bytes": 1101004,
+      "text": "1.0 MB"
+    },
+    {
+      "bytes": 104805376,
+      "text": "100.0 MB"
+    },
+    {
+      "bytes": 1073741824,
+      "text": "1.0 GB"
+    },
+    {
+      "bytes": 1099511627776,
+      "text": "1.0 TB"
+    },
+    {
+      "bytes": 1125899906842624,
+      "text": "1024 TB"
+    },
+    {
+      "bytes": 9007199254740992,
+      "text": "8192 TB"
+    },
+    {
+      "bytes": 5000,
+      "text": "4.9 KB"
+    },
+    {
+      "bytes": 10240,
+      "text": "10.0 KB"
+    },
+    {
+      "bytes": 10291,
+      "text": "10.0 KB"
+    },
+    {
+      "bytes": 10292,
+      "text": "10.1 KB"
+    },
+    {
+      "bytes": 1075,
+      "text": "1.0 KB"
+    },
+    {
+      "bytes": 1127,
+      "text": "1.1 KB"
+    },
+    {
+      "bytes": 1178,
+      "text": "1.2 KB"
+    },
+    {
+      "bytes": 1229,
+      "text": "1.2 KB"
+    },
+    {
+      "bytes": 1331,
+      "text": "1.3 KB"
+    },
+    {
+      "bytes": 1382,
+      "text": "1.3 KB"
+    },
+    {
+      "bytes": 1433,
+      "text": "1.4 KB"
+    },
+    {
+      "bytes": 1485,
+      "text": "1.5 KB"
+    },
+    {
+      "bytes": 1587,
+      "text": "1.5 KB"
+    },
+    {
+      "bytes": 2355,
+      "text": "2.3 KB"
+    },
+    {
+      "bytes": 2406,
+      "text": "2.3 KB"
+    },
+    {
+      "bytes": 2457,
+      "text": "2.4 KB"
+    },
+    {
+      "bytes": 1638,
+      "text": "1.6 KB"
+    },
+    {
+      "bytes": 1690,
+      "text": "1.7 KB"
+    },
+    {
+      "bytes": 1741,
+      "text": "1.7 KB"
+    },
+    {
+      "bytes": 1792,
+      "text": "1.8 KB"
+    },
+    {
+      "bytes": 1843,
+      "text": "1.8 KB"
+    },
+    {
+      "bytes": 1894,
+      "text": "1.8 KB"
+    },
+    {
+      "bytes": 1946,
+      "text": "1.9 KB"
+    },
+    {
+      "bytes": 1997,
+      "text": "2.0 KB"
+    },
+    {
+      "bytes": 1049,
+      "text": "1.0 KB"
+    },
+    {
+      "bytes": 1101,
+      "text": "1.1 KB"
+    },
+    {
+      "bytes": 1152,
+      "text": "1.1 KB"
+    },
+    {
+      "bytes": 1203,
+      "text": "1.2 KB"
+    },
+    {
+      "bytes": 1254,
+      "text": "1.2 KB"
+    },
+    {
+      "bytes": 1306,
+      "text": "1.3 KB"
+    },
+    {
+      "bytes": 1357,
+      "text": "1.3 KB"
+    },
+    {
+      "bytes": 1408,
+      "text": "1.4 KB"
+    },
+    {
+      "bytes": 1459,
+      "text": "1.4 KB"
+    },
+    {
+      "bytes": 1510,
+      "text": "1.5 KB"
+    },
+    {
+      "bytes": 1561,
+      "text": "1.5 KB"
+    },
+    {
+      "bytes": 1613,
+      "text": "1.6 KB"
+    },
+    {
+      "bytes": 1664,
+      "text": "1.6 KB"
+    },
+    {
+      "bytes": 1715,
+      "text": "1.7 KB"
+    },
+    {
+      "bytes": 1766,
+      "text": "1.7 KB"
+    },
+    {
+      "bytes": 1818,
+      "text": "1.8 KB"
+    },
+    {
+      "bytes": 1869,
+      "text": "1.8 KB"
+    },
+    {
+      "bytes": 1920,
+      "text": "1.9 KB"
+    },
+    {
+      "bytes": 1971,
+      "text": "1.9 KB"
+    },
+    {
+      "bytes": 2022,
+      "text": "2.0 KB"
+    }
+  ]
+}

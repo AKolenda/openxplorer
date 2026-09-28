@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  The transfer panel, `#transfer` of desktop/ui/index.html: the copy
+  glyph, what the operation is doing above its progress bar, and Cancel.
+  It floats above the status bar between the sidebar and the details pane
+  (native/docs/ui-spec.md §4.15, "Transfer"). src/window/transfer_panel.rs
+  sets the glyph and the Cancel action.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxTransferPanel" parent="GtkBox">
+    <property name="visible">false</property>
+    <property name="valign">end</property>
+    <property name="spacing">12</property>
+    <style>
+      <class name="transfer"/>
+    </style>
+    <child>
+      <object class="GtkImage" id="glyph">
+        <property name="accessible-role">presentation</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="hexpand">true</property>
+        <property name="spacing">8</property>
+        <child>
+          <object class="GtkLabel" id="status_label">
+            <property name="xalign">0</property>
+            <property name="ellipsize">end</property>
+            <property name="accessible-role">status</property>
+            <style>
+              <class name="transfer-label"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkProgressBar" id="progress_bar">
+            <accessibility>
+              <property name="label">Operation progress</property>
+            </accessibility>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkButton" id="cancel_button">
+        <property name="label">Cancel</property>
+        <property name="valign">center</property>
+        <style>
+          <class name="bordered"/>
+        </style>
+      </object>
+    </child>
+  </template>
+</interface>

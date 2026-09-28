@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  One category in the Settings list (src/settings_page/category_row.rs):
+  the accent bar of the chosen row, the category's coloured glyph and
+  name, and while a search is typed the number of its matching settings.
+  resources/skin/settings.css draws the bar and the count.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxCategoryRow" parent="GtkListBoxRow">
+    <property name="child">
+      <object class="GtkBox">
+        <property name="spacing">12</property>
+        <child>
+          <object class="GtkBox">
+            <property name="valign">center</property>
+            <style>
+              <class name="pill"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkImage" id="glyph">
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <property name="accessible-role">presentation</property>
+            <style>
+              <class name="glyph"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="title">
+            <property name="xalign">0</property>
+            <property name="hexpand">true</property>
+            <property name="ellipsize">end</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="count">
+            <property name="visible">false</property>
+            <property name="valign">center</property>
+            <style>
+              <class name="category-count"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </property>
+  </template>
+</interface>

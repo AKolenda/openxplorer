@@ -1,0 +1,42 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Menus and the toast (ui-spec.md §4.9, §4.15; style.css .menu.win10, the
+   classic style the app defaults to, and .toast). Menu widths and row
+   heights follow the text size (src/theme/fonts.rs). */
+
+/* ---- Menu surface (E03 classic, C07, C42) ---- */
+popover.ox-menu > contents {
+  background-color: @ox_flyout;
+  color: @ox_text;
+  border: 1px solid @ox_flyout_stroke;
+  border-radius: 2px;
+  padding: 3px;
+  box-shadow: 0 5px 16px @ox_menu_shadow;
+}
+
+/* ---- The app's own menus (src/window/menu_popover.rs) ---- */
+popover.ox-menu list { background: none; color: @ox_text; }
+popover.ox-menu list > row {
+  padding: 0 9px;
+  border-radius: 0;
+  background: none;
+  outline: none;
+  transition: background-color 83ms linear;
+}
+popover.ox-menu list > row:hover { background-color: @ox_hover; }
+popover.ox-menu list > row:active { background-color: @ox_pressed; }
+popover.ox-menu list > row:focus-visible { background-color: @ox_selected; box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+popover.ox-menu list > row:disabled { color: @ox_text_disabled; }
+popover.ox-menu list > row .shortcut { color: @ox_muted; padding-left: 12px; }
+/* A disabled row greys its shortcut too, as the web's opacity did. */
+popover.ox-menu list > row:disabled .shortcut { color: @ox_text_disabled; }
+popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-color: @ox_border; }
+
+/* ---- Toast (§4.15, E08) ---- */
+.toast {
+  background-color: @ox_text;
+  color: @ox_bg;
+  border-radius: 8px;
+  padding: 12px 20px;
+  margin-bottom: 48px;
+  box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
+}

@@ -1,0 +1,120 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Light palette: the colour tokens of native/docs/ui-spec.md §3.1 (IDs in
+   brackets), which start from the :root tokens in desktop/ui/style.css.
+   Tokens tagged "visible" in the spec keep the current app's value until
+   the product owner signs them off (§3.8, "Staging"); the comment names the
+   Windows value waiting for that. dark.css defines the same names. */
+
+/* Surfaces */
+@define-color ox_title #eff1f4;                    /* C01 tab strip */
+@define-color ox_title_backdrop @ox_title;         /* C02 */
+@define-color ox_chrome #f9f9f9;                   /* C04 active tab, bars */
+@define-color ox_bg #ffffff;                       /* C05 content */
+@define-color ox_sidebar #fafafa;                  /* C06 */
+@define-color ox_flyout #f9f9f9;                   /* C07 menus */
+@define-color ox_tooltip #f9f9f9;                  /* C08 */
+@define-color ox_card #ffffff;                     /* C09 drive cards */
+@define-color ox_field_bg #ffffff;                 /* C26 address, search */
+
+/* Text */
+@define-color ox_text #1b1b1b;                     /* C10 */
+@define-color ox_muted #616161;                    /* C11 */
+@define-color ox_text_tertiary #8d8d8d;            /* C12 dividers, pins */
+/* Placeholders: the current app's #757575 in both themes (§4.2 names
+   @ox_muted for the search box, which is darker in light). */
+@define-color ox_placeholder #757575;
+@define-color ox_text_disabled #a3a3a3;            /* C13 */
+@define-color ox_text_selection_bg #0078d4;        /* C31 */
+@define-color ox_text_selection_fg #ffffff;
+
+/* Accent */
+@define-color ox_accent #0067c0;                   /* C14 */
+@define-color ox_accent_hover alpha(@ox_accent, .9);   /* C15 */
+@define-color ox_accent_pressed alpha(@ox_accent, .8);
+@define-color ox_on_accent #ffffff;                /* C16 */
+@define-color ox_on_accent_pressed alpha(@ox_on_accent, .7);   /* §4.11 */
+@define-color ox_accent_stroke alpha(white, .08);  /* E07 */
+@define-color ox_accent_stroke_bottom alpha(black, .4);
+
+/* States */
+@define-color ox_hover #f0f0f0;                    /* C17 */
+@define-color ox_pressed #f3f3f3;                  /* C18 */
+@define-color ox_selected #e8f1fb;                 /* C19 */
+@define-color ox_selected_hover @ox_selected;      /* C20 visible: mix(@ox_selected, @ox_accent, .06) */
+@define-color ox_selected_edge alpha(#80b4e0, .16);        /* C21 rows */
+@define-color ox_tile_selected_edge alpha(#80b4e0, .38);   /* C21 tiles */
+@define-color ox_focus_outer @ox_accent;           /* C29 visible: alpha(black, .89) */
+
+/* The tab strip's own states (§4.1, §4.14) */
+@define-color ox_title_hover alpha(black, .04);    /* C03, D-A03: caption, +, windows */
+@define-color ox_title_pressed alpha(black, .02);  /* §4.14 */
+@define-color ox_tab_hover alpha(white, .33);      /* C03 visible for tabs: alpha(black, .04) */
+@define-color ox_tab_text_inactive @ox_text;       /* C37 visible: @ox_muted */
+
+/* Lines and strokes */
+@define-color ox_border #e8e8e8;                   /* C22 */
+@define-color ox_control_stroke alpha(black, .06);         /* C23 */
+@define-color ox_control_stroke_top @ox_control_stroke;    /* C24: the strong */
+@define-color ox_control_stroke_bottom alpha(black, .16);  /* edge is at the bottom */
+@define-color ox_field_bottom #c9c9c9;             /* C27 */
+@define-color ox_input_bottom #8d8d8d;             /* C28 */
+@define-color ox_flyout_stroke alpha(black, .06);  /* C42 */
+
+/* Bordered buttons (C25 visible: alpha(white, .7), alpha(#f9f9f9, .5), alpha(#f9f9f9, .3)) */
+@define-color ox_control_fill @ox_chrome;
+@define-color ox_control_fill_hover @ox_hover;
+@define-color ox_control_fill_pressed @ox_pressed;
+
+/* Status */
+@define-color ox_critical_fill #c42b1c;            /* C33 close hover, full drives */
+@define-color ox_on_critical #ffffff;              /* the close glyph on C33 */
+@define-color ox_success #0f7b0f;                  /* C34 connected */
+@define-color ox_caution #9d5d00;                  /* WinUI SystemFillColorCaution */
+
+/* Scroll bars and shadows */
+@define-color ox_scrollbar_thumb alpha(black, .45);        /* C40 */
+@define-color ox_scrollbar_trough alpha(@ox_flyout, .85);  /* §4.12 */
+@define-color ox_shadow_ambient alpha(black, .12);  /* C44 */
+@define-color ox_shadow_key alpha(black, .14);
+/* The current app's own shadows, the same in both themes */
+@define-color ox_tab_shadow alpha(black, .012);     /* the active tab */
+@define-color ox_menu_shadow alpha(black, .2);      /* E03 classic menus */
+@define-color ox_preview_shadow alpha(black, .043); /* the details pane's art */
+/* The current app's own glyph colour, the same in both themes */
+@define-color ox_share_glyph #4b96c0;  /* a server's glyph, app.js's saved-share blue */
+
+/* Composed icons (skin/icons.css; icon mapping, 2026-09-27 and 2026-09-28) */
+@define-color ox_network_bar #35a854;  /* the green network bar, the current app's pipe in both themes */
+@define-color ox_zip_badge #6b4e00;    /* the zip badge, on the yellow folder in both themes */
+@define-color ox_mapped_drive #5f6368;  /* a mapped network drive's glyph */
+
+/* The Settings page (skin/settings.css; the settings mockup) */
+@define-color ox_status_tint #f5f9fd;         /* a status card */
+@define-color ox_status_tint_border #dfeaf6;
+/* The category glyphs, in the mockup's colours in both themes */
+@define-color ox_category_appearance #9a79cb;
+@define-color ox_category_search @ox_accent;
+@define-color ox_category_default_apps #138266;
+@define-color ox_category_windows #3b8ec7;
+@define-color ox_category_brave #b48540;
+@define-color ox_category_about @ox_muted;
+/* The theme cards show each palette's own surfaces in both themes */
+@define-color ox_preview_light_title #eff1f4;
+@define-color ox_preview_light_sidebar #fafafa;
+@define-color ox_preview_light_content #ffffff;
+@define-color ox_preview_dark_title #191919;
+@define-color ox_preview_dark_sidebar #252525;
+@define-color ox_preview_dark_content #202020;
+@define-color ox_preview_accent #0067c0;
+@define-color ox_preview_line alpha(#888888, .4);
+
+/* Dialogs, the snapshot banner and tab marker (skin/in-window-dialogs.css) */
+@define-color ox_smoke alpha(black, .3);           /* C36 modal scrim */
+@define-color ox_dialog_stroke alpha(#757575, .4); /* C43 */
+@define-color ox_error #b32323;                    /* --error: dialog errors */
+@define-color ox_caution_bg #fff7e8;               /* C35 snapshot banner */
+@define-color ox_caution_text #775314;
+@define-color ox_caution_border #dfcba5;
+@define-color ox_caution_badge_bg #fff2d6;         /* C35 snapshot tab badge */
+@define-color ox_caution_badge_text #714a08;
+@define-color ox_caution_edge #c48c2f;             /* C35 snapshot tab top */

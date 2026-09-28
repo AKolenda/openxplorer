@@ -1,0 +1,89 @@
+name: Native Rust checks
+# Pull requests are checked here on hosted runners. checks.yml runs only on
+# pushes to main, on the production host, so anything this workflow skips is
+# first checked after it has merged.
+on:
+  pull_request:
+    # One list for both triggers, shared through a YAML anchor so the two
+    # cannot drift apart.
+    paths: &checked-paths
+      # Native sources, and the Python app whose behaviour and settings they
+      # must match (parity inventory, bridge and settings interop tests).
+      # tools/release.py also imports desktop/core.py.
+      - 'native/**'
+      - 'desktop/**'
+      # The other inputs of the release-source and public-data policy tests.
+      - '.gitignore'
+      - 'tools/release.py'
+      - 'tools/audit-public-data.py'
+      - 'tests/test_release_source.py'
+      - 'tests/test_public_data.py'
+      - '.github/workflows/native-checks.yml'
+  push:
+    branches: [main]
+    paths: *checked-paths
+  workflow_dispatch:
+# The jobs only read the repository.
+permissions:
+  contents: read
+jobs:
+  native:
+    # Public code is checked on a hosted runner, never the production LAN host.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      # Actions are pinned to a commit, so a moved tag cannot change what runs.
+      # persist-credentials: false keeps the token out of .git/config, where
+      # later steps could read it.
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install GTK 4, SQLite, libsoup 3, GVfs, the private-display test tools, the keyring and the desktop validators
+        # The search cache links the system SQLite (libsqlite3-dev).
+        # libsoup-3.0-dev builds the updater's HTTPS client (the soup3 crate).
+        # xvfb and xauth provide xvfb-run and Xvfb. dbus-x11 depends on
+        # dbus-daemon, which provides dbus-run-session. gvfs provides the
+        # trash:/// backend the Recycle Bin and Undo tests use, and
+        # gvfs-backends the smb:// backend of the not-mounted share tests.
+        # python3-gi and gir1.2-glib-2.0 let the interoperability tests import
+        # the Python app's GIO modules. gnome-keyring is started on the private
+        # bus for the keyring tests, and gir1.2-secret-1 is the Python app's
+        # libsecret. desktop-file-utils and appstream let the packaging tests
+        # validate the desktop entries and metainfo with the desktop's own tools.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libsqlite3-dev libsoup-3.0-dev xvfb xauth dbus-x11 gvfs gvfs-backends python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1 desktop-file-utils appstream
+      - name: Install Rust 1.92.0, the minimum supported version
+        # Must match rust-version in native/Cargo.toml.
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt --component clippy
+          rustup override set 1.92.0
+      - name: Run the native check driver
+        # Parity inventories, rustfmt, Clippy with the workspace lints, and every
+        # Rust test on a private X display and D-Bus session.
+        # OX_REQUIRE_KEYRING makes the keyring tests fail instead of skipping
+        # when GNOME Keyring or libsecret is missing, so the keyring
+        # compatibility with the Python app is always proven here.
+        env:
+          OX_REQUIRE_KEYRING: '1'
+        run: python3 native/tools/check.py
+
+  release-policies:
+    # A separate job, so these quick tests need neither GTK nor Rust and report
+    # on their own. Path filters apply to the whole workflow, so a change to a
+    # policy input also runs the native job. checks.yml repeats these tests as
+    # the gate before publishing.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test the corresponding-source archive policy
+        run: python3 -m unittest discover -s tests -p 'test_release_source.py'
+      - name: Test the public-data audit
+        run: python3 -m unittest discover -s tests -p 'test_public_data.py'

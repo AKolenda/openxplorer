@@ -1,9 +1,11 @@
-# 1.0 release checklist
+# Release checklist
 
-**Current status: 1.0.0 is published; this source tree prepares a local 1.1.2 maintenance build.** A built
-Debian package, source inspection and simulated browser checks are useful
-evidence, but do not prove native compatibility or the absence of
-vulnerabilities. Treat the gates below as the standing per-release list: the
+**Current status: this source tree prepares 2.0.0, the native GTK 4 app
+(`native/`) that replaces the deprecated Python app (`desktop/`, no longer
+shipped).** The remaining parity items, known gaps and owed hardware
+acceptance are in [native/BACKLOG.md](../native/BACKLOG.md). Built packages,
+source inspection and isolated tests are useful evidence, but do not prove
+native compatibility or the absence of vulnerabilities. Treat the gates below as the standing per-release list: the
 website and packaging gates run in CI and locally, while the native desktop
 gate stays an owner task on real Zorin hardware.
 
@@ -29,13 +31,35 @@ exported routes, demo sandbox, mobile docs, real download/source links and host
 security headers. CI and Vercel deliberately require a lockfile. Pin CI actions
 to reviewed immutable commits before enabling a privileged release workflow.
 
+## Native app gate (runs locally and in CI)
+
+```sh
+cd native && cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings   # workspace lints in native/Cargo.toml
+cd .. && python3 native/tools/check.py        # private Xvfb display, D-Bus and HOME
+python3 native/parity/check.py                # inventories; --gate replace lists the backlog
+python3 tools/release.py [--flatpak]           # stable .deb (+ Flatpak), source ZIP, SHA256SUMS in dist/
+python3 native/tools/verify_upgrade.py --python openxplorer_1.1.4_all.deb \
+    --stable dist/openxplorer_<version>_all.deb
+python3 tools/audit-public-data.py
+```
+
+The versions in `native/Cargo.toml`, `native/packaging/rpm/openxplorer.spec`,
+`native/packaging/arch/PKGBUILD`, the newest `<release>` of both metainfo files
+in `native/packaging/data/`, `package.json`, `apps/web/package.json`,
+`apps/web/lib/site.ts` and `tools/sync-docs.py` must agree, and `CHANGELOG.md`
+starts with the release's entry (the workflow publishes its first section as
+the release notes). On `main`, `checks.yml` builds the stable `.deb` (Ubuntu
+24.04), the RPMs (Fedora, openSUSE), the Arch package and the Flatpak bundle on
+hosted runners, and the self-hosted release job verifies and publishes them.
+
 ## Native desktop gate (owner task on real hardware)
 
 On Zorin under the intended Wayland session, then X11 where supported:
 
-- Install the candidate, run `openxplorer --check`, confirm launch, no duplicate
-  title/menu row and functional WebKit subprocess sandbox. Do not disable the
-  sandbox to hide an installation failure.
+- Install the candidate over 1.1.4 through **Check for updates** and from the
+  file, run `openxplorer --version`, confirm launch and no duplicate
+  title/menu row. Install the Flatpak bundle on a second distribution.
 - Middle-click local/SMB folders and sidebar locations. Check background vs
   Shift foreground, tab closing, tear-out onto the desktop and source body,
   merge-back, reorder, Escape, busy/closed destination and scaled displays.
@@ -64,7 +88,7 @@ checksums via a trusted channel; checksums alone are not a signature. Create a
 signing/release process without embedding keys in the repo. Re-run current
 upstream advisories/system package updates before signing.
 
-Semantic and Debian versions are `1.1.2`. For each later release, bump both,
-rebuild, verify source correspondence, and publish the installer, the
-corresponding-source archive and `SHA256SUMS` together. Do not present this
+The release version is `2.0.0`. For each later release, bump every version
+listed above, rebuild, verify source correspondence, and publish the packages,
+the corresponding-source archive and `SHA256SUMS` together. Do not present this
 checklist or a limited source sweep as independent security certification.

@@ -1,28 +1,59 @@
+# tools/release.py leaves these paths out of the corresponding-source archive
+# too. It matches file names case-insensitively, so it also leaves out
+# upper-case variants such as PRIVATE.KEY, which Git ignores only when
+# core.ignorecase is set. tests/test_release_source.py checks that Git and the
+# archive agree on a sample of paths.
+
+# Dependencies, package-manager stores, TypeScript build info and compiled
+# Python bytecode.
 node_modules/
-.next/
-out/
 .pnpm-store/
 *.tsbuildinfo
 __pycache__/
 *.py[cod]
+
+# Local secrets: environment files, private keys, certificates and credential
+# files. The .example files hold only public placeholders and are published.
 .env*
 !.env.example
 .dev.vars*
 !.dev.vars.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.credentials
+credentials.json
+credentials.toml
+credentials.yaml
+credentials.yml
+client_secret*.json
+service-account*.json
+
+# Deployment tool state, other version-control systems and macOS metadata.
 .wrangler/
 .vercel/
 .hg/
 .svn/
 .DS_Store
+
+# Build and release output, and files regenerated from their sources.
+# .next/ and out/ hold the Next.js website build and its static export.
+# dist/ matches at any depth, so it covers desktop/dist/ as well.
+.next/
+out/
 dist/
-desktop/dist/
 designs/
 apps/web/public/downloads/
 apps/web/public/app-preview.html
 apps/web/public/assets/site.js
 desktop/preview.html
 
-# Local tools, runtime data and test captures are not editable release inputs.
+# Built packages and archives, in any directory.
+*.deb
+*.zip
+
+# Virtual environments, tool caches and coverage data.
 .venv/
 venv/
 .pytest_cache/
@@ -36,6 +67,8 @@ venv/
 .coverage*
 htmlcov/
 coverage/
+
+# Scratch directories, test results and test captures.
 tmp/
 .tmp/
 temp/
@@ -43,6 +76,8 @@ temp/
 test-results/
 playwright-report/
 blob-report/
+
+# Logs and local databases.
 *.log
 *.log.*
 *.sqlite
@@ -51,19 +86,8 @@ blob-report/
 *.sqlite3-*
 *.db
 *.db-*
-*.deb
-*.zip
-*.pem
-*.key
-*.p12
-*.pfx
-*.credentials
-credentials.json
-credentials.toml
-credentials.yaml
-credentials.yml
-client_secret*.json
-service-account*.json
+
+# Editor swap files, backups and temporary files.
 *.swp
 *.swo
 *.tmp
@@ -73,3 +97,6 @@ service-account*.json
 # Local privacy-review identifiers must never be published.
 .private-demo-terms*
 private-terms.json
+
+# Rust build output.
+native/target/

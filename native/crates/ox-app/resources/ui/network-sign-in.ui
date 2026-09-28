@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  The network sign-in dialog: `#auth-dialog` as `renderAuth` in
+  desktop/ui/app.js builds it, with `.auth-*` of desktop/ui/style.css,
+  refined to WinUI's ContentDialog (native/docs/ui-spec.md §4.11). The
+  caption bar says who asks, the "password" page asks for an account and
+  the "question" page shows a server's question with one button per
+  answer. src/dialogs/network_sign_in.rs fills it for one challenge and
+  sets the icons, which only src/icons/icon.rs names.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxSignInDialog" parent="GtkWindow">
+    <property name="modal">true</property>
+    <property name="resizable">false</property>
+    <property name="destroy-with-parent">true</property>
+    <property name="hide-on-close">false</property>
+    <!-- .auth-dialog{width:535px} -->
+    <property name="default-width">535</property>
+    <property name="titlebar">
+      <object class="GtkBox">
+        <property name="visible">false</property>
+      </object>
+    </property>
+    <property name="accessible-role">dialog</property>
+    <style>
+      <class name="ox"/>
+      <class name="ox-dialog"/>
+      <class name="sign-in-dialog"/>
+    </style>
+    <property name="child">
+      <object class="GtkWindowHandle">
+        <property name="child">
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">9</property>
+                <style>
+                  <class name="sign-in-caption"/>
+                </style>
+                <child>
+                  <object class="GtkImage" id="caption_glyph">
+                    <style>
+                      <class name="sign-in-shield"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label">OpenXplorer Security</property>
+                    <property name="hexpand">true</property>
+                    <property name="xalign">0</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="close_button">
+                    <property name="tooltip-text">Cancel sign-in</property>
+                    <property name="focus-on-click">false</property>
+                    <accessibility>
+                      <property name="label">Cancel sign-in</property>
+                    </accessibility>
+                    <style>
+                      <class name="sign-in-close"/>
+                    </style>
+                    <child>
+                      <object class="GtkImage" id="close_glyph"/>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStack" id="pages">
+                <property name="vhomogeneous">false</property>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">password</property>
+                    <property name="child">
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <style>
+                          <class name="sign-in-body"/>
+                        </style>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="spacing">16</property>
+                            <style>
+                              <class name="sign-in-heading"/>
+                            </style>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="valign">center</property>
+                                <property name="halign">start</property>
+                                <style>
+                                  <class name="sign-in-device"/>
+                                </style>
+                                <child>
+                                  <object class="GtkImage" id="device_glyph">
+                                    <property name="halign">center</property>
+                                    <property name="valign">center</property>
+                                    <property name="width-request">52</property>
+                                    <property name="height-request">52</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="valign">center</property>
+                                <property name="spacing">5</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label">Enter network credentials</property>
+                                    <property name="xalign">0</property>
+                                    <property name="wrap">true</property>
+                                    <style>
+                                      <class name="dialog-title"/>
+                                    </style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel" id="host_label">
+                                    <property name="xalign">0</property>
+                                    <property name="wrap">true</property>
+                                    <property name="wrap-mode">word-char</property>
+                                    <style>
+                                      <class name="dialog-message"/>
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="description_label">
+                            <property name="xalign">0</property>
+                            <property name="wrap">true</property>
+                            <property name="max-width-chars">60</property>
+                            <style>
+                              <class name="dialog-message"/>
+                              <class name="sign-in-description"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="spacing">9</property>
+                            <style>
+                              <class name="sign-in-target"/>
+                            </style>
+                            <child>
+                              <object class="GtkImage" id="target_glyph"/>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="target_label">
+                                <property name="xalign">0</property>
+                                <property name="ellipsize">end</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Username</property>
+                            <property name="xalign">0</property>
+                            <property name="mnemonic-widget">username_entry</property>
+                            <style>
+                              <class name="field-label"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkEntry" id="username_entry">
+                            <property name="placeholder-text">Your network username</property>
+                            <property name="max-length">512</property>
+                            <property name="activates-default">true</property>
+                            <property name="input-hints">no-spellcheck</property>
+                            <accessibility>
+                              <property name="label">Username</property>
+                            </accessibility>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Password</property>
+                            <property name="xalign">0</property>
+                            <property name="mnemonic-widget">password_entry</property>
+                            <style>
+                              <class name="field-label"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkOverlay">
+                            <property name="child">
+                              <object class="GtkEntry" id="password_entry">
+                                <property name="placeholder-text">Password</property>
+                                <property name="max-length">16384</property>
+                                <property name="visibility">false</property>
+                                <property name="input-purpose">password</property>
+                                <property name="activates-default">true</property>
+                                <!-- Keeps the password in non-pageable
+                                     memory, as GtkPasswordEntry does. -->
+                                <property name="buffer">
+                                  <object class="GtkPasswordEntryBuffer"/>
+                                </property>
+                                <accessibility>
+                                  <property name="label">Password</property>
+                                </accessibility>
+                                <style>
+                                  <class name="sign-in-password"/>
+                                </style>
+                              </object>
+                            </property>
+                            <child type="overlay">
+                              <object class="GtkToggleButton" id="reveal_button">
+                                <property name="halign">end</property>
+                                <property name="valign">center</property>
+                                <property name="tooltip-text">Show password</property>
+                                <property name="focus-on-click">false</property>
+                                <accessibility>
+                                  <property name="label">Show or hide password</property>
+                                </accessibility>
+                                <style>
+                                  <class name="sign-in-eye"/>
+                                </style>
+                                <child>
+                                  <object class="GtkImage" id="reveal_glyph"/>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkCheckButton" id="remember_check">
+                            <property name="label">Remember my credentials</property>
+                            <style>
+                              <class name="sign-in-remember"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="spacing">7</property>
+                            <style>
+                              <class name="sign-in-note"/>
+                            </style>
+                            <child>
+                              <object class="GtkImage" id="note_glyph">
+                                <property name="valign">start</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="note_label">
+                                <property name="xalign">0</property>
+                                <property name="wrap">true</property>
+                                <property name="hexpand">true</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="guest_button">
+                            <property name="label">Connect as guest</property>
+                            <property name="halign">start</property>
+                            <property name="visible">false</property>
+                            <style>
+                              <class name="sign-in-guest"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="error_label">
+                            <property name="visible">false</property>
+                            <property name="xalign">0</property>
+                            <property name="wrap">true</property>
+                            <property name="wrap-mode">word-char</property>
+                            <property name="accessible-role">alert</property>
+                            <style>
+                              <class name="dialog-error"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">question</property>
+                    <property name="child">
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <style>
+                          <class name="sign-in-body"/>
+                        </style>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">Network connection</property>
+                            <property name="xalign">0</property>
+                            <style>
+                              <class name="dialog-title"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <!-- The server's question keeps its line breaks,
+                               as `white-space: pre-wrap` did. -->
+                          <object class="GtkLabel" id="question_label">
+                            <property name="xalign">0</property>
+                            <property name="wrap">true</property>
+                            <property name="wrap-mode">word-char</property>
+                            <property name="max-width-chars">60</property>
+                            <property name="selectable">true</property>
+                            <style>
+                              <class name="dialog-message"/>
+                              <class name="sign-in-description"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkFlowBox" id="choices">
+                            <property name="selection-mode">none</property>
+                            <property name="halign">end</property>
+                            <property name="column-spacing">10</property>
+                            <property name="row-spacing">10</property>
+                            <property name="max-children-per-line">4</property>
+                            <style>
+                              <class name="sign-in-choices"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox" id="actions">
+                <property name="halign">fill</property>
+                <property name="spacing">10</property>
+                <style>
+                  <class name="dialog-actions"/>
+                </style>
+                <child>
+                  <object class="GtkButton" id="cancel_button">
+                    <property name="label">Cancel</property>
+                    <property name="hexpand">true</property>
+                    <property name="halign">end</property>
+                    <style>
+                      <class name="bordered"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="connect_button">
+                    <property name="label">Connect</property>
+                    <style>
+                      <class name="accent"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+</interface>

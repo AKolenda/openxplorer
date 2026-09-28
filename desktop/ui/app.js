@@ -58,13 +58,33 @@ function icon(name, size=18) {
   const p=document.createElementNS(NS,'path');p.setAttribute('d',paths[name]||paths.documents);s.append(p);return s;
 }
 function svgEl(tag,attrs){const e=document.createElementNS(NS,tag);for(const[k,v]of Object.entries(attrs))e.setAttribute(k,v);return e;}
+function appendFolderArt(target){
+  target.append(svgEl('path',{d:'M4 12a3 3 0 0 1 3-3h12l5 5h17a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z',fill:'#d99a22'}));
+  target.append(svgEl('path',{d:'M5 16h36v6H5z',fill:'#fff0bd'}));
+  target.append(svgEl('path',{d:'M4 20h17l4-4h17a3 3 0 0 1 3 3l-2 19a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z',fill:'#ffce56'}));
+  target.append(svgEl('path',{d:'M4 25h40l-1 13a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z',fill:'#f7bd40'}));
+  target.append(svgEl('path',{d:'M6 21h15l4-4h16',fill:'none',stroke:'#fff0a9','stroke-width':'1'}));
+}
+// Windows-style network location: a folder (or another glyph, such as a
+// server or a relocated Documents folder) on a short stem joined to a green
+// network pipe. The pipe carries the shared-bar class that marks network
+// locations; a glyph keeps the currentColor set on the outer icon.
+function networkIcon(size=24,glyph=null){
+  const s=svgEl('svg',{viewBox:'0 0 48 48',width:size,height:size,'aria-hidden':'true'});s.classList.add('svg-icon');
+  s.dataset.icon='network-'+(glyph||'folder');
+  if(glyph){const g=icon(glyph);g.removeAttribute('class');for(const[k,v]of Object.entries({x:8,y:0,width:32,height:32,'stroke-width':1.8}))g.setAttribute(k,v);s.append(g);}
+  else{const g=svgEl('g',{transform:'translate(3.84 -4.1) scale(.84)'});appendFolderArt(g);s.append(g);}
+  const pipe=svgEl('g',{class:'shared-bar'});
+  pipe.append(svgEl('rect',{x:21.5,y:30,width:5,height:9,fill:'#23873f'}));
+  pipe.append(svgEl('rect',{x:22.5,y:30,width:1.6,height:9,fill:'#6fd989'}));
+  pipe.append(svgEl('rect',{x:2,y:38,width:44,height:8,rx:2.5,fill:'#23873f'}));
+  pipe.append(svgEl('rect',{x:3,y:39,width:42,height:3,rx:1.5,fill:'#62cf7c'}));
+  pipe.append(svgEl('rect',{x:3,y:42,width:42,height:3,rx:1.5,fill:'#35a854'}));
+  s.append(pipe);return s;
+}
 function folderIcon(size=24,mark=''){
   const s=svgEl('svg',{viewBox:'0 0 48 48',width:size,height:size,'aria-hidden':'true'});s.classList.add('svg-icon');
-  s.append(svgEl('path',{d:'M4 12a3 3 0 0 1 3-3h12l5 5h17a3 3 0 0 1 3 3v20a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z',fill:'#d99a22'}));
-  s.append(svgEl('path',{d:'M5 16h36v6H5z',fill:'#fff0bd'}));
-  s.append(svgEl('path',{d:'M4 20h17l4-4h17a3 3 0 0 1 3 3l-2 19a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z',fill:'#ffce56'}));
-  s.append(svgEl('path',{d:'M4 25h40l-1 13a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z',fill:'#f7bd40'}));
-  s.append(svgEl('path',{d:'M6 21h15l4-4h16',fill:'none',stroke:'#fff0a9','stroke-width':'1'}));
+  appendFolderArt(s);
   if(mark){const t=svgEl('text',{x:28,y:34,'font-size':13,'text-anchor':'middle',fill:'#936d11','font-family':'sans-serif','font-weight':600});t.textContent=mark;s.append(t);}return s;
 }
 function isZipEntry(entry){return !!entry&&!entry.isDir&&(/\.zip$/i.test(entry.name||'')||['application/zip','application/x-zip','application/x-zip-compressed'].includes(entry.contentType));}
@@ -274,9 +294,9 @@ function renderTabs(){
     tab.setAttribute('role','tab');tab.setAttribute('aria-selected',String(t.id===state.activeId));tab.tabIndex=t.id===state.activeId?0:-1;
     const snapshot=snapshotFor(t);
     if(snapshot)tab.classList.add('snapshot-tab');
-    const im=t.uri==='settings:'?icon('settings'):t.uri==='network:'?icon('network'):deviceLocation(t.uri)?icon('phone'):folderIcon(17);
+    const im=t.uri==='settings:'?icon('settings'):t.uri==='network:'?icon('network'):deviceLocation(t.uri)?icon('phone'):networkLocation(t.uri)?networkIcon(17):folderIcon(17);
     const wrap=elem('span','tab-icon-wrap');wrap.append(im);im.classList.add('tab-icon');
-    if(networkLocation(t.uri)){wrap.classList.add('shared');wrap.append(elem('span','shared-bar'));wrap.title='Network location';}
+    if(networkLocation(t.uri)){wrap.classList.add('shared');wrap.title='Network location';}
     tab.title=displayUri(t.uri)+(networkLocation(t.uri)?' · Network location':'')+(t.savedDialog?' · Properties open':'');
     tab.append(wrap,elem('span','tab-title',titleFor(t.uri)));
     if(snapshot){const badge=elem('span','snapshot-tab-badge','Previous version');badge.prepend(icon('clock',12));badge.title='Previous version · '+snapshot.label;tab.append(badge);tab.title+=' · Previous version · '+snapshot.label;tab.setAttribute('aria-label',titleFor(t.uri)+' — Previous version — '+snapshot.label);}
@@ -338,8 +358,10 @@ function renderSidebar(){
     const b=button('',()=>opts.volume?mountVolume(opts.volume):navigate(uri),'side-entry'+(sameLocation(current,uri)?' selected':'')+(opts.indent?' indent':''));
     b.dataset.uri=uri||'';bindMiddleOpen(b,()=>opts.volume?null:uri);
     if(opts.expand){const v=icon('down');v.classList.add('expand');b.append(v);}
-    const im=opts.folder?folderIcon(19):icon(ico);if(opts.color)im.style.color=opts.color;
-    const wrap=elem('span','side-icon');wrap.append(im);if(opts.shared||uri?.startsWith('smb:')){wrap.classList.add('shared');wrap.append(elem('span','shared-bar'));wrap.title='Network share';}b.append(wrap,elem('span','name',label));
+    const shared=opts.shared||uri?.startsWith('smb:');
+    const glyph=opts.folder||ico==='folder'?null:ico==='server'?(opts.network?.kind==='server'?'server':null):ico;
+    const im=shared?networkIcon(19,glyph):opts.folder?folderIcon(19):icon(ico);if(opts.color)im.style.color=opts.color;
+    const wrap=elem('span','side-icon');wrap.append(im);if(shared){wrap.classList.add('shared');wrap.title='Network share';}b.append(wrap,elem('span','name',label));
     if(opts.pin){const p=elem('span','pin');p.append(icon('pin'));b.append(p);}
     if(!opts.volume&&fileDragEntry({uri}))makeFileDraggable(b,()=>[{uri,name:label,isDir:true,fromSidebar:true}]);
     b.title=uri?displayUri(uri):label;

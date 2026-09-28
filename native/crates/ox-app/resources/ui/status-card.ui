@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  A status card (src/settings_page/status_card.rs), the settings mockup's
+  `.hero`: a round badge with the category's glyph, the one-line state and
+  the line under it, the milestone when the preview lacks the card's
+  actions, and the main actions at the right. resources/skin/settings.css
+  tints it.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxStatusCard" parent="GtkBox">
+    <property name="spacing">16</property>
+    <style>
+      <class name="status-card"/>
+    </style>
+    <child>
+      <object class="GtkBox">
+        <property name="valign">center</property>
+        <property name="halign">start</property>
+        <style>
+          <class name="status-badge"/>
+        </style>
+        <child>
+          <object class="GtkImage" id="glyph">
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <property name="accessible-role">presentation</property>
+            <style>
+              <class name="glyph"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="hexpand">true</property>
+        <property name="valign">center</property>
+        <child>
+          <object class="GtkLabel" id="title_label">
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <property name="hexpand">true</property>
+            <style>
+              <class name="status-title"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="text_label">
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <property name="hexpand">true</property>
+            <style>
+              <class name="status-text"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="notice_label">
+            <property name="visible">false</property>
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <property name="hexpand">true</property>
+            <style>
+              <class name="setting-notice"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="actions">
+        <property name="spacing">8</property>
+        <property name="valign">center</property>
+        <property name="halign">start</property>
+      </object>
+    </child>
+  </template>
+</interface>

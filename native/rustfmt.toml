@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# rustfmt's defaults, except max_width: 110 columns instead of 100. rustfmt
+# scales its call and method-chain limits with max_width, so at 100 it would
+# split many GTK and GIO signatures, method chains and assertions in the crates
+# over several lines each.
+max_width = 110

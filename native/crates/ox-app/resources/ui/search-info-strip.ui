@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- The search information strip above the columns while searching
+     (src/search/info_strip.rs; renderSearchInfo in app.js): the glyph,
+     what was searched, the scope, "Cache this folder", the note on cached
+     results and the clear button. -->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxSearchInfoStrip" parent="GtkBox">
+    <property name="visible">false</property>
+    <property name="spacing">10</property>
+    <accessibility>
+      <property name="label">Search information</property>
+    </accessibility>
+    <style>
+      <class name="search-info"/>
+    </style>
+    <child>
+      <object class="GtkImage" id="glyph">
+        <property name="valign">center</property>
+        <property name="accessible-role">presentation</property>
+        <style>
+          <class name="glyph"/>
+          <class name="search-glyph"/>
+        </style>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="caption">
+        <property name="xalign">0</property>
+        <property name="ellipsize">end</property>
+        <style>
+          <class name="search-caption"/>
+        </style>
+      </object>
+    </child>
+    <child>
+      <!-- The scope list is a ChoiceButton, added in code. -->
+      <object class="GtkBox" id="scope_slot">
+        <property name="valign">center</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkButton" id="cache_button">
+        <property name="valign">center</property>
+        <property name="halign">end</property>
+        <property name="hexpand">true</property>
+        <property name="tooltip-text">Cache this folder for search</property>
+        <property name="child">
+          <object class="GtkBox">
+            <property name="spacing">6</property>
+            <child>
+              <object class="GtkImage" id="cache_glyph">
+                <property name="accessible-role">presentation</property>
+                <style>
+                  <class name="glyph"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label">Cache this folder</property>
+              </object>
+            </child>
+          </object>
+        </property>
+        <accessibility>
+          <property name="label">Cache this folder</property>
+        </accessibility>
+        <style>
+          <class name="cache-link"/>
+        </style>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="freshness">
+        <property name="hexpand">true</property>
+        <property name="xalign">1</property>
+        <property name="ellipsize">end</property>
+        <style>
+          <class name="cache-freshness"/>
+        </style>
+      </object>
+    </child>
+    <child>
+      <object class="GtkButton" id="clear_button">
+        <property name="valign">center</property>
+        <property name="tooltip-text">Clear search</property>
+        <property name="child">
+          <object class="GtkImage" id="clear_glyph">
+            <property name="accessible-role">presentation</property>
+            <style>
+              <class name="glyph"/>
+            </style>
+          </object>
+        </property>
+        <accessibility>
+          <property name="label">Clear search</property>
+        </accessibility>
+        <style>
+          <class name="search-clear"/>
+        </style>
+      </object>
+    </child>
+  </template>
+</interface>

@@ -1,0 +1,679 @@
+{
+  "schema": 1,
+  "scope": "Legacy bridge operations only. features.toml lists the user-visible behaviours, the Dolphin baseline and GNOME integration.",
+  "methods": {
+    "activateItem": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "applications": {
+      "status": "native-tested",
+      "note": "The Open with dialog lists, filters and chooses the installed applications.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::open_with_lists_filters_and_launches_the_chosen_application",
+        "native/crates/ox-app/src/integration/applications.rs::a_folder_lists_installed_applications_but_never_openxplorer"
+      ]
+    },
+    "archiveExtract": {
+      "status": "native-tested",
+      "note": "Extract all… and Extract here run the ox-core extractor with the write guard, the operation panel and Cancel, and show or list the result in the native window.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/archives.rs::extract_all_unpacks_into_a_new_folder_and_shows_it",
+        "native/crates/ox-app/src/window/tests/archives.rs::extract_here_uses_the_next_free_name",
+        "native/crates/ox-core/tests/archive_extract.rs::extracts_files_folders_and_empty_files_into_a_new_folder",
+        "native/crates/ox-core/tests/archive_extract_checks.rs::unsafe_member_paths_are_refused_with_nothing_written",
+        "native/crates/ox-core/tests/archive_extract_rollback.rs::a_crc_failure_rolls_back",
+        "native/crates/ox-core/tests/archive_extract_rollback.rs::a_folder_created_meanwhile_is_never_replaced",
+        "native/crates/ox-core/tests/archive_extract_rollback.rs::cancelling_while_writing_removes_the_staging_folder",
+        "native/crates/ox-core/tests/archive_extract_dispatch.rs::member_destinations_are_checked_before_any_staging",
+        "native/crates/ox-core/tests/archive_gio.rs::extraction_through_gio_never_applies_archive_permissions"
+      ]
+    },
+    "archiveInspect": {
+      "status": "native-tested",
+      "note": "The Extract compressed folder dialog checks the archive on a worker and shows the summary before Extract is allowed.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/archives.rs::extract_all_unpacks_into_a_new_folder_and_shows_it",
+        "native/crates/ox-app/src/window/tests/archives.rs::extract_refuses_a_bad_name_and_keeps_the_dialog_open",
+        "native/crates/ox-core/tests/archive_extract_checks.rs::inspection_summarises_and_writes_nothing",
+        "native/crates/ox-core/tests/archive_extract_dispatch.rs::inspection_and_extraction_agree",
+        "native/crates/ox-core/tests/archive_gio.rs::background_variants_return_the_blocking_results"
+      ]
+    },
+    "archiveList": {
+      "status": "native-tested",
+      "note": "The Compressed folder dialog lists the archive through ox-core in the native window, folder by folder.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/archives.rs::opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy",
+        "native/crates/ox-core/tests/archive_browse.rs::listing_extracts_nothing",
+        "native/crates/ox-core/tests/archive_browse.rs::rows_list_folders_first_by_name_ignoring_case",
+        "native/crates/ox-core/tests/archive_browse.rs::dangerous_members_are_hidden_and_counted",
+        "native/crates/ox-core/tests/archive_browse.rs::more_than_100000_members_are_left_to_an_archive_manager",
+        "native/crates/ox-core/tests/archive_gio.rs::a_real_zip_is_read_through_short_reads"
+      ]
+    },
+    "archiveOpenMember": {
+      "status": "native-tested",
+      "note": "The Compressed folder dialog copies one member privately through ox-core and opens the copy with its default application.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/archives.rs::opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy",
+        "native/crates/ox-core/tests/archive_browse.rs::only_the_selected_member_is_copied_read_only",
+        "native/crates/ox-core/tests/archive_browse.rs::a_script_is_not_opened",
+        "native/crates/ox-core/tests/archive_browse.rs::encrypted_and_oversized_members_are_listed_but_not_opened",
+        "native/crates/ox-core/tests/archive_gio.rs::previews_go_to_the_private_runtime_directory"
+      ]
+    },
+    "authReply": {
+      "status": "native-tested",
+      "note": "The window's sign-in dialog answers GVfs through ox-core's prompts: accounts, session or permanent remembering, guest, questions, refusals kept in the dialog, one challenge at a time, and cancelling with the dialog or the window. Tested on emitted GVfs signals without a server.",
+      "evidence": [
+        "native/crates/ox-app/src/network/sign_in_queue/tests.rs::connect_hands_gvfs_the_account_and_empties_the_password",
+        "native/crates/ox-app/src/network/sign_in_queue/tests.rs::connect_as_guest_signs_in_anonymously",
+        "native/crates/ox-app/src/network/sign_in_queue/tests.rs::a_question_offers_its_answers_and_cancel",
+        "native/crates/ox-app/src/network/sign_in_queue/tests.rs::challenges_are_shown_one_at_a_time_in_order",
+        "native/crates/ox-app/src/window/tests/network.rs::closing_the_window_aborts_its_sign_ins"
+      ]
+    },
+    "beginFileDrag": {
+      "status": "native-tested",
+      "note": "GTK drag sources on the folder views and the sidebar prepare the selection or the place on the press itself; the refusals and the SMB export follow native_file_drag.py.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/drag_and_drop.rs::dragging_a_selected_item_carries_the_whole_selection",
+        "native/crates/ox-app/src/window/tests/drag_and_drop.rs::a_drag_fades_its_items_and_pauses_clicks_until_shortly_after_it_ends",
+        "native/crates/ox-app/src/window/file_drag.rs::a_sidebar_folder_can_be_dragged_and_a_page_cannot",
+        "native/crates/ox-app/src/window/file_drag.rs::dragging_an_unmounted_smb_item_says_which_apps_can_open_it"
+      ]
+    },
+    "beginTabDrag": {
+      "status": "native-tested",
+      "note": "The tab strip is a GTK drag source offering the tab as a process-local value; a busy window or a close button starts no drag.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tab_moves/drag.rs::no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy",
+        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_drag_offers_the_tab_to_this_process_only",
+        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer"
+      ]
+    },
+    "bookmark": {
+      "status": "core-tested",
+      "note": "Adding, re-adding and removing stored pins and network locations is tested, including UNC normalisation, credential refusal and two windows writing at once; the native pin, unpin and network-location UI remains pending.",
+      "evidence": [
+        "native/crates/ox-core/src/settings/tests.rs::settings_private_and_atomic",
+        "native/crates/ox-core/src/settings/tests.rs::a_bookmark_with_credentials_is_refused_and_nothing_is_saved",
+        "native/crates/ox-core/src/settings/tests.rs::two_windows_pins_not_lost",
+        "native/crates/ox-core/src/settings/mutate.rs::unpin_removes_order_only_not_share",
+        "native/crates/ox-core/src/settings/mutate.rs::re_adding_a_bookmark_moves_it_last_with_the_new_label"
+      ]
+    },
+    "braveRestore": {
+      "status": "core-tested",
+      "note": "The dialog's Restore previous calls ox-core's restore for exactly one profile with consent; not tested from the dialog.",
+      "evidence": [
+        "native/crates/ox-core/tests/integration_brave/restore.rs::restoring_puts_back_only_the_download_folders"
+      ]
+    },
+    "braveStatus": {
+      "status": "native-tested",
+      "note": "The Brave dialog lists the native profiles and says whether Brave runs.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::the_brave_dialog_lists_profiles_and_needs_consent",
+        "native/crates/ox-app/src/integration/brave_dialog.rs::the_status_says_whether_brave_can_be_changed_now"
+      ]
+    },
+    "braveSync": {
+      "status": "core-tested",
+      "note": "Apply to Brave calls ox-core's sync after its consent and selection checks; the dialog's refusals are tested, a sync from the dialog is not.",
+      "evidence": [
+        "native/crates/ox-core/tests/integration_brave/sync.rs::syncing_changes_only_the_two_download_folders",
+        "native/crates/ox-app/src/integration/tests.rs::the_brave_dialog_lists_profiles_and_needs_consent"
+      ]
+    },
+    "cacheClear": {
+      "status": "core-tested",
+      "note": "Clearing a root's names is ported; \"Clear cached names only\" uses it. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/src/search/index.rs::clearing_a_root_keeps_it_as_not_indexed"
+      ]
+    },
+    "cacheRefresh": {
+      "status": "core-tested",
+      "note": "Refreshing one root or all of them is ported; Refresh cache, Refresh all and F5 during a search use it. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/tests/search_live.rs::refresh_all_rescans_every_enabled_root"
+      ]
+    },
+    "cacheRemove": {
+      "status": "core-tested",
+      "note": "Removing a root is ported and tested in ox-core. As in the Python app, no control calls it: \"Remove from index\" switches a folder off, as the Python check box did.",
+      "evidence": [
+        "native/crates/ox-core/src/search/index.rs::removing_a_root_deletes_it_and_its_entries"
+      ]
+    },
+    "cacheSet": {
+      "status": "core-tested",
+      "note": "Enabling and disabling a root is ported, with the device and server-list refusals; the window's cache toggle and the Indexed folders page use it. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/tests/search_service.rs::enabling_a_root_scans_it_and_disabling_removes_its_names",
+        "native/crates/ox-core/src/search/index.rs::a_root_is_labelled_with_its_path_unless_named",
+        "native/crates/ox-app/src/settings_page/indexed_folders/commands.rs::a_typed_folder_is_read_relative_to_the_folder_shown_before"
+      ]
+    },
+    "cacheStatus": {
+      "status": "core-tested",
+      "note": "The cache status (roots, counts, update modes, errors) is ported; the app reads it after changes, every 5 s while a window is shown and on focus. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/src/search/index.rs::the_status_counts_the_entries_of_enabled_roots",
+        "native/crates/ox-app/src/settings_page/indexed_folders/root_row.rs::a_folder_says_how_many_names_it_holds_and_how_it_keeps_current"
+      ]
+    },
+    "cacheStop": {
+      "status": "core-tested",
+      "note": "Stopping a running scan is ported and keeps the earlier results; the Indexed folders page offers Stop indexing while a folder is indexing, which no GTK test clicks yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/search_service.rs::stopping_a_scan_keeps_the_earlier_results"
+      ]
+    },
+    "cancel": {
+      "status": "native-tested",
+      "note": "Core cancellation is regression-tested: the transfer engine stops mid-copy and removes its partial stage, a replacement cancelled after the old item is moved aside still finishes so the name is never lost, a local delete cancelled during its preflight keeps the file, GIO copy, move and delete refuse an already-cancelled token, and a listing stops after a batch. Native: Cancel on the transfer panel cancels the running operation, and the panel reads \"Cancelling…\".",
+      "evidence": [
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::cancellation_during_copy_removes_partial_stage_and_stops_the_batch",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_old_name",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::cancellation_never_hides_a_backup_that_requires_manual_recovery",
+        "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs::cancellation_prevents_copy_move_and_recursive_delete",
+        "native/crates/ox-core/tests/gio_node_cases/removal.rs::cancellation_during_local_delete_preflight_preserves_the_file",
+        "native/crates/ox-core/src/entry/enumerate.rs::dropping_the_listing_stops_delivery",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::the_transfer_panel_shows_the_running_operation_and_cancel_stops_it"
+      ]
+    },
+    "chrome": {
+      "status": "pending",
+      "note": "Legacy WebKit transport mechanism. Native toolkit replacement still needs equivalent interaction/lifecycle verification; a deleted bridge is not proof of feature parity.",
+      "evidence": []
+    },
+    "clipboardConsume": {
+      "status": "native-tested",
+      "note": "Validated GNOME/KDE/custom formats and cut identity tested. Native: A move-paste removes the moved items from the same cut and clears the clipboard once nothing is left.",
+      "evidence": [
+        "native/crates/ox-core/src/clipboard/tests.rs::gnome_cut_keeps_identity_across_reads_and_consumes_only_successful_items",
+        "native/crates/ox-core/src/clipboard/tests.rs::old_cut_cannot_consume_a_changed_payload_or_a_copy",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::cut_then_paste_moves_the_items_and_empties_the_cut"
+      ]
+    },
+    "clipboardGet": {
+      "status": "native-tested",
+      "note": "Validated GNOME/KDE/custom formats and cut identity tested. Native: The window reads the display clipboard asynchronously in format order, again when it changes and when the window becomes active; plain text is no file list.",
+      "evidence": [
+        "native/crates/ox-core/src/clipboard/tests.rs::kde_requires_an_exact_short_cut_marker",
+        "native/crates/ox-core/src/clipboard/tests.rs::uri_list_discards_comments_and_deduplicates_canonical_addresses",
+        "native/crates/ox-core/src/clipboard/tests.rs::invalid_external_payloads_fail_closed",
+        "native/crates/ox-core/src/clipboard/tests.rs::external_fingerprint_matches_the_python_clipboard",
+        "native/crates/ox-core/src/clipboard/tests.rs::legacy_line_endings_do_not_drop_valid_selections",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::text_on_the_clipboard_is_no_file_list_and_disables_paste",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::a_cut_from_dolphin_pastes_as_a_move",
+        "native/crates/ox-app/src/window/tests/clipboard_interop.rs::a_conversion_the_owner_refuses_is_no_file_list",
+        "native/crates/ox-app/src/window/tests/clipboard_interop.rs::a_read_overtaken_by_an_owner_change_is_dropped"
+      ]
+    },
+    "clipboardSet": {
+      "status": "native-tested",
+      "note": "Validated GNOME/KDE/custom formats and cut identity tested. Native: Cut and Copy claim the display clipboard with all four formats.",
+      "evidence": [
+        "native/crates/ox-core/src/clipboard/tests.rs::every_advertised_format_round_trips",
+        "native/crates/ox-core/src/clipboard/tests.rs::custom_payload_preserves_token_and_rejects_invalid_operations",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy"
+      ]
+    },
+    "clipboardText": {
+      "status": "native-tested",
+      "note": "Native: Copy path (its button, its menu item and Ctrl+Shift+C or Ctrl+Alt+C) puts the display path on the display clipboard as text with gdk::Clipboard::set_text, which cannot fail, so the Python fallback dialog has no trigger. The copy buttons of Properties and the mount setup are proven with their own features.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_copies_the_selected_items_address_or_the_folders",
+        "native/crates/ox-app/src/window/tests/command_bar.rs::copy_path_runs_on_explorers_and_dolphins_keys",
+        "native/crates/ox-app/src/window/copy_path.rs::local_smb_and_device_items_copy_their_display_path"
+      ]
+    },
+    "connect": {
+      "status": "core-tested",
+      "note": "Map network location validates, mounts and checks the share in ox-core; the native dialog, its errors and its refusals are tested. Connecting to a real share needs a server (manual acceptance).",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::map_network_location_keeps_its_errors_inside_the_dialog",
+        "native/crates/ox-app/src/window/tests/network.rs::a_server_being_signed_out_is_neither_listed_nor_mapped",
+        "native/crates/ox-core/src/network/mounting/tests.rs::map_network_location_refuses_bad_input_before_mounting"
+      ]
+    },
+    "create": {
+      "status": "native-tested",
+      "note": "ox_core::ops::create_item ports create_item in desktop/gio_backend.py and the checks of the create branch of dispatch: name validation, the refusal inside an SMB server listing, the snapshot write guard, and an exclusive make_directory or create that never overwrites. Native: The New folder dialog runs it: a refused name stays in the dialog, the new folder is selected and Undo removes it.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_create.rs::new_folder_and_new_file_appear_under_their_names",
+        "native/crates/ox-core/tests/ops_create.rs::creating_onto_a_taken_name_never_overwrites",
+        "native/crates/ox-core/tests/ops_create.rs::invalid_names_are_refused_before_anything_is_created",
+        "native/crates/ox-core/tests/ops_create.rs::a_server_listing_or_a_protected_folder_gets_no_new_items",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::new_folder_asks_for_a_name_then_creates_and_selects_the_folder",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten"
+      ]
+    },
+    "createTemplate": {
+      "status": "native-tested",
+      "note": "ox_core::ops::create_from_template ports create_from_template in desktop/file_services.py with the OPS-048 rules: the template must be in a fresh list, it is opened without following links or blocking and checked on the descriptor, read in bounded, cancellable blocks, staged in a private file that is published without overwriting and deleted when it is not published. Native: Create in the New from template dialog runs it; the new file is selected.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_create.rs::a_starter_writes_its_content_to_a_private_new_file",
+        "native/crates/ox-core/tests/ops_create.rs::a_user_template_is_copied_without_its_permissions",
+        "native/crates/ox-core/tests/ops_create.rs::a_template_the_list_does_not_offer_is_refused",
+        "native/crates/ox-core/tests/ops_create.rs::a_template_never_overwrites_and_never_goes_to_a_server_listing",
+        "native/crates/ox-core/src/ops/new_from_template.rs::a_template_swapped_for_a_link_or_a_fifo_is_refused_without_blocking",
+        "native/crates/ox-core/src/ops/new_from_template.rs::a_name_taken_while_publishing_is_kept_and_the_stage_file_is_deleted",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::a_new_menu_file_starts_from_its_template_and_is_created_from_it"
+      ]
+    },
+    "desktopDefault": {
+      "status": "native-tested",
+      "note": "Make OpenXplorer default, with the Show in folder and ZIP options, from Settings > Default apps.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::making_openxplorer_the_default_can_be_undone"
+      ]
+    },
+    "desktopRestore": {
+      "status": "native-tested",
+      "note": "Restore previous in Settings > Default apps puts the recorded handlers back and turns Show in folder off.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::making_openxplorer_the_default_can_be_undone"
+      ]
+    },
+    "desktopStatus": {
+      "status": "native-tested",
+      "note": "Settings > Default apps reads the handlers, the restore record and the Show in folder owner off the main thread.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/tests.rs::default_apps_reads_which_app_opens_each_route",
+        "native/crates/ox-app/src/integration/status.rs::a_route_names_openxplorer_the_app_its_id_or_nothing",
+        "native/crates/ox-app/src/integration/status.rs::show_in_folder_says_who_answers_it"
+      ]
+    },
+    "detachTab": {
+      "status": "native-tested",
+      "note": "Move tab to new window and a tear-out build the new window in this process and remove the tab only after it has it.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tab_moves.rs::a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll",
+        "native/crates/ox-app/src/window/tab_moves.rs::moving_the_only_tab_to_a_new_window_closes_the_old_one",
+        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays"
+      ]
+    },
+    "discover": {
+      "status": "native-tested",
+      "note": "The Network page discovers servers on its first visit in three passes, merges them, and stops on Stop; ox-core reads GVfs's network browser without passwords. The page's tests use a fixed answer.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::the_network_page_discovers_servers_on_its_first_visit",
+        "native/crates/ox-app/src/network/discovery.rs::stop_ends_the_passes_and_keeps_what_was_found",
+        "native/crates/ox-core/src/network/discovery.rs::discovery_aborts_every_password_request"
+      ]
+    },
+    "environment": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "fileDragLayout": {
+      "status": "native-tested",
+      "note": "No layout is published: each drop target hit-tests a point in its own coordinates at its real size (folder rows and tiles, sidebar places, Quick access, crumbs and tabs).",
+      "evidence": [
+        "native/crates/ox-app/src/window/file_drop/targets.rs::a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown",
+        "native/crates/ox-app/src/window/file_drop/targets.rs::only_the_folder_under_a_drag_is_highlighted",
+        "native/crates/ox-app/src/window/file_drop/targets.rs::sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows",
+        "native/crates/ox-app/src/window/file_drop/targets.rs::a_crumb_takes_drops_for_its_folder"
+      ]
+    },
+    "focusWindow": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "folderSize": {
+      "status": "native-tested",
+      "note": "Calculate folder size, Calculate folder sizes and the Properties button scan on a worker with progress in the size-scan bar, Cancel scan and one scan per window; the results show in the Size column, the details pane and Properties. Mounting an unmounted share before the scan is not done yet.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::calculate_folder_size_shows_the_size_everywhere_the_folder_is",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::calculate_folder_sizes_measures_every_folder_shown_and_one_scan_runs_at_a_time",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::cancel_scan_stops_the_run_and_says_so"
+      ]
+    },
+    "handoffReady": {
+      "status": "native-tested",
+      "note": "The detached window is built and given the tab in this process before the source removes it, so there is no readiness message to wait for.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tab_moves.rs::a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll"
+      ]
+    },
+    "list": {
+      "status": "core-tested",
+      "note": "GIO enumeration covers batching, hidden files, symlinks and cancellation on temporary local folders. Remote authentication remains pending.",
+      "evidence": [
+        "native/crates/ox-core/tests/entry_enumeration.rs::listing_preserves_file_and_folder_metadata",
+        "native/crates/ox-core/src/entry/enumerate.rs::the_top_of_a_large_folder_arrives_first",
+        "native/crates/ox-core/src/entry/enumerate.rs::later_batches_are_merged_until_the_window_has_passed",
+        "native/crates/ox-core/tests/entry_enumeration.rs::hidden_items_are_listed_and_flagged",
+        "native/crates/ox-core/tests/entry_enumeration.rs::an_empty_folder_finishes_without_rows",
+        "native/crates/ox-core/src/entry/enumerate.rs::dropping_the_listing_stops_delivery",
+        "native/crates/ox-core/tests/entry_enumeration.rs::symlink_to_a_folder_is_browsable_without_recursing_into_it"
+      ]
+    },
+    "locationApply": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "locationCheck": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "mountPlan": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "mountVolume": {
+      "status": "core-tested",
+      "note": "Clicking an unmounted volume mounts it with GTK's mount operation and opens it; a volume that went away shows 'Could not mount device'. Mounting real media needs hardware (manual acceptance).",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::mounting_a_volume_that_went_away_says_so",
+        "native/crates/ox-core/src/network/volumes.rs::a_volume_that_went_away_is_reported_as_gone"
+      ]
+    },
+    "moveTabToWindow": {
+      "status": "native-tested",
+      "note": "Move tab to window… lists the other windows; a busy source or destination keeps the tab.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tab_moves.rs::a_tab_moved_into_another_window_goes_there_and_leaves_here",
+        "native/crates/ox-app/src/window/tab_moves.rs::move_tab_to_window_lists_the_other_windows",
+        "native/crates/ox-app/src/window/tab_moves.rs::a_busy_window_keeps_its_tabs_and_takes_none"
+      ]
+    },
+    "newWindow": {
+      "status": "native-tested",
+      "note": "New window (Ctrl+N, Settings, the windows menu and --new-window) opens a window in the same application.",
+      "evidence": [
+        "native/crates/ox-app/src/application/state.rs::ctrl_n_opens_another_window_at_the_current_folder",
+        "native/crates/ox-app/src/application/state.rs::new_window_opens_its_locations_in_a_window_of_its_own"
+      ]
+    },
+    "normalise": {
+      "status": "core-tested",
+      "note": "Canonical locations tested against Python and external address fixtures; address-bar integration is separate.",
+      "evidence": [
+        "native/crates/ox-core/tests/location_external.rs::normalise_matches_python",
+        "native/crates/ox-core/tests/location_python.rs::typed_addresses_are_normalised_like_core_py"
+      ]
+    },
+    "open": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "openTerminal": {
+      "status": "core-tested",
+      "note": "win.open-in-terminal runs ox-core's prepared terminal launch with the previous-versions write guard; no UI test starts a terminal.",
+      "evidence": [
+        "native/crates/ox-core/tests/integration_terminal/folder.rs::a_local_folder_opens_in_itself"
+      ]
+    },
+    "openWith": {
+      "status": "native-tested",
+      "note": "Open checks the chosen application again and launches it (recorded in the test); \"Always use this app\" is not exercised, as a test must not change associations.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::open_with_lists_filters_and_launches_the_chosen_application"
+      ]
+    },
+    "operate": {
+      "status": "native-tested",
+      "note": "Core operation and local GIO failure cases are regression-tested, and permanent deletion of phone folders is tested on a simulated MTP device. Native: Copy, move, Move to Trash, Shift+Delete and Duplicate run in the window one at a time with the transfer panel, Cancel and the completion report. Real SMB servers and phones still need the manual acceptance of native/ROADMAP.md.",
+      "evidence": [
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::recursive_copy_preserves_sources_hidden_files_links_and_modes",
+        "native/crates/ox-core/tests/transfer_cases/conflicts.rs::conflict_policies_never_overwrite_without_replace",
+        "native/crates/ox-core/tests/transfer_cases/replace.rs::replace_merges_folders_and_retains_destination_only_children",
+        "native/crates/ox-core/tests/transfer_cases/containment.rs::self_and_descendant_destinations_are_rejected_including_symlink_aliases",
+        "native/crates/ox-core/tests/transfer_cases/snapshots.rs::protected_descendants_stop_mutations_before_any_item_changes",
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::deleting_a_link_keeps_its_target",
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::unsupported_trash_never_falls_back_to_delete",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::native_move_failure_never_degrades_to_copy_then_delete",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::a_name_taken_while_copying_is_not_overwritten_at_publication",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::replacement_install_failure_or_false_success_restores_the_old_name",
+        "native/crates/ox-core/tests/transfer_cases/devices.rs::uploads_publish_by_one_same_folder_rename_from_a_staged_sibling",
+        "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs::complete_engine_stages_and_publishes_a_recursive_local_copy",
+        "native/crates/ox-core/tests/gio_node_cases/removal.rs::roots_and_whole_network_shares_are_refused_before_mutation",
+        "native/crates/ox-core/tests/gio_node_cases/removal.rs::protected_descendants_are_preflighted_before_gio_permanent_deletion",
+        "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs::cross_filesystem_move_is_refused_without_copying_or_removing_the_source",
+        "native/crates/ox-core/tests/transfer_cases/mtp_adapter.rs::the_engine_deletes_a_phone_folder_after_checking_every_item",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::cut_then_paste_moves_the_items_and_empties_the_cut",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::delete_asks_then_moves_to_the_trash_and_undo_restores",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::shift_delete_deletes_permanently_after_its_own_confirmation"
+      ]
+    },
+    "pin": {
+      "status": "core-tested",
+      "note": "Stored pin/network preferences and GIO pin classification tested; complete pin/reorder/unpin UI remains pending.",
+      "evidence": [
+        "native/crates/ox-core/src/settings/tests.rs::add_pin_preserves_file_tree",
+        "native/crates/ox-core/src/settings/tests.rs::a_pinned_batch_is_read_back_after_the_shown_order",
+        "native/crates/ox-core/src/settings/tests.rs::invalid_batch_writes_nothing",
+        "native/crates/ox-core/src/entry/inspect.rs::pin_inspects_browse_item_but_saves_real_share_target",
+        "native/crates/ox-core/src/entry/inspect.rs::verify_pin_uses_validated_target_not_browse_uri",
+        "native/crates/ox-core/src/entry/inspect.rs::verify_pin_rejects_regular_file"
+      ]
+    },
+    "preferences": {
+      "status": "core-tested",
+      "note": "Shared settings serialization and file locking implemented; complete native settings UI remains pending.",
+      "evidence": [
+        "native/crates/ox-core/src/settings/tests.rs::settings_private_and_atomic",
+        "native/crates/ox-core/src/settings/tests.rs::two_windows_preserve_each_others_preferences",
+        "native/crates/ox-core/src/settings/tests.rs::a_version_1_file_is_read_and_can_switch_to_the_system_theme",
+        "native/crates/ox-core/src/settings/tests/storage.rs::preferences_still_persist_in_private_storage",
+        "native/crates/ox-core/src/settings/tests/storage.rs::settings_lock_symlink_refused",
+        "native/crates/ox-core/src/settings/tests.rs::unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write"
+      ]
+    },
+    "previousVersions": {
+      "status": "native-tested",
+      "note": "The Previous versions tab looks versions up through GIO on a worker, lists them with their dates and offers Browse and Restore a copy in the native window.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::previous_versions_lists_the_snapshots_of_the_folder",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::a_file_without_snapshots_explains_that_none_were_found",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::browse_opens_the_snapshot_in_a_marked_tab_with_its_banner",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::restore_a_copy_copies_the_version_into_a_live_folder_only"
+      ]
+    },
+    "properties": {
+      "status": "native-tested",
+      "note": "The Properties dialog reads the item off the main thread and shows the General and Permissions tabs in the native window; Change app… waits for the Open with dialog.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::alt_enter_opens_the_properties_of_the_selected_file",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::properties_without_a_selection_describe_the_folder",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::properties_of_a_location_open_for_menus_outside_the_folder_view"
+      ]
+    },
+    "quit": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "rename": {
+      "status": "native-tested",
+      "note": "ox_core::ops::rename_item ports rename_item in desktop/gio_backend.py: name validation, the refusal of roots and whole SMB shares, the same-name no-op, the whole-tree snapshot write check, then a same-folder move that never overwrites. test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected of desktop/tests/gio_integration.py are ported. Native: F2 runs it on the name edited in place (or in the Rename dialog when the item is not on screen) with the base name selected; the renamed item stays selected and Undo and Redo walk the rename.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_rename.rs::rename_onto_a_taken_name_changes_nothing",
+        "native/crates/ox-core/tests/ops_rename.rs::a_folder_holding_a_protected_backup_is_not_renamed",
+        "native/crates/ox-core/tests/ops_rename.rs::a_folder_holding_a_configured_snapshot_folder_is_not_renamed",
+        "native/crates/ox-core/tests/ops_rename.rs::renaming_to_the_same_name_changes_nothing_and_leaves_nothing_to_undo",
+        "native/crates/ox-core/tests/ops_rename.rs::invalid_names_roots_and_whole_shares_are_refused",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::rename_edits_the_name_in_place_and_undo_and_redo_walk_it"
+      ]
+    },
+    "revealDisable": {
+      "status": "native-tested",
+      "note": "Disable Show in folder removes the unmodified session files and gives the name up.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::show_in_folder_owns_file_manager1_until_disabled"
+      ]
+    },
+    "revealEnable": {
+      "status": "native-tested",
+      "note": "Enable Show in folder writes the session files and owns FileManager1 on the session bus.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::show_in_folder_owns_file_manager1_until_disabled"
+      ]
+    },
+    "revealTest": {
+      "status": "native-tested",
+      "note": "Test sends ShowFolders for the home folder through the bus, and is refused while OpenXplorer does not own the name.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::show_in_folder_owns_file_manager1_until_disabled",
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::show_in_folder_starts_disabled_and_its_test_needs_the_service"
+      ]
+    },
+    "search": {
+      "status": "core-tested",
+      "note": "The cache search is ported (words, scope, hidden items, limit, cancellation) and the window merges the listing's matches with it. The native workflow is in place and proven by the GTK tests of native/crates/ox-app/src/window/tests/search.rs and native/crates/ox-app/src/settings_page/tests/indexing.rs; the bridge check cites only #[test] functions, so the status stays core-tested until it reads #[gtk::test].",
+      "evidence": [
+        "native/crates/ox-core/src/search/query.rs::every_word_must_occur_in_the_name_or_parent_path",
+        "native/crates/ox-core/src/search/query.rs::a_running_search_stops_when_cancelled",
+        "native/crates/ox-app/src/search/results.rs::the_folders_own_matches_come_first_then_cached_ones_once",
+        "native/crates/ox-app/src/search/folder_search.rs::an_edit_cancels_the_running_search_and_drops_its_results"
+      ]
+    },
+    "signOut": {
+      "status": "native-tested",
+      "note": "Sign out of server asks what to forget, disconnects the server's mounts, forgets its credentials, marks its tabs, shows Network and reports failures. Clearing the search cache waits for the window to run one.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::signing_out_forgets_the_server_and_its_tabs",
+        "native/crates/ox-app/src/window/tests/network.rs::signing_out_without_a_keyring_says_the_credentials_remain",
+        "native/crates/ox-core/src/network/sign_out/tests.rs::signing_out_forgets_every_saved_credential_of_that_server_only"
+      ]
+    },
+    "snapshotSource": {
+      "status": "native-tested",
+      "note": "The Snapshot source form saves and removes mappings through ox-core on a worker and lists the versions again.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::the_snapshot_source_form_saves_a_mapping_and_lists_again"
+      ]
+    },
+    "tabDragLayout": {
+      "status": "native-tested",
+      "note": "No layout is published: every window takes tab drops with one target that finds the strip, the insertion point and the tear-out area from its widgets.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tab_moves/drag.rs::only_the_source_window_well_below_its_strip_tears_a_tab_out",
+        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_drag_shows_where_the_tab_would_go"
+      ]
+    },
+    "tabTransferReady": {
+      "status": "native-tested",
+      "note": "The destination window adds the tab in this process and the source removes it only afterwards, once the drag has ended; a busy or dialog-holding destination refuses and the source keeps it. ox_core::ops::TabTransfers, which ports the Python broker, is not needed by the in-process move.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag",
+        "native/crates/ox-app/src/window/tab_moves.rs::a_window_with_an_open_dialog_keeps_its_tabs_and_takes_none",
+        "native/crates/ox-core/tests/ops_tab_transfer.rs::the_acknowledgement_commits_once_to_the_original_source"
+      ]
+    },
+    "templates": {
+      "status": "native-tested",
+      "note": "ox_core::ops::list_templates ports PRESETS and list_templates in desktop/file_services.py: the six starters, then at most 100 visible regular files of at most 16 MiB from the Templates folder, listed without following links and without .desktop files. Native: The New file and New from template dialog lists the templates when it opens.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_create.rs::the_six_starters_come_first_with_their_fixed_names",
+        "native/crates/ox-core/tests/ops_create.rs::only_visible_regular_files_up_to_sixteen_mebibytes_are_user_templates",
+        "native/crates/ox-core/tests/ops_create.rs::at_most_one_hundred_user_templates_are_listed",
+        "native/crates/ox-core/src/ops/templates.rs::a_cancelled_listing_is_a_cancellation_not_the_starters_alone",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::a_new_menu_file_starts_from_its_template_and_is_created_from_it"
+      ]
+    },
+    "transferConflicts": {
+      "status": "native-tested",
+      "note": "ox_core::ops::find_conflicts answers the paste-conflict query of desktop/winspace.py: 1 to 100,000 item URIs, a destination that must be a folder (\"Open a destination folder before pasting.\") and the items whose names are taken there, hidden items and dangling links included. A cancelled check is reported as cancelled, never as no conflicts. Native: Paste checks the destination with it and asks about taken names (Skip, Keep both, Replace, Apply to all).",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_transfer.rs::conflicts_list_the_items_whose_names_are_taken_hidden_and_dangling_ones_included",
+        "native/crates/ox-core/tests/ops_transfer.rs::a_conflict_check_needs_a_folder_and_between_one_and_the_maximum_items",
+        "native/crates/ox-core/tests/ops_transfer.rs::a_cancelled_conflict_check_reports_the_cancellation",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::pasting_onto_a_taken_name_asks_and_keep_both_keeps_both",
+        "native/crates/ox-app/src/window/tests/clipboard.rs::clearing_apply_to_all_asks_about_each_conflict_in_turn"
+      ]
+    },
+    "trashSupport": {
+      "status": "native-tested",
+      "note": "ox_core::ops::trash_support asks access::can-trash as trash_support in desktop/gio_backend.py does, and is tested on a local folder, a folder GIO reports without a Trash, and a share that is not mounted, which reaches the caller as not-mounted so it can mount and ask again. ox_core::ops::plan_delete applies the per-folder decision of app.js. Native: The window asks each folder it shows once and labels Delete from the answer; each Delete decides every item by its own folder with plan_delete.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_delete_plan.rs::an_item_whose_folder_cannot_be_queried_is_planned_for_permanent_delete_like_python",
+        "native/crates/ox-core/tests/ops_delete_plan.rs::a_folder_gio_reports_without_a_trash_is_planned_for_permanent_delete",
+        "native/crates/ox-core/tests/ops_delete_plan.rs::a_share_that_cannot_answer_counts_as_having_a_trash",
+        "native/crates/ox-core/tests/ops_delete_plan.rs::a_cancelled_trash_check_reports_the_cancellation_and_plans_nothing",
+        "native/crates/ox-app/src/window/file_ops/trash_support.rs::delete_reads_delete_permanently_only_where_no_trash_is_known",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::delete_asks_then_moves_to_the_trash_and_undo_restores"
+      ]
+    },
+    "uiReady": {
+      "status": "pending",
+      "note": "Legacy WebKit transport mechanism. Native toolkit replacement still needs equivalent interaction/lifecycle verification; a deleted bridge is not proof of feature parity.",
+      "evidence": []
+    },
+    "unmount": {
+      "status": "core-tested",
+      "note": "Disconnect asks first and unmounts with GTK's mount operation; Eject and Safely remove are added. The refusals are tested; removing real media needs hardware (manual acceptance).",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::disconnect_asks_first_and_reports_a_location_without_a_mount",
+        "native/crates/ox-core/src/network/volumes.rs::disconnect_waits_for_this_windows_writes"
+      ]
+    },
+    "updateCheck": {
+      "status": "native-tested",
+      "note": "Software updates checks at once through ox-core's updater (simulated GitHub); the status bar and About show a release found.",
+      "evidence": [
+        "native/crates/ox-app/src/update/tests.rs::checking_offers_a_newer_release_and_the_status_bar_says_so",
+        "native/crates/ox-app/src/update/tests.rs::a_flatpak_is_told_to_update_through_flatpak"
+      ]
+    },
+    "updateInstall": {
+      "status": "native-tested",
+      "note": "Install update… downloads, verifies and installs through the simulated package tools, locking every window meanwhile.",
+      "evidence": [
+        "native/crates/ox-app/src/update/tests.rs::installing_verifies_installs_and_offers_the_restart",
+        "native/crates/ox-app/src/update/tests.rs::an_installing_update_locks_every_window"
+      ]
+    },
+    "updateRestart": {
+      "status": "native-tested",
+      "note": "Restart now starts only /usr/bin/openxplorer --restart.",
+      "evidence": [
+        "native/crates/ox-app/src/update/tests.rs::installing_verifies_installs_and_offers_the_restart"
+      ]
+    },
+    "window": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "windowMetadata": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "windows": {
+      "status": "pending",
+      "note": "Port and verify this desktop workflow in the native application.",
+      "evidence": []
+    },
+    "zipDefault": {
+      "status": "native-tested",
+      "note": "Use OpenXplorer for ZIPs on the ZIP files row.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::zip_files_are_taken_over_and_given_back_on_their_own"
+      ]
+    },
+    "zipRestore": {
+      "status": "native-tested",
+      "note": "Restore ZIP handler in Settings > Default apps > Advanced.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::zip_files_are_taken_over_and_given_back_on_their_own"
+      ]
+    }
+  }
+}

@@ -9,9 +9,103 @@ concurrency:
   group: openxplorer-production
   cancel-in-progress: false
 jobs:
+  # The release packages of the native app (native/packaging/README.md), built
+  # on hosted runners in each distribution's container, and uploaded as
+  # artifacts that the release job below publishes. The Python app in
+  # desktop/ is deprecated and no longer packaged.
+  native-package:
+    if: github.ref == 'refs/heads/main'
+    name: Release package (${{ matrix.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      matrix:
+        include:
+          # Ubuntu 24.04 is the oldest supported base, so the .deb built on it
+          # (dpkg-shlibdeps records its library versions) installs on Zorin OS
+          # 18, Ubuntu 24.04 and newer, and Debian 13.
+          - name: Debian package
+            image: ubuntu:24.04
+            family: debian
+            format: deb
+          - name: Fedora RPM
+            image: fedora:latest
+            family: fedora
+            format: rpm
+          - name: openSUSE RPM
+            image: opensuse/tumbleweed:latest
+            family: opensuse
+            format: rpm
+          - name: Arch package
+            image: archlinux:latest
+            family: arch
+            format: arch
+    env:
+      CARGO_TERM_COLOR: always
+    permissions:
+      contents: read
+    steps:
+      - name: Install Git, so the checkout is a repository
+        run: |
+          case "${{ matrix.family }}" in
+            fedora) dnf -y install git-core ;;
+            opensuse) zypper --non-interactive install git-core ;;
+            arch) pacman -Syu --noconfirm --needed git ;;
+            debian) apt-get update && apt-get install -y git ca-certificates ;;
+          esac
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install the build, check and packaging tools
+        run: sh native/packaging/ci/prepare-container.sh "${{ matrix.family }}"
+      - name: Install Rust 1.92.0 and stable with rustup
+        run: runuser -u builder -- sh native/packaging/ci/install-rust.sh
+      - name: Run the native check driver
+        run: runuser -u builder -- sh native/packaging/ci/run-checks.sh
+      - name: Build and verify the stable ${{ matrix.format }} package
+        run: >-
+          runuser -u builder -- sh native/packaging/ci/build-package.sh
+          "${{ matrix.format }}" io.winspace.Development
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.family }}-${{ matrix.format }}
+          path: dist/native/
+          if-no-files-found: error
+
+  native-flatpak:
+    if: github.ref == 'refs/heads/main'
+    name: Release Flatpak bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    container:
+      # flatpak-builder needs a privileged container for its sandbox.
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Build the stable Flatpak bundle offline
+        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
+        with:
+          manifest-path: native/packaging/flatpak/io.winspace.Development.yml
+          bundle: io.winspace.Development.flatpak
+          upload-artifact: false
+          cache-key: flatpak-builder-release-${{ hashFiles('native/Cargo.lock') }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-flatpak
+          path: io.winspace.Development.flatpak
+          if-no-files-found: error
+
   release:
     # Public pull requests and non-main dispatches must not run on the LAN host.
     if: github.ref == 'refs/heads/main'
+    needs: [native-package, native-flatpak]
     runs-on: [self-hosted, Linux, X64, openxplorer]
     timeout-minutes: 45
     permissions:
@@ -71,8 +165,14 @@ jobs:
           dbus-run-session -- xvfb-run -a -s '-screen 0 1280x900x24' \
             env GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 \
             "$RUNNER_TEMP/browser-tests/bin/python" desktop/tests/native_file_transport.py
-      - name: Stage matching installer and corresponding source
-        run: /usr/bin/python3 tools/release.py
+      - name: Download the native release packages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: release-*
+          path: ${{ runner.temp }}/packages
+          merge-multiple: true
+      - name: Stage the verified native packages and corresponding source
+        run: /usr/bin/python3 tools/release.py --packages "$RUNNER_TEMP/packages"
       - name: Audit complete release
         run: /usr/bin/python3 tools/audit-public-data.py
       - name: Publish a new desktop version
@@ -87,12 +187,17 @@ jobs:
             python3 - <<'PY'
           import os
           from pathlib import Path
-          notes = Path('desktop/CHANGELOG.md').read_text().split('\n# ', 1)[0]
+          notes = Path('CHANGELOG.md').read_text().split('\n# ', 1)[0]
           (Path(os.environ['RUNNER_TEMP'])/'release-notes.md').write_text(notes)
           PY
+            # Every asset SHA256SUMS lists (the packages and the source
+            # archive), then SHA256SUMS itself. The 1.1.x updater looks only
+            # for openxplorer_<version>_all.deb.
+            test -s "dist/openxplorer_${version}_all.deb"
+            mapfile -t assets < <(awk '{ print "dist/" $2 }' dist/SHA256SUMS)
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
               --title "OpenXplorer $version" --notes-file "$RUNNER_TEMP/release-notes.md" \
-              "dist/openxplorer_${version}_all.deb" "dist/openxplorer-${version}-source.zip" dist/SHA256SUMS
+              "${assets[@]}" dist/SHA256SUMS
           fi
       - name: Deploy the verified website
         env:

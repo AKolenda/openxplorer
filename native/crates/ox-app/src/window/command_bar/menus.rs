@@ -1,0 +1,168 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! The command bar's menus: New, Sort, View, More options and the
+//! appearance choices.
+//!
+//! Ports `openNewMenu`, the Sort and View menus of `setup()`, the More
+//! options menu and `appearanceMenu` in `desktop/ui/app.js`, in their
+//! order. Each item runs a window or application action; the choices and
+//! toggles show a check mark while their action's state matches.
+
+use ox_core::settings::Theme;
+
+use crate::application::AppAction;
+use crate::folder_view::grid::IconSize;
+use crate::folder_view::sorting::{SortColumn, SortDirection};
+use crate::icons::Icon;
+use crate::text_size::Step;
+use crate::window::folder_pane::FolderView;
+use crate::window::menu_popover::{MenuEntry, MenuItem};
+use crate::window::window_action::WindowAction;
+
+/// A menu line that runs `action`.
+fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuEntry {
+    MenuItem::new(label, glyph, action).into()
+}
+
+/// The New menu (`openNewMenu`), which the folder background's "New…"
+/// opens too.
+pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
+    vec![
+        MenuItem::new("Folder", Icon::FolderAdd, WindowAction::NewFolder)
+            .with_shortcut("Ctrl+Shift+N")
+            .into(),
+        item("Text document", Icon::DocumentText, WindowAction::NewTextDocument),
+        item("File…", Icon::DocumentAdd, WindowAction::NewFile),
+        MenuEntry::Divider,
+        item(
+            "Markdown document",
+            Icon::Markdown,
+            WindowAction::NewMarkdownDocument,
+        ),
+        item("CSV file", Icon::Table, WindowAction::NewCsvFile),
+        item("JSON file", Icon::Braces, WindowAction::NewJsonFile),
+        item("HTML document", Icon::Code, WindowAction::NewHtmlDocument),
+        MenuEntry::Divider,
+        item(
+            "From template…",
+            Icon::DocumentCopy,
+            WindowAction::NewFromTemplate,
+        ),
+    ]
+}
+
+/// The Sort menu's item for `column`.
+fn column_item(column: SortColumn) -> MenuEntry {
+    MenuItem::choice(
+        column.label(),
+        Icon::ArrowSort,
+        WindowAction::Sort,
+        column.as_str(),
+    )
+    .into()
+}
+
+/// The Sort menu's item for `direction`.
+fn direction_item(label: &str, glyph: Icon, direction: SortDirection) -> MenuEntry {
+    MenuItem::choice(label, glyph, WindowAction::Direction, direction.as_str()).into()
+}
+
+/// The Sort menu: the columns, then the direction. The direction has an
+/// item each, where app.js had one item that flips it.
+pub(super) fn sort_menu() -> Vec<MenuEntry> {
+    let mut entries: Vec<MenuEntry> = SortColumn::IN_SORT_MENU.into_iter().map(column_item).collect();
+    entries.extend([
+        MenuEntry::Divider,
+        direction_item("Ascending", Icon::ArrowUp, SortDirection::Ascending),
+        direction_item("Descending", Icon::ArrowDown, SortDirection::Descending),
+    ]);
+    entries
+}
+
+/// The View menu's item for `view`.
+fn view_item(label: &str, glyph: Icon, view: FolderView) -> MenuEntry {
+    MenuItem::choice(label, glyph, WindowAction::View, view.as_str()).into()
+}
+
+/// The View menu's item for a text-size `step`, showing its `shortcut`.
+fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) -> MenuEntry {
+    MenuItem::new(label, glyph, WindowAction::TextSize(step))
+        .with_shortcut(shortcut)
+        .into()
+}
+
+/// The View menu: the views (every icon size the native app has), the
+/// hidden-files and details-pane toggles, then the text size.
+pub(super) fn view_menu() -> Vec<MenuEntry> {
+    let mut entries = vec![view_item("Details", Icon::TextBulletList, FolderView::Details)];
+    let icon_sizes = IconSize::ALL
+        .into_iter()
+        .map(|size| view_item(size.label(), Icon::Grid, FolderView::Icons(size)));
+    entries.extend(icon_sizes);
+    entries.extend([
+        MenuEntry::Divider,
+        MenuItem::toggle("Show hidden files", Icon::Eye, WindowAction::Hidden).into(),
+        MenuItem::toggle("Details pane", Icon::PanelRight, WindowAction::DetailsPane).into(),
+        MenuEntry::Divider,
+        text_size_item("Larger text", Icon::Add, Step::Increase, "Ctrl++"),
+        text_size_item("Smaller text", Icon::Subtract, Step::Decrease, "Ctrl+−"),
+        text_size_item("Reset text size", Icon::ArrowReset, Step::Reset, "Ctrl+0"),
+    ]);
+    entries
+}
+
+/// The appearance menu's item for `theme`.
+fn theme_item(label: &str, glyph: Icon, theme: Theme) -> MenuEntry {
+    MenuItem::choice(label, glyph, WindowAction::Theme, theme.as_str()).into()
+}
+
+/// The three appearance choices (`appearanceMenu`).
+pub(super) fn appearance_items() -> [MenuEntry; 3] {
+    [
+        theme_item("Light appearance", Icon::WeatherSunny, Theme::Light),
+        theme_item("Dark appearance", Icon::WeatherMoon, Theme::Dark),
+        theme_item("Use system appearance", Icon::Desktop, Theme::System),
+    ]
+}
+
+/// The More options menu, plus the selection commands the native context
+/// menu used to hold.
+pub(super) fn more_menu() -> Vec<MenuEntry> {
+    let mut entries = vec![
+        MenuItem::new("New window", Icon::WindowNew, AppAction::NewWindow)
+            .with_shortcut("Ctrl+N")
+            .into(),
+        item("Settings", Icon::Settings, WindowAction::Settings),
+        item(
+            "Default file explorer…",
+            Icon::Folder,
+            WindowAction::DefaultFileExplorer,
+        ),
+        MenuItem::toggle(
+            "Cache this folder for search",
+            Icon::Search,
+            WindowAction::CacheFolder,
+        )
+        .into(),
+        item(
+            "Map network location",
+            Icon::Organization,
+            WindowAction::MapNetworkLocation,
+        ),
+        item("Pin current folder", Icon::Pin, WindowAction::PinFolder),
+        MenuEntry::Divider,
+    ];
+    entries.extend(appearance_items());
+    entries.push(MenuItem::toggle("Show hidden files", Icon::Eye, WindowAction::Hidden).into());
+    entries.extend([
+        MenuEntry::Divider,
+        MenuItem::new("Select all", Icon::SelectAllOn, WindowAction::SelectAll)
+            .with_shortcut("Ctrl+A")
+            .into(),
+        item("Select none", Icon::SelectAllOff, WindowAction::SelectNone),
+        item("Invert selection", Icon::ArrowSwap, WindowAction::InvertSelection),
+        MenuEntry::Divider,
+        item("License & source", Icon::Document, WindowAction::License),
+        item("About this build", Icon::Info, WindowAction::About),
+    ]);
+    entries
+}

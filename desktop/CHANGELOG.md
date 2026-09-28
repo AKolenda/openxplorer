@@ -1,3 +1,30 @@
+# Unreleased (not released: the Python app is deprecated)
+
+OpenXplorer 2.0.0 replaced this app with the native app in `native/`; its
+changelog is [../CHANGELOG.md](../CHANGELOG.md). The changes below were never
+released.
+
+- Fix copying to Android phones over MTP. GVfs publishes a move into another
+  folder with the item's old name, so copies landed as `payload` or failed with
+  "libmtp error: could not move object". Phone copies are now built under a
+  hidden `.winspace-transfer-<hex>.part` name beside the destination and
+  published with a same-folder rename, then checked before success is
+  reported. Copies between folders on the same phone, which the device performs
+  under the source's own name, are built inside a private staging folder
+  instead. A partial copy is never visible under its final name.
+- Never use the MTP backend's overwrite move for Replace: it deleted the
+  existing phone file before a move that then failed. Replace now renames the
+  old file aside, and restores it if that rename or installing the new file
+  fails.
+- Fix F2 rename, New from template and ZIP extraction on phones, which used the
+  same unsupported same-folder move.
+- Refresh phone folders after moves so a stale path can no longer point at the
+  moved file, and retry cleanup of an interrupted phone copy. Leftover staging
+  that cannot be checked is still reported.
+- Show network shares and servers with a Windows-style network icon: the folder
+  or server sits on a green network pipe instead of a plain green underline.
+  Known folders moved to a share keep their own icon on the pipe.
+
 # 1.1.4 — 2026-09-26
 
 - Accept stable releases published from the openxplorer GitHub organization as

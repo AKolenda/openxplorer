@@ -1,0 +1,34 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* What the integration dialogs add to the dialog frame (dialogs.css):
+   the Open with list (style.css .app-choice-list, .app-choice,
+   .apps-empty) and the Brave dialog's buttons and check boxes
+   (.brave-profile-list), refined to WinUI's list items (ui-spec.md
+   §4.11). src/integration/open_with_dialog.rs and brave_dialog.rs. */
+
+/* The list of applications: a framed, scrolling list inside the dialog. */
+window.ox.ox-dialog .app-choices {
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+  background-color: @ox_bg;
+}
+window.ox.ox-dialog .app-choices list { background: none; }
+window.ox.ox-dialog .app-choice {
+  padding: 6px 8px;
+  margin: 2px 4px;
+  border-radius: 4px;
+  color: @ox_text;
+}
+window.ox.ox-dialog .app-choice:hover { background-color: @ox_control_fill_hover; }
+/* The chosen application, as a selected row of the folder views. */
+window.ox.ox-dialog .app-choice:selected {
+  background-color: @ox_selected;
+  color: @ox_text;
+}
+window.ox.ox-dialog .app-choice .app-note { color: @ox_muted; }
+window.ox.ox-dialog .app-choice:disabled { opacity: .55; }
+window.ox.ox-dialog .apps-empty { color: @ox_muted; padding: 12px; }
+/* Buttons inside the dialog's body, such as "Recheck profiles". */
+window.ox.ox-dialog .dialog-content button.bordered {
+  min-height: 30px;
+  padding: 0 12px;
+}

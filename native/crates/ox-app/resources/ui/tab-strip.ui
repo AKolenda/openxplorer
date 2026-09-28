@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- The tab strip in the title bar (src/window/tab_strip.rs). -->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxTabStrip" parent="GtkWidget">
+    <!-- Not expanding: the "+" follows the last tab and the drag area
+         takes the rest of the bar. -->
+    <property name="hexpand">false</property>
+    <property name="valign">end</property>
+    <child>
+      <!-- External: scrollable without a visible bar, and never asking the
+           window to be as wide as all the tabs. -->
+      <object class="GtkScrolledWindow" id="scroller">
+        <property name="hscrollbar-policy">external</property>
+        <property name="vscrollbar-policy">never</property>
+        <property name="propagate-natural-width">true</property>
+        <property name="child">
+          <object class="GtkViewport" id="viewport">
+            <property name="child">
+              <object class="GtkBox" id="tab_list">
+                <property name="accessible-role">tab-list</property>
+                <property name="layout-manager">
+                  <object class="OxTabLayout" id="layout"/>
+                </property>
+                <style>
+                  <class name="tabs"/>
+                </style>
+                <accessibility>
+                  <property name="label">Folder tabs</property>
+                </accessibility>
+              </object>
+            </property>
+          </object>
+        </property>
+      </object>
+    </child>
+  </template>
+</interface>

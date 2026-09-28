@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- The address bar: the location's icon, then the breadcrumbs or the
+     editable address, then the edit chevron (src/window/address_bar.rs). -->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxAddressBar" parent="GtkBox">
+    <property name="spacing">10</property>
+    <property name="hexpand">true</property>
+    <property name="valign">center</property>
+    <style>
+      <class name="address"/>
+    </style>
+    <child>
+      <object class="GtkImage" id="icon">
+        <property name="halign">center</property>
+        <property name="valign">center</property>
+        <property name="accessible-role">presentation</property>
+        <style>
+          <class name="glyph"/>
+          <class name="address-icon"/>
+        </style>
+      </object>
+    </child>
+    <child>
+      <!-- The page names match AddressMode::name. -->
+      <object class="GtkStack" id="stack">
+        <property name="hexpand">true</property>
+        <property name="hhomogeneous">false</property>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">crumbs</property>
+            <property name="child">
+              <!-- External: scrollable without a visible bar, and never
+                   asking the window to be as wide as the path. -->
+              <object class="GtkScrolledWindow" id="crumb_scroll">
+                <property name="hscrollbar-policy">external</property>
+                <property name="vscrollbar-policy">never</property>
+                <property name="propagate-natural-width">true</property>
+                <property name="hexpand">true</property>
+                <property name="child">
+                  <object class="GtkBox" id="crumbs">
+                    <property name="spacing">2</property>
+                    <style>
+                      <class name="breadcrumbs"/>
+                    </style>
+                  </object>
+                </property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">entry</property>
+            <property name="child">
+              <object class="GtkEntry" id="entry">
+                <property name="hexpand">true</property>
+                <accessibility>
+                  <property name="label">Location</property>
+                </accessibility>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <!-- #address-edit: the chevron that edits the address. -->
+      <object class="GtkButton" id="edit_button">
+        <property name="tooltip-text">Edit location (Ctrl+L)</property>
+        <property name="valign">center</property>
+        <style>
+          <class name="address-chevron"/>
+        </style>
+        <accessibility>
+          <property name="label">Edit location</property>
+        </accessibility>
+      </object>
+    </child>
+  </template>
+</interface>

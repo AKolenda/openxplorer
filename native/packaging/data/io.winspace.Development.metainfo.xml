@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<!--
+  The AppStream description of the native app once it replaces the Python
+  app: the same ID, name, licences and release history as
+  desktop/packaging/io.winspace.Development.metainfo.xml, so GNOME Software
+  shows one application across the switch. The release that ships the native
+  app adds its own <release> entry at the top.
+-->
+<component type="desktop-application">
+  <id>io.winspace.Development</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <name>OpenXplorer</name>
+  <summary>Explorer-style local and SMB file manager</summary>
+  <developer id="app.openxplorer">
+    <name>OpenXplorer contributors</name>
+  </developer>
+  <description>
+    <p>Browse local folders, SMB shares and connected phones in a tabbed window styled after Windows 11 File Explorer, with light and dark appearances, a resizable sidebar, indexed filename search and ZIP browsing.</p>
+    <p>Installation does not change file associations, browser preferences or network mounts. Making OpenXplorer the default file manager, handling Show in folder requests and the other desktop integrations stay off until you turn them on in Settings.</p>
+  </description>
+  <launchable type="desktop-id">io.winspace.Development.desktop</launchable>
+  <icon type="stock">io.winspace.Development</icon>
+  <provides>
+    <binary>openxplorer</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>FileManager</category>
+  </categories>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <branding>
+    <color type="primary" scheme_preference="light">#fcd53f</color>
+    <color type="primary" scheme_preference="dark">#7a5c00</color>
+  </branding>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="2.0.0" date="2026-09-28" type="stable"><description><p>OpenXplorer is now a native GTK 4 application with the same Windows 11 look. It adds Fluent icons, a categorised Settings page, undo, dropping files onto programs, tearing tabs out into new windows, and Flatpak and distribution packages. Pinned folders are indexed for search by default.</p></description></release>
+    <release version="1.1.4" date="2026-09-26" type="stable"><description><p>Keep in-app updates working after the repository moves to the openxplorer GitHub organization.</p></description></release>
+    <release version="1.1.3" date="2026-09-21" type="stable"><description><p>Fix dragging filenames containing parentheses and simplify the Software updates dialog.</p></description></release>
+    <release version="1.1.2" date="2026-09-19" type="stable"><description><p>Place the update action beside the bottom-right view controls and remove the stable-release status indicator.</p></description></release>
+    <release version="1.1.1" date="2026-09-19" type="stable"><description><p>Display the native app layout immediately during startup instead of a centered message and spinner, while preserving startup recovery.</p></description></release>
+    <release version="1.1.0" date="2026-09-19" type="stable"><description><p>Add opt-in in-app updates and fix folder permission preservation, backup protection, keyboard activation, tab navigation, cached search and device ZIP extraction.</p></description></release>
+    <release version="1.0.2" date="2026-09-14" type="stable"><description><p>Add explicit Replace or Skip conflict handling and fix transfers to connected phones that do not support Unix permission changes.</p></description></release>
+    <release version="1.0.1" date="2026-09-13" type="stable"><description><p>Show connected Android, camera/PTP and iPhone devices in the sidebar and This PC, with native GIO browsing and hot-plug refresh.</p></description></release>
+    <release version="1.0.0" date="2026-09-13" type="stable"><description><p>First stable release. Middle-click folders to open tabs in the background, tear tabs out onto the desktop and merge them back across windows, extract ZIP archives and open terminals in the current folder. Existing defaults remain unchanged until requested.</p></description></release>
+  </releases>
+  <url type="homepage">https://openxplorer.app</url>
+  <url type="help">https://openxplorer.app/docs/installation/</url>
+  <url type="vcs-browser">https://github.com/AKolenda/openxplorer</url>
+  <keywords>
+    <keyword>File Explorer</keyword>
+    <keyword>File Manager</keyword>
+    <keyword>files</keyword>
+    <keyword>folders</keyword>
+    <keyword>SMB</keyword>
+    <keyword>NAS</keyword>
+    <keyword>network</keyword>
+    <keyword>ZIP</keyword>
+  </keywords>
+</component>

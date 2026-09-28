@@ -26,13 +26,13 @@ The interactive preview runs the same HTML, CSS, icons and controls as the deskt
 
 ## Native storage. Local interface.
 
-The desktop app is Python with GTK 3 and WebKitGTK. Its HTML/CSS/JavaScript interface is loaded locally. GIO/GVfs provides the filesystem and SMB layer; SQLite stores the optional filename index. This Next.js website is separate and is not required to run the app.
+Since 2.0.0 the desktop app is a native GTK 4 application written in Rust. GIO/GVfs provides the filesystem, SMB and phone layer; SQLite stores the optional filename index. The Python/WebKitGTK app of 1.x is deprecated and no longer released. This Next.js website is separate and is not required to run the app; its interactive preview still renders the 1.x HTML interface, which the native app reproduces.
 
 ## Know what you are installing
 
-Version 1.1.4 keeps in-app updates working after the repository moves to the openxplorer GitHub organization. Check for updates is beside the bottom-right view controls. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration.
+Version 2.0.0 replaces the Python app with the native GTK 4 app under the same name, settings and saved passwords, and adds Fluent icons, a categorised Settings page, undo, and Flatpak and distribution packages. Zorin is the primary target; Ubuntu 24.04+, Debian 13, Fedora, openSUSE and Arch are supported through their packages, and every other distribution through the Flatpak. The known gaps are listed in the changelog.
 
-> Use a disposable folder and a non-critical share first. Native Zorin/WebKit, live NAS access, keyring behavior, and browser/portal integration have not been validated in the release environment.
+> Use a disposable folder and a non-critical share first. SMB servers other than the maintainer's, phones and USB drives have not yet been accepted on real hardware with the native app.
 
 ## Start with one folder
 
@@ -40,4 +40,4 @@ Read Installation, open your home directory, and test a network share. Enable in
 
 ---
 
-OpenXplorer 1.1.4. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.0. Project-authored documentation: AGPL-3.0-only.

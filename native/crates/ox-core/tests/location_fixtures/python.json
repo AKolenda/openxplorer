@@ -1,0 +1,4945 @@
+{
+  "home": "/home/test",
+  "normalise": [
+    {
+      "input": "\\\\NAS\\Team files\\Q3 #1",
+      "outcome": {
+        "value": "smb://nas/Team%20files/Q3%20%231"
+      }
+    },
+    {
+      "input": "//NAS/Projects",
+      "outcome": {
+        "value": "smb://nas/Projects"
+      }
+    },
+    {
+      "input": "smb://NAS/Team%20files/100%25.pdf",
+      "outcome": {
+        "value": "smb://nas/Team%20files/100%25.pdf"
+      }
+    },
+    {
+      "input": "/tmp/Été #1?.txt",
+      "outcome": {
+        "value": "file:///tmp/%C3%89t%C3%A9%20%231%3F.txt"
+      }
+    },
+    {
+      "input": "mtp://[usb:001,010]/Internal storage/DCIM",
+      "outcome": {
+        "value": "mtp://[usb:001,010]/Internal%20storage/DCIM"
+      }
+    },
+    {
+      "input": "gphoto2://[usb:001,002]/DCIM",
+      "outcome": {
+        "value": "gphoto2://[usb:001,002]/DCIM"
+      }
+    },
+    {
+      "input": "afc://00008020-001C/",
+      "outcome": {
+        "value": "afc://00008020-001C/"
+      }
+    },
+    {
+      "input": "mtp://user@device/DCIM",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://[usb:001,002/DCIM",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://[usb:001,002]/DCIM?mode=write",
+      "outcome": {
+        "error": "A connected-device address must include a device identifier and path."
+      }
+    },
+    {
+      "input": "afc:///DCIM",
+      "outcome": {
+        "error": "A connected-device address must include a device identifier and path."
+      }
+    },
+    {
+      "input": "mtp://[usb:001,002]/a%00b",
+      "outcome": {
+        "error": "Encoded control characters are not allowed."
+      }
+    },
+    {
+      "input": "~/Docs",
+      "outcome": {
+        "value": "file:///home/test/Docs"
+      }
+    },
+    {
+      "input": "file://localhost/tmp/x",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "smb://u:p@nas/share",
+      "outcome": {
+        "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+      }
+    },
+    {
+      "input": "smb://u@nas/share",
+      "outcome": {
+        "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+      }
+    },
+    {
+      "input": "\\\\u:p@nas\\share",
+      "outcome": {
+        "error": "Use a server name without credentials, for example \\\\nas\\share."
+      }
+    },
+    {
+      "input": "smb://u%40nas/share",
+      "outcome": {
+        "error": "Use an unescaped server name without credentials or control characters."
+      }
+    },
+    {
+      "input": "",
+      "outcome": {
+        "error": "Enter a local folder path or an SMB address."
+      }
+    },
+    {
+      "input": "http://example.org",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "javascript:alert(1)",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "file://nas/share",
+      "outcome": {
+        "error": "For network folders, use smb://server/share rather than file://server/…"
+      }
+    },
+    {
+      "input": "smb:///share",
+      "outcome": {
+        "error": "Enter an SMB server name, for example smb://nas/Projects."
+      }
+    },
+    {
+      "input": "smb://nas/a%00b",
+      "outcome": {
+        "error": "Encoded control characters are not allowed."
+      }
+    },
+    {
+      "input": "smb://nas/a#b",
+      "outcome": {
+        "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+      }
+    },
+    {
+      "input": "smb://nas/a?b",
+      "outcome": {
+        "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+      }
+    },
+    {
+      "input": "C:\\Windows",
+      "outcome": {
+        "error": "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share."
+      }
+    },
+    {
+      "input": "smb://nas%0a/share",
+      "outcome": {
+        "error": "Use an unescaped server name without credentials or control characters."
+      }
+    },
+    {
+      "input": "   ",
+      "outcome": {
+        "error": "Enter a local folder path or an SMB address."
+      }
+    },
+    {
+      "input": "\t",
+      "outcome": {
+        "error": "Enter a local folder path or an SMB address."
+      }
+    },
+    {
+      "input": " 　/tmp/x  ",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "\u001c/tmp\u001f",
+      "outcome": {
+        "value": "file:///tmp"
+      }
+    },
+    {
+      "input": "/tmp/a\u0000",
+      "outcome": {
+        "error": "Control characters are not allowed in an address."
+      }
+    },
+    {
+      "input": "/tmp/a",
+      "outcome": {
+        "error": "Control characters are not allowed in an address."
+      }
+    },
+    {
+      "input": "/tmp/ab",
+      "outcome": {
+        "value": "file:///tmp/a%C2%85b"
+      }
+    },
+    {
+      "input": "smb://nas/a\tb",
+      "outcome": {
+        "error": "Control characters are not allowed in an address."
+      }
+    },
+    {
+      "input": "\\\\nas",
+      "outcome": {
+        "value": "smb://nas/"
+      }
+    },
+    {
+      "input": "\\\\nas\\",
+      "outcome": {
+        "value": "smb://nas/"
+      }
+    },
+    {
+      "input": "\\\\",
+      "outcome": {
+        "error": "Use a server name without credentials, for example \\\\nas\\share."
+      }
+    },
+    {
+      "input": "//",
+      "outcome": {
+        "error": "Use a server name without credentials, for example \\\\nas\\share."
+      }
+    },
+    {
+      "input": "///tmp/x",
+      "outcome": {
+        "value": "smb://tmp/x"
+      }
+    },
+    {
+      "input": "//tmp",
+      "outcome": {
+        "value": "smb://tmp/"
+      }
+    },
+    {
+      "input": "\\\\nas:445\\share",
+      "outcome": {
+        "error": "Use a server name without credentials, for example \\\\nas\\share."
+      }
+    },
+    {
+      "input": "\\\\nas\\a\\..\\b",
+      "outcome": {
+        "value": "smb://nas/b"
+      }
+    },
+    {
+      "input": "\\\\nas\\a/b",
+      "outcome": {
+        "value": "smb://nas/a/b"
+      }
+    },
+    {
+      "input": "\\\\nas\\a%20b",
+      "outcome": {
+        "value": "smb://nas/a%2520b"
+      }
+    },
+    {
+      "input": "\\\\NAS\\é",
+      "outcome": {
+        "value": "smb://nas/%C3%A9"
+      }
+    },
+    {
+      "input": "\\\\nas\\100%",
+      "outcome": {
+        "value": "smb://nas/100%25"
+      }
+    },
+    {
+      "input": "\\\\[::1]\\x",
+      "outcome": {
+        "error": "Use a server name without credentials, for example \\\\nas\\share."
+      }
+    },
+    {
+      "input": "\\\\nas?x\\share",
+      "outcome": {
+        "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+      }
+    },
+    {
+      "input": "\\\\nas#x\\share",
+      "outcome": {
+        "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+      }
+    },
+    {
+      "input": "\\\\nas%41\\share",
+      "outcome": {
+        "error": "Use an unescaped server name without credentials or control characters."
+      }
+    },
+    {
+      "input": "\\\\[fe80--1]\\x",
+      "outcome": {
+        "rejected": "'fe80--1' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "\\\\nas\\..\\..\\x",
+      "outcome": {
+        "value": "smb://nas/x"
+      }
+    },
+    {
+      "input": "\\\\nas\\.",
+      "outcome": {
+        "value": "smb://nas/"
+      }
+    },
+    {
+      "input": "\\\\nas\\a\\\\b\\",
+      "outcome": {
+        "value": "smb://nas/a/b"
+      }
+    },
+    {
+      "input": "\\\\nas\\it's (1)!*",
+      "outcome": {
+        "value": "smb://nas/it%27s%20%281%29%21%2A"
+      }
+    },
+    {
+      "input": "c:/x",
+      "outcome": {
+        "error": "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share."
+      }
+    },
+    {
+      "input": "C:",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "C:x",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "z:\\",
+      "outcome": {
+        "error": "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share."
+      }
+    },
+    {
+      "input": "1:/x",
+      "outcome": {
+        "value": "file:///home/test/1%3A/x"
+      }
+    },
+    {
+      "input": "a:b",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "report:2024.txt",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "ftp://h/x",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "sftp://h/x",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "dav://h/",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "trash:///",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "recent:///",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "network:///",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "home:",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "ox:home",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "x-y.z+w:foo",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "~",
+      "outcome": {
+        "value": "file:///home/test"
+      }
+    },
+    {
+      "input": "~/",
+      "outcome": {
+        "value": "file:///home/test"
+      }
+    },
+    {
+      "input": "~user",
+      "outcome": {
+        "value": "file:///home/test/~user"
+      }
+    },
+    {
+      "input": "~/../x",
+      "outcome": {
+        "value": "file:///home/x"
+      }
+    },
+    {
+      "input": "~/./a//b/",
+      "outcome": {
+        "value": "file:///home/test/a/b"
+      }
+    },
+    {
+      "input": "~//etc",
+      "outcome": {
+        "value": "file:///etc"
+      }
+    },
+    {
+      "input": "~///etc",
+      "outcome": {
+        "value": "file:////etc"
+      }
+    },
+    {
+      "input": "relative",
+      "outcome": {
+        "value": "file:///home/test/relative"
+      }
+    },
+    {
+      "input": "a/../..",
+      "outcome": {
+        "value": "file:///home"
+      }
+    },
+    {
+      "input": "../..",
+      "outcome": {
+        "value": "file:///"
+      }
+    },
+    {
+      "input": ".",
+      "outcome": {
+        "value": "file:///home/test"
+      }
+    },
+    {
+      "input": "..",
+      "outcome": {
+        "value": "file:///home"
+      }
+    },
+    {
+      "input": "a b/c#d?e%20f",
+      "outcome": {
+        "value": "file:///home/test/a%20b/c%23d%3Fe%2520f"
+      }
+    },
+    {
+      "input": "/",
+      "outcome": {
+        "value": "file:///"
+      }
+    },
+    {
+      "input": "/..",
+      "outcome": {
+        "value": "file:///"
+      }
+    },
+    {
+      "input": "/tmp/x/",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "/tmp/./x",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "/tmp/../../..",
+      "outcome": {
+        "value": "file:///"
+      }
+    },
+    {
+      "input": "/tmp/a b",
+      "outcome": {
+        "value": "file:///tmp/a%20b"
+      }
+    },
+    {
+      "input": "/tmp/a%20b",
+      "outcome": {
+        "value": "file:///tmp/a%2520b"
+      }
+    },
+    {
+      "input": "/tmp/it's (1) [x] {y} @ $ & + , ; = ~ ! *",
+      "outcome": {
+        "value": "file:///tmp/it%27s%20%281%29%20%5Bx%5D%20%7By%7D%20%40%20%24%20%26%20%2B%20%2C%20%3B%20%3D%20~%20%21%20%2A"
+      }
+    },
+    {
+      "input": "/tmp/€/ü/日本",
+      "outcome": {
+        "value": "file:///tmp/%E2%82%AC/%C3%BC/%E6%97%A5%E6%9C%AC"
+      }
+    },
+    {
+      "input": "/tmp/a\\b",
+      "outcome": {
+        "value": "file:///tmp/a%5Cb"
+      }
+    },
+    {
+      "input": "/tmp/a:b",
+      "outcome": {
+        "value": "file:///tmp/a%3Ab"
+      }
+    },
+    {
+      "input": "/tmp/😀",
+      "outcome": {
+        "value": "file:///tmp/%F0%9F%98%80"
+      }
+    },
+    {
+      "input": "file:///tmp/x",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "FILE:///TMP",
+      "outcome": {
+        "value": "file:///TMP"
+      }
+    },
+    {
+      "input": "File://LOCALHOST/x",
+      "outcome": {
+        "value": "file:///x"
+      }
+    },
+    {
+      "input": "file:tmp",
+      "outcome": {
+        "error": "A file URL must contain an absolute path."
+      }
+    },
+    {
+      "input": "file:/tmp/x",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "file:",
+      "outcome": {
+        "error": "A file URL must contain an absolute path."
+      }
+    },
+    {
+      "input": "file://",
+      "outcome": {
+        "error": "A file URL must contain an absolute path."
+      }
+    },
+    {
+      "input": "file:///",
+      "outcome": {
+        "value": "file:///"
+      }
+    },
+    {
+      "input": "file:///tmp/a%2Fb",
+      "outcome": {
+        "value": "file:///tmp/a/b"
+      }
+    },
+    {
+      "input": "file:///tmp/%23",
+      "outcome": {
+        "value": "file:///tmp/%23"
+      }
+    },
+    {
+      "input": "file:///tmp/a%3Fb",
+      "outcome": {
+        "value": "file:///tmp/a%3Fb"
+      }
+    },
+    {
+      "input": "file:///tmp/%FF",
+      "outcome": {
+        "rejected": "'utf-8' codec can't decode byte 0xff in position 5: invalid start byte"
+      }
+    },
+    {
+      "input": "file:///tmp/%zz",
+      "outcome": {
+        "value": "file:///tmp/%25zz"
+      }
+    },
+    {
+      "input": "file:///tmp/%4",
+      "outcome": {
+        "value": "file:///tmp/%254"
+      }
+    },
+    {
+      "input": "file:///tmp/a%00b",
+      "outcome": {
+        "error": "Encoded control characters are not allowed."
+      }
+    },
+    {
+      "input": "file:///tmp/../..",
+      "outcome": {
+        "value": "file:///"
+      }
+    },
+    {
+      "input": "file:///tmp/x?y",
+      "outcome": {
+        "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+      }
+    },
+    {
+      "input": "file:///tmp/x#y",
+      "outcome": {
+        "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+      }
+    },
+    {
+      "input": "file:///tmp/x?",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "file:///tmp/x#",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "file://user@localhost/x",
+      "outcome": {
+        "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+      }
+    },
+    {
+      "input": "file:////server/share",
+      "outcome": {
+        "value": "file:////server/share"
+      }
+    },
+    {
+      "input": "file:///tmp/%e2%82%ac",
+      "outcome": {
+        "value": "file:///tmp/%E2%82%AC"
+      }
+    },
+    {
+      "input": "file:///tmp/a%5Cb",
+      "outcome": {
+        "value": "file:///tmp/a%5Cb"
+      }
+    },
+    {
+      "input": "file:///tmp/a b",
+      "outcome": {
+        "value": "file:///tmp/a%20b"
+      }
+    },
+    {
+      "input": "file://localhost:80/x",
+      "outcome": {
+        "error": "For network folders, use smb://server/share rather than file://server/…"
+      }
+    },
+    {
+      "input": "file://[::1]/x",
+      "outcome": {
+        "error": "For network folders, use smb://server/share rather than file://server/…"
+      }
+    },
+    {
+      "input": "file:///tmp/%C3",
+      "outcome": {
+        "rejected": "'utf-8' codec can't decode byte 0xc3 in position 5: unexpected end of data"
+      }
+    },
+    {
+      "input": "file:///a/./b/../c/",
+      "outcome": {
+        "value": "file:///a/c"
+      }
+    },
+    {
+      "input": "smb://nas",
+      "outcome": {
+        "value": "smb://nas/"
+      }
+    },
+    {
+      "input": "smb://nas/",
+      "outcome": {
+        "value": "smb://nas/"
+      }
+    },
+    {
+      "input": "smb://NAS/Share/",
+      "outcome": {
+        "value": "smb://nas/Share"
+      }
+    },
+    {
+      "input": "smb://nas:445/a",
+      "outcome": {
+        "value": "smb://nas:445/a"
+      }
+    },
+    {
+      "input": "smb://nas:0445",
+      "outcome": {
+        "value": "smb://nas:445/"
+      }
+    },
+    {
+      "input": "smb://nas:/a",
+      "outcome": {
+        "value": "smb://nas/a"
+      }
+    },
+    {
+      "input": "smb://nas:0/a",
+      "outcome": {
+        "value": "smb://nas:0/a"
+      }
+    },
+    {
+      "input": "smb://nas:65535/a",
+      "outcome": {
+        "value": "smb://nas:65535/a"
+      }
+    },
+    {
+      "input": "smb://nas:65536/a",
+      "outcome": {
+        "error": "Invalid SMB port."
+      }
+    },
+    {
+      "input": "smb://nas:99999/a",
+      "outcome": {
+        "error": "Invalid SMB port."
+      }
+    },
+    {
+      "input": "smb://nas:x/a",
+      "outcome": {
+        "error": "Invalid SMB port."
+      }
+    },
+    {
+      "input": "smb://nas:-1/a",
+      "outcome": {
+        "error": "Invalid SMB port."
+      }
+    },
+    {
+      "input": "smb://nas:+1/a",
+      "outcome": {
+        "error": "Invalid SMB port."
+      }
+    },
+    {
+      "input": "smb://nas:١/a",
+      "outcome": {
+        "error": "Invalid SMB port."
+      }
+    },
+    {
+      "input": "smb://[fe80::1]/a",
+      "outcome": {
+        "value": "smb://[fe80::1]/a"
+      }
+    },
+    {
+      "input": "smb://[FE80::1]:445/a",
+      "outcome": {
+        "value": "smb://[fe80::1]:445/a"
+      }
+    },
+    {
+      "input": "smb://[fe80::1%eth0]/a",
+      "outcome": {
+        "error": "Use an unescaped server name without credentials or control characters."
+      }
+    },
+    {
+      "input": "smb://[::1]:445/a",
+      "outcome": {
+        "value": "smb://[::1]:445/a"
+      }
+    },
+    {
+      "input": "smb://[1.2.3.4]/",
+      "outcome": {
+        "rejected": "An IPv4 address cannot be in brackets"
+      }
+    },
+    {
+      "input": "smb://[v1.x]/share",
+      "outcome": {
+        "value": "smb://v1.x/share"
+      }
+    },
+    {
+      "input": "smb://[vz.x]/share",
+      "outcome": {
+        "rejected": "IPvFuture address is invalid"
+      }
+    },
+    {
+      "input": "smb://[v1.]/share",
+      "outcome": {
+        "rejected": "IPvFuture address is invalid"
+      }
+    },
+    {
+      "input": "smb://[nas]/a",
+      "outcome": {
+        "rejected": "'nas' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "smb://x[::1]/",
+      "outcome": {
+        "rejected": "Invalid IPv6 URL"
+      }
+    },
+    {
+      "input": "smb://[::1]x/",
+      "outcome": {
+        "rejected": "Invalid IPv6 URL"
+      }
+    },
+    {
+      "input": "smb://[::1",
+      "outcome": {
+        "rejected": "Invalid IPv6 URL"
+      }
+    },
+    {
+      "input": "smb://::1]/",
+      "outcome": {
+        "rejected": "Invalid IPv6 URL"
+      }
+    },
+    {
+      "input": "smb://nas/a%5Cb",
+      "outcome": {
+        "value": "smb://nas/a/b"
+      }
+    },
+    {
+      "input": "smb://nas/a\\b",
+      "outcome": {
+        "value": "smb://nas/a/b"
+      }
+    },
+    {
+      "input": "smb://nas/a?",
+      "outcome": {
+        "value": "smb://nas/a"
+      }
+    },
+    {
+      "input": "smb://nas/a#",
+      "outcome": {
+        "value": "smb://nas/a"
+      }
+    },
+    {
+      "input": "smb:nas/share",
+      "outcome": {
+        "error": "Enter an SMB server name, for example smb://nas/Projects."
+      }
+    },
+    {
+      "input": "smb:/nas/share",
+      "outcome": {
+        "error": "Enter an SMB server name, for example smb://nas/Projects."
+      }
+    },
+    {
+      "input": "smb://my nas/a",
+      "outcome": {
+        "error": "Enter an SMB server name, for example smb://nas/Projects."
+      }
+    },
+    {
+      "input": "smb://nas x/a",
+      "outcome": {
+        "error": "Enter an SMB server name, for example smb://nas/Projects."
+      }
+    },
+    {
+      "input": "smb://nas/../..",
+      "outcome": {
+        "value": "smb://nas/"
+      }
+    },
+    {
+      "input": "smb://nas/a/./b/",
+      "outcome": {
+        "value": "smb://nas/a/b"
+      }
+    },
+    {
+      "input": "smb://nas/%E2%82%AC",
+      "outcome": {
+        "value": "smb://nas/%E2%82%AC"
+      }
+    },
+    {
+      "input": "smb://nas/%e2%82%ac",
+      "outcome": {
+        "value": "smb://nas/%E2%82%AC"
+      }
+    },
+    {
+      "input": "smb://nas/a%2Fb",
+      "outcome": {
+        "value": "smb://nas/a/b"
+      }
+    },
+    {
+      "input": "smb://nas/a%25b",
+      "outcome": {
+        "value": "smb://nas/a%25b"
+      }
+    },
+    {
+      "input": "smb://nas/~user",
+      "outcome": {
+        "value": "smb://nas/~user"
+      }
+    },
+    {
+      "input": "smb://nas/a b",
+      "outcome": {
+        "value": "smb://nas/a%20b"
+      }
+    },
+    {
+      "input": "smb://NÄS/x",
+      "outcome": {
+        "value": "smb://näs/x"
+      }
+    },
+    {
+      "input": "smb://ＮＡＳ/x",
+      "outcome": {
+        "value": "smb://ｎａｓ/x"
+      }
+    },
+    {
+      "input": "smb://nas℀/x",
+      "outcome": {
+        "rejected": "netloc 'nas℀' contains invalid characters under NFKC normalization"
+      }
+    },
+    {
+      "input": "smb://İ/x",
+      "outcome": {
+        "value": "smb://i̇/x"
+      }
+    },
+    {
+      "input": "smb://nas/%FF",
+      "outcome": {
+        "rejected": "'utf-8' codec can't decode byte 0xff in position 1: invalid start byte"
+      }
+    },
+    {
+      "input": "smb://nas/%zz",
+      "outcome": {
+        "value": "smb://nas/%25zz"
+      }
+    },
+    {
+      "input": "SMB://Nas.Local:139/Share/Sub/",
+      "outcome": {
+        "value": "smb://nas.local:139/Share/Sub"
+      }
+    },
+    {
+      "input": "smb://10.0.0.1/share",
+      "outcome": {
+        "value": "smb://10.0.0.1/share"
+      }
+    },
+    {
+      "input": "smb://nas/it's (1)!",
+      "outcome": {
+        "value": "smb://nas/it%27s%20%281%29%21"
+      }
+    },
+    {
+      "input": "smb://nas//a//b",
+      "outcome": {
+        "value": "smb://nas/a/b"
+      }
+    },
+    {
+      "input": "smb://nas/a/..",
+      "outcome": {
+        "value": "smb://nas/"
+      }
+    },
+    {
+      "input": "smb://@nas/x",
+      "outcome": {
+        "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+      }
+    },
+    {
+      "input": "smb://:p@nas/x",
+      "outcome": {
+        "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+      }
+    },
+    {
+      "input": "smb://nas:445:1/x",
+      "outcome": {
+        "error": "Invalid SMB port."
+      }
+    },
+    {
+      "input": "smb://[::1]:/x",
+      "outcome": {
+        "value": "smb://[::1]/x"
+      }
+    },
+    {
+      "input": "smb://[::1]:x/x",
+      "outcome": {
+        "error": "Invalid SMB port."
+      }
+    },
+    {
+      "input": "smb:// nas/x",
+      "outcome": {
+        "error": "Enter an SMB server name, for example smb://nas/Projects."
+      }
+    },
+    {
+      "input": "smb://nas /x",
+      "outcome": {
+        "error": "Enter an SMB server name, for example smb://nas/Projects."
+      }
+    },
+    {
+      "input": "smb://n%20as/x",
+      "outcome": {
+        "error": "Use an unescaped server name without credentials or control characters."
+      }
+    },
+    {
+      "input": "smb://ǅ/x",
+      "outcome": {
+        "value": "smb://ǆ/x"
+      }
+    },
+    {
+      "input": "smb://ß/x",
+      "outcome": {
+        "value": "smb://ß/x"
+      }
+    },
+    {
+      "input": "MTP://[usb:001,010]",
+      "outcome": {
+        "value": "mtp://[usb:001,010]/"
+      }
+    },
+    {
+      "input": "mtp://[usb:001,010]",
+      "outcome": {
+        "value": "mtp://[usb:001,010]/"
+      }
+    },
+    {
+      "input": "afc://Device-ID/a/../b/",
+      "outcome": {
+        "value": "afc://Device-ID/b"
+      }
+    },
+    {
+      "input": "mtp://[usb]x/",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://[[usb]]/",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://a b/",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://a%20b/",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp:///x",
+      "outcome": {
+        "error": "A connected-device address must include a device identifier and path."
+      }
+    },
+    {
+      "input": "mtp://xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/",
+      "outcome": {
+        "value": "mtp://xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/"
+      }
+    },
+    {
+      "input": "mtp://xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé/",
+      "outcome": {
+        "value": "mtp://éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé/"
+      }
+    },
+    {
+      "input": "mtp://ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé/",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://x/a\\b",
+      "outcome": {
+        "value": "mtp://x/a%5Cb"
+      }
+    },
+    {
+      "input": "mtp://x/a%2Fb",
+      "outcome": {
+        "value": "mtp://x/a/b"
+      }
+    },
+    {
+      "input": "mtp://x/%FF",
+      "outcome": {
+        "rejected": "'utf-8' codec can't decode byte 0xff in position 1: invalid start byte"
+      }
+    },
+    {
+      "input": "mtp://x/%E2%82%AC",
+      "outcome": {
+        "value": "mtp://x/%E2%82%AC"
+      }
+    },
+    {
+      "input": "mtp://x/a#b",
+      "outcome": {
+        "error": "A connected-device address must include a device identifier and path."
+      }
+    },
+    {
+      "input": "mtp://x/a?b",
+      "outcome": {
+        "error": "A connected-device address must include a device identifier and path."
+      }
+    },
+    {
+      "input": "mtp:x",
+      "outcome": {
+        "error": "A connected-device address must include a device identifier and path."
+      }
+    },
+    {
+      "input": "mtp:",
+      "outcome": {
+        "error": "A connected-device address must include a device identifier and path."
+      }
+    },
+    {
+      "input": "mtp://",
+      "outcome": {
+        "error": "A connected-device address must include a device identifier and path."
+      }
+    },
+    {
+      "input": "gphoto2://[usb:001,002]/",
+      "outcome": {
+        "value": "gphoto2://[usb:001,002]/"
+      }
+    },
+    {
+      "input": "GPHOTO2://[usb:001,002]/store_00010001/DCIM/",
+      "outcome": {
+        "value": "gphoto2://[usb:001,002]/store_00010001/DCIM"
+      }
+    },
+    {
+      "input": "afc://abc:1/x",
+      "outcome": {
+        "value": "afc://abc:1/x"
+      }
+    },
+    {
+      "input": "afc://abc　/x",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://x]/",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://[x/",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    },
+    {
+      "input": "mtp://x/..",
+      "outcome": {
+        "value": "mtp://x/"
+      }
+    },
+    {
+      "input": "mtp://x/./a/",
+      "outcome": {
+        "value": "mtp://x/a"
+      }
+    },
+    {
+      "input": "mtp://[usb:001,010]/Internal%20storage",
+      "outcome": {
+        "value": "mtp://[usb:001,010]/Internal%20storage"
+      }
+    },
+    {
+      "input": "mtp://x/a%zz",
+      "outcome": {
+        "value": "mtp://x/a%25zz"
+      }
+    },
+    {
+      "input": "mtp://x/a%00",
+      "outcome": {
+        "error": "Encoded control characters are not allowed."
+      }
+    },
+    {
+      "input": "mtp://x\u001c/",
+      "outcome": {
+        "error": "Control characters are not allowed in an address."
+      }
+    },
+    {
+      "input": "mtp://[usb:1]]/",
+      "outcome": {
+        "error": "Invalid connected-device identifier."
+      }
+    }
+  ],
+  "relative": [
+    {
+      "input": "Plans",
+      "base": "file:///home/a",
+      "outcome": {
+        "value": "file:///home/a/Plans"
+      }
+    },
+    {
+      "input": "x",
+      "base": "file:///tmp/a%20b/",
+      "outcome": {
+        "value": "file:///tmp/a%20b/x"
+      }
+    },
+    {
+      "input": "..",
+      "base": "file:///home/a",
+      "outcome": {
+        "value": "file:///home"
+      }
+    },
+    {
+      "input": "Next plan",
+      "base": "smb://nas/share",
+      "outcome": {
+        "value": "smb://nas/share/Next%20plan"
+      }
+    },
+    {
+      "input": "../../x",
+      "base": "smb://nas/share/",
+      "outcome": {
+        "value": "smb://nas/x"
+      }
+    },
+    {
+      "input": "a#b",
+      "base": "smb://nas/share",
+      "outcome": {
+        "value": "smb://nas/share/a%23b"
+      }
+    },
+    {
+      "input": "a?b",
+      "base": "smb://nas/share",
+      "outcome": {
+        "value": "smb://nas/share/a%3Fb"
+      }
+    },
+    {
+      "input": "a%20b",
+      "base": "smb://nas/share",
+      "outcome": {
+        "value": "smb://nas/share/a%2520b"
+      }
+    },
+    {
+      "input": "Docs",
+      "base": "trash:///",
+      "outcome": {
+        "value": "file:///home/test/Docs"
+      }
+    },
+    {
+      "input": "Docs",
+      "base": "ox:pc",
+      "outcome": {
+        "value": "file:///home/test/Docs"
+      }
+    },
+    {
+      "input": "Docs",
+      "base": "home:",
+      "outcome": {
+        "value": "file:///home/test/Docs"
+      }
+    },
+    {
+      "input": "DCIM/Camera",
+      "base": "mtp://[usb:001,010]/Internal%20storage",
+      "outcome": {
+        "value": "mtp://[usb:001,010]/Internal%20storage/DCIM/Camera"
+      }
+    },
+    {
+      "input": "../..",
+      "base": "mtp://[usb:001,010]/Internal%20storage",
+      "outcome": {
+        "value": "mtp://[usb:001,010]/"
+      }
+    },
+    {
+      "input": "x",
+      "base": "MTP://[usb:001,010]/",
+      "outcome": {
+        "value": "mtp://[usb:001,010]/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "SMB://NAS/a",
+      "outcome": {
+        "value": "smb://nas/a/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "FILE:///tmp",
+      "outcome": {
+        "value": "file:///home/test/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "",
+      "outcome": {
+        "value": "file:///home/test/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "file:///tmp/%FF",
+      "outcome": {
+        "value": "file:///tmp/%EF%BF%BD/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "file://[bad/x",
+      "outcome": {
+        "rejected": "Invalid IPv6 URL"
+      }
+    },
+    {
+      "input": "x",
+      "base": "smb://[bad/",
+      "outcome": {
+        "value": "file:///home/test/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "smb://u@nas/a",
+      "outcome": {
+        "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+      }
+    },
+    {
+      "input": "/abs",
+      "base": "smb://nas/share",
+      "outcome": {
+        "value": "file:///abs"
+      }
+    },
+    {
+      "input": "~",
+      "base": "smb://nas/share",
+      "outcome": {
+        "value": "file:///home/test"
+      }
+    },
+    {
+      "input": "~/x",
+      "base": "smb://nas/share",
+      "outcome": {
+        "value": "file:///home/test/x"
+      }
+    },
+    {
+      "input": "é #",
+      "base": "smb://nas/s",
+      "outcome": {
+        "value": "smb://nas/s/%C3%A9%20%23"
+      }
+    },
+    {
+      "input": "a\\b",
+      "base": "smb://nas/s",
+      "outcome": {
+        "value": "smb://nas/s/a/b"
+      }
+    },
+    {
+      "input": "x",
+      "base": "file:///tmp/a%23b",
+      "outcome": {
+        "value": "file:///tmp/a%23b/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "file://localhost/tmp",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "afc://id",
+      "outcome": {
+        "value": "afc://id/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "smb://nas",
+      "outcome": {
+        "value": "smb://nas/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "smb://nas/share?q",
+      "outcome": {
+        "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+      }
+    },
+    {
+      "input": ".",
+      "base": "smb://nas/share",
+      "outcome": {
+        "value": "smb://nas/share"
+      }
+    },
+    {
+      "input": "x",
+      "base": "file://h/tmp",
+      "outcome": {
+        "value": "file:///tmp/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "file:////srv/a",
+      "outcome": {
+        "value": "file:////srv/a/x"
+      }
+    },
+    {
+      "input": "x",
+      "base": "smb://nas/%FF",
+      "outcome": {
+        "rejected": "'utf-8' codec can't decode byte 0xff in position 1: invalid start byte"
+      }
+    },
+    {
+      "input": "C:\\x",
+      "base": "smb://nas/s",
+      "outcome": {
+        "error": "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share."
+      }
+    },
+    {
+      "input": "x",
+      "base": "mtp:x",
+      "outcome": {
+        "error": "A connected-device address must include a device identifier and path."
+      }
+    }
+  ],
+  "names": [
+    {
+      "input": "Résumé 2026.txt",
+      "outcome": {
+        "value": "Résumé 2026.txt"
+      }
+    },
+    {
+      "input": "",
+      "outcome": {
+        "error": "Enter a non-empty file name, not “.” or “..”."
+      }
+    },
+    {
+      "input": ".",
+      "outcome": {
+        "error": "Enter a non-empty file name, not “.” or “..”."
+      }
+    },
+    {
+      "input": "..",
+      "outcome": {
+        "error": "Enter a non-empty file name, not “.” or “..”."
+      }
+    },
+    {
+      "input": "../bad",
+      "outcome": {
+        "error": "A name cannot contain slashes or control characters."
+      }
+    },
+    {
+      "input": "a/b",
+      "outcome": {
+        "error": "A name cannot contain slashes or control characters."
+      }
+    },
+    {
+      "input": "a\\b",
+      "outcome": {
+        "error": "A name cannot contain slashes or control characters."
+      }
+    },
+    {
+      "input": "x\u0000",
+      "outcome": {
+        "error": "A name cannot contain slashes or control characters."
+      }
+    },
+    {
+      "input": "x\n",
+      "outcome": {
+        "error": "A name cannot contain slashes or control characters."
+      }
+    },
+    {
+      "input": "del",
+      "outcome": {
+        "error": "A name cannot contain slashes or control characters."
+      }
+    },
+    {
+      "input": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "outcome": {
+        "error": "This name is longer than 255 bytes."
+      }
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "outcome": {
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "outcome": {
+        "error": "This name is longer than 255 bytes."
+      }
+    },
+    {
+      "input": "x",
+      "outcome": {
+        "value": "x"
+      }
+    },
+    {
+      "input": " ",
+      "outcome": {
+        "value": " "
+      }
+    },
+    {
+      "input": "...",
+      "outcome": {
+        "value": "..."
+      }
+    },
+    {
+      "input": ".hidden",
+      "outcome": {
+        "value": ".hidden"
+      }
+    },
+    {
+      "input": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééa",
+      "outcome": {
+        "value": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééa"
+      }
+    },
+    {
+      "input": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "outcome": {
+        "error": "This name is longer than 255 bytes."
+      }
+    }
+  ],
+  "copies": [
+    {
+      "name": "file.pdf",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "value": "file (copy 2).pdf"
+      }
+    },
+    {
+      "name": ".env",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "value": ".env (copy 2)"
+      }
+    },
+    {
+      "name": "Folder.v1",
+      "number": 3,
+      "is_dir": true,
+      "outcome": {
+        "value": "Folder.v1 (copy 3)"
+      }
+    },
+    {
+      "name": "archive.tar.gz",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "value": "archive.tar (copy 2).gz"
+      }
+    },
+    {
+      "name": "..hidden.txt",
+      "number": 4,
+      "is_dir": false,
+      "outcome": {
+        "value": "..hidden (copy 4).txt"
+      }
+    },
+    {
+      "name": "trailing.",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "value": "trailing (copy 2)."
+      }
+    },
+    {
+      "name": "README",
+      "number": 10,
+      "is_dir": false,
+      "outcome": {
+        "value": "README (copy 10)"
+      }
+    },
+    {
+      "name": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.txt",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "value": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé (copy 2).txt"
+      }
+    },
+    {
+      "name": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.txt",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "value": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé (copy 2).txt"
+      }
+    },
+    {
+      "name": "a.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "error": "This file name is too long to generate a duplicate name."
+      }
+    },
+    {
+      "name": "a/b",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "error": "A name cannot contain slashes or control characters."
+      }
+    },
+    {
+      "name": "...",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "value": "... (copy 2)"
+      }
+    },
+    {
+      "name": ".a.b",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "value": ".a (copy 2).b"
+      }
+    },
+    {
+      "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "number": 2,
+      "is_dir": true,
+      "outcome": {
+        "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (copy 2)"
+      }
+    },
+    {
+      "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt",
+      "number": 99,
+      "is_dir": false,
+      "outcome": {
+        "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (copy 99).txt"
+      }
+    },
+    {
+      "name": "日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語",
+      "number": 12345,
+      "is_dir": false,
+      "outcome": {
+        "value": "日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本語日本 (copy 12345)"
+      }
+    },
+    {
+      "name": "a..b",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "value": "a. (copy 2).b"
+      }
+    },
+    {
+      "name": ".",
+      "number": 2,
+      "is_dir": false,
+      "outcome": {
+        "error": "Enter a non-empty file name, not “.” or “..”."
+      }
+    },
+    {
+      "name": "noext",
+      "number": 0,
+      "is_dir": false,
+      "outcome": {
+        "value": "noext (copy 0)"
+      }
+    },
+    {
+      "name": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀.md",
+      "number": 7,
+      "is_dir": false,
+      "outcome": {
+        "value": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀 (copy 7).md"
+      }
+    }
+  ],
+  "labels": [
+    {
+      "input": "  Projects (Z:) ",
+      "fallback": "Folder",
+      "outcome": {
+        "value": "Projects (Z:)"
+      }
+    },
+    {
+      "input": " \t",
+      "fallback": "Folder",
+      "outcome": {
+        "value": "Folder"
+      }
+    },
+    {
+      "input": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "fallback": "Folder",
+      "outcome": {
+        "value": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      }
+    },
+    {
+      "input": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "fallback": "Folder",
+      "outcome": {
+        "error": "A sidebar label must be at most 120 characters and contain no control characters."
+      }
+    },
+    {
+      "input": "a\u0001b",
+      "fallback": "Folder",
+      "outcome": {
+        "error": "A sidebar label must be at most 120 characters and contain no control characters."
+      }
+    },
+    {
+      "input": "",
+      "fallback": "Fallback",
+      "outcome": {
+        "value": "Fallback"
+      }
+    },
+    {
+      "input": "\u001c",
+      "fallback": "F",
+      "outcome": {
+        "value": "F"
+      }
+    },
+    {
+      "input": "　x ",
+      "fallback": "F",
+      "outcome": {
+        "value": "x"
+      }
+    },
+    {
+      "input": "a",
+      "fallback": "F",
+      "outcome": {
+        "value": "a"
+      }
+    },
+    {
+      "input": "\u001cx\u001d",
+      "fallback": "F",
+      "outcome": {
+        "value": "x"
+      }
+    }
+  ],
+  "items": [
+    {
+      "input": "smb://nas/work/Projects",
+      "outcome": {
+        "value": "smb://nas/work/Projects"
+      }
+    },
+    {
+      "input": "smb://nas/",
+      "outcome": {
+        "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+      }
+    },
+    {
+      "input": "smb://nas/work",
+      "outcome": {
+        "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+      }
+    },
+    {
+      "input": "smb://nas/work/",
+      "outcome": {
+        "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+      }
+    },
+    {
+      "input": "mtp://[usb:001,010]/",
+      "outcome": {
+        "error": "Open the device storage first, then select files or folders inside it. The device itself cannot be moved or copied."
+      }
+    },
+    {
+      "input": "mtp://[usb:001,010]/Internal%20storage",
+      "outcome": {
+        "value": "mtp://[usb:001,010]/Internal%20storage"
+      }
+    },
+    {
+      "input": "file:///",
+      "outcome": {
+        "value": "file:///"
+      }
+    },
+    {
+      "input": "/tmp",
+      "outcome": {
+        "value": "file:///tmp"
+      }
+    },
+    {
+      "input": "afc://x",
+      "outcome": {
+        "error": "Open the device storage first, then select files or folders inside it. The device itself cannot be moved or copied."
+      }
+    },
+    {
+      "input": "gphoto2://[usb:1]/DCIM",
+      "outcome": {
+        "value": "gphoto2://[usb:1]/DCIM"
+      }
+    },
+    {
+      "input": "\\\\nas\\s\\x",
+      "outcome": {
+        "value": "smb://nas/s/x"
+      }
+    },
+    {
+      "input": "http://x/",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "smb://nas//",
+      "outcome": {
+        "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+      }
+    },
+    {
+      "input": "trash:///",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    },
+    {
+      "input": "smb://nas/work/../x",
+      "outcome": {
+        "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+      }
+    },
+    {
+      "input": "mtp://x/./",
+      "outcome": {
+        "error": "Open the device storage first, then select files or folders inside it. The device itself cannot be moved or copied."
+      }
+    }
+  ],
+  "shares": [
+    {
+      "input": "smb://nas/",
+      "outcome": {
+        "error": "Enter a shared folder such as \\\\nas\\Projects, not only the server name."
+      }
+    },
+    {
+      "input": "/tmp",
+      "outcome": {
+        "error": "Enter a shared folder such as \\\\nas\\Projects, not only the server name."
+      }
+    },
+    {
+      "input": "\\\\nas\\share",
+      "outcome": {
+        "value": "smb://nas/share"
+      }
+    },
+    {
+      "input": "smb://nas/share/sub",
+      "outcome": {
+        "value": "smb://nas/share/sub"
+      }
+    },
+    {
+      "input": "mtp://x/a",
+      "outcome": {
+        "error": "Enter a shared folder such as \\\\nas\\Projects, not only the server name."
+      }
+    },
+    {
+      "input": "smb://nas",
+      "outcome": {
+        "error": "Enter a shared folder such as \\\\nas\\Projects, not only the server name."
+      }
+    },
+    {
+      "input": "bad:",
+      "outcome": {
+        "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+      }
+    }
+  ],
+  "servers": [
+    {
+      "input": "smb://nas/",
+      "is_server": true
+    },
+    {
+      "input": "\\\\nas",
+      "is_server": true
+    },
+    {
+      "input": "smb://nas/work",
+      "is_server": false
+    },
+    {
+      "input": "file:///",
+      "is_server": false
+    },
+    {
+      "input": "http://nas/",
+      "is_server": false
+    },
+    {
+      "input": "smb://nas",
+      "is_server": true
+    },
+    {
+      "input": "smb://nas/a/..",
+      "is_server": true
+    },
+    {
+      "input": "mtp://x/",
+      "is_server": false
+    },
+    {
+      "input": "bad:",
+      "is_server": false
+    },
+    {
+      "input": "",
+      "is_server": false
+    },
+    {
+      "input": "smb://u@nas/",
+      "is_server": false
+    }
+  ],
+  "devices": [
+    {
+      "input": "mtp://[usb:001,010]/Internal%20storage/DCIM",
+      "is_device": true
+    },
+    {
+      "input": "GPhoto2://[usb:001,002]",
+      "is_device": true
+    },
+    {
+      "input": "smb://[usb:001,002]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://NAS/Team%20files",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/x",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/a:b",
+      "is_device": false
+    },
+    {
+      "input": "C:\\Windows",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a?b#c",
+      "is_device": false
+    },
+    {
+      "input": "mtp:foo",
+      "is_device": true
+    },
+    {
+      "input": "smb://[fe80::1]/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://[fe80::1%eth0]:445/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://[v1.x]/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://[nas/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[1.2.3.4]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://x[::1]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::1]x/",
+      "is_device": false
+    },
+    {
+      "input": " mtp://x/",
+      "is_device": true
+    },
+    {
+      "input": "\tsmb://a\tb/c\n",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas℀/x",
+      "is_device": false
+    },
+    {
+      "input": "trash:///a",
+      "is_device": false
+    },
+    {
+      "input": "ox:home",
+      "is_device": false
+    },
+    {
+      "input": "mtp://x/a?b",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[a]b/",
+      "is_device": true
+    },
+    {
+      "input": "",
+      "is_device": false
+    },
+    {
+      "input": "//x/y",
+      "is_device": false
+    },
+    {
+      "input": "smb://u[@[::1]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::1]@x/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::1]:5/",
+      "is_device": false
+    },
+    {
+      "input": "smb://a:b@[::1]:5/p",
+      "is_device": false
+    },
+    {
+      "input": "x://[::1]",
+      "is_device": false
+    },
+    {
+      "input": "smb://[fe80::1%]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[v1.x\n]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::ffff:1.2.3.4]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[01.2.3.4]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[1.2.3.04]/",
+      "is_device": false
+    },
+    {
+      "input": "afc://x#y/z",
+      "is_device": true
+    },
+    {
+      "input": "1abc://x",
+      "is_device": false
+    },
+    {
+      "input": "a+b-c.d://h/p",
+      "is_device": false
+    },
+    {
+      "input": "\u0000\u001f smb://h/p",
+      "is_device": false
+    },
+    {
+      "input": "smb://h/p\r\n",
+      "is_device": false
+    },
+    {
+      "input": "é://x",
+      "is_device": false
+    },
+    {
+      "input": "smb://[fe80::1%a%b]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::1%25eth0]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[v1.x]:8/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[V1.x]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[vA.x]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[v.x]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[:::]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[1::2::3]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://ｘ℀/",
+      "is_device": false
+    },
+    {
+      "input": "smb://a℀@b/",
+      "is_device": false
+    },
+    {
+      "input": "mtp://ａ℀/x",
+      "is_device": true
+    },
+    {
+      "input": "\\\\NAS\\Team files\\Q3 #1",
+      "is_device": false
+    },
+    {
+      "input": "//NAS/Projects",
+      "is_device": false
+    },
+    {
+      "input": "smb://NAS/Team%20files/100%25.pdf",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/Été #1?.txt",
+      "is_device": false
+    },
+    {
+      "input": "mtp://[usb:001,010]/Internal storage/DCIM",
+      "is_device": true
+    },
+    {
+      "input": "gphoto2://[usb:001,002]/DCIM",
+      "is_device": true
+    },
+    {
+      "input": "afc://00008020-001C/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://user@device/DCIM",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[usb:001,002/DCIM",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[usb:001,002]/DCIM?mode=write",
+      "is_device": false
+    },
+    {
+      "input": "afc:///DCIM",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[usb:001,002]/a%00b",
+      "is_device": true
+    },
+    {
+      "input": "~/Docs",
+      "is_device": false
+    },
+    {
+      "input": "file://localhost/tmp/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://u:p@nas/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://u@nas/share",
+      "is_device": false
+    },
+    {
+      "input": "\\\\u:p@nas\\share",
+      "is_device": false
+    },
+    {
+      "input": "smb://u%40nas/share",
+      "is_device": false
+    },
+    {
+      "input": "",
+      "is_device": false
+    },
+    {
+      "input": "http://example.org",
+      "is_device": false
+    },
+    {
+      "input": "javascript:alert(1)",
+      "is_device": false
+    },
+    {
+      "input": "file://nas/share",
+      "is_device": false
+    },
+    {
+      "input": "smb:///share",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a%00b",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a#b",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a?b",
+      "is_device": false
+    },
+    {
+      "input": "C:\\Windows",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas%0a/share",
+      "is_device": false
+    },
+    {
+      "input": "   ",
+      "is_device": false
+    },
+    {
+      "input": "\t",
+      "is_device": false
+    },
+    {
+      "input": " 　/tmp/x  ",
+      "is_device": false
+    },
+    {
+      "input": "\u001c/tmp\u001f",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/a\u0000",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/a",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/ab",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a\tb",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas\\",
+      "is_device": false
+    },
+    {
+      "input": "\\\\",
+      "is_device": false
+    },
+    {
+      "input": "//",
+      "is_device": false
+    },
+    {
+      "input": "///tmp/x",
+      "is_device": false
+    },
+    {
+      "input": "//tmp",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas:445\\share",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas\\a\\..\\b",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas\\a/b",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas\\a%20b",
+      "is_device": false
+    },
+    {
+      "input": "\\\\NAS\\é",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas\\100%",
+      "is_device": false
+    },
+    {
+      "input": "\\\\[::1]\\x",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas?x\\share",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas#x\\share",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas%41\\share",
+      "is_device": false
+    },
+    {
+      "input": "\\\\[fe80--1]\\x",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas\\..\\..\\x",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas\\.",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas\\a\\\\b\\",
+      "is_device": false
+    },
+    {
+      "input": "\\\\nas\\it's (1)!*",
+      "is_device": false
+    },
+    {
+      "input": "c:/x",
+      "is_device": false
+    },
+    {
+      "input": "C:",
+      "is_device": false
+    },
+    {
+      "input": "C:x",
+      "is_device": false
+    },
+    {
+      "input": "z:\\",
+      "is_device": false
+    },
+    {
+      "input": "1:/x",
+      "is_device": false
+    },
+    {
+      "input": "a:b",
+      "is_device": false
+    },
+    {
+      "input": "report:2024.txt",
+      "is_device": false
+    },
+    {
+      "input": "ftp://h/x",
+      "is_device": false
+    },
+    {
+      "input": "sftp://h/x",
+      "is_device": false
+    },
+    {
+      "input": "dav://h/",
+      "is_device": false
+    },
+    {
+      "input": "trash:///",
+      "is_device": false
+    },
+    {
+      "input": "recent:///",
+      "is_device": false
+    },
+    {
+      "input": "network:///",
+      "is_device": false
+    },
+    {
+      "input": "home:",
+      "is_device": false
+    },
+    {
+      "input": "ox:home",
+      "is_device": false
+    },
+    {
+      "input": "x-y.z+w:foo",
+      "is_device": false
+    },
+    {
+      "input": "~",
+      "is_device": false
+    },
+    {
+      "input": "~/",
+      "is_device": false
+    },
+    {
+      "input": "~user",
+      "is_device": false
+    },
+    {
+      "input": "~/../x",
+      "is_device": false
+    },
+    {
+      "input": "~/./a//b/",
+      "is_device": false
+    },
+    {
+      "input": "~//etc",
+      "is_device": false
+    },
+    {
+      "input": "~///etc",
+      "is_device": false
+    },
+    {
+      "input": "relative",
+      "is_device": false
+    },
+    {
+      "input": "a/../..",
+      "is_device": false
+    },
+    {
+      "input": "../..",
+      "is_device": false
+    },
+    {
+      "input": ".",
+      "is_device": false
+    },
+    {
+      "input": "..",
+      "is_device": false
+    },
+    {
+      "input": "a b/c#d?e%20f",
+      "is_device": false
+    },
+    {
+      "input": "/",
+      "is_device": false
+    },
+    {
+      "input": "/..",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/x/",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/./x",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/../../..",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/a b",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/a%20b",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/it's (1) [x] {y} @ $ & + , ; = ~ ! *",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/€/ü/日本",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/a\\b",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/a:b",
+      "is_device": false
+    },
+    {
+      "input": "/tmp/😀",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/x",
+      "is_device": false
+    },
+    {
+      "input": "FILE:///TMP",
+      "is_device": false
+    },
+    {
+      "input": "File://LOCALHOST/x",
+      "is_device": false
+    },
+    {
+      "input": "file:tmp",
+      "is_device": false
+    },
+    {
+      "input": "file:/tmp/x",
+      "is_device": false
+    },
+    {
+      "input": "file:",
+      "is_device": false
+    },
+    {
+      "input": "file://",
+      "is_device": false
+    },
+    {
+      "input": "file:///",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/a%2Fb",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/%23",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/a%3Fb",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/%FF",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/%zz",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/%4",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/a%00b",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/../..",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/x?y",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/x#y",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/x?",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/x#",
+      "is_device": false
+    },
+    {
+      "input": "file://user@localhost/x",
+      "is_device": false
+    },
+    {
+      "input": "file:////server/share",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/%e2%82%ac",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/a%5Cb",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/a b",
+      "is_device": false
+    },
+    {
+      "input": "file://localhost:80/x",
+      "is_device": false
+    },
+    {
+      "input": "file://[::1]/x",
+      "is_device": false
+    },
+    {
+      "input": "file:///tmp/%C3",
+      "is_device": false
+    },
+    {
+      "input": "file:///a/./b/../c/",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/",
+      "is_device": false
+    },
+    {
+      "input": "smb://NAS/Share/",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:445/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:0445",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:0/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:65535/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:65536/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:99999/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:x/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:-1/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:+1/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:١/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://[fe80::1]/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://[FE80::1]:445/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://[fe80::1%eth0]/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::1]:445/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://[1.2.3.4]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[v1.x]/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://[vz.x]/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://[v1.]/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://[nas]/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://x[::1]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::1]x/",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::1",
+      "is_device": false
+    },
+    {
+      "input": "smb://::1]/",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a%5Cb",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a\\b",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a?",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a#",
+      "is_device": false
+    },
+    {
+      "input": "smb:nas/share",
+      "is_device": false
+    },
+    {
+      "input": "smb:/nas/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://my nas/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas x/a",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/../..",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a/./b/",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/%E2%82%AC",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/%e2%82%ac",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a%2Fb",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a%25b",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/~user",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a b",
+      "is_device": false
+    },
+    {
+      "input": "smb://NÄS/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://ＮＡＳ/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas℀/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://İ/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/%FF",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/%zz",
+      "is_device": false
+    },
+    {
+      "input": "SMB://Nas.Local:139/Share/Sub/",
+      "is_device": false
+    },
+    {
+      "input": "smb://10.0.0.1/share",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/it's (1)!",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas//a//b",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas/a/..",
+      "is_device": false
+    },
+    {
+      "input": "smb://@nas/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://:p@nas/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas:445:1/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::1]:/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://[::1]:x/x",
+      "is_device": false
+    },
+    {
+      "input": "smb:// nas/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://nas /x",
+      "is_device": false
+    },
+    {
+      "input": "smb://n%20as/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://ǅ/x",
+      "is_device": false
+    },
+    {
+      "input": "smb://ß/x",
+      "is_device": false
+    },
+    {
+      "input": "MTP://[usb:001,010]",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[usb:001,010]",
+      "is_device": true
+    },
+    {
+      "input": "afc://Device-ID/a/../b/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[usb]x/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[[usb]]/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://a b/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://a%20b/",
+      "is_device": true
+    },
+    {
+      "input": "mtp:///x",
+      "is_device": true
+    },
+    {
+      "input": "mtp://xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/a\\b",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/a%2Fb",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/%FF",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/%E2%82%AC",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/a#b",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/a?b",
+      "is_device": true
+    },
+    {
+      "input": "mtp:x",
+      "is_device": true
+    },
+    {
+      "input": "mtp:",
+      "is_device": true
+    },
+    {
+      "input": "mtp://",
+      "is_device": true
+    },
+    {
+      "input": "gphoto2://[usb:001,002]/",
+      "is_device": true
+    },
+    {
+      "input": "GPHOTO2://[usb:001,002]/store_00010001/DCIM/",
+      "is_device": true
+    },
+    {
+      "input": "afc://abc:1/x",
+      "is_device": true
+    },
+    {
+      "input": "afc://abc　/x",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x]/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[x/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/..",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/./a/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[usb:001,010]/Internal%20storage",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/a%zz",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x/a%00",
+      "is_device": true
+    },
+    {
+      "input": "mtp://x\u001c/",
+      "is_device": true
+    },
+    {
+      "input": "mtp://[usb:1]]/",
+      "is_device": true
+    }
+  ],
+  "splits": [
+    {
+      "input": "mtp://[usb:001,010]/Internal%20storage/DCIM",
+      "outcome": {
+        "value": {
+          "scheme": "mtp",
+          "netloc": "[usb:001,010]",
+          "path": "/Internal%20storage/DCIM",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "GPhoto2://[usb:001,002]",
+      "outcome": {
+        "value": {
+          "scheme": "gphoto2",
+          "netloc": "[usb:001,002]",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[usb:001,002]/",
+      "outcome": {
+        "rejected": "'usb:001,002' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "smb://NAS/Team%20files",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "NAS",
+          "path": "/Team%20files",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "file:///tmp/x",
+      "outcome": {
+        "value": {
+          "scheme": "file",
+          "netloc": "",
+          "path": "/tmp/x",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "/tmp/a:b",
+      "outcome": {
+        "value": {
+          "scheme": "",
+          "netloc": "",
+          "path": "/tmp/a:b",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "C:\\Windows",
+      "outcome": {
+        "value": {
+          "scheme": "c",
+          "netloc": "",
+          "path": "\\Windows",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://nas/a?b#c",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "nas",
+          "path": "/a",
+          "query": "b",
+          "fragment": "c"
+        }
+      }
+    },
+    {
+      "input": "mtp:foo",
+      "outcome": {
+        "value": {
+          "scheme": "mtp",
+          "netloc": "",
+          "path": "foo",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[fe80::1]/share",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "[fe80::1]",
+          "path": "/share",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[fe80::1%eth0]:445/share",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "[fe80::1%eth0]:445",
+          "path": "/share",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[v1.x]/share",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "[v1.x]",
+          "path": "/share",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[nas/share",
+      "outcome": {
+        "rejected": "Invalid IPv6 URL"
+      }
+    },
+    {
+      "input": "smb://nas]/",
+      "outcome": {
+        "rejected": "Invalid IPv6 URL"
+      }
+    },
+    {
+      "input": "smb://[1.2.3.4]/",
+      "outcome": {
+        "rejected": "An IPv4 address cannot be in brackets"
+      }
+    },
+    {
+      "input": "smb://x[::1]/",
+      "outcome": {
+        "rejected": "Invalid IPv6 URL"
+      }
+    },
+    {
+      "input": "smb://[::1]x/",
+      "outcome": {
+        "rejected": "Invalid IPv6 URL"
+      }
+    },
+    {
+      "input": " mtp://x/",
+      "outcome": {
+        "value": {
+          "scheme": "mtp",
+          "netloc": "x",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "\tsmb://a\tb/c\n",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "ab",
+          "path": "/c",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://nas℀/x",
+      "outcome": {
+        "rejected": "netloc 'nas℀' contains invalid characters under NFKC normalization"
+      }
+    },
+    {
+      "input": "trash:///a",
+      "outcome": {
+        "value": {
+          "scheme": "trash",
+          "netloc": "",
+          "path": "/a",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "ox:home",
+      "outcome": {
+        "value": {
+          "scheme": "ox",
+          "netloc": "",
+          "path": "home",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "mtp://x/a?b",
+      "outcome": {
+        "value": {
+          "scheme": "mtp",
+          "netloc": "x",
+          "path": "/a",
+          "query": "b",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "mtp://[a]b/",
+      "outcome": {
+        "value": {
+          "scheme": "mtp",
+          "netloc": "[a]b",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "",
+      "outcome": {
+        "value": {
+          "scheme": "",
+          "netloc": "",
+          "path": "",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "//x/y",
+      "outcome": {
+        "value": {
+          "scheme": "",
+          "netloc": "x",
+          "path": "/y",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://u[@[::1]/",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "u[@[::1]",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[::1]@x/",
+      "outcome": {
+        "rejected": "'x' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "smb://[::1]:5/",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "[::1]:5",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://a:b@[::1]:5/p",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "a:b@[::1]:5",
+          "path": "/p",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "x://[::1]",
+      "outcome": {
+        "value": {
+          "scheme": "x",
+          "netloc": "[::1]",
+          "path": "",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[fe80::1%]/",
+      "outcome": {
+        "rejected": "'fe80::1%' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "smb://[v1.x\n]/",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "[v1.x]",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[::ffff:1.2.3.4]/",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "[::ffff:1.2.3.4]",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[01.2.3.4]/",
+      "outcome": {
+        "rejected": "'01.2.3.4' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "smb://[1.2.3.04]/",
+      "outcome": {
+        "rejected": "'1.2.3.04' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "afc://x#y/z",
+      "outcome": {
+        "value": {
+          "scheme": "afc",
+          "netloc": "x",
+          "path": "",
+          "query": "",
+          "fragment": "y/z"
+        }
+      }
+    },
+    {
+      "input": "1abc://x",
+      "outcome": {
+        "value": {
+          "scheme": "",
+          "netloc": "",
+          "path": "1abc://x",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "a+b-c.d://h/p",
+      "outcome": {
+        "value": {
+          "scheme": "a+b-c.d",
+          "netloc": "h",
+          "path": "/p",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "\u0000\u001f smb://h/p",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "h",
+          "path": "/p",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://h/p\r\n",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "h",
+          "path": "/p",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "é://x",
+      "outcome": {
+        "value": {
+          "scheme": "",
+          "netloc": "",
+          "path": "é://x",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[fe80::1%a%b]/",
+      "outcome": {
+        "rejected": "'fe80::1%a%b' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "smb://[::1%25eth0]/",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "[::1%25eth0]",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[v1.x]:8/",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "[v1.x]:8",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[V1.x]/",
+      "outcome": {
+        "rejected": "'V1.x' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "smb://[vA.x]/",
+      "outcome": {
+        "value": {
+          "scheme": "smb",
+          "netloc": "[vA.x]",
+          "path": "/",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    },
+    {
+      "input": "smb://[v.x]/",
+      "outcome": {
+        "rejected": "IPvFuture address is invalid"
+      }
+    },
+    {
+      "input": "smb://[:::]/",
+      "outcome": {
+        "rejected": "':::' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "smb://[1::2::3]/",
+      "outcome": {
+        "rejected": "'1::2::3' does not appear to be an IPv4 or IPv6 address"
+      }
+    },
+    {
+      "input": "smb://ｘ℀/",
+      "outcome": {
+        "rejected": "netloc 'ｘ℀' contains invalid characters under NFKC normalization"
+      }
+    },
+    {
+      "input": "smb://a℀@b/",
+      "outcome": {
+        "rejected": "netloc 'a℀@b' contains invalid characters under NFKC normalization"
+      }
+    },
+    {
+      "input": "mtp://ａ℀/x",
+      "outcome": {
+        "value": {
+          "scheme": "mtp",
+          "netloc": "ａ℀",
+          "path": "/x",
+          "query": "",
+          "fragment": ""
+        }
+      }
+    }
+  ],
+  "external": {
+    "home": "/home/demo",
+    "normalise": [
+      {
+        "input": "/tmp/file",
+        "outcome": {
+          "value": "file:///tmp/file"
+        }
+      },
+      {
+        "input": "/tmp/a/../b/",
+        "outcome": {
+          "value": "file:///tmp/b"
+        }
+      },
+      {
+        "input": "/tmp/(a) b",
+        "outcome": {
+          "value": "file:///tmp/%28a%29%20b"
+        }
+      },
+      {
+        "input": "/tmp/Q3 #1?.txt",
+        "outcome": {
+          "value": "file:///tmp/Q3%20%231%3F.txt"
+        }
+      },
+      {
+        "input": "/",
+        "outcome": {
+          "value": "file:///"
+        }
+      },
+      {
+        "input": "~",
+        "outcome": {
+          "value": "file:///home/demo"
+        }
+      },
+      {
+        "input": "~/",
+        "outcome": {
+          "value": "file:///home/demo"
+        }
+      },
+      {
+        "input": "~/Docs",
+        "outcome": {
+          "value": "file:///home/demo/Docs"
+        }
+      },
+      {
+        "input": "~//etc",
+        "outcome": {
+          "value": "file:///etc"
+        }
+      },
+      {
+        "input": "Plans",
+        "outcome": {
+          "value": "file:///home/demo/Plans"
+        }
+      },
+      {
+        "input": "../../etc",
+        "outcome": {
+          "value": "file:///etc"
+        }
+      },
+      {
+        "input": "./x/./y",
+        "outcome": {
+          "value": "file:///home/demo/x/y"
+        }
+      },
+      {
+        "input": "\\\\NAS\\Team files\\Q3 #1",
+        "outcome": {
+          "value": "smb://nas/Team%20files/Q3%20%231"
+        }
+      },
+      {
+        "input": "//nas/share",
+        "outcome": {
+          "value": "smb://nas/share"
+        }
+      },
+      {
+        "input": "\\\\nas",
+        "outcome": {
+          "value": "smb://nas/"
+        }
+      },
+      {
+        "input": "\\\\u@nas\\share",
+        "outcome": {
+          "error": "Use a server name without credentials, for example \\\\nas\\share."
+        }
+      },
+      {
+        "input": "\\\\nas:445\\share",
+        "outcome": {
+          "error": "Use a server name without credentials, for example \\\\nas\\share."
+        }
+      },
+      {
+        "input": "file:///tmp/x",
+        "outcome": {
+          "value": "file:///tmp/x"
+        }
+      },
+      {
+        "input": "file://localhost/tmp/x",
+        "outcome": {
+          "value": "file:///tmp/x"
+        }
+      },
+      {
+        "input": "file://LOCALHOST/tmp",
+        "outcome": {
+          "value": "file:///tmp"
+        }
+      },
+      {
+        "input": "file:////tmp/x",
+        "outcome": {
+          "value": "file:////tmp/x"
+        }
+      },
+      {
+        "input": "file:///tmp/(a)!",
+        "outcome": {
+          "value": "file:///tmp/%28a%29%21"
+        }
+      },
+      {
+        "input": "file:///tmp/%C3%89t%C3%A9%20%231%3F.txt",
+        "outcome": {
+          "value": "file:///tmp/%C3%89t%C3%A9%20%231%3F.txt"
+        }
+      },
+      {
+        "input": "file:///tmp/Read me.txt",
+        "outcome": {
+          "value": "file:///tmp/Read%20me.txt"
+        }
+      },
+      {
+        "input": "file:///",
+        "outcome": {
+          "value": "file:///"
+        }
+      },
+      {
+        "input": "file:///tmp/%zz",
+        "outcome": {
+          "value": "file:///tmp/%25zz"
+        }
+      },
+      {
+        "input": "file:///a/b/%2F",
+        "outcome": {
+          "value": "file:///a/b"
+        }
+      },
+      {
+        "input": "file:",
+        "outcome": {
+          "error": "A file URL must contain an absolute path."
+        }
+      },
+      {
+        "input": "file:relative",
+        "outcome": {
+          "error": "A file URL must contain an absolute path."
+        }
+      },
+      {
+        "input": "file://nas/share",
+        "outcome": {
+          "error": "For network folders, use smb://server/share rather than file://server/…"
+        }
+      },
+      {
+        "input": "file:///tmp/a%0Ab",
+        "outcome": {
+          "error": "Encoded control characters are not allowed."
+        }
+      },
+      {
+        "input": "file:///tmp/%FF",
+        "outcome": {
+          "rejected": "'utf-8' codec can't decode byte 0xff in position 5: invalid start byte"
+        }
+      },
+      {
+        "input": " file:///tmp/x ",
+        "outcome": {
+          "value": "file:///tmp/x"
+        }
+      },
+      {
+        "input": "file:///tmp/x\u001f",
+        "outcome": {
+          "value": "file:///tmp/x"
+        }
+      },
+      {
+        "input": "smb://NAS/Team%20files/100%25.pdf",
+        "outcome": {
+          "value": "smb://nas/Team%20files/100%25.pdf"
+        }
+      },
+      {
+        "input": "smb://ALPHA/",
+        "outcome": {
+          "value": "smb://alpha/"
+        }
+      },
+      {
+        "input": "smb://nas/work/",
+        "outcome": {
+          "value": "smb://nas/work"
+        }
+      },
+      {
+        "input": "smb://nas/a/./b/../c",
+        "outcome": {
+          "value": "smb://nas/a/c"
+        }
+      },
+      {
+        "input": "smb://nas:445/share",
+        "outcome": {
+          "value": "smb://nas:445/share"
+        }
+      },
+      {
+        "input": "smb://nas:0445/s",
+        "outcome": {
+          "value": "smb://nas:445/s"
+        }
+      },
+      {
+        "input": "smb://nas:/s",
+        "outcome": {
+          "value": "smb://nas/s"
+        }
+      },
+      {
+        "input": "smb://[FE80::1]/share",
+        "outcome": {
+          "value": "smb://[fe80::1]/share"
+        }
+      },
+      {
+        "input": "smb://[FE80::1]:445/s",
+        "outcome": {
+          "value": "smb://[fe80::1]:445/s"
+        }
+      },
+      {
+        "input": "smb://[::ffff:1.2.3.4]/s",
+        "outcome": {
+          "value": "smb://[::ffff:1.2.3.4]/s"
+        }
+      },
+      {
+        "input": "smb://nas",
+        "outcome": {
+          "value": "smb://nas/"
+        }
+      },
+      {
+        "input": "smb://NAS/a\\b",
+        "outcome": {
+          "value": "smb://nas/a/b"
+        }
+      },
+      {
+        "input": "smb://nas/%2e%2e/x",
+        "outcome": {
+          "value": "smb://nas/x"
+        }
+      },
+      {
+        "input": "smb://nas/a%2Fb",
+        "outcome": {
+          "value": "smb://nas/a/b"
+        }
+      },
+      {
+        "input": "smb://ÄB/x",
+        "outcome": {
+          "value": "smb://äb/x"
+        }
+      },
+      {
+        "input": "smb://nas/a?",
+        "outcome": {
+          "value": "smb://nas/a"
+        }
+      },
+      {
+        "input": "smb://nas/a#",
+        "outcome": {
+          "value": "smb://nas/a"
+        }
+      },
+      {
+        "input": "smb://nas/Team%20files/%C3%89t%C3%A9",
+        "outcome": {
+          "value": "smb://nas/Team%20files/%C3%89t%C3%A9"
+        }
+      },
+      {
+        "input": "smb://u:p@nas/share",
+        "outcome": {
+          "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+        }
+      },
+      {
+        "input": "smb://u@nas/share",
+        "outcome": {
+          "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+        }
+      },
+      {
+        "input": "smb://u%40nas/share",
+        "outcome": {
+          "error": "Use an unescaped server name without credentials or control characters."
+        }
+      },
+      {
+        "input": "smb:///share",
+        "outcome": {
+          "error": "Enter an SMB server name, for example smb://nas/Projects."
+        }
+      },
+      {
+        "input": "smb://nas/a%00b",
+        "outcome": {
+          "error": "Encoded control characters are not allowed."
+        }
+      },
+      {
+        "input": "smb://nas/a#b",
+        "outcome": {
+          "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+        }
+      },
+      {
+        "input": "smb://nas/a?b",
+        "outcome": {
+          "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+        }
+      },
+      {
+        "input": "smb://nas%0a/share",
+        "outcome": {
+          "error": "Use an unescaped server name without credentials or control characters."
+        }
+      },
+      {
+        "input": "smb://nas:99999/share",
+        "outcome": {
+          "error": "Invalid SMB port."
+        }
+      },
+      {
+        "input": "smb://nas:44x/share",
+        "outcome": {
+          "error": "Invalid SMB port."
+        }
+      },
+      {
+        "input": "smb://nas:+1/s",
+        "outcome": {
+          "error": "Invalid SMB port."
+        }
+      },
+      {
+        "input": "smb://a:b:c/s",
+        "outcome": {
+          "error": "Invalid SMB port."
+        }
+      },
+      {
+        "input": "smb://[not-v6]/share",
+        "outcome": {
+          "rejected": "'not-v6' does not appear to be an IPv4 or IPv6 address"
+        }
+      },
+      {
+        "input": "smb://[1.2.3.4]/s",
+        "outcome": {
+          "rejected": "An IPv4 address cannot be in brackets"
+        }
+      },
+      {
+        "input": "smb://x[fe80::1]/s",
+        "outcome": {
+          "rejected": "Invalid IPv6 URL"
+        }
+      },
+      {
+        "input": "smb://[fe80::1]x/s",
+        "outcome": {
+          "rejected": "Invalid IPv6 URL"
+        }
+      },
+      {
+        "input": "smb://na s/x",
+        "outcome": {
+          "error": "Enter an SMB server name, for example smb://nas/Projects."
+        }
+      },
+      {
+        "input": "smb://a／b/x",
+        "outcome": {
+          "rejected": "netloc 'a／b' contains invalid characters under NFKC normalization"
+        }
+      },
+      {
+        "input": "smb:nas/share",
+        "outcome": {
+          "error": "Enter an SMB server name, for example smb://nas/Projects."
+        }
+      },
+      {
+        "input": "smb://[fe80::1%25eth0]/s",
+        "outcome": {
+          "error": "Use an unescaped server name without credentials or control characters."
+        }
+      },
+      {
+        "input": "mtp://[usb:001,010]/Internal storage/DCIM",
+        "outcome": {
+          "value": "mtp://[usb:001,010]/Internal%20storage/DCIM"
+        }
+      },
+      {
+        "input": "gphoto2://[usb:001,002]/DCIM",
+        "outcome": {
+          "value": "gphoto2://[usb:001,002]/DCIM"
+        }
+      },
+      {
+        "input": "afc://00008020-001C/",
+        "outcome": {
+          "value": "afc://00008020-001C/"
+        }
+      },
+      {
+        "input": "MTP://[usb:001,010]",
+        "outcome": {
+          "value": "mtp://[usb:001,010]/"
+        }
+      },
+      {
+        "input": "mtp://[usb:001,010]//a/../b",
+        "outcome": {
+          "value": "mtp://[usb:001,010]/b"
+        }
+      },
+      {
+        "input": "afc://x",
+        "outcome": {
+          "value": "afc://x/"
+        }
+      },
+      {
+        "input": "mtp://user@device/DCIM",
+        "outcome": {
+          "error": "Invalid connected-device identifier."
+        }
+      },
+      {
+        "input": "mtp://[usb:001,002/DCIM",
+        "outcome": {
+          "error": "Invalid connected-device identifier."
+        }
+      },
+      {
+        "input": "mtp://[usb:001,002]/DCIM?mode=write",
+        "outcome": {
+          "error": "A connected-device address must include a device identifier and path."
+        }
+      },
+      {
+        "input": "afc:///DCIM",
+        "outcome": {
+          "error": "A connected-device address must include a device identifier and path."
+        }
+      },
+      {
+        "input": "mtp://[usb:001,002]/a%00b",
+        "outcome": {
+          "error": "Encoded control characters are not allowed."
+        }
+      },
+      {
+        "input": "mtp://a b/x",
+        "outcome": {
+          "error": "Invalid connected-device identifier."
+        }
+      },
+      {
+        "input": "mtp://[a]b]/x",
+        "outcome": {
+          "error": "Invalid connected-device identifier."
+        }
+      },
+      {
+        "input": "mtp:/x",
+        "outcome": {
+          "error": "A connected-device address must include a device identifier and path."
+        }
+      },
+      {
+        "input": "",
+        "outcome": {
+          "error": "Enter a local folder path or an SMB address."
+        }
+      },
+      {
+        "input": "   ",
+        "outcome": {
+          "error": "Enter a local folder path or an SMB address."
+        }
+      },
+      {
+        "input": "http://example.org",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      },
+      {
+        "input": "javascript:alert(1)",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      },
+      {
+        "input": "C:\\Windows",
+        "outcome": {
+          "error": "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share."
+        }
+      },
+      {
+        "input": "c:/x",
+        "outcome": {
+          "error": "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share."
+        }
+      },
+      {
+        "input": "trash:///",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      },
+      {
+        "input": "archive:///tmp/a.zip/file",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      },
+      {
+        "input": "a:b",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      }
+    ],
+    "items": [
+      {
+        "input": "/tmp/file",
+        "outcome": {
+          "value": "file:///tmp/file"
+        }
+      },
+      {
+        "input": "/tmp/a/../b/",
+        "outcome": {
+          "value": "file:///tmp/b"
+        }
+      },
+      {
+        "input": "/tmp/(a) b",
+        "outcome": {
+          "value": "file:///tmp/%28a%29%20b"
+        }
+      },
+      {
+        "input": "/tmp/Q3 #1?.txt",
+        "outcome": {
+          "value": "file:///tmp/Q3%20%231%3F.txt"
+        }
+      },
+      {
+        "input": "/",
+        "outcome": {
+          "value": "file:///"
+        }
+      },
+      {
+        "input": "~",
+        "outcome": {
+          "value": "file:///home/demo"
+        }
+      },
+      {
+        "input": "~/",
+        "outcome": {
+          "value": "file:///home/demo"
+        }
+      },
+      {
+        "input": "~/Docs",
+        "outcome": {
+          "value": "file:///home/demo/Docs"
+        }
+      },
+      {
+        "input": "~//etc",
+        "outcome": {
+          "value": "file:///etc"
+        }
+      },
+      {
+        "input": "Plans",
+        "outcome": {
+          "value": "file:///home/demo/Plans"
+        }
+      },
+      {
+        "input": "../../etc",
+        "outcome": {
+          "value": "file:///etc"
+        }
+      },
+      {
+        "input": "./x/./y",
+        "outcome": {
+          "value": "file:///home/demo/x/y"
+        }
+      },
+      {
+        "input": "\\\\NAS\\Team files\\Q3 #1",
+        "outcome": {
+          "value": "smb://nas/Team%20files/Q3%20%231"
+        }
+      },
+      {
+        "input": "//nas/share",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "\\\\nas",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "\\\\u@nas\\share",
+        "outcome": {
+          "error": "Use a server name without credentials, for example \\\\nas\\share."
+        }
+      },
+      {
+        "input": "\\\\nas:445\\share",
+        "outcome": {
+          "error": "Use a server name without credentials, for example \\\\nas\\share."
+        }
+      },
+      {
+        "input": "file:///tmp/x",
+        "outcome": {
+          "value": "file:///tmp/x"
+        }
+      },
+      {
+        "input": "file://localhost/tmp/x",
+        "outcome": {
+          "value": "file:///tmp/x"
+        }
+      },
+      {
+        "input": "file://LOCALHOST/tmp",
+        "outcome": {
+          "value": "file:///tmp"
+        }
+      },
+      {
+        "input": "file:////tmp/x",
+        "outcome": {
+          "value": "file:////tmp/x"
+        }
+      },
+      {
+        "input": "file:///tmp/(a)!",
+        "outcome": {
+          "value": "file:///tmp/%28a%29%21"
+        }
+      },
+      {
+        "input": "file:///tmp/%C3%89t%C3%A9%20%231%3F.txt",
+        "outcome": {
+          "value": "file:///tmp/%C3%89t%C3%A9%20%231%3F.txt"
+        }
+      },
+      {
+        "input": "file:///tmp/Read me.txt",
+        "outcome": {
+          "value": "file:///tmp/Read%20me.txt"
+        }
+      },
+      {
+        "input": "file:///",
+        "outcome": {
+          "value": "file:///"
+        }
+      },
+      {
+        "input": "file:///tmp/%zz",
+        "outcome": {
+          "value": "file:///tmp/%25zz"
+        }
+      },
+      {
+        "input": "file:///a/b/%2F",
+        "outcome": {
+          "value": "file:///a/b"
+        }
+      },
+      {
+        "input": "file:",
+        "outcome": {
+          "error": "A file URL must contain an absolute path."
+        }
+      },
+      {
+        "input": "file:relative",
+        "outcome": {
+          "error": "A file URL must contain an absolute path."
+        }
+      },
+      {
+        "input": "file://nas/share",
+        "outcome": {
+          "error": "For network folders, use smb://server/share rather than file://server/…"
+        }
+      },
+      {
+        "input": "file:///tmp/a%0Ab",
+        "outcome": {
+          "error": "Encoded control characters are not allowed."
+        }
+      },
+      {
+        "input": "file:///tmp/%FF",
+        "outcome": {
+          "rejected": "'utf-8' codec can't decode byte 0xff in position 5: invalid start byte"
+        }
+      },
+      {
+        "input": " file:///tmp/x ",
+        "outcome": {
+          "value": "file:///tmp/x"
+        }
+      },
+      {
+        "input": "file:///tmp/x\u001f",
+        "outcome": {
+          "value": "file:///tmp/x"
+        }
+      },
+      {
+        "input": "smb://NAS/Team%20files/100%25.pdf",
+        "outcome": {
+          "value": "smb://nas/Team%20files/100%25.pdf"
+        }
+      },
+      {
+        "input": "smb://ALPHA/",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://nas/work/",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://nas/a/./b/../c",
+        "outcome": {
+          "value": "smb://nas/a/c"
+        }
+      },
+      {
+        "input": "smb://nas:445/share",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://nas:0445/s",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://nas:/s",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://[FE80::1]/share",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://[FE80::1]:445/s",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://[::ffff:1.2.3.4]/s",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://nas",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://NAS/a\\b",
+        "outcome": {
+          "value": "smb://nas/a/b"
+        }
+      },
+      {
+        "input": "smb://nas/%2e%2e/x",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://nas/a%2Fb",
+        "outcome": {
+          "value": "smb://nas/a/b"
+        }
+      },
+      {
+        "input": "smb://ÄB/x",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://nas/a?",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://nas/a#",
+        "outcome": {
+          "error": "Open the network share first, then select files or folders inside it. The share itself cannot be renamed, moved, copied or trashed here."
+        }
+      },
+      {
+        "input": "smb://nas/Team%20files/%C3%89t%C3%A9",
+        "outcome": {
+          "value": "smb://nas/Team%20files/%C3%89t%C3%A9"
+        }
+      },
+      {
+        "input": "smb://u:p@nas/share",
+        "outcome": {
+          "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+        }
+      },
+      {
+        "input": "smb://u@nas/share",
+        "outcome": {
+          "error": "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog."
+        }
+      },
+      {
+        "input": "smb://u%40nas/share",
+        "outcome": {
+          "error": "Use an unescaped server name without credentials or control characters."
+        }
+      },
+      {
+        "input": "smb:///share",
+        "outcome": {
+          "error": "Enter an SMB server name, for example smb://nas/Projects."
+        }
+      },
+      {
+        "input": "smb://nas/a%00b",
+        "outcome": {
+          "error": "Encoded control characters are not allowed."
+        }
+      },
+      {
+        "input": "smb://nas/a#b",
+        "outcome": {
+          "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+        }
+      },
+      {
+        "input": "smb://nas/a?b",
+        "outcome": {
+          "error": "In a URL, encode “?” as %3F and “#” as %23, or enter a normal file/UNC path."
+        }
+      },
+      {
+        "input": "smb://nas%0a/share",
+        "outcome": {
+          "error": "Use an unescaped server name without credentials or control characters."
+        }
+      },
+      {
+        "input": "smb://nas:99999/share",
+        "outcome": {
+          "error": "Invalid SMB port."
+        }
+      },
+      {
+        "input": "smb://nas:44x/share",
+        "outcome": {
+          "error": "Invalid SMB port."
+        }
+      },
+      {
+        "input": "smb://nas:+1/s",
+        "outcome": {
+          "error": "Invalid SMB port."
+        }
+      },
+      {
+        "input": "smb://a:b:c/s",
+        "outcome": {
+          "error": "Invalid SMB port."
+        }
+      },
+      {
+        "input": "smb://[not-v6]/share",
+        "outcome": {
+          "rejected": "'not-v6' does not appear to be an IPv4 or IPv6 address"
+        }
+      },
+      {
+        "input": "smb://[1.2.3.4]/s",
+        "outcome": {
+          "rejected": "An IPv4 address cannot be in brackets"
+        }
+      },
+      {
+        "input": "smb://x[fe80::1]/s",
+        "outcome": {
+          "rejected": "Invalid IPv6 URL"
+        }
+      },
+      {
+        "input": "smb://[fe80::1]x/s",
+        "outcome": {
+          "rejected": "Invalid IPv6 URL"
+        }
+      },
+      {
+        "input": "smb://na s/x",
+        "outcome": {
+          "error": "Enter an SMB server name, for example smb://nas/Projects."
+        }
+      },
+      {
+        "input": "smb://a／b/x",
+        "outcome": {
+          "rejected": "netloc 'a／b' contains invalid characters under NFKC normalization"
+        }
+      },
+      {
+        "input": "smb:nas/share",
+        "outcome": {
+          "error": "Enter an SMB server name, for example smb://nas/Projects."
+        }
+      },
+      {
+        "input": "smb://[fe80::1%25eth0]/s",
+        "outcome": {
+          "error": "Use an unescaped server name without credentials or control characters."
+        }
+      },
+      {
+        "input": "mtp://[usb:001,010]/Internal storage/DCIM",
+        "outcome": {
+          "value": "mtp://[usb:001,010]/Internal%20storage/DCIM"
+        }
+      },
+      {
+        "input": "gphoto2://[usb:001,002]/DCIM",
+        "outcome": {
+          "value": "gphoto2://[usb:001,002]/DCIM"
+        }
+      },
+      {
+        "input": "afc://00008020-001C/",
+        "outcome": {
+          "error": "Open the device storage first, then select files or folders inside it. The device itself cannot be moved or copied."
+        }
+      },
+      {
+        "input": "MTP://[usb:001,010]",
+        "outcome": {
+          "error": "Open the device storage first, then select files or folders inside it. The device itself cannot be moved or copied."
+        }
+      },
+      {
+        "input": "mtp://[usb:001,010]//a/../b",
+        "outcome": {
+          "value": "mtp://[usb:001,010]/b"
+        }
+      },
+      {
+        "input": "afc://x",
+        "outcome": {
+          "error": "Open the device storage first, then select files or folders inside it. The device itself cannot be moved or copied."
+        }
+      },
+      {
+        "input": "mtp://user@device/DCIM",
+        "outcome": {
+          "error": "Invalid connected-device identifier."
+        }
+      },
+      {
+        "input": "mtp://[usb:001,002/DCIM",
+        "outcome": {
+          "error": "Invalid connected-device identifier."
+        }
+      },
+      {
+        "input": "mtp://[usb:001,002]/DCIM?mode=write",
+        "outcome": {
+          "error": "A connected-device address must include a device identifier and path."
+        }
+      },
+      {
+        "input": "afc:///DCIM",
+        "outcome": {
+          "error": "A connected-device address must include a device identifier and path."
+        }
+      },
+      {
+        "input": "mtp://[usb:001,002]/a%00b",
+        "outcome": {
+          "error": "Encoded control characters are not allowed."
+        }
+      },
+      {
+        "input": "mtp://a b/x",
+        "outcome": {
+          "error": "Invalid connected-device identifier."
+        }
+      },
+      {
+        "input": "mtp://[a]b]/x",
+        "outcome": {
+          "error": "Invalid connected-device identifier."
+        }
+      },
+      {
+        "input": "mtp:/x",
+        "outcome": {
+          "error": "A connected-device address must include a device identifier and path."
+        }
+      },
+      {
+        "input": "",
+        "outcome": {
+          "error": "Enter a local folder path or an SMB address."
+        }
+      },
+      {
+        "input": "   ",
+        "outcome": {
+          "error": "Enter a local folder path or an SMB address."
+        }
+      },
+      {
+        "input": "http://example.org",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      },
+      {
+        "input": "javascript:alert(1)",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      },
+      {
+        "input": "C:\\Windows",
+        "outcome": {
+          "error": "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share."
+        }
+      },
+      {
+        "input": "c:/x",
+        "outcome": {
+          "error": "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share."
+        }
+      },
+      {
+        "input": "trash:///",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      },
+      {
+        "input": "archive:///tmp/a.zip/file",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      },
+      {
+        "input": "a:b",
+        "outcome": {
+          "error": "Only local paths, smb:// locations and connected devices are supported in this build."
+        }
+      }
+    ]
+  }
+}

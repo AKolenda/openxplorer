@@ -1,0 +1,24 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Higher contrast, loaded only while GNOME's accessibility setting asks
+   for it (src/theme/contrast.rs): the `@media (prefers-contrast: more)`
+   rules of style.css and ui-spec.md §4.13. The current location in the
+   sidebar gets an accent outline, and keyboard focus inside rows, tiles
+   and menus draws 2px instead of 1px. */
+
+.sidebar list > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }
+.sidebar list > row:focus-visible,
+columnview.files > listview > row:focus-visible,
+gridview.files > child:focus-visible,
+popover.ox-menu list > row:focus-visible {
+  box-shadow: inset 0 0 0 2px @ox_focus_outer;
+}
+
+/* Place glyphs drop their own colours for the text colour, whose contrast
+   with the sidebar is always high enough (src/icons/tint.rs). */
+.tinted { color: @ox_text; }
+
+/* Settings: category glyphs in the text colour, as place glyphs above,
+   and stronger frames around switches and groups. */
+.settings-categories image { color: @ox_text; }
+window.ox .settings switch { border-color: @ox_text; }
+.settings .group-rows { border-color: @ox_text_tertiary; }

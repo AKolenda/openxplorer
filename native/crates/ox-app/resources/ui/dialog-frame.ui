@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  One in-window dialog: section.modal of desktop/ui/index.html as
+  native/docs/ui-spec.md §4.11 refines it. The title, an optional message,
+  the body the dialog fills in, the error line and the footer with its
+  buttons. src/dialog_layer/frame.rs adds the buttons and the body.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxDialogFrame" parent="GtkWidget">
+    <property name="accessible-role">dialog</property>
+    <style>
+      <class name="ox-dialog"/>
+    </style>
+    <child>
+      <object class="GtkBox" id="column">
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="vexpand">true</property>
+            <style>
+              <class name="dialog-content"/>
+            </style>
+            <child>
+              <object class="GtkLabel" id="title_label">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="wrap-mode">word-char</property>
+                <style>
+                  <class name="dialog-title"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="message_label">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="wrap-mode">word-char</property>
+                <property name="visible">false</property>
+                <style>
+                  <class name="dialog-message"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <!-- Only the body scrolls, so the title and the buttons stay
+                   in view in a short window. -->
+              <object class="GtkScrolledWindow" id="scroller">
+                <property name="hscrollbar-policy">never</property>
+                <property name="propagate-natural-height">true</property>
+                <property name="vexpand">true</property>
+                <property name="child">
+                  <object class="GtkBox" id="body">
+                    <property name="orientation">vertical</property>
+                    <style>
+                      <class name="dialog-body"/>
+                    </style>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="error_label">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="wrap-mode">word-char</property>
+                <property name="selectable">true</property>
+                <property name="visible">false</property>
+                <accessibility>
+                  <property name="label">Error</property>
+                </accessibility>
+                <style>
+                  <class name="dialog-error"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="actions">
+            <property name="halign">fill</property>
+            <style>
+              <class name="dialog-actions"/>
+            </style>
+            <child>
+              <!-- Pushes the buttons to the right, as .modal-actions does. -->
+              <object class="GtkBox">
+                <property name="hexpand">true</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
