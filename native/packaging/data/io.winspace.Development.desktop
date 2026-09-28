@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The launcher of the native app once it replaces the Python app. The ID,
+# the icon name and the MIME types are the Python app's (AGENTS.md);
+# native/packaging/README.md explains each key.
+[Desktop Entry]
+Type=Application
+Name=OpenXplorer
+GenericName=File Explorer
+Comment=Explorer-style local and SMB file manager
+Keywords=File Explorer;file explorer;File Manager;files;folders;SMB;NAS;network;archives;
+Exec=openxplorer %U
+TryExec=openxplorer
+Icon=io.winspace.Development
+Terminal=false
+Categories=System;FileTools;FileManager;
+MimeType=inode/directory;x-scheme-handler/smb;application/zip;application/x-zip;application/x-zip-compressed;
+StartupNotify=true
+Actions=new-window;windows;settings;
+
+[Desktop Action new-window]
+Name=New window
+Exec=openxplorer --new-window
+
+[Desktop Action windows]
+Name=Open windows…
+Exec=openxplorer --windows
+
+[Desktop Action settings]
+Name=Settings
+Exec=openxplorer --settings

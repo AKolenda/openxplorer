@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# The package is labelled "Architecture: all" because the in-app updater of
+# OpenXplorer 1.1.x installs only openxplorer_<version>_all.deb, yet its
+# program is built for one processor type. Safety rule "refuse a foreign
+# processor before unpacking": on any other type the installation stops
+# here, before a file changes, so the installed version keeps working.
+set -e
+
+case "$1" in
+    install|upgrade)
+        machine=$(dpkg --print-architecture)
+        if [ "$machine" != "@ARCHITECTURE@" ]; then
+            echo "OpenXplorer: this package runs on @ARCHITECTURE@ computers, not $machine. Install the OpenXplorer Flatpak instead." >&2
+            exit 1
+        fi
+        ;;
+esac
+
+exit 0
