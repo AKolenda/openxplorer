@@ -191,13 +191,42 @@ fn tabs_are_announced_as_tabs_with_their_selected_state() {
     }
 }
 
+/// parity: TAB-001
 #[gtk::test]
-fn a_new_tab_opens_the_home_folder() {
+fn the_new_tab_button_opens_the_home_folder_in_front() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    test.activate("new-tab", None);
+    let button = &test.window.imp().new_tab_button;
+    assert_eq!(button.tooltip_text().as_deref(), Some("New tab (Ctrl+T)"));
+    button.emit_clicked();
     test.wait_for_listing("the home folder");
     let home = ox_core::location::file_uri(&gtk::glib::home_dir());
     assert_eq!(test.window.current_uri(), Some(home));
     assert_eq!(test.window.tab_count(), 2);
+}
+
+/// Ctrl+Tab and Ctrl+T stay out of text fields, and while the active
+/// tab's Properties are open only the tab keys work.
+///
+/// parity: TAB-005
+#[gtk::test]
+fn tab_keys_stay_out_of_text_fields_but_switch_away_from_properties() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_pane().focus_view();
+    assert!(test.window.tab_keys_apply());
+    assert!(test.window.new_tab_key_applies());
+
+    test.window.search_box().entry().grab_focus();
+    let in_search = (test.window.tab_keys_apply(), test.window.new_tab_key_applies());
+    test.window.folder_pane().focus_view();
+    test.activate("properties", None);
+    test.wait_for_dialog("the Properties dialog");
+
+    assert_eq!(in_search, (false, false), "a text field keeps the keys");
+    assert!(test.window.tab_keys_apply(), "Ctrl+Tab leaves the dialog's tab");
+    assert!(
+        !test.window.new_tab_key_applies(),
+        "other keys wait for the dialog"
+    );
 }

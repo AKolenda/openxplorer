@@ -26,6 +26,9 @@ pub(crate) enum WindowAction {
     NextTab,
     /// Shows the previous tab, wrapping around (Ctrl+Shift+Tab).
     PreviousTab,
+    /// Closes the window after asking whether it may close: the caption's
+    /// Close button.
+    CloseWindow,
     /// Shows the tab whose id is the `u64` target.
     SelectTab,
     /// Closes the tab whose id is the `u64` target (its close button).
@@ -250,12 +253,14 @@ impl WindowAction {
     ///
     /// This is the one table of every action's name, so it is longer than
     /// a function should be.
+    #[allow(clippy::too_many_lines, reason = "one arm per action")]
     pub(crate) const fn name(self) -> &'static str {
         match self {
             WindowAction::NewTab => "new-tab",
             WindowAction::CloseTab => "close-tab",
             WindowAction::NextTab => "next-tab",
             WindowAction::PreviousTab => "previous-tab",
+            WindowAction::CloseWindow => "close-window",
             WindowAction::SelectTab => "select-tab",
             WindowAction::CloseTabById => "close-tab-by-id",
             WindowAction::OpenTab => "open-tab",

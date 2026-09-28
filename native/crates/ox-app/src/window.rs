@@ -50,6 +50,7 @@ mod button_style;
 mod cache_folder;
 mod caption_buttons;
 mod card_grid;
+mod closing;
 mod command_bar;
 mod connections;
 mod context_menu;
@@ -105,6 +106,7 @@ mod unported;
 mod version_restore;
 mod widget_tree;
 mod window_action;
+mod window_keys;
 
 #[cfg(test)]
 mod tests;
@@ -127,6 +129,7 @@ use tab_strip::TabStrip;
 
 pub(crate) use actions::install_accelerators;
 pub(crate) use button_style::ButtonStyle;
+pub(crate) use closing::QUIT_WHILE_WRITING;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;

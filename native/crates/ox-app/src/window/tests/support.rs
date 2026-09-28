@@ -5,6 +5,7 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gdk, glib};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
 
 use crate::icons::{Art, ArtImage};
@@ -56,6 +57,61 @@ impl TestWindow {
         WidgetExt::activate_action(&self.window, &action.detailed_name(), Some(&target))
             .expect("the window has the tab actions");
     }
+}
+
+/// The click gesture of `widget` that listens to `button`.
+///
+/// # Panics
+///
+/// When `widget` has none.
+fn click_gesture(widget: &impl IsA<gtk::Widget>, button: u32) -> gtk::GestureClick {
+    let controllers = widget.observe_controllers();
+    let gesture = controllers
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+        .find(|gesture| gesture.button() == button);
+    gesture.unwrap_or_else(|| panic!("the widget has a gesture for button {button}"))
+}
+
+/// What `widget`'s gesture for `button` does for a press and, when
+/// `release` says so, a release at (`x`, `y`). GTK has no public way to
+/// synthesise pointer events, so this emits the gesture's signals, with
+/// no modifier held.
+pub(super) fn click_at(widget: &impl IsA<gtk::Widget>, button: u32, point: (f64, f64), release: Release) {
+    let gesture = click_gesture(widget, button);
+    let (x, y) = point;
+    gesture.emit_by_name::<()>("pressed", &[&1_i32, &x, &y]);
+    if release == Release::Released {
+        gesture.emit_by_name::<()>("released", &[&1_i32, &x, &y]);
+    }
+}
+
+/// Whether a click in [`click_at`] lets go of the button.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Release {
+    /// The button goes down and up: a click.
+    Released,
+    /// The button stays down.
+    Held,
+}
+
+/// Middle-clicks `widget` at `point`, in its own coordinates.
+pub(super) fn middle_click_at(widget: &impl IsA<gtk::Widget>, point: (f64, f64)) {
+    click_at(widget, gdk::BUTTON_MIDDLE, point, Release::Released);
+}
+
+/// The middle of `widget` in the coordinates of `ancestor`.
+///
+/// # Panics
+///
+/// When `widget` is not laid out inside `ancestor`.
+pub(super) fn middle_of(widget: &impl IsA<gtk::Widget>, ancestor: &impl IsA<gtk::Widget>) -> (f64, f64) {
+    let bounds = widget
+        .compute_bounds(ancestor)
+        .expect("the widget is laid out inside its ancestor");
+    let centre = bounds.center();
+    (f64::from(centre.x()), f64::from(centre.y()))
 }
 
 /// The menu button in `test`'s window that has the CSS class `class`.

@@ -346,6 +346,21 @@ impl BrowserWindow {
         properties.iter().any(|entry| entry.tab == id)
     }
 
+    /// True while the dialog on screen is the active tab's Properties,
+    /// which Ctrl+Tab suspends with its tab (`state.modalOwner`).
+    pub(super) fn shows_dialog_of_active_tab(&self) -> bool {
+        let Some(shown) = self.dialog_layer().shown() else {
+            return false;
+        };
+        let Some(active) = self.imp().session.borrow().active_id() else {
+            return false;
+        };
+        let properties = self.item_dialogs().properties.borrow();
+        properties
+            .iter()
+            .any(|entry| entry.tab == active && entry.frame == shown)
+    }
+
     /// Every open Properties view, for updates such as a measured size.
     pub(super) fn properties_views(&self) -> Vec<PropertiesView> {
         let properties = self.item_dialogs().properties.borrow();

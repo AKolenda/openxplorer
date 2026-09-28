@@ -223,8 +223,9 @@ impl WidgetImpl for BrowserWindow {
 
 impl WindowImpl for BrowserWindow {
     fn close_request(&self) -> glib::Propagation {
-        // Safety rule "an update locks the application" (UPD-005): no
-        // window closes while an update installs.
+        // Safety rules "an update locks the application" (UPD-005) and
+        // "a window never closes under a running write" (TAB-049): see
+        // closing.rs.
         if let Some(refusal) = self.obj().close_refusal() {
             self.obj().show_message(&refusal);
             return glib::Propagation::Stop;

@@ -5,7 +5,9 @@
 //! 46-pixel-wide, full-height buttons with thin 12-pixel glyphs and a red
 //! close hover. `GtkWindowControls` can only draw the icon theme's bold
 //! symbolic icons, so these are plain buttons running GTK's built-in
-//! `window.minimize`, `window.toggle-maximized` and `window.close` actions.
+//! `window.minimize` and `window.toggle-maximized` actions, and the
+//! window's `win.close-window`, which asks first whether the window may
+//! close ([`super::closing`]).
 //! They still follow GNOME: the desktop's `gtk-decoration-layout` decides
 //! which buttons exist and on which side, and changes to it apply at once.
 //!
@@ -20,6 +22,7 @@ use gtk::subclass::prelude::*;
 use crate::icons::{self, Icon};
 
 use super::widget_tree::remove_children;
+use super::window_action::WindowAction;
 
 /// The edge of a caption glyph: thin 12-pixel lines, as index.html draws them.
 const GLYPH_SIZE: i32 = 12;
@@ -80,11 +83,14 @@ impl Caption {
         }
     }
 
-    const fn action(self) -> &'static str {
+    /// The action the button runs. Close asks first whether the window
+    /// may close (`askClose`, TAB-049), so it runs the window's own action
+    /// rather than GTK's `window.close`.
+    fn action(self) -> String {
         match self {
-            Caption::Minimize => "window.minimize",
-            Caption::Maximize => "window.toggle-maximized",
-            Caption::Close => "window.close",
+            Caption::Minimize => "window.minimize".to_owned(),
+            Caption::Maximize => "window.toggle-maximized".to_owned(),
+            Caption::Close => WindowAction::CloseWindow.detailed_name(),
         }
     }
 

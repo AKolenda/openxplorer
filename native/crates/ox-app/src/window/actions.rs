@@ -12,7 +12,6 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::settings::Theme;
 
-use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::text_size::Step;
@@ -127,6 +126,8 @@ impl BrowserWindow {
     /// Adds every window action (`win.*`).
     pub(super) fn install_actions(&self) {
         self.install_tab_actions();
+        self.install_closing_actions();
+        self.install_window_keys();
         self.install_tab_move_actions();
         self.install_navigation_actions();
         self.install_selection_actions();
@@ -370,38 +371,26 @@ impl BrowserWindow {
     }
 }
 
-/// The window's keyboard shortcuts of `onKey` that never change: each
-/// action and its accelerators, as GTK parses them.
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 12] = [
-    (WindowAction::NewTab, &["<Primary>t"]),
-    (WindowAction::CloseTab, &["<Primary>w"]),
-    (WindowAction::NextTab, &["<Primary>Tab", "<Primary>Page_Down"]),
-    (
-        WindowAction::PreviousTab,
-        &["<Primary><Shift>Tab", "<Primary>Page_Up"],
-    ),
-    (WindowAction::Back, &["<Alt>Left"]),
-    (WindowAction::Forward, &["<Alt>Right"]),
-    (WindowAction::Up, &["<Alt>Up"]),
+/// The window's keyboard shortcuts of `onKey` that work from text fields
+/// too: each action and its accelerators, as GTK parses them. The keys a
+/// text field keeps are in [`super::window_keys`] and
+/// [`super::file_ops`].
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 4] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::Search, &["<Primary>f"]),
-    (WindowAction::Hidden, &["<Primary>h"]),
     (WindowAction::Settings, &["<Primary>comma"]),
 ];
-
-/// Ctrl+N, the application's one shortcut: another window.
-const NEW_WINDOW_ACCELERATORS: &[&str] = &["<Primary>n"];
 
 /// Alt+Enter: Properties of the selection or the folder (`onKey`).
 const PROPERTIES_ACCELERATORS: &[&str] = &["<Alt>Return", "<Alt>KP_Enter"];
 
-/// Installs the keyboard shortcuts of every window action, and Ctrl+N.
+/// Installs the keyboard shortcuts of the window actions that work from
+/// any focus.
 pub(crate) fn install_accelerators(app: &gtk::Application) {
     for (action, keys) in WINDOW_ACCELERATORS {
         app.set_accels_for_action(&action.detailed_name(), keys);
     }
-    app.set_accels_for_action(&AppAction::NewWindow.detailed_name(), NEW_WINDOW_ACCELERATORS);
     app.set_accels_for_action(&WindowAction::Properties.detailed_name(), PROPERTIES_ACCELERATORS);
     for step in Step::ALL {
         let keys = step.accelerators();

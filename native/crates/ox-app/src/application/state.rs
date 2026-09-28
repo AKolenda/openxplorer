@@ -547,6 +547,32 @@ mod tests {
         });
     }
 
+    /// Quit refuses while any window writes files, and closes every window
+    /// once none does.
+    ///
+    /// parity: TAB-052
+    #[gtk::test]
+    fn quit_waits_for_the_file_operations_of_every_window() {
+        let app = TestApp::new();
+        let idle = app.state.open_window(&application(), None);
+        let writing = app.state.open_window(&application(), None);
+        assert!(writing.begin_test_write());
+
+        let quit = app.state.quit_safely(&application());
+
+        assert!(!quit);
+        assert_eq!(browser_windows().len(), 2, "no window closed");
+        assert_eq!(
+            idle.shown_message_text(),
+            "Finish or cancel active file operations before quitting OpenXplorer."
+        );
+        writing.end_test_write();
+        // The test application must keep running for the next test, so
+        // this closes the windows as Quit would, without quitting.
+        close_all_windows();
+        assert!(browser_windows().is_empty());
+    }
+
     #[gtk::test]
     fn closing_one_window_releases_it_while_another_stays_open() {
         let app = TestApp::new();

@@ -218,10 +218,11 @@ impl BrowserWindow {
         })
     }
 
-    /// Closes a tab; closing the last one closes the window.
+    /// Closes a tab; closing the last one closes the window, after asking
+    /// as its Close button does (`closeTab` calls `askClose`).
     pub(super) fn close_tab(&self, id: TabId) {
         if self.tab_count() <= 1 {
-            self.close();
+            self.request_close();
             return;
         }
         self.save_tab_view();

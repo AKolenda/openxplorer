@@ -361,3 +361,62 @@ fn close_button(tab: &TabView) -> gtk::Button {
     close.update_property(&[gtk::accessible::Property::Label(&name)]);
     close
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::harness::descendants;
+
+    /// A tab on a snapshot folder, showing the previous version
+    /// `previous_version` when there is one.
+    fn tab_view(previous_version: Option<&str>) -> TabView {
+        TabView {
+            id: TabId::from_raw(1),
+            uri: "file:///srv/Documents/.snapshot/daily/Plans".to_owned(),
+            title: "Plans".to_owned(),
+            tooltip: "/srv/Documents/.snapshot/daily/Plans".to_owned(),
+            icon: Art::Folder,
+            active: true,
+            previous_version: previous_version.map(str::to_owned),
+        }
+    }
+
+    /// parity: TAB-011
+    #[gtk::test]
+    fn a_tab_in_a_snapshot_carries_the_previous_version_badge() {
+        let widget = tab_widget(&tab_view(Some("daily")));
+
+        assert!(
+            widget.has_css_class("snapshot-tab"),
+            "the amber edge and the wider tab"
+        );
+        let badge = descendants::<gtk::Box>(&widget)
+            .into_iter()
+            .find(|child| child.has_css_class("snapshot-tab-badge"))
+            .expect("a snapshot tab has its badge");
+        assert_eq!(badge.tooltip_text().as_deref(), Some("Previous version · daily"));
+        let texts: Vec<String> = descendants::<gtk::Label>(&badge)
+            .iter()
+            .map(|label| label.text().to_string())
+            .collect();
+        assert_eq!(texts, ["Previous version"]);
+    }
+
+    /// parity: TAB-010
+    #[gtk::test]
+    fn a_live_tab_has_no_badge_a_close_button_and_an_ellipsized_title() {
+        let widget = tab_widget(&tab_view(None));
+
+        assert!(!widget.has_css_class("snapshot-tab"));
+        let close = descendants::<gtk::Button>(&widget)
+            .into_iter()
+            .next()
+            .expect("a tab has its close button");
+        assert_eq!(close.tooltip_text().as_deref(), Some("Close tab"));
+        let title = descendants::<gtk::Label>(&widget)
+            .into_iter()
+            .next()
+            .expect("a tab shows its title");
+        assert_eq!(title.ellipsize(), gtk::pango::EllipsizeMode::End);
+    }
+}

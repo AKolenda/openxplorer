@@ -15,7 +15,7 @@ use super::command_line::CommandRequest;
 use super::state::{active_window, open_window, AppState};
 use crate::app_context::AppContext;
 use crate::settings_page::SettingsView;
-use crate::window::BrowserWindow;
+use crate::window::{BrowserWindow, QUIT_WHILE_WRITING};
 
 impl AppState {
     /// Does what `request` asks.
@@ -96,11 +96,17 @@ impl AppState {
     }
 
     /// Quit `OpenXplorer`: every window closes and the Show in folder
-    /// service stops, unless an update is installing (`quit_safely`,
-    /// TAB-052). Returns whether the application quits.
+    /// service stops, unless an update is installing or a window writes
+    /// files (`quit_safely`, TAB-052). Returns whether the application
+    /// quits.
     pub(super) fn quit_safely(&self, app: &gtk::Application) -> bool {
         if let Some(refusal) = self.context().updates().quit_refusal() {
             report_in_every_window(app, &refusal);
+            return false;
+        }
+        // Data safety: Quit never cuts off a write, in any window.
+        if browser_windows(app).any(|window| window.has_running_write()) {
+            report_in_every_window(app, QUIT_WHILE_WRITING);
             return false;
         }
         for window in app.windows() {
@@ -141,11 +147,15 @@ fn report_in_active_window(app: &gtk::Application, message: &str) {
 
 /// Shows `message` in every browser window (`broadcast('notice')`).
 fn report_in_every_window(app: &gtk::Application, message: &str) {
-    let windows = app.windows();
-    let browsers = windows
-        .into_iter()
-        .filter_map(|window| window.downcast::<BrowserWindow>().ok());
-    for window in browsers {
+    for window in browser_windows(app) {
         window.show_message(message);
     }
+}
+
+/// The browser windows of `app`.
+fn browser_windows(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
+    let windows = app.windows();
+    windows
+        .into_iter()
+        .filter_map(|window| window.downcast::<BrowserWindow>().ok())
 }
