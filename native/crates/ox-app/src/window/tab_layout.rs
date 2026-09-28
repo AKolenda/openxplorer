@@ -3,7 +3,7 @@
 //!
 //! Ports the flex rules of `.tabs` and `.tab` in `desktop/ui/style.css`:
 //! every tab is 215 pixels wide (180 or 150 in a narrow window), tabs
-//! shrink evenly toward 80 pixels when the title bar runs out of room, and
+//! shrink evenly toward 100 pixels when the title bar runs out of room, and
 //! below that the strip scrolls. A `GtkBox` cannot shrink its children
 //! below their natural width without also dropping to their minimum, so
 //! the tab strip uses this layout.
@@ -14,8 +14,10 @@ use gtk::subclass::prelude::*;
 
 /// A tab's width when there is room (`.tab{width:215px}`).
 pub(super) const TAB_WIDTH: i32 = 215;
-/// The narrowest a tab gets before the strip scrolls (`min-width:80px`).
-pub(super) const MIN_TAB_WIDTH: i32 = 80;
+/// The narrowest a tab gets before the strip scrolls: the Windows 11 tab
+/// minimum (ui-spec.md §4.1), where the web's `min-width:80px` left too
+/// little of a title to read.
+pub(super) const MIN_TAB_WIDTH: i32 = 100;
 /// The space between tabs (`.tabs{gap:2px}`).
 pub(super) const TAB_GAP: i32 = 2;
 
@@ -190,12 +192,16 @@ mod tests {
     #[test]
     fn tabs_shrink_evenly_then_stop_at_their_minimum() {
         assert_eq!(tab_width(302, 2, widths(TAB_WIDTH, MIN_TAB_WIDTH)), 150);
-        assert_eq!(tab_width(100, 4, widths(TAB_WIDTH, MIN_TAB_WIDTH)), MIN_TAB_WIDTH);
+        assert_eq!(
+            tab_width(100, 4, widths(TAB_WIDTH, MIN_TAB_WIDTH)),
+            100,
+            "WinUI's minimum"
+        );
     }
 
     #[test]
     fn tabs_never_get_narrower_than_their_contents_need() {
-        assert_eq!(tab_width(100, 4, widths(TAB_WIDTH, 96)), 96);
+        assert_eq!(tab_width(100, 4, widths(TAB_WIDTH, 112)), 112);
         assert_eq!(tab_width(2000, 1, widths(TAB_WIDTH, 240)), 240);
     }
 }

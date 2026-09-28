@@ -13,6 +13,14 @@
   min-height: 146px;
   margin-bottom: 18px;
 }
+/* The art's soft shadow (`.detail-preview svg{filter:drop-shadow()}`;
+   GTK's cairo renderer drops a shadow this faint, its GL renderers draw
+   it). The art is centred on a half pixel, which Chromium draws one pixel
+   down. */
+.details .preview image {
+  -gtk-icon-shadow: 0 4px 4px alpha(black, .043);
+  margin-top: 1px;
+}
 .details .dname { font-weight: 600; margin-bottom: 4px; }
 .details .dtype { color: @ox_muted; margin-bottom: 17px; }
 /* Open, or Pin to Quick access: a bordered button 32px tall. */
