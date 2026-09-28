@@ -31,12 +31,12 @@ pub(super) struct ArtStyle {
 
 impl ArtStyle {
     /// A new image of `kind` art, `size` pixels square.
-    pub fn image(self, kind: ArtKind, size: i32) -> gtk::Image {
+    pub(super) fn image(self, kind: ArtKind, size: i32) -> gtk::Image {
         icons::art_image(kind, size, self.appearance, self.scale)
     }
 
     /// Makes `image` show `kind` art, `size` pixels square.
-    pub fn draw_into(self, image: &gtk::Image, kind: ArtKind, size: i32) {
+    pub(super) fn draw_into(self, image: &gtk::Image, kind: ArtKind, size: i32) {
         icons::set_art(image, kind, size, self.appearance, self.scale);
     }
 }
@@ -59,6 +59,10 @@ impl BrowserWindow {
             move |change| window.skin_changed(change)
         ));
         self.imp().handlers.borrow_mut().skin = Some(listener);
+        let appearance = self.skin().appearance();
+        // The template builds the panes light; nothing is drawn in them yet.
+        self.folder_pane().icons().set_appearance(appearance);
+        self.details_pane().show_placeholder(appearance);
         self.show_appearance_choice();
         self.folder_pane().set_text_size(self.skin().text_size());
         self.connect_scale_factor_notify(|window| {
@@ -89,8 +93,7 @@ impl BrowserWindow {
     fn show_appearance_choice(&self) {
         let preference = self.skin().preference();
         let appearance = self.skin().appearance();
-        self.chrome()
-            .commands
+        self.command_bar()
             .show_appearance(appearance, &preference.tooltip(appearance));
         self.set_action_state(WindowAction::Theme, &preference.key().to_variant());
     }

@@ -83,14 +83,14 @@ const LIMITS: [WidthLimit; 4] = [
 
 impl WindowWidth {
     /// The band `width` pixels fall in.
-    pub fn for_width(width: i32) -> Self {
+    pub(super) fn for_width(width: i32) -> Self {
         // The narrowest limit the width is within decides.
         let narrowest_within = LIMITS.iter().rev().find(|limit| width <= limit.max_width);
         narrowest_within.map_or(WindowWidth::Wide, |limit| limit.band)
     }
 
     /// The CSS classes of a window in this band: one per limit it is in.
-    pub fn css_classes(self) -> Vec<&'static str> {
+    pub(super) fn css_classes(self) -> Vec<&'static str> {
         LIMITS
             .iter()
             .filter(|limit| self >= limit.band)
@@ -100,23 +100,23 @@ impl WindowWidth {
 
     /// Whether there is room for the details pane (`.details{display:none}`
     /// at 960 pixels).
-    pub fn has_room_for_details(self) -> bool {
+    pub(super) fn has_room_for_details(self) -> bool {
         self < WindowWidth::Narrow
     }
 
     /// Whether the appearance button shows its "Light" or "Dark" label
     /// (`.appearance-label{display:none}` at 1050 pixels).
-    pub fn shows_appearance_label(self) -> bool {
+    pub(super) fn shows_appearance_label(self) -> bool {
         self < WindowWidth::Reduced
     }
 
     /// Whether the window is at its most compact (the 680-pixel rules).
-    pub fn is_compact(self) -> bool {
+    pub(super) fn is_compact(self) -> bool {
         self == WindowWidth::Compact
     }
 
     /// The details pane's width: [`PANE_WIDTH`], narrower from 1190 pixels.
-    pub fn details_pane_width(self) -> i32 {
+    pub(super) fn details_pane_width(self) -> i32 {
         if self >= WindowWidth::Medium {
             NARROW_PANE_WIDTH
         } else {
@@ -126,7 +126,7 @@ impl WindowWidth {
 
     /// A tab's width when there is room: [`TAB_WIDTH`], narrower from 960
     /// and again from 680 pixels.
-    pub fn tab_width(self) -> i32 {
+    pub(super) fn tab_width(self) -> i32 {
         match self {
             WindowWidth::Wide | WindowWidth::Medium | WindowWidth::Reduced => TAB_WIDTH,
             WindowWidth::Narrow => NARROW_TAB_WIDTH,
@@ -162,11 +162,10 @@ impl BrowserWindow {
         self.fit_details_pane();
         self.details_pane().set_width(band.details_pane_width());
         let compact = band.is_compact();
-        let chrome = self.chrome();
-        chrome.tabs.set_tab_width(band.tab_width());
-        chrome.search.root.set_visible(!compact);
-        chrome.commands.fit_to_width(band);
-        chrome.status.set_build_visible(!compact);
+        self.tab_strip().set_tab_width(band.tab_width());
+        self.search_box().set_visible(!compact);
+        self.command_bar().fit_to_width(band);
+        self.status_bar().set_build_visible(!compact);
         crate::folder_view::details::show_date_and_type(self.folder_pane().details(), !compact);
         self.render_landing();
     }
@@ -185,7 +184,7 @@ impl BrowserWindow {
             .and_then(|state| state.get::<bool>())
             .unwrap_or(true);
         let room = self.window_width().has_room_for_details();
-        self.details_pane().root.set_visible(switched_on && room);
+        self.details_pane().set_visible(switched_on && room);
     }
 }
 

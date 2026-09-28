@@ -148,12 +148,12 @@ fn closing_a_background_tab_keeps_the_active_tab_and_its_filter() {
     test.wait_for_listing("the second tab");
     test.activate("previous-tab", None);
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
-    test.window.chrome().search.entry.set_text("Notes 2");
+    test.window.search_box().entry().set_text("Notes 2");
     wait_until("the active filter", || test.names() == ["Notes 2.txt"]);
     let background = tab_ids(&test)[1];
     test.activate_tab_close(background);
     assert_eq!(test.window.tab_count(), 1);
-    assert_eq!(test.window.chrome().search.entry.text().as_str(), "Notes 2");
+    assert_eq!(test.window.search_box().entry().text().as_str(), "Notes 2");
     assert_eq!(test.names(), ["Notes 2.txt"]);
 }
 
@@ -166,13 +166,13 @@ fn tabs_are_announced_as_tabs_with_their_selected_state() {
         .add_tab(&fixture.uri_of("Documents"))
         .expect("valid folder");
     test.wait_for_listing("the second tab");
-    let tab_list = test.window.chrome().tabs.tab_list();
+    let tab_list = test.window.tab_strip().tab_list();
     assert_eq!(tab_list.accessible_role(), gtk::AccessibleRole::TabList);
     assert!(gtk::test_accessible_has_property(
-        tab_list,
+        &tab_list,
         gtk::AccessibleProperty::Label
     ));
-    let tabs: Vec<gtk::Box> = descendants::<gtk::Box>(tab_list)
+    let tabs: Vec<gtk::Box> = descendants::<gtk::Box>(&tab_list)
         .into_iter()
         .filter(|button| button.accessible_role() == gtk::AccessibleRole::Tab)
         .collect();

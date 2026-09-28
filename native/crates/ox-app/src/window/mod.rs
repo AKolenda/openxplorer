@@ -2,25 +2,42 @@
 //! A browsing window with independent tab histories and listings.
 //!
 //! Ports the page structure and the controller of `desktop/ui/app.js`.
-//! [`BrowserWindow`] is a `GtkApplicationWindow` subclass. Its parts live
-//! in submodules, one job each: the frame ([`chrome`]), the folder pane
-//! ([`folder_pane`]), the sidebar and landing pages ([`environment`]), tab
-//! state ([`session`]), changing location ([`navigation`]) and drawing it
-//! ([`location_view`]), listing ([`loading`]), the selection
-//! ([`selection`]), the skin ([`appearance`]), activation, actions and
-//! input. Widgets run window actions (`win.go-to`, `win.select-tab`, ...),
-//! so the controller code does not reach into widget trees.
+//! [`BrowserWindow`] is a `GtkApplicationWindow` subclass whose frame, the
+//! static layout of `desktop/ui/index.html`, is the template
+//! `resources/ui/window.ui`. Each part of the frame is a widget with a
+//! module of its own: the title bar ([`title_bar`], [`tab_strip`],
+//! [`caption_buttons`]), the navigation row ([`navigation_buttons`],
+//! [`address_bar`], [`search_box`]), the [`command_bar`], the [`sidebar`],
+//! the [`folder_pane`], the [`details_pane`], the [`status_bar`] and the
+//! [`toast`].
+//!
+//! The controller lives in submodules, one job each: tab state
+//! ([`session`], read through [`active_tab`]), changing location
+//! ([`navigation`]) and drawing it ([`location_view`]), listing
+//! ([`loading`]), the selection ([`selection`]), the desktop's volumes and
+//! places ([`environment`]), Quick access ([`quick_access`]), mounting
+//! ([`mounting`]), the skin ([`appearance`]), activation, actions and
+//! input. Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
+//! and report typing through calls of their own (such as
+//! [`search_box::SearchBox::connect_query_changed`]), so the controller
+//! never reaches into another widget's children; it connects directly only
+//! to the window's own template children, such as the workspace split.
+//!
+//! Every module here is private, so a `pub` item could never be used
+//! outside the crate; `unreachable_pub` makes the compiler ask for the
+//! visibility each item really has.
+#![warn(unreachable_pub)]
 
 mod about;
 mod actions;
 mod activation;
+mod active_tab;
 mod address_bar;
 mod appearance;
 mod breakpoints;
 mod button_style;
 mod caption_buttons;
 mod card_grid;
-mod chrome;
 mod command_bar;
 mod context_menu;
 mod copy_path;
@@ -37,9 +54,12 @@ mod loading_line;
 mod location_kind;
 mod location_view;
 mod menu_popover;
+mod mounting;
 mod navigation;
+mod navigation_buttons;
 mod network_page;
 mod preferences;
+mod quick_access;
 mod search_box;
 mod selection;
 mod session;
@@ -64,20 +84,18 @@ use crate::shared::AppContext;
 use crate::theme::{ListenerId, Skin};
 use crate::typeahead;
 
-use chrome::Chrome;
+use address_bar::AddressBar;
+use command_bar::CommandBar;
 use details_pane::DetailsPane;
-use folder_pane::{FolderPane, PanePage};
+use folder_pane::FolderPane;
+use search_box::SearchBox;
 use sidebar::Sidebar;
+use status_bar::StatusBar;
+use tab_strip::TabStrip;
 
 pub(crate) use actions::install_accelerators;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use location_kind::is_local_or_smb_location;
-
-/// A new window's size, as `set_default_size(1320, 810)` in
-/// `desktop/winspace.py`.
-const DEFAULT_WIDTH: i32 = 1320;
-/// See [`DEFAULT_WIDTH`].
-const DEFAULT_HEIGHT: i32 = 810;
 
 /// Handlers this window registered on objects that outlive it.
 #[derive(Debug, Default)]
@@ -92,7 +110,7 @@ struct ExternalHandlers {
 
 /// The type-to-select prefix and the timer that clears its hint.
 #[derive(Debug, Default)]
-struct TypeAhead {
+struct Typeahead {
     /// The typed prefix and the matching rules.
     controller: typeahead::Controller,
     /// Ends the prefix after a pause; it clears itself when it fires.
@@ -102,39 +120,87 @@ struct TypeAhead {
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
 
+    use gtk::prelude::*;
     use gtk::subclass::prelude::*;
     use gtk::{gio, glib};
     use ox_core::location::LocationContext;
 
+    use super::address_bar::AddressBar;
     use super::breakpoints::WindowWidth;
-    use super::{Chrome, DetailsPane, ExternalHandlers, FolderPane, Sidebar, TypeAhead};
+    use super::caption_buttons::CaptionButtons;
+    use super::command_bar::CommandBar;
+    use super::details_pane::DetailsPane;
+    use super::folder_pane::FolderPane;
+    use super::search_box::SearchBox;
+    use super::session::Session;
+    use super::sidebar::Sidebar;
+    use super::status_bar::StatusBar;
+    use super::tab_strip::TabStrip;
+    use super::toast::Toast;
+    use super::{ExternalHandlers, Typeahead};
     use crate::shared::AppContext;
     use crate::volumes::VolumeRow;
-    use crate::window::session::Session;
 
-    /// Private state of [`super::BrowserWindow`].
-    #[derive(Debug, Default)]
-    pub struct BrowserWindow {
-        /// What every window shares: the skin, settings and places.
-        pub(super) context: OnceCell<AppContext>,
-        /// The frame around the workspace.
-        pub(super) chrome: OnceCell<Chrome>,
-        /// The folder pane.
-        pub(super) folder_pane: OnceCell<FolderPane>,
-        /// The details pane beside the folder pane.
-        pub(super) details_pane: OnceCell<DetailsPane>,
+    /// Private state of [`super::BrowserWindow`]: the parts of the frame
+    /// it updates, then the state of its tabs.
+    #[derive(Debug, Default, gtk::CompositeTemplate)]
+    #[template(file = "../../resources/ui/window.ui")]
+    pub(crate) struct BrowserWindow {
+        /// The tabs in the title bar.
+        #[template_child]
+        pub(super) tab_strip: TemplateChild<TabStrip>,
+        /// "+", right after the last tab.
+        #[template_child]
+        pub(super) new_tab_button: TemplateChild<gtk::Button>,
+        /// Lists the open windows.
+        #[template_child]
+        pub(super) open_windows_button: TemplateChild<gtk::MenuButton>,
+        /// Back, Forward, Up and Refresh.
+        #[template_child]
+        pub(super) navigation_buttons: TemplateChild<gtk::Box>,
+        /// Breadcrumbs or the editable address.
+        #[template_child]
+        pub(super) address_bar: TemplateChild<AddressBar>,
+        /// The search box that filters the folder.
+        #[template_child]
+        pub(super) search_box: TemplateChild<SearchBox>,
+        /// New, the edit commands, Sort, View, More, appearance and Details.
+        #[template_child]
+        pub(super) command_bar: TemplateChild<CommandBar>,
+        /// The split between the sidebar and the folder and details panes
+        /// (`.sidebar-resizer`).
+        #[template_child]
+        pub(super) workspace: TemplateChild<gtk::Paned>,
         /// The navigation pane.
-        pub(super) sidebar: OnceCell<Sidebar>,
+        #[template_child]
+        pub(super) sidebar: TemplateChild<Sidebar>,
+        /// The folder pane.
+        #[template_child]
+        pub(super) folder_pane: TemplateChild<FolderPane>,
+        /// The details pane beside the folder pane.
+        #[template_child]
+        pub(super) details_pane: TemplateChild<DetailsPane>,
+        /// The message at the bottom of the workspace.
+        #[template_child]
+        pub(super) toast: TemplateChild<Toast>,
+        /// Counts, the type-to-select hint and the view buttons.
+        #[template_child]
+        pub(super) status_bar: TemplateChild<StatusBar>,
+        /// What every window shares: the skin, settings and places. It
+        /// comes from the application, so [`super::BrowserWindow::new`]
+        /// sets it.
+        pub(super) context: OnceCell<AppContext>,
+        /// The desktop's volume monitor, set by `constructed`. Holding it
+        /// keeps the monitor, and so its signals, alive.
+        pub(super) volume_monitor: OnceCell<gio::VolumeMonitor>,
         /// The tabs and which one is active.
         pub(super) session: RefCell<Session>,
         /// Display names of the home folder and the mounted devices.
         pub(super) locations: RefCell<LocationContext>,
         /// The drives and devices the volume monitor reported last.
         pub(super) volumes: RefCell<Vec<VolumeRow>>,
-        /// The desktop's volume monitor.
-        pub(super) volume_monitor: OnceCell<gio::VolumeMonitor>,
         /// The type-to-select prefix of the folder views.
-        pub(super) type_ahead: RefCell<TypeAhead>,
+        pub(super) typeahead: RefCell<Typeahead>,
         /// Set while the window swaps or reloads the model, so the
         /// selection it restores is not saved over the tab's selection.
         pub(super) changing_model: Cell<bool>,
@@ -152,9 +218,39 @@ mod imp {
         const NAME: &'static str = "OxBrowserWindow";
         type Type = super::BrowserWindow;
         type ParentType = gtk::ApplicationWindow;
+
+        fn class_init(klass: &mut Self::Class) {
+            // GtkBuilder finds the template's own types by name, so they
+            // must be registered before the template is parsed.
+            CaptionButtons::ensure_type();
+            TabStrip::ensure_type();
+            AddressBar::ensure_type();
+            SearchBox::ensure_type();
+            CommandBar::ensure_type();
+            Sidebar::ensure_type();
+            FolderPane::ensure_type();
+            DetailsPane::ensure_type();
+            Toast::ensure_type();
+            StatusBar::ensure_type();
+            klass.bind_template();
+        }
+
+        fn instance_init(window: &glib::subclass::InitializingObject<Self>) {
+            window.init_template();
+        }
     }
 
     impl ObjectImpl for BrowserWindow {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let window = self.obj();
+            window.finish_title_bar();
+            window.add_navigation_buttons();
+            self.volume_monitor
+                .set(gio::VolumeMonitor::get())
+                .expect("constructed runs once per object");
+        }
+
         fn dispose(&self) {
             self.obj().disconnect_external_handlers();
             // Dropping the tabs cancels their listings and folder watches.
@@ -174,16 +270,17 @@ mod imp {
             // Let go of keyboard focus first. On Wayland, GTK's input method
             // otherwise keeps the focused address entry and later asks a
             // destroyed widget for its cursor position (a Gtk-CRITICAL).
-            gtk::prelude::GtkWindowExt::set_focus(&*self.obj(), None::<&gtk::Widget>);
+            GtkWindowExt::set_focus(&*self.obj(), None::<&gtk::Widget>);
             self.parent_close_request()
         }
     }
+
     impl ApplicationWindowImpl for BrowserWindow {}
 }
 
 glib::wrapper! {
     /// One OpenXplorer window: tabs, sidebar, folder views and details.
-    pub struct BrowserWindow(ObjectSubclass<imp::BrowserWindow>)
+    pub(crate) struct BrowserWindow(ObjectSubclass<imp::BrowserWindow>)
         @extends gtk::ApplicationWindow, gtk::Window, gtk::Widget,
         @implements gio::ActionGroup, gio::ActionMap, gtk::Accessible, gtk::Buildable,
             gtk::ConstraintTarget, gtk::Native, gtk::Root, gtk::ShortcutManager;
@@ -192,16 +289,13 @@ glib::wrapper! {
 impl BrowserWindow {
     /// Creates an empty window of `app` sharing `context`. Add a tab with
     /// [`Self::add_tab`] before presenting it.
-    pub fn new(app: &gtk::Application, context: &AppContext) -> Self {
-        let window: Self = glib::Object::builder()
-            .property("application", app)
-            .property("title", "OpenXplorer")
-            .property("default-width", DEFAULT_WIDTH)
-            .property("default-height", DEFAULT_HEIGHT)
-            .build();
-        window.add_css_class("ox");
-        window.build_parts(context);
-        window.lay_out_workspace();
+    pub(crate) fn new(app: &gtk::Application, context: &AppContext) -> Self {
+        let window: Self = glib::Object::builder().property("application", app).build();
+        window
+            .imp()
+            .context
+            .set(context.clone())
+            .expect("a new window has no context yet");
         window.install_actions();
         window.install_input();
         window.connect_signals();
@@ -209,72 +303,6 @@ impl BrowserWindow {
         window.apply_preferences();
         window.focus_file_list_once_shown();
         window
-    }
-
-    /// Builds the frame, the panes and the sidebar, and keeps what the
-    /// window shares with the others. [`Self::new`] does this once.
-    fn build_parts(&self, context: &AppContext) {
-        let imp = self.imp();
-        let appearance = context.skin().appearance();
-        imp.context
-            .set(context.clone())
-            .expect("a new window has no context yet");
-        imp.chrome
-            .set(Chrome::new(self.upcast_ref()))
-            .expect("a new window has no chrome yet");
-        imp.folder_pane
-            .set(FolderPane::new(appearance))
-            .expect("a new window has no folder pane yet");
-        imp.details_pane
-            .set(DetailsPane::new(appearance))
-            .expect("a new window has no details pane yet");
-        imp.sidebar
-            .set(Sidebar::new())
-            .expect("a new window has no sidebar yet");
-        imp.volume_monitor
-            .set(gio::VolumeMonitor::get())
-            .expect("a new window has no volume monitor yet");
-    }
-
-    /// Focuses the file list once GTK has finished showing the window,
-    /// which ends by focusing the first focusable widget (see
-    /// [`Self::focus_new_file_list`]).
-    fn focus_file_list_once_shown(&self) {
-        self.imp().file_list_awaits_focus.set(true);
-        self.connect_map(|window| {
-            glib::idle_add_local_once(glib::clone!(
-                #[weak]
-                window,
-                move || window.focus_new_file_list()
-            ));
-        });
-    }
-
-    /// Gives a new window's file list keyboard focus once the window is
-    /// shown and its first location is listed, as `#main` has focus when
-    /// app.js starts. A landing page or an empty folder has no list to
-    /// focus, so nothing keeps focus: GTK would otherwise leave it on the
-    /// first focusable widget, and a focused crumb draws the address bar's
-    /// editing line.
-    fn focus_new_file_list(&self) {
-        let ready = self.is_mapped() && self.is_listed();
-        if !ready || !self.imp().file_list_awaits_focus.replace(false) {
-            return;
-        }
-        if self.folder_pane().page() == Some(PanePage::Listing) {
-            self.folder_pane().focus_view();
-        } else {
-            gtk::prelude::GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
-        }
-    }
-
-    fn lay_out_workspace(&self) {
-        let pane = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        pane.append(self.folder_pane());
-        pane.append(&self.details_pane().root);
-        let workspace = &self.chrome().workspace;
-        workspace.set_start_child(Some(self.sidebar()));
-        workspace.set_end_child(Some(&pane));
     }
 
     /// The state shared by every window of the application.
@@ -289,39 +317,56 @@ impl BrowserWindow {
         self.context().skin()
     }
 
-    fn chrome(&self) -> &Chrome {
-        self.imp()
-            .chrome
-            .get()
-            .expect("BrowserWindow::new builds the chrome")
-    }
-
-    fn folder_pane(&self) -> &FolderPane {
-        self.imp()
-            .folder_pane
-            .get()
-            .expect("BrowserWindow::new builds the folder pane")
-    }
-
-    fn details_pane(&self) -> &DetailsPane {
-        self.imp()
-            .details_pane
-            .get()
-            .expect("BrowserWindow::new builds the details pane")
-    }
-
-    fn sidebar(&self) -> &Sidebar {
-        self.imp()
-            .sidebar
-            .get()
-            .expect("BrowserWindow::new builds the sidebar")
-    }
-
     fn volume_monitor(&self) -> &gio::VolumeMonitor {
         self.imp()
             .volume_monitor
             .get()
-            .expect("BrowserWindow::new gets the volume monitor")
+            .expect("constructed gets the volume monitor")
+    }
+
+    /// The tabs in the title bar.
+    fn tab_strip(&self) -> &TabStrip {
+        &self.imp().tab_strip
+    }
+
+    /// The breadcrumbs or the editable address.
+    fn address_bar(&self) -> &AddressBar {
+        &self.imp().address_bar
+    }
+
+    /// The search box that filters the folder.
+    fn search_box(&self) -> &SearchBox {
+        &self.imp().search_box
+    }
+
+    /// The command bar under the navigation row.
+    fn command_bar(&self) -> &CommandBar {
+        &self.imp().command_bar
+    }
+
+    /// The split between the sidebar and the panes beside it.
+    fn workspace(&self) -> &gtk::Paned {
+        &self.imp().workspace
+    }
+
+    /// The navigation pane.
+    fn sidebar(&self) -> &Sidebar {
+        &self.imp().sidebar
+    }
+
+    /// The folder pane.
+    fn folder_pane(&self) -> &FolderPane {
+        &self.imp().folder_pane
+    }
+
+    /// The details pane.
+    fn details_pane(&self) -> &DetailsPane {
+        &self.imp().details_pane
+    }
+
+    /// The status bar.
+    fn status_bar(&self) -> &StatusBar {
+        &self.imp().status_bar
     }
 
     /// The active folder's sorted, filtered native selection model, for
@@ -331,51 +376,22 @@ impl BrowserWindow {
         self.folder_pane().model()
     }
 
-    /// Number of tabs in this window.
-    pub fn tab_count(&self) -> usize {
-        self.imp().session.borrow().tabs().len()
+    /// Shows a message in the window's toast: a refused command, a
+    /// failure, or a recoverable startup or integration problem.
+    pub(crate) fn show_message(&self, message: &str) {
+        self.imp().toast.show(message);
     }
 
-    /// The items of tab `id`, unfiltered and unsorted, while it is open.
-    fn tab_store(&self, id: session::TabId) -> Option<gio::ListStore> {
-        let session = self.imp().session.borrow();
-        session.tab(id).map(|tab| tab.store.clone())
+    /// Hides the toast's message at once, as moving to another folder or
+    /// tab does.
+    fn hide_message(&self) {
+        self.imp().toast.hide();
     }
 
-    /// The active location, or `None` before the first tab is added.
-    pub fn current_uri(&self) -> Option<String> {
-        let session = self.imp().session.borrow();
-        session.active().map(|tab| tab.uri().to_owned())
-    }
-
-    /// Whether the active tab has finished its first listing (a landing
-    /// page counts as listed).
-    pub fn is_listed(&self) -> bool {
-        let session = self.imp().session.borrow();
-        session.active().is_some_and(|tab| tab.listing_state.is_listed())
-    }
-
-    /// Whether the active tab is still receiving directory entries.
-    pub fn is_loading(&self) -> bool {
-        self.imp()
-            .session
-            .borrow()
-            .active()
-            .is_some_and(|tab| tab.listing_state.is_listing())
-    }
-
-    /// The active listing's failure, if one occurred, for tests.
+    /// The message the toast showed last, for tests.
     #[cfg(test)]
-    fn load_error(&self) -> Option<String> {
-        let session = self.imp().session.borrow();
-        let error = session.active()?.error.as_ref()?;
-        Some(error.to_string())
-    }
-
-    /// Shows a recoverable startup or integration message in the window's
-    /// toast.
-    pub fn show_message(&self, message: &str) {
-        self.chrome().show_message(message);
+    fn shown_message(&self) -> glib::GString {
+        self.imp().toast.text()
     }
 
     fn connect_signals(&self) {
@@ -396,11 +412,11 @@ impl BrowserWindow {
 
     /// Filters the folder as the user types in the search box.
     fn connect_filter(&self) {
-        self.chrome().search.entry.connect_search_changed(glib::clone!(
+        self.search_box().connect_query_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |search| {
-                window.folder_pane().model().set_query(search.text().as_str());
+            move |query| {
+                window.folder_pane().model().set_query(query);
                 window.update_content();
             }
         ));
@@ -419,7 +435,7 @@ impl BrowserWindow {
         for handler in handlers.volumes {
             self.volume_monitor().disconnect(handler);
         }
-        if let Some(timer) = self.imp().type_ahead.borrow_mut().timer.take() {
+        if let Some(timer) = self.imp().typeahead.borrow_mut().timer.take() {
             timer.remove();
         }
     }

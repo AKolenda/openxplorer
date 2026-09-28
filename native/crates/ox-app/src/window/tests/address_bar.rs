@@ -34,7 +34,7 @@ fn deep_folder(fixture: &Fixture) -> PathBuf {
 fn crumbs_name_their_folder_and_show_its_full_address() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let crumbs = test.window.chrome().address.crumb_buttons();
+    let crumbs = test.window.address_bar().crumb_buttons();
     let last = crumbs.last().expect("a crumb per ancestor");
     assert_eq!(last.label().as_deref(), Some("Documents"));
     let address = fixture.path("Documents").display().to_string();
@@ -84,7 +84,7 @@ fn the_crumbs_stay_scrolled_to_the_current_folder() {
         .navigate(deep.to_str().expect("fixture paths are UTF-8"))
         .expect("valid folder");
     test.wait_for_listing("the deep folder");
-    let adjustment = test.window.chrome().address.crumb_adjustment();
+    let adjustment = test.window.address_bar().crumb_adjustment();
     wait_until("the crumbs to overflow and scroll to the end", || {
         let end = adjustment.upper() - adjustment.page_size();
         end > 0.0 && (adjustment.value() - end).abs() < 1.0
@@ -95,11 +95,11 @@ fn the_crumbs_stay_scrolled_to_the_current_folder() {
 fn editing_ends_when_focus_leaves_the_address() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let address = &test.window.chrome().address;
+    let address = test.window.address_bar();
     test.activate("location", None);
     assert_eq!(address.mode(), AddressMode::Entry);
     assert_eq!(
-        address.entry.text().as_str(),
+        address.entry().text().as_str(),
         fixture.root().display().to_string()
     );
     test.window.folder_pane().focus_view();
@@ -113,14 +113,14 @@ fn navigating_while_editing_returns_to_the_crumbs() {
     test.activate("location", None);
     test.activate("go-to", Some(&fixture.uri_of("Documents")));
     test.wait_for_listing("the subfolder");
-    assert_eq!(test.window.chrome().address.mode(), AddressMode::Crumbs);
+    assert_eq!(test.window.address_bar().mode(), AddressMode::Crumbs);
 }
 
 #[gtk::test]
 fn left_and_right_move_focus_between_crumbs() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let crumbs = test.window.chrome().address.crumb_buttons();
+    let crumbs = test.window.address_bar().crumb_buttons();
     let [.., parent, current] = crumbs.as_slice() else {
         panic!("a folder has several crumbs");
     };
@@ -135,14 +135,14 @@ fn left_and_right_move_focus_between_crumbs() {
 fn escape_discards_the_typed_address() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let address = &test.window.chrome().address;
+    let address = test.window.address_bar();
     test.activate("location", None);
-    address.entry.set_text("/somewhere else");
+    address.entry().set_text("/somewhere else");
     test.window.finish_address();
     assert_eq!(address.mode(), AddressMode::Crumbs);
     test.activate("location", None);
     assert_eq!(
-        address.entry.text().as_str(),
+        address.entry().text().as_str(),
         fixture.root().display().to_string()
     );
 }
@@ -169,12 +169,12 @@ fn the_title_crumbs_and_address_call_a_phone_by_its_mount_name() {
     }
     test.window.render_navigation();
     assert_eq!(test.window.title().as_deref(), Some("DCIM — OpenXplorer"));
-    let crumbs = test.window.chrome().address.crumb_buttons();
+    let crumbs = test.window.address_bar().crumb_buttons();
     let labels: Vec<String> = crumbs
         .iter()
         .filter_map(|crumb| crumb.label().map(|label| label.to_string()))
         .collect();
     assert_eq!(labels, ["Pixel 7", "Internal storage", "DCIM"]);
-    let entry = &test.window.chrome().address.entry;
+    let entry = test.window.address_bar().entry();
     assert_eq!(entry.text().as_str(), "Pixel 7 / Internal storage/DCIM");
 }

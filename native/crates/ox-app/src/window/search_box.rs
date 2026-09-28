@@ -7,64 +7,110 @@
 //! delayed `search-changed`, Escape handling and clear icon stay; only its
 //! own magnifier, which GTK always draws first, is hidden in favour of the
 //! trailing one.
+//!
+//! [`SearchBox`] is a `GtkBox` subclass laid out by the template
+//! `resources/ui/search-box.ui`. The window hears the typed text through
+//! [`SearchBox::connect_query_changed`], never through the entry itself.
 
+use gtk::glib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
 use crate::icons::{self, Glyph};
 
-/// How long typing pauses before the folder is filtered (`queueSearch`).
-const SEARCH_DELAY_MS: u32 = 120;
+/// The trailing magnifier's glyph.
+const MAGNIFIER_GLYPH: i32 = 15;
 
-/// The search box's widgets.
-#[derive(Debug)]
-pub(super) struct SearchBox {
-    /// The bordered box in the navigation row.
-    pub root: gtk::Box,
-    /// The field the user types in.
-    pub entry: gtk::SearchEntry,
+mod imp {
+    use gtk::glib;
+    use gtk::subclass::prelude::*;
+
+    /// Private state of [`super::SearchBox`]: the template's widgets.
+    #[derive(Debug, Default, gtk::CompositeTemplate)]
+    #[template(file = "../../resources/ui/search-box.ui")]
+    pub(crate) struct SearchBox {
+        /// The field the user types in.
+        #[template_child]
+        pub(super) entry: TemplateChild<gtk::SearchEntry>,
+        /// The magnifier at the right end.
+        #[template_child]
+        pub(super) magnifier: TemplateChild<gtk::Image>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for SearchBox {
+        const NAME: &'static str = "OxSearchBox";
+        type Type = super::SearchBox;
+        type ParentType = gtk::Box;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(search_box: &glib::subclass::InitializingObject<Self>) {
+            search_box.init_template();
+        }
+    }
+
+    impl ObjectImpl for SearchBox {
+        fn constructed(&self) {
+            self.parent_constructed();
+            self.obj().finish_template();
+        }
+    }
+
+    impl WidgetImpl for SearchBox {}
+    impl BoxImpl for SearchBox {}
+}
+
+glib::wrapper! {
+    /// The bordered search box in the navigation row.
+    pub(crate) struct SearchBox(ObjectSubclass<imp::SearchBox>)
+        @extends gtk::Box, gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl SearchBox {
-    /// An empty search box.
-    pub fn new() -> Self {
-        let entry = gtk::SearchEntry::builder()
-            .hexpand(true)
-            .search_delay(SEARCH_DELAY_MS)
-            .tooltip_text("Search file names in this folder")
-            .build();
-        entry.update_property(&[gtk::accessible::Property::Label("Search filenames and paths")]);
-        // The box has a fixed width (`.search-wrap{width:235px}`), so the
-        // entry asks for no more than one character.
-        entry.set_width_chars(1);
-        entry.set_max_width_chars(1);
-        hide_leading_magnifier(&entry);
-        let magnifier = icons::glyph(Glyph::Search, 15);
-        magnifier.add_css_class("search-icon");
-        // Not expanding, although the entry inside does: the address bar
-        // takes the rest of the row.
-        let root = gtk::Box::builder()
-            .valign(gtk::Align::Center)
-            .hexpand(false)
-            .css_classes(["search-wrap"])
-            .build();
-        root.append(&entry);
-        root.append(&magnifier);
-        Self { root, entry }
+    /// Swaps the entry's leading magnifier for the trailing one.
+    fn finish_template(&self) {
+        let imp = self.imp();
+        hide_leading_magnifier(&imp.entry);
+        icons::set_glyph(&imp.magnifier, Glyph::Search, MAGNIFIER_GLYPH);
+    }
+
+    /// Calls `on_query_changed` with the text once typing pauses, and at
+    /// once when the text is cleared.
+    pub(super) fn connect_query_changed(&self, on_query_changed: impl Fn(&str) + 'static) {
+        self.imp()
+            .entry
+            .connect_search_changed(move |entry| on_query_changed(entry.text().as_str()));
+    }
+
+    /// Moves keyboard focus into the box (Ctrl+F).
+    pub(super) fn focus(&self) {
+        self.imp().entry.grab_focus();
     }
 
     /// Names the folder the box searches: "Search Documents".
-    pub fn set_folder_title(&self, title: &str) {
-        self.entry.set_placeholder_text(Some(&format!("Search {title}")));
+    pub(super) fn set_folder_title(&self, title: &str) {
+        let placeholder = format!("Search {title}");
+        self.imp().entry.set_placeholder_text(Some(&placeholder));
     }
 
     /// Enables the box in folders and disables it on landing pages.
-    pub fn set_enabled(&self, enabled: bool) {
-        self.root.set_sensitive(enabled);
+    pub(super) fn set_enabled(&self, enabled: bool) {
+        self.set_sensitive(enabled);
     }
 
     /// Empties the box, which ends the filter.
-    pub fn clear(&self) {
-        self.entry.set_text("");
+    pub(super) fn clear(&self) {
+        self.imp().entry.set_text("");
+    }
+
+    /// The field the user types in, for tests.
+    #[cfg(test)]
+    pub(super) fn entry(&self) -> gtk::SearchEntry {
+        self.imp().entry.get()
     }
 }
 

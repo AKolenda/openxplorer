@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- The status bar (footer.statusbar in desktop/ui/index.html): the item
+     count, the selection and the type-to-select hint, then at the right
+     the build, "Check for updates" and the two view buttons
+     (src/window/status_bar.rs). -->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxStatusBar" parent="GtkBox">
+    <property name="spacing">18</property>
+    <style>
+      <class name="statusbar"/>
+    </style>
+    <child>
+      <!-- #status-count -->
+      <object class="GtkLabel" id="count">
+        <property name="label">Ready</property>
+        <property name="xalign">0</property>
+      </object>
+    </child>
+    <child>
+      <!-- #status-selected -->
+      <object class="GtkLabel" id="selection">
+        <property name="xalign">0</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="typeahead_hint">
+        <property name="xalign">0</property>
+        <property name="ellipsize">end</property>
+        <style>
+          <class name="typeahead-hint"/>
+        </style>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox">
+        <property name="hexpand">true</property>
+      </object>
+    </child>
+    <child>
+      <!-- #status-mode: the build, which a compact window hides. -->
+      <object class="GtkLabel" id="build">
+        <property name="ellipsize">end</property>
+        <style>
+          <class name="status-mode"/>
+        </style>
+      </object>
+    </child>
+    <child>
+      <!-- #check-updates, disabled until the update flow is ported. -->
+      <object class="GtkButton" id="check_updates_button">
+        <property name="valign">center</property>
+        <accessibility>
+          <property name="label">Check for updates</property>
+        </accessibility>
+      </object>
+    </child>
+    <child>
+      <object class="GtkButton" id="details_view_button">
+        <property name="tooltip-text">Details view</property>
+        <property name="valign">center</property>
+        <accessibility>
+          <property name="label">Details view</property>
+        </accessibility>
+      </object>
+    </child>
+    <child>
+      <object class="GtkButton" id="icons_view_button">
+        <property name="tooltip-text">Large icons</property>
+        <property name="valign">center</property>
+        <accessibility>
+          <property name="label">Large icons</property>
+        </accessibility>
+      </object>
+    </child>
+  </template>
+</interface>

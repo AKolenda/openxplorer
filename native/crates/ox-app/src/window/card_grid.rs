@@ -12,7 +12,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::widget_tree::laid_out_children;
+use super::widget_tree::{laid_out_children, widest_minimum_width};
 
 /// A grid's sizes, from its stylesheet rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +60,9 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{column_count, column_width, laid_out_children, GridSpacing, QUICK_GRID};
+    use super::{
+        column_count, column_width, laid_out_children, widest_minimum_width, GridSpacing, QUICK_GRID,
+    };
 
     /// Private state of [`super::CardGridLayout`].
     #[derive(Debug)]
@@ -100,7 +102,9 @@ mod imp {
             let spacing = self.spacing.get();
             let cards = laid_out_children(widget);
             if orientation == gtk::Orientation::Horizontal {
-                let narrowest = spacing.narrowest_column.min(super::widest_minimum(&cards));
+                // A card is never squeezed below its own minimum.
+                let widest_card = widest_minimum_width(&cards).unwrap_or(0);
+                let narrowest = spacing.narrowest_column.min(widest_card);
                 return (narrowest, narrowest, -1, -1);
             }
             let height = super::rows_height(spacing, &cards, for_size);
@@ -148,12 +152,6 @@ pub(super) fn card_grid(spacing: GridSpacing) -> gtk::Box {
         .layout_manager(&CardGridLayout::new(spacing))
         .css_classes(["card-grid"])
         .build()
-}
-
-/// The widest minimum width among `cards`, so a card is never squeezed.
-fn widest_minimum(cards: &[gtk::Widget]) -> i32 {
-    let minimum_of = |card: &gtk::Widget| card.measure(gtk::Orientation::Horizontal, -1).0;
-    cards.iter().map(minimum_of).max().unwrap_or(0)
 }
 
 /// The height of the tallest of `cards` at `width`.

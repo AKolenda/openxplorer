@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  The browsing window's frame: the static layout of desktop/ui/index.html,
+  top to bottom. src/window/mod.rs binds the parts it updates by id.
+
+  Buttons name no action here: Rust sets every action name from
+  WindowAction, so a misspelt name is a compile error, and draws the
+  glyphs, which src/icons paints natively.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxBrowserWindow" parent="GtkApplicationWindow">
+    <property name="title">OpenXplorer</property>
+    <!-- set_default_size(1320, 810) in desktop/winspace.py. -->
+    <property name="default-width">1320</property>
+    <property name="default-height">810</property>
+    <style>
+      <class name="ox"/>
+    </style>
+    <!--
+      header.titlebar: caption buttons, the tabs, "+" right after the last
+      tab, the drag area taking the rest, the open-windows button and the
+      caption buttons. The whole bar is a GtkWindowHandle, so dragging or
+      double-clicking any empty part moves or maximises the window as the
+      desktop expects.
+    -->
+    <property name="titlebar">
+      <object class="GtkWindowHandle">
+        <property name="child">
+          <object class="GtkBox">
+            <style>
+              <class name="ox-titlebar"/>
+            </style>
+            <child>
+              <object class="OxCaptionButtons">
+                <property name="side">start</property>
+              </object>
+            </child>
+            <child>
+              <object class="OxTabStrip" id="tab_strip"/>
+            </child>
+            <child>
+              <object class="GtkButton" id="new_tab_button">
+                <property name="tooltip-text">New tab (Ctrl+T)</property>
+                <property name="valign">end</property>
+                <style>
+                  <class name="newtab"/>
+                </style>
+                <accessibility>
+                  <property name="label">New tab</property>
+                </accessibility>
+              </object>
+            </child>
+            <child>
+              <!-- .title-drag: the empty part of the bar, which keeps its
+                   CSS minimum width so the window can always be grabbed. -->
+              <object class="GtkBox">
+                <property name="hexpand">true</property>
+                <style>
+                  <class name="title-drag"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <!-- #windows-button: the open windows, New window and Quit. -->
+              <object class="GtkMenuButton" id="open_windows_button">
+                <property name="tooltip-text">Open windows</property>
+                <property name="valign">center</property>
+                <style>
+                  <class name="windows-button"/>
+                </style>
+                <accessibility>
+                  <property name="label">Open windows</property>
+                </accessibility>
+              </object>
+            </child>
+            <child>
+              <object class="OxCaptionButtons">
+                <property name="side">end</property>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </property>
+    <property name="child">
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <child>
+          <!-- section.navigation: the history buttons, the address and the
+               search box, 14 pixels apart by their CSS border-spacing,
+               which narrow windows shrink. -->
+          <object class="GtkBox">
+            <style>
+              <class name="navigation"/>
+            </style>
+            <accessibility>
+              <property name="label">Navigation</property>
+            </accessibility>
+            <child>
+              <!-- .nav-buttons: Back, Forward, Up and Refresh, added from
+                   the table in navigation_buttons.rs. -->
+              <object class="GtkBox" id="navigation_buttons">
+                <property name="valign">center</property>
+                <style>
+                  <class name="nav-buttons"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="OxAddressBar" id="address_bar"/>
+            </child>
+            <child>
+              <object class="OxSearchBox" id="search_box"/>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="OxCommandBar" id="command_bar"/>
+        </child>
+        <child>
+          <!-- The toast lies over the workspace, at its bottom centre. -->
+          <object class="GtkOverlay">
+            <property name="vexpand">true</property>
+            <property name="child">
+              <!-- The sidebar and the panes beside it, split by the 6-pixel
+                   .sidebar-resizer. -->
+              <object class="GtkPaned" id="workspace">
+                <property name="orientation">horizontal</property>
+                <property name="vexpand">true</property>
+                <property name="wide-handle">true</property>
+                <property name="shrink-start-child">false</property>
+                <property name="shrink-end-child">false</property>
+                <property name="resize-start-child">false</property>
+                <style>
+                  <class name="workspace"/>
+                </style>
+                <property name="start-child">
+                  <object class="OxSidebar" id="sidebar"/>
+                </property>
+                <property name="end-child">
+                  <object class="GtkBox">
+                    <child>
+                      <object class="OxFolderPane" id="folder_pane"/>
+                    </child>
+                    <child>
+                      <object class="OxDetailsPane" id="details_pane"/>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </property>
+            <child type="overlay">
+              <object class="OxToast" id="toast"/>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="OxStatusBar" id="status_bar"/>
+        </child>
+      </object>
+    </property>
+  </template>
+</interface>

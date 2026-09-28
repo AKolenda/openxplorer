@@ -76,7 +76,7 @@ impl BrowserWindow {
             }
         };
         let selected = self.folder_pane().model().summary();
-        self.chrome().status.show(subject, selected);
+        self.status_bar().show(subject, selected);
     }
 
     /// Shows the selection's properties, or the folder's, in the details

@@ -34,14 +34,14 @@ fn press(test: &TestWindow, key: gdk::Key) -> bool {
 }
 
 fn hint(test: &TestWindow) -> String {
-    let label = test.window.chrome().status.typeahead_hint_label();
+    let label = test.window.status_bar().typeahead_hint_label();
     label.text().to_string()
 }
 
 /// Whether the hint is drawn in the light palette's `hex` colour.
 fn hint_is_drawn_in(test: &TestWindow, hex: &str) -> bool {
     let expected = gdk::RGBA::parse(hex).expect("a CSS colour");
-    let drawn = test.window.chrome().status.typeahead_hint_label().color();
+    let drawn = test.window.status_bar().typeahead_hint_label().color();
     let channels = [
         (drawn.red(), expected.red()),
         (drawn.green(), expected.green()),
@@ -111,7 +111,7 @@ fn leaving_the_view_starts_a_new_prefix() {
     let test = TestWindow::open(&fixture.uri());
     test.window.folder_pane().focus_view();
     test.window.type_text("n");
-    test.window.chrome().search.entry.grab_focus();
+    test.window.search_box().focus();
     assert_eq!(hint(&test), "", "the prefix ended with the focus");
     test.window.folder_pane().focus_view();
     test.window.type_text("r");

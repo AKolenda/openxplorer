@@ -98,7 +98,7 @@ impl BrowserWindow {
         // `win.details-pane` starts from the same preferences.
         self.fit_details_pane();
         self.show_view(FolderView::from_setting(&preferences.view));
-        let workspace = &self.chrome().workspace;
+        let workspace = self.workspace();
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
         let details_view = self.folder_pane().details();
         details::apply_column_widths(details_view, preferences.column_widths.as_ref());
@@ -118,18 +118,18 @@ impl BrowserWindow {
     /// The widest the sidebar may be now, or `None` before the workspace
     /// is laid out.
     fn sidebar_limit(&self) -> Option<i32> {
-        let workspace_width = self.chrome().workspace.width();
+        let workspace_width = self.workspace().width();
         if workspace_width == 0 {
             return None;
         }
-        let pane = &self.details_pane().root;
+        let pane = self.details_pane();
         let details_width = if pane.is_visible() { pane.width() } else { 0 };
         Some(widest_sidebar(workspace_width, details_width))
     }
 
     /// Stops a dragged sidebar where the folder pane would lose its room.
     fn keep_sidebar_within_limit(&self) {
-        self.chrome().workspace.connect_position_notify(glib::clone!(
+        self.workspace().connect_position_notify(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |workspace| {
@@ -150,7 +150,7 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             move |_, presses, x, _| {
-                let workspace = &window.chrome().workspace;
+                let workspace = window.workspace();
                 let on_handle = (x - f64::from(workspace.position())).abs() <= HANDLE_REACH;
                 if presses == 2 && on_handle {
                     workspace.set_position(DEFAULT_SIDEBAR_WIDTH);
@@ -158,13 +158,13 @@ impl BrowserWindow {
                 }
             }
         ));
-        self.chrome().workspace.add_controller(click);
+        self.workspace().add_controller(click);
     }
 
     /// Saves the sidebar width when the user finishes dragging it, never
     /// for the window's own layout changes.
     fn save_sidebar_width_after_drags(&self) {
-        let workspace = &self.chrome().workspace;
+        let workspace = self.workspace();
         let drag = gtk::GestureDrag::new();
         drag.set_propagation_phase(gtk::PropagationPhase::Capture);
         // Where the drag started, shared by its begin and end handlers.
@@ -200,7 +200,7 @@ impl BrowserWindow {
             move |result: Result<(), SettingsError>| {
                 if let Err(error) = result {
                     let message = format!("Changed for this window, but could not be saved: {error}");
-                    window.chrome().show_message(&message);
+                    window.show_message(&message);
                 }
             }
         );

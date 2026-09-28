@@ -75,20 +75,14 @@ glib::wrapper! {
 }
 
 impl Sidebar {
-    /// An empty navigation pane.
-    pub(super) fn new() -> Self {
-        glib::Object::builder()
-            .property("orientation", gtk::Orientation::Vertical)
-            .build()
-    }
-
     /// The list of rows.
     pub(super) fn list(&self) -> &gtk::ListBox {
         self.imp().list.get().expect("constructed builds the list")
     }
 
-    /// Builds the list and the footer into the pane.
+    /// Builds the list and, below it, the footer into the pane.
     fn build_pane(&self) {
+        self.set_orientation(gtk::Orientation::Vertical);
         self.add_css_class("sidebar");
         self.update_property(&[gtk::accessible::Property::Label("Folders and network locations")]);
         let list = gtk::ListBox::builder()

@@ -4,9 +4,9 @@
 .details { background-color: @ox_bg; border-left: 1px solid @ox_border; }
 .details-inner { padding: 22px 22px 16px 22px; }
 .details .detail-header { margin-bottom: 20px; }
-.details button.x { min-width: 24px; min-height: 24px; }
+.details button.detail-close { min-width: 24px; min-height: 24px; }
 /* 148px tall with its border. */
-.details .preview {
+.details .detail-preview {
   background-color: @ox_chrome;
   border: 1px solid @ox_border;
   border-radius: 7px;
@@ -17,17 +17,17 @@
    GTK's cairo renderer drops a shadow this faint, its GL renderers draw
    it). The art is centred on a half pixel, which Chromium draws one pixel
    down. */
-.details .preview image {
+.details .detail-preview image {
   -gtk-icon-shadow: 0 4px 4px alpha(black, .043);
   margin-top: 1px;
 }
-.details .dname { font-weight: 600; margin-bottom: 4px; }
-.details .dtype { color: @ox_muted; margin-bottom: 17px; }
+.details .detail-name { font-weight: 600; margin-bottom: 4px; }
+.details .detail-type { color: @ox_muted; margin-bottom: 17px; }
 /* Open, or Pin to Quick access: a bordered button 32px tall. */
-.details button.dbutton { min-height: 30px; margin-bottom: 24px; }
-.details .dsection { font-weight: 600; margin-bottom: 17px; }
-.details .dkey { color: @ox_muted; }
-.details .note {
+.details button.detail-button { min-height: 30px; margin-bottom: 24px; }
+.details .detail-section { font-weight: 600; margin-bottom: 17px; }
+.details .detail-key { color: @ox_muted; }
+.details .detail-note {
   color: @ox_muted;
   border-top: 1px solid @ox_border;
   padding-top: 17px;
@@ -35,5 +35,5 @@
 }
 /* `line-height:1.65` is 18px at 11px. GTK multiplies the font's own line
    height (16px for Noto Sans at 11px), not the font size: 18 / 16. */
-.details .note label { line-height: 1.13; }
-.details .note image { color: @ox_accent; }
+.details .detail-note label { line-height: 1.13; }
+.details .detail-note image { color: @ox_accent; }

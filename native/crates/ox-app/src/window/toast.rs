@@ -80,8 +80,10 @@ glib::wrapper! {
 }
 
 impl Toast {
-    /// A hidden toast.
-    pub fn new() -> Self {
+    /// A hidden toast, for tests; a window gets its toast from its
+    /// template.
+    #[cfg(test)]
+    fn new() -> Self {
         glib::Object::new()
     }
 

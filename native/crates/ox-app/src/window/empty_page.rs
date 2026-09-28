@@ -57,7 +57,7 @@ fn centred_text() -> gtk::Label {
 
 impl EmptyPage {
     /// A page that says nothing yet.
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(PART_GAP)
@@ -95,7 +95,7 @@ impl EmptyPage {
     }
 
     /// Shows `state`, with the app.js wording (`renderRows`).
-    pub fn show(&self, state: &EmptyState) {
+    pub(super) fn show(&self, state: &EmptyState) {
         let loading = *state == EmptyState::Loading;
         self.spinner.set_visible(loading);
         self.spinner.set_spinning(loading);
@@ -120,13 +120,13 @@ impl EmptyPage {
 
     /// The title shown, for tests.
     #[cfg(test)]
-    pub fn title(&self) -> String {
+    pub(super) fn title(&self) -> String {
         self.title.text().to_string()
     }
 
     /// True when a Try again button that refreshes is shown, for tests.
     #[cfg(test)]
-    pub fn offers_try_again(&self) -> bool {
+    pub(super) fn offers_try_again(&self) -> bool {
         let retry = &self.retry;
         let refresh = WindowAction::Refresh.detailed_name();
         let runs_refresh = retry.action_name().as_deref() == Some(refresh.as_str());

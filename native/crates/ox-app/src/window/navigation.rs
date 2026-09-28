@@ -36,6 +36,10 @@ impl BrowserWindow {
     /// legacy page names, a landing page by URI, the home folder or a
     /// landing page by title, else a folder relative to the current one
     /// (see [`Self::resolve_relative`]).
+    ///
+    /// # Errors
+    ///
+    /// The address is not a location the app can open.
     pub(super) fn resolve_address(&self, address: &str) -> Result<String, LocationError> {
         let typed = address.trim();
         if locations::is_home_alias(typed) {
@@ -101,7 +105,7 @@ impl BrowserWindow {
     /// # Errors
     ///
     /// The address is not a location the app can open; nothing changes.
-    pub fn add_tab(&self, address: &str) -> Result<(), LocationError> {
+    pub(crate) fn add_tab(&self, address: &str) -> Result<(), LocationError> {
         self.open_tab(address, TabPlacement::Foreground)
     }
 
@@ -126,7 +130,7 @@ impl BrowserWindow {
     /// Navigates, showing a refused address in the message line.
     pub(super) fn navigate_or_report(&self, address: &str) {
         if let Err(error) = self.navigate(address) {
-            self.chrome().show_message(error.message());
+            self.show_message(error.message());
         }
     }
 
@@ -144,7 +148,7 @@ impl BrowserWindow {
     /// filter, the selection and the type-to-select prefix.
     fn leave_location(&self) {
         self.change_model(|| {
-            self.chrome().search.clear();
+            self.search_box().clear();
             self.folder_pane().model().set_query("");
             self.folder_pane().model().select_none();
         });
@@ -177,14 +181,14 @@ impl BrowserWindow {
     /// screen, and lists a tab that was opened in the background.
     fn show_tab(&self, id: TabId) {
         self.reset_typeahead();
-        self.chrome().hide_message();
+        self.hide_message();
         let Some(view) = self.saved_tab_view(id) else {
             return;
         };
         let had_focus = self.folder_pane().view_has_focus();
         self.change_model(|| {
             let model = self.folder_pane().model();
-            self.chrome().search.clear();
+            self.search_box().clear();
             model.set_query("");
             model.set_store(Some(&view.store));
             model.select_uris(&view.selected);

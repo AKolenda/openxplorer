@@ -128,7 +128,7 @@ pub(super) struct MenuItem {
 
 impl MenuItem {
     /// An item that runs `action` without a parameter.
-    pub fn new(label: &str, glyph: Glyph, action: impl Into<MenuAction>) -> Self {
+    pub(super) fn new(label: &str, glyph: Glyph, action: impl Into<MenuAction>) -> Self {
         Self {
             label: label.to_owned(),
             glyph,
@@ -140,7 +140,7 @@ impl MenuItem {
     }
 
     /// A choice of the string action `action`, checked while it is chosen.
-    pub fn choice(label: &str, glyph: Glyph, action: WindowAction, value: &str) -> Self {
+    pub(super) fn choice(label: &str, glyph: Glyph, action: WindowAction, value: &str) -> Self {
         Self {
             target: Some(value.to_variant()),
             check: ItemCheck::FollowsAction,
@@ -149,7 +149,7 @@ impl MenuItem {
     }
 
     /// An item for the boolean action `action`, checked while it is on.
-    pub fn toggle(label: &str, glyph: Glyph, action: WindowAction) -> Self {
+    pub(super) fn toggle(label: &str, glyph: Glyph, action: WindowAction) -> Self {
         Self {
             check: ItemCheck::FollowsAction,
             ..Self::new(label, glyph, action)
@@ -157,7 +157,7 @@ impl MenuItem {
     }
 
     /// The same item showing `shortcut`.
-    pub fn with_shortcut(self, shortcut: &'static str) -> Self {
+    pub(super) fn with_shortcut(self, shortcut: &'static str) -> Self {
         Self {
             shortcut: Some(shortcut),
             ..self

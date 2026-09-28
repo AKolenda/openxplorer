@@ -88,13 +88,13 @@ fn the_status_bar_says_ready_on_a_page_and_counts_a_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(Page::ThisPc.uri());
     assert_eq!(
-        test.window.chrome().status.texts(),
+        test.window.status_bar().texts(),
         ("Ready".to_owned(), String::new())
     );
     test.window.navigate(&fixture.uri()).expect("the fixture folder");
     test.wait_for_listing("the fixture folder");
     test.window.folder_model().select_only(0);
-    let (count, selection) = test.window.chrome().status.texts();
+    let (count, selection) = test.window.status_bar().texts();
     assert_eq!(count, "4 items");
     assert_eq!(selection, "1 selected");
 }
@@ -117,7 +117,7 @@ fn pinning_the_current_folder_adds_it_to_quick_access() {
         [fixture.uri()]
     );
     test.activate("pin-folder", None);
-    let message = test.window.chrome().toast.text();
+    let message = test.window.shown_message();
     assert_eq!(message.as_str(), "Already pinned to Quick access.");
 }
 
@@ -127,7 +127,7 @@ fn the_details_pane_keeps_its_width_for_long_names() {
     let long_name = format!("{}.txt", "A very long file name ".repeat(8));
     fixture.write(&long_name);
     let test = TestWindow::open(&fixture.uri());
-    if !test.window.details_pane().root.is_visible() {
+    if !test.window.details_pane().is_visible() {
         test.activate("details-pane", None);
     }
     let position = test.names().iter().position(|name| *name == long_name);
@@ -135,7 +135,7 @@ fn the_details_pane_keeps_its_width_for_long_names() {
     test.window
         .folder_model()
         .select_only(u32::try_from(position).expect("a short listing"));
-    let pane = &test.window.details_pane().root;
+    let pane = test.window.details_pane();
     wait_until("the pane to be laid out", || pane.width() > 0);
     settle_layout(&test);
     // Its stylesheet adds 44 pixels of padding and a 1-pixel border.

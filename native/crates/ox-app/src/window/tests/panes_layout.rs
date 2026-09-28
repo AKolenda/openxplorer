@@ -97,7 +97,7 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
 fn the_details_pane_spaces_its_parts_as_the_current_app() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let pane = &test.window.details_pane().root;
+    let pane = test.window.details_pane();
     let pane_place = bounds(&test, pane);
     assert_eq!(pane_place.width, 262);
     let frames = descendants::<gtk::CenterBox>(pane);
@@ -119,7 +119,7 @@ fn the_details_pane_spaces_its_parts_as_the_current_app() {
 fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let status_buttons: Vec<gtk::Button> = descendants::<gtk::Button>(&test.window.chrome().status.root);
+    let status_buttons: Vec<gtk::Button> = descendants::<gtk::Button>(test.window.status_bar());
     let placed: Vec<Bounds> = status_buttons
         .iter()
         .map(|button| bounds(&test, button))
@@ -133,13 +133,10 @@ fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted()
     for pair in placed.windows(2) {
         assert_eq!(pair[1].x - pair[0].right(), 3, "3 pixels apart");
     }
-    assert_eq!(
-        test.window.chrome().status.active_view_buttons(),
-        ["Details view"]
-    );
+    assert_eq!(test.window.status_bar().active_view_buttons(), ["Details view"]);
     test.activate("view", Some("large"));
     wait_for_frames(&test.window, 2);
-    assert_eq!(test.window.chrome().status.active_view_buttons(), ["Large icons"]);
+    assert_eq!(test.window.status_bar().active_view_buttons(), ["Large icons"]);
 }
 
 #[gtk::test]

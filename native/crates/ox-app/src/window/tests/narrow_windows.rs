@@ -22,7 +22,7 @@ fn resize(test: &TestWindow, width: i32) {
 fn the_details_pane_gives_way_below_961_pixels_and_comes_back() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let pane = &test.window.details_pane().root;
+    let pane = test.window.details_pane();
     assert!(pane.is_visible());
     resize(&test, 940);
     assert!(!pane.is_visible(), "no room for the pane");
@@ -31,7 +31,7 @@ fn the_details_pane_gives_way_below_961_pixels_and_comes_back() {
         .action_state("details-pane")
         .and_then(|state| state.get::<bool>());
     assert_eq!(switched_on, Some(true), "still switched on");
-    let tab = test.window.chrome().tabs.tab_list().first_child().expect("a tab");
+    let tab = test.window.tab_strip().tab_list().first_child().expect("a tab");
     assert_eq!(bounds(&test, &tab).width, 180, "narrower tabs");
     resize(&test, 1320);
     assert!(pane.is_visible(), "the pane comes back");
@@ -42,7 +42,7 @@ fn a_compact_window_drops_the_search_box_some_commands_and_two_columns() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     resize(&test, 660);
-    assert!(!test.window.chrome().search.root.is_visible());
+    assert!(!test.window.search_box().is_visible());
     for action in ["win.cut", "win.rename", "win.copy-path"] {
         assert!(!button_for(&test, action).is_visible(), "{action} is hidden");
     }
@@ -53,7 +53,7 @@ fn a_compact_window_drops_the_search_box_some_commands_and_two_columns() {
         assert!(!shown, "{column:?} is hidden");
     }
     resize(&test, 1320);
-    assert!(test.window.chrome().search.root.is_visible());
+    assert!(test.window.search_box().is_visible());
     assert!(button_for(&test, "win.cut").is_visible());
 }
 

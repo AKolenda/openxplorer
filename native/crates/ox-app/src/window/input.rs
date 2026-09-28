@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Keyboard and pointer input of the folder views and the address entry:
-//! type-to-select, middle-click to open a folder in a tab, and activation.
-//! The context menu has a module of its own ([`super::context_menu`]).
+//! a new window's first keyboard focus, type-to-select, middle-click to
+//! open a folder in a tab, and activation. The context menu has a module
+//! of its own ([`super::context_menu`]).
 //!
 //! Ports `onKey` and the type-select glue in `desktop/ui/app.js`
 //! (`desktop/tests/ui_type_select.py` is its specification): typed
@@ -18,6 +19,7 @@ use gtk::{gdk, glib};
 use crate::typeahead::{self, TypeSelect};
 
 use super::activation::{activation_for, Activation};
+use super::folder_pane::PanePage;
 use super::gestures;
 use super::status_bar::TypeaheadMatch;
 use super::BrowserWindow;
@@ -61,36 +63,62 @@ pub(super) fn typeahead_hint(result: &TypeSelect, matched_name: Option<&str>) ->
 }
 
 impl BrowserWindow {
-    /// Adds keyboard and pointer handling to both folder views and the
-    /// address entry.
+    /// Adds keyboard and pointer handling to both folder views, and makes
+    /// Escape in the address entry return to the breadcrumbs.
     pub(super) fn install_input(&self) {
         let details = self.folder_pane().details().clone();
         let grid = self.folder_pane().grid().clone();
         self.folder_input(details.upcast_ref());
         self.folder_input(grid.upcast_ref());
-        let escape = gtk::EventControllerKey::new();
-        escape.connect_key_pressed(glib::clone!(
+        self.address_bar().connect_cancelled(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_, key, _, _| {
-                if key != gdk::Key::Escape {
-                    return glib::Propagation::Proceed;
-                }
-                window.finish_address();
-                glib::Propagation::Stop
-            }
+            move || window.finish_address()
         ));
-        self.chrome().address.entry.add_controller(escape);
+    }
+
+    /// Focuses the file list once GTK has finished showing the window,
+    /// which ends by focusing the first focusable widget (see
+    /// [`Self::focus_new_file_list`]).
+    pub(super) fn focus_file_list_once_shown(&self) {
+        self.imp().file_list_awaits_focus.set(true);
+        self.connect_map(|window| {
+            glib::idle_add_local_once(glib::clone!(
+                #[weak]
+                window,
+                move || window.focus_new_file_list()
+            ));
+        });
+    }
+
+    /// Gives a new window's file list keyboard focus once the window is
+    /// shown and its first location is listed, as `#main` has focus when
+    /// app.js starts. A landing page or an empty folder has no list to
+    /// focus, so nothing keeps focus: GTK would otherwise leave it on the
+    /// first focusable widget, and a focused crumb draws the address bar's
+    /// editing line.
+    pub(super) fn focus_new_file_list(&self) {
+        if !(self.is_mapped() && self.is_listed()) {
+            return;
+        }
+        // Only the first time: later listings leave focus where it is.
+        let awaits_focus = self.imp().file_list_awaits_focus.replace(false);
+        if !awaits_focus {
+            return;
+        }
+        if self.folder_pane().page() == Some(PanePage::Listing) {
+            self.folder_pane().focus_view();
+        } else {
+            GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
+        }
     }
 
     /// Opens what was typed into the address bar when Enter is pressed.
     pub(super) fn connect_address_entry(&self) {
-        self.chrome().address.entry.connect_activate(glib::clone!(
+        self.address_bar().connect_submitted(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |entry| window.submit_address(entry.text().as_str())
+            move |address| window.submit_address(address)
         ));
     }
 
@@ -224,7 +252,7 @@ impl BrowserWindow {
     /// `None` for every other key.
     fn prefix_editing_key(&self, input: &gtk::IMMulticontext, key: gdk::Key) -> Option<glib::Propagation> {
         let now = now_in_milliseconds();
-        let prefix_active = self.imp().type_ahead.borrow().controller.active(now);
+        let prefix_active = self.imp().typeahead.borrow().controller.active(now);
         match key {
             gdk::Key::Escape if prefix_active => {
                 input.reset();
@@ -243,7 +271,7 @@ impl BrowserWindow {
     /// goes on to the view.
     fn prefix_reset_on_click(&self) -> gtk::GestureClick {
         let click = gtk::GestureClick::new();
-        click.set_button(0);
+        click.set_button(gestures::EVERY_BUTTON);
         click.set_propagation_phase(gtk::PropagationPhase::Capture);
         click.connect_pressed(glib::clone!(
             #[weak(rename_to = window)]
@@ -259,7 +287,7 @@ impl BrowserWindow {
         let model = self.folder_pane().model();
         let count = model.n_items() as usize;
         let current = model.first_selected().map(|position| position as usize);
-        let result = self.imp().type_ahead.borrow_mut().controller.backspace(
+        let result = self.imp().typeahead.borrow_mut().controller.backspace(
             count,
             |index| self.name_at_index(index),
             current,
@@ -283,7 +311,7 @@ impl BrowserWindow {
         let count = model.n_items() as usize;
         let current = model.first_selected().map(|position| position as usize);
         let typed = character.to_string();
-        let result = self.imp().type_ahead.borrow_mut().controller.push(
+        let result = self.imp().typeahead.borrow_mut().controller.push(
             &typed,
             count,
             |index| self.name_at_index(index),
@@ -315,7 +343,7 @@ impl BrowserWindow {
         } else {
             TypeaheadMatch::Missed
         };
-        self.chrome().status.show_typeahead_hint(&hint, outcome);
+        self.status_bar().show_typeahead_hint(&hint, outcome);
         self.restart_typeahead_timer();
     }
 
@@ -329,12 +357,12 @@ impl BrowserWindow {
                 #[weak(rename_to = window)]
                 self,
                 move || {
-                    window.imp().type_ahead.borrow_mut().timer = None;
+                    window.imp().typeahead.borrow_mut().timer = None;
                     window.reset_typeahead();
                 }
             ),
         );
-        let previous = self.imp().type_ahead.borrow_mut().timer.replace(timer);
+        let previous = self.imp().typeahead.borrow_mut().timer.replace(timer);
         if let Some(previous) = previous {
             previous.remove();
         }
@@ -343,14 +371,14 @@ impl BrowserWindow {
     /// Forgets the typed prefix and clears its hint.
     pub(super) fn reset_typeahead(&self) {
         let timer = {
-            let mut type_ahead = self.imp().type_ahead.borrow_mut();
-            type_ahead.controller.reset();
-            type_ahead.timer.take()
+            let mut typeahead = self.imp().typeahead.borrow_mut();
+            typeahead.controller.reset();
+            typeahead.timer.take()
         };
         if let Some(timer) = timer {
             timer.remove();
         }
-        self.chrome().status.clear_typeahead_hint();
+        self.status_bar().clear_typeahead_hint();
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;

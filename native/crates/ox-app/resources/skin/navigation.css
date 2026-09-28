@@ -7,15 +7,15 @@
    `align-items:center` centres them. The web row puts them 13.5px down,
    which Chromium draws from the 14th pixel; GTK centres on whole pixels
    and rounds down, so the band starts 12px down to land on the same row. */
-.navrow {
+.navigation {
   background-color: @ox_chrome;
   border-bottom: 1px solid @ox_border;
   padding: 12px 16px 10px 13px;
   min-height: 39px;
   border-spacing: 14px;
 }
-.navrow .nav-buttons { border-spacing: 5px; }
-.navrow .nav-buttons button { min-width: 34px; min-height: 34px; }
+.navigation .nav-buttons { border-spacing: 5px; }
+.navigation .nav-buttons button { min-width: 34px; min-height: 34px; }
 
 /* ---- Address and search fields (R07: 4px corners) ---- */
 .address, .search-wrap {

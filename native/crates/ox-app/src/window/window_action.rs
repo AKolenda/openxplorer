@@ -5,9 +5,10 @@
 //! handlers of `desktop/ui/app.js` as window actions, by name. GTK ignores
 //! a name it does not know, so a misspelt name would leave a control that
 //! silently does nothing. [`WindowAction`] keeps every name in one table,
-//! which turns such a typo into a compile error. [`super::actions`]
-//! registers the working actions and [`super::unported`] the disabled
-//! ones.
+//! which turns such a typo into a compile error. The templates in
+//! `resources/ui/` therefore name no action: their buttons get one through
+//! [`WindowAction::assign_to`]. [`super::actions`] registers the working
+//! actions and [`super::unported`] the disabled ones.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -132,7 +133,7 @@ impl WindowAction {
     ///
     /// This is the one table of every action's name, so it is longer than
     /// a function should be.
-    pub const fn name(self) -> &'static str {
+    pub(super) const fn name(self) -> &'static str {
         match self {
             WindowAction::NewTab => "new-tab",
             WindowAction::CloseTab => "close-tab",
@@ -191,13 +192,24 @@ impl WindowAction {
     }
 
     /// The name widgets, menus and accelerators use: `win.` and the name.
-    pub fn detailed_name(self) -> String {
+    pub(super) fn detailed_name(self) -> String {
         format!("win.{}", self.name())
+    }
+
+    /// Makes `control` run this action when it is clicked or toggled.
+    pub(super) fn assign_to(self, control: &impl IsA<gtk::Actionable>) {
+        control.set_action_name(Some(&self.detailed_name()));
+    }
+
+    /// Makes `control` run this action with `target` when it is clicked.
+    pub(super) fn assign_with_target_to(self, control: &impl IsA<gtk::Actionable>, target: &glib::Variant) {
+        self.assign_to(control);
+        control.set_action_target_value(Some(target));
     }
 
     /// Runs the action with `target` from `widget`, through the browser
     /// window that holds it.
-    pub fn activate_from(self, widget: &impl IsA<gtk::Widget>, target: Option<&glib::Variant>) {
+    pub(super) fn activate_from(self, widget: &impl IsA<gtk::Widget>, target: Option<&glib::Variant>) {
         // GTK fails only when no ancestor has the action. Every browser
         // window registers them all, so that is a widget outside one,
         // which has nothing to run.

@@ -26,12 +26,12 @@ pub(super) struct Bounds {
 
 impl Bounds {
     /// `width` by `height` pixels at (`x`, `y`).
-    pub const fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+    pub(super) const fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
         Self { x, y, width, height }
     }
 
     /// `rect` rounded to whole pixels.
-    pub fn from_rect(rect: &graphene::Rect) -> Self {
+    pub(super) fn from_rect(rect: &graphene::Rect) -> Self {
         Self::new(
             pixels(rect.x()),
             pixels(rect.y()),
@@ -41,7 +41,7 @@ impl Bounds {
     }
 
     /// Where the right edge is.
-    pub const fn right(self) -> i32 {
+    pub(super) const fn right(self) -> i32 {
         self.x + self.width
     }
 }

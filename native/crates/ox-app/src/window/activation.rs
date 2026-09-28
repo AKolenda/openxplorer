@@ -13,7 +13,6 @@
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{self, Entry, EntryKind, EnumerateError};
-use ox_core::location;
 
 use crate::locations::{self, Page};
 
@@ -87,7 +86,7 @@ impl BrowserWindow {
         match activation_for(entry) {
             Activation::Folder(uri) => self.navigate_or_report(&uri),
             Activation::File => self.open_file(entry),
-            Activation::Refused(message) => self.chrome().show_message(message),
+            Activation::Refused(message) => self.show_message(message),
         }
     }
 
@@ -97,7 +96,7 @@ impl BrowserWindow {
         let on_error = glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |message: String| window.chrome().show_message(&message)
+            move |message: String| window.show_message(&message)
         );
         self.context().open_file(entry, self.upcast_ref(), on_error);
     }
@@ -112,7 +111,7 @@ impl BrowserWindow {
                 match query_entry(&uri).await {
                     Ok(entry) if activation_for(&entry) == Activation::File => window.open_file(&entry),
                     Ok(_) => {}
-                    Err(error) => window.chrome().show_message(&error.to_string()),
+                    Err(error) => window.show_message(&error.to_string()),
                 }
             }
         ));
@@ -135,7 +134,7 @@ impl BrowserWindow {
             Err(error) => {
                 match place {
                     Some(place) => self.navigate_or_report(&place),
-                    None => self.chrome().show_message(error.message()),
+                    None => self.show_message(error.message()),
                 }
                 return;
             }
@@ -166,7 +165,7 @@ impl BrowserWindow {
                 return;
             }
             (Err(error), _) => {
-                self.chrome().show_message(&error.to_string());
+                self.show_message(&error.to_string());
                 return;
             }
         };
@@ -199,25 +198,27 @@ impl BrowserWindow {
 
     /// Opens one incoming location, whose metadata query gave `result`.
     fn open_incoming(&self, uri: &str, tab: IncomingTab, result: Result<Entry, EnumerateError>) {
-        let outcome = match result.map(|entry| (activation_for(&entry), entry)) {
-            Ok((Activation::Folder(folder), _)) => self.open_incoming_folder(&folder, tab),
-            Ok((Activation::File, entry)) => {
-                self.open_file(&entry);
-                Ok(())
-            }
-            Ok((Activation::Refused(message), _)) => Err(location::LocationError::new(message)),
+        let Ok(entry) = result else {
             // A missing or unreadable location opens as a tab that says so.
-            Err(_) => self.open_incoming_folder(uri, tab),
+            self.open_incoming_folder(uri, tab);
+            return;
         };
-        if let Err(error) = outcome {
-            self.chrome().show_message(error.message());
+        match activation_for(&entry) {
+            Activation::Folder(folder) => self.open_incoming_folder(&folder, tab),
+            Activation::File => self.open_file(&entry),
+            Activation::Refused(message) => self.show_message(message),
         }
     }
 
-    fn open_incoming_folder(&self, uri: &str, tab: IncomingTab) -> Result<(), location::LocationError> {
-        match tab {
+    /// Opens the folder `uri` where `tab` says, showing an address the app
+    /// cannot open in the message line.
+    fn open_incoming_folder(&self, uri: &str, tab: IncomingTab) {
+        let opened = match tab {
             IncomingTab::Active => self.navigate(uri),
             IncomingTab::New => self.add_tab(uri),
+        };
+        if let Err(error) = opened {
+            self.show_message(error.message());
         }
     }
 }

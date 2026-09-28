@@ -8,10 +8,17 @@
 //! and the Details toggle. Every control runs a window or application
 //! action; commands whose workflow is not ported are disabled actions
 //! ([`super::unported`]), so they show greyed out with a tooltip.
-
-use gtk::prelude::*;
+//!
+//! [`CommandBar`] is a `GtkBox` subclass. The template
+//! `resources/ui/command-bar.ui` lays out the bar and the three controls at
+//! its right; the file commands come from [`EDIT_COMMANDS`] and the menus
+//! of [`menus`].
 
 mod menus;
+
+use gtk::glib;
+use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
 use crate::icons::{self, Glyph};
 use crate::theme::Appearance;
@@ -97,114 +104,180 @@ const EDIT_COMMANDS: [IconCommand; 6] = [
     },
 ];
 
-/// The command bar's widgets that the window updates.
-#[derive(Debug)]
-pub(super) struct CommandBar {
-    /// The bar.
-    pub root: gtk::Box,
-    theme: gtk::MenuButton,
-    theme_glyph: gtk::Image,
-    theme_label: gtk::Label,
-    /// Cut, Rename, Copy path and Details, which a compact window hides.
-    hidden_when_compact: Vec<gtk::Widget>,
+/// The tooltip of Settings, before the milestone note of an unported
+/// command.
+const SETTINGS_TOOLTIP: &str = "Settings (Ctrl+,)";
+
+mod imp {
+    use std::cell::RefCell;
+
+    use gtk::glib;
+    use gtk::subclass::prelude::*;
+
+    /// Private state of [`super::CommandBar`].
+    #[derive(Debug, Default, gtk::CompositeTemplate)]
+    #[template(file = "../../../resources/ui/command-bar.ui")]
+    pub(crate) struct CommandBar {
+        /// New to More options, filled from the tables.
+        #[template_child]
+        pub(super) file_commands: TemplateChild<gtk::Box>,
+        /// The appearance toggle (`#theme-toggle`).
+        #[template_child]
+        pub(super) appearance_button: TemplateChild<gtk::MenuButton>,
+        /// The sun or moon of the drawn appearance.
+        #[template_child]
+        pub(super) appearance_glyph: TemplateChild<gtk::Image>,
+        /// "Light" or "Dark".
+        #[template_child]
+        pub(super) appearance_label: TemplateChild<gtk::Label>,
+        /// Opens the Settings page.
+        #[template_child]
+        pub(super) settings_button: TemplateChild<gtk::Button>,
+        /// Shows whether the details pane is open.
+        #[template_child]
+        pub(super) details_toggle: TemplateChild<gtk::ToggleButton>,
+        /// The glyph of [`Self::details_toggle`].
+        #[template_child]
+        pub(super) details_glyph: TemplateChild<gtk::Image>,
+        /// Cut, Rename, Copy path and Details, which a compact window
+        /// hides.
+        pub(super) hidden_when_compact: RefCell<Vec<gtk::Widget>>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for CommandBar {
+        const NAME: &'static str = "OxCommandBar";
+        type Type = super::CommandBar;
+        type ParentType = gtk::Box;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(bar: &glib::subclass::InitializingObject<Self>) {
+            bar.init_template();
+        }
+    }
+
+    impl ObjectImpl for CommandBar {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let bar = self.obj();
+            bar.add_file_commands();
+            bar.finish_right_commands();
+        }
+    }
+
+    impl WidgetImpl for CommandBar {}
+    impl BoxImpl for CommandBar {}
+}
+
+glib::wrapper! {
+    /// The command bar, showing the light appearance until told otherwise.
+    pub(crate) struct CommandBar(ObjectSubclass<imp::CommandBar>)
+        @extends gtk::Box, gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl CommandBar {
-    /// The command bar, showing the light appearance until told otherwise.
-    pub fn new() -> Self {
-        // The gaps are CSS `border-spacing`, which narrow windows shrink.
-        let root = gtk::Box::builder().css_classes(["commandbar"]).build();
-        root.update_property(&[gtk::accessible::Property::Label("File commands")]);
-        let mut hidden_when_compact = Vec::new();
-        root.append(&file_commands(&mut hidden_when_compact));
-        let theme_glyph = icons::glyph(Appearance::Light.glyph(), TEXT_COMMAND_GLYPH);
-        let theme_label = gtk::Label::new(Some(Appearance::Light.label()));
-        let theme = theme_button(&theme_glyph, &theme_label);
-        root.append(&theme);
-        let settings = icon_button(&IconCommand {
-            glyph: Glyph::Settings,
-            action: WindowAction::Settings,
-            name: "Settings",
-            tooltip: "Settings (Ctrl+,)",
-            compact: InCompactWindow::Kept,
-        });
-        settings.add_css_class("settings-button");
-        root.append(&settings);
-        let details = details_toggle();
-        hidden_when_compact.push(details.clone().upcast());
-        root.append(&details);
-        Self {
-            root,
-            theme,
-            theme_glyph,
-            theme_label,
-            hidden_when_compact,
+    /// New ▾ │ Cut … Move to Trash │ Sort ▾, View ▾ and More options,
+    /// remembering the commands a compact window hides.
+    fn add_file_commands(&self) {
+        let imp = self.imp();
+        let group = &*imp.file_commands;
+        group.append(&text_menu_button("New", Glyph::Plus, "new-command", new_menu()));
+        group.append(&separator());
+        for command in &EDIT_COMMANDS {
+            let button = icon_button(command);
+            if command.compact == InCompactWindow::Hidden {
+                imp.hidden_when_compact.borrow_mut().push(button.clone().upcast());
+            }
+            group.append(&button);
         }
+        group.append(&separator());
+        group.append(&text_menu_button(
+            "Sort",
+            Glyph::Sort,
+            "sort-command",
+            sort_menu(),
+        ));
+        group.append(&text_menu_button(
+            "View",
+            Glyph::Grid,
+            "view-command",
+            view_menu(),
+        ));
+        group.append(&more_button());
+    }
+
+    /// Gives the appearance toggle, Settings and the Details toggle, which
+    /// the template places at the right, what it cannot express.
+    fn finish_right_commands(&self) {
+        self.finish_appearance_button();
+        self.finish_settings_button();
+        self.finish_details_toggle();
+    }
+
+    /// The appearance menu, and the light appearance until the window
+    /// shows the skin's.
+    fn finish_appearance_button(&self) {
+        let appearance_menu = MenuPopover::new(appearance_items().to_vec());
+        self.imp().appearance_button.set_popover(Some(&appearance_menu));
+        self.show_appearance_glyph(Appearance::Light);
+    }
+
+    /// The gear, and the tooltip that names the milestone bringing the
+    /// Settings page.
+    fn finish_settings_button(&self) {
+        let settings = &*self.imp().settings_button;
+        settings.set_child(Some(&icons::glyph(Glyph::Settings, ICON_COMMAND_GLYPH)));
+        let tooltip = unported::tooltip(WindowAction::Settings, SETTINGS_TOOLTIP);
+        settings.set_tooltip_text(Some(&tooltip));
+        WindowAction::Settings.assign_to(settings);
+    }
+
+    /// The pane glyph and the `win.details-pane` toggle; a compact window
+    /// hides the button.
+    fn finish_details_toggle(&self) {
+        let imp = self.imp();
+        icons::set_glyph(&imp.details_glyph, Glyph::Details, TEXT_COMMAND_GLYPH);
+        WindowAction::DetailsPane.assign_to(&*imp.details_toggle);
+        let details_toggle = imp.details_toggle.get().upcast();
+        imp.hidden_when_compact.borrow_mut().push(details_toggle);
+    }
+
+    /// Shows `appearance`'s sun or moon and its "Light" or "Dark" label.
+    fn show_appearance_glyph(&self, appearance: Appearance) {
+        let imp = self.imp();
+        icons::set_glyph(&imp.appearance_glyph, appearance.glyph(), TEXT_COMMAND_GLYPH);
+        imp.appearance_label.set_text(appearance.label());
     }
 
     /// Shows the drawn appearance on the theme button: a sun and "Light"
     /// or a moon and "Dark", with `tooltip` saying what was chosen
     /// (`applyTheme` in app.js).
-    pub fn show_appearance(&self, appearance: Appearance, tooltip: &str) {
-        icons::set_glyph(&self.theme_glyph, appearance.glyph(), TEXT_COMMAND_GLYPH);
-        self.theme_label.set_text(appearance.label());
-        self.theme.set_tooltip_text(Some(tooltip));
+    pub(super) fn show_appearance(&self, appearance: Appearance, tooltip: &str) {
+        self.show_appearance_glyph(appearance);
+        self.imp().appearance_button.set_tooltip_text(Some(tooltip));
     }
 
     /// Hides what the web layout hides in a window of `band`'s width: the
     /// appearance label from 1050 pixels, and Cut, Rename, Copy path and
     /// Details from 680.
-    pub fn fit_to_width(&self, band: WindowWidth) {
-        self.theme_label.set_visible(band.shows_appearance_label());
-        for control in &self.hidden_when_compact {
+    pub(super) fn fit_to_width(&self, band: WindowWidth) {
+        let imp = self.imp();
+        imp.appearance_label.set_visible(band.shows_appearance_label());
+        for control in imp.hidden_when_compact.borrow().iter() {
             control.set_visible(!band.is_compact());
         }
     }
 
     /// The theme button's tooltip, for tests.
     #[cfg(test)]
-    pub fn appearance_tooltip(&self) -> Option<String> {
-        self.theme.tooltip_text().map(|text| text.to_string())
+    pub(super) fn appearance_tooltip(&self) -> Option<String> {
+        let tooltip = self.imp().appearance_button.tooltip_text();
+        tooltip.map(|text| text.to_string())
     }
-}
-
-/// New ▾ │ Cut … Move to Trash │ Sort ▾, View ▾ and More options, adding
-/// the commands a compact window hides to `hidden_when_compact`. They
-/// scroll without a scroll bar, so the window can be narrower than all the
-/// commands (the web bar clips them); the appearance, Settings and Details
-/// buttons stay at the right.
-fn file_commands(hidden_when_compact: &mut Vec<gtk::Widget>) -> gtk::ScrolledWindow {
-    let group = gtk::Box::builder().css_classes(["command-group"]).build();
-    group.append(&text_menu_button("New", Glyph::Plus, "new-command", new_menu()));
-    group.append(&separator());
-    for command in &EDIT_COMMANDS {
-        let button = icon_button(command);
-        if command.compact == InCompactWindow::Hidden {
-            hidden_when_compact.push(button.clone().upcast());
-        }
-        group.append(&button);
-    }
-    group.append(&separator());
-    group.append(&text_menu_button(
-        "Sort",
-        Glyph::Sort,
-        "sort-command",
-        sort_menu(),
-    ));
-    group.append(&text_menu_button(
-        "View",
-        Glyph::Grid,
-        "view-command",
-        view_menu(),
-    ));
-    group.append(&more_button());
-    gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::External)
-        .vscrollbar_policy(gtk::PolicyType::Never)
-        .propagate_natural_width(true)
-        .hexpand(true)
-        .child(&group)
-        .build()
 }
 
 fn separator() -> gtk::Separator {
@@ -259,34 +332,4 @@ fn more_button() -> gtk::MenuButton {
         .build();
     button.update_property(&[gtk::accessible::Property::Label("More options")]);
     button
-}
-
-/// The appearance toggle (`#theme-toggle`) showing `glyph` and `label`;
-/// [`CommandBar::show_appearance`] sets them and the tooltip.
-fn theme_button(glyph: &gtk::Image, label: &gtk::Label) -> gtk::MenuButton {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-    content.append(glyph);
-    content.append(label);
-    let button = gtk::MenuButton::builder()
-        .child(&content)
-        .popover(&MenuPopover::new(appearance_items().to_vec()))
-        .valign(gtk::Align::Center)
-        .css_classes(["command", "text-command", "theme-toggle"])
-        .build();
-    button.update_property(&[gtk::accessible::Property::Label("Appearance")]);
-    button
-}
-
-/// The Details button shows whether the pane is open: a toggle bound to
-/// the boolean `win.details-pane` action.
-fn details_toggle() -> gtk::ToggleButton {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&icons::glyph(Glyph::Details, TEXT_COMMAND_GLYPH));
-    content.append(&gtk::Label::new(Some("Details")));
-    gtk::ToggleButton::builder()
-        .child(&content)
-        .action_name(WindowAction::DetailsPane.detailed_name())
-        .valign(gtk::Align::Center)
-        .css_classes(["command", "text-command", "details-toggle"])
-        .build()
 }

@@ -195,8 +195,8 @@ impl BrowserWindow {
     pub(super) fn open_server_address(&self, typed: &str) {
         match location::normalise_location(typed, None, &glib::home_dir()) {
             Ok(uri) if is_smb_location(&uri) => self.navigate_or_report(&uri),
-            Ok(_) => self.chrome().show_message("Enter an SMB server or share."),
-            Err(error) => self.chrome().show_message(error.message()),
+            Ok(_) => self.show_message("Enter an SMB server or share."),
+            Err(error) => self.show_message(error.message()),
         }
     }
 }

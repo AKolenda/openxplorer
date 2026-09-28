@@ -12,7 +12,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::widget_tree::laid_out_children;
+use super::widget_tree::{laid_out_children, widest_minimum_width};
 
 /// A tab's width when there is room (`.tab{width:215px}`).
 pub(super) const TAB_WIDTH: i32 = 215;
@@ -28,26 +28,33 @@ pub(super) const TAB_GAP: i32 = 2;
 pub(super) struct TabWidths {
     /// The width when there is room.
     pub widest: i32,
-    /// The narrowest a tab gets: [`MIN_TAB_WIDTH`], or more when a tab's
-    /// contents need it at a large text size.
+    /// The narrowest a tab's contents let it get; a large text size can
+    /// make this more than [`MIN_TAB_WIDTH`].
     pub narrowest: i32,
+}
+
+impl TabWidths {
+    /// The narrowest a tab gets: [`MIN_TAB_WIDTH`], or more when its
+    /// contents need it.
+    fn narrowest_allowed(self) -> i32 {
+        self.narrowest.max(MIN_TAB_WIDTH)
+    }
+
+    /// The widest a tab gets: its width when there is room, never less
+    /// than [`Self::narrowest_allowed`].
+    fn widest_allowed(self) -> i32 {
+        self.widest.max(self.narrowest_allowed())
+    }
 }
 
 /// The width each of `count` tabs gets in `available` pixels.
 pub(super) fn tab_width(available: i32, count: i32, widths: TabWidths) -> i32 {
-    let narrowest = widths.narrowest.max(MIN_TAB_WIDTH);
-    let widest = widths.widest.max(narrowest);
     if count == 0 {
-        return widest;
+        return widths.widest_allowed();
     }
     let gaps = TAB_GAP * (count - 1);
-    ((available - gaps) / count).clamp(narrowest, widest)
-}
-
-/// The widest minimum width among `tabs`.
-fn narrowest_tab(tabs: &[gtk::Widget]) -> i32 {
-    let minimum_of = |tab: &gtk::Widget| tab.measure(gtk::Orientation::Horizontal, -1).0;
-    tabs.iter().map(minimum_of).max().unwrap_or(MIN_TAB_WIDTH)
+    let even_share = (available - gaps) / count;
+    even_share.clamp(widths.narrowest_allowed(), widths.widest_allowed())
 }
 
 /// The strip's width for `count` tabs of `width` pixels.
@@ -65,7 +72,10 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{laid_out_children, strip_width, tab_width, TabWidths, TAB_GAP, TAB_WIDTH};
+    use super::{
+        laid_out_children, strip_width, tab_width, widest_minimum_width, TabWidths, MIN_TAB_WIDTH, TAB_GAP,
+        TAB_WIDTH,
+    };
 
     /// Private state of [`super::TabLayout`].
     #[derive(Debug)]
@@ -86,7 +96,7 @@ mod imp {
         fn widths(&self, tabs: &[gtk::Widget]) -> TabWidths {
             TabWidths {
                 widest: self.widest.get(),
-                narrowest: super::narrowest_tab(tabs),
+                narrowest: widest_minimum_width(tabs).unwrap_or(MIN_TAB_WIDTH),
             }
         }
     }
@@ -122,8 +132,8 @@ mod imp {
             }
             let count = i32::try_from(tabs.len()).unwrap_or(i32::MAX);
             let widths = self.widths(&tabs);
-            let minimum = strip_width(count, tab_width(0, count, widths));
-            let natural = strip_width(count, tab_width(i32::MAX, 1, widths));
+            let minimum = strip_width(count, widths.narrowest_allowed());
+            let natural = strip_width(count, widths.widest_allowed());
             (minimum, natural, -1, -1)
         }
 
@@ -148,11 +158,6 @@ glib::wrapper! {
 }
 
 impl TabLayout {
-    /// A layout for a tab strip.
-    pub fn new() -> Self {
-        glib::Object::new()
-    }
-
     /// Makes tabs `width` pixels wide when there is room.
     pub fn set_tab_width(&self, width: i32) {
         if self.imp().widest.replace(width) != width {

@@ -17,7 +17,7 @@ pub(super) enum ButtonStyle {
 
 impl ButtonStyle {
     /// The CSS class that gives a button this look.
-    pub const fn css_class(self) -> &'static str {
+    pub(super) const fn css_class(self) -> &'static str {
         match self {
             ButtonStyle::Accent => "accent",
             ButtonStyle::Bordered => "bordered",

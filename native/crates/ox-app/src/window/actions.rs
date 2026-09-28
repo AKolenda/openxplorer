@@ -25,18 +25,21 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// An action without a target.
-fn action(action: WindowAction, run: impl Fn(&BrowserWindow) + 'static) -> gio::ActionEntry<BrowserWindow> {
-    gio::ActionEntry::builder(action.name())
+fn plain_action(
+    window_action: WindowAction,
+    run: impl Fn(&BrowserWindow) + 'static,
+) -> gio::ActionEntry<BrowserWindow> {
+    gio::ActionEntry::builder(window_action.name())
         .activate(move |window: &BrowserWindow, _, _| run(window))
         .build()
 }
 
 /// An action whose target is a string (a location or a volume id).
 fn text_action(
-    action: WindowAction,
+    window_action: WindowAction,
     run: impl Fn(&BrowserWindow, &str) + 'static,
 ) -> gio::ActionEntry<BrowserWindow> {
-    gio::ActionEntry::builder(action.name())
+    gio::ActionEntry::builder(window_action.name())
         .parameter_type(Some(glib::VariantTy::STRING))
         .activate(move |window: &BrowserWindow, _, target| {
             if let Some(text) = target.and_then(glib::Variant::str) {
@@ -48,10 +51,10 @@ fn text_action(
 
 /// An action whose target is a tab.
 fn tab_action(
-    action: WindowAction,
+    window_action: WindowAction,
     run: impl Fn(&BrowserWindow, TabId) + 'static,
 ) -> gio::ActionEntry<BrowserWindow> {
-    gio::ActionEntry::builder(action.name())
+    gio::ActionEntry::builder(window_action.name())
         .parameter_type(Some(glib::VariantTy::UINT64))
         .activate(move |window: &BrowserWindow, _, target| {
             if let Some(id) = target.and_then(TabId::from_variant) {
@@ -64,19 +67,19 @@ fn tab_action(
 /// A radio action: `apply` returns false for a value it does not accept,
 /// and the state changes only when it accepts it.
 fn choice_action(
-    action: WindowAction,
+    window_action: WindowAction,
     initial: &str,
     apply: impl Fn(&BrowserWindow, &str) -> bool + 'static,
 ) -> gio::ActionEntry<BrowserWindow> {
-    gio::ActionEntry::builder(action.name())
+    gio::ActionEntry::builder(window_action.name())
         .parameter_type(Some(glib::VariantTy::STRING))
         .state(initial.to_variant())
-        .activate(move |window: &BrowserWindow, action, target| {
+        .activate(move |window: &BrowserWindow, state_action, target| {
             let Some(value) = target.and_then(glib::Variant::str) else {
                 return;
             };
             if apply(window, value) {
-                action.set_state(&value.to_variant());
+                state_action.set_state(&value.to_variant());
             }
         })
         .build()
@@ -84,16 +87,16 @@ fn choice_action(
 
 /// A check action that calls `apply` with its new state.
 fn toggle_action(
-    action: WindowAction,
+    window_action: WindowAction,
     initial: bool,
     apply: impl Fn(&BrowserWindow, bool) + 'static,
 ) -> gio::ActionEntry<BrowserWindow> {
-    gio::ActionEntry::builder(action.name())
+    gio::ActionEntry::builder(window_action.name())
         .state(initial.to_variant())
-        .activate(move |window: &BrowserWindow, action, _| {
-            let current = action.state().and_then(|state| state.get::<bool>());
+        .activate(move |window: &BrowserWindow, state_action, _| {
+            let current = state_action.state().and_then(|state| state.get::<bool>());
             let next = !current.unwrap_or(false);
-            action.set_state(&next.to_variant());
+            state_action.set_state(&next.to_variant());
             apply(window, next);
         })
         .build()
@@ -135,20 +138,20 @@ impl BrowserWindow {
 
     fn install_tab_actions(&self) {
         self.add_action_entries([
-            action(WindowAction::NewTab, |window| {
+            plain_action(WindowAction::NewTab, |window| {
                 let home = window.imp().locations.borrow().home_uri();
                 window.open_tab_or_report(&home, TabPlacement::Foreground);
             }),
-            action(WindowAction::CloseTab, |window| {
+            plain_action(WindowAction::CloseTab, |window| {
                 let active = window.imp().session.borrow().active_id();
                 if let Some(id) = active {
                     window.close_tab(id);
                 }
             }),
-            action(WindowAction::NextTab, |window| {
+            plain_action(WindowAction::NextTab, |window| {
                 window.cycle_tabs(Direction::Forward);
             }),
-            action(WindowAction::PreviousTab, |window| {
+            plain_action(WindowAction::PreviousTab, |window| {
                 window.cycle_tabs(Direction::Backward);
             }),
             tab_action(WindowAction::SelectTab, BrowserWindow::switch_tab),
@@ -164,17 +167,17 @@ impl BrowserWindow {
 
     fn install_navigation_actions(&self) {
         self.add_action_entries([
-            action(WindowAction::Back, |window| {
+            plain_action(WindowAction::Back, |window| {
                 window.go_history(Direction::Backward);
             }),
-            action(WindowAction::Forward, |window| {
+            plain_action(WindowAction::Forward, |window| {
                 window.go_history(Direction::Forward);
             }),
-            action(WindowAction::Up, BrowserWindow::go_up),
-            action(WindowAction::Refresh, BrowserWindow::refresh),
-            action(WindowAction::Location, BrowserWindow::edit_address),
-            action(WindowAction::Search, |window| {
-                window.chrome().search.entry.grab_focus();
+            plain_action(WindowAction::Up, BrowserWindow::go_up),
+            plain_action(WindowAction::Refresh, BrowserWindow::refresh),
+            plain_action(WindowAction::Location, BrowserWindow::edit_address),
+            plain_action(WindowAction::Search, |window| {
+                window.search_box().focus();
             }),
             text_action(WindowAction::GoTo, BrowserWindow::navigate_or_report),
             text_action(WindowAction::MountVolume, BrowserWindow::mount_volume),
@@ -187,27 +190,27 @@ impl BrowserWindow {
 
     fn install_selection_actions(&self) {
         self.add_action_entries([
-            action(WindowAction::Open, |window| {
+            plain_action(WindowAction::Open, |window| {
                 // Enter and Open act on exactly one item, as app.js does.
                 let positions = window.folder_pane().model().selected_positions();
                 if let [position] = positions.as_slice() {
                     window.activate_item(*position);
                 }
             }),
-            action(WindowAction::SelectAll, |window| {
+            plain_action(WindowAction::SelectAll, |window| {
                 window.folder_pane().model().select_all();
             }),
-            action(WindowAction::SelectNone, |window| {
+            plain_action(WindowAction::SelectNone, |window| {
                 window.folder_pane().model().select_none();
             }),
-            action(WindowAction::InvertSelection, |window| {
+            plain_action(WindowAction::InvertSelection, |window| {
                 window.folder_pane().model().invert_selection();
             }),
-            action(WindowAction::PinSelected, BrowserWindow::pin_selected),
-            action(WindowAction::PinFolder, BrowserWindow::pin_folder),
-            action(WindowAction::CopyPath, BrowserWindow::copy_path),
-            action(WindowAction::About, BrowserWindow::show_about),
-            action(
+            plain_action(WindowAction::PinSelected, BrowserWindow::pin_selected),
+            plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
+            plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),
+            plain_action(WindowAction::About, BrowserWindow::show_about),
+            plain_action(
                 WindowAction::ContextMenu,
                 BrowserWindow::open_context_menu_from_keyboard,
             ),
@@ -315,7 +318,7 @@ impl BrowserWindow {
             true
         })]);
         let steps = Step::ALL.map(|step| {
-            action(WindowAction::TextSize(step), move |window| {
+            plain_action(WindowAction::TextSize(step), move |window| {
                 let size = step.apply(window.skin().text_size());
                 window.skin().set_text_size(size);
                 window.save_preference(Preference::TextSize(size));
@@ -328,7 +331,7 @@ impl BrowserWindow {
     /// message line.
     fn open_tab_or_report(&self, address: &str, placement: TabPlacement) {
         if let Err(error) = self.open_tab(address, placement) {
-            self.chrome().show_message(error.message());
+            self.show_message(error.message());
         }
     }
 
@@ -337,7 +340,7 @@ impl BrowserWindow {
     pub(crate) fn show_view(&self, view: FolderView) {
         self.reset_typeahead();
         self.folder_pane().show_view(view);
-        self.chrome().status.show_view(view);
+        self.status_bar().show_view(view);
     }
 }
 

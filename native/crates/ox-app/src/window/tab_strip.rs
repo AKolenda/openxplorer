@@ -9,8 +9,12 @@
 //! tab of the "Folder tabs" list with its selected state; a click or Enter
 //! shows it and a middle-click closes it. The close button inside claims
 //! its own clicks.
+//!
+//! [`TabStrip`] is a widget subclass whose scroller and tab list are the
+//! template `resources/ui/tab-strip.ui`; the tabs are built here.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use crate::icons::{self, ArtKind, Glyph};
@@ -18,7 +22,6 @@ use crate::icons::{self, ArtKind, Glyph};
 use super::appearance::ArtStyle;
 use super::gestures;
 use super::session::TabId;
-use super::tab_layout::TabLayout;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
 
@@ -53,60 +56,86 @@ pub(super) struct TabView {
     pub active: bool,
 }
 
-/// The tab strip's widgets.
-#[derive(Debug)]
-pub(super) struct TabStrip {
-    /// The scrolling strip.
-    pub root: gtk::ScrolledWindow,
-    viewport: gtk::Viewport,
-    tabs: gtk::Box,
-    layout: TabLayout,
-}
+mod imp {
+    use gtk::glib;
+    use gtk::prelude::*;
+    use gtk::subclass::prelude::*;
 
-impl TabStrip {
-    /// An empty tab strip.
-    pub fn new() -> Self {
-        let layout = TabLayout::new();
-        let tabs = gtk::Box::builder()
-            .accessible_role(gtk::AccessibleRole::TabList)
-            .layout_manager(&layout)
-            .css_classes(["tabs"])
-            .build();
-        tabs.update_property(&[gtk::accessible::Property::Label("Folder tabs")]);
-        let viewport = gtk::Viewport::builder().child(&tabs).build();
-        // External: scrollable without a visible bar, and never asking the
-        // window to be as wide as all the tabs. Not expanding: the "+"
-        // follows the last tab and the drag area takes the rest.
-        let root = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::External)
-            .vscrollbar_policy(gtk::PolicyType::Never)
-            .propagate_natural_width(true)
-            .hexpand(false)
-            .valign(gtk::Align::End)
-            .child(&viewport)
-            .build();
-        gestures::scroll_sideways_with_wheel(&root);
-        Self {
-            root,
-            viewport,
-            tabs,
-            layout,
+    use crate::window::gestures;
+    use crate::window::tab_layout::TabLayout;
+
+    /// Private state of [`super::TabStrip`]: the template's widgets.
+    #[derive(Debug, Default, gtk::CompositeTemplate)]
+    #[template(file = "../../resources/ui/tab-strip.ui")]
+    pub(crate) struct TabStrip {
+        /// The strip, scrolling sideways when the tabs do not fit.
+        #[template_child]
+        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
+        /// Scrolls the active tab into view.
+        #[template_child]
+        pub(super) viewport: TemplateChild<gtk::Viewport>,
+        /// The tabs, announced as the "Folder tabs" list.
+        #[template_child]
+        pub(super) tab_list: TemplateChild<gtk::Box>,
+        /// Shares the strip's width between the tabs.
+        #[template_child]
+        pub(super) layout: TemplateChild<TabLayout>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for TabStrip {
+        const NAME: &'static str = "OxTabStrip";
+        type Type = super::TabStrip;
+        type ParentType = gtk::Widget;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.set_layout_manager_type::<gtk::BinLayout>();
+            // GtkBuilder finds the template's own types by name.
+            TabLayout::ensure_type();
+            klass.bind_template();
+        }
+
+        fn instance_init(strip: &glib::subclass::InitializingObject<Self>) {
+            strip.init_template();
         }
     }
 
+    impl ObjectImpl for TabStrip {
+        fn constructed(&self) {
+            self.parent_constructed();
+            gestures::scroll_sideways_with_wheel(&self.scroller);
+        }
+
+        fn dispose(&self) {
+            self.dispose_template();
+        }
+    }
+
+    impl WidgetImpl for TabStrip {}
+}
+
+glib::wrapper! {
+    /// The tab strip in the title bar.
+    pub(crate) struct TabStrip(ObjectSubclass<imp::TabStrip>)
+        @extends gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
+}
+
+impl TabStrip {
     /// Makes tabs `width` pixels wide when there is room: 215, or less in
     /// a narrow window.
-    pub fn set_tab_width(&self, width: i32) {
-        self.layout.set_tab_width(width);
+    pub(super) fn set_tab_width(&self, width: i32) {
+        self.imp().layout.set_tab_width(width);
     }
 
     /// Replaces the tabs with `tabs` and scrolls the active one into view.
-    pub fn show(&self, tabs: &[TabView], style: ArtStyle) {
-        remove_children(&self.tabs);
+    pub(super) fn show(&self, tabs: &[TabView], style: ArtStyle) {
+        let imp = self.imp();
+        remove_children(&*imp.tab_list);
         let mut active = None;
         for tab in tabs {
             let widget = tab_widget(tab, style);
-            self.tabs.append(&widget);
+            imp.tab_list.append(&widget);
             if tab.active {
                 active = Some(widget);
             }
@@ -115,17 +144,18 @@ impl TabStrip {
             return;
         };
         // After the new tabs are laid out, so their positions are known.
+        let viewport = imp.viewport.get();
         glib::idle_add_local_once(glib::clone!(
-            #[weak(rename_to = viewport)]
-            self.viewport,
+            #[weak]
+            viewport,
             move || viewport.scroll_to(&active, None)
         ));
     }
 
     /// The tab list, for tests.
     #[cfg(test)]
-    pub fn tab_list(&self) -> &gtk::Box {
-        &self.tabs
+    pub(super) fn tab_list(&self) -> gtk::Box {
+        self.imp().tab_list.get()
     }
 }
 

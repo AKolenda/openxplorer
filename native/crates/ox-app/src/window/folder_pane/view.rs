@@ -19,7 +19,7 @@ pub(crate) enum FolderView {
 
 impl FolderView {
     /// The `win.view` action state: `details` or an icon size key.
-    pub fn key(self) -> &'static str {
+    pub(crate) fn key(self) -> &'static str {
         match self {
             FolderView::Details => "details",
             FolderView::Icons(size) => size.key(),
@@ -27,7 +27,7 @@ impl FolderView {
     }
 
     /// The view for a `win.view` action state.
-    pub fn from_key(key: &str) -> Option<FolderView> {
+    pub(crate) fn from_key(key: &str) -> Option<FolderView> {
         if key == "details" {
             return Some(FolderView::Details);
         }
@@ -36,7 +36,7 @@ impl FolderView {
 
     /// The view saved in settings. The Python app knows one icon view,
     /// "grid", which is Large icons.
-    pub fn from_setting(view: &str) -> FolderView {
+    pub(crate) fn from_setting(view: &str) -> FolderView {
         if view == "grid" {
             FolderView::Icons(IconSize::Large)
         } else {
@@ -46,7 +46,7 @@ impl FolderView {
 
     /// The value settings store: only `details` and `grid` are valid for
     /// the Python app, so every icon size is saved as `grid`.
-    pub fn setting(self) -> &'static str {
+    pub(crate) fn setting(self) -> &'static str {
         match self {
             FolderView::Details => "details",
             FolderView::Icons(_) => "grid",

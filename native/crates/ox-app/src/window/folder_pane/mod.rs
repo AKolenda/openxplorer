@@ -83,8 +83,7 @@ mod imp {
     /// Private state of [`super::FolderPane`].
     #[derive(Debug, Default)]
     pub struct FolderPane {
-        /// The widgets and the folder model, built by
-        /// [`super::FolderPane::new`].
+        /// The widgets and the folder model, built by `constructed`.
         pub(super) parts: OnceCell<PaneParts>,
         /// What sizes the icon view's tiles.
         pub(super) grid_scale: Cell<GridScale>,
@@ -109,6 +108,7 @@ mod imp {
             let pane = self.obj();
             pane.set_hexpand(true);
             pane.set_vexpand(true);
+            pane.build_parts();
         }
 
         fn dispose(&self) {
@@ -130,21 +130,24 @@ glib::wrapper! {
 }
 
 impl FolderPane {
-    /// An empty folder pane in the details view, drawing icons in `appearance`.
-    pub(super) fn new(appearance: Appearance) -> Self {
-        let pane: Self = glib::Object::new();
-        let parts = PaneParts::new(appearance);
+    /// Builds the pages, empty and in the details view. Item icons are
+    /// drawn light until the window sets the skin's appearance through
+    /// [`IconCells::set_appearance`], before anything is listed.
+    fn build_parts(&self) {
+        let parts = PaneParts::new(Appearance::Light);
         let overlay = gtk::Overlay::builder().child(&parts.stack).build();
         overlay.add_overlay(&parts.loading_line);
-        overlay.set_parent(&pane);
-        pane.imp().parts.set(parts).expect("a new pane has no parts yet");
-        pane.show_view(FolderView::Details);
-        pane.fit_grid_columns_to_width();
-        pane
+        overlay.set_parent(self);
+        self.imp()
+            .parts
+            .set(parts)
+            .expect("constructed runs once per object");
+        self.show_view(FolderView::Details);
+        self.fit_grid_columns_to_width();
     }
 
     fn parts(&self) -> &PaneParts {
-        self.imp().parts.get().expect("FolderPane::new builds the parts")
+        self.imp().parts.get().expect("constructed builds the parts")
     }
 
     /// The active tab's filtered, sorted and selectable items.

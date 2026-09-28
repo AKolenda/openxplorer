@@ -94,20 +94,20 @@ fn only_the_sorted_column_shows_the_apps_arrow() {
 fn switching_views_keeps_the_selection_and_shows_the_active_view() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let chrome = test.window.chrome();
-    assert_eq!(chrome.status.active_view_buttons(), ["Details view"]);
+    let status_bar = test.window.status_bar();
+    assert_eq!(status_bar.active_view_buttons(), ["Details view"]);
     test.window.folder_model().select_only(1);
     test.activate("view", Some("large"));
     assert_eq!(test.selected_names(), ["Notes 2.txt"]);
-    assert_eq!(chrome.status.active_view_buttons(), ["Large icons"]);
+    assert_eq!(status_bar.active_view_buttons(), ["Large icons"]);
     test.activate("view", Some("small"));
     assert_eq!(
-        chrome.status.active_view_buttons(),
+        status_bar.active_view_buttons(),
         ["Large icons"],
         "every icon size is the icon view"
     );
     test.activate("view", Some("details"));
-    assert_eq!(chrome.status.active_view_buttons(), ["Details view"]);
+    assert_eq!(status_bar.active_view_buttons(), ["Details view"]);
 }
 
 #[gtk::test]
@@ -118,7 +118,7 @@ fn the_details_button_shows_whether_the_pane_is_open() {
         .into_iter()
         .find(|button| button.action_name().as_deref() == Some("win.details-pane"))
         .expect("a Details toggle in the command bar");
-    let pane = &test.window.details_pane().root;
+    let pane = test.window.details_pane();
     assert_eq!(toggle.is_active(), pane.is_visible());
     test.activate("details-pane", None);
     assert_eq!(toggle.is_active(), pane.is_visible());
@@ -147,10 +147,10 @@ fn both_views_show_each_name_with_its_icon() {
 fn a_dragged_sidebar_stops_where_the_folder_pane_keeps_its_room() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let workspace = &test.window.chrome().workspace;
+    let workspace = test.window.workspace();
     assert_eq!(workspace.position(), 210, "a new sidebar is 210 pixels wide");
     workspace.set_position(5000);
-    let details = &test.window.details_pane().root;
+    let details = test.window.details_pane();
     let details_width = if details.is_visible() { details.width() } else { 0 };
     let room_left = workspace.width() - workspace.position() - details_width;
     assert!(workspace.position() <= 560);
@@ -245,7 +245,7 @@ fn a_theme_chosen_in_one_window_reaches_every_window() {
     first.activate("theme", Some("dark"));
     assert_eq!(skin().appearance(), Appearance::Dark);
     assert_eq!(second.action_state("theme").as_deref(), Some("dark"));
-    let button = second.window.chrome().commands.appearance_tooltip();
+    let button = second.window.command_bar().appearance_tooltip();
     assert_eq!(button.as_deref(), Some("Appearance: dark. Click to change."));
 }
 

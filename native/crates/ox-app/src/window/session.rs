@@ -24,12 +24,12 @@ pub(super) struct TabId(u64);
 
 impl TabId {
     /// The id as a window action's target (`win.select-tab`).
-    pub fn to_variant(self) -> glib::Variant {
+    pub(super) fn to_variant(self) -> glib::Variant {
         self.0.to_variant()
     }
 
     /// The id in a window action's target.
-    pub fn from_variant(variant: &glib::Variant) -> Option<Self> {
+    pub(super) fn from_variant(variant: &glib::Variant) -> Option<Self> {
         variant.get::<u64>().map(TabId)
     }
 }
@@ -56,7 +56,7 @@ pub(super) enum Direction {
 
 impl Direction {
     /// The step as an offset in a list: -1 or 1.
-    pub const fn offset(self) -> isize {
+    pub(super) const fn offset(self) -> isize {
         match self {
             Direction::Backward => -1,
             Direction::Forward => 1,
@@ -73,8 +73,10 @@ pub(super) struct Tab {
     pub history: History,
     /// The tab's items, unfiltered and unsorted.
     pub store: gio::ListStore,
-    /// Incremented by every load; results of an older load are ignored.
-    pub generation: u64,
+    /// Advanced only by [`Tab::begin_load`]; [`Session::accepts`] rejects
+    /// the results of an older load, so a stale listing never refills the
+    /// tab (parity NAV-016).
+    generation: u64,
     /// Whether the location is listed, being listed or never was.
     pub listing_state: ListingState,
     /// Why the last listing failed.
@@ -106,13 +108,13 @@ impl Tab {
     }
 
     /// The location the tab shows.
-    pub fn uri(&self) -> &str {
+    pub(super) fn uri(&self) -> &str {
         self.history.current()
     }
 
     /// Starts a load and returns its generation. The folder watch is kept:
     /// the caller replaces it only when the location changed.
-    pub fn begin_load(&mut self) -> u64 {
+    pub(super) fn begin_load(&mut self) -> u64 {
         self.listing = None;
         self.generation = self.generation.wrapping_add(1);
         self.listing_state.begin();
@@ -122,7 +124,7 @@ impl Tab {
 
     /// Forgets what belonged to the previous location: the selection and
     /// the scroll position, as `navigate()` does with `t.scroll = 0`.
-    pub fn forget_location_state(&mut self) {
+    pub(super) fn forget_location_state(&mut self) {
         self.selected.clear();
         self.scroll = 0.0;
     }
@@ -145,7 +147,7 @@ impl Session {
     /// # Panics
     ///
     /// Only after `u64::MAX` tabs in one window.
-    pub fn add(&mut self, uri: &str, placement: TabPlacement) -> TabId {
+    pub(super) fn add(&mut self, uri: &str, placement: TabPlacement) -> TabId {
         self.next_id = self
             .next_id
             .checked_add(1)
@@ -159,62 +161,62 @@ impl Session {
     }
 
     /// The open tabs, left to right.
-    pub fn tabs(&self) -> &[Tab] {
+    pub(super) fn tabs(&self) -> &[Tab] {
         &self.tabs
     }
 
     /// The tab `id`, if it is open.
-    pub fn tab(&self, id: TabId) -> Option<&Tab> {
+    pub(super) fn tab(&self, id: TabId) -> Option<&Tab> {
         self.tabs.iter().find(|tab| tab.id == id)
     }
 
     /// The tab `id`, to change it.
-    pub fn tab_mut(&mut self, id: TabId) -> Option<&mut Tab> {
+    pub(super) fn tab_mut(&mut self, id: TabId) -> Option<&mut Tab> {
         self.tabs.iter_mut().find(|tab| tab.id == id)
     }
 
     /// The id of the tab in front.
-    pub fn active_id(&self) -> Option<TabId> {
+    pub(super) fn active_id(&self) -> Option<TabId> {
         self.active
     }
 
     /// The tab in front.
-    pub fn active(&self) -> Option<&Tab> {
+    pub(super) fn active(&self) -> Option<&Tab> {
         self.active.and_then(|id| self.tab(id))
     }
 
     /// The tab in front, to change it.
-    pub fn active_mut(&mut self) -> Option<&mut Tab> {
+    pub(super) fn active_mut(&mut self) -> Option<&mut Tab> {
         let id = self.active?;
         self.tab_mut(id)
     }
 
     /// True when tab `id` is in front.
-    pub fn is_active(&self, id: TabId) -> bool {
+    pub(super) fn is_active(&self, id: TabId) -> bool {
         self.active == Some(id)
     }
 
     /// True when tab `id` is open and not already in front.
-    pub fn can_activate(&self, id: TabId) -> bool {
+    pub(super) fn can_activate(&self, id: TabId) -> bool {
         !self.is_active(id) && self.tab(id).is_some()
     }
 
     /// Brings tab `id` to the front. An id that is not open changes
     /// nothing, so the active id always names an open tab.
-    pub fn activate(&mut self, id: TabId) {
+    pub(super) fn activate(&mut self, id: TabId) {
         if self.tab(id).is_some() {
             self.active = Some(id);
         }
     }
 
     /// True while `generation` is the latest load of tab `id`.
-    pub fn accepts(&self, id: TabId, generation: u64) -> bool {
+    pub(super) fn accepts(&self, id: TabId, generation: u64) -> bool {
         self.tab(id).is_some_and(|tab| tab.generation == generation)
     }
 
     /// Ends tab `id`'s listing: the tab is listed, and is listed again
     /// when its folder changed meanwhile (see [`ListingEnd`]).
-    pub fn end_listing(&mut self, id: TabId) -> ListingEnd {
+    pub(super) fn end_listing(&mut self, id: TabId) -> ListingEnd {
         let Some(tab) = self.tab_mut(id) else {
             return ListingEnd::TabClosed;
         };
@@ -224,7 +226,7 @@ impl Session {
     /// Removes a tab. When it was active, the tab to its right becomes
     /// active, or the new last tab (`Math.min(i, tabs.length - 1)` in
     /// app.js, as in Windows Explorer and browsers).
-    pub fn remove(&mut self, id: TabId) {
+    pub(super) fn remove(&mut self, id: TabId) {
         let Some(index) = self.tabs.iter().position(|tab| tab.id == id) else {
             return;
         };
@@ -237,7 +239,7 @@ impl Session {
 
     /// The tab next to the active one in `direction`, wrapping around at
     /// either end.
-    pub fn adjacent(&self, direction: Direction) -> Option<TabId> {
+    pub(super) fn adjacent(&self, direction: Direction) -> Option<TabId> {
         let current = self.tabs.iter().position(|tab| Some(tab.id) == self.active)?;
         let count = self.tabs.len();
         let target = match direction {

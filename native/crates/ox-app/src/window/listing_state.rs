@@ -48,23 +48,23 @@ pub(super) enum ReloadTiming {
 
 impl ListingState {
     /// Whether the last listing finished and no other runs.
-    pub fn is_listed(self) -> bool {
+    pub(super) fn is_listed(self) -> bool {
         self == ListingState::Listed
     }
 
     /// Whether a listing runs.
-    pub fn is_listing(self) -> bool {
+    pub(super) fn is_listing(self) -> bool {
         matches!(self, ListingState::Listing { .. })
     }
 
     /// Whether the tab has never been listed and no listing runs: a
     /// background tab that is shown for the first time.
-    pub fn needs_listing(self) -> bool {
+    pub(super) fn needs_listing(self) -> bool {
         self == ListingState::NotListed
     }
 
     /// Whether a change seen during the running listing waits for it.
-    pub fn has_pending_reload(self) -> bool {
+    pub(super) fn has_pending_reload(self) -> bool {
         matches!(
             self,
             ListingState::Listing {
@@ -85,7 +85,7 @@ impl ListingState {
 
     /// A listing begins. It replaces any listing that ran, and it covers
     /// a reload that was pending.
-    pub fn begin(&mut self) {
+    pub(super) fn begin(&mut self) {
         *self = ListingState::Listing {
             listed_before: self.has_been_listed(),
             reload_pending: false,
@@ -94,7 +94,7 @@ impl ListingState {
 
     /// The running listing stops without finishing, so the tab stands as
     /// it did before the listing began.
-    pub fn stop(&mut self) {
+    pub(super) fn stop(&mut self) {
         *self = if self.has_been_listed() {
             ListingState::Listed
         } else {
@@ -104,7 +104,7 @@ impl ListingState {
 
     /// The running listing finished: [`ListingEnd::ListAgain`] when the
     /// folder changed while it ran, else [`ListingEnd::Done`].
-    pub fn finish(&mut self) -> ListingEnd {
+    pub(super) fn finish(&mut self) -> ListingEnd {
         let list_again = self.has_pending_reload();
         *self = ListingState::Listed;
         if list_again {
@@ -116,7 +116,7 @@ impl ListingState {
 
     /// The watched folder changed. A running listing may have read the
     /// folder before the change, so it is listed again after that one.
-    pub fn schedule_reload(&mut self) -> ReloadTiming {
+    pub(super) fn schedule_reload(&mut self) -> ReloadTiming {
         let ListingState::Listing { reload_pending, .. } = self else {
             return ReloadTiming::Now;
         };

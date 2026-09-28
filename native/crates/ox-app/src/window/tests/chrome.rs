@@ -5,6 +5,10 @@
 //! pixels in and runs into the navigation row, the "+" right after the
 //! last tab, 46-pixel caption buttons, and 34-pixel address and search
 //! boxes (see [`super::geometry`] for where the numbers come from).
+//!
+//! The frame's templates (`resources/ui/`) leave two things to Rust: the
+//! window actions of their buttons and their natively drawn glyphs. The
+//! last tests prove that no control is left without either.
 
 use gtk::prelude::*;
 
@@ -28,7 +32,7 @@ fn the_active_tab_starts_9_pixels_in_and_reaches_the_bottom_of_the_42_pixel_titl
         (0, 42),
         "the title bar is 42 pixels tall"
     );
-    let tabs = test.window.chrome().tabs.tab_list();
+    let tabs = test.window.tab_strip().tab_list();
     let first_tab = tabs.first_child().expect("one tab");
     assert_eq!(
         bounds(&test, &first_tab),
@@ -47,7 +51,7 @@ fn the_new_tab_button_follows_the_last_tab() {
         .expect("valid folder");
     test.wait_for_listing("the second tab");
     wait_for_frames(&test.window, 3);
-    let tabs = test.window.chrome().tabs.tab_list();
+    let tabs = test.window.tab_strip().tab_list();
     let last_tab = tabs.last_child().expect("two tabs");
     let tab = bounds(&test, &last_tab);
     assert_eq!(tab.x, 9 + 215 + 2, "tabs are 2 pixels apart");
@@ -86,10 +90,9 @@ fn the_caption_buttons_are_46_pixels_wide_and_as_tall_as_the_title_bar() {
 fn the_address_and_search_boxes_are_34_pixels_tall_14_pixels_below_the_title_bar() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let chrome = test.window.chrome();
-    let address = bounds(&test, &chrome.address.root);
+    let address = bounds(&test, test.window.address_bar());
     assert_eq!((address.x, address.y, address.height), (178, 56, 34));
-    let search = bounds(&test, &chrome.search.root);
+    let search = bounds(&test, test.window.search_box());
     assert_eq!((search.y, search.width, search.height), (56, 235, 34));
     assert_eq!(
         search.right(),
@@ -102,7 +105,7 @@ fn the_address_and_search_boxes_are_34_pixels_tall_14_pixels_below_the_title_bar
 fn the_search_box_names_the_folder_it_searches() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri_of("Documents"));
-    let placeholder = test.window.chrome().search.entry.placeholder_text();
+    let placeholder = test.window.search_box().entry().placeholder_text();
     assert_eq!(placeholder.as_deref(), Some("Search Documents"));
 }
 
@@ -154,7 +157,7 @@ fn a_disabled_menu_item_names_the_milestone_that_brings_it() {
 fn a_new_window_on_a_landing_page_leaves_the_address_bar_alone() {
     let test = laid_out(Page::ThisPc.uri());
     let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
-    let address = &test.window.chrome().address.root;
+    let address = test.window.address_bar();
     let in_address = focus.is_some_and(|widget| widget.is_ancestor(address));
     assert!(!in_address, "the address bar does not hold focus");
 }
@@ -169,4 +172,59 @@ fn a_new_window_types_into_its_file_list() {
         focus.is_ancestor(&view) || focus == view,
         "focus is in the file list, not {focus:?}"
     );
+}
+
+/// Every window action a control of the frame names, its menus included,
+/// without the `win.` prefix.
+fn window_actions_named(test: &TestWindow) -> Vec<String> {
+    let widgets = descendants::<gtk::Widget>(&test.window);
+    let controls = widgets
+        .iter()
+        .filter_map(|widget| widget.dynamic_cast_ref::<gtk::Actionable>());
+    let detailed_names = controls.filter_map(ActionableExt::action_name);
+    detailed_names
+        .filter_map(|name| name.strip_prefix("win.").map(str::to_owned))
+        .collect()
+}
+
+#[gtk::test]
+fn every_control_of_the_frame_runs_an_action_the_window_has() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let named = window_actions_named(&test);
+    let from_templates = [
+        "new-tab",
+        "location",
+        "details-pane",
+        "view",
+        "check-updates",
+        "settings",
+    ];
+    for action in from_templates {
+        assert!(
+            named.iter().any(|name| name == action),
+            "a control runs win.{action}"
+        );
+    }
+    let missing: Vec<&String> = named
+        .iter()
+        .filter(|name| test.window.lookup_action(name).is_none())
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "controls name actions the window lacks: {missing:?}"
+    );
+}
+
+#[gtk::test]
+fn every_glyph_of_the_frame_is_drawn() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let glyphs: Vec<gtk::Image> = descendants::<gtk::Image>(&test.window)
+        .into_iter()
+        .filter(|image| image.has_css_class("glyph"))
+        .collect();
+    assert!(!glyphs.is_empty(), "the frame shows glyphs");
+    let empty = glyphs.iter().filter(|glyph| glyph.paintable().is_none()).count();
+    assert_eq!(empty, 0, "every glyph has a picture");
 }

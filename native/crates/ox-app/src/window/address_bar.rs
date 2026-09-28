@@ -13,8 +13,14 @@
 //! readers, shows its full address as a tooltip and opens in a background
 //! tab on a middle-click. GTK's own Left and Right focus movement already
 //! walks between crumbs.
+//!
+//! [`AddressBar`] is a `GtkBox` subclass laid out by the template
+//! `resources/ui/address-bar.ui`. The window hears what the user typed
+//! through [`AddressBar::connect_submitted`] and
+//! [`AddressBar::connect_cancelled`], never through the entry itself.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::location::Crumb;
 
@@ -28,6 +34,9 @@ use super::window_action::WindowAction;
 /// The location icon: 16 pixels (ui-spec.md §4.2; the web app's was 17).
 const ICON_SIZE: i32 = 16;
 
+/// The glyph of the edit chevron.
+const CHEVRON_GLYPH: i32 = 12;
+
 /// What the address bar shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AddressMode {
@@ -38,6 +47,7 @@ pub(crate) enum AddressMode {
 }
 
 impl AddressMode {
+    /// The name of the mode's page in the template's stack.
     const fn name(self) -> &'static str {
         match self {
             AddressMode::Crumbs => "crumbs",
@@ -67,65 +77,92 @@ pub(super) enum AddressIcon {
     Folder,
 }
 
-/// The address bar's widgets.
-#[derive(Debug)]
-pub(super) struct AddressBar {
-    /// The bordered box in the navigation row.
-    pub root: gtk::Box,
-    icon: gtk::Image,
-    stack: gtk::Stack,
-    /// The editable address.
-    pub entry: gtk::Entry,
-    crumbs: gtk::Box,
-    crumb_scroll: gtk::ScrolledWindow,
+mod imp {
+    use gtk::glib;
+    use gtk::subclass::prelude::*;
+
+    /// Private state of [`super::AddressBar`]: the template's widgets.
+    #[derive(Debug, Default, gtk::CompositeTemplate)]
+    #[template(file = "../../resources/ui/address-bar.ui")]
+    pub(crate) struct AddressBar {
+        /// The location's glyph or colour folder.
+        #[template_child]
+        pub(super) icon: TemplateChild<gtk::Image>,
+        /// The breadcrumbs or the entry ([`super::AddressMode`]).
+        #[template_child]
+        pub(super) stack: TemplateChild<gtk::Stack>,
+        /// Scrolls the crumbs sideways.
+        #[template_child]
+        pub(super) crumb_scroll: TemplateChild<gtk::ScrolledWindow>,
+        /// The crumb buttons and their dividers.
+        #[template_child]
+        pub(super) crumbs: TemplateChild<gtk::Box>,
+        /// The editable address.
+        #[template_child]
+        pub(super) entry: TemplateChild<gtk::Entry>,
+        /// The chevron that edits the address.
+        #[template_child]
+        pub(super) edit_button: TemplateChild<gtk::Button>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for AddressBar {
+        const NAME: &'static str = "OxAddressBar";
+        type Type = super::AddressBar;
+        type ParentType = gtk::Box;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(bar: &glib::subclass::InitializingObject<Self>) {
+            bar.init_template();
+        }
+    }
+
+    impl ObjectImpl for AddressBar {
+        fn constructed(&self) {
+            self.parent_constructed();
+            self.obj().finish_template();
+        }
+    }
+
+    impl WidgetImpl for AddressBar {}
+    impl BoxImpl for AddressBar {}
+}
+
+glib::wrapper! {
+    /// The address bar in the navigation row.
+    pub(crate) struct AddressBar(ObjectSubclass<imp::AddressBar>)
+        @extends gtk::Box, gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl AddressBar {
-    /// An address bar that shows no location yet.
-    pub fn new() -> Self {
-        let root = gtk::Box::builder()
-            .spacing(10)
-            .hexpand(true)
-            .valign(gtk::Align::Center)
-            .css_classes(["address"])
-            .build();
-        let icon = icons::glyph(Glyph::FolderLine, ICON_SIZE);
-        icon.add_css_class("address-icon");
-        let entry = gtk::Entry::builder().hexpand(true).build();
-        entry.update_property(&[gtk::accessible::Property::Label("Location")]);
-        let crumbs = gtk::Box::builder()
-            .spacing(2)
-            .css_classes(["breadcrumbs"])
-            .build();
-        let crumb_scroll = crumb_scroller(&crumbs);
-        let stack = gtk::Stack::builder().hexpand(true).hhomogeneous(false).build();
-        stack.add_named(&crumb_scroll, Some(AddressMode::Crumbs.name()));
-        stack.add_named(&entry, Some(AddressMode::Entry.name()));
-        root.append(&icon);
-        root.append(&stack);
-        root.append(&edit_button());
-        let bar = Self {
-            root,
-            icon,
-            stack,
-            entry,
-            crumbs,
-            crumb_scroll,
-        };
-        bar.keep_current_folder_visible();
-        gestures::scroll_sideways_with_wheel(&bar.crumb_scroll);
-        bar.edit_on_blank_click();
-        bar.show_crumbs_when_focus_leaves();
-        bar
+    /// Adds what the template cannot express: the glyphs, the chevron's
+    /// action, and the crumbs' scrolling and click handling.
+    fn finish_template(&self) {
+        let imp = self.imp();
+        icons::set_glyph(&imp.icon, Glyph::FolderLine, ICON_SIZE);
+        let chevron = icons::glyph(Glyph::Down, CHEVRON_GLYPH);
+        imp.edit_button.set_child(Some(&chevron));
+        WindowAction::Location.assign_to(&*imp.edit_button);
+        self.keep_current_folder_visible();
+        gestures::scroll_sideways_with_wheel(&imp.crumb_scroll);
+        self.edit_on_blank_click();
+        self.show_crumbs_when_focus_leaves();
     }
 
     /// Scrolls to the last crumb whenever the crumbs or the width change,
     /// as `crumbs.scrollLeft = crumbs.scrollWidth` in app.js. `changed`
     /// fires for new bounds only, so the user can still scroll back.
     fn keep_current_folder_visible(&self) {
-        self.crumb_scroll.hadjustment().connect_changed(|adjustment| {
-            adjustment.set_value(adjustment.upper() - adjustment.page_size());
-        });
+        self.imp()
+            .crumb_scroll
+            .hadjustment()
+            .connect_changed(|adjustment| {
+                adjustment.set_value(adjustment.upper() - adjustment.page_size());
+            });
     }
 
     /// A click on blank space around the crumbs starts editing. Crumb
@@ -134,17 +171,17 @@ impl AddressBar {
         let click = gtk::GestureClick::new();
         click.set_button(gdk::BUTTON_PRIMARY);
         click.connect_released(glib::clone!(
-            #[weak(rename_to = stack)]
-            self.stack,
+            #[weak(rename_to = bar)]
+            self,
             move |gesture, _, _, _| {
-                if stack.visible_child_name().as_deref() != Some(AddressMode::Crumbs.name()) {
+                if bar.mode() != AddressMode::Crumbs {
                     return;
                 }
-                WindowAction::Location.activate_from(&stack, None);
+                WindowAction::Location.activate_from(&bar, None);
                 gesture.set_state(gtk::EventSequenceState::Claimed);
             }
         ));
-        self.crumb_scroll.add_controller(click);
+        self.imp().crumb_scroll.add_controller(click);
     }
 
     /// Leaving the entry, for another widget or another window, returns to
@@ -152,21 +189,43 @@ impl AddressBar {
     fn show_crumbs_when_focus_leaves(&self) {
         let focus = gtk::EventControllerFocus::new();
         focus.connect_leave(glib::clone!(
-            #[weak(rename_to = stack)]
-            self.stack,
+            #[weak(rename_to = bar)]
+            self,
             move |_| {
                 // Hiding the entry makes it lose focus again; do nothing then.
-                if stack.visible_child_name().as_deref() == Some(AddressMode::Entry.name()) {
-                    stack.set_visible_child_name(AddressMode::Crumbs.name());
+                if bar.mode() == AddressMode::Entry {
+                    bar.imp().stack.set_visible_child_name(AddressMode::Crumbs.name());
                 }
             }
         ));
-        self.entry.add_controller(focus);
+        self.imp().entry.add_controller(focus);
+    }
+
+    /// Calls `on_submitted` with the typed address when Enter is pressed
+    /// in the entry.
+    pub(super) fn connect_submitted(&self, on_submitted: impl Fn(&str) + 'static) {
+        self.imp()
+            .entry
+            .connect_activate(move |entry| on_submitted(entry.text().as_str()));
+    }
+
+    /// Calls `on_cancelled` when Escape is pressed in the entry, which
+    /// the entry then ignores.
+    pub(super) fn connect_cancelled(&self, on_cancelled: impl Fn() + 'static) {
+        let escape = gtk::EventControllerKey::new();
+        escape.connect_key_pressed(move |_, key, _, _| {
+            if key != gdk::Key::Escape {
+                return glib::Propagation::Proceed;
+            }
+            on_cancelled();
+            glib::Propagation::Stop
+        });
+        self.imp().entry.add_controller(escape);
     }
 
     /// What the bar shows now.
-    pub fn mode(&self) -> AddressMode {
-        let shown = self.stack.visible_child_name();
+    pub(super) fn mode(&self) -> AddressMode {
+        let shown = self.imp().stack.visible_child_name();
         if shown.as_deref() == Some(AddressMode::Entry.name()) {
             AddressMode::Entry
         } else {
@@ -176,16 +235,23 @@ impl AddressBar {
 
     /// Shows the location's crumbs, address text and icon. Text the user
     /// is typing is left alone.
-    pub fn show_location(&self, crumbs: &[CrumbButton], address: &str, icon: AddressIcon, style: ArtStyle) {
+    pub(super) fn show_location(
+        &self,
+        crumbs: &[CrumbButton],
+        address: &str,
+        icon: AddressIcon,
+        style: ArtStyle,
+    ) {
+        let imp = self.imp();
         match icon {
-            AddressIcon::Glyph(glyph) => icons::set_glyph(&self.icon, glyph, ICON_SIZE),
-            AddressIcon::Folder => style.draw_into(&self.icon, ArtKind::Folder, ICON_SIZE),
+            AddressIcon::Glyph(glyph) => icons::set_glyph(&imp.icon, glyph, ICON_SIZE),
+            AddressIcon::Folder => style.draw_into(&imp.icon, ArtKind::Folder, ICON_SIZE),
         }
-        self.root.set_tooltip_text(Some(&format!(
+        self.set_tooltip_text(Some(&format!(
             "{address} · Click blank space or press Ctrl+L to edit"
         )));
         if self.mode() == AddressMode::Crumbs {
-            self.entry.set_text(address);
+            imp.entry.set_text(address);
         }
         self.show_crumb_buttons(crumbs);
     }
@@ -193,74 +259,57 @@ impl AddressBar {
     /// Replaces the crumb buttons, the last one announced as the current
     /// location (`aria-current` in app.js).
     fn show_crumb_buttons(&self, crumbs: &[CrumbButton]) {
-        remove_children(&self.crumbs);
+        let crumb_box = &*self.imp().crumbs;
+        remove_children(crumb_box);
         let last = crumbs.len().saturating_sub(1);
         for (index, crumb) in crumbs.iter().enumerate() {
             if let Some(divider) = crumb.divider_before {
-                self.crumbs.append(&divider_label(divider));
+                crumb_box.append(&divider_label(divider));
             }
             let button = crumb_button(crumb);
             if index == last {
                 button.update_property(&[gtk::accessible::Property::Description("Current location")]);
             }
-            self.crumbs.append(&button);
+            crumb_box.append(&button);
         }
     }
 
     /// Replaces the entry with the breadcrumbs, resetting the entry to
     /// `address` so typed text is discarded.
-    pub fn show_crumbs(&self, address: &str) {
-        self.entry.set_text(address);
-        self.stack.set_visible_child_name(AddressMode::Crumbs.name());
+    pub(super) fn show_crumbs(&self, address: &str) {
+        let imp = self.imp();
+        imp.entry.set_text(address);
+        imp.stack.set_visible_child_name(AddressMode::Crumbs.name());
     }
 
     /// Shows the entry holding `address`, focused with all text selected.
-    pub fn edit(&self, address: &str) {
-        self.entry.set_text(address);
-        self.stack.set_visible_child_name(AddressMode::Entry.name());
-        self.entry.grab_focus();
-        self.entry.select_region(0, -1);
+    pub(super) fn edit(&self, address: &str) {
+        let imp = self.imp();
+        imp.entry.set_text(address);
+        imp.stack.set_visible_child_name(AddressMode::Entry.name());
+        imp.entry.grab_focus();
+        imp.entry.select_region(0, -1);
+    }
+
+    /// The editable address, for tests.
+    #[cfg(test)]
+    pub(super) fn entry(&self) -> gtk::Entry {
+        self.imp().entry.get()
     }
 
     /// The crumb buttons shown, for tests.
     #[cfg(test)]
-    pub fn crumb_buttons(&self) -> Vec<gtk::Button> {
-        super::widget_tree::children(&self.crumbs)
+    pub(super) fn crumb_buttons(&self) -> Vec<gtk::Button> {
+        super::widget_tree::children(&*self.imp().crumbs)
             .filter_map(|child| child.downcast::<gtk::Button>().ok())
             .collect()
     }
 
     /// The crumbs' horizontal scroll position, for tests.
     #[cfg(test)]
-    pub fn crumb_adjustment(&self) -> gtk::Adjustment {
-        self.crumb_scroll.hadjustment()
+    pub(super) fn crumb_adjustment(&self) -> gtk::Adjustment {
+        self.imp().crumb_scroll.hadjustment()
     }
-}
-
-/// The scroller around `crumbs`. External: scrollable without a visible
-/// bar, and never asking the window to be as wide as the path.
-fn crumb_scroller(crumbs: &gtk::Box) -> gtk::ScrolledWindow {
-    gtk::ScrolledWindow::builder()
-        .hscrollbar_policy(gtk::PolicyType::External)
-        .vscrollbar_policy(gtk::PolicyType::Never)
-        .propagate_natural_width(true)
-        .hexpand(true)
-        .child(crumbs)
-        .build()
-}
-
-/// The chevron at the end of the bar that edits the address
-/// (`#address-edit`).
-fn edit_button() -> gtk::Button {
-    let button = gtk::Button::builder()
-        .child(&icons::glyph(Glyph::Down, 12))
-        .tooltip_text("Edit location (Ctrl+L)")
-        .action_name(WindowAction::Location.detailed_name())
-        .valign(gtk::Align::Center)
-        .css_classes(["address-chevron"])
-        .build();
-    button.update_property(&[gtk::accessible::Property::Label("Edit location")]);
-    button
 }
 
 /// The `/` or `\\` between crumbs, hidden from screen readers as

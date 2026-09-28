@@ -6,19 +6,16 @@
 //! `desktop/winspace.py`. The volume monitor's changes and the
 //! application's `places-changed` signal (a pin, a saved share, a visited
 //! server or the settings file changed) redraw the sidebar, the landing
-//! page and every label that names a device.
+//! page and every label that names a device. Pinning a folder is in
+//! [`super::quick_access`] and mounting a volume in [`super::mounting`].
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::entry::pin_target;
-use ox_core::location::same_location;
-use ox_core::settings::{PinRequest, SettingsError};
 
 use crate::locations::{self, Page};
 use crate::places::{self, PlaceSources, Places};
-use crate::settings_store::Change;
-use crate::volumes::{self, VolumeFacts};
+use crate::volumes;
 
 use super::landing;
 use super::sidebar;
@@ -84,7 +81,7 @@ impl BrowserWindow {
     }
 
     /// The sidebar and landing sections for the current settings and volumes.
-    fn places(&self) -> Places {
+    pub(super) fn places(&self) -> Places {
         let settings = self.context().settings_data();
         let known_folders = ox_core::places::known_folders();
         let volumes = self.imp().volumes.borrow();
@@ -121,89 +118,5 @@ impl BrowserWindow {
         let body = self.folder_pane().landing();
         let locations = self.imp().locations.borrow();
         landing::render(body, page, places, &locations, self.art_style());
-    }
-
-    /// Pins the one selected folder to Quick access (`pinEntry`).
-    pub(super) fn pin_selected(&self) {
-        let items = self.folder_pane().model().selected_items();
-        let [item] = items.as_slice() else {
-            return;
-        };
-        let entry = item.entry();
-        match pin_target(entry, &entry.name) {
-            Ok(target) => self.pin(target.uri, target.label),
-            Err(error) => self.chrome().show_message(&error.to_string()),
-        }
-    }
-
-    /// Pins the folder the tab shows (`pinCurrent`).
-    pub(super) fn pin_folder(&self) {
-        let Some(uri) = self.current_uri().filter(|uri| Page::from_uri(uri).is_none()) else {
-            return;
-        };
-        let label = self.imp().locations.borrow().title_for(&uri);
-        self.pin(uri, label);
-    }
-
-    /// Adds a Quick access pin, with the Python app's messages.
-    fn pin(&self, uri: String, label: String) {
-        let quick_access = self.places().quick_access;
-        if quick_access.iter().any(|place| same_location(&place.uri, &uri)) {
-            self.chrome().show_message("Already pinned to Quick access.");
-            return;
-        }
-        let change: Change = Box::new(move |settings| {
-            let request = PinRequest::new(uri, label);
-            // Not dropped on a row, so the pin goes at the end, and no
-            // sidebar order to save with it.
-            let drop_target: Option<&str> = None;
-            let shown_order: Option<&[String]> = None;
-            settings
-                .pin_many(&[request], drop_target, shown_order)
-                .map(|_pins| ())
-        });
-        self.context().change_settings(
-            change,
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |result: Result<(), SettingsError>| {
-                    let message = match result {
-                        Ok(()) => "Pinned to Quick access. No files were moved.".to_owned(),
-                        Err(error) => format!("Could not pin: {error}"),
-                    };
-                    window.chrome().show_message(&message);
-                }
-            ),
-        );
-    }
-
-    /// Mounts the volume `id` (asking for a password through the desktop's
-    /// dialog if needed), then opens it (`mountVolume` in app.js).
-    pub(super) fn mount_volume(&self, id: &str) {
-        let volume = self
-            .volume_monitor()
-            .volumes()
-            .into_iter()
-            .find(|volume| VolumeFacts::from_volume(volume).id() == id);
-        let Some(volume) = volume else {
-            self.chrome().show_message("This device is no longer connected.");
-            return;
-        };
-        let operation = gtk::MountOperation::new(Some(self));
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            async move {
-                let mounted = volume
-                    .mount_future(gio::MountMountFlags::NONE, Some(&operation))
-                    .await;
-                match (mounted, volume.get_mount()) {
-                    (Err(error), _) => window.chrome().show_message(error.message()),
-                    (Ok(()), Some(mount)) => window.navigate_or_report(&mount.root().uri()),
-                    (Ok(()), None) => {}
-                }
-            }
-        ));
     }
 }

@@ -86,7 +86,7 @@ impl BrowserWindow {
         self.render_location();
         if let Some(uri) = self.current_uri() {
             let address = self.imp().locations.borrow().display_location(&uri);
-            self.chrome().address.show_crumbs(&address);
+            self.address_bar().show_crumbs(&address);
         }
     }
 
@@ -105,7 +105,7 @@ impl BrowserWindow {
         self.set_action_enabled(WindowAction::Up, parent_location(uri).is_some());
         self.set_action_enabled(WindowAction::PinFolder, !on_page);
         self.render_address(uri);
-        let search = &self.chrome().search;
+        let search = self.search_box();
         search.set_folder_title(&title);
         search.set_enabled(!on_page && !is_device_location(uri));
         self.render_tabs();
@@ -138,8 +138,7 @@ impl BrowserWindow {
             })
             .collect();
         let address = locations.display_location(uri);
-        self.chrome()
-            .address
+        self.address_bar()
             .show_location(&crumbs, &address, address_icon(uri), self.art_style());
     }
 
@@ -154,14 +153,14 @@ impl BrowserWindow {
                 .map(|tab| tab_view(tab, &session, &locations));
             tab_views.collect()
         };
-        self.chrome().tabs.show(&views, self.art_style());
+        self.tab_strip().show(&views, self.art_style());
     }
 
     /// Replaces the breadcrumbs with the editable address (Ctrl+L).
     pub(super) fn edit_address(&self) {
         let Some(uri) = self.current_uri() else { return };
         let address = self.imp().locations.borrow().display_location(&uri);
-        self.chrome().address.edit(&address);
+        self.address_bar().edit(&address);
     }
 
     /// Ends editing with Enter or Escape: back to the breadcrumbs, with
@@ -169,7 +168,7 @@ impl BrowserWindow {
     pub(super) fn finish_address(&self) {
         if let Some(uri) = self.current_uri() {
             let address = self.imp().locations.borrow().display_location(&uri);
-            self.chrome().address.show_crumbs(&address);
+            self.address_bar().show_crumbs(&address);
         }
         self.folder_pane().focus_view();
     }

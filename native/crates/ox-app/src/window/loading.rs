@@ -67,7 +67,7 @@ impl BrowserWindow {
         let is_active = self.imp().session.borrow().is_active(id);
         if is_active {
             self.reset_typeahead();
-            self.chrome().hide_message();
+            self.hide_message();
         }
         let Some(start) = self.begin_load(id) else {
             return;
@@ -299,7 +299,7 @@ impl BrowserWindow {
         } else if pane.model().n_items() > 0 {
             pane.show_page(PanePage::Listing);
             if let Some(error) = error {
-                self.chrome().show_message(&error);
+                self.show_message(&error);
             }
         } else {
             let state = match error {

@@ -36,7 +36,7 @@ fn control_name(control: &gtk::Widget) -> Option<String> {
 /// The command bar's controls in order, the scrolling file commands
 /// included.
 fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
-    let bar = &test.window.chrome().commands.root;
+    let bar = test.window.command_bar();
     let mut controls = Vec::new();
     for child in children(bar) {
         let group = descendants::<gtk::Box>(&child)
@@ -100,7 +100,7 @@ fn unported_file_commands_are_disabled_and_name_their_milestone() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     for action in ["win.cut", "win.copy", "win.paste", "win.rename", "win.trash"] {
-        let button = descendants::<gtk::Button>(&test.window.chrome().commands.root)
+        let button = descendants::<gtk::Button>(test.window.command_bar())
             .into_iter()
             .find(|button| button.action_name().as_deref() == Some(action))
             .unwrap_or_else(|| panic!("a button runs {action}"));
@@ -210,7 +210,7 @@ fn copy_path_copies_the_selected_items_address_or_the_folders() {
         Some(folder.as_str()),
         "nothing selected"
     );
-    let message = test.window.chrome().toast.text();
+    let message = test.window.shown_message();
     assert_eq!(
         message.as_str(),
         "Path copied. Sharing permissions are unchanged."
@@ -230,7 +230,7 @@ fn copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most() {
     let fixture = Fixture::standard();
     let test = laid_out(Page::ThisPc.uri());
     test.activate("copy-path", None);
-    let message = test.window.chrome().toast.text();
+    let message = test.window.shown_message();
     assert_eq!(message.as_str(), "Open a folder first.");
     test.window.navigate(&fixture.uri()).expect("the fixture folder");
     test.wait_for_listing("the fixture folder");

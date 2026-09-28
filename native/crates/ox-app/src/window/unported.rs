@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Commands the Python app has whose native workflow does not exist yet.
 //!
-//! Owner rule 1 forbids dropping a control, and a button that silently does
-//! nothing would be worse than none. So each of these commands is a real
+//! Owner rule 1 ("only gain functionality", `native/docs/ui-spec.md` §1.2)
+//! forbids dropping a control, and a button that silently does nothing
+//! would be worse than none. So each of these commands is a real
 //! window action that stays disabled: its button and menu row are shown
 //! greyed out with a tooltip naming the milestone that brings it
 //! (`native/ROADMAP.md`). Porting a command means replacing its entry here

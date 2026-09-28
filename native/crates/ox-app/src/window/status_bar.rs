@@ -6,9 +6,14 @@
 //! type-to-select hint, then at the right the build, "Check for updates"
 //! and the Details and Large icons view buttons, the current view's
 //! button highlighted.
+//!
+//! [`StatusBar`] is a `GtkBox` subclass laid out by the template
+//! `resources/ui/status-bar.ui`; this module adds the glyphs, the build
+//! text and the buttons' actions.
 
-use gtk::pango;
+use gtk::glib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::format;
 
 use crate::folder_view::grid::IconSize;
@@ -84,94 +89,132 @@ pub(super) fn selection_text(selected: SelectionSummary) -> String {
     }
 }
 
-/// The status bar's widgets.
-#[derive(Debug)]
-pub(super) struct StatusBar {
-    /// The bar.
-    pub root: gtk::Box,
-    count: gtk::Label,
-    selection: gtk::Label,
-    typeahead_hint: gtk::Label,
-    build: gtk::Label,
-    details_view: gtk::Button,
-    icons_view: gtk::Button,
+mod imp {
+    use gtk::glib;
+    use gtk::subclass::prelude::*;
+
+    /// Private state of [`super::StatusBar`]: the template's widgets.
+    #[derive(Debug, Default, gtk::CompositeTemplate)]
+    #[template(file = "../../resources/ui/status-bar.ui")]
+    pub(crate) struct StatusBar {
+        /// The item count (`#status-count`).
+        #[template_child]
+        pub(super) count: TemplateChild<gtk::Label>,
+        /// The selection (`#status-selected`).
+        #[template_child]
+        pub(super) selection: TemplateChild<gtk::Label>,
+        /// The type-to-select hint.
+        #[template_child]
+        pub(super) typeahead_hint: TemplateChild<gtk::Label>,
+        /// The build (`#status-mode`).
+        #[template_child]
+        pub(super) build: TemplateChild<gtk::Label>,
+        /// "Check for updates" (`#check-updates`).
+        #[template_child]
+        pub(super) check_updates_button: TemplateChild<gtk::Button>,
+        /// Shows the details view.
+        #[template_child]
+        pub(super) details_view_button: TemplateChild<gtk::Button>,
+        /// Shows the Large icons view.
+        #[template_child]
+        pub(super) icons_view_button: TemplateChild<gtk::Button>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for StatusBar {
+        const NAME: &'static str = "OxStatusBar";
+        type Type = super::StatusBar;
+        type ParentType = gtk::Box;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(bar: &glib::subclass::InitializingObject<Self>) {
+            bar.init_template();
+        }
+    }
+
+    impl ObjectImpl for StatusBar {
+        fn constructed(&self) {
+            self.parent_constructed();
+            self.obj().finish_template();
+        }
+    }
+
+    impl WidgetImpl for StatusBar {}
+    impl BoxImpl for StatusBar {}
+}
+
+glib::wrapper! {
+    /// The status bar at the bottom of the window.
+    pub(crate) struct StatusBar(ObjectSubclass<imp::StatusBar>)
+        @extends gtk::Box, gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl StatusBar {
-    /// An empty status bar.
-    pub fn new() -> Self {
-        let count = gtk::Label::builder().label("Ready").xalign(0.0).build();
-        let selection = gtk::Label::builder().xalign(0.0).build();
-        let typeahead_hint = gtk::Label::builder()
-            .xalign(0.0)
-            .ellipsize(pango::EllipsizeMode::End)
-            .css_classes(["typeahead-hint"])
-            .build();
-        let spacer = gtk::Box::builder().hexpand(true).build();
-        let build = gtk::Label::builder()
-            .label(BUILD_TEXT)
-            .ellipsize(pango::EllipsizeMode::End)
-            .css_classes(["status-mode"])
-            .build();
-        let details_view = view_button(Glyph::List, "Details view", FolderView::Details);
-        let icons_view = view_button(Glyph::Grid, "Large icons", FolderView::Icons(IconSize::Large));
-        let root = gtk::Box::builder().spacing(18).css_classes(["statusbar"]).build();
-        root.append(&count);
-        root.append(&selection);
-        root.append(&typeahead_hint);
-        root.append(&spacer);
-        root.append(&build);
-        root.append(&check_updates_button());
-        root.append(&details_view);
-        root.append(&icons_view);
-        Self {
-            root,
-            count,
-            selection,
-            typeahead_hint,
-            build,
-            details_view,
-            icons_view,
-        }
+    /// Adds what the template cannot express: the build, the buttons'
+    /// glyphs and their actions.
+    fn finish_template(&self) {
+        let imp = self.imp();
+        imp.build.set_text(BUILD_TEXT);
+        self.finish_check_updates_button();
+        let large_icons = FolderView::Icons(IconSize::Large);
+        show_view_on(&imp.details_view_button, Glyph::List, FolderView::Details);
+        show_view_on(&imp.icons_view_button, Glyph::Grid, large_icons);
+    }
+
+    /// "Check for updates" stays disabled, with the milestone that brings
+    /// it in its tooltip, until the update flow is ported.
+    fn finish_check_updates_button(&self) {
+        let check_updates = &*self.imp().check_updates_button;
+        check_updates.set_child(Some(&icons::glyph(Glyph::Refresh, BUTTON_GLYPH)));
+        let tooltip = unported::tooltip(WindowAction::CheckUpdates, "Check for updates");
+        check_updates.set_tooltip_text(Some(&tooltip));
+        WindowAction::CheckUpdates.assign_to(check_updates);
     }
 
     /// Shows or hides the build text, which a compact window has no room
     /// for (`.status-mode{display:none}` at 680 pixels).
-    pub fn set_build_visible(&self, visible: bool) {
-        self.build.set_visible(visible);
+    pub(super) fn set_build_visible(&self, visible: bool) {
+        self.imp().build.set_visible(visible);
     }
 
     /// Shows the item count and the selection.
-    pub fn show(&self, subject: StatusSubject, selected: SelectionSummary) {
-        self.count.set_text(&count_text(subject));
+    pub(super) fn show(&self, subject: StatusSubject, selected: SelectionSummary) {
+        let imp = self.imp();
+        imp.count.set_text(&count_text(subject));
         let selection = match subject {
             StatusSubject::Page => String::new(),
             StatusSubject::Folder { .. } => selection_text(selected),
         };
-        self.selection.set_visible(!selection.is_empty());
-        self.selection.set_text(&selection);
+        imp.selection.set_visible(!selection.is_empty());
+        imp.selection.set_text(&selection);
     }
 
     /// Shows the type-to-select `hint`, drawn as its `outcome` asks.
-    pub fn show_typeahead_hint(&self, hint: &str, outcome: TypeaheadMatch) {
-        self.typeahead_hint.set_text(hint);
+    pub(super) fn show_typeahead_hint(&self, hint: &str, outcome: TypeaheadMatch) {
+        let label = &*self.imp().typeahead_hint;
+        label.set_text(hint);
         match outcome {
-            TypeaheadMatch::Found => self.typeahead_hint.remove_css_class(MISS_CLASS),
-            TypeaheadMatch::Missed => self.typeahead_hint.add_css_class(MISS_CLASS),
+            TypeaheadMatch::Found => label.remove_css_class(MISS_CLASS),
+            TypeaheadMatch::Missed => label.add_css_class(MISS_CLASS),
         }
     }
 
     /// Clears the type-to-select hint.
-    pub fn clear_typeahead_hint(&self) {
-        self.typeahead_hint.set_text("");
+    pub(super) fn clear_typeahead_hint(&self) {
+        self.imp().typeahead_hint.set_text("");
     }
 
     /// Highlights the button of `view`. Every icon size counts as the icon
     /// view, as the Python app's single grid view did.
-    pub fn show_view(&self, view: FolderView) {
+    pub(super) fn show_view(&self, view: FolderView) {
+        let imp = self.imp();
         let (on, off) = match view {
-            FolderView::Details => (&self.details_view, &self.icons_view),
-            FolderView::Icons(_) => (&self.icons_view, &self.details_view),
+            FolderView::Details => (&imp.details_view_button, &imp.icons_view_button),
+            FolderView::Icons(_) => (&imp.icons_view_button, &imp.details_view_button),
         };
         on.add_css_class("active");
         off.remove_css_class("active");
@@ -179,20 +222,22 @@ impl StatusBar {
 
     /// The count and selection as shown, for tests.
     #[cfg(test)]
-    pub fn texts(&self) -> (String, String) {
-        (self.count.text().to_string(), self.selection.text().to_string())
+    pub(super) fn texts(&self) -> (String, String) {
+        let imp = self.imp();
+        (imp.count.text().to_string(), imp.selection.text().to_string())
     }
 
     /// The type-to-select hint's label, for tests.
     #[cfg(test)]
-    pub fn typeahead_hint_label(&self) -> &gtk::Label {
-        &self.typeahead_hint
+    pub(super) fn typeahead_hint_label(&self) -> gtk::Label {
+        self.imp().typeahead_hint.get()
     }
 
     /// The view buttons that show as active, for tests.
     #[cfg(test)]
-    pub fn active_view_buttons(&self) -> Vec<String> {
-        [&self.details_view, &self.icons_view]
+    pub(super) fn active_view_buttons(&self) -> Vec<String> {
+        let imp = self.imp();
+        [&imp.details_view_button, &imp.icons_view_button]
             .into_iter()
             .filter(|button| button.has_css_class("active"))
             .filter_map(|button| button.tooltip_text().map(|text| text.to_string()))
@@ -200,29 +245,10 @@ impl StatusBar {
     }
 }
 
-fn view_button(glyph: Glyph, tooltip: &str, view: FolderView) -> gtk::Button {
-    let button = gtk::Button::builder()
-        .child(&icons::glyph(glyph, BUTTON_GLYPH))
-        .tooltip_text(tooltip)
-        .action_name(WindowAction::View.detailed_name())
-        .action_target(&view.key().to_variant())
-        .valign(gtk::Align::Center)
-        .build();
-    button.update_property(&[gtk::accessible::Property::Label(tooltip)]);
-    button
-}
-
-/// "Check for updates" (`#check-updates`), disabled until the update flow
-/// is ported.
-fn check_updates_button() -> gtk::Button {
-    let button = gtk::Button::builder()
-        .child(&icons::glyph(Glyph::Refresh, BUTTON_GLYPH))
-        .tooltip_text(unported::tooltip(WindowAction::CheckUpdates, "Check for updates"))
-        .action_name(WindowAction::CheckUpdates.detailed_name())
-        .valign(gtk::Align::Center)
-        .build();
-    button.update_property(&[gtk::accessible::Property::Label("Check for updates")]);
-    button
+/// Makes `button` show `glyph` and switch to `view`.
+fn show_view_on(button: &gtk::Button, glyph: Glyph, view: FolderView) {
+    button.set_child(Some(&icons::glyph(glyph, BUTTON_GLYPH)));
+    WindowAction::View.assign_with_target_to(button, &view.key().to_variant());
 }
 
 #[cfg(test)]

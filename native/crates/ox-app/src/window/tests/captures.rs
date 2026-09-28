@@ -146,8 +146,8 @@ fn hovered_widgets(test: &TestWindow) -> Vec<gtk::Widget> {
     let new_tab = buttons
         .iter()
         .find(|button| button.action_name().as_deref() == Some("win.new-tab"));
-    let tab_list = test.window.chrome().tabs.tab_list();
-    let inactive_tab = children(tab_list).find(|tab| !tab.has_css_class("active"));
+    let tab_list = test.window.tab_strip().tab_list();
+    let inactive_tab = children(&tab_list).find(|tab| !tab.has_css_class("active"));
     let file_row = descendants::<gtk::Widget>(&test.window.folder_pane().view_widget())
         .into_iter()
         .filter(|widget| widget.css_name() == "row")
