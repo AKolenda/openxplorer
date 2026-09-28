@@ -249,27 +249,27 @@ fn a_theme_chosen_in_one_window_reaches_every_window() {
     assert_eq!(button.as_deref(), Some("Appearance: dark. Click to change."));
 }
 
-/// Each window follows a skin of its own here, so the test sees which
-/// window still has handlers connected.
+/// The windows follow skins on no display, so the test can ask each skin
+/// whether anything is still connected to it: two windows share one skin
+/// and a third, open at the same time, has its own.
 ///
 /// parity: TAB-050
 #[gtk::test]
 fn closing_a_window_disconnects_it_from_the_shared_skin() {
     let fixture = Fixture::standard();
-    let first_skin = Skin::detached();
-    let second_skin = Skin::detached();
-    let first = TestWindow::open_with_skin(&fixture.uri(), &first_skin);
-    let second = TestWindow::open_with_skin(&fixture.uri(), &second_skin);
-    assert!(first_skin.has_listeners());
-    assert!(second_skin.has_listeners());
+    let shared = Skin::detached();
+    let lone = Skin::detached();
+    let first = TestWindow::open_with_skin(&fixture.uri(), &shared);
+    let second = first.open_beside(&fixture.uri());
+    let third = TestWindow::open_with_skin(&fixture.uri(), &lone);
+    assert!(shared.has_listeners());
+    assert!(lone.has_listeners());
+    drop(third);
+    assert!(!lone.has_listeners(), "the closed window left no handler");
     drop(second);
-    assert!(!second_skin.has_listeners(), "the closed window left no handler");
-    assert!(
-        first_skin.has_listeners(),
-        "the open window still follows its skin"
-    );
+    assert!(shared.has_listeners(), "the open window still follows the skin");
     drop(first);
-    assert!(!first_skin.has_listeners());
+    assert!(!shared.has_listeners(), "the last window left no handler");
 }
 
 /// Where the icon view's tiles are, relative to the view's scroller.
