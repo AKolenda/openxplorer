@@ -7,8 +7,7 @@
 //! `desktop/tests/test_rc2.py`; the dispatcher's busy check belongs to the
 //! app, which runs one extraction at a time.
 
-#[path = "archive_support.rs"]
-mod support;
+mod archive_support;
 #[allow(
     dead_code,
     unused_imports,
@@ -20,7 +19,7 @@ use std::fs;
 
 use ox_core::archive::{ArchiveError, ExtractionRequest};
 
-use support::{file_uri, ExtractionFixture, TestMember};
+use archive_support::{file_uri, ExtractionFixture, TestMember};
 use transfer_support::versions::{PreviousVersions, READ_ONLY};
 
 /// The `archiveExtract` branch of `dispatch` in `desktop/winspace.py`

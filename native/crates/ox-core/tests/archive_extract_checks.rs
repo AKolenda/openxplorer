@@ -7,12 +7,11 @@
 //! `test_unsupported_compression` changed in memory are written with the
 //! changed fields instead.
 
-#[path = "archive_support.rs"]
-mod support;
+mod archive_support;
 
 use ox_core::archive::{ArchiveError, ExtractionLimits};
 
-use support::{file_type, Compression, ExtractionFixture, TestMember, ENCRYPTED_FLAG};
+use archive_support::{file_type, Compression, ExtractionFixture, TestMember, ENCRYPTED_FLAG};
 
 /// Member paths that all meet the same refusal.
 struct UnsafePaths {
@@ -174,19 +173,40 @@ fn names_differing_only_in_case_or_unicode_form_are_refused() {
     }
 }
 
+/// Two file members, one of whose paths is a folder of the other.
+struct ConflictCase {
+    first: &'static str,
+    second: &'static str,
+}
+
 /// Ported from `desktop/tests/test_zip_extract.py::ZipExtractTests::test_file_directory_conflicts`.
 ///
 /// parity: ARC-015
 #[test]
 fn a_path_used_as_file_and_folder_is_refused_in_either_order() {
+    let cases = [
+        ConflictCase {
+            first: "a",
+            second: "a/b",
+        },
+        ConflictCase {
+            first: "a/b",
+            second: "a",
+        },
+    ];
     let fixture = ExtractionFixture::new();
-    for (first, second) in [("a", "a/b"), ("a/b", "a")] {
-        fixture.write_zip(&[TestMember::file(first, b"f"), TestMember::file(second, b"g")]);
+    for case in cases {
+        fixture.write_zip(&[
+            TestMember::file(case.first, b"f"),
+            TestMember::file(case.second, b"g"),
+        ]);
 
         assert_eq!(
             refusal(&fixture),
             ArchiveError::AmbiguousPaths,
-            "{first} and {second}"
+            "{} and {}",
+            case.first,
+            case.second
         );
     }
 }

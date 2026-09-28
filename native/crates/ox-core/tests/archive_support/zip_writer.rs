@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Writes ZIP archives byte by byte for the `archive_*` integration tests;
-//! `archive_support.rs` includes it and re-exports what tests use. Cargo
-//! also builds this file as a test executable of its own, which has no
-//! tests.
+//! the `archive_support` module includes it and re-exports what tests use.
 //!
 //! The Python tests build archives with `zipfile` and then change fields
 //! in memory. [`TestMember`] writes those fields directly instead, so a

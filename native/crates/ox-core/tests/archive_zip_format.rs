@@ -6,15 +6,14 @@
 //! is no Python test to port; these tests hold the ZIP reader of
 //! `ox_core::archive` to `zipfile`'s behaviour.
 
-#[path = "archive_support.rs"]
-mod support;
+mod archive_support;
 
 use std::fs;
 
 use ox_core::archive::{ArchiveBrowser, ArchiveError, ZipFormatError};
 use ox_core::transfer::Cancellation;
 
-use support::{
+use archive_support::{
     memory_opener, zip_bytes, zip_bytes_with, ArchiveLayout, Compression, EndRecords, ExtractionFixture,
     TestMember, UTF8_NAME_FLAG,
 };
@@ -194,7 +193,7 @@ fn data_running_into_the_next_member_is_refused_as_a_zip_bomb() {
 fn undecompressable_data_rolls_back_naming_the_member() {
     let fixture = ExtractionFixture::new();
     let mut archive = zip_bytes(&[TestMember::file("doc.txt", b"contents contents contents")]);
-    let data_start = support::first_member_data_offset("doc.txt");
+    let data_start = archive_support::first_member_data_offset("doc.txt");
     archive[data_start] = 0xff;
     fs::write(&fixture.archive, archive).expect("write the damaged archive");
 

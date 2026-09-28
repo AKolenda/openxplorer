@@ -6,8 +6,7 @@
 //! of `transfer_support/`, the counterpart of
 //! `desktop/tests/local_provider.py`.
 
-#[path = "archive_support.rs"]
-mod support;
+mod archive_support;
 #[allow(
     dead_code,
     unused_imports,
@@ -21,7 +20,7 @@ use std::sync::Arc;
 use ox_core::archive::{ArchiveError, ZipFormatError};
 use ox_core::transfer::{Cancellation, Node, TransferError};
 
-use support::{
+use archive_support::{
     file_uri, first_member_data_offset, gio_factory, incompressible_bytes, zip_bytes, Compression,
     ExtractionFixture, LocalFileOutput, TestMember, WriteBehaviour,
 };

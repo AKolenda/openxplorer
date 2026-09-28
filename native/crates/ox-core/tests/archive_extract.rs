@@ -9,8 +9,7 @@
 //! use the local provider of `transfer_support/`, the counterpart of
 //! `desktop/tests/local_provider.py`.
 
-#[path = "archive_support.rs"]
-mod support;
+mod archive_support;
 #[allow(
     dead_code,
     unused_imports,
@@ -24,7 +23,7 @@ use std::sync::Arc;
 
 use ox_core::archive::{ArchiveError, ExtractionRequest};
 
-use support::{
+use archive_support::{
     file_type, file_uri, mode_of, write_zip_with_python, CreatedMode, ExtractionFixture, LocalFileOutput,
     TestMember,
 };

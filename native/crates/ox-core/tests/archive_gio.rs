@@ -5,8 +5,7 @@
 //! `desktop/tests/test_rc2.py`, whose fake GIO stream is the
 //! [`ShortReadStream`] here.
 
-#[path = "archive_support.rs"]
-mod support;
+mod archive_support;
 
 use std::fs;
 use std::io::{ErrorKind, Read, Seek, SeekFrom};
@@ -19,8 +18,10 @@ use ox_core::archive::{
 };
 use ox_core::transfer::Cancellation;
 
+use archive_support::{
+    file_type, file_uri, gio_factory, mode_of, opener, zip_bytes, ExtractionFixture, TestMember,
+};
 use short_reads::{Seeking, ShortReadStream};
-use support::{file_type, file_uri, gio_factory, mode_of, opener, zip_bytes, ExtractionFixture, TestMember};
 use unsized_file::UnsizedFile;
 
 /// A GIO input stream over bytes in memory that returns at most three

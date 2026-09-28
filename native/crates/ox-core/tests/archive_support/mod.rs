@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Shared by the `archive_*` integration tests: the extraction fixture of
 //! `desktop/tests/test_zip_extract.py`, test doubles for the extraction
-//! output, archive openers and the ZIP writer of `archive_zip_writer.rs`.
-//! Include it with `#[path = "archive_support.rs"] mod support;`. Cargo
-//! also builds this file as a test executable of its own, which has no
-//! tests.
+//! output, archive openers and the ZIP writer of `zip_writer`. Include it
+//! with `mod archive_support;`.
 //!
 //! Destinations go through the production [`GioNode`]; tests that need the
 //! overridable local provider of `transfer_support/` include it themselves.
@@ -14,7 +12,6 @@
     reason = "each test executable that includes this module uses a different part of it"
 )]
 
-#[path = "archive_zip_writer.rs"]
 mod zip_writer;
 
 use std::fs;

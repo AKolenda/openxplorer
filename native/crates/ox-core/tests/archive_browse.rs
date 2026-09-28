@@ -4,8 +4,7 @@
 //! `AdditionalSecurityTests` in `desktop/tests/test_terminal_security.py`
 //! (the name rules alone are unit tests of `member_names`).
 
-#[path = "archive_support.rs"]
-mod support;
+mod archive_support;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,7 +15,7 @@ use ox_core::archive::{
 };
 use ox_core::transfer::Cancellation;
 
-use support::{
+use archive_support::{
     file_type, file_uri, memory_opener, mode_of, opener, write_archive_declaring_directory, zip_bytes,
     Compression, TestMember, ENCRYPTED_FLAG,
 };
