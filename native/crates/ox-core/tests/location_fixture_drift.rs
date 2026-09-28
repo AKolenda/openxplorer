@@ -24,6 +24,10 @@ const LISTED_CHANGES: usize = 20;
 
 #[test]
 fn python_fixture_matches_desktop_core_py() {
+    if std::env::var_os("OX_DISTRO_CI").is_some() {
+        eprintln!("skipped under OX_DISTRO_CI: the reference check needs the Python version the fixtures were generated with; the native job covers this");
+        return;
+    }
     let desktop = repository_path("desktop");
     let captured = run_generator(OsStr::new("python3"), "generate_python.py", &desktop);
     let committed = include_str!("location_fixtures/python.json");
@@ -32,6 +36,10 @@ fn python_fixture_matches_desktop_core_py() {
 
 #[test]
 fn javascript_fixture_matches_desktop_app_js() {
+    if std::env::var_os("OX_DISTRO_CI").is_some() {
+        eprintln!("skipped under OX_DISTRO_CI: the reference check needs a current Node.js; distribution Node versions differ; the native job covers this");
+        return;
+    }
     let app = repository_path("desktop/ui/app.js");
     let captured = run_generator(&node_program(), "generate_javascript.cjs", &app);
     let committed = include_str!("location_fixtures/javascript.json");
