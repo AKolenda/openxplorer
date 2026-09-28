@@ -33,6 +33,11 @@ const TILE_ICON_GAP: i32 = 8;
 const TILE_NAME_LINES: i32 = 2;
 
 /// The list item behind a factory object (column cells are list items too).
+///
+/// # Panics
+///
+/// If `object` is not a [`gtk::ListItem`]; GTK hands list factories
+/// nothing else.
 pub(crate) fn as_list_item(object: &glib::Object) -> &gtk::ListItem {
     object
         .downcast_ref::<gtk::ListItem>()

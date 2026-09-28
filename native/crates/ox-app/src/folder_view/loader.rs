@@ -29,15 +29,15 @@ const MERGE_WINDOW: Duration = Duration::from_millis(250);
 /// A running listing. Dropping it cancels the listing.
 #[derive(Debug)]
 pub(crate) struct Listing {
-    /// The listing task; taken when the listing is dropped.
-    task: Option<glib::JoinHandle<()>>,
+    /// The listing task, aborted when the listing is dropped.
+    task: glib::JoinHandle<()>,
 }
 
 impl Drop for Listing {
     fn drop(&mut self) {
-        if let Some(task) = self.task.take() {
-            task.abort();
-        }
+        // Dropping a JoinHandle only detaches the task; aborting it is what
+        // stops the listing and cancels its GIO futures.
+        self.task.abort();
     }
 }
 
@@ -53,7 +53,7 @@ pub(crate) fn list_folder(
         let result = enumerate(&folder, &on_batch).await;
         on_done(result.map_err(|error| EnumerateError::from_glib(&error)));
     });
-    Listing { task: Some(task) }
+    Listing { task }
 }
 
 /// Reads `folder` to the end, handing its rows to `on_batch` in merged

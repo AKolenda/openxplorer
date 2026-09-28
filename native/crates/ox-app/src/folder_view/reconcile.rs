@@ -60,6 +60,11 @@ fn remove_run(store: &gio::ListStore, start: u32, count: u32) {
 
 /// Makes `store` hold exactly `entries`, keeping the item objects of
 /// entries that did not change.
+///
+/// # Panics
+///
+/// If `store` holds anything but [`FileItem`]s; tab stores are made with
+/// `gio::ListStore::new::<FileItem>()`.
 pub(crate) fn update_in_place(store: &gio::ListStore, entries: Vec<Entry>) {
     let mut listing = NewListing::new(entries);
     // Walk from the end so removals never shift a position still to visit.
