@@ -12030,7 +12030,8 @@ python_tests = [
 ]
 bridge = ["activateItem", "archiveList", "archiveOpenMember", "open"]
 dolphin = "Browse archives as folders (kio-extras); Browse archives as folders (KIO zip:/)"
-native = "todo"
+native = "partial"
+native_note = "Listing ported to ox-core: native/crates/ox-core/tests/archive_browse.rs (listing_extracts_nothing, rows_list_folders_first_by_name_ignoring_case, a_folder_inside_the_archive_lists_its_members, an_empty_archive_lists_nothing, a_listing_stops_at_5000_rows); native/crates/ox-core/tests/archive_zip_format.rs reads comments, prepended bytes, ZIP64 and code page 437 names. The Compressed folder dialog, its buttons and notices, and ignoring stale replies are not in the native UI yet."
 
 [[feature]]
 id = "ARC-004"
@@ -12051,7 +12052,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_preview_rejects_special_members",
 ]
 bridge = ["archiveList"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/src/archive/member_names.rs (absolute_windows_and_backslash_paths_are_unsafe, ambiguous_and_control_names_are_unsafe, dot_names_are_unsafe_instead_of_failing); native/crates/ox-core/tests/archive_browse.rs (dangerous_members_are_hidden_and_counted, fifos_devices_and_links_are_hidden_and_not_opened, a_name_hiding_text_after_a_nul_is_hidden). The native UI does not show the hidden count yet."
 
 [[feature]]
 id = "ARC-005"
@@ -12079,7 +12081,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_rejects_ambiguous_and_control_names",
 ]
 bridge = ["archiveList"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_browse.rs (a_central_directory_over_32_mib_is_not_read, more_than_100000_members_are_left_to_an_archive_manager, a_file_that_is_not_a_zip_reports_a_bad_zip). The native UI does not show these errors yet."
 
 [[feature]]
 id = "ARC-006"
@@ -12108,7 +12111,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_preview_rejects_special_members",
 ]
 bridge = ["archiveOpenMember"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_browse.rs (only_the_selected_member_is_copied_read_only, a_script_is_not_opened, encrypted_and_oversized_members_are_listed_but_not_opened, a_duplicated_member_is_not_opened); native/crates/ox-core/tests/archive_gio.rs (previews_go_to_the_private_runtime_directory). Opening the copy with its default application and showing the notice are not in the native UI yet."
 
 [[feature]]
 id = "ARC-007"
@@ -12134,7 +12138,8 @@ python_tests = [
   "desktop/tests/test_rc2.py::ArchiveReaderTests::test_nonseekable_closes_stream",
 ]
 bridge = ["archiveList", "archiveOpenMember", "archiveInspect", "archiveExtract"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_gio.rs (short_gio_reads_are_completed_by_further_reads, one_read_asks_gio_for_at_most_64_kib, a_stream_that_cannot_seek_is_refused_and_closed, a_cancelled_reader_stops_reading, the_production_opener_reads_local_archives, a_fifo_named_like_an_archive_fails_instead_of_blocking). Deferred: local_path in desktop/native_opening.py also reads an smb:// archive through a kernel CIFS mount of the share; the native opener reads it through GVfs until the mount-table reader of the search service is in ox-core."
 
 [[feature]]
 id = "ARC-008"
@@ -12154,7 +12159,8 @@ python_tests = [
   "desktop/tests/test_rc2.py::DispatchTests::test_inspect_and_extract_actual_actions",
 ]
 bridge = ["archiveInspect"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (inspection_summarises_and_writes_nothing); native/crates/ox-core/tests/archive_extract_dispatch.rs (inspection_and_extraction_agree). The Extract dialog that shows the summary is not in the native UI yet."
 
 [[feature]]
 id = "ARC-009"
@@ -12194,7 +12200,8 @@ python_tests = [
 ]
 bridge = ["archiveInspect", "cancel", "normalise", "open"]
 dolphin = "Extract archive here / to…"
-native = "todo"
+native = "partial"
+native_note = "Suggested folder names: native/crates/ox-core/src/archive/member_names.rs (suggested_names_drop_the_zip_extension, suggested_names_trim_trailing_dots_and_spaces_and_stay_valid); the cancellable preflight: native/crates/ox-core/tests/archive_extract_checks.rs (inspection_summarises_and_writes_nothing) and native/crates/ox-core/tests/archive_gio.rs (background_variants_return_the_blocking_results). The Extract compressed folder dialog is not in the native UI yet."
 
 [[feature]]
 id = "ARC-010"
@@ -12212,7 +12219,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_protected_extraction_descendant_fails_before_writing",
 ]
 bridge = ["archiveInspect", "normalise"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract_dispatch.rs (locations_are_normalised_first, a_server_listing_is_not_a_destination); native/crates/ox-core/tests/archive_extract.rs (a_protected_member_path_stops_the_extraction_before_writing). The dialog and its validation messages are not in the native UI yet."
 
 [[feature]]
 id = "ARC-011"
@@ -12251,7 +12259,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_progress_and_cleanup",
 ]
 bridge = ["archiveExtract", "cancel", "list", "archiveInspect", "normalise"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract_rollback.rs (progress_labels_name_the_check_each_file_and_the_result, progress_ends_complete_and_only_the_new_folder_remains, cancelling_while_writing_removes_the_staging_folder); native/crates/ox-core/tests/archive_extract.rs (an_existing_folder_is_never_merged_into). The transfer panel, the Extraction stopped dialog, the toast and showing the result are not in the native UI yet."
 
 [[feature]]
 id = "ARC-012"
@@ -12284,7 +12293,8 @@ python_tests = [
 ]
 bridge = ["archiveExtract"]
 dolphin = "Ark 'Extract archive here' service menu"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract.rs (extracts_files_folders_and_empty_files_into_a_new_folder, an_existing_file_keeps_the_name, an_existing_link_keeps_the_name_and_its_target_stays_empty, a_linked_destination_folder_is_refused, the_archive_is_left_unchanged). The native UI does not offer extraction yet."
 
 [[feature]]
 id = "ARC-013"
@@ -12319,7 +12329,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_supported_compression_round_trip",
 ]
 bridge = ["archiveExtract", "cancel"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract_rollback.rs (a_crc_failure_rolls_back, a_failed_write_rolls_back, a_short_write_rolls_back, a_folder_created_meanwhile_is_never_replaced, a_staging_folder_that_cannot_be_removed_is_reported_where_it_is); native/crates/ox-core/src/archive/extract/staging.rs (staging_names_are_hidden_random_and_distinct). The native UI does not offer extraction yet."
 
 [[feature]]
 id = "ARC-014"
@@ -12351,7 +12362,8 @@ python_tests = [
   "desktop/tests/test_rc2.py::DispatchTests::test_inspect_and_extract_actual_actions",
 ]
 bridge = ["archiveExtract", "archiveInspect"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (unsafe_member_paths_are_refused_with_nothing_written, a_segment_over_255_bytes_is_refused, a_name_hiding_text_after_a_nul_is_invalid); native/crates/ox-core/src/archive/extract/plan.rs (reserved_device_names_are_refused_with_any_extension_and_case). The native UI does not offer extraction yet."
 
 [[feature]]
 id = "ARC-015"
@@ -12368,7 +12380,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_file_directory_conflicts",
 ]
 bridge = ["archiveExtract", "archiveInspect"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (duplicate_names_are_refused, names_differing_only_in_case_or_unicode_form_are_refused, a_path_used_as_file_and_folder_is_refused_in_either_order); native/crates/ox-core/src/archive/extract/plan.rs (a_member_repeated_in_another_case_is_a_duplicate_not_an_ambiguous_folder). The native UI does not offer extraction yet."
 
 [[feature]]
 id = "ARC-016"
@@ -12388,8 +12401,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_supported_compression_round_trip",
 ]
 bridge = ["archiveExtract", "archiveInspect"]
-native = "todo"
-native_note = "Porting notes: Dolphin via Ark handles encrypted archives and many formats (tar, 7z, rar); OpenXplorer supports ZIP only."
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (a_symbolic_link_member_is_refused, fifos_devices_and_sockets_are_refused, an_encrypted_member_is_refused, an_unsupported_compression_method_is_refused, a_folder_entry_with_data_is_refused); native/crates/ox-core/tests/archive_extract.rs (archives_python_writes_with_each_supported_method_round_trip). The native UI does not offer extraction yet. Porting notes: Dolphin via Ark handles encrypted archives and many formats (tar, 7z, rar); OpenXplorer supports ZIP only."
 
 [[feature]]
 id = "ARC-017"
@@ -12416,7 +12429,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_filename_size_limit",
 ]
 bridge = ["archiveExtract", "archiveInspect"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (more_entries_than_the_limit_are_refused, implied_folders_count_toward_the_paths_limit, nesting_deeper_than_128_levels_is_refused, members_over_the_total_limit_are_refused, a_member_over_the_size_limit_is_refused, a_member_compressed_beyond_the_ratio_limit_is_refused, a_member_shorter_than_it_declares_stops_the_extraction); native/crates/ox-core/src/archive/extract/limits.rs (written_bytes_stop_at_the_declared_size_and_the_limits); native/crates/ox-core/tests/archive_plan_memory.rs (checking_deep_long_names_takes_memory_in_proportion_to_the_names). The native UI does not offer extraction yet."
 
 [[feature]]
 id = "ARC-018"
@@ -12431,7 +12445,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_never_restores_executable_or_setuid_mode",
 ]
 bridge = ["archiveExtract"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract.rs (archive_permissions_are_never_applied, a_device_destination_gets_no_unix_modes); native/crates/ox-core/tests/archive_gio.rs (extraction_through_gio_never_applies_archive_permissions). The native UI does not offer extraction yet."
 
 [[feature]]
 id = "ARC-019"
@@ -12450,7 +12465,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_unicode_spaces",
 ]
 bridge = ["archiveExtract"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract.rs (folders_implied_by_member_paths_are_created, empty_folder_entries_are_created, a_folder_entry_after_its_contents_is_accepted, unicode_and_spaces_in_names_are_kept, an_empty_archive_extracts_to_an_empty_folder). The native UI does not offer extraction yet."
 
 [[feature]]
 id = "ARC-020"
@@ -12476,7 +12492,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_invalid_destination_names",
 ]
 bridge = ["archiveExtract"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-core/tests/archive_extract.rs (a_new_folder_inside_a_configured_snapshot_is_refused, a_protected_member_path_stops_the_extraction_before_writing); native/crates/ox-core/tests/archive_extract_dispatch.rs (a_protected_destination_folder_is_refused, member_destinations_are_checked_before_any_staging). The native UI does not offer extraction yet."
 
 [[feature]]
 id = "ARC-021"
