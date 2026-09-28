@@ -107,12 +107,15 @@ pub enum Acceptance {
     Refused,
 }
 
-/// A message for one window, which the app delivers to it.
+/// A message for one window, which the app delivers to it. The window acts
+/// on it after the delivery has returned, never inside it (see
+/// [`TabTransfers::new`](crate::ops::TabTransfers::new)).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TabMessage<Tab> {
     /// `tabReceive`: insert `tab` tentatively before the tab
-    /// `before_tab_id` (at the end without one), then call
-    /// [`TabTransfers::ready`].
+    /// `before_tab_id` (at the end without one), then answer with
+    /// [`TabTransfers::acknowledge`](crate::ops::TabTransfers::acknowledge)
+    /// once this delivery has returned.
     Receive {
         /// The move.
         token: TabTransferToken,
@@ -160,8 +163,9 @@ pub enum TabTransferError {
     /// The tab identifier is empty or longer than 80 characters.
     #[error("Invalid tab identifier.")]
     InvalidTabId,
-    /// The tab is already moving, or [`MAX_PENDING_TAB_TRANSFERS`] moves
-    /// are waiting.
+    /// The tab is already moving, or
+    /// [`MAX_PENDING_TAB_TRANSFERS`](crate::ops::MAX_PENDING_TAB_TRANSFERS)
+    /// moves are waiting.
     #[error("That tab is already moving. Wait for it to finish.")]
     AlreadyMoving,
     /// The token is unknown, expired, already claimed or already used.

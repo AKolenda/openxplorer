@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Moving a tab to another window without ever losing it (TAB-030,
-//! TAB-036).
+//! Moving a tab to another window without ever losing it: the broker half
+//! of TAB-036.
 //!
 //! Ports `TabTransfers` in `desktop/tab_transfers.py`. A move has two
 //! phases: the destination window receives the tab and inserts it
@@ -12,10 +12,16 @@
 //!
 //! A move is addressed by a [`TabTransferToken`]: 64 random hexadecimal
 //! digits, single use and without any location in it, so a tab drag can
-//! offer the token as its only payload (TAB-040). The tab itself is the
-//! app's own typed state, so only what that type holds can travel;
-//! `tab_snapshot` in `desktop/window_state.py` filtered the web interface's
-//! JSON for the same reason.
+//! offer the token as its only payload. The broker moves the app's tab
+//! state as it gets it (`Tab`), so the rest of TAB-036 belongs to that
+//! type: keeping only the listed state and dropping passwords and other
+//! fields, as `tab_snapshot` in `desktop/window_state.py` does. The
+//! windows' Move tab menu (TAB-030) and the tab drag target (TAB-040) are
+//! the interface's.
+//!
+//! The broker delivers messages while it is borrowed mutably, so a window
+//! never answers a message from inside the delivery; see
+//! [`TabTransfers::new`].
 
 mod messages;
 
@@ -76,6 +82,16 @@ impl<Tab> fmt::Debug for TabTransfers<Tab> {
 impl<Tab> TabTransfers<Tab> {
     /// A broker that asks `is_ready` whether a window can take part in a
     /// move and hands messages for windows to `deliver`.
+    ///
+    /// `deliver` runs while the broker is borrowed mutably, inside
+    /// [`TabTransfers::claim`], [`TabTransfers::acknowledge`] and every
+    /// rollback, so it must not call back into the broker: it queues the
+    /// message for the window (for example with
+    /// `glib::idle_add_local_once`), and the window answers from there. A
+    /// window that inserted a received tab and acknowledged it from inside
+    /// `deliver` would find the broker still borrowed, which panics when
+    /// the app keeps it in a `RefCell`. The Python app never met this
+    /// because its messages reached the web interface asynchronously.
     pub fn new(
         is_ready: impl Fn(WindowId) -> bool + 'static,
         deliver: impl FnMut(WindowId, TabMessage<Tab>) -> Delivery + 'static,
@@ -136,7 +152,7 @@ impl<Tab> TabTransfers<Tab> {
 
     /// Claims the move `token` for window `destination` and sends it the
     /// tab, to insert before `before_tab_id`. The source keeps its tab
-    /// until [`TabTransfers::ready`] commits the move.
+    /// until [`TabTransfers::acknowledge`] commits the move.
     ///
     /// # Errors
     ///
@@ -179,11 +195,13 @@ impl<Tab> TabTransfers<Tab> {
         Ok(())
     }
 
-    /// The destination's answer after it tried to insert the tab. Only an
-    /// acceptance from the claiming window, while both windows are ready,
-    /// commits the move; a refusal or a closed window rolls it back. An
-    /// answer that matches no pending move changes nothing.
-    pub fn ready(
+    /// Takes the destination's answer after it tried to insert the tab
+    /// (the bridge's `tabTransferReady`, `ready` in
+    /// `desktop/tab_transfers.py`). Only an acceptance from the claiming
+    /// window, while both windows are ready, commits the move; a refusal or
+    /// a closed window rolls it back. An answer that matches no pending
+    /// move changes nothing.
+    pub fn acknowledge(
         &mut self,
         token: &TabTransferToken,
         destination: WindowId,

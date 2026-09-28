@@ -153,7 +153,9 @@ fn the_acknowledgement_commits_once_to_the_original_source() {
         .claim(&token, DESTINATION, Some("existing-tab"))
         .unwrap();
 
-    let outcome = hub.transfers.ready(&token, DESTINATION, Acceptance::Accepted);
+    let outcome = hub
+        .transfers
+        .acknowledge(&token, DESTINATION, Acceptance::Accepted);
 
     assert_eq!(outcome, TabMoveOutcome::Committed);
     assert!(!hub.transfers.has_pending());
@@ -188,7 +190,7 @@ fn an_acknowledgement_from_another_window_cannot_close_the_source_tab() {
     let token = hub.offer();
     hub.transfers.claim(&token, DESTINATION, None).unwrap();
 
-    let outcome = hub.transfers.ready(&token, OTHER, Acceptance::Accepted);
+    let outcome = hub.transfers.acknowledge(&token, OTHER, Acceptance::Accepted);
 
     assert_eq!(outcome, TabMoveOutcome::Kept(KeptReason::NotPending));
     assert!(hub.transfers.is_busy(DESTINATION));
@@ -212,7 +214,8 @@ fn a_used_capability_cannot_be_replayed() {
     let mut hub = Hub::new();
     let token = hub.offer();
     hub.transfers.claim(&token, DESTINATION, None).unwrap();
-    hub.transfers.ready(&token, DESTINATION, Acceptance::Accepted);
+    hub.transfers
+        .acknowledge(&token, DESTINATION, Acceptance::Accepted);
 
     let replayed = hub.transfers.claim(&token, OTHER, None);
 
@@ -261,7 +264,9 @@ fn an_acknowledgement_after_the_timeout_never_commits() {
     hub.transfers.claim(&token, DESTINATION, None).unwrap();
 
     hub.wait(40);
-    let outcome = hub.transfers.ready(&token, DESTINATION, Acceptance::Accepted);
+    let outcome = hub
+        .transfers
+        .acknowledge(&token, DESTINATION, Acceptance::Accepted);
 
     assert_eq!(outcome, TabMoveOutcome::Kept(KeptReason::NotPending));
     assert_eq!(hub.source_outcome(), TabMoveOutcome::Kept(KeptReason::TimedOut));
@@ -274,7 +279,9 @@ fn a_refusal_keeps_the_source_tab() {
     let token = hub.offer();
     hub.transfers.claim(&token, DESTINATION, None).unwrap();
 
-    let outcome = hub.transfers.ready(&token, DESTINATION, Acceptance::Refused);
+    let outcome = hub
+        .transfers
+        .acknowledge(&token, DESTINATION, Acceptance::Refused);
 
     assert_eq!(outcome, TabMoveOutcome::Kept(KeptReason::DestinationBusy));
     assert_eq!(
@@ -354,10 +361,12 @@ fn the_same_tab_cannot_move_twice_at_once() {
     );
 }
 
-/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_no_credentials_or_arbitrary_js_forwarded`.
-/// The Python broker filtered the web interface's JSON; here the tab is
-/// the app's typed state, so the destination receives exactly that state
-/// and nothing else.
+/// Ported from `desktop/tests/test_rc3.py::TabTransferTests::test_no_credentials_or_arbitrary_js_forwarded`,
+/// as far as the broker goes: it hands the destination exactly the tab
+/// state it was offered. The Python broker also filtered that state
+/// (`tab_snapshot` in `desktop/window_state.py`); dropping passwords and
+/// other fields is now the rule of the app's tab-state type, which must
+/// carry this test's other half.
 #[test]
 fn only_the_tab_state_reaches_the_destination() {
     let mut hub = Hub::new();
