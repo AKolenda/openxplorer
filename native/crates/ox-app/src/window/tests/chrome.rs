@@ -8,7 +8,7 @@
 
 use gtk::prelude::*;
 
-use super::geometry::{bounds, button_for, laid_out};
+use super::geometry::{bounds, button_for, laid_out, Bounds};
 use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
 use crate::window::menu_popover::MenuPopover;
 
@@ -21,15 +21,19 @@ fn the_active_tab_starts_9_pixels_in_and_reaches_the_bottom_of_the_42_pixel_titl
         .window
         .titlebar()
         .expect("the window has the tab strip as its title bar");
-    let (_, title_y, _, title_height) = bounds(&test, &title_bar);
+    let title = bounds(&test, &title_bar);
     assert_eq!(
-        (title_y, title_height),
+        (title.y, title.height),
         (0, 42),
         "the title bar is 42 pixels tall"
     );
     let tabs = test.window.chrome().tabs.tab_list();
     let first_tab = tabs.first_child().expect("one tab");
-    assert_eq!(bounds(&test, &first_tab), (9, 7, 215, 35), "215 x 35 at (9, 7)");
+    assert_eq!(
+        bounds(&test, &first_tab),
+        Bounds::new(9, 7, 215, 35),
+        "215 x 35 at (9, 7)"
+    );
     assert!(first_tab.has_css_class("active"));
 }
 
@@ -44,11 +48,11 @@ fn the_new_tab_button_follows_the_last_tab() {
     wait_for_frames(&test.window, 3);
     let tabs = test.window.chrome().tabs.tab_list();
     let last_tab = tabs.last_child().expect("two tabs");
-    let (tab_x, _, tab_width, _) = bounds(&test, &last_tab);
-    assert_eq!(tab_x, 9 + 215 + 2, "tabs are 2 pixels apart");
-    let (plus_x, plus_y, plus_width, plus_height) = bounds(&test, &button_for(&test, "win.new-tab"));
-    assert_eq!(plus_x, tab_x + tab_width + 5, "5 pixels after the last tab");
-    assert_eq!((plus_y, plus_width, plus_height), (8, 38, 34));
+    let tab = bounds(&test, &last_tab);
+    assert_eq!(tab.x, 9 + 215 + 2, "tabs are 2 pixels apart");
+    let plus = bounds(&test, &button_for(&test, "win.new-tab"));
+    assert_eq!(plus.x, tab.right() + 5, "5 pixels after the last tab");
+    assert_eq!((plus.y, plus.width, plus.height), (8, 38, 34));
 }
 
 #[gtk::test]
@@ -62,13 +66,18 @@ fn the_caption_buttons_are_46_pixels_wide_and_as_tall_as_the_title_bar() {
     assert!(!captions.is_empty(), "the desktop's layout shows caption buttons");
     let window_width = test.window.width();
     for caption in &captions {
-        let (_, y, width, height) = bounds(&test, caption);
-        assert_eq!((y, width, height), (0, 46, 42), "{:?}", caption.tooltip_text());
+        let place = bounds(&test, caption);
+        assert_eq!(
+            (place.y, place.width, place.height),
+            (0, 46, 42),
+            "{:?}",
+            caption.tooltip_text()
+        );
     }
     let close = captions.iter().find(|button| button.has_css_class("close"));
     if let Some(close) = close {
-        let (x, _, width, _) = bounds(&test, close);
-        assert_eq!(x + width, window_width, "Close sits in the corner");
+        let place = bounds(&test, close);
+        assert_eq!(place.right(), window_width, "Close sits in the corner");
     }
 }
 
@@ -77,12 +86,12 @@ fn the_address_and_search_boxes_are_34_pixels_tall_14_pixels_below_the_title_bar
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let chrome = test.window.chrome();
-    let (address_x, address_y, _, address_height) = bounds(&test, &chrome.address.root);
-    assert_eq!((address_x, address_y, address_height), (178, 56, 34));
-    let (search_x, search_y, search_width, search_height) = bounds(&test, &chrome.search.root);
-    assert_eq!((search_y, search_width, search_height), (56, 235, 34));
+    let address = bounds(&test, &chrome.address.root);
+    assert_eq!((address.x, address.y, address.height), (178, 56, 34));
+    let search = bounds(&test, &chrome.search.root);
+    assert_eq!((search.y, search.width, search.height), (56, 235, 34));
     assert_eq!(
-        search_x + search_width,
+        search.right(),
         test.window.width() - 16,
         "the search box ends 16 pixels from the edge"
     );

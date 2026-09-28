@@ -41,17 +41,17 @@ fn quick_access_cards_stretch_across_the_page_in_equal_columns() {
         .collect();
     assert!(cards.len() >= 2, "the two pins at least");
     let first = &cards[0];
-    let (grid_x, _, grid_width, _) = bounds(&test, &grid);
-    assert_eq!(first.0, grid_x, "the first card starts at the grid's edge");
+    let grid_place = bounds(&test, &grid);
+    assert_eq!(first.x, grid_place.x, "the first card starts at the grid's edge");
     assert!(
-        cards.iter().all(|card| card.2 == first.2),
+        cards.iter().all(|card| card.width == first.width),
         "equal columns: {cards:?}"
     );
-    assert!(first.2 >= 170, "columns never narrower than 170 pixels");
-    let first_row: Vec<&Bounds> = cards.iter().filter(|card| card.1 == first.1).collect();
+    assert!(first.width >= 170, "columns never narrower than 170 pixels");
+    let first_row: Vec<&Bounds> = cards.iter().filter(|card| card.y == first.y).collect();
     let last = first_row.last().expect("the first row has a card");
     let columns = i32::try_from(first_row.len()).expect("a few columns");
-    let room_for_another = last.0 + last.2 + 12 + 170 <= grid_x + grid_width;
+    let room_for_another = last.right() + 12 + 170 <= grid_place.right();
     let cards_left = cards.len() > first_row.len();
     assert!(
         !(room_for_another && cards_left),

@@ -50,7 +50,7 @@ fn hint_is_drawn_in(test: &TestWindow, hex: &str) -> bool {
     channels.iter().all(|(a, b)| (a - b).abs() < 0.01)
 }
 
-/// parity: SEL-020
+/// parity: SEL-020, SEL-023
 #[gtk::test]
 fn typing_selects_the_next_matching_name_and_names_it_in_the_hint() {
     let fixture = Fixture::standard();
@@ -134,6 +134,7 @@ fn navigation_keys_start_a_new_prefix() {
     );
 }
 
+/// parity: SEL-029
 #[gtk::test]
 fn modifier_keys_keep_the_typed_prefix() {
     let fixture = Fixture::standard();

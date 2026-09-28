@@ -74,6 +74,7 @@ fn a_deep_path_and_many_tabs_do_not_widen_the_window() {
     assert!(minimum_width(&test) <= narrowest + 1, "many tabs scroll instead");
 }
 
+/// parity: NAV-017
 #[gtk::test]
 fn the_crumbs_stay_scrolled_to_the_current_folder() {
     let fixture = Fixture::standard();
@@ -146,7 +147,7 @@ fn escape_discards_the_typed_address() {
     );
 }
 
-/// parity: TAB-010
+/// parity: TAB-010, NAV-017
 #[gtk::test]
 fn the_title_crumbs_and_address_call_a_phone_by_its_mount_name() {
     let fixture = Fixture::standard();

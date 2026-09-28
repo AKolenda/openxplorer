@@ -271,19 +271,12 @@ fn closing_a_window_disconnects_it_from_the_shared_skin() {
 fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
     let grid = &test.window.content().grid;
     let scroll = grid.parent().expect("the icon view scrolls");
-    let tiles = descendants::<FileCell>(grid);
-    let bounds = tiles
+    let cells = descendants::<FileCell>(grid);
+    let bounds = cells
         .iter()
         .filter_map(WidgetExt::parent)
         .filter_map(|tile| tile.compute_bounds(&scroll))
-        .map(|rect| {
-            (
-                pixels(rect.x()),
-                pixels(rect.y()),
-                pixels(rect.width()),
-                pixels(rect.height()),
-            )
-        })
+        .map(|rect| Bounds::from_rect(&rect))
         .collect();
     (scroll.width(), bounds)
 }
@@ -306,11 +299,11 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     let columns = width / 135;
     assert!(columns >= 2, "a {width}-pixel pane holds several columns");
     let tile_width = (width - 20) / columns - 4;
-    assert_eq!(tiles[0], (10, 5, tile_width, 128), "the first tile");
-    let first_row: Vec<_> = tiles.iter().filter(|tile| tile.1 == 5).collect();
+    assert_eq!(tiles[0], Bounds::new(10, 5, tile_width, 128), "the first tile");
+    let first_row: Vec<_> = tiles.iter().filter(|tile| tile.y == 5).collect();
     assert_eq!(first_row.len(), usize::try_from(columns).expect("a few columns"));
-    let next_row = tiles.iter().find(|tile| tile.1 != 5).expect("a second row");
-    assert_eq!(next_row.1, 5 + 130, "rows are 130 pixels apart");
+    let next_row = tiles.iter().find(|tile| tile.y != 5).expect("a second row");
+    assert_eq!(next_row.y, 5 + 130, "rows are 130 pixels apart");
     let first_cell = descendants::<FileCell>(&test.window.content().grid)
         .into_iter()
         .next()

@@ -20,6 +20,7 @@ use crate::test_support::harness::{
     capture, capture_popover, descendants, wait_for, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::window::menu_popover::MenuPopover;
+use crate::window::widget_tree::children;
 
 /// Longer than the skin's 83 ms colour transitions (ui-spec.md M01).
 const TRANSITION_TIME: Duration = Duration::from_millis(150);
@@ -157,16 +158,8 @@ fn hovered_widgets(test: &TestWindow) -> Vec<gtk::Widget> {
     let new_tab = buttons
         .iter()
         .find(|button| button.action_name().as_deref() == Some("win.new-tab"));
-    let inactive_tab = test
-        .window
-        .chrome()
-        .tabs
-        .tab_list()
-        .observe_children()
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter_map(|tab| tab.downcast::<gtk::Widget>().ok())
-        .find(|tab| !tab.has_css_class("active"));
+    let tab_list = test.window.chrome().tabs.tab_list();
+    let inactive_tab = children(tab_list).find(|tab| !tab.has_css_class("active"));
     let file_row = descendants::<gtk::Widget>(&test.window.content().view_widget())
         .into_iter()
         .filter(|widget| widget.css_name() == "row")

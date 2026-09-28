@@ -88,6 +88,10 @@ fn folders_come_first_then_names_in_natural_order() {
     );
 }
 
+/// Rows show while the folder is still being listed, and a selection made
+/// among them is kept when the listing ends.
+///
+/// parity: PERF-002
 #[gtk::test]
 fn a_selection_made_while_listing_survives_the_end_of_the_listing() {
     let fixture = Fixture::standard();
@@ -337,9 +341,13 @@ fn the_loading_line_lies_over_the_pane_without_moving_the_items() {
         line.set_visible(true);
         line.height() > 0
     });
-    let (_, line_y, _, line_height) = bounds(&test, line);
-    let (_, pane_y, _, _) = bounds(&test, &content.root);
-    assert_eq!((line_y, line_height), (pane_y, 2), "2 pixels over the pane's top");
+    let line_place = bounds(&test, line);
+    let pane = bounds(&test, &content.root);
+    assert_eq!(
+        (line_place.y, line_place.height),
+        (pane.y, 2),
+        "2 pixels over the pane's top"
+    );
     assert_eq!(
         bounds(&test, &content.view_widget()),
         items_before,

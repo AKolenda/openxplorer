@@ -11,8 +11,36 @@ use gtk::prelude::*;
 
 use crate::test_support::harness::{descendants, wait_for_frames, TestWindow};
 
-/// A widget's place in the window: x, y, width and height in pixels.
-pub(super) type Bounds = (i32, i32, i32, i32);
+/// A widget's place, in whole pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Bounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+impl Bounds {
+    /// `width` by `height` pixels at (`x`, `y`).
+    pub const fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+        Self { x, y, width, height }
+    }
+
+    /// `rect` rounded to whole pixels.
+    pub fn from_rect(rect: &graphene::Rect) -> Self {
+        Self::new(
+            pixels(rect.x()),
+            pixels(rect.y()),
+            pixels(rect.width()),
+            pixels(rect.height()),
+        )
+    }
+
+    /// Where the right edge is.
+    pub const fn right(self) -> i32 {
+        self.x + self.width
+    }
+}
 
 /// Rounds a widget coordinate to whole pixels.
 #[expect(clippy::cast_possible_truncation, reason = "window coordinates are small")]
@@ -25,12 +53,7 @@ pub(super) fn bounds(test: &TestWindow, widget: &impl IsA<gtk::Widget>) -> Bound
     let rect = widget
         .compute_bounds(&test.window)
         .unwrap_or_else(graphene::Rect::zero);
-    (
-        pixels(rect.x()),
-        pixels(rect.y()),
-        pixels(rect.width()),
-        pixels(rect.height()),
-    )
+    Bounds::from_rect(&rect)
 }
 
 /// A window on `uri`, listed and drawn.

@@ -32,7 +32,7 @@ fn the_details_pane_gives_way_below_961_pixels_and_comes_back() {
         .and_then(|state| state.get::<bool>());
     assert_eq!(switched_on, Some(true), "still switched on");
     let tab = test.window.chrome().tabs.tab_list().first_child().expect("a tab");
-    assert_eq!(bounds(&test, &tab).2, 180, "narrower tabs");
+    assert_eq!(bounds(&test, &tab).width, 180, "narrower tabs");
     resize(&test, 1320);
     assert!(pane.is_visible(), "the pane comes back");
 }
@@ -67,7 +67,7 @@ fn the_name_column_keeps_260_pixels_and_the_list_scrolls_sideways() {
     let header = details.first_child().expect("the header");
     let name_title = header.first_child().expect("the Name title");
     assert_eq!(
-        bounds(&test, &name_title).2,
+        bounds(&test, &name_title).width,
         260 + 14,
         "260 pixels and the 14-pixel end"
     );

@@ -393,6 +393,7 @@ mod tests {
         assert_eq!(typeahead_hint(&result("", None), None), "");
     }
 
+    /// parity: SEL-029
     #[test]
     fn modifier_keys_keep_the_typed_prefix() {
         for key in [gdk::Key::Shift_L, gdk::Key::Caps_Lock, gdk::Key::ISO_Level3_Shift] {

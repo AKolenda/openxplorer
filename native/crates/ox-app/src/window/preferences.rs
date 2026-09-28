@@ -217,6 +217,7 @@ mod tests {
 
     use super::*;
 
+    /// parity: SIDE-023
     #[test]
     fn the_sidebar_starts_at_210_within_the_python_limits() {
         assert_eq!(start_sidebar_width(None), 210);

@@ -7,7 +7,7 @@
 
 use gtk::prelude::*;
 
-use super::geometry::{bounds, button_for, laid_out};
+use super::geometry::{bounds, button_for, laid_out, Bounds};
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 
 /// The sidebar row named `label`.
@@ -44,28 +44,32 @@ fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
     let fixture = Fixture::standard();
     let test = with_two_pins(&fixture);
     let home = bounds(&test, &row_named(&test, "Home"));
-    assert_eq!(home, (7, 173, 196, 35), "Home is 14 pixels below the command bar");
-    let quick_access: Vec<_> = descendants::<gtk::ListBoxRow>(test.window.sidebar().list())
+    assert_eq!(
+        home,
+        Bounds::new(7, 173, 196, 35),
+        "Home is 14 pixels below the command bar"
+    );
+    let quick_access: Vec<Bounds> = descendants::<gtk::ListBoxRow>(test.window.sidebar().list())
         .into_iter()
         .filter(|row| row.has_css_class("quick-access"))
         .map(|row| bounds(&test, &row))
         .collect();
     assert!(quick_access.len() >= 2, "the known folders and two pins");
-    assert_eq!(quick_access[0], (11, 234, 188, 35));
+    assert_eq!(quick_access[0], Bounds::new(11, 234, 188, 35));
     for pair in quick_access.windows(2) {
-        assert_eq!(pair[1].1 - pair[0].1, 35, "Quick access rows touch");
+        assert_eq!(pair[1].y - pair[0].y, 35, "Quick access rows touch");
     }
     let last = quick_access[quick_access.len() - 1];
     let this_pc = bounds(&test, &row_named(&test, "This PC"));
     let local_disk = bounds(&test, &row_named(&test, "Local Disk"));
     let separator_gap = 12 + 1 + 12;
     assert_eq!(
-        this_pc.1,
-        last.1 + 35 + 4 + 1 + separator_gap,
+        this_pc.y,
+        last.y + 35 + 4 + 1 + separator_gap,
         "4px padding and a 1px border end Quick access, then a separator"
     );
-    assert_eq!(local_disk.1 - this_pc.1, 36, "other rows are a pixel apart");
-    assert_eq!(this_pc.0, 7);
+    assert_eq!(local_disk.y - this_pc.y, 36, "other rows are a pixel apart");
+    assert_eq!(this_pc.x, 7);
 }
 
 #[gtk::test]
@@ -78,19 +82,20 @@ fn the_selected_row_shows_the_accent_bar_at_its_edge() {
         .into_iter()
         .find(|part| part.has_css_class("pill"))
         .expect("every row has the accent bar");
-    let (row_x, row_y, _, _) = bounds(&test, &documents);
+    let row = bounds(&test, &documents);
     // 3 x 16 with 2px corners (ui-spec.md §4.4; the web's is 3 x 15).
-    assert_eq!(bounds(&test, &bar), (row_x, row_y + 10, 3, 16));
+    assert_eq!(bounds(&test, &bar), Bounds::new(row.x, row.y + 10, 3, 16));
 }
 
+/// parity: SIDE-023
 #[gtk::test]
 fn the_sidebar_is_210_pixels_with_a_6_pixel_resizer() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let (_, _, sidebar_width, _) = bounds(&test, test.window.sidebar());
-    assert_eq!(sidebar_width, 210);
-    let (list_x, _, _, _) = bounds(&test, &test.window.content().root);
-    assert_eq!(list_x, 216, "the file list starts after the resizer");
+    let sidebar = bounds(&test, test.window.sidebar());
+    assert_eq!(sidebar.width, 210);
+    let list = bounds(&test, &test.window.content().root);
+    assert_eq!(list.x, 216, "the file list starts after the resizer");
 }
 
 #[gtk::test]
@@ -101,8 +106,12 @@ fn map_network_location_waits_below_the_list_for_its_milestone() {
     assert!(!button.is_sensitive(), "connecting to a share is not ported yet");
     let tooltip = button.tooltip_text().unwrap_or_default();
     assert!(tooltip.contains("network and device support"), "{tooltip}");
-    let (x, y, width, height) = bounds(&test, &button);
+    let place = bounds(&test, &button);
     let window_height = test.window.height();
-    assert_eq!((x, width, height), (7, 196, 34));
-    assert_eq!(y + height + 11 + 30, window_height, "above the status bar");
+    assert_eq!((place.x, place.width, place.height), (7, 196, 34));
+    assert_eq!(
+        place.y + place.height + 11 + 30,
+        window_height,
+        "above the status bar"
+    );
 }

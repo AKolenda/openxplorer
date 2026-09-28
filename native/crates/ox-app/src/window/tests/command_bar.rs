@@ -114,54 +114,63 @@ fn unported_file_commands_are_disabled_and_name_their_milestone() {
     );
 }
 
+/// The New menu of `openNewMenu`, a divider as `-`.
+const NEW_MENU: [&str; 10] = [
+    "Folder",
+    "Text document",
+    "File…",
+    "-",
+    "Markdown document",
+    "CSV file",
+    "JSON file",
+    "HTML document",
+    "-",
+    "From template…",
+];
+
+/// The Sort menu: the columns, then one item per direction.
+const SORT_MENU: [&str; 7] = [
+    "Name",
+    "Date modified",
+    "Type",
+    "Size",
+    "-",
+    "Ascending",
+    "Descending",
+];
+
+/// The appearance button's menu (`appearanceMenu`).
+const APPEARANCE_MENU: [&str; 3] = ["Light appearance", "Dark appearance", "Use system appearance"];
+
+/// How the More options menu starts.
+const MORE_MENU_START: [&str; 11] = [
+    "New window",
+    "Settings",
+    "Default file explorer…",
+    "Cache this folder for search",
+    "Map network location",
+    "Pin current folder",
+    "-",
+    "Light appearance",
+    "Dark appearance",
+    "Use system appearance",
+    "Show hidden files",
+];
+
+/// How the More options menu ends.
+const MORE_MENU_END: [&str; 3] = ["-", "License & source", "About this build"];
+
+/// parity: VIEW-013
 #[gtk::test]
 fn the_menus_list_the_current_items_between_the_same_dividers() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let new = [
-        "Folder",
-        "Text document",
-        "File…",
-        "-",
-        "Markdown document",
-        "CSV file",
-        "JSON file",
-        "HTML document",
-        "-",
-        "From template…",
-    ];
-    assert_eq!(menu_of(&test, "New").row_labels(), new);
-    let sort = [
-        "Name",
-        "Date modified",
-        "Type",
-        "Size",
-        "-",
-        "Ascending",
-        "Descending",
-    ];
-    assert_eq!(menu_of(&test, "Sort").row_labels(), sort);
-    let appearance = ["Light appearance", "Dark appearance", "Use system appearance"];
-    assert_eq!(menu_of(&test, "Light").row_labels(), appearance);
+    assert_eq!(menu_of(&test, "New").row_labels(), NEW_MENU);
+    assert_eq!(menu_of(&test, "Sort").row_labels(), SORT_MENU);
+    assert_eq!(menu_of(&test, "Light").row_labels(), APPEARANCE_MENU);
     let more = menu_of(&test, "More options").row_labels();
-    let expected_start = [
-        "New window",
-        "Settings",
-        "Default file explorer…",
-        "Cache this folder for search",
-        "Map network location",
-        "Pin current folder",
-        "-",
-        "Light appearance",
-        "Dark appearance",
-        "Use system appearance",
-        "Show hidden files",
-    ];
-    assert_eq!(&more[..expected_start.len()], expected_start);
-    assert_eq!(
-        &more[more.len() - 3..],
-        ["-", "License & source", "About this build"]
-    );
+    assert_eq!(&more[..MORE_MENU_START.len()], MORE_MENU_START);
+    assert_eq!(&more[more.len() - MORE_MENU_END.len()..], MORE_MENU_END);
 }
 
 /// parity: VIEW-006

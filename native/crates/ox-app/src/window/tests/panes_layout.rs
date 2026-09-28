@@ -28,10 +28,6 @@ fn first_row(test: &TestWindow) -> gtk::Widget {
         .expect("the fixture has rows")
 }
 
-fn right(bounds: Bounds) -> i32 {
-    bounds.0 + bounds.2
-}
-
 /// parity: VIEW-001
 #[gtk::test]
 fn columns_run_from_14_pixels_in_with_the_web_widths() {
@@ -42,20 +38,20 @@ fn columns_run_from_14_pixels_in_with_the_web_widths() {
         .iter()
         .map(|title| bounds(&test, title))
         .collect();
-    let widths: Vec<i32> = titles.iter().map(|title| title.2).collect();
+    let widths: Vec<i32> = titles.iter().map(|title| title.width).collect();
     assert_eq!(
         &widths[1..],
         [152, 135, 90 + 14],
         "Date, Type, and Size with the end padding"
     );
-    assert_eq!(titles[0].0, list.0, "Name holds the 14 pixels before the columns");
+    assert_eq!(titles[0].x, list.x, "Name holds the 14 pixels before the columns");
     assert_eq!(
-        right(titles[3]),
-        right(list),
+        titles[3].right(),
+        list.right(),
         "Size holds the 14 pixels after them"
     );
     assert!(
-        titles.iter().all(|title| title.3 == 37),
+        titles.iter().all(|title| title.height == 37),
         "37-pixel titles above a 1-pixel line"
     );
 }
@@ -70,8 +66,8 @@ fn the_size_title_is_right_aligned_and_only_the_sorted_column_has_an_arrow() {
     let size_label = labels.first().expect("the Size title has a label");
     assert_eq!(size_label.text().as_str(), "Size");
     assert_eq!(
-        right(bounds(&test, size_label)),
-        right(bounds(&test, size_title)) - 32,
+        bounds(&test, size_label).right(),
+        bounds(&test, size_title).right() - 32,
         "12 pixels of padding and the 14-pixel end, as `padding-right:17px` \
          plus the list's padding in style.css, and no room for an arrow"
     );
@@ -84,13 +80,16 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let test = laid_out(&fixture.uri());
     let list = bounds(&test, &test.window.content().details);
     let row = first_row(&test);
-    let (row_x, _, row_width, row_height) = bounds(&test, &row);
-    assert_eq!((row_x, row_width, row_height), (list.0 + 12, list.2 - 24, 36));
+    let row_place = bounds(&test, &row);
+    assert_eq!(
+        (row_place.x, row_place.width, row_place.height),
+        (list.x + 12, list.width - 24, 36)
+    );
     let title_x: Vec<i32> = column_titles(&test)
         .iter()
-        .map(|title| bounds(&test, title).0)
+        .map(|title| bounds(&test, title).x)
         .collect();
-    let cell_x: Vec<i32> = children(&row).map(|cell| bounds(&test, &cell).0).collect();
+    let cell_x: Vec<i32> = children(&row).map(|cell| bounds(&test, &cell).x).collect();
     assert_eq!(cell_x, title_x);
 }
 
@@ -99,18 +98,18 @@ fn the_details_pane_spaces_its_parts_as_the_current_app() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let pane = &test.window.details_pane().root;
-    let (pane_x, pane_y, pane_width, _) = bounds(&test, pane);
-    assert_eq!(pane_width, 262);
+    let pane_place = bounds(&test, pane);
+    assert_eq!(pane_place.width, 262);
     let frames = descendants::<gtk::CenterBox>(pane);
     let preview = frames.first().expect("the pane has a preview");
-    let (preview_x, preview_y, preview_width, preview_height) = bounds(&test, preview);
+    let preview_place = bounds(&test, preview);
     assert_eq!(
-        (preview_x, preview_width, preview_height),
-        (pane_x + 23, 217, 148)
+        (preview_place.x, preview_place.width, preview_place.height),
+        (pane_place.x + 23, 217, 148)
     );
     assert_eq!(
-        preview_y,
-        pane_y + 22 + 24 + 20,
+        preview_place.y,
+        pane_place.y + 22 + 24 + 20,
         "padding, the 24px header and its margin"
     );
 }
@@ -126,11 +125,13 @@ fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted()
         .map(|button| bounds(&test, button))
         .collect();
     assert!(
-        placed.iter().all(|button| (button.2, button.3) == (24, 24)),
+        placed
+            .iter()
+            .all(|button| (button.width, button.height) == (24, 24)),
         "{placed:?}"
     );
     for pair in placed.windows(2) {
-        assert_eq!(pair[1].0 - right(pair[0]), 3, "3 pixels apart");
+        assert_eq!(pair[1].x - pair[0].right(), 3, "3 pixels apart");
     }
     assert_eq!(
         test.window.chrome().status.active_view_buttons(),
