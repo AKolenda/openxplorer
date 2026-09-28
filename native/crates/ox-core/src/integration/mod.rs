@@ -72,8 +72,8 @@ pub use activation::{choose_application, Activation, OpenError};
 pub use app_catalog::{editor_shortcuts, unique_applications, EditorShortcut};
 pub use applications::{ApplicationDatabase, ApplicationInfo, InstalledApplications};
 pub use brave::{
-    BraveActivity, BraveChannel, BraveError, BraveIntegration, BravePaths, BraveProfile, BraveStatus,
-    Confirmation, DownloadPreference, ProcessTable, ProfileFailure, SandboxedBrave, SyncOutcome,
+    BraveActivity, BraveChannel, BraveError, BraveIntegration, BravePaths, BraveProfile, BraveReach,
+    BraveStatus, Confirmation, DownloadPreference, ProcessTable, ProfileFailure, SandboxedBrave, SyncOutcome,
     MANUAL_SETTINGS_URL,
 };
 pub use default_apps::{

@@ -96,6 +96,12 @@ impl Fixture {
         BraveIntegration::with_activity(&self.paths(), Sandbox::Host, activity)
     }
 
+    /// The integration as a Flatpak build of the app sets it up, over the
+    /// same folders.
+    fn brave_in_flatpak(&self) -> BraveIntegration<BraveSwitch> {
+        BraveIntegration::with_activity(&self.paths(), Sandbox::Flatpak, self.brave_switch.clone())
+    }
+
     fn sync(&self, confirmation: Confirmation) -> Result<SyncOutcome, BraveError> {
         self.brave()
             .sync(&[PROFILE_ID.to_owned()], &self.destination_text(), confirmation)

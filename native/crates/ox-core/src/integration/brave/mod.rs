@@ -15,7 +15,8 @@
 //! - No browser policy, credential, extension or `sudo` is involved.
 //!
 //! Inside a Flatpak sandbox the host's Brave profiles and processes are
-//! out of reach, so syncing and restoring are refused there.
+//! out of reach: the status says so ([`BraveReach::Sandboxed`]) and
+//! syncing and restoring are refused.
 //!
 //! | Module | Responsibility |
 //! |---|---|
@@ -79,9 +80,34 @@ impl BravePaths {
     }
 }
 
+/// Whether the app can see and change the host's Brave profiles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BraveReach {
+    /// The app runs on the host: its native profiles are listed and can
+    /// be changed.
+    Native,
+    /// The app runs inside Flatpak, which has its own processes and
+    /// configuration folder: the host's profiles, processes and installs
+    /// are out of sight, so the dialog shows the message of
+    /// [`BraveError::Sandboxed`] instead of profiles.
+    Sandboxed,
+}
+
+impl BraveReach {
+    /// What the app can reach from `sandbox`.
+    pub fn for_sandbox(sandbox: Sandbox) -> Self {
+        match sandbox {
+            Sandbox::Host => Self::Native,
+            Sandbox::Flatpak => Self::Sandboxed,
+        }
+    }
+}
+
 /// What the Brave dialog shows (INT-019).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BraveStatus {
+    /// Whether the host's profiles can be seen and changed at all.
+    pub reach: BraveReach,
     /// The native profiles that can be updated.
     pub profiles: Vec<BraveProfile>,
     /// Brave is running, or that cannot be told.
@@ -148,17 +174,49 @@ impl<A: BraveActivity> BraveIntegration<A> {
         &self.backups
     }
 
-    /// The detected native profiles.
+    /// The detected native profiles; none inside Flatpak, whose
+    /// configuration folder is the sandbox's, not the host's.
     pub fn profiles(&self) -> Vec<BraveProfile> {
-        profiles::detect_profiles(&self.config_home)
+        match BraveReach::for_sandbox(self.sandbox) {
+            BraveReach::Native => profiles::detect_profiles(&self.config_home),
+            BraveReach::Sandboxed => Vec::new(),
+        }
     }
 
     /// Everything the Brave dialog shows. Only reads.
     pub fn status(&self) -> BraveStatus {
+        match BraveReach::for_sandbox(self.sandbox) {
+            BraveReach::Native => self.status_on_host(),
+            BraveReach::Sandboxed => self.status_out_of_reach(),
+        }
+    }
+
+    /// The status on the host: the detected profiles and installs, and
+    /// whether Brave runs.
+    fn status_on_host(&self) -> BraveStatus {
         BraveStatus {
+            reach: BraveReach::Native,
             profiles: self.profiles(),
             is_running: self.activity.is_running(),
             sandboxed_installs: profiles::sandboxed_installs(&self.home),
+            backups: self.backups.clone(),
+        }
+    }
+
+    /// The status inside Flatpak.
+    ///
+    /// Safety rule "fail closed" (`browser_running` in
+    /// `brave_integration.py`): the sandbox's process table holds none of
+    /// the host's processes, so Brave counts as running because that
+    /// cannot be told. No profile or install is listed, since the
+    /// sandbox's configuration folder is not the host's and `~/.var/app`
+    /// is hidden from it.
+    fn status_out_of_reach(&self) -> BraveStatus {
+        BraveStatus {
+            reach: BraveReach::Sandboxed,
+            profiles: Vec::new(),
+            is_running: true,
+            sandboxed_installs: Vec::new(),
             backups: self.backups.clone(),
         }
     }

@@ -6,7 +6,10 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
-use ox_core::integration::{BraveActivity, BraveIntegration, ProcessTable, SandboxedBrave};
+use ox_core::integration::{
+    BraveActivity, BraveError, BraveIntegration, BraveReach, ProcessTable, SandboxedBrave,
+    MANUAL_SETTINGS_URL,
+};
 
 use super::{Fixture, PROFILE_ID};
 
@@ -96,6 +99,23 @@ fn a_process_table_that_cannot_be_read_counts_as_brave_running() {
     let root = tempfile::tempdir().expect("temporary folder");
 
     assert!(ProcessTable::at(&root.path().join("missing")).is_running());
+}
+
+/// parity: INT-019
+#[test]
+fn inside_flatpak_the_status_says_brave_cannot_be_reached() {
+    let fixture = Fixture::new();
+    fs::create_dir_all(fixture.home().join(".var/app/com.brave.Browser")).expect("Flatpak data");
+
+    let on_host = fixture.brave().status();
+    let in_flatpak = fixture.brave_in_flatpak().status();
+
+    assert_eq!(on_host.reach, BraveReach::Native);
+    assert_eq!(in_flatpak.reach, BraveReach::Sandboxed);
+    assert!(in_flatpak.is_running, "host processes cannot be seen");
+    assert!(in_flatpak.profiles.is_empty());
+    assert!(in_flatpak.sandboxed_installs.is_empty());
+    assert!(BraveError::Sandboxed.to_string().contains(MANUAL_SETTINGS_URL));
 }
 
 /// parity: INT-019

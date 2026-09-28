@@ -9,12 +9,11 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
-use ox_core::integration::{BraveError, BraveIntegration, Confirmation, Sandbox};
+use ox_core::integration::{BraveError, Confirmation};
 use serde_json::json;
 
 use super::{
-    mode_of, original_preferences, read_json, BraveSwitch, Fixture, PREFERENCES_WITH_ZOOM_LEVEL, PROFILE_ID,
-    ZOOM_LEVEL,
+    mode_of, original_preferences, read_json, Fixture, PREFERENCES_WITH_ZOOM_LEVEL, PROFILE_ID, ZOOM_LEVEL,
 };
 
 /// Ported from `desktop/tests/test_v07.py::BraveTests::test_explicit_consent`
@@ -311,7 +310,7 @@ fn a_volatile_system_folder_is_not_a_download_folder() {
 #[test]
 fn inside_flatpak_brave_is_never_changed() {
     let fixture = Fixture::new();
-    let brave = BraveIntegration::with_activity(&fixture.paths(), Sandbox::Flatpak, BraveSwitch::default());
+    let brave = fixture.brave_in_flatpak();
 
     let synced = brave.sync(
         &[PROFILE_ID.to_owned()],
