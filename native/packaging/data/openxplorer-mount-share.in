@@ -1,0 +1,13 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# The administrator's persistent SMB mount helper. The mount assistant in
+# Settings prints "sudo /usr/bin/openxplorer-mount-share --share ..." for
+# the user to review and run; the app never runs it. Until its interactive
+# command line is ported (native/ROADMAP.md, "Network and devices") it is
+# the Python app's desktop/mount_share.py, run in isolated mode so it
+# imports only its own root-owned folder and the standard library.
+if [ ! -x /usr/bin/python3 ]; then
+    echo "openxplorer-mount-share needs Python 3. Install the python3 package, then run it again." >&2
+    exit 1
+fi
+exec /usr/bin/python3 -I @HELPER_DIRECTORY@/mount_share.py "$@"

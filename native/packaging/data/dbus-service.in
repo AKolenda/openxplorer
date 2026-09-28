@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# D-Bus activation of the app under its own application ID, installed in
+# share/dbus-1/services and named after that ID. When the app is not running,
+# a request to its bus name (a notification action, `gapplication launch`)
+# starts it as a GApplication service, which opens a window only when asked.
+# It never claims org.freedesktop.FileManager1: that stays the opt-in
+# per-user file of "Show in folder" (native/packaging/README.md).
+[D-BUS Service]
+Name=@APP_ID@
+Exec=@COMMAND@ --gapplication-service

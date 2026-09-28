@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The Arch Linux package of the native app. It builds the preview
+# (openxplorer-native); set _app_id=io.winspace.Development for the stable
+# app, which the release replacing the Python app ships as openxplorer. The
+# source is openxplorer-<version>.tar.gz from native/tools/source_archive.py,
+# placed beside this file; native/packaging/README.md explains the
+# dependency grouping.
+# Maintainer: OpenXplorer contributors <maintainer@example.invalid>
+
+_app_id=${_app_id:-io.winspace.Development.Native}
+if [[ $_app_id == io.winspace.Development ]]; then
+  pkgname=openxplorer
+  pkgdesc='Explorer-style local and SMB file manager'
+else
+  pkgname=openxplorer-native
+  pkgdesc='Preview of the native OpenXplorer file manager'
+fi
+pkgver=0.1.0
+pkgrel=1
+arch=('x86_64' 'aarch64')
+url='https://openxplorer.app'
+# The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
+# Apache-2.0 or both, and their licences are installed beside it.
+license=('AGPL-3.0-only AND MIT AND Apache-2.0')
+# Arch lists the libraries a program links by hand. SQLite and libsoup are
+# the search cache's and the updater's; the program links them as soon as
+# the interface uses those services.
+depends=('glibc' 'gcc-libs' 'glib2' 'gtk4' 'pango' 'graphene' 'sqlite' 'libsoup3'
+         'hicolor-icon-theme')
+# glib-compile-resources, which build.rs runs, comes with glib2.
+makedepends=('cargo' 'python')
+checkdepends=('desktop-file-utils' 'appstream')
+optdepends=('gvfs: the Recycle Bin and the drive and phone list'
+            'gvfs-smb: SMB shares'
+            'gvfs-mtp: phones'
+            'gnome-keyring: remembering SMB passwords'
+            'xdg-utils: making OpenXplorer the default file manager'
+            'file-roller: Open in archive manager')
+if [[ $pkgname == openxplorer ]]; then
+  optdepends+=('python: the persistent SMB mount helper, openxplorer-mount-share'
+               'cifs-utils: the persistent SMB mount helper')
+fi
+# Cargo's release profile has no debug information, so a debug package would
+# be empty.
+options=('!debug')
+# The archive is written from the checkout being built, so it has no fixed
+# checksum; a published PKGBUILD names the release's archive and its SHA-256.
+source=("openxplorer-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "openxplorer-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/^host: //p')" \
+    --manifest-path native/Cargo.toml
+}
+
+build() {
+  cd "openxplorer-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  export OX_APP_ID=$_app_id
+  cargo build --frozen --release --manifest-path native/Cargo.toml \
+    --package ox-app --bin openxplorer-native
+}
+
+check() {
+  cd "openxplorer-$pkgver"
+  desktop-file-validate "native/packaging/data/$_app_id.desktop"
+  appstreamcli validate --no-net "native/packaging/data/$_app_id.metainfo.xml"
+}
+
+package() {
+  cd "openxplorer-$pkgver"
+  # The shared install layout of every package format.
+  python native/tools/package_data.py --app-id "$_app_id" --layout fhs \
+    --program target/release/openxplorer-native --destdir "$pkgdir"
+}

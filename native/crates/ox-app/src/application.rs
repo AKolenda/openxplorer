@@ -198,9 +198,9 @@ glib::wrapper! {
 }
 
 impl Application {
-    /// The application for `launch`, under the build's ID. A snapshot
-    /// runs as an instance of its own, so it never hands its window to a
-    /// running instance.
+    /// The application for `launch`, under the build's ID
+    /// ([`crate::config::APP_ID`]). A snapshot runs as an instance of its
+    /// own, so it never hands its window to a running instance.
     fn new(launch: Launch) -> Self {
         let mut flags = gio::ApplicationFlags::HANDLES_OPEN | gio::ApplicationFlags::HANDLES_COMMAND_LINE;
         if matches!(launch, Launch::Snapshot(_)) {
@@ -356,7 +356,9 @@ fn choose_renderer(arguments: &[String]) {
     }
 }
 
-/// Runs the app under the build's application ID. With
+/// Runs the app under the build's application ID (`APP_ID` in
+/// `config.rs`); the preview's own ID leaves installed file-manager
+/// defaults and the Python app's D-Bus name untouched. With
 /// `OPENXPLORER_SNAPSHOT` set it saves a picture of one window and quits
 /// instead (see `snapshot.rs`); otherwise the launch guard runs first.
 pub fn run() -> glib::ExitCode {

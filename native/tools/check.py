@@ -214,8 +214,9 @@ def private_user_directories(root: Path) -> dict[str, str]:
 def isolated_environment(root: Path) -> dict[str, str]:
     """Return an environment that keeps GTK, GIO and Python tests off the real session.
 
-    The display and session bus variables are removed, HOME and the XDG
-    directories point into root, and GSettings keeps its values in memory.
+    The display and session bus variables are removed, HOME, the XDG
+    directories and TMPDIR point into root, and GSettings keeps its values in
+    memory.
     GIO keeps using GVfs on purpose: the app relies on its smb:// and mtp://
     URI handling, and the tests exercise it. The private bus has no user
     mounts and GVfs does not mount remote locations on access; tests must
@@ -229,6 +230,12 @@ def isolated_environment(root: Path) -> dict[str, str]:
     for name in LIVE_SESSION_VARIABLES:
         environment.pop(name, None)
     environment.update(private_user_directories(root))
+    # Temporary files go into root, which is deleted after the run: Arch
+    # Linux's xvfb-run makes a directory under TMPDIR even when given
+    # --auth-file and removes it only when it exits normally, so a run stopped
+    # by a timeout would leave it behind. The user directories stay below
+    # TMPDIR, which the Recycle Bin tests require of XDG_DATA_HOME.
+    environment['TMPDIR'] = str(root)
     environment.update(GTK_AND_GIO_SETTINGS)
     return environment
 
@@ -236,9 +243,10 @@ def isolated_environment(root: Path) -> dict[str, str]:
 def isolated_command(root: Path, command: Sequence[str]) -> list[str]:
     """Wrap a command so it runs on a private X display and D-Bus session.
 
-    The X authority file is kept in root. Without --auth-file, xvfb-run makes
-    its own directory under TMPDIR and removes it only when it exits normally,
-    so a run stopped by a timeout would leave the directory behind.
+    The X authority file is kept in root. Without --auth-file, Debian's
+    xvfb-run makes its own directory under TMPDIR and removes it only when it
+    exits normally, so a run stopped by a timeout would leave the directory
+    behind. Arch Linux's makes one in any case; see isolated_environment.
     """
     return [
         'xvfb-run',

@@ -1,0 +1,122 @@
+name: Native distribution packages
+# Runs the native check driver on each supported distribution's own GTK,
+# GLib and GVfs, and builds, verifies and publishes the preview package of
+# that distribution's format, plus the Flatpak every distribution can
+# install. native/packaging/README.md describes the formats; native-checks.yml
+# stays the quick check on the minimum supported Rust.
+on:
+  pull_request:
+    # One list for both triggers, shared through a YAML anchor so the two
+    # cannot drift apart.
+    paths: &packaged-paths
+      # The app, its packaging and tools, and the Python mount helper and
+      # updater that the packages ship or must satisfy.
+      - 'native/**'
+      - 'desktop/**'
+      - 'licenses/**'
+      - 'LICENSE'
+      - 'THIRD_PARTY_NOTICES.md'
+      - '.github/workflows/native-distros.yml'
+  push:
+    branches: [main]
+    paths: *packaged-paths
+  workflow_dispatch:
+# The jobs only read the repository.
+permissions:
+  contents: read
+jobs:
+  distribution:
+    name: ${{ matrix.name }}
+    # Public code is checked on a hosted runner, never the production LAN host.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      # One distribution's failure must not hide the others' results.
+      fail-fast: false
+      matrix:
+        include:
+          # The rolling and newest releases track new GTK and GLib versions;
+          # Ubuntu 24.04 (Zorin OS 18) and Debian 13 are the oldest
+          # distributions with GTK 4.14, which the native packages need.
+          # Debian 12 has GTK 4.8, so its users install the Flatpak.
+          - name: Fedora
+            image: fedora:latest
+            family: fedora
+            format: rpm
+          - name: openSUSE Tumbleweed
+            image: opensuse/tumbleweed:latest
+            family: opensuse
+            format: rpm
+          - name: Arch Linux
+            image: archlinux:latest
+            family: arch
+            format: arch
+          - name: Ubuntu 24.04
+            image: ubuntu:24.04
+            family: debian
+            format: deb
+          - name: Debian 13
+            image: debian:13
+            family: debian
+            format: deb
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Install Git, so the checkout is a repository
+        # The source archives and the packages' timestamps come from the last
+        # commit, which a checkout without Git does not have.
+        run: |
+          case "${{ matrix.family }}" in
+            fedora) dnf -y install git-core ;;
+            opensuse) zypper --non-interactive install git-core ;;
+            arch) pacman -Syu --noconfirm --needed git ;;
+            debian) apt-get update && apt-get install -y git ca-certificates ;;
+          esac
+      # Actions are pinned to a commit, so a moved tag cannot change what runs.
+      # persist-credentials: false keeps the token out of .git/config, where
+      # later steps could read it.
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install the build, check and packaging tools
+        # Also adds the unprivileged user "builder" that the next steps use.
+        run: sh native/packaging/ci/prepare-container.sh "${{ matrix.family }}"
+      - name: Install Rust 1.92.0 and stable with rustup
+        run: runuser -u builder -- sh native/packaging/ci/install-rust.sh
+      - name: Run the native check driver
+        run: runuser -u builder -- sh native/packaging/ci/run-checks.sh
+      - name: Build and verify the ${{ matrix.format }} package
+        run: runuser -u builder -- sh native/packaging/ci/build-package.sh "${{ matrix.format }}"
+      - name: Publish the package as a workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openxplorer-native-${{ matrix.family }}-${{ matrix.format }}
+          path: dist/native/
+          if-no-files-found: error
+
+  flatpak:
+    name: Flatpak
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      # Flathub's image with flatpak-builder and the GNOME 51 SDK the
+      # manifest names; flatpak-builder needs a privileged container for its
+      # sandbox.
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Build the preview Flatpak and publish its bundle
+        # Builds offline from native/packaging/flatpak/cargo-sources.json and
+        # uploads io.winspace.Development.Native.flatpak as an artifact.
+        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
+        with:
+          manifest-path: native/packaging/flatpak/io.winspace.Development.Native.yml
+          bundle: io.winspace.Development.Native.flatpak
+          cache-key: flatpak-builder-${{ hashFiles('native/Cargo.lock') }}

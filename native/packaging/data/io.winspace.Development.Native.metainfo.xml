@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<!--
+  The AppStream description of the native preview, which runs beside the
+  Python app under its own ID until it replaces it. Its releases are marked
+  "development", so software centres never present it as the stable app.
+-->
+<component type="desktop-application">
+  <id>io.winspace.Development.Native</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <name>OpenXplorer Native Preview</name>
+  <summary>Preview of the native OpenXplorer file manager</summary>
+  <developer id="app.openxplorer">
+    <name>OpenXplorer contributors</name>
+  </developer>
+  <description>
+    <p>A preview of the next OpenXplorer, drawn with native GTK 4 widgets instead of a web page. It browses local folders, SMB shares and connected phones in the familiar tabbed window styled after Windows 11 File Explorer.</p>
+    <p>The preview is incomplete and runs beside the current OpenXplorer without replacing it. It never changes file associations, browser preferences or network mounts.</p>
+  </description>
+  <launchable type="desktop-id">io.winspace.Development.Native.desktop</launchable>
+  <icon type="stock">io.winspace.Development.Native</icon>
+  <provides>
+    <binary>openxplorer-native</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>FileManager</category>
+  </categories>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <branding>
+    <color type="primary" scheme_preference="light">#fcd53f</color>
+    <color type="primary" scheme_preference="dark">#7a5c00</color>
+  </branding>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-09-28" type="development"><description><p>First packaged native preview of the GTK 4 interface, for trying it beside the current OpenXplorer.</p></description></release>
+  </releases>
+  <url type="homepage">https://openxplorer.app</url>
+  <url type="help">https://openxplorer.app/docs/installation/</url>
+  <url type="vcs-browser">https://github.com/AKolenda/openxplorer</url>
+  <keywords>
+    <keyword>File Explorer</keyword>
+    <keyword>File Manager</keyword>
+    <keyword>files</keyword>
+    <keyword>folders</keyword>
+    <keyword>SMB</keyword>
+    <keyword>NAS</keyword>
+    <keyword>network</keyword>
+    <keyword>ZIP</keyword>
+  </keywords>
+</component>

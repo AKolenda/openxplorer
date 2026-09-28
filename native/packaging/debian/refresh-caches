@@ -1,0 +1,27 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# The postinst and postrm of both native packages, ported from CACHE_SCRIPT in
+# desktop/tools/build_deb.py. Safety rule "installing never changes user
+# state" (UPD-018): they refresh the application, icon and AppStream caches
+# and nothing else; defaults, user data, passwords, folder locations and
+# mounts stay as they are. The AppStream refresh is the one dpkg triggers do
+# not cover: appstream watches /usr/share/app-info, not the
+# /usr/share/swcatalog catalog that lets GNOME Software show the package as
+# OpenXplorer. $DPKG_ROOT is empty except in dpkg --root test installations.
+set -e
+
+case "$1" in
+    configure|remove|purge)
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q "$DPKG_ROOT/usr/share/applications" || true
+        fi
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q -f -t "$DPKG_ROOT/usr/share/icons/hicolor" || true
+        fi
+        if [ -z "$DPKG_ROOT" ] && command -v appstreamcli >/dev/null 2>&1; then
+            appstreamcli refresh-cache --force >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+exit 0

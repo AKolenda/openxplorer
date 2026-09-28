@@ -1,0 +1,37 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: OpenXplorer
+Upstream-Contact: OpenXplorer contributors
+Source: https://openxplorer.app
+Comment:
+ The native (Rust and GTK 4) OpenXplorer. The complete AGPL text is in
+ LICENSE in this directory and the other licence texts in licenses/. The
+ program also contains the Rust crates listed in rust-crates/INDEX.txt,
+ each under the licence named there; rust-crates/ holds the licence files
+ each crate ships.
+
+Files: *
+Copyright: 2026 OpenXplorer contributors
+License: AGPL-3.0-only
+ This program is distributed under the GNU Affero General Public License,
+ version 3 only. The complete licence is in LICENSE in this directory.
+
+Files: native/packaging/data/*.metainfo.xml
+Copyright: 2026 OpenXplorer contributors
+License: CC0-1.0
+ AppStream metadata is dedicated to the public domain under CC0 1.0.
+ See https://creativecommons.org/publicdomain/zero/1.0/
+
+Files: native/crates/ox-app/resources/icons/hicolor/*
+Copyright: Microsoft Corporation
+License: MIT
+ The application icon and the icons compiled into the program are
+ unmodified files from Microsoft's Fluent Emoji and Fluent UI System Icons.
+ Their MIT notices are in licenses/Fluent-Emoji-MIT.txt and
+ licenses/Fluent-UI-System-Icons-MIT.txt.
+
+Files: licenses/Winspace-MIT.txt
+Copyright: 2026 Winspace contributors
+License: MIT
+ OpenXplorer is based on Winspace. The original attribution and MIT grant
+ are preserved verbatim in licenses/Winspace-MIT.txt; the modified project
+ code is AGPL-3.0-only.
