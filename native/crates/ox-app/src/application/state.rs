@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::location::file_uri;
+use ox_core::location::{self, file_uri, VirtualPlace};
 use ox_core::settings::Settings;
 
 use crate::shared::AppContext;
@@ -44,7 +44,7 @@ impl AppState {
 
     /// The application state around an installed `skin`.
     fn with_skin(app: &gtk::Application, skin: Rc<Skin>, settings: Settings) -> Self {
-        let preferences = settings.data().preferences.clone();
+        let preferences = &settings.data().preferences;
         skin.set_preference(ThemePreference::parse(&preferences.theme));
         skin.set_text_size(preferences.text_size);
         let system_scheme = follow_system_scheme(&skin);
@@ -72,8 +72,12 @@ impl AppState {
         let start = start.unwrap_or(home.as_str());
         if let Err(error) = window.add_tab(start) {
             window.notify(error.message());
-            // The home folder always resolves; a window never opens empty.
-            let _ = window.add_tab(&home);
+            // A window never opens empty. The home page name resolves
+            // without the location check, which could refuse the home
+            // folder's own path (BrowserWindow::resolve_address).
+            window
+                .add_tab(VirtualPlace::Home.uri())
+                .expect("the home page name always resolves to the home folder");
         }
         if let Some(warning) = self.context.settings_warning() {
             window.notify(&warning);
@@ -123,9 +127,15 @@ impl AppState {
     /// folder, else at home (app.js `newWindow`).
     pub(super) fn new_window(&self, app: &gtk::Application) {
         let current = active_window(app).and_then(|window| window.current_uri());
-        let start = current.filter(|uri| uri.starts_with("file:") || uri.starts_with("smb:"));
+        let start = current.filter(|uri| is_real_folder(uri));
         self.open_window(app, start.as_deref());
     }
+}
+
+/// True for a location a new window can start in (`newWindow` in app.js):
+/// a local or SMB folder, not a landing page or a device.
+fn is_real_folder(uri: &str) -> bool {
+    matches!(location::scheme(uri).as_str(), "file" | "smb")
 }
 
 /// The focused browser window, else the most recent one.
@@ -141,24 +151,22 @@ pub(super) fn active_window(app: &gtk::Application) -> Option<BrowserWindow> {
 /// Applies the desktop's light or dark scheme to `skin` now and on every
 /// change.
 fn follow_system_scheme(skin: &Rc<Skin>) -> Rc<SystemScheme> {
-    let follower = Rc::downgrade(skin);
-    let scheme = SystemScheme::new(move |dark| {
-        if let Some(skin) = follower.upgrade() {
-            skin.set_system_dark(dark);
-        }
-    });
+    let scheme = SystemScheme::new(glib::clone!(
+        #[weak]
+        skin,
+        move |dark| skin.set_system_dark(dark)
+    ));
     skin.set_system_dark(scheme.is_dark());
     scheme
 }
 
 /// Applies the desktop's contrast to `skin` now and on every change.
 fn follow_contrast(skin: &Rc<Skin>) -> ContrastSetting {
-    let follower = Rc::downgrade(skin);
-    let setting = ContrastSetting::watch(move |contrast| {
-        if let Some(skin) = follower.upgrade() {
-            skin.set_contrast(contrast);
-        }
-    });
+    let setting = ContrastSetting::watch(glib::clone!(
+        #[weak]
+        skin,
+        move |contrast| skin.set_contrast(contrast)
+    ));
     skin.set_contrast(setting.contrast());
     setting
 }

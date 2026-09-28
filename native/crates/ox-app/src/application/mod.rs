@@ -26,6 +26,9 @@ use state::{active_window, AppState};
 /// The `--new-window` command-line option.
 const NEW_WINDOW_OPTION: &str = "new-window";
 
+/// The application action behind Ctrl+N and `--new-window`.
+const NEW_WINDOW_ACTION: &str = "new-window";
+
 /// How this process was started.
 #[derive(Debug)]
 enum Launch {
@@ -175,7 +178,7 @@ impl Application {
 
     /// Adds `app.new-window`, `app.focus-window` and `app.quit`.
     fn install_actions(&self) {
-        let new_window = gio::ActionEntry::builder("new-window")
+        let new_window = gio::ActionEntry::builder(NEW_WINDOW_ACTION)
             .activate(|app: &Self, _, _| {
                 if let Some(state) = app.imp().state.get() {
                     state.new_window(app.upcast_ref());
@@ -212,7 +215,7 @@ impl Application {
     /// the first) for another window; the launch then goes on as usual.
     fn handle_new_window_option(&self, options: &glib::VariantDict) {
         if options.contains(NEW_WINDOW_OPTION) && self.register(None::<&gio::Cancellable>).is_ok() {
-            self.activate_action("new-window", None);
+            self.activate_action(NEW_WINDOW_ACTION, None);
         }
     }
 
