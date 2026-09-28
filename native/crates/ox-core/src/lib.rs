@@ -22,6 +22,7 @@ pub mod clipboard;
 pub mod entry;
 pub mod format;
 pub mod gio_node;
+pub mod integration;
 pub mod location;
 pub mod places;
 pub mod settings;
