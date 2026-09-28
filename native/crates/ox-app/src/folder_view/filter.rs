@@ -7,7 +7,8 @@
 
 /// The current search text and hidden-file preference.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct FilterState {
+pub(crate) struct FilterState {
+    /// The lower-cased search terms; empty while nothing is searched.
     terms: Vec<String>,
     show_hidden: bool,
 }
@@ -38,15 +39,22 @@ impl FilterState {
         !self.terms.is_empty()
     }
 
-    /// Whether an item is shown. `lower_name` is the lower-cased display name.
-    pub fn accepts(&self, lower_name: &str, hidden: bool) -> bool {
-        let visible = self.show_hidden || !hidden;
-        visible && self.terms.iter().all(|term| lower_name.contains(term.as_str()))
+    /// Whether an item is shown: `lowercase_name` is its lower-cased display
+    /// name and `is_hidden` whether GIO marks it hidden.
+    pub fn accepts(&self, lowercase_name: &str, is_hidden: bool) -> bool {
+        let is_listed = self.show_hidden || !is_hidden;
+        is_listed && self.matches_every_term(lowercase_name)
+    }
+
+    fn matches_every_term(&self, lowercase_name: &str) -> bool {
+        self.terms
+            .iter()
+            .all(|term| lowercase_name.contains(term.as_str()))
     }
 }
 
 /// Splits search text into lower-cased terms.
-pub fn query_terms(query: &str) -> Vec<String> {
+fn query_terms(query: &str) -> Vec<String> {
     query
         .to_lowercase()
         .split_whitespace()
@@ -58,26 +66,35 @@ pub fn query_terms(query: &str) -> Vec<String> {
 mod tests {
     use super::*;
 
-    fn state(query: &str, show_hidden: bool) -> FilterState {
-        let mut state = FilterState::default();
-        state.set_query(query);
-        state.set_show_hidden(show_hidden);
-        state
+    /// A name GIO does not mark hidden, for [`FilterState::accepts`].
+    const LISTED: bool = false;
+    /// A name GIO marks hidden, for [`FilterState::accepts`].
+    const HIDDEN: bool = true;
+
+    /// A filter searching for `query` with hidden files not shown.
+    fn searching(query: &str) -> FilterState {
+        let mut filter = FilterState::default();
+        filter.set_query(query);
+        filter
     }
 
+    /// parity: SRCH-003
     #[test]
     fn every_term_must_match_somewhere() {
-        let filter = state("  Report  2026 ", false);
-        assert!(filter.accepts("quarterly report 2026.docx", false));
-        assert!(!filter.accepts("quarterly report 2025.docx", false));
+        let filter = searching("  Report  2026 ");
+        assert!(filter.accepts("quarterly report 2026.docx", LISTED));
+        assert!(!filter.accepts("quarterly report 2025.docx", LISTED));
     }
 
+    /// parity: SRCH-003, VIEW-023
     #[test]
     fn empty_search_shows_everything_visible() {
-        let filter = state("", false);
-        assert!(filter.accepts("anything", false));
-        assert!(!filter.accepts(".cache", true));
-        assert!(state("", true).accepts(".cache", true));
+        let filter = searching("");
+        assert!(filter.accepts("anything", LISTED));
+        assert!(!filter.accepts(".cache", HIDDEN));
+        let mut showing_hidden = searching("");
+        showing_hidden.set_show_hidden(true);
+        assert!(showing_hidden.accepts(".cache", HIDDEN));
     }
 
     #[test]
