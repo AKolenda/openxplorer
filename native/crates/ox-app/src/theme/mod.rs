@@ -15,10 +15,9 @@ mod providers;
 mod stylesheets;
 pub(crate) mod system;
 
-use gtk::gdk;
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gdk, gio, glib};
 
 pub(crate) use preference::{Appearance, ThemePreference};
 
@@ -226,4 +225,12 @@ impl Skin {
             .expect("the skin registers both of its signals");
         glib::signal::signal_has_handler_pending(self, signal, None, true)
     }
+}
+
+/// The desktop's settings under `schema_id` (GNOME's interface and
+/// accessibility keys), when that schema is installed.
+fn desktop_settings(schema_id: &str) -> Option<gio::Settings> {
+    let schema = gio::SettingsSchemaSource::default()?.lookup(schema_id, true)?;
+    let settings = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
+    Some(settings)
 }

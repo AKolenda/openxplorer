@@ -11,7 +11,9 @@ use gtk::gio;
 use gtk::prelude::*;
 
 const ACCESSIBILITY_SCHEMA: &str = "org.gnome.desktop.a11y.interface";
-const HIGH_CONTRAST_KEY: &str = "high-contrast";
+
+/// GNOME's key behind Settings > Accessibility > High Contrast.
+pub(crate) const HIGH_CONTRAST_KEY: &str = "high-contrast";
 
 /// How much contrast the desktop asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -48,14 +50,12 @@ impl ContrastSetting {
     }
 }
 
-/// GNOME's accessibility settings, when the schema and its key exist.
-fn accessibility_settings() -> Option<gio::Settings> {
-    let schema = gio::SettingsSchemaSource::default()?.lookup(ACCESSIBILITY_SCHEMA, true)?;
-    if !schema.has_key(HIGH_CONTRAST_KEY) {
-        return None;
-    }
-    let settings = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
-    Some(settings)
+/// GNOME's accessibility settings, when the schema and its
+/// [`HIGH_CONTRAST_KEY`] exist.
+pub(crate) fn accessibility_settings() -> Option<gio::Settings> {
+    let settings = super::desktop_settings(ACCESSIBILITY_SCHEMA)?;
+    let has_key = settings.settings_schema()?.has_key(HIGH_CONTRAST_KEY);
+    has_key.then_some(settings)
 }
 
 /// The contrast that `settings` ask for.

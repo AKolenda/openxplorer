@@ -6,13 +6,15 @@
 //! `color-scheme` key decides when the schema is installed (`prefer-dark`
 //! or `prefer-light`; `default` falls back to a GTK theme name containing
 //! "dark"). Without the schema, the XDG desktop portal's
-//! `org.freedesktop.appearance color-scheme` setting is read instead.
+//! `org.freedesktop.appearance color-scheme` setting is read instead, and
+//! while the portal has no preference, GTK's own dark preference as it was
+//! when the app started (`gtk_system_dark`).
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use gtk::prelude::*;
-use gtk::{gio, glib};
+use gtk::{gdk, gio, glib};
 
 use super::Appearance;
 
@@ -58,6 +60,20 @@ fn appearance_from_portal(value: u32) -> Option<Appearance> {
     }
 }
 
+/// GTK's own dark preference on `display` (`gtk-application-prefer-dark-theme`
+/// in the user's GTK settings). Read it before
+/// [`Skin::install`](super::Skin::install) forces the flag off: afterwards
+/// the flag only says which palette the skin drew last. winspace.py reads
+/// `gtk_system_dark` before theming, too.
+pub(crate) fn gtk_preference(display: &gdk::Display) -> Appearance {
+    let settings = gtk::Settings::for_display(display);
+    if settings.is_gtk_application_prefer_dark_theme() {
+        Appearance::Dark
+    } else {
+        Appearance::Light
+    }
+}
+
 /// The string value of `key`, when the installed `schema` has it.
 fn string_key(settings: &gio::Settings, schema: &gio::SettingsSchema, key: &str) -> Option<String> {
     if !schema.has_key(key) {
@@ -76,6 +92,10 @@ pub(crate) struct SystemScheme {
     gnome_settings: Option<gio::Settings>,
     /// The portal's last answer, when there is no GNOME schema.
     portal_appearance: Cell<Option<Appearance>>,
+    /// GTK's dark preference as read at startup, before the skin forced
+    /// it; the desktop's appearance when neither GNOME's keys nor the
+    /// portal decide.
+    gtk_fallback: Appearance,
     /// Hears the desktop's appearance whenever it may have changed.
     on_change: Box<dyn Fn(Appearance)>,
     /// Keeps the portal's `SettingChanged` subscription alive.
@@ -90,6 +110,7 @@ impl std::fmt::Debug for SystemScheme {
             .debug_struct("SystemScheme")
             .field("gnome_settings", &self.gnome_settings.is_some())
             .field("portal_appearance", &self.portal_appearance)
+            .field("gtk_fallback", &self.gtk_fallback)
             .finish_non_exhaustive()
     }
 }
@@ -98,17 +119,12 @@ impl SystemScheme {
     /// Starts watching and calls `on_change` with the desktop's appearance
     /// whenever the scheme changes. With no GNOME schema the portal is
     /// queried asynchronously, and `on_change` hears its answer.
-    pub(crate) fn new(on_change: impl Fn(Appearance) + 'static) -> Rc<Self> {
-        let gnome_settings = gio::SettingsSchemaSource::default()
-            .and_then(|source| source.lookup(INTERFACE_SCHEMA, true))
-            .map(|schema| gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None));
-        let scheme = Rc::new(Self {
-            gnome_settings,
-            portal_appearance: Cell::new(None),
-            on_change: Box::new(on_change),
-            portal_subscription: RefCell::new(None),
-            portal_signal_seen: Cell::new(false),
-        });
+    ///
+    /// `gtk_fallback` is GTK's dark preference from [`gtk_preference`],
+    /// read before the skin was installed.
+    pub(crate) fn new(gtk_fallback: Appearance, on_change: impl Fn(Appearance) + 'static) -> Rc<Self> {
+        let gnome_settings = super::desktop_settings(INTERFACE_SCHEMA);
+        let scheme = Rc::new(Self::unwatched(gnome_settings, gtk_fallback, Box::new(on_change)));
         match &scheme.gnome_settings {
             Some(settings) => scheme.watch_gnome_keys(settings),
             None => {
@@ -118,22 +134,36 @@ impl SystemScheme {
         scheme
     }
 
+    /// A scheme that reads `gnome_settings` but watches nothing yet.
+    fn unwatched(
+        gnome_settings: Option<gio::Settings>,
+        gtk_fallback: Appearance,
+        on_change: Box<dyn Fn(Appearance)>,
+    ) -> Self {
+        Self {
+            gnome_settings,
+            portal_appearance: Cell::new(None),
+            gtk_fallback,
+            on_change,
+            portal_subscription: RefCell::new(None),
+            portal_signal_seen: Cell::new(false),
+        }
+    }
+
+    /// A scheme as it is on a desktop without GNOME's schema before the
+    /// portal answers, for tests that set the portal's value themselves.
+    #[cfg(test)]
+    fn without_gnome_schema(gtk_fallback: Appearance) -> Self {
+        Self::unwatched(None, gtk_fallback, Box::new(|_| {}))
+    }
+
     /// The appearance the desktop asks for: GNOME's keys decide, else the
-    /// portal, else GTK's own dark preference.
+    /// portal, else the GTK preference read at startup, before the skin
+    /// forced it (`gtk_system_dark` in winspace.py).
     pub(crate) fn appearance(&self) -> Appearance {
-        if let Some(appearance) = self.gnome_appearance() {
-            return appearance;
-        }
-        if let Some(appearance) = self.portal_appearance.get() {
-            return appearance;
-        }
-        let prefers_dark =
-            gtk::Settings::default().is_some_and(|settings| settings.is_gtk_application_prefer_dark_theme());
-        if prefers_dark {
-            Appearance::Dark
-        } else {
-            Appearance::Light
-        }
+        self.gnome_appearance()
+            .or(self.portal_appearance.get())
+            .unwrap_or(self.gtk_fallback)
     }
 
     fn notify(&self) {
@@ -296,6 +326,37 @@ mod tests {
         assert_eq!(appearance_from_portal(1), Some(Appearance::Dark));
         assert_eq!(appearance_from_portal(2), Some(Appearance::Light));
         assert_eq!(appearance_from_portal(0), None);
+    }
+
+    /// Without GNOME's schema, a portal with no preference (0) leaves the
+    /// GTK preference read at startup in charge, not the palette the skin
+    /// has drawn on the display since.
+    ///
+    /// parity: LOOK-004
+    #[gtk::test]
+    fn a_portal_without_preference_falls_back_to_the_startup_gtk_preference() {
+        let display = gdk::Display::default().expect("GTK tests run on a private display");
+        let drawn_on_display = gtk_preference(&display);
+        let startup_preference = match drawn_on_display {
+            Appearance::Light => Appearance::Dark,
+            Appearance::Dark => Appearance::Light,
+        };
+        let scheme = SystemScheme::without_gnome_schema(startup_preference);
+        assert_eq!(
+            scheme.appearance(),
+            startup_preference,
+            "before the portal answers"
+        );
+
+        scheme.set_portal_value(2);
+        assert_eq!(scheme.appearance(), Appearance::Light, "the portal prefers light");
+
+        scheme.set_portal_value(0);
+        assert_eq!(
+            scheme.appearance(),
+            startup_preference,
+            "the portal has no preference"
+        );
     }
 
     /// One `SettingChanged` signal and the colour-scheme value expected
