@@ -16,12 +16,12 @@ use std::time::{Duration, Instant};
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::location::file_uri;
-use ox_core::settings::Settings;
+use ox_core::settings::{Settings, Theme};
 use tempfile::TempDir;
 
+use crate::app_context::AppContext;
 use crate::application::AppAction;
-use crate::shared::AppContext;
-use crate::theme::{Skin, ThemePreference};
+use crate::theme::Skin;
 use crate::window::BrowserWindow;
 
 /// How long a test waits for the window to settle before it fails.
@@ -321,18 +321,18 @@ impl Drop for TestWindow {
 /// Keeps the shared skin's theme choice for the length of a test that
 /// changes it.
 #[derive(Debug)]
-pub(crate) struct ThemeGuard(ThemePreference);
+pub(crate) struct ThemeGuard(Theme);
 
 impl ThemeGuard {
     /// Remembers the current choice; dropping the guard restores it.
     pub(crate) fn keep() -> Self {
-        Self(skin().preference())
+        Self(skin().theme())
     }
 }
 
 impl Drop for ThemeGuard {
     fn drop(&mut self) {
-        skin().set_preference(self.0);
+        skin().set_theme(self.0);
     }
 }
 

@@ -9,9 +9,10 @@
 
 use std::path::PathBuf;
 
+use ox_core::settings::Theme;
+
 use super::SnapshotError;
 use crate::settings_page::SettingsView;
-use crate::theme::ThemePreference;
 use crate::window::FolderView;
 
 /// The variable naming the PNG to write; its presence turns the hook on.
@@ -50,7 +51,7 @@ pub(crate) struct SnapshotRequest {
     /// The first tab's location, or `None` for the home folder.
     pub start: Option<String>,
     /// The theme to draw, or `None` for the saved one.
-    pub theme: Option<ThemePreference>,
+    pub theme: Option<Theme>,
     /// The folder view to show, or `None` for the saved one.
     pub view: Option<FolderView>,
     /// The window size, or `None` for the app's default.
@@ -80,7 +81,7 @@ impl SnapshotRequest {
             return Ok(None);
         };
         let theme = parse_variable(&lookup, THEME_VARIABLE, "light, dark or system", |value| {
-            ThemePreference::from_key(value)
+            Theme::from_key(value)
         })?;
         let view = parse_variable(&lookup, VIEW_VARIABLE, "details or an icon size", |value| {
             FolderView::from_key(value)
@@ -167,7 +168,7 @@ mod tests {
         let expected = SnapshotRequest {
             png: PathBuf::from("/tmp/window.png"),
             start: Some("pc:".to_owned()),
-            theme: Some(ThemePreference::Dark),
+            theme: Some(Theme::Dark),
             view: Some(FolderView::Icons(IconSize::Large)),
             size: Some(WindowSize {
                 width: 1440,

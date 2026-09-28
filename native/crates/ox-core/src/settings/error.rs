@@ -7,15 +7,12 @@
 //! stored data that fails validation, for a location or label it refuses,
 //! and for a file private storage refuses; here they are
 //! [`SettingsError::Invalid`], [`SettingsError::Location`] and
-//! [`SettingsError::Refused`]. A refusal names the refused path, as
-//! Python's `OSError` ([`SettingsError::Io`]) does, so the settings warning
-//! can say which file was refused.
-
-use std::io;
-use std::path::PathBuf;
+//! [`SettingsError::Storage`], which also carries Python's `OSError`. A
+//! storage error names the refused path, so the settings warning can say
+//! which file was refused.
 
 use crate::location::LocationError;
-use crate::private_storage::{StorageError, StorageRefusal};
+use crate::private_storage::StorageError;
 
 /// Why a settings change was refused or could not be saved.
 #[derive(Debug, thiserror::Error)]
@@ -29,25 +26,12 @@ pub enum SettingsError {
     /// message is user-facing.
     #[error(transparent)]
     Location(#[from] LocationError),
-    /// Private storage refused `path` (Python's `ValueError` in
+    /// Private storage refused a file (Python's `ValueError` in
     /// `private_storage.py`): it is not private, or its contents cannot be
-    /// read safely.
-    #[error("{reason} ({})", path.display())]
-    Refused {
-        /// The file or directory that was refused.
-        path: PathBuf,
-        /// Which private-storage rule it broke.
-        reason: StorageRefusal,
-    },
-    /// The file system refused an operation on `path` (Python's `OSError`),
-    /// for example because `settings.lock` is a symlink.
-    #[error("{error}: {}", path.display())]
-    Io {
-        /// The file or directory the operation was on.
-        path: PathBuf,
-        /// What the operating system reported.
-        error: io::Error,
-    },
+    /// read safely; or the file system refused an operation on it (Python's
+    /// `OSError`), for example because `settings.lock` is a symlink.
+    #[error(transparent)]
+    Storage(#[from] StorageError),
 }
 
 impl SettingsError {
@@ -59,25 +43,17 @@ impl SettingsError {
     /// Whether this is a missing file or directory, which Python reports as
     /// `FileNotFoundError` and the settings reader treats as a first start.
     pub(super) fn is_not_found(&self) -> bool {
-        matches!(self, Self::Io { error, .. } if error.kind() == io::ErrorKind::NotFound)
-    }
-}
-
-/// A private-storage error keeps its path, reason and message.
-impl From<StorageError> for SettingsError {
-    fn from(error: StorageError) -> Self {
-        match error {
-            StorageError::Refused { path, reason } => Self::Refused { path, reason },
-            StorageError::Io { path, error } => Self::Io { path, error },
-        }
+        matches!(self, Self::Storage(error) if error.is_not_found())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::path::Path;
 
     use super::*;
+    use crate::private_storage::StorageRefusal;
 
     /// The settings warning shows either type, so both must say the same.
     #[test]

@@ -23,13 +23,10 @@ use ox_core::location::same_location;
 use crate::icons::{self, Icon};
 
 use super::window_action::WindowAction;
-use super::{gestures, unported};
+use super::{gestures, preferences, unported};
 
 pub(super) use entries::sidebar_entries;
 use entries::{RowTarget, Section, SidebarEntry};
-
-/// The narrowest the list gets, the Python app's narrowest sidebar.
-const NARROWEST_LIST: i32 = 140;
 
 /// The "+" of Map network location.
 const MAP_NETWORK_GLYPH: i32 = 17;
@@ -44,7 +41,7 @@ mod imp {
 
     /// Private state of [`super::Sidebar`].
     #[derive(Debug, Default)]
-    pub struct Sidebar {
+    pub(crate) struct Sidebar {
         /// The rows, built by `constructed`.
         pub(super) list: OnceCell<gtk::ListBox>,
         /// What each row shows and does, in row order.
@@ -71,7 +68,7 @@ mod imp {
 
 glib::wrapper! {
     /// The navigation pane: the scrolling list above the footer button.
-    pub struct Sidebar(ObjectSubclass<imp::Sidebar>)
+    pub(crate) struct Sidebar(ObjectSubclass<imp::Sidebar>)
         @extends gtk::Box, gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
@@ -96,7 +93,8 @@ impl Sidebar {
         self.open_places_on_middle_click(&list);
         let scroller = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
-            .min_content_width(NARROWEST_LIST)
+            // The list is never narrower than the narrowest saved sidebar.
+            .min_content_width(*preferences::sidebar_widths().start())
             .vexpand(true)
             .child(&list)
             .build();

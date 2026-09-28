@@ -18,7 +18,7 @@ use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
-use ox_core::location::LocationContext;
+use ox_core::location::{is_smb_location, LocationContext};
 use ox_core::places::{NetworkKind, Place, SavedShare};
 
 use crate::icons::{self, Art, ArtImage, Connection, Icon};
@@ -27,7 +27,6 @@ use crate::places::Places;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
 use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
-use super::location_kind::is_smb_location;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
 use super::{gestures, network_page, unported};

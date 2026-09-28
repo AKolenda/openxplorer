@@ -38,7 +38,7 @@ impl<T: PartialEq> Outcome<T> {
     pub fn is_matched_by(&self, actual: &Result<T, LocationError>) -> bool {
         match (self, actual) {
             (Outcome::Value(expected), Ok(value)) => expected == value,
-            (Outcome::Error(message), Err(error)) => message == error.message(),
+            (Outcome::Error(message), Err(error)) => *message == error.to_string(),
             (Outcome::Rejected(_), Err(_)) => true,
             _ => false,
         }

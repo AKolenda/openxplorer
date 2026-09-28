@@ -18,7 +18,7 @@ pub(crate) struct History {
 
 impl History {
     /// A history holding only `uri`.
-    pub fn new(uri: &str) -> Self {
+    pub(crate) fn new(uri: &str) -> Self {
         Self {
             entries: vec![uri.to_string()],
             position: 0,
@@ -26,13 +26,13 @@ impl History {
     }
 
     /// The location currently shown.
-    pub fn current(&self) -> &str {
+    pub(crate) fn current(&self) -> &str {
         &self.entries[self.position]
     }
 
     /// Records a navigation to `uri`. Returns false (and changes nothing)
     /// when `uri` is already the current location.
-    pub fn push(&mut self, uri: &str) -> bool {
+    pub(crate) fn push(&mut self, uri: &str) -> bool {
         if self.current() == uri {
             return false;
         }
@@ -44,23 +44,23 @@ impl History {
 
     /// Replaces the current location without adding an entry, for example
     /// when a location resolves to a different canonical URI.
-    pub fn replace_current(&mut self, uri: &str) {
+    pub(crate) fn replace_current(&mut self, uri: &str) {
         self.entries[self.position] = uri.to_string();
     }
 
     /// True when Back has somewhere to go.
-    pub fn can_go_back(&self) -> bool {
+    pub(crate) fn can_go_back(&self) -> bool {
         self.position > 0
     }
 
     /// True when Forward has somewhere to go.
-    pub fn can_go_forward(&self) -> bool {
+    pub(crate) fn can_go_forward(&self) -> bool {
         self.position + 1 < self.entries.len()
     }
 
     /// Moves `delta` steps (negative for Back) and returns the new current
     /// location, or `None` (without moving) when that is out of range.
-    pub fn go(&mut self, delta: isize) -> Option<&str> {
+    pub(crate) fn go(&mut self, delta: isize) -> Option<&str> {
         let target = self.position.checked_add_signed(delta)?;
         if target >= self.entries.len() {
             return None;

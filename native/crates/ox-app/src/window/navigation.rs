@@ -130,7 +130,7 @@ impl BrowserWindow {
     /// Navigates, showing a refused address in the message line.
     pub(super) fn navigate_or_report(&self, address: &str) {
         if let Err(error) = self.navigate(address) {
-            self.show_message(error.message());
+            self.show_message(&error.to_string());
         }
     }
 

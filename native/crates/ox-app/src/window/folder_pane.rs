@@ -65,7 +65,7 @@ mod imp {
 
     /// Private state of [`super::FolderPane`].
     #[derive(Debug, Default)]
-    pub struct FolderPane {
+    pub(crate) struct FolderPane {
         /// The widgets and the folder model, built by `constructed`.
         pub(super) parts: OnceCell<PaneParts>,
     }
@@ -105,7 +105,7 @@ mod imp {
 
 glib::wrapper! {
     /// The folder pane, with the shared folder model of its window.
-    pub struct FolderPane(ObjectSubclass<imp::FolderPane>)
+    pub(crate) struct FolderPane(ObjectSubclass<imp::FolderPane>)
         @extends gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }

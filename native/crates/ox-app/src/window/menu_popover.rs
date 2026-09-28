@@ -191,7 +191,7 @@ mod imp {
 
     /// Private state of [`super::MenuPopover`].
     #[derive(Debug, Default)]
-    pub struct MenuPopover {
+    pub(crate) struct MenuPopover {
         /// The rows, built by `constructed`.
         pub(super) list: OnceCell<gtk::ListBox>,
         /// What the rows show, dividers included.
@@ -250,7 +250,7 @@ mod imp {
 
 glib::wrapper! {
     /// A drop-down menu of [`MenuEntry`] rows.
-    pub struct MenuPopover(ObjectSubclass<imp::MenuPopover>)
+    pub(crate) struct MenuPopover(ObjectSubclass<imp::MenuPopover>)
         @extends gtk::Popover, gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget,
             gtk::Native, gtk::ShortcutManager;
@@ -308,7 +308,7 @@ impl MenuPopover {
 
     /// The labels of the rows, a divider as `-`, for tests.
     #[cfg(test)]
-    pub fn row_labels(&self) -> Vec<String> {
+    pub(crate) fn row_labels(&self) -> Vec<String> {
         let mut labels = Vec::new();
         for row in self.rows() {
             if row.header().is_some() {
@@ -321,7 +321,7 @@ impl MenuPopover {
 
     /// The rows, for tests.
     #[cfg(test)]
-    pub fn rows(&self) -> Vec<gtk::ListBoxRow> {
+    pub(crate) fn rows(&self) -> Vec<gtk::ListBoxRow> {
         super::widget_tree::children(self.list())
             .filter_map(|child| child.downcast::<gtk::ListBoxRow>().ok())
             .collect()
@@ -329,7 +329,7 @@ impl MenuPopover {
 
     /// The labels of the rows showing a check mark, for tests.
     #[cfg(test)]
-    pub fn checked_labels(&self) -> Vec<String> {
+    pub(crate) fn checked_labels(&self) -> Vec<String> {
         let checked = self.rows().into_iter().filter(|row| row.has_css_class("checked"));
         checked.filter_map(|row| row_label(&row)).collect()
     }

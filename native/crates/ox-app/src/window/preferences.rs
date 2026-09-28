@@ -10,24 +10,20 @@
 //! columns to their default widths.
 
 use std::cell::Cell;
+use std::ops::RangeInclusive;
 use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::settings::{Column, PreferencesUpdate, SettingsError};
-
-use crate::theme::ThemePreference;
+use ox_core::settings::{ColumnWidth, PreferencesUpdate, SettingsError, Theme, SIDEBAR_WIDTHS};
 
 use super::folder_pane::FolderView;
 use super::BrowserWindow;
+use crate::text_size::TextSize;
 
 /// Sidebar width nobody changed (`resetLayout` in app.js).
 const DEFAULT_SIDEBAR_WIDTH: i32 = 210;
-/// The narrowest sidebar the Python app saves.
-const NARROWEST_SIDEBAR: i32 = 140;
-/// The widest sidebar the Python app saves.
-const WIDEST_SIDEBAR: i32 = 560;
 
 /// Room the folder pane keeps beside the sidebar (`sidebarLimit` in app.js).
 const FOLDER_PANE_ROOM: i32 = 300;
@@ -45,13 +41,13 @@ pub(super) enum Preference {
     /// Show the details pane.
     DetailsPane(bool),
     /// System, Light or Dark.
-    Theme(ThemePreference),
-    /// Text size in percent.
-    TextSize(u32),
+    Theme(Theme),
+    /// Text size.
+    TextSize(TextSize),
     /// Sidebar width in pixels.
     SidebarWidth(i32),
     /// The details columns the user sized, in pixels.
-    ColumnWidths(Vec<(Column, f64)>),
+    ColumnWidths(Vec<ColumnWidth>),
     /// The default sidebar width and column widths (`resetLayout`).
     DefaultLayout,
 }
@@ -64,8 +60,8 @@ impl Preference {
             Preference::View(view) => update.view = Some(view.setting()),
             Preference::ShowHidden(show) => update.show_hidden = Some(show),
             Preference::DetailsPane(show) => update.show_details_pane = Some(show),
-            Preference::Theme(theme) => update.theme = Some(theme.into()),
-            Preference::TextSize(size) => update.text_size = Some(size),
+            Preference::Theme(theme) => update.theme = Some(theme),
+            Preference::TextSize(size) => update.text_size = Some(size.percent()),
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
             Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
             Preference::DefaultLayout => {
@@ -78,14 +74,30 @@ impl Preference {
     }
 }
 
+/// The sidebar widths the settings save (ox-core's [`SIDEBAR_WIDTHS`]),
+/// in GTK's pixels. The window never shows a width the settings would
+/// refuse to save, nor saves one the Python app would ignore.
+///
+/// # Panics
+///
+/// Never: the settings' limits are a few hundred pixels.
+pub(super) fn sidebar_widths() -> RangeInclusive<i32> {
+    let pixels = |width: u32| i32::try_from(width).expect("sidebar widths are a few hundred pixels");
+    pixels(*SIDEBAR_WIDTHS.start())..=pixels(*SIDEBAR_WIDTHS.end())
+}
+
+/// `width` limited to [`sidebar_widths`].
+fn clamp_sidebar_width(width: i32) -> i32 {
+    let limits = sidebar_widths();
+    width.clamp(*limits.start(), *limits.end())
+}
+
 /// The sidebar width to start with: the saved one within the Python app's
 /// limits, else 210.
 fn start_sidebar_width(saved: Option<u32>) -> i32 {
     saved
         .and_then(|width| i32::try_from(width).ok())
-        .map_or(DEFAULT_SIDEBAR_WIDTH, |width| {
-            width.clamp(NARROWEST_SIDEBAR, WIDEST_SIDEBAR)
-        })
+        .map_or(DEFAULT_SIDEBAR_WIDTH, clamp_sidebar_width)
 }
 
 /// The widest the sidebar may be in a workspace `workspace_width` pixels
@@ -93,7 +105,7 @@ fn start_sidebar_width(saved: Option<u32>) -> i32 {
 /// keeps its room (`sidebarLimit` in app.js).
 fn widest_sidebar(workspace_width: i32, details_width: i32) -> i32 {
     let room_left = workspace_width - details_width - FOLDER_PANE_ROOM;
-    room_left.clamp(NARROWEST_SIDEBAR, WIDEST_SIDEBAR)
+    clamp_sidebar_width(room_left)
 }
 
 impl BrowserWindow {

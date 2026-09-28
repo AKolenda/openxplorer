@@ -39,7 +39,7 @@ pub(crate) enum Page {
 
 impl Page {
     /// Every page, in sidebar order, then Settings.
-    pub const ALL: [Page; 3] = [Page::ThisPc, Page::Network, Page::Settings];
+    pub(crate) const ALL: [Page; 3] = [Page::ThisPc, Page::Network, Page::Settings];
 
     /// The ox-core place the page draws.
     const fn place(self) -> VirtualPlace {
@@ -56,13 +56,13 @@ impl Page {
     }
 
     /// The canonical URI that identifies the page in tab history.
-    pub fn uri(self) -> &'static str {
+    pub(crate) fn uri(self) -> &'static str {
         self.place().uri()
     }
 
     /// The page for a URI, including the web UI's spellings (`pc:`,
     /// `network:`).
-    pub fn from_uri(uri: &str) -> Option<Page> {
+    pub(crate) fn from_uri(uri: &str) -> Option<Page> {
         VirtualPlace::from_uri(uri).and_then(Self::from_place)
     }
 
@@ -70,18 +70,18 @@ impl Page {
     ///
     /// Settings is never typed by title: the address bar is hidden on it,
     /// and a folder called Settings must still open when its name is typed.
-    pub fn from_title(text: &str) -> Option<Page> {
+    pub(crate) fn from_title(text: &str) -> Option<Page> {
         let page = VirtualPlace::from_title(text).and_then(Self::from_place);
         page.filter(|page| *page != Page::Settings)
     }
 
     /// Heading, tab title and breadcrumb label.
-    pub fn title(self) -> &'static str {
+    pub(crate) fn title(self) -> &'static str {
         self.place().title()
     }
 
     /// The line under the heading (`renderLanding` and `renderNetwork`).
-    pub const fn subtitle(self) -> &'static str {
+    pub(crate) const fn subtitle(self) -> &'static str {
         match self {
             Page::ThisPc => "Folders, devices, and connected storage.",
             Page::Network => "Find shared storage on your local network, or enter an address.",
@@ -91,7 +91,7 @@ impl Page {
 
     /// Glyph for the sidebar, the address bar and the tab: a laptop for
     /// This PC, connected nodes for Network and the gear for Settings.
-    pub const fn icon(self) -> Icon {
+    pub(crate) const fn icon(self) -> Icon {
         match self {
             Page::ThisPc => Icon::Laptop,
             Page::Network => Icon::Organization,

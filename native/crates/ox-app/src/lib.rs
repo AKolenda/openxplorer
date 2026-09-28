@@ -6,7 +6,14 @@
 //! module is private to the crate, so the compiler reports anything the
 //! app no longer uses. The GTK tests of the window live beside it in
 //! `window::tests` and reach its internals directly.
+//!
+//! Since no other crate can reach an item here, a plain `pub` would claim
+//! a visibility no item has; `unreachable_pub` makes the compiler ask for
+//! `pub(crate)` or narrower on every item, so the declared visibility is
+//! the real one.
+#![warn(unreachable_pub)]
 
+mod app_context;
 pub mod application;
 mod config;
 mod folder_view;
@@ -16,7 +23,6 @@ mod locations;
 mod places;
 mod settings_page;
 mod settings_store;
-mod shared;
 mod snapshot;
 mod text_size;
 mod theme;

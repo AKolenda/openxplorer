@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Compiles the vendored icons into `icons.gresource`, which
-//! `src/icons/mod.rs` includes in the binary with
+//! `src/icons.rs` includes in the binary with
 //! `gio::resources_register_include!`.
 //!
 //! `glib-compile-resources` must be installed; it comes with the `GLib`

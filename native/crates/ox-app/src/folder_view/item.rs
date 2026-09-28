@@ -47,7 +47,7 @@ mod imp {
 
     /// Private state of [`super::FileItem`]; set once at construction.
     #[derive(Debug, Default)]
-    pub struct FileItem {
+    pub(crate) struct FileItem {
         /// The entry and what is computed from it, set by
         /// [`super::FileItem::new`].
         pub(super) prepared: OnceCell<PreparedEntry>,
@@ -64,7 +64,7 @@ mod imp {
 
 glib::wrapper! {
     /// One row of a folder listing.
-    pub struct FileItem(ObjectSubclass<imp::FileItem>);
+    pub(crate) struct FileItem(ObjectSubclass<imp::FileItem>);
 }
 
 impl FileItem {

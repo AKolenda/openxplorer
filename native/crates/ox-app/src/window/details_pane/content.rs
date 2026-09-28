@@ -11,13 +11,12 @@
 
 use ox_core::entry::Entry;
 use ox_core::format;
-use ox_core::location::{parent_location, LocationContext};
+use ox_core::location::{is_smb_location, parent_location, LocationContext};
 use ox_core::places::NetworkLocation;
 
 use crate::folder_view::item::FileItem;
 use crate::icons::Art;
 use crate::locations::Page;
-use crate::window::location_kind::{is_smb_location, smb_location_art};
 
 /// The note for SMB folders.
 const NETWORK_NOTE: &str =
@@ -181,7 +180,7 @@ fn folder_heading(facts: &PaneFacts<'_>) -> FolderHeading {
 /// shows, else the folder.
 fn folder_art(facts: &PaneFacts<'_>) -> Art {
     if is_smb_location(facts.folder_uri) {
-        smb_location_art(facts.folder_uri, facts.network)
+        Art::for_smb_location(facts.folder_uri, facts.network)
     } else {
         Art::Folder
     }

@@ -152,19 +152,19 @@ pub(crate) struct Controller {
 impl Controller {
     /// The prefix typed so far.
     #[cfg(test)]
-    pub fn prefix(&self) -> &str {
+    pub(crate) fn prefix(&self) -> &str {
         &self.prefix
     }
 
     /// Forgets the typed prefix.
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.prefix.clear();
         self.last_key = None;
     }
 
     /// True while a prefix is being typed at time `now`: it is not empty
     /// and its last key is less than [`PREFIX_TIMEOUT`] old.
-    pub fn is_active(&self, now: Duration) -> bool {
+    pub(crate) fn is_active(&self, now: Duration) -> bool {
         let Some(last_key) = self.last_key else {
             return false;
         };
@@ -177,7 +177,7 @@ impl Controller {
     /// Adds `key` to the prefix at time `now` and finds the row to select
     /// among `rows`. Returns `None` (leaving the prefix unchanged) when
     /// `key` is not a printable character.
-    pub fn push<F, S>(&mut self, key: &str, rows: &Rows<F>, now: Duration) -> Option<PrefixMatch>
+    pub(crate) fn push<F, S>(&mut self, key: &str, rows: &Rows<F>, now: Duration) -> Option<PrefixMatch>
     where
         F: Fn(u32) -> S,
         S: AsRef<str>,
@@ -204,7 +204,7 @@ impl Controller {
     /// Removes the last typed character at time `now` and finds the row to
     /// select among `rows`. Returns `None` (and resets) when no prefix is
     /// active, so Backspace then has no effect on the selection.
-    pub fn backspace<F, S>(&mut self, rows: &Rows<F>, now: Duration) -> Option<PrefixMatch>
+    pub(crate) fn backspace<F, S>(&mut self, rows: &Rows<F>, now: Duration) -> Option<PrefixMatch>
     where
         F: Fn(u32) -> S,
         S: AsRef<str>,

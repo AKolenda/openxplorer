@@ -125,6 +125,7 @@ pub(crate) struct StagedCopy<'a> {
     /// Replace overwrites files and merges folders; every other policy
     /// publishes without overwriting.
     pub(crate) policy: ConflictPolicy,
+    /// The user's cancellation, checked before each step of the copy.
     pub(crate) cancel: &'a Cancellation,
     /// Asked about every destination a Replace changes.
     pub(crate) guard: Option<&'a WriteGuard>,

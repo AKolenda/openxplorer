@@ -76,6 +76,16 @@ impl Column {
     }
 }
 
+/// The width the Details view measured for one column, before it is
+/// checked against [`Column::width_range`] and rounded.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ColumnWidth {
+    /// The column.
+    pub column: Column,
+    /// Its width in pixels.
+    pub pixels: f64,
+}
+
 /// Saved Details-view column widths; unset columns use their default width.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,10 +120,11 @@ impl ColumnWidths {
     }
 
     /// Keeps only in-range widths, rounded like Python's `round()`.
-    pub fn from_values(values: &[(Column, f64)]) -> Self {
+    pub fn from_values(values: &[ColumnWidth]) -> Self {
         let mut widths = Self::default();
-        for &(column, requested) in values {
-            if let Some(width) = bounded_width(requested, column.width_range()) {
+        for requested in values {
+            let column = requested.column;
+            if let Some(width) = bounded_width(requested.pixels, column.width_range()) {
                 *widths.width_mut(column) = Some(width);
             }
         }
@@ -232,7 +243,7 @@ pub struct PreferencesUpdate {
     /// New sidebar width in pixels; rounded when saved.
     pub sidebar_width: Option<f64>,
     /// Replaces all column widths; an empty list resets them.
-    pub column_widths: Option<Vec<(Column, f64)>>,
+    pub column_widths: Option<Vec<ColumnWidth>>,
     /// New context menu style.
     pub context_menu: Option<ContextMenu>,
     /// New network refresh interval in seconds.
@@ -292,11 +303,11 @@ fn read_network_interval(value: &Value) -> Option<u32> {
 /// The numeric widths of the known columns in a `columnWidths` object;
 /// `None` if it is not an object. Out-of-range widths are dropped when
 /// applied.
-fn read_column_widths(value: &Value) -> Option<Vec<(Column, f64)>> {
+fn read_column_widths(value: &Value) -> Option<Vec<ColumnWidth>> {
     let columns = value.as_object()?;
     let numeric_width = |column: Column| {
-        let width = columns.get(column.as_str())?.as_f64()?;
-        Some((column, width))
+        let pixels = columns.get(column.as_str())?.as_f64()?;
+        Some(ColumnWidth { column, pixels })
     };
     Some(Column::ALL.into_iter().filter_map(numeric_width).collect())
 }
@@ -389,7 +400,16 @@ mod tests {
     /// parity: VIEW-028
     #[test]
     fn column_widths_keep_only_known_in_range_columns() {
-        let widths = ColumnWidths::from_values(&[(Column::Name, 150.0), (Column::Size, 99_999.0)]);
+        let widths = ColumnWidths::from_values(&[
+            ColumnWidth {
+                column: Column::Name,
+                pixels: 150.0,
+            },
+            ColumnWidth {
+                column: Column::Size,
+                pixels: 99_999.0,
+            },
+        ]);
         assert_eq!(widths.get(Column::Name), Some(150));
         assert_eq!(widths.get(Column::Size), None);
         let json = serde_json::to_value(&widths).unwrap();

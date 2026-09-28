@@ -530,8 +530,8 @@ mod tests {
     fn bracket_mistakes_are_refused_in_the_app_wording() {
         for case in &BRACKET_REFUSALS {
             let result = split_location(case.location);
-            let refusal = result.as_ref().map_err(LocationError::message);
-            assert_eq!(refusal, Err(case.message), "{}", case.location);
+            let refusal = result.as_ref().map_err(ToString::to_string);
+            assert_eq!(refusal, Err(case.message.to_owned()), "{}", case.location);
         }
     }
 

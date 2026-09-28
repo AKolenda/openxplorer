@@ -29,7 +29,7 @@ mod imp {
 
     /// Private state of [`super::Toast`].
     #[derive(Debug, Default)]
-    pub struct Toast {
+    pub(crate) struct Toast {
         /// The message, built by `constructed`.
         pub(super) label: OnceCell<gtk::Label>,
         /// The pending hide, while one runs. The timer clears it when it
@@ -74,7 +74,7 @@ mod imp {
 
 glib::wrapper! {
     /// The toast, to lay over the window's workspace.
-    pub struct Toast(ObjectSubclass<imp::Toast>)
+    pub(crate) struct Toast(ObjectSubclass<imp::Toast>)
         @extends gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
@@ -93,7 +93,7 @@ impl Toast {
 
     /// Shows `message` for [`TOAST_DURATION`], replacing the message shown
     /// now and starting the time again.
-    pub fn show(&self, message: &str) {
+    pub(crate) fn show(&self, message: &str) {
         self.cancel_hide_timer();
         self.label().set_text(message);
         self.set_visible(true);
@@ -113,7 +113,7 @@ impl Toast {
     }
 
     /// Hides the toast at once, as moving to another folder or tab does.
-    pub fn hide(&self) {
+    pub(crate) fn hide(&self) {
         self.cancel_hide_timer();
         self.label().set_text("");
         self.set_visible(false);
@@ -121,7 +121,7 @@ impl Toast {
 
     /// The message shown last, for tests.
     #[cfg(test)]
-    pub fn text(&self) -> glib::GString {
+    pub(crate) fn text(&self) -> glib::GString {
         self.label().text()
     }
 

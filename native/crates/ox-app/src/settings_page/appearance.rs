@@ -13,7 +13,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::settings::{ContextMenu, PreferencesUpdate};
+use ox_core::settings::{ContextMenu, PreferencesUpdate, Theme};
 
 use super::bindings::{position_u32, Choice, PreferenceBinding};
 use super::choice_list::ChoiceButton;
@@ -26,7 +26,6 @@ use super::section::{PageKind, SettingsSection};
 use super::SettingsPage;
 use crate::icons::Icon;
 use crate::text_size::TextSize;
-use crate::theme::ThemePreference;
 use crate::window::{Milestone, WindowAction};
 
 const THEME: RowText = RowText {
@@ -72,7 +71,7 @@ const CHOSEN_CLASS: &str = "chosen";
 
 /// A theme card: the choice it stands for, its name and its CSS class.
 struct ThemeCard {
-    preference: ThemePreference,
+    theme: Theme,
     name: &'static str,
     css_class: &'static str,
 }
@@ -80,17 +79,17 @@ struct ThemeCard {
 /// The cards, in the mockup's order.
 const THEME_CARDS: [ThemeCard; 3] = [
     ThemeCard {
-        preference: ThemePreference::System,
+        theme: Theme::System,
         name: "System",
         css_class: "system",
     },
     ThemeCard {
-        preference: ThemePreference::Light,
+        theme: Theme::Light,
         name: "Light",
         css_class: "light",
     },
     ThemeCard {
-        preference: ThemePreference::Dark,
+        theme: Theme::Dark,
         name: "Dark",
         css_class: "dark",
     },
@@ -151,7 +150,7 @@ fn theme_radio(card: &ThemeCard, first: Option<&gtk::CheckButton>) -> gtk::Check
         .css_classes(["theme-radio"])
         .build();
     radio.set_group(first);
-    let target = card.preference.key().to_variant();
+    let target = card.theme.as_str().to_variant();
     WindowAction::Theme.assign_with_target_to(&radio, &target);
     radio
 }

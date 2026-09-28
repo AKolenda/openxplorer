@@ -75,13 +75,13 @@ impl TransferError {
 /// [`Cancellation`](super::Cancellation) is cancelled.
 impl From<glib::Error> for TransferError {
     fn from(error: glib::Error) -> Self {
-        let message = error.message().to_string();
+        let message = error.message().to_owned();
         match error.kind::<gio::IOErrorEnum>() {
-            Some(gio::IOErrorEnum::NotFound) => TransferError::NotFound(message),
-            Some(gio::IOErrorEnum::Exists) => TransferError::Exists(message),
-            Some(gio::IOErrorEnum::NotMounted) => TransferError::NotMounted(message),
-            Some(gio::IOErrorEnum::NotSupported) => TransferError::NotSupported(message),
-            _ => TransferError::Failed(message),
+            Some(gio::IOErrorEnum::NotFound) => Self::NotFound(message),
+            Some(gio::IOErrorEnum::Exists) => Self::Exists(message),
+            Some(gio::IOErrorEnum::NotMounted) => Self::NotMounted(message),
+            Some(gio::IOErrorEnum::NotSupported) => Self::NotSupported(message),
+            _ => Self::Failed(message),
         }
     }
 }
@@ -92,9 +92,9 @@ impl From<std::io::Error> for TransferError {
     fn from(error: std::io::Error) -> Self {
         let message = error.to_string();
         match error.kind() {
-            std::io::ErrorKind::NotFound => TransferError::NotFound(message),
-            std::io::ErrorKind::AlreadyExists => TransferError::Exists(message),
-            _ => TransferError::Failed(message),
+            std::io::ErrorKind::NotFound => Self::NotFound(message),
+            std::io::ErrorKind::AlreadyExists => Self::Exists(message),
+            _ => Self::Failed(message),
         }
     }
 }
@@ -110,7 +110,7 @@ impl From<rustix::io::Errno> for TransferError {
 /// user-facing message (Python raises the same `ValueError` inside the item).
 impl From<LocationError> for TransferError {
     fn from(error: LocationError) -> Self {
-        TransferError::Failed(error.into_message())
+        Self::Failed(error.to_string())
     }
 }
 

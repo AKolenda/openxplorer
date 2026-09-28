@@ -21,10 +21,10 @@ pub(crate) enum FolderView {
 
 impl FolderView {
     /// The `win.view` action state: `details` or an icon size key.
-    pub(crate) fn key(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             FolderView::Details => "details",
-            FolderView::Icons(size) => size.key(),
+            FolderView::Icons(size) => size.as_str(),
         }
     }
 

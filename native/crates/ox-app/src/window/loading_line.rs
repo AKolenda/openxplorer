@@ -27,7 +27,7 @@ mod imp {
 
     /// Private state of [`super::LoadingLine`].
     #[derive(Debug, Default)]
-    pub struct LoadingLine {
+    pub(crate) struct LoadingLine {
         /// The timer that will show the line, while one runs. It clears
         /// itself when it fires, so it is never removed twice.
         pub(super) pending: RefCell<Option<glib::SourceId>>,
@@ -63,20 +63,20 @@ mod imp {
 
 glib::wrapper! {
     /// The loading line, to lay over the top of the folder pane.
-    pub struct LoadingLine(ObjectSubclass<imp::LoadingLine>)
+    pub(crate) struct LoadingLine(ObjectSubclass<imp::LoadingLine>)
         @extends gtk::Box, gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl LoadingLine {
     /// A hidden line.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         glib::Object::new()
     }
 
     /// Shows the line [`APPEARANCE_DELAY`] after a listing starts, or hides
     /// it at once when the listing is over.
-    pub fn set_loading(&self, loading: bool) {
+    pub(crate) fn set_loading(&self, loading: bool) {
         if !loading {
             self.cancel_pending();
             self.set_visible(false);

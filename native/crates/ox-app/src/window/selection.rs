@@ -11,11 +11,11 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::location::is_smb_location;
 
 use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts};
-use super::location_kind::is_smb_location;
 use super::status_bar::StatusSubject;
 use super::window_action::WindowAction;
 use super::BrowserWindow;

@@ -23,6 +23,15 @@ pub enum TransferMode {
 }
 
 impl TransferMode {
+    /// Every mode, so a protocol name is read back through
+    /// [`as_str`](Self::as_str) and each name is spelt once.
+    pub const ALL: [TransferMode; 4] = [
+        TransferMode::Copy,
+        TransferMode::Move,
+        TransferMode::Trash,
+        TransferMode::Delete,
+    ];
+
     /// The protocol name (`copy`, `move`, `trash`, `delete`).
     pub fn as_str(self) -> &'static str {
         match self {
@@ -40,13 +49,10 @@ impl FromStr for TransferMode {
     /// Parses the protocol name; anything else is refused with the Python
     /// app's message.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "copy" => Ok(TransferMode::Copy),
-            "move" => Ok(TransferMode::Move),
-            "trash" => Ok(TransferMode::Trash),
-            "delete" => Ok(TransferMode::Delete),
-            _ => Err(TransferError::failed("Unknown operation.")),
-        }
+        Self::ALL
+            .into_iter()
+            .find(|mode| mode.as_str() == value)
+            .ok_or_else(|| TransferError::failed("Unknown operation."))
     }
 }
 
@@ -62,6 +68,14 @@ pub enum ConflictPolicy {
 }
 
 impl ConflictPolicy {
+    /// Every policy, so a protocol name is read back through
+    /// [`as_str`](Self::as_str) and each name is spelt once.
+    pub const ALL: [ConflictPolicy; 3] = [
+        ConflictPolicy::Skip,
+        ConflictPolicy::Replace,
+        ConflictPolicy::KeepBoth,
+    ];
+
     /// The protocol name (`skip`, `replace`, `keep-both`).
     pub fn as_str(self) -> &'static str {
         match self {
@@ -78,14 +92,10 @@ impl FromStr for ConflictPolicy {
     /// Parses the protocol name; anything else is refused with the Python
     /// app's message.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "skip" => Ok(ConflictPolicy::Skip),
-            "replace" => Ok(ConflictPolicy::Replace),
-            "keep-both" => Ok(ConflictPolicy::KeepBoth),
-            _ => Err(TransferError::failed(
-                "Choose Skip duplicates, Keep both, or Replace existing.",
-            )),
-        }
+        Self::ALL
+            .into_iter()
+            .find(|policy| policy.as_str() == value)
+            .ok_or_else(|| TransferError::failed("Choose Skip duplicates, Keep both, or Replace existing."))
     }
 }
 

@@ -63,7 +63,8 @@ pub use virtual_place::{
     SETTINGS_URI, TRASH_URI,
 };
 
-/// A user-facing validation error. The message is shown as-is.
+/// A user-facing validation error. Its `Display` text is the message,
+/// shown as-is; errors that wrap it keep that text.
 ///
 /// Where the Rust port refuses what a `raise` in `desktop/core.py` refuses,
 /// the message is the Python app's, word for word; `location_python.rs`
@@ -83,16 +84,6 @@ impl LocationError {
         Self {
             message: message.into(),
         }
-    }
-
-    /// The user-facing message.
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-
-    /// The user-facing message, for errors that wrap this one.
-    pub fn into_message(self) -> String {
-        self.message
     }
 
     /// A `?` or `#` in a URL. `urlsplit` would cut the path there, so the
@@ -132,6 +123,13 @@ pub fn scheme(uri: &str) -> Option<String> {
 /// for plain paths and schemes the app does not browse as folders.
 pub fn location_kind(uri: &str) -> LocationKind {
     scheme(uri).map_or(LocationKind::Other, |scheme| LocationKind::from_scheme(&scheme))
+}
+
+/// True for `smb:` locations: a server, a share or a folder inside one.
+/// The web UI's `uri.startsWith('smb:')`, which the Python app's canonical,
+/// lower-case schemes make the same test.
+pub fn is_smb_location(uri: &str) -> bool {
+    location_kind(uri) == LocationKind::Smb
 }
 
 /// True for phones, cameras and iOS devices (`mtp:`, `gphoto2:`, `afc:`).

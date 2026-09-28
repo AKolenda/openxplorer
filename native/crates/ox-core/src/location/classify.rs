@@ -9,7 +9,9 @@
 //! [`LocationContext`].
 
 use super::display::{location_parts, same_location, LocationContext};
+use super::location_kind;
 use super::normalise::is_smb_server;
+use super::parts::LocationKind;
 use super::text::{decode_uri_component, strip_one_trailing_slash};
 use super::virtual_place::{is_in_virtual_folder, VirtualPlace};
 
@@ -50,13 +52,15 @@ impl LocationContext {
     /// CIFS/SMB3 share; such folders get the network icon. The web UI's
     /// `networkLocation`.
     pub fn is_network_location(&self, uri: &str) -> bool {
-        // Text tests, as in app.js: canonical URIs have lower-case schemes.
-        if uri.starts_with("smb:") {
-            return true;
+        match location_kind(uri) {
+            LocationKind::Smb => true,
+            LocationKind::Local => self.is_on_network_mount(uri),
+            LocationKind::Device | LocationKind::Other => false,
         }
-        if !uri.starts_with("file:") {
-            return false;
-        }
+    }
+
+    /// True for a `file:` location at or below a mounted CIFS/SMB3 share.
+    fn is_on_network_mount(&self, uri: &str) -> bool {
         let Some(decoded) = decoded_path(uri) else {
             return false;
         };
@@ -162,5 +166,13 @@ mod tests {
             assert!(!context.is_writable_location(uri), "{uri}");
         }
         assert!(context.is_writable_location("file:///home/test"));
+    }
+
+    #[test]
+    fn only_smb_addresses_are_smb_locations() {
+        assert!(crate::location::is_smb_location("smb://nas/media"));
+        assert!(!crate::location::is_smb_location("file:///srv/smb"));
+        assert!(!crate::location::is_smb_location("mtp://phone/"));
+        assert!(!crate::location::is_smb_location("smb-share:server=nas"));
     }
 }

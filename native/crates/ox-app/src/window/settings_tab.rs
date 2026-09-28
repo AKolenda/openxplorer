@@ -64,9 +64,8 @@ pub(super) struct SettingsTabState {
     /// The folder shown before Settings opened, which the search index
     /// offers first (`state.settingsOrigin` in app.js).
     origin: Option<String>,
-    /// Quick access as the sidebar last drew it. Opening Settings offers
-    /// these rather than reading `user-dirs.dirs` again on the main
-    /// thread; the sidebar reads it on every change of the places.
+    /// Quick access as the sidebar last drew it; Settings offers these
+    /// folders to the search index.
     quick_access: Vec<Place>,
 }
 
@@ -116,7 +115,7 @@ impl BrowserWindow {
             return;
         }
         if let Err(error) = self.open_tab(Page::Settings.uri(), TabPlacement::Foreground) {
-            self.show_message(error.message());
+            self.show_message(&error.to_string());
         }
     }
 

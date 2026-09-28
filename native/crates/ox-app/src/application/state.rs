@@ -12,16 +12,16 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::location::{file_uri, VirtualPlace};
-use ox_core::settings::Settings;
+use ox_core::location::{file_uri, location_kind, LocationKind, VirtualPlace};
+use ox_core::settings::{Appearance, Settings};
 
-use crate::shared::AppContext;
+use crate::app_context::AppContext;
 use crate::snapshot::SnapshotRequest;
 use crate::text_size::TextSize;
 use crate::theme::contrast::ContrastSetting;
 use crate::theme::system::{self, SystemScheme};
-use crate::theme::{Appearance, Skin, ThemePreference};
-use crate::window::{is_local_or_smb_location, BrowserWindow};
+use crate::theme::Skin;
+use crate::window::BrowserWindow;
 
 /// What lives as long as the application: the shared state and the
 /// watches on the desktop's colour scheme and contrast.
@@ -51,7 +51,7 @@ impl AppState {
     /// the desktop's appearance falls back to.
     fn with_skin(app: &gtk::Application, skin: Skin, gtk_preference: Appearance, settings: Settings) -> Self {
         let preferences = &settings.data().preferences;
-        skin.set_preference(ThemePreference::from(preferences.theme));
+        skin.set_theme(preferences.theme);
         skin.set_text_size(TextSize::from_percent(preferences.text_size));
         let system_scheme = follow_system_scheme(&skin, gtk_preference);
         let contrast_setting = follow_contrast(&skin);
@@ -77,12 +77,12 @@ impl AppState {
         let home = file_uri(&glib::home_dir());
         let start = start.unwrap_or(home.as_str());
         if let Err(error) = window.add_tab(start) {
-            window.show_message(error.message());
+            window.show_message(&error.to_string());
             // A window never opens empty. The home page name resolves
             // without the location check, which could refuse the home
             // folder's own path (BrowserWindow::resolve_address).
             if let Err(error) = window.add_tab(VirtualPlace::Home.uri()) {
-                window.show_message(error.message());
+                window.show_message(&error.to_string());
             }
         }
         if let Some(warning) = self.context.settings_warning() {
@@ -99,7 +99,7 @@ impl AppState {
         request: &SnapshotRequest,
     ) -> BrowserWindow {
         if let Some(theme) = request.theme {
-            self.context.skin().set_preference(theme);
+            self.context.skin().set_theme(theme);
         }
         let window = self.build_window(app, request.start.as_deref());
         if let Some(size) = request.size {
@@ -141,9 +141,16 @@ impl AppState {
     /// folder, else at home (app.js `newWindow`).
     pub(super) fn new_window(&self, app: &gtk::Application) {
         let current = active_window(app).and_then(|window| window.current_uri());
-        let start = current.filter(|uri| is_local_or_smb_location(uri));
+        let start = current.filter(|uri| can_start_a_new_window_in(uri));
         self.open_window(app, start.as_deref());
     }
+}
+
+/// Whether a new window may start in `uri`: a folder on this computer or
+/// on an SMB share, rather than a landing page, a device or another
+/// virtual place (`newWindow` in app.js).
+fn can_start_a_new_window_in(uri: &str) -> bool {
+    matches!(location_kind(uri), LocationKind::Local | LocationKind::Smb)
 }
 
 /// The focused browser window, else the most recent one.
@@ -182,12 +189,14 @@ fn follow_contrast(skin: &Skin) -> ContrastSetting {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::Path;
 
+    use ox_core::settings::Theme;
     use tempfile::TempDir;
 
     use super::*;
-    use crate::test_support::harness::{application, settle, skin, wait_until, Fixture};
+    use crate::test_support::harness::{application, settle, skin, wait_until, Fixture, ThemeGuard};
     use crate::theme::contrast::{self, Contrast};
 
     /// Application state on the shared test application with its own
@@ -202,6 +211,21 @@ mod tests {
     impl TestApp {
         fn new() -> Self {
             let settings = tempfile::tempdir().expect("the test home has room for settings");
+            Self::with_settings_folder(settings)
+        }
+
+        /// Starts from a settings file whose saved theme is `theme`.
+        fn with_saved_theme(theme: &str) -> Self {
+            let settings = tempfile::tempdir().expect("the test home has room for settings");
+            let contents = format!(r#"{{"preferences": {{"theme": "{theme}"}}}}"#);
+            fs::write(settings.path().join(Settings::FILE_NAME), contents)
+                .expect("the test settings folder is writable");
+            Self::with_settings_folder(settings)
+        }
+
+        /// Starts from the settings in `settings`, which the app owns
+        /// until it is dropped.
+        fn with_settings_folder(settings: TempDir) -> Self {
             // The private test display's GTK settings do not prefer dark.
             let gtk_preference = Appearance::Light;
             let state = AppState::with_skin(
@@ -327,6 +351,48 @@ mod tests {
     }
 
     /// parity: TAB-050
+    #[test]
+    fn a_new_window_can_start_in_a_local_or_smb_folder_only() {
+        assert!(can_start_a_new_window_in("file:///home/demo"));
+        assert!(can_start_a_new_window_in("smb://nas/media"));
+        assert!(!can_start_a_new_window_in("ox:pc"));
+        assert!(!can_start_a_new_window_in("trash:///"));
+    }
+
+    /// A saved theme and the choice the skin starts with.
+    struct SavedThemeCase {
+        saved: &'static str,
+        theme: Theme,
+    }
+
+    /// The saved theme is the skin's choice when the application starts;
+    /// settings drop an unknown value, which leaves the default, System
+    /// (`applyTheme`).
+    ///
+    /// parity: LOOK-003
+    #[gtk::test]
+    fn saved_themes_parse_and_anything_else_means_system() {
+        let _theme = ThemeGuard::keep();
+        let cases = [
+            SavedThemeCase {
+                saved: "dark",
+                theme: Theme::Dark,
+            },
+            SavedThemeCase {
+                saved: "light",
+                theme: Theme::Light,
+            },
+            SavedThemeCase {
+                saved: "sepia",
+                theme: Theme::System,
+            },
+        ];
+        for case in cases {
+            let _app = TestApp::with_saved_theme(case.saved);
+            assert_eq!(skin().theme(), case.theme, "{}", case.saved);
+        }
+    }
+
     #[gtk::test]
     fn closing_one_window_releases_it_while_another_stays_open() {
         let app = TestApp::new();

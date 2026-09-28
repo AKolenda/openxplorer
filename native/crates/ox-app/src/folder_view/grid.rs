@@ -37,7 +37,7 @@ pub(crate) enum IconSize {
 
 impl IconSize {
     /// Every size, largest first.
-    pub const ALL: [IconSize; 4] = [
+    pub(crate) const ALL: [IconSize; 4] = [
         IconSize::ExtraLarge,
         IconSize::Large,
         IconSize::Medium,
@@ -45,7 +45,7 @@ impl IconSize {
     ];
 
     /// Icon edge in logical pixels.
-    pub const fn pixels(self) -> i32 {
+    pub(crate) const fn pixels(self) -> i32 {
         match self {
             IconSize::ExtraLarge => 96,
             IconSize::Large => 56,
@@ -55,7 +55,7 @@ impl IconSize {
     }
 
     /// Menu label.
-    pub const fn label(self) -> &'static str {
+    pub(crate) const fn label(self) -> &'static str {
         match self {
             IconSize::ExtraLarge => "Extra large icons",
             IconSize::Large => "Large icons",
@@ -65,7 +65,7 @@ impl IconSize {
     }
 
     /// Action-state key.
-    pub const fn key(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             IconSize::ExtraLarge => "extra-large",
             IconSize::Large => "large",
@@ -75,7 +75,7 @@ impl IconSize {
     }
 
     /// Explorer's shortcut for the layout.
-    pub const fn accelerator(self) -> &'static str {
+    pub(crate) const fn accelerator(self) -> &'static str {
         match self {
             IconSize::ExtraLarge => "<Primary><Shift>1",
             IconSize::Large => "<Primary><Shift>2",
@@ -85,12 +85,12 @@ impl IconSize {
     }
 
     /// The size for an action-state key.
-    pub fn from_key(key: &str) -> Option<IconSize> {
-        Self::ALL.into_iter().find(|size| size.key() == key)
+    pub(crate) fn from_key(key: &str) -> Option<IconSize> {
+        Self::ALL.into_iter().find(|size| size.as_str() == key)
     }
 
     /// CSS class that widens tiles for large icons.
-    pub const fn css_class(self) -> &'static str {
+    pub(crate) const fn css_class(self) -> &'static str {
         match self {
             IconSize::ExtraLarge => "icons-extra-large",
             IconSize::Large => "icons-large",
@@ -167,7 +167,7 @@ mod imp {
 
     /// Private state of [`super::IconView`].
     #[derive(Debug)]
-    pub struct IconView {
+    pub(crate) struct IconView {
         /// Scrolls the grid; the view's only child. The grid must be the
         /// scroller's direct child: GTK then builds tiles only for the rows
         /// on screen.
@@ -230,7 +230,7 @@ mod imp {
 glib::wrapper! {
     /// The icon view: tiles of one [`IconSize`] in a scroller, in as many
     /// columns as its width holds.
-    pub struct IconView(ObjectSubclass<imp::IconView>)
+    pub(crate) struct IconView(ObjectSubclass<imp::IconView>)
         @extends gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
@@ -353,7 +353,7 @@ mod tests {
     #[test]
     fn icon_sizes_round_trip_and_shrink() {
         for size in IconSize::ALL {
-            assert_eq!(IconSize::from_key(size.key()), Some(size));
+            assert_eq!(IconSize::from_key(size.as_str()), Some(size));
         }
         let pixels: Vec<i32> = IconSize::ALL.iter().map(|size| size.pixels()).collect();
         assert!(pixels.windows(2).all(|pair| pair[0] > pair[1]));

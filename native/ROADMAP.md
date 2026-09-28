@@ -22,7 +22,7 @@ The core ports are organised by responsibility:
   network-mount badges and merging saved, mounted and visited SMB locations.
 - [Clipboard formats](crates/ox-core/src/clipboard.rs): validated GNOME, KDE and
   existing OpenXplorer payloads, including cut ownership and consumption.
-- [Transfers](crates/ox-core/src/transfer/mod.rs) and the
+- [Transfers](crates/ox-core/src/transfer.rs) and the
   [GIO adapter](crates/ox-core/src/gio_node.rs): reusable operation machinery,
   separate from GTK confirmations and progress dialogs.
 

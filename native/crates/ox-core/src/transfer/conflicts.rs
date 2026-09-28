@@ -25,13 +25,16 @@ pub(crate) struct Placement<'a> {
     pub(crate) policy: ConflictPolicy,
     /// The folder the items go into.
     pub(crate) destination_folder: &'a dyn Node,
-    pub(crate) cancel: &'a Cancellation,
 }
 
 impl Placement<'_> {
     /// The destination `source` (of `kind`) gets in the destination folder,
     /// or `None` when it is skipped: a move into the folder it is already
     /// in, or a taken name with Skip.
+    ///
+    /// The existence checks and the Keep-both search stop when the user
+    /// cancels through `cancel`, the run's [`Batch`](super::batch::Batch)
+    /// token.
     ///
     /// # Errors
     ///
@@ -41,6 +44,7 @@ impl Placement<'_> {
         &self,
         source: &dyn Node,
         kind: NodeKind,
+        cancel: &Cancellation,
     ) -> Result<Option<Box<dyn Node>>, TransferError> {
         let source_name = source.name();
         let destination = child_node(self.destination_folder, &source_name)?;
@@ -50,20 +54,25 @@ impl Placement<'_> {
         if self.mode == TransferMode::Move && destination.uri() == source.uri() {
             return Ok(None);
         }
-        if !destination.exists(Some(self.cancel)) {
+        if !destination.exists(Some(cancel)) {
             return Ok(Some(destination));
         }
         match self.policy {
             // XFER-006: Skip never touches the existing item.
             ConflictPolicy::Skip => Ok(None),
-            ConflictPolicy::KeepBoth => self.free_copy_name(&source_name, kind).map(Some),
+            ConflictPolicy::KeepBoth => self.free_copy_name(&source_name, kind, cancel).map(Some),
             ConflictPolicy::Replace => Ok(Some(destination)),
         }
     }
 
     /// XFER-008: the first free Windows-style duplicate name, starting at
     /// `(copy 2)`.
-    fn free_copy_name(&self, source_name: &OsStr, kind: NodeKind) -> Result<Box<dyn Node>, TransferError> {
+    fn free_copy_name(
+        &self,
+        source_name: &OsStr,
+        kind: NodeKind,
+        cancel: &Cancellation,
+    ) -> Result<Box<dyn Node>, TransferError> {
         // Duplicate names are text. A name that is not UTF-8 is refused
         // rather than given a lossily converted "(copy N)" name.
         let Some(source_name) = source_name.to_str() else {
@@ -78,10 +87,10 @@ impl Placement<'_> {
             ItemKind::File
         };
         for number in 2..MAX_COPY_NUMBER {
-            self.cancel.check()?;
+            cancel.check()?;
             let name = new_copy_name(source_name, number, item_kind)?;
             let candidate = child_node(self.destination_folder, &name)?;
-            if !candidate.exists(Some(self.cancel)) {
+            if !candidate.exists(Some(cancel)) {
                 return Ok(candidate);
             }
         }

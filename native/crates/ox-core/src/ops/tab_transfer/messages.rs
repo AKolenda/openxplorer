@@ -7,7 +7,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use crate::ops::random::random_hex;
+use crate::random::random_hex;
 
 /// Random bytes in a token: 64 hexadecimal digits.
 const TOKEN_BYTES: usize = 32;

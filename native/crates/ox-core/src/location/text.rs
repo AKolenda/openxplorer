@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(unquote_without_controls("a%20b").as_deref(), Ok("a b"));
         for escaped in ["a%00b", "line%0A", "%1F", "del%7F"] {
             let error = unquote_without_controls(escaped).expect_err(escaped);
-            assert_eq!(error.message(), "Encoded control characters are not allowed.");
+            assert_eq!(error.to_string(), "Encoded control characters are not allowed.");
         }
         // C1 controls are not in `[\x00-\x1f\x7f]`.
         assert_eq!(unquote_without_controls("%C2%85").as_deref(), Ok("\u{85}"));

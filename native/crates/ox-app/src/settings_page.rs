@@ -49,9 +49,9 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::settings::Preferences;
 
+use crate::app_context::AppContext;
 use crate::icons::{self, Icon};
 use crate::locations::Page;
-use crate::shared::AppContext;
 use crate::window::{show_bundled_clear_icon, show_bundled_magnifier};
 
 pub(crate) use indexed_folders::{index_candidates, CandidateSources, IndexCandidate};
@@ -106,11 +106,11 @@ mod imp {
     use super::search::SearchQuery;
     use super::section::SettingsSection;
     use super::{OpenedHook, PreferenceFollower, SharedHandler, BACK_TO_FILES, MESSAGE};
-    use crate::shared::AppContext;
+    use crate::app_context::AppContext;
 
     /// Private state of [`super::SettingsPage`].
     #[derive(Default, gtk::CompositeTemplate)]
-    #[template(file = "../../resources/ui/settings-page.ui")]
+    #[template(file = "../resources/ui/settings-page.ui")]
     pub(crate) struct SettingsPage {
         /// "Your explorer, your way."
         #[template_child]

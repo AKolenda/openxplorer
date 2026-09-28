@@ -16,6 +16,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use super::{StorageError, WithPath, FILE_MODE};
+use crate::random::{random_hex, NAME_BYTES};
 
 /// Atomically replaces `target` with `contents`: a private temporary file
 /// named `<prefix><random>` beside it is written, flushed to disk and
@@ -96,12 +97,14 @@ struct UniqueFile {
 }
 
 impl UniqueFile {
-    /// Creates `<prefix><random UUID>` in `directory` with mode 0600.
+    /// Creates `<prefix><32 random hex digits>` in `directory` with mode
+    /// 0600.
     /// `create_new` (`O_CREAT | O_EXCL`) never opens an existing file or
     /// follows a symlink, so a taken name fails instead of being
     /// overwritten, and the cleanup above never removes another file.
     fn create(directory: &Path, prefix: &str) -> Result<Self, StorageError> {
-        let path = directory.join(format!("{prefix}{}", glib::uuid_string_random()));
+        let digits = random_hex(NAME_BYTES).with_path(directory)?;
+        let path = directory.join(format!("{prefix}{digits}"));
         let file = OpenOptions::new()
             .write(true)
             .create_new(true)

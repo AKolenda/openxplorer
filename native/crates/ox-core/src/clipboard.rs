@@ -108,7 +108,7 @@ pub enum ClipboardError {
     /// An item is not a file or folder that can be copied: a share or
     /// device root, a foreign scheme or an address with credentials.
     #[error(transparent)]
-    Item(#[from] LocationError),
+    Location(#[from] LocationError),
 }
 
 /// One published format of a selection: the bytes a reader gets when it
@@ -141,7 +141,7 @@ impl ClipboardFiles {
     /// # Errors
     ///
     /// [`ClipboardError::ItemCount`] when the selection has fewer than 1 or
-    /// more than [`MAX_ITEMS`] items, and [`ClipboardError::Item`] when an
+    /// more than [`MAX_ITEMS`] items, and [`ClipboardError::Location`] when an
     /// item is not a file or folder that can be copied.
     pub fn new(mode: ClipboardMode, uris: &[String]) -> Result<Self, ClipboardError> {
         Self::with_token(mode, uris, new_token())
@@ -239,7 +239,10 @@ impl ClipboardFiles {
     }
 }
 
-/// A fresh owner token: 32 hex digits, like Python's `uuid.uuid4().hex`.
+/// A fresh owner token: 32 hex digits, in the form of Python's
+/// `uuid.uuid4().hex`. The token only tells one cut from another and is
+/// published on the clipboard anyway, so `GLib`'s UUID, which cannot fail,
+/// is enough (see [`crate::random`]).
 fn new_token() -> String {
     glib::uuid_string_random().replace('-', "")
 }

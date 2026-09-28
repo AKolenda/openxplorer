@@ -28,10 +28,10 @@ use gio::prelude::*;
 use super::context::{on_worker, unless_cancelled, OperationContext};
 use super::create::CreatedItem;
 use super::error::OpsError;
-use super::random::random_hex;
 use super::templates::{list_templates_blocking, TemplateId, MAX_TEMPLATE_BYTES};
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name, ItemKind};
+use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{Cancellation, Node};
 
 /// Templates are read in blocks of this many bytes, with a cancellation
@@ -189,7 +189,7 @@ fn publish_new_file(
     contents: &[u8],
     context: &OperationContext,
 ) -> Result<(), OpsError> {
-    let digits = random_hex(16).map_err(|error| {
+    let digits = random_hex(NAME_BYTES).map_err(|error| {
         OpsError::failed(format!(
             "Could not reserve a private staging name. Nothing was changed. {error}"
         ))

@@ -79,7 +79,7 @@ mod imp {
 
     /// Private state of [`super::TabLayout`].
     #[derive(Debug)]
-    pub struct TabLayout {
+    pub(crate) struct TabLayout {
         /// A tab's width when there is room.
         pub(super) widest: Cell<i32>,
     }
@@ -153,13 +153,13 @@ mod imp {
 
 glib::wrapper! {
     /// Lays out the tab strip's tabs side by side at an equal width.
-    pub struct TabLayout(ObjectSubclass<imp::TabLayout>)
+    pub(crate) struct TabLayout(ObjectSubclass<imp::TabLayout>)
         @extends gtk::LayoutManager;
 }
 
 impl TabLayout {
     /// Makes tabs `width` pixels wide when there is room.
-    pub fn set_tab_width(&self, width: i32) {
+    pub(crate) fn set_tab_width(&self, width: i32) {
         if self.imp().widest.replace(width) != width {
             self.layout_changed();
         }

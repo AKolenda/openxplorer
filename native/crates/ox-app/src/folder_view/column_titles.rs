@@ -14,6 +14,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
+use ox_core::LOG_DOMAIN;
 
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::icons::{self, Icon};
@@ -31,7 +32,7 @@ const CARET_CLASS: &str = "sort-caret";
 pub(crate) fn style_titles(view: &gtk::ColumnView) -> Vec<gtk::Image> {
     let titles = title_boxes(view);
     if titles.len() != SortColumn::ALL.len() {
-        glib::g_warning!("openxplorer", "The column titles have an unexpected structure");
+        glib::g_warning!(LOG_DOMAIN, "The column titles have an unexpected structure");
         return Vec::new();
     }
     if let Some(size_title) = titles.last() {

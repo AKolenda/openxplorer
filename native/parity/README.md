@@ -70,14 +70,14 @@ behaviour truly has no native counterpart.
 
 1. Implement the whole behaviour described in `behaviour`. Read the
    `sources` and the cited `python_tests`: they are the specification.
-2. Write a native test that proves it: a Rust unit or integration test, or a
-   UI test under `native/ui-tests/`. The test must run in
-   `python3 native/tools/check.py`.
-3. Put a parity marker comment next to the test, naming every feature it
+2. Write a native test that proves it: a Rust unit or integration test,
+   or, once the first one exists, a UI test under `native/ui-tests/`. The
+   test must run in `python3 native/tools/check.py`.
+3. Put a parity marker in the test's doc comment, naming every feature it
    proves:
 
    ```rust
-   // parity: NAV-001, NAV-005
+   /// parity: NAV-001, NAV-005
    #[test]
    fn back_and_forward_walk_the_tab_history() {
    ```

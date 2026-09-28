@@ -25,7 +25,7 @@ pub(crate) struct FilterState {
 
 impl FilterState {
     /// Sets the search text; returns true when the terms changed.
-    pub fn set_query(&mut self, query: &str) -> bool {
+    pub(crate) fn set_query(&mut self, query: &str) -> bool {
         let terms = query_terms(query);
         let changed = terms != self.terms;
         self.terms = terms;
@@ -33,26 +33,26 @@ impl FilterState {
     }
 
     /// Sets whether hidden items are listed; returns true when it changed.
-    pub fn set_show_hidden(&mut self, show_hidden: bool) -> bool {
+    pub(crate) fn set_show_hidden(&mut self, show_hidden: bool) -> bool {
         let changed = show_hidden != self.show_hidden;
         self.show_hidden = show_hidden;
         changed
     }
 
     /// True when a search is active.
-    pub fn is_searching(&self) -> bool {
+    pub(crate) fn is_searching(&self) -> bool {
         !self.terms.is_empty()
     }
 
     /// True when an item of `visibility` is listed at all, searched or
     /// not: hidden items only while "Show hidden files" is on.
-    pub fn lists(&self, visibility: Visibility) -> bool {
+    pub(crate) fn lists(&self, visibility: Visibility) -> bool {
         self.show_hidden || visibility == Visibility::Visible
     }
 
     /// Whether an item is shown: it is listed, and `lowercase_name`, its
     /// lower-cased display name, holds every search term.
-    pub fn accepts(&self, lowercase_name: &str, visibility: Visibility) -> bool {
+    pub(crate) fn accepts(&self, lowercase_name: &str, visibility: Visibility) -> bool {
         self.lists(visibility) && self.matches_every_term(lowercase_name)
     }
 

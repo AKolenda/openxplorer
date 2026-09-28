@@ -6,11 +6,11 @@
 //! holds the providers ([`providers`]) and what they draw; windows connect
 //! to its `appearance-changed` and `text-size-changed` signals, as they
 //! connect to `places-changed` on the shared
-//! [`AppContext`](crate::shared::AppContext).
+//! [`AppContext`](crate::app_context::AppContext).
 
+mod appearance_button;
 pub(crate) mod contrast;
 mod fonts;
-mod preference;
 mod providers;
 mod stylesheets;
 pub(crate) mod system;
@@ -19,7 +19,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 
-pub(crate) use preference::{Appearance, ThemePreference};
+pub(crate) use appearance_button::{tooltip, AppearanceExt};
+use ox_core::settings::{Appearance, Theme};
 
 use crate::icons;
 use crate::text_size::TextSize;
@@ -40,7 +41,7 @@ mod imp {
     use gtk::glib::subclass::Signal;
     use gtk::subclass::prelude::*;
 
-    use super::{Appearance, Contrast, Providers, TextSize, ThemePreference};
+    use super::{Appearance, Contrast, Providers, TextSize, Theme};
     use super::{APPEARANCE_CHANGED, TEXT_SIZE_CHANGED};
 
     /// Private state of [`super::Skin`].
@@ -55,9 +56,8 @@ mod imp {
         /// The size text is drawn at.
         pub(super) text_size: Cell<TextSize>,
         /// The user's theme choice.
-        pub(super) preference: Cell<ThemePreference>,
-        /// The desktop's colour scheme, which [`ThemePreference::System`]
-        /// follows.
+        pub(super) theme: Cell<Theme>,
+        /// The desktop's colour scheme, which [`Theme::System`] follows.
         pub(super) desktop_appearance: Cell<Appearance>,
     }
 
@@ -85,7 +85,7 @@ glib::wrapper! {
     /// providers draw and the choices behind it.
     ///
     /// The skin also remembers the desktop's appearance, so a window can
-    /// change the [`ThemePreference`] without asking the desktop again.
+    /// change the [`Theme`] without asking the desktop again.
     pub(crate) struct Skin(ObjectSubclass<imp::Skin>);
 }
 
@@ -131,19 +131,19 @@ impl Skin {
         self.imp().appearance.get()
     }
 
-    /// The display-wide preference shared by every window.
-    pub(crate) fn preference(&self) -> ThemePreference {
-        self.imp().preference.get()
+    /// The display-wide theme choice shared by every window.
+    pub(crate) fn theme(&self) -> Theme {
+        self.imp().theme.get()
     }
 
-    /// Applies a shared preference and synchronizes all window palettes.
+    /// Applies a shared theme choice and synchronizes all window palettes.
     /// Windows hear `appearance-changed` even when the drawn appearance
     /// stays the same, so every window's Appearance menu shows the new
     /// choice.
-    pub(crate) fn set_preference(&self, preference: ThemePreference) {
+    pub(crate) fn set_theme(&self, theme: Theme) {
         let imp = self.imp();
-        let changed = imp.preference.replace(preference) != preference;
-        let appearance = preference.resolve(imp.desktop_appearance.get());
+        let changed = imp.theme.replace(theme) != theme;
+        let appearance = theme.appearance(imp.desktop_appearance.get());
         if appearance != self.appearance() {
             self.draw(appearance);
         } else if changed {
@@ -151,11 +151,11 @@ impl Skin {
         }
     }
 
-    /// Records the desktop's colour scheme and follows it when the
-    /// preference is [`ThemePreference::System`].
+    /// Records the desktop's colour scheme and follows it when the theme
+    /// is [`Theme::System`].
     pub(crate) fn set_desktop_appearance(&self, desktop: Appearance) {
         self.imp().desktop_appearance.set(desktop);
-        self.draw(self.preference().resolve(desktop));
+        self.draw(self.theme().appearance(desktop));
     }
 
     /// Switches the palette to `appearance` and tells the windows; does
@@ -264,14 +264,36 @@ mod tests {
         skin.set_desktop_appearance(Appearance::Light);
         let changes = count_appearance_changes(&skin);
 
-        skin.set_preference(ThemePreference::Light);
+        skin.set_theme(Theme::Light);
         assert_eq!(changes.get(), 1, "System to Light on a light desktop");
 
-        skin.set_preference(ThemePreference::Light);
+        skin.set_theme(Theme::Light);
         assert_eq!(changes.get(), 1, "Light chosen again");
 
-        skin.set_preference(ThemePreference::Dark);
+        skin.set_theme(Theme::Dark);
         assert_eq!(changes.get(), 2, "Light to Dark redraws once");
+        assert_eq!(skin.appearance(), Appearance::Dark);
+    }
+
+    /// [`Theme::System`] draws the desktop's colour scheme and follows it
+    /// when it changes; Light and Dark ignore it (`applyTheme`).
+    ///
+    /// parity: LOOK-003
+    #[gtk::test]
+    fn system_follows_the_desktop() {
+        let skin = Skin::detached();
+        skin.set_theme(Theme::System);
+        skin.set_desktop_appearance(Appearance::Dark);
+        assert_eq!(skin.appearance(), Appearance::Dark);
+        skin.set_desktop_appearance(Appearance::Light);
+        assert_eq!(skin.appearance(), Appearance::Light);
+
+        skin.set_theme(Theme::Light);
+        skin.set_desktop_appearance(Appearance::Dark);
+        assert_eq!(skin.appearance(), Appearance::Light);
+
+        skin.set_theme(Theme::Dark);
+        skin.set_desktop_appearance(Appearance::Light);
         assert_eq!(skin.appearance(), Appearance::Dark);
     }
 
@@ -283,10 +305,10 @@ mod tests {
         let display = gdk::Display::default().expect("GTK tests run on a private display");
         let display_settings = gtk::Settings::for_display(&display);
 
-        harness::skin().set_preference(ThemePreference::Dark);
+        harness::skin().set_theme(Theme::Dark);
         assert!(display_settings.is_gtk_application_prefer_dark_theme());
 
-        harness::skin().set_preference(ThemePreference::Light);
+        harness::skin().set_theme(Theme::Light);
         assert!(!display_settings.is_gtk_application_prefer_dark_theme());
     }
 }

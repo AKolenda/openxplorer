@@ -7,7 +7,7 @@
 //! keeps a share in settings. Sign out removes the server's entries.
 
 use super::server::host_name;
-use crate::location::split_location;
+use crate::location::{is_smb_location, split_location};
 use crate::settings::Bookmark;
 
 /// The SMB roots browsed this session, in the order first browsed. One
@@ -56,7 +56,7 @@ impl VisitedNetwork {
 /// `smb://host/share`, or `smb://host/` for a server listing. `None` for
 /// other locations.
 pub fn session_network_root(uri: &str) -> Option<String> {
-    if !uri.starts_with("smb:") {
+    if !is_smb_location(uri) {
         return None;
     }
     let parts = split_location(uri).ok()?;

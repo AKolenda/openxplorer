@@ -13,7 +13,7 @@ use gio::prelude::*;
 
 use super::mount_table::{read_mount_table, resolve_smb_path};
 use super::server::{ServerKey, DEFAULT_SMB_PORT};
-use crate::location::{normalise, split_location, unquote_lossy};
+use crate::location::{is_smb_location, normalise, split_location, unquote_lossy};
 
 /// Prefix of `GVfs`'s FUSE directory names for SMB shares, for example
 /// `smb-share:server=nas,share=projects`.
@@ -27,7 +27,7 @@ pub fn local_path(uri: &str) -> Option<PathBuf> {
     if let Some(path) = file.path() {
         return Some(path);
     }
-    if !uri.starts_with("smb:") {
+    if !is_smb_location(uri) {
         return None;
     }
     // An unreadable mount table only rules out kernel mounts.

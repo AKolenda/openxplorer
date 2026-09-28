@@ -33,7 +33,7 @@ use super::mounting::{PromptedOperation, WriteActivity};
 use super::prompts::MountPrompts;
 use super::server::smb_host;
 use super::session_credentials::SessionCredentials;
-use crate::location::normalise;
+use crate::location::{is_smb_location, normalise};
 
 /// The `protocol` attribute of the SMB passwords `GVfs` remembers under
 /// GNOME's `org.gnome.keyring.NetworkPassword` schema. Those items are
@@ -239,7 +239,7 @@ fn mounts_of_host(mounts: &[gio::Mount], host: &str) -> Vec<gio::Mount> {
 /// any port. Sign out disconnects exactly these mounts, including those of
 /// other applications.
 fn is_on_host(root_uri: &str, host: &str) -> bool {
-    root_uri.starts_with("smb:") && smb_host(root_uri).as_deref() == Some(host)
+    is_smb_location(root_uri) && smb_host(root_uri).as_deref() == Some(host)
 }
 
 /// Unmounts `mount`, answering its questions through `prompts`.

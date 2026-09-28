@@ -54,7 +54,6 @@
 //! | `undo` | The undo journal |
 //! | `undo_apply` | Carrying out an Undo |
 //! | `tab_transfer` | Moving a tab to another window |
-//! | `random` | Unpredictable stage and capability names |
 //!
 //! The tests of this service in `desktop/tests` are ported to
 //! `tests/ops_*.rs`, each naming the test it comes from;
@@ -74,7 +73,6 @@ mod error;
 mod folder_groups;
 mod new_from_template;
 mod progress;
-mod random;
 mod recycle_bin;
 mod rename;
 mod report;

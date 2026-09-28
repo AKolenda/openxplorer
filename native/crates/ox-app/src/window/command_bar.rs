@@ -19,9 +19,10 @@ mod menus;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::settings::Appearance;
 
 use crate::icons::{self, Icon};
-use crate::theme::Appearance;
+use crate::theme::AppearanceExt;
 
 use super::breakpoints::WindowWidth;
 use super::menu_popover::{MenuEntry, MenuPopover};
@@ -116,7 +117,7 @@ mod imp {
 
     /// Private state of [`super::CommandBar`].
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(file = "../../../resources/ui/command-bar.ui")]
+    #[template(file = "../../resources/ui/command-bar.ui")]
     pub(crate) struct CommandBar {
         /// New to More options, filled from the tables.
         #[template_child]

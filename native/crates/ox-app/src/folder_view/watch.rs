@@ -23,6 +23,7 @@ use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use ox_core::LOG_DOMAIN;
 
 /// Quiet time before a burst of change notifications triggers a refresh.
 const CHANGE_DEBOUNCE: Duration = Duration::from_millis(350);
@@ -123,13 +124,13 @@ pub(crate) struct Watch {
 
 impl Watch {
     /// The folder being watched.
-    pub fn uri(&self) -> &str {
+    pub(crate) fn uri(&self) -> &str {
         &self.uri
     }
 
     /// Tells watches apart, for tests that a watch was kept.
     #[cfg(test)]
-    pub fn id(&self) -> WatchId {
+    pub(crate) fn id(&self) -> WatchId {
         self.id
     }
 }
@@ -169,7 +170,7 @@ impl MonitorThread {
         // it does, the folder is not watched and F5 still refreshes it.
         let watched = monitor_context.with_thread_default(|| self.monitor_until_stopped());
         if let Err(error) = watched {
-            glib::g_warning!("openxplorer", "Could not watch {} for changes: {error}", self.uri);
+            glib::g_warning!(LOG_DOMAIN, "Could not watch {} for changes: {error}", self.uri);
         }
     }
 
@@ -224,7 +225,7 @@ pub(crate) fn watch_folder(uri: &str, on_change: impl Fn() + 'static) -> Watch {
         .name("folder-watch".to_owned())
         .spawn(move || thread.run());
     if let Err(error) = spawned {
-        glib::g_warning!("openxplorer", "Could not watch {uri} for changes: {error}");
+        glib::g_warning!(LOG_DOMAIN, "Could not watch {uri} for changes: {error}");
     }
     watch
 }

@@ -1,28 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Keyboard and pointer input of the folder views and the address entry:
-//! a new window's first keyboard focus, type-to-select, middle-click to
-//! open a folder in a tab, and activation. The context menu has a module
-//! of its own ([`super::context_menu`]).
+//! a new window's first keyboard focus, the keys and clicks that feed or
+//! end type-to-select, middle-click to open a folder in a tab, and
+//! activation. The typed prefix itself lives in [`super::type_to_select`],
+//! the context menu in [`super::context_menu`].
 //!
 //! Ports `onKey` and the type-select glue in `desktop/ui/app.js`
-//! (`desktop/tests/ui_type_select.py` is its specification): typed
-//! characters jump to the next name with that prefix; Escape first clears
-//! the prefix and only then the selection; arrows, clicks, shortcuts and
-//! leaving the view start a new prefix.
-
-use std::time::Duration;
+//! (`desktop/tests/ui_type_select.py` is its specification): Escape first
+//! clears the prefix and only then the selection; arrows, clicks,
+//! shortcuts and leaving the view start a new prefix.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use crate::folder_view::model::FolderModel;
-use crate::typeahead::{self, PrefixMatch, Rows};
-
 use super::activation::{activation_for, Activation};
 use super::folder_pane::PanePage;
 use super::gestures;
-use super::status_bar::TypeaheadMatch;
+use super::type_to_select::monotonic_now;
 use super::BrowserWindow;
 
 /// Keys that only modify another key; pressing one keeps the prefix, so
@@ -46,31 +41,6 @@ fn is_modifier_key(key: gdk::Key) -> bool {
             | gdk::Key::ISO_Level5_Shift
             | gdk::Key::Mode_switch
     )
-}
-
-/// The status-bar hint for a type-to-select result.
-pub(super) fn typeahead_hint(result: &PrefixMatch, matched_name: Option<&str>) -> String {
-    match (result.prefix.is_empty(), matched_name) {
-        (true, _) => String::new(),
-        (false, Some(name)) => format!("Jump to: {} — {name}", result.prefix),
-        (false, None) => format!("No name starts with “{}”", result.prefix),
-    }
-}
-
-/// The current time on `GLib`'s monotonic clock, which type-to-select
-/// times its prefix with. The clock never reads below zero and never goes
-/// backwards.
-fn monotonic_now() -> Duration {
-    Duration::from_micros(glib::monotonic_time().unsigned_abs())
-}
-
-/// The folder's rows in display order, as type-to-select searches them.
-fn typeahead_rows(model: &FolderModel) -> Rows<impl Fn(u32) -> String + '_> {
-    Rows {
-        count: model.n_items(),
-        name_at: |row| model.name_at(row).unwrap_or_default(),
-        current: model.first_selected(),
-    }
 }
 
 impl BrowserWindow {
@@ -266,7 +236,7 @@ impl BrowserWindow {
     /// `None` for every other key.
     fn prefix_editing_key(&self, input: &gtk::IMMulticontext, key: gdk::Key) -> Option<glib::Propagation> {
         let now = monotonic_now();
-        let prefix_active = self.imp().typeahead.borrow().controller.is_active(now);
+        let prefix_active = self.imp().typeahead.borrow().is_active(now);
         match key {
             gdk::Key::Escape if prefix_active => {
                 input.reset();
@@ -293,88 +263,6 @@ impl BrowserWindow {
             move |_, _, _, _| window.reset_typeahead()
         ));
         click
-    }
-
-    /// Backspace: removes the last typed character and selects what the
-    /// shorter prefix matches.
-    fn erase_typed_character(&self, now: Duration) {
-        let rows = typeahead_rows(self.folder_pane().model());
-        let result = self.imp().typeahead.borrow_mut().controller.backspace(&rows, now);
-        if let Some(result) = result {
-            self.apply_typeahead(&result);
-        }
-    }
-
-    /// Adds text the input method committed to the typed prefix and
-    /// selects the next matching name.
-    pub(super) fn type_text(&self, text: &str) {
-        for character in text.chars() {
-            self.type_character(character);
-        }
-    }
-
-    /// Adds one typed character to the prefix. Each character moves the
-    /// selection the next one starts from, so the rows are read again.
-    fn type_character(&self, character: char) {
-        let rows = typeahead_rows(self.folder_pane().model());
-        let typed = character.to_string();
-        let result = self
-            .imp()
-            .typeahead
-            .borrow_mut()
-            .controller
-            .push(&typed, &rows, monotonic_now());
-        if let Some(result) = result {
-            self.apply_typeahead(&result);
-        }
-    }
-
-    fn apply_typeahead(&self, result: &PrefixMatch) {
-        let model = self.folder_pane().model();
-        if let Some(row) = result.row {
-            model.select_only(row);
-            self.folder_pane().reveal(row);
-        }
-        let matched_name = result.row.and_then(|row| model.name_at(row));
-        let hint = typeahead_hint(result, matched_name.as_deref());
-        let outcome = if result.row.is_some() {
-            TypeaheadMatch::Found
-        } else {
-            TypeaheadMatch::Missed
-        };
-        self.status_bar().show_typeahead_hint(&hint, outcome);
-        self.restart_typeahead_timer();
-    }
-
-    fn restart_typeahead_timer(&self) {
-        let timer = glib::timeout_add_local_once(
-            typeahead::PREFIX_TIMEOUT,
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move || {
-                    window.imp().typeahead.borrow_mut().timer = None;
-                    window.reset_typeahead();
-                }
-            ),
-        );
-        let previous = self.imp().typeahead.borrow_mut().timer.replace(timer);
-        if let Some(previous) = previous {
-            previous.remove();
-        }
-    }
-
-    /// Forgets the typed prefix and clears its hint.
-    pub(super) fn reset_typeahead(&self) {
-        let timer = {
-            let mut typeahead = self.imp().typeahead.borrow_mut();
-            typeahead.controller.reset();
-            typeahead.timer.take()
-        };
-        if let Some(timer) = timer {
-            timer.remove();
-        }
-        self.status_bar().clear_typeahead_hint();
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;
@@ -412,24 +300,6 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn result(prefix: &str, row: Option<u32>) -> PrefixMatch {
-        PrefixMatch {
-            prefix: prefix.into(),
-            row,
-            cycling: false,
-        }
-    }
-
-    /// Ported from `desktop/tests/ui_type_select.py` (the "Jump to" hint).
-    #[test]
-    fn the_hint_names_the_item_it_jumped_to() {
-        let hint = typeahead_hint(&result("SC", Some(3)), Some("scripts"));
-        assert_eq!(hint, "Jump to: SC — scripts");
-        let miss = typeahead_hint(&result("zz", None), None);
-        assert_eq!(miss, "No name starts with “zz”");
-        assert_eq!(typeahead_hint(&result("", None), None), "");
-    }
 
     /// parity: SEL-029
     #[test]

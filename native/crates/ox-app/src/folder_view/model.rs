@@ -93,7 +93,7 @@ pub(crate) struct FolderModel {
 
 impl FolderModel {
     /// Empty models; [`FolderModel::set_store`] shows a tab's items.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let filter_state = Rc::new(RefCell::new(FilterState::default()));
         let state = Rc::clone(&filter_state);
         let filter = gtk::CustomFilter::new(move |object| {
@@ -115,7 +115,7 @@ impl FolderModel {
     /// Completes the sorter once the details view exists: folders first,
     /// then `column_sorter` (the column view's sorter, which applies the
     /// chosen direction), then names ascending.
-    pub fn attach_column_sorter(&self, column_sorter: &gtk::Sorter) {
+    pub(crate) fn attach_column_sorter(&self, column_sorter: &gtk::Sorter) {
         let sorter = gtk::MultiSorter::new();
         sorter.append(folders_first());
         sorter.append(column_sorter.clone());
@@ -124,29 +124,29 @@ impl FolderModel {
     }
 
     /// The selection model both views display.
-    pub fn selection(&self) -> &gtk::MultiSelection {
+    pub(crate) fn selection(&self) -> &gtk::MultiSelection {
         &self.selection
     }
 
     /// The sorted, filtered items in display order.
-    pub fn sorted(&self) -> &gtk::SortListModel {
+    pub(crate) fn sorted(&self) -> &gtk::SortListModel {
         &self.sort_model
     }
 
     /// Shows another tab's items.
-    pub fn set_store(&self, store: Option<&gio::ListStore>) {
+    pub(crate) fn set_store(&self, store: Option<&gio::ListStore>) {
         self.filter_model.set_model(store);
     }
 
     /// Items shown (after filtering).
-    pub fn n_items(&self) -> u32 {
+    pub(crate) fn n_items(&self) -> u32 {
         self.sort_model.n_items()
     }
 
     /// How many of `store`'s items the folder lists, searched or not: the
     /// hidden ones count only while hidden files are shown, as the Python
     /// backend lists them (`enumerate_folder(uri, showHidden)`).
-    pub fn listed_count(&self, store: &gio::ListStore) -> u32 {
+    pub(crate) fn listed_count(&self, store: &gio::ListStore) -> u32 {
         let filter = self.filter_state.borrow();
         let listed = store
             .iter::<FileItem>()
@@ -157,28 +157,28 @@ impl FolderModel {
     }
 
     /// The item at a display position.
-    pub fn item(&self, position: u32) -> Option<FileItem> {
+    pub(crate) fn item(&self, position: u32) -> Option<FileItem> {
         self.sort_model.item(position).and_downcast::<FileItem>()
     }
 
     /// The display name at a position, or `None` past the end.
-    pub fn name_at(&self, position: u32) -> Option<String> {
+    pub(crate) fn name_at(&self, position: u32) -> Option<String> {
         let item = self.item(position)?;
         Some(item.entry().name.clone())
     }
 
     /// Sets the search text; returns true when the shown items changed.
-    pub fn set_query(&self, query: &str) -> bool {
+    pub(crate) fn set_query(&self, query: &str) -> bool {
         self.update_filter(|state| state.set_query(query))
     }
 
     /// True while the search box filters the folder.
-    pub fn is_searching(&self) -> bool {
+    pub(crate) fn is_searching(&self) -> bool {
         self.filter_state.borrow().is_searching()
     }
 
     /// Shows or hides hidden items; returns true when that changed.
-    pub fn set_show_hidden(&self, show: bool) -> bool {
+    pub(crate) fn set_show_hidden(&self, show: bool) -> bool {
         self.update_filter(|state| state.set_show_hidden(show))
     }
 
@@ -195,7 +195,7 @@ impl FolderModel {
     }
 
     /// Display positions of the selected items, ascending.
-    pub fn selected_positions(&self) -> Vec<u32> {
+    pub(crate) fn selected_positions(&self) -> Vec<u32> {
         let bitset = self.selection.selection();
         // A list model has at most u32::MAX positions.
         let count = u32::try_from(bitset.size()).unwrap_or(u32::MAX);
@@ -203,7 +203,7 @@ impl FolderModel {
     }
 
     /// The selected items in display order.
-    pub fn selected_items(&self) -> Vec<FileItem> {
+    pub(crate) fn selected_items(&self) -> Vec<FileItem> {
         self.selected_positions()
             .into_iter()
             .filter_map(|position| self.item(position))
@@ -211,7 +211,7 @@ impl FolderModel {
     }
 
     /// The first selected position, if any.
-    pub fn first_selected(&self) -> Option<u32> {
+    pub(crate) fn first_selected(&self) -> Option<u32> {
         let bitset = self.selection.selection();
         if bitset.is_empty() {
             return None;
@@ -220,7 +220,7 @@ impl FolderModel {
     }
 
     /// Count and size of the selection.
-    pub fn summary(&self) -> SelectionSummary {
+    pub(crate) fn summary(&self) -> SelectionSummary {
         let mut summary = SelectionSummary::default();
         for item in self.selected_items() {
             summary.count += 1;
@@ -233,22 +233,22 @@ impl FolderModel {
     }
 
     /// Selects only `position`.
-    pub fn select_only(&self, position: u32) {
+    pub(crate) fn select_only(&self, position: u32) {
         self.selection.select_item(position, true);
     }
 
     /// Selects every shown item.
-    pub fn select_all(&self) {
+    pub(crate) fn select_all(&self) {
         self.selection.select_all();
     }
 
     /// Clears the selection.
-    pub fn select_none(&self) {
+    pub(crate) fn select_none(&self) {
         self.selection.unselect_all();
     }
 
     /// Selects exactly the items that were not selected.
-    pub fn invert_selection(&self) {
+    pub(crate) fn invert_selection(&self) {
         let count = self.n_items();
         let everything = gtk::Bitset::new_range(0, count);
         let inverted = gtk::Bitset::new_range(0, count);
@@ -257,7 +257,7 @@ impl FolderModel {
     }
 
     /// URIs of the selected items, in display order.
-    pub fn selected_uris(&self) -> Vec<String> {
+    pub(crate) fn selected_uris(&self) -> Vec<String> {
         self.selected_items()
             .iter()
             .map(|item| item.entry().uri.clone())
@@ -269,7 +269,7 @@ impl FolderModel {
     ///
     /// One pass over the rows with a set lookup: a whole selected folder of
     /// 20,000 photos is restored in milliseconds, not seconds.
-    pub fn select_uris(&self, uris: &[String]) {
+    pub(crate) fn select_uris(&self, uris: &[String]) {
         if uris.is_empty() {
             self.select_none();
             return;

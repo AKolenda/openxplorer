@@ -22,6 +22,7 @@ use ox_core::places::{KnownFolder, NetworkKind, NetworkLocation};
 use super::file_type::{is_zip, FileType};
 use super::tint::Tint;
 use super::Icon;
+use crate::places::network_row;
 
 /// What an icon shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -136,6 +137,15 @@ impl Art {
         Self::for_network_location(location.kind, &location.label, connection)
     }
 
+    /// The art of the SMB location `uri`, for its tab and the details pane:
+    /// the art its row of `network` has in the sidebar (a server, a share
+    /// or a mapped drive, with the red cross while it is not connected),
+    /// else a share on the network bar, as for a folder inside a share
+    /// (`networkIcon` for every SMB tab in app.js).
+    pub(crate) fn for_smb_location(uri: &str, network: &[NetworkLocation]) -> Self {
+        network_row(network, uri).map_or(Art::SHARE, Art::for_network_row)
+    }
+
     /// The art of a Quick access folder: a standard folder's glyph (in its
     /// colour, when it has one) or the yellow folder for a pin, standing on
     /// the green bar when the folder is on the network.
@@ -199,6 +209,24 @@ mod tests {
     use crate::test_support::{
         file_entry as file, folder_entry as folder, studio_nas_mapped_drive, studio_nas_server,
     };
+
+    /// parity: LOOK-016
+    #[test]
+    fn an_smb_location_shows_the_art_of_its_network_row_or_a_share() {
+        let network = [studio_nas_server(), studio_nas_mapped_drive()];
+        let art_of = |uri: &str| Art::for_smb_location(uri, &network);
+        let server = Art::for_network_location(NetworkKind::Server, "studio-nas", Connection::Connected);
+        assert_eq!(art_of("smb://studio-nas/"), server);
+        let crossed_out_drive =
+            Art::for_network_location(NetworkKind::Share, "Studio NAS (Z:)", Connection::Disconnected);
+        assert_eq!(art_of("smb://studio-nas/projects"), crossed_out_drive);
+        assert_eq!(
+            art_of("smb://studio-nas/projects/2024"),
+            Art::SHARE,
+            "a folder inside"
+        );
+        assert_eq!(art_of("smb://other-nas/media"), Art::SHARE, "not in the list");
+    }
 
     /// parity: ARC-001
     #[test]

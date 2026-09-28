@@ -15,11 +15,32 @@
 //! listed modifiers, so Ctrl+Alt and `AltGr` combinations never resize text,
 //! as `action()` in text-size.js requires.
 
-/// Supported text sizes, in percent (`levels` in text-size.js).
-const LEVELS: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
+use ox_core::settings::{DEFAULT_TEXT_SIZE, TEXT_SIZES};
 
-/// The position of 100%, the default size, in [`LEVELS`].
-const DEFAULT_LEVEL: usize = 2;
+/// Supported text sizes, in percent (`levels` in text-size.js). They are
+/// the sizes the settings accept, so a size the app offers is always one
+/// the settings save, and the reverse.
+const LEVELS: [u32; 8] = TEXT_SIZES;
+
+/// The position of the default size, 100%, in [`LEVELS`].
+const DEFAULT_LEVEL: usize = level_of(DEFAULT_TEXT_SIZE);
+
+/// The position of `percent` in [`LEVELS`], worked out while compiling.
+///
+/// # Panics
+///
+/// While compiling, when `percent` is not one of the levels, so a default
+/// the settings and the app disagree on never builds.
+const fn level_of(percent: u32) -> usize {
+    let mut level = 0;
+    while level < LEVELS.len() {
+        if LEVELS[level] == percent {
+            return level;
+        }
+        level += 1;
+    }
+    panic!("the default text size is one of the levels");
+}
 
 /// A supported text size: always one of the levels of text-size.js.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,11 +209,14 @@ mod tests {
         }
     }
 
+    /// The levels are `levels` in text-size.js, which the settings accept
+    /// too.
+    ///
     /// parity: VIEW-044
     #[test]
     fn every_level_is_listed_once_smallest_first() {
         let percents: Vec<u32> = TextSize::all().map(TextSize::percent).collect();
-        assert_eq!(percents, LEVELS);
+        assert_eq!(percents, [80, 90, 100, 110, 125, 150, 175, 200]);
         assert_eq!(TextSize::DEFAULT.percent(), 100);
         assert_eq!(TextSize::default(), TextSize::DEFAULT);
     }

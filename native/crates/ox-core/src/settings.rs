@@ -43,13 +43,13 @@ mod test_support;
 
 use std::path::{Path, PathBuf};
 
-pub use crate::private_storage::StorageRefusal;
+pub use crate::private_storage::{StorageError, StorageRefusal};
 pub use choices::{Appearance, ContextMenu, Theme, View};
 pub use error::SettingsError;
 pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use preferences::{
-    Column, ColumnWidths, Preferences, PreferencesUpdate, DEFAULT_TEXT_SIZE, NETWORK_INTERVALS,
+    Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, DEFAULT_TEXT_SIZE, NETWORK_INTERVALS,
     SIDEBAR_WIDTHS, TEXT_SIZES,
 };
 
@@ -183,8 +183,8 @@ impl Settings {
     ///
     /// # Errors
     ///
-    /// [`SettingsError::Refused`] if private storage refuses the settings
-    /// directory, lock or file, and [`SettingsError::Io`] if one of them
+    /// [`SettingsError::Storage`] if private storage refuses the settings
+    /// directory, lock or file, or if one of them
     /// cannot be opened or written.
     pub fn update_preferences(&mut self, update: &PreferencesUpdate) -> Result<Preferences, SettingsError> {
         self.mutate(|data| {

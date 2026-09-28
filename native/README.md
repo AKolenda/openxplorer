@@ -136,13 +136,19 @@ Rust:
   rather than silencing it; an `#[allow]` that is truly needed says why.
 - Small modules with one responsibility; split a file before it passes about
   500 lines. No dense one-line logic: name intermediate values.
+- A module with submodules is a `name.rs` file beside a `name/` directory,
+  never `name/mod.rs`. The one exception is a helper folder under a crate's
+  `tests/`, such as `tests/transfer_support/mod.rs`: Cargo would build a
+  `tests/transfer_support.rs` as a test binary of its own.
+- Items get the narrowest visibility they need. `ox-app` warns on
+  `unreachable_pub`, so its crate-visible items say `pub(crate)`.
 - No `unwrap()` outside tests; use `expect("why this holds")` for real
   invariants and return errors for everything else.
 - Every public item has a doc comment saying what it is for, with `# Errors`
   and `# Panics` sections where they apply.
 - Code and tests ported from Python say so: "Ported from `desktop/core.py`".
 - Tests accompany behaviour. A test that proves an inventory feature carries a
-  parity marker such as `// parity: NAV-001` (see
+  parity marker in its doc comment, such as `/// parity: NAV-001` (see
   [parity/README.md](parity/README.md)).
 - The transfer engine is ported test-first from the Python suite and must keep
   every safety rule in `desktop/operations.py`.

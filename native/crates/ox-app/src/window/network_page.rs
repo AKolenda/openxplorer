@@ -14,7 +14,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::location::{self, LocationContext};
+use ox_core::location::{self, is_smb_location, LocationContext};
 use ox_core::places::NetworkLocation;
 
 use crate::icons::{self, Art, ArtImage, Icon};
@@ -23,7 +23,6 @@ use crate::places::Places;
 use super::button_style::ButtonStyle;
 use super::card_grid::{card_grid, DRIVE_GRID};
 use super::landing::{card_texts, location_card, section_title, CARD_ICON_GAP};
-use super::location_kind::is_smb_location;
 use super::window_action::WindowAction;
 use super::{unported, BrowserWindow};
 
@@ -199,7 +198,7 @@ impl BrowserWindow {
         match location::normalise_location(typed, None, &glib::home_dir()) {
             Ok(uri) if is_smb_location(&uri) => self.navigate_or_report(&uri),
             Ok(_) => self.show_message("Enter an SMB server or share."),
-            Err(error) => self.show_message(error.message()),
+            Err(error) => self.show_message(&error.to_string()),
         }
     }
 }

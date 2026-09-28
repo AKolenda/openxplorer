@@ -144,7 +144,7 @@ Local facts checked on the development machine (Zorin OS 18.1, GTK
 - The user's `~/.config/gtk-4.0/gtk.css` sets
   `window.csd, window.csd decoration, window.csd headerbar { border-radius: 0; }`.
   GTK loads that file at `GTK_STYLE_PROVIDER_PRIORITY_USER` (800), above the
-  skin's `APPLICATION` providers (600–602, `theme/mod.rs`). So window rules in
+  skin's `APPLICATION` providers (600–602, `theme.rs`). So window rules in
   the skin lose to it on this machine. Headless captures use a throwaway HOME
   and do not show this.
 
@@ -722,7 +722,7 @@ size before judging hairlines.
 | D-N13 | P1 | visible | The status bar joins its parts with " · "; the view toggles are not highlighted; there is no status mode or update button. | §4.7; add class `active` to the current view's toggle. |
 | D-N14 | P1 | visible | No responsive behaviour: at 990 px the capture still shows a 238 px details pane and a 218 px sidebar. The current app shows 235 / 185 there and hides the pane at ≤ 960. | Follow `.workspace` width with a `notify::width` handler (or `GtkConstraintLayout`) that applies the §4 breakpoints: 1190, 960 and 680. |
 | D-N15 | P1 | visible | The open-windows button is missing. | §4.1. |
-| D-N16 | P2 | safe | The sidebar default width is 220 (`window/mod.rs`); the current app uses 210 plus a 6 px resizer. | `unwrap_or(210)`; draw the resizer per §4.4. |
+| D-N16 | P2 | safe | The sidebar default width is 220 (`window.rs`); the current app uses 210 plus a 6 px resizer. | `unwrap_or(210)`; draw the resizer per §4.4. |
 | D-N17 | P2 | safe | The Size column is 90 wide (spec 78). | `SortColumn::Size => Some(78)` in `folder_view/details.rs`. |
 | D-N18 | P2 | safe | `ox_pressed` is darker than hover (`#e9e9e9` / `#3a3a3a`). | C18. |
 | D-N19 | P2 | safe | Menus have min width 215 (current 264 classic / 276 Windows 11), only one style, and a 25 px accelerator gap. | §4.9: add the `classic` class from `preferences.contextMenu`. |

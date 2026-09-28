@@ -93,7 +93,7 @@ mod imp {
 
     /// Private state of [`super::FileCell`].
     #[derive(Debug, Default)]
-    pub struct FileCell {
+    pub(crate) struct FileCell {
         /// The item's icon art.
         pub(super) image: ArtImage,
         /// The item's name.
@@ -126,7 +126,7 @@ mod imp {
 glib::wrapper! {
     /// An item's icon and name, as one row of the details view or one tile
     /// of the icon view.
-    pub struct FileCell(ObjectSubclass<imp::FileCell>)
+    pub(crate) struct FileCell(ObjectSubclass<imp::FileCell>)
         @extends gtk::Box, gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Find parity markers: comments that tie a native test to its features.
 
-A marker is a comment such as ``// parity: NAV-001, TAB-004`` placed
-next to a test in a Rust source under native/, or in any file under
-native/ui-tests/. Only a feature named by a marker may be recorded as
-natively done.
+A marker is a comment such as ``/// parity: NAV-001, TAB-004`` placed
+in a test's doc comment in a Rust source under native/, or in any file
+under native/ui-tests/ once UI tests exist there. Only a feature named by a
+marker may be recorded as natively done.
 """
 from __future__ import annotations
 

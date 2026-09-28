@@ -35,13 +35,13 @@ pub enum EntryError {
     /// An address that is not a supported location, refused by the
     /// `location` module before GIO was asked.
     #[error(transparent)]
-    Invalid(#[from] LocationError),
+    Location(#[from] LocationError),
     /// A file was offered for Quick access (`verify_pin` in Python).
     #[error("Only folders and network shares can be pinned to Quick access.")]
     NotPinnable,
     /// Any other failure.
     #[error("{0}")]
-    Other(String),
+    Failed(String),
 }
 
 impl EntryError {
@@ -56,7 +56,7 @@ impl EntryError {
             Self::NotDirectory(_) => "not-directory",
             Self::NotSupported(_) => "not-supported",
             Self::Cancelled => "cancelled",
-            Self::Invalid(_) | Self::NotPinnable | Self::Other(_) => "error",
+            Self::Location(_) | Self::NotPinnable | Self::Failed(_) => "error",
         }
     }
 
@@ -79,7 +79,7 @@ impl From<glib::Error> for EntryError {
             Some(gio::IOErrorEnum::NotDirectory) => Self::NotDirectory(message),
             Some(gio::IOErrorEnum::NotSupported) => Self::NotSupported(message),
             Some(gio::IOErrorEnum::Cancelled) => Self::Cancelled,
-            _ => Self::Other(message),
+            _ => Self::Failed(message),
         }
     }
 }
@@ -154,7 +154,7 @@ mod tests {
         let error = EntryError::from(LocationError::new("Enter a folder location."));
         assert_eq!(
             error,
-            EntryError::Invalid(LocationError::new("Enter a folder location."))
+            EntryError::Location(LocationError::new("Enter a folder location."))
         );
         assert_eq!(error.to_string(), "Enter a folder location.");
         assert_eq!(error.code(), "error");

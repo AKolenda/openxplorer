@@ -25,6 +25,10 @@ const CHECK_GLYPH: i32 = 16;
 /// The class of the chosen option's row.
 const CHOSEN_CLASS: &str = "chosen";
 
+#[expect(
+    unreachable_pub,
+    reason = "the glib::Properties derive always makes the selected property's accessors pub"
+)]
 mod imp {
     use super::{Cell, OnceCell, RefCell};
     use gtk::glib;

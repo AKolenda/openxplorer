@@ -46,5 +46,10 @@ pub mod update;
 pub mod versions;
 
 mod private_storage;
+mod random;
 #[cfg(test)]
 mod test_support;
+
+/// The `GLib` log domain of every warning the native app logs, from either
+/// crate, so one journal filter (`GLIB_DOMAIN=openxplorer`) shows them all.
+pub const LOG_DOMAIN: &str = "openxplorer";

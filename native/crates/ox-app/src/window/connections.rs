@@ -74,8 +74,6 @@ impl BrowserWindow {
         for handler in handlers.volumes {
             self.volume_monitor().disconnect(handler);
         }
-        if let Some(timer) = self.imp().typeahead.borrow_mut().timer.take() {
-            timer.remove();
-        }
+        self.imp().typeahead.borrow_mut().stop_timer();
     }
 }

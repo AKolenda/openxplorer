@@ -115,7 +115,7 @@ impl SnapshotProvider for TreeProvider {
             return Err(EntryError::NotFound("No such folder".into()));
         };
         if let Some(message) = collection["error"].as_str() {
-            return Err(EntryError::Other(message.into()));
+            return Err(EntryError::Failed(message.into()));
         }
         let entries = collection["entries"].as_array().expect("a list of entries");
         Ok(CollectionListing {
@@ -129,7 +129,7 @@ impl SnapshotProvider for TreeProvider {
             return Err(EntryError::NotFound("Not present in this snapshot.".into()));
         };
         if let Some(message) = item["error"].as_str() {
-            return Err(EntryError::Other(message.into()));
+            return Err(EntryError::Failed(message.into()));
         }
         Ok(fixture_entry(item))
     }

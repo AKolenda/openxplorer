@@ -37,7 +37,7 @@ impl SettingsPage {
     fn add_category_sections(&self) {
         for category in Category::ALL {
             let section = self.build_category(category);
-            self.add_page(category.key(), &section);
+            self.add_page(category.as_str(), &section);
             self.imp()
                 .category_sections
                 .borrow_mut()
@@ -76,7 +76,7 @@ impl SettingsPage {
                     move |_| settings.show_view(SettingsView::Category(subpage.category()))
                 ));
             }
-            self.add_page(subpage.key(), &section);
+            self.add_page(subpage.as_str(), &section);
             self.imp().subpages.borrow_mut().insert(subpage, section);
         }
     }

@@ -8,14 +8,13 @@
 //! [`sidebar_entries`] turns composed [`Places`] into rows without GTK, so
 //! the order is tested on its own.
 
-use ox_core::location::{LocationContext, NETWORK_URI, PC_URI};
+use ox_core::location::{is_smb_location, LocationContext, NETWORK_URI, PC_URI};
 use ox_core::places::{NetworkLocation, Place};
 
 use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
 use crate::places::Places;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
-use crate::window::location_kind::is_smb_location;
 
 /// A group of rows; a separator is drawn where the group changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

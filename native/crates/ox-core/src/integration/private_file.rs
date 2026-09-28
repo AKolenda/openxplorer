@@ -13,6 +13,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use crate::private_storage::FILE_MODE;
+use crate::random::{random_hex, NAME_BYTES};
 
 /// Replaces `path` with a private file holding `contents`.
 ///
@@ -44,7 +45,7 @@ fn temporary_path(path: &Path, prefix: &str) -> io::Result<PathBuf> {
     let directory = path
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "a file path has a parent"))?;
-    let name = format!("{prefix}{}", glib::uuid_string_random());
+    let name = format!("{prefix}{}", random_hex(NAME_BYTES)?);
     Ok(directory.join(name))
 }
 

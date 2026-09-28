@@ -250,7 +250,7 @@ impl StatusBar {
 /// Makes `button` show `glyph` and switch to `view`.
 fn show_view_on(button: &gtk::Button, glyph: Icon, view: FolderView) {
     button.set_child(Some(&icons::image(glyph, BUTTON_GLYPH)));
-    WindowAction::View.assign_with_target_to(button, &view.key().to_variant());
+    WindowAction::View.assign_with_target_to(button, &view.as_str().to_variant());
 }
 
 #[cfg(test)]

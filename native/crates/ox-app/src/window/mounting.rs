@@ -35,7 +35,7 @@ impl BrowserWindow {
                     .mount_future(gio::MountMountFlags::NONE, Some(&operation))
                     .await;
                 match (mounted, volume.get_mount()) {
-                    (Err(error), _) => window.show_message(error.message()),
+                    (Err(error), _) => window.show_message(&error.to_string()),
                     (Ok(()), Some(mount)) => window.navigate_or_report(&mount.root().uri()),
                     (Ok(()), None) => {}
                 }

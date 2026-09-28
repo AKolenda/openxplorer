@@ -13,7 +13,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::places::{FolderLocations, NetworkLocation, Place};
+use ox_core::places::{NetworkLocation, Place};
 
 use crate::locations::{self, Page};
 use crate::places::{self, PlaceSources, Places};
@@ -81,19 +81,16 @@ impl BrowserWindow {
         self.context().reload_settings();
     }
 
-    /// The sidebar and landing sections for the current settings and volumes.
+    /// The sidebar and landing sections for the current settings, volumes
+    /// and standard folders. The application reads `user-dirs.dirs` off the
+    /// main thread whenever it changes, so nothing is read here.
     pub(super) fn places(&self) -> Places {
-        // Read again on every call, as the Python app does, so a folder
-        // moved with xdg-user-dirs-update shows at once.
-        let known_folders = FolderLocations::from_environment()
-            .read_paths()
-            .quick_access_places();
-        self.places_with(&known_folders)
+        self.places_with(&self.context().known_folders())
     }
 
     /// The Network list alone, for the icons of network locations in the
-    /// tabs and the details pane. Unlike [`Self::places`] it reads no file,
-    /// because only Quick access needs the known folders.
+    /// tabs and the details pane; only Quick access needs the known
+    /// folders.
     pub(super) fn network_locations(&self) -> Vec<NetworkLocation> {
         self.places_with(&[]).network
     }

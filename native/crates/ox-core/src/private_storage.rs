@@ -40,7 +40,7 @@ const SQLITE_SIDECAR_SUFFIXES: [&str; 3] = ["-wal", "-shm", "-journal"];
 /// Python raises `ValueError` for a refusal and `OSError` for everything
 /// else; both name the path, so a warning can say which file it was.
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum StorageError {
+pub enum StorageError {
     /// `path` broke a private-storage rule.
     #[error("{reason} ({})", path.display())]
     Refused {
@@ -99,7 +99,7 @@ impl StorageError {
     /// Whether this is a missing file or directory, which Python reports as
     /// `FileNotFoundError` and [`private_file_if_present`] treats as
     /// "nothing there yet".
-    fn is_not_found(&self) -> bool {
+    pub(crate) fn is_not_found(&self) -> bool {
         matches!(self, Self::Io { error, .. } if error.kind() == io::ErrorKind::NotFound)
     }
 }

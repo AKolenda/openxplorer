@@ -7,12 +7,13 @@
 //! order. Each item runs a window or application action; the choices and
 //! toggles show a check mark while their action's state matches.
 
+use ox_core::settings::Theme;
+
 use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::icons::Icon;
 use crate::text_size::Step;
-use crate::theme::ThemePreference;
 use crate::window::folder_pane::FolderView;
 use crate::window::menu_popover::{MenuEntry, MenuItem};
 use crate::window::window_action::WindowAction;
@@ -50,12 +51,18 @@ pub(super) fn new_menu() -> Vec<MenuEntry> {
 
 /// The Sort menu's item for `column`.
 fn column_item(column: SortColumn) -> MenuEntry {
-    MenuItem::choice(column.label(), Icon::ArrowSort, WindowAction::Sort, column.key()).into()
+    MenuItem::choice(
+        column.label(),
+        Icon::ArrowSort,
+        WindowAction::Sort,
+        column.as_str(),
+    )
+    .into()
 }
 
 /// The Sort menu's item for `direction`.
 fn direction_item(label: &str, glyph: Icon, direction: SortDirection) -> MenuEntry {
-    MenuItem::choice(label, glyph, WindowAction::Direction, direction.key()).into()
+    MenuItem::choice(label, glyph, WindowAction::Direction, direction.as_str()).into()
 }
 
 /// The Sort menu: the columns, then the direction. The direction has an
@@ -72,7 +79,7 @@ pub(super) fn sort_menu() -> Vec<MenuEntry> {
 
 /// The View menu's item for `view`.
 fn view_item(label: &str, glyph: Icon, view: FolderView) -> MenuEntry {
-    MenuItem::choice(label, glyph, WindowAction::View, view.key()).into()
+    MenuItem::choice(label, glyph, WindowAction::View, view.as_str()).into()
 }
 
 /// The View menu's item for a text-size `step`, showing its `shortcut`.
@@ -102,17 +109,17 @@ pub(super) fn view_menu() -> Vec<MenuEntry> {
     entries
 }
 
-/// The appearance menu's item for `preference`.
-fn theme_item(label: &str, glyph: Icon, preference: ThemePreference) -> MenuEntry {
-    MenuItem::choice(label, glyph, WindowAction::Theme, preference.key()).into()
+/// The appearance menu's item for `theme`.
+fn theme_item(label: &str, glyph: Icon, theme: Theme) -> MenuEntry {
+    MenuItem::choice(label, glyph, WindowAction::Theme, theme.as_str()).into()
 }
 
 /// The three appearance choices (`appearanceMenu`).
 pub(super) fn appearance_items() -> [MenuEntry; 3] {
     [
-        theme_item("Light appearance", Icon::WeatherSunny, ThemePreference::Light),
-        theme_item("Dark appearance", Icon::WeatherMoon, ThemePreference::Dark),
-        theme_item("Use system appearance", Icon::Desktop, ThemePreference::System),
+        theme_item("Light appearance", Icon::WeatherSunny, Theme::Light),
+        theme_item("Dark appearance", Icon::WeatherMoon, Theme::Dark),
+        theme_item("Use system appearance", Icon::Desktop, Theme::System),
     ]
 }
 

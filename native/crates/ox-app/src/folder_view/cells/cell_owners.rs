@@ -57,13 +57,13 @@ pub(crate) struct CellOwners {
 
 impl CellOwners {
     /// A shared, empty registry.
-    pub fn new() -> Rc<Self> {
+    pub(crate) fn new() -> Rc<Self> {
         Rc::new(Self::default())
     }
 
     /// Records that `cell` is the content widget of `list_item`, and
     /// forgets cells that are gone.
-    pub fn register(&self, cell: &impl IsA<gtk::Widget>, list_item: &gtk::ListItem) {
+    pub(crate) fn register(&self, cell: &impl IsA<gtk::Widget>, list_item: &gtk::ListItem) {
         let mut owners = self.owners.borrow_mut();
         owners.retain(CellOwner::is_alive);
         owners.push(CellOwner {
@@ -74,7 +74,7 @@ impl CellOwners {
 
     /// The position of the item under (`x`, `y`) in `view`'s coordinates,
     /// or `None` over empty space. Clicks in a row's padding count too.
-    pub fn position_at(&self, view: &impl IsA<gtk::Widget>, x: f64, y: f64) -> Option<u32> {
+    pub(crate) fn position_at(&self, view: &impl IsA<gtk::Widget>, x: f64, y: f64) -> Option<u32> {
         let view = view.as_ref();
         let picked = view.pick(x, y, gtk::PickFlags::DEFAULT)?;
         let list_item = self.owner_near(view, picked)?;
@@ -82,7 +82,7 @@ impl CellOwners {
     }
 
     /// The content widget showing `position`, if it is on screen.
-    pub fn widget_at(&self, position: u32) -> Option<gtk::Widget> {
+    pub(crate) fn widget_at(&self, position: u32) -> Option<gtk::Widget> {
         self.owners
             .borrow()
             .iter()

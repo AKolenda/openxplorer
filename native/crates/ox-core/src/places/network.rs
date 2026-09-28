@@ -12,7 +12,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::location::{file_uri, normalise, split_location, unquote_lossy, LocationError};
+use crate::location::{file_uri, is_smb_location, normalise, split_location, unquote_lossy, LocationError};
 use crate::settings::Bookmark;
 
 /// SMB's port, which Python fills in when a URI has none or port 0.
@@ -150,7 +150,7 @@ pub fn merge_network_locations(
 impl NetworkMount {
     /// Only active SMB mounts contribute a Network row.
     fn is_active_smb_mount(&self) -> bool {
-        self.is_mounted && self.uri.starts_with("smb:")
+        self.is_mounted && is_smb_location(&self.uri)
     }
 }
 
@@ -232,7 +232,7 @@ impl<'a> Contribution<'a> {
     /// invalid location, or one that is neither SMB nor a stable mount.
     fn to_location(&self) -> Option<NetworkLocation> {
         let uri = normalise(&self.uri).ok()?;
-        let is_network = uri.starts_with("smb:") || self.kind == NetworkKind::Mount;
+        let is_network = is_smb_location(&uri) || self.kind == NetworkKind::Mount;
         if !is_network {
             return None;
         }

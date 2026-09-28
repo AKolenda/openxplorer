@@ -10,14 +10,13 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::{self, is_device_location, parent_location, LocationContext};
+use ox_core::location::{self, is_device_location, is_smb_location, parent_location, LocationContext};
 use ox_core::places::NetworkLocation;
 
 use crate::icons::{Art, Icon};
 use crate::locations::Page;
 
 use super::address_bar::CrumbButton;
-use super::location_kind::{is_smb_location, smb_location_art};
 use super::session::{Session, Tab};
 use super::tab_strip::TabView;
 use super::window_action::WindowAction;
@@ -59,7 +58,7 @@ fn tab_icon(uri: &str, network: &[NetworkLocation]) -> Art {
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
     } else if is_smb_location(uri) {
-        smb_location_art(uri, network)
+        Art::for_smb_location(uri, network)
     } else {
         Art::Folder
     }

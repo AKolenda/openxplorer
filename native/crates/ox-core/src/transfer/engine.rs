@@ -140,7 +140,6 @@ impl TransferEngine {
                     mode: operation.mode(),
                     policy,
                     destination_folder: folder.as_ref(),
-                    cancel,
                 };
                 self.run_items(ItemAction::Transfer(placement), &uris, cancel)
             }
@@ -276,7 +275,7 @@ impl TransferEngine {
         if selected.kind == NodeKind::Directory {
             guard_destination(source, placement.destination_folder)?;
         }
-        let Some(destination) = placement.destination_for(source, selected.kind)? else {
+        let Some(destination) = placement.destination_for(source, selected.kind, batch.cancel)? else {
             return Ok(ItemOutcome::Skipped);
         };
         let destination = destination.as_ref();
@@ -295,7 +294,7 @@ impl TransferEngine {
             moved_from.remember(source);
             self.move_item(source, destination, placement.policy, batch.cancel)?;
         } else {
-            self.copy_item(placement, selected, destination, staging)?;
+            self.copy_item(placement, selected, destination, batch.cancel, staging)?;
         }
         Ok(ItemOutcome::Done)
     }
@@ -318,13 +317,14 @@ impl TransferEngine {
     }
 
     /// Copies one item into the destination folder of `placement` through
-    /// private staging; `staging` receives the staging as soon as it
-    /// exists.
+    /// private staging, until the user cancels through `cancel`; `staging`
+    /// receives the staging as soon as it exists.
     fn copy_item(
         &mut self,
         placement: &Placement,
         selected: &SelectedItem,
         destination: &dyn Node,
+        cancel: &Cancellation,
         staging: &mut ItemStaging,
     ) -> Result<(), TransferError> {
         let copy = StagedCopy {
@@ -333,7 +333,7 @@ impl TransferEngine {
             destination_folder: placement.destination_folder,
             destination,
             policy: placement.policy,
-            cancel: placement.cancel,
+            cancel,
             guard: self.write_guard.as_deref(),
             emit: &mut *self.emit,
         };

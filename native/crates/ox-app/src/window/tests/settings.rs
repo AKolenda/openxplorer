@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::settings::{PreferencesUpdate, Settings};
+use ox_core::settings::{Column, ColumnWidth, PreferencesUpdate, Settings};
 
 use crate::locations::Page;
 use crate::settings_page::{Category, SettingsView};
@@ -221,7 +221,10 @@ fn reset_returns_every_windows_sidebar_to_its_default_width() {
     let beside = test.open_beside(&fixture.uri());
     let widened = PreferencesUpdate {
         sidebar_width: Some(320.0),
-        column_widths: Some(vec![(ox_core::settings::Column::Name, 400.0)]),
+        column_widths: Some(vec![ColumnWidth {
+            column: Column::Name,
+            pixels: 400.0,
+        }]),
         ..PreferencesUpdate::default()
     };
     Settings::open(test.settings_directory())

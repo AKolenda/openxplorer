@@ -27,7 +27,7 @@ pub(crate) enum SortColumn {
 
 impl SortColumn {
     /// Every column, in display order.
-    pub const ALL: [SortColumn; 4] = [
+    pub(crate) const ALL: [SortColumn; 4] = [
         SortColumn::Name,
         SortColumn::Modified,
         SortColumn::Type,
@@ -35,7 +35,7 @@ impl SortColumn {
     ];
 
     /// Key used in action targets (`win.sort::modified`), as in app.js.
-    pub const fn key(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             SortColumn::Name => "name",
             SortColumn::Modified => "modified",
@@ -45,12 +45,12 @@ impl SortColumn {
     }
 
     /// The column for an action target key.
-    pub fn from_key(key: &str) -> Option<SortColumn> {
-        Self::ALL.into_iter().find(|column| column.key() == key)
+    pub(crate) fn from_key(key: &str) -> Option<SortColumn> {
+        Self::ALL.into_iter().find(|column| column.as_str() == key)
     }
 
     /// Column header and Sort menu label.
-    pub const fn label(self) -> &'static str {
+    pub(crate) const fn label(self) -> &'static str {
         match self {
             SortColumn::Name => "Name",
             SortColumn::Modified => "Date modified",
@@ -71,10 +71,10 @@ pub(crate) enum SortDirection {
 
 impl SortDirection {
     /// Both directions, ascending first.
-    pub const ALL: [SortDirection; 2] = [SortDirection::Ascending, SortDirection::Descending];
+    pub(crate) const ALL: [SortDirection; 2] = [SortDirection::Ascending, SortDirection::Descending];
 
     /// Key used in action targets (`win.direction::descending`).
-    pub const fn key(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             SortDirection::Ascending => "ascending",
             SortDirection::Descending => "descending",
@@ -82,13 +82,13 @@ impl SortDirection {
     }
 
     /// The direction for an action target key.
-    pub fn from_key(key: &str) -> Option<SortDirection> {
-        Self::ALL.into_iter().find(|direction| direction.key() == key)
+    pub(crate) fn from_key(key: &str) -> Option<SortDirection> {
+        Self::ALL.into_iter().find(|direction| direction.as_str() == key)
     }
 
     /// CSS class of a column title's sort arrow pointing this way;
     /// `resources/skin/folder-views.css` turns `.sort-caret.ascending` up.
-    pub const fn css_class(self) -> &'static str {
+    pub(crate) const fn css_class(self) -> &'static str {
         match self {
             SortDirection::Ascending => "ascending",
             SortDirection::Descending => "descending",
@@ -96,7 +96,7 @@ impl SortDirection {
     }
 
     /// GTK's sort type for this direction.
-    pub fn to_sort_type(self) -> gtk::SortType {
+    pub(crate) fn to_sort_type(self) -> gtk::SortType {
         match self {
             SortDirection::Ascending => gtk::SortType::Ascending,
             SortDirection::Descending => gtk::SortType::Descending,
@@ -105,7 +105,7 @@ impl SortDirection {
 
     /// The direction of GTK's sort type. GTK's enum is open, so anything
     /// but descending counts as ascending.
-    pub fn from_sort_type(sort_type: gtk::SortType) -> SortDirection {
+    pub(crate) fn from_sort_type(sort_type: gtk::SortType) -> SortDirection {
         match sort_type {
             gtk::SortType::Descending => SortDirection::Descending,
             _ => SortDirection::Ascending,
@@ -125,7 +125,7 @@ pub(crate) struct SortOrder {
 impl SortOrder {
     /// Name ascending: how a new window sorts, and what an unsorted view
     /// reports.
-    pub const DEFAULT: SortOrder = SortOrder {
+    pub(crate) const DEFAULT: SortOrder = SortOrder {
         column: SortColumn::Name,
         direction: SortDirection::Ascending,
     };
@@ -143,7 +143,7 @@ pub(crate) struct SortKey(String);
 
 impl SortKey {
     /// The key of `text`.
-    pub fn new(text: &str) -> Self {
+    pub(crate) fn new(text: &str) -> Self {
         let decomposed = glib::normalize(text, glib::NormalizeMode::Default);
         let folded = decomposed
             .chars()
@@ -156,7 +156,7 @@ impl SortKey {
     /// Compares two keys in natural order: runs of ASCII digits compare by
     /// numeric value, punctuation sorts before digits and digits before
     /// letters.
-    pub fn natural_cmp(&self, other: &SortKey) -> Ordering {
+    pub(crate) fn natural_cmp(&self, other: &SortKey) -> Ordering {
         natural_cmp(&self.0, &other.0)
     }
 }
@@ -331,7 +331,7 @@ mod tests {
     #[test]
     fn columns_round_trip_through_their_keys() {
         for column in SortColumn::ALL {
-            assert_eq!(SortColumn::from_key(column.key()), Some(column));
+            assert_eq!(SortColumn::from_key(column.as_str()), Some(column));
         }
         assert_eq!(SortColumn::from_key("colour"), None);
     }
@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn directions_round_trip_through_their_keys() {
         for direction in SortDirection::ALL {
-            assert_eq!(SortDirection::from_key(direction.key()), Some(direction));
+            assert_eq!(SortDirection::from_key(direction.as_str()), Some(direction));
             let sort_type = direction.to_sort_type();
             assert_eq!(SortDirection::from_sort_type(sort_type), direction);
         }

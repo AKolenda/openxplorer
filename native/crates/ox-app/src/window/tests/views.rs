@@ -3,7 +3,7 @@
 //! and appearance.
 
 use gtk::prelude::*;
-use ox_core::settings::View;
+use ox_core::settings::{Appearance, Theme, View};
 
 use crate::folder_view::cells::FileCell;
 use crate::folder_view::column_titles;
@@ -14,7 +14,7 @@ use crate::test_support::harness::{
     application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::text_size::Step;
-use crate::theme::{Appearance, Skin};
+use crate::theme::Skin;
 use crate::window::folder_pane::FolderView;
 
 use super::geometry::{pixels, Bounds};
@@ -288,6 +288,27 @@ fn a_theme_chosen_in_one_window_reaches_every_window() {
     assert_eq!(second.action_state("theme").as_deref(), Some("dark"));
     let button = second.window.command_bar().appearance_tooltip();
     assert_eq!(button.as_deref(), Some("Appearance: dark. Click to change."));
+}
+
+/// Each theme's settings value is also the `win.theme` target: choosing it
+/// sets the skin, shows it as the action's state and saves it; any other
+/// target is refused.
+#[gtk::test]
+fn every_choice_round_trips_through_settings_and_action_keys() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    for theme in Theme::ALL {
+        test.activate("theme", Some(theme.as_str()));
+        assert_eq!(skin().theme(), theme);
+        assert_eq!(test.action_state("theme").as_deref(), Some(theme.as_str()));
+        wait_until("the theme to be saved", || {
+            test.context.settings_data().preferences.theme == theme
+        });
+    }
+    let chosen = skin().theme();
+    test.activate("theme", Some("sepia"));
+    assert_eq!(skin().theme(), chosen, "an unknown theme is refused");
 }
 
 /// The windows follow skins on no display, so the test can ask each skin

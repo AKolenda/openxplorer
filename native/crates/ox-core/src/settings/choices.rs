@@ -54,9 +54,11 @@ impl Theme {
 }
 
 /// The colours actually drawn: `data-theme` in `desktop/ui/app.js`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum Appearance {
-    /// Light surfaces with dark text.
+    /// Light surfaces with dark text; drawn until the desktop's colour
+    /// scheme is known, as the web page's stylesheet starts light.
+    #[default]
     Light,
     /// Dark surfaces with light text.
     Dark,

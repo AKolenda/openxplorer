@@ -395,10 +395,10 @@ fn selections_outside_one_to_two_hundred_items_are_refused_in_the_python_wording
 #[test]
 fn share_roots_cannot_be_copied_and_keep_the_location_message() {
     let error = ClipboardFiles::new(ClipboardMode::Cut, &["smb://nas/share".into()]).expect_err("share root");
-    let ClipboardError::Item(location_error) = &error else {
-        panic!("expected an item error, got {error:?}");
+    let ClipboardError::Location(location_error) = &error else {
+        panic!("expected a location error, got {error:?}");
     };
-    assert_eq!(error.to_string(), location_error.message());
+    assert_eq!(error.to_string(), location_error.to_string());
     assert!(
         error.to_string().starts_with("Open the network share first"),
         "{error}"

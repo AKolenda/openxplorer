@@ -29,7 +29,7 @@ pub struct PinTarget {
 ///
 /// # Errors
 ///
-/// [`EntryError::Invalid`] when `uri` is not a supported location, or the
+/// [`EntryError::Location`] when `uri` is not a supported location, or the
 /// GIO failure sorted by [`EntryError`].
 pub fn inspect(uri: &str, cancellable: Option<&gio::Cancellable>) -> Result<Entry, EntryError> {
     let uri = normalise(uri)?;
@@ -61,7 +61,7 @@ pub fn verify_pin(
 ///
 /// # Errors
 ///
-/// [`EntryError::NotPinnable`] for a file, and [`EntryError::Invalid`] for
+/// [`EntryError::NotPinnable`] for a file, and [`EntryError::Location`] for
 /// a target that is not a location that can be saved.
 pub fn pin_target(entry: &Entry, label: Option<&str>) -> Result<PinTarget, EntryError> {
     if !entry.is_dir {
@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn inspect_refuses_unsupported_addresses_before_any_query() {
         let error = inspect("javascript:alert(1)", None).expect_err("not a location");
-        assert!(matches!(error, EntryError::Invalid(_)), "{error:?}");
+        assert!(matches!(error, EntryError::Location(_)), "{error:?}");
         assert_eq!(error.code(), "error");
     }
 

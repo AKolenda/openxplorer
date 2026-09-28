@@ -434,7 +434,7 @@ mod tests {
             let entry = RecentEntry {
                 uri: format!("/tmp/file{i}.txt"),
                 name: format!("file{i}.txt"),
-                type_name: "Text".into(),
+                type_label: "Text".into(),
                 is_dir: true,
                 size: i,
                 modified: 1,

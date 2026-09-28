@@ -23,7 +23,6 @@ use super::SettingsPage;
 use crate::test_support::harness::{descendants, skin, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::test_support::python::{python_preference, python_saves_preferences};
 use crate::text_size::TextSize;
-use crate::theme::ThemePreference;
 
 /// A window on the standard fixture with Settings open in front.
 struct SettingsTest {
@@ -547,7 +546,7 @@ fn a_theme_card_applies_the_theme_and_saves_it_for_both_apps() {
 
     dark.activate();
 
-    assert_eq!(skin().preference(), ThemePreference::Dark);
+    assert_eq!(skin().theme(), Theme::Dark);
     assert!(dark.is_active());
     let dark_card = dark.parent().expect("the radio is in its card");
     assert!(dark_card.has_css_class("chosen"), "the chosen card is outlined");
@@ -582,7 +581,7 @@ fn the_arrow_keys_move_between_the_theme_cards_and_choose_them() {
 
     assert!(dark.has_focus(), "the next card has keyboard focus");
     assert!(dark.is_active());
-    assert_eq!(skin().preference(), ThemePreference::Dark);
+    assert_eq!(skin().theme(), Theme::Dark);
 }
 
 /// parity: SET-019, VIEW-045

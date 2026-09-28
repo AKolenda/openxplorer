@@ -49,7 +49,7 @@ impl Category {
 
     /// The name of the category's page in the page stack, and in
     /// `OPENXPLORER_SETTINGS`.
-    pub(crate) const fn key(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Category::Appearance => "appearance",
             Category::SearchAndIndexing => "search",
@@ -136,7 +136,7 @@ impl Subpage {
 
     /// The name of the page in the page stack, and in
     /// `OPENXPLORER_SETTINGS`.
-    pub(crate) const fn key(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Subpage::IndexedFolders => "indexed-folders",
             Subpage::FolderSizes => "folder-sizes",
@@ -171,10 +171,10 @@ impl Default for SettingsView {
 
 impl SettingsView {
     /// The name of the view's page in the page stack.
-    pub(crate) const fn key(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
-            SettingsView::Category(category) => category.key(),
-            SettingsView::Subpage(subpage) => subpage.key(),
+            SettingsView::Category(category) => category.as_str(),
+            SettingsView::Subpage(subpage) => subpage.as_str(),
         }
     }
 
@@ -182,7 +182,7 @@ impl SettingsView {
     pub(crate) fn from_key(key: &str) -> Option<Self> {
         let categories = Category::ALL.into_iter().map(SettingsView::Category);
         let subpages = Subpage::ALL.into_iter().map(SettingsView::Subpage);
-        categories.chain(subpages).find(|view| view.key() == key)
+        categories.chain(subpages).find(|view| view.as_str() == key)
     }
 
     /// The category the list highlights for this view.
@@ -205,14 +205,14 @@ mod tests {
         let categories = Category::ALL.map(SettingsView::Category);
         let subpages = Subpage::ALL.map(SettingsView::Subpage);
         for view in categories.into_iter().chain(subpages) {
-            assert_eq!(SettingsView::from_key(view.key()), Some(view));
+            assert_eq!(SettingsView::from_key(view.as_str()), Some(view));
         }
         assert_eq!(SettingsView::from_key("general"), None);
     }
 
     #[test]
     fn page_names_titles_and_colours_are_unique() {
-        let keys: HashSet<_> = Category::ALL.map(Category::key).into();
+        let keys: HashSet<_> = Category::ALL.map(Category::as_str).into();
         let titles: HashSet<_> = Category::ALL.map(Category::title).into();
         let classes: HashSet<_> = Category::ALL.map(Category::css_class).into();
         assert_eq!(keys.len(), Category::ALL.len());

@@ -402,8 +402,8 @@ mod tests {
     fn assert_each_refused(cases: &[RefusalCase]) {
         for case in cases {
             let result = canonical(case.address);
-            let refusal = result.as_deref().map_err(LocationError::message);
-            assert_eq!(refusal, Err(case.message), "{:?}", case.address);
+            let refusal = result.as_deref().map_err(ToString::to_string);
+            assert_eq!(refusal, Err(case.message.to_owned()), "{:?}", case.address);
         }
     }
 
@@ -601,8 +601,8 @@ mod tests {
     fn credentials_are_refused_in_every_address_form() {
         assert_each_refused(&CREDENTIALS);
         let inside_signed_in_folder = resolve("x", "smb://u@nas/a");
-        let refusal = inside_signed_in_folder.as_deref().map_err(LocationError::message);
-        assert_eq!(refusal, Err(SIGN_IN));
+        let refusal = inside_signed_in_folder.as_deref().map_err(ToString::to_string);
+        assert_eq!(refusal, Err(SIGN_IN.to_owned()));
     }
 
     /// parity: DEV-005

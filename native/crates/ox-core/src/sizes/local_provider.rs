@@ -147,7 +147,7 @@ fn read_error(path: &Path, error: &io::Error) -> EntryError {
         io::ErrorKind::NotFound => EntryError::NotFound(message),
         io::ErrorKind::PermissionDenied => EntryError::PermissionDenied(message),
         io::ErrorKind::NotADirectory => EntryError::NotDirectory(message),
-        _ => EntryError::Other(message),
+        _ => EntryError::Failed(message),
     }
 }
 

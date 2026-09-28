@@ -235,7 +235,10 @@ fn settings_lock_symlink_refused() {
     fs::write(&target, "unchanged").unwrap();
     symlink(&target, directory.join("settings.lock")).unwrap();
     let result = store.update_preferences(&update_from(&json!({"theme": "dark"})));
-    assert!(matches!(result, Err(SettingsError::Io { .. })));
+    assert!(matches!(
+        result,
+        Err(SettingsError::Storage(StorageError::Io { .. }))
+    ));
     assert_eq!(fs::read_to_string(&target).unwrap(), "unchanged");
 }
 
@@ -255,7 +258,10 @@ fn settings_json_symlink_not_overwritten() {
     let mut store = Settings::open(&directory);
     assert!(store.warning().is_some());
     let result = store.update_preferences(&PreferencesUpdate::default());
-    assert!(matches!(result, Err(SettingsError::Io { .. })));
+    assert!(matches!(
+        result,
+        Err(SettingsError::Storage(StorageError::Io { .. }))
+    ));
     assert!(store.path().is_symlink());
     assert_eq!(fs::read_to_string(&target).unwrap(), "{}");
     assert_eq!(backups(&directory), Vec::<String>::new());
@@ -462,10 +468,10 @@ fn a_change_never_moves_a_refused_file() {
 
     assert!(matches!(
         result,
-        Err(SettingsError::Refused {
+        Err(SettingsError::Storage(StorageError::Refused {
             reason: StorageRefusal::NotPrivateFile,
             ..
-        })
+        }))
     ));
     assert_eq!(
         fs::read_to_string(directory.join("settings.json")).unwrap(),

@@ -19,7 +19,8 @@
 use std::ffi::OsStr;
 
 use crate::archive::ArchiveError;
-use crate::transfer::{random_hex, secure_local_staging, Cancellation, ItemIdentity, Node, TransferError};
+use crate::random::{random_hex, NAME_BYTES};
+use crate::transfer::{secure_local_staging, Cancellation, ItemIdentity, Node, TransferError};
 
 /// Staging folders are `.openxplorer-extract-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-extract-";
@@ -113,7 +114,7 @@ impl ExtractionStaging {
 ///
 /// When the kernel's random source cannot be read.
 fn staging_name() -> Result<String, ArchiveError> {
-    let digits = random_hex().map_err(|error| {
+    let digits = random_hex(NAME_BYTES).map_err(|error| {
         TransferError::failed(format!("Could not reserve a private staging name. {error}"))
     })?;
     Ok(format!("{STAGING_PREFIX}{digits}{STAGING_SUFFIX}"))

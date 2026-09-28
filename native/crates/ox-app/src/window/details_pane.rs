@@ -59,7 +59,7 @@ mod imp {
     /// Private state of [`super::DetailsPane`]: the template's widgets
     /// that change with the selection.
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(file = "../../../resources/ui/details-pane.ui")]
+    #[template(file = "../../resources/ui/details-pane.ui")]
     pub(crate) struct DetailsPane {
         /// The pane's one child, around everything else. Bound so that
         /// `dispose_template` unparents it with the pane.

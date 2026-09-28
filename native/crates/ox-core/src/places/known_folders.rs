@@ -14,9 +14,7 @@ use std::path::{Path, PathBuf};
 use super::quick_access::Place;
 use super::user_dirs::{self, UserDirs};
 use crate::location::file_uri;
-
-/// `GLib` log domain for problems with `user-dirs.dirs`.
-const LOG_DOMAIN: &str = "openxplorer";
+use crate::LOG_DOMAIN;
 
 /// An XDG standard folder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -148,6 +146,11 @@ impl FolderLocations {
         }
     }
 
+    /// The `user-dirs.dirs` file these locations read, for watching it.
+    pub fn user_dirs_file(&self) -> &Path {
+        &self.user_dirs_file
+    }
+
     /// Reads `user-dirs.dirs` now and returns every standard folder. A
     /// folder without a valid line is `~/<Label>`; nothing is created.
     ///
@@ -156,7 +159,18 @@ impl FolderLocations {
     /// with a logged warning, where the Python app failed to build the
     /// sidebar at all.
     pub fn read_paths(&self) -> KnownFolderPaths {
-        let mut configured = self.read_configured();
+        self.paths_with(self.read_configured())
+    }
+
+    /// Every standard folder at its default, `~/<Label>`, without reading
+    /// anything: what [`read_paths`](Self::read_paths) returns for a
+    /// missing file, for use until the file has been read.
+    pub fn default_paths(&self) -> KnownFolderPaths {
+        self.paths_with(UserDirs::new())
+    }
+
+    /// Every standard folder: where `configured` puts it, else `~/<Label>`.
+    fn paths_with(&self, mut configured: UserDirs) -> KnownFolderPaths {
         let mut paths = HashMap::new();
         for folder in KnownFolder::ALL {
             let default_path = self.home.join(folder.label());
@@ -269,6 +283,20 @@ mod tests {
         for folder in KnownFolder::ALL {
             assert_eq!(paths.path(folder), fixture.home.join(folder.label()));
         }
+    }
+
+    #[test]
+    fn the_defaults_ignore_the_file_until_it_is_read() {
+        let fixture = Fixture::new();
+        fixture.write_user_dirs("XDG_DOWNLOAD_DIR=\"$HOME/Incoming\"\n");
+        let defaults = fixture.locations().default_paths();
+        for folder in KnownFolder::ALL {
+            assert_eq!(defaults.path(folder), fixture.home.join(folder.label()));
+        }
+        assert_eq!(
+            fixture.locations().user_dirs_file(),
+            fixture.config.join("user-dirs.dirs")
+        );
     }
 
     /// Python's `paths()` re-reads the file on every call, so a folder moved

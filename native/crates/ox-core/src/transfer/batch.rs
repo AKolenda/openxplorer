@@ -13,6 +13,8 @@ use super::types::{progress_fraction, TransferMode};
 pub(crate) struct Batch<'a> {
     /// What the run does with each item.
     pub(crate) action: ItemAction<'a>,
+    /// The user's cancellation, checked before each step of every item.
+    /// It is the run's only token: the item's steps receive it from here.
     pub(crate) cancel: &'a Cancellation,
     /// The number of distinct items.
     pub(crate) total: usize,
@@ -93,7 +95,6 @@ mod tests {
             mode,
             policy: ConflictPolicy::Skip,
             destination_folder: &folder,
-            cancel: &cancel,
         };
         let cases = [
             ActionCase {

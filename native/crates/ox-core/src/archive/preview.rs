@@ -29,6 +29,7 @@ use super::worker::on_worker;
 use super::zip::{MemberFileType, ZipArchive, ZipMember};
 use super::ArchiveError;
 use crate::private_storage::private_directory;
+use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{Cancellation, TransferError, PRIVATE_DIRECTORY_MODE};
 
 /// The largest member that can be opened (256 MiB).
@@ -157,7 +158,8 @@ fn check_previewable(member: &ZipMember) -> Result<(), ArchiveError> {
 /// itself must be a private folder of this user, not a link.
 fn create_preview_folder(root: &Path) -> Result<PathBuf, ArchiveError> {
     private_directory(root).map_err(|error| TransferError::failed(error.to_string()))?;
-    let folder = root.join(format!("{PREVIEW_FOLDER_PREFIX}{}", glib::uuid_string_random()));
+    let digits = random_hex(NAME_BYTES)?;
+    let folder = root.join(format!("{PREVIEW_FOLDER_PREFIX}{digits}"));
     DirBuilder::new().mode(PRIVATE_DIRECTORY_MODE).create(&folder)?;
     // The umask may have removed bits; the folder must be exactly 0700.
     fs::set_permissions(&folder, Permissions::from_mode(PRIVATE_DIRECTORY_MODE))?;

@@ -17,7 +17,7 @@ use rustix::fs::Access;
 
 use super::TerminalError;
 use crate::entry::{Entry, EntryError, EntryKind};
-use crate::location::{file_uri, is_smb_server, normalise, split_location, unquote_lossy};
+use crate::location::{file_uri, is_smb_location, is_smb_server, normalise, split_location, unquote_lossy};
 use crate::transfer::Cancellation;
 
 /// The longest folder path accepted, in characters.
@@ -141,7 +141,7 @@ pub fn prepare_directory<C: DirectoryChecks>(
     check_live_location(checks, &file_uri(&path))?;
     stop_if_cancelled(cancel)?;
     Ok(PreparedDirectory {
-        is_network: directory_uri.starts_with("smb:"),
+        is_network: is_smb_location(&directory_uri),
         uri: directory_uri,
         path,
     })

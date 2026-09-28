@@ -10,12 +10,12 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
+use ox_core::settings::Theme;
 
 use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::text_size::Step;
-use crate::theme::ThemePreference;
 
 use super::folder_pane::FolderView;
 use super::preferences::Preference;
@@ -220,7 +220,7 @@ impl BrowserWindow {
         let preferences = self.context().settings_data().preferences;
         let view = FolderView::from_setting(preferences.view);
         self.add_action_entries([
-            choice_action(WindowAction::View, view.key(), |window, key| {
+            choice_action(WindowAction::View, view.as_str(), |window, key| {
                 let Some(view) = FolderView::from_key(key) else {
                     return false;
                 };
@@ -248,7 +248,7 @@ impl BrowserWindow {
     /// by a column header too.
     fn install_sort_actions(&self) {
         self.add_action_entries([
-            choice_action(WindowAction::Sort, SortColumn::Name.key(), |window, key| {
+            choice_action(WindowAction::Sort, SortColumn::Name.as_str(), |window, key| {
                 let Some(column) = SortColumn::from_key(key) else {
                     return false;
                 };
@@ -257,7 +257,7 @@ impl BrowserWindow {
             }),
             choice_action(
                 WindowAction::Direction,
-                SortDirection::Ascending.key(),
+                SortDirection::Ascending.as_str(),
                 |window, key| {
                     let Some(direction) = SortDirection::from_key(key) else {
                         return false;
@@ -307,27 +307,27 @@ impl BrowserWindow {
             self,
             move |_, _| {
                 let order = window.folder_pane().details().sort_order();
-                window.set_action_state(WindowAction::Sort, &order.column.key().to_variant());
-                window.set_action_state(WindowAction::Direction, &order.direction.key().to_variant());
+                window.set_action_state(WindowAction::Sort, &order.column.as_str().to_variant());
+                window.set_action_state(WindowAction::Direction, &order.direction.as_str().to_variant());
             }
         ));
     }
 
     fn install_appearance_actions(&self) {
-        let theme = self.skin().preference().key();
+        let theme = self.skin().theme().as_str();
         self.add_action_entries([choice_action(WindowAction::Theme, theme, |window, key| {
-            let Some(preference) = ThemePreference::from_key(key) else {
+            let Some(theme) = Theme::from_key(key) else {
                 return false;
             };
-            window.skin().set_preference(preference);
-            window.save_preference(Preference::Theme(preference));
+            window.skin().set_theme(theme);
+            window.save_preference(Preference::Theme(theme));
             true
         })]);
         let steps = Step::ALL.map(|step| {
             plain_action(WindowAction::TextSize(step), move |window| {
                 let size = step.apply(window.skin().text_size());
                 window.skin().set_text_size(size);
-                window.save_preference(Preference::TextSize(size.percent()));
+                window.save_preference(Preference::TextSize(size));
             })
         });
         self.add_action_entries(steps);
@@ -347,7 +347,7 @@ impl BrowserWindow {
     /// message line.
     fn open_tab_or_report(&self, address: &str, placement: TabPlacement) {
         if let Err(error) = self.open_tab(address, placement) {
-            self.show_message(error.message());
+            self.show_message(&error.to_string());
         }
     }
 
@@ -396,7 +396,7 @@ pub(crate) fn install_accelerators(app: &gtk::Application) {
     }
     for size in IconSize::ALL {
         let view = WindowAction::View.detailed_name();
-        let detailed = format!("{view}::{}", size.key());
+        let detailed = format!("{view}::{}", size.as_str());
         app.set_accels_for_action(&detailed, &[size.accelerator()]);
     }
 }

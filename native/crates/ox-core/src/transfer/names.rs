@@ -11,11 +11,12 @@
 //! did not create successfully is never deleted by it.
 
 use std::ffi::OsStr;
-use std::io::{self, Read};
+use std::io;
 use std::os::unix::ffi::OsStrExt;
 
 use super::error::TransferError;
 use super::node::Node;
+use crate::random::{random_hex, NAME_BYTES};
 
 /// Staging names are `.winspace-transfer-<32 hex>.part` (XFER-001).
 const STAGING_PREFIX: &str = ".winspace-transfer-";
@@ -24,27 +25,10 @@ const STAGING_SUFFIX: &str = ".part";
 /// (XFER-010).
 const BACKUP_PREFIX: &str = ".winspace-replaced-";
 const BACKUP_SUFFIX: &str = ".backup";
-/// The number of hexadecimal digits in a generated name: 128 random bits.
-const RANDOM_DIGITS: usize = 32;
+/// The hexadecimal digits of a generated name, two per random byte.
+const NAME_DIGITS: usize = 2 * NAME_BYTES;
 /// The payload item inside a local or network staging folder.
 pub(crate) const PAYLOAD_NAME: &str = "payload";
-
-/// 32 lowercase hexadecimal digits from `/dev/urandom` (like
-/// `uuid.uuid4().hex` in Python: unpredictable, not merely unique). The
-/// engine's names and the ZIP extractor's staging names in
-/// [`crate::archive`] use them.
-///
-/// # Errors
-///
-/// When the kernel's random source cannot be read. Each caller explains
-/// the failure in terms of the name it asked for.
-pub(crate) fn random_hex() -> io::Result<String> {
-    let mut bytes = [0u8; RANDOM_DIGITS / 2];
-    let mut source = std::fs::File::open("/dev/urandom")?;
-    source.read_exact(&mut bytes)?;
-    let pairs: Vec<String> = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    Ok(pairs.concat())
-}
 
 /// A new `.winspace-transfer-<32 hex>.part` name for a private staging item.
 ///
@@ -53,7 +37,7 @@ pub(crate) fn random_hex() -> io::Result<String> {
 /// When the kernel's random source cannot be read. A copy asks for its
 /// staging name before it creates anything, so nothing was changed.
 pub(crate) fn staging_name() -> Result<String, TransferError> {
-    let digits = random_hex().map_err(|error| staging_name_failure(&error))?;
+    let digits = random_hex(NAME_BYTES).map_err(|error| staging_name_failure(&error))?;
     Ok(format!("{STAGING_PREFIX}{digits}{STAGING_SUFFIX}"))
 }
 
@@ -64,7 +48,7 @@ pub(crate) fn staging_name() -> Result<String, TransferError> {
 ///
 /// When the kernel's random source cannot be read.
 pub(crate) fn backup_name() -> Result<String, TransferError> {
-    let digits = random_hex().map_err(|error| backup_name_failure(&error))?;
+    let digits = random_hex(NAME_BYTES).map_err(|error| backup_name_failure(&error))?;
     Ok(format!("{BACKUP_PREFIX}{digits}{BACKUP_SUFFIX}"))
 }
 
@@ -95,7 +79,7 @@ pub fn is_own_staging_name(name: &str) -> bool {
         return false;
     };
     let is_lower_hex = |digit: u8| matches!(digit, b'0'..=b'9' | b'a'..=b'f');
-    digits.len() == RANDOM_DIGITS && digits.bytes().all(is_lower_hex)
+    digits.len() == NAME_DIGITS && digits.bytes().all(is_lower_hex)
 }
 
 /// `folder.child(name)` after checking that `name` is exactly one path

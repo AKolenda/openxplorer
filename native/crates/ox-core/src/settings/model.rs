@@ -49,7 +49,7 @@ pub struct RecentEntry {
     pub name: String,
     /// Human-readable type, for example "PDF document".
     #[serde(rename = "type")]
-    pub type_name: String,
+    pub type_label: String,
     /// Always `false` when read back: only files are remembered.
     pub is_dir: bool,
     /// Size in bytes.
@@ -68,7 +68,7 @@ impl RecentEntry {
     pub(super) fn into_stored(self) -> Self {
         Self {
             name: first_chars(&self.name, MAX_NAME_CHARS),
-            type_name: first_chars(&self.type_name, MAX_TYPE_CHARS),
+            type_label: first_chars(&self.type_label, MAX_TYPE_CHARS),
             is_dir: false,
             ..self
         }
@@ -183,7 +183,7 @@ mod tests {
         let opened = RecentEntry {
             uri: "file:///tmp/long".into(),
             name: "n".repeat(600),
-            type_name: "t".repeat(300),
+            type_label: "t".repeat(300),
             is_dir: true,
             size: 7,
             modified: 9,
@@ -192,7 +192,7 @@ mod tests {
         let stored = opened.clone().into_stored();
 
         assert_eq!(stored.name.chars().count(), MAX_NAME_CHARS);
-        assert_eq!(stored.type_name.chars().count(), MAX_TYPE_CHARS);
+        assert_eq!(stored.type_label.chars().count(), MAX_TYPE_CHARS);
         assert!(!stored.is_dir);
         assert_eq!((stored.uri, stored.size, stored.modified), (opened.uri, 7, 9));
     }

@@ -17,18 +17,14 @@
 //! ([`navigation`]) and drawing it ([`location_view`]), listing
 //! ([`loading`]), the selection ([`selection`]), the desktop's volumes and
 //! places ([`environment`]), Quick access ([`quick_access`]), mounting
-//! ([`mounting`]), the skin ([`appearance`]), activation, actions,
-//! input, and what the window connects and lets go of ([`connections`]).
+//! ([`mounting`]), the skin ([`appearance`]), activation, actions, input
+//! ([`type_to_select`]), and what the window connects and lets go of
+//! ([`connections`]).
 //! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
 //! [`search_box::SearchBox::connect_query_changed`]), so the controller
 //! never reaches into another widget's children; it connects directly only
 //! to the window's own template children, such as the workspace split.
-//!
-//! Every module here is private, so a `pub` item could never be used
-//! outside the crate; `unreachable_pub` makes the compiler ask for the
-//! visibility each item really has.
-#![warn(unreachable_pub)]
 
 mod about;
 mod actions;
@@ -54,7 +50,6 @@ mod landing;
 mod listing_state;
 mod loading;
 mod loading_line;
-mod location_kind;
 mod location_view;
 mod menu_popover;
 mod mounting;
@@ -73,6 +68,7 @@ mod tab_layout;
 mod tab_strip;
 mod title_bar;
 mod toast;
+mod type_to_select;
 mod unported;
 mod widget_tree;
 mod window_action;
@@ -83,10 +79,9 @@ mod tests;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use crate::app_context::AppContext;
 use crate::settings_page::SettingsPage;
-use crate::shared::AppContext;
 use crate::theme::Skin;
-use crate::typeahead;
 
 use address_bar::AddressBar;
 use command_bar::CommandBar;
@@ -100,21 +95,11 @@ use tab_strip::TabStrip;
 pub(crate) use actions::install_accelerators;
 pub(crate) use button_style::ButtonStyle;
 pub(crate) use folder_pane::FolderView;
-pub(crate) use location_kind::is_local_or_smb_location;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;
 pub(crate) use unported::Milestone;
 pub(crate) use widget_tree::children;
 pub(crate) use window_action::WindowAction;
-
-/// The type-to-select prefix and the timer that clears its hint.
-#[derive(Debug, Default)]
-struct Typeahead {
-    /// The typed prefix and the matching rules.
-    controller: typeahead::Controller,
-    /// Ends the prefix after a pause; it clears itself when it fires.
-    timer: Option<glib::SourceId>,
-}
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
@@ -138,15 +123,15 @@ mod imp {
     use super::status_bar::StatusBar;
     use super::tab_strip::TabStrip;
     use super::toast::Toast;
-    use super::Typeahead;
+    use super::type_to_select::Typeahead;
+    use crate::app_context::AppContext;
     use crate::settings_page::SettingsPage;
-    use crate::shared::AppContext;
     use crate::volumes::VolumeRow;
 
     /// Private state of [`super::BrowserWindow`]: the parts of the frame
     /// it updates, then the state of its tabs.
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(file = "../../resources/ui/window.ui")]
+    #[template(file = "../resources/ui/window.ui")]
     pub(crate) struct BrowserWindow {
         /// The tabs in the title bar.
         #[template_child]

@@ -182,11 +182,11 @@ fn read_recent(item: &Value) -> Option<RecentEntry> {
     let stored_uri = fields.get("uri")?.as_str()?;
     let uri = normalise(stored_uri).ok()?;
     let name = python_str(fields.get("name")?);
-    let type_name = fields.get("type").map_or_else(|| "File".to_owned(), python_str);
+    let type_label = fields.get("type").map_or_else(|| "File".to_owned(), python_str);
     let entry = RecentEntry {
         uri,
         name,
-        type_name,
+        type_label,
         is_dir: false,
         size: python_count(fields.get("size"))?,
         modified: python_count(fields.get("modified"))?,
@@ -222,7 +222,7 @@ mod tests {
     use super::*;
     use crate::settings::model::MAX_NAME_CHARS;
     use crate::settings::save::OldFile;
-    use crate::settings::{Column, Theme};
+    use crate::settings::{Column, StorageError, Theme};
 
     /// What reading one parsed file produced.
     struct Outcome {
@@ -240,10 +240,8 @@ mod tests {
     /// A read of `settings.json` that failed with the operating-system
     /// error `error`.
     fn failed_read(error: io::Error) -> Result<(), SettingsError> {
-        Err(SettingsError::Io {
-            path: "/state/winspace/settings.json".into(),
-            error,
-        })
+        let path = Path::new("/state/winspace/settings.json");
+        Err(SettingsError::from(StorageError::io(path, error)))
     }
 
     /// Safety rule "never erase unreadable settings": an I/O error after
@@ -389,9 +387,9 @@ mod tests {
         assert_eq!(names[2].chars().count(), MAX_NAME_CHARS);
         let first = &settings.recent[0];
         assert_eq!((first.size, first.modified, first.is_dir), (1024, 0, false));
-        assert_eq!(first.type_name, "File");
+        assert_eq!(first.type_label, "File");
         let second = &settings.recent[1];
         assert_eq!((second.size, second.modified), (2, 0));
-        assert_eq!(second.type_name, "None");
+        assert_eq!(second.type_label, "None");
     }
 }

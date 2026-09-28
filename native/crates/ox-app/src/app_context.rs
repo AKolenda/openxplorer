@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the windows of one application share: the skin, the settings file,
-//! the network locations visited this session and the way files are opened.
+//! the standard folders, the network locations visited this session and
+//! the way files are opened.
 //!
 //! The Python app kept these on its `Gtk.Application` (`settings_store`,
 //! `visited_network`, `launch_default` in `desktop/winspace.py`) and
 //! broadcast `environmentChanged` to every window. Here an [`AppContext`]
 //! emits `places-changed`, which every window connects to, when a pin, a
-//! saved share, a visited server or a preference changes, and
-//! `layout-reset` when Settings restores the default pane widths.
+//! saved share, a visited server, a standard folder ([`known_folders`]) or
+//! a preference changes, and `layout-reset` when Settings restores the
+//! default pane widths.
+
+mod known_folders;
 
 use std::rc::Rc;
 
@@ -33,9 +37,10 @@ mod imp {
     use std::rc::Rc;
     use std::sync::OnceLock;
 
-    use gtk::glib;
     use gtk::glib::subclass::Signal;
     use gtk::subclass::prelude::*;
+    use gtk::{gio, glib};
+    use ox_core::places::Place;
     use ox_core::settings::Bookmark;
 
     use super::{LAYOUT_RESET, PLACES_CHANGED};
@@ -51,6 +56,12 @@ mod imp {
         pub(super) settings: OnceCell<Rc<SettingsStore>>,
         /// SMB servers and shares browsed this session, oldest first.
         pub(super) visited_network: RefCell<Vec<Bookmark>>,
+        /// Quick access rows of the standard folders, as last read from
+        /// `user-dirs.dirs`.
+        pub(super) known_folders: RefCell<Vec<Place>>,
+        /// Reports changes of `user-dirs.dirs`, so the standard folders
+        /// are read again; `None` where the file cannot be watched.
+        pub(super) user_dirs_monitor: RefCell<Option<gio::FileMonitor>>,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,
@@ -93,6 +104,7 @@ impl AppContext {
         imp.settings
             .set(SettingsStore::new(settings))
             .expect("a new AppContext has no settings yet");
+        context.watch_known_folders();
         context
     }
 
@@ -219,12 +231,12 @@ impl AppContext {
 
     /// Opens `entry` in its default application and records it among the
     /// recently opened files, as `launch_default` in winspace.py does.
-    /// `on_error` hears why it could not be opened.
+    /// `on_error` hears GIO's reason when it could not be opened.
     pub(crate) fn open_file(
         &self,
         entry: &Entry,
         window: &gtk::Window,
-        on_error: impl FnOnce(String) + 'static,
+        on_error: impl FnOnce(glib::Error) + 'static,
     ) {
         let recent = recent_entry(entry);
         let uri = entry.navigation_uri().to_owned();
@@ -240,7 +252,7 @@ impl AppContext {
         glib::spawn_future_local(async move {
             let launched = gio::AppInfo::launch_default_for_uri_future(&uri, Some(&launch_context)).await;
             match (launched, context.upgrade()) {
-                (Err(error), _) => on_error(error.message().to_owned()),
+                (Err(error), _) => on_error(error),
                 (Ok(()), Some(context)) => context.remember_open(recent),
                 (Ok(()), None) => {}
             }
@@ -275,7 +287,7 @@ fn recent_entry(entry: &Entry) -> RecentEntry {
     RecentEntry {
         uri: entry.uri.clone(),
         name: entry.name.clone(),
-        type_name: entry.type_label.clone(),
+        type_label: entry.type_label.clone(),
         is_dir: entry.is_dir,
         size: entry.size.unwrap_or(0),
         // `settings.json` keeps 0 for an unknown time, as core.py does.

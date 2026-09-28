@@ -192,8 +192,8 @@ mod tests {
         let long_extension = format!("a.{}", "x".repeat(250));
         let refusal = new_copy_name(&long_extension, 2, ItemKind::File);
         assert_eq!(
-            refusal.as_ref().map_err(LocationError::message),
-            Err("This file name is too long to generate a duplicate name.")
+            refusal.as_ref().map_err(ToString::to_string),
+            Err("This file name is too long to generate a duplicate name.".to_owned())
         );
         assert!(new_copy_name("a/b", 2, ItemKind::File).is_err());
     }

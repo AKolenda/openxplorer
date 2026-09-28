@@ -84,7 +84,7 @@ impl VolumeRow {
     /// True for a mounted SMB share. It belongs under Network, never among
     /// the drives (`!m.uri?.startsWith('smb:')` in app.js).
     pub(crate) fn is_network(&self) -> bool {
-        self.uri().is_some_and(|uri| uri.starts_with("smb:"))
+        self.uri().is_some_and(location::is_smb_location)
     }
 }
 

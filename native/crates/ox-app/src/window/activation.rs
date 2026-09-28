@@ -95,7 +95,7 @@ impl BrowserWindow {
         let on_error = glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |message: String| window.show_message(&message)
+            move |error: glib::Error| window.show_message(&error.to_string())
         );
         self.context().open_file(entry, self.upcast_ref(), on_error);
     }
@@ -133,7 +133,7 @@ impl BrowserWindow {
             Err(error) => {
                 match place {
                     Some(place) => self.navigate_or_report(&place),
-                    None => self.show_message(error.message()),
+                    None => self.show_message(&error.to_string()),
                 }
                 return;
             }
@@ -217,7 +217,7 @@ impl BrowserWindow {
             IncomingTab::New => self.add_tab(uri),
         };
         if let Err(error) = opened {
-            self.show_message(error.message());
+            self.show_message(&error.to_string());
         }
     }
 }

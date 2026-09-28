@@ -13,6 +13,7 @@ use gtk::subclass::prelude::*;
 
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use crate::theme;
 
 impl BrowserWindow {
     /// Applies the skin's current appearance and text size, and follows
@@ -36,10 +37,10 @@ impl BrowserWindow {
     /// Shows the chosen and drawn appearance on the Appearance button and
     /// in the Appearance menu.
     fn show_appearance_choice(&self) {
-        let preference = self.skin().preference();
+        let theme = self.skin().theme();
         let appearance = self.skin().appearance();
         self.command_bar()
-            .show_appearance(appearance, &preference.tooltip(appearance));
-        self.set_action_state(WindowAction::Theme, &preference.key().to_variant());
+            .show_appearance(appearance, &theme::tooltip(theme, appearance));
+        self.set_action_state(WindowAction::Theme, &theme.as_str().to_variant());
     }
 }

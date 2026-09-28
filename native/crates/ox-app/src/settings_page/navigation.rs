@@ -140,7 +140,7 @@ impl SettingsPage {
     pub(super) fn show_view(&self, view: SettingsView) {
         let imp = self.imp();
         imp.view.set(view);
-        imp.pages.set_visible_child_name(view.key());
+        imp.pages.set_visible_child_name(view.as_str());
         let row = self.category_list_row(view.category());
         if let Some(row) = row.filter(|row| !row.is_selected()) {
             imp.category_list.select_row(Some(&row));
@@ -197,7 +197,7 @@ impl SettingsPage {
     fn show_search_results(&self) {
         let imp = self.imp();
         if imp.query.borrow().is_empty() {
-            imp.pages.set_visible_child_name(self.view().key());
+            imp.pages.set_visible_child_name(self.view().as_str());
             return;
         }
         let current = self.view().category();

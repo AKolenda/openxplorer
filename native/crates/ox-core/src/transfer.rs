@@ -82,7 +82,6 @@ pub use guard::MAX_DEPTH;
 pub(crate) use guard::{check_write_tree, nesting_error, SourceChange};
 pub(crate) use modes::{secure_local_staging, PRIVATE_DIRECTORY_MODE};
 pub use names::is_own_staging_name;
-pub(crate) use names::random_hex;
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;
 pub(crate) use staging::{clean_staging, STAGING_LEVELS};

@@ -13954,7 +13954,7 @@ python_tests = [
 bridge = ["preferences", "environment"]
 gnome = "AdwStyleManager / org.freedesktop.appearance color-scheme; org.gnome.desktop.interface color-scheme (GSettings); org.gnome.desktop.interface color-scheme / gtk-theme"
 native = "partial"
-native_note = "native/crates/ox-app/src/theme/mod.rs (preferences_parse_like_apply_theme, system_follows_the_desktop); theme switch across windows in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes)."
+native_note = "native/crates/ox-core/src/settings/choices.rs (system_theme_follows_the_desktop); native/crates/ox-app/src/theme.rs (system_follows_the_desktop); native/crates/ox-app/src/theme/appearance_button.rs (the_tooltip_names_the_choice_and_the_system_appearance); native/crates/ox-app/src/application/state.rs (saved_themes_parse_and_anything_else_means_system); theme switch across windows in native/crates/ox-app/src/window/tests/views.rs (a_theme_chosen_in_one_window_reaches_every_window)."
 
 [[feature]]
 id = "LOOK-004"
@@ -13992,7 +13992,7 @@ sources = ["desktop/ui/app.js:720-729", "desktop/ui/style.css:36"]
 python_tests = ["desktop/tests/ui_release.py::Light appearance switch"]
 bridge = ["preferences"]
 native = "todo"
-native_note = "Tooltip wording is ported (native/crates/ox-app/src/theme/mod.rs, tooltips_match_the_web_interface); the button and menu are untested."
+native_note = "Tooltip wording is ported (native/crates/ox-app/src/theme/appearance_button.rs, the_tooltip_names_the_choice_and_the_system_appearance); the button and menu are untested."
 
 [[feature]]
 id = "LOOK-006"

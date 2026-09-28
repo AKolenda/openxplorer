@@ -66,7 +66,7 @@ mod imp {
 
     /// Private state of [`super::CardGridLayout`].
     #[derive(Debug)]
-    pub struct CardGridLayout {
+    pub(crate) struct CardGridLayout {
         /// The grid's narrowest column and gaps.
         pub(super) spacing: Cell<GridSpacing>,
     }
@@ -133,7 +133,7 @@ mod imp {
 
 glib::wrapper! {
     /// Lays out cards in stretching columns, as a CSS `auto-fit` grid.
-    pub struct CardGridLayout(ObjectSubclass<imp::CardGridLayout>)
+    pub(crate) struct CardGridLayout(ObjectSubclass<imp::CardGridLayout>)
         @extends gtk::LayoutManager;
 }
 

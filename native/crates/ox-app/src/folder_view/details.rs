@@ -16,7 +16,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format;
-use ox_core::settings::{Column, ColumnWidths};
+use ox_core::settings::{ColumnWidth, ColumnWidths};
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners};
 use crate::folder_view::column_titles;
@@ -86,7 +86,7 @@ fn new_view_column(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::ColumnVi
         SortColumn::Modified | SortColumn::Type | SortColumn::Size => text_factory(column, owners),
     };
     let view_column = gtk::ColumnViewColumn::new(Some(column.label()), Some(factory));
-    view_column.set_id(Some(column.key()));
+    view_column.set_id(Some(column.as_str()));
     view_column.set_resizable(true);
     view_column.set_sorter(Some(&model::column_sorter(column)));
     view_column
@@ -125,7 +125,7 @@ mod imp {
 
     /// Private state of [`super::DetailsView`].
     #[derive(Debug, Default)]
-    pub struct DetailsView {
+    pub(crate) struct DetailsView {
         /// Scrolls the column view; the view's only child. The column view
         /// must be the scroller's direct child: GTK then builds rows only
         /// for the part of the list on screen.
@@ -185,7 +185,7 @@ mod imp {
 glib::wrapper! {
     /// The details view: a column view of the folder's items in a
     /// scroller, sorted by its column titles.
-    pub struct DetailsView(ObjectSubclass<imp::DetailsView>)
+    pub(crate) struct DetailsView(ObjectSubclass<imp::DetailsView>)
         @extends gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
@@ -227,7 +227,7 @@ impl DetailsView {
         let columns = self.column_view().columns();
         (0..columns.n_items())
             .filter_map(|position| columns.item(position).and_downcast::<gtk::ColumnViewColumn>())
-            .find(|candidate| candidate.id().as_deref() == Some(column.key()))
+            .find(|candidate| candidate.id().as_deref() == Some(column.as_str()))
     }
 
     /// Each details column with the column view's column that shows it.
@@ -259,10 +259,11 @@ impl DetailsView {
 
     /// The widths the user set, in the form settings save them. Name
     /// counts only once it has a width of its own.
-    fn widths_to_save(&self) -> Vec<(Column, f64)> {
+    fn widths_to_save(&self) -> Vec<ColumnWidth> {
         let widths = self.view_columns().filter_map(|(column, view_column)| {
-            let width = column_widths::saved_width(column, view_column.fixed_width())?;
-            Some((column_widths::settings_column(column), width))
+            let pixels = column_widths::saved_width(column, view_column.fixed_width())?;
+            let column = column_widths::settings_column(column);
+            Some(ColumnWidth { column, pixels })
         });
         widths.collect()
     }
@@ -271,7 +272,7 @@ impl DetailsView {
     /// save them, once a resize has settled for [`RESIZE_SETTLE`].
     pub(crate) fn connect_columns_resized(
         &self,
-        on_resized: impl Fn(Vec<(Column, f64)>) + 'static,
+        on_resized: impl Fn(Vec<ColumnWidth>) + 'static,
     ) -> glib::SignalHandlerId {
         self.connect_closure(
             COLUMNS_RESIZED,
@@ -382,6 +383,8 @@ impl DetailsView {
 mod tests {
     use std::cell::RefCell;
 
+    use ox_core::settings::Column;
+
     use super::*;
     use crate::test_support::harness::{wait_for, wait_until};
 
@@ -392,7 +395,7 @@ mod tests {
     }
 
     /// The last widths a view reported, `None` until it reports any.
-    type ReportedWidths = Rc<RefCell<Option<Vec<(Column, f64)>>>>;
+    type ReportedWidths = Rc<RefCell<Option<Vec<ColumnWidth>>>>;
 
     /// The widths `view` reports once its next resize settles, filled in
     /// by its `columns-resized` handler.
@@ -444,9 +447,18 @@ mod tests {
         type_column.set_fixed_width(200);
         wait_until("the resize to settle", || reported.borrow().is_some());
         let expected = [
-            (Column::Modified, 152.0),
-            (Column::Type, 200.0),
-            (Column::Size, 90.0),
+            ColumnWidth {
+                column: Column::Modified,
+                pixels: 152.0,
+            },
+            ColumnWidth {
+                column: Column::Type,
+                pixels: 200.0,
+            },
+            ColumnWidth {
+                column: Column::Size,
+                pixels: 90.0,
+            },
         ];
         assert_eq!(
             reported.take().as_deref(),

@@ -117,7 +117,7 @@ impl From<glib::Error> for OpsError {
 /// (Python raises the same `ValueError`).
 impl From<LocationError> for OpsError {
     fn from(error: LocationError) -> Self {
-        OpsError::Failed(error.into_message())
+        OpsError::Failed(error.to_string())
     }
 }
 
