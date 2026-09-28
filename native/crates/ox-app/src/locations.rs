@@ -132,7 +132,7 @@ mod tests {
     use ox_core::location::parent_location;
 
     use super::*;
-    use crate::volumes::{locations, MountFacts, VolumeState};
+    use crate::volumes::{locations, MountControls, MountFacts, VolumeState};
 
     /// The home folder of the tests' windows.
     const DEMO_HOME: &str = "/home/demo";
@@ -150,7 +150,7 @@ mod tests {
             name: "Pixel 7".into(),
             root_uri: "mtp://[usb:001,010]/".into(),
             shadowed: false,
-            can_unmount: true,
+            controls: MountControls::UNMOUNTABLE,
         };
         location_context(PathBuf::from(DEMO_HOME), &locations(&[mount], &[]))
     }
@@ -205,7 +205,7 @@ mod tests {
         assert!(!is_home_alias("pc:"));
     }
 
-    /// parity: NAV-017, TAB-010
+    /// parity: NAV-017, TAB-010, DEV-004
     #[test]
     fn a_mounted_phone_is_called_by_its_mount_name() {
         let context = phone_context();
@@ -220,7 +220,7 @@ mod tests {
         );
     }
 
-    /// parity: NAV-017
+    /// parity: NAV-017, DEV-004
     #[test]
     fn an_unknown_device_is_a_connected_device() {
         let context = demo_context();
@@ -242,7 +242,7 @@ mod tests {
             kind: VolumeKind::Drive,
             state: VolumeState::Mounted {
                 uri: "file:///media/u/Disk".into(),
-                can_unmount: true,
+                controls: MountControls::UNMOUNTABLE,
             },
         };
         let context = location_context(PathBuf::from(DEMO_HOME), &[unmounted_phone, disk]);
@@ -264,6 +264,22 @@ mod tests {
         let crumbs = labels(&context, "smb://studio-nas/projects/Design");
         assert_eq!(crumbs.first().map(String::as_str), Some("studio-nas"));
         assert_eq!(crumbs.last().map(String::as_str), Some("Design"));
+    }
+
+    /// Up goes to the folder above within a phone, and stops at its root.
+    ///
+    /// parity: DEV-004
+    #[test]
+    fn up_stays_within_a_device() {
+        assert_eq!(
+            parent_location(PHONE_FOLDER).as_deref(),
+            Some("mtp://[usb:001,010]/Internal%20storage")
+        );
+        assert_eq!(
+            parent_location("mtp://[usb:001,010]/Internal%20storage").as_deref(),
+            Some("mtp://[usb:001,010]/")
+        );
+        assert_eq!(parent_location("mtp://[usb:001,010]/"), None);
     }
 
     /// parity: NAV-010

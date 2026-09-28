@@ -91,7 +91,6 @@ impl BrowserWindow {
         let uri = self.resolve_address(address)?;
         self.save_tab_view();
         let id = self.imp().session.borrow_mut().add(&uri, placement);
-        self.context().remember_network(&uri);
         if self.imp().session.borrow().is_active(id) {
             self.show_tab(id);
         } else {
@@ -121,7 +120,6 @@ impl BrowserWindow {
             return self.add_tab(&uri);
         };
         self.leave_location();
-        self.context().remember_network(&uri);
         self.render_navigation();
         self.load_tab(id, LoadMode::Navigate);
         Ok(())

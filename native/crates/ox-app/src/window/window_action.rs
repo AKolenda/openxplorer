@@ -35,6 +35,9 @@ pub(crate) enum WindowAction {
     /// Opens the location in the string target in a new tab behind the
     /// active one (a middle-click).
     OpenTabBackground,
+    /// Opens the location in the string target in a new window ("Open in
+    /// new window" of a place's menu).
+    OpenWindow,
     /// Back in the active tab's history (Alt+Left).
     Back,
     /// Forward in the active tab's history (Alt+Right).
@@ -119,6 +122,23 @@ pub(crate) enum WindowAction {
     MapNetworkLocation,
     /// Looks for SMB servers that advertise themselves.
     DiscoverServers,
+    /// Stops looking for servers.
+    StopDiscovery,
+    /// Saves the network location in the string target under Network
+    /// ("Keep in Network").
+    KeepInNetwork,
+    /// Removes the saved network location in the string target; it stays
+    /// mounted and its credentials stay saved.
+    RemoveSavedLocation,
+    /// Signs out of the server of the location in the string target.
+    SignOut,
+    /// Unmounts the drive or device that holds the location in the string
+    /// target.
+    Disconnect,
+    /// Ejects the medium that holds the location in the string target.
+    Eject,
+    /// Powers off the drive that holds the location in the string target.
+    SafelyRemove,
     /// Adds the current folder to the search cache.
     CacheFolder,
     /// Opens the Settings page (Ctrl+,), as a tab of its own.
@@ -147,6 +167,7 @@ impl WindowAction {
             WindowAction::CloseTabById => "close-tab-by-id",
             WindowAction::OpenTab => "open-tab",
             WindowAction::OpenTabBackground => "open-tab-background",
+            WindowAction::OpenWindow => "open-window",
             WindowAction::Back => "back",
             WindowAction::Forward => "forward",
             WindowAction::Up => "up",
@@ -188,6 +209,13 @@ impl WindowAction {
             WindowAction::Trash => "trash",
             WindowAction::MapNetworkLocation => "map-network-location",
             WindowAction::DiscoverServers => "discover-servers",
+            WindowAction::StopDiscovery => "stop-discovery",
+            WindowAction::KeepInNetwork => "keep-in-network",
+            WindowAction::RemoveSavedLocation => "remove-saved-location",
+            WindowAction::SignOut => "sign-out",
+            WindowAction::Disconnect => "disconnect",
+            WindowAction::Eject => "eject",
+            WindowAction::SafelyRemove => "safely-remove",
             WindowAction::CacheFolder => "cache-folder",
             WindowAction::Settings => "settings",
             WindowAction::License => "license",

@@ -2,29 +2,32 @@
 //! The Network landing page.
 //!
 //! Ports `renderNetwork` in `desktop/ui/app.js`: the "Computers & network
-//! storage" banner with Discover servers, the server address field with
-//! Open address and Map location, the discovered servers, the note on how
-//! discovery works, and every connected, saved and visited network
-//! location. Server discovery and the connect dialog arrive with the
-//! Network and devices milestone, so their buttons are disabled until then
-//! ([`super::unported`]); Open address works now. Each location's card
-//! shows it on the network bar as its sidebar row does (the owner's icon
-//! mapping, 2026-09-28), where app.js drew the network glyph for every
-//! one.
+//! storage" banner with Discover servers (Stop while it runs), the server
+//! address field with Open address and Map location, the discovered
+//! servers with their count, the note on how discovery works, and every
+//! connected, saved and visited network location with its menu. The page
+//! draws what the window's [`DiscoveryState`] holds; discovery starts the
+//! first time the window shows the page ([`super::network_actions`]).
+//! Each location's card shows it on the network bar as its sidebar row
+//! does (the owner's icon mapping, 2026-09-28), where app.js drew the
+//! network glyph for every one.
 
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::location::{self, is_smb_location, LocationContext};
-use ox_core::places::NetworkLocation;
+use ox_core::network::DiscoveredServer;
+use ox_core::places::{NetworkKind, NetworkLocation};
 
-use crate::icons::{self, Art, ArtImage, Icon};
+use crate::icons::{self, Art, ArtImage, Connection, Icon};
+use crate::network::DiscoveryState;
 use crate::places::Places;
 
 use super::button_style::ButtonStyle;
 use super::card_grid::{card_grid, DRIVE_GRID};
 use super::landing::{card_texts, location_card, section_title, CARD_ICON_GAP};
+use super::place_menus::{attach_place_menu, PlaceMenu};
 use super::window_action::WindowAction;
-use super::{unported, BrowserWindow};
+use super::BrowserWindow;
 
 /// The network glyph of the banner (`icon('network',38)` in
 /// `renderNetwork`).
@@ -42,24 +45,26 @@ const ADDRESS_FIELD_GAP: i32 = 9;
 /// The icon of a connected or saved location's card, as large as app.js
 /// drew its network glyph (`icon('network',34)`).
 const LOCATION_CARD_ICON: i32 = 34;
+/// The icon of a discovered server's card (`icon('server',40)`).
+const SERVER_CARD_ICON: i32 = 40;
 
 /// The note under the discovered servers (`.discovery-note`).
 const DISCOVERY_NOTE: &str = "Discovery depends on devices advertising themselves and on local \
 firewall/network settings. It does not guarantee a list of every host.";
 
-/// A button for a command that may not be ported yet.
+/// A bordered or accent button that runs `action`.
 fn command_button(label: &str, action: WindowAction, style: ButtonStyle) -> gtk::Button {
     gtk::Button::builder()
         .label(label)
         .action_name(action.detailed_name())
-        .tooltip_text(unported::tooltip(action, label))
         .valign(gtk::Align::Center)
         .css_classes([style.css_class()])
         .build()
 }
 
-/// "Computers & network storage" with Discover servers.
-fn banner() -> gtk::Box {
+/// "Computers & network storage" with Discover servers, or Stop while
+/// discovery runs.
+fn banner(discovery: &DiscoveryState) -> gtk::Box {
     let words = gtk::Box::new(gtk::Orientation::Vertical, 0);
     words.set_hexpand(true);
     words.append(
@@ -69,7 +74,7 @@ fn banner() -> gtk::Box {
             .build(),
     );
     let hint = gtk::Label::builder()
-        .label("Discover devices without scanning their files.")
+        .label(discovery.banner_hint())
         .xalign(0.0)
         .wrap(true)
         .css_classes(["banner-hint"])
@@ -83,12 +88,16 @@ fn banner() -> gtk::Box {
         .build();
     banner.append(&glyph);
     banner.append(&words);
-    // Starts looking for advertised SMB servers (`discoverNetwork`).
-    banner.append(&command_button(
-        "Discover servers",
-        WindowAction::DiscoverServers,
-        ButtonStyle::Accent,
-    ));
+    let toggle = if discovery.is_busy {
+        command_button("Stop", WindowAction::StopDiscovery, ButtonStyle::Accent)
+    } else {
+        command_button(
+            "Discover servers",
+            WindowAction::DiscoverServers,
+            ButtonStyle::Accent,
+        )
+    };
+    banner.append(&toggle);
     banner
 }
 
@@ -137,25 +146,52 @@ fn open_typed_address(entry: &gtk::Entry) {
     WindowAction::OpenServerAddress.activate_from(entry, Some(&typed));
 }
 
-/// "Discovered servers" with their count, and the notice while there are
-/// none. Discovery is not ported, so no server is ever found yet.
-fn discovered_servers(body: &gtk::Box) {
+/// A discovered server's card: its name, address and "SMB · Discovered".
+/// It opens the server's shares; a middle-click opens them in a tab
+/// behind the Network page.
+fn server_card(server: &DiscoveredServer, locations: &LocationContext) -> gtk::Button {
+    let art = Art::for_network_location(NetworkKind::Server, &server.label, Connection::Connected);
+    let texts = card_texts(&server.label, &locations.display_location(&server.uri));
+    let protocol = gtk::Label::builder()
+        .label("SMB · Discovered")
+        .xalign(0.0)
+        .css_classes(["network-protocol"])
+        .build();
+    texts.append(&protocol);
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
+    content.append(&ArtImage::new(art, SERVER_CARD_ICON));
+    content.append(&texts);
+    let card = location_card("drive-card", &server.uri, &content);
+    card.add_css_class("discovered-server");
+    card
+}
+
+/// "Discovered servers" with their count, their cards, the notice while
+/// there are none, and the note on how discovery works.
+fn discovered_servers(body: &gtk::Box, discovery: &DiscoveryState, locations: &LocationContext) {
     let title = section_title("Discovered servers", Icon::Desktop);
     let count = gtk::Label::builder()
-        .label("0")
+        .label(discovery.servers.len().to_string())
         .hexpand(true)
         .xalign(1.0)
         .css_classes(["network-count"])
         .build();
     title.append(&count);
     body.append(&title);
-    let notice = gtk::Label::builder()
-        .label("No advertised SMB servers found yet. Discover again or enter an address above.")
-        .xalign(0.0)
-        .wrap(true)
-        .css_classes(["notice"])
-        .build();
-    body.append(&notice);
+    let cards = card_grid(DRIVE_GRID);
+    for server in &discovery.servers {
+        cards.append(&server_card(server, locations));
+    }
+    body.append(&cards);
+    if discovery.servers.is_empty() {
+        let notice = gtk::Label::builder()
+            .label(discovery.empty_notice())
+            .xalign(0.0)
+            .wrap(true)
+            .css_classes(["notice"])
+            .build();
+        body.append(&notice);
+    }
     let note = gtk::Label::builder()
         .label(DISCOVERY_NOTE)
         .xalign(0.0)
@@ -170,7 +206,9 @@ fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk:
     content.append(&ArtImage::new(Art::for_network_row(location), LOCATION_CARD_ICON));
     let address = locations.display_location(&location.uri);
     content.append(&card_texts(&location.label, &address));
-    location_card("drive-card", &location.uri, &content)
+    let card = location_card("drive-card", &location.uri, &content);
+    attach_place_menu(&card, PlaceMenu::Network(location.clone()));
+    card
 }
 
 /// Every connected, saved and visited network location.
@@ -184,10 +222,15 @@ fn connected_and_saved(body: &gtk::Box, places: &Places, locations: &LocationCon
 }
 
 /// Draws the Network page's sections into `body`, below its title.
-pub(super) fn render(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&banner());
+pub(super) fn render(
+    body: &gtk::Box,
+    places: &Places,
+    locations: &LocationContext,
+    discovery: &DiscoveryState,
+) {
+    body.append(&banner(discovery));
     body.append(&server_address_field());
-    discovered_servers(body);
+    discovered_servers(body, discovery, locations);
     connected_and_saved(body, places, locations);
 }
 

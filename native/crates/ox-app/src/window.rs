@@ -16,8 +16,11 @@
 //! ([`session`], read through [`active_tab`]), changing location
 //! ([`navigation`]) and drawing it ([`location_view`]), listing
 //! ([`loading`]), the selection ([`selection`]), the desktop's volumes and
-//! places ([`environment`]), Quick access ([`quick_access`]), mounting
-//! ([`mounting`]), the skin ([`appearance`]), activation, actions, input
+//! places ([`environment`]), Quick access ([`quick_access`]), connecting
+//! and removing drives ([`mounting`]), network sign-in
+//! ([`network_session`]), the network commands ([`network_actions`],
+//! [`network_sign_out`]) and the places' menus ([`place_menus`]), the
+//! skin ([`appearance`]), activation, actions, input
 //! ([`type_to_select`]), and what the window connects and lets go of
 //! ([`connections`]).
 //! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
@@ -55,7 +58,11 @@ mod menu_popover;
 mod mounting;
 mod navigation;
 mod navigation_buttons;
+mod network_actions;
 mod network_page;
+mod network_session;
+mod network_sign_out;
+mod place_menus;
 mod preferences;
 mod quick_access;
 mod search_box;
@@ -125,6 +132,7 @@ mod imp {
     use super::toast::Toast;
     use super::type_to_select::Typeahead;
     use crate::app_context::AppContext;
+    use crate::network::WindowNetwork;
     use crate::settings_page::SettingsPage;
     use crate::volumes::VolumeRow;
 
@@ -192,6 +200,9 @@ mod imp {
         /// The desktop's volume monitor, set by `constructed`. Holding it
         /// keeps the monitor, and so its signals, alive.
         pub(super) volume_monitor: OnceCell<gio::VolumeMonitor>,
+        /// The window's sign-in prompts and dialogs and its server
+        /// discovery; [`super::BrowserWindow::new`] sets it.
+        pub(super) network: OnceCell<WindowNetwork>,
         /// The tabs and which one is active.
         pub(super) session: RefCell<Session>,
         /// Display names of the home folder and the mounted devices.
@@ -254,6 +265,7 @@ mod imp {
 
         fn dispose(&self) {
             self.obj().disconnect_external_handlers();
+            self.obj().close_network();
             // Dropping the tabs cancels their listings and folder watches.
             self.session.take();
         }
@@ -272,6 +284,9 @@ mod imp {
             // otherwise keeps the focused address entry and later asks a
             // destroyed widget for its cursor position (a Gtk-CRITICAL).
             GtkWindowExt::set_focus(&*self.obj(), None::<&gtk::Widget>);
+            // A closed window's sign-ins end with it, even while something
+            // still holds the window (SAFE-011, TAB-050).
+            self.obj().close_network();
             self.parent_close_request()
         }
     }
@@ -297,6 +312,7 @@ impl BrowserWindow {
             .context
             .set(context.clone())
             .expect("a new window has no context yet");
+        window.start_network();
         window.install_actions();
         window.install_input();
         window.connect_signals();

@@ -21,8 +21,6 @@ pub(crate) enum Milestone {
     /// "Complete safe file-operation workflows", which also brings file
     /// and tab drag-and-drop between windows.
     FileOperations,
-    /// The "Network and devices" service.
-    NetworkAndDevices,
     /// The "Search and metadata" service: the search index and folder
     /// sizes.
     SearchAndMetadata,
@@ -39,7 +37,6 @@ impl Milestone {
     pub(crate) const fn description(self) -> &'static str {
         match self {
             Milestone::FileOperations => "file operations",
-            Milestone::NetworkAndDevices => "network and device support",
             Milestone::SearchAndMetadata => "cached search",
             Milestone::DesktopIntegration => "desktop integration",
             Milestone::Distribution => "packaging and updates",
@@ -70,7 +67,7 @@ const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand 
 }
 
 /// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 18] = [
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 16] = [
     command(WindowAction::NewFolder, Milestone::FileOperations),
     command(WindowAction::NewTextDocument, Milestone::FileOperations),
     command(WindowAction::NewFile, Milestone::FileOperations),
@@ -84,8 +81,6 @@ pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 18] = [
     command(WindowAction::Paste, Milestone::FileOperations),
     command(WindowAction::Rename, Milestone::FileOperations),
     command(WindowAction::Trash, Milestone::FileOperations),
-    command(WindowAction::MapNetworkLocation, Milestone::NetworkAndDevices),
-    command(WindowAction::DiscoverServers, Milestone::NetworkAndDevices),
     command(WindowAction::CacheFolder, Milestone::SearchAndMetadata),
     // The dialog names where the installed source and the corresponding
     // source archive are, which packaging decides.

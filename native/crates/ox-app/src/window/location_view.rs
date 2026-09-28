@@ -196,7 +196,7 @@ mod tests {
         address: Icon,
     }
 
-    /// parity: TAB-010
+    /// parity: TAB-010, DEV-004
     #[test]
     fn tabs_and_the_address_bar_show_the_current_apps_icons() {
         let cases = [

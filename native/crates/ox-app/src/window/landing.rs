@@ -12,7 +12,9 @@
 //! one.
 //!
 //! Cards run [`WindowAction::GoTo`] or [`WindowAction::MountVolume`]; a
-//! middle-click opens a folder in a background tab.
+//! middle-click opens a folder in a background tab, and a right-click on
+//! a drive that can be removed or on a saved location opens its menu
+//! ([`super::place_menus`]).
 
 use gtk::gio;
 use gtk::glib;
@@ -23,13 +25,15 @@ use ox_core::places::{NetworkKind, Place, SavedShare};
 
 use crate::icons::{self, Art, ArtImage, Connection, Icon};
 use crate::locations::Page;
+use crate::network::DiscoveryState;
 use crate::places::Places;
-use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
+use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
 use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
+use super::place_menus::{attach_place_menu, PlaceMenu};
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
-use super::{gestures, network_page, unported};
+use super::{gestures, network_page};
 
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
@@ -211,9 +215,19 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
     content.append(&icons::image(glyph, DRIVE_CARD_ICON));
     content.append(&texts);
     match &row.state {
-        VolumeState::Mounted { uri, .. } => {
+        VolumeState::Mounted { uri, controls } => {
             show_capacity(&texts, uri);
-            location_card("drive-card", uri, &content)
+            let card = location_card("drive-card", uri, &content);
+            let menu = PlaceMenu::DriveCard {
+                uri: uri.clone(),
+                kind: row.kind,
+                controls: *controls,
+            };
+            // Local Disk and mounts the system keeps have no menu.
+            if !menu.entries().is_empty() {
+                attach_place_menu(&card, menu);
+            }
+            card
         }
         VolumeState::Mountable { id } => gtk::Button::builder()
             .child(&content)
@@ -230,7 +244,7 @@ fn local_disk() -> VolumeRow {
         kind: VolumeKind::Drive,
         state: VolumeState::Mounted {
             uri: "file:///".to_owned(),
-            can_unmount: false,
+            controls: MountControls::FIXED,
         },
     }
 }
@@ -253,7 +267,12 @@ fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::But
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
     content.append(&ArtImage::new(saved_share_art(share), DRIVE_CARD_ICON));
     content.append(&texts);
-    location_card("drive-card", &bookmark.uri, &content)
+    let card = location_card("drive-card", &bookmark.uri, &content);
+    let menu = PlaceMenu::SavedShare {
+        uri: bookmark.uri.clone(),
+    };
+    attach_place_menu(&card, menu);
+    card
 }
 
 /// A saved share's art: the share, or the drive its label maps it to, on
@@ -286,16 +305,11 @@ fn share_state(share: &SavedShare) -> gtk::Box {
     state
 }
 
-/// "Map network location" at the right of the Network locations heading,
-/// disabled until the connect dialog is ported.
+/// "Map network location" at the right of the Network locations heading.
 fn map_network_button() -> gtk::Button {
     gtk::Button::builder()
         .label("Map network location")
         .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text(unported::tooltip(
-            WindowAction::MapNetworkLocation,
-            "Map network location",
-        ))
         .hexpand(true)
         .halign(gtk::Align::End)
         .build()
@@ -313,7 +327,10 @@ fn saved_shares(body: &gtk::Box, places: &Places, locations: &LocationContext) {
     body.append(&cards);
     if places.saved_shares.is_empty() {
         let empty = gtk::Label::builder()
-            .label("No saved network locations. Enter a share's address in the location bar to open it.")
+            .label(
+                "No network locations saved. Use “Map network location” to connect to a share and add it to \
+                 the sidebar.",
+            )
             .xalign(0.0)
             .wrap(true)
             .css_classes(["notice"])
@@ -338,8 +355,15 @@ fn page_header(body: &gtk::Box, page: Page) {
     body.append(&subtitle);
 }
 
-/// Draws `page` into `body`, replacing what it showed.
-pub(super) fn render(body: &gtk::Box, page: Page, places: &Places, locations: &LocationContext) {
+/// Draws `page` into `body`, replacing what it showed; the Network page
+/// shows `discovery`.
+pub(super) fn render(
+    body: &gtk::Box,
+    page: Page,
+    places: &Places,
+    locations: &LocationContext,
+    discovery: &DiscoveryState,
+) {
     remove_children(body);
     match page {
         Page::ThisPc => {
@@ -350,7 +374,7 @@ pub(super) fn render(body: &gtk::Box, page: Page, places: &Places, locations: &L
         }
         Page::Network => {
             page_header(body, page);
-            network_page::render(body, places, locations);
+            network_page::render(body, places, locations, discovery);
         }
         // The Settings page replaces the whole browsing area, landing
         // pages included (`super::settings_tab`), so it leaves this empty.
@@ -378,6 +402,63 @@ fn section_title_text(title: &gtk::Widget) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::harness::descendants;
+    use crate::test_support::mounted_volume;
+
+    /// The texts of `card`, in order.
+    fn texts_of(card: &impl IsA<gtk::Widget>) -> Vec<String> {
+        let labels = descendants::<gtk::Label>(card);
+        labels.iter().map(|label| label.text().to_string()).collect()
+    }
+
+    /// Local Disk comes first; a drive shows where it is mounted, a phone
+    /// "Connected device", and a volume "Click to connect", which mounts
+    /// it when clicked.
+    ///
+    /// parity: HOME-003
+    #[gtk::test]
+    fn drive_cards_say_where_each_drive_is_or_that_it_connects_on_click() {
+        let locations = LocationContext::default();
+        let volume = VolumeRow {
+            label: "Backup".into(),
+            kind: VolumeKind::Drive,
+            state: VolumeState::Mountable { id: "uuid-1".into() },
+        };
+        let places = Places {
+            quick_access: Vec::new(),
+            drives: vec![
+                mounted_volume("USB", "file:///media/u/USB", VolumeKind::Drive),
+                mounted_volume("Pixel 7", "mtp://[usb:001,010]/", VolumeKind::Device),
+                volume,
+            ],
+            saved_shares: Vec::new(),
+            network: Vec::new(),
+        };
+        let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        devices_and_drives(&body, &places, &locations);
+
+        let cards = descendants::<gtk::Button>(&body);
+        let first_lines: Vec<Vec<String>> = cards.iter().map(|card| texts_of(card)[..2].to_vec()).collect();
+        assert_eq!(
+            first_lines,
+            [
+                ["Local Disk", "/"],
+                ["USB", "/media/u/USB"],
+                ["Pixel 7", "Connected device"],
+                ["Backup", "Click to connect"],
+            ]
+        );
+        let mount = cards.last().expect("the volume's card");
+        assert_eq!(
+            mount.action_name().as_deref(),
+            Some(WindowAction::MountVolume.detailed_name().as_str())
+        );
+        let target = mount
+            .action_target_value()
+            .and_then(|target| target.get::<String>());
+        assert_eq!(target.as_deref(), Some("uuid-1"));
+    }
 
     #[test]
     fn the_capacity_bar_turns_red_from_ninety_percent_used() {

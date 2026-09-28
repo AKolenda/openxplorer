@@ -18,6 +18,7 @@ mod input;
 mod landing_pages;
 mod listing;
 mod narrow_windows;
+mod network;
 mod opening;
 mod panes_layout;
 mod settings;

@@ -9,8 +9,10 @@
 //! [`WindowAction::MountVolume`]; a middle-click opens a place in a tab.
 //!
 //! [`Sidebar`] is a `GtkBox` subclass that keeps the entries its rows show,
-//! so the list's header function and middle-click handler read them
-//! through the pane itself.
+//! so the list's header function and its middle-click and right-click
+//! handlers read them through the pane itself. A right-click on a drive or
+//! a network location opens its menu (`driveMenu` and
+//! `networkLocationMenu` in app.js).
 
 mod entries;
 mod row;
@@ -22,8 +24,9 @@ use ox_core::location::same_location;
 
 use crate::icons::{self, Icon};
 
+use super::place_menus::{popup_place_menu, PlaceMenu};
 use super::window_action::WindowAction;
-use super::{gestures, preferences, unported};
+use super::{gestures, preferences};
 
 pub(super) use entries::sidebar_entries;
 use entries::{RowTarget, Section, SidebarEntry};
@@ -91,6 +94,7 @@ impl Sidebar {
         list.update_property(&[gtk::accessible::Property::Label("Navigation pane")]);
         self.separate_sections(&list);
         self.open_places_on_middle_click(&list);
+        self.open_menus_on_right_click(&list);
         let scroller = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
             // The list is never narrower than the narrowest saved sidebar.
@@ -145,6 +149,33 @@ impl Sidebar {
             }
         ));
         list.add_controller(gesture);
+    }
+
+    /// A right-click on a drive or a network location opens its menu.
+    fn open_menus_on_right_click(&self, list: &gtk::ListBox) {
+        let right_click = gtk::GestureClick::new();
+        right_click.set_button(gtk::gdk::BUTTON_SECONDARY);
+        right_click.connect_pressed(glib::clone!(
+            #[weak(rename_to = sidebar)]
+            self,
+            move |gesture, _, x, y| {
+                let Some(menu) = sidebar.menu_at(y) else {
+                    return;
+                };
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                popup_place_menu(&menu, sidebar.list(), x, y);
+            }
+        ));
+        list.add_controller(right_click);
+    }
+
+    /// The menu of the row at `y` in the list, if it has one.
+    fn menu_at(&self, y: f64) -> Option<PlaceMenu> {
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let row = self.list().row_at_y(y as i32)?;
+        let index = usize::try_from(row.index()).ok()?;
+        let entries = self.imp().entries.borrow();
+        entries.get(index)?.menu.clone()
     }
 
     /// The location of the row at `y` in the list, if it opens one.
@@ -218,10 +249,7 @@ fn map_network_button() -> gtk::Box {
     let button = gtk::Button::builder()
         .child(&content)
         .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text(unported::tooltip(
-            WindowAction::MapNetworkLocation,
-            "Map network location",
-        ))
+        .tooltip_text("Map network location")
         .build();
     let footer = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)

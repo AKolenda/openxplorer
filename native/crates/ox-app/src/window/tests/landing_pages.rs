@@ -63,6 +63,7 @@ fn quick_access_cards_stretch_across_the_page_in_equal_columns() {
     );
 }
 
+/// parity: HOME-006, HOME-009
 #[gtk::test]
 fn the_network_page_has_the_banner_address_field_and_notes() {
     let fixture = Fixture::standard();
@@ -71,6 +72,8 @@ fn the_network_page_has_the_banner_address_field_and_notes() {
         .navigate(Page::Network.uri())
         .expect("the Network page");
     test.wait_for_listing("the Network page");
+    // The first visit discovers servers; stopping shows the idle page.
+    test.activate("stop-discovery", None);
     wait_for_frames(&test.window, 2);
     let texts = texts_in(test.window.folder_pane().landing());
     for expected in [
@@ -95,6 +98,7 @@ fn the_network_page_has_the_banner_address_field_and_notes() {
     );
 }
 
+/// parity: HOME-009
 #[gtk::test]
 fn open_address_refuses_anything_but_an_smb_server() {
     let fixture = Fixture::standard();

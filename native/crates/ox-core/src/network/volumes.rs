@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Connecting drives and phones, and Disconnect.
+//! Connecting drives and phones, Disconnect, Eject and Safely remove.
 //!
 //! Ports the `mountVolume` and `unmount` operations of
-//! `desktop/winspace.py` and `volume_id` of `desktop/volume_locations.py`.
-//! Both take the mount operation from the interface: GTK's shows the
-//! password dialog of an encrypted disk and the programs that keep a mount
-//! busy. Dropping a future cancels its GIO call.
+//! `desktop/winspace.py` and `volume_id` of `desktop/volume_locations.py`,
+//! and adds Dolphin's Eject and Safely remove (DEV-007, DEV-008), which
+//! the Python app lacks. Each takes the mount operation from the
+//! interface: GTK's shows the password dialog of an encrypted disk, the
+//! programs that keep a mount busy and the desktop's "safe to remove"
+//! message. Dropping a future cancels its GIO call.
 
 use gio::prelude::*;
 
@@ -91,8 +93,80 @@ pub async fn unmount_location(
     operation: Option<&gio::MountOperation>,
     activity: WriteActivity,
 ) -> Result<(), NetworkError> {
-    // Safety rule (DEV-006): unmounting never interrupts this window's
-    // own writes.
+    let mount = mount_to_remove(mounts, uri, activity)?;
+    if !mount.can_unmount() {
+        return Err(NetworkError::UnmountNotPermitted);
+    }
+    mount
+        .unmount_with_operation_future(gio::MountUnmountFlags::NONE, operation)
+        .await?;
+    Ok(())
+}
+
+/// Eject: unmounts every mount of the drive that holds `uri`, among
+/// `mounts` (the volume monitor's), and ejects its medium, as GNOME and
+/// Dolphin eject removable drives, SD cards and optical discs.
+///
+/// # Errors
+///
+/// [`NetworkError::WriteInProgress`] while this window writes,
+/// [`NetworkError::NoUserMount`] for a location outside every mount,
+/// [`NetworkError::CannotEject`] for a medium that cannot be ejected, or
+/// GIO's error, for example when a program keeps the drive busy.
+pub async fn eject_location(
+    mounts: &[gio::Mount],
+    uri: &str,
+    operation: Option<&gio::MountOperation>,
+    activity: WriteActivity,
+) -> Result<(), NetworkError> {
+    let mount = mount_to_remove(mounts, uri, activity)?;
+    if !mount.can_eject() {
+        return Err(NetworkError::CannotEject);
+    }
+    mount
+        .eject_with_operation_future(gio::MountUnmountFlags::NONE, operation)
+        .await?;
+    Ok(())
+}
+
+/// Safely remove: unmounts every mount of the drive that holds `uri`,
+/// among `mounts` (the volume monitor's), and powers the drive off, as
+/// "Safely Remove Drive" in GNOME and Dolphin does for USB disks.
+///
+/// # Errors
+///
+/// [`NetworkError::WriteInProgress`] while this window writes,
+/// [`NetworkError::NoUserMount`] for a location outside every mount,
+/// [`NetworkError::CannotSafelyRemove`] for a drive that cannot be
+/// stopped, or GIO's error.
+pub async fn safely_remove_location(
+    mounts: &[gio::Mount],
+    uri: &str,
+    operation: Option<&gio::MountOperation>,
+    activity: WriteActivity,
+) -> Result<(), NetworkError> {
+    let mount = mount_to_remove(mounts, uri, activity)?;
+    let drive = mount.drive().filter(DriveExt::can_stop);
+    let drive = drive.ok_or(NetworkError::CannotSafelyRemove)?;
+    drive.stop_future(gio::MountUnmountFlags::NONE, operation).await?;
+    Ok(())
+}
+
+/// The mount among `mounts` that holds `uri`, for Disconnect, Eject or
+/// Safely remove.
+///
+/// # Errors
+///
+/// [`NetworkError::WriteInProgress`] while this window writes, the
+/// location error of an invalid address, or
+/// [`NetworkError::NoUserMount`] for a location outside every mount.
+fn mount_to_remove<'a>(
+    mounts: &'a [gio::Mount],
+    uri: &str,
+    activity: WriteActivity,
+) -> Result<&'a gio::Mount, NetworkError> {
+    // Safety rule (DEV-006): removing a mount never interrupts this
+    // window's own writes.
     if activity == WriteActivity::Writing {
         return Err(NetworkError::WriteInProgress);
     }
@@ -101,14 +175,7 @@ pub async fn unmount_location(
         let root = mount.root();
         file.equal(&root) || file.has_prefix(&root)
     });
-    let mount = holding.ok_or(NetworkError::NoUserMount)?;
-    if !mount.can_unmount() {
-        return Err(NetworkError::UnmountNotPermitted);
-    }
-    mount
-        .unmount_with_operation_future(gio::MountUnmountFlags::NONE, operation)
-        .await?;
-    Ok(())
+    holding.ok_or(NetworkError::NoUserMount)
 }
 
 #[cfg(test)]
@@ -188,6 +255,27 @@ mod tests {
         let error = refused.expect_err("disconnect is refused");
         assert_eq!(
             error.to_string(),
+            "This location has no active user-session mount."
+        );
+    }
+
+    /// Eject and Safely remove refuse, as Disconnect does, while this
+    /// window writes and for a location outside every mount.
+    ///
+    /// parity: DEV-007, DEV-008
+    #[test]
+    fn eject_and_safely_remove_wait_for_writes_and_need_a_mount() {
+        let context = glib::MainContext::new();
+        let usb = "file:///media/demo/USB";
+
+        let ejecting = context.block_on(eject_location(&[], usb, None, WriteActivity::Writing));
+        let removing = context.block_on(safely_remove_location(&[], usb, None, WriteActivity::Idle));
+
+        let ejecting = ejecting.expect_err("eject waits for the write");
+        let removing = removing.expect_err("no mount holds the location");
+        assert_eq!(ejecting.to_string(), "Finish the active file operation first.");
+        assert_eq!(
+            removing.to_string(),
             "This location has no active user-session mount."
         );
     }

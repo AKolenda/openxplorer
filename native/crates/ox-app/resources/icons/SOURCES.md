@@ -36,6 +36,7 @@ it.
 | `actions/ox-apps-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/apps_20_regular.svg` | 0ad15fd4cca3d66e5221e3533d1fafd4d705ebdbc68e74e0674a72106fe627ba |
 | `actions/ox-arrow-clockwise-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_clockwise_20_regular.svg` | e216c5859ca5368c3ce795d1ffaf19b4be5e5ba2df6d09e7ff544d3c2fef0466 |
 | `actions/ox-arrow-down-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_down_20_regular.svg` | c1548448de9cc56a3569bb51e54e954337eff72fa6d6e68a910c1586033780f8 |
+| `actions/ox-arrow-eject-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_eject_20_regular.svg` | c308ecfb2513a7def3bcd991c233b3f1e32106adfda35ea048eb95323540269b |
 | `actions/ox-arrow-left-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_left_20_regular.svg` | d94a8b83b6764b02c7e80a80d7854b37eaa2ce0b505f289ed2a0e3b2a1d2f82c |
 | `actions/ox-arrow-reset-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_reset_20_regular.svg` | 0b1fff894154d44bdf4a6e2645f3a2dfa9d1389ff8b1deb8f973095fe37532a1 |
 | `actions/ox-arrow-right-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_right_20_regular.svg` | be74746338292cc2bb120ab6fa119bf8d8065e4bdcd67baef406c3444368b08d |

@@ -29,7 +29,7 @@
 //! | `session_credentials` | One window's credentials per server, in memory and in the keyring | `session_credentials.py` |
 //! | `prompts` | `GVfs`'s sign-in questions, answered by the window's dialog | `auth_bridge.py` |
 //! | `mounting` | Mount on demand and Map network location | `winspace.py`, `gio_backend.py` |
-//! | `volumes` | Connect drives and phones, and Disconnect | `winspace.py`, `volume_locations.py` |
+//! | `volumes` | Connect drives and phones, Disconnect, Eject and Safely remove | `winspace.py`, `volume_locations.py` |
 //! | `sign_out` | Sign out of a server | `winspace.py` |
 //! | `discovery` | Servers advertising on the local network | `winspace.py`, `gio_backend.py` |
 //! | `visited` | Servers and shares browsed this session | `winspace.py` |
@@ -86,7 +86,9 @@ pub use error::NetworkError;
 pub use keyring::{Keyring, KeyringCollection, KeyringError, NewSecret, SecretAttributes};
 pub use local_path::{fuse_export_path, local_path};
 pub use mount_plan::{mount_plan, DesktopUser, MountPlan, MountPlanError};
-pub use mount_table::{mount_for_path, parse_mount_table, read_mount_table, resolve_smb_path, MountEntry};
+pub use mount_table::{
+    mount_for_path, parse_mount_table, read_mount_table, read_stable_smb_mounts, resolve_smb_path, MountEntry,
+};
 pub use mounting::{
     connect_share, mount_location, read_mounting_once, ConnectedShare, MountedReadError, NeedsMount,
     WriteActivity,
@@ -102,4 +104,6 @@ pub use sign_out::{
     begin_sign_out, finish_sign_out, SignOutRegistry, SignOutReport, SignOutRequest, SigningOut,
 };
 pub use visited::{session_network_root, VisitedNetwork};
-pub use volumes::{mount_volume, unmount_location, volume_id, volume_id_from};
+pub use volumes::{
+    eject_location, mount_volume, safely_remove_location, unmount_location, volume_id, volume_id_from,
+};

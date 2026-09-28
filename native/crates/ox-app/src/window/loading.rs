@@ -12,6 +12,13 @@
 //!   made while a listing runs are not lost: they list it once more after.
 //! - A location that turns out to be a file opens its folder instead, and
 //!   the file itself when the user asked for it.
+//! - A share that is not mounted is mounted once, asking for credentials
+//!   if needed, and listed again from empty rows (`retry_list` in
+//!   winspace.py, NET-004). A server being signed out is not listed
+//!   (NET-023), and a listed SMB location joins the session's Network
+//!   list (NET-016).
+
+mod mount_retry;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -31,6 +38,7 @@ use super::folder_pane::PanePage;
 use super::listing_state::{ListingEnd, ListingState, ReloadTiming};
 use super::session::TabId;
 use super::BrowserWindow;
+use mount_retry::MountRetry;
 
 /// Why a tab is listed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,9 +62,13 @@ struct LoadStart {
 #[derive(Debug)]
 struct LoadRun {
     tab: TabId,
+    /// The location listed.
+    uri: String,
     /// Results of an older generation are ignored.
     generation: u64,
     mode: LoadMode,
+    /// Whether an unmounted share may still be mounted.
+    mount_retry: MountRetry,
     /// A reload's rows, held back until the listing is complete.
     held_rows: RefCell<Vec<Entry>>,
 }
@@ -72,20 +84,37 @@ impl BrowserWindow {
         let Some(start) = self.begin_load(id) else {
             return;
         };
-        if Page::from_uri(&start.uri).is_some() {
-            self.finish_page(id);
+        if let Some(page) = Page::from_uri(&start.uri) {
+            self.finish_page(id, page);
             return;
         }
-        self.keep_watching(id, &start.uri);
         if mode == LoadMode::Navigate {
             self.clear_rows(id);
         }
+        let signing_out = self.context().network().sign_out_registry();
+        if let Err(refusal) = signing_out.check_listing(&start.uri) {
+            self.refuse_listing(id, mode, EntryError::Failed(refusal.to_string()));
+            return;
+        }
+        self.keep_watching(id, &start.uri);
         if is_active {
             self.update_content();
         }
-        let listing = self.start_listing(id, &start, mode);
+        let listing = self.start_listing(id, &start, mode, MountRetry::Allowed);
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.listing = Some(listing);
+        }
+    }
+
+    /// Ends tab `id`'s listing with `error` before anything was read; a
+    /// cancelled one ends without a message.
+    fn refuse_listing(&self, id: TabId, mode: LoadMode, error: EntryError) {
+        if error != EntryError::Cancelled {
+            self.fail_load(id, mode, error);
+        }
+        let end = self.imp().session.borrow_mut().end_listing(id);
+        if end != ListingEnd::TabClosed && self.imp().session.borrow().is_active(id) {
+            self.update_content();
         }
     }
 
@@ -99,16 +128,20 @@ impl BrowserWindow {
     }
 
     /// A landing page needs no listing and no watch: it is listed as soon
-    /// as it is shown.
-    fn finish_page(&self, id: TabId) {
+    /// as it is shown. The Network page's first showing starts discovery.
+    fn finish_page(&self, id: TabId, page: Page) {
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.listing_state = ListingState::Listed;
             tab.watch = None;
         }
-        if self.imp().session.borrow().is_active(id) {
-            self.render_landing();
-            self.update_content();
+        if !self.imp().session.borrow().is_active(id) {
+            return;
         }
+        if page == Page::Network {
+            self.discover_servers_once();
+        }
+        self.render_landing();
+        self.update_content();
     }
 
     fn clear_rows(&self, id: TabId) {
@@ -159,11 +192,19 @@ impl BrowserWindow {
         self.load_tab(id, LoadMode::Reload);
     }
 
-    fn start_listing(&self, id: TabId, start: &LoadStart, mode: LoadMode) -> loader::Listing {
+    fn start_listing(
+        &self,
+        id: TabId,
+        start: &LoadStart,
+        mode: LoadMode,
+        mount_retry: MountRetry,
+    ) -> loader::Listing {
         let run = Rc::new(LoadRun {
             tab: id,
+            uri: start.uri.clone(),
             generation: start.generation,
             mode,
+            mount_retry,
             held_rows: RefCell::default(),
         });
         let batch_run = Rc::clone(&run);
@@ -204,6 +245,7 @@ impl BrowserWindow {
         if !self.imp().session.borrow().accepts(id, run.generation) {
             return;
         }
+        let is_listed = result.is_ok();
         match result {
             Ok(()) if run.mode == LoadMode::Reload => self.merge_rows(id, run.held_rows.take()),
             Ok(()) | Err(EntryError::Cancelled) => {}
@@ -211,7 +253,15 @@ impl BrowserWindow {
                 self.open_folder_of_file(id, run.mode);
                 return;
             }
+            Err(error) if error.needs_mount() && run.mount_retry == MountRetry::Allowed => {
+                self.mount_and_list_again(run);
+                return;
+            }
             Err(error) => self.fail_load(id, run.mode, error),
+        }
+        if is_listed {
+            // NET-016: a listed share joins Network for the session only.
+            self.context().remember_network(&run.uri);
         }
         let end = self.imp().session.borrow_mut().end_listing(id);
         if end == ListingEnd::TabClosed {

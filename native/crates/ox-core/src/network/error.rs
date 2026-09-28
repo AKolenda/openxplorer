@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Why a network operation failed: mounting, connecting, unmounting,
-//! signing out or discovering servers.
+//! ejecting, signing out or discovering servers.
 //!
 //! The messages are the Python app's (`desktop/winspace.py` and
 //! `desktop/gio_backend.py`); GIO's own errors keep GIO's message.
@@ -39,6 +39,12 @@ pub enum NetworkError {
     /// The mount cannot be unmounted by the user.
     #[error("The system does not permit unmounting this location.")]
     UnmountNotPermitted,
+    /// Eject was chosen for a drive whose medium cannot be ejected.
+    #[error("This device cannot be ejected.")]
+    CannotEject,
+    /// Safely remove was chosen for a drive that cannot be powered off.
+    #[error("This drive cannot be safely removed.")]
+    CannotSafelyRemove,
     /// Sign out was chosen while a window writes files.
     #[error("Finish active file operations in every OpenXplorer window before signing out.")]
     SignOutDuringWrites,

@@ -370,6 +370,20 @@ pub(crate) fn capture_popover(window: &BrowserWindow, popover: &gtk::Popover, fi
         .expect("an open popover is drawn and the capture directory is writable");
 }
 
+/// Saves a PNG of the open `dialog` into `$OX_NATIVE_CAPTURE_DIR`, when
+/// set. A dialog is a window of its own, which a capture of `window`
+/// leaves out.
+pub(crate) fn capture_dialog(window: &BrowserWindow, dialog: &gtk::Window, filename: &str) {
+    let Some(directory) = capture_directory() else {
+        return;
+    };
+    wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
+    let path = directory.join(filename);
+    wait_until("the dialog to be saved", || {
+        crate::snapshot::render_png(dialog, None, &path).is_ok()
+    });
+}
+
 /// Waits until `window` has drawn `count` frames, so a capture shows the
 /// finished layout.
 pub(crate) fn wait_for_frames(window: &BrowserWindow, count: u32) {

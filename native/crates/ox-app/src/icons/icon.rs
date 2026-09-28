@@ -34,6 +34,10 @@ pub(crate) enum Icon {
     ArrowClockwise,
     /// `arrow_down_20_regular`: the Descending sort.
     ArrowDown,
+    /// `arrow_eject_20_regular`: Eject, Safely remove, Disconnect and
+    /// Sign out of server, the commands app.js drew with its eject
+    /// glyph, and the eject button of a removable drive's sidebar row.
+    ArrowEject,
     /// `arrow_download_20_regular`: the Downloads folder and the Brave &
     /// downloads settings.
     ArrowDownload,
@@ -230,6 +234,7 @@ impl Icon {
             Icon::Apps => "ox-apps-20-symbolic",
             Icon::ArrowClockwise => "ox-arrow-clockwise-20-symbolic",
             Icon::ArrowDown => "ox-arrow-down-20-symbolic",
+            Icon::ArrowEject => "ox-arrow-eject-20-symbolic",
             Icon::ArrowDownload => "ox-arrow-download-20-symbolic",
             Icon::ArrowLeft => "ox-arrow-left-20-symbolic",
             Icon::ArrowReset => "ox-arrow-reset-20-symbolic",
@@ -335,11 +340,12 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 87] = [
+pub(crate) const ALL_ICONS: [Icon; 88] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowClockwise,
     Icon::ArrowDown,
+    Icon::ArrowEject,
     Icon::ArrowDownload,
     Icon::ArrowLeft,
     Icon::ArrowReset,

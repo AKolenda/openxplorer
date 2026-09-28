@@ -20,7 +20,6 @@ use std::path::PathBuf;
 
 use gtk::gio;
 use gtk::prelude::*;
-use ox_core::location::{split_location, LocationKind};
 use ox_core::places::{
     compose_quick_access, merge_network_locations, network_key, NetworkLocation, NetworkMount, Place,
     SavedShare, StableMount,
@@ -38,10 +37,8 @@ pub(crate) struct PlaceSources<'a> {
     pub known_folders: &'a [Place],
     /// Rows from the volume monitor.
     pub volumes: &'a [VolumeRow],
-    /// Kernel CIFS/SMB3 mounts. ox-core does not read the mount table yet
-    /// (`read_mounts` in `desktop/mount_support.py`; the "Network and
-    /// devices" services in `native/ROADMAP.md`), so the window passes
-    /// none; the composition already handles them.
+    /// Kernel CIFS/SMB3 mounts (`read_mounts` in
+    /// `desktop/mount_support.py`), as the application last read them.
     pub stable_mounts: &'a [StableMount],
     /// SMB servers and shares browsed this session.
     pub visited_network: &'a [Bookmark],
@@ -147,28 +144,9 @@ pub(crate) fn network_row<'a>(network: &'a [NetworkLocation], uri: &str) -> Opti
         .find(|location| network_key(&location.uri).is_ok_and(|key| key == wanted))
 }
 
-/// The Network row a browsed SMB location adds for the session: the server
-/// for `smb://nas/`, else the share (`smb://nas/media` for
-/// `smb://nas/media/2024`). `None` for anything but SMB. The label is left
-/// empty so the merge names it after the share or server.
-pub(crate) fn visited_root(uri: &str) -> Option<Bookmark> {
-    let parts = split_location(uri).ok()?;
-    if parts.kind() != LocationKind::Smb {
-        return None;
-    }
-    let share = parts.path.split('/').find(|segment| !segment.is_empty());
-    let root = match share {
-        Some(share) => format!("smb://{}/{share}", parts.authority),
-        None => format!("smb://{}/", parts.authority),
-    };
-    Some(Bookmark {
-        uri: root,
-        label: String::new(),
-    })
-}
-
 #[cfg(test)]
 mod tests {
+    use ox_core::network::{session_network_root, VisitedNetwork};
     use ox_core::places::NetworkKind;
 
     use super::*;
@@ -187,6 +165,16 @@ mod tests {
             shares: vec![bookmark(uri, label)],
             ..SettingsData::default()
         }
+    }
+
+    /// The Network rows browsing `uris` adds for the session, as the app
+    /// records them.
+    fn visited(uris: &[&str]) -> Vec<Bookmark> {
+        let mut visited = VisitedNetwork::default();
+        for uri in uris {
+            visited.remember(uri);
+        }
+        visited.to_bookmarks()
     }
 
     fn compose_with(settings: &SettingsData, volumes: &[VolumeRow], stable: &[StableMount]) -> Places {
@@ -215,7 +203,7 @@ mod tests {
         assert!(!places.network[0].is_saved);
     }
 
-    /// parity: NET-018
+    /// parity: NET-018, SIDE-021
     #[test]
     fn a_saved_share_that_is_mounted_appears_once_and_connected() {
         let settings = settings_with_share("smb://nas/media", "Media");
@@ -230,6 +218,7 @@ mod tests {
         assert!(places.saved_shares[0].is_connected);
     }
 
+    /// parity: SIDE-021
     #[test]
     fn a_saved_share_inside_a_mounted_share_is_connected() {
         let settings = settings_with_share("smb://nas/media/2024", "2024");
@@ -238,7 +227,7 @@ mod tests {
         assert!(places.saved_shares[0].is_connected);
     }
 
-    /// parity: NET-018
+    /// parity: NET-018, SIDE-021
     #[test]
     fn an_unmounted_saved_share_is_not_connected() {
         let settings = settings_with_share("smb://nas/media", "Media");
@@ -268,7 +257,7 @@ mod tests {
     #[test]
     fn visited_servers_are_listed_after_saved_shares() {
         let settings = settings_with_share("smb://nas/media", "Media");
-        let visited = [visited_root("smb://studio/").expect("SMB server")];
+        let visited = visited(&["smb://studio/"]);
         let places = compose(PlaceSources {
             settings: &settings,
             known_folders: &[],
@@ -293,7 +282,7 @@ mod tests {
     #[test]
     fn a_location_finds_its_own_network_row_however_it_is_spelt() {
         let settings = settings_with_share("smb://nas/media", "Media (M:)");
-        let visited = [visited_root("smb://studio/").expect("SMB server")];
+        let visited = visited(&["smb://studio/"]);
         let places = compose(PlaceSources {
             settings: &settings,
             known_folders: &[],
@@ -321,7 +310,7 @@ mod tests {
     /// parity: NET-018
     #[test]
     fn visited_roots_are_the_server_or_the_share() {
-        let root = |uri: &str| visited_root(uri).map(|bookmark| bookmark.uri);
+        let root = session_network_root;
         assert_eq!(root("smb://nas/").as_deref(), Some("smb://nas/"));
         assert_eq!(
             root("smb://nas/media/2024/June").as_deref(),

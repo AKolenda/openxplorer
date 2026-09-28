@@ -128,6 +128,24 @@ impl Tab {
         self.selected.clear();
         self.scroll = 0.0;
     }
+
+    /// Stops the tab's listing and folder watch, as Sign out cancels the
+    /// loads and the refreshes on its server; the rows stay.
+    pub(super) fn stop_reading(&mut self) {
+        self.listing = None;
+        self.watch = None;
+        self.generation = self.generation.wrapping_add(1);
+        self.listing_state.stop();
+    }
+
+    /// Drops what the tab listed, so it is listed again when next shown,
+    /// as Sign out marks its server's tabs (`t.loaded=false`).
+    pub(super) fn mark_stale(&mut self) {
+        self.stop_reading();
+        self.listing_state = ListingState::NotListed;
+        self.error = None;
+        self.store.remove_all();
+    }
 }
 
 /// The tabs of one window and which one is active.
@@ -158,6 +176,11 @@ impl Session {
             self.active = Some(id);
         }
         id
+    }
+
+    /// The open tabs, left to right, to change.
+    pub(super) fn tabs_mut(&mut self) -> &mut [Tab] {
+        &mut self.tabs
     }
 
     /// The open tabs, left to right.

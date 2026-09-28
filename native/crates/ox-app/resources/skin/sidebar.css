@@ -41,6 +41,10 @@
 .sidebar .side-glyph { margin: 1px 13px 0 1px; }
 .sidebar .side-art { margin: 0 12px 0 1px; }
 .sidebar .pin { color: @ox_text_tertiary; margin-left: 12px; }
+/* The eject button of a removable drive (DEV-007): a subtle 24px button
+   at the row's end, as GNOME's places sidebar shows it. */
+window.ox .sidebar button.side-eject { min-width: 24px; min-height: 24px; margin-left: 6px; color: @ox_muted; }
+window.ox .sidebar button.side-eject:hover { background-color: @ox_pressed; color: @ox_text; }
 /* The accent bar of the selected row: 3 x 16 with 2px corners, centred
    on the row (§4.4; the web's .side-entry.selected:before is 3 x 15). */
 .sidebar .pill { min-width: 3px; min-height: 16px; margin-top: 10px; border-radius: 2px; }

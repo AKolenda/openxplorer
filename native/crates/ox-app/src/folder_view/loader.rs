@@ -14,6 +14,8 @@
 //! [`EntryError`], so the window can tell a file from a missing folder or
 //! an unmounted share.
 
+use std::future::Future;
+
 use gtk::glib;
 use ox_core::entry::{self, Entry, EntryError};
 
@@ -32,6 +34,16 @@ impl Drop for Listing {
     }
 }
 
+impl Listing {
+    /// A listing that runs `work` on the main loop, such as mounting a
+    /// share before it is listed again. Dropping it cancels `work`.
+    pub(crate) fn spawn(work: impl Future<Output = ()> + 'static) -> Self {
+        Self {
+            task: glib::spawn_future_local(work),
+        }
+    }
+}
+
 /// Lists `uri`, calling `on_batch` with rows as they arrive and `on_done`
 /// once at the end. Neither is called after the [`Listing`] is dropped.
 pub(crate) fn list_folder(
@@ -40,9 +52,8 @@ pub(crate) fn list_folder(
     on_done: impl FnOnce(Result<(), EntryError>) + 'static,
 ) -> Listing {
     let uri = uri.to_owned();
-    let task = glib::spawn_future_local(async move {
+    Listing::spawn(async move {
         let result = entry::enumerate_folder(&uri, on_batch).await;
         on_done(result);
-    });
-    Listing { task }
+    })
 }

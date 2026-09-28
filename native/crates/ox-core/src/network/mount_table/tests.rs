@@ -132,3 +132,28 @@ fn the_longest_mount_point_holds_a_path_and_names_are_whole() {
     assert_eq!(holder("/mnt/nas"), Some("/mnt/nas"));
     assert_eq!(holder("/mnt/nas-other/file"), Some("/"));
 }
+
+/// Only kernel SMB mounts become Network rows, named after their mount
+/// point (`stable` in `environment` of `desktop/winspace.py`).
+///
+/// parity: NET-006, NET-018
+#[test]
+fn only_smb_mounts_become_stable_network_mounts() {
+    let mounts = parse_mount_table(MOUNT_INFO_SAMPLE);
+
+    let stable: Vec<StableMount> = mounts.iter().filter_map(MountEntry::to_stable_mount).collect();
+
+    let expected = [
+        StableMount {
+            path: PathBuf::from("/mnt/nas"),
+            label: String::new(),
+            filesystem: "cifs".into(),
+        },
+        StableMount {
+            path: PathBuf::from("/mnt/bind point"),
+            label: String::new(),
+            filesystem: "cifs".into(),
+        },
+    ];
+    assert_eq!(stable, expected);
+}

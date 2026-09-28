@@ -1085,7 +1085,8 @@ sources = ["desktop/ui/app.js:431"]
 python_tests = ["desktop/tests/ui_rc4.py::This PC drive cards support middle-click"]
 bridge = ["mountVolume", "environment", "list"]
 dolphin = "Places > Devices with capacity bar"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/landing.rs (drive_cards_say_where_each_drive_is_or_that_it_connects_on_click); native/crates/ox-app/src/window/tests/network.rs (the_local_disk_card_shows_its_capacity); native/crates/ox-app/src/window/place_menus.rs (a_drive_card_offers_disconnect_only_where_the_mount_allows_it). Middle-click uses the landing cards' shared gesture."
 
 [[feature]]
 id = "HOME-004"
@@ -1107,8 +1108,8 @@ python_tests = []
 bridge = ["environment"]
 dolphin = "Places panel capacity bars (KFilePlacesView)"
 gnome = "g_file_query_filesystem_info filesystem::size / filesystem::free; g_file_query_filesystem_info_async (filesystem::size, filesystem::free, filesystem::used), verified available via gio in the isolated runner"
-native = "todo"
-native_note = "Porting notes: The UI exists but the native host sends no data. Supply capacity natively."
+native = "done"
+native_note = "native/crates/ox-app/src/window/landing.rs (the_capacity_bar_turns_red_from_ninety_percent_used, the_capacity_line_says_how_much_is_free_of_the_size); native/crates/ox-app/src/window/tests/network.rs (the_local_disk_card_shows_its_capacity). GIO measures each mounted card's file system off the main thread."
 
 [[feature]]
 id = "HOME-005"
@@ -1121,7 +1122,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:429", "desktop/ui/app.js:426"]
 python_tests = []
 bridge = ["bookmark", "signOut", "connect", "environment"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/network.rs (this_pc_lists_saved_locations_or_says_how_to_map_one); native/crates/ox-app/src/window/place_menus.rs (a_saved_share_card_opens_removes_and_signs_out); native/crates/ox-app/src/window/tests/landing_pages.rs (a_saved_share_card_shows_the_art_of_its_sidebar_row). A saved share's card shows it on the network bar, as its sidebar row does (the owner's icon mapping, 2026-09-28)."
 
 [[feature]]
 id = "HOME-006"
@@ -1143,7 +1145,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Network discovery cards open server tabs without leaving Network",
 ]
 bridge = ["discover", "cancel", "normalise"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/network.rs (the_network_page_discovers_servers_on_its_first_visit); native/crates/ox-app/src/window/tests/landing_pages.rs (the_network_page_has_the_banner_address_field_and_notes); native/crates/ox-app/src/network/discovery.rs (the_page_says_what_discovery_is_doing)."
 
 [[feature]]
 id = "HOME-007"
@@ -1157,7 +1160,8 @@ sources = ["desktop/ui/app.js:324", "desktop/ui/app.js:924", "desktop/ui/app.js:
 python_tests = ["desktop/tests/ui_release.py::Network discovery populates sample servers"]
 bridge = ["discover", "cancel"]
 gnome = "GVfs network:// / dns-sd backend"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/network/discovery.rs (passes_merge_servers_by_address_in_the_order_first_found, stop_ends_the_passes_and_keeps_what_was_found); native/crates/ox-app/src/window/tests/network.rs (the_network_page_discovers_servers_on_its_first_visit)."
 
 [[feature]]
 id = "HOME-008"
@@ -1172,7 +1176,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Network discovery cards open server tabs without leaving Network",
 ]
 bridge = ["discover", "list"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/network.rs (the_network_page_discovers_servers_on_its_first_visit); native/crates/ox-app/src/network/discovery.rs (the_page_says_what_discovery_is_doing). Middle-click uses the landing cards' shared gesture."
 
 [[feature]]
 id = "HOME-009"
@@ -1185,7 +1190,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:922"]
 python_tests = []
 bridge = ["normalise", "list"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/landing_pages.rs (the_network_page_has_the_banner_address_field_and_notes, open_address_refuses_anything_but_an_smb_server); native/crates/ox-app/src/window/tests/network.rs (map_network_location_keeps_its_errors_inside_the_dialog)."
 
 [[feature]]
 id = "HOME-010"
@@ -1198,7 +1204,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:926", "desktop/ui/app.js:1769-1776"]
 python_tests = ["desktop/tests/ui_v07.py::Network landing page uses connected and saved union"]
 bridge = ["bookmark", "signOut"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/place_menus.rs (a_network_share_can_be_kept_removed_and_signed_out_of); native/crates/ox-app/src/window/tests/landing_pages.rs (a_server_card_shows_the_server_in_the_share_blue_on_the_network_bar). Every network location is a card that opens on a click, in a background tab on a middle-click, and shows its menu on a right-click."
 
 [[feature]]
 id = "HOME-011"
@@ -5417,7 +5424,8 @@ python_tests = [
 ]
 bridge = ["mountVolume", "environment", "list"]
 gnome = "GVolumeMonitor volumes/mounts"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (a_removable_drive_has_an_eject_button_and_every_drive_a_menu); native/crates/ox-app/src/window/tests/network.rs (mounting_a_volume_that_went_away_says_so). Local Disk and every non-SMB mount are listed; an unmounted volume mounts, then opens, and a failure shows 'Could not mount device'. Missing: drives as drag sources and drop targets arrive with drag and drop."
 
 [[feature]]
 id = "SIDE-017"
@@ -5430,8 +5438,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:372", "desktop/ui/app.js:1563-1567"]
 python_tests = []
 bridge = ["newWindow", "cacheSet", "properties", "mountVolume"]
-native = "todo"
-native_note = "Porting notes: No 'Unmount/Eject' in the sidebar drive menu (only on This PC cards); Dolphin offers it in Places."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts); native/crates/ox-app/src/window/tests/network.rs (open_in_new_window_shows_the_place_in_another_window). Open, Open in new window and 'Mount volume' work, and Dolphin's Disconnect, Eject and Safely remove are added where the drive allows them. Missing: the search cache toggle and Properties join the menu with their milestones."
 
 [[feature]]
 id = "SIDE-018"
@@ -5474,7 +5482,7 @@ python_tests = [
 ]
 bridge = ["environment"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/places_composition.rs (network_identity_preserves_custom_ports_and_host_aliases, saved_labels_win_and_connected_state_merges, visited_servers_and_stable_mounts_need_no_saved_bookmark); native/crates/ox-app/src/places.rs (an_smb_mount_is_listed_under_network_and_not_among_the_drives); native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, network_rows_say_whether_they_are_connected_saved_or_visited, a_saved_share_that_is_not_mounted_shows_the_red_cross). Merging, the three tooltips and the green-bar and red-cross art are tested. Not tested natively yet: browsing an SMB location in a window adds its Network row without saving a bookmark (needs a share; AppContext::remember_network does it)."
+native_note = "native/crates/ox-core/tests/places_composition.rs (network_identity_preserves_custom_ports_and_host_aliases, saved_labels_win_and_connected_state_merges, visited_servers_and_stable_mounts_need_no_saved_bookmark); native/crates/ox-app/src/places.rs (an_smb_mount_is_listed_under_network_and_not_among_the_drives); native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, network_rows_say_whether_they_are_connected_saved_or_visited, a_saved_share_that_is_not_mounted_shows_the_red_cross). Merging, the three tooltips and the green-bar and red-cross art are tested. A listed SMB location now joins Network without saving a bookmark; missing: a native test of that listing, which needs a share."
 
 [[feature]]
 id = "SIDE-020"
@@ -5491,7 +5499,8 @@ python_tests = [
   "desktop/tests/ui_terminal.py::Network sidebar share offers Terminal",
 ]
 bridge = ["newWindow", "openTerminal", "bookmark", "signOut", "properties"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/place_menus.rs (a_network_share_can_be_kept_removed_and_signed_out_of); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it, open_in_new_window_shows_the_place_in_another_window). Open, Open in new tab, Open in new window, Keep in Network, Remove saved location and Sign out of server… work in the sidebar and on the Network page. Missing: Open in Terminal and Properties arrive with desktop integration and properties."
 
 [[feature]]
 id = "SIDE-021"
@@ -5504,7 +5513,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:1384-1388"]
 python_tests = []
 bridge = ["environment"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/places.rs (a_saved_share_that_is_mounted_appears_once_and_connected, a_saved_share_inside_a_mounted_share_is_connected, an_unmounted_saved_share_is_not_connected)."
 
 [[feature]]
 id = "SIDE-022"
@@ -10186,7 +10196,7 @@ bridge = ["connect", "cancel", "environment", "list", "bookmark"]
 dolphin = "Add Network Folder; Network > Add Network Folder"
 gnome = "GMountOperation + g_file_mount_enclosing_volume; g_file_mount_enclosing_volume (GVfs)"
 native = "partial"
-native_note = "native/crates/ox-core/src/network/mounting/tests.rs (a_mapped_share_is_named_after_its_folder, map_network_location_refuses_bad_input_before_mounting); native/crates/ox-core/src/network/prompts/tests.rs (a_failed_mount_saves_nothing, credentials_are_saved_only_after_the_mount_succeeds). The Map network location dialog, its fields and its cancel handling are not in the native UI yet."
+native_note = "native/crates/ox-app/src/dialogs/network_map.rs (the_dialog_asks_for_a_folder_a_label_and_whether_to_save_it, an_unchecked_box_maps_the_share_for_this_session_only); native/crates/ox-app/src/window/tests/network.rs (map_network_location_keeps_its_errors_inside_the_dialog, a_server_being_signed_out_is_neither_listed_nor_mapped); native/crates/ox-app/src/window/tests/sidebar_layout.rs (map_network_location_sits_below_the_list); native/crates/ox-core/src/network/mounting/tests.rs (a_mapped_share_is_named_after_its_folder, map_network_location_refuses_bad_input_before_mounting). The dialog opens from the sidebar button, More, This PC and the Network page; Connect shows Connecting… while it runs, errors stay in the dialog, and closing it drops the connection so a late success is ignored. Missing: a test of the success path (saving the share, refreshing the sidebar and opening it), which needs a real share. Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md."
 
 [[feature]]
 id = "NET-002"
@@ -10237,7 +10247,7 @@ python_tests = [
 bridge = ["list", "activateItem"]
 gnome = "GVfs smb-browse / smb-share"
 native = "partial"
-native_note = "native/crates/ox-core/src/entry/classify.rs (smb_share_is_navigable_not_a_mutable_regular_directory, shortcut_server_uses_real_target); native/crates/ox-core/src/entry/info.rs (gvfs_mountable_browse_uri_and_target_remain_distinct). No SMB server is exercised."
+native_note = "native/crates/ox-core/src/entry/classify.rs (smb_share_is_navigable_not_a_mutable_regular_directory, shortcut_server_uses_real_target); native/crates/ox-core/src/entry/info.rs (gvfs_mountable_browse_uri_and_target_remain_distinct); native/crates/ox-app/src/window/tests/network.rs (an_unmounted_share_is_mounted_once_then_listed_again). Opening a share mounts it once before it is listed. No SMB server is exercised; the network overlay badge of a listed share has no native test."
 
 [[feature]]
 id = "NET-004"
@@ -10273,7 +10283,7 @@ bridge = [
 ]
 gnome = "G_IO_ERROR_NOT_MOUNTED + mount_enclosing_volume"
 native = "partial"
-native_note = "native/crates/ox-core/src/network/mounting/tests.rs (a_read_of_an_unmounted_share_mounts_it_and_reads_again, a_share_is_mounted_at_most_once_per_read, other_read_failures_mount_nothing, a_failed_mount_is_reported_without_reading_again). native/crates/ox-core/src/entry/error.rs (only_not_mounted_asks_for_a_mount) classifies the error. The native UI's reads do not mount and retry through this yet."
+native_note = "native/crates/ox-core/src/network/mounting/tests.rs (a_read_of_an_unmounted_share_mounts_it_and_reads_again, a_share_is_mounted_at_most_once_per_read, other_read_failures_mount_nothing, a_failed_mount_is_reported_without_reading_again); native/crates/ox-core/src/entry/error.rs (only_not_mounted_asks_for_a_mount); native/crates/ox-app/src/window/tests/network.rs (an_unmounted_share_is_mounted_once_then_listed_again). Folder listings mount once, clear the partial rows and list again. Missing: the other reads (properties, Open with, folder size, terminal, opening files, archives, previous versions, trash support) do not mount through the service yet; they arrive with their own milestones."
 
 [[feature]]
 id = "NET-005"
@@ -10303,7 +10313,7 @@ python_tests = [
 ]
 bridge = ["environment"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/places_composition.rs (mount_badges_respect_path_boundaries_and_escaping)."
+native_note = "native/crates/ox-core/tests/places_composition.rs (mount_badges_respect_path_boundaries_and_escaping); native/crates/ox-core/src/network/mount_table/tests.rs (only_smb_mounts_become_stable_network_mounts); native/crates/ox-app/src/places.rs (a_pin_inside_a_cifs_mount_is_marked_shared). The app reads the kernel CIFS/SMB3 mounts off the main thread on every volume change, so pins and the Network list see them. Missing: tabs on a CIFS path do not show the green bar yet (only smb:// tabs do)."
 
 [[feature]]
 id = "NET-007"
@@ -10334,8 +10344,8 @@ python_tests = [
 ]
 bridge = ["authReply"]
 gnome = "GMountOperation ask-password; libsecret; GMountOperation ask-password"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/prompts/challenge.rs (a_domain_can_be_given_as_domain_backslash_user); native/crates/ox-core/src/network/prompts/tests.rs (unchecked_remember_saves_for_the_session_not_never, checked_remember_saves_permanently, the_dialog_shows_the_server_and_what_it_offers). The sign-in dialog is not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (the_dialog_names_the_server_and_preselects_remember, unchecking_remember_keeps_the_account_for_the_session_only, a_retry_says_why_and_a_server_that_cannot_save_offers_no_remember, enter_connects_and_the_eye_reveals_the_password); native/crates/ox-core/src/network/prompts/challenge.rs (a_domain_can_be_given_as_domain_backslash_user). As in the Python app, the note follows the check box, so a server that cannot save shows 'Reused for this server during your Linux login session. Not saved permanently.' (the account is kept in the session keyring); 'This connection does not support saving credentials.' was only ever visible in the web preview."
 
 [[feature]]
 id = "NET-008"
@@ -10352,8 +10362,8 @@ python_tests = [
   "desktop/tests/test_v05.py::AuthTests::test_cancelled_challenge_dismisses",
 ]
 bridge = ["authReply"]
-native = "partial"
-native_note = "native/crates/ox-core/src/network/prompts/tests.rs (the_password_is_never_sent_back_to_the_window). The dialog's username check, focus handling and 'Connecting…' state are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (connect_hands_gvfs_the_account_and_empties_the_password, a_refused_answer_keeps_the_dialog_open_with_the_reason, enter_connects_and_the_eye_reveals_the_password); native/crates/ox-core/src/network/prompts/tests.rs (the_password_is_never_sent_back_to_the_window). The dialog is modal, so GTK returns focus to the window or the dialog underneath when it closes."
 
 [[feature]]
 id = "NET-009"
@@ -10384,7 +10394,8 @@ python_tests = [
 ]
 bridge = ["authReply"]
 gnome = "Gtk.MountOperation / GVfs ask-password dialog semantics."
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (the_dialog_opens_over_the_windows_own_dialog, closing_the_dialog_aborts_its_mount, enter_connects_and_the_eye_reveals_the_password). The dialog is modal over the window, or over its own dialog such as Map network location, which stays open; Escape, × and closing cancel only its challenge; Enter presses Connect; the user name has focus and is selected. Missing: the text-size shortcuts do not reach the modal dialog, and Escape itself has no test (closing the window does)."
 
 [[feature]]
 id = "NET-010"
@@ -10397,7 +10408,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:183-184", "desktop/ui/app.js:784-787"]
 python_tests = []
 bridge = ["authReply"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (challenges_are_shown_one_at_a_time_in_order)."
 
 [[feature]]
 id = "NET-011"
@@ -10445,8 +10457,8 @@ python_tests = [
 bridge = ["authReply", "connect", "list"]
 dolphin = "KPasswdServer + KWallet; kio_smb “Remember password” in KWallet"
 gnome = "GPasswordSave PERMANENTLY / FOR_SESSION / NEVER; libsecret (default and session collections); Gtk.MountOperation + libsecret (Secret Service); libsecret (password_store/lookup/clear, COLLECTION_DEFAULT vs COLLECTION_SESSION) in gnome-keyring; GMountOperation password-save"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/server.rs (shares_on_one_server_share_a_key_whatever_the_host_case); native/crates/ox-core/src/network/prompts/answer.rs (a_domain_in_the_user_name_replaces_the_default_domain, remembering_falls_back_to_the_session_where_saving_is_unsupported, guest_needs_no_user_name_but_only_where_the_server_offers_it, a_password_with_nul_is_refused); native/crates/ox-core/src/network/prompts/challenge.rs (a_domain_can_be_given_as_domain_backslash_user, a_plain_user_name_gets_the_default_domain_and_is_stripped, malformed_user_names_are_refused_in_the_dialog_wording, passwords_are_bounded_and_free_of_nul); native/crates/ox-core/src/network/prompts/tests.rs (unchecked_remember_saves_for_the_session_not_never, checked_remember_saves_permanently, another_share_reuses_the_account_without_a_dialog, a_rejected_known_credential_shows_the_dialog_instead_of_looping, the_password_is_never_sent_back_to_the_window, cancelling_aborts_the_mount_and_dismisses_the_dialog, an_invalid_answer_keeps_the_dialog_open, a_guest_sign_in_saves_nothing, a_guest_sign_in_after_a_rejected_credential_saves_nothing); native/crates/ox-core/src/network/session_credentials/tests.rs (unchecked_remember_saves_in_the_session_collection, checked_remember_saves_in_the_default_collection, a_session_entry_wins_over_an_older_permanent_account, without_a_keyring_nothing_is_saved_and_memory_still_works); native/crates/ox-core/tests/network_python.rs (user_names_split_as_in_auth_bridge_py). The dialog's Remember checkbox and Connect as guest are not in the native UI yet. Porting notes: The io.winspace.SmbCredentials schema is a compatibility contract (AGENTS.md)."
+native = "done"
+native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (connect_hands_gvfs_the_account_and_empties_the_password, connect_as_guest_signs_in_anonymously, unchecking_remember_keeps_the_account_for_the_session_only, a_refused_answer_keeps_the_dialog_open_with_the_reason); native/crates/ox-core/src/network/prompts/answer.rs, native/crates/ox-core/src/network/prompts/challenge.rs, native/crates/ox-core/src/network/prompts/tests.rs and native/crates/ox-core/src/network/session_credentials/tests.rs (the answer rules, scopes and wording). Porting notes: The io.winspace.SmbCredentials schema is a compatibility contract (AGENTS.md)."
 
 [[feature]]
 id = "NET-012"
@@ -10463,8 +10475,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/test_v05.py::AuthTests::test_cancelled_challenge_dismisses"]
 bridge = ["authReply"]
-native = "partial"
-native_note = "native/crates/ox-core/src/network/prompts/tests.rs (cancelling_aborts_the_mount_and_dismisses_the_dialog, an_unanswered_challenge_expires_and_aborts_the_mount, a_retry_replaces_only_its_own_mounts_challenge, an_aborted_mount_dismisses_its_dialog, closing_aborts_every_pending_prompt). The native UI shows no sign-in dialog yet."
+native = "done"
+native_note = "native/crates/ox-core/src/network/prompts/tests.rs (cancelling_aborts_the_mount_and_dismisses_the_dialog, an_unanswered_challenge_expires_and_aborts_the_mount, a_retry_replaces_only_its_own_mounts_challenge, an_aborted_mount_dismisses_its_dialog, closing_aborts_every_pending_prompt); native/crates/ox-app/src/network/sign_in_queue/tests.rs (closing_the_dialog_aborts_its_mount); native/crates/ox-app/src/window/tests/network.rs (closing_the_window_aborts_its_sign_ins)."
 
 [[feature]]
 id = "NET-013"
@@ -10489,8 +10501,8 @@ python_tests = ["desktop/tests/test_v05.py::AuthTests::test_cancelled_challenge_
 bridge = ["authReply"]
 dolphin = "KIO worker messageBox prompts (host key, certificate)"
 gnome = "GMountOperation ask-question; GMountOperation ask-question / show-processes; GMountOperation signals ask-question, show-processes and aborted"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/prompts/answer.rs (a_choice_must_be_one_of_the_buttons); native/crates/ox-core/src/network/prompts/challenge.rs (questions_are_bounded_to_what_the_dialog_shows); native/crates/ox-core/src/network/prompts/tests.rs (cancelling_aborts_the_mount_and_dismisses_the_dialog, a_question_is_answered_with_the_chosen_button). The 'Network connection' dialog is not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (a_question_offers_its_answers_and_cancel); native/crates/ox-core/src/network/prompts/answer.rs (a_choice_must_be_one_of_the_buttons); native/crates/ox-core/src/network/prompts/challenge.rs (questions_are_bounded_to_what_the_dialog_shows); native/crates/ox-core/src/network/prompts/tests.rs (a_question_is_answered_with_the_chosen_button)."
 
 [[feature]]
 id = "NET-014"
@@ -10524,7 +10536,7 @@ python_tests = [
 bridge = ["connect", "authReply"]
 gnome = "libsecret schema io.winspace.SmbCredentials (server, port, scope)"
 native = "partial"
-native_note = "native/crates/ox-core/src/network/server.rs (shares_on_one_server_share_a_key_whatever_the_host_case, a_custom_port_is_a_different_server, host_aliases_are_never_merged); native/crates/ox-core/src/network/prompts/tests.rs (a_failed_mount_saves_nothing, credentials_are_saved_only_after_the_mount_succeeds, another_share_reuses_the_account_without_a_dialog, a_keyring_credential_is_reused_without_a_dialog, the_keyring_is_read_off_the_main_thread, a_rejected_known_credential_shows_the_dialog_instead_of_looping); native/crates/ox-core/src/network/session_credentials/tests.rs (another_share_on_the_server_loads_the_saved_credential, another_window_loads_the_saved_credential, another_process_on_the_same_keyring_loads_the_saved_credential, another_server_does_not_load_the_credential, a_session_entry_wins_over_an_older_permanent_account); native/crates/ox-core/tests/network_keyring_python.rs (credentials_saved_natively_load_in_the_python_app, credentials_saved_by_the_python_app_load_natively); native/crates/ox-core/tests/network_python.rs (server_keys_match_session_credentials_py); native/crates/ox-core/tests/network_secret_service.rs (a_credential_saved_in_the_session_keyring_serves_another_process_until_forgotten, both_apps_find_each_others_credentials_in_the_keyring). The native UI does not use this service yet to mount shares."
+native_note = "native/crates/ox-core/src/network/server.rs, native/crates/ox-core/src/network/prompts/tests.rs, native/crates/ox-core/src/network/session_credentials/tests.rs, native/crates/ox-core/tests/network_keyring_python.rs, native/crates/ox-core/tests/network_python.rs and native/crates/ox-core/tests/network_secret_service.rs (reuse per server, the keyring order, the rejected-credential rule and host aliases). Each window now mounts through prompts over the one keyring store every window shares. Missing: a native test of reuse across two windows; the app tests keep credentials in memory, without a keyring."
 
 [[feature]]
 id = "NET-015"
@@ -10543,8 +10555,8 @@ python_tests = [
 ]
 bridge = ["connect", "authReply"]
 gnome = "Secret Service session and default collections"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/prompts/tests.rs (a_failed_mount_saves_nothing, credentials_are_saved_only_after_the_mount_succeeds, a_credential_the_keyring_cannot_save_still_works_and_the_user_is_told, a_guest_sign_in_after_a_rejected_credential_saves_nothing); native/crates/ox-core/src/network/session_credentials/tests.rs (unchecked_remember_saves_in_the_session_collection, checked_remember_saves_in_the_default_collection, a_permanent_save_removes_the_stale_session_entry). The native UI does not show the keyring notice yet."
+native = "done"
+native_note = "native/crates/ox-core/src/network/prompts/tests.rs (a_failed_mount_saves_nothing, credentials_are_saved_only_after_the_mount_succeeds, a_credential_the_keyring_cannot_save_still_works_and_the_user_is_told); native/crates/ox-core/src/network/session_credentials/tests.rs (a_permanent_save_removes_the_stale_session_entry); native/crates/ox-app/src/window/tests/network.rs (a_sign_in_the_keyring_cannot_keep_is_announced)."
 
 [[feature]]
 id = "NET-016"
@@ -10561,7 +10573,7 @@ python_tests = [
 ]
 bridge = ["list", "environment"]
 native = "partial"
-native_note = "native/crates/ox-core/src/network/visited.rs (browsing_remembers_the_share_root_not_every_subfolder, a_server_listing_is_remembered_as_the_server). The native UI does not record browsed shares or refresh the sidebar with them yet."
+native_note = "native/crates/ox-core/src/network/visited.rs (browsing_remembers_the_share_root_not_every_subfolder, a_server_listing_is_remembered_as_the_server); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it). A successful SMB listing records its share or server for the session and never saves it. Missing: a native test of that listing, which needs a share."
 
 [[feature]]
 id = "NET-017"
@@ -10578,8 +10590,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::Keep in Network explicitly persists location",
 ]
 bridge = ["bookmark", "connect"]
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (re_adding_a_bookmark_moves_it_last_with_the_new_label, a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); UI not implemented."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/mutate.rs (re_adding_a_bookmark_moves_it_last_with_the_new_label, a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it); native/crates/ox-app/src/window/place_menus.rs (a_network_share_can_be_kept_removed_and_signed_out_of)."
 
 [[feature]]
 id = "NET-018"
@@ -10625,8 +10637,8 @@ python_tests = [
 bridge = ["environment", "bookmark"]
 dolphin = "Dolphin Places 'Network' / network:/ ioslave; n/a: KIO connections are per-process (Dolphin lists Network → Samba Shares)"
 gnome = "Session-wide GVfs mount tracker via GVolumeMonitor.get_mounts; /proc/self/mountinfo for CIFS"
-native = "partial"
-native_note = "native/crates/ox-core/tests/places_composition.rs (saved_labels_win_and_connected_state_merges, visited_servers_and_stable_mounts_need_no_saved_bookmark, network_identity_preserves_custom_ports_and_host_aliases)."
+native = "done"
+native_note = "native/crates/ox-core/tests/places_composition.rs (saved_labels_win_and_connected_state_merges, visited_servers_and_stable_mounts_need_no_saved_bookmark, network_identity_preserves_custom_ports_and_host_aliases); native/crates/ox-app/src/places.rs (an_smb_mount_is_listed_under_network_and_not_among_the_drives, visited_servers_are_listed_after_saved_shares); native/crates/ox-core/src/network/mount_table/tests.rs (only_smb_mounts_become_stable_network_mounts). The app now passes the kernel SMB mounts to the merge."
 
 [[feature]]
 id = "NET-019"
@@ -10668,7 +10680,7 @@ python_tests = [
 ]
 bridge = ["signOut", "cancel", "environment", "cacheStatus"]
 native = "partial"
-native_note = "native/crates/ox-core/src/network/session_credentials/tests.rs (forgetting_clears_only_the_matching_server, a_save_started_before_sign_out_is_discarded, forgetting_waits_for_a_save_in_flight); native/crates/ox-core/src/network/sign_out/tests.rs (signing_out_forgets_every_saved_credential_of_that_server_only, only_the_servers_smb_mounts_are_disconnected). The Sign out dialog, its checkboxes, marking tabs stale and the toasts are not in the native UI yet."
+native_note = "native/crates/ox-app/src/dialogs/network_sign_out.rs (the_dialog_forgets_credentials_and_keeps_the_cache_by_default); native/crates/ox-app/src/window/network_sign_out.rs (the_message_says_whether_saved_credentials_were_kept); native/crates/ox-app/src/window/tests/network.rs (signing_out_forgets_the_server_and_its_tabs, signing_out_without_a_keyring_says_the_credentials_remain); native/crates/ox-core/src/network/session_credentials/tests.rs and native/crates/ox-core/src/network/sign_out/tests.rs. Missing: the refusal while a file operation runs waits for the window to report its writes (the file-operations milestone)."
 
 [[feature]]
 id = "NET-021"
@@ -10692,7 +10704,7 @@ bridge = ["signOut"]
 dolphin = "Manual removal in KWallet Manager"
 gnome = "libsecret password_clear (GVfs NetworkPassword schema); libsecret password_clear with the org.gnome.keyring.NetworkPassword schema (DONT_MATCH_NAME), the attribute schema GVfs writes"
 native = "partial"
-native_note = "native/crates/ox-core/src/network/error.rs (a_failed_credential_removal_says_the_server_was_disconnected); native/crates/ox-core/src/network/session_credentials/tests.rs (forgetting_clears_only_the_matching_server, forgetting_session_entries_keeps_the_permanent_account, forgetting_session_entries_deletes_them_but_not_the_permanent_account, signing_out_in_one_window_wipes_the_server_from_every_windows_memory, a_save_started_before_sign_out_is_discarded, forgetting_waits_for_a_save_in_flight); native/crates/ox-core/src/network/sign_out/tests.rs (signing_out_forgets_every_saved_credential_of_that_server_only, keeping_saved_credentials_removes_only_session_entries, keeping_saved_credentials_without_session_entries_removes_nothing, without_a_keyring_the_server_is_disconnected_but_the_user_is_told, a_keyring_that_does_not_answer_in_time_is_reported); native/crates/ox-core/tests/network_secret_service.rs (a_credential_saved_in_the_session_keyring_serves_another_process_until_forgotten). The native UI does not offer Sign out yet. Porting notes: The NetworkPassword clear itself has no direct test; tests cover OpenXplorer's own schema."
+native_note = "native/crates/ox-core/src/network/error.rs (a_failed_credential_removal_says_the_server_was_disconnected); native/crates/ox-core/src/network/session_credentials/tests.rs and native/crates/ox-core/src/network/sign_out/tests.rs; native/crates/ox-core/tests/network_secret_service.rs; native/crates/ox-app/src/window/tests/network.rs (signing_out_forgets_the_server_and_its_tabs, signing_out_without_a_keyring_says_the_credentials_remain). Missing: the deletion of GNOME's NetworkPassword entries has no direct test, and the report has no cacheCleared (NET-022)."
 
 [[feature]]
 id = "NET-022"
@@ -10712,7 +10724,7 @@ sources = [
 python_tests = []
 bridge = ["signOut"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/search_pins.rs (a_pin_on_a_server_being_signed_out_of_waits_for_sign_in); native/crates/ox-core/tests/search_service.rs (signing_out_pauses_a_server_and_can_clear_its_names, signing_in_does_not_rescan_a_partly_unreadable_share). The native UI does not offer Sign out yet."
+native_note = "native/crates/ox-core/tests/search_pins.rs (a_pin_on_a_server_being_signed_out_of_waits_for_sign_in); native/crates/ox-core/tests/search_service.rs (signing_out_pauses_a_server_and_can_clear_its_names, signing_in_does_not_rescan_a_partly_unreadable_share). The Sign out dialog offers the check box and the app announces the finished sign-out with the choice (server-signed-out). Missing: the window runs no search cache yet to pause and clear (the Search and metadata milestone)."
 
 [[feature]]
 id = "NET-023"
@@ -10734,8 +10746,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["signOut", "list", "connect"]
-native = "partial"
-native_note = "native/crates/ox-core/src/network/sign_out/tests.rs (sign_out_is_refused_during_writes_and_outside_smb_servers, a_server_is_signed_out_once_at_a_time, the_server_stays_marked_until_the_sign_out_is_dropped, a_server_being_signed_out_can_be_neither_listed_nor_connected). The native UI does not offer Sign out yet."
+native = "done"
+native_note = "native/crates/ox-core/src/network/sign_out/tests.rs (sign_out_is_refused_during_writes_and_outside_smb_servers, a_server_is_signed_out_once_at_a_time, the_server_stays_marked_until_the_sign_out_is_dropped, a_server_being_signed_out_can_be_neither_listed_nor_connected); native/crates/ox-app/src/window/tests/network.rs (a_server_being_signed_out_is_neither_listed_nor_mapped)."
 
 [[feature]]
 id = "NET-024"
@@ -10769,8 +10781,8 @@ python_tests = [
 bridge = ["discover", "cancel", "connect", "list", "authReply"]
 dolphin = "Dolphin network:/ (KDNSSD/SMB); remote:/ network:/ smb:/ (kio-extras)"
 gnome = "GVfs network:/// backend; gvfsd-network / network:///; GVfs smb-browse / network:/// and dns-sd"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/discovery.rs (only_smb_servers_are_listed_once_and_sorted_by_label, a_server_without_a_name_is_labelled_by_its_host_and_keeps_its_port, discovery_aborts_every_password_request). The native Network page does not run discovery yet."
+native = "done"
+native_note = "native/crates/ox-core/src/network/discovery.rs (only_smb_servers_are_listed_once_and_sorted_by_label, a_server_without_a_name_is_labelled_by_its_host_and_keeps_its_port, discovery_aborts_every_password_request); native/crates/ox-app/src/window/tests/network.rs (the_network_page_discovers_servers_on_its_first_visit). Tests discover through a fixed answer; the real network browser is covered by manual acceptance."
 
 [[feature]]
 id = "NET-025"
@@ -11053,6 +11065,7 @@ python_tests = []
 bridge = ["environment"]
 gnome = "GVolumeMonitor signals"
 native = "todo"
+native_note = "The window listens to the volume monitor's mount, volume and drive signals (window/environment.rs) and redraws every window, but no native test emits them: a test cannot create a GIO mount or drive."
 
 [[feature]]
 id = "DEV-003"
@@ -11078,8 +11091,8 @@ python_tests = [
 bridge = ["mountVolume", "environment"]
 dolphin = "Places panel click on an unmounted device (Solid StorageAccess::setup, passphrase dialog)"
 gnome = "g_volume_mount with GtkMountOperation; g_volume_mount with GtkMountOperation (GNOME Shell's mount-operation handler draws LUKS prompts)"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/volumes.rs (volume_ids_prefer_uuid_then_device_then_activation_root_then_name, a_volume_that_went_away_is_reported_as_gone). The volume id choice is also tested in native/crates/ox-app/src/volumes.rs (volume_ids_prefer_uuid_then_device_then_activation_root_then_name). ox_core::network::mount_volume mounts a volume by that id, but clicking an unmounted volume in the native UI does not call it yet, and a real mount with GTK's password dialog has no test."
+native = "done"
+native_note = "native/crates/ox-core/src/network/volumes.rs (volume_ids_prefer_uuid_then_device_then_activation_root_then_name, a_volume_that_went_away_is_reported_as_gone); native/crates/ox-app/src/volumes.rs (volume_ids_prefer_uuid_then_device_then_activation_root_then_name); native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts); native/crates/ox-app/src/window/tests/network.rs (mounting_a_volume_that_went_away_says_so). Clicking an unmounted volume mounts it with GTK's mount operation, whose dialog asks for an encrypted disk's password, then opens it. Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md."
 
 [[feature]]
 id = "DEV-004"
@@ -11097,8 +11110,8 @@ python_tests = [
 ]
 bridge = ["list", "environment"]
 gnome = "GVfs mtp/gphoto2/afc backends"
-native = "todo"
-native_note = "Device authorities are parsed (native/crates/ox-core/src/location/parts.rs, device_authorities_with_brackets_split); device display labels are not implemented."
+native = "done"
+native_note = "native/crates/ox-app/src/locations.rs (a_mounted_phone_is_called_by_its_mount_name, an_unknown_device_is_a_connected_device, up_stays_within_a_device); native/crates/ox-app/src/window/location_view.rs (tabs_and_the_address_bar_show_the_current_apps_icons)."
 
 [[feature]]
 id = "DEV-005"
@@ -11159,7 +11172,7 @@ bridge = ["unmount", "environment"]
 dolphin = "Places 'Unmount'/'Safely Remove'; Eject / Safely Remove in Places; Places panel “Unmount” / “Release”"
 gnome = "g_mount_unmount_with_operation; g_mount_unmount_with_operation + GMountOperation::show-processes"
 native = "partial"
-native_note = "native/crates/ox-core/src/network/volumes.rs (disconnect_waits_for_this_windows_writes, a_location_outside_every_user_mount_cannot_be_disconnected). The Disconnect menu, its dialog and the navigation to Network are not in the native UI yet, and unmounting a real mount has no test. Porting notes: GNOME and Dolphin also offer Eject / Safely remove (g_drive_eject/stop); the Python app only unmounts. The sidebar device context menu (driveMenu) has no unmount entry. After disconnecting a USB drive the tab jumps to Network; consider This PC natively. No automated test."
+native_note = "native/crates/ox-core/src/network/volumes.rs (disconnect_waits_for_this_windows_writes, a_location_outside_every_user_mount_cannot_be_disconnected); native/crates/ox-app/src/devices.rs (disconnect_names_a_device_or_a_mount_as_app_js_does); native/crates/ox-app/src/window/place_menus.rs (a_drive_card_offers_disconnect_only_where_the_mount_allows_it); native/crates/ox-app/src/window/tests/network.rs (disconnect_asks_first_and_reports_a_location_without_a_mount). The card's menu, 'Disconnect this mount?', the unmount with GTK's mount operation, 'Could not disconnect' and the move to Network work. Missing: the toast while this window writes waits for the window to report its writes (the file-operations milestone). Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md. Porting notes: GNOME and Dolphin also offer Eject / Safely remove (DEV-007, DEV-008), now in the menus too."
 
 [[feature]]
 id = "DEV-007"
@@ -11183,8 +11196,8 @@ python_tests = []
 bridge = ["unmount", "environment"]
 dolphin = "Places panel eject icon on removable devices (Solid OpticalDrive::eject / StorageAccess::teardown); Places teardown/eject actions"
 gnome = "g_mount_can_eject / g_mount_eject_with_operation, g_volume_eject_with_operation, g_drive_eject_with_operation (udisks2), GMountOperation::show-unmount-progress; Gio.Mount.unmount_with_operation / eject_with_operation, Gio.Drive.stop (power off)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer offers 'Disconnect device/mount' on This PC cards only. The sidebar drive menu has no unmount, and there is no eject or power-off."
+native = "done"
+native_note = "native/crates/ox-app/src/devices.rs (each_drive_offers_what_it_allows); native/crates/ox-app/src/window/sidebar/entries.rs (a_removable_drive_has_an_eject_button_and_every_drive_a_menu); native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts); native/crates/ox-core/src/network/volumes.rs (eject_and_safely_remove_wait_for_writes_and_need_a_mount); native/crates/ox-app/src/window/tests/network.rs (eject_and_safely_remove_report_a_location_without_a_mount). A removable drive's sidebar row has an eject button, and its menu and card offer Eject; GTK's mount operation shows the busy programs and the desktop's messages. Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md."
 
 [[feature]]
 id = "DEV-008"
@@ -11203,7 +11216,8 @@ python_tests = []
 bridge = ["unmount", "environment"]
 dolphin = "“Safely Remove” in the Places panel"
 gnome = "g_drive_can_stop / g_drive_stop (udisks2 Drive.PowerOff), g_drive_get_start_stop_type"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/devices.rs (each_drive_offers_what_it_allows, only_safely_remove_says_the_drive_can_be_unplugged); native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts); native/crates/ox-core/src/network/volumes.rs (eject_and_safely_remove_wait_for_writes_and_need_a_mount); native/crates/ox-app/src/window/tests/network.rs (eject_and_safely_remove_report_a_location_without_a_mount). Safely remove is offered only where the drive can be stopped, powers it off and says it can be unplugged. Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md."
 
 [[feature]]
 id = "DEV-009"
@@ -11221,7 +11235,7 @@ python_tests = []
 bridge = ["unmount", "list"]
 dolphin = "setViewsToHomeIfMountPathOpen"
 native = "todo"
-native_note = "Porting notes: OpenXplorer moves only the active tab, and only after unmounting (to Network). Existing OpenXplorer part is protected by DEV-006."
+native_note = "Porting notes: OpenXplorer moves only the active tab, and only after unmounting (to Network). Natively, the tabs on a drive stop listing and watching it before Disconnect, Eject or Safely remove, so the window's own folder monitors never keep it busy; moving them to Home is still missing. Existing OpenXplorer part is protected by DEV-006."
 
 [[feature]]
 id = "DEV-010"

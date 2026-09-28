@@ -22,6 +22,7 @@
 
 use gio::prelude::*;
 use ox_core::location;
+use ox_core::network::volume_id_from;
 
 /// What a row represents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,6 +45,49 @@ impl VolumeKind {
     }
 }
 
+/// What the desktop lets the user do with a mount: the commands of its
+/// sidebar row and its This PC card.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct MountControls {
+    /// The mount can be unmounted: Disconnect (`canUnmount` in
+    /// `desktop/volume_locations.py`).
+    pub can_unmount: bool,
+    /// The medium can be ejected: Eject, for removable drives, SD cards
+    /// and optical discs (`g_mount_can_eject`).
+    pub can_eject: bool,
+    /// The drive can be powered off: Safely remove, for USB disks
+    /// (`g_drive_can_stop`).
+    pub can_stop: bool,
+}
+
+impl MountControls {
+    /// A mount the user cannot remove, such as Local Disk.
+    pub(crate) const FIXED: Self = Self {
+        can_unmount: false,
+        can_eject: false,
+        can_stop: false,
+    };
+
+    /// A mount that can only be unmounted, such as an internal partition
+    /// or a network share.
+    #[cfg(test)]
+    pub(crate) const UNMOUNTABLE: Self = Self {
+        can_unmount: true,
+        can_eject: false,
+        can_stop: false,
+    };
+
+    /// Reads what `mount` and its drive allow.
+    fn of_mount(mount: &gio::Mount) -> Self {
+        let drive = mount.drive();
+        Self {
+            can_unmount: mount.can_unmount(),
+            can_eject: mount.can_eject(),
+            can_stop: drive.is_some_and(|drive| drive.can_stop()),
+        }
+    }
+}
+
 /// Whether a location can be browsed now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum VolumeState {
@@ -51,8 +95,8 @@ pub(crate) enum VolumeState {
     Mounted {
         /// The canonical root, spelled as tabs store it.
         uri: String,
-        /// The mount offers a Disconnect command.
-        can_unmount: bool,
+        /// Disconnect, Eject and Safely remove, as the mount allows them.
+        controls: MountControls,
     },
     /// Not mounted yet; clicking the row mounts it.
     Mountable {
@@ -97,8 +141,8 @@ pub(crate) struct MountFacts {
     pub root_uri: String,
     /// Hidden behind a replacement mount.
     pub shadowed: bool,
-    /// The mount offers an unmount operation.
-    pub can_unmount: bool,
+    /// What the mount and its drive let the user do.
+    pub controls: MountControls,
 }
 
 impl MountFacts {
@@ -108,7 +152,7 @@ impl MountFacts {
             name: mount.name().to_string(),
             root_uri: mount.root().uri().to_string(),
             shadowed: mount.is_shadowed(),
-            can_unmount: mount.can_unmount(),
+            controls: MountControls::of_mount(mount),
         }
     }
 }
@@ -145,13 +189,16 @@ impl VolumeFacts {
 
     /// A stable-enough identifier for a single mount request, as
     /// `volume_id` in `desktop/volume_locations.py`: the UUID, else the
-    /// device path, else the activation root, else the name.
+    /// device path, else the activation root, else the name. ox-core's
+    /// [`volume_id_from`] decides, so a row and the mount it requests
+    /// always agree.
     pub(crate) fn id(&self) -> &str {
-        self.uuid
-            .as_deref()
-            .or(self.unix_device.as_deref())
-            .or(self.activation_uri.as_deref())
-            .unwrap_or(&self.name)
+        volume_id_from(
+            self.uuid.as_deref(),
+            self.unix_device.as_deref(),
+            self.activation_uri.as_deref(),
+            &self.name,
+        )
     }
 }
 
@@ -170,7 +217,7 @@ fn mounted_row(mount: &MountFacts) -> Option<VolumeRow> {
         kind: VolumeKind::of_root(&uri),
         state: VolumeState::Mounted {
             uri,
-            can_unmount: mount.can_unmount,
+            controls: mount.controls,
         },
     })
 }
@@ -225,7 +272,7 @@ mod tests {
             name: name.into(),
             root_uri: uri.into(),
             shadowed: false,
-            can_unmount: true,
+            controls: MountControls::UNMOUNTABLE,
         }
     }
 

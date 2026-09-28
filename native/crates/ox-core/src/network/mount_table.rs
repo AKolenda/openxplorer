@@ -3,7 +3,9 @@
 //!
 //! Ports `unescape_mount`, `parse_mounts`, `read_mounts`, `is_below`,
 //! `mount_for_path`, `remote_root` and `resolve_smb_path` in
-//! `desktop/mount_support.py`. Reading the table never mounts anything.
+//! `desktop/mount_support.py`, and the `stable` mounts `environment` in
+//! `desktop/winspace.py` hands to the Network list. Reading the table
+//! never mounts anything.
 
 use std::fs;
 use std::io;
@@ -12,6 +14,7 @@ use std::path::PathBuf;
 use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 
 use crate::location::{normalise, require_share, split_location, unquote_lossy, LocationError};
+use crate::places::StableMount;
 
 /// This process's mount table.
 const MOUNT_INFO: &str = "/proc/self/mountinfo";
@@ -47,6 +50,20 @@ impl MountEntry {
         matches!(self.filesystem.as_str(), "cifs" | "smb3")
     }
 
+    /// This mount as a [`StableMount`] of the Network list, or `None` for
+    /// a mount that is not a kernel SMB mount. The mount table names no
+    /// label, so the row is named after the mount point.
+    pub fn to_stable_mount(&self) -> Option<StableMount> {
+        if !self.is_smb() {
+            return None;
+        }
+        Some(StableMount {
+            path: PathBuf::from(&self.path),
+            label: String::new(),
+            filesystem: self.filesystem.clone(),
+        })
+    }
+
     /// The SMB location mounted here: the share, or the folder of a bind
     /// mount of a subfolder. `None` for other filesystems and unreadable
     /// sources.
@@ -77,6 +94,17 @@ pub fn parse_mount_table(text: &str) -> Vec<MountEntry> {
 pub fn read_mount_table() -> io::Result<Vec<MountEntry>> {
     let text = fs::read_to_string(MOUNT_INFO)?;
     Ok(parse_mount_table(&text))
+}
+
+/// The kernel SMB mounts of this process's mount table, as the Network
+/// list and Quick access read them (`stable` in `environment`).
+///
+/// # Errors
+///
+/// The I/O error of reading `/proc/self/mountinfo`.
+pub fn read_stable_smb_mounts() -> io::Result<Vec<StableMount>> {
+    let mounts = read_mount_table()?;
+    Ok(mounts.iter().filter_map(MountEntry::to_stable_mount).collect())
 }
 
 /// One mountinfo line: `id parent major:minor root path options
