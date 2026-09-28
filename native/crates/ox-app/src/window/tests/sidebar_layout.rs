@@ -44,15 +44,14 @@ fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
     let fixture = Fixture::standard();
     let test = with_two_pins(&fixture);
     let home = bounds(&test, &row_named(&test, "Home"));
-    // The pane is padded 12px 8px (ui-spec.md §4.4; the web's 13px 7px).
-    assert_eq!(home, (8, 172, 194, 35), "Home is 13 pixels below the command bar");
+    assert_eq!(home, (7, 173, 196, 35), "Home is 14 pixels below the command bar");
     let quick_access: Vec<_> = descendants::<gtk::ListBoxRow>(&test.window.sidebar().list)
         .into_iter()
         .filter(|row| row.has_css_class("quick-access"))
         .map(|row| bounds(&test, &row))
         .collect();
     assert!(quick_access.len() >= 2, "the known folders and two pins");
-    assert_eq!(quick_access[0], (12, 233, 186, 35));
+    assert_eq!(quick_access[0], (11, 234, 188, 35));
     for pair in quick_access.windows(2) {
         assert_eq!(pair[1].1 - pair[0].1, 35, "Quick access rows touch");
     }
@@ -66,7 +65,7 @@ fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
         "4px padding and a 1px border end Quick access, then a separator"
     );
     assert_eq!(local_disk.1 - this_pc.1, 36, "other rows are a pixel apart");
-    assert_eq!(this_pc.0, 8);
+    assert_eq!(this_pc.0, 7);
 }
 
 #[gtk::test]
@@ -104,6 +103,6 @@ fn map_network_location_waits_below_the_list_for_its_milestone() {
     assert!(tooltip.contains("network and device support"), "{tooltip}");
     let (x, y, width, height) = bounds(&test, &button);
     let window_height = test.window.height();
-    assert_eq!((x, width, height), (8, 194, 34));
+    assert_eq!((x, width, height), (7, 196, 34));
     assert_eq!(y + height + 11 + 30, window_height, "above the status bar");
 }

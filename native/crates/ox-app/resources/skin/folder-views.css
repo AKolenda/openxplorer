@@ -114,6 +114,10 @@ gridview.files > child {
    top of the cell's own 8px gap; the padding above is all the room
    .file-tile has. */
 gridview.files > child > box { margin: 0; border-spacing: 0; }
+/* Names wrap on a 16px pitch (`.tile-name{line-height:1.35}`). GTK
+   multiplies the font's own line height, 17px for Noto Sans at 12px,
+   not the font size (T15). */
+gridview.files > child label { line-height: 0.95; }
 gridview.files > child:hover { background-color: @ox_hover; }
 gridview.files > child:active { background-color: @ox_pressed; }
 gridview.files > child:selected {

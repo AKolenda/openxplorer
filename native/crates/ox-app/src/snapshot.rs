@@ -19,6 +19,11 @@
 //! size with `GDK_SCALE=2`). The app then runs as a separate
 //! instance, so it never hands the request to a running preview.
 //! The Python app has no such hook.
+//!
+//! Before quitting, the hook prints when the window drew its first frame
+//! and its first listing, on the monotonic clock (`CLOCK_MONOTONIC`, in
+//! microseconds), so a benchmark can time start-up against the moment it
+//! started the app.
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -169,11 +174,16 @@ pub(crate) fn save_when_listed(
     let png = request.png.clone();
     let size = request.size;
     let started = Instant::now();
+    let milestones = Milestones::default();
     let frames_since_listed = Cell::new(0);
     let done = RefCell::new(Some(done));
     window.add_tick_callback(move |window, _| {
         if let Some(size) = size {
             fit_content(window.upcast_ref(), size);
+        }
+        milestones.note_frame();
+        if window.is_listed() {
+            milestones.note_first_listing();
         }
         let waited_too_long = started.elapsed() > LISTING_PATIENCE;
         if !window.is_listed() && !waited_too_long {
@@ -186,11 +196,47 @@ pub(crate) fn save_when_listed(
         if waited_too_long {
             eprintln!("OpenXplorer snapshot: the first listing did not finish; saving the window as it is");
         }
+        eprintln!("{}", milestones.summary());
         if let Some(done) = done.take() {
             done(save_png(window.upcast_ref(), &png));
         }
         glib::ControlFlow::Break
     });
+}
+
+/// When the snapshot's window drew its first frame and its first
+/// listing, in microseconds on GLib's monotonic clock.
+#[derive(Debug, Default)]
+struct Milestones {
+    first_frame: Cell<Option<i64>>,
+    first_listing: Cell<Option<i64>>,
+}
+
+impl Milestones {
+    /// Notes that a frame is about to be drawn.
+    fn note_frame(&self) {
+        if self.first_frame.get().is_none() {
+            self.first_frame.set(Some(glib::monotonic_time()));
+        }
+    }
+
+    /// Notes that the frame about to be drawn shows a finished listing.
+    fn note_first_listing(&self) {
+        if self.first_listing.get().is_none() {
+            self.first_listing.set(Some(glib::monotonic_time()));
+        }
+    }
+
+    /// The line the hook prints for benchmarks.
+    fn summary(&self) -> String {
+        let time =
+            |moment: Option<i64>| moment.map_or_else(|| "never".to_owned(), |micros| micros.to_string());
+        format!(
+            "OpenXplorer snapshot: first frame at {} us, first listing at {} us (monotonic clock)",
+            time(self.first_frame.get()),
+            time(self.first_listing.get()),
+        )
+    }
 }
 
 /// Resizes `window` so its title bar and contents take `size`: a window's
@@ -314,5 +360,23 @@ mod tests {
         );
         let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SIZE_VARIABLE, "wide")]);
         assert!(refused.is_err(), "a size needs a width and a height");
+    }
+
+    #[test]
+    fn the_start_up_milestones_read_never_until_reached() {
+        let milestones = Milestones::default();
+        assert!(milestones.summary().contains("first frame at never us"));
+        milestones.note_frame();
+        let first_frame = milestones.first_frame.get().expect("a frame was noted");
+        milestones.note_frame();
+        assert_eq!(
+            milestones.first_frame.get(),
+            Some(first_frame),
+            "later frames keep the first"
+        );
+        assert!(milestones
+            .summary()
+            .contains(&format!("first frame at {first_frame} us")));
+        assert!(milestones.summary().contains("first listing at never us"));
     }
 }
