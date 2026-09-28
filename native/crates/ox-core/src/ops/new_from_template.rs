@@ -25,8 +25,8 @@ use std::path::{Path, PathBuf};
 
 use gio::prelude::*;
 
-use super::context::{on_worker, OperationContext};
-use super::create::{name_taken_or, CreatedItem};
+use super::context::{on_worker, unless_cancelled, OperationContext};
+use super::create::CreatedItem;
 use super::error::OpsError;
 use super::random::random_hex;
 use super::templates::{list_templates_blocking, TemplateId, MAX_TEMPLATE_BYTES};
@@ -40,6 +40,11 @@ const READ_BLOCK_BYTES: usize = 64 * 1024;
 
 /// The stage file is `.winspace-new-<32 hex>` in the target folder.
 const STAGE_PREFIX: &str = ".winspace-new-";
+
+/// The refusal of a taken name, in `create_from_template`'s wording in
+/// `desktop/file_services.py`, whether the name was taken before the file
+/// was made or while it was published.
+const NAME_TAKEN: &str = "An item with that name already exists. Nothing was overwritten.";
 
 /// What New from template creates.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,14 +91,11 @@ fn create_from_template_blocking(
     context.protection.check(&folder_uri)?;
     let folder = gio::File::for_uri(&folder_uri);
     let target = GioNode::from_file(folder.child(&request.name));
-    if target.exists(Some(&context.cancel)) {
-        return Err(OpsError::Exists(
-            "An item with that name already exists. Nothing was overwritten.".into(),
-        ));
+    if unless_cancelled(&context.cancel, || target.exists(Some(&context.cancel)))? {
+        return Err(OpsError::Exists(NAME_TAKEN.into()));
     }
     let contents = template_contents(request, &context.cancel)?;
-    publish_new_file(&folder, &target, &contents, context)
-        .map_err(|error| name_taken_or(error, &request.name))?;
+    publish_new_file(&folder, &target, &contents, context)?;
     Ok(CreatedItem {
         uri: target.uri(),
         kind: ItemKind::File,
@@ -175,6 +177,12 @@ fn read_bounded(mut template: File, cancel: &Cancellation) -> Result<Vec<u8>, Op
 /// Writes `contents` to a private stage file in `folder` and publishes it
 /// as `target`. The stage file is deleted when anything fails after it was
 /// created.
+///
+/// # Errors
+///
+/// [`OpsError::Exists`] with [`NAME_TAKEN`] when `target`'s name was taken
+/// meanwhile (the item there is left as it was), cancellation, or the
+/// backend's failure.
 fn publish_new_file(
     folder: &gio::File,
     target: &GioNode,
@@ -191,10 +199,14 @@ fn publish_new_file(
     // Same folder, never overwriting: the kernel's no-replace rename
     // locally, `set_display_name` on a phone (XFER-007, XFER-024).
     let published = GioNode::from_file(stage.clone()).publish(target, Some(&context.cancel));
+    // OPS-048: a stage that was not published is deleted.
     if published.is_err() {
         discard_stage(&stage);
     }
-    published.map_err(OpsError::from)
+    published.map_err(|error| match OpsError::from(error) {
+        OpsError::Exists(_) => OpsError::Exists(NAME_TAKEN.into()),
+        other => other,
+    })
 }
 
 /// Creates `stage` exclusively as a private (0600) file and writes
@@ -214,6 +226,7 @@ fn write_private_stage(
     // Close even after a failed write, as the Python `finally` does.
     let closed = stream.close(cancellable);
     let outcome = written.and(closed).map_err(OpsError::from);
+    // OPS-048: a stage that could not be written in full is deleted.
     if outcome.is_err() {
         discard_stage(stage);
     }
@@ -267,5 +280,26 @@ mod tests {
 
         assert_eq!(too_large, Err(OpsError::failed("Template exceeds 16 MiB.")));
         assert_eq!(stopped, Err(OpsError::Cancelled));
+    }
+
+    /// The race the check before reading the template cannot close: the
+    /// name is taken by the time the stage file is published.
+    #[test]
+    fn a_name_taken_while_publishing_is_kept_and_the_stage_file_is_deleted() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let existing = temp.path().join("New document.txt");
+        fs::write(&existing, b"kept").expect("an existing item");
+        let folder = gio::File::for_path(temp.path());
+        let target = GioNode::from_file(folder.child("New document.txt"));
+
+        let published = publish_new_file(&folder, &target, b"template", &OperationContext::default());
+
+        assert_eq!(published, Err(OpsError::Exists(NAME_TAKEN.into())));
+        assert_eq!(fs::read(&existing).expect("the existing item"), b"kept");
+        let names: Vec<_> = fs::read_dir(temp.path())
+            .expect("a readable folder")
+            .map(|entry| entry.expect("a folder entry").file_name())
+            .collect();
+        assert_eq!(names, ["New document.txt"], "no {STAGE_PREFIX} file is left");
     }
 }
