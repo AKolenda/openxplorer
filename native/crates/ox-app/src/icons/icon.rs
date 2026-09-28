@@ -493,6 +493,59 @@ mod tests {
         }
     }
 
+    /// A glyph name of app.js, as ox-core's `KnownFolder::glyph` gives it,
+    /// and the Fluent icon the approved icon mapping chose for it.
+    struct GlyphCase {
+        app_glyph: &'static str,
+        icon: Option<Icon>,
+    }
+
+    /// [`Icon::for_known_folder`] repeats ox-core's glyph table in Fluent
+    /// icons; the two must agree, Templates sharing the Documents glyph
+    /// included.
+    #[test]
+    fn every_known_folder_shows_the_fluent_icon_of_its_ox_core_glyph() {
+        let mapping = [
+            GlyphCase {
+                app_glyph: "desktop",
+                icon: Some(Icon::Desktop),
+            },
+            GlyphCase {
+                app_glyph: "downloads",
+                icon: Some(Icon::ArrowDownload),
+            },
+            GlyphCase {
+                app_glyph: "documents",
+                icon: Some(Icon::Document),
+            },
+            GlyphCase {
+                app_glyph: "pictures",
+                icon: Some(Icon::Image),
+            },
+            GlyphCase {
+                app_glyph: "music",
+                icon: Some(Icon::MusicNote),
+            },
+            GlyphCase {
+                app_glyph: "videos",
+                icon: Some(Icon::Video),
+            },
+            // "folder" is the folder art, not a glyph.
+            GlyphCase {
+                app_glyph: "folder",
+                icon: None,
+            },
+        ];
+        for folder in KnownFolder::ALL {
+            let app_glyph = folder.glyph();
+            let case = mapping
+                .iter()
+                .find(|case| case.app_glyph == app_glyph)
+                .unwrap_or_else(|| panic!("the icon mapping has no icon for {app_glyph:?}"));
+            assert_eq!(Icon::for_known_folder(folder), case.icon, "{folder:?}");
+        }
+    }
+
     /// parity: LOOK-015
     #[test]
     fn every_quick_access_folder_has_its_own_glyph() {

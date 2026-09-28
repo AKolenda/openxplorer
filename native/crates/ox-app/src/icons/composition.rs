@@ -9,6 +9,8 @@
 //! other size, and a badge is 9/16 of the icon. Computed without widgets,
 //! so the geometry is tested on its own; [`super::ArtImage`] applies it.
 
+use ox_core::places::KnownFolder;
+
 use super::art::{Art, Connection, NetworkArt, NetworkPlace};
 use super::tint::Tint;
 use super::Icon;
@@ -45,7 +47,20 @@ pub(super) struct Picture {
     /// Its edge in logical pixels.
     pub(super) size: i32,
     /// CSS classes that colour a glyph.
-    pub(super) classes: Vec<&'static str>,
+    pub(super) classes: &'static [&'static str],
+}
+
+impl Picture {
+    /// `icon` at `size` pixels, in its own colours or, for a glyph, the
+    /// text colour.
+    const fn plain(icon: Icon, size: i32) -> Self {
+        Self::coloured(icon, size, &[])
+    }
+
+    /// `icon` at `size` pixels, a glyph coloured by the skin's `classes`.
+    const fn coloured(icon: Icon, size: i32, classes: &'static [&'static str]) -> Self {
+        Self { icon, size, classes }
+    }
 }
 
 /// A small icon over a bottom corner of the picture.
@@ -125,11 +140,7 @@ pub(super) fn compose(art: Art, size: i32) -> Composition {
     match art {
         Art::Glyph(icon) => plain(icon, size),
         Art::TintedGlyph(icon, tint) => Composition {
-            picture: Picture {
-                icon,
-                size,
-                classes: tint.css_classes().to_vec(),
-            },
+            picture: Picture::coloured(icon, size, tint.css_classes()),
             ..plain(icon, size)
         },
         Art::Folder => plain(Icon::FileFolder, size),
@@ -145,11 +156,7 @@ pub(super) fn compose(art: Art, size: i32) -> Composition {
 /// A picture that fills the icon, with nothing else.
 fn plain(icon: Icon, size: i32) -> Composition {
     Composition {
-        picture: Picture {
-            icon,
-            size,
-            classes: Vec::new(),
-        },
+        picture: Picture::plain(icon, size),
         badge: None,
         network_bar: None,
     }
@@ -171,36 +178,39 @@ fn zip_badge(size: i32) -> Badge {
 /// when a share or mapped drive is disconnected.
 fn on_network_bar(network: NetworkArt, size: i32) -> Composition {
     let bar = NetworkBar::for_size(size);
-    let (icon, classes) = network_picture(network.place);
     let is_disconnected = network.connection == Connection::Disconnected;
     let badge =
         (is_disconnected && network.place.can_be_disconnected()).then(|| disconnected_badge(size, bar));
     Composition {
-        picture: Picture {
-            icon,
-            size: picture_on_bar(size),
-            classes,
-        },
+        picture: network_picture(network.place, picture_on_bar(size)),
         badge,
         network_bar: Some(bar),
     }
 }
 
-/// What a network location shows on the bar, and the classes that colour
-/// a glyph there.
-fn network_picture(place: NetworkPlace) -> (Icon, Vec<&'static str>) {
+/// The picture, `size` pixels square, that a network location shows on
+/// the bar.
+fn network_picture(place: NetworkPlace, size: i32) -> Picture {
     match place {
-        NetworkPlace::Share => (Icon::FileFolder, Vec::new()),
-        NetworkPlace::MappedDrive => (Icon::HardDrive, vec![MAPPED_DRIVE_CLASS]),
-        NetworkPlace::Server => (Icon::Server, vec![SERVER_CLASS]),
-        NetworkPlace::KnownFolder(folder) => {
-            let Some(glyph) = Icon::for_known_folder(folder) else {
-                return (Icon::FileFolder, Vec::new());
-            };
-            let classes = Tint::for_known_folder(folder).map(Tint::css_classes);
-            (glyph, classes.map(Vec::from).unwrap_or_default())
-        }
+        NetworkPlace::Share => Picture::plain(Icon::FileFolder, size),
+        NetworkPlace::MappedDrive => Picture::coloured(Icon::HardDrive, size, &[MAPPED_DRIVE_CLASS]),
+        NetworkPlace::Server => Picture::coloured(Icon::Server, size, &[SERVER_CLASS]),
+        NetworkPlace::KnownFolder(folder) => known_folder_picture(folder, size),
     }
+}
+
+/// A standard folder on a network mount: its own glyph in its colour
+/// (`networkIcon(19, glyph)` in app.js), or the folder for one without a
+/// glyph.
+fn known_folder_picture(folder: KnownFolder, size: i32) -> Picture {
+    let Some(glyph) = Icon::for_known_folder(folder) else {
+        return Picture::plain(Icon::FileFolder, size);
+    };
+    let classes: &'static [&'static str] = match Tint::for_known_folder(folder) {
+        Some(tint) => tint.css_classes(),
+        None => &[],
+    };
+    Picture::coloured(glyph, size, classes)
 }
 
 /// The red cross at the picture's bottom-left, on a white disc half its
@@ -219,8 +229,6 @@ fn disconnected_badge(size: i32, bar: NetworkBar) -> Badge {
 
 #[cfg(test)]
 mod tests {
-    use ox_core::places::KnownFolder;
-
     use super::*;
     use crate::icons::FileType;
 

@@ -172,7 +172,7 @@ impl DetailsPane {
 
     /// Shows the folder art a pane shows before its first [`Self::show`].
     fn show_placeholder(&self) {
-        self.imp().preview.show(Art::Folder, PREVIEW_SIZE);
+        self.imp().preview.set_art(Art::Folder, PREVIEW_SIZE);
     }
 
     /// Makes the pane `width` pixels wide ([`PANE_WIDTH`], or less in a
@@ -185,8 +185,8 @@ impl DetailsPane {
     pub(super) fn show(&self, content: &PaneContent) {
         let imp = self.imp();
         match content.preview {
-            Preview::Art(art) => imp.preview.show(art, PREVIEW_SIZE),
-            Preview::Several => imp.preview.show(Art::Glyph(Icon::Copy), SEVERAL_ITEMS_GLYPH),
+            Preview::Art(art) => imp.preview.set_art(art, PREVIEW_SIZE),
+            Preview::Several => imp.preview.set_art(Art::Glyph(Icon::Copy), SEVERAL_ITEMS_GLYPH),
         }
         imp.name.set_text(&content.name);
         imp.kind.set_text(&content.kind);

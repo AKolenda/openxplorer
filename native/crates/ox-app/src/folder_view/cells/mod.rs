@@ -139,7 +139,7 @@ impl FileCell {
         let imp = cell.imp();
         imp.icon_size.set(icon_size);
         // A folder until bound, so the cell has its full size from the start.
-        imp.image.show(Art::Folder, icon_size);
+        imp.image.set_art(Art::Folder, icon_size);
         match layout {
             CellLayout::DetailsRow => cell.lay_out_as_row(),
             CellLayout::IconTile => cell.lay_out_as_tile(),
@@ -175,7 +175,7 @@ impl FileCell {
     /// Shows `item`: its art and its name.
     pub(crate) fn bind(&self, item: &FileItem) {
         let imp = self.imp();
-        imp.image.show(item.art(), imp.icon_size.get());
+        imp.image.set_art(item.art(), imp.icon_size.get());
         imp.label.set_text(&item.entry().name);
     }
 

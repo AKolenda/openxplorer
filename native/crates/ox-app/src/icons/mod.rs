@@ -14,6 +14,9 @@
 //! badge, the green network bar, the red cross of a disconnected share) are
 //! an [`ArtImage`], which lays real icons and CSS-styled boxes over each
 //! other.
+//!
+//! Icons are hidden from assistive technology, as app.js marks every icon
+//! `aria-hidden`: the button, row, tab or card around an icon names it.
 
 mod art;
 mod art_image;
@@ -25,6 +28,7 @@ mod tint;
 use std::sync::Once;
 
 use gtk::gdk;
+use gtk::prelude::*;
 
 pub(crate) use art::{Art, Connection, Storage};
 pub(crate) use art_image::ArtImage;
@@ -68,13 +72,20 @@ pub(crate) fn register(display: &gdk::Display) {
 /// A new image of `icon` at `size` logical pixels, centred in its
 /// allocation so a larger one never stretches it.
 pub(crate) fn image(icon: Icon, size: i32) -> gtk::Image {
-    let image = gtk::Image::builder()
-        .halign(gtk::Align::Center)
-        .valign(gtk::Align::Center)
-        .css_classes([GLYPH_CLASS])
-        .build();
+    let image = decorative_image();
+    image.add_css_class(GLYPH_CLASS);
     set_icon(&image, icon, size);
     image
+}
+
+/// An empty image, centred in its allocation and hidden from assistive
+/// technology (see the module documentation).
+fn decorative_image() -> gtk::Image {
+    gtk::Image::builder()
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
+        .accessible_role(gtk::AccessibleRole::Presentation)
+        .build()
 }
 
 /// Shows `icon` in `image` at `size` logical pixels.
@@ -85,30 +96,83 @@ pub(crate) fn set_icon(image: &gtk::Image, icon: Icon, size: i32) {
 
 #[cfg(test)]
 mod tests {
-    use gtk::prelude::*;
+    use std::path::PathBuf;
+
+    use gtk::gsk;
 
     use super::*;
     use crate::icons::icon::ALL_ICONS;
 
+    /// The edge every icon is painted at to check that it loads.
+    const PAINTED_SIZE: i32 = 32;
+
+    /// The tests' private display.
+    fn display() -> gdk::Display {
+        gdk::Display::default().expect("GTK tests run on a private display")
+    }
+
     /// The icon theme of the tests' private display, with the bundle added.
     fn registered_theme() -> gtk::IconTheme {
-        let display = gdk::Display::default().expect("GTK tests run on a private display");
+        let display = display();
         register(&display);
         gtk::IconTheme::for_display(&display)
     }
 
-    /// The resource an icon name resolves to at 16 pixels, as a URI.
-    fn resolved_uri(theme: &gtk::IconTheme, icon: Icon) -> Option<String> {
-        let paintable = theme.lookup_icon(
+    /// `icon` as the icon theme finds it for `size` pixels.
+    fn look_up(theme: &gtk::IconTheme, icon: Icon, size: i32) -> gtk::IconPaintable {
+        theme.lookup_icon(
             icon.name(),
             &[],
-            16,
+            size,
             1,
             gtk::TextDirection::Ltr,
             gtk::IconLookupFlags::empty(),
-        );
-        let file = paintable.file()?;
+        )
+    }
+
+    /// The resource an icon name resolves to at 16 pixels, as a URI.
+    fn resolved_uri(theme: &gtk::IconTheme, icon: Icon) -> Option<String> {
+        let file = look_up(theme, icon, 16).file()?;
         Some(file.uri().to_string())
+    }
+
+    /// A renderer that paints off screen. GSK requires a renderer to be
+    /// unrealized before it is dropped, so the guard does that, also when
+    /// an assertion fails.
+    struct OffscreenRenderer(gsk::CairoRenderer);
+
+    impl OffscreenRenderer {
+        fn new() -> Self {
+            let renderer = gsk::CairoRenderer::new();
+            renderer
+                .realize_for_display(&display())
+                .expect("the Cairo renderer needs no GPU");
+            Self(renderer)
+        }
+
+        /// What `paintable` looks like `size` pixels square.
+        fn paint(&self, paintable: &impl IsA<gdk::Paintable>, size: i32) -> Option<gdk::Texture> {
+            let snapshot = gtk::Snapshot::new();
+            let edge = f64::from(size);
+            paintable.snapshot(&snapshot, edge, edge);
+            let node = snapshot.to_node()?;
+            Some(self.0.render_texture(node, None))
+        }
+    }
+
+    impl Drop for OffscreenRenderer {
+        fn drop(&mut self) {
+            self.0.unrealize();
+        }
+    }
+
+    /// How many pixels of `texture` any ink covers.
+    fn inked_pixels(texture: &gdk::Texture) -> usize {
+        let downloader = gdk::TextureDownloader::new(texture);
+        let (bytes, _stride) = downloader.download_bytes();
+        let (pixels, _) = bytes.as_chunks::<4>();
+        // GDK's default memory format keeps alpha in the fourth byte.
+        pixels.iter().filter(|pixel| pixel[3] > 0).count()
     }
 
     #[gtk::test]
@@ -123,11 +187,35 @@ mod tests {
         }
     }
 
+    /// Every file loads and paints: GTK would show its own image-missing
+    /// picture instead of a file it cannot read (a broken gradient, say),
+    /// and names the paintable after that picture.
+    ///
+    /// parity: LOOK-015
+    #[gtk::test]
+    fn every_icon_loads_and_paints_something() {
+        let theme = registered_theme();
+        let renderer = OffscreenRenderer::new();
+        for icon in ALL_ICONS {
+            let paintable = look_up(&theme, icon, PAINTED_SIZE);
+            let texture = renderer.paint(&paintable, PAINTED_SIZE);
+            let inked = texture.as_ref().map_or(0, inked_pixels);
+            assert!(inked > 0, "{icon:?} paints nothing");
+            let loaded_name = paintable.icon_name();
+            assert_eq!(
+                loaded_name,
+                Some(PathBuf::from(icon.name())),
+                "{icon:?} did not load"
+            );
+            let is_symbolic = icon.name().ends_with("-symbolic");
+            assert_eq!(paintable.is_symbolic(), is_symbolic, "{icon:?}");
+        }
+    }
+
     #[gtk::test]
     fn registering_twice_adds_the_icons_once() {
         let theme = registered_theme();
-        let display = gdk::Display::default().expect("GTK tests run on a private display");
-        register(&display);
+        register(&display());
         let bundles = theme
             .resource_path()
             .iter()
@@ -142,6 +230,7 @@ mod tests {
         assert_eq!(image.icon_name().as_deref(), Some("ox-arrow-left-20-symbolic"));
         assert_eq!(image.pixel_size(), 16);
         assert!(image.has_css_class(GLYPH_CLASS));
+        assert_eq!(image.accessible_role(), gtk::AccessibleRole::Presentation);
         set_icon(&image, Icon::ArrowRight, 12);
         assert_eq!(image.icon_name().as_deref(), Some("ox-arrow-right-20-symbolic"));
         assert_eq!(image.pixel_size(), 12);

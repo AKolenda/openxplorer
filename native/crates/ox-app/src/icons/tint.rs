@@ -49,27 +49,29 @@ impl Tint {
         }
     }
 
-    /// The CSS class of this tint alone.
-    fn css_class(self) -> &'static str {
+    /// The classes a glyph in this tint carries: [`TINTED_CLASS`], then the
+    /// tint's own. Static, so a composed icon can hold them without
+    /// allocating.
+    pub(crate) const fn css_classes(self) -> &'static [&'static str; 2] {
         match self {
-            Tint::Home => "tint-home",
-            Tint::ThisPc => "tint-this-pc",
-            Tint::Network => "tint-network",
-            Tint::KnownFolder(KnownFolder::Desktop) => "tint-desktop",
-            Tint::KnownFolder(KnownFolder::Downloads) => "tint-downloads",
-            Tint::KnownFolder(KnownFolder::Documents) => "tint-documents",
-            Tint::KnownFolder(KnownFolder::Pictures) => "tint-pictures",
-            Tint::KnownFolder(KnownFolder::Music) => "tint-music",
-            Tint::KnownFolder(KnownFolder::Videos) => "tint-videos",
-            Tint::KnownFolder(KnownFolder::Templates) => "tint-templates",
-            Tint::KnownFolder(KnownFolder::Public) => "tint-public",
+            Tint::Home => &[TINTED_CLASS, "tint-home"],
+            Tint::ThisPc => &[TINTED_CLASS, "tint-this-pc"],
+            Tint::Network => &[TINTED_CLASS, "tint-network"],
+            Tint::KnownFolder(KnownFolder::Desktop) => &[TINTED_CLASS, "tint-desktop"],
+            Tint::KnownFolder(KnownFolder::Downloads) => &[TINTED_CLASS, "tint-downloads"],
+            Tint::KnownFolder(KnownFolder::Documents) => &[TINTED_CLASS, "tint-documents"],
+            Tint::KnownFolder(KnownFolder::Pictures) => &[TINTED_CLASS, "tint-pictures"],
+            Tint::KnownFolder(KnownFolder::Music) => &[TINTED_CLASS, "tint-music"],
+            Tint::KnownFolder(KnownFolder::Videos) => &[TINTED_CLASS, "tint-videos"],
+            Tint::KnownFolder(KnownFolder::Templates) => &[TINTED_CLASS, "tint-templates"],
+            Tint::KnownFolder(KnownFolder::Public) => &[TINTED_CLASS, "tint-public"],
         }
     }
 
-    /// The classes a glyph in this tint carries: [`TINTED_CLASS`] and the
-    /// tint's own.
-    pub(crate) fn css_classes(self) -> [&'static str; 2] {
-        [TINTED_CLASS, self.css_class()]
+    /// The CSS class of this tint alone.
+    const fn css_class(self) -> &'static str {
+        let [_, own_class] = self.css_classes();
+        own_class
     }
 
     /// Every tint that has a colour.
@@ -122,7 +124,7 @@ mod tests {
     #[test]
     fn a_folder_without_a_colour_has_no_tint() {
         assert_eq!(Tint::for_known_folder(KnownFolder::Public), None);
-        assert_eq!(Tint::Home.css_classes(), ["tinted", "tint-home"]);
+        assert_eq!(Tint::Home.css_classes(), &["tinted", "tint-home"]);
     }
 
     #[gtk::test]
