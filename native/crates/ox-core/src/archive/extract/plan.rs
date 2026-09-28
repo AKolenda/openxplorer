@@ -15,6 +15,7 @@
 //!   and folders carrying data are refused.
 //! - ARC-017: the [`ExtractionLimits`] against ZIP bombs.
 
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use super::limits::ExtractionLimits;
@@ -245,21 +246,47 @@ fn check_size(member: &ZipMember, limits: &ExtractionLimits) -> Result<(), Archi
     Ok(())
 }
 
-/// What one path of the archive is, and how the archive spells it.
+/// The position of a path in [`ArchivePaths::paths`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PathId(usize);
+
+/// How a path is found: the folder it is in, and its last segment keyed
+/// the way a case-insensitive share compares names.
+#[derive(Debug, PartialEq, Eq, Hash)]
+struct PathKey {
+    /// The folder the path is in; `None` at the top of the archive.
+    folder: Option<PathId>,
+    /// The [`share_key`] of the path's last segment.
+    segment_key: String,
+}
+
+/// What one path of the archive is, and how the archive spells its last
+/// segment. The segments above it are spelled by its folders.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct KnownPath {
     kind: PathKind,
-    spelling: String,
+    segment: String,
 }
 
 /// ARC-015: every path an extraction would create, keyed the way a
 /// case-insensitive share compares names.
+///
+/// ARC-017: a path is stored once, as its last segment and a link to its
+/// folder, so the memory this takes grows with the length of the member
+/// names and not with their depth times their length. Python's `plan`
+/// keeps one copy of each segment too: its path tuples share the segment
+/// strings. Storing every folder's whole path instead would let a crafted
+/// archive of deep, long names within every limit cost gigabytes just to
+/// be checked.
 #[derive(Debug, Default)]
 struct ArchivePaths {
-    /// The member paths themselves.
+    /// The member paths themselves: their segments' share keys, joined by
+    /// `/`, which no segment contains.
     members: HashSet<String>,
+    /// Every path's position in `paths`.
+    ids: HashMap<PathKey, PathId>,
     /// Every path, including the folders member paths imply.
-    known: HashMap<String, KnownPath>,
+    paths: Vec<KnownPath>,
 }
 
 impl ArchivePaths {
@@ -272,41 +299,56 @@ impl ArchivePaths {
     /// member uses as the other kind or spells differently.
     fn add(&mut self, segments: &[String], kind: PathKind) -> Result<(), ArchiveError> {
         let keys: Vec<String> = segments.iter().map(|segment| share_key(segment)).collect();
+        // The whole path is compared first, as Python does: a member
+        // repeated in another case is a duplicate, not an ambiguous path.
         if !self.members.insert(keys.join("/")) {
             return Err(ArchiveError::DuplicateNames);
         }
-        for depth in 1..=segments.len() {
+        let mut folder = None;
+        for (depth, (segment, segment_key)) in segments.iter().zip(keys).enumerate() {
             // Every path above the member itself is a folder.
-            let is_member_itself = depth == segments.len();
+            let is_member_itself = depth + 1 == segments.len();
             let path = KnownPath {
                 kind: if is_member_itself { kind } else { PathKind::Folder },
-                spelling: segments[..depth].join("/"),
+                segment: segment.clone(),
             };
-            self.record(keys[..depth].join("/"), path)?;
+            let key = PathKey { folder, segment_key };
+            folder = Some(self.record(key, path)?);
         }
         Ok(())
     }
 
-    /// Records `path` under `key`, refusing a different earlier record.
-    fn record(&mut self, key: String, path: KnownPath) -> Result<(), ArchiveError> {
-        match self.known.get(&key) {
-            Some(known) if *known != path => Err(ArchiveError::AmbiguousPaths),
-            _ => {
-                self.known.insert(key, path);
-                Ok(())
+    /// Records `path` under `key` and returns its id, refusing a different
+    /// earlier record. The folders above `path` were compared before it, so
+    /// comparing its last segment compares its whole spelling.
+    fn record(&mut self, key: PathKey, path: KnownPath) -> Result<PathId, ArchiveError> {
+        match self.ids.entry(key) {
+            Entry::Occupied(known) => {
+                let id = *known.get();
+                if self.paths[id.0] == path {
+                    Ok(id)
+                } else {
+                    Err(ArchiveError::AmbiguousPaths)
+                }
+            }
+            Entry::Vacant(new) => {
+                let id = PathId(self.paths.len());
+                self.paths.push(path);
+                new.insert(id);
+                Ok(id)
             }
         }
     }
 
     /// The number of paths, implied folders included.
     fn count(&self) -> usize {
-        self.known.len()
+        self.paths.len()
     }
 
     /// The number of folders, implied ones included.
     fn folder_count(&self) -> usize {
-        self.known
-            .values()
+        self.paths
+            .iter()
             .filter(|path| path.kind == PathKind::Folder)
             .count()
     }
@@ -354,17 +396,58 @@ mod tests {
         }
     }
 
+    /// `segments` as the owned segments of a member path.
+    fn owned(segments: &[&str]) -> Vec<String> {
+        segments.iter().map(|segment| (*segment).to_owned()).collect()
+    }
+
     /// parity: ARC-015, ARC-019
     #[test]
     fn implied_folders_count_once_and_a_parent_after_its_child_agrees() {
         let mut paths = ArchivePaths::default();
-        let child = ["a".to_owned(), "b.txt".to_owned()];
 
-        paths.add(&child, PathKind::File).expect("a new file");
         paths
-            .add(&["a".to_owned()], PathKind::Folder)
+            .add(&owned(&["a", "b.txt"]), PathKind::File)
+            .expect("a new file");
+        paths
+            .add(&owned(&["a"]), PathKind::Folder)
             .expect("its folder, listed after it");
 
         assert_eq!((paths.count(), paths.folder_count()), (2, 1));
+    }
+
+    /// Python compares whole member paths before their folders, so a member
+    /// repeated in another case is a duplicate even though its folder is
+    /// spelled differently too.
+    ///
+    /// parity: ARC-015
+    #[test]
+    fn a_member_repeated_in_another_case_is_a_duplicate_not_an_ambiguous_folder() {
+        let mut paths = ArchivePaths::default();
+        paths
+            .add(&owned(&["Docs", "a.txt"]), PathKind::File)
+            .expect("a new file");
+
+        let repeated = paths.add(&owned(&["docs", "A.TXT"]), PathKind::File);
+        let beside_it = paths.add(&owned(&["docs", "b.txt"]), PathKind::File);
+
+        assert_eq!(repeated, Err(ArchiveError::DuplicateNames));
+        assert_eq!(beside_it, Err(ArchiveError::AmbiguousPaths));
+    }
+
+    /// ARC-017: a deep member costs one stored segment per level, not one
+    /// stored path per level.
+    ///
+    /// parity: ARC-017
+    #[test]
+    fn a_deep_member_stores_each_segment_once() {
+        let segments: Vec<String> = (0..128).map(|level| format!("{level:031}")).collect();
+        let mut paths = ArchivePaths::default();
+
+        paths.add(&segments, PathKind::File).expect("a new deep file");
+
+        let stored_bytes: usize = paths.paths.iter().map(|path| path.segment.len()).sum();
+        assert_eq!(stored_bytes, 128 * 31);
+        assert_eq!((paths.count(), paths.folder_count()), (128, 127));
     }
 }
