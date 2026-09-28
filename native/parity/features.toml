@@ -10119,6 +10119,23 @@ gnome = "freedesktop xattrs user.xdg.tags / user.baloo.rating; Tracker nao:Tag (
 native = "todo"
 
 [[feature]]
+id = "SRCH-040"
+area = "SRCH"
+title = "Pinned folders are indexed for search automatically"
+behaviour = "Pinning a folder to Quick access adds it to the search index, so pinned folders are instantly searchable without a separate step. Unpinning removes it from the index only if it was added by pinning, not if the user indexed it themselves. Folders already pinned when the feature arrives are indexed in the background. A share that needs sign-in is indexed after the user signs in. A switch 'Index pinned folders automatically' (on by default) in Search & indexing turns this off. In the indexed-folder list these entries carry a 'Pinned' tag."
+origin = ["openxplorer"]
+priority = "must"
+openxplorer = "missing"
+sources = [
+  "owner decision 2026-09-28: anything pinned should be indexed by default",
+  "desktop/index_service.py (index roots), desktop/core.py (pins)",
+]
+python_tests = []
+bridge = ["pin", "bookmark"]
+native = "todo"
+native_note = "New behaviour decided by the owner. Needs tests: pin adds a root, unpin removes only pin-added roots, existing pins are indexed once, sign-in-required shares wait for credentials, the switch disables it."
+
+[[feature]]
 id = "NET-001"
 area = "NET"
 title = "Map network location dialog"
