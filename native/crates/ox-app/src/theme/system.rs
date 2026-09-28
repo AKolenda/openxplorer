@@ -15,13 +15,19 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 
 const INTERFACE_SCHEMA: &str = "org.gnome.desktop.interface";
+const COLOR_SCHEME_KEY: &str = "color-scheme";
+const GTK_THEME_KEY: &str = "gtk-theme";
+
 const PORTAL_NAME: &str = "org.freedesktop.portal.Desktop";
 const PORTAL_PATH: &str = "/org/freedesktop/portal/desktop";
 const PORTAL_SETTINGS: &str = "org.freedesktop.portal.Settings";
 const APPEARANCE_NAMESPACE: &str = "org.freedesktop.appearance";
 
+/// How long the portal may take to answer the first read, in milliseconds.
+const PORTAL_TIMEOUT_MS: i32 = 2000;
+
 /// Dark or not, from GNOME's keys. `None` when they do not decide.
-pub fn dark_from_gnome_keys(color_scheme: Option<&str>, gtk_theme: Option<&str>) -> Option<bool> {
+fn dark_from_gnome_keys(color_scheme: Option<&str>, gtk_theme: Option<&str>) -> Option<bool> {
     match color_scheme {
         Some("prefer-dark") => return Some(true),
         Some("prefer-light") => return Some(false),
@@ -32,7 +38,7 @@ pub fn dark_from_gnome_keys(color_scheme: Option<&str>, gtk_theme: Option<&str>)
 
 /// Dark or not, from the portal's value (1 prefers dark, 2 prefers light,
 /// 0 has no preference).
-pub fn dark_from_portal(value: u32) -> Option<bool> {
+fn dark_from_portal(value: u32) -> Option<bool> {
     match value {
         1 => Some(true),
         2 => Some(false),
@@ -45,11 +51,15 @@ pub fn dark_from_portal(value: u32) -> Option<bool> {
 /// The application creates one and forwards changes to the shared
 /// [`Skin`](super::Skin); windows never register here, so closing a
 /// window leaves nothing behind.
-pub struct SystemScheme {
-    settings: Option<gio::Settings>,
-    portal_dark: RefCell<Option<bool>>,
+pub(crate) struct SystemScheme {
+    /// GNOME's interface settings, when the schema is installed.
+    gnome_settings: Option<gio::Settings>,
+    /// The portal's last answer, when there is no GNOME schema.
+    portal_dark: Cell<Option<bool>>,
     on_change: Box<dyn Fn(bool)>,
-    portal_watch: RefCell<Option<gio::SignalSubscription>>,
+    /// Keeps the portal's `SettingChanged` subscription alive.
+    portal_subscription: RefCell<Option<gio::SignalSubscription>>,
+    /// A `SettingChanged` signal arrived; it is newer than the first read.
     portal_signal_seen: Cell<bool>,
 }
 
@@ -57,7 +67,7 @@ impl std::fmt::Debug for SystemScheme {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("SystemScheme")
-            .field("gnome_settings", &self.settings.is_some())
+            .field("gnome_settings", &self.gnome_settings.is_some())
             .field("portal_dark", &self.portal_dark)
             .finish_non_exhaustive()
     }
@@ -67,27 +77,33 @@ impl SystemScheme {
     /// Starts watching and calls `on_change` with the new value whenever the
     /// scheme changes. With no GNOME schema the portal is queried
     /// asynchronously, and `on_change` hears its answer.
-    pub fn new(on_change: impl Fn(bool) + 'static) -> Rc<Self> {
-        let settings = gio::SettingsSchemaSource::default()
+    pub(crate) fn new(on_change: impl Fn(bool) + 'static) -> Rc<Self> {
+        let gnome_settings = gio::SettingsSchemaSource::default()
             .and_then(|source| source.lookup(INTERFACE_SCHEMA, true))
             .map(|schema| gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None));
         let scheme = Rc::new(Self {
-            settings,
-            portal_dark: RefCell::new(None),
+            gnome_settings,
+            portal_dark: Cell::new(None),
             on_change: Box::new(on_change),
-            portal_watch: RefCell::new(None),
+            portal_subscription: RefCell::new(None),
             portal_signal_seen: Cell::new(false),
         });
-        scheme.watch();
+        match &scheme.gnome_settings {
+            Some(settings) => scheme.watch_gnome_keys(settings),
+            None => {
+                glib::spawn_future_local(follow_portal(Rc::downgrade(&scheme)));
+            }
+        }
         scheme
     }
 
-    /// True when the desktop prefers dark.
-    pub fn is_dark(&self) -> bool {
+    /// True when the desktop prefers dark: GNOME's keys decide, else the
+    /// portal, else GTK's own dark preference.
+    pub(crate) fn is_dark(&self) -> bool {
         if let Some(dark) = self.gnome_dark() {
             return dark;
         }
-        if let Some(dark) = *self.portal_dark.borrow() {
+        if let Some(dark) = self.portal_dark.get() {
             return dark;
         }
         gtk::Settings::default().is_some_and(|settings| settings.is_gtk_application_prefer_dark_theme())
@@ -97,22 +113,15 @@ impl SystemScheme {
         (self.on_change)(self.is_dark());
     }
 
+    /// Dark or not from GNOME's keys, reading only the keys the installed
+    /// schema has.
     fn gnome_dark(&self) -> Option<bool> {
-        let settings = self.settings.as_ref()?;
+        let settings = self.gnome_settings.as_ref()?;
         let schema = settings.settings_schema()?;
         let read = |key: &str| schema.has_key(key).then(|| settings.string(key).to_string());
-        let color_scheme = read("color-scheme");
-        let gtk_theme = read("gtk-theme");
+        let color_scheme = read(COLOR_SCHEME_KEY);
+        let gtk_theme = read(GTK_THEME_KEY);
         dark_from_gnome_keys(color_scheme.as_deref(), gtk_theme.as_deref())
-    }
-
-    fn watch(self: &Rc<Self>) {
-        match &self.settings {
-            Some(settings) => self.watch_gnome_keys(settings),
-            None => {
-                glib::spawn_future_local(follow_portal(Rc::downgrade(self)));
-            }
-        }
     }
 
     /// Follows GNOME's own keys, when their schema is installed.
@@ -120,11 +129,11 @@ impl SystemScheme {
         let Some(schema) = settings.settings_schema() else {
             return;
         };
-        let keys = ["color-scheme", "gtk-theme"].into_iter();
-        for key in keys.filter(|key| schema.has_key(key)) {
-            let weak = Rc::downgrade(self);
+        let keys = [COLOR_SCHEME_KEY, GTK_THEME_KEY];
+        for key in keys.into_iter().filter(|key| schema.has_key(key)) {
+            let scheme = Rc::downgrade(self);
             settings.connect_changed(Some(key), move |_, _| {
-                if let Some(scheme) = weak.upgrade() {
+                if let Some(scheme) = scheme.upgrade() {
                     scheme.notify();
                 }
             });
@@ -133,7 +142,7 @@ impl SystemScheme {
 
     /// Records the portal's value and reports the scheme.
     fn set_portal_value(&self, value: u32) {
-        self.portal_dark.replace(dark_from_portal(value));
+        self.portal_dark.set(dark_from_portal(value));
         self.notify();
     }
 }
@@ -144,26 +153,13 @@ async fn follow_portal(scheme: Weak<SystemScheme>) {
     let Ok(connection) = gio::bus_get_future(gio::BusType::Session).await else {
         return;
     };
-    let changed = scheme.clone();
-    let subscription = connection.subscribe_to_signal(
-        Some(PORTAL_NAME),
-        Some(PORTAL_SETTINGS),
-        Some("SettingChanged"),
-        Some(PORTAL_PATH),
-        Some(APPEARANCE_NAMESPACE),
-        gio::DBusSignalFlags::NONE,
-        move |signal| {
-            let value = portal_change(signal.parameters);
-            if let (Some(scheme), Some(value)) = (changed.upgrade(), value) {
-                scheme.portal_signal_seen.set(true);
-                scheme.set_portal_value(value);
-            }
-        },
-    );
+    let subscription = subscribe_to_portal_changes(&connection, scheme.clone());
     let Some(watching) = scheme.upgrade() else {
         return;
     };
-    watching.portal_watch.replace(Some(subscription));
+    watching.portal_subscription.replace(Some(subscription));
+    // Hold no strong reference across the read, so the application can
+    // drop the scheme while the portal is slow to answer.
     drop(watching);
     let current = read_portal(&connection).await;
     let Some((value, scheme)) = current.zip(scheme.upgrade()) else {
@@ -175,9 +171,32 @@ async fn follow_portal(scheme: Weak<SystemScheme>) {
     }
 }
 
+/// Subscribes `scheme` to the portal's `SettingChanged` signals for the
+/// appearance namespace.
+fn subscribe_to_portal_changes(
+    connection: &gio::DBusConnection,
+    scheme: Weak<SystemScheme>,
+) -> gio::SignalSubscription {
+    connection.subscribe_to_signal(
+        Some(PORTAL_NAME),
+        Some(PORTAL_SETTINGS),
+        Some("SettingChanged"),
+        Some(PORTAL_PATH),
+        Some(APPEARANCE_NAMESPACE),
+        gio::DBusSignalFlags::NONE,
+        move |signal| {
+            let (Some(scheme), Some(value)) = (scheme.upgrade(), portal_change(signal.parameters)) else {
+                return;
+            };
+            scheme.portal_signal_seen.set(true);
+            scheme.set_portal_value(value);
+        },
+    )
+}
+
 /// Reads the portal's colour scheme, or `None` without a portal.
 async fn read_portal(connection: &gio::DBusConnection) -> Option<u32> {
-    let arguments = (APPEARANCE_NAMESPACE, "color-scheme").to_variant();
+    let arguments = (APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY).to_variant();
     let reply = connection
         .call_future(
             Some(PORTAL_NAME),
@@ -187,7 +206,7 @@ async fn read_portal(connection: &gio::DBusConnection) -> Option<u32> {
             Some(&arguments),
             None,
             gio::DBusCallFlags::NONE,
-            2000,
+            PORTAL_TIMEOUT_MS,
         )
         .await
         .ok()?;
@@ -197,9 +216,11 @@ async fn read_portal(connection: &gio::DBusConnection) -> Option<u32> {
     inner.get::<u32>()
 }
 
+/// The colour-scheme value a `SettingChanged` signal carries, or `None`
+/// for any other setting.
 fn portal_change(parameters: &glib::Variant) -> Option<u32> {
     let (namespace, key, value) = parameters.get::<(String, String, glib::Variant)>()?;
-    if namespace != APPEARANCE_NAMESPACE || key != "color-scheme" {
+    if namespace != APPEARANCE_NAMESPACE || key != COLOR_SCHEME_KEY {
         return None;
     }
     value.get::<u32>()
@@ -209,6 +230,7 @@ fn portal_change(parameters: &glib::Variant) -> Option<u32> {
 mod tests {
     use super::*;
 
+    /// parity: LOOK-004
     #[test]
     fn color_scheme_decides_first() {
         assert_eq!(
@@ -221,6 +243,7 @@ mod tests {
         );
     }
 
+    /// parity: LOOK-004
     #[test]
     fn default_scheme_falls_back_to_the_theme_name() {
         assert_eq!(
@@ -234,6 +257,7 @@ mod tests {
         assert_eq!(dark_from_gnome_keys(None, None), None);
     }
 
+    /// parity: LOOK-004
     #[test]
     fn portal_values_follow_the_specification() {
         assert_eq!(dark_from_portal(1), Some(true));
@@ -241,28 +265,59 @@ mod tests {
         assert_eq!(dark_from_portal(0), None);
     }
 
+    /// One `SettingChanged` signal and the colour-scheme value expected
+    /// from it.
+    struct PortalSignalCase {
+        namespace: &'static str,
+        key: &'static str,
+        value: glib::Variant,
+        expected: Option<u32>,
+    }
+
+    /// parity: LOOK-004
     #[test]
     fn portal_changes_accept_only_the_appearance_color_scheme() {
-        let change = |namespace: &str, key: &str, value: glib::Variant| (namespace, key, value).to_variant();
-        assert_eq!(
-            portal_change(&change(APPEARANCE_NAMESPACE, "color-scheme", 1u32.to_variant())),
-            Some(1)
-        );
-        assert_eq!(
-            portal_change(&change(APPEARANCE_NAMESPACE, "color-scheme", 0u32.to_variant())),
-            Some(0)
-        );
-        assert_eq!(
-            portal_change(&change("another.namespace", "color-scheme", 1u32.to_variant())),
-            None
-        );
-        assert_eq!(
-            portal_change(&change(APPEARANCE_NAMESPACE, "accent-color", 1u32.to_variant())),
-            None
-        );
-        assert_eq!(
-            portal_change(&change(APPEARANCE_NAMESPACE, "color-scheme", "dark".to_variant())),
-            None
-        );
+        let cases = [
+            PortalSignalCase {
+                namespace: APPEARANCE_NAMESPACE,
+                key: "color-scheme",
+                value: 1u32.to_variant(),
+                expected: Some(1),
+            },
+            PortalSignalCase {
+                namespace: APPEARANCE_NAMESPACE,
+                key: "color-scheme",
+                value: 0u32.to_variant(),
+                expected: Some(0),
+            },
+            PortalSignalCase {
+                namespace: "another.namespace",
+                key: "color-scheme",
+                value: 1u32.to_variant(),
+                expected: None,
+            },
+            PortalSignalCase {
+                namespace: APPEARANCE_NAMESPACE,
+                key: "accent-color",
+                value: 1u32.to_variant(),
+                expected: None,
+            },
+            PortalSignalCase {
+                namespace: APPEARANCE_NAMESPACE,
+                key: "color-scheme",
+                value: "dark".to_variant(),
+                expected: None,
+            },
+        ];
+        for case in cases {
+            let parameters = (case.namespace, case.key, case.value).to_variant();
+            assert_eq!(
+                portal_change(&parameters),
+                case.expected,
+                "{}.{}",
+                case.namespace,
+                case.key
+            );
+        }
     }
 }
