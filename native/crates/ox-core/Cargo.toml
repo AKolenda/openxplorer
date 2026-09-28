@@ -17,6 +17,10 @@ percent-encoding.workspace = true
 thiserror.workspace = true
 libc.workspace = true
 rustix.workspace = true
+# The Secret Service client for SMB credentials (session_credentials.py used
+# libsecret). Pure Rust with an encrypted session, so no C library or -dev
+# package is needed; async-io keeps it independent of Tokio.
+oo7 = { version = "0.6", default-features = false, features = ["async-std", "native_crypto"] }
 
 [dev-dependencies]
 tempfile.workspace = true
