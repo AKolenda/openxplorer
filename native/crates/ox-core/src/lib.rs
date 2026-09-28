@@ -17,6 +17,7 @@
 //! | [`format`](mod@format) | Size and date text | `ui/app.js` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
+//! | [`versions`] | Previous versions and the read-only rule for snapshots | `previous_versions.py`, `file_services.py`, `ui/snapshot-meta.js` |
 
 pub mod clipboard;
 pub mod entry;
@@ -26,6 +27,7 @@ pub mod location;
 pub mod places;
 pub mod settings;
 pub mod transfer;
+pub mod versions;
 
 mod private_storage;
 #[cfg(test)]
