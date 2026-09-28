@@ -176,6 +176,18 @@ impl IndexedFolder {
         found_names(self.service.index(), text)
     }
 
+    /// The names a search of every cached folder for `text` finds when
+    /// hidden items are shown.
+    pub fn found_names_including_hidden(&self, text: &str) -> Vec<String> {
+        let query = SearchQuery {
+            hidden_items: HiddenItems::Include,
+            ..SearchQuery::new(text)
+        };
+        let results = self.service.index().search(&query, None);
+        let hits = results.expect("the search runs").hits;
+        hits.into_iter().map(|hit| hit.name).collect()
+    }
+
     /// Ticks the service with the default settings until `done` holds.
     pub fn tick_until(&self, what: &str, done: impl Fn() -> bool) {
         tick_until(&self.service, &IndexSettings::default(), what, done);

@@ -12,9 +12,9 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::time::Duration;
 
+use ox_core::location::file_uri;
 use ox_core::search::{
-    AutoIndex, GioFolderReader, HiddenItems, IndexService, IndexSettings, RootStatus, SearchIndex,
-    SearchQuery, UpdateMode,
+    AutoIndex, GioFolderReader, HiddenItems, IndexService, IndexSettings, RootStatus, SearchIndex, UpdateMode,
 };
 use search_support::{tick_for, tick_until, IndexedFolder};
 
@@ -96,6 +96,37 @@ fn hidden_items_and_symlinks_are_not_indexed() {
 
     assert!(folder.found_names("hidden").is_empty());
     assert!(folder.found_names("link").is_empty());
+    // A search that shows hidden items finds nothing either: the hidden
+    // file was never stored, not merely left out of the results.
+    assert!(folder.found_names_including_hidden("hidden").is_empty());
+    assert_eq!(folder.state().entry_count, 0);
+}
+
+/// A deleted file's URI passed as a changed folder, as Python's
+/// `invalidate_cache_for_write` passed it, re-reads the file's folder: it
+/// is neither a failed check nor a folder that could not be watched.
+///
+/// parity: SRCH-028, SRCH-033
+#[test]
+fn the_uri_of_a_deleted_file_keeps_live_events() {
+    let folder = IndexedFolder::new();
+    let draft = folder.tree.join("draft.pdf");
+    fs::write(&draft, "draft").unwrap();
+    folder.tick_until("draft.pdf is found", || folder.found_names("draft").len() == 1);
+    fs::remove_file(&draft).unwrap();
+
+    folder.service.folder_changed(&file_uri(&draft)).unwrap();
+
+    folder.tick_until("the deletion is seen", || folder.found_names("draft").is_empty());
+    // Both updates, the watch's and the app's, have run after this.
+    tick_for(
+        &folder.service,
+        &IndexSettings::default(),
+        Duration::from_millis(600),
+    );
+    let root = folder.state();
+    assert_eq!(root.update_mode, UpdateMode::LiveLocalEvents);
+    assert_eq!(root.watch_error, None);
 }
 
 /// Ported from `desktop/tests/test_v05.py::LiveTests::test_two_window_index_leader`
@@ -153,12 +184,7 @@ fn snapshot_folders_are_not_indexed_even_with_hidden_items() {
     fs::write(snapshots.join("secret.pdf"), "old").unwrap();
 
     folder.tick_until("the hidden file is found", || {
-        let query = SearchQuery {
-            hidden_items: HiddenItems::Include,
-            ..SearchQuery::new("visible-when")
-        };
-        let results = folder.service.index().search(&query, None).unwrap();
-        results.hits.len() == 1
+        folder.found_names_including_hidden("visible-when").len() == 1
     });
     tick_for(
         &folder.service,

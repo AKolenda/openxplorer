@@ -133,6 +133,33 @@ fn a_folder_the_app_changed_is_read_again() {
     );
 }
 
+/// Python's `invalidate_cache_for_write` also passed the changed items
+/// themselves. A deleted file's URI re-reads its folder, which drops the
+/// file, and the check does not fail.
+///
+/// parity: SRCH-033
+#[test]
+fn the_uri_of_a_deleted_file_re_reads_its_folder() {
+    let cache = TemporaryCache::new();
+    let share = MemoryShare::new();
+    let reports = share.add_folder(MemoryShare::URI, "Reports");
+    let draft = share.add_file(&reports, "draft.pdf");
+    let service = cache.index_share(&share);
+    share.remove(&reports, &draft);
+
+    service.folder_changed(&draft).unwrap();
+
+    tick_until(
+        &service,
+        &IndexSettings::default(),
+        "the deleted file is gone",
+        || found_names(&cache.index, "draft").is_empty(),
+    );
+    let root = root_state(&cache.index, MemoryShare::URI);
+    assert_eq!(root.update_mode, UpdateMode::IncrementalNetworkChecks);
+    assert_eq!(root.watch_error, None);
+}
+
 /// parity: SRCH-019
 #[test]
 fn enabling_a_root_scans_it_and_disabling_removes_its_names() {

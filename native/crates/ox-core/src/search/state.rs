@@ -21,14 +21,11 @@ use super::reader::FolderReader;
 use super::root::{Monitoring, UpdateMode};
 use super::service::{AutoIndex, IndexSettings};
 use super::text::host_of;
-use super::watch::LocalWatch;
+use super::watch::{LocalWatch, WatchError};
 
 /// Called after anything the Search settings or results show changed
 /// (the `cacheChanged` event of the Python app).
 pub(crate) type ChangeListener = Box<dyn Fn() + Send + Sync>;
-
-/// Shown for a local root when inotify cannot be used at all.
-const NO_INOTIFY_MESSAGE: &str = "inotify unavailable; using incremental checks.";
 
 /// Most changed folders waiting for live updates.
 const MAX_DIRTY_FOLDERS: usize = 8192;
@@ -235,22 +232,40 @@ impl Shared {
         IndexScope::current(root, self.index.directory())
     }
 
-    /// Watches `folder` of a local root (`monitor` in Python). Called
-    /// before the folder is read, so a change during the read is not lost.
-    /// Network roots are never push-watched, and nothing is watched while
-    /// Auto-index is paused.
+    /// Watches `folder` of a local root (`monitor` in Python) and records
+    /// why it could not be watched, if it could not. Called before the
+    /// folder is read, so a change during the read is not lost.
     pub(super) fn watch_folder(&self, root: &str, folder: &str, storage: RootStorage) {
-        let mut state = self.state();
+        if let Err(failure) = self.try_watch_folder(root, folder, storage) {
+            self.record_watch_failure(root, &failure);
+        }
+    }
+
+    /// Watches `folder` of a local root and returns why it could not be
+    /// watched, without recording it, for a caller that first finds out
+    /// whether the folder still exists. Network roots are never
+    /// push-watched, and nothing is watched while Auto-index is paused.
+    pub(super) fn try_watch_folder(
+        &self,
+        root: &str,
+        folder: &str,
+        storage: RootStorage,
+    ) -> Result<(), WatchError> {
+        let state = self.state();
         if state.settings.auto_index == AutoIndex::Paused || storage == RootStorage::Network {
-            return;
+            return Ok(());
         }
-        let failure = match &state.watch {
-            Some(watch) => watch.add(root, folder).err().map(|error| error.to_string()),
-            None => Some(NO_INOTIFY_MESSAGE.to_owned()),
-        };
-        if let Some(failure) = failure {
-            state.failed_watches.insert(root.to_owned(), failure);
+        match &state.watch {
+            Some(watch) => watch.add(root, folder),
+            None => Err(WatchError::Unavailable),
         }
+    }
+
+    /// Records that a directory of `root` could not be watched, so the
+    /// root reports timed checks as its fallback (SRCH-029).
+    pub(super) fn record_watch_failure(&self, root: &str, failure: &WatchError) {
+        let mut state = self.state();
+        state.failed_watches.insert(root.to_owned(), failure.to_string());
     }
 
     /// Forgets the watches of `root` before a full scan sets them up again.

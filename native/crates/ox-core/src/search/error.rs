@@ -84,6 +84,15 @@ impl SearchError {
     pub fn is_cancelled(&self) -> bool {
         matches!(self, Self::Cancelled | Self::Read(EntryError::Cancelled))
     }
+
+    /// Whether a folder read found no folder at its location: the item was
+    /// deleted or renamed, or is a file.
+    pub(crate) fn is_missing_folder(&self) -> bool {
+        matches!(
+            self,
+            Self::Read(EntryError::NotFound(_) | EntryError::NotDirectory(_))
+        )
+    }
 }
 
 /// A private-storage error keeps its path, reason and message.
@@ -132,6 +141,21 @@ mod tests {
         assert!(SearchError::Cancelled.is_cancelled());
         assert!(SearchError::Read(EntryError::Cancelled).is_cancelled());
         assert!(!SearchError::NotEnabled.is_cancelled());
+    }
+
+    #[test]
+    fn only_a_deleted_item_or_a_file_is_a_missing_folder() {
+        let missing = [
+            EntryError::NotFound("No such file or directory".to_owned()),
+            EntryError::NotDirectory("Not a directory".to_owned()),
+        ];
+        let other = EntryError::NotMounted("Location is not mounted".to_owned());
+
+        for error in missing {
+            assert!(SearchError::Read(error).is_missing_folder());
+        }
+        assert!(!SearchError::Read(other).is_missing_folder());
+        assert!(!SearchError::Cancelled.is_missing_folder());
     }
 
     #[test]

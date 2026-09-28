@@ -126,9 +126,10 @@ impl IndexService {
     /// contents changed: the destination and the parents of the changed
     /// items.
     ///
-    /// Python also passed the changed items themselves, so a renamed or
-    /// deleted file was read as a folder, which failed and reported the
-    /// root as offline; passing folders only avoids that.
+    /// The changed items themselves may be passed too, as Python did: a
+    /// location that is gone or not a folder re-reads its parent instead
+    /// (see `update.rs`). Python read it as a folder, which failed and
+    /// reported the root as offline.
     ///
     /// # Errors
     ///

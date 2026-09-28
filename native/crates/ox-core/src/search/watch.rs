@@ -53,6 +53,9 @@ pub(crate) enum WatchError {
     /// limit is used up.
     #[error("Could not watch a directory: {0}")]
     Refused(Errno),
+    /// inotify could not be started at all, so nothing is watched.
+    #[error("inotify unavailable; using incremental checks.")]
+    Unavailable,
 }
 
 /// A change the service must act on.
