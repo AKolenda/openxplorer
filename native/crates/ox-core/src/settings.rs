@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Shared settings in `$XDG_CONFIG_HOME/winspace/settings.json`.
 //!
-//! Ports `Settings` in `desktop/core.py` and `desktop/private_storage.py`.
-//! The Python application and this one use the same file, so the protocol
-//! matches exactly:
+//! Ports `Settings` in `desktop/core.py`, on the private storage of
+//! `crate::private_storage` (`desktop/private_storage.py`). The Python
+//! application and this one use the same file, so the protocol matches
+//! exactly:
 //!
 //! * Reading validates against a whitelist and never fails: unreadable
 //!   input yields safe defaults plus a [`warning`](Settings::warning).
@@ -15,63 +16,44 @@
 //!   `networkInterval`, `autoIndex` and `columnWidths`) is read and written
 //!   back, so a change made here never erases a Python setting.
 //!
+//! One rule goes beyond the Python app: a change never erases a settings
+//! file that could not be read completely. It is first renamed to
+//! `settings.json.unreadable-…` beside the new file, and the
+//! [`warning`](Settings::warning) says where it went. A file private storage
+//! refuses is never renamed: the change fails instead.
+//!
+//! The submodules split the work: `read` reads the file, `mutate` holds
+//! the changes, and `save` locks and writes. Reading and saving rely on
+//! the private-storage rules of `crate::private_storage`.
+//!
 //! The `winspace` directory name is a compatibility contract; do not rename
 //! it.
 
+mod choices;
+mod error;
+mod labels;
 mod model;
 mod mutate;
+mod preferences;
+mod python_conversions;
 mod read;
-pub mod storage;
-mod validate;
+mod save;
+#[cfg(test)]
+mod test_support;
 
-use std::io;
 use std::path::{Path, PathBuf};
 
-pub use model::{
-    Bookmark, Column, ColumnWidths, Preferences, PreferencesUpdate, RecentEntry, SettingsData, CONTEXT_MENUS,
-    NETWORK_INTERVALS, SETTINGS_VERSION, SIDEBAR_WIDTHS, TEXT_SIZES, THEMES, VIEWS,
+pub use crate::private_storage::StorageRefusal;
+pub use choices::{Appearance, ContextMenu, Theme, View};
+pub use error::SettingsError;
+pub use model::{Bookmark, RecentEntry, SettingsData};
+pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
+pub use preferences::{
+    Column, ColumnWidths, Preferences, PreferencesUpdate, DEFAULT_TEXT_SIZE, NETWORK_INTERVALS,
+    SIDEBAR_WIDTHS, TEXT_SIZES,
 };
-pub use mutate::{BookmarkAction, BookmarkKind, PinRequest};
-pub use validate::{safe_label, MAX_LABEL_CHARS};
 
-use storage::{private_directory, private_text, replace_private_file, SettingsLock, SETTINGS_SIZE_LIMIT};
-
-/// Why a settings change was refused.
-#[derive(Debug, thiserror::Error)]
-pub enum SettingsError {
-    /// The request or the stored data failed validation (Python's
-    /// `ValueError`). The message is user-facing.
-    #[error("{0}")]
-    Invalid(String),
-    /// The file system refused an operation (Python's `OSError`), for
-    /// example because `settings.lock` is a symlink.
-    #[error(transparent)]
-    Io(#[from] io::Error),
-}
-
-impl SettingsError {
-    /// A validation error with a user-facing message.
-    pub(crate) fn invalid(message: impl Into<String>) -> Self {
-        Self::Invalid(message.into())
-    }
-
-    /// True if this is a missing file or directory.
-    fn is_not_found(&self) -> bool {
-        matches!(self, Self::Io(error) if error.kind() == io::ErrorKind::NotFound)
-    }
-}
-
-impl From<crate::location::LocationError> for SettingsError {
-    fn from(error: crate::location::LocationError) -> Self {
-        Self::Invalid(error.into_message())
-    }
-}
-
-impl From<serde_json::Error> for SettingsError {
-    fn from(error: serde_json::Error) -> Self {
-        Self::Invalid(error.to_string())
-    }
-}
+use save::{replace_private_file, OldFile, SettingsLock};
 
 /// Settings shared by every window of both applications.
 ///
@@ -83,7 +65,45 @@ impl From<serde_json::Error> for SettingsError {
 pub struct Settings {
     directory: PathBuf,
     data: SettingsData,
-    warning: Option<String>,
+    file_state: FileState,
+}
+
+/// What the last read or change found out about `settings.json`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum FileState {
+    /// Read completely, or not created yet.
+    Sound,
+    /// Not read completely: private storage refused the file or its
+    /// directory (a symlink, hard link, FIFO, other owner, or an open that
+    /// failed), reading it failed, or its contents are too large, not UTF-8,
+    /// not JSON or of the wrong shape. The message says why. What the next
+    /// change does with the file is decided by [`FileState::old_file`].
+    Unreadable(String),
+    /// A change replaced an unreadable file after keeping it as a backup;
+    /// the message names the backup.
+    BackedUp(String),
+}
+
+impl FileState {
+    /// What the next change does with the file this state describes.
+    ///
+    /// Safety rule "never erase unreadable settings" (a gain over
+    /// `Settings.save` in core.py): a file that was not read completely is
+    /// kept as a backup, whatever stopped the read. Keeping it never moves a
+    /// file private storage refuses, because [`replace_private_file`] runs
+    /// the same checks and fails before it writes or renames anything. If a
+    /// refusal has gone away since the read (an open that failed only once),
+    /// the file is still kept rather than replaced by settings that never
+    /// came from it. The match names every state, so a new one cannot fall
+    /// into [`OldFile::Discard`] unnoticed.
+    fn old_file(&self) -> OldFile {
+        match self {
+            // Safety rule "never erase unreadable settings".
+            FileState::Unreadable(_) => OldFile::KeepAsBackup,
+            // Read completely, or written by the last change: nothing is lost.
+            FileState::Sound | FileState::BackedUp(_) => OldFile::Discard,
+        }
+    }
 }
 
 impl Settings {
@@ -101,13 +121,16 @@ impl Settings {
 
     /// Loads settings from `directory`; never fails. A missing file gives
     /// the defaults; anything unreadable gives the defaults plus a warning.
-    /// Does not create the directory.
+    /// Does not create the directory, but an existing directory and
+    /// `settings.json` are made private (0700 / 0600) while they are read,
+    /// as `Settings.__init__` in core.py does.
     pub fn open(directory: &Path) -> Self {
-        let (data, warning) = load(directory);
+        let mut data = SettingsData::default();
+        let file_state = read::read_file(directory, &mut data);
         Self {
             directory: directory.to_path_buf(),
             data,
-            warning,
+            file_state,
         }
     }
 
@@ -135,9 +158,14 @@ impl Settings {
         self.data.clone()
     }
 
-    /// Why the last read fell back to defaults, if it did.
+    /// What the user should be told about the settings file: why the last
+    /// read fell back to defaults, or, right after a change replaced an
+    /// unreadable file, where that file was kept.
     pub fn warning(&self) -> Option<&str> {
-        self.warning.as_deref()
+        match &self.file_state {
+            FileState::Sound => None,
+            FileState::Unreadable(message) | FileState::BackedUp(message) => Some(message),
+        }
     }
 
     /// The settings directory.
@@ -150,19 +178,14 @@ impl Settings {
         self.directory.join(Self::FILE_NAME)
     }
 
-    /// Writes the current snapshot under the shared lock. This deliberately
-    /// replaces the snapshot; use change methods to merge concurrent edits.
-    pub fn save(&self) -> Result<(), SettingsError> {
-        let _lock = SettingsLock::acquire(&self.directory)?;
-        replace_private_file(
-            &self.path(),
-            Self::TEMPORARY_PREFIX,
-            self.data.to_file_text().as_bytes(),
-        )
-    }
-
     /// Applies every valid value in `update`, ignores the rest, saves, and
     /// returns the resulting preferences.
+    ///
+    /// # Errors
+    ///
+    /// [`SettingsError::Refused`] if private storage refuses the settings
+    /// directory, lock or file, and [`SettingsError::Io`] if one of them
+    /// cannot be opened or written.
     pub fn update_preferences(&mut self, update: &PreferencesUpdate) -> Result<Preferences, SettingsError> {
         self.mutate(|data| {
             data.preferences.apply(update);
@@ -172,26 +195,39 @@ impl Settings {
 
     /// Adds or removes a Quick access pin or a mapped share. Removing a pin
     /// hides it from Quick access, which also works for known folders;
-    /// adding it shows it again.
+    /// adding it shows it again. Removing ignores the requested label.
+    ///
+    /// # Errors
+    ///
+    /// [`SettingsError::Location`] for a location or label the Python app
+    /// would reject (for example one with credentials), and every error of
+    /// [`update_preferences`](Self::update_preferences).
     pub fn bookmark(
         &mut self,
         action: BookmarkAction,
         kind: BookmarkKind,
-        uri: &str,
-        label: &str,
+        request: &BookmarkRequest,
     ) -> Result<(), SettingsError> {
-        self.mutate(|data| mutate::apply_bookmark(data, action, kind, uri, label))
+        self.mutate(|data| mutate::apply_bookmark(data, action, kind, request))
     }
 
     /// Adds or reorders up to 200 Quick access pins in one change and
     /// returns the cleaned pins. The batch is validated as a whole, so an
-    /// invalid entry changes nothing. See [`PinRequest`].
+    /// invalid entry changes nothing. See [`BookmarkRequest`].
     ///
     /// `before` is the entry the folders were dropped on; `quick_order` is
     /// the order the sidebar showed (at most 400 entries).
+    ///
+    /// # Errors
+    ///
+    /// [`SettingsError::Invalid`] for an empty or oversized batch, an order
+    /// longer than 400 entries, or more than 200 pins in total;
+    /// [`SettingsError::Location`] for an invalid location or label in the
+    /// batch, `before` or the order; and every error of
+    /// [`update_preferences`](Self::update_preferences).
     pub fn pin_many(
         &mut self,
-        items: &[PinRequest],
+        items: &[BookmarkRequest],
         before: Option<&str>,
         quick_order: Option<&[String]>,
     ) -> Result<Vec<Bookmark>, SettingsError> {
@@ -199,51 +235,59 @@ impl Settings {
     }
 
     /// Records an opened file at the top of the recent files.
-    pub fn remember_open(&mut self, entry: &RecentEntry) -> Result<(), SettingsError> {
-        self.mutate(|data| mutate::remember_open(data, entry))
+    ///
+    /// # Errors
+    ///
+    /// [`SettingsError::Location`] for an invalid file location, and every
+    /// error of [`update_preferences`](Self::update_preferences).
+    pub fn remember_open(&mut self, entry: RecentEntry) -> Result<(), SettingsError> {
+        self.mutate(move |data| mutate::remember_open(data, entry))
     }
 
     /// Locks, re-reads, changes a copy of the data, saves it, and only then
     /// keeps it. The Python app's `settings_mutation` protocol.
+    ///
+    /// Safety rule "a failed change changes nothing" (the `self.data = old`
+    /// rollback of `pin_many` in core.py, applied here to every change):
+    /// the change is made on a copy, so an invalid request or a failed save
+    /// leaves [`data`](Self::data) as it was.
     fn mutate<T>(
         &mut self,
         change: impl FnOnce(&mut SettingsData) -> Result<T, SettingsError>,
     ) -> Result<T, SettingsError> {
-        let _lock = SettingsLock::acquire(&self.directory)?;
+        let lock = SettingsLock::acquire(&self.directory)?;
         let mut updated = self.clone();
         updated.reload();
         let result = change(&mut updated.data)?;
-        replace_private_file(
-            &self.path(),
-            Self::TEMPORARY_PREFIX,
-            updated.data.to_file_text().as_bytes(),
-        )?;
+        updated.save_while_locked(&lock)?;
         *self = updated;
         Ok(result)
     }
-}
 
-/// Reads and validates the settings in `directory`.
-fn load(directory: &Path) -> (SettingsData, Option<String>) {
-    let mut data = SettingsData::default();
-    match read_file(directory, &mut data) {
-        Ok(()) => (data, None),
-        Err(error) if error.is_not_found() => (data, None),
-        Err(error) => {
-            let warning = format!("Could not fully read settings; using safe defaults. {error}");
-            (data, Some(warning))
+    /// Writes the data, keeping an unreadable file as a backup (see
+    /// [`FileState::old_file`]).
+    ///
+    /// Safety rule "changes never interleave" (the `flock` of
+    /// `settings_mutation` in core.py): the borrowed [`SettingsLock`] proves
+    /// that the caller has held the lock since it re-read the file, so no
+    /// other window or Python process can change the file in between.
+    fn save_while_locked(&mut self, _lock: &SettingsLock) -> Result<(), SettingsError> {
+        let contents = self.data.to_file_text();
+        let backup = replace_private_file(
+            &self.path(),
+            Self::TEMPORARY_PREFIX,
+            contents.as_bytes(),
+            self.file_state.old_file(),
+        )?;
+        if let Some(backup) = backup {
+            let message = format!(
+                "Your previous settings could not be read and were kept as “{}”.",
+                backup.display()
+            );
+            self.file_state = FileState::BackedUp(message);
         }
+        Ok(())
     }
-}
-
-/// Checks the directory and file, then reads what is valid into `data`.
-fn read_file(directory: &Path, data: &mut SettingsData) -> Result<(), SettingsError> {
-    if directory.exists() || directory.is_symlink() {
-        private_directory(directory)?;
-    }
-    let text = private_text(&directory.join(Settings::FILE_NAME), SETTINGS_SIZE_LIMIT)?;
-    let source: serde_json::Value = serde_json::from_str(&text)?;
-    read::read_settings(&source, data)
 }
 
 #[cfg(test)]

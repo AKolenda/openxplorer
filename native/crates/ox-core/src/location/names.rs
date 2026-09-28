@@ -213,4 +213,17 @@ mod tests {
         assert!(safe_label(&"é".repeat(121), "Folder").is_err());
         assert!(safe_label("a\u{1}b", "Folder").is_err());
     }
+
+    /// parity: SAFE-018, SIDE-007
+    #[test]
+    fn safe_label_trims_falls_back_and_rejects_control_characters_and_long_labels() {
+        assert_eq!(safe_label("  Work  ", "Folder").unwrap(), "Work");
+        assert_eq!(safe_label("   ", "Folder").unwrap(), "Folder");
+        assert_eq!(safe_label("", "Fallback").unwrap(), "Fallback");
+        assert_eq!(safe_label("\u{1c}Work\u{a0}", "Folder").unwrap(), "Work");
+        assert_eq!(safe_label(&"é".repeat(120), "x").unwrap(), "é".repeat(120));
+        assert!(safe_label(&"é".repeat(121), "x").is_err());
+        assert!(safe_label("bad\nlabel", "x").is_err());
+        assert!(safe_label("bad\u{7f}", "x").is_err());
+    }
 }

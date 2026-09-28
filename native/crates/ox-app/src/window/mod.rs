@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::settings::SettingsData;
+use ox_core::settings::{SettingsData, View};
 
 use crate::folder_view::model::FolderModel;
 use crate::theme::{system::SystemScheme, Skin};
@@ -69,8 +69,10 @@ impl BrowserWindow {
         let chrome = Chrome::new(&window);
         let content = Content::new(skin.appearance());
         content.model.set_show_hidden(settings.preferences.show_hidden);
-        content.inspector.set_visible(settings.preferences.details);
-        if settings.preferences.view == "grid" {
+        content
+            .inspector
+            .set_visible(settings.preferences.show_details_pane);
+        if settings.preferences.view == View::Grid {
             content.views.set_visible_child_name("grid");
         }
         let sidebar = gtk::ListBox::builder()

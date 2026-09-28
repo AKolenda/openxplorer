@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use ox_core::settings::View;
 
 use crate::folder_view::{details, grid, sorting::SortColumn};
 use crate::theme::ThemePreference;
@@ -110,7 +111,7 @@ impl BrowserWindow {
             browser.content.model.invert_selection()
         });
 
-        let view = if self.settings.preferences.view == "grid" {
+        let view = if self.settings.preferences.view == View::Grid {
             "large"
         } else {
             "details"
@@ -177,7 +178,7 @@ impl BrowserWindow {
         );
         self.toggle(
             "details-pane",
-            self.settings.preferences.details,
+            self.settings.preferences.show_details_pane,
             |browser, show| {
                 browser.content.inspector.set_visible(show);
             },

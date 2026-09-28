@@ -15,3 +15,7 @@ pub mod location;
 pub mod places;
 pub mod settings;
 pub mod transfer;
+
+mod private_storage;
+#[cfg(test)]
+mod test_support;

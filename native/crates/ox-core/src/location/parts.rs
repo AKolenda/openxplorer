@@ -10,6 +10,7 @@
 use std::borrow::Cow;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
+use super::text::unquote_lossy;
 use super::LocationError;
 
 /// Characters `urlsplit` removes wherever they occur (Python's
@@ -138,6 +139,16 @@ impl LocationParts {
             .split('/')
             .filter(|component| !component.is_empty())
             .count()
+    }
+
+    /// The decoded last name of the path, ignoring trailing slashes; empty
+    /// at a root. Python's `unquote(path).rstrip('/').split('/')[-1]`, which
+    /// the label fallbacks of pins (`pin_many` in `core.py`) and network
+    /// rows (`network_locations.py`) use.
+    pub(crate) fn last_name(&self) -> String {
+        let decoded_path = unquote_lossy(&self.path);
+        let name = decoded_path.trim_end_matches('/').rsplit('/').next();
+        name.unwrap_or_default().to_owned()
     }
 
     /// Python's `_hostinfo`: the host (brackets removed) and the non-empty

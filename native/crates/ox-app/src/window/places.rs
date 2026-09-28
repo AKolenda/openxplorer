@@ -25,8 +25,8 @@ impl BrowserWindow {
             self.sidebar_row(
                 &place.label,
                 Some(&place.uri),
-                place.icon.unwrap_or("folderline"),
-                place.color,
+                place.glyph().unwrap_or("folderline"),
+                place.glyph_color(),
             );
         }
         self.sidebar_separator();
@@ -120,7 +120,7 @@ impl BrowserWindow {
             cards.insert(&self.location_card("Home folder", &self.home_uri, "home"), -1);
             for place in ox_core::places::quick_access(&self.settings) {
                 cards.insert(
-                    &self.location_card(&place.label, &place.uri, place.icon.unwrap_or("folderline")),
+                    &self.location_card(&place.label, &place.uri, place.glyph().unwrap_or("folderline")),
                     -1,
                 );
             }
