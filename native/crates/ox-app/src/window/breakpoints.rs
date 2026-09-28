@@ -17,7 +17,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::folder_view::details::{self, DetailsColumns};
+use crate::folder_view::details::DetailsColumns;
 
 use super::BrowserWindow;
 
@@ -139,7 +139,7 @@ impl BrowserWindow {
         } else {
             DetailsColumns::All
         };
-        details::show_columns(&self.content().details, details_columns);
+        self.content().details.show_columns(details_columns);
         self.render_landing();
     }
 

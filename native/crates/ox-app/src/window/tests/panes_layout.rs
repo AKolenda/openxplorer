@@ -20,7 +20,7 @@ fn children(widget: &impl IsA<gtk::Widget>) -> Vec<gtk::Widget> {
 
 /// The column titles of the details view, left to right.
 fn column_titles(test: &TestWindow) -> Vec<gtk::Widget> {
-    let details = &test.window.content().details;
+    let details = test.window.content().details.column_view();
     let header = children(details)
         .into_iter()
         .find(|child| child.css_name() == "header")
@@ -30,7 +30,7 @@ fn column_titles(test: &TestWindow) -> Vec<gtk::Widget> {
 
 /// The first row of the details view.
 fn first_row(test: &TestWindow) -> gtk::Widget {
-    let details = &test.window.content().details;
+    let details = test.window.content().details.column_view();
     let list = children(details)
         .into_iter()
         .find(|child| child.css_name() == "listview")
@@ -50,7 +50,7 @@ fn right(bounds: Bounds) -> i32 {
 fn columns_run_from_14_pixels_in_with_the_web_widths() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let list = bounds(&test, &test.window.content().details);
+    let list = bounds(&test, test.window.content().details.column_view());
     let titles: Vec<Bounds> = column_titles(&test)
         .iter()
         .map(|title| bounds(&test, title))
@@ -95,7 +95,7 @@ fn the_size_title_is_right_aligned_and_only_the_sorted_column_has_an_arrow() {
 fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let list = bounds(&test, &test.window.content().details);
+    let list = bounds(&test, test.window.content().details.column_view());
     let row = first_row(&test);
     let (row_x, _, row_width, row_height) = bounds(&test, &row);
     assert_eq!((row_x, row_width, row_height), (list.0 + 12, list.2 - 24, 36));

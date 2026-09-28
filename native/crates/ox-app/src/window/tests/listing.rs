@@ -290,7 +290,7 @@ fn only_the_visible_view_holds_the_model() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let content = test.window.content();
-    assert!(content.details.model().is_some());
+    assert!(content.details.column_view().model().is_some());
     assert!(
         content.icon_view.grid().model().is_none(),
         "the hidden icon view builds no tiles"
@@ -301,7 +301,7 @@ fn only_the_visible_view_holds_the_model() {
         FolderView::Icons(crate::folder_view::grid::IconSize::Large)
     );
     assert!(
-        content.details.model().is_none(),
+        content.details.column_view().model().is_none(),
         "the hidden details view builds no rows"
     );
     assert!(content.icon_view.grid().model().is_some());
@@ -310,7 +310,7 @@ fn only_the_visible_view_holds_the_model() {
         "the tile budget follows the width"
     );
     test.activate("view", Some("details"));
-    assert!(content.details.model().is_some());
+    assert!(content.details.column_view().model().is_some());
     assert!(
         content.icon_view.grid().model().is_none(),
         "switching back detaches the icon view"

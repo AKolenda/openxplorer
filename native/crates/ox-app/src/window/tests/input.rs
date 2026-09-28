@@ -18,7 +18,7 @@ use crate::test_support::harness::{descendants, Fixture, TestWindow, ThemeGuard}
 /// Presses `key` in the details view, as far as the window's own key
 /// handling goes. Returns true when the window handled the key itself.
 fn press(test: &TestWindow, key: gdk::Key) -> bool {
-    let view = &test.window.content().details;
+    let view = test.window.content().details.column_view();
     let controller = view
         .observe_controllers()
         .iter::<glib::Object>()
@@ -147,7 +147,7 @@ fn modifier_keys_keep_the_typed_prefix() {
 fn enter_opens_only_a_single_selected_item() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let details = &test.window.content().details;
+    let details = test.window.content().details.column_view();
     let model = test.window.folder_model();
     model.select_only(1);
     model.selection().select_item(2, false);
@@ -187,7 +187,7 @@ fn view_shortcuts(view: &impl IsA<gtk::Widget>) -> Vec<String> {
 fn the_menu_key_opens_the_context_menu_with_or_without_a_selection() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let details = &test.window.content().details;
+    let details = test.window.content().details.column_view();
     assert!(view_shortcuts(details).contains(&"Menu|<Shift>F10".to_owned()));
     let menus = descendants::<gtk::PopoverMenu>(details);
     let [menu] = menus.as_slice() else {

@@ -7,7 +7,6 @@
 use gtk::prelude::*;
 
 use super::geometry::{bounds, button_for, laid_out};
-use crate::folder_view::details::view_column;
 use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 
@@ -49,7 +48,7 @@ fn a_compact_window_drops_the_search_box_some_commands_and_two_columns() {
     assert!(button_for(&test, "win.copy").is_visible(), "Copy stays");
     let details = &test.window.content().details;
     for column in [SortColumn::Modified, SortColumn::Type] {
-        let shown = view_column(details, column).is_some_and(|column| column.is_visible());
+        let shown = details.column(column).is_some_and(|column| column.is_visible());
         assert!(!shown, "{column:?} is hidden");
     }
     resize(&test, 1320);
@@ -63,8 +62,8 @@ fn the_name_column_keeps_260_pixels_and_the_list_scrolls_sideways() {
     let test = laid_out(&fixture.uri());
     resize(&test, 1000);
     let details = &test.window.content().details;
-    let name = view_column(details, SortColumn::Name).expect("a Name column");
-    let header = details.first_child().expect("the header");
+    let name = details.column(SortColumn::Name).expect("a Name column");
+    let header = details.column_view().first_child().expect("the header");
     let name_title = header.first_child().expect("the Name title");
     assert_eq!(
         bounds(&test, &name_title).2,

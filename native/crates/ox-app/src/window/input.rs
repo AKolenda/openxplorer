@@ -74,7 +74,7 @@ impl BrowserWindow {
     /// Adds keyboard and pointer handling to both folder views and the
     /// address entry.
     pub(super) fn install_input(&self) {
-        let details = self.content().details.clone();
+        let details = self.content().details.column_view().clone();
         let grid = self.content().icon_view.grid().clone();
         self.folder_input(details.upcast_ref());
         self.folder_input(grid.upcast_ref());
@@ -122,6 +122,7 @@ impl BrowserWindow {
         let on_row = activate.clone();
         self.content()
             .details
+            .column_view()
             .connect_activate(move |_, position| on_row(position));
         self.content()
             .icon_view

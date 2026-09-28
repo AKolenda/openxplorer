@@ -20,7 +20,7 @@ use super::geometry::{pixels, Bounds};
 /// The sort direction each details header shows: `ascending`,
 /// `descending` or `unsorted`, in column order.
 fn header_arrows(test: &TestWindow) -> Vec<String> {
-    let details = &test.window.content().details;
+    let details = test.window.content().details.column_view();
     let indicators = descendants::<gtk::Widget>(details)
         .into_iter()
         .filter(|widget| widget.css_name() == "sort-indicator");
@@ -40,9 +40,12 @@ fn sorting_by_a_header_updates_the_sort_menu() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let details = &test.window.content().details;
-    let modified = crate::folder_view::details::view_column(details, SortColumn::Modified)
+    let modified = details
+        .column(SortColumn::Modified)
         .expect("a Date modified column");
-    details.sort_by_column(Some(&modified), gtk::SortType::Descending);
+    details
+        .column_view()
+        .sort_by_column(Some(&modified), gtk::SortType::Descending);
     assert_eq!(test.action_state("sort").as_deref(), Some("modified"));
     assert_eq!(test.action_state("direction").as_deref(), Some("descending"));
 }
@@ -76,7 +79,7 @@ fn the_sort_menu_leaves_one_arrow_on_the_sorted_column() {
 fn only_the_sorted_column_shows_the_apps_arrow() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let details = &test.window.content().details;
+    let details = test.window.content().details.column_view();
     assert_eq!(
         column_titles::shown_carets(details),
         [Some(SortDirection::Ascending), None, None, None]

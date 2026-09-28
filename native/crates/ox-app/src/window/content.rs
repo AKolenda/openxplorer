@@ -13,8 +13,9 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use crate::folder_view::cells::{BoundIcons, CellOwners};
+use crate::folder_view::details::DetailsView;
 use crate::folder_view::grid::{IconSize, IconView};
-use crate::folder_view::{details, model::FolderModel};
+use crate::folder_view::model::FolderModel;
 use crate::theme::Appearance;
 
 use super::empty_page::{EmptyPage, EmptyState};
@@ -95,9 +96,9 @@ impl FolderView {
 }
 
 /// The details and icon views, one of them shown.
-fn view_stack(details_scroll: &gtk::ScrolledWindow, icon_view: &IconView) -> gtk::Stack {
+fn view_stack(details: &DetailsView, icon_view: &IconView) -> gtk::Stack {
     let views = gtk::Stack::new();
-    views.add_named(details_scroll, Some(FolderView::Details.stack_name()));
+    views.add_named(details, Some(FolderView::Details.stack_name()));
     let icons = FolderView::Icons(IconSize::Large);
     views.add_named(icon_view, Some(icons.stack_name()));
     views
@@ -139,8 +140,7 @@ pub(super) struct Content {
     stack: gtk::Stack,
     views: gtk::Stack,
     /// The details view.
-    pub details: gtk::ColumnView,
-    details_scroll: gtk::ScrolledWindow,
+    pub details: DetailsView,
     /// The icon view.
     pub icon_view: IconView,
     /// The active tab's filtered, sorted and selectable items.
@@ -162,10 +162,9 @@ impl Content {
         let model = FolderModel::new();
         let icons = BoundIcons::new(appearance);
         let owners = CellOwners::new();
-        let details = details::build(&model, &icons, &owners);
+        let details = DetailsView::new(&model, &icons, &owners);
         let icon_view = IconView::new(&icons, &owners);
-        let details_scroll = scrolled(&details);
-        let views = view_stack(&details_scroll, &icon_view);
+        let views = view_stack(&details, &icon_view);
         let empty = EmptyPage::new();
         let (landing, landing_scroll) = landing_page();
         let stack = page_stack(&views, &empty, &landing_scroll);
@@ -177,7 +176,6 @@ impl Content {
             stack,
             views,
             details,
-            details_scroll,
             icon_view,
             model,
             icons,
@@ -235,15 +233,16 @@ impl Content {
     /// Switches views. Only the visible view holds the selection model.
     pub fn show_view(&self, view: FolderView) {
         let selection = self.model.selection();
+        let column_view = self.details.column_view();
         let grid = self.icon_view.grid();
         match view {
             FolderView::Details => {
                 grid.set_model(None::<&gtk::MultiSelection>);
-                self.details.set_model(Some(selection));
+                column_view.set_model(Some(selection));
             }
             FolderView::Icons(size) => {
                 self.icon_view.set_icon_size(size);
-                self.details.set_model(None::<&gtk::MultiSelection>);
+                column_view.set_model(None::<&gtk::MultiSelection>);
                 grid.set_model(Some(selection));
                 self.icon_view.fit_columns();
             }
@@ -254,7 +253,7 @@ impl Content {
     /// The visible view's vertical scroll adjustment.
     fn visible_vadjustment(&self) -> gtk::Adjustment {
         match self.view() {
-            FolderView::Details => self.details_scroll.vadjustment(),
+            FolderView::Details => self.details.vadjustment(),
             FolderView::Icons(_) => self.icon_view.vadjustment(),
         }
     }
@@ -275,9 +274,10 @@ impl Content {
 
     /// True while keyboard focus is inside the visible view.
     pub fn has_focus(&self) -> bool {
+        let column_view = self.details.column_view();
         let grid = self.icon_view.grid();
         match self.view() {
-            FolderView::Details => self.details.has_focus() || self.details.focus_child().is_some(),
+            FolderView::Details => column_view.has_focus() || column_view.focus_child().is_some(),
             FolderView::Icons(_) => grid.has_focus() || grid.focus_child().is_some(),
         }
     }
@@ -285,18 +285,17 @@ impl Content {
     /// Moves keyboard focus into the visible view.
     pub fn focus(&self) {
         match self.view() {
-            FolderView::Details => self.details.grab_focus(),
+            FolderView::Details => self.details.column_view().grab_focus(),
             FolderView::Icons(_) => self.icon_view.grid().grab_focus(),
         };
     }
 
     /// Scrolls to `position` and gives it keyboard focus.
     pub fn reveal(&self, position: u32) {
+        let column_view = self.details.column_view();
         let grid = self.icon_view.grid();
         match self.view() {
-            FolderView::Details => self
-                .details
-                .scroll_to(position, None, gtk::ListScrollFlags::FOCUS, None),
+            FolderView::Details => column_view.scroll_to(position, None, gtk::ListScrollFlags::FOCUS, None),
             FolderView::Icons(_) => grid.scroll_to(position, gtk::ListScrollFlags::FOCUS, None),
         }
     }
@@ -304,7 +303,7 @@ impl Content {
     /// The visible view, as a widget.
     pub fn view_widget(&self) -> gtk::Widget {
         match self.view() {
-            FolderView::Details => self.details.clone().upcast(),
+            FolderView::Details => self.details.column_view().clone().upcast(),
             FolderView::Icons(_) => self.icon_view.grid().clone().upcast(),
         }
     }

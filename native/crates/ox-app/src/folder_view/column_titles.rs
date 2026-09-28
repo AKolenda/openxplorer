@@ -15,8 +15,7 @@
 use gtk::glib;
 use gtk::prelude::*;
 
-use crate::folder_view::details;
-use crate::folder_view::sorting::{SortColumn, SortDirection};
+use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::icons::{self, Glyph};
 
 /// The arrow's edge (`.column-head svg{width:10px;height:10px}`).
@@ -26,29 +25,21 @@ const CARET_SIZE: i32 = 10;
 /// it and turns it up for [`SortDirection::Ascending`].
 const CARET_CLASS: &str = "sort-caret";
 
-/// Aligns the titles and gives them the current app's sort arrow, which
-/// follows the view's sorter from now on.
-pub(crate) fn style_titles(view: &gtk::ColumnView) {
+/// Aligns the titles and gives each a hidden sort arrow, the current
+/// app's, for [`show_sort_caret`] to show. Returns the arrows in column
+/// order, or none, after a warning, if GTK built the titles differently.
+pub(crate) fn style_titles(view: &gtk::ColumnView) -> Vec<gtk::Image> {
     let titles = title_boxes(view);
     if titles.len() != SortColumn::ALL.len() {
         glib::g_warning!("openxplorer", "The column titles have an unexpected structure");
-        return;
+        return Vec::new();
     }
     if let Some(size_title) = titles.last() {
         // `.column:last-child .column-label{justify-content:flex-end}`,
         // with the arrow kept beside the text.
         size_title.set_halign(gtk::Align::End);
     }
-    let carets: Vec<gtk::Image> = titles.iter().map(append_caret).collect();
-    show_sort_caret(view, &carets);
-    let Some(sorter) = view.sorter() else {
-        return;
-    };
-    sorter.connect_changed(glib::clone!(
-        #[weak]
-        view,
-        move |_, _| show_sort_caret(&view, &carets)
-    ));
+    titles.iter().map(append_caret).collect()
 }
 
 /// The box inside each column title, in column order.
@@ -70,14 +61,14 @@ fn append_caret(title: &gtk::Box) -> gtk::Image {
     caret
 }
 
-/// Shows the arrow of the column the view sorts by, pointing its way,
-/// and hides the others (`aria-sort` in `renderColumns`).
-fn show_sort_caret(view: &gtk::ColumnView, carets: &[gtk::Image]) {
-    let primary_sort = details::primary_sort(view);
+/// Shows the arrow, among the titles' `carets`, of the column the view
+/// sorts by, pointing its way, and hides the others (`aria-sort` in
+/// `renderColumns`). An unsorted view (`None`) shows no arrow.
+pub(crate) fn show_sort_caret(carets: &[gtk::Image], sorted_by: Option<SortOrder>) {
     for (column, caret) in SortColumn::ALL.into_iter().zip(carets) {
-        let direction = primary_sort
-            .filter(|(sorted_column, _)| *sorted_column == column)
-            .map(|(_, direction)| direction);
+        let direction = sorted_by
+            .filter(|order| order.column == column)
+            .map(|order| order.direction);
         point_caret(caret, direction);
     }
 }

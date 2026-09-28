@@ -113,6 +113,24 @@ impl SortDirection {
     }
 }
 
+/// What the details view sorts by: a column and the way it sorts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SortOrder {
+    /// The column whose values order the items.
+    pub column: SortColumn,
+    /// Which way that column orders them.
+    pub direction: SortDirection,
+}
+
+impl SortOrder {
+    /// Name ascending: how a new window sorts, and what an unsorted view
+    /// reports.
+    pub const DEFAULT: SortOrder = SortOrder {
+        column: SortColumn::Name,
+        direction: SortDirection::Ascending,
+    };
+}
+
 /// A name or type label folded for natural ordering: decomposed, with
 /// combining accents removed and lower-cased.
 ///

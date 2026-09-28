@@ -10,9 +10,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
-use crate::folder_view::details;
 use crate::folder_view::grid::IconSize;
-use crate::folder_view::sorting::{SortColumn, SortDirection};
+use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::text_size::Step;
 use crate::theme::ThemePreference;
 
@@ -197,16 +196,22 @@ impl BrowserWindow {
                 let Some(column) = SortColumn::from_key(key) else {
                     return false;
                 };
-                let (_, direction) = details::current_sort(&window.content().details);
-                details::sort_by(&window.content().details, column, direction);
+                let details = &window.content().details;
+                details.sort_by(SortOrder {
+                    column,
+                    ..details.sort_order()
+                });
                 true
             }),
             choice("direction", SortDirection::Ascending.key(), |window, key| {
                 let Some(direction) = SortDirection::from_key(key) else {
                     return false;
                 };
-                let (column, _) = details::current_sort(&window.content().details);
-                details::sort_by(&window.content().details, column, direction);
+                let details = &window.content().details;
+                details.sort_by(SortOrder {
+                    direction,
+                    ..details.sort_order()
+                });
                 true
             }),
             toggle(
@@ -233,16 +238,16 @@ impl BrowserWindow {
 
     /// Keeps the Sort menu in step with sorting by a column header.
     fn follow_header_sorting(&self) {
-        let Some(sorter) = self.content().details.sorter() else {
+        let Some(sorter) = self.content().details.column_view().sorter() else {
             return;
         };
         sorter.connect_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |_, _| {
-                let (column, direction) = details::current_sort(&window.content().details);
-                window.set_action_state("sort", &column.key().to_variant());
-                window.set_action_state("direction", &direction.key().to_variant());
+                let order = window.content().details.sort_order();
+                window.set_action_state("sort", &order.column.key().to_variant());
+                window.set_action_state("direction", &order.direction.key().to_variant());
             }
         ));
     }
