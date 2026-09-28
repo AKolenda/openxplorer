@@ -12,6 +12,7 @@ mod about;
 mod actions;
 mod activation;
 mod address_bar;
+mod art_style;
 mod breakpoints;
 mod button_style;
 mod caption_buttons;
@@ -464,8 +465,6 @@ impl BrowserWindow {
             folder_item_count,
             locations: &locations,
         });
-        let appearance = self.skin().appearance();
-        self.details_pane()
-            .show(&content, appearance, self.scale_factor());
+        self.details_pane().show(&content, self.art_style());
     }
 }

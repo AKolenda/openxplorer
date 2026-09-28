@@ -17,6 +17,7 @@ use crate::icons::{self, ArtKind, Glyph};
 use crate::locations::Page;
 use crate::theme::Appearance;
 
+use super::art_style::ArtStyle;
 use super::button_style::ButtonStyle;
 
 /// Width of the pane (`.details` in `desktop/ui/style.css`).
@@ -275,10 +276,10 @@ impl DetailsPane {
         self.root.set_width_request(width);
     }
 
-    /// Shows `content`, drawing art in `appearance` at `scale`.
-    pub fn show(&self, content: &PaneContent, appearance: Appearance, scale: i32) {
+    /// Shows `content`, drawing its art in `style`.
+    pub fn show(&self, content: &PaneContent, style: ArtStyle) {
         match content.preview {
-            Preview::Art(kind) => icons::set_art(&self.preview, kind, PREVIEW_SIZE, appearance, scale),
+            Preview::Art(kind) => style.draw_into(&self.preview, kind, PREVIEW_SIZE),
             Preview::Several => icons::set_glyph(&self.preview, Glyph::Copy, 80),
         }
         self.name.set_text(&content.name);

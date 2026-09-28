@@ -10,7 +10,7 @@
 use gtk::prelude::*;
 
 use crate::icons::{self, Glyph};
-use crate::theme::Appearance;
+use crate::window::art_style::ArtStyle;
 
 use super::entries::{RowIcon, RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
 
@@ -18,11 +18,11 @@ use super::entries::{RowIcon, RowLevel, RowTarget, Section, SectionEdges, Sideba
 const GLYPH_SIZE: i32 = 18;
 const ART_SIZE: i32 = 19;
 
-fn row_icon(icon: RowIcon, appearance: Appearance, scale: i32) -> gtk::Image {
+fn row_icon(icon: RowIcon, style: ArtStyle) -> gtk::Image {
     let image = match icon {
         RowIcon::Glyph(glyph, Some(fixed)) => icons::colored_glyph(glyph, GLYPH_SIZE, fixed),
         RowIcon::Glyph(glyph, None) => icons::glyph(glyph, GLYPH_SIZE),
-        RowIcon::Art(kind) => icons::art_image(kind, ART_SIZE, appearance, scale),
+        RowIcon::Art(kind) => style.image(kind, ART_SIZE),
     };
     let class = match icon {
         RowIcon::Glyph(..) => "side-glyph",
@@ -43,7 +43,7 @@ fn name_label(text: &str) -> gtk::Label {
 }
 
 /// The chevron, icon, name and pin of `entry`.
-fn row_content(entry: &SidebarEntry, appearance: Appearance, scale: i32) -> gtk::Box {
+fn row_content(entry: &SidebarEntry, style: ArtStyle) -> gtk::Box {
     // The gaps are CSS margins on the parts (see `.side-entry` in
     // resources/style.css), so no box spacing.
     let content = gtk::Box::builder().css_classes(["side-entry"]).build();
@@ -52,7 +52,7 @@ fn row_content(entry: &SidebarEntry, appearance: Appearance, scale: i32) -> gtk:
         expander.add_css_class("expand");
         content.append(&expander);
     }
-    content.append(&row_icon(entry.icon, appearance, scale));
+    content.append(&row_icon(entry.icon, style));
     content.append(&name_label(&entry.label));
     if entry.pinned {
         let pin = icons::glyph(Glyph::Pin, 11);
@@ -94,15 +94,8 @@ fn placement_classes(entry: &SidebarEntry, edges: SectionEdges) -> Vec<&'static 
 }
 
 /// The row for `entry`, which runs `win.go-to` or `win.mount-volume`.
-pub(super) fn sidebar_row(
-    entry: &SidebarEntry,
-    edges: SectionEdges,
-    appearance: Appearance,
-    scale: i32,
-) -> gtk::ListBoxRow {
-    let overlay = gtk::Overlay::builder()
-        .child(&row_content(entry, appearance, scale))
-        .build();
+pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges, style: ArtStyle) -> gtk::ListBoxRow {
+    let overlay = gtk::Overlay::builder().child(&row_content(entry, style)).build();
     overlay.add_overlay(&selection_bar());
     let row = gtk::ListBoxRow::builder()
         .child(&overlay)

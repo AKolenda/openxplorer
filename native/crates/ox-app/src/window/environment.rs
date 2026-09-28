@@ -20,7 +20,7 @@ use crate::places::{self, PlaceSources, Places};
 use crate::settings_store::Change;
 use crate::volumes::{self, VolumeFacts};
 
-use super::landing::{self, Drawing};
+use super::landing;
 use super::sidebar;
 use super::BrowserWindow;
 
@@ -98,19 +98,11 @@ impl BrowserWindow {
         })
     }
 
-    fn drawing(&self) -> Drawing {
-        Drawing {
-            appearance: self.skin().appearance(),
-            scale: self.scale_factor(),
-        }
-    }
-
     /// Redraws the sidebar and the landing page.
     pub(super) fn render_places(&self) {
         let places = self.places();
         let entries = sidebar::sidebar_entries(&places, &self.imp().locations.borrow());
-        let drawing = self.drawing();
-        self.sidebar().show(entries, drawing.appearance, drawing.scale);
+        self.sidebar().show(entries, self.art_style());
         if let Some(uri) = self.current_uri() {
             self.sidebar().select(&uri);
         }
@@ -126,8 +118,9 @@ impl BrowserWindow {
         let Some(page) = self.current_uri().as_deref().and_then(Page::from_uri) else {
             return;
         };
+        let body = &self.content().landing;
         let locations = self.imp().locations.borrow();
-        landing::render(&self.content().landing, page, places, &locations, self.drawing());
+        landing::render(body, page, places, &locations, self.art_style());
     }
 
     /// Pins the one selected folder to Quick access (`pinEntry`).

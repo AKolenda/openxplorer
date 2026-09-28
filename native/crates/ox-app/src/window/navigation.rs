@@ -17,7 +17,7 @@ use ox_core::location::{self, is_device_location, parent_location, LocationConte
 use crate::icons::{ArtKind, Glyph};
 use crate::locations::{self, Page};
 
-use super::address_bar::{AddressIcon, ArtStyle, CrumbButton};
+use super::address_bar::{AddressIcon, CrumbButton};
 use super::loading::LoadMode;
 use super::session::{TabId, TabPlacement};
 use super::tab_strip::{TabIcon, TabLabel};
@@ -323,13 +323,9 @@ impl BrowserWindow {
             })
             .collect();
         let address = locations.display_location(uri);
-        let style = ArtStyle {
-            appearance: self.skin().appearance(),
-            scale: self.scale_factor(),
-        };
         self.chrome()
             .address
-            .show_location(&crumbs, &address, address_icon(uri), style);
+            .show_location(&crumbs, &address, address_icon(uri), self.art_style());
     }
 
     /// Redraws the tab strip.
@@ -356,8 +352,7 @@ impl BrowserWindow {
                 })
                 .collect()
         };
-        let appearance = self.skin().appearance();
-        self.chrome().tabs.show(&labels, appearance, self.scale_factor());
+        self.chrome().tabs.show(&labels, self.art_style());
     }
 
     /// Replaces the breadcrumbs with the editable address (Ctrl+L).
