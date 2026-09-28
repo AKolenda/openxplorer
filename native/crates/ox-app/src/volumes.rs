@@ -146,13 +146,12 @@ impl VolumeFacts {
     /// A stable-enough identifier for a single mount request, as
     /// `volume_id` in `desktop/volume_locations.py`: the UUID, else the
     /// device path, else the activation root, else the name.
-    pub(crate) fn id(&self) -> String {
+    pub(crate) fn id(&self) -> &str {
         self.uuid
             .as_deref()
             .or(self.unix_device.as_deref())
             .or(self.activation_uri.as_deref())
             .unwrap_or(&self.name)
-            .to_owned()
     }
 }
 
@@ -194,7 +193,9 @@ fn mountable_row(volume: &VolumeFacts) -> Option<VolumeRow> {
     Some(VolumeRow {
         label: volume.name.clone(),
         kind,
-        state: VolumeState::Mountable { id: volume.id() },
+        state: VolumeState::Mountable {
+            id: volume.id().to_owned(),
+        },
     })
 }
 
@@ -362,6 +363,7 @@ mod tests {
         assert!(locations(&[], &[web]).is_empty());
     }
 
+    /// parity: NET-018
     #[test]
     fn only_mounted_smb_rows_count_as_network() {
         let rows = locations(
