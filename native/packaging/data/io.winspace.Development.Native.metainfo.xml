@@ -37,6 +37,7 @@
   </branding>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.0.0" date="2026-09-28" type="development"><description><p>Preview build of OpenXplorer 2.0.0 under its own application ID.</p></description></release>
     <release version="0.1.0" date="2026-09-28" type="development"><description><p>First packaged native preview of the GTK 4 interface, for trying it beside the current OpenXplorer.</p></description></release>
   </releases>
   <url type="homepage">https://openxplorer.app</url>

@@ -33,16 +33,16 @@
         "id": "under-the-hood",
         "title": "Native storage. Local interface.",
         "paragraphs": [
-          "The desktop app is Python with GTK 3 and WebKitGTK. Its HTML/CSS/JavaScript interface is loaded locally. GIO/GVfs provides the filesystem and SMB layer; SQLite stores the optional filename index. This Next.js website is separate and is not required to run the app."
+          "Since 2.0.0 the desktop app is a native GTK 4 application written in Rust. GIO/GVfs provides the filesystem, SMB and phone layer; SQLite stores the optional filename index. The Python/WebKitGTK app of 1.x is deprecated and no longer released. This Next.js website is separate and is not required to run the app; its interactive preview still renders the 1.x HTML interface, which the native app reproduces."
         ]
       },
       {
         "id": "release-status",
         "title": "Know what you are installing",
         "paragraphs": [
-          "Version 1.1.4 keeps in-app updates working after the repository moves to the openxplorer GitHub organization. Check for updates is beside the bottom-right view controls. Zorin is the primary target; Ubuntu and Debian compatibility depends on the declared APT dependencies and desktop integration."
+          "Version 2.0.0 replaces the Python app with the native GTK 4 app under the same name, settings and saved passwords, and adds Fluent icons, a categorised Settings page, undo, and Flatpak and distribution packages. Zorin is the primary target; Ubuntu 24.04+, Debian 13, Fedora, openSUSE and Arch are supported through their packages, and every other distribution through the Flatpak. The known gaps are listed in the changelog."
         ],
-        "callout": "Use a disposable folder and a non-critical share first. Native Zorin/WebKit, live NAS access, keyring behavior, and browser/portal integration have not been validated in the release environment."
+        "callout": "Use a disposable folder and a non-critical share first. SMB servers other than the maintainer's, phones and USB drives have not yet been accepted on real hardware with the native app."
       },
       {
         "id": "next-steps",
@@ -63,8 +63,8 @@
         "id": "requirements",
         "title": "Requirements",
         "paragraphs": [
-          "A compatible Debian-family system with Python 3.10+, GTK 3, WebKitGTK 4.1 (2.40+), GIO/GVfs and a graphical user session. The .deb declares these runtime dependencies; APT resolves them. Zorin is the primary target, not the only possible host.",
-          "There are no Node.js or pnpm requirements for the desktop application."
+          "For the .deb: Zorin OS 18, Ubuntu 24.04 or newer, or Debian 13 on x86-64, with GTK 4.14 or newer, GIO/GVfs and a graphical user session. The .deb declares its runtime dependencies; APT resolves them. Fedora, openSUSE and Arch users install the release's .rpm or Arch package when it lists one; every other distribution, including Debian 12, uses the Flatpak bundle.",
+          "There are no Node.js, pnpm or Python requirements for the application itself; Python is only recommended for the optional persistent mount helper."
         ]
       },
       {
@@ -73,7 +73,7 @@
         "paragraphs": [
           "Close every old Winspace/OpenXplorer window and finish file operations. Download the .deb, then run these commands from that download directory as your normal user."
         ],
-        "code": "sudo apt update\nsudo apt install ./openxplorer_1.1.4_all.deb\nopenxplorer --check\nopenxplorer",
+        "code": "sudo apt update\nsudo apt install ./openxplorer_2.0.0_all.deb\nopenxplorer --version\nopenxplorer",
         "callout": "This is a local unsigned package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts."
       },
       {
@@ -82,7 +82,7 @@
         "paragraphs": [
           "Click the Check for updates icon at the bottom right, beside the view controls. In 1.1.0 and 1.1.1, this button is at the bottom of the sidebar. This contacts the public OpenXplorer GitHub Releases API only when requested. Review the installed and available versions, then choose Install update. Finish file operations and tab moves first.",
           "The installed Debian app downloads the release installer, verifies its GitHub SHA-256 digest and package identity, then asks for system administrator approval through polkit. APT installs the update without removing packages. Choose Restart now when finished; restarting closes existing windows and tabs.",
-          "Older releases need one manual upgrade to 1.1.0 before this control is available. Install 1.1.4 before the repository moves to the openxplorer GitHub organization; earlier releases then need one manual upgrade from GitHub Releases. Source checkouts can check versions but cannot install in-app. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature."
+          "Older releases need one manual upgrade to 1.1.0 before this control is available; 1.1.x offers 2.0.0 there. Earlier releases need one manual upgrade from GitHub Releases. Source checkouts, RPM, Arch and Flatpak installations update through their own package manager. Updates are not live code patches; the running app must restart. GitHub HTTPS and asset digests are the trust boundary, not an independent publisher signature. To go back to 1.1.4, install its .deb with sudo apt install --allow-downgrades; settings and saved passwords are shared."
         ]
       },
       {
@@ -444,7 +444,7 @@
         "id": "structure",
         "title": "Repository layout",
         "paragraphs": [
-          "desktop/ contains the Python GTK/WebKit host, native services, local UI, regression tests and Debian builder. apps/web/ contains the Next.js App Router website. docs/ mirrors the website documentation as Markdown. designs/ holds generated standalone HTML pitches."
+          "native/ contains the Rust GTK 4 application, its parity inventories, packaging and check driver. desktop/ contains the deprecated Python GTK/WebKit app of 1.x, kept as the behavioural specification and for the mount helper. apps/web/ contains the Next.js App Router website. docs/ mirrors the website documentation as Markdown. designs/ holds generated standalone HTML pitches."
         ]
       },
       {
@@ -463,7 +463,7 @@
           "The website remains a Next.js static export. pnpm build writes apps/web/out, and pnpm check performs dependency-aware TypeScript checking. Cloudflare Workers Static Assets serves that export without a framework migration or application backend. The offline preview renderer does not exercise the Next.js runtime.",
           "The native experience roadmap and public source checklist are in docs/NATIVE-EXPERIENCE-ROADMAP.md and docs/PUBLIC-RELEASE-CHECKLIST.md. They distinguish remaining desktop work, source-publication preparation and stable-release validation."
         ],
-        "code": "pnpm check\npnpm build\npnpm preview\n\n# Desktop package (Debian-family build host)\npython3 desktop/tools/build_deb.py\npython3 desktop/tools/verify_deb.py desktop/dist/openxplorer_1.1.4_all.deb"
+        "code": "pnpm check\npnpm build\npnpm preview\n\n# Native checks and the release .deb (Ubuntu 24.04 build host)\npython3 native/tools/check.py\npython3 native/tools/build_deb.py --app-id io.winspace.Development\npython3 native/tools/verify_deb.py dist/native/openxplorer_2.0.0_all.deb"
       },
       {
         "id": "contribute",

@@ -20,6 +20,11 @@ with an older GTK.
 
 ## Application ID: preview and stable
 
+**Since 2.0.0 every release package is the stable channel**: `tools/release.py`
+and the `native-package` and `native-flatpak` jobs of
+`.github/workflows/checks.yml` build `io.winspace.Development`. The preview
+remains the default of a plain build and of `native-distros.yml`.
+
 Until the native app has every behaviour of the Python app
 (`python3 native/parity/check.py --gate replace`), it is a **preview** that
 installs beside the Python app. The release that replaces the Python app builds

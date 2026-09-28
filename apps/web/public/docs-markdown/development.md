@@ -4,7 +4,7 @@ One repository. A native app and an independent website.
 
 ## Repository layout
 
-desktop/ contains the Python GTK/WebKit host, native services, local UI, regression tests and Debian builder. apps/web/ contains the Next.js App Router website. docs/ mirrors the website documentation as Markdown. designs/ holds generated standalone HTML pitches.
+native/ contains the Rust GTK 4 application, its parity inventories, packaging and check driver. desktop/ contains the deprecated Python GTK/WebKit app of 1.x, kept as the behavioural specification and for the mount helper. apps/web/ contains the Next.js App Router website. docs/ mirrors the website documentation as Markdown. designs/ holds generated standalone HTML pitches.
 
 ## Run the website with pnpm
 
@@ -31,9 +31,10 @@ pnpm check
 pnpm build
 pnpm preview
 
-# Desktop package (Debian-family build host)
-python3 desktop/tools/build_deb.py
-python3 desktop/tools/verify_deb.py desktop/dist/openxplorer_1.1.4_all.deb
+# Native checks and the release .deb (Ubuntu 24.04 build host)
+python3 native/tools/check.py
+python3 native/tools/build_deb.py --app-id io.winspace.Development
+python3 native/tools/verify_deb.py dist/native/openxplorer_2.0.0_all.deb
 ```
 
 ## Make a focused contribution
@@ -64,4 +65,4 @@ Documentation search opens from its named button. The site does not intercept Co
 
 ---
 
-OpenXplorer 1.1.4. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.0. Project-authored documentation: AGPL-3.0-only.

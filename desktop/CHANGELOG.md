@@ -1,4 +1,8 @@
-# Unreleased
+# Unreleased (not released: the Python app is deprecated)
+
+OpenXplorer 2.0.0 replaced this app with the native app in `native/`; its
+changelog is [../CHANGELOG.md](../CHANGELOG.md). The changes below were never
+released.
 
 - Fix copying to Android phones over MTP. GVfs publishes a move into another
   folder with the item's old name, so copies landed as `payload` or failed with

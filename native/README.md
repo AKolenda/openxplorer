@@ -1,9 +1,12 @@
 # OpenXplorer native (Rust + GTK4)
 
-The next OpenXplorer: the same Explorer skin, drawn with native GTK4 widgets
-instead of an HTML page in WebKit. It replaces the Python/WebKit app in
-`desktop/` once it reaches parity; until then it is a preview that runs side by
-side with it.
+OpenXplorer since 2.0.0: the same Explorer skin, drawn with native GTK4
+widgets instead of an HTML page in WebKit. It replaces the deprecated
+Python/WebKit app in `desktop/`, which is no longer released. Releases ship the
+stable channel (`io.winspace.Development`, see
+[packaging/README.md](packaging/README.md)); the parity items still open when
+2.0.0 shipped are in [BACKLOG.md](BACKLOG.md). The preview channel below
+remains for trying a development build beside an installed release.
 
 The rewrite removes the HTML-to-Python command bridge and uses GTK's native
 models, selection, menus, fonts and scaling. The toolkit also supplies the

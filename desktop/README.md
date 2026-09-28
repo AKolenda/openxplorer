@@ -1,5 +1,7 @@
 # OpenXplorer desktop
 
+> **Deprecated.** This Python app was OpenXplorer 1.x. OpenXplorer 2.0.0 replaces it with the native GTK 4 app in [`../native/`](../native/README.md), and releases no longer ship this directory. It stays in the repository as the behavioural specification for `native/parity/`, and its `mount_share.py` is still packaged as the persistent SMB mount helper.
+
 **Windows File Explorer-inspired file manager for Linux.** Zorin OS is the primary target; compatible Ubuntu and Debian desktops are additional targets, not certified configurations.
 
 Version **1.1.4** keeps in-app updates working after the repository moves to the openxplorer GitHub organization; 1.0.1 added connected-device browsing and 1.0.0 was the first stable release, renamed from Winspace 0.7.0. The native engine is Python + GTK 3/WebKitGTK + GIO/GVfs. The website is separate; Node.js is not a desktop runtime dependency.

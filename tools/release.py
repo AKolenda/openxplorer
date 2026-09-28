@@ -2,12 +2,21 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Build and verify the local release artifacts, without installing anything.
 
-The release is the Debian package, the corresponding-source archive and their
-SHA256SUMS in dist/. The source archive holds every editable input, including
-the scripts that regenerate generated files, and leaves out itself, binaries
-and generated HTML. Website downloads are removed on purpose: releases are
-published on GitHub, not on the website host. Nothing here changes desktop
-settings.
+The release is the native app (native/): the stable Debian package
+openxplorer_<version>_all.deb, which the in-app updater of OpenXplorer 1.1.x
+downloads and installs, any RPM, Arch package and Flatpak bundle built for
+the release, the corresponding-source archive and their SHA256SUMS, all in
+dist/. The Python app in desktop/ is deprecated and no longer shipped.
+
+The Debian package is built here unless --packages names a folder that
+already holds it (the continuous-integration build); --flatpak also builds
+the Flatpak bundle here. Every package is the stable channel, application ID
+io.winspace.Development; preview packages are never picked up.
+
+The source archive holds every editable input, including the scripts that
+regenerate generated files, and leaves out itself, binaries and generated
+HTML. Website downloads are removed on purpose: releases are published on
+GitHub, not on the website host. Nothing here changes desktop settings.
 """
 from __future__ import annotations
 
@@ -15,20 +24,23 @@ import argparse
 from collections.abc import Iterable
 from fnmatch import fnmatchcase
 import hashlib
-import importlib
 import os
 from pathlib import Path
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
+import tomllib
 from typing import NoReturn
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 DESKTOP = ROOT / 'desktop'
+NATIVE = ROOT / 'native'
+NATIVE_TOOLS = NATIVE / 'tools'
+CARGO_MANIFEST = NATIVE / 'Cargo.toml'
 DIST = ROOT / 'dist'
-DESKTOP_DIST = DESKTOP / 'dist'
 TEST_RESULTS = ROOT / 'test-results'
 DESIGNS = ROOT / 'designs'
 
@@ -63,6 +75,20 @@ GENERATED_SOURCE_PATHS = frozenset({
     'desktop/preview.html', 'apps/web/public/app-preview.html',
     'apps/web/public/assets/site.js',
 })
+
+# The application ID of the released app: the Python app's, which the native
+# app takes over (native/packaging/README.md).
+STABLE_APP_ID = 'io.winspace.Development'
+FLATPAK_MANIFEST = NATIVE / 'packaging/flatpak' / f'{STABLE_APP_ID}.yml'
+FLATPAK_BUNDLE = f'{STABLE_APP_ID}.flatpak'
+FLATPAK_REMOTE = 'https://dl.flathub.org/repo/flathub.flatpakrepo'
+# The file names of the release's packages besides the Debian one, as the
+# RPM spec, the PKGBUILD and the Flatpak manifest name them. The preview's
+# names (openxplorer-native..., ...Development.Native.flatpak) never match.
+EXTRA_PACKAGE_PATTERNS = ('openxplorer-[0-9]*.rpm', 'openxplorer-[0-9]*.pkg.tar.zst',
+                          FLATPAK_BUNDLE)
+# Suffixes of the artifacts an earlier build left in dist/.
+ARTIFACT_SUFFIXES = ('.zip', '.deb', '.rpm', '.zst', '.flatpak')
 
 # Download folders in the website trees, removed by every release.
 WEBSITE_DOWNLOADS = (
@@ -154,16 +180,15 @@ def source_files(root: Path = ROOT) -> list[tuple[Path, Path]]:
     return sorted(files, key=lambda item: item[1].as_posix())
 
 
-def release_versions() -> tuple[str, str]:
-    """Return the app version and the Debian package version from desktop/core.py.
+def release_version() -> str:
+    """Return the release version: [workspace.package] version in native/Cargo.toml.
 
-    core.py imports modules next to it, so desktop/ goes on the search path.
+    The Debian, RPM and Arch packages and the metainfo carry the same version;
+    the tests in native/tools check that they agree.
     """
-    sys.path.insert(0, str(DESKTOP))
-    core = importlib.import_module('core')
-    version: str = core.VERSION
-    debian_version: str = core.DEBIAN_VERSION
-    return version, debian_version
+    manifest = tomllib.loads(CARGO_MANIFEST.read_text(encoding='utf-8'))
+    version: str = manifest['workspace']['package']['version']
+    return version
 
 
 def run_python(script: Path, *arguments: str) -> None:
@@ -180,27 +205,84 @@ def remove_website_downloads() -> None:
 
 def is_previous_artifact(path: Path) -> bool:
     """Return whether path is a package, archive or checksum list of an earlier build."""
-    return path.is_file() and (path.suffix in ('.zip', '.deb') or path.name == 'SHA256SUMS')
+    return path.is_file() and (path.suffix in ARTIFACT_SUFFIXES or path.name == 'SHA256SUMS')
 
 
 def prepare_output_directories() -> None:
     """Create the output directories and empty them of earlier artifacts."""
-    for directory in (DIST, DESKTOP_DIST):
-        directory.mkdir(parents=True, exist_ok=True)
-        for path in directory.iterdir():
-            if is_previous_artifact(path):
-                path.unlink()
+    DIST.mkdir(parents=True, exist_ok=True)
+    for path in DIST.iterdir():
+        if is_previous_artifact(path):
+            path.unlink()
     TEST_RESULTS.mkdir(exist_ok=True)  # For the package verification report.
     DESIGNS.mkdir(exist_ok=True)  # For a copy of the preview.
 
 
-def build_and_verify_package(debian_version: str) -> Path:
-    """Build the Debian package into dist/, verify it and return its path."""
-    package = DIST / f'openxplorer_{debian_version}_all.deb'
+def debian_package_name(version: str) -> str:
+    """Return the only installer name the 1.1.x updater accepts (desktop/updater.py)."""
+    return f'openxplorer_{version}_all.deb'
+
+
+def obtain_debian_package(version: str, packages: Path | None) -> Path:
+    """Copy the stable .deb from packages, or build it, into dist/ and return its path."""
+    name = debian_package_name(version)
+    if packages is None:
+        run_python(NATIVE_TOOLS / 'build_deb.py', '--app-id', STABLE_APP_ID,
+                   '--output-directory', str(DIST))
+        return DIST / name
+    built = packages / name
+    if not built.is_file():
+        raise FileNotFoundError(f'{built} is missing; build it with native/packaging/ci/'
+                                f'build-package.sh deb {STABLE_APP_ID}')
+    shutil.copyfile(built, DIST / name)
+    return DIST / name
+
+
+def verify_debian_package(package: Path) -> None:
+    """Verify the package, including the 1.1.x updater's own checks, and save the report."""
     report = TEST_RESULTS / 'package-verification.json'
-    run_python(DESKTOP / 'tools/build_deb.py', '--output', str(package))
-    run_python(DESKTOP / 'tools/verify_deb.py', str(package), '--json', str(report))
-    return package
+    result = subprocess.run([sys.executable, str(NATIVE_TOOLS / 'verify_deb.py'), str(package)],
+                            stdout=subprocess.PIPE, text=True, check=True)
+    report.write_text(result.stdout, encoding='utf-8')
+
+
+def copy_extra_packages(packages: Path | None) -> list[Path]:
+    """Copy the release's RPMs, Arch packages and Flatpak bundle from packages into dist/."""
+    if packages is None:
+        return []
+    copied = []
+    for path in sorted(packages.iterdir()):
+        wanted = any(fnmatchcase(path.name, pattern) for pattern in EXTRA_PACKAGE_PATTERNS)
+        if wanted and path.is_file():
+            shutil.copyfile(path, DIST / path.name)
+            copied.append(DIST / path.name)
+    return copied
+
+
+def flatpak_builder() -> list[str]:
+    """Return the flatpak-builder command: the host's, or the org.flatpak.Builder Flatpak."""
+    if shutil.which('flatpak-builder'):
+        return ['flatpak-builder']
+    return ['flatpak', 'run', 'org.flatpak.Builder']
+
+
+def build_flatpak_bundle(work: Path) -> Path:
+    """Build the stable Flatpak offline in work and export its bundle into dist/.
+
+    The build needs the GNOME 51 SDK and the rust-stable extension installed
+    for the user (native/packaging/README.md, "Flatpak"). work keeps
+    flatpak-builder's cache between runs; it lies outside the repository, so
+    neither the source archive nor the public-data audit reads it.
+    """
+    work.mkdir(parents=True, exist_ok=True)
+    repository = work / 'repo'
+    subprocess.run([*flatpak_builder(), '--user', '--force-clean',
+                    f'--state-dir={work / "state"}', f'--repo={repository}',
+                    str(work / 'build'), str(FLATPAK_MANIFEST)], check=True)
+    bundle = DIST / FLATPAK_BUNDLE
+    subprocess.run(['flatpak', 'build-bundle', f'--runtime-repo={FLATPAK_REMOTE}',
+                    str(repository), str(bundle), STABLE_APP_ID], check=True)
+    return bundle
 
 
 def write_source_archive(archive: Path, root: Path = ROOT) -> None:
@@ -232,23 +314,39 @@ def publish_preview() -> None:
 
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
-    """Accept no options but --help, so a mistyped option cannot start a release build."""
+    """Read the options; a mistyped option stops before anything is built."""
     parser = argparse.ArgumentParser(
-        description='Build and verify the Debian package, the corresponding-source archive '
-                    'and SHA256SUMS in dist/, and refresh the offline preview copies.')
+        description='Build and verify the native Debian package, gather the other native '
+                    'packages, write the corresponding-source archive and SHA256SUMS in '
+                    'dist/, and refresh the offline preview copies.')
+    parser.add_argument('--packages', type=Path,
+                        help='a folder holding the release packages built elsewhere (CI): '
+                             'openxplorer_<version>_all.deb and any RPM, Arch package and '
+                             f'{FLATPAK_BUNDLE}; without it the .deb is built here')
+    parser.add_argument('--flatpak', action='store_true',
+                        help=f'also build {FLATPAK_BUNDLE} here with flatpak-builder')
+    parser.add_argument('--flatpak-work', type=Path,
+                        default=Path(tempfile.gettempdir()) / 'openxplorer-flatpak',
+                        help="flatpak-builder's build folder and cache, outside the "
+                             'repository (default: %(default)s)')
     return parser.parse_args(argv)
 
 
-def build_release() -> None:
-    """Build the installer, the corresponding source and their checksums."""
-    version, debian_version = release_versions()
+def build_release(arguments: argparse.Namespace) -> None:
+    """Build the installers, the corresponding source and their checksums."""
+    packages = arguments.packages.resolve() if arguments.packages else None
+    version = release_version()
     remove_website_downloads()
     prepare_output_directories()
-    package = build_and_verify_package(debian_version)
+    package = obtain_debian_package(version, packages)
+    verify_debian_package(package)
+    artifacts = [package, *copy_extra_packages(packages)]
+    if arguments.flatpak:
+        artifacts = [path for path in artifacts if path.name != FLATPAK_BUNDLE]
+        artifacts.append(build_flatpak_bundle(arguments.flatpak_work))
     source = DIST / f'openxplorer-{version}-source.zip'
     write_source_archive(source)
-    write_checksums((package, source), DIST / 'SHA256SUMS')
-    shutil.copyfile(package, DESKTOP_DIST / package.name)
+    write_checksums([*artifacts, source], DIST / 'SHA256SUMS')
     publish_preview()
 
 
@@ -265,9 +363,9 @@ def main(argv: list[str] | None = None) -> int:
 
     A failure ends in one line that says what failed, instead of a traceback.
     """
-    parse_arguments(argv)
+    arguments = parse_arguments(argv)
     try:
-        build_release()
+        build_release(arguments)
     except subprocess.CalledProcessError as error:
         print(f'Release failed: {describe_failed_command(error)}; its output is above.',
               file=sys.stderr)
@@ -276,7 +374,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f'Release failed: {error}. Fix this and rerun tools/release.py.',
               file=sys.stderr)
         return 1
-    print('Built local installer, corresponding source and checksums. '
+    print('Built the native packages, corresponding source and checksums in dist/. '
           'Website links remain on GitHub.')
     return 0
 

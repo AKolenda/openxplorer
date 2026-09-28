@@ -49,9 +49,9 @@ python3 tools/audit-public-data.py
 pnpm build
 ```
 
-`pnpm release` builds and verifies the Debian package and creates a corresponding-source ZIP and checksums under local, ignored output directories. It removes legacy website download directories. Re-run it after any source change intended for a distributed build. Regenerating standalone designs is separate from the real Next.js export.
+`pnpm release` builds and verifies the native app's stable Debian package (`native/tools/build_deb.py`; add `-- --flatpak` for the Flatpak bundle) and creates a corresponding-source ZIP and checksums under local, ignored output directories. The deprecated Python app in `desktop/` is no longer packaged. It removes legacy website download directories. Re-run it after any source change intended for a distributed build. Regenerating standalone designs is separate from the real Next.js export.
 
-Inspect the resulting source ZIP and confirm it contains the instructions and inputs needed to reproduce the application, including the lockfile and license notices. Confirm every website project/install call to action resolves to the public GitHub repository and that the website export contains no release binaries. If release assets are published later, publish the installer, matching source ZIP and `SHA256SUMS` together on GitHub; generated binaries do not belong in the source history.
+Inspect the resulting source ZIP and confirm it contains the instructions and inputs needed to reproduce the application, including the lockfile and license notices. Confirm every website project/install call to action resolves to the public GitHub repository and that the website export contains no release binaries. Publish the packages, matching source ZIP and `SHA256SUMS` together on GitHub; generated binaries do not belong in the source history.
 
 Run the public-data audit again after staging the complete release, including any newly generated captures. Use `--private-terms` with a reviewed JSON list stored outside the repository when a private-data review calls for it. Keep such lists out of Git, workflow logs and corresponding-source archives.
 

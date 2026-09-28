@@ -1,13 +1,22 @@
 #!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-only
-# Builds the preview package of one format, verifies it and leaves it in
-# dist/native/ for .github/workflows/native-distros.yml to publish. Run it as
-# the unprivileged user from the repository root.
-# Usage: build-package.sh deb|rpm|arch
+# Builds the package of one format, verifies it and leaves it in dist/native/
+# for .github/workflows/native-distros.yml (the preview) and checks.yml (the
+# stable release) to publish. Run it as the unprivileged user from the
+# repository root.
+# Usage: build-package.sh deb|rpm|arch [io.winspace.Development.Native|io.winspace.Development]
 set -eu
 
-format=${1:?usage: build-package.sh deb|rpm|arch}
-app_id=io.winspace.Development.Native
+format=${1:?usage: build-package.sh deb|rpm|arch [application ID]}
+app_id=${2:-io.winspace.Development.Native}
+case "$app_id" in
+    io.winspace.Development.Native) package_name=openxplorer-native ;;
+    io.winspace.Development) package_name=openxplorer ;;
+    *)
+        echo "Unknown application ID: $app_id" >&2
+        exit 2
+        ;;
+esac
 output=dist/native
 version=$(python3 - <<'EOF'
 import tomllib
@@ -37,7 +46,7 @@ case "$format" in
         PATH="$HOME/.cargo/bin:$PATH" python3 native/tools/source_archive.py --vendor \
             --output-directory "$HOME/rpmbuild/SOURCES"
         rpmbuild -bb --define "app_id $app_id" native/packaging/rpm/openxplorer.spec
-        package=$(find "$HOME/rpmbuild/RPMS" -name 'openxplorer-native-[0-9]*.rpm' | head -n 1)
+        package=$(find "$HOME/rpmbuild/RPMS" -name "$package_name-[0-9]*.rpm" | head -n 1)
         cp "$package" "$output/"
         rpm2cpio "$package" | (cd "$work/tree" && cpio -idm --quiet)
         verify_tree
@@ -46,7 +55,7 @@ case "$format" in
         python3 native/tools/source_archive.py --output-directory "$work"
         cp native/packaging/arch/PKGBUILD "$work/"
         (cd "$work" && _app_id=$app_id makepkg --noconfirm)
-        package=$(find "$work" -maxdepth 1 -name 'openxplorer-native-[0-9]*.pkg.tar.zst' | head -n 1)
+        package=$(find "$work" -maxdepth 1 -name "$package_name-[0-9]*.pkg.tar.zst" | head -n 1)
         cp "$package" "$output/"
         tar --zstd -x -f "$package" -C "$work/tree"
         verify_tree

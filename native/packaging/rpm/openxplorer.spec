@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        0.1.0
+Version:        2.0.0
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -113,5 +113,8 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Mon Sep 28 2026 OpenXplorer contributors <maintainer@example.invalid> - 2.0.0-1
+- OpenXplorer 2.0.0: the native GTK 4 app replaces the Python app.
+
 * Mon Sep 28 2026 OpenXplorer contributors <maintainer@example.invalid> - 0.1.0-1
 - First packaged native preview.

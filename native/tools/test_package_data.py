@@ -20,7 +20,7 @@ from verify_layout import InstalledTree, Report, VerificationError
 
 # The version at the top of each channel's metainfo, which a verified tree
 # must carry.
-METAINFO_VERSIONS = {Channel.PREVIEW: '0.1.0', Channel.STABLE: '1.1.4'}
+METAINFO_VERSIONS = {Channel.PREVIEW: '2.0.0', Channel.STABLE: '2.0.0'}
 
 
 @dataclass(frozen=True)
@@ -177,7 +177,7 @@ class VerifierTests(StagingTestCase):
 
     def test_a_metainfo_without_the_package_version_is_refused(self) -> None:
         tree = self.install(Channel.STABLE, Layout.DEBIAN)
-        newer = InstalledTree(tree.root, tree.channel, tree.layout, '2.0.0')
+        newer = InstalledTree(tree.root, tree.channel, tree.layout, '2.0.1')
 
         with self.assertRaisesRegex(VerificationError, 'newest release'):
             verify_layout.check_metainfo(Report(), newer)

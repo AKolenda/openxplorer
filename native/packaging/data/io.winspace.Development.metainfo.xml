@@ -39,6 +39,7 @@
   </branding>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="2.0.0" date="2026-09-28" type="stable"><description><p>OpenXplorer is now a native GTK 4 application with the same Windows 11 look. It adds Fluent icons, a categorised Settings page, undo, dropping files onto programs, tearing tabs out into new windows, and Flatpak and distribution packages. Pinned folders are indexed for search by default.</p></description></release>
     <release version="1.1.4" date="2026-09-26" type="stable"><description><p>Keep in-app updates working after the repository moves to the openxplorer GitHub organization.</p></description></release>
     <release version="1.1.3" date="2026-09-21" type="stable"><description><p>Fix dragging filenames containing parentheses and simplify the Software updates dialog.</p></description></release>
     <release version="1.1.2" date="2026-09-19" type="stable"><description><p>Place the update action beside the bottom-right view controls and remove the stable-release status indicator.</p></description></release>

@@ -21,6 +21,11 @@ WebKit's sandbox. Download the official GitHub Actions runner and verify its
 published SHA-256 before registering it to this repository with the
 `openxplorer` label. Install its systemd service under the dedicated user.
 The workflow installs its pinned pnpm and Playwright versions without sudo.
+The native packages are built on GitHub-hosted runners in distribution
+containers (`native-package` and `native-flatpak` jobs); this host only
+downloads, verifies and publishes them, so it needs `dpkg-deb`,
+`desktop-file-validate`, `appstreamcli` (the `appstream` package) and Python
+3.11 or newer, but no Rust or GTK 4 toolchain.
 
 On LXC hosts whose overlaid `/proc` blocks nested sandbox mounts, install
 `tools/runner-service.sh` root-owned and mode 0755 at
@@ -50,7 +55,8 @@ Repository configuration:
 Bump the package, desktop and website versions together, update the changelog,
 regenerate docs/designs and fictional screenshots, and merge the reviewed
 change into `main`. All checks must pass before publication. A release includes
-the Debian installer, matching corresponding source and `SHA256SUMS`.
+the native Debian installer, the RPMs, Arch package and Flatpak bundle,
+matching corresponding source and `SHA256SUMS`.
 Existing release assets are left unchanged. Cloudflare deployment follows
 release publication; rerun the workflow after fixing a deployment failure.
 
