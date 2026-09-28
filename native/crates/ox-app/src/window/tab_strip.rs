@@ -14,8 +14,8 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use crate::icons::{self, ArtKind, Glyph};
-use crate::theme::Appearance;
 
+use super::art_style::ArtStyle;
 use super::gestures;
 use super::session::TabId;
 use super::tab_layout::TabLayout;
@@ -97,13 +97,13 @@ impl TabStrip {
     }
 
     /// Replaces the tabs and scrolls the active one into view.
-    pub fn show(&self, labels: &[TabLabel], appearance: Appearance, scale: i32) {
+    pub fn show(&self, labels: &[TabLabel], style: ArtStyle) {
         while let Some(child) = self.tabs.first_child() {
             self.tabs.remove(&child);
         }
         let mut active = None;
         for label in labels {
-            let tab = tab(label, appearance, scale);
+            let tab = tab(label, style);
             self.tabs.append(&tab);
             if label.active {
                 active = Some(tab);
@@ -127,14 +127,14 @@ impl TabStrip {
     }
 }
 
-fn tab_icon(icon: TabIcon, appearance: Appearance, scale: i32) -> gtk::Image {
+fn tab_icon(icon: TabIcon, style: ArtStyle) -> gtk::Image {
     match icon {
         TabIcon::Glyph(glyph) => icons::glyph(glyph, ICON_SIZE),
-        TabIcon::Art(kind) => icons::art_image(kind, ICON_SIZE, appearance, scale),
+        TabIcon::Art(kind) => style.image(kind, ICON_SIZE),
     }
 }
 
-fn tab(label: &TabLabel, appearance: Appearance, scale: i32) -> gtk::Box {
+fn tab(label: &TabLabel, style: ArtStyle) -> gtk::Box {
     let tab = gtk::Box::builder()
         .spacing(ICON_TO_TITLE)
         .focusable(true)
@@ -147,7 +147,7 @@ fn tab(label: &TabLabel, appearance: Appearance, scale: i32) -> gtk::Box {
     }
     tab.update_property(&[gtk::accessible::Property::Label(&label.title)]);
     tab.update_state(&[gtk::accessible::State::Selected(Some(label.active))]);
-    tab.append(&tab_icon(label.icon, appearance, scale));
+    tab.append(&tab_icon(label.icon, style));
     tab.append(&title(&label.title));
     tab.append(&close_button(label));
     let id = label.id.to_variant();

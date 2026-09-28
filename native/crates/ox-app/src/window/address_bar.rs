@@ -19,8 +19,8 @@ use gtk::prelude::*;
 use ox_core::location::Crumb;
 
 use crate::icons::{self, ArtKind, Glyph};
-use crate::theme::Appearance;
 
+use super::art_style::ArtStyle;
 use super::gestures;
 
 /// The location icon: 16 pixels (ui-spec.md §4.2; the web app's was 17).
@@ -63,15 +63,6 @@ pub(super) enum AddressIcon {
     Glyph(Glyph),
     /// The colour folder of local folders.
     Folder,
-}
-
-/// How art is drawn: the appearance and the screen's scale factor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct ArtStyle {
-    /// Light or dark art.
-    pub appearance: Appearance,
-    /// The screen's scale factor.
-    pub scale: i32,
 }
 
 /// The address bar's widgets.
@@ -187,15 +178,7 @@ impl AddressBar {
     pub fn show_location(&self, crumbs: &[CrumbButton], address: &str, icon: AddressIcon, style: ArtStyle) {
         match icon {
             AddressIcon::Glyph(glyph) => icons::set_glyph(&self.icon, glyph, ICON_SIZE),
-            AddressIcon::Folder => {
-                icons::set_art(
-                    &self.icon,
-                    ArtKind::Folder,
-                    ICON_SIZE,
-                    style.appearance,
-                    style.scale,
-                );
-            }
+            AddressIcon::Folder => style.draw_into(&self.icon, ArtKind::Folder, ICON_SIZE),
         }
         self.root.set_tooltip_text(Some(&format!(
             "{address} · Click blank space or press Ctrl+L to edit"

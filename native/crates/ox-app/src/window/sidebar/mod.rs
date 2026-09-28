@@ -18,8 +18,8 @@ use gtk::prelude::*;
 use ox_core::location::same_location;
 
 use crate::icons::{self, Glyph};
-use crate::theme::Appearance;
 
+use super::art_style::ArtStyle;
 use super::{gestures, unported};
 
 pub(super) use entries::sidebar_entries;
@@ -133,14 +133,14 @@ impl Sidebar {
     }
 
     /// Replaces the rows.
-    pub fn show(&self, entries: Vec<SidebarEntry>, appearance: Appearance, scale: i32) {
+    pub fn show(&self, entries: Vec<SidebarEntry>, style: ArtStyle) {
         self.list.remove_all();
         let rows: Vec<gtk::ListBoxRow> = entries
             .iter()
             .enumerate()
             .map(|(index, entry)| {
                 let edges = entries::section_edges(&entries, index);
-                row::sidebar_row(entry, edges, appearance, scale)
+                row::sidebar_row(entry, edges, style)
             })
             .collect();
         self.entries.replace(entries);

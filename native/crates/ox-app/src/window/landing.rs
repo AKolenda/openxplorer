@@ -21,9 +21,9 @@ use ox_core::places::Place;
 use crate::icons::{self, ArtKind, Glyph};
 use crate::locations::Page;
 use crate::places::{Places, SavedShare};
-use crate::theme::Appearance;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
+use super::art_style::ArtStyle;
 use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
 use super::{gestures, network_page, unported};
 
@@ -35,15 +35,6 @@ const SHARE_GLYPH_COLOR: &str = "#4b96c0";
 
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
-
-/// What a page needs to draw its art.
-#[derive(Debug, Clone, Copy)]
-pub(super) struct Drawing {
-    /// Light or dark art.
-    pub appearance: Appearance,
-    /// The screen's scale factor.
-    pub scale: i32,
-}
 
 fn label(text: &str, css_class: &str) -> gtk::Label {
     gtk::Label::builder()
@@ -91,7 +82,7 @@ pub(super) fn texts(name: &str, subtitle: &str) -> gtk::Box {
     texts_with(name, &label(subtitle, "card-sub"))
 }
 
-fn quick_card(place: &Place, drawing: Drawing) -> gtk::Button {
+fn quick_card(place: &Place, style: ArtStyle) -> gtk::Button {
     let network = place.uri.starts_with("smb:");
     let (art, subtitle) = if network {
         (ArtKind::NetworkFolder, "Network folder")
@@ -99,7 +90,7 @@ fn quick_card(place: &Place, drawing: Drawing) -> gtk::Button {
         (ArtKind::Folder, "Stored on this PC")
     };
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 15);
-    content.append(&icons::art_image(art, 43, drawing.appearance, drawing.scale));
+    content.append(&style.image(art, 43));
     // "Stored on this PC" is never cut short: in a narrow card it runs
     // into the padding, as `.quick-card .card-sub` lets it.
     let whole_subtitle = gtk::Label::builder()
@@ -111,11 +102,11 @@ fn quick_card(place: &Place, drawing: Drawing) -> gtk::Button {
     location_card("quick-card", &place.uri, &content)
 }
 
-fn quick_access(body: &gtk::Box, places: &Places, drawing: Drawing) {
+fn quick_access(body: &gtk::Box, places: &Places, style: ArtStyle) {
     body.append(&section_title("Quick access", Glyph::Pin));
     let cards = card_grid(QUICK_GRID);
     for place in &places.quick_access {
-        cards.append(&quick_card(place, drawing));
+        cards.append(&quick_card(place, style));
     }
     body.append(&cards);
 }
@@ -288,7 +279,7 @@ pub(super) fn render(
     page: Page,
     places: &Places,
     locations: &LocationContext,
-    drawing: Drawing,
+    style: ArtStyle,
 ) {
     while let Some(child) = body.first_child() {
         body.remove(&child);
@@ -296,7 +287,7 @@ pub(super) fn render(
     page_header(body, page);
     match page {
         Page::ThisPc => {
-            quick_access(body, places, drawing);
+            quick_access(body, places, style);
             devices_and_drives(body, places, locations);
             saved_shares(body, places, locations);
         }
