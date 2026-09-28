@@ -1,0 +1,35 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The command bar (ui-spec.md §4.3; style.css .commandbar, .command,
+   .separator). */
+
+.commandbar {
+  background-color: @ox_chrome;
+  border-bottom: 1px solid @ox_border;
+  min-height: 54px;
+  padding: 0 15px;
+}
+.commandbar, .commandbar .command-group { border-spacing: 4px; }
+/* 34px high; icon-only commands are 38px wide, their 16px glyph (I01)
+   centred where the web's 18px one was. */
+.commandbar button.command, .commandbar menubutton.command > button {
+  min-height: 34px;
+  min-width: 18px;
+  padding: 0 10px;
+}
+.commandbar button.text-command, .commandbar menubutton.text-command > button { padding: 0 11px; }
+/* The 17px glyphs of the text commands are centred on a half pixel, which
+   Chromium draws one pixel down. */
+.commandbar .text-command image { margin-top: 1px; }
+.commandbar menubutton.new-command > button { padding: 0 10px 0 8px; }
+.commandbar .chevron { color: @ox_muted; margin-left: 4px; }
+.commandbar separator { min-height: 20px; min-width: 1px; background-color: @ox_border; margin: 0 10px; }
+.commandbar menubutton.theme-toggle > button { color: @ox_muted; margin-right: 6px; }
+.commandbar menubutton.theme-toggle > button:hover { color: @ox_text; }
+.commandbar button.settings-button { color: @ox_muted; margin-right: 3px; }
+.commandbar button.settings-button:hover { color: @ox_text; }
+/* A menu's button looks pressed only while pressed, not while its menu
+   is open, as in the current app. */
+.commandbar menubutton > button:checked { background: none; }
+.commandbar menubutton > button:checked:hover { background-color: @ox_hover; }
+.commandbar button.details-toggle:checked,
+.commandbar button.details-toggle:checked:hover { background-color: @ox_selected; }

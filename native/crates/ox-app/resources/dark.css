@@ -1,21 +1,77 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-/* Dark palette: the :root[data-theme="dark"] tokens in desktop/ui/style.css. */
-@define-color ox_bg #202020;
-@define-color ox_chrome #262626;
-@define-color ox_title #191919;
-@define-color ox_sidebar #252525;
-@define-color ox_text #f1f1f1;
-@define-color ox_muted #aaaaaa;
-@define-color ox_border #373737;
-@define-color ox_hover #343434;
-@define-color ox_pressed #3a3a3a;
-@define-color ox_selected #263c50;
-@define-color ox_selected_edge alpha(#80b4e0, .16);
-@define-color ox_accent #74beff;
-@define-color ox_error #ff9b96;
-@define-color ox_field_bottom #5a5a5a;
-@define-color ox_tab_hover alpha(white, .05);
+/* Dark palette: the colour tokens of native/docs/ui-spec.md §3.1 (IDs in
+   brackets), which start from the :root[data-theme="dark"] tokens in
+   desktop/ui/style.css. Tokens tagged "visible" in the spec keep the
+   current app's value until the product owner signs them off (§3.8,
+   "Staging"); the comment names the Windows value waiting for that.
+   light.css defines the same names. */
+
+/* Surfaces */
+@define-color ox_title #191919;                    /* C01 tab strip */
+@define-color ox_title_backdrop @ox_title;         /* C02 */
+@define-color ox_chrome #282828;                   /* C04 active tab, bars */
+@define-color ox_bg #202020;                       /* C05 content */
+@define-color ox_sidebar #252525;                  /* C06 */
+@define-color ox_flyout #2c2c2c;                   /* C07, D-A13 menus */
+@define-color ox_tooltip #2c2c2c;                  /* C08 */
+@define-color ox_card #202020;                     /* C09 visible: #2b2b2b */
+@define-color ox_field_bg #202020;                 /* C26 address, search */
+
+/* Text */
+@define-color ox_text #f1f1f1;                     /* C10 visible: #ffffff */
+@define-color ox_muted #aaaaaa;                    /* C11 visible: #cccccc */
+@define-color ox_text_tertiary #969696;            /* C12 dividers, pins */
+/* Placeholders: the current app's #757575 in both themes (§4.2 names
+   @ox_muted for the search box, which is darker in light). */
 @define-color ox_placeholder #757575;
-@define-color ox_pin #92979b;
-@define-color ox_menu_shadow alpha(black, .4);
-@define-color ox_on_accent #142535;
+@define-color ox_text_disabled #717171;            /* C13 */
+@define-color ox_text_selection_bg #0078d4;        /* C31 */
+@define-color ox_text_selection_fg #ffffff;
+
+/* Accent */
+@define-color ox_accent #74beff;                   /* C14 visible: #4cc2ff */
+@define-color ox_accent_hover alpha(@ox_accent, .9);   /* C15 */
+@define-color ox_accent_pressed alpha(@ox_accent, .8);
+@define-color ox_on_accent #000000;                /* C16 */
+@define-color ox_on_accent_pressed alpha(@ox_on_accent, .5);   /* §4.11 */
+@define-color ox_accent_stroke alpha(white, .08);  /* E07 */
+@define-color ox_accent_stroke_bottom alpha(black, .14);
+
+/* States */
+@define-color ox_hover #343434;                    /* C17 */
+@define-color ox_pressed #303030;                  /* C18 */
+@define-color ox_selected #263c50;                 /* C19 */
+@define-color ox_selected_hover @ox_selected;      /* C20 visible: mix(@ox_selected, @ox_accent, .06) */
+@define-color ox_selected_edge alpha(#80b4e0, .16);        /* C21 rows */
+@define-color ox_tile_selected_edge alpha(#80b4e0, .38);   /* C21 tiles */
+@define-color ox_focus_outer @ox_accent;           /* C29 visible: #ffffff */
+
+/* The tab strip's own states (§4.1, §4.14) */
+@define-color ox_title_hover alpha(white, .06);    /* C03, D-A03: caption, +, windows */
+@define-color ox_title_pressed alpha(white, .04);  /* §4.14 */
+@define-color ox_tab_hover alpha(white, .05);      /* C03 visible for tabs: alpha(white, .06) */
+@define-color ox_tab_text_inactive @ox_text;       /* C37 visible: @ox_muted */
+
+/* Lines and strokes */
+@define-color ox_border #373737;                   /* C22 */
+@define-color ox_control_stroke alpha(white, .07);         /* C23 */
+@define-color ox_control_stroke_top alpha(white, .09);     /* C24: the strong */
+@define-color ox_control_stroke_bottom @ox_control_stroke; /* edge is at the top */
+@define-color ox_field_bottom #5a5a5a;             /* C27 */
+@define-color ox_input_bottom #9a9a9a;             /* C28 */
+@define-color ox_flyout_stroke alpha(black, .2);   /* C42 */
+
+/* Bordered buttons (C25 visible: alpha(white, .06), alpha(white, .08), alpha(white, .03)) */
+@define-color ox_control_fill @ox_chrome;
+@define-color ox_control_fill_hover @ox_hover;
+@define-color ox_control_fill_pressed @ox_pressed;
+
+/* Status */
+@define-color ox_critical_fill #c42b1c;            /* C33 close hover, full drives */
+@define-color ox_success #6ccb5f;                  /* C34 connected */
+
+/* Scroll bars and shadows */
+@define-color ox_scrollbar_thumb alpha(white, .55);        /* C40 */
+@define-color ox_scrollbar_trough alpha(@ox_flyout, .85);  /* §4.12 */
+@define-color ox_shadow_ambient alpha(black, .24);  /* C44 */
+@define-color ox_shadow_key alpha(black, .28);

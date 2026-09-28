@@ -19,6 +19,7 @@ use crate::folder_view::{details, model::FolderModel};
 use crate::theme::Appearance;
 
 use super::empty_page::{EmptyPage, EmptyState};
+use super::loading_line::LoadingLine;
 
 /// What the folder pane shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,14 +113,6 @@ fn landing_page() -> (gtk::Box, gtk::ScrolledWindow) {
     (landing, landing_scroll)
 }
 
-/// The thin line that runs above the items while a folder is listed.
-fn loading_line() -> gtk::ProgressBar {
-    gtk::ProgressBar::builder()
-        .css_classes(["loading-line"])
-        .visible(false)
-        .build()
-}
-
 fn scrolled(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
     gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Automatic)
@@ -131,8 +124,8 @@ fn scrolled(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
 /// The folder pane's widgets and the shared folder model.
 #[derive(Debug)]
 pub(super) struct Content {
-    /// The folder pane, including the loading line.
-    pub root: gtk::Box,
+    /// The folder pane, with the loading line over it.
+    pub root: gtk::Overlay,
     stack: gtk::Stack,
     views: gtk::Stack,
     /// The details view.
@@ -152,7 +145,7 @@ pub(super) struct Content {
     pub empty: EmptyPage,
     /// The landing page's contents.
     pub landing: gtk::Box,
-    loading_line: gtk::ProgressBar,
+    loading_line: LoadingLine,
 }
 
 impl Content {
@@ -173,10 +166,9 @@ impl Content {
         stack.add_named(&views, Some(ContentPage::Listing.name()));
         stack.add_named(&empty.root, Some(ContentPage::Empty.name()));
         stack.add_named(&landing_scroll, Some(ContentPage::Landing.name()));
-        let loading_line = loading_line();
-        let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        root.append(&loading_line);
-        root.append(&stack);
+        let loading_line = LoadingLine::new();
+        let root = gtk::Overlay::builder().child(&stack).build();
+        root.add_overlay(&loading_line.widget);
         let content = Self {
             root,
             stack,
@@ -206,8 +198,7 @@ impl Content {
         self.stack.set_visible_child_name(page.name());
     }
 
-    /// The page shown now, for tests.
-    #[cfg(test)]
+    /// The page shown now.
     pub fn page(&self) -> Option<ContentPage> {
         let name = self.stack.visible_child_name()?;
         [ContentPage::Listing, ContentPage::Empty, ContentPage::Landing]
@@ -221,12 +212,16 @@ impl Content {
         self.show_page(ContentPage::Empty);
     }
 
-    /// Shows or hides the loading line above the items.
+    /// Shows the loading line over the items while `loading` lasts (see
+    /// [`LoadingLine::set_loading`]).
     pub fn show_loading_line(&self, loading: bool) {
-        self.loading_line.set_visible(loading);
-        if loading {
-            self.loading_line.pulse();
-        }
+        self.loading_line.set_loading(loading);
+    }
+
+    /// The loading line, for tests.
+    #[cfg(test)]
+    pub fn loading_line(&self) -> &gtk::Box {
+        &self.loading_line.widget
     }
 
     /// The view that lists items now.

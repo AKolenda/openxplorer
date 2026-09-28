@@ -293,17 +293,47 @@ impl Drop for ThemeGuard {
     }
 }
 
+/// The directory named by `$OX_NATIVE_CAPTURE_DIR`, created, or `None`
+/// when captures are off.
+fn capture_directory() -> Option<PathBuf> {
+    let directory = PathBuf::from(std::env::var_os("OX_NATIVE_CAPTURE_DIR")?);
+    fs::create_dir_all(&directory).expect("capture directory");
+    Some(directory)
+}
+
 /// Saves a PNG of `window` into `$OX_NATIVE_CAPTURE_DIR`, when set, for
 /// visual review of the layout.
 pub(crate) fn capture(window: &BrowserWindow, filename: &str) {
-    let Some(directory) = std::env::var_os("OX_NATIVE_CAPTURE_DIR") else {
+    let Some(directory) = capture_directory() else {
         return;
     };
-    let directory = PathBuf::from(directory);
-    fs::create_dir_all(&directory).expect("capture directory");
     wait_for_frames(window, 3);
-    crate::snapshot::save_png(window.upcast_ref(), &directory.join(filename))
-        .expect("a shown window saves to the writable capture directory");
+    // A window that was just resized may not be drawable for a frame or two.
+    let path = directory.join(filename);
+    wait_until("the window to be saved", || {
+        crate::snapshot::save_png(window.upcast_ref(), &path).is_ok()
+    });
+}
+
+/// Saves a PNG of the open `popover` into `$OX_NATIVE_CAPTURE_DIR`, when
+/// set. A popover is a surface of its own, which a window capture leaves
+/// out.
+pub(crate) fn capture_popover(window: &BrowserWindow, popover: &gtk::Popover, filename: &str) {
+    let Some(directory) = capture_directory() else {
+        return;
+    };
+    wait_for_frames(window, 3);
+    let renderer = popover.renderer().expect("an open popover has a renderer");
+    let paintable = gtk::WidgetPaintable::new(Some(popover));
+    let snapshot = gtk::Snapshot::new();
+    let width = f64::from(paintable.intrinsic_width());
+    let height = f64::from(paintable.intrinsic_height());
+    paintable.snapshot(&snapshot, width, height);
+    let node = snapshot.to_node().expect("an open popover draws something");
+    renderer
+        .render_texture(&node, None)
+        .save_to_png(directory.join(filename))
+        .expect("the capture directory is writable");
 }
 
 /// Waits until `window` has drawn `count` frames, so a capture shows the

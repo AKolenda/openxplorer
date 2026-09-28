@@ -23,6 +23,9 @@ use crate::theme::Appearance;
 
 use super::gestures;
 
+/// The location icon: 16 pixels (ui-spec.md §4.2; the web app's was 17).
+const ICON_SIZE: i32 = 16;
+
 /// What the address bar shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AddressMode {
@@ -93,7 +96,7 @@ impl AddressBar {
             .valign(gtk::Align::Center)
             .css_classes(["address"])
             .build();
-        let icon = icons::glyph(Glyph::FolderLine, 17);
+        let icon = icons::glyph(Glyph::FolderLine, ICON_SIZE);
         icon.add_css_class("address-icon");
         let entry = gtk::Entry::builder().hexpand(true).build();
         entry.update_property(&[gtk::accessible::Property::Label("Location")]);
@@ -183,9 +186,15 @@ impl AddressBar {
     /// is typing is left alone.
     pub fn show_location(&self, crumbs: &[CrumbButton], address: &str, icon: AddressIcon, style: ArtStyle) {
         match icon {
-            AddressIcon::Glyph(glyph) => icons::set_glyph(&self.icon, glyph, 17),
+            AddressIcon::Glyph(glyph) => icons::set_glyph(&self.icon, glyph, ICON_SIZE),
             AddressIcon::Folder => {
-                icons::set_art(&self.icon, ArtKind::Folder, 17, style.appearance, style.scale);
+                icons::set_art(
+                    &self.icon,
+                    ArtKind::Folder,
+                    ICON_SIZE,
+                    style.appearance,
+                    style.scale,
+                );
             }
         }
         self.root.set_tooltip_text(Some(&format!(

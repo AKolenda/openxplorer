@@ -20,6 +20,10 @@ use super::breakpoints::WindowWidth;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::unported;
 
+/// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
+/// command bar (ui-spec.md I01; the web app's were 18).
+const ICON_COMMAND_GLYPH: i32 = 16;
+
 /// Whether a command stays in a compact window (the 680-pixel rules).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InCompactWindow {
@@ -195,7 +199,7 @@ fn separator() -> gtk::Separator {
 
 fn icon_button(command: &IconCommand) -> gtk::Button {
     let button = gtk::Button::builder()
-        .child(&icons::glyph(command.glyph, 18))
+        .child(&icons::glyph(command.glyph, ICON_COMMAND_GLYPH))
         .tooltip_text(unported::tooltip(command.action, command.tooltip))
         .action_name(command.action)
         .valign(gtk::Align::Center)
@@ -334,7 +338,7 @@ fn more_menu() -> Vec<MenuEntry> {
 
 fn more_button() -> gtk::MenuButton {
     let button = gtk::MenuButton::builder()
-        .child(&icons::glyph(Glyph::More, 18))
+        .child(&icons::glyph(Glyph::More, ICON_COMMAND_GLYPH))
         .tooltip_text("More options")
         .popover(&MenuPopover::new(more_menu()))
         .valign(gtk::Align::Center)

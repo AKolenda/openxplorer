@@ -17,6 +17,7 @@ use ox_core::places::NetworkLocation;
 use crate::icons::{self, Glyph};
 use crate::places::Places;
 
+use super::button_style::ButtonStyle;
 use super::card_grid::{card_grid, DRIVE_GRID};
 use super::landing::{location_card, section_title, texts};
 use super::{unported, BrowserWindow};
@@ -33,13 +34,13 @@ const DISCOVERY_NOTE: &str = "Discovery depends on devices advertising themselve
 firewall/network settings. It does not guarantee a list of every host.";
 
 /// A button for a command that may not be ported yet.
-fn command_button(label: &str, action: &str, css_class: &str) -> gtk::Button {
+fn command_button(label: &str, action: &str, style: ButtonStyle) -> gtk::Button {
     gtk::Button::builder()
         .label(label)
         .action_name(action)
         .tooltip_text(unported::tooltip(action, label))
         .valign(gtk::Align::Center)
-        .css_classes([css_class])
+        .css_classes([style.css_class()])
         .build()
 }
 
@@ -68,7 +69,11 @@ fn banner() -> gtk::Box {
         .build();
     banner.append(&glyph);
     banner.append(&words);
-    banner.append(&command_button("Discover servers", DISCOVER_ACTION, "primary"));
+    banner.append(&command_button(
+        "Discover servers",
+        DISCOVER_ACTION,
+        ButtonStyle::Accent,
+    ));
     banner
 }
 
@@ -84,7 +89,7 @@ fn server_address_field() -> gtk::Box {
     let open = gtk::Button::builder()
         .label("Open address")
         .valign(gtk::Align::Center)
-        .css_classes(["secondary"])
+        .css_classes([ButtonStyle::Bordered.css_class()])
         .build();
     open.connect_clicked(glib::clone!(
         #[weak]
@@ -94,7 +99,7 @@ fn server_address_field() -> gtk::Box {
     let map_content = gtk::Box::new(gtk::Orientation::Horizontal, 7);
     map_content.append(&icons::glyph(Glyph::Plus, 14));
     map_content.append(&gtk::Label::new(Some("Map location")));
-    let map = command_button("Map location", MAP_NETWORK_ACTION, "secondary");
+    let map = command_button("Map location", MAP_NETWORK_ACTION, ButtonStyle::Bordered);
     map.set_child(Some(&map_content));
     let field = gtk::Box::builder()
         .spacing(9)

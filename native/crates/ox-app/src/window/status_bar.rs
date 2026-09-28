@@ -65,6 +65,10 @@ pub(super) fn selection_text(selected: SelectionSummary) -> String {
 }
 
 /// The build shown at the right (`#status-mode`).
+/// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
+/// were 15).
+const BUTTON_GLYPH: i32 = 16;
+
 const BUILD_TEXT: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"), " native preview");
 
 /// The status bar's widgets.
@@ -170,7 +174,7 @@ impl StatusBar {
 
 fn view_button(glyph: Glyph, tooltip: &str, view: FolderView) -> gtk::Button {
     let button = gtk::Button::builder()
-        .child(&icons::glyph(glyph, 15))
+        .child(&icons::glyph(glyph, BUTTON_GLYPH))
         .tooltip_text(tooltip)
         .action_name("win.view")
         .action_target(&view.key().to_variant())
@@ -184,7 +188,7 @@ fn view_button(glyph: Glyph, tooltip: &str, view: FolderView) -> gtk::Button {
 /// is ported.
 fn check_updates_button() -> gtk::Button {
     let button = gtk::Button::builder()
-        .child(&icons::glyph(Glyph::Refresh, 15))
+        .child(&icons::glyph(Glyph::Refresh, BUTTON_GLYPH))
         .tooltip_text(unported::tooltip("win.check-updates", "Check for updates"))
         .action_name("win.check-updates")
         .valign(gtk::Align::Center)

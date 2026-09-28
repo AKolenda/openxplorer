@@ -8,6 +8,8 @@ use gtk::prelude::*;
 
 use crate::icons::{self, Glyph};
 
+use super::button_style::ButtonStyle;
+
 /// What the empty page says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum EmptyState {
@@ -64,6 +66,7 @@ impl EmptyPage {
             .label("Try again")
             .action_name("win.refresh")
             .halign(gtk::Align::Center)
+            .css_classes([ButtonStyle::Bordered.css_class()])
             .visible(false)
             .build();
         root.append(&spinner);

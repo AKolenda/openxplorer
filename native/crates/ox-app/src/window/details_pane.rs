@@ -17,6 +17,8 @@ use crate::icons::{self, ArtKind, Glyph};
 use crate::locations::Page;
 use crate::theme::Appearance;
 
+use super::button_style::ButtonStyle;
+
 /// Width of the pane (`.details` in `desktop/ui/style.css`).
 pub(super) const PANE_WIDTH: i32 = 262;
 
@@ -192,7 +194,7 @@ fn pane_button(label: &str, glyph: Glyph, action: &str) -> gtk::Button {
     gtk::Button::builder()
         .child(&child)
         .action_name(action)
-        .css_classes(["dbutton"])
+        .css_classes(["dbutton", ButtonStyle::Bordered.css_class()])
         .build()
 }
 

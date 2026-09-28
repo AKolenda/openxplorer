@@ -1,0 +1,72 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The title bar and its tab strip (ui-spec.md §4.1; style.css .titlebar,
+   .tab, .window-buttons). */
+
+/* GTK's own theme gives a window's title bar a 46px height, 6px padding at
+   both ends and a line along the bottom. The Explorer title bar has none of
+   these: it is 42px of @ox_title from edge to edge, and the active tab runs
+   straight into the navigation row. */
+window.ox > .titlebar, window.ox > .titlebar:backdrop {
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.ox-titlebar { background-color: @ox_title; min-height: 42px; padding-left: 9px; }
+window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
+
+/* ---- Tabs ---- */
+.tab {
+  min-height: 35px;
+  border-radius: 8px 8px 0 0;
+  padding: 0 10px 0 13px;
+  color: @ox_tab_text_inactive;
+  transition: background-color 83ms linear, color 83ms linear;
+}
+.tab.active { background-color: @ox_chrome; color: @ox_text; box-shadow: 0 -1px 2px alpha(black, .012); }
+.tab:not(.active):hover { background-color: @ox_tab_hover; }
+.tab:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }
+/* The 16px icon (I03) sits where the web's 17px one did, and the title
+   starts 10px after it (S06), at x=50 as in the current app. A margin,
+   not a min-width: GtkImage stretches its picture to fill a wider
+   allocation, which blurs the art. */
+.tab > image:first-child { margin-left: 2px; }
+/* Half-pixel centring: where the web layout centres a box at x.5 pixels,
+   Chromium draws it from the next pixel down (or right), while GTK rounds
+   down. A one-pixel margin on the far side puts these on the same pixels
+   as the current app: the tab's close button and the open-windows glyph. */
+.tab button.tab-close { min-width: 22px; min-height: 22px; margin-top: 1px; }
+/* On an inactive tab the close button sits on the strip's colour, where
+   @ox_hover would barely show (§4.1). */
+.tab:not(.active) button.tab-close:hover { background-color: @ox_title_hover; }
+/* An inactive window dims the inactive tabs and the caption glyphs (§4.1). */
+window.ox:backdrop .tab:not(.active),
+window.ox:backdrop .ox-titlebar button.caption { color: @ox_text_tertiary; }
+
+/* ---- New tab, drag area, open windows ---- */
+.ox-titlebar button.newtab { min-width: 38px; min-height: 34px; margin: 0 3px 0 5px; }
+/* The empty part of the bar always leaves room to grab the window
+   (TitleBarMinDragRegionWidth). */
+.ox-titlebar .title-drag { min-width: 48px; }
+.ox-titlebar button.windows-button, .ox-titlebar menubutton.windows-button > button {
+  min-width: 35px;
+  min-height: 30px;
+  color: @ox_muted;
+}
+.ox-titlebar .windows-button image { margin-left: 1px; }
+
+/* ---- Caption buttons ---- */
+.ox-titlebar button.caption { min-width: 46px; min-height: 42px; border-radius: 0; }
+/* The strip's buttons darken it a little when hovered (D-A03): @ox_hover
+   on @ox_title was nearly invisible. */
+.ox-titlebar button.caption:hover,
+.ox-titlebar button.newtab:hover,
+.ox-titlebar menubutton.windows-button > button:hover { background-color: @ox_title_hover; }
+.ox-titlebar button.caption:active,
+.ox-titlebar button.newtab:active,
+.ox-titlebar menubutton.windows-button > button:active { background-color: @ox_title_pressed; }
+.ox-titlebar button.caption.close:hover { background-color: @ox_critical_fill; color: white; }
+.ox-titlebar button.caption.close:active { background-color: alpha(@ox_critical_fill, .9); color: alpha(white, .7); }

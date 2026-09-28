@@ -7,6 +7,7 @@
 //! into it; only this application's GTK settings change, never GNOME's.
 
 mod fonts;
+mod stylesheets;
 pub mod system;
 
 use std::cell::{Cell, RefCell};
@@ -17,10 +18,6 @@ use gtk::gdk;
 pub use fonts::css_for_text_size;
 
 use crate::icons::Glyph;
-
-const BASE_CSS: &str = include_str!("../../resources/style.css");
-const LIGHT_CSS: &str = include_str!("../../resources/light.css");
-const DARK_CSS: &str = include_str!("../../resources/dark.css");
 
 /// The appearance actually drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -164,9 +161,9 @@ impl Skin {
     pub fn install(display: &gdk::Display) -> Self {
         force_builtin_theme(&gtk::Settings::for_display(display));
         let base = gtk::CssProvider::new();
-        base.load_from_string(BASE_CSS);
+        base.load_from_string(stylesheets::RULES);
         let palette = gtk::CssProvider::new();
-        palette.load_from_string(LIGHT_CSS);
+        palette.load_from_string(stylesheets::palette(Appearance::Light));
         let text = gtk::CssProvider::new();
         text.load_from_string(&css_for_text_size(crate::text_size::DEFAULT));
         let priority = gtk::STYLE_PROVIDER_PRIORITY_APPLICATION;
@@ -195,11 +192,7 @@ impl Skin {
         if self.appearance.replace(appearance) == appearance {
             return false;
         }
-        let css = match appearance {
-            Appearance::Light => LIGHT_CSS,
-            Appearance::Dark => DARK_CSS,
-        };
-        self.palette.load_from_string(css);
+        self.palette.load_from_string(stylesheets::palette(appearance));
         if let Some(settings) = gtk::Settings::default() {
             settings.set_gtk_application_prefer_dark_theme(appearance == Appearance::Dark);
         }
@@ -330,12 +323,5 @@ mod tests {
             ThemePreference::Light.tooltip(Appearance::Light),
             "Appearance: light. Click to change."
         );
-    }
-
-    #[test]
-    fn stylesheets_are_embedded() {
-        assert!(BASE_CSS.contains(".ox-titlebar"));
-        assert!(LIGHT_CSS.contains("@define-color ox_bg #ffffff"));
-        assert!(DARK_CSS.contains("@define-color ox_bg #202020"));
     }
 }

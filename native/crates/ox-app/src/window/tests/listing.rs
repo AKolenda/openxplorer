@@ -10,8 +10,12 @@ use std::time::{Duration, Instant};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::test_support::harness::{settle, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
+use crate::test_support::harness::{
+    settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, STANDARD_NAMES,
+};
 use crate::window::content::{ContentPage, FolderView};
+
+use super::geometry::bounds;
 
 /// A folder long enough to scroll in a 810-pixel window.
 const LONG_FOLDER: usize = 300;
@@ -310,5 +314,34 @@ fn only_the_visible_view_holds_the_model() {
     assert!(
         content.grid.model().is_none(),
         "switching back detaches the icon view"
+    );
+}
+
+/// The loading line lies over the top of the folder pane, as the web's
+/// absolutely positioned `.loading-line`, so showing it never moves the
+/// items.
+///
+/// parity: VIEW-047
+#[gtk::test]
+fn the_loading_line_lies_over_the_pane_without_moving_the_items() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    wait_for_frames(&test.window, 2);
+    let content = test.window.content();
+    let items_before = bounds(&test, &content.view_widget());
+    let line = content.loading_line();
+    // A reload that the folder watch starts may hide the line again, so
+    // it is shown until it has been laid out.
+    wait_until("the loading line to be laid out", || {
+        line.set_visible(true);
+        line.height() > 0
+    });
+    let (_, line_y, _, line_height) = bounds(&test, line);
+    let (_, pane_y, _, _) = bounds(&test, &content.root);
+    assert_eq!((line_y, line_height), (pane_y, 2), "2 pixels over the pane's top");
+    assert_eq!(
+        bounds(&test, &content.view_widget()),
+        items_before,
+        "the items stay put"
     );
 }

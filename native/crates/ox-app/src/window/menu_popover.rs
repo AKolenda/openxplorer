@@ -20,6 +20,10 @@ use super::unported;
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
 
+/// A menu row's glyph: 16 pixels, as WinUI's menu icons (ui-spec.md I05;
+/// the web app's classic menus drew 15).
+const ROW_GLYPH: i32 = 16;
+
 /// Whether an item shows a check mark.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ItemCheck {
@@ -279,7 +283,7 @@ fn item_content(item: &MenuItem, checked: Option<bool>) -> gtk::Box {
         item.glyph
     };
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&icons::glyph(glyph, 15));
+    content.append(&icons::glyph(glyph, ROW_GLYPH));
     let label = gtk::Label::builder()
         .label(&item.label)
         .xalign(0.0)

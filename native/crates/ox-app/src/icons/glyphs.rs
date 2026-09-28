@@ -233,13 +233,22 @@ impl Glyph {
         }
     }
 
-    /// Stroke width in viewBox units: 3 for the `more` dots, so they are
-    /// visible, and 1.35 otherwise.
-    pub const fn stroke_width(self) -> f32 {
-        match self {
-            Glyph::More => 3.0,
-            _ => 1.35,
+    /// Stroke width in viewBox units for the glyph drawn `size` pixels
+    /// wide: 3 for the `more` dots, so they are visible, and 1.35 (the web
+    /// app's) otherwise, but never under one pixel from 16 pixels up, the
+    /// monoline stroke of Windows 11's icons (ui-spec.md I10). Smaller
+    /// glyphs keep the web app's thinner line: a whole pixel there is
+    /// visibly bolder, which awaits the owner's sign-off.
+    pub fn stroke_width(self, size: i32) -> f32 {
+        if self == Glyph::More {
+            return 3.0;
         }
+        if size < MONOLINE_FROM_SIZE {
+            return WEB_STROKE_WIDTH;
+        }
+        #[expect(clippy::cast_precision_loss, reason = "icon sizes fit an f32 exactly")]
+        let one_pixel = VIEWBOX_SIZE / size as f32;
+        WEB_STROKE_WIDTH.max(one_pixel)
     }
 
     /// The glyph for a known-folder icon name in ox-core's Quick access
@@ -325,12 +334,24 @@ mod imp {
             stroke.set_line_join(gsk::LineJoin::Round);
             snapshot.save();
             #[expect(clippy::cast_possible_truncation, reason = "icon sizes fit an f32 exactly")]
-            snapshot.scale((width / 24.0) as f32, (height / 24.0) as f32);
+            snapshot.scale(
+                width as f32 / super::VIEWBOX_SIZE,
+                height as f32 / super::VIEWBOX_SIZE,
+            );
             snapshot.append_stroke(path, &stroke, &color);
             snapshot.restore();
         }
     }
 }
+
+/// The glyphs' coordinate space: a 24-unit square (the SVG viewBox).
+const VIEWBOX_SIZE: f32 = 24.0;
+
+/// The stroke of the web app's `paths` table, in viewBox units.
+const WEB_STROKE_WIDTH: f32 = 1.35;
+
+/// The smallest glyph drawn with a stroke of at least one pixel.
+const MONOLINE_FROM_SIZE: i32 = 16;
 
 /// Ink for a glyph drawn outside a styled widget: the light theme's text.
 const FALLBACK_INK: gdk::RGBA = gdk::RGBA::new(0.14, 0.14, 0.14, 1.0);
@@ -354,7 +375,7 @@ impl GlyphPaintable {
         let imp = paintable.imp();
         let path = gsk::Path::parse(glyph.path_data()).expect("glyph paths are valid SVG path data");
         imp.path.set(path).expect("a new paintable has no path yet");
-        imp.stroke_width.set(glyph.stroke_width());
+        imp.stroke_width.set(glyph.stroke_width(size));
         imp.size.set(size);
         imp.color.set(color);
         paintable
@@ -372,10 +393,33 @@ mod tests {
         }
     }
 
+    /// A stroke width in pixels for `glyph` drawn `size` pixels wide.
+    fn stroke_pixels(glyph: Glyph, size: i32) -> f32 {
+        glyph.stroke_width(size) * f32::from(u8::try_from(size).expect("a small icon")) / VIEWBOX_SIZE
+    }
+
     #[test]
     fn the_more_dots_use_a_heavier_stroke() {
-        assert!((Glyph::More.stroke_width() - 3.0).abs() < f32::EPSILON);
-        assert!((Glyph::Copy.stroke_width() - 1.35).abs() < f32::EPSILON);
+        assert!((Glyph::More.stroke_width(16) - 3.0).abs() < f32::EPSILON);
+        assert!((Glyph::Copy.stroke_width(12) - 1.35).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn glyphs_from_16_pixels_draw_at_least_a_one_pixel_line() {
+        for size in [16, 17, 18, 24, 46] {
+            assert!(
+                stroke_pixels(Glyph::Copy, size) >= 1.0 - f32::EPSILON,
+                "{size} pixels"
+            );
+        }
+        assert!(
+            (stroke_pixels(Glyph::Copy, 16) - 1.0).abs() < 1e-6,
+            "16 pixels: exactly one"
+        );
+        assert!(
+            stroke_pixels(Glyph::Copy, 12) < 0.7,
+            "12 pixels keep the web app's line"
+        );
     }
 
     #[test]

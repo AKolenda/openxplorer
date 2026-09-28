@@ -13,6 +13,7 @@ mod actions;
 mod activation;
 mod address_bar;
 mod breakpoints;
+mod button_style;
 mod caption_buttons;
 mod card_grid;
 mod chrome;
@@ -27,6 +28,7 @@ mod gestures;
 mod input;
 mod landing;
 mod loading;
+mod loading_line;
 mod menu_popover;
 mod navigation;
 mod network_page;
@@ -54,7 +56,7 @@ use crate::theme::{Appearance, ListenerId, Skin, SkinChange};
 use crate::typeahead;
 
 use chrome::Chrome;
-use content::Content;
+use content::{Content, ContentPage};
 use details_pane::DetailsPane;
 use sidebar::Sidebar;
 use status_bar::StatusSubject;
@@ -191,18 +193,33 @@ impl BrowserWindow {
         window.watch_environment();
         window.apply_preferences();
         imp.file_list_awaits_focus.set(true);
-        window.connect_map(BrowserWindow::focus_new_file_list);
+        // After GTK has finished showing the window, which ends by focusing
+        // the first focusable widget.
+        window.connect_map(|window| {
+            glib::idle_add_local_once(glib::clone!(
+                #[weak]
+                window,
+                move || window.focus_new_file_list()
+            ));
+        });
         window
     }
 
     /// Gives a new window's file list keyboard focus once the window is
-    /// shown and its first listing has rows, as `#main` has focus when
-    /// app.js starts. Until then GTK would focus the first focusable
-    /// widget, and a focused crumb draws the address bar's editing line.
+    /// shown and its first location is listed, as `#main` has focus when
+    /// app.js starts. A landing page or an empty folder has no list to
+    /// focus, so nothing keeps focus: GTK would otherwise leave it on the
+    /// first focusable widget, and a focused crumb draws the address bar's
+    /// editing line.
     fn focus_new_file_list(&self) {
-        let ready = self.is_mapped() && self.is_listed() && self.content().model.n_items() > 0;
-        if ready && self.imp().file_list_awaits_focus.replace(false) {
+        let ready = self.is_mapped() && self.is_listed();
+        if !ready || !self.imp().file_list_awaits_focus.replace(false) {
+            return;
+        }
+        if self.content().page() == Some(ContentPage::Listing) {
             self.content().focus();
+        } else {
+            gtk::prelude::GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
         }
     }
 

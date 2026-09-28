@@ -80,8 +80,8 @@ fn an_unmatched_prefix_keeps_the_selection_and_says_so() {
     assert_eq!(test.selected_names(), ["Documents"]);
     assert_eq!(hint(&test), "No name starts with “dzz”");
     assert!(
-        hint_is_drawn_in(&test, "#686b70"),
-        "a miss is muted, not an error"
+        hint_is_drawn_in(&test, "#616161"),
+        "a miss is muted (the light palette's ox_muted), not an error"
     );
 }
 

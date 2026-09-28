@@ -149,6 +149,18 @@ fn a_disabled_menu_item_names_the_milestone_that_brings_it() {
     );
 }
 
+/// A new window on a landing page has no file list to focus; GTK's first
+/// focusable widget was a crumb, which drew the address bar's editing
+/// line.
+#[gtk::test]
+fn a_new_window_on_a_landing_page_leaves_the_address_bar_alone() {
+    let test = laid_out("pc:");
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
+    let address = &test.window.chrome().address.root;
+    let in_address = focus.is_some_and(|widget| widget.is_ancestor(address));
+    assert!(!in_address, "the address bar does not hold focus");
+}
+
 #[gtk::test]
 fn a_new_window_types_into_its_file_list() {
     let fixture = Fixture::standard();

@@ -20,6 +20,11 @@ use super::gestures;
 use super::session::TabId;
 use super::tab_layout::TabLayout;
 
+/// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
+const ICON_SIZE: i32 = 16;
+/// The gap between the icon and the title (ui-spec.md S06).
+const ICON_TO_TITLE: i32 = 10;
+
 /// A tab's icon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TabIcon {
@@ -124,14 +129,14 @@ impl TabStrip {
 
 fn tab_icon(icon: TabIcon, appearance: Appearance, scale: i32) -> gtk::Image {
     match icon {
-        TabIcon::Glyph(glyph) => icons::glyph(glyph, 17),
-        TabIcon::Art(kind) => icons::art_image(kind, 17, appearance, scale),
+        TabIcon::Glyph(glyph) => icons::glyph(glyph, ICON_SIZE),
+        TabIcon::Art(kind) => icons::art_image(kind, ICON_SIZE, appearance, scale),
     }
 }
 
 fn tab(label: &TabLabel, appearance: Appearance, scale: i32) -> gtk::Box {
     let tab = gtk::Box::builder()
-        .spacing(9)
+        .spacing(ICON_TO_TITLE)
         .focusable(true)
         .accessible_role(gtk::AccessibleRole::Tab)
         .tooltip_text(&label.tooltip)

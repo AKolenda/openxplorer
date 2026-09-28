@@ -1,0 +1,23 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The status bar (ui-spec.md §4.7; style.css .statusbar). */
+
+.statusbar {
+  background-color: @ox_bg;
+  border-top: 1px solid @ox_border;
+  min-height: 29px;
+  padding: 0 13px 0 19px;
+  color: @ox_muted;
+}
+/* The 11px texts and the 24px buttons are centred on half pixels, which
+   Chromium draws one pixel down; the 10px build text is not. */
+.statusbar > label:not(.status-mode) { margin-top: 1px; }
+.statusbar .status-mode { letter-spacing: .01em; }
+/* 24px buttons 3px apart: the bar's 18px gap less `margin-left:-15px`.
+   Their 16px glyphs (I09) sit on whole pixels. */
+window.ox .statusbar button {
+  min-width: 24px;
+  min-height: 24px;
+  margin: 1px 0 0 -15px;
+  color: @ox_muted;
+}
+window.ox .statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
