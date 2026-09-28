@@ -133,10 +133,6 @@ class IsolatedRunTests(MarkedProcessTestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        # xvfb-run would create its own authority directory here.
-        self.temporary_files = self.root / 'tmp'
-        self.temporary_files.mkdir()
-        self.environment['TMPDIR'] = str(self.temporary_files)
 
     def run_isolated_shell(self, script: str, timeout: float) -> None:
         """Run a shell script the way the driver runs a test executable."""
@@ -168,12 +164,23 @@ class IsolatedRunTests(MarkedProcessTestCase):
         self.assert_nothing_left_running()
 
     def test_a_hung_test_leaves_no_display_bus_or_temporary_files(self) -> None:
-        """A timed-out run stops Xvfb and the bus and leaves nothing in TMPDIR."""
-        with self.assertRaises(check.CheckTimeoutError):
-            self.run_isolated_shell('touch "$HOME/started"; exec sleep 300', timeout=5)
-        self.assertTrue((self.root / 'home/started').exists(), 'the command never started')
+        """A timed-out run stops Xvfb and the bus and leaves nothing in TMPDIR.
+
+        Some xvfb-run versions leave a directory in their TMPDIR when they are
+        stopped, so the run's TMPDIR is inside its root, which the driver
+        deletes; the TMPDIR the driver itself runs with stays empty.
+        """
+        driver_temporary_files = self.root / 'driver-tmp'
+        driver_temporary_files.mkdir()
+        witness = self.root / 'started'
+        command = ['sh', '-c', f'touch {witness}; exec sleep 300']
+        with (patch.object(tempfile, 'tempdir', str(driver_temporary_files)),
+              patch.dict(os.environ, {'TMPDIR': str(driver_temporary_files)}),
+              self.assertRaises(check.CheckTimeoutError)):
+            self.run_through_driver(command, timeout=5)
+        self.assertTrue(witness.exists(), 'the command never started')
         self.assert_nothing_left_running()
-        self.assertEqual(list(self.temporary_files.iterdir()), [])
+        self.assertEqual(list(driver_temporary_files.iterdir()), [])
 
     def test_a_failing_test_is_reported_by_its_own_command(self) -> None:
         """The failure names the test command and its status, not the isolation wrapper."""
@@ -217,7 +224,7 @@ class EnvironmentTests(unittest.TestCase):
                 with self.subTest(variable=name):
                     self.assertNotIn(name, environment)
             for name in ('HOME', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME',
-                         'XDG_STATE_HOME', 'XDG_RUNTIME_DIR'):
+                         'XDG_STATE_HOME', 'XDG_RUNTIME_DIR', 'TMPDIR'):
                 with self.subTest(variable=name):
                     self.assertTrue(Path(environment[name]).is_relative_to(root))
                     self.assertTrue(Path(environment[name]).is_dir())
