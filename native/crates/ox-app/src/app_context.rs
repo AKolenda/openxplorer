@@ -34,7 +34,7 @@ const PLACES_CHANGED: &str = "places-changed";
 const LAYOUT_RESET: &str = "layout-reset";
 
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
     use std::rc::Rc;
     use std::sync::OnceLock;
 
@@ -63,6 +63,9 @@ mod imp {
         /// Reports changes of `user-dirs.dirs`, so the standard folders
         /// are read again; `None` where the file cannot be watched.
         pub(super) user_dirs_monitor: RefCell<Option<gio::FileMonitor>>,
+        /// The number of the latest reading of `user-dirs.dirs` started; a
+        /// reading that finishes after a newer one started is dropped.
+        pub(super) latest_folder_reading: Cell<u64>,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,

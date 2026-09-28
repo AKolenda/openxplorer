@@ -23,7 +23,17 @@ fn row_named(test: &TestWindow, label: &str) -> gtk::ListBoxRow {
         .expect("a row for every label")
 }
 
+/// How many sidebar rows are labelled `label`.
+fn rows_labelled(test: &TestWindow, label: &str) -> usize {
+    let labels = test.window.sidebar().labels();
+    labels.iter().filter(|shown| *shown == label).count()
+}
+
 /// A window whose Quick access holds the fixture folder and Documents.
+///
+/// The standard Documents folder has a row from the start, so the
+/// fixture's Documents is pinned once a second row carries the name.
+/// Quick access lists the pins before the standard folders.
 fn with_two_pins(fixture: &Fixture) -> TestWindow {
     let test = laid_out(&fixture.uri());
     test.activate("pin-folder", None);
@@ -32,9 +42,7 @@ fn with_two_pins(fixture: &Fixture) -> TestWindow {
         .expect("valid folder");
     test.wait_for_listing("Documents");
     test.activate("pin-folder", None);
-    wait_until("both pins", || {
-        test.window.sidebar().labels().contains(&"Documents".to_owned())
-    });
+    wait_until("both pins", || rows_labelled(&test, "Documents") == 2);
     wait_for_frames(&test.window, 3);
     test
 }

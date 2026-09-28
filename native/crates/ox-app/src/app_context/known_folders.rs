@@ -67,8 +67,11 @@ impl AppContext {
     }
 
     /// Reads `locations` on a worker thread, then keeps the result and tells
-    /// every window.
+    /// every window. When the file changes again while it is read, only the
+    /// newest reading is kept, whichever finishes last.
     fn read_known_folders(&self, locations: FolderLocations) {
+        let reading_number = self.imp().latest_folder_reading.get() + 1;
+        self.imp().latest_folder_reading.set(reading_number);
         let context = self.downgrade();
         glib::spawn_future_local(async move {
             let reading = gio::spawn_blocking(move || locations.read_paths().quick_access_places());
@@ -78,6 +81,9 @@ impl AppContext {
             let Some(context) = context.upgrade() else {
                 return;
             };
+            if context.imp().latest_folder_reading.get() != reading_number {
+                return;
+            }
             let changed = *context.imp().known_folders.borrow() != places;
             context.imp().known_folders.replace(places);
             if changed {

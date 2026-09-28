@@ -84,6 +84,54 @@ mod tests {
         label: &'static str,
     }
 
+    /// Every content type with an interface name, and the name.
+    const INTERFACE_LABELS: [LabelCase; 11] = [
+        LabelCase {
+            content_type: "text/plain",
+            label: "Text document",
+        },
+        LabelCase {
+            content_type: "application/msword",
+            label: "Word document",
+        },
+        LabelCase {
+            content_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            label: "Word document",
+        },
+        LabelCase {
+            content_type: "application/vnd.ms-excel",
+            label: "Excel worksheet",
+        },
+        LabelCase {
+            content_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            label: "Excel worksheet",
+        },
+        LabelCase {
+            content_type: "application/vnd.ms-powerpoint",
+            label: "PowerPoint presentation",
+        },
+        LabelCase {
+            content_type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            label: "PowerPoint presentation",
+        },
+        LabelCase {
+            content_type: "application/zip",
+            label: "Compressed folder",
+        },
+        LabelCase {
+            content_type: "application/x-zip",
+            label: "Compressed folder",
+        },
+        LabelCase {
+            content_type: "application/x-zip-compressed",
+            label: "Compressed folder",
+        },
+        LabelCase {
+            content_type: "video/mp4",
+            label: "MP4 video",
+        },
+    ];
+
     /// parity: VIEW-002
     #[test]
     fn folder_wording_wins() {
@@ -102,53 +150,7 @@ mod tests {
     /// parity: VIEW-002
     #[test]
     fn office_text_zip_and_video_files_use_the_interface_names() {
-        let cases = [
-            LabelCase {
-                content_type: "text/plain",
-                label: "Text document",
-            },
-            LabelCase {
-                content_type: "application/msword",
-                label: "Word document",
-            },
-            LabelCase {
-                content_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                label: "Word document",
-            },
-            LabelCase {
-                content_type: "application/vnd.ms-excel",
-                label: "Excel worksheet",
-            },
-            LabelCase {
-                content_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                label: "Excel worksheet",
-            },
-            LabelCase {
-                content_type: "application/vnd.ms-powerpoint",
-                label: "PowerPoint presentation",
-            },
-            LabelCase {
-                content_type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                label: "PowerPoint presentation",
-            },
-            LabelCase {
-                content_type: "application/zip",
-                label: "Compressed folder",
-            },
-            LabelCase {
-                content_type: "application/x-zip",
-                label: "Compressed folder",
-            },
-            LabelCase {
-                content_type: "application/x-zip-compressed",
-                label: "Compressed folder",
-            },
-            LabelCase {
-                content_type: "video/mp4",
-                label: "MP4 video",
-            },
-        ];
-        for case in cases {
+        for case in INTERFACE_LABELS {
             assert_eq!(
                 type_label(None, Some(case.content_type)),
                 case.label,
