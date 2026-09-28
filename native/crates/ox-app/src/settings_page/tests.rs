@@ -608,7 +608,7 @@ fn manage_opens_the_indexed_folders_page_and_back_returns() {
         .indexed_folders
         .get()
         .expect("the page is built");
-    let labels: Vec<String> = folders.shown().into_iter().map(|folder| folder.label).collect();
+    let labels = folders.shown_labels();
     let origin = settings
         .fixture
         .root()
@@ -631,6 +631,27 @@ fn manage_opens_the_indexed_folders_page_and_back_returns() {
         settings.page.view(),
         SettingsView::Category(Category::SearchAndIndexing)
     );
+}
+
+/// The Python "Folder sizes" help moves off the Search & indexing page to
+/// a page of its own, whole.
+///
+/// parity: SET-019
+#[gtk::test]
+fn how_sizes_are_counted_opens_the_folder_sizes_help() {
+    let settings = SettingsTest::open();
+    let open = settings.row("How sizes are counted").controls()[0]
+        .clone()
+        .downcast::<gtk::Button>()
+        .expect("the row opens its page with a button");
+
+    open.emit_clicked();
+
+    assert_eq!(settings.page.view(), SettingsView::Subpage(Subpage::FolderSizes));
+    let subpage = settings.page.imp().subpages.borrow()[&Subpage::FolderSizes].clone();
+    let text = crate::settings_page::search::shown_text(&subpage);
+    assert!(text.contains("Results are logical file bytes"), "{text}");
+    assert!(text.contains("Cancel stops the active scan"), "{text}");
 }
 
 /// parity: SET-019

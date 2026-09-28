@@ -120,19 +120,26 @@ pub(crate) enum Subpage {
     /// The folders to index for search (the Python app's inline cache
     /// list).
     IndexedFolders,
+    /// How folder sizes are counted (the Python "Folder sizes" help).
+    FolderSizes,
     /// The Zorin and Brave setup and troubleshooting steps.
     Troubleshooting,
 }
 
 impl Subpage {
     /// Every sub-page.
-    pub(crate) const ALL: [Subpage; 2] = [Subpage::IndexedFolders, Subpage::Troubleshooting];
+    pub(crate) const ALL: [Subpage; 3] = [
+        Subpage::IndexedFolders,
+        Subpage::FolderSizes,
+        Subpage::Troubleshooting,
+    ];
 
     /// The name of the page in the page stack, and in
     /// `OPENXPLORER_SETTINGS`.
     pub(crate) const fn key(self) -> &'static str {
         match self {
             Subpage::IndexedFolders => "indexed-folders",
+            Subpage::FolderSizes => "folder-sizes",
             Subpage::Troubleshooting => "troubleshooting",
         }
     }
@@ -140,7 +147,7 @@ impl Subpage {
     /// The category whose row opens it, which the back arrow returns to.
     pub(crate) const fn category(self) -> Category {
         match self {
-            Subpage::IndexedFolders => Category::SearchAndIndexing,
+            Subpage::IndexedFolders | Subpage::FolderSizes => Category::SearchAndIndexing,
             Subpage::Troubleshooting => Category::DefaultApps,
         }
     }
@@ -217,6 +224,8 @@ mod tests {
     fn a_subpage_highlights_the_category_that_opens_it() {
         let indexed = SettingsView::Subpage(Subpage::IndexedFolders);
         assert_eq!(indexed.category(), Category::SearchAndIndexing);
+        let folder_sizes = SettingsView::Subpage(Subpage::FolderSizes);
+        assert_eq!(folder_sizes.category(), Category::SearchAndIndexing);
         let troubleshooting = SettingsView::Subpage(Subpage::Troubleshooting);
         assert_eq!(troubleshooting.category(), Category::DefaultApps);
     }

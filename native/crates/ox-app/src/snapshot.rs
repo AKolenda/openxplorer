@@ -13,7 +13,7 @@
 //! - `OPENXPLORER_SIZE`: the window's size, `<width>x<height>`;
 //! - `OPENXPLORER_SETTINGS`: opens Settings at a category (`appearance`,
 //!   `search`, `default-apps`, `windows`, `brave`, `about`) or a page one
-//!   of them opens (`indexed-folders`, `troubleshooting`);
+//!   of them opens (`indexed-folders`, `folder-sizes`, `troubleshooting`);
 //! - `OPENXPLORER_SETTINGS_SEARCH`: types this into the settings search,
 //!   opening Settings when it is not open.
 //!

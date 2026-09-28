@@ -5,14 +5,14 @@
 //! Ports `renderSettingsCache` and the "Add a folder" field of
 //! `renderSettingsPage` in `desktop/ui/app.js` (SET-006, SET-007). The
 //! Python app listed these inline, in a long list that filled the page;
-//! here they open from the "Folders to index" row. Indexing is not in the
-//! native preview yet, so each folder shows "Not cached" and its switch
-//! waits for cached search, but the list offers the same folders, once
-//! each: the folder shown before Settings opened, Home, Quick access,
-//! saved shares, the Local Disk and mounted drives, never pages, devices
-//! or SMB servers.
-
-use std::cell::RefCell;
+//! here they open from the "Folders to index" row, with the limits of
+//! indexing under them. Indexing is not in the native preview yet: the
+//! native app cannot read the Python index (the database of
+//! `desktop/index_service.py`), so a folder's status is left out rather
+//! than guessed, and its switch waits for cached search. The list offers
+//! the same folders, once each: the folder shown before Settings opened,
+//! Home, Quick access, saved shares, the Local Disk and mounted drives,
+//! never pages, devices or SMB servers.
 
 use gtk::prelude::*;
 use ox_core::location::{is_device_location, is_smb_server, same_location, LocationContext, VirtualPlace};
@@ -24,7 +24,7 @@ use super::parts;
 use super::row::{Availability, ControlName, RowLayout, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
-use crate::icons::{Art, ArtImage};
+use crate::icons::{Art, ArtImage, Icon};
 use crate::volumes::VolumeRow;
 use crate::window::{ButtonStyle, Milestone};
 
@@ -38,6 +38,13 @@ const FOLDER_ART: i32 = 28;
 const LEAD: &str = "Check a folder to index the names and paths of its files and subfolders. SMB \
                     folders work too. File contents are never cached. Open a protected share and \
                     sign in before indexing it.";
+
+/// The limits of indexing, from the Python section's help.
+const LIMITS_NOTE: &str = "Local changes update the index after a short debounce. Watching uses up \
+                           to 8,192 directories; timed checks cover any remaining ones. Disk roots \
+                           skip system/temporary folders, nested mounts and symlinks. Select each \
+                           mounted volume separately. Initial scans are limited to 1 million \
+                           entries.";
 
 const ADD_FOLDER: RowText = RowText {
     title: "Add a folder",
@@ -69,16 +76,15 @@ pub(crate) struct IndexCandidate {
     pub label: String,
     /// Where it is: a path, or `\\server\share` for SMB.
     pub path: String,
-}
-
-impl IndexCandidate {
-    /// Whether the folder is on an SMB share, which shows the network bar.
-    fn is_network(&self) -> bool {
-        self.uri.starts_with("smb:")
-    }
+    /// Whether it is on an SMB share, reached as `smb://` or inside a
+    /// mounted CIFS share, which shows the network bar.
+    pub is_network: bool,
 }
 
 /// The candidates of `renderSettingsCache`, in its order and once each.
+/// `renderSettingsCache` also lists the existing index roots after the
+/// origin; the native preview adds them once cached search reads them
+/// (the Search and metadata milestone).
 pub(crate) fn index_candidates(sources: &CandidateSources<'_>) -> Vec<IndexCandidate> {
     let home = sources.locations.home_uri();
     let mut offers: Vec<Offer<'_>> = Vec::new();
@@ -137,6 +143,7 @@ impl<'a> Offer<'a> {
             uri: self.uri.to_owned(),
             label,
             path: locations.display_location(self.uri),
+            is_network: locations.is_network_location(self.uri),
         }
     }
 }
@@ -154,8 +161,6 @@ fn can_be_indexed(uri: &str) -> bool {
 pub(super) struct FolderList {
     /// The group the folders are listed in.
     group: SettingsGroup,
-    /// The folders listed now.
-    shown: RefCell<Vec<IndexCandidate>>,
 }
 
 impl FolderList {
@@ -165,13 +170,16 @@ impl FolderList {
         for candidate in candidates {
             self.group.add_plain_row(&candidate_row(candidate));
         }
-        self.shown.replace(candidates.to_vec());
     }
 
-    /// The folders listed now.
+    /// The names of the folders listed now, as their rows show them.
     #[cfg(test)]
-    pub(super) fn shown(&self) -> Vec<IndexCandidate> {
-        self.shown.borrow().clone()
+    pub(super) fn shown_labels(&self) -> Vec<String> {
+        let labels = crate::test_support::harness::descendants::<gtk::Label>(&self.group);
+        let titles = labels
+            .into_iter()
+            .filter(|label| label.has_css_class("setting-title"));
+        titles.map(|title| title.text().into()).collect()
     }
 }
 
@@ -184,11 +192,8 @@ pub(super) fn build() -> (SettingsSection, FolderList) {
     indexed.append_group(&add_group);
     let group = SettingsGroup::pending("Folders", pending);
     indexed.append_group(&group);
-    let list = FolderList {
-        group,
-        shown: RefCell::new(Vec::new()),
-    };
-    (indexed, list)
+    indexed.append_text(&parts::note(Icon::Info, LIMITS_NOTE));
+    (indexed, FolderList { group })
 }
 
 /// The path field and "Add" (SET-007), waiting for cached search.
@@ -210,14 +215,15 @@ fn add_folder_row(pending: Availability) -> SettingRow {
     row
 }
 
-/// A folder's row: its picture, name and path, "Not cached", and a switch
-/// named "Cache <label>" as the Python checkbox is.
+/// A folder's row: its picture, name and path, and a switch named "Cache
+/// <label>" as the Python checkbox is. The Python row's status waits for
+/// cached search, which reads the index.
 fn candidate_row(candidate: &IndexCandidate) -> gtk::Box {
     let row = gtk::Box::builder()
         .spacing(14)
         .css_classes(["setting-row", "folder-row"])
         .build();
-    let art = if candidate.is_network() {
+    let art = if candidate.is_network {
         Art::SHARE
     } else {
         Art::Folder
@@ -231,7 +237,6 @@ fn candidate_row(candidate: &IndexCandidate) -> gtk::Box {
     texts.append(&parts::wrapped_label(&candidate.label, "setting-title"));
     texts.append(&parts::wrapped_label(&candidate.path, "setting-description"));
     row.append(&texts);
-    row.append(&parts::value_label("Not cached"));
     let switch = parts::switch();
     switch.set_sensitive(false);
     let name = format!("Cache {}", candidate.label);
@@ -352,5 +357,37 @@ mod tests {
         assert_eq!(labels, ["Home", "Local Disk"]);
         assert!(!can_be_indexed("trash:///"));
         assert!(!can_be_indexed("network:///"));
+    }
+
+    /// A share shows the network bar however it is reached, as `smb://` or
+    /// inside a mounted CIFS share, as `networkLocation` in app.js decides.
+    #[test]
+    fn folders_on_shares_are_marked_as_network_folders() {
+        let locations = LocationContext {
+            network_mounts: vec![PathBuf::from("/mnt/media")],
+            ..locations()
+        };
+        let quick_access = [pin("Films", "file:///mnt/media/Films")];
+        let shares = [share("Projects", "smb://nas/projects")];
+        let sources = CandidateSources {
+            origin: None,
+            quick_access: &quick_access,
+            shares: &shares,
+            volumes: &[],
+            locations: &locations,
+        };
+
+        let candidates = index_candidates(&sources);
+
+        let network: Vec<&str> = candidates
+            .iter()
+            .filter(|candidate| candidate.is_network)
+            .map(|candidate| candidate.label.as_str())
+            .collect();
+        assert_eq!(
+            network,
+            ["Films", "Projects"],
+            "Home and the Local Disk are local"
+        );
     }
 }

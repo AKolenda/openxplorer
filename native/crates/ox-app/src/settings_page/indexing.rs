@@ -4,12 +4,15 @@
 //!
 //! Ports the "Search cache" and "Folder sizes" sections of
 //! `renderSettingsPage` in `desktop/ui/app.js` (SET-006, SET-008,
-//! SET-009), with the options of the settings mockup, including
-//! SRCH-040's "Index pinned folders automatically". The folder list opens
-//! as a page of its own ([`super::indexed_folders`]). Cached search is not
-//! in the native preview yet: its actions wait for it, while the two
-//! options the Python app already reads (`autoIndex`, `networkInterval`)
-//! are saved for it now.
+//! SET-009), with the options of the settings mockup, including "Index
+//! pinned folders automatically" (the owner's decision of 2026-09-28 that
+//! anything pinned is indexed by default). The folder list opens as a page
+//! of its own ([`super::indexed_folders`]), with the limits of indexing,
+//! and so do the details of folder sizes. The page itself keeps one note,
+//! on privacy, as the mockup does. Cached search is not in the native
+//! preview yet: its actions wait for it, while the two options the Python
+//! app already reads (`autoIndex`, `networkInterval`) are saved for it
+//! now.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -50,16 +53,25 @@ const WATCH_FOLDERS: RowText = RowText {
 
 const NETWORK_CHECKS: RowText = RowText {
     title: "Network / fallback checks",
-    description: "SMB and unwatched folders use incremental directory checks, not push \
-                  notifications. Large trees take longer than one interval.",
-    keywords: "network refresh interval smb polling nas seconds minute",
+    description: "SMB and unwatched folders are checked for changes this often.",
+    keywords: "network refresh interval smb polling nas seconds minute. SMB and unwatched folders \
+               use incremental directory checks, not push notifications. Large trees take longer \
+               than one interval.",
 };
 
 const FOLDER_SIZES: RowText = RowText {
     title: "Calculate folder sizes",
-    description: "Right-click a folder → Calculate folder size. Results are kept only for this \
-                  window session.",
-    keywords: "zfs logical bytes snapshots disk usage",
+    description: "Right-click a folder → Calculate folder size. Results last for this session.",
+    keywords: "zfs logical bytes snapshots disk usage. Results are kept only for this window \
+               session.",
+};
+
+const HOW_SIZES_ARE_COUNTED: RowText = RowText {
+    title: "How sizes are counted",
+    description: "Logical file bytes, what a scan skips, and its limits.",
+    keywords: "folder sizes scans run on demand outside the browsing worker pool compressed zfs \
+               space snapshot usage hidden files links nested filesystem mounts snapshot \
+               collections 1 million entries 5 minutes partial total cancel recalculate",
 };
 
 /// How often network and unwatched folders are checked, as the Python
@@ -85,21 +97,16 @@ const PRIVACY_NOTE: &str = "Cached paths are stored locally and can be searched 
                             Other overlapping roots may still contain them. Hidden folders and \
                             symbolic links are skipped.";
 
-/// The limits of indexing, from the Python section's help.
-const LIMITS_NOTE: &str = "Local changes update the index after a short debounce. Watching uses up \
-                           to 8,192 directories; timed checks cover any remaining ones. Disk roots \
-                           skip system/temporary folders, nested mounts and symlinks. Select each \
-                           mounted volume separately. Initial scans are limited to 1 million \
-                           entries.";
-
-/// How folder sizes are counted, from the Python "Folder sizes" section.
-const FOLDER_SIZES_NOTE: &str = "Scans run on demand, outside the browsing worker pool. Results are \
-                                 logical file bytes, not compressed ZFS space or snapshot usage. \
-                                 Scans include hidden files, but skip links, nested filesystem \
-                                 mounts and snapshot collections. Each folder is limited to 1 \
-                                 million entries or 5 minutes between I/O calls. Inaccessible or \
-                                 excluded entries produce a partial total. Cancel stops the active \
-                                 scan and any queued folders. Recalculate to pick up later changes.";
+/// The two paragraphs of the Python "Folder sizes" section.
+const FOLDER_SIZES_HELP: [&str; 2] = [
+    "Right-click a folder → Calculate folder size. Scans run on demand, outside the browsing worker \
+     pool. Results are logical file bytes, not compressed ZFS space or snapshot usage. They are \
+     kept only for this window session. Recalculate to pick up later changes.",
+    "Scans include hidden files, but skip links, nested filesystem mounts and snapshot \
+     collections. Each folder is limited to 1 million entries or 5 minutes between I/O calls. \
+     Inaccessible or excluded entries produce a partial total. Cancel stops the active scan and \
+     any queued folders.",
+];
 
 /// The Search & indexing page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
@@ -109,9 +116,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     indexing.append_group(&folders_group(page));
     indexing.append_group(&options_group(page));
     indexing.append_text(&parts::note(Icon::ShieldLock, PRIVACY_NOTE));
-    indexing.append_text(&parts::note(Icon::Info, LIMITS_NOTE));
-    indexing.append_group(&folder_sizes_group());
-    indexing.append_text(&parts::note(Icon::Info, FOLDER_SIZES_NOTE));
+    indexing.append_group(&folder_sizes_group(page));
     indexing
 }
 
@@ -175,24 +180,47 @@ fn options_group(page: &SettingsPage) -> SettingsGroup {
     group
 }
 
-/// SRCH-040's switch, on as the owner decided, waiting for cached search:
-/// no settings key exists for it yet.
+/// "Index pinned folders automatically", waiting for cached search. The
+/// owner decided that it starts on (2026-09-28), but neither app indexes
+/// pinned folders yet, so the switch shows off until cached search brings
+/// the behaviour and a settings key for it.
 fn pinned_folders_row() -> SettingRow {
     let row = SettingRow::new(PINNED_FOLDERS);
-    let switch = parts::switch();
-    switch.set_active(true);
-    row.add_control(&switch, ControlName::RowTitle);
+    row.add_control(&parts::switch(), ControlName::RowTitle);
     row.set_availability(Availability::Unported(Milestone::SearchAndMetadata));
     row
 }
 
-/// "Calculate folder sizes", a command of the folder's context menu.
-fn folder_sizes_group() -> SettingsGroup {
+/// "Calculate folder sizes", a command of the folder's context menu, and
+/// the row that opens how sizes are counted.
+fn folder_sizes_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new("Folder sizes");
-    let row = SettingRow::new(FOLDER_SIZES);
-    row.set_availability(Availability::Unported(Milestone::SearchAndMetadata));
-    group.add_row(&row);
+    let command = SettingRow::new(FOLDER_SIZES);
+    command.set_availability(Availability::Unported(Milestone::SearchAndMetadata));
+    group.add_row(&command);
+    let details = SettingRow::new(HOW_SIZES_ARE_COUNTED);
+    let open = parts::chevron_button(HOW_SIZES_ARE_COUNTED.title);
+    open.connect_clicked(glib::clone!(
+        #[weak]
+        page,
+        move |_| page.show_view(SettingsView::Subpage(Subpage::FolderSizes))
+    ));
+    details.add_control(&open, ControlName::OwnLabel);
+    group.add_row(&details);
     group
+}
+
+/// The page of how folder sizes are counted: the Python section's help.
+pub(super) fn build_folder_sizes() -> SettingsSection {
+    let sizes = SettingsSection::new(
+        "Folder sizes",
+        "How Calculate folder size counts a folder, and what it leaves out.",
+        PageKind::Subpage,
+    );
+    for paragraph in FOLDER_SIZES_HELP {
+        sizes.append_text(&parts::paragraph(paragraph));
+    }
+    sizes
 }
 
 #[cfg(test)]

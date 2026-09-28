@@ -288,6 +288,7 @@ impl SettingsPage {
             .expect("the sub-pages are built once");
         let subpages = [
             (Subpage::IndexedFolders, indexed_page),
+            (Subpage::FolderSizes, indexing::build_folder_sizes()),
             (Subpage::Troubleshooting, default_apps::build_troubleshooting()),
         ];
         for (subpage, page) in subpages {
