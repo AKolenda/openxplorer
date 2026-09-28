@@ -3,16 +3,23 @@
 //! are never symlinks, hard links, FIFOs or devices.
 //!
 //! Ports `desktop/private_storage.py`, which several Python services use.
-//! The settings keep `settings.json` here (their lock and atomic replace
-//! are in `settings::save`); the search index will check its SQLite files
-//! with [`validate_sqlite_files`] once it is ported. This is defence in
-//! depth against misplaced or tampered XDG state, not isolation from
-//! another process running as the same user.
+//! The settings keep `settings.json` here (their lock is in
+//! `settings::save`) and the previous-versions service its
+//! `snapshot-sources.json`; both save through the atomic replace of
+//! `replace` ([`replace_file_atomically`], [`replace_file_with`]). The
+//! search index will check its SQLite files with [`validate_sqlite_files`]
+//! once it is ported. This is defence in depth against misplaced or
+//! tampered XDG state, not isolation from another process running as the
+//! same user.
 //!
 //! Every open uses `O_NOFOLLOW` (a symlinked leaf fails with `ELOOP`) and
 //! `O_NONBLOCK` (a FIFO never blocks), and the checks run on the opened
 //! descriptor before its mode is changed, so a refused file is never
 //! modified.
+
+mod replace;
+
+pub(crate) use replace::{parent_directory, replace_file_atomically, replace_file_with, reserve_unique_name};
 
 use std::fs::{self, DirBuilder, File, Metadata, OpenOptions, Permissions};
 use std::io::{self, Read};

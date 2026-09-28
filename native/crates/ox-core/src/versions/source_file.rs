@@ -4,17 +4,16 @@
 //!
 //! Ports `PreviousVersions.sources` and the saving half of
 //! `PreviousVersions.configure` in `desktop/previous_versions.py`, built on
-//! the checks in `crate::private_storage`.
+//! the checks and the atomic replace in `crate::private_storage`.
 
-use std::fs::{self, File, OpenOptions, Permissions};
-use std::io::Write;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::fs::OpenOptions;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
 use super::{SnapshotSource, VersionsError};
 use crate::private_storage::{
-    private_directory, read_limited_text, StorageError, StorageRefusal, WithPath, FILE_MODE,
+    private_directory, read_limited_text, replace_file_atomically, StorageError, StorageRefusal, WithPath,
 };
 
 /// The most sources that are read or saved.
@@ -89,12 +88,15 @@ impl SourceFile {
         Ok(sources)
     }
 
-    /// Saves `sources` atomically in a private file.
+    /// Saves `sources` atomically in a private file, so readers see the
+    /// old or the new sources, never a mix. Unlike `settings.json`, an
+    /// existing sources file is replaced whatever it is, even a link, as
+    /// Python's `os.replace` does; the link's target is never written.
     fn save(&self, sources: &[SnapshotSource]) -> Result<(), VersionsError> {
         let contents = serde_json::to_vec(sources)
             .expect("sources are strings and layout names, which always serialise");
         private_directory(&self.directory)?;
-        replace_file(&self.directory, &self.path, &contents)?;
+        replace_file_atomically(&self.path, TEMPORARY_PREFIX, &contents)?;
         Ok(())
     }
 }
@@ -117,43 +119,11 @@ fn read_saved_text(path: &Path) -> Result<String, StorageError> {
     read_limited_text(file, path, READ_LIMIT)
 }
 
-/// Atomically replaces `target` with `contents`: a private temporary file
-/// in `directory` is written, flushed to disk and renamed over `target`,
-/// so readers see the old or the new sources, never a mix.
-fn replace_file(directory: &Path, target: &Path, contents: &[u8]) -> Result<(), StorageError> {
-    let temporary_path = directory.join(format!("{TEMPORARY_PREFIX}{}", glib::uuid_string_random()));
-    // `create_new` (`O_CREAT | O_EXCL`, like `mkstemp`) never opens an
-    // existing file or follows a link, so a taken name fails here and no
-    // other file is removed below.
-    let temporary = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(FILE_MODE)
-        .open(&temporary_path)
-        .with_path(&temporary_path)?;
-    let published = write_and_rename(temporary, &temporary_path, target, contents);
-    if published.is_err() {
-        // Safety rule "a failed save leaves no temporary file" (the
-        // `finally` of `configure`). Removing it is best effort; a leftover
-        // is private and named with the temporary prefix.
-        let _ = fs::remove_file(&temporary_path);
-    }
-    published
-}
-
-/// Writes `contents` to the opened temporary file, flushes it to disk and
-/// renames it over `target`. The explicit mode change makes the file
-/// exactly 0600 whatever the umask, as Python's `fchmod` does.
-fn write_and_rename(mut file: File, path: &Path, target: &Path, contents: &[u8]) -> Result<(), StorageError> {
-    file.set_permissions(Permissions::from_mode(FILE_MODE))
-        .with_path(path)?;
-    file.write_all(contents).with_path(path)?;
-    file.sync_all().with_path(path)?;
-    fs::rename(path, target).with_path(target)
-}
-
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
     use super::*;
     use crate::test_support::{make_fifo, mode};
     use crate::versions::SnapshotLayout;
@@ -216,6 +186,30 @@ mod tests {
         assert!(matches!(saved, Err(VersionsError::Io { .. })), "{saved:?}");
         assert_eq!(names_in(directory.path()), [FILE_NAME]);
         assert!(directory.path().join(FILE_NAME).is_dir());
+    }
+
+    /// A dotfile manager may link the sources file. Saving replaces the
+    /// link with a private file, as Python's `os.replace` does, and never
+    /// writes to the file the link points to.
+    ///
+    /// parity: PROP-023
+    #[test]
+    fn a_linked_sources_file_is_replaced_not_written_through() {
+        let directory = tempfile::tempdir().unwrap();
+        let elsewhere = directory.path().join("dotfiles-sources.json");
+        fs::write(&elsewhere, "[]").unwrap();
+        symlink(&elsewhere, directory.path().join(FILE_NAME)).unwrap();
+        let file = SourceFile::new(directory.path());
+
+        let saved = file.update(|sources| {
+            sources.push(source("data"));
+            Ok(())
+        });
+
+        assert_eq!(saved.expect("saved"), [source("data")]);
+        assert!(!directory.path().join(FILE_NAME).is_symlink());
+        assert_eq!(mode(&directory.path().join(FILE_NAME)), 0o600);
+        assert_eq!(fs::read_to_string(&elsewhere).unwrap(), "[]");
     }
 
     #[test]
