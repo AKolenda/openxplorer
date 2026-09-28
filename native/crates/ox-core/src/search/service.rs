@@ -23,6 +23,7 @@ use gio::prelude::*;
 use super::crawl::{run_scan, ScanJob};
 use super::error::SearchError;
 use super::index::SearchIndex;
+use super::limits::ServiceLimits;
 use super::ownership::Ownership;
 use super::reader::FolderReader;
 use super::requests::IndexRequest;
@@ -30,7 +31,7 @@ use super::root::IndexRoot;
 use super::state::{ChangeListener, FolderKey, Shared};
 use super::text::is_at_or_below;
 use super::update::{run_update, UpdateJob};
-use super::watch::{LocalWatch, WATCH_LIMIT};
+use super::watch::LocalWatch;
 use crate::settings::Preferences;
 
 /// Whether automatic index updates run (the Auto-index setting, SRCH-026).
@@ -128,19 +129,20 @@ impl IndexService {
         reader: impl FolderReader + 'static,
         listener: impl Fn() + Send + Sync + 'static,
     ) -> Result<Self, SearchError> {
-        Self::start_with_watch_limit(index, Box::new(reader), Box::new(listener), WATCH_LIMIT)
+        let limits = ServiceLimits::default();
+        Self::start_with_limits(index, Box::new(reader), Box::new(listener), limits)
     }
 
-    /// [`IndexService::start`] with at most `watch_limit` watched
-    /// directories, so that tests can reach the limit.
-    pub(crate) fn start_with_watch_limit(
+    /// [`IndexService::start`] with other `limits`, so that tests can
+    /// reach them.
+    pub(crate) fn start_with_limits(
         index: SearchIndex,
         reader: Box<dyn FolderReader>,
         listener: ChangeListener,
-        watch_limit: usize,
+        limits: ServiceLimits,
     ) -> Result<Self, SearchError> {
         let ownership = Ownership::open(index.directory())?;
-        let shared = Arc::new(Shared::new(index, reader, listener, watch_limit, ownership));
+        let shared = Arc::new(Shared::new(index, reader, listener, limits, ownership));
         let (jobs, queue) = mpsc::channel();
         let worker_shared = Arc::clone(&shared);
         let worker = thread::Builder::new()
@@ -210,7 +212,7 @@ impl IndexService {
                 return Ok(false);
             }
             // Without inotify, local roots fall back to timed checks.
-            state.watch = LocalWatch::start(self.shared.watch_limit).ok();
+            state.watch = LocalWatch::start(self.shared.limits.watched_folders).ok();
         }
         self.shared.index.recover_interrupted()?;
         Ok(true)

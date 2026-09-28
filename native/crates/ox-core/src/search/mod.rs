@@ -41,6 +41,7 @@
 //! | `ownership` | Electing one owner across processes | `index_service.py` |
 //! | `crawl` | A full scan | `index_service.py` |
 //! | `update` | A live update of changed folders | `index_service.py` |
+//! | `limits` | The entry, folder and watch limits | `index_service.py`, `local_watch.py` |
 //! | `policy` | What may be indexed, and network roots | `index_service.py` |
 //! | `mounts` | The kernel's mount table | `mount_support.py` |
 //! | `watch` | inotify watches | `local_watch.py` |
@@ -53,6 +54,7 @@ mod commands;
 mod crawl;
 mod error;
 mod index;
+mod limits;
 mod mounts;
 mod ownership;
 mod pins;

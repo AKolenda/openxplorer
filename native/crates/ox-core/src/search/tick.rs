@@ -295,8 +295,8 @@ impl IndexService {
 #[cfg(test)]
 mod tests {
     use crate::search::fixtures::LocalRoot;
+    use crate::search::limits::ServiceLimits;
     use crate::search::root::RootStatus;
-    use crate::search::watch::WATCH_LIMIT;
 
     /// Events were lost when the inotify queue overflowed, so every root
     /// is scanned again in full (`overflow` in Python).
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn a_queue_overflow_rescans_every_root() {
         let local = LocalRoot::new();
-        let service = local.start_service(WATCH_LIMIT);
+        let service = local.start_service(ServiceLimits::default());
         service.refresh(&local.root).unwrap();
         local.tick_until(&service, "the first scan is ready", |root| {
             root.status == RootStatus::Ready

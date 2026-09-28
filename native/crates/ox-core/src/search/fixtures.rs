@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 use super::index::SearchIndex;
+use super::limits::ServiceLimits;
 use super::query::{SearchHit, SearchQuery};
 use super::reader::GioFolderReader;
 use super::root::{Caching, HiddenItems, IndexRoot, ScanGeneration};
@@ -171,11 +172,11 @@ impl LocalRoot {
         }
     }
 
-    /// Starts a service that watches at most `watch_limit` directories.
-    pub(super) fn start_service(&self, watch_limit: usize) -> IndexService {
+    /// Starts a service with `limits`.
+    pub(super) fn start_service(&self, limits: ServiceLimits) -> IndexService {
         let reader = Box::new(GioFolderReader);
         let listener = Box::new(|| {});
-        let service = IndexService::start_with_watch_limit(self.index.clone(), reader, listener, watch_limit);
+        let service = IndexService::start_with_limits(self.index.clone(), reader, listener, limits);
         service.expect("the service starts")
     }
 

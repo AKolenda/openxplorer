@@ -7,15 +7,11 @@
 
 use std::collections::HashSet;
 
-use super::crawl::MAX_ENTRIES;
 use super::error::{check_cancelled, SearchError};
 use super::policy::{IndexScope, RootStorage};
 use super::root::IndexRoot;
 use super::scan::ListedItem;
 use super::state::{FolderKey, Shared};
-
-/// Most folders one live update may read.
-const MAX_UPDATED_FOLDERS: usize = 10_000;
 
 /// A queued live update.
 #[derive(Debug)]
@@ -72,7 +68,10 @@ fn update_folders(shared: &Shared, job: &UpdateJob, storage: RootStorage) -> Res
             continue;
         }
         seen.insert(folder.clone());
-        if seen.len() > MAX_UPDATED_FOLDERS {
+        // Safety rule "at most 10,000 folders per live update" (SRCH-032,
+        // `ServiceLimits::folders_per_update`): a larger change needs a
+        // full scan, which the user starts with Refresh.
+        if seen.len() > shared.limits.folders_per_update {
             return Err(SearchError::TooManyNewFolders);
         }
         shared.watch_folder(root, &folder, storage);
@@ -95,7 +94,9 @@ fn is_abandoned(shared: &Shared, root: &str) -> bool {
 /// Every indexable item of `folder` (`_read` in Python). The listing must
 /// be complete, because the cached children are replaced by it.
 ///
-/// Safety rule "at most a million entries per folder" (SRCH-032).
+/// Safety rule "at most a million entries per folder" (SRCH-032,
+/// `ServiceLimits::entries_per_folder`): a larger folder is not stored at
+/// all, because its cached children are replaced only by a whole listing.
 fn read_whole_folder(
     shared: &Shared,
     job: &UpdateJob,
@@ -106,7 +107,7 @@ fn read_whole_folder(
     let mut receive = |batch| {
         check_cancelled(&job.cancellable)?;
         items.extend(scope.admit(batch)?);
-        if items.len() > MAX_ENTRIES {
+        if items.len() > shared.limits.entries_per_folder {
             return Err(SearchError::FolderTooLarge);
         }
         Ok(())

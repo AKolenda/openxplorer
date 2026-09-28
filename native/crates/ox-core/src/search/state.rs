@@ -14,6 +14,7 @@ use gio::prelude::*;
 
 use super::error::SearchError;
 use super::index::SearchIndex;
+use super::limits::ServiceLimits;
 use super::ownership::Ownership;
 use super::policy::{IndexScope, RootStorage};
 use super::reader::FolderReader;
@@ -173,7 +174,7 @@ pub(super) struct Shared {
     pub(super) index: SearchIndex,
     pub(super) reader: Box<dyn FolderReader>,
     listener: ChangeListener,
-    pub(super) watch_limit: usize,
+    pub(super) limits: ServiceLimits,
     state: Mutex<ServiceState>,
 }
 
@@ -182,7 +183,7 @@ impl fmt::Debug for Shared {
         formatter
             .debug_struct("Shared")
             .field("index", &self.index)
-            .field("watch_limit", &self.watch_limit)
+            .field("limits", &self.limits)
             .finish_non_exhaustive()
     }
 }
@@ -193,14 +194,14 @@ impl Shared {
         index: SearchIndex,
         reader: Box<dyn FolderReader>,
         listener: ChangeListener,
-        watch_limit: usize,
+        limits: ServiceLimits,
         ownership: Ownership,
     ) -> Self {
         Self {
             index,
             reader,
             listener,
-            watch_limit,
+            limits,
             state: Mutex::new(ServiceState::new(ownership)),
         }
     }
