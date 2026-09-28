@@ -7,14 +7,17 @@
 //! discovery works, and every connected, saved and visited network
 //! location. Server discovery and the connect dialog arrive with the
 //! Network and devices milestone, so their buttons are disabled until then
-//! ([`super::unported`]); Open address works now.
+//! ([`super::unported`]); Open address works now. Each location's card
+//! shows it on the network bar as its sidebar row does (the owner's icon
+//! mapping, 2026-09-28), where app.js drew the network glyph for every
+//! one.
 
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::location::{self, LocationContext};
 use ox_core::places::NetworkLocation;
 
-use crate::icons::{self, Icon};
+use crate::icons::{self, Art, ArtImage, Icon};
 use crate::places::Places;
 
 use super::button_style::ButtonStyle;
@@ -37,9 +40,9 @@ const MAP_GLYPH_GAP: i32 = 7;
 /// Pixels between the address field and its buttons
 /// (`.network-manual{gap:9px}`).
 const ADDRESS_FIELD_GAP: i32 = 9;
-/// The network glyph of a connected or saved location's card
-/// (`icon('network',34)`).
-const LOCATION_CARD_GLYPH: i32 = 34;
+/// The icon of a connected or saved location's card, as large as app.js
+/// drew its network glyph (`icon('network',34)`).
+const LOCATION_CARD_ICON: i32 = 34;
 
 /// The note under the discovered servers (`.discovery-note`).
 const DISCOVERY_NOTE: &str = "Discovery depends on devices advertising themselves and on local \
@@ -165,7 +168,7 @@ fn discovered_servers(body: &gtk::Box) {
 
 fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&icons::image(Icon::Organization, LOCATION_CARD_GLYPH));
+    content.append(&ArtImage::new(Art::for_network_row(location), LOCATION_CARD_ICON));
     let address = locations.display_location(&location.uri);
     content.append(&card_texts(&location.label, &address));
     location_card("drive-card", &location.uri, &content)

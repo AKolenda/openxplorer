@@ -90,12 +90,14 @@ impl BrowserWindow {
         let store = active.and_then(|id| self.tab_store(id));
         let model = self.folder_pane().model();
         let folder_item_count = store.map_or(0, |store| model.listed_count(&store));
+        let network = self.network_locations();
         let locations = self.imp().locations.borrow();
         let content = details_pane::pane_content(&PaneFacts {
             selection: &selection,
             folder_uri: &folder_uri,
             folder_item_count,
             locations: &locations,
+            network: &network,
         });
         self.details_pane().show(&content);
     }

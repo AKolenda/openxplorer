@@ -6,7 +6,10 @@
 //! of Network). This PC lists Quick access (cards in a stretching grid,
 //! [`super::card_grid`]), then Devices and drives (Local Disk, drives and
 //! devices with a capacity bar, unmounted volumes that connect on click),
-//! then the saved network locations with their state.
+//! then the saved network locations with their state. A saved location's
+//! card shows it on the network bar, as its sidebar row does (the owner's
+//! icon mapping, 2026-09-28), where app.js drew a blue server for every
+//! one.
 //!
 //! Cards run [`WindowAction::GoTo`] or [`WindowAction::MountVolume`]; a
 //! middle-click opens a folder in a background tab.
@@ -16,9 +19,9 @@ use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
 use ox_core::location::LocationContext;
-use ox_core::places::{Place, SavedShare};
+use ox_core::places::{NetworkKind, Place, SavedShare};
 
-use crate::icons::{self, Art, ArtImage, Icon};
+use crate::icons::{self, Art, ArtImage, Connection, Icon};
 use crate::locations::Page;
 use crate::places::Places;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
@@ -29,10 +32,6 @@ use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
 use super::{gestures, network_page, unported};
 
-/// The class of the server glyph on saved-share cards, which the
-/// stylesheet colours as app.js does (`im.style.color='#4b96c0'`).
-const SHARE_GLYPH_CLASS: &str = "share-glyph";
-
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
 
@@ -40,8 +39,8 @@ const NEARLY_FULL: f64 = 0.9;
 const SECTION_GLYPH: i32 = 14;
 /// The folder art of a Quick access card (`folderIcon(43)`).
 const QUICK_CARD_ART: i32 = 43;
-/// The glyph of a drive, device or network card.
-const DRIVE_CARD_GLYPH: i32 = 46;
+/// The icon of a drive, device or saved network location's card.
+const DRIVE_CARD_ICON: i32 = 46;
 /// Pixels between a card's picture and its texts.
 pub(super) const CARD_ICON_GAP: i32 = 15;
 
@@ -210,7 +209,7 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
     };
     let texts = card_texts(&row.label, &subtitle);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&icons::image(glyph, DRIVE_CARD_GLYPH));
+    content.append(&icons::image(glyph, DRIVE_CARD_ICON));
     content.append(&texts);
     match &row.state {
         VolumeState::Mounted { uri, .. } => {
@@ -252,13 +251,19 @@ fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::But
     let address = locations.display_location(&bookmark.uri);
     let texts = card_texts(&bookmark.label, &address);
     texts.append(&share_state(share));
-    // Its colour is the stylesheet's (`.share-glyph`), as app.js colours it.
-    let glyph = icons::image(Icon::Server, DRIVE_CARD_GLYPH);
-    glyph.add_css_class(SHARE_GLYPH_CLASS);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&glyph);
+    content.append(&ArtImage::new(saved_share_art(share), DRIVE_CARD_ICON));
     content.append(&texts);
     location_card("drive-card", &bookmark.uri, &content)
+}
+
+/// A saved share's art: the share, or the drive its label maps it to, on
+/// the network bar, crossed out while it is not mounted. The Network list
+/// counts every saved location as a share, so the card and the sidebar row
+/// show the same.
+fn saved_share_art(share: &SavedShare) -> Art {
+    let connection = Connection::from_mounted(share.is_connected);
+    Art::for_network_location(NetworkKind::Share, &share.bookmark.label, connection)
 }
 
 /// A saved share's state line: a status dot, marked offline while the

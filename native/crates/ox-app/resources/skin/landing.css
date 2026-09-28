@@ -34,8 +34,6 @@ window.ox .landing button.drive-card {
 }
 window.ox .landing button.drive-card:hover { background-color: @ox_hover; }
 .landing .drive-card .card-name { font-weight: 500; }
-/* A saved share's server glyph, in both themes (`im.style.color` in shares()). */
-.landing .share-glyph { color: @ox_share_glyph; }
 .landing .card-sub { color: @ox_muted; }
 .landing .connected { color: @ox_muted; margin-top: 4px; }
 .landing .status-dot { min-width: 5px; min-height: 5px; border-radius: 100px; background-color: @ox_success; }

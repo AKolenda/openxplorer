@@ -11,12 +11,13 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::{self, is_device_location, parent_location, LocationContext};
+use ox_core::places::NetworkLocation;
 
 use crate::icons::{Art, Icon};
 use crate::locations::Page;
 
 use super::address_bar::CrumbButton;
-use super::location_kind::is_smb_location;
+use super::location_kind::{is_smb_location, smb_location_art};
 use super::session::{Session, Tab};
 use super::tab_strip::TabView;
 use super::window_action::WindowAction;
@@ -47,24 +48,39 @@ fn address_icon(uri: &str) -> Icon {
 }
 
 /// A tab's icon, as `renderTabs` picks it: the network glyph on the
-/// Network page, a phone for devices, a share on the network bar for SMB,
-/// and the colour folder everywhere else, This PC included.
-fn tab_icon(uri: &str) -> Art {
+/// Network page, a phone for devices, the colour folder everywhere else,
+/// This PC included, and for SMB the location on the network bar as its
+/// row of `network` shows it in the sidebar.
+fn tab_icon(uri: &str, network: &[NetworkLocation]) -> Art {
     if Page::from_uri(uri) == Some(Page::Network) {
         return Art::Glyph(Icon::Organization);
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
     } else if is_smb_location(uri) {
-        Art::SHARE
+        smb_location_art(uri, network)
     } else {
         Art::Folder
     }
 }
 
+/// What every tab of the strip is drawn from.
+#[derive(Debug, Clone, Copy)]
+struct TabSources<'a> {
+    session: &'a Session,
+    locations: &'a LocationContext,
+    /// The Network list, for the icons of SMB tabs.
+    network: &'a [NetworkLocation],
+}
+
 /// How the strip shows `tab`: its title, its address (with "Network
 /// location" for SMB) and its icon.
-fn tab_view(tab: &Tab, session: &Session, locations: &LocationContext) -> TabView {
+fn tab_view(tab: &Tab, sources: TabSources<'_>) -> TabView {
+    let TabSources {
+        session,
+        locations,
+        network,
+    } = sources;
     let uri = tab.uri();
     let mut tooltip = locations.display_location(uri);
     if is_smb_location(uri) {
@@ -74,7 +90,7 @@ fn tab_view(tab: &Tab, session: &Session, locations: &LocationContext) -> TabVie
         id: tab.id,
         title: locations.title_for(uri),
         tooltip,
-        icon: tab_icon(uri),
+        icon: tab_icon(uri, network),
         active: session.is_active(tab.id),
     }
 }
@@ -144,13 +160,16 @@ impl BrowserWindow {
 
     /// Redraws the tab strip.
     pub(super) fn render_tabs(&self) {
+        let network = self.network_locations();
         let views: Vec<TabView> = {
             let session = self.imp().session.borrow();
             let locations = self.imp().locations.borrow();
-            let tab_views = session
-                .tabs()
-                .iter()
-                .map(|tab| tab_view(tab, &session, &locations));
+            let sources = TabSources {
+                session: &session,
+                locations: &locations,
+                network: &network,
+            };
+            let tab_views = session.tabs().iter().map(|tab| tab_view(tab, sources));
             tab_views.collect()
         };
         self.tab_strip().show(&views);
@@ -177,6 +196,7 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{studio_nas_mapped_drive, studio_nas_server};
 
     /// A location and the tab and address-bar icons it shows.
     struct IconCase {
@@ -216,8 +236,24 @@ mod tests {
             },
         ];
         for case in cases {
-            assert_eq!(tab_icon(case.uri), case.tab, "{}", case.uri);
+            assert_eq!(tab_icon(case.uri, &[]), case.tab, "{}", case.uri);
             assert_eq!(address_icon(case.uri), case.address, "{}", case.uri);
         }
+    }
+
+    /// The owner's icon mapping (2026-09-28) shows a network location the
+    /// same way everywhere, so a tab on a server or a mapped drive shows
+    /// what its sidebar row shows.
+    ///
+    /// parity: LOOK-016
+    #[test]
+    fn a_tab_on_a_server_or_a_mapped_drive_shows_its_sidebar_art() {
+        let server = studio_nas_server();
+        let mapped_drive = studio_nas_mapped_drive();
+        let network = [server.clone(), mapped_drive.clone()];
+        let tab_on = |uri: &str| tab_icon(uri, &network);
+        assert_eq!(tab_on(&server.uri), Art::for_network_row(&server));
+        assert_eq!(tab_on(&mapped_drive.uri), Art::for_network_row(&mapped_drive));
+        assert_eq!(tab_on("smb://studio-nas/projects/2024"), Art::SHARE);
     }
 }

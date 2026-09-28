@@ -11,7 +11,7 @@
 use ox_core::location::{LocationContext, NETWORK_URI, PC_URI};
 use ox_core::places::{NetworkLocation, Place};
 
-use crate::icons::{Art, Connection, Icon, Storage, Tint};
+use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
 use crate::places::Places;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
@@ -121,13 +121,12 @@ fn network_state(location: &NetworkLocation) -> &'static str {
 }
 
 fn network_entry(location: &NetworkLocation, locations: &LocationContext) -> SidebarEntry {
-    let connection = Connection::from_mounted(location.is_connected);
     let address = locations.display_location(&location.uri);
     SidebarEntry {
         section: Section::Network,
         level: RowLevel::Child,
         label: location.label.clone(),
-        icon: Art::for_network_location(location.kind, &location.label, connection),
+        icon: Art::for_network_row(location),
         target: RowTarget::Location(location.uri.clone()),
         tooltip: format!("{address} · {}", network_state(location)),
         pinned: false,
@@ -220,6 +219,7 @@ mod tests {
     use ox_core::settings::{Bookmark, SettingsData};
 
     use super::*;
+    use crate::icons::Connection;
     use crate::places::{compose, PlaceSources};
 
     fn mounted(label: &str, uri: &str, kind: VolumeKind) -> VolumeRow {

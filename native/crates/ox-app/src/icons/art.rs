@@ -10,12 +10,14 @@
 //! mapping, 2026-09-27 and 2026-09-28): a share stands on the green bar as
 //! the folder, a mapped drive (a location whose label names a drive
 //! letter, such as "Studio NAS (Z:)") as a drive, a server as a server, and
-//! a share or mapped drive that is not connected carries a red cross.
+//! a share or mapped drive that is not connected carries a red cross. The
+//! same art shows a network location everywhere it appears: the sidebar,
+//! the cards of This PC and Network, the tabs and the details pane.
 //!
 //! [`ArtImage`]: crate::icons::ArtImage
 
 use ox_core::entry::Entry;
-use ox_core::places::{KnownFolder, NetworkKind};
+use ox_core::places::{KnownFolder, NetworkKind, NetworkLocation};
 
 use super::file_type::{is_zip, FileType};
 use super::tint::Tint;
@@ -128,6 +130,12 @@ impl Art {
         Art::Network(NetworkArt { place, connection })
     }
 
+    /// The art of a row of the Network list, as the sidebar shows it.
+    pub(crate) fn for_network_row(location: &NetworkLocation) -> Self {
+        let connection = Connection::from_mounted(location.is_connected);
+        Self::for_network_location(location.kind, &location.label, connection)
+    }
+
     /// The art of a Quick access folder: a standard folder's glyph (in its
     /// colour, when it has one) or the yellow folder for a pin, standing on
     /// the green bar when the folder is on the network.
@@ -188,7 +196,9 @@ fn names_a_drive_letter(label: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{file_entry as file, folder_entry as folder};
+    use crate::test_support::{
+        file_entry as file, folder_entry as folder, studio_nas_mapped_drive, studio_nas_server,
+    };
 
     /// parity: ARC-001
     #[test]
@@ -259,6 +269,24 @@ mod tests {
             });
             assert_eq!(art, expected, "{}", case.label);
         }
+    }
+
+    /// parity: LOOK-016
+    #[test]
+    fn a_network_row_shows_its_kind_label_and_connection() {
+        let crossed_out_drive = Art::Network(NetworkArt {
+            place: NetworkPlace::MappedDrive,
+            connection: Connection::Disconnected,
+        });
+        assert_eq!(
+            Art::for_network_row(&studio_nas_mapped_drive()),
+            crossed_out_drive
+        );
+        let server = Art::Network(NetworkArt {
+            place: NetworkPlace::Server,
+            connection: Connection::Connected,
+        });
+        assert_eq!(Art::for_network_row(&studio_nas_server()), server);
     }
 
     #[test]

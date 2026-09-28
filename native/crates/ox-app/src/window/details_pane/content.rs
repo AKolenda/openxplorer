@@ -5,16 +5,19 @@
 //! Ports the text of `renderDetails` in `desktop/ui/app.js`: one selected
 //! item shows its type, size, date and containing folder; no selection or
 //! several items describe the folder, with the item count, its location
-//! and where it is stored.
+//! and where it is stored. A folder on an SMB share is pictured as its tab
+//! and sidebar row picture it, on the network bar (the owner's icon
+//! mapping, 2026-09-28), where app.js drew the plain folder.
 
 use ox_core::entry::Entry;
 use ox_core::format;
 use ox_core::location::{parent_location, LocationContext};
+use ox_core::places::NetworkLocation;
 
 use crate::folder_view::item::FileItem;
 use crate::icons::Art;
 use crate::locations::Page;
-use crate::window::location_kind::is_smb_location;
+use crate::window::location_kind::{is_smb_location, smb_location_art};
 
 /// The note for SMB folders.
 const NETWORK_NOTE: &str =
@@ -88,6 +91,8 @@ pub(in crate::window) struct PaneFacts<'a> {
     pub folder_item_count: u32,
     /// Display names for devices and the home folder.
     pub locations: &'a LocationContext,
+    /// The Network list, for the picture of an SMB folder.
+    pub network: &'a [NetworkLocation],
 }
 
 /// The picture, name and type line when no single item is selected.
@@ -166,9 +171,19 @@ fn folder_heading(facts: &PaneFacts<'_>) -> FolderHeading {
         };
     }
     FolderHeading {
-        preview: Preview::Art(Art::Folder),
+        preview: Preview::Art(folder_art(facts)),
         name: facts.locations.title_for(facts.folder_uri),
         kind: "Folder",
+    }
+}
+
+/// The picture of the folder itself: on an SMB share the art its tab
+/// shows, else the folder.
+fn folder_art(facts: &PaneFacts<'_>) -> Art {
+    if is_smb_location(facts.folder_uri) {
+        smb_location_art(facts.folder_uri, facts.network)
+    } else {
+        Art::Folder
     }
 }
 
@@ -204,7 +219,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::test_support::{file_entry, folder_entry};
+    use crate::test_support::{file_entry, folder_entry, studio_nas_mapped_drive};
 
     fn context() -> LocationContext {
         LocationContext {
@@ -215,11 +230,13 @@ mod tests {
 
     fn content_for(selection: &[FileItem], folder_uri: &str) -> PaneContent {
         let locations = context();
+        let network = [studio_nas_mapped_drive()];
         pane_content(&PaneFacts {
             selection,
             folder_uri,
             folder_item_count: 7,
             locations: &locations,
+            network: &network,
         })
     }
 
@@ -279,6 +296,19 @@ mod tests {
         assert_eq!(property(&content, "Items"), Some("2"));
         assert_eq!(property(&content, "Storage"), Some("Network share"));
         assert_eq!(content.note, NETWORK_NOTE);
+    }
+
+    /// parity: LOOK-016
+    #[test]
+    fn an_smb_folder_is_pictured_on_the_network_bar_as_its_tab_is() {
+        let mapped_drive = studio_nas_mapped_drive();
+        let drive_root = content_for(&[], &mapped_drive.uri);
+        let drive_art = Art::for_network_row(&mapped_drive);
+        assert_eq!(drive_root.preview, Preview::Art(drive_art));
+        let inside = content_for(&[], "smb://studio-nas/projects/2024");
+        assert_eq!(inside.preview, Preview::Art(Art::SHARE));
+        let local = content_for(&[], "file:///home/demo");
+        assert_eq!(local.preview, Preview::Art(Art::Folder));
     }
 
     #[test]
