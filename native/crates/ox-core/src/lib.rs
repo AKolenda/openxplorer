@@ -26,6 +26,7 @@ pub mod location;
 pub mod places;
 pub mod settings;
 pub mod transfer;
+pub mod update;
 
 mod private_storage;
 #[cfg(test)]
