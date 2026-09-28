@@ -245,6 +245,11 @@ impl Shared {
     /// watched, without recording it, for a caller that first finds out
     /// whether the folder still exists. Network roots are never
     /// push-watched, and nothing is watched while Auto-index is paused.
+    ///
+    /// # Errors
+    ///
+    /// [`WatchError::Unavailable`] without a live watch, and the watch's
+    /// own refusal, for example when the watch limit is reached.
     pub(super) fn try_watch_folder(
         &self,
         root: &str,

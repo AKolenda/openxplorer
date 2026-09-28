@@ -12,7 +12,9 @@ use std::io::{self, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use crate::private_storage::FILE_MODE;
+use rustix::fs::OFlags;
+
+use crate::private_storage::{KernelOpenFlags, FILE_MODE};
 use crate::random::{random_hex, NAME_BYTES};
 
 /// Replaces `path` with a private file holding `contents`.
@@ -68,7 +70,7 @@ fn create_private(path: &Path) -> io::Result<File> {
         .write(true)
         .create_new(true)
         .mode(FILE_MODE)
-        .custom_flags(libc::O_NOFOLLOW)
+        .kernel_flags(OFlags::NOFOLLOW)
         .open(path)?;
     file.set_permissions(Permissions::from_mode(FILE_MODE))?;
     Ok(file)

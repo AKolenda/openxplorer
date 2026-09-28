@@ -107,6 +107,10 @@ impl From<StorageError> for SearchError {
 
 /// Stops between two steps once `cancellable` was cancelled, as
 /// `Cancellation.check` does in Python.
+///
+/// # Errors
+///
+/// [`SearchError::Cancelled`] once `cancellable` was cancelled.
 pub(crate) fn check_cancelled(cancellable: &gio::Cancellable) -> Result<(), SearchError> {
     if cancellable.is_cancelled() {
         return Err(SearchError::Cancelled);
@@ -116,6 +120,7 @@ pub(crate) fn check_cancelled(cancellable: &gio::Cancellable) -> Result<(), Sear
 
 #[cfg(test)]
 mod tests {
+    use rustix::io::Errno;
     use std::path::Path;
 
     use super::*;
@@ -125,7 +130,7 @@ mod tests {
         let path = Path::new("/cache/winspace/search.sqlite3");
         let storage_errors = [
             StorageError::refused(path, StorageRefusal::NotPrivateFile),
-            StorageError::io(path, io::Error::from_raw_os_error(libc::ELOOP)),
+            StorageError::io(path, io::Error::from(Errno::LOOP)),
         ];
         for storage_error in storage_errors {
             let message = storage_error.to_string();

@@ -15,11 +15,13 @@ use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Component, Path, PathBuf};
+
+use rustix::fs::OFlags;
 
 use super::known_folders::KnownFolder;
 use crate::location::python_strip;
+use crate::private_storage::KernelOpenFlags;
 
 /// The standard folders a file configures validly.
 pub(super) type UserDirs = HashMap<KnownFolder, PathBuf>;
@@ -46,11 +48,16 @@ pub(super) enum UserDirsError {
 
 /// Reads the standard folders configured in `path`; a missing file
 /// configures none. `$HOME` means `home`.
+///
+/// # Errors
+///
+/// A [`UserDirsError`] for a file that is too large, not UTF-8 text, not a
+/// regular file, or cannot be opened or read.
 pub(super) fn read(path: &Path, home: &Path) -> Result<UserDirs, UserDirsError> {
     // O_NONBLOCK: a FIFO in place of the file must not hang the sidebar.
     let opened = OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_NONBLOCK)
+        .kernel_flags(OFlags::NONBLOCK)
         .open(path);
     let file = match opened {
         Ok(file) => file,

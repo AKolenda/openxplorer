@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Helpers shared by the `transfer` and `gio_node` test binaries: an engine
-//! over the production GIO adapter, Unix permission bits and the guard that
-//! gives read-only test folders back to their owner. `gio_node.rs`
+//! over the production GIO adapter, the test's temporary folder, Unix
+//! permission bits and the guard that gives read-only test folders back to
+//! their owner. `gio_node.rs`
 //! includes this file by path, so it holds only what both binaries use.
 
 use std::fs;
@@ -11,6 +12,12 @@ use std::sync::Arc;
 
 use ox_core::gio_node::GioNode;
 use ox_core::transfer::{Node, TransferEngine};
+use tempfile::TempDir;
+
+/// A new temporary folder for one test, removed when dropped.
+pub fn temporary_folder() -> TempDir {
+    tempfile::tempdir().expect("the test home has room for a temporary folder")
+}
 
 /// An engine resolving every URI with the production [`GioNode`], without
 /// a write guard.

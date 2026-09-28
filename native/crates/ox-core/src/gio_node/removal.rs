@@ -12,6 +12,13 @@ use crate::transfer::{Cancellation, TransferError, WriteGuard};
 impl GioNode {
     /// Moves the item to the Trash. XFER-014: never falls back to a
     /// permanent delete.
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::Cancelled`] when `cancel` was cancelled, a refusal
+    /// for a filesystem root or share, [`TransferError::NotSupported`] with
+    /// the Python app's explanation where there is no Trash, and the
+    /// backend's error otherwise.
     pub(super) fn trash_item(&self, cancel: &Cancellation) -> Result<(), TransferError> {
         cancel.check()?;
         self.require_item()?;
@@ -21,6 +28,12 @@ impl GioNode {
     /// XFER-015: permanently deletes the item and everything inside it.
     /// Local items are deleted relative to pinned folder descriptors; every
     /// other location is deleted by path, as the Python app does.
+    ///
+    /// # Errors
+    ///
+    /// A refusal for a filesystem root or share, a refusal from `guard`,
+    /// [`TransferError::Cancelled`], and the first error that stopped the
+    /// deletion; what was deleted before it stays deleted.
     pub(super) fn delete_item_tree(
         &self,
         cancel: &Cancellation,

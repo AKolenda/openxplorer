@@ -9,7 +9,7 @@ use ox_core::transfer::ConflictPolicy;
 
 use crate::transfer_support::{versions::PreviousVersions, *};
 
-/// Port of `test_keep_both`.
+/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_keep_both`
 ///
 /// parity: XFER-008
 #[test]
@@ -34,7 +34,7 @@ fn keep_both_through_gio_adds_a_copy_name() {
     fixture.assert_no_staging();
 }
 
-/// Port of `test_replace_existing_file`.
+/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_replace_existing_file`.
 ///
 /// parity: XFER-009
 #[test]
@@ -56,7 +56,7 @@ fn replace_through_gio_overwrites_the_existing_file() {
     assert_eq!(read(&source), "new");
 }
 
-/// Port of `test_copy_preserves_private_directory_modes` and
+/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_copy_preserves_private_directory_modes` and
 /// `test_copy_read_only_directory_preserves_mode`.
 ///
 /// parity: XFER-005
@@ -99,7 +99,7 @@ fn copied_folders_keep_private_and_read_only_modes() {
     fixture.assert_no_staging();
 }
 
-/// Port of `test_merge_read_only_source_keeps_existing_destination_permissions`.
+/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_merge_read_only_source_keeps_existing_destination_permissions`.
 ///
 /// parity: XFER-005, XFER-009
 #[test]
@@ -128,7 +128,7 @@ fn merging_a_read_only_folder_keeps_the_destination_folders_mode() {
     fixture.assert_no_staging();
 }
 
-/// Port of `test_failed_publish_cleans_restricted_staging_tree`. Another
+/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_failed_publish_cleans_restricted_staging_tree`. Another
 /// program takes the final name while the copy runs, so publishing fails
 /// after the staged folder got its read-only mode back; cleanup must still
 /// remove the whole staging tree.
@@ -154,7 +154,7 @@ fn a_failed_publish_removes_staging_that_holds_a_read_only_folder() {
     assert_eq!(read(&source.join("payload")), "contents");
 }
 
-/// Port of `test_recursive_replace_and_delete_preserve_backup_descendant`,
+/// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_recursive_replace_and_delete_preserve_backup_descendant`,
 /// which is also the engine half of
 /// `test_operate_dispatch_protects_backup_descendants` in
 /// `desktop/tests/test_rc2.py` (its bridge dispatch has no native port yet).

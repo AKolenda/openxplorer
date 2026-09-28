@@ -162,7 +162,7 @@ mod tests {
     use std::io::Cursor;
 
     use super::*;
-    use crate::test_support::mode;
+    use crate::test_support::permission_bits;
     use crate::update::{Sha256Digest, TrustedUrl};
 
     const PAYLOAD: &[u8] = b"Fictional package bytes.\n";
@@ -194,9 +194,9 @@ mod tests {
         let staged = download_installer(&FixedBody, &installer(), &updates, &Cancellation::new()).unwrap();
 
         assert_eq!(std::fs::read(staged.path()).unwrap(), PAYLOAD);
-        assert_eq!(mode(&staged.path()), 0o600);
-        assert_eq!(mode(staged.folder()), 0o700);
-        assert_eq!(mode(&updates), 0o700);
+        assert_eq!(permission_bits(&staged.path()), 0o600);
+        assert_eq!(permission_bits(staged.folder()), 0o700);
+        assert_eq!(permission_bits(&updates), 0o700);
         drop(staged);
         assert_eq!(std::fs::read_dir(&updates).unwrap().count(), 0);
     }

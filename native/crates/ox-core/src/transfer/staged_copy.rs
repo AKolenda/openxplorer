@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Copying one top-level item: build it in private staging, then publish it
-//! under its final name. Port of the copy branch of `_run_items` in
+//! under its final name. Ports the copy branch of `_run_items` in
 //! `desktop/operations.py`.
 //!
 //! Rules enforced here:

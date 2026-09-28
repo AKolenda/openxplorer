@@ -126,6 +126,10 @@ impl SearchIndex {
     }
 
     /// The root `uri` if it is enabled.
+    ///
+    /// # Errors
+    ///
+    /// As [`SearchIndex::open`].
     pub(crate) fn enabled_root(&self, uri: &str) -> Result<Option<IndexRoot>, SearchError> {
         let roots = self.roots()?;
         let root = roots
@@ -237,6 +241,10 @@ impl SearchIndex {
 
     /// Records how changes below `root` reach the cache (`monitoring` in
     /// Python).
+    ///
+    /// # Errors
+    ///
+    /// As [`SearchIndex::open`].
     pub(crate) fn set_monitoring(&self, root: &str, monitoring: &Monitoring) -> Result<(), SearchError> {
         let watch_count = i64::try_from(monitoring.watch_count).unwrap_or(i64::MAX);
         let error = truncate_chars(&monitoring.error, MAX_ERROR_CHARS);
@@ -250,6 +258,10 @@ impl SearchIndex {
 
     /// Marks scans a stopped application left running as interrupted.
     /// Only the index owner calls this; see [`schema::recover_interrupted`].
+    ///
+    /// # Errors
+    ///
+    /// As [`SearchIndex::open`].
     pub(crate) fn recover_interrupted(&self) -> Result<(), SearchError> {
         let connection = self.connect()?;
         schema::recover_interrupted(&connection)?;
@@ -263,6 +275,11 @@ impl SearchIndex {
     /// directory, and the database and its sidecars owned regular files
     /// with one link, so a symlink planted after start-up is refused
     /// before SQLite follows it.
+    ///
+    /// # Errors
+    ///
+    /// A storage refusal of the directory or a database file, or the
+    /// database's error.
     pub(super) fn connect(&self) -> Result<Connection, SearchError> {
         private_directory(&self.directory)?;
         validate_sqlite_files(&self.database)?;
@@ -274,6 +291,11 @@ impl SearchIndex {
 
 /// Starts a transaction that takes the write lock at once, so its reads
 /// and writes see no other writer in between.
+///
+/// # Errors
+///
+/// The database's error, for example when another writer holds the lock
+/// past the busy timeout.
 pub(super) fn begin_immediate(connection: &mut Connection) -> rusqlite::Result<Transaction<'_>> {
     connection.transaction_with_behavior(TransactionBehavior::Immediate)
 }
@@ -283,6 +305,11 @@ pub(super) fn begin_immediate(connection: &mut Connection) -> rusqlite::Result<T
 /// Safety rules "no devices, no server lists" (SRCH-021): a phone or camera
 /// is never crawled in the background, and a server's share list holds no
 /// files.
+///
+/// # Errors
+///
+/// The location error of an invalid address, [`SearchError::DeviceLocation`]
+/// and [`SearchError::ServerList`].
 pub(super) fn indexable_root(uri: &str) -> Result<String, SearchError> {
     let uri = normalise(uri)?;
     if is_device_location(&uri) {

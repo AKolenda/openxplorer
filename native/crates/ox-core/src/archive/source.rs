@@ -8,14 +8,15 @@
 
 use std::fs::OpenOptions;
 use std::io::{Read, Seek};
-use std::os::unix::fs::OpenOptionsExt;
 
 use gio::prelude::*;
+use rustix::fs::OFlags;
 
 use super::gio_reader::GioArchiveReader;
 use super::zip::ZipArchive;
 use super::ArchiveError;
 use crate::location::normalise;
+use crate::private_storage::KernelOpenFlags;
 use crate::transfer::Cancellation;
 
 /// ARC-005: the most members the built-in reader accepts.
@@ -75,7 +76,7 @@ impl ArchiveOpener for GioArchiveOpener {
         // of blocking the worker forever. Regular files ignore the flag.
         let local = OpenOptions::new()
             .read(true)
-            .custom_flags(libc::O_NONBLOCK)
+            .kernel_flags(OFlags::NONBLOCK)
             .open(path)?;
         Ok(Box::new(local))
     }

@@ -1164,7 +1164,6 @@ dependencies = [
  "futures-util",
  "gio",
  "glib",
- "libc",
  "lzma-rust2",
  "oo7",
  "percent-encoding",

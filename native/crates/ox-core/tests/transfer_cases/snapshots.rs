@@ -10,7 +10,7 @@ use ox_core::transfer::ConflictPolicy;
 
 use crate::transfer_support::{local, versions::PreviousVersions, *};
 
-/// Port of `test_replace_cannot_overwrite_nested_snapshot`: a snapshot
+/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_replace_cannot_overwrite_nested_snapshot`: a snapshot
 /// inside the existing folder stops the whole Replace before any file in
 /// that folder changes.
 ///
@@ -37,7 +37,7 @@ fn replace_never_overwrites_a_nested_snapshot() {
     fixture.assert_no_staging();
 }
 
-/// Port of `test_configured_backup_descendant_is_protected`: a configured
+/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_configured_backup_descendant_is_protected`: a configured
 /// snapshot folder inside the selection stops a permanent delete.
 ///
 /// parity: XFER-020
@@ -59,7 +59,7 @@ fn a_configured_snapshot_folder_inside_a_deleted_folder_survives() {
     assert_eq!(read(&backup.join("version.txt")), "backup");
 }
 
-/// Port of `test_snapshot_file_can_be_restored_to_another_folder`.
+/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_snapshot_file_can_be_restored_to_another_folder`.
 ///
 /// parity: XFER-020
 #[test]
@@ -78,7 +78,7 @@ fn a_snapshot_file_can_be_copied_to_another_folder() {
     assert_eq!(read(&fixture.destination_folder.join("document.txt")), "saved");
 }
 
-/// Port of `test_symlink_to_snapshot_is_removed_without_traversal`: the
+/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_symlink_to_snapshot_is_removed_without_traversal`: the
 /// link itself is not protected, and deleting it never enters the
 /// snapshot it points to.
 ///
@@ -101,7 +101,7 @@ fn a_link_to_a_snapshot_is_deleted_without_entering_the_snapshot() {
     assert_eq!(read(&snapshot.join("version.txt")), "backup");
 }
 
-/// Port of `test_removal_or_move_preserves_whole_tree_containing_snapshot`.
+/// Ported from `desktop/tests/test_operations.py::ProtectedTransferTests::test_removal_or_move_preserves_whole_tree_containing_snapshot`.
 ///
 /// parity: XFER-020
 #[test]

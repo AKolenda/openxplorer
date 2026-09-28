@@ -100,6 +100,7 @@ mod tests {
 
     use super::*;
     use crate::gio_node::GioNode;
+    use crate::test_support::temporary_folder;
 
     /// Resolves every URI with the production GIO adapter.
     fn gio_factory() -> NodeFactory {
@@ -111,8 +112,8 @@ mod tests {
         names.iter().map(ToString::to_string).collect()
     }
 
-    /// Port of `test_duplicate_sources_deduplicated` in
-    /// `desktop/tests/test_operations.py`, at the level of the request.
+    /// Ported from `desktop/tests/test_operations.py::TransferTests::test_duplicate_sources_deduplicated`,
+    /// at the level of the request.
     ///
     /// parity: XFER-019
     #[test]
@@ -149,11 +150,11 @@ mod tests {
     /// parity: XFER-019
     #[test]
     fn the_destination_must_be_an_existing_folder() {
-        let temp = tempfile::tempdir().expect("a temp dir");
-        let file = temp.path().join("file");
+        let root = temporary_folder();
+        let file = root.path().join("file");
         std::fs::write(&file, b"not a folder").expect("write a file");
         let file_uri = GioNode::from_file(gio::File::for_path(&file)).uri();
-        let folder_uri = GioNode::from_file(gio::File::for_path(temp.path())).uri();
+        let folder_uri = GioNode::from_file(gio::File::for_path(root.path())).uri();
         let factory = gio_factory();
         let cancel = Cancellation::new();
 

@@ -49,6 +49,7 @@ impl SettingsError {
 
 #[cfg(test)]
 mod tests {
+    use rustix::io::Errno;
     use std::io;
     use std::path::Path;
 
@@ -61,7 +62,7 @@ mod tests {
         let path = Path::new("/state/settings.json");
         let storage_errors = [
             StorageError::refused(path, StorageRefusal::NotPrivateFile),
-            StorageError::io(path, io::Error::from_raw_os_error(libc::ELOOP)),
+            StorageError::io(path, io::Error::from(Errno::LOOP)),
         ];
         for storage_error in storage_errors {
             let message = storage_error.to_string();

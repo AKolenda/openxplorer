@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Helpers shared by the settings tests: directory listings and the Quick
-//! access order a window shows. The file-mode helper is shared with the
-//! private-storage tests in `crate::test_support`.
+//! Helpers shared by the settings tests: pin requests, directory listings
+//! and the Quick access order a window shows. The file-mode helper is
+//! shared with the private-storage tests in `crate::test_support`.
 
 use std::fs;
 use std::path::Path;
+
+use super::BookmarkRequest;
 
 /// The Desktop standard folder of the test user.
 pub(super) const DESKTOP: &str = "file:///home/test/Desktop";
@@ -14,6 +16,11 @@ pub(super) const DOWNLOADS: &str = "file:///home/test/Downloads";
 
 /// The Documents standard folder of the test user.
 pub(super) const DOCUMENTS: &str = "file:///home/test/Documents";
+
+/// A request to pin `uri` under its folder name.
+pub(super) fn pin(uri: &str) -> BookmarkRequest {
+    BookmarkRequest::new(uri, "")
+}
 
 /// The `quick_order` a window sends when its sidebar shows Desktop,
 /// Downloads and Documents, as in `desktop/tests/test_pins.py`.

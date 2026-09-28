@@ -140,7 +140,7 @@ mod tests {
     use std::os::unix::fs::symlink;
 
     use super::*;
-    use crate::test_support::mode;
+    use crate::test_support::permission_bits;
 
     /// The number of entries in `directory`.
     fn entry_count(directory: &Path) -> usize {
@@ -157,7 +157,7 @@ mod tests {
         replace_file_atomically(&target, ".versions-", b"new").unwrap();
 
         assert_eq!(fs::read(&target).unwrap(), b"new");
-        assert_eq!(mode(&target), 0o600);
+        assert_eq!(permission_bits(&target), 0o600);
         assert_eq!(entry_count(root.path()), 1, "no temporary file remains");
     }
 
@@ -201,6 +201,6 @@ mod tests {
         let name = reserved.file_name().unwrap().to_string_lossy();
         assert!(name.starts_with("settings.json.unreadable-"), "{name}");
         assert_eq!(fs::read(&reserved).unwrap(), b"");
-        assert_eq!(mode(&reserved), 0o600);
+        assert_eq!(permission_bits(&reserved), 0o600);
     }
 }

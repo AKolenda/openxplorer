@@ -72,7 +72,8 @@ impl Provider for ShareUnderTwoNames {
     }
 }
 
-/// Port of the alias guard in `_copy`: when the destination lies inside the
+/// Ported from the alias guard in `_copy` (`desktop/operations.py`): when
+/// the destination lies inside the
 /// source under another host name, the copy meets its own staging folder
 /// and stops instead of copying itself.
 ///

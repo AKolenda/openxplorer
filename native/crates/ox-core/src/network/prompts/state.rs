@@ -246,6 +246,11 @@ impl Inner {
     }
 
     /// The operation and request of pending challenge `id`.
+    ///
+    /// # Errors
+    ///
+    /// [`SignInError::Expired`] when the challenge was answered, cancelled
+    /// or dismissed already.
     pub(super) fn pending_challenge(
         &self,
         id: ChallengeId,

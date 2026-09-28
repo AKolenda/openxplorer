@@ -20,10 +20,11 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{ErrorKind, Read};
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use gio::prelude::*;
+use rustix::fs::OFlags;
+use rustix::io::Errno;
 
 use super::context::{on_worker, unless_cancelled, OperationContext};
 use super::create::CreatedItem;
@@ -31,6 +32,7 @@ use super::error::OpsError;
 use super::templates::{list_templates_blocking, TemplateId, MAX_TEMPLATE_BYTES};
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name, ItemKind};
+use crate::private_storage::KernelOpenFlags;
 use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{Cancellation, Node};
 
@@ -135,11 +137,11 @@ fn read_user_template(
 fn open_regular_file(path: &Path) -> Result<File, OpsError> {
     let opened = OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .kernel_flags(OFlags::NOFOLLOW | OFlags::NONBLOCK)
         .open(path);
     let file = match opened {
         Ok(file) => file,
-        Err(error) if error.raw_os_error() == Some(libc::ELOOP) => return Err(not_regular()),
+        Err(error) if error.raw_os_error() == Some(Errno::LOOP.raw_os_error()) => return Err(not_regular()),
         Err(error) => return Err(error.into()),
     };
     if !file.metadata()?.file_type().is_file() {

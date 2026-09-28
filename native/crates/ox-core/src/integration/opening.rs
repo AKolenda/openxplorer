@@ -163,6 +163,10 @@ where
 {
     /// [`DefaultOpener::prepare`] on a worker thread. Cancelling `cancel`
     /// aborts the query of the file.
+    ///
+    /// # Errors
+    ///
+    /// The future resolves to every error of [`DefaultOpener::prepare`].
     pub fn prepare_in_background(
         &self,
         uri: String,

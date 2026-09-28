@@ -75,7 +75,7 @@
       "note": "Adding, re-adding and removing stored pins and network locations is tested, including UNC normalisation, credential refusal and two windows writing at once; the native pin, unpin and network-location UI remains pending.",
       "evidence": [
         "native/crates/ox-core/src/settings/tests.rs::settings_private_and_atomic",
-        "native/crates/ox-core/src/settings/tests.rs::credential_bookmark_rejected",
+        "native/crates/ox-core/src/settings/tests.rs::a_bookmark_with_credentials_is_refused_and_nothing_is_saved",
         "native/crates/ox-core/src/settings/tests.rs::two_windows_pins_not_lost",
         "native/crates/ox-core/src/settings/mutate.rs::unpin_removes_order_only_not_share",
         "native/crates/ox-core/src/settings/mutate.rs::re_adding_a_bookmark_moves_it_last_with_the_new_label"
@@ -133,7 +133,7 @@
         "native/crates/ox-core/tests/transfer_cases/operations.rs::cancellation_during_copy_removes_partial_stage_and_stops_the_batch",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_old_name",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::cancellation_never_hides_a_backup_that_requires_manual_recovery",
-        "native/crates/ox-core/tests/gio_node.rs::cancellation_prevents_copy_move_and_recursive_delete",
+        "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs::cancellation_prevents_copy_move_and_recursive_delete",
         "native/crates/ox-core/tests/gio_node_cases/removal.rs::cancellation_during_local_delete_preflight_preserves_the_file",
         "native/crates/ox-core/src/entry/enumerate.rs::dropping_the_listing_stops_delivery"
       ]
@@ -333,10 +333,10 @@
         "native/crates/ox-core/tests/transfer_cases/failures.rs::a_name_taken_while_copying_is_not_overwritten_at_publication",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::replacement_install_failure_or_false_success_restores_the_old_name",
         "native/crates/ox-core/tests/transfer_cases/devices.rs::uploads_publish_by_one_same_folder_rename_from_a_staged_sibling",
-        "native/crates/ox-core/tests/gio_node.rs::complete_engine_stages_and_publishes_a_recursive_local_copy",
+        "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs::complete_engine_stages_and_publishes_a_recursive_local_copy",
         "native/crates/ox-core/tests/gio_node_cases/removal.rs::roots_and_whole_network_shares_are_refused_before_mutation",
         "native/crates/ox-core/tests/gio_node_cases/removal.rs::protected_descendants_are_preflighted_before_gio_permanent_deletion",
-        "native/crates/ox-core/tests/gio_node.rs::cross_filesystem_move_is_refused_without_copying_or_removing_the_source",
+        "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs::cross_filesystem_move_is_refused_without_copying_or_removing_the_source",
         "native/crates/ox-core/tests/transfer_cases/mtp_adapter.rs::the_engine_deletes_a_phone_folder_after_checking_every_item"
       ]
     },

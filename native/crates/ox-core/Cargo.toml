@@ -19,7 +19,6 @@ serde.workspace = true
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 percent-encoding.workspace = true
 thiserror.workspace = true
-libc.workspace = true
 # `event`: the search index's inotify watcher waits on its descriptor with
 # poll(2). `process` gives `setsid`, which starts `openxplorer --restart` in its
 # own session as desktop/winspace.py does (`update::SessionLauncher`).

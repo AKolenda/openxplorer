@@ -307,6 +307,11 @@ fn top_level_item(uri: &str) -> Result<gio::File, OpsError> {
 /// newest Recycle Bin item deleted from there since `since` (seconds since
 /// the Unix epoch). An older item from the same place stays in the
 /// Recycle Bin.
+///
+/// # Errors
+///
+/// Only a Recycle Bin that cannot be listed fails the whole Undo; an item
+/// that cannot be restored is reported in the result instead.
 pub(crate) fn restore_trashed_since(
     original_paths: &[PathBuf],
     since: u64,

@@ -206,6 +206,11 @@ pub(super) struct PromptedOperation<'a> {
 }
 
 impl<'a> PromptedOperation<'a> {
+    /// A mount operation for `uri` that `prompts` answer.
+    ///
+    /// # Errors
+    ///
+    /// The location error of an address that is not a supported location.
     pub(super) fn new(prompts: &'a MountPrompts, uri: &str) -> Result<Self, NetworkError> {
         Ok(Self {
             operation: prompts.create(uri)?,

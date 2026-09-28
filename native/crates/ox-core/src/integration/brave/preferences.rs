@@ -15,15 +15,18 @@
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io::Read;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
+use rustix::fs::OFlags;
+use rustix::io::Errno;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use super::process::current_user_id;
 use super::BraveError;
 use crate::integration::private_file::write_private_file;
+use crate::private_storage::KernelOpenFlags;
 
 /// The largest preference file that is read, in bytes.
 const MAX_PREFERENCES_BYTES: u64 = 32_000_000;
@@ -214,11 +217,11 @@ pub(super) fn restore_download_folders(
 fn open_private_regular_file(path: &Path) -> Result<File, BraveError> {
     let opened = OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .kernel_flags(OFlags::NOFOLLOW | OFlags::NONBLOCK)
         .open(path);
     let file = match opened {
         Ok(file) => file,
-        Err(error) if error.raw_os_error() == Some(libc::ELOOP) => {
+        Err(error) if error.raw_os_error() == Some(Errno::LOOP.raw_os_error()) => {
             return Err(BraveError::SymlinkedPreferences);
         }
         Err(error) => return Err(BraveError::io(path, error)),

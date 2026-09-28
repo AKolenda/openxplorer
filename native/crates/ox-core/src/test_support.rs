@@ -6,10 +6,17 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::process::Command;
 
-/// The permission bits of `path`, for example `0o600`, for the tests of
-/// private storage.
-pub(crate) fn mode(path: &Path) -> u32 {
-    fs::metadata(path).expect("the path exists").mode() & 0o777
+use tempfile::TempDir;
+
+/// The permission bits of `path` itself, not of a link's target, for
+/// example `0o600`, including the set-id and sticky bits.
+pub(crate) fn permission_bits(path: &Path) -> u32 {
+    fs::symlink_metadata(path).expect("the path exists").mode() & 0o7777
+}
+
+/// A new temporary folder for one test, removed when dropped.
+pub(crate) fn temporary_folder() -> TempDir {
+    tempfile::tempdir().expect("the test home has room for a temporary folder")
 }
 
 /// Creates a named pipe (FIFO) at `path` with the system `mkfifo`, for the

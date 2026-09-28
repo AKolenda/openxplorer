@@ -11,9 +11,9 @@ use ox_core::transfer::{Node, TransferError};
 /// A photo on an MTP device. No test here contacts a device.
 const DEVICE_PHOTO: &str = "mtp://test-device/Internal/source/photo.jpg";
 
-/// Port of `test_device_schemes_request_sibling_staging` in
-/// `desktop/tests/test_device_staging.py`: only MTP locations stage beside
-/// the final name; cameras on gphoto2 keep folder staging.
+/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_device_schemes_request_sibling_staging`:
+/// only MTP locations stage beside the final name; cameras on gphoto2 keep
+/// folder staging.
 ///
 /// parity: XFER-021
 #[test]
@@ -30,9 +30,9 @@ fn only_mtp_destinations_stage_beside_the_final_name() {
     assert_eq!(others_stage_beside, [false, false, false], "{others:?}");
 }
 
-/// Port of `test_same_device_copies_are_detected` in
-/// `desktop/tests/test_device_staging.py`: MTP `CopyObject` keeps the
-/// source's name, which only matters for a copy within one device.
+/// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_same_device_copies_are_detected`:
+/// MTP `CopyObject` keeps the source's name, which only matters for a copy
+/// within one device.
 ///
 /// parity: XFER-023
 #[test]

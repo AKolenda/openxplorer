@@ -13,18 +13,13 @@ use tempfile::TempDir;
 
 mod preferences;
 
-use super::test_support::{names_starting_with, shown_quick_order};
+use super::test_support::{names_starting_with, pin, shown_quick_order};
 use super::*;
 use crate::location::file_uri;
-use crate::test_support::mode;
+use crate::test_support::permission_bits;
 
 fn temporary_directory() -> TempDir {
     tempfile::tempdir().expect("a temporary directory")
-}
-
-/// A request to pin `uri` under its folder name.
-fn pin(uri: &str) -> BookmarkRequest {
-    BookmarkRequest::new(uri, "")
 }
 
 /// The update a window sends for `values`, read like any untrusted request.
@@ -64,8 +59,8 @@ fn settings_private_and_atomic() {
     assert_eq!(reread.data().preferences.theme, Theme::Dark);
     assert_eq!(reread.data().preferences.view, View::Details);
     assert!(!fs::read_to_string(store.path()).unwrap().contains("not-stored"));
-    assert_eq!(mode(&store.path()), 0o600);
-    assert_eq!(mode(&directory), 0o700);
+    assert_eq!(permission_bits(&store.path()), 0o600);
+    assert_eq!(permission_bits(&directory), 0o700);
     let temporary_files = names_starting_with(&directory, ".settings-");
     assert_eq!(temporary_files.len(), 0);
 }
@@ -73,7 +68,7 @@ fn settings_private_and_atomic() {
 /// Ported from `desktop/tests/test_core.py::CoreTests::test_credential_bookmark_rejected`
 /// parity: SAFE-010
 #[test]
-fn credential_bookmark_rejected() {
+fn a_bookmark_with_credentials_is_refused_and_nothing_is_saved() {
     let root = temporary_directory();
     let mut store = Settings::open(root.path());
     let with_password = BookmarkRequest::new("smb://u:secret@nas/share", "");
@@ -288,8 +283,8 @@ fn reading_makes_an_existing_directory_and_file_private() {
     fs::write(directory.join("settings.json"), "{}").unwrap();
     let store = Settings::open(&directory);
     assert!(store.warning().is_none());
-    assert_eq!(mode(&directory), 0o700);
-    assert_eq!(mode(&store.path()), 0o600);
+    assert_eq!(permission_bits(&directory), 0o700);
+    assert_eq!(permission_bits(&store.path()), 0o600);
 }
 
 #[test]
@@ -406,7 +401,7 @@ fn a_change_keeps_an_unreadable_file_as_a_backup() {
     assert_eq!(kept.len(), 1);
     let backup = root.path().join(&kept[0]);
     assert_eq!(fs::read_to_string(&backup).unwrap(), damaged);
-    assert_eq!(mode(&backup), 0o600);
+    assert_eq!(permission_bits(&backup), 0o600);
     let warning = store.warning().expect("the change reports the backup");
     assert!(warning.contains(&kept[0]), "{warning}");
     let reread = Settings::open(root.path());

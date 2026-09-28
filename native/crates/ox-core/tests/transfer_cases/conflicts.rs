@@ -7,7 +7,8 @@ use ox_core::transfer::ConflictPolicy;
 
 use crate::transfer_support::{local, *};
 
-/// Port of `test_keep_both`: a taken `(copy 2)` name is skipped too, and
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_keep_both`:
+/// a taken `(copy 2)` name is skipped too, and
 /// both existing files stay untouched.
 ///
 /// parity: XFER-008
@@ -32,7 +33,7 @@ fn keep_both_skips_every_taken_copy_name() {
     fixture.assert_no_staging();
 }
 
-/// Port of `test_move_same_directory_is_noop`, for every policy: moving an
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_same_directory_is_noop`, for every policy: moving an
 /// item into the folder it is already in is skipped (XFER-012). With Keep
 /// both it would otherwise be renamed to "(copy 2)"; with Replace it would
 /// be replaced by itself.
@@ -61,7 +62,7 @@ fn moving_an_item_into_its_own_folder_changes_nothing() {
     }
 }
 
-/// Port of `test_move_collision_keeps_source`: Skip leaves both the source
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_collision_keeps_source`: Skip leaves both the source
 /// and the item that holds its name alone (XFER-006, XFER-012).
 ///
 /// parity: XFER-006

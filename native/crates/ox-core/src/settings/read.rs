@@ -215,6 +215,7 @@ fn normalised_without_duplicates(locations: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use rustix::io::Errno;
     use std::io;
 
     use serde_json::json;
@@ -251,7 +252,7 @@ mod tests {
     /// parity: SET-013
     #[test]
     fn a_read_error_after_opening_leaves_the_file_unreadable() {
-        let eio = io::Error::from_raw_os_error(libc::EIO);
+        let eio = io::Error::from(Errno::IO);
 
         let state = file_state_after(failed_read(eio));
 

@@ -233,6 +233,11 @@ impl IndexRoot {
     }
 
     /// Reads a row of the roots query in `SearchIndex::roots`.
+    ///
+    /// # Errors
+    ///
+    /// The database's error for a column that is missing or of another
+    /// type.
     pub(crate) fn from_row(row: &Row<'_>) -> rusqlite::Result<Self> {
         let caching = if row.get("enabled")? {
             Caching::Enabled

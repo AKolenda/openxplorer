@@ -61,6 +61,10 @@ pub(crate) fn quote_component(text: &str) -> String {
 
 /// `unquote(text, errors='strict')`: decodes `%XX` escapes and rejects a
 /// result that is not UTF-8. Malformed escapes such as `%zz` stay literal.
+///
+/// # Errors
+///
+/// A [`LocationError`] when the decoded bytes are not UTF-8.
 pub(crate) fn unquote_strict(text: &str) -> Result<String, LocationError> {
     percent_decode_str(text)
         .decode_utf8()
@@ -74,6 +78,11 @@ pub(crate) fn unquote_strict(text: &str) -> Result<String, LocationError> {
 /// Safety rule (`core.py`: `if CONTROL.search(decoded)` after every
 /// `unquote`): a `%00` or `%0A` in an address never reaches GIO or a file
 /// name.
+///
+/// # Errors
+///
+/// A [`LocationError`] when the decoded text is not UTF-8 or holds a
+/// control character.
 pub(crate) fn unquote_without_controls(text: &str) -> Result<String, LocationError> {
     let decoded = unquote_strict(text)?;
     if has_control_character(&decoded) {

@@ -17,12 +17,15 @@
 
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions, Permissions};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+
+use rustix::fs::OFlags;
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
 use super::node::{ItemIdentity, Node};
+use crate::private_storage::KernelOpenFlags;
 
 /// Owner-only access for staging folders.
 pub(crate) const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
@@ -35,7 +38,7 @@ pub(crate) const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
 pub(crate) fn open_directory_nofollow(path: &Path) -> std::io::Result<File> {
     OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .kernel_flags(OFlags::DIRECTORY | OFlags::NOFOLLOW)
         .open(path)
 }
 
@@ -158,28 +161,23 @@ pub(crate) fn restore_directory_modes(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The permission bits of `path`, without following a link.
-    fn mode_of(path: &Path) -> u32 {
-        let metadata = std::fs::symlink_metadata(path).expect("the test path exists");
-        metadata.permissions().mode() & 0o7777
-    }
+    use crate::test_support::{permission_bits, temporary_folder};
 
     /// parity: XFER-004
     #[test]
     fn modes_are_applied_through_a_no_follow_descriptor() {
-        let temp = tempfile::tempdir().expect("a temp dir");
-        let folder = temp.path().join("folder");
+        let root = temporary_folder();
+        let folder = root.path().join("folder");
         std::fs::create_dir(&folder).expect("create folder");
         apply_mode(&folder, 0o750).expect("chmod a real folder");
-        assert_eq!(mode_of(&folder), 0o750);
+        assert_eq!(permission_bits(&folder), 0o750);
 
         // A symbolic link swapped in for the folder is refused, and the
         // folder it points to keeps its mode.
-        let link = temp.path().join("link");
+        let link = root.path().join("link");
         std::os::unix::fs::symlink(&folder, &link).expect("create link");
         assert!(apply_mode(&link, 0o700).is_err());
-        assert_eq!(mode_of(&folder), 0o750);
+        assert_eq!(permission_bits(&folder), 0o750);
     }
 
     #[test]

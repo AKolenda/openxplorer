@@ -220,17 +220,7 @@ mod tests {
     use super::*;
     use crate::icons::Connection;
     use crate::places::{compose, PlaceSources};
-
-    fn mounted(label: &str, uri: &str, kind: VolumeKind) -> VolumeRow {
-        VolumeRow {
-            label: label.into(),
-            kind,
-            state: VolumeState::Mounted {
-                uri: uri.into(),
-                can_unmount: true,
-            },
-        }
-    }
+    use crate::test_support::mounted_volume;
 
     fn entries_for(settings: &SettingsData, volumes: &[VolumeRow]) -> Vec<SidebarEntry> {
         let places = compose(PlaceSources {
@@ -265,9 +255,9 @@ mod tests {
             ..SettingsData::default()
         };
         let volumes = [
-            mounted("USB", "file:///media/u/USB", VolumeKind::Drive),
-            mounted("media on nas", "smb://nas/media", VolumeKind::Drive),
-            mounted("Pixel 7", "mtp://[usb:001,010]/", VolumeKind::Device),
+            mounted_volume("USB", "file:///media/u/USB", VolumeKind::Drive),
+            mounted_volume("media on nas", "smb://nas/media", VolumeKind::Drive),
+            mounted_volume("Pixel 7", "mtp://[usb:001,010]/", VolumeKind::Device),
         ];
         let entries = entries_for(&settings, &volumes);
         assert_eq!(

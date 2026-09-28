@@ -213,6 +213,10 @@ pub async fn list_templates(folder: &Path, cancel: &Cancellation) -> Result<Temp
 }
 
 /// [`list_templates`] on the calling thread.
+///
+/// # Errors
+///
+/// As [`list_templates`].
 pub(crate) fn list_templates_blocking(
     folder: &Path,
     cancel: &Cancellation,

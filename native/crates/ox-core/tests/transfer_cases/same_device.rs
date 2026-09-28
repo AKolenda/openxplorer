@@ -14,7 +14,7 @@ use crate::transfer_support::{
     *,
 };
 
-/// Port of `test_same_device_keep_both_renames_inside_the_private_folder`
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_same_device_keep_both_renames_inside_the_private_folder`
 /// and `test_same_device_file_copy_is_built_inside_a_private_folder`.
 ///
 /// parity: XFER-023
@@ -104,7 +104,7 @@ impl Provider for FailingSameDeviceCopy {
     }
 }
 
-/// Port of `test_same_device_copy_failure_leaves_nothing_under_the_final_name`.
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_same_device_copy_failure_leaves_nothing_under_the_final_name`.
 ///
 /// parity: XFER-001, XFER-023
 #[test]

@@ -19,7 +19,10 @@ use std::io::{self, Write};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 
+use rustix::fs::OFlags;
+
 use crate::location::python_strip;
+use crate::private_storage::KernelOpenFlags;
 
 /// Permission bits that let the group or others write.
 const GROUP_OR_OTHER_WRITE: u32 = 0o022;
@@ -116,7 +119,7 @@ pub(crate) fn write_new_file(path: &Path, text: &str, mode: u32) -> Result<(), M
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .custom_flags(libc::O_NOFOLLOW)
+        .kernel_flags(OFlags::NOFOLLOW)
         .mode(mode)
         .open(path)
         .map_err(|error| MountHelperError::io(path, error))?;

@@ -14,18 +14,19 @@ use gio::prelude::VfsExt;
 use ox_core::gio_node::GioNode;
 use ox_core::transfer::{Cancellation, Node, Operation, TransferError};
 
-use super::{gio_engine, node, LinkedFolder};
+use super::shared::{gio_engine, temporary_folder};
+use super::{node, LinkedFolder};
 
 /// parity: XFER-015, XFER-017
 #[test]
 fn deleting_a_copied_link_keeps_its_target() {
-    let temp = tempfile::tempdir().unwrap();
-    let linked = LinkedFolder::create(temp.path());
-    let copied = temp.path().join("copied");
+    let root = temporary_folder();
+    let linked = LinkedFolder::create(root.path());
+    let copied = root.path().join("copied");
     let cancel = Cancellation::new();
     node(&linked.link)
         .copy_file(&node(&copied), &cancel, &mut |_, _| {})
-        .unwrap();
+        .expect("the adapter copies the file");
 
     let result = node(&copied).delete_tree(&cancel, None);
 
@@ -37,19 +38,19 @@ fn deleting_a_copied_link_keeps_its_target() {
 /// parity: XFER-015, XFER-017
 #[test]
 fn local_recursive_delete_removes_selected_tree_without_following_its_links() {
-    let temp = tempfile::tempdir().unwrap();
-    let selected = temp.path().join("selected");
-    fs::create_dir_all(selected.join("nested")).unwrap();
-    fs::write(selected.join("nested/data"), b"delete me").unwrap();
-    let outside = temp.path().join("outside");
-    fs::write(&outside, b"retained").unwrap();
-    symlink(&outside, selected.join("link")).unwrap();
+    let root = temporary_folder();
+    let selected = root.path().join("selected");
+    fs::create_dir_all(selected.join("nested")).expect("the fixture folders are created");
+    fs::write(selected.join("nested/data"), b"delete me").expect("the fixture file is written");
+    let outside = root.path().join("outside");
+    fs::write(&outside, b"retained").expect("the fixture file is written");
+    symlink(&outside, selected.join("link")).expect("the fixture link is created");
 
     let result = node(&selected).delete_tree(&Cancellation::new(), None);
 
     assert_eq!(result, Ok(()));
     assert!(!selected.exists());
-    assert_eq!(fs::read(outside).unwrap(), b"retained");
+    assert_eq!(fs::read(outside).expect("the file can be read"), b"retained");
 }
 
 /// A folder opened through a symbolic link (`~/Music` pointing at a data
@@ -60,14 +61,14 @@ fn local_recursive_delete_removes_selected_tree_without_following_its_links() {
 /// parity: XFER-015
 #[test]
 fn local_delete_works_inside_a_folder_reached_through_a_symbolic_link() {
-    let temp = tempfile::tempdir().unwrap();
-    let actual = temp.path().join("actual");
-    fs::create_dir_all(actual.join("sub/nested")).unwrap();
-    fs::write(actual.join("data"), b"delete me").unwrap();
-    fs::write(actual.join("sub/nested/deep"), b"delete me too").unwrap();
-    fs::write(actual.join("kept"), b"retained").unwrap();
-    let alias = temp.path().join("alias");
-    symlink(&actual, &alias).unwrap();
+    let root = temporary_folder();
+    let actual = root.path().join("actual");
+    fs::create_dir_all(actual.join("sub/nested")).expect("the fixture folders are created");
+    fs::write(actual.join("data"), b"delete me").expect("the fixture file is written");
+    fs::write(actual.join("sub/nested/deep"), b"delete me too").expect("the fixture file is written");
+    fs::write(actual.join("kept"), b"retained").expect("the fixture file is written");
+    let alias = root.path().join("alias");
+    symlink(&actual, &alias).expect("the fixture link is created");
     let cancel = Cancellation::new();
 
     let file_deleted = node(&alias.join("data")).delete_tree(&cancel, None);
@@ -77,8 +78,14 @@ fn local_delete_works_inside_a_folder_reached_through_a_symbolic_link() {
     assert_eq!(folder_deleted, Ok(()));
     assert!(!actual.join("data").exists());
     assert!(!actual.join("sub").exists());
-    assert_eq!(fs::read(actual.join("kept")).unwrap(), b"retained");
-    assert!(fs::symlink_metadata(&alias).unwrap().file_type().is_symlink());
+    assert_eq!(
+        fs::read(actual.join("kept")).expect("the file can be read"),
+        b"retained"
+    );
+    assert!(fs::symlink_metadata(&alias)
+        .expect("the link still exists")
+        .file_type()
+        .is_symlink());
 }
 
 /// Which folder another program swaps for a symbolic link mid-deletion.
@@ -104,11 +111,11 @@ impl SwapTree {
         let selected = root.join("selected");
         let nested = selected.join("nested");
         let outside = root.join("outside");
-        fs::create_dir_all(&nested).unwrap();
-        fs::write(nested.join("victim"), b"selected content").unwrap();
-        fs::create_dir_all(outside.join("nested")).unwrap();
-        fs::write(outside.join("victim"), b"must survive").unwrap();
-        fs::write(outside.join("nested/victim"), b"must also survive").unwrap();
+        fs::create_dir_all(&nested).expect("the fixture folders are created");
+        fs::write(nested.join("victim"), b"selected content").expect("the fixture file is written");
+        fs::create_dir_all(outside.join("nested")).expect("the fixture folders are created");
+        fs::write(outside.join("victim"), b"must survive").expect("the fixture file is written");
+        fs::write(outside.join("nested/victim"), b"must also survive").expect("the fixture file is written");
         Self {
             selected,
             nested,
@@ -129,12 +136,12 @@ impl SwapTree {
 #[test]
 fn an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion() {
     for swapped_folder in [SwappedFolder::Nested, SwappedFolder::Selected] {
-        let temp = tempfile::tempdir().unwrap();
-        let tree = SwapTree::create(temp.path());
+        let root = temporary_folder();
+        let tree = SwapTree::create(root.path());
         let swapped = Arc::new(AtomicBool::new(false));
         let did_swap = swapped.clone();
         let ancestor = tree.folder(swapped_folder);
-        let detached = temp.path().join("detached");
+        let detached = root.path().join("detached");
         let outside_for_guard = tree.outside.clone();
         let guard = move |uri: &str| {
             let first_victim = uri.ends_with("/victim") && !did_swap.swap(true, Ordering::SeqCst);
@@ -152,9 +159,12 @@ fn an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion() {
             .unwrap_err()
             .to_string()
             .contains("changed during deletion"));
-        assert_eq!(fs::read(tree.outside.join("victim")).unwrap(), b"must survive");
         assert_eq!(
-            fs::read(tree.outside.join("nested/victim")).unwrap(),
+            fs::read(tree.outside.join("victim")).expect("the file can be read"),
+            b"must survive"
+        );
+        assert_eq!(
+            fs::read(tree.outside.join("nested/victim")).expect("the file can be read"),
             b"must also survive"
         );
     }
@@ -163,11 +173,11 @@ fn an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion() {
 /// parity: XFER-015, XFER-020
 #[test]
 fn protected_descendants_are_preflighted_before_gio_permanent_deletion() {
-    let temp = tempfile::tempdir().unwrap();
-    let source = temp.path().join("source");
-    fs::create_dir_all(source.join("protected")).unwrap();
-    fs::write(source.join("a"), b"live").unwrap();
-    fs::write(source.join("protected/data"), b"snapshot").unwrap();
+    let root = temporary_folder();
+    let source = root.path().join("source");
+    fs::create_dir_all(source.join("protected")).expect("the fixture folders are created");
+    fs::write(source.join("a"), b"live").expect("the fixture file is written");
+    fs::write(source.join("protected/data"), b"snapshot").expect("the fixture file is written");
     let protected = node(&source.join("protected")).uri();
     let mut engine = gio_engine().with_write_guard(move |uri| {
         if uri.starts_with(&protected) {
@@ -179,20 +189,23 @@ fn protected_descendants_are_preflighted_before_gio_permanent_deletion() {
 
     let result = engine
         .run(Operation::Delete, &[node(&source).uri()], &Cancellation::new())
-        .unwrap();
+        .expect("the engine accepts the request");
 
     assert!(result.done.is_empty());
     assert_eq!(result.errors.len(), 1);
-    assert_eq!(fs::read(source.join("a")).unwrap(), b"live");
-    assert_eq!(fs::read(source.join("protected/data")).unwrap(), b"snapshot");
+    assert_eq!(fs::read(source.join("a")).expect("the file can be read"), b"live");
+    assert_eq!(
+        fs::read(source.join("protected/data")).expect("the file can be read"),
+        b"snapshot"
+    );
 }
 
 /// parity: OPS-022, XFER-015
 #[test]
 fn cancellation_during_local_delete_preflight_preserves_the_file() {
-    let temp = tempfile::tempdir().unwrap();
-    let source = temp.path().join("source");
-    fs::write(&source, b"retained").unwrap();
+    let root = temporary_folder();
+    let source = root.path().join("source");
+    fs::write(&source, b"retained").expect("the fixture file is written");
     let cancel = Cancellation::new();
     let requested = cancel.clone();
     let guard = move |_uri: &str| {
@@ -203,7 +216,7 @@ fn cancellation_during_local_delete_preflight_preserves_the_file() {
     let result = node(&source).delete_tree(&cancel, Some(&guard));
 
     assert_eq!(result, Err(TransferError::Cancelled));
-    assert_eq!(fs::read(source).unwrap(), b"retained");
+    assert_eq!(fs::read(source).expect("the file can be read"), b"retained");
 }
 
 /// Like `can_trash` in `desktop/gio_backend.py`: a share unmounted in the
@@ -216,8 +229,8 @@ fn trash_support_reports_an_unmounted_share_instead_of_denying_trash() {
         schemes.iter().any(|scheme| scheme == "smb"),
         "this check needs GVfs with its SMB backend (gvfs-backends); found {schemes:?}"
     );
-    let temp = tempfile::tempdir().unwrap();
-    let missing = temp.path().join("missing");
+    let root = temporary_folder();
+    let missing = root.path().join("missing");
 
     let unmounted = GioNode::new("smb://example.invalid/share/folder").can_trash(None);
     let local_missing = node(&missing).can_trash(None);

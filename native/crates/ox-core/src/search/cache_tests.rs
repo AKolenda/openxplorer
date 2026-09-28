@@ -13,7 +13,7 @@ use super::fixtures::{found_names, listed_file, listed_folder, root_state, searc
 use super::index::SearchIndex;
 use super::root::{Caching, HiddenItems, RootStatus};
 use super::scan::ScanOutcome;
-use crate::test_support::mode;
+use crate::test_support::permission_bits;
 
 /// Ported from `desktop/tests/test_v05.py::IndexTests::test_cached_regular_not_directory`
 ///
@@ -194,8 +194,8 @@ fn the_database_and_its_directory_are_private() {
 
     let index = SearchIndex::open(&directory).unwrap();
 
-    assert_eq!(mode(index.database_path()), 0o600);
-    assert_eq!(mode(index.directory()), 0o700);
+    assert_eq!(permission_bits(index.database_path()), 0o600);
+    assert_eq!(permission_bits(index.directory()), 0o700);
 }
 
 /// Ported from `desktop/tests/test_v05.py::IndexTests::test_fts_special_characters_bound`

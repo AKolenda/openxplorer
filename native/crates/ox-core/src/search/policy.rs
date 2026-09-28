@@ -211,6 +211,7 @@ fn decoded_path(uri: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use rustix::io::Errno;
     use std::path::PathBuf;
 
     use super::*;
@@ -344,7 +345,7 @@ mod tests {
         let unreadable = || {
             Err(SearchError::Io {
                 path: PathBuf::from("/proc/self/mountinfo"),
-                error: std::io::Error::from_raw_os_error(libc::EACCES),
+                error: std::io::Error::from(Errno::ACCESS),
             })
         };
         let directory = Path::new(INDEX_DIRECTORY);

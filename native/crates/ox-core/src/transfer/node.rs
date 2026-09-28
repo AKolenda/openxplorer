@@ -57,6 +57,20 @@ pub struct ItemIdentity {
 /// symbolic links: the engine copies links as links and never traverses them.
 /// Every method that returns a [`TransferError`] reports the backend's own
 /// error; the variants the engine acts on are named in each method.
+///
+/// Cancellation takes three forms, by what a method is used for:
+///
+/// - `Option<&Cancellation>` for the short steps the engine also takes
+///   after the user cancelled: checking, publishing, replacing and
+///   relisting. Cleanup and the recovery of a replacement pass `None`,
+///   because stopping halfway would leave staging or a moved-aside
+///   original behind; the user's steps pass `Some`.
+/// - `&Cancellation` for the long operations the user starts and may stop
+///   at any time: copying a file, moving to the Trash and deleting a tree.
+/// - No token for [`Node::delete`], which removes only the engine's own
+///   staging or backups: that cleanup must finish even after the user
+///   cancelled (`_clean_staging` and `_discard_stage` in
+///   `desktop/operations.py` take no cancellation either).
 pub trait Node: Send + Sync {
     /// The canonical URI.
     fn uri(&self) -> String;

@@ -15,7 +15,7 @@ use crate::transfer_support::{
     *,
 };
 
-/// Port of `test_replace_file_uses_reversible_renames`: the device cannot
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_replace_file_uses_reversible_renames`: the device cannot
 /// overwrite safely (XFER-026), so the old file is renamed aside, the new
 /// one renamed in and the backup removed, all within the destination
 /// folder.
@@ -67,7 +67,7 @@ impl Provider for FailingInstall {
     }
 }
 
-/// Port of `test_replace_install_failure_restores_original_and_cleans_stage`.
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_replace_install_failure_restores_original_and_cleans_stage`.
 ///
 /// parity: XFER-010
 #[test]
@@ -90,7 +90,7 @@ fn a_failed_device_install_restores_the_original_and_removes_the_stage() {
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
 }
 
-/// Port of `test_replace_merges_folders_and_keeps_destination_only_items`
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_replace_merges_folders_and_keeps_destination_only_items`
 /// for devices: a folder merge on a phone behaves as on a local disk
 /// (XFER-026).
 ///
@@ -147,7 +147,7 @@ impl Provider for WatchedAside {
     }
 }
 
-/// Port of `test_replace_move_aside_is_not_cancellable`: a device can finish
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_replace_move_aside_is_not_cancellable`: a device can finish
 /// a rename after the client stopped waiting, so the move-aside is never
 /// interrupted.
 ///
@@ -194,7 +194,7 @@ impl Provider for LateAside {
     }
 }
 
-/// Port of `test_replace_move_aside_finished_by_the_device_is_restored`: the
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_replace_move_aside_finished_by_the_device_is_restored`: the
 /// original must not stay under the hidden backup name.
 ///
 /// parity: XFER-010
@@ -239,7 +239,7 @@ impl Provider for RacingWriter {
     }
 }
 
-/// Port of `test_publish_race_never_overwrites` for devices.
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_publish_race_never_overwrites` for devices.
 ///
 /// parity: XFER-007
 #[test]

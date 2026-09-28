@@ -180,8 +180,8 @@ pub struct TransferResult {
 mod tests {
     use super::*;
 
-    /// Port of `test_unknown_operation_rejected` in
-    /// `desktop/tests/test_operations.py`. Only the parsing can be tested:
+    /// Ported from `desktop/tests/test_operations.py::TransferTests::test_unknown_operation_rejected`.
+    /// Only the parsing can be tested:
     /// an unknown name never becomes a [`TransferMode`] or
     /// [`ConflictPolicy`], so the engine cannot be asked to run one.
     ///

@@ -137,6 +137,10 @@ impl IndexService {
 
     /// [`IndexService::start`] with other `limits`, so that tests can
     /// reach them.
+    ///
+    /// # Errors
+    ///
+    /// As [`IndexService::start`].
     pub(crate) fn start_with_limits(
         index: SearchIndex,
         reader: Box<dyn FolderReader>,
@@ -211,6 +215,10 @@ impl IndexService {
     /// Tries to become the index owner (`elect` in Python) and returns
     /// whether this process is the owner. A new owner starts watching and
     /// marks the scans a stopped owner left running as interrupted.
+    ///
+    /// # Errors
+    ///
+    /// The index's error while marking the interrupted scans.
     pub(super) fn elect(&self) -> Result<bool, SearchError> {
         {
             let mut state = self.shared.state();
@@ -230,6 +238,10 @@ impl IndexService {
     /// Starts a full scan of the enabled root `root` (`refresh` in Python)
     /// and returns whether one was queued in this process. Another process
     /// passes a user's request on to the owner.
+    ///
+    /// # Errors
+    ///
+    /// The index's error while reading the root or passing the request on.
     pub(super) fn start_scan(&self, root: &str, trigger: ScanTrigger) -> Result<bool, SearchError> {
         if !self.is_owner() {
             if trigger == ScanTrigger::User {
@@ -292,6 +304,10 @@ impl IndexService {
     /// (`changed` in Python). The owner re-reads it on a later tick;
     /// another process passes it on to the owner. Changes are ignored while
     /// Auto-index is paused.
+    ///
+    /// # Errors
+    ///
+    /// The index's error while passing the change on.
     pub(super) fn record_change(
         &self,
         root: &str,

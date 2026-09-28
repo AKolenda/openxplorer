@@ -15,7 +15,7 @@ use crate::transfer_support::{
     *,
 };
 
-/// Port of `test_copy_file`.
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_copy_file`.
 ///
 /// parity: XFER-001
 #[test]
@@ -72,7 +72,7 @@ fn recursive_copy_preserves_sources_hidden_files_links_and_modes() {
     fixture.assert_no_staging();
 }
 
-/// Port of `test_duplicate_sources_deduplicated`.
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_duplicate_sources_deduplicated`.
 ///
 /// parity: XFER-019
 #[test]
@@ -91,7 +91,7 @@ fn a_source_selected_twice_is_copied_once() {
     assert_eq!(list(&fixture.destination_folder), ["a"]);
 }
 
-/// Port of `test_move_native`.
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_native`.
 ///
 /// parity: XFER-011
 #[test]
@@ -108,7 +108,7 @@ fn a_move_takes_the_item_out_of_its_folder() {
     assert_eq!(read(&fixture.destination_folder.join("a")), "a");
 }
 
-/// Port of `test_trash_unsupported_no_delete`: where the backend has no
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_trash_unsupported_no_delete`: where the backend has no
 /// Trash, the item is kept, never permanently deleted instead.
 ///
 /// parity: XFER-014
@@ -174,7 +174,7 @@ fn permanent_delete_removes_folders_and_files_without_a_destination() {
     assert!(!exists_without_following_links(&loose));
 }
 
-/// Port of `test_special_file_rejected_cleanup`: a special file is never
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_special_file_rejected_cleanup`: a special file is never
 /// copied, and nothing is published or left staged.
 ///
 /// parity: XFER-018
@@ -215,7 +215,7 @@ fn a_tree_deeper_than_the_nesting_limit_is_not_published() {
     assert!(list(&fixture.destination_folder).is_empty());
 }
 
-/// Port of `test_copy_cancel_removes_partial_stage`: the user's
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_copy_cancel_removes_partial_stage`: the user's
 /// cancellation stops the copy between blocks, removes its staging and
 /// starts no later item.
 ///
@@ -259,7 +259,7 @@ fn cancellation_during_copy_removes_partial_stage_and_stops_the_batch() {
     assert_eq!(byte_updates, 1);
 }
 
-/// Port of `test_failure_inside_tree_leaves_source`: one special file deep
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_failure_inside_tree_leaves_source`: one special file deep
 /// inside a folder fails the whole folder. Nothing is published, the stage
 /// is removed and the source is untouched.
 ///
@@ -282,7 +282,8 @@ fn a_special_file_inside_a_folder_fails_the_whole_folder() {
     assert_eq!(read(&tree.join("a")), "hello");
 }
 
-/// Port of `test_cancel_before_start`: a run cancelled before it starts is
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_cancel_before_start`:
+/// a run cancelled before it starts is
 /// refused while the destination is checked, before anything is touched.
 ///
 /// parity: OPS-022
@@ -324,7 +325,7 @@ impl Provider for WatchedLocal {
     }
 }
 
-/// Port of `test_local_destinations_keep_directory_staging`.
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_local_destinations_keep_directory_staging`.
 ///
 /// parity: XFER-001
 #[test]

@@ -7,13 +7,15 @@
 //! the checks and the atomic replace in `crate::private_storage`.
 
 use std::fs::OpenOptions;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
+use rustix::fs::OFlags;
+
 use super::{SnapshotSource, VersionsError};
 use crate::private_storage::{
-    private_directory, read_limited_text, replace_file_atomically, StorageError, StorageRefusal, WithPath,
+    private_directory, read_limited_text, replace_file_atomically, KernelOpenFlags, StorageError,
+    StorageRefusal, WithPath,
 };
 
 /// The most sources that are read or saved.
@@ -110,7 +112,7 @@ impl SourceFile {
 fn read_saved_text(path: &Path) -> Result<String, StorageError> {
     let file = OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_NONBLOCK)
+        .kernel_flags(OFlags::NONBLOCK)
         .open(path)
         .with_path(path)?;
     if !file.metadata().with_path(path)?.is_file() {
@@ -125,7 +127,7 @@ mod tests {
     use std::os::unix::fs::symlink;
 
     use super::*;
-    use crate::test_support::{make_fifo, mode};
+    use crate::test_support::{make_fifo, permission_bits};
     use crate::versions::SnapshotLayout;
 
     /// A source that maps `/srv/<name>` to `/srv/history/<name>`.
@@ -164,8 +166,8 @@ mod tests {
         });
 
         assert_eq!(saved.expect("saved"), [source("data")]);
-        assert_eq!(mode(&directory), 0o700);
-        assert_eq!(mode(&directory.join(FILE_NAME)), 0o600);
+        assert_eq!(permission_bits(&directory), 0o700);
+        assert_eq!(permission_bits(&directory.join(FILE_NAME)), 0o600);
         assert_eq!(names_in(&directory), [FILE_NAME]);
         assert_eq!(file.read(), [source("data")]);
     }
@@ -208,7 +210,7 @@ mod tests {
 
         assert_eq!(saved.expect("saved"), [source("data")]);
         assert!(!directory.path().join(FILE_NAME).is_symlink());
-        assert_eq!(mode(&directory.path().join(FILE_NAME)), 0o600);
+        assert_eq!(permission_bits(&directory.path().join(FILE_NAME)), 0o600);
         assert_eq!(fs::read_to_string(&elsewhere).unwrap(), "[]");
     }
 

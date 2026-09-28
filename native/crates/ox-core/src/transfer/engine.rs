@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The transfer orchestration. Port of `TransferEngine.run` and
+//! The transfer orchestration. Ports `TransferEngine.run` and
 //! `_run_items` in `desktop/operations.py`; see the module documentation for
 //! the rules. The request is validated in `request.rs`, the settings of the
 //! run are in `batch.rs`, the destination name is chosen in `conflicts.rs`,

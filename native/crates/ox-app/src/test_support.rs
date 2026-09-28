@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the crate's tests share: listed entries built through ox-core's own
 //! conversion, so they carry every field a real listing does, rows of the
-//! Network list, the GTK [`harness`] for tests that open windows, and
-//! [`python`], which runs the Python app's settings code.
+//! Network list and of the volume monitor, the GTK [`harness`] for tests
+//! that open windows, and [`python`], which runs the Python app's settings
+//! code.
 
 pub(crate) mod harness;
 pub(crate) mod python;
@@ -10,6 +11,8 @@ pub(crate) mod python;
 use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry};
 use ox_core::places::{NetworkKind, NetworkLocation};
+
+use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
 /// An entry named `name` in `/tmp/ox-test`, of `file_type`, as a listing
 /// would produce it. Nothing is created on disk.
@@ -29,6 +32,19 @@ pub(crate) fn file_entry(name: &str) -> Entry {
 /// A folder named `name` in `/tmp/ox-test`.
 pub(crate) fn folder_entry(name: &str) -> Entry {
     entry(name, gio::FileType::Directory)
+}
+
+/// A volume monitor row for a mounted volume of `kind` called `label`,
+/// open at `uri`, that the user may unmount.
+pub(crate) fn mounted_volume(label: &str, uri: &str, kind: VolumeKind) -> VolumeRow {
+    VolumeRow {
+        label: label.into(),
+        kind,
+        state: VolumeState::Mounted {
+            uri: uri.into(),
+            can_unmount: true,
+        },
+    }
 }
 
 /// The Network row of the SMB server `smb://studio-nas/`, browsed this

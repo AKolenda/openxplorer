@@ -172,18 +172,8 @@ mod tests {
     use ox_core::places::NetworkKind;
 
     use super::*;
-    use crate::volumes::{VolumeKind, VolumeState};
-
-    fn mounted(label: &str, uri: &str) -> VolumeRow {
-        VolumeRow {
-            label: label.into(),
-            kind: VolumeKind::Drive,
-            state: VolumeState::Mounted {
-                uri: uri.into(),
-                can_unmount: true,
-            },
-        }
-    }
+    use crate::test_support::mounted_volume;
+    use crate::volumes::VolumeKind;
 
     fn bookmark(uri: &str, label: &str) -> Bookmark {
         Bookmark {
@@ -213,8 +203,8 @@ mod tests {
     #[test]
     fn an_smb_mount_is_listed_under_network_and_not_among_the_drives() {
         let volumes = [
-            mounted("media on nas", "smb://nas/media"),
-            mounted("Backup", "file:///media/u/Backup"),
+            mounted_volume("media on nas", "smb://nas/media", VolumeKind::Drive),
+            mounted_volume("Backup", "file:///media/u/Backup", VolumeKind::Drive),
         ];
         let places = compose_with(&SettingsData::default(), &volumes, &[]);
         let drives: Vec<&str> = places.drives.iter().map(|row| row.label.as_str()).collect();
@@ -229,7 +219,8 @@ mod tests {
     #[test]
     fn a_saved_share_that_is_mounted_appears_once_and_connected() {
         let settings = settings_with_share("smb://nas/media", "Media");
-        let places = compose_with(&settings, &[mounted("media on nas", "smb://nas/media")], &[]);
+        let share_mount = mounted_volume("media on nas", "smb://nas/media", VolumeKind::Drive);
+        let places = compose_with(&settings, &[share_mount], &[]);
         assert_eq!(places.network.len(), 1);
         let row = &places.network[0];
         assert_eq!(
@@ -242,7 +233,8 @@ mod tests {
     #[test]
     fn a_saved_share_inside_a_mounted_share_is_connected() {
         let settings = settings_with_share("smb://nas/media/2024", "2024");
-        let places = compose_with(&settings, &[mounted("media on nas", "smb://nas/media")], &[]);
+        let share_mount = mounted_volume("media on nas", "smb://nas/media", VolumeKind::Drive);
+        let places = compose_with(&settings, &[share_mount], &[]);
         assert!(places.saved_shares[0].is_connected);
     }
 

@@ -55,7 +55,7 @@ fn failed_or_backend_cancelled_copies_keep_the_original_and_remove_private_stagi
     }
 }
 
-/// Port of `test_move_failure_does_not_copy_delete`.
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_failure_does_not_copy_delete`.
 ///
 /// parity: XFER-011
 #[test]
@@ -73,7 +73,7 @@ fn native_move_failure_never_degrades_to_copy_then_delete() {
     assert!(list(&fixture.destination_folder).is_empty());
 }
 
-/// Port of `test_preflight_race_never_overwrites`: a name another program
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_preflight_race_never_overwrites`: a name another program
 /// creates after the conflict check is not overwritten when the copy is
 /// published.
 ///
@@ -122,7 +122,7 @@ impl Provider for UnreachableAfterFailure {
     }
 }
 
-/// Port of `test_local_stage_query_error_is_still_reported`: local staging
+/// Ported from `desktop/tests/test_device_staging.py::DeviceStagingTests::test_local_stage_query_error_is_still_reported`: local staging
 /// that cannot even be queried gets one cleanup attempt and is reported
 /// with its exact location.
 ///

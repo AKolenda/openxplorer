@@ -164,7 +164,7 @@ mod tests {
 
     use super::*;
     use crate::private_storage::FILE_MODE;
-    use crate::test_support::mode;
+    use crate::test_support::permission_bits;
 
     /// parity: SET-012, SAFE-009
     #[test]
@@ -176,7 +176,7 @@ mod tests {
         replace_private_file(&target, ".settings-", b"two", OldFile::Discard).unwrap();
 
         assert_eq!(fs::read(&target).unwrap(), b"two");
-        assert_eq!(mode(&target), 0o600);
+        assert_eq!(permission_bits(&target), 0o600);
         let leftovers = fs::read_dir(root.path()).unwrap().count();
         assert_eq!(leftovers, 1, "no temporary files remain");
     }
@@ -214,7 +214,7 @@ mod tests {
         let name = backup.file_name().unwrap().to_string_lossy();
         assert!(name.starts_with("settings.json.unreadable-"), "{name}");
         assert_eq!(fs::read_to_string(&backup).unwrap(), "{bad");
-        assert_eq!(mode(&backup), 0o600);
+        assert_eq!(permission_bits(&backup), 0o600);
         assert_eq!(fs::read_dir(root.path()).unwrap().count(), 2);
     }
 

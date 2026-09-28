@@ -254,6 +254,11 @@ fn is_scheme(text: &str) -> bool {
 /// every tab, carriage return and line feed (the WHATWG rules), then checks
 /// bracketed hosts and rejects non-ASCII authorities that NFKC
 /// normalisation turns into URL delimiters (`℀` becomes `a/c`).
+///
+/// # Errors
+///
+/// A [`LocationError`] in the app's wording for a malformed bracketed
+/// host or an authority that NFKC turns into a delimiter.
 pub(crate) fn split_url(location: &str) -> Result<LocationParts, LocationError> {
     let cleaned = strip_ignored_url_characters(location);
     let (scheme, after_scheme) = match split_scheme(&cleaned) {

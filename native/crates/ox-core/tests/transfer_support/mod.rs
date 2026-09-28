@@ -36,7 +36,7 @@ use ox_core::transfer::{
 
 pub use fifo::make_fifo;
 use local::{LocalNode, Provider};
-pub use shared::{gio_engine, mode_of, set_mode, RestoreOwnerAccess};
+pub use shared::{gio_engine, mode_of, set_mode, temporary_folder, RestoreOwnerAccess};
 pub use uri::file_uri;
 
 /// What a test run asks the engine to do. Copies and moves go into the
@@ -90,7 +90,7 @@ impl<'a> Request<'a> {
 /// Python transfer tests (`self.src` and `self.dst` there).
 pub struct Fixture {
     /// Removes the temporary folder when the fixture is dropped.
-    _temp: tempfile::TempDir,
+    _folder: tempfile::TempDir,
     /// The temporary folder holding both of the others.
     pub root: PathBuf,
     /// The folder the test's sources are created in, called `source`.
@@ -111,14 +111,14 @@ impl Fixture {
 
     /// `source` and a destination folder called `name`.
     pub fn with_destination(name: &str) -> Self {
-        let temp = tempfile::tempdir().expect("create a temporary folder");
-        let root = temp.path().to_path_buf();
+        let folder = temporary_folder();
+        let root = folder.path().to_path_buf();
         let source_folder = root.join("source");
         let destination_folder = root.join(name);
         fs::create_dir(&source_folder).expect("create source");
         fs::create_dir(&destination_folder).expect("create destination");
         Self {
-            _temp: temp,
+            _folder: folder,
             root,
             source_folder,
             destination_folder,

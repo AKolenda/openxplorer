@@ -46,6 +46,14 @@ const MOVE_FLAGS: gio::FileCopyFlags =
 
 impl GioNode {
     /// Moves or renames this item to `target` natively.
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::Cancelled`] when `cancel` was cancelled, a refusal
+    /// for a filesystem root or share, [`TransferError::ReplaceUnsupported`]
+    /// when `overwrite` asks for a replacement the backend cannot make in
+    /// one step, [`TransferError::NotSupported`] for a move the backend
+    /// could only do by copying, and the backend's error otherwise.
     pub(super) fn move_item(
         &self,
         target: &dyn Node,
@@ -108,6 +116,12 @@ impl GioNode {
     /// overwriting (see the module rules). Remote items, and local
     /// filesystems that lack no-replace renames (some network and FUSE
     /// filesystems), are published by the ordinary native move.
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::Exists`] when `target` is taken (nothing is
+    /// overwritten), [`TransferError::NotSupported`] across filesystems,
+    /// and every error of [`Self::move_item`].
     pub(super) fn publish_item(
         &self,
         target: &dyn Node,

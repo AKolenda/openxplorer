@@ -59,6 +59,11 @@ impl BookmarkRequest {
 /// Adds or removes a pin or share. Removing a pin also hides it (so a
 /// known folder can be unpinned) and drops it from the Quick access
 /// order; adding a pin un-hides it.
+///
+/// # Errors
+///
+/// [`SettingsError::Location`] for a location or label the location rules
+/// refuse; nothing is changed then.
 pub(super) fn apply_bookmark(
     settings: &mut SettingsData,
     action: BookmarkAction,
@@ -111,6 +116,12 @@ fn show_or_hide_in_quick_access(settings: &mut SettingsData, action: BookmarkAct
 /// one of the dragged folders keeps its place. `quick_order` is the order
 /// the sidebar showed, used as the base order when given. Performs no file
 /// I/O: callers verify new folders exist before pinning them.
+///
+/// # Errors
+///
+/// [`SettingsError::Invalid`] for an empty or oversized batch or order,
+/// and [`SettingsError::Location`] for an invalid location or label;
+/// nothing is changed then.
 pub(super) fn pin_many(
     settings: &mut SettingsData,
     items: &[BookmarkRequest],
@@ -226,6 +237,11 @@ fn push_unique(order: &mut Vec<String>, uri: String) {
 /// Puts `entry` first in the recent files, removing an older entry for the
 /// same file and keeping at most 30. The entry is stored as it will read
 /// back: canonical URI, bounded name and type, never a folder.
+///
+/// # Errors
+///
+/// [`SettingsError::Location`] for an invalid file location; nothing is
+/// changed then.
 pub(super) fn remember_open(settings: &mut SettingsData, entry: RecentEntry) -> Result<(), SettingsError> {
     let opened = RecentEntry {
         uri: normalise(&entry.uri)?,
@@ -242,11 +258,7 @@ pub(super) fn remember_open(settings: &mut SettingsData, entry: RecentEntry) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::test_support::{shown_quick_order, DESKTOP, DOCUMENTS, DOWNLOADS};
-
-    fn pin(uri: &str) -> BookmarkRequest {
-        BookmarkRequest::new(uri, "")
-    }
+    use crate::settings::test_support::{pin, shown_quick_order, DESKTOP, DOCUMENTS, DOWNLOADS};
 
     /// `count` distinct share folders, `smb://nas/s/0` onwards.
     fn numbered_pins(count: usize) -> Vec<BookmarkRequest> {
@@ -388,7 +400,7 @@ mod tests {
     /// Ported from `desktop/tests/test_core.py::CoreTests::test_credential_bookmark_rejected`
     /// parity: SAFE-010, NET-017
     #[test]
-    fn credential_bookmark_rejected() {
+    fn a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged() {
         let mut settings = SettingsData::default();
         let with_password = pin("smb://u:secret@nas/share");
         let result = apply_bookmark(

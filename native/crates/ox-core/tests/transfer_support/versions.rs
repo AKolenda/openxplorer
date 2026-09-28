@@ -43,7 +43,7 @@ impl PreviousVersions {
             .push(snapshots.to_string());
     }
 
-    /// Refuses protected locations with [`READ_ONLY`]. Port of
+    /// Refuses protected locations with [`READ_ONLY`]. Ported from
     /// `PreviousVersions.assert_writable` in `desktop/previous_versions.py`,
     /// which raises the refusal where this returns it.
     ///
@@ -67,7 +67,7 @@ impl PreviousVersions {
     }
 }
 
-/// Port of `conventional_snapshot` in `previous_versions.py`.
+/// Ported from `conventional_snapshot` in `desktop/previous_versions.py`.
 fn is_conventional_snapshot(uri: &str) -> bool {
     let after_scheme = uri.split_once("://").map_or(uri, |(_, rest)| rest);
     let path = after_scheme.find('/').map_or("", |slash| &after_scheme[slash..]);
@@ -80,7 +80,7 @@ fn is_conventional_snapshot(uri: &str) -> bool {
     marked || zfs
 }
 
-/// Port of `within` in `previous_versions.py`.
+/// Ported from `within` in `desktop/previous_versions.py`.
 fn is_within(uri: &str, root: &str) -> bool {
     let root = root.trim_end_matches('/');
     uri.trim_end_matches('/') == root || uri.starts_with(&format!("{root}/"))

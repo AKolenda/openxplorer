@@ -133,8 +133,7 @@ mod tests {
         assert!(!is_own_staging_name(&backup));
     }
 
-    /// Port of `StagingNameTests.test_only_exact_generated_names_match` in
-    /// `desktop/tests/test_device_staging.py`.
+    /// Ported from `desktop/tests/test_device_staging.py::StagingNameTests::test_only_exact_generated_names_match`
     ///
     /// parity: XFER-002
     #[test]

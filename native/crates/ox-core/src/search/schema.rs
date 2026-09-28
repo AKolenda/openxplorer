@@ -92,6 +92,10 @@ pub(super) fn prepare(connection: &mut Connection) -> rusqlite::Result<SearchEng
 /// Safety rule "only the index owner recovers": a second process opening
 /// a folder must not mark a live scan interrupted, so only the elected
 /// owner calls this (`recover_interrupted` in `search_index.py`).
+///
+/// # Errors
+///
+/// The database's error.
 pub(super) fn recover_interrupted(connection: &Connection) -> rusqlite::Result<()> {
     connection.execute(
         "UPDATE roots SET status=?1, error=?2 WHERE status IN (?3, ?4)",

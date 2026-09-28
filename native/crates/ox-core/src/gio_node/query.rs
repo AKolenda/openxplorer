@@ -16,6 +16,12 @@ const PERMISSION_BITS: u32 = 0o7777;
 
 impl GioNode {
     /// Kind, size and mode of this item, not of a link's target (XFER-017).
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::Cancelled`] when `cancel` was cancelled; the
+    /// backend's error otherwise, with [`TransferError::NotFound`] only for
+    /// a definite absence.
     pub(super) fn query_info(&self, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
         check_cancelled(cancel)?;
         let info = self.file.query_info(
@@ -35,6 +41,11 @@ impl GioNode {
 
     /// The items of this folder. XFER-017: a link to a folder is refused,
     /// so the engine never walks into a link's target.
+    ///
+    /// # Errors
+    ///
+    /// [`TransferError::Failed`] when this item is not a real folder, and
+    /// every error of [`Self::query_info`] and of the enumeration.
     pub(super) fn list_children(
         &self,
         cancel: Option<&Cancellation>,

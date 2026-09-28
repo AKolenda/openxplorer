@@ -255,6 +255,7 @@ mod tests {
     //! of other paths; it is tested here.
 
     use super::*;
+    use crate::test_support::temporary_folder;
 
     /// parity: XFER-015
     #[test]
@@ -271,9 +272,9 @@ mod tests {
     /// parity: XFER-015
     #[test]
     fn an_absolute_folder_path_is_opened() {
-        let temp = tempfile::tempdir().expect("a temp dir");
+        let root = temporary_folder();
 
-        let opened = open_parent(temp.path());
+        let opened = open_parent(root.path());
 
         assert!(opened.is_ok(), "{:?}", opened.err());
     }

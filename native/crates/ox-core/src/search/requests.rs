@@ -86,6 +86,10 @@ impl IndexRequest {
 impl SearchIndex {
     /// Leaves `request` for the index owner. A request equal to one still
     /// waiting replaces it, so repeated requests run once.
+    ///
+    /// # Errors
+    ///
+    /// As [`SearchIndex::open`].
     pub(crate) fn enqueue(&self, request: &IndexRequest) -> Result<(), SearchError> {
         let kind = request.kind();
         let subject = request.subject();
@@ -104,6 +108,10 @@ impl SearchIndex {
     /// Reading and deleting run in one immediate transaction, so a request
     /// another process leaves in between is kept for the next call instead
     /// of being deleted unread.
+    ///
+    /// # Errors
+    ///
+    /// As [`SearchIndex::open`]; nothing is deleted then.
     pub(crate) fn drain_requests(&self) -> Result<Vec<IndexRequest>, SearchError> {
         let mut connection = self.connect()?;
         let transaction = begin_immediate(&mut connection)?;

@@ -13,7 +13,7 @@ use crate::transfer_support::{
     *,
 };
 
-/// Port of `test_replace_move_is_native_and_removes_source`.
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_replace_move_is_native_and_removes_source`.
 ///
 /// parity: XFER-009, XFER-011
 #[test]
@@ -80,7 +80,7 @@ impl Provider for NoDirectReplace {
     }
 }
 
-/// Port of `test_replace_falls_back_to_reversible_rename_for_remote_backend`.
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_replace_falls_back_to_reversible_rename_for_remote_backend`.
 ///
 /// parity: XFER-010
 #[test]
@@ -99,7 +99,7 @@ fn replace_without_direct_overwrite_renames_reversibly_and_leaves_no_backup() {
     assert!(fixture.leftovers().is_empty(), "{:?}", fixture.leftovers());
 }
 
-/// Port of `test_replace_type_mismatch_preserves_existing_folder`, in both
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_replace_type_mismatch_preserves_existing_folder`, in both
 /// directions.
 ///
 /// parity: XFER-009

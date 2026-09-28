@@ -146,6 +146,7 @@ fn process_error(program: &str, error: &glib::Error) -> UpdateError {
 
 #[cfg(test)]
 mod tests {
+    use rustix::process::Signal;
     use std::time::Instant;
 
     use super::*;
@@ -175,7 +176,7 @@ mod tests {
 
         let output = run_to_completion(SHELL, &arguments, None).unwrap();
 
-        assert_eq!(output.exit_status, -libc::SIGTERM);
+        assert_eq!(output.exit_status, -Signal::TERM.as_raw());
     }
 
     #[test]

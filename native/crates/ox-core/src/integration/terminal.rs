@@ -36,6 +36,12 @@ use crate::transfer::Cancellation;
 /// worker thread: the whole Open in Terminal request of the Python app's
 /// `openTerminal` operation. Cancelling `cancel` stops it before the
 /// terminal starts.
+///
+/// # Errors
+///
+/// The future resolves to the errors of [`prepare_directory`],
+/// [`find_terminal`] and [`launch_terminal`], or to
+/// [`TerminalError::Cancelled`].
 pub fn open_terminal_in_background<C>(
     uri: String,
     checks: C,

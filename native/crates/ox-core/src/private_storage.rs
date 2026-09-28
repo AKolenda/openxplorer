@@ -26,6 +26,8 @@ use std::io::{self, Read};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
+use rustix::fs::OFlags;
+
 /// Mode of private directories.
 const DIRECTORY_MODE: u32 = 0o700;
 
@@ -148,7 +150,7 @@ pub(crate) fn private_directory(path: &Path) -> Result<(), StorageError> {
     create_directory(path).with_path(path)?;
     let directory = OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .kernel_flags(OFlags::DIRECTORY | OFlags::NOFOLLOW)
         .open(path)
         .with_path(path)?;
     let metadata = directory.metadata().with_path(path)?;
@@ -309,16 +311,31 @@ impl OpenedFile {
 /// fails on a symlinked leaf instead of opening its target, and
 /// `O_NONBLOCK` returns at once for a FIFO, which the checks then refuse.
 fn open_without_following(path: &Path, options: PrivateFileOptions) -> io::Result<File> {
-    let mut flags = libc::O_NOFOLLOW | libc::O_NONBLOCK;
+    let mut flags = OFlags::NOFOLLOW | OFlags::NONBLOCK;
     if options.create {
-        flags |= libc::O_CREAT;
+        flags |= OFlags::CREATE;
     }
     OpenOptions::new()
         .read(true)
         .write(options.writable)
         .mode(FILE_MODE)
-        .custom_flags(flags)
+        .kernel_flags(flags)
         .open(path)
+}
+
+/// Kernel open flags for std's [`OpenOptions`], as rustix's typed [`OFlags`]
+/// rather than raw integers. The crate does all descriptor-level I/O through
+/// rustix: opening a path with these flags, and the descriptor-relative
+/// calls std lacks (`openat`, `renameat2` with `RENAME_NOREPLACE`).
+pub(crate) trait KernelOpenFlags {
+    /// Adds `flags`, such as `O_NOFOLLOW` or `O_NONBLOCK`, to the open call.
+    fn kernel_flags(&mut self, flags: OFlags) -> &mut Self;
+}
+
+impl KernelOpenFlags for OpenOptions {
+    fn kernel_flags(&mut self, flags: OFlags) -> &mut Self {
+        self.custom_flags(flags.bits().cast_signed())
+    }
 }
 
 /// `mkdir -p` where only the final directory gets mode 0700, like Python's
@@ -348,7 +365,7 @@ mod tests {
     use std::os::unix::fs::symlink;
 
     use super::*;
-    use crate::test_support::{make_fifo, mode};
+    use crate::test_support::{make_fifo, permission_bits};
 
     fn writable() -> PrivateFileOptions {
         PrivateFileOptions {
@@ -393,8 +410,8 @@ mod tests {
             allow_unlinked: false,
         };
         drop(private_file(&directory.join("state"), options).unwrap());
-        assert_eq!(mode(&directory), 0o700);
-        assert_eq!(mode(&directory.join("state")), 0o600);
+        assert_eq!(permission_bits(&directory), 0o700);
+        assert_eq!(permission_bits(&directory.join("state")), 0o600);
     }
 
     /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_directory_symlink_not_chmodded`
@@ -408,7 +425,7 @@ mod tests {
         let link = root.path().join("link");
         symlink(&real, &link).unwrap();
         assert!(matches!(private_directory(&link), Err(StorageError::Io { .. })));
-        assert_eq!(mode(&real), 0o755);
+        assert_eq!(permission_bits(&real), 0o755);
     }
 
     /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_file_symlink_leaves_target_unchanged`
@@ -426,13 +443,13 @@ mod tests {
             Err(StorageError::Io { .. })
         ));
         assert_eq!(fs::read_to_string(&real).unwrap(), "private");
-        assert_eq!(mode(&real), 0o644);
+        assert_eq!(permission_bits(&real), 0o644);
     }
 
     /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_hardlink_rejected`
     /// parity: SAFE-009
     #[test]
-    fn hardlink_rejected() {
+    fn a_hard_linked_file_is_refused() {
         let root = tempfile::tempdir().unwrap();
         let real = root.path().join("real");
         fs::write(&real, "x").unwrap();
@@ -484,7 +501,7 @@ mod tests {
     /// Ported from `desktop/tests/test_terminal_security.py::PrivateStorageTests::test_database_symlink_refused`
     /// parity: SAFE-009
     #[test]
-    fn database_symlink_refused() {
+    fn a_symlinked_database_is_refused_and_its_target_unchanged() {
         let root = tempfile::tempdir().unwrap();
         let target = root.path().join("target");
         fs::write(&target, b"unchanged").unwrap();
@@ -564,10 +581,10 @@ mod tests {
 
         private_directory(&leaf).unwrap();
 
-        assert_eq!(mode(&leaf), 0o700);
-        let default_mode = mode(&reference);
+        assert_eq!(permission_bits(&leaf), 0o700);
+        let default_mode = permission_bits(&reference);
         for parent in ["a", "a/b"] {
-            let parent_mode = mode(&root.path().join(parent));
+            let parent_mode = permission_bits(&root.path().join(parent));
             assert_eq!(parent_mode, default_mode, "{parent} keeps the default mode");
         }
         private_directory(&leaf).expect("an existing private directory is accepted again");

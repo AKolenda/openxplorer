@@ -27,6 +27,11 @@ impl TabTransferToken {
     }
 
     /// A new unpredictable token from the kernel's random source.
+    ///
+    /// # Errors
+    ///
+    /// [`TabTransferError::NoCapability`] when the kernel's random source
+    /// cannot be read.
     pub(super) fn generate() -> Result<Self, TabTransferError> {
         let digits =
             random_hex(TOKEN_BYTES).map_err(|error| TabTransferError::NoCapability(error.to_string()))?;

@@ -92,21 +92,22 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+    use crate::test_support::temporary_folder;
 
     /// Deletes the local tree at `path` through the remote deletion walk.
     fn delete(path: &Path, cancel: &Cancellation, guard: Option<&WriteGuard>) -> Result<(), TransferError> {
         delete_tree(&gio::File::for_path(path), cancel, guard)
     }
 
-    /// Port of `_delete_recursive` in `desktop/gio_backend.py`: hidden items
+    /// Ported from `_delete_recursive` in `desktop/gio_backend.py`: hidden items
     /// and empty folders go too. GIO removes only empty folders, so a tree
     /// that is gone was emptied children first.
     ///
     /// parity: XFER-015
     #[test]
     fn nested_folders_hidden_items_and_empty_folders_are_all_deleted() {
-        let temp = tempfile::tempdir().expect("a temp dir");
-        let selected = temp.path().join("selected");
+        let root = temporary_folder();
+        let selected = root.path().join("selected");
         fs::create_dir_all(selected.join("nested/empty")).expect("create the tree");
         fs::write(selected.join("nested/data"), b"delete me").expect("write");
         fs::write(selected.join(".hidden"), b"delete me too").expect("write");
@@ -120,11 +121,11 @@ mod tests {
     /// parity: XFER-015, XFER-017
     #[test]
     fn a_link_to_a_folder_is_removed_without_touching_its_target() {
-        let temp = tempfile::tempdir().expect("a temp dir");
-        let outside = temp.path().join("outside");
+        let root = temporary_folder();
+        let outside = root.path().join("outside");
         fs::create_dir(&outside).expect("create the target");
         fs::write(outside.join("kept"), b"kept").expect("write");
-        let selected = temp.path().join("selected");
+        let selected = root.path().join("selected");
         fs::create_dir(&selected).expect("create the selected folder");
         symlink(&outside, selected.join("link")).expect("create the link");
 
@@ -138,8 +139,8 @@ mod tests {
     /// parity: XFER-015, XFER-020
     #[test]
     fn a_protected_descendant_stops_the_deletion_before_it_is_removed() {
-        let temp = tempfile::tempdir().expect("a temp dir");
-        let selected = temp.path().join("selected");
+        let root = temporary_folder();
+        let selected = root.path().join("selected");
         let protected = selected.join("sub/.snapshot");
         fs::create_dir_all(&protected).expect("create the tree");
         fs::write(protected.join("version"), b"backup").expect("write");
@@ -160,8 +161,8 @@ mod tests {
     /// parity: XFER-015
     #[test]
     fn nesting_deeper_than_the_limit_is_refused() {
-        let temp = tempfile::tempdir().expect("a temp dir");
-        let selected = temp.path().join("selected");
+        let root = temporary_folder();
+        let selected = root.path().join("selected");
         let deepest = (0..=MAX_DEPTH).fold(selected.clone(), |path, _| path.join("d"));
         fs::create_dir_all(&deepest).expect("create the deep tree");
 
@@ -174,8 +175,8 @@ mod tests {
     /// parity: XFER-015
     #[test]
     fn cancellation_stops_the_deletion_and_keeps_the_rest() {
-        let temp = tempfile::tempdir().expect("a temp dir");
-        let selected = temp.path().join("selected");
+        let root = temporary_folder();
+        let selected = root.path().join("selected");
         fs::create_dir(&selected).expect("create the selected folder");
         fs::write(selected.join("data"), b"kept").expect("write");
         let cancel = Cancellation::new();

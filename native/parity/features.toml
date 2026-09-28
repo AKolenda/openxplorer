@@ -3216,7 +3216,7 @@ bridge = ["list", "preferences"]
 dolphin = "View > Show Hidden Files (Ctrl+H / Alt+.); KIO honours .hidden files"
 gnome = "standard::is-hidden (includes .hidden files); standard::is-hidden (GLib's local backend reads .hidden; verified with gio in the isolated runner)"
 native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node.rs (metadata_and_listing_preserve_hidden_files_and_do_not_follow_links); .hidden files are not covered by a native test. Porting notes: The behaviour comes from GIO and is untested; add a native test."
+native_note = "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (metadata_and_listing_preserve_hidden_files_and_do_not_follow_links); .hidden files are not covered by a native test. Porting notes: The behaviour comes from GIO and is untested; add a native test."
 
 [[feature]]
 id = "VIEW-025"
@@ -6592,7 +6592,7 @@ python_tests = [
 bridge = ["create", "createTemplate", "rename"]
 dolphin = "Create New > Folder (F10); Rename (F2); KIO::moveAs + slotRenamingResult"
 native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node.rs (exclusive_copy_move_and_mkdir_preserve_existing_destinations); dialogs not implemented."
+native_note = "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (exclusive_copy_move_and_folder_creation_preserve_existing_destinations); dialogs not implemented."
 
 [[feature]]
 id = "OPS-009"
@@ -6905,7 +6905,7 @@ python_tests = [
 ]
 bridge = ["cancel"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (cancellation_during_copy_removes_partial_stage_and_stops_the_batch); native/crates/ox-core/tests/gio_node.rs (cancellation_prevents_copy_move_and_recursive_delete)."
+native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (cancellation_during_copy_removes_partial_stage_and_stops_the_batch); native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (cancellation_prevents_copy_move_and_recursive_delete)."
 
 [[feature]]
 id = "OPS-023"
@@ -7200,7 +7200,7 @@ python_tests = [
 ]
 bridge = ["operate", "rename", "transferConflicts", "clipboardSet"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node.rs (roots_and_whole_network_shares_are_refused_before_mutation)."
+native_note = "native/crates/ox-core/tests/gio_node_cases/removal.rs (roots_and_whole_network_shares_are_refused_before_mutation)."
 
 [[feature]]
 id = "OPS-036"
@@ -7458,7 +7458,7 @@ python_tests = [
 ]
 bridge = ["operate"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node.rs (complete_engine_stages_and_publishes_a_recursive_local_copy); native/crates/ox-core/tests/transfer_cases/failures.rs (failed_or_backend_cancelled_copies_keep_the_original_and_remove_private_staging)."
+native_note = "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (complete_engine_stages_and_publishes_a_recursive_local_copy); native/crates/ox-core/tests/transfer_cases/failures.rs (failed_or_backend_cancelled_copies_keep_the_original_and_remove_private_staging)."
 
 [[feature]]
 id = "XFER-002"
@@ -7698,7 +7698,7 @@ python_tests = [
 ]
 bridge = ["operate"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/failures.rs (native_move_failure_never_degrades_to_copy_then_delete); native/crates/ox-core/tests/gio_node.rs (cross_filesystem_move_is_refused_without_copying_or_removing_the_source). Porting notes: Dolphin/KIO performs cross-device moves as copy+delete; OpenXplorer deliberately refuses. The product owner must decide whether the native app gains this."
+native_note = "native/crates/ox-core/tests/transfer_cases/failures.rs (native_move_failure_never_degrades_to_copy_then_delete); native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (cross_filesystem_move_is_refused_without_copying_or_removing_the_source). Porting notes: Dolphin/KIO performs cross-device moves as copy+delete; OpenXplorer deliberately refuses. The product owner must decide whether the native app gains this."
 
 [[feature]]
 id = "XFER-012"
@@ -7793,7 +7793,7 @@ python_tests = [
 bridge = ["operate"]
 dolphin = "Shift+Delete"
 native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node.rs (local_recursive_delete_removes_selected_tree_without_following_its_links, an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion). Remote directory deletion is refused natively (see ROADMAP.md)."
+native_note = "native/crates/ox-core/tests/gio_node_cases/removal.rs (local_recursive_delete_removes_selected_tree_without_following_its_links, an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion). Remote directory deletion is refused natively (see ROADMAP.md)."
 
 [[feature]]
 id = "XFER-016"
@@ -7851,7 +7851,7 @@ python_tests = [
 bridge = ["operate"]
 dolphin = "KIO::CopyJob (UDS_LINK_DEST)"
 native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node.rs (copying_and_deleting_symbolic_links_never_traverses_the_target)."
+native_note = "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (copying_a_link_copies_the_link_not_its_target); native/crates/ox-core/tests/gio_node_cases/removal.rs (deleting_a_copied_link_keeps_its_target)."
 
 [[feature]]
 id = "XFER-018"
@@ -7927,7 +7927,7 @@ python_tests = [
 ]
 bridge = ["operate", "rename", "create", "createTemplate", "archiveExtract"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (protected_descendants_stop_mutations_before_any_item_changes); native/crates/ox-core/tests/gio_node.rs (protected_descendants_are_preflighted_before_gio_permanent_deletion)."
+native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (protected_descendants_stop_mutations_before_any_item_changes); native/crates/ox-core/tests/gio_node_cases/removal.rs (protected_descendants_are_preflighted_before_gio_permanent_deletion)."
 
 [[feature]]
 id = "XFER-021"
@@ -8038,7 +8038,7 @@ python_tests = [
 ]
 bridge = ["rename", "createTemplate", "archiveExtract", "operate"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node.rs (device_capabilities_and_unsupported_renames_are_resolved_without_device_io). Simulated device only."
+native_note = "native/crates/ox-core/tests/gio_node_cases/device_capabilities.rs (only_mtp_destinations_stage_beside_the_final_name, only_a_copy_within_one_mtp_device_keeps_the_source_name, a_device_move_under_a_new_name_or_with_replace_is_refused_without_device_io). Simulated device only."
 
 [[feature]]
 id = "XFER-025"
@@ -10577,7 +10577,7 @@ python_tests = [
 ]
 bridge = ["bookmark", "connect"]
 native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (re_adding_a_bookmark_moves_it_last_with_the_new_label, credential_bookmark_rejected); UI not implemented."
+native_note = "native/crates/ox-core/src/settings/mutate.rs (re_adding_a_bookmark_moves_it_last_with_the_new_label, a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); UI not implemented."
 
 [[feature]]
 id = "NET-018"
@@ -16544,7 +16544,7 @@ python_tests = [
 ]
 bridge = []
 native = "partial"
-native_note = "native/crates/ox-core/src/settings/storage.rs (permissions, directory_symlink_not_chmodded, file_symlink_leaves_target_unchanged, hardlink_rejected, fifo_does_not_block, database_symlink_refused, database_sidecar_symlink_refused)."
+native_note = "native/crates/ox-core/src/private_storage.rs (effective_uid_owns_new_files, directory_symlink_not_chmodded, file_symlink_leaves_target_unchanged, a_hard_linked_file_is_refused, fifo_does_not_block, a_symlinked_database_is_refused_and_its_target_unchanged, database_sidecar_symlink_refused)."
 
 [[feature]]
 id = "SAFE-010"
@@ -16575,7 +16575,7 @@ python_tests = [
 ]
 bridge = ["normalise", "authReply", "connect", "bookmark", "pin"]
 native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (credential_bookmark_rejected); address rejection compared with Python in native/crates/ox-core/tests/location_python.rs."
+native_note = "native/crates/ox-core/src/settings/mutate.rs (a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); address rejection compared with Python in native/crates/ox-core/tests/location_python.rs."
 
 [[feature]]
 id = "SAFE-011"
