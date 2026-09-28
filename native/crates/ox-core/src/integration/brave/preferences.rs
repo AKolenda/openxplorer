@@ -6,8 +6,11 @@
 //! `desktop/brave_integration.py` and the record format of
 //! `BraveIntegration.sync`. Only `download.default_directory` and
 //! `savefile.default_directory` are ever changed; every other preference
-//! is written back as read. Keys come back in sorted order, which Brave
-//! reads the same, since JSON objects are unordered.
+//! is written back with the value it was read with. Numbers are parsed
+//! exactly (`serde_json`'s `float_roundtrip`, as Python's `json` parses
+//! them), so a 17-digit zoom level survives a sync and a restore. Keys
+//! come back in sorted order, which Brave reads the same, since JSON
+//! objects are unordered.
 
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};

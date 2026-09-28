@@ -27,6 +27,13 @@ use tempfile::TempDir;
 /// The stable channel's default profile.
 const PROFILE_ID: &str = "Brave-Browser:Default";
 
+/// A zoom level as Chromium writes it: a 17-digit double that a float
+/// parser which is not correctly rounded reads as a neighbouring value.
+const ZOOM_LEVEL: &str = "39.430133835633676";
+
+/// Preferences holding [`ZOOM_LEVEL`], written as Brave writes them.
+const PREFERENCES_WITH_ZOOM_LEVEL: &str = r#"{"download":{"default_directory":"/old/downloads"},"partition":{"default_zoom_level":{"x":39.430133835633676}},"profile":{"name":"Test person"}}"#;
+
 /// Whether Brave runs, switchable by the test.
 #[derive(Debug, Clone, Default)]
 struct BraveSwitch(Arc<AtomicBool>);

@@ -12,7 +12,10 @@ use std::sync::Mutex;
 use ox_core::integration::{BraveError, BraveIntegration, Confirmation, Sandbox};
 use serde_json::json;
 
-use super::{mode_of, original_preferences, read_json, BraveSwitch, Fixture, PROFILE_ID};
+use super::{
+    mode_of, original_preferences, read_json, BraveSwitch, Fixture, PREFERENCES_WITH_ZOOM_LEVEL, PROFILE_ID,
+    ZOOM_LEVEL,
+};
 
 /// Ported from `desktop/tests/test_v07.py::BraveTests::test_explicit_consent`
 /// parity: INT-020
@@ -60,6 +63,18 @@ fn syncing_changes_only_the_two_download_folders() {
     assert_eq!(preferences["download"]["prompt_for_download"], json!(true));
     assert_eq!(preferences["savefile"]["default_directory"], json!(destination));
     assert_eq!(preferences["download"]["default_directory"], json!(destination));
+}
+
+/// parity: INT-020
+#[test]
+fn syncing_keeps_unrelated_decimal_preferences_exactly() {
+    let fixture = Fixture::new();
+    fs::write(&fixture.preferences, PREFERENCES_WITH_ZOOM_LEVEL).expect("preferences");
+
+    fixture.sync(Confirmation::Confirmed).expect("sync");
+
+    let written = fs::read_to_string(&fixture.preferences).expect("read");
+    assert!(written.contains(ZOOM_LEVEL), "{written}");
 }
 
 /// Ported from `desktop/tests/test_v07.py::BraveTests::test_private_backups_and_prefs`
