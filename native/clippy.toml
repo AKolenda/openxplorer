@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Clippy's configuration for every crate of the workspace.
+#
+# Names that documentation may write without backticks. Clippy 1.92, the
+# minimum supported Rust that CI checks with, does not yet know "SQLite";
+# newer versions do. ".." keeps Clippy's own list.
+doc-valid-idents = ["SQLite", ".."]
