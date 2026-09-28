@@ -269,7 +269,7 @@ fn closing_a_window_disconnects_it_from_the_shared_skin() {
 
 /// Where the icon view's tiles are, relative to the view's scroller.
 fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
-    let grid = &test.window.content().grid;
+    let grid = test.window.content().icon_view.grid();
     let scroll = grid.parent().expect("the icon view scrolls");
     let tiles = descendants::<FileCell>(grid);
     let bounds = tiles
@@ -311,7 +311,7 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     assert_eq!(first_row.len(), usize::try_from(columns).expect("a few columns"));
     let next_row = tiles.iter().find(|tile| tile.1 != 5).expect("a second row");
     assert_eq!(next_row.1, 5 + 130, "rows are 130 pixels apart");
-    let first_cell = descendants::<FileCell>(&test.window.content().grid)
+    let first_cell = descendants::<FileCell>(test.window.content().icon_view.grid())
         .into_iter()
         .next()
         .expect("a tile");

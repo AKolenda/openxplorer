@@ -163,7 +163,7 @@ fn a_selected_tile_keeps_the_text_colour() {
     test.activate("view", Some("large"));
     test.window.folder_model().select_only(1);
     wait_for_frames(&test.window, 3);
-    let grid = &test.window.content().grid;
+    let grid = test.window.content().icon_view.grid();
     let labels = descendants::<gtk::Label>(grid);
     let selected = labels.iter().find(|label| label.text() == "Notes 2.txt");
     let other = labels.iter().find(|label| label.text() == "Notes 10.txt");

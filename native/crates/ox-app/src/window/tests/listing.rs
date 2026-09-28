@@ -292,7 +292,7 @@ fn only_the_visible_view_holds_the_model() {
     let content = test.window.content();
     assert!(content.details.model().is_some());
     assert!(
-        content.grid.model().is_none(),
+        content.icon_view.grid().model().is_none(),
         "the hidden icon view builds no tiles"
     );
     test.activate("view", Some("large"));
@@ -304,15 +304,15 @@ fn only_the_visible_view_holds_the_model() {
         content.details.model().is_none(),
         "the hidden details view builds no rows"
     );
-    assert!(content.grid.model().is_some());
+    assert!(content.icon_view.grid().model().is_some());
     assert!(
-        content.grid.max_columns() < 64,
+        content.icon_view.grid().max_columns() < 64,
         "the tile budget follows the width"
     );
     test.activate("view", Some("details"));
     assert!(content.details.model().is_some());
     assert!(
-        content.grid.model().is_none(),
+        content.icon_view.grid().model().is_none(),
         "switching back detaches the icon view"
     );
 }

@@ -74,7 +74,7 @@ impl BrowserWindow {
     /// address entry.
     pub(super) fn install_input(&self) {
         let details = self.content().details.clone();
-        let grid = self.content().grid.clone();
+        let grid = self.content().icon_view.grid().clone();
         self.folder_input(details.upcast_ref());
         self.folder_input(grid.upcast_ref());
         let escape = gtk::EventControllerKey::new();
@@ -123,7 +123,8 @@ impl BrowserWindow {
             .details
             .connect_activate(move |_, position| on_row(position));
         self.content()
-            .grid
+            .icon_view
+            .grid()
             .connect_activate(move |_, position| activate(position));
     }
 

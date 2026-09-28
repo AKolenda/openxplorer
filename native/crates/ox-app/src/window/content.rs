@@ -7,14 +7,13 @@
 //! model: a hidden `GtkGridView` still builds and binds its tiles for every
 //! change, which made large folders several times slower to list.
 
-use std::cell::Cell;
 use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
 
 use crate::folder_view::cells::{BoundIcons, CellOwners};
-use crate::folder_view::grid::{self, IconSize};
+use crate::folder_view::grid::{IconSize, IconView};
 use crate::folder_view::{details, model::FolderModel};
 use crate::theme::Appearance;
 
@@ -96,11 +95,11 @@ impl FolderView {
 }
 
 /// The details and icon views, one of them shown.
-fn view_stack(details_scroll: &gtk::ScrolledWindow, grid_scroll: &gtk::ScrolledWindow) -> gtk::Stack {
+fn view_stack(details_scroll: &gtk::ScrolledWindow, icon_view: &IconView) -> gtk::Stack {
     let views = gtk::Stack::new();
     views.add_named(details_scroll, Some(FolderView::Details.stack_name()));
     let icons = FolderView::Icons(IconSize::Large);
-    views.add_named(grid_scroll, Some(icons.stack_name()));
+    views.add_named(icon_view, Some(icons.stack_name()));
     views
 }
 
@@ -143,9 +142,7 @@ pub(super) struct Content {
     pub details: gtk::ColumnView,
     details_scroll: gtk::ScrolledWindow,
     /// The icon view.
-    pub grid: gtk::GridView,
-    grid_scroll: gtk::ScrolledWindow,
-    grid_scale: Rc<Cell<GridScale>>,
+    pub icon_view: IconView,
     /// The active tab's filtered, sorted and selectable items.
     pub model: FolderModel,
     /// Bound item icons, redrawn when the theme or scale changes.
@@ -166,10 +163,9 @@ impl Content {
         let icons = BoundIcons::new(appearance);
         let owners = CellOwners::new();
         let details = details::build(&model, &icons, &owners);
-        let grid = grid::build(&icons, &owners, IconSize::Large);
+        let icon_view = IconView::new(&icons, &owners);
         let details_scroll = scrolled(&details);
-        let grid_scroll = scrolled(&grid);
-        let views = view_stack(&details_scroll, &grid_scroll);
+        let views = view_stack(&details_scroll, &icon_view);
         let empty = EmptyPage::new();
         let (landing, landing_scroll) = landing_page();
         let stack = page_stack(&views, &empty, &landing_scroll);
@@ -182,9 +178,7 @@ impl Content {
             views,
             details,
             details_scroll,
-            grid,
-            grid_scroll,
-            grid_scale: Rc::new(Cell::new(GridScale::default())),
+            icon_view,
             model,
             icons,
             owners,
@@ -193,7 +187,6 @@ impl Content {
             loading_line,
         };
         content.show_view(FolderView::Details);
-        content.fit_grid_columns_to_width();
         content
     }
 
@@ -230,7 +223,7 @@ impl Content {
 
     /// The view that lists items now.
     pub fn view(&self) -> FolderView {
-        let icons = FolderView::Icons(self.grid_scale.get().icon_size);
+        let icons = FolderView::Icons(self.icon_view.icon_size());
         let shown = self.views.visible_child_name();
         if shown.as_deref() == Some(icons.stack_name()) {
             icons
@@ -242,54 +235,50 @@ impl Content {
     /// Switches views. Only the visible view holds the selection model.
     pub fn show_view(&self, view: FolderView) {
         let selection = self.model.selection();
+        let grid = self.icon_view.grid();
         match view {
             FolderView::Details => {
-                self.grid.set_model(None::<&gtk::MultiSelection>);
+                grid.set_model(None::<&gtk::MultiSelection>);
                 self.details.set_model(Some(selection));
             }
             FolderView::Icons(size) => {
-                let scale = self.grid_scale.get();
-                if scale.icon_size != size {
-                    self.grid_scale.set(GridScale {
-                        icon_size: size,
-                        ..scale
-                    });
-                    grid::set_icon_size(&self.grid, &self.icons, &self.owners, size);
-                }
+                self.icon_view.set_icon_size(size);
                 self.details.set_model(None::<&gtk::MultiSelection>);
-                self.grid.set_model(Some(selection));
-                set_grid_columns(&self.grid, &self.grid_scroll, self.grid_scale.get());
+                grid.set_model(Some(selection));
+                self.icon_view.fit_columns();
             }
         }
         self.views.set_visible_child_name(view.stack_name());
     }
 
-    fn visible_scroll(&self) -> &gtk::ScrolledWindow {
+    /// The visible view's vertical scroll adjustment.
+    fn visible_vadjustment(&self) -> gtk::Adjustment {
         match self.view() {
-            FolderView::Details => &self.details_scroll,
-            FolderView::Icons(_) => &self.grid_scroll,
+            FolderView::Details => self.details_scroll.vadjustment(),
+            FolderView::Icons(_) => self.icon_view.vadjustment(),
         }
     }
 
     /// The visible view's vertical scroll position.
     pub fn scroll_position(&self) -> f64 {
-        self.visible_scroll().vadjustment().value()
+        self.visible_vadjustment().value()
     }
 
     /// Scrolls the visible view to `position` once the view has measured
     /// its new items; set straight after a model change, the position
     /// would be clamped to the old, shorter list.
     pub fn restore_scroll_position(&self, position: f64) {
-        let adjustment = self.visible_scroll().vadjustment();
+        let adjustment = self.visible_vadjustment();
         adjustment.set_value(position);
         glib::idle_add_local_once(move || adjustment.set_value(position));
     }
 
     /// True while keyboard focus is inside the visible view.
     pub fn has_focus(&self) -> bool {
+        let grid = self.icon_view.grid();
         match self.view() {
             FolderView::Details => self.details.has_focus() || self.details.focus_child().is_some(),
-            FolderView::Icons(_) => self.grid.has_focus() || self.grid.focus_child().is_some(),
+            FolderView::Icons(_) => grid.has_focus() || grid.focus_child().is_some(),
         }
     }
 
@@ -297,17 +286,18 @@ impl Content {
     pub fn focus(&self) {
         match self.view() {
             FolderView::Details => self.details.grab_focus(),
-            FolderView::Icons(_) => self.grid.grab_focus(),
+            FolderView::Icons(_) => self.icon_view.grid().grab_focus(),
         };
     }
 
     /// Scrolls to `position` and gives it keyboard focus.
     pub fn reveal(&self, position: u32) {
+        let grid = self.icon_view.grid();
         match self.view() {
             FolderView::Details => self
                 .details
                 .scroll_to(position, None, gtk::ListScrollFlags::FOCUS, None),
-            FolderView::Icons(_) => self.grid.scroll_to(position, gtk::ListScrollFlags::FOCUS, None),
+            FolderView::Icons(_) => grid.scroll_to(position, gtk::ListScrollFlags::FOCUS, None),
         }
     }
 
@@ -315,71 +305,12 @@ impl Content {
     pub fn view_widget(&self) -> gtk::Widget {
         match self.view() {
             FolderView::Details => self.details.clone().upcast(),
-            FolderView::Icons(_) => self.grid.clone().upcast(),
+            FolderView::Icons(_) => self.icon_view.grid().clone().upcast(),
         }
     }
 
     /// Draws the icon view's cells for text of `percent` size.
     pub fn set_text_size(&self, percent: u32) {
-        let scale = self.grid_scale.get();
-        self.grid_scale.set(GridScale {
-            text_size: percent,
-            ..scale
-        });
-        set_grid_columns(&self.grid, &self.grid_scroll, self.grid_scale.get());
-    }
-
-    /// Keeps the icon view's columns at what fits its pane (see
-    /// [`grid::columns_for_width`]).
-    fn fit_grid_columns_to_width(&self) {
-        let grid = self.grid.downgrade();
-        let scroll = self.grid_scroll.downgrade();
-        let scale = Rc::clone(&self.grid_scale);
-        self.grid_scroll.hadjustment().connect_page_size_notify(move |_| {
-            set_grid_columns_when_allocated(grid.clone(), scroll.clone(), Rc::clone(&scale));
-        });
-    }
-}
-
-/// What sizes the icon view's cells: the icon size and the text size.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct GridScale {
-    icon_size: IconSize,
-    /// In percent.
-    text_size: u32,
-}
-
-impl Default for GridScale {
-    /// Large icons at the default text size, as a new window starts.
-    fn default() -> Self {
-        Self {
-            icon_size: IconSize::Large,
-            text_size: crate::text_size::DEFAULT,
-        }
-    }
-}
-
-/// Sets the icon view's columns for its pane's width, once GTK has
-/// finished allocating the pane. The page size changes while GTK
-/// allocates the grid, and GTK ignores a resize the grid queues then, so a
-/// window that opened in the icon view kept one column.
-fn set_grid_columns_when_allocated(
-    grid: glib::WeakRef<gtk::GridView>,
-    scroll: glib::WeakRef<gtk::ScrolledWindow>,
-    scale: Rc<Cell<GridScale>>,
-) {
-    glib::idle_add_local_once(move || {
-        if let (Some(grid), Some(scroll)) = (grid.upgrade(), scroll.upgrade()) {
-            set_grid_columns(&grid, &scroll, scale.get());
-        }
-    });
-}
-
-/// Gives `grid` the columns its scroller's width holds at `scale`.
-fn set_grid_columns(grid: &gtk::GridView, scroll: &gtk::ScrolledWindow, scale: GridScale) {
-    let cell = grid::cell_size(scale.icon_size, scale.text_size);
-    let columns = grid::columns_for_width(cell.width, scroll.width());
-    if grid.max_columns() != columns {
-        grid.set_max_columns(columns);
+        self.icon_view.set_text_size(percent);
     }
 }
