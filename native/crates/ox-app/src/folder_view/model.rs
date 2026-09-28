@@ -19,13 +19,15 @@ use crate::folder_view::filter::FilterState;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::sorting::{self, SortColumn};
 
+/// The item a folder model hands to its filter or sorters.
 fn as_item(object: &glib::Object) -> &FileItem {
     object
         .downcast_ref::<FileItem>()
         .expect("folder models hold FileItems")
 }
 
-fn to_gtk(order: Ordering) -> gtk::Ordering {
+/// GTK's spelling of a standard ordering.
+fn to_gtk_ordering(order: Ordering) -> gtk::Ordering {
     match order {
         Ordering::Less => gtk::Ordering::Smaller,
         Ordering::Equal => gtk::Ordering::Equal,
@@ -34,38 +36,44 @@ fn to_gtk(order: Ordering) -> gtk::Ordering {
 }
 
 /// Compares two items by one column, without folders-first or tie-breaks.
-pub fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> Ordering {
-    let (x, y) = (a.entry(), b.entry());
+/// Sizes that are not known count as 0, as in app.js.
+fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> Ordering {
     match column {
-        SortColumn::Name => sorting::natural_cmp(a.name_key(), b.name_key()),
-        SortColumn::Modified => x.modified.cmp(&y.modified),
-        SortColumn::Type => sorting::natural_cmp(a.type_key(), b.type_key()),
-        SortColumn::Size => x.size.unwrap_or(0).cmp(&y.size.unwrap_or(0)),
+        SortColumn::Name => a.sort_name().key.natural_cmp(b.sort_name().key),
+        SortColumn::Modified => a.entry().modified.cmp(&b.entry().modified),
+        SortColumn::Type => a.type_sort_key().natural_cmp(b.type_sort_key()),
+        SortColumn::Size => {
+            let a_size = a.entry().size.unwrap_or(0);
+            let b_size = b.entry().size.unwrap_or(0);
+            a_size.cmp(&b_size)
+        }
     }
 }
 
-/// The sorter a details column uses.
-pub fn column_sorter(column: SortColumn) -> gtk::CustomSorter {
-    gtk::CustomSorter::new(move |a, b| to_gtk(compare_column(column, as_item(a), as_item(b))))
-}
-
-fn folders_first() -> gtk::CustomSorter {
-    gtk::CustomSorter::new(|a, b| {
-        let (x, y) = (as_item(a).entry(), as_item(b).entry());
-        // `true` sorts first.
-        to_gtk(y.is_dir.cmp(&x.is_dir))
+/// The sorter a details column uses; the column view applies the
+/// direction.
+pub(crate) fn column_sorter(column: SortColumn) -> gtk::CustomSorter {
+    gtk::CustomSorter::new(move |a, b| {
+        let order = compare_column(column, as_item(a), as_item(b));
+        to_gtk_ordering(order)
     })
 }
 
+/// Sorts folders before files, whichever way the column sorts.
+fn folders_first() -> gtk::CustomSorter {
+    gtk::CustomSorter::new(|a, b| {
+        let a_is_folder = as_item(a).entry().is_dir;
+        let b_is_folder = as_item(b).entry().is_dir;
+        // Reversed, so `true` sorts first.
+        to_gtk_ordering(b_is_folder.cmp(&a_is_folder))
+    })
+}
+
+/// Breaks ties by name, always ascending.
 fn names_ascending() -> gtk::CustomSorter {
     gtk::CustomSorter::new(|a, b| {
-        let (x, y) = (as_item(a), as_item(b));
-        to_gtk(sorting::compare_names(
-            x.name_key(),
-            &x.entry().name,
-            y.name_key(),
-            &y.entry().name,
-        ))
+        let order = sorting::compare_names(as_item(a).sort_name(), as_item(b).sort_name());
+        to_gtk_ordering(order)
     })
 }
 
@@ -83,6 +91,8 @@ pub struct SelectionSummary {
 /// Filter, sort and selection over the active tab's store.
 #[derive(Debug)]
 pub struct FolderModel {
+    /// Shared with the filter's callback, which GTK calls with no access
+    /// to the model.
     filter_state: Rc<RefCell<FilterState>>,
     filter: gtk::CustomFilter,
     filter_model: gtk::FilterListModel,
@@ -97,7 +107,7 @@ impl FolderModel {
         let state = Rc::clone(&filter_state);
         let filter = gtk::CustomFilter::new(move |object| {
             let item = as_item(object);
-            state.borrow().accepts(item.lower_name(), item.entry().hidden)
+            state.borrow().accepts(item.lowercase_name(), item.entry().hidden)
         });
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
@@ -169,11 +179,7 @@ impl FolderModel {
 
     /// Sets the search text; returns true when the shown items changed.
     pub fn set_query(&self, query: &str) -> bool {
-        let changed = self.filter_state.borrow_mut().set_query(query);
-        if changed {
-            self.filter.changed(gtk::FilterChange::Different);
-        }
-        changed
+        self.update_filter(|state| state.set_query(query))
     }
 
     /// True while the search box filters the folder.
@@ -183,7 +189,15 @@ impl FolderModel {
 
     /// Shows or hides hidden items; returns true when that changed.
     pub fn set_show_hidden(&self, show: bool) -> bool {
-        let changed = self.filter_state.borrow_mut().set_show_hidden(show);
+        self.update_filter(|state| state.set_show_hidden(show))
+    }
+
+    /// Applies `update` to the filter state and, when it reports a change,
+    /// filters the items again. Returns what `update` returned.
+    fn update_filter(&self, update: impl FnOnce(&mut FilterState) -> bool) -> bool {
+        // The borrow ends with this statement: filtering again calls the
+        // filter's callback, which borrows the state too.
+        let changed = update(&mut self.filter_state.borrow_mut());
         if changed {
             self.filter.changed(gtk::FilterChange::Different);
         }
@@ -209,7 +223,10 @@ impl FolderModel {
     /// The first selected position, if any.
     pub fn first_selected(&self) -> Option<u32> {
         let bitset = self.selection.selection();
-        (!bitset.is_empty()).then(|| bitset.minimum())
+        if bitset.is_empty() {
+            return None;
+        }
+        Some(bitset.minimum())
     }
 
     /// Count and size of the selection.
@@ -217,7 +234,7 @@ impl FolderModel {
         let mut summary = SelectionSummary::default();
         for item in self.selected_items() {
             summary.count += 1;
-            if let (false, Some(size)) = (item.entry().is_dir, item.entry().size) {
+            if let Some(size) = item.file_size() {
                 summary.bytes += size;
                 summary.has_files = true;
             }
@@ -271,15 +288,15 @@ impl FolderModel {
         let count = self.n_items();
         let selected = gtk::Bitset::new_empty();
         for position in 0..count {
-            let listed = self
+            let is_wanted = self
                 .item(position)
                 .is_some_and(|item| wanted.contains(item.entry().uri.as_str()));
-            if listed {
+            if is_wanted {
                 selected.add(position);
             }
         }
-        self.selection
-            .set_selection(&selected, &gtk::Bitset::new_range(0, count));
+        let everything = gtk::Bitset::new_range(0, count);
+        self.selection.set_selection(&selected, &everything);
     }
 }
 
@@ -292,14 +309,12 @@ impl Default for FolderModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::folder_view::item::store_of_files;
     use crate::test_support::file_entry;
 
     /// A model showing a tab's store of files called `names`, and the store.
     fn model_with(names: &[&str]) -> (FolderModel, gio::ListStore) {
-        let store = gio::ListStore::new::<FileItem>();
-        for name in names {
-            store.append(&FileItem::new(file_entry(name)));
-        }
+        let store = store_of_files(names);
         let model = FolderModel::new();
         model.set_store(Some(&store));
         (model, store)
@@ -315,6 +330,7 @@ mod tests {
         selected
     }
 
+    /// parity: NAV-014
     #[gtk::test]
     fn restoring_a_selection_selects_exactly_the_listed_uris() {
         let (model, _store) = model_with(&["a.txt", "b.txt", "c.txt"]);
@@ -331,6 +347,7 @@ mod tests {
         assert!(model.selected_uris().is_empty());
     }
 
+    /// parity: NAV-014
     #[gtk::test]
     fn a_whole_selected_folder_is_restored() {
         let names: Vec<String> = (0..2000).map(|number| format!("photo {number}.jpg")).collect();
