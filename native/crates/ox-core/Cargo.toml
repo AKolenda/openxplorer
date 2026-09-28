@@ -16,7 +16,11 @@ serde_json.workspace = true
 percent-encoding.workspace = true
 thiserror.workspace = true
 libc.workspace = true
-rustix.workspace = true
+# The search index's inotify watcher waits on its descriptor with poll(2).
+rustix = { workspace = true, features = ["event"] }
+# The search cache; [workspace.dependencies] says why it links the system
+# SQLite.
+rusqlite.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

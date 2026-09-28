@@ -4,8 +4,8 @@
 //!
 //! Ports `desktop/private_storage.py`, which several Python services use.
 //! The settings keep `settings.json` here (their lock and atomic replace
-//! are in `settings::save`); the search index will check its SQLite files
-//! with [`validate_sqlite_files`] once it is ported. This is defence in
+//! are in `settings::save`); the search index checks its SQLite files
+//! with [`validate_sqlite_files`] on every connection. This is defence in
 //! depth against misplaced or tampered XDG state, not isolation from
 //! another process running as the same user.
 //!
@@ -231,14 +231,6 @@ pub(crate) fn read_limited_text(file: File, path: &Path, limit: u64) -> Result<S
 ///
 /// Everything [`private_file`] refuses for the database or a sidecar
 /// that still exists.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the search index checks its SQLite files with this once it is ported \
-                  (ROADMAP.md: recover the remaining Python application services)"
-    )
-)]
 pub(crate) fn validate_sqlite_files(path: &Path) -> Result<(), StorageError> {
     let database = PrivateFileOptions {
         writable: true,

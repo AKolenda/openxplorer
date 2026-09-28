@@ -17,6 +17,7 @@
 //! | [`format`](mod@format) | Size and date text | `ui/app.js` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
+//! | [`search`] | The metadata-only filename search cache and its index service | `search_index.py`, `index_service.py`, `local_watch.py` |
 
 pub mod clipboard;
 pub mod entry;
@@ -24,6 +25,7 @@ pub mod format;
 pub mod gio_node;
 pub mod location;
 pub mod places;
+pub mod search;
 pub mod settings;
 pub mod transfer;
 

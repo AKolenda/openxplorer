@@ -26,6 +26,11 @@ percent-encoding = "2.3"
 thiserror = "2"
 libc = "0.2"
 rustix = { version = "1", features = ["fs"] }
+# The search cache is the SQLite database the Python app shares. It links the
+# system SQLite, as Python's sqlite3 module does, so building needs its
+# development files (libsqlite3-dev on Ubuntu). "hooks" provides the progress
+# handler that cancels a running search.
+rusqlite = { version = "0.38", default-features = false, features = ["hooks"] }
 tempfile = "3"
 ox-core = { path = "crates/ox-core" }
 
