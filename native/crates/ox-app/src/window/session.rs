@@ -162,13 +162,18 @@ impl Tab {
         self.listing_state.stop();
     }
 
-    /// Drops what the tab listed, so it is listed again when next shown,
-    /// as Sign out marks its server's tabs (`t.loaded=false`).
-    pub(super) fn mark_stale(&mut self) {
+    /// Marks the tab to be listed again when next shown, as Sign out marks
+    /// its server's tabs (`t.loaded=false`), and returns its items for
+    /// the caller to drop with [`gio::ListStore::remove_all`] once the
+    /// session is no longer borrowed: the active tab's items are on
+    /// screen, and removing them runs the view's handlers, which read the
+    /// session.
+    #[must_use = "the caller empties the returned items"]
+    pub(super) fn mark_stale(&mut self) -> gio::ListStore {
         self.stop_reading();
         self.listing_state = ListingState::NotListed;
         self.error = None;
-        self.store.remove_all();
+        self.store.clone()
     }
 }
 
