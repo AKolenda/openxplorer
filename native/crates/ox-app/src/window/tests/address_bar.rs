@@ -102,7 +102,7 @@ fn editing_ends_when_focus_leaves_the_address() {
         address.entry.text().as_str(),
         fixture.root().display().to_string()
     );
-    test.window.content().focus();
+    test.window.folder_pane().focus_view();
     assert_eq!(address.mode(), AddressMode::Crumbs);
 }
 

@@ -18,7 +18,7 @@ use crate::test_support::harness::{descendants, Fixture, TestWindow, ThemeGuard}
 /// Presses `key` in the details view, as far as the window's own key
 /// handling goes. Returns true when the window handled the key itself.
 fn press(test: &TestWindow, key: gdk::Key) -> bool {
-    let view = &test.window.content().details;
+    let view = test.window.folder_pane().details();
     let controller = view
         .observe_controllers()
         .iter::<glib::Object>()
@@ -57,7 +57,7 @@ fn typing_selects_the_next_matching_name_and_names_it_in_the_hint() {
     let test = TestWindow::open(&fixture.uri());
     let _theme = ThemeGuard::keep();
     test.activate("theme", Some("light"));
-    test.window.content().focus();
+    test.window.folder_pane().focus_view();
     test.window.type_text("n");
     assert_eq!(test.selected_names(), ["Notes 2.txt"]);
     assert_eq!(hint(&test), "Jump to: n — Notes 2.txt");
@@ -109,11 +109,11 @@ fn escape_clears_the_typed_prefix_before_the_selection() {
 fn leaving_the_view_starts_a_new_prefix() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    test.window.content().focus();
+    test.window.folder_pane().focus_view();
     test.window.type_text("n");
     test.window.chrome().search.entry.grab_focus();
     assert_eq!(hint(&test), "", "the prefix ended with the focus");
-    test.window.content().focus();
+    test.window.folder_pane().focus_view();
     test.window.type_text("r");
     assert_eq!(test.selected_names(), ["Résumé.txt"]);
 }
@@ -149,7 +149,7 @@ fn modifier_keys_keep_the_typed_prefix() {
 fn enter_opens_only_a_single_selected_item() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let details = &test.window.content().details;
+    let details = test.window.folder_pane().details();
     let model = test.window.folder_model();
     model.select_only(1);
     model.selection().select_item(2, false);
@@ -189,7 +189,7 @@ fn view_shortcuts(view: &impl IsA<gtk::Widget>) -> Vec<String> {
 fn the_menu_key_opens_the_context_menu_with_or_without_a_selection() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let details = &test.window.content().details;
+    let details = test.window.folder_pane().details();
     assert!(view_shortcuts(details).contains(&"Menu|<Shift>F10".to_owned()));
     let menus = descendants::<gtk::PopoverMenu>(details);
     let [menu] = menus.as_slice() else {

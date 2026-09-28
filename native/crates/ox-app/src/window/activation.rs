@@ -11,7 +11,6 @@
 //! a command-line argument) ever launches an application.
 
 use gtk::prelude::*;
-use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{self, Entry, EntryKind, EnumerateError};
 use ox_core::location;
@@ -79,7 +78,7 @@ async fn query_entry(uri: &str) -> Result<Entry, EnumerateError> {
 impl BrowserWindow {
     /// Opens the item at a display position (Enter, double-click, Open).
     pub(super) fn activate_item(&self, position: u32) {
-        if let Some(item) = self.content().model.item(position) {
+        if let Some(item) = self.folder_pane().model().item(position) {
             self.activate_entry(item.entry());
         }
     }
@@ -119,14 +118,6 @@ impl BrowserWindow {
         ));
     }
 
-    /// The home folder or landing page whose title is `typed`.
-    fn place_titled(&self, typed: &str) -> Option<String> {
-        if typed.trim().eq_ignore_ascii_case("home") {
-            return Some(self.imp().locations.borrow().home_uri());
-        }
-        Page::from_title(typed).map(|page| page.uri().to_owned())
-    }
-
     /// Opens what was typed into the address bar and pressed Enter on.
     pub(super) fn submit_address(&self, text: &str) {
         let typed = text.trim();
@@ -139,7 +130,7 @@ impl BrowserWindow {
             self.navigate_or_report(typed);
             return;
         }
-        let folder = match self.folder_for_address(text) {
+        let folder = match self.resolve_relative(text) {
             Ok(folder) => folder,
             Err(error) => {
                 match place {
@@ -157,18 +148,6 @@ impl BrowserWindow {
                 window.open_typed_location(&folder, place.as_deref(), result);
             }
         ));
-    }
-
-    /// The location an address names relative to the current folder, or to
-    /// the home folder on a landing page.
-    fn folder_for_address(&self, text: &str) -> Result<String, location::LocationError> {
-        let home = self.imp().locations.borrow().home_uri();
-        let current = self.current_uri();
-        let base = current
-            .as_deref()
-            .filter(|uri| Page::from_uri(uri).is_none())
-            .unwrap_or(&home);
-        location::normalise_location(text, Some(base), &glib::home_dir())
     }
 
     fn open_typed_location(&self, uri: &str, place: Option<&str>, result: Result<Entry, EnumerateError>) {

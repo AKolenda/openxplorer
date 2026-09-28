@@ -4,7 +4,7 @@
 //! Ports the page structure and the controller of `desktop/ui/app.js`.
 //! [`BrowserWindow`] is a `GtkApplicationWindow` subclass. Its parts live
 //! in submodules, one job each: the frame ([`chrome`]), the folder pane
-//! ([`content`]), the sidebar and landing pages ([`environment`]), tab
+//! ([`folder_pane`]), the sidebar and landing pages ([`environment`]), tab
 //! state ([`session`]), changing location ([`navigation`]) and drawing it
 //! ([`location_view`]), listing ([`loading`]), the selection
 //! ([`selection`]), the skin ([`appearance`]), activation, actions and
@@ -22,12 +22,12 @@ mod caption_buttons;
 mod card_grid;
 mod chrome;
 mod command_bar;
-mod content;
 mod context_menu;
 mod copy_path;
 mod details_pane;
 mod empty_page;
 mod environment;
+mod folder_pane;
 mod gestures;
 mod input;
 mod landing;
@@ -65,12 +65,12 @@ use crate::theme::{ListenerId, Skin};
 use crate::typeahead;
 
 use chrome::Chrome;
-use content::{Content, ContentPage};
 use details_pane::DetailsPane;
+use folder_pane::{FolderPane, PanePage};
 use sidebar::Sidebar;
 
 pub(crate) use actions::install_accelerators;
-pub(crate) use content::FolderView;
+pub(crate) use folder_pane::FolderView;
 pub(crate) use location_kind::is_local_or_smb_location;
 
 /// Handlers this window registered on objects that outlive it.
@@ -101,7 +101,7 @@ mod imp {
     use ox_core::location::LocationContext;
 
     use super::breakpoints::WindowWidth;
-    use super::{Chrome, Content, DetailsPane, ExternalHandlers, Sidebar, TypeAhead};
+    use super::{Chrome, DetailsPane, ExternalHandlers, FolderPane, Sidebar, TypeAhead};
     use crate::shared::AppContext;
     use crate::volumes::VolumeRow;
     use crate::window::session::Session;
@@ -114,7 +114,7 @@ mod imp {
         /// The frame around the workspace.
         pub(super) chrome: OnceCell<Chrome>,
         /// The folder pane.
-        pub(super) content: OnceCell<Content>,
+        pub(super) folder_pane: OnceCell<FolderPane>,
         /// The details pane beside the folder pane.
         pub(super) details_pane: OnceCell<DetailsPane>,
         /// The navigation pane.
@@ -197,15 +197,15 @@ impl BrowserWindow {
         let imp = window.imp();
         let appearance = context.skin().appearance();
         let chrome = Chrome::new(window.upcast_ref());
-        let content = Content::new(appearance);
+        let folder_pane = FolderPane::new(appearance);
         let details_pane = DetailsPane::new(appearance);
         let sidebar = Sidebar::new();
         imp.context
             .set(context.clone())
             .expect("a new window has no context yet");
         imp.chrome.set(chrome).expect("a new window has no chrome yet");
-        imp.content
-            .set(content)
+        imp.folder_pane
+            .set(folder_pane)
             .expect("a new window has no folder pane yet");
         imp.details_pane
             .set(details_pane)
@@ -244,8 +244,8 @@ impl BrowserWindow {
         if !ready || !self.imp().file_list_awaits_focus.replace(false) {
             return;
         }
-        if self.content().page() == Some(ContentPage::Listing) {
-            self.content().focus();
+        if self.folder_pane().page() == Some(PanePage::Listing) {
+            self.folder_pane().focus_view();
         } else {
             gtk::prelude::GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
         }
@@ -253,7 +253,7 @@ impl BrowserWindow {
 
     fn lay_out_workspace(&self) {
         let pane = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        pane.append(&self.content().root);
+        pane.append(self.folder_pane());
         pane.append(&self.details_pane().root);
         let workspace = &self.chrome().workspace;
         workspace.set_start_child(Some(self.sidebar()));
@@ -279,11 +279,11 @@ impl BrowserWindow {
             .expect("BrowserWindow::new builds the chrome")
     }
 
-    fn content(&self) -> &Content {
+    fn folder_pane(&self) -> &FolderPane {
         self.imp()
-            .content
+            .folder_pane
             .get()
-            .expect("BrowserWindow::new builds the content")
+            .expect("BrowserWindow::new builds the folder pane")
     }
 
     fn details_pane(&self) -> &DetailsPane {
@@ -311,7 +311,7 @@ impl BrowserWindow {
     /// tests.
     #[cfg(test)]
     pub(crate) fn folder_model(&self) -> &crate::folder_view::model::FolderModel {
-        &self.content().model
+        self.folder_pane().model()
     }
 
     /// Number of tabs in this window.
@@ -383,7 +383,7 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             move |search| {
-                window.content().model.set_query(search.text().as_str());
+                window.folder_pane().model().set_query(search.text().as_str());
                 window.update_content();
             }
         ));

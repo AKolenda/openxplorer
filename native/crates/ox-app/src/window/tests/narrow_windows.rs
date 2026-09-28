@@ -47,7 +47,7 @@ fn a_compact_window_drops_the_search_box_some_commands_and_two_columns() {
         assert!(!button_for(&test, action).is_visible(), "{action} is hidden");
     }
     assert!(button_for(&test, "win.copy").is_visible(), "Copy stays");
-    let details = &test.window.content().details;
+    let details = test.window.folder_pane().details();
     for column in [SortColumn::Modified, SortColumn::Type] {
         let shown = view_column(details, column).is_some_and(|column| column.is_visible());
         assert!(!shown, "{column:?} is hidden");
@@ -62,7 +62,7 @@ fn the_name_column_keeps_260_pixels_and_the_list_scrolls_sideways() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     resize(&test, 1000);
-    let details = &test.window.content().details;
+    let details = test.window.folder_pane().details();
     let name = view_column(details, SortColumn::Name).expect("a Name column");
     let header = details.first_child().expect("the header");
     let name_title = header.first_child().expect("the Name title");

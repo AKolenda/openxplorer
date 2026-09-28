@@ -17,7 +17,7 @@ use ox_core::settings::{Column, PreferencesUpdate, Settings, SettingsError};
 use crate::folder_view::details;
 use crate::theme::ThemePreference;
 
-use super::content::FolderView;
+use super::folder_pane::FolderView;
 use super::BrowserWindow;
 
 /// Sidebar width nobody changed (`resetLayout` in app.js).
@@ -92,13 +92,15 @@ impl BrowserWindow {
     /// the ones the user changes.
     pub(super) fn apply_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
-        self.content().model.set_show_hidden(preferences.show_hidden);
+        self.folder_pane()
+            .model()
+            .set_show_hidden(preferences.show_hidden);
         // `win.details-pane` starts from the same preferences.
         self.fit_details_pane();
         self.show_view(FolderView::from_setting(&preferences.view));
         let workspace = &self.chrome().workspace;
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
-        let details_view = &self.content().details;
+        let details_view = self.folder_pane().details();
         details::apply_column_widths(details_view, preferences.column_widths.as_ref());
         details::connect_columns_resized(
             details_view,

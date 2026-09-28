@@ -171,7 +171,7 @@ impl BrowserWindow {
             let address = self.imp().locations.borrow().display_location(&uri);
             self.chrome().address.show_crumbs(&address);
         }
-        self.content().focus();
+        self.folder_pane().focus_view();
     }
 }
 

@@ -19,7 +19,7 @@ use crate::text_size::Step;
 use crate::theme::{Appearance, ThemePreference};
 
 use super::breakpoints::WindowWidth;
-use super::content::FolderView;
+use super::folder_pane::FolderView;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::unported;
 use super::window_action::WindowAction;

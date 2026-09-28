@@ -18,7 +18,7 @@ use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::text_size::Step;
 use crate::theme::ThemePreference;
 
-use super::content::FolderView;
+use super::folder_pane::FolderView;
 use super::preferences::Preference;
 use super::session::{Direction, TabId, TabPlacement};
 use super::window_action::WindowAction;
@@ -146,7 +146,7 @@ impl BrowserWindow {
                 }
             }),
             action(WindowAction::NextTab, |window| {
-                window.cycle_tabs(Direction::Forward)
+                window.cycle_tabs(Direction::Forward);
             }),
             action(WindowAction::PreviousTab, |window| {
                 window.cycle_tabs(Direction::Backward);
@@ -165,10 +165,10 @@ impl BrowserWindow {
     fn install_navigation_actions(&self) {
         self.add_action_entries([
             action(WindowAction::Back, |window| {
-                window.go_history(Direction::Backward)
+                window.go_history(Direction::Backward);
             }),
             action(WindowAction::Forward, |window| {
-                window.go_history(Direction::Forward)
+                window.go_history(Direction::Forward);
             }),
             action(WindowAction::Up, BrowserWindow::go_up),
             action(WindowAction::Refresh, BrowserWindow::refresh),
@@ -189,19 +189,19 @@ impl BrowserWindow {
         self.add_action_entries([
             action(WindowAction::Open, |window| {
                 // Enter and Open act on exactly one item, as app.js does.
-                let positions = window.content().model.selected_positions();
+                let positions = window.folder_pane().model().selected_positions();
                 if let [position] = positions.as_slice() {
                     window.activate_item(*position);
                 }
             }),
             action(WindowAction::SelectAll, |window| {
-                window.content().model.select_all()
+                window.folder_pane().model().select_all();
             }),
             action(WindowAction::SelectNone, |window| {
-                window.content().model.select_none()
+                window.folder_pane().model().select_none();
             }),
             action(WindowAction::InvertSelection, |window| {
-                window.content().model.invert_selection();
+                window.folder_pane().model().invert_selection();
             }),
             action(WindowAction::PinSelected, BrowserWindow::pin_selected),
             action(WindowAction::PinFolder, BrowserWindow::pin_folder),
@@ -267,21 +267,21 @@ impl BrowserWindow {
 
     /// Sorts the details view by `column`, keeping the direction.
     fn sort_by_column(&self, column: SortColumn) {
-        let view = &self.content().details;
+        let view = self.folder_pane().details();
         let (_, direction) = details::current_sort(view);
         details::sort_by(view, column, direction);
     }
 
     /// Sorts the details view in `direction`, keeping the column.
     fn sort_in_direction(&self, direction: SortDirection) {
-        let view = &self.content().details;
+        let view = self.folder_pane().details();
         let (column, _) = details::current_sort(view);
         details::sort_by(view, column, direction);
     }
 
     /// Show hidden files: lists or hides them, and saves the choice.
     fn set_hidden_files_shown(&self, shown: bool) {
-        self.content().model.set_show_hidden(shown);
+        self.folder_pane().model().set_show_hidden(shown);
         self.update_content();
         // The folder's item count changes with it.
         self.update_details_pane();
@@ -290,14 +290,14 @@ impl BrowserWindow {
 
     /// Keeps the Sort menu in step with sorting by a column header.
     fn follow_header_sorting(&self) {
-        let Some(sorter) = self.content().details.sorter() else {
+        let Some(sorter) = self.folder_pane().details().sorter() else {
             return;
         };
         sorter.connect_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |_, _| {
-                let (column, direction) = details::current_sort(&window.content().details);
+                let (column, direction) = details::current_sort(window.folder_pane().details());
                 window.set_action_state(WindowAction::Sort, &column.key().to_variant());
                 window.set_action_state(WindowAction::Direction, &direction.key().to_variant());
             }
@@ -336,7 +336,7 @@ impl BrowserWindow {
     /// it as the preferred view.
     pub(crate) fn show_view(&self, view: FolderView) {
         self.reset_typeahead();
-        self.content().show_view(view);
+        self.folder_pane().show_view(view);
         self.chrome().status.show_view(view);
     }
 }

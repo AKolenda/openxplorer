@@ -15,7 +15,7 @@ use crate::folder_view::grid::IconSize;
 use crate::folder_view::model::SelectionSummary;
 use crate::icons::{self, Glyph};
 
-use super::content::FolderView;
+use super::folder_pane::FolderView;
 use super::unported;
 use super::window_action::WindowAction;
 

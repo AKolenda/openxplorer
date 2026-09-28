@@ -26,7 +26,7 @@ impl BrowserWindow {
     /// What Copy path would copy now: the single selected item, else the
     /// folder the tab shows.
     pub(super) fn path_to_copy(&self) -> CopiedPath {
-        let selected = self.content().model.selected_items();
+        let selected = self.folder_pane().model().selected_items();
         let uri = match selected.as_slice() {
             [item] => Some(item.entry().uri.clone()),
             _ => self.current_uri(),

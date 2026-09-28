@@ -31,7 +31,7 @@ fn quick_access_cards_stretch_across_the_page_in_equal_columns() {
     test.window.navigate(Page::ThisPc.uri()).expect("This PC");
     test.wait_for_listing("This PC");
     wait_for_frames(&test.window, 3);
-    let landing = &test.window.content().landing;
+    let landing = test.window.folder_pane().landing();
     let grid = descendants::<gtk::Box>(landing)
         .into_iter()
         .find(|widget| widget.has_css_class("card-grid"))
@@ -69,7 +69,7 @@ fn the_network_page_has_the_banner_address_field_and_notes() {
         .expect("the Network page");
     test.wait_for_listing("the Network page");
     wait_for_frames(&test.window, 2);
-    let texts = texts_in(&test.window.content().landing);
+    let texts = texts_in(test.window.folder_pane().landing());
     for expected in [
         "Find shared storage on your local network, or enter an address.",
         "Computers & network storage",
@@ -84,7 +84,7 @@ fn the_network_page_has_the_banner_address_field_and_notes() {
             "{expected} in {texts:?}"
         );
     }
-    let entries = descendants::<gtk::Entry>(&test.window.content().landing);
+    let entries = descendants::<gtk::Entry>(test.window.folder_pane().landing());
     let address = entries.first().expect("the page has an address field");
     assert_eq!(
         address.placeholder_text().as_deref(),
@@ -124,7 +124,7 @@ fn a_saved_share_card_draws_its_server_glyph_in_the_share_blue() {
         )
         .expect("the settings file takes a share");
     test.activate("refresh", None);
-    let landing = &test.window.content().landing;
+    let landing = test.window.folder_pane().landing();
     wait_until("the saved share's card", || share_glyph(landing).is_some());
     wait_for_frames(&test.window, 2);
     let glyph = share_glyph(landing).expect("the card is drawn");

@@ -118,14 +118,14 @@ impl BrowserWindow {
         let Some(page) = self.current_uri().as_deref().and_then(Page::from_uri) else {
             return;
         };
-        let body = &self.content().landing;
+        let body = self.folder_pane().landing();
         let locations = self.imp().locations.borrow();
         landing::render(body, page, places, &locations, self.art_style());
     }
 
     /// Pins the one selected folder to Quick access (`pinEntry`).
     pub(super) fn pin_selected(&self) {
-        let items = self.content().model.selected_items();
+        let items = self.folder_pane().model().selected_items();
         let [item] = items.as_slice() else {
             return;
         };

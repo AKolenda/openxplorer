@@ -68,7 +68,7 @@ fn the_home_row_is_selected_in_the_home_folder() {
 #[gtk::test]
 fn this_pc_lists_quick_access_devices_and_network_locations() {
     let test = TestWindow::open(Page::ThisPc.uri());
-    let landing = &test.window.content().landing;
+    let landing = test.window.folder_pane().landing();
     assert_eq!(
         landing::section_titles(landing),
         ["Quick access", "Devices and drives", "Network locations"]

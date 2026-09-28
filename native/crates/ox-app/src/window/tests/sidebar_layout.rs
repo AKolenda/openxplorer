@@ -94,7 +94,7 @@ fn the_sidebar_is_210_pixels_with_a_6_pixel_resizer() {
     let test = laid_out(&fixture.uri());
     let sidebar = bounds(&test, test.window.sidebar());
     assert_eq!(sidebar.width, 210);
-    let list = bounds(&test, &test.window.content().root);
+    let list = bounds(&test, test.window.folder_pane());
     assert_eq!(list.x, 216, "the file list starts after the resizer");
 }
 

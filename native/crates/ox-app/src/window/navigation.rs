@@ -33,23 +33,48 @@ struct SavedTabView {
 
 impl BrowserWindow {
     /// The canonical location for an address: the home folder for its
-    /// legacy page names, a landing page by URI or title, else a folder
-    /// relative to the current one (or to home on a landing page).
+    /// legacy page names, a landing page by URI, the home folder or a
+    /// landing page by title, else a folder relative to the current one
+    /// (see [`Self::resolve_relative`]).
     pub(super) fn resolve_address(&self, address: &str) -> Result<String, LocationError> {
-        let home = self.imp().locations.borrow().home_uri();
         let typed = address.trim();
-        if locations::is_home_alias(typed) || typed.eq_ignore_ascii_case("home") {
-            return Ok(home);
+        if locations::is_home_alias(typed) {
+            return Ok(self.imp().locations.borrow().home_uri());
         }
-        if let Some(page) = Page::from_uri(typed).or_else(|| Page::from_title(typed)) {
+        if let Some(page) = Page::from_uri(typed) {
             return Ok(page.uri().to_owned());
         }
-        let current = self.current_uri();
-        let base = current
-            .as_deref()
-            .filter(|uri| Page::from_uri(uri).is_none())
-            .unwrap_or(&home);
-        location::normalise_location(address, Some(base), &glib::home_dir())
+        if let Some(place) = self.place_titled(typed) {
+            return Ok(place);
+        }
+        self.resolve_relative(address)
+    }
+
+    /// The home folder or landing page whose title is `typed` ("Home",
+    /// "This PC", "Network"), as the address bar shows them.
+    pub(super) fn place_titled(&self, typed: &str) -> Option<String> {
+        if typed.trim().eq_ignore_ascii_case("home") {
+            return Some(self.imp().locations.borrow().home_uri());
+        }
+        Page::from_title(typed).map(|page| page.uri().to_owned())
+    }
+
+    /// `address` as a location, relative to the current folder, or to the
+    /// home folder on a landing page.
+    ///
+    /// # Errors
+    ///
+    /// The address is not a location the app can open.
+    pub(super) fn resolve_relative(&self, address: &str) -> Result<String, LocationError> {
+        let base = self.address_base();
+        location::normalise_location(address, Some(&base), &glib::home_dir())
+    }
+
+    /// Where a relative address starts: the current folder, or the home
+    /// folder on a landing page and before the first tab.
+    fn address_base(&self) -> String {
+        let folder = self.current_uri().filter(|uri| Page::from_uri(uri).is_none());
+        folder.unwrap_or_else(|| self.imp().locations.borrow().home_uri())
     }
 
     /// Adds a tab for `address`, in front or in the background. A
@@ -120,8 +145,8 @@ impl BrowserWindow {
     fn leave_location(&self) {
         self.change_model(|| {
             self.chrome().search.clear();
-            self.content().model.set_query("");
-            self.content().model.select_none();
+            self.folder_pane().model().set_query("");
+            self.folder_pane().model().select_none();
         });
         self.reset_typeahead();
     }
@@ -130,7 +155,7 @@ impl BrowserWindow {
     /// another tab is shown.
     fn save_tab_view(&self) {
         self.save_selection();
-        let scroll = self.content().scroll_position();
+        let scroll = self.folder_pane().scroll_position();
         if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
             tab.scroll = scroll;
         }
@@ -156,9 +181,9 @@ impl BrowserWindow {
         let Some(view) = self.saved_tab_view(id) else {
             return;
         };
-        let had_focus = self.content().has_focus();
+        let had_focus = self.folder_pane().view_has_focus();
         self.change_model(|| {
-            let model = &self.content().model;
+            let model = self.folder_pane().model();
             self.chrome().search.clear();
             model.set_query("");
             model.set_store(Some(&view.store));
@@ -167,9 +192,9 @@ impl BrowserWindow {
         self.render_navigation();
         self.update_content();
         self.update_details_pane();
-        self.content().restore_scroll_position(view.scroll);
+        self.folder_pane().restore_scroll_position(view.scroll);
         if had_focus {
-            self.content().focus();
+            self.folder_pane().focus_view();
         }
         if view.needs_listing {
             self.load_tab(id, LoadMode::Navigate);

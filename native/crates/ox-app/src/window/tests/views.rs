@@ -13,14 +13,14 @@ use crate::test_support::harness::{
 };
 use crate::text_size::Step;
 use crate::theme::Appearance;
-use crate::window::content::FolderView;
+use crate::window::folder_pane::FolderView;
 
 use super::geometry::{pixels, Bounds};
 
 /// The sort direction each details header shows: `ascending`,
 /// `descending` or `unsorted`, in column order.
 fn header_arrows(test: &TestWindow) -> Vec<String> {
-    let details = &test.window.content().details;
+    let details = test.window.folder_pane().details();
     let indicators = descendants::<gtk::Widget>(details)
         .into_iter()
         .filter(|widget| widget.css_name() == "sort-indicator");
@@ -39,7 +39,7 @@ fn header_arrows(test: &TestWindow) -> Vec<String> {
 fn sorting_by_a_header_updates_the_sort_menu() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let details = &test.window.content().details;
+    let details = test.window.folder_pane().details();
     let modified = crate::folder_view::details::view_column(details, SortColumn::Modified)
         .expect("a Date modified column");
     details.sort_by_column(Some(&modified), gtk::SortType::Descending);
@@ -76,7 +76,7 @@ fn the_sort_menu_leaves_one_arrow_on_the_sorted_column() {
 fn only_the_sorted_column_shows_the_apps_arrow() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let details = &test.window.content().details;
+    let details = test.window.folder_pane().details();
     assert_eq!(
         column_titles::shown_carets(details),
         [Some(SortDirection::Ascending), None, None, None]
@@ -132,7 +132,7 @@ fn both_views_show_each_name_with_its_icon() {
     let test = TestWindow::open(&fixture.uri());
     for view in ["details", "large"] {
         test.activate("view", Some(view));
-        let view_widget = test.window.content().view_widget();
+        let view_widget = test.window.folder_pane().view_widget();
         wait_until("the cells to be bound", || {
             !descendants::<FileCell>(&view_widget).is_empty()
         });
@@ -172,8 +172,8 @@ fn changed_view_preferences_are_saved_for_new_windows() {
         preferences.view == "grid" && preferences.show_hidden
     });
     let second = test.open_beside(&fixture.uri());
-    let content = second.window.content();
-    assert_eq!(content.view(), FolderView::Icons(IconSize::Large));
+    let pane = second.window.folder_pane();
+    assert_eq!(pane.view(), FolderView::Icons(IconSize::Large));
     assert_eq!(second.action_state("view").as_deref(), Some("large"));
     assert!(second.names().contains(&".private".to_owned()));
 }
@@ -269,7 +269,7 @@ fn closing_a_window_disconnects_it_from_the_shared_skin() {
 
 /// Where the icon view's tiles are, relative to the view's scroller.
 fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
-    let grid = &test.window.content().grid;
+    let grid = test.window.folder_pane().grid();
     let scroll = grid.parent().expect("the icon view scrolls");
     let cells = descendants::<FileCell>(grid);
     let bounds = cells
@@ -304,7 +304,7 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     assert_eq!(first_row.len(), usize::try_from(columns).expect("a few columns"));
     let next_row = tiles.iter().find(|tile| tile.y != 5).expect("a second row");
     assert_eq!(next_row.y, 5 + 130, "rows are 130 pixels apart");
-    let first_cell = descendants::<FileCell>(&test.window.content().grid)
+    let first_cell = descendants::<FileCell>(test.window.folder_pane().grid())
         .into_iter()
         .next()
         .expect("a tile");

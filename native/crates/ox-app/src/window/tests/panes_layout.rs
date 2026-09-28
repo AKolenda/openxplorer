@@ -10,7 +10,7 @@ use crate::window::widget_tree::children;
 
 /// The column titles of the details view, left to right.
 fn column_titles(test: &TestWindow) -> Vec<gtk::Widget> {
-    let details = &test.window.content().details;
+    let details = test.window.folder_pane().details();
     let header = children(details)
         .find(|child| child.css_name() == "header")
         .expect("the details view has a header");
@@ -19,7 +19,7 @@ fn column_titles(test: &TestWindow) -> Vec<gtk::Widget> {
 
 /// The first row of the details view.
 fn first_row(test: &TestWindow) -> gtk::Widget {
-    let details = &test.window.content().details;
+    let details = test.window.folder_pane().details();
     let list = children(details)
         .find(|child| child.css_name() == "listview")
         .expect("the details view has a list");
@@ -33,7 +33,7 @@ fn first_row(test: &TestWindow) -> gtk::Widget {
 fn columns_run_from_14_pixels_in_with_the_web_widths() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let list = bounds(&test, &test.window.content().details);
+    let list = bounds(&test, test.window.folder_pane().details());
     let titles: Vec<Bounds> = column_titles(&test)
         .iter()
         .map(|title| bounds(&test, title))
@@ -78,7 +78,7 @@ fn the_size_title_is_right_aligned_and_only_the_sorted_column_has_an_arrow() {
 fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let list = bounds(&test, &test.window.content().details);
+    let list = bounds(&test, test.window.folder_pane().details());
     let row = first_row(&test);
     let row_place = bounds(&test, &row);
     assert_eq!(
@@ -151,7 +151,7 @@ fn a_selected_tile_keeps_the_text_colour() {
     test.activate("view", Some("large"));
     test.window.folder_model().select_only(1);
     wait_for_frames(&test.window, 3);
-    let grid = &test.window.content().grid;
+    let grid = test.window.folder_pane().grid();
     let labels = descendants::<gtk::Label>(grid);
     let selected = labels.iter().find(|label| label.text() == "Notes 2.txt");
     let other = labels.iter().find(|label| label.text() == "Notes 10.txt");

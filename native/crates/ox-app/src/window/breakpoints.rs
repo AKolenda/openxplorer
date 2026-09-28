@@ -167,7 +167,7 @@ impl BrowserWindow {
         chrome.search.root.set_visible(!compact);
         chrome.commands.fit_to_width(band);
         chrome.status.set_build_visible(!compact);
-        crate::folder_view::details::show_date_and_type(&self.content().details, !compact);
+        crate::folder_view::details::show_date_and_type(self.folder_pane().details(), !compact);
         self.render_landing();
     }
 

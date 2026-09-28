@@ -99,19 +99,19 @@ fn shift_middle_click_opens_the_tab_in_front() {
 fn switching_back_to_a_tab_restores_its_scroll_position() {
     let fixture = Fixture::with_files(300);
     let test = TestWindow::open(&fixture.uri());
-    let content = test.window.content();
-    let last = content.model.n_items() - 1;
-    content.reveal(last);
-    wait_until("the view to scroll", || content.scroll_position() > 0.0);
+    let pane = test.window.folder_pane();
+    let last = pane.model().n_items() - 1;
+    pane.reveal(last);
+    wait_until("the view to scroll", || pane.scroll_position() > 0.0);
     wait_for(std::time::Duration::from_millis(100));
-    let scrolled = content.scroll_position();
+    let scrolled = pane.scroll_position();
     let first = tab_ids(&test)[0];
     test.window.add_tab(&fixture.uri()).expect("valid folder");
     test.wait_for_listing("the second tab");
-    assert!(content.scroll_position() < 1.0, "a new tab starts at the top");
+    assert!(pane.scroll_position() < 1.0, "a new tab starts at the top");
     test.activate_tab(first);
     wait_until("the first tab's scroll position", || {
-        (content.scroll_position() - scrolled).abs() < 1.0
+        (pane.scroll_position() - scrolled).abs() < 1.0
     });
 }
 

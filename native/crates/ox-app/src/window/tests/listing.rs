@@ -13,7 +13,7 @@ use gtk::subclass::prelude::*;
 use crate::test_support::harness::{
     settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, STANDARD_NAMES,
 };
-use crate::window::content::{ContentPage, FolderView};
+use crate::window::folder_pane::{FolderView, PanePage};
 use crate::window::session::Direction;
 
 use super::geometry::bounds;
@@ -31,14 +31,14 @@ fn keeps_position(position: f64, before: f64) -> bool {
 /// Selects and focuses the last item, scrolls it into view and returns the
 /// scroll position once it settles.
 fn scroll_to_the_end(test: &TestWindow) -> f64 {
-    let content = test.window.content();
-    let last = content.model.n_items() - 1;
-    content.model.select_only(last);
-    content.focus();
-    content.reveal(last);
-    wait_until("the view to scroll", || content.scroll_position() > 0.0);
+    let pane = test.window.folder_pane();
+    let last = pane.model().n_items() - 1;
+    pane.model().select_only(last);
+    pane.focus_view();
+    pane.reveal(last);
+    wait_until("the view to scroll", || pane.scroll_position() > 0.0);
     wait_for(Duration::from_millis(100));
-    content.scroll_position()
+    pane.scroll_position()
 }
 
 /// What the folder pane showed while a reload ran.
@@ -52,11 +52,11 @@ struct ReloadObservation {
 
 /// Runs the main loop until the active tab is listed, watching the pane.
 fn observe_reload(test: &TestWindow) -> ReloadObservation {
-    let content = test.window.content();
-    let fewest_items = Rc::new(Cell::new(content.model.n_items()));
+    let pane = test.window.folder_pane();
+    let fewest_items = Rc::new(Cell::new(pane.model().n_items()));
     let fewest = Rc::clone(&fewest_items);
-    let handler = content
-        .model
+    let handler = pane
+        .model()
         .sorted()
         .connect_items_changed(move |model, _, _, _| {
             fewest.set(fewest.get().min(model.n_items()));
@@ -66,9 +66,9 @@ fn observe_reload(test: &TestWindow) -> ReloadObservation {
     while test.window.is_loading() {
         assert!(Instant::now() < deadline, "the reload did not finish");
         settle();
-        showed_empty_page |= content.page() == Some(ContentPage::Empty);
+        showed_empty_page |= pane.page() == Some(PanePage::Empty);
     }
-    content.model.sorted().disconnect(handler);
+    pane.model().sorted().disconnect(handler);
     ReloadObservation {
         showed_empty_page,
         fewest_items: fewest_items.get(),
@@ -126,7 +126,7 @@ fn refresh_keeps_the_rows_scroll_position_focus_and_selection() {
     let focused_item = test.window.folder_model().selected_items()[0].clone();
     test.window.refresh();
     let reload = observe_reload(&test);
-    let content = test.window.content();
+    let pane = test.window.folder_pane();
     assert!(
         !reload.showed_empty_page,
         "the rows stay on screen while reloading"
@@ -136,13 +136,13 @@ fn refresh_keeps_the_rows_scroll_position_focus_and_selection() {
         u32::try_from(LONG_FOLDER).expect("small count")
     );
     assert!(
-        keeps_position(content.scroll_position(), scrolled),
+        keeps_position(pane.scroll_position(), scrolled),
         "the view keeps its scroll position"
     );
     assert_eq!(test.selected_names(), selected);
     let item_after = test.window.folder_model().selected_items()[0].clone();
     assert_eq!(item_after, focused_item, "unchanged rows keep their item objects");
-    assert!(content.has_focus(), "keyboard focus stays in the folder view");
+    assert!(pane.view_has_focus(), "keyboard focus stays in the folder view");
 }
 
 /// parity: VIEW-055
@@ -155,9 +155,9 @@ fn a_change_on_disk_is_listed_and_keeps_the_scroll_position() {
     wait_until("the folder watch to list the new file", || {
         test.names().contains(&"new download.txt".to_owned())
     });
-    let content = test.window.content();
+    let pane = test.window.folder_pane();
     assert!(
-        keeps_position(content.scroll_position(), scrolled),
+        keeps_position(pane.scroll_position(), scrolled),
         "the view keeps its scroll position"
     );
     assert_eq!(test.selected_names(), ["file 0299.txt"]);
@@ -176,7 +176,7 @@ fn navigating_to_another_folder_starts_at_the_top_without_a_selection() {
     test.wait_for_listing("the subfolder");
     test.window.go_history(Direction::Backward);
     test.wait_for_listing("the folder again");
-    assert!(test.window.content().scroll_position() < 1.0);
+    assert!(test.window.folder_pane().scroll_position() < 1.0);
     assert!(test.selected_names().is_empty());
 }
 
@@ -250,18 +250,18 @@ fn a_missing_folder_says_it_is_unavailable_and_offers_try_again() {
         .expect("a missing folder is still a valid address");
     test.wait_for_listing("the failed listing");
     assert!(test.window.load_error().is_some());
-    let content = test.window.content();
-    assert_eq!(content.page(), Some(ContentPage::Empty));
-    assert_eq!(content.empty.title(), "This location is unavailable");
+    let pane = test.window.folder_pane();
+    assert_eq!(pane.page(), Some(PanePage::Empty));
+    assert_eq!(pane.empty_page().title(), "This location is unavailable");
     assert!(
-        content.empty.offers_try_again(),
+        pane.empty_page().offers_try_again(),
         "a visible Try again button runs win.refresh"
     );
     fs::create_dir(&missing).expect("the folder appears");
     test.activate("refresh", None);
     test.wait_for_listing("the retried listing");
     assert_eq!(test.window.load_error(), None);
-    assert_eq!(content.empty.title(), "This folder is empty");
+    assert_eq!(pane.empty_page().title(), "This folder is empty");
 }
 
 /// parity: SRCH-003, VIEW-023
@@ -294,30 +294,30 @@ fn the_filter_and_hidden_files_change_what_is_listed_until_the_folder_changes() 
 fn only_the_visible_view_holds_the_model() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let content = test.window.content();
-    assert!(content.details.model().is_some());
+    let pane = test.window.folder_pane();
+    assert!(pane.details().model().is_some());
     assert!(
-        content.grid.model().is_none(),
+        pane.grid().model().is_none(),
         "the hidden icon view builds no tiles"
     );
     test.activate("view", Some("large"));
     assert_eq!(
-        content.view(),
+        pane.view(),
         FolderView::Icons(crate::folder_view::grid::IconSize::Large)
     );
     assert!(
-        content.details.model().is_none(),
+        pane.details().model().is_none(),
         "the hidden details view builds no rows"
     );
-    assert!(content.grid.model().is_some());
+    assert!(pane.grid().model().is_some());
     assert!(
-        content.grid.max_columns() < 64,
+        pane.grid().max_columns() < 64,
         "the tile budget follows the width"
     );
     test.activate("view", Some("details"));
-    assert!(content.details.model().is_some());
+    assert!(pane.details().model().is_some());
     assert!(
-        content.grid.model().is_none(),
+        pane.grid().model().is_none(),
         "switching back detaches the icon view"
     );
 }
@@ -332,9 +332,9 @@ fn the_loading_line_lies_over_the_pane_without_moving_the_items() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     wait_for_frames(&test.window, 2);
-    let content = test.window.content();
-    let items_before = bounds(&test, &content.view_widget());
-    let line = content.loading_line();
+    let pane = test.window.folder_pane();
+    let items_before = bounds(&test, &pane.view_widget());
+    let line = pane.loading_line();
     // A reload that the folder watch starts may hide the line again, so
     // it is shown until it has been laid out.
     wait_until("the loading line to be laid out", || {
@@ -342,14 +342,14 @@ fn the_loading_line_lies_over_the_pane_without_moving_the_items() {
         line.height() > 0
     });
     let line_place = bounds(&test, line);
-    let pane = bounds(&test, &content.root);
+    let pane_place = bounds(&test, pane);
     assert_eq!(
         (line_place.y, line_place.height),
-        (pane.y, 2),
+        (pane_place.y, 2),
         "2 pixels over the pane's top"
     );
     assert_eq!(
-        bounds(&test, &content.view_widget()),
+        bounds(&test, &pane.view_widget()),
         items_before,
         "the items stay put"
     );

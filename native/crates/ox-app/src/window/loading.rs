@@ -26,8 +26,8 @@ use crate::folder_view::item::FileItem;
 use crate::folder_view::{loader, reconcile, watch};
 use crate::locations::Page;
 
-use super::content::ContentPage;
 use super::empty_page::EmptyState;
+use super::folder_pane::PanePage;
 use super::listing_state::{ListingEnd, ListingState, ReloadTiming};
 use super::session::TabId;
 use super::BrowserWindow;
@@ -255,7 +255,7 @@ impl BrowserWindow {
             .tab(id)
             .map(|tab| tab.selected.clone())
             .unwrap_or_default();
-        self.change_model(|| self.content().model.select_uris(&selected));
+        self.change_model(|| self.folder_pane().model().select_uris(&selected));
     }
 
     /// The tab's location is a file: show its folder (or home) in place of
@@ -292,12 +292,12 @@ impl BrowserWindow {
             let loading = tab.listing_state.is_listing();
             (page, loading, tab.error.as_ref().map(ToString::to_string))
         };
-        let content = self.content();
-        content.set_loading(loading && page.is_none());
+        let pane = self.folder_pane();
+        pane.set_loading(loading && page.is_none());
         if page.is_some() {
-            content.show_page(ContentPage::Landing);
-        } else if content.model.n_items() > 0 {
-            content.show_page(ContentPage::Listing);
+            pane.show_page(PanePage::Landing);
+        } else if pane.model().n_items() > 0 {
+            pane.show_page(PanePage::Listing);
             if let Some(error) = error {
                 self.chrome().show_message(&error);
             }
@@ -305,10 +305,10 @@ impl BrowserWindow {
             let state = match error {
                 Some(error) => EmptyState::Unavailable(error),
                 None if loading => EmptyState::Loading,
-                None if content.model.is_searching() => EmptyState::NoMatches,
+                None if pane.model().is_searching() => EmptyState::NoMatches,
                 None => EmptyState::EmptyFolder,
             };
-            content.show_empty(&state);
+            pane.show_empty(&state);
         }
         self.update_status();
     }

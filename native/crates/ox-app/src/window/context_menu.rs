@@ -75,8 +75,8 @@ impl BrowserWindow {
     /// A right-click on an unselected item selects only it; on blank space
     /// it clears the selection.
     fn select_for_context_menu(&self, view: &gtk::Widget, x: f64, y: f64) {
-        let model = &self.content().model;
-        match self.content().owners.position_at(view, x, y) {
+        let model = self.folder_pane().model();
+        match self.folder_pane().owners().position_at(view, x, y) {
             Some(position) if !model.selection().is_selected(position) => model.select_only(position),
             Some(_) => {}
             None => model.select_none(),
@@ -86,15 +86,15 @@ impl BrowserWindow {
     /// Opens the context menu from the Menu key or Shift+F10, pointing at
     /// the first selected item, or near the top of the view without one.
     pub(super) fn open_context_menu_from_keyboard(&self) {
-        let view = self.content().view_widget();
+        let view = self.folder_pane().view_widget();
         let Some(popover) = context_menu_of(&view) else {
             return;
         };
-        let selected = self.content().model.first_selected();
+        let selected = self.folder_pane().model().first_selected();
         if let Some(position) = selected {
-            self.content().reveal(position);
+            self.folder_pane().reveal(position);
         }
-        let row = selected.and_then(|position| self.content().owners.widget_at(position));
+        let row = selected.and_then(|position| self.folder_pane().owners().widget_at(position));
         let bounds = row.and_then(|row| row.compute_bounds(&view));
         popover.set_pointing_to(Some(&keyboard_menu_anchor(bounds)));
         popover.popup();

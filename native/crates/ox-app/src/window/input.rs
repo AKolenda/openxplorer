@@ -64,8 +64,8 @@ impl BrowserWindow {
     /// Adds keyboard and pointer handling to both folder views and the
     /// address entry.
     pub(super) fn install_input(&self) {
-        let details = self.content().details.clone();
-        let grid = self.content().grid.clone();
+        let details = self.folder_pane().details().clone();
+        let grid = self.folder_pane().grid().clone();
         self.folder_input(details.upcast_ref());
         self.folder_input(grid.upcast_ref());
         let escape = gtk::EventControllerKey::new();
@@ -102,7 +102,7 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             move |position: u32| {
-                let selected = window.content().model.selected_positions();
+                let selected = window.folder_pane().model().selected_positions();
                 let is_the_selection = selected.is_empty() || selected == [position];
                 if is_the_selection {
                     window.activate_item(position);
@@ -110,11 +110,11 @@ impl BrowserWindow {
             }
         );
         let on_row = activate.clone();
-        self.content()
-            .details
+        self.folder_pane()
+            .details()
             .connect_activate(move |_, position| on_row(position));
-        self.content()
-            .grid
+        self.folder_pane()
+            .grid()
             .connect_activate(move |_, position| activate(position));
     }
 
@@ -230,7 +230,7 @@ impl BrowserWindow {
                 input.reset();
                 self.reset_typeahead();
             }
-            gdk::Key::Escape => self.content().model.select_none(),
+            gdk::Key::Escape => self.folder_pane().model().select_none(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
             // Space toggles the native selection unless a prefix is typed.
             gdk::Key::space if !prefix_active => return Some(glib::Propagation::Proceed),
@@ -256,7 +256,7 @@ impl BrowserWindow {
     /// Backspace: removes the last typed character and selects what the
     /// shorter prefix matches.
     fn erase_typed_character(&self, now: i64) {
-        let model = &self.content().model;
+        let model = self.folder_pane().model();
         let count = model.n_items() as usize;
         let current = model.first_selected().map(|position| position as usize);
         let result = self.imp().type_ahead.borrow_mut().controller.backspace(
@@ -279,7 +279,7 @@ impl BrowserWindow {
     }
 
     fn type_character(&self, character: char) {
-        let model = &self.content().model;
+        let model = self.folder_pane().model();
         let count = model.n_items() as usize;
         let current = model.first_selected().map(|position| position as usize);
         let typed = character.to_string();
@@ -299,16 +299,16 @@ impl BrowserWindow {
     /// count positions.
     fn name_at_index(&self, index: usize) -> String {
         let position = u32::try_from(index).unwrap_or(u32::MAX);
-        self.content().model.name_at(position)
+        self.folder_pane().model().name_at(position)
     }
 
     fn apply_typeahead(&self, result: &TypeSelect) {
         let position = result.index.and_then(|index| u32::try_from(index).ok());
         if let Some(position) = position {
-            self.content().model.select_only(position);
-            self.content().reveal(position);
+            self.folder_pane().model().select_only(position);
+            self.folder_pane().reveal(position);
         }
-        let matched_name = position.map(|position| self.content().model.name_at(position));
+        let matched_name = position.map(|position| self.folder_pane().model().name_at(position));
         let hint = typeahead_hint(result, matched_name.as_deref());
         let outcome = if position.is_some() {
             TypeaheadMatch::Found
@@ -362,8 +362,8 @@ impl BrowserWindow {
             self,
             move |gesture, x, y| {
                 let Some(view) = view.upgrade() else { return };
-                let position = window.content().owners.position_at(&view, x, y);
-                let item = position.and_then(|position| window.content().model.item(position));
+                let position = window.folder_pane().owners().position_at(&view, x, y);
+                let item = position.and_then(|position| window.folder_pane().model().item(position));
                 let Some(Activation::Folder(uri)) = item.map(|item| activation_for(item.entry())) else {
                     return;
                 };

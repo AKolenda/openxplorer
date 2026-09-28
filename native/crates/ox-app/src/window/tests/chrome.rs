@@ -164,7 +164,7 @@ fn a_new_window_types_into_its_file_list() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let focus = gtk::prelude::GtkWindowExt::focus(&test.window).expect("a focused widget");
-    let view = test.window.content().view_widget();
+    let view = test.window.folder_pane().view_widget();
     assert!(
         focus.is_ancestor(&view) || focus == view,
         "focus is in the file list, not {focus:?}"

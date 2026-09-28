@@ -365,11 +365,22 @@ mod tests {
             ..SettingsData::default()
         };
         let entries = entries_for(&settings, &[]);
-        let edges: Vec<(bool, bool)> = (0..4)
-            .map(|index| section_edges(&entries, index))
-            .map(|edges| (edges.first, edges.last))
-            .collect();
-        // Home alone; Work and Play in Quick access; This PC starts a group.
-        assert_eq!(edges, [(true, true), (true, false), (false, true), (true, false)]);
+        assert_eq!(labels(&entries)[..4], ["Home", "Work", "Play", "This PC"]);
+        let alone = SectionEdges {
+            first: true,
+            last: true,
+        };
+        let starting = SectionEdges {
+            first: true,
+            last: false,
+        };
+        let ending = SectionEdges {
+            first: false,
+            last: true,
+        };
+        assert_eq!(section_edges(&entries, 0), alone, "Home is a section of its own");
+        assert_eq!(section_edges(&entries, 1), starting, "Work starts Quick access");
+        assert_eq!(section_edges(&entries, 2), ending, "Play ends Quick access");
+        assert_eq!(section_edges(&entries, 3), starting, "This PC starts a group");
     }
 }

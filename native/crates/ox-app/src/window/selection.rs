@@ -23,7 +23,7 @@ impl BrowserWindow {
     /// Updates the status bar and the details pane whenever the selection
     /// or the shown items change.
     pub(super) fn follow_selection(&self) {
-        let model = &self.content().model;
+        let model = self.folder_pane().model();
         model.selection().connect_selection_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -42,7 +42,7 @@ impl BrowserWindow {
         }
         self.update_status();
         self.update_details_pane();
-        let selected = self.content().model.summary().count;
+        let selected = self.folder_pane().model().summary().count;
         self.set_action_enabled(WindowAction::Open, selected == 1);
         // Copy path copies one item, or the folder when none is selected.
         self.set_action_enabled(WindowAction::CopyPath, selected <= 1);
@@ -58,7 +58,7 @@ impl BrowserWindow {
 
     /// Remembers the active tab's selection, for a reload or tab switch.
     pub(super) fn save_selection(&self) {
-        let selected = self.content().model.selected_uris();
+        let selected = self.folder_pane().model().selected_uris();
         if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
             tab.selected = selected;
         }
@@ -71,24 +71,24 @@ impl BrowserWindow {
             StatusSubject::Page
         } else {
             StatusSubject::Folder {
-                shown: self.content().model.n_items(),
+                shown: self.folder_pane().model().n_items(),
                 loading: self.is_loading(),
             }
         };
-        let selected = self.content().model.summary();
+        let selected = self.folder_pane().model().summary();
         self.chrome().status.show(subject, selected);
     }
 
     /// Shows the selection's properties, or the folder's, in the details
     /// pane.
     pub(super) fn update_details_pane(&self) {
-        let selection = self.content().model.selected_items();
+        let selection = self.folder_pane().model().selected_items();
         let Some(folder_uri) = self.current_uri() else {
             return;
         };
         let active = self.imp().session.borrow().active_id();
         let store = active.and_then(|id| self.tab_store(id));
-        let model = &self.content().model;
+        let model = self.folder_pane().model();
         let folder_item_count = store.map_or(0, |store| model.listed_count(&store));
         let locations = self.imp().locations.borrow();
         let content = details_pane::pane_content(&PaneFacts {

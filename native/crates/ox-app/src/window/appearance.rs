@@ -60,9 +60,9 @@ impl BrowserWindow {
         ));
         self.imp().handlers.borrow_mut().skin = Some(listener);
         self.show_appearance_choice();
-        self.content().set_text_size(self.skin().text_size());
+        self.folder_pane().set_text_size(self.skin().text_size());
         self.connect_scale_factor_notify(|window| {
-            window.content().icons.redraw();
+            window.folder_pane().icons().redraw();
             window.render_places();
             window.update_details_pane();
         });
@@ -71,12 +71,12 @@ impl BrowserWindow {
     fn skin_changed(&self, change: SkinChange) {
         match change {
             SkinChange::Appearance(appearance) => self.appearance_changed(appearance),
-            SkinChange::TextSize(percent) => self.content().set_text_size(percent),
+            SkinChange::TextSize(percent) => self.folder_pane().set_text_size(percent),
         }
     }
 
     fn appearance_changed(&self, appearance: Appearance) {
-        self.content().icons.set_appearance(appearance);
+        self.folder_pane().icons().set_appearance(appearance);
         self.render_places();
         // Redraws the tabs' and the address bar's colour art too.
         self.render_location();
