@@ -13,9 +13,14 @@ use gtk::prelude::*;
 use crate::folder_view::cells::{self, CellLayout, CellOwners, IconCells};
 use crate::text_size;
 
+/// A large tile's width beyond its icon: the 135-pixel `gridWidth` less
+/// the 56-pixel icon of Large icons. Larger icons widen the tile by as
+/// much as the icon grows.
+const TILE_WIDTH_BEYOND_ICON: i32 = 79;
+
 /// Icon sizes of Explorer's icon layouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IconSize {
+pub(crate) enum IconSize {
     /// Explorer's "Extra large icons" (Ctrl+Shift+1).
     ExtraLarge,
     /// "Large icons" (Ctrl+Shift+2), the Python app's only icon view.
@@ -91,6 +96,7 @@ impl IconSize {
     }
 }
 
+/// The icon view's tiles: `size` icons above their names.
 fn factory(icons: &Rc<IconCells>, owners: &Rc<CellOwners>, size: IconSize) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     cells::connect_file_cells(&factory, CellLayout::IconTile, size.pixels(), icons, owners);
@@ -137,10 +143,11 @@ pub(crate) struct CellSize {
 /// which the Python app does not have.
 pub(crate) fn cell_size(size: IconSize, text_size: u32) -> CellSize {
     let metrics = text_size::metrics(text_size);
-    let growth = size.pixels() - IconSize::Large.pixels();
+    let icon_growth = size.pixels() - IconSize::Large.pixels();
+    let width_for_icon = size.pixels() + TILE_WIDTH_BEYOND_ICON;
     CellSize {
-        width: metrics.grid_width.max(size.pixels() + 79),
-        height: metrics.grid_row + growth,
+        width: metrics.grid_width.max(width_for_icon),
+        height: metrics.grid_row + icon_growth,
     }
 }
 
@@ -161,6 +168,7 @@ pub(crate) fn columns_for_width(cell_width: i32, width: i32) -> u32 {
 mod tests {
     use super::*;
 
+    /// parity: VIEW-005
     #[test]
     fn icon_sizes_round_trip_and_shrink() {
         for size in IconSize::ALL {
@@ -171,6 +179,7 @@ mod tests {
         assert_eq!(IconSize::Large.pixels(), 56);
     }
 
+    /// parity: VIEW-005
     #[test]
     fn large_icon_cells_are_the_web_grid_cells() {
         let cell = cell_size(IconSize::Large, 100);
@@ -198,6 +207,7 @@ mod tests {
         columns: u32,
     }
 
+    /// parity: VIEW-005
     #[test]
     fn grid_columns_follow_the_width_as_render_rows_counts_them() {
         let cases = [
