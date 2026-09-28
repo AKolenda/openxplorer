@@ -67,7 +67,7 @@ pub(super) fn build() -> SettingsSection {
     let windows = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     windows.append_group(&windows_group());
     windows.append_group(&dragging_group());
-    windows.append_extra(&parts::note(Icon::Info, DRAGGING_NOTE));
+    windows.append_text(&parts::note(Icon::Info, DRAGGING_NOTE));
     windows
 }
 

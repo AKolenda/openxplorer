@@ -15,7 +15,6 @@ use gtk::{gdk, glib, graphene};
 
 use super::category_row::CategoryRow;
 use super::pages::{Category, SettingsView};
-use super::row::SettingRow;
 use super::search::{match_count_text, SearchQuery};
 use super::section::SettingsSection;
 use super::SettingsPage;
@@ -248,22 +247,21 @@ impl SettingsPage {
             return false;
         }
         let first_match = Category::ALL.into_iter().find_map(|category| {
-            let rows = self.category_section(category).rows();
-            let row = rows.into_iter().find(WidgetExt::is_visible)?;
-            Some((category, row))
+            let target = self.category_section(category).first_match()?;
+            Some((category, target))
         });
-        let Some((category, row)) = first_match else {
+        let Some((category, target)) = first_match else {
             return false;
         };
         self.show_view(SettingsView::Category(category));
-        row.jump_here();
-        self.scroll_to(&row);
+        target.jump_here();
+        self.scroll_to(target.widget());
         true
     }
 
-    /// Scrolls the shown page so `row` is near its top, once the page has
-    /// been laid out.
-    fn scroll_to(&self, row: &SettingRow) {
+    /// Scrolls the shown page so `setting` is near its top, once the page
+    /// has been laid out.
+    fn scroll_to(&self, setting: &gtk::Widget) {
         let scrolled = self
             .imp()
             .pages
@@ -272,13 +270,13 @@ impl SettingsPage {
         let Some(scrolled) = scrolled else {
             return;
         };
-        let row = row.downgrade();
+        let setting = setting.downgrade();
         glib::idle_add_local_once(move || {
             let content = scrolled.child().and_then(|viewport| viewport.first_child());
-            let (Some(row), Some(content)) = (row.upgrade(), content) else {
+            let (Some(setting), Some(content)) = (setting.upgrade(), content) else {
                 return;
             };
-            let top = row.compute_point(&content, &graphene::Point::zero());
+            let top = setting.compute_point(&content, &graphene::Point::zero());
             if let Some(top) = top {
                 scrolled.vadjustment().set_value(f64::from(top.y()) - JUMP_MARGIN);
             }

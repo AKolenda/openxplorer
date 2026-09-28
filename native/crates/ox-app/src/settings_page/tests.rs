@@ -18,6 +18,7 @@ use super::choice_list::ChoiceList;
 use super::group::SettingsGroup;
 use super::pages::{Category, SettingsView, Subpage};
 use super::row::{Availability, SettingRow};
+use super::status_card::StatusCard;
 use super::SettingsPage;
 use crate::test_support::harness::{descendants, skin, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::test_support::python::{python_preference, python_saves_preferences};
@@ -70,6 +71,14 @@ impl SettingsTest {
         let rows = self.page.category_section(category).rows();
         let shown = rows.into_iter().filter(WidgetExt::is_visible);
         shown.map(|row| row.text().title).collect()
+    }
+
+    /// Whether the category page shown now shows its status card.
+    fn shows_status_card(&self) -> bool {
+        let category = self.page.view().category();
+        let section = self.page.category_section(category);
+        let cards = descendants::<StatusCard>(&section);
+        cards.iter().any(WidgetExt::is_visible)
     }
 
     /// The categories the list shows now.
@@ -216,6 +225,82 @@ fn the_search_filters_rows_across_every_category() {
     let count = &settings.page.imp().match_count;
     assert!(count.is_visible());
     assert_eq!(count.text(), "5 matching settings");
+}
+
+/// A search for what a setting shows, and the category, status card and
+/// rows it finds.
+struct ShownTextCase {
+    typed: &'static str,
+    category: Category,
+    shows_status_card: bool,
+    shown: &'static [&'static str],
+}
+
+/// Ported from `settingsSearch` in `desktop/ui/app.js`, which matched an
+/// element's visible text too: buttons, drop-down options and headings
+/// find their settings.
+///
+/// parity: SET-019
+#[gtk::test]
+fn the_search_finds_what_buttons_options_and_headings_show() {
+    let settings = SettingsTest::open();
+    let cases = [
+        ShownTextCase {
+            typed: "refresh all",
+            category: Category::SearchAndIndexing,
+            shows_status_card: true,
+            shown: &["Network / fallback checks"],
+        },
+        ShownTextCase {
+            typed: "make openxplorer default",
+            category: Category::DefaultApps,
+            shows_status_card: true,
+            shown: &["Include Show in folder", "Also open ZIP files in OpenXplorer"],
+        },
+        ShownTextCase {
+            typed: "refresh status",
+            category: Category::DefaultApps,
+            shows_status_card: false,
+            shown: &["Folders", "SMB links", "ZIP files"],
+        },
+        ShownTextCase {
+            typed: "compact actions",
+            category: Category::Appearance,
+            shows_status_card: false,
+            shown: &["Right-click menu"],
+        },
+    ];
+    for case in cases {
+        settings.page.search(case.typed);
+        let view = settings.page.view();
+        assert_eq!(view, SettingsView::Category(case.category), "{}", case.typed);
+        assert_eq!(
+            settings.shows_status_card(),
+            case.shows_status_card,
+            "{}",
+            case.typed
+        );
+        assert_eq!(settings.shown_rows(), case.shown, "{}", case.typed);
+    }
+}
+
+/// Enter on a search that finds a status card jumps to the card.
+///
+/// parity: SET-019
+#[gtk::test]
+fn enter_on_a_status_card_match_jumps_to_the_card() {
+    let settings = SettingsTest::open();
+    settings.page.search("refresh all");
+
+    settings.page.imp().search_entry.emit_activate();
+
+    let section = settings.page.category_section(Category::SearchAndIndexing);
+    let card = descendants::<StatusCard>(&section)
+        .into_iter()
+        .next()
+        .expect("Search & indexing has a status card");
+    assert!(card.has_css_class("jump-target"));
+    assert_eq!(settings.page.imp().match_count.text(), "2 matching settings");
 }
 
 /// parity: SET-019

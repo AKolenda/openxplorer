@@ -18,10 +18,11 @@ use ox_core::settings::PreferencesUpdate;
 use super::bindings::{Choice, PreferenceBinding};
 use super::group::SettingsGroup;
 use super::pages::{Category, SettingsView, Subpage};
-use super::parts::{self, StatusText};
+use super::parts;
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
+use super::status_card::{StatusCard, StatusText};
 use super::SettingsPage;
 use crate::icons::Icon;
 use crate::window::Milestone;
@@ -104,18 +105,18 @@ const FOLDER_SIZES_NOTE: &str = "Scans run on demand, outside the browsing worke
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::SearchAndIndexing;
     let indexing = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
-    indexing.append_extra(&status_card());
+    indexing.append_card(&status_card());
     indexing.append_group(&folders_group(page));
     indexing.append_group(&options_group(page));
-    indexing.append_extra(&parts::note(Icon::ShieldLock, PRIVACY_NOTE));
-    indexing.append_extra(&parts::note(Icon::Info, LIMITS_NOTE));
+    indexing.append_text(&parts::note(Icon::ShieldLock, PRIVACY_NOTE));
+    indexing.append_text(&parts::note(Icon::Info, LIMITS_NOTE));
     indexing.append_group(&folder_sizes_group());
-    indexing.append_extra(&parts::note(Icon::Info, FOLDER_SIZES_NOTE));
+    indexing.append_text(&parts::note(Icon::Info, FOLDER_SIZES_NOTE));
     indexing
 }
 
 /// Where instant search stands, with "Refresh all" waiting for it.
-fn status_card() -> gtk::Box {
+fn status_card() -> StatusCard {
     let refresh = parts::button_with_glyph("Refresh all", Icon::ArrowClockwise);
     let pending = Milestone::SearchAndMetadata.notice();
     refresh.set_sensitive(false);
@@ -126,7 +127,7 @@ fn status_card() -> gtk::Box {
         text: "Search file names in the folders you choose, even while a share is offline.",
         notice: Some(&pending),
     };
-    parts::status_card(status, &[refresh.upcast()])
+    StatusCard::new(status, &[refresh.upcast()])
 }
 
 /// "Folders to index", which opens the Indexed folders page.

@@ -106,6 +106,9 @@ window.ox button.page-back { min-width: 32px; min-height: 32px; }
 .status-badge image { color: @ox_accent; }
 .settings .status-title { font-weight: 600; }
 .settings .status-text { color: @ox_muted; }
+/* A card the search found, and the one it jumped to, as rows show them. */
+.status-card.search-match { box-shadow: inset 3px 0 @ox_accent; }
+.status-card.jump-target { border-color: @ox_accent; }
 
 /* ---- Controls ---- */
 /* A main action the native preview cannot run yet. */

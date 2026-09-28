@@ -16,10 +16,11 @@ use gtk::{gio, glib};
 
 use super::group::SettingsGroup;
 use super::pages::{Category, SettingsView, Subpage};
-use super::parts::{self, StatusText};
+use super::parts;
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
+use super::status_card::{StatusCard, StatusText};
 use super::SettingsPage;
 use crate::icons::Icon;
 use crate::window::{ButtonStyle, Milestone};
@@ -146,7 +147,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::DefaultApps;
     let default_apps = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     let pending = Availability::Unported(Milestone::DesktopIntegration);
-    default_apps.append_extra(&status_card());
+    default_apps.append_card(&status_card());
     default_apps.append_group(&routes_group(page));
     default_apps.append_group(&make_default_options_group(pending));
     default_apps.append_group(&button_group(
@@ -168,7 +169,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
 }
 
 /// The Default file explorer card with its main action.
-fn status_card() -> gtk::Box {
+fn status_card() -> StatusCard {
     let pending = Milestone::DesktopIntegration.notice();
     let make_default = parts::button("Make OpenXplorer default", ButtonStyle::Accent);
     make_default.set_sensitive(false);
@@ -180,7 +181,7 @@ fn status_card() -> gtk::Box {
                unchanged.",
         notice: Some(&pending),
     };
-    parts::status_card(status, &[make_default.upcast()])
+    StatusCard::new(status, &[make_default.upcast()])
 }
 
 /// Which app opens each route now, with "Refresh status".
@@ -337,9 +338,9 @@ pub(super) fn build_troubleshooting() -> SettingsSection {
     );
     let (restore, steps) = GUIDE.split_last().expect("the guide has steps");
     for step in steps {
-        guide.append_extra(&parts::paragraph(step));
+        guide.append_text(&parts::paragraph(step));
     }
-    guide.append_extra(&parts::note(Icon::Info, restore));
+    guide.append_text(&parts::note(Icon::Info, restore));
     guide
 }
 

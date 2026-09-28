@@ -1,10 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Finding settings by what they say.
+//! Finding settings by what they say and show.
 //!
-//! Ports `settingsSearch` in `desktop/ui/app.js`: every word typed into
-//! "Search settings" must appear, ignoring case, in a setting's title, its
-//! description or its keywords (the Python app's `data-search-terms`), so
-//! "watch live", "zoom" and "dolphin" find the settings people mean.
+//! Ports `settingsSearch` in `desktop/ui/app.js` (SET-004): every word
+//! typed into "Search settings" must appear, ignoring case, in what a
+//! setting says or shows. For a row that is its title, its description,
+//! its keywords (the Python app's `data-search-terms`), the labels of its
+//! controls and the heading of its group; for a status card, its title,
+//! its text and the labels of its buttons. The Python search read an
+//! element's `textContent` the same way, so "watch live", "zoom",
+//! "dolphin", "make default" and "refresh all" find the settings people
+//! mean.
+
+use gtk::prelude::*;
+
+use crate::window::children;
+
+/// The class of a setting that matches the settings search.
+const SEARCH_MATCH_CLASS: &str = "search-match";
+/// The class of the setting the search jumped to.
+const JUMP_TARGET_CLASS: &str = "jump-target";
 
 /// What a setting row says, and the other words it is found by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,15 +28,14 @@ pub(crate) struct RowText {
     /// The line under the name.
     pub description: &'static str,
     /// Words people search for it by that it does not show, such as
-    /// "zoom" for Text size.
+    /// "zoom" for Text size, and the Python app's longer wording.
     pub keywords: &'static str,
 }
 
 impl RowText {
-    /// Whether every word of `query` appears in the row's text.
-    pub(crate) fn matches(&self, query: &SearchQuery) -> bool {
-        let searchable = [self.title, self.description, self.keywords].join(" ");
-        query.is_found_in(&searchable)
+    /// The row's own words: its title, description and keywords.
+    pub(crate) fn words(&self) -> String {
+        [self.title, self.description, self.keywords].join(" ")
     }
 }
 
@@ -44,10 +57,81 @@ impl SearchQuery {
         self.words.is_empty()
     }
 
-    /// Whether every word appears in `text`, ignoring case.
-    fn is_found_in(&self, text: &str) -> bool {
-        let text = text.to_lowercase();
-        self.words.iter().all(|word| text.contains(word.as_str()))
+    /// How a setting that says and shows `texts` stands against the query:
+    /// each word may appear in any of them.
+    pub(crate) fn find_in(&self, texts: &[&str]) -> Finding {
+        if self.is_empty() {
+            return Finding::NoSearch;
+        }
+        let text = texts.join(" ").to_lowercase();
+        let has_every_word = self.words.iter().all(|word| text.contains(word.as_str()));
+        if has_every_word {
+            Finding::Match
+        } else {
+            Finding::Miss
+        }
+    }
+}
+
+/// How a setting stands against the search typed now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Finding {
+    /// Nothing is typed: every setting shows, none is marked.
+    NoSearch,
+    /// Every typed word is in the setting's text.
+    Match,
+    /// A typed word is missing, so the setting hides.
+    Miss,
+}
+
+impl Finding {
+    /// Whether the setting shows.
+    pub(crate) fn is_shown(self) -> bool {
+        self != Finding::Miss
+    }
+
+    /// Shows `setting` or hides it as the finding says, marks it while it
+    /// matches a search, and forgets an earlier jump to it.
+    pub(crate) fn show_on(self, setting: &impl IsA<gtk::Widget>) {
+        setting.set_visible(self.is_shown());
+        setting.remove_css_class(JUMP_TARGET_CLASS);
+        if self == Finding::Match {
+            setting.add_css_class(SEARCH_MATCH_CLASS);
+        } else {
+            setting.remove_css_class(SEARCH_MATCH_CLASS);
+        }
+    }
+}
+
+/// Outlines `setting` as the one the search jumped to, and gives the first
+/// of its `controls` that works keyboard focus, as Enter in the Python
+/// app's search clicked the first result. False when none works, as on a
+/// disabled row.
+pub(crate) fn jump_to(setting: &impl IsA<gtk::Widget>, controls: &[gtk::Widget]) -> bool {
+    setting.add_css_class(JUMP_TARGET_CLASS);
+    for control in controls {
+        if control.is_sensitive() && control.grab_focus() {
+            return true;
+        }
+    }
+    false
+}
+
+/// The text of every label in `widget`, in tree order: what the Python
+/// search read as an element's `textContent`. A drop-down's options are in
+/// its list, which is a child of its button, so they are found too.
+pub(crate) fn shown_text(widget: &impl IsA<gtk::Widget>) -> String {
+    let mut texts = Vec::new();
+    collect_label_texts(widget.upcast_ref(), &mut texts);
+    texts.join(" ")
+}
+
+fn collect_label_texts(widget: &gtk::Widget, texts: &mut Vec<String>) {
+    if let Some(label) = widget.downcast_ref::<gtk::Label>() {
+        texts.push(label.text().into());
+    }
+    for child in children(widget) {
+        collect_label_texts(&child, texts);
     }
 }
 
@@ -102,9 +186,9 @@ mod tests {
             },
         ];
         for case in cases {
-            let query = SearchQuery::parse(case.typed);
+            let finding = SearchQuery::parse(case.typed).find_in(&[&TEXT_SIZE.words()]);
             assert_eq!(
-                TEXT_SIZE.matches(&query),
+                finding == Finding::Match,
                 case.finds_text_size,
                 "{:?}",
                 case.typed
@@ -112,10 +196,27 @@ mod tests {
         }
     }
 
+    /// A row's words and the heading of its group are one text, so a query
+    /// may take some words from each.
+    #[test]
+    fn a_query_may_take_its_words_from_the_row_and_its_heading() {
+        let query = SearchQuery::parse("refresh folders");
+        let found = query.find_in(&[
+            "Folders Double-clicking a folder",
+            "What opens where Refresh status",
+        ]);
+        assert_eq!(found, Finding::Match);
+        let missing = query.find_in(&["Folders Double-clicking a folder"]);
+        assert_eq!(missing, Finding::Miss);
+    }
+
     #[test]
     fn an_empty_query_is_no_search() {
         assert!(SearchQuery::parse("  ").is_empty());
         assert!(!SearchQuery::parse("x").is_empty());
+        let finding = SearchQuery::parse("").find_in(&["anything"]);
+        assert_eq!(finding, Finding::NoSearch);
+        assert!(finding.is_shown());
     }
 
     #[test]
@@ -123,5 +224,16 @@ mod tests {
         assert_eq!(match_count_text(0), "No matching settings");
         assert_eq!(match_count_text(1), "1 matching setting");
         assert_eq!(match_count_text(4), "4 matching settings");
+    }
+
+    /// Ported from `settingsSearch`, which searched an element's
+    /// `textContent`: the labels of a button, however deep, are found.
+    #[gtk::test]
+    fn the_shown_text_is_every_label_in_tree_order() {
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        content.append(&gtk::Label::new(Some("Refresh")));
+        content.append(&gtk::Label::new(Some("all")));
+        let button = gtk::Button::builder().child(&content).build();
+        assert_eq!(shown_text(&button), "Refresh all");
     }
 }

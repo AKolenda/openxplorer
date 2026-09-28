@@ -15,7 +15,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::row::{Availability, PageWidth, SettingRow};
-use super::search::SearchQuery;
+use super::search::{shown_text, SearchQuery};
 use crate::window::children;
 
 mod imp {
@@ -134,12 +134,24 @@ impl SettingsGroup {
         rows.collect()
     }
 
-    /// Shows the rows that match `query`, and the group while any does;
-    /// returns how many match.
+    /// Shows the rows that match `query`, by their own text or by the
+    /// group's heading, and the group while any does; returns how many
+    /// match.
     pub(crate) fn apply_query(&self, query: &SearchQuery) -> usize {
-        let matching = self.rows().iter().filter(|row| row.apply_query(query)).count();
+        let heading = self.heading_text();
+        let rows = self.rows();
+        let matching = rows.iter().filter(|row| row.apply_query(query, &heading));
+        let matching = matching.count();
         self.set_visible(matching > 0);
         matching
+    }
+
+    /// What the heading shows: the title and the labels of its buttons,
+    /// such as "What opens where Refresh status".
+    fn heading_text(&self) -> String {
+        let imp = self.imp();
+        let actions = shown_text(&*imp.actions);
+        format!("{} {actions}", imp.title_label.text())
     }
 
     /// Lays every row out for a page `width` wide.

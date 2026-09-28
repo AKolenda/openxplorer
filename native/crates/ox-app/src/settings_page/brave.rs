@@ -43,7 +43,7 @@ pub(super) fn build() -> SettingsSection {
     row.set_availability(Availability::Unported(Milestone::DesktopIntegration));
     group.add_row(&row);
     brave.append_group(&group);
-    brave.append_extra(&parts::note(Icon::Info, SYNC_NOTE));
-    brave.append_extra(&parts::note(Icon::Info, MANUAL_NOTE));
+    brave.append_text(&parts::note(Icon::Info, SYNC_NOTE));
+    brave.append_text(&parts::note(Icon::Info, MANUAL_NOTE));
     brave
 }

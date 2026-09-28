@@ -12,10 +12,11 @@ use gtk::prelude::*;
 
 use super::group::SettingsGroup;
 use super::pages::Category;
-use super::parts::{self, StatusText};
+use super::parts;
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
+use super::status_card::{StatusCard, StatusText};
 use crate::config::BUILD_NAME;
 use crate::icons::Icon;
 use crate::window::{ButtonStyle, Milestone, WindowAction};
@@ -59,7 +60,7 @@ const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
 pub(super) fn build() -> SettingsSection {
     let category = Category::About;
     let about = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
-    about.append_extra(&build_card());
+    about.append_card(&build_card());
     let pending = Availability::Unported(Milestone::Distribution);
     about.append_group(&action_group(&UPDATES, pending));
     about.append_group(&action_group(&LICENSE_AND_SOURCE, pending));
@@ -67,7 +68,7 @@ pub(super) fn build() -> SettingsSection {
 }
 
 /// The build's name and description, with "About this build".
-fn build_card() -> gtk::Box {
+fn build_card() -> StatusCard {
     let about_build = parts::button("About this build", ButtonStyle::Bordered);
     WindowAction::About.assign_to(&about_build);
     let status = StatusText {
@@ -77,7 +78,7 @@ fn build_card() -> gtk::Box {
                GIO/GVfs.",
         notice: None,
     };
-    parts::status_card(status, &[about_build.upcast()])
+    StatusCard::new(status, &[about_build.upcast()])
 }
 
 /// The group `spec` describes, waiting for `pending`.

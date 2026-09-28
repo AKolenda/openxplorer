@@ -14,13 +14,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::search::{RowText, SearchQuery};
+use super::search::{jump_to, shown_text, RowText, SearchQuery};
 use crate::window::{children, Milestone};
-
-/// The class of a row that matches the settings search.
-const SEARCH_MATCH_CLASS: &str = "search-match";
-/// The class of the row the search jumped to.
-const JUMP_TARGET_CLASS: &str = "jump-target";
 
 /// Whether the native preview can do what a row controls.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -228,31 +223,22 @@ impl SettingRow {
         label.is_visible().then(|| label.text().to_string())
     }
 
-    /// Shows the row when it matches `query`, marked as a match while a
-    /// search is typed, and says whether it shows.
-    pub(crate) fn apply_query(&self, query: &SearchQuery) -> bool {
-        let matches = self.text().matches(query);
-        self.set_visible(matches);
-        self.remove_css_class(JUMP_TARGET_CLASS);
-        if matches && !query.is_empty() {
-            self.add_css_class(SEARCH_MATCH_CLASS);
-        } else {
-            self.remove_css_class(SEARCH_MATCH_CLASS);
-        }
-        matches
+    /// Shows the row when it matches `query` by its own words, the labels
+    /// of its controls or `heading`, what its group's heading shows; marks
+    /// it as a match while a search is typed, and says whether it shows.
+    pub(crate) fn apply_query(&self, query: &SearchQuery, heading: &str) -> bool {
+        let words = self.text().words();
+        let controls = shown_text(&*self.imp().control_slot);
+        let finding = query.find_in(&[&words, &controls, heading]);
+        finding.show_on(self);
+        finding.is_shown()
     }
 
     /// Outlines the row as the one the search jumped to, and gives its
     /// first working control keyboard focus. False when it has none, as a
     /// disabled row.
     pub(crate) fn jump_here(&self) -> bool {
-        self.add_css_class(JUMP_TARGET_CLASS);
-        for control in self.controls() {
-            if control.is_sensitive() && control.grab_focus() {
-                return true;
-            }
-        }
-        false
+        jump_to(self, &self.controls())
     }
 
     /// Where the controls go while the window has room; wide controls such

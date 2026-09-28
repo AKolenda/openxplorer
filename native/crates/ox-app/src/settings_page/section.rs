@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A section of Settings: the right side for one category, or for a
 //! sub-page one of its rows opens. A title, the line under it, then status
-//! cards, groups of rows and notes.
+//! cards, groups of rows and notes, each a [`Part`] of the section.
 //!
 //! Replaces the stacked `.settings-section` cards of `renderSettingsPage`
 //! in `desktop/ui/app.js`: only the chosen category shows (SET-019). The
@@ -14,9 +14,9 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::group::SettingsGroup;
-use super::parts;
 use super::row::{PageWidth, SettingRow};
 use super::search::SearchQuery;
+use super::status_card::StatusCard;
 use crate::icons::{self, Icon};
 use crate::window::children;
 
@@ -175,48 +175,137 @@ impl SettingsSection {
         self.imp().back_button.get()
     }
 
+    /// Adds a status card at the end.
+    pub(crate) fn append_card(&self, card: &StatusCard) {
+        self.body().append(card);
+    }
+
     /// Adds a group of rows at the end.
     pub(crate) fn append_group(&self, group: &SettingsGroup) {
         self.body().append(group);
     }
 
-    /// Adds a status card or a note at the end. The settings search hides
-    /// them, so only matching rows show.
-    pub(crate) fn append_extra(&self, extra: &impl IsA<gtk::Widget>) {
-        self.body().append(extra);
+    /// Adds a note or a paragraph at the end. The settings search hides
+    /// it, so only matching settings show.
+    pub(crate) fn append_text(&self, text: &impl IsA<gtk::Widget>) {
+        self.body().append(text);
     }
 
-    /// The page's groups, in order.
+    /// The section's parts, top to bottom.
+    fn parts(&self) -> Vec<Part> {
+        children(self.body()).map(Part::of).collect()
+    }
+
+    /// The section's groups, in order.
+    #[cfg(test)]
     pub(crate) fn groups(&self) -> Vec<SettingsGroup> {
-        let groups = children(self.body()).filter_map(|child| child.downcast::<SettingsGroup>().ok());
+        let parts = self.parts().into_iter();
+        let groups = parts.filter_map(|part| match part {
+            Part::Group(group) => Some(group),
+            Part::Card(_) | Part::Text(_) => None,
+        });
         groups.collect()
     }
 
-    /// Every row of the page, in order.
+    /// Every row of the section, in order.
+    #[cfg(test)]
     pub(crate) fn rows(&self) -> Vec<SettingRow> {
         self.groups().iter().flat_map(SettingsGroup::rows).collect()
     }
 
-    /// Shows only the rows that match `query`, and the status cards and
-    /// notes only while nothing is typed; returns how many rows match.
+    /// Shows only the rows and status cards that match `query`, and the
+    /// notes only while nothing is typed; returns how many settings match.
     pub(crate) fn apply_query(&self, query: &SearchQuery) -> usize {
         let mut matching = 0;
-        for child in children(self.body()) {
-            match child.downcast::<SettingsGroup>() {
-                Ok(group) => matching += group.apply_query(query),
-                Err(extra) => extra.set_visible(query.is_empty()),
-            }
+        for part in self.parts() {
+            matching += match part {
+                Part::Group(group) => group.apply_query(query),
+                Part::Card(card) => usize::from(card.apply_query(query)),
+                Part::Text(text) => {
+                    text.set_visible(query.is_empty());
+                    0
+                }
+            };
         }
         matching
     }
 
+    /// The first setting the search shows, top to bottom: a status card or
+    /// a row.
+    pub(crate) fn first_match(&self) -> Option<SearchTarget> {
+        self.parts().into_iter().find_map(|part| match part {
+            Part::Card(card) => card.is_visible().then_some(SearchTarget::Card(card)),
+            Part::Group(group) => {
+                let row = group.rows().into_iter().find(WidgetExt::is_visible)?;
+                Some(SearchTarget::Row(row))
+            }
+            Part::Text(_) => None,
+        })
+    }
+
     /// Lays every row and status card out for a page `width` wide.
     pub(crate) fn fit_to_width(&self, width: PageWidth) {
-        for child in children(self.body()) {
-            match child.downcast::<SettingsGroup>() {
-                Ok(group) => group.fit_to_width(width),
-                Err(extra) => parts::fit_status_card(&extra, width),
+        for part in self.parts() {
+            match part {
+                Part::Group(group) => group.fit_to_width(width),
+                Part::Card(card) => card.fit_to_width(width),
+                Part::Text(_) => {}
             }
+        }
+    }
+}
+
+/// One part of a section's body, as [`SettingsSection::append_card`],
+/// [`SettingsSection::append_group`] and [`SettingsSection::append_text`]
+/// added it.
+#[derive(Debug)]
+enum Part {
+    /// A status card, which the settings search finds.
+    Card(StatusCard),
+    /// A group of rows, which the settings search filters.
+    Group(SettingsGroup),
+    /// A note or a paragraph, hidden while searching.
+    Text(gtk::Widget),
+}
+
+impl Part {
+    /// The part `child` of the body is.
+    fn of(child: gtk::Widget) -> Self {
+        let child = match child.downcast::<StatusCard>() {
+            Ok(card) => return Part::Card(card),
+            Err(child) => child,
+        };
+        match child.downcast::<SettingsGroup>() {
+            Ok(group) => Part::Group(group),
+            Err(text) => Part::Text(text),
+        }
+    }
+}
+
+/// A setting the settings search found: a status card or a row.
+#[derive(Debug, Clone)]
+pub(crate) enum SearchTarget {
+    /// A status card, found by its text and its buttons.
+    Card(StatusCard),
+    /// A row of settings.
+    Row(SettingRow),
+}
+
+impl SearchTarget {
+    /// Outlines the setting and gives its first working control keyboard
+    /// focus; false when it has none.
+    pub(crate) fn jump_here(&self) -> bool {
+        match self {
+            SearchTarget::Card(card) => card.jump_here(),
+            SearchTarget::Row(row) => row.jump_here(),
+        }
+    }
+
+    /// The setting's widget, for scrolling to it.
+    pub(crate) fn widget(&self) -> &gtk::Widget {
+        match self {
+            SearchTarget::Card(card) => card.upcast_ref(),
+            SearchTarget::Row(row) => row.upcast_ref(),
         }
     }
 }

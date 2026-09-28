@@ -1,79 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The small pieces the category pages are built from: status cards,
-//! notes, and the compact controls of a row.
+//! The small pieces the category pages are built from: notes, paragraphs
+//! and the compact controls of a row.
 //!
 //! Ports the buttons, checkboxes and help paragraphs of
 //! `renderSettingsPage` in `desktop/ui/app.js` in the look of the settings
-//! mockup: a checkbox becomes a switch, a paragraph a short note, and a
-//! section's summary a tinted status card. `resources/skin/settings.css`
-//! styles the classes named here.
+//! mockup: a checkbox becomes a switch and a paragraph a short note; a
+//! section's summary is a [`super::status_card::StatusCard`].
+//! `resources/skin/settings.css` styles the classes named here.
 
 use gtk::prelude::*;
 
-use super::row::PageWidth;
 use crate::icons::{self, Icon};
 use crate::window::{children, ButtonStyle};
 
-/// The glyph in a status card's round badge.
-const STATUS_GLYPH: i32 = 22;
 /// The glyph before a note.
 const NOTE_GLYPH: i32 = 16;
 /// The chevron of a row that opens a page.
 const CHEVRON_GLYPH: i32 = 12;
 /// The glyph inside a button, before its label.
 const BUTTON_GLYPH: i32 = 16;
-
-/// The class of a status card.
-const STATUS_CARD_CLASS: &str = "status-card";
-
-/// What a status card says.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct StatusText<'a> {
-    /// The glyph in the round badge.
-    pub glyph: Icon,
-    /// The one-line state, such as "Default file explorer".
-    pub title: &'a str,
-    /// The line under it.
-    pub text: &'a str,
-    /// The milestone that brings the card's actions, when the native
-    /// preview lacks them.
-    pub notice: Option<&'a str>,
-}
-
-/// A tinted card that sums up a category, with its main actions at the
-/// right, as the mockup's `.hero`.
-pub(crate) fn status_card(status: StatusText<'_>, actions: &[gtk::Widget]) -> gtk::Box {
-    let card = gtk::Box::new(gtk::Orientation::Horizontal, 16);
-    card.add_css_class(STATUS_CARD_CLASS);
-    let badge = gtk::Box::builder()
-        .valign(gtk::Align::Center)
-        .halign(gtk::Align::Start)
-        .css_classes(["status-badge"])
-        .build();
-    badge.append(&icons::image(status.glyph, STATUS_GLYPH));
-    card.append(&badge);
-    let texts = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .hexpand(true)
-        .valign(gtk::Align::Center)
-        .build();
-    texts.append(&wrapped_label(status.title, "status-title"));
-    texts.append(&wrapped_label(status.text, "status-text"));
-    if let Some(notice) = status.notice {
-        texts.append(&wrapped_label(notice, "setting-notice"));
-    }
-    card.append(&texts);
-    let buttons = gtk::Box::builder()
-        .spacing(8)
-        .valign(gtk::Align::Center)
-        .halign(gtk::Align::Start)
-        .build();
-    for action in actions {
-        buttons.append(action);
-    }
-    card.append(&buttons);
-    card
-}
 
 /// A short muted paragraph after a group, with `glyph` before it, for
 /// what a row's one line cannot say.
@@ -177,18 +122,4 @@ pub(crate) fn menu_button_with_glyph(label: &str, glyph: Icon) -> gtk::MenuButto
         .build();
     button.update_property(&[gtk::accessible::Property::Label(label)]);
     button
-}
-
-/// Lays `extra` out for a page `width` wide when it is a status card: its
-/// parts side by side, or stacked in a narrow window.
-pub(crate) fn fit_status_card(extra: &gtk::Widget, width: PageWidth) {
-    let card = extra.downcast_ref::<gtk::Box>();
-    let Some(card) = card.filter(|card| card.has_css_class(STATUS_CARD_CLASS)) else {
-        return;
-    };
-    let orientation = match width {
-        PageWidth::Roomy => gtk::Orientation::Horizontal,
-        PageWidth::Narrow => gtk::Orientation::Vertical,
-    };
-    card.set_orientation(orientation);
 }
