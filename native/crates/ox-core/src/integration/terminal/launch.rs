@@ -145,6 +145,7 @@ mod tests {
     use std::ffi::OsStr;
 
     use super::*;
+    use crate::integration::host_command::argv;
     use crate::integration::terminal::TerminalKind;
 
     #[test]
@@ -176,8 +177,6 @@ mod tests {
             .expect("command")
             .to_command(Sandbox::Flatpak);
 
-        let mut argv = vec![command.get_program().to_owned()];
-        argv.extend(command.get_args().map(OsStr::to_owned));
         let folder_text = directory.to_string_lossy();
         let expected: Vec<OsString> = [
             "flatpak-spawn".to_owned(),
@@ -190,6 +189,6 @@ mod tests {
         .into_iter()
         .map(OsString::from)
         .collect();
-        assert_eq!(argv, expected);
+        assert_eq!(argv(&command), expected);
     }
 }

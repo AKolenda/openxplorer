@@ -11,12 +11,15 @@
 //! file system, and a program run there would change the sandbox's copy
 //! of the user's files instead of the host's. There, a command runs on the
 //! host through `flatpak-spawn --host`, which needs the app's
-//! `--talk-name=org.freedesktop.Flatpak` permission.
+//! `--talk-name=org.freedesktop.Flatpak` permission. A command with a time
+//! limit runs there under the host's `timeout`, because stopping
+//! `flatpak-spawn` does not stop the program it started on the host.
 
 use std::ffi::{OsStr, OsString};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, ChildStdout, Command, ExitStatus, Stdio};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -24,6 +27,30 @@ use super::sandbox::Sandbox;
 
 /// The Flatpak tool that runs a command on the host.
 const FLATPAK_SPAWN: &str = "flatpak-spawn";
+
+/// The coreutils program that stops a command on the host after a time
+/// limit.
+const HOST_TIMEOUT: &str = "timeout";
+
+/// How long the host's `timeout` waits after SIGTERM before it sends
+/// SIGKILL.
+const HOST_KILL_GRACE: Duration = Duration::from_secs(1);
+
+/// How much longer the app waits for `flatpak-spawn` than the host's
+/// `timeout` needs to stop the program, so that the host always stops it
+/// first.
+const FLATPAK_SPAWN_MARGIN: Duration = Duration::from_secs(2);
+
+/// The exit status of `timeout` when the program ran out of time and
+/// SIGTERM stopped it.
+const TIMEOUT_STOPPED: i32 = 124;
+
+/// The exit status of `timeout` when the program ran out of time and
+/// only SIGKILL stopped it (128 + 9).
+const TIMEOUT_KILLED: i32 = 137;
+
+/// The exit status of `timeout` when the program is not installed.
+const TIMEOUT_NOT_FOUND: i32 = 127;
 
 /// How often a running command is checked for having exited.
 const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
@@ -42,7 +69,8 @@ pub(crate) struct HostCommand {
 /// Why a command did not produce its output.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum CommandFailure {
-    /// The program, or `flatpak-spawn` inside Flatpak, is not installed.
+    /// The program is not installed on the host, or `flatpak-spawn` is not
+    /// installed in the sandbox.
     #[error("the program is not installed")]
     NotInstalled,
     /// The program exited unsuccessfully.
@@ -104,8 +132,8 @@ impl HostCommand {
 
     /// Runs the command to completion and returns its standard output
     /// without surrounding whitespace, as `subprocess.run(...,
-    /// capture_output=True, timeout=..., check=True).stdout.strip()` does.
-    /// A command still running after `timeout` is killed.
+    /// capture_output=True, timeout=..., check=True).stdout.strip()` does:
+    /// running the program and collecting its output end after `timeout`.
     ///
     /// # Errors
     ///
@@ -116,33 +144,73 @@ impl HostCommand {
         sandbox: Sandbox,
         timeout: Duration,
     ) -> Result<String, CommandFailure> {
+        let wait_limit = app_side_limit(sandbox, timeout);
+        let deadline = Instant::now() + wait_limit;
         let mut child = self
-            .to_command(sandbox)
+            .to_limited_command(sandbox, timeout)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .map_err(CommandFailure::from_spawn_error)?;
-        let mut stdout = child
+        let stdout = child
             .stdout
             .take()
             .expect("standard output was requested as a pipe");
-        // Read on another thread, so a command that fills the pipe cannot
-        // stall the wait below.
-        let reader = thread::spawn(move || {
-            let mut output = String::new();
-            stdout.read_to_string(&mut output).map(|_| output)
-        });
-        let Some(status) = wait_for_exit(&mut child, timeout)? else {
+        let output = OutputReader::start(stdout);
+        let Some(status) = wait_for_exit(&mut child, wait_limit)? else {
+            // On the host this stops the program. Inside Flatpak SIGKILL
+            // reaches only `flatpak-spawn`, which cannot pass it on, but
+            // the host's `timeout` stopped the program before this
+            // deadline, so no default changes after the app reports that
+            // the desktop took too long.
             child.kill()?;
             child.wait()?;
             return Err(CommandFailure::TimedOut);
         };
         if !status.success() {
-            return Err(CommandFailure::Failed(status));
+            return Err(CommandFailure::from_exit_status(status, sandbox));
         }
-        let output = reader.join().expect("reading a pipe does not panic")?;
+        let output = output.finish_by(deadline)?;
         Ok(output.trim().to_owned())
+    }
+
+    /// The process that runs the command with a time limit of `timeout`:
+    /// the program itself on the host, where the app stops it; inside
+    /// Flatpak, [`HostCommand::under_host_timeout`] through
+    /// `flatpak-spawn --host`.
+    fn to_limited_command(&self, sandbox: Sandbox, timeout: Duration) -> Command {
+        match sandbox {
+            Sandbox::Host => self.to_host_command(),
+            Sandbox::Flatpak => self.under_host_timeout(timeout).to_flatpak_spawn_command(),
+        }
+    }
+
+    /// This command run by the host's `timeout`, which stops it with
+    /// SIGTERM after `timeout` and with SIGKILL one [`HOST_KILL_GRACE`]
+    /// later.
+    ///
+    /// Safety rule "a timed-out change stays stopped"
+    /// (`subprocess.run(timeout=8)` in `desktop_integration.py`): SIGKILL
+    /// of `flatpak-spawn` cannot be passed on to the host, so only a limit
+    /// the host enforces stops a slow `xdg-mime` before the app reports
+    /// the timeout.
+    fn under_host_timeout(&self, timeout: Duration) -> Self {
+        let kill_after = format!("--kill-after={}", HOST_KILL_GRACE.as_secs());
+        let seconds = timeout.as_secs_f64().to_string();
+        let mut arguments = vec![
+            OsString::from(kill_after),
+            OsString::from(seconds),
+            self.program.clone(),
+        ];
+        arguments.extend(self.arguments.iter().cloned());
+        Self {
+            program: OsString::from(HOST_TIMEOUT),
+            arguments,
+            directory: self.directory.clone(),
+            environment: self.environment.clone(),
+            removed_environment: self.removed_environment.clone(),
+        }
     }
 
     /// The program run directly.
@@ -193,6 +261,76 @@ impl CommandFailure {
             Self::Io(error)
         }
     }
+
+    /// The failure an unsuccessful exit `status` means.
+    ///
+    /// Inside Flatpak the status is that of the host's `timeout`, which
+    /// `flatpak-spawn` passes on, and tells a program that ran out of time
+    /// or is not installed on the host from one that failed. `timeout`
+    /// exits with 127 only when it cannot find the program, and `xdg-mime`
+    /// itself exits with 1 to 5, so a missing `xdg-mime` needs no second
+    /// query of the host.
+    fn from_exit_status(status: ExitStatus, sandbox: Sandbox) -> Self {
+        if sandbox == Sandbox::Host {
+            return Self::Failed(status);
+        }
+        match status.code() {
+            Some(TIMEOUT_STOPPED | TIMEOUT_KILLED) => Self::TimedOut,
+            Some(TIMEOUT_NOT_FOUND) => Self::NotInstalled,
+            _ => Self::Failed(status),
+        }
+    }
+}
+
+/// A command's standard output, read to its end on a thread of its own,
+/// so that a command that fills the pipe cannot stall the wait for its
+/// exit.
+struct OutputReader {
+    receiver: mpsc::Receiver<io::Result<String>>,
+}
+
+impl OutputReader {
+    /// Starts reading `stdout`.
+    fn start(mut stdout: ChildStdout) -> Self {
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let mut output = String::new();
+            let read = stdout.read_to_string(&mut output).map(|_| output);
+            // After a timeout nobody waits for the output any more, and
+            // it is not needed.
+            let _ = sender.send(read);
+        });
+        Self { receiver }
+    }
+
+    /// The whole output, if the pipe closes before `deadline`.
+    ///
+    /// A helper that the program left running can hold the pipe open
+    /// after the program exits. Python's `run(timeout=8)` limits
+    /// collecting the output too, so the wait ends at the same deadline;
+    /// the reading thread ends when the helper closes the pipe.
+    fn finish_by(self, deadline: Instant) -> Result<String, CommandFailure> {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match self.receiver.recv_timeout(remaining) {
+            Ok(read) => Ok(read?),
+            Err(RecvTimeoutError::Timeout) => Err(CommandFailure::TimedOut),
+            Err(RecvTimeoutError::Disconnected) => {
+                let lost = io::Error::other("the output of the program was lost");
+                Err(CommandFailure::Io(lost))
+            }
+        }
+    }
+}
+
+/// How long the app waits for a command limited to `timeout`: exactly
+/// that on the host; inside Flatpak long enough for the host's `timeout`
+/// to stop the program first, so that its exit status says what
+/// happened.
+fn app_side_limit(sandbox: Sandbox, timeout: Duration) -> Duration {
+    match sandbox {
+        Sandbox::Host => timeout,
+        Sandbox::Flatpak => timeout + HOST_KILL_GRACE + FLATPAK_SPAWN_MARGIN,
+    }
 }
 
 /// Waits up to `timeout` for `child` to exit; `None` if it is still
@@ -221,15 +359,27 @@ fn prefixed(prefix: &str, value: &OsStr) -> OsString {
     text
 }
 
+/// The program and arguments `command` starts, for the tests of the
+/// commands built on [`HostCommand`].
+#[cfg(test)]
+pub(crate) fn argv(command: &Command) -> Vec<&OsStr> {
+    let mut argv = vec![command.get_program()];
+    argv.extend(command.get_args());
+    argv
+}
+
 #[cfg(test)]
 mod tests {
+    use std::os::unix::process::ExitStatusExt;
+
     use super::*;
 
-    /// The program and arguments `command` starts.
-    fn argv(command: &Command) -> Vec<&OsStr> {
-        let mut argv = vec![command.get_program()];
-        argv.extend(command.get_args());
-        argv
+    /// An exit code of the program, or of the host's `timeout` inside
+    /// Flatpak, and the failure it is reported as.
+    struct ExitCase {
+        sandbox: Sandbox,
+        code: i32,
+        expected: &'static str,
     }
 
     fn terminal_in_projects() -> HostCommand {
@@ -300,5 +450,103 @@ mod tests {
         );
         assert!(matches!(failing, Err(CommandFailure::Failed(_))), "{failing:?}");
         assert!(matches!(slow, Err(CommandFailure::TimedOut)), "{slow:?}");
+    }
+
+    #[test]
+    fn a_helper_holding_the_output_open_cannot_outlast_the_timeout() {
+        let command = HostCommand::new("sh").arg("-c").arg("sleep 30 &");
+        let started = Instant::now();
+
+        let output = command.output_within(Sandbox::Host, Duration::from_millis(200));
+
+        assert!(matches!(output, Err(CommandFailure::TimedOut)), "{output:?}");
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn inside_flatpak_a_limited_command_runs_under_the_hosts_timeout() {
+        let query = HostCommand::new("xdg-mime")
+            .arg("query")
+            .arg("default")
+            .arg("inode/directory");
+        let limit = Duration::from_secs(8);
+
+        let on_host = query.to_limited_command(Sandbox::Host, limit);
+        let in_flatpak = query.to_limited_command(Sandbox::Flatpak, limit);
+
+        assert_eq!(
+            argv(&on_host),
+            ["xdg-mime", "query", "default", "inode/directory"]
+        );
+        assert_eq!(
+            argv(&in_flatpak),
+            [
+                "flatpak-spawn",
+                "--host",
+                "timeout",
+                "--kill-after=1",
+                "8",
+                "xdg-mime",
+                "query",
+                "default",
+                "inode/directory",
+            ]
+        );
+    }
+
+    #[test]
+    fn inside_flatpak_the_hosts_timeout_tells_a_slow_or_missing_program_apart() {
+        let cases = [
+            ExitCase {
+                sandbox: Sandbox::Flatpak,
+                code: TIMEOUT_STOPPED,
+                expected: "the program did not finish in time",
+            },
+            ExitCase {
+                sandbox: Sandbox::Flatpak,
+                code: TIMEOUT_KILLED,
+                expected: "the program did not finish in time",
+            },
+            ExitCase {
+                sandbox: Sandbox::Flatpak,
+                code: TIMEOUT_NOT_FOUND,
+                expected: "the program is not installed",
+            },
+            ExitCase {
+                sandbox: Sandbox::Flatpak,
+                code: 4,
+                expected: "the program exited with exit status: 4",
+            },
+            ExitCase {
+                sandbox: Sandbox::Host,
+                code: TIMEOUT_NOT_FOUND,
+                expected: "the program exited with exit status: 127",
+            },
+        ];
+        for case in cases {
+            let status = ExitStatus::from_raw(case.code << 8);
+
+            let failure = CommandFailure::from_exit_status(status, case.sandbox);
+
+            assert_eq!(
+                failure.to_string(),
+                case.expected,
+                "{:?} {}",
+                case.sandbox,
+                case.code
+            );
+        }
+    }
+
+    #[test]
+    fn inside_flatpak_the_app_waits_until_the_host_has_stopped_the_program() {
+        let timeout = Duration::from_secs(8);
+
+        assert_eq!(app_side_limit(Sandbox::Host, timeout), timeout);
+        assert!(app_side_limit(Sandbox::Flatpak, timeout) > timeout + HOST_KILL_GRACE);
     }
 }
