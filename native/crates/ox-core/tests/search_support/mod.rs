@@ -3,6 +3,13 @@
 //! by a service with the real GIO reader (the set-up of `LiveTests` in
 //! `desktop/tests/test_v05.py`), an SMB share held in memory, and waiting
 //! for the service's ticks. Include it with `mod search_support;`.
+//!
+//! `src/search/fixtures.rs` has crate-private counterparts of
+//! [`found_names`], [`root_state`], the wait loop of [`tick_until`] and
+//! [`IndexedFolder`] (`LocalRoot` there). Both copies are needed: these
+//! helpers use only the public API, as the app does, and cannot reach that
+//! module, while the unit tests there need crate-private items, such as
+//! lowered limits and the service state, that this crate cannot use.
 #![allow(
     dead_code,
     reason = "each test crate that includes this module uses a different part of it"

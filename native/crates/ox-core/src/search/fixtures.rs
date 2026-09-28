@@ -5,6 +5,13 @@
 //! of `desktop/tests/test_v05.py` does, [`ScannedShare`] is the set-up of
 //! its `IndexTests` (a cache with one SMB root whose scan has begun), and
 //! [`LocalRoot`] the set-up of its `LiveTests` without the service.
+//!
+//! `tests/search_support` has public-API counterparts of [`found_names`],
+//! [`root_state`], the wait loop of [`wait_until`] and [`LocalRoot`]
+//! (`IndexedFolder` there). Both copies are needed: the unit tests here
+//! use crate-private items, such as `begin_scan`, `store_scanned`, lowered
+//! [`ServiceLimits`] and the service state, which integration tests cannot
+//! reach, and a unit test cannot include a module of `tests/`.
 
 use std::fs;
 use std::path::PathBuf;

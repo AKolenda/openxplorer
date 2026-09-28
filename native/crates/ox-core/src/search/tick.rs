@@ -301,6 +301,10 @@ mod tests {
     /// Events were lost when the inotify queue overflowed, so every root
     /// is scanned again in full (`overflow` in Python).
     ///
+    /// A unit test, because no public call can overflow the queue: the
+    /// watch's reader thread drains it as events arrive, so the overflow is
+    /// reported directly.
+    ///
     /// parity: SRCH-029
     #[test]
     fn a_queue_overflow_rescans_every_root() {

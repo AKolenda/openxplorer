@@ -193,7 +193,7 @@ impl Crawl<'_> {
     /// Stores one batch and queues its folders.
     ///
     /// Safety rule "at most a million entries per root" (SRCH-032,
-    /// [`ServiceLimits::entries_per_root`]): what does not fit is not
+    /// `ServiceLimits::entries_per_root`): what does not fit is not
     /// stored, and the scan stops with the limit message.
     fn store_batch(&mut self, batch: Vec<ListedItem>, child_depth: usize) -> Result<(), SearchError> {
         check_cancelled(&self.job.cancellable)?;

@@ -96,6 +96,8 @@ enum Job {
     Scan(ScanJob),
     /// A live update of one changed folder.
     Update(UpdateJob),
+    /// Stopping the inotify watch of a closed service.
+    StopWatch(LocalWatch),
 }
 
 /// Keeps the search cache up to date (`IndexService` in Python).
@@ -169,8 +171,9 @@ impl IndexService {
         self.shared.state().ownership.is_owner()
     }
 
-    /// Stops every scan and update and gives up ownership once the worker
-    /// is idle (`close` in Python). Does not wait; see
+    /// Stops every scan, update and watch, and gives up ownership once the
+    /// worker is idle (`close` in Python). Does not wait, so dropping the
+    /// service on the main thread never blocks it (PERF-003); see
     /// [`IndexService::shut_down`].
     pub fn close(&self) {
         let watch = {
@@ -182,12 +185,18 @@ impl IndexService {
             state.release_if_idle();
             state.watch.take()
         };
-        // Dropped outside the lock: it waits for its reader thread.
-        drop(watch);
+        if let Some(watch) = watch {
+            // Stopping the watch joins its reader thread, which looks at
+            // its stop flag only every 200 ms, so the worker does it after
+            // the cancelled jobs. Should the worker have ended, the job is
+            // dropped here and the watch stops on this thread.
+            self.queue(Job::StopWatch(watch));
+        }
     }
 
     /// Closes the service and waits for the worker thread to end, which
-    /// happens as soon as the queued jobs notice their cancellation.
+    /// happens as soon as the queued jobs notice their cancellation and the
+    /// inotify watch has stopped (up to 200 ms).
     pub fn shut_down(mut self) {
         let worker = self.worker.take();
         // Dropping closes the service and the job queue.
@@ -324,6 +333,7 @@ fn run_jobs(shared: &Shared, queue: &Receiver<Job>) {
         match job {
             Job::Scan(scan) => run_scan(shared, &scan),
             Job::Update(update) => run_update(shared, &update),
+            Job::StopWatch(watch) => drop(watch),
         }
     }
 }
