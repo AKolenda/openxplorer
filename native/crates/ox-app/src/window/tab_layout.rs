@@ -12,6 +12,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use super::widget_tree::laid_out_children;
+
 /// A tab's width when there is room (`.tab{width:215px}`).
 pub(super) const TAB_WIDTH: i32 = 215;
 /// The narrowest a tab gets before the strip scrolls: the Windows 11 tab
@@ -63,7 +65,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{strip_width, tab_width, TabWidths, TAB_GAP, TAB_WIDTH};
+    use super::{laid_out_children, strip_width, tab_width, TabWidths, TAB_GAP, TAB_WIDTH};
 
     /// Private state of [`super::TabLayout`].
     #[derive(Debug)]
@@ -109,7 +111,7 @@ mod imp {
             orientation: gtk::Orientation,
             _for_size: i32,
         ) -> (i32, i32, i32, i32) {
-            let tabs = super::visible_children(widget);
+            let tabs = laid_out_children(widget);
             if orientation == gtk::Orientation::Vertical {
                 let height = tabs
                     .iter()
@@ -126,7 +128,7 @@ mod imp {
         }
 
         fn allocate(&self, widget: &gtk::Widget, width: i32, height: i32, _baseline: i32) {
-            let tabs = super::visible_children(widget);
+            let tabs = laid_out_children(widget);
             let count = i32::try_from(tabs.len()).unwrap_or(i32::MAX);
             let each = tab_width(width, count, self.widths(&tabs));
             let mut x = 0;
@@ -157,18 +159,6 @@ impl TabLayout {
             self.layout_changed();
         }
     }
-}
-
-fn visible_children(widget: &gtk::Widget) -> Vec<gtk::Widget> {
-    let mut children = Vec::new();
-    let mut child = widget.first_child();
-    while let Some(current) = child {
-        if current.should_layout() {
-            children.push(current.clone());
-        }
-        child = current.next_sibling();
-    }
-    children
 }
 
 #[cfg(test)]

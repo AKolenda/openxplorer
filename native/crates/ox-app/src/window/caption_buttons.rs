@@ -15,6 +15,8 @@ use gtk::subclass::prelude::*;
 
 use crate::icons::{self, Glyph};
 
+use super::widget_tree::remove_children;
+
 /// One caption button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Caption {
@@ -162,9 +164,7 @@ impl CaptionButtons {
     }
 
     fn rebuild(&self) {
-        while let Some(child) = self.first_child() {
-            self.remove(&child);
-        }
+        remove_children(self);
         let maximized = self.imp().maximized.get();
         for caption in self.captions() {
             self.append(&caption_button(caption, maximized));

@@ -12,6 +12,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use super::widget_tree::laid_out_children;
+
 /// A grid's sizes, from its stylesheet rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct GridSpacing {
@@ -58,7 +60,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::{column_count, column_width, GridSpacing, QUICK_GRID};
+    use super::{column_count, column_width, laid_out_children, GridSpacing, QUICK_GRID};
 
     /// Private state of [`super::CardGridLayout`].
     #[derive(Debug)]
@@ -95,7 +97,7 @@ mod imp {
             for_size: i32,
         ) -> (i32, i32, i32, i32) {
             let spacing = self.spacing.get();
-            let cards = super::cards(widget);
+            let cards = laid_out_children(widget);
             if orientation == gtk::Orientation::Horizontal {
                 let narrowest = spacing.narrowest_column.min(super::widest_minimum(&cards));
                 return (narrowest, narrowest, -1, -1);
@@ -106,7 +108,7 @@ mod imp {
 
         fn allocate(&self, widget: &gtk::Widget, width: i32, _height: i32, _baseline: i32) {
             let spacing = self.spacing.get();
-            let cards = super::cards(widget);
+            let cards = laid_out_children(widget);
             let count = i32::try_from(cards.len()).unwrap_or(i32::MAX);
             let columns = column_count(spacing, width, count);
             let each = column_width(spacing, width, columns);
@@ -145,18 +147,6 @@ pub(super) fn card_grid(spacing: GridSpacing) -> gtk::Box {
         .layout_manager(&CardGridLayout::new(spacing))
         .css_classes(["card-grid"])
         .build()
-}
-
-fn cards(widget: &gtk::Widget) -> Vec<gtk::Widget> {
-    let mut cards = Vec::new();
-    let mut child = widget.first_child();
-    while let Some(current) = child {
-        if current.should_layout() {
-            cards.push(current.clone());
-        }
-        child = current.next_sibling();
-    }
-    cards
 }
 
 /// The widest minimum width among `cards`, so a card is never squeezed.

@@ -6,37 +6,24 @@ use gtk::prelude::*;
 
 use super::geometry::{bounds, laid_out, Bounds};
 use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
-
-/// The children of `widget`, in order.
-fn children(widget: &impl IsA<gtk::Widget>) -> Vec<gtk::Widget> {
-    let mut found = Vec::new();
-    let mut child = widget.as_ref().first_child();
-    while let Some(current) = child {
-        child = current.next_sibling();
-        found.push(current);
-    }
-    found
-}
+use crate::window::widget_tree::children;
 
 /// The column titles of the details view, left to right.
 fn column_titles(test: &TestWindow) -> Vec<gtk::Widget> {
     let details = &test.window.content().details;
     let header = children(details)
-        .into_iter()
         .find(|child| child.css_name() == "header")
         .expect("the details view has a header");
-    children(&header)
+    children(&header).collect()
 }
 
 /// The first row of the details view.
 fn first_row(test: &TestWindow) -> gtk::Widget {
     let details = &test.window.content().details;
     let list = children(details)
-        .into_iter()
         .find(|child| child.css_name() == "listview")
         .expect("the details view has a list");
     children(&list)
-        .into_iter()
         .find(|child| child.css_name() == "row")
         .expect("the fixture has rows")
 }
@@ -103,7 +90,7 @@ fn rows_are_inset_12_pixels_and_their_cells_sit_under_the_titles() {
         .iter()
         .map(|title| bounds(&test, title).0)
         .collect();
-    let cell_x: Vec<i32> = children(&row).iter().map(|cell| bounds(&test, cell).0).collect();
+    let cell_x: Vec<i32> = children(&row).map(|cell| bounds(&test, &cell).0).collect();
     assert_eq!(cell_x, title_x);
 }
 

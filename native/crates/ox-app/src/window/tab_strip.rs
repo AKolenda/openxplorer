@@ -19,6 +19,7 @@ use super::art_style::ArtStyle;
 use super::gestures;
 use super::session::TabId;
 use super::tab_layout::TabLayout;
+use super::widget_tree::remove_children;
 
 /// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
 const ICON_SIZE: i32 = 16;
@@ -98,9 +99,7 @@ impl TabStrip {
 
     /// Replaces the tabs and scrolls the active one into view.
     pub fn show(&self, labels: &[TabLabel], style: ArtStyle) {
-        while let Some(child) = self.tabs.first_child() {
-            self.tabs.remove(&child);
-        }
+        remove_children(&self.tabs);
         let mut active = None;
         for label in labels {
             let tab = tab(label, style);

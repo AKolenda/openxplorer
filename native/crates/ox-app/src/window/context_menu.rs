@@ -10,6 +10,7 @@
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 
+use super::widget_tree::children;
 use super::BrowserWindow;
 
 /// The right-click and keyboard context menu of one view.
@@ -100,14 +101,7 @@ impl BrowserWindow {
 
 /// The context menu popover attached to `view`.
 fn context_menu_of(view: &gtk::Widget) -> Option<gtk::PopoverMenu> {
-    let mut child = view.first_child();
-    while let Some(widget) = child {
-        if let Ok(popover) = widget.clone().downcast::<gtk::PopoverMenu>() {
-            return Some(popover);
-        }
-        child = widget.next_sibling();
-    }
-    None
+    children(view).find_map(|child| child.downcast::<gtk::PopoverMenu>().ok())
 }
 
 /// The Menu key and Shift+F10 open the context menu. They are view

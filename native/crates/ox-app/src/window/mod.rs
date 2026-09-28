@@ -42,6 +42,7 @@ mod tab_layout;
 mod tab_strip;
 mod title_bar;
 mod unported;
+mod widget_tree;
 
 #[cfg(test)]
 mod tests;

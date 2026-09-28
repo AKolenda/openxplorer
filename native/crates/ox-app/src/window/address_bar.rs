@@ -22,6 +22,7 @@ use crate::icons::{self, ArtKind, Glyph};
 
 use super::art_style::ArtStyle;
 use super::gestures;
+use super::widget_tree::remove_children;
 
 /// The location icon: 16 pixels (ui-spec.md §4.2; the web app's was 17).
 const ICON_SIZE: i32 = 16;
@@ -186,9 +187,7 @@ impl AddressBar {
         if self.mode() == AddressMode::Crumbs {
             self.entry.set_text(address);
         }
-        while let Some(child) = self.crumbs.first_child() {
-            self.crumbs.remove(&child);
-        }
+        remove_children(&self.crumbs);
         let last = crumbs.len().saturating_sub(1);
         for (index, crumb) in crumbs.iter().enumerate() {
             if let Some(divider) = crumb.divider_before {
@@ -220,13 +219,9 @@ impl AddressBar {
     /// The crumb buttons shown, for tests.
     #[cfg(test)]
     pub fn crumb_buttons(&self) -> Vec<gtk::Button> {
-        let mut buttons = Vec::new();
-        let mut child = self.crumbs.first_child();
-        while let Some(widget) = child {
-            buttons.extend(widget.clone().downcast::<gtk::Button>().ok());
-            child = widget.next_sibling();
-        }
-        buttons
+        super::widget_tree::children(&self.crumbs)
+            .filter_map(|child| child.downcast::<gtk::Button>().ok())
+            .collect()
     }
 
     /// The crumbs' horizontal scroll position, for tests.

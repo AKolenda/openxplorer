@@ -25,6 +25,7 @@ use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
 use super::art_style::ArtStyle;
 use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
+use super::widget_tree::remove_children;
 use super::{gestures, network_page, unported};
 
 /// The action of the "Map network location" heading button.
@@ -281,9 +282,7 @@ pub(super) fn render(
     locations: &LocationContext,
     style: ArtStyle,
 ) {
-    while let Some(child) = body.first_child() {
-        body.remove(&child);
-    }
+    remove_children(body);
     page_header(body, page);
     match page {
         Page::ThisPc => {
@@ -298,19 +297,16 @@ pub(super) fn render(
 /// The section titles `body` shows, for tests.
 #[cfg(test)]
 pub(super) fn section_titles(body: &gtk::Box) -> Vec<String> {
-    let mut titles = Vec::new();
-    let mut child = body.first_child();
-    while let Some(widget) = child {
-        if widget.has_css_class("section-title") {
-            // The glyph, then the title's label.
-            let text = widget
-                .first_child()
-                .and_then(|glyph| glyph.next_sibling())
-                .and_downcast::<gtk::Label>()
-                .map(|label| label.text().to_string());
-            titles.extend(text);
-        }
-        child = widget.next_sibling();
-    }
-    titles
+    super::widget_tree::children(body)
+        .filter(|child| child.has_css_class("section-title"))
+        .filter_map(|title| section_title_text(&title))
+        .collect()
+}
+
+/// The text of a [`section_title`]: its glyph, then its label.
+#[cfg(test)]
+fn section_title_text(title: &gtk::Widget) -> Option<String> {
+    let glyph = title.first_child()?;
+    let label = glyph.next_sibling().and_downcast::<gtk::Label>()?;
+    Some(label.text().to_string())
 }

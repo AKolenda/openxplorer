@@ -245,13 +245,9 @@ impl MenuPopover {
     /// The rows, for tests.
     #[cfg(test)]
     pub fn rows(&self) -> Vec<gtk::ListBoxRow> {
-        let mut rows = Vec::new();
-        let mut child = self.list().first_child();
-        while let Some(widget) = child {
-            rows.extend(widget.clone().downcast::<gtk::ListBoxRow>().ok());
-            child = widget.next_sibling();
-        }
-        rows
+        super::widget_tree::children(self.list())
+            .filter_map(|child| child.downcast::<gtk::ListBoxRow>().ok())
+            .collect()
     }
 
     /// The labels of the rows showing a check mark, for tests.
