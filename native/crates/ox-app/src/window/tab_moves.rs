@@ -129,11 +129,10 @@ impl OtherWindow {
 }
 
 impl BrowserWindow {
-    /// True while the window runs or plans a file operation or shows a
-    /// dialog: its tabs stay, and it takes no tab (TAB-031, TAB-037).
+    /// True while the window writes files or shows a dialog: its tabs
+    /// stay, and it takes no tab (TAB-031, TAB-037).
     fn is_busy_for_tab_moves(&self) -> bool {
-        let is_operating = !self.imp().file_operations.borrow().is_idle();
-        is_operating || self.shows_dialog()
+        self.is_writing_files() || self.shows_dialog()
     }
 
     /// True while a dialog of this window is open.

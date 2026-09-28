@@ -53,10 +53,23 @@ impl BrowserWindow {
         &self.imp().transfer_panel
     }
 
+    /// Whether this window writes files now: a file operation runs or is
+    /// being planned, or an extraction, compression or restored copy
+    /// runs. Data safety (OPS-024): no other write starts meanwhile, and
+    /// Sign out, Disconnect, moving a tab and an update's restart wait.
+    pub(in crate::window) fn is_writing_files(&self) -> bool {
+        let is_operating = !self.imp().file_operations.borrow().is_idle();
+        is_operating || self.operation_panel().is_busy()
+    }
+
     /// Starts an operation whose panel reads `label` until the first
     /// progress report. Returns its context, or `None` while another
-    /// operation runs (OPS-024: `if(state.operation)return` in app.js).
+    /// operation runs (OPS-024: `if(state.operation)return` in app.js),
+    /// an archive operation included.
     pub(in crate::window) fn begin_operation(&self, label: &str) -> Option<OperationContext> {
+        if self.operation_panel().is_busy() {
+            return None;
+        }
         let context = OperationContext::new(self.context().write_protection());
         {
             let mut operations = self.imp().file_operations.borrow_mut();

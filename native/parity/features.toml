@@ -5389,7 +5389,7 @@ bridge = [
 ]
 dolphin = "Places context menu 'Properties'"
 native = "partial"
-native_note = "native/crates/ox-app/src/window/sidebar/menu.rs (a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_pin_opens_its_menu). Open, Open in new tab and Unpin work; the other items show disabled until their milestones."
+native_note = "native/crates/ox-app/src/window/sidebar/menu.rs (a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb, every_pin_menu_item_acts_on_the_pin, a_pin_that_cannot_be_indexed_has_no_cache_entry); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_pin_opens_its_menu). Every item works and acts on the pin: Open in Terminal, Open folder with…, the cache entry, Previous versions and Properties run the *Of window actions with the pin's location. Missing: window tests of each item's result."
 
 [[feature]]
 id = "SIDE-015"
@@ -7001,7 +7001,7 @@ python_tests = [
 ]
 bridge = ["operate", "archiveExtract"]
 native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/file_ops/availability.rs (a_running_operation_or_a_share_root_disables_the_edit_commands). Missing: the refusals of disconnect, sign-out, extraction and update install, which come with those commands."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/file_ops/availability.rs (a_running_operation_or_a_share_root_disables_the_edit_commands); native/crates/ox-app/src/window/tests/network.rs (sign_out_and_disconnect_wait_for_a_running_file_operation). One rule covers every write of a window (BrowserWindow::is_writing_files): a transfer, and an extraction, compression or restored copy; each refuses to start while another runs, and Sign out, Disconnect, tab moves and an update's installation and restart wait for them. Missing: window tests of the extraction, restore and update-install refusals."
 
 [[feature]]
 id = "OPS-025"
@@ -9770,7 +9770,7 @@ sources = ["desktop/ui/app.js:774-783"]
 python_tests = ["desktop/tests/test_v05.py::IndexTests::test_disable_clears_metadata"]
 bridge = ["cacheSet", "cacheStatus"]
 native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/search.rs (caching_the_folder_from_the_strip_searches_the_cache); native/crates/ox-app/src/window/cache_folder.rs (pages_devices_and_servers_are_not_offered_for_caching). More > \"Cache this folder for search\" is a check item that caches the folder or stops caching it, with the Python toasts, and the strip's \"Cache this folder\" runs it too; an active search runs again. Missing: the folder, background, sidebar pin and drive context menus, which do not exist natively yet; the check item keeps its label where Python said \"Stop caching this folder\"."
+native_note = "native/crates/ox-app/src/window/tests/search.rs (caching_the_folder_from_the_strip_searches_the_cache); native/crates/ox-app/src/window/cache_folder.rs (pages_devices_and_servers_are_not_offered_for_caching). More > \"Cache this folder for search\" is a check item that caches the folder or stops caching it, with the Python toasts, and the strip's \"Cache this folder\" runs it too; an active search runs again. The folder's background menu toggles the folder shown; a folder item's and a Quick access pin's menus cache their own folder (CacheFolderOf), checked while it is cached. Missing: the drive and network place menus; the check item keeps its label where Python said \"Stop caching this folder\"."
 
 [[feature]]
 id = "SRCH-021"
@@ -12830,7 +12830,7 @@ python_tests = [
 bridge = ["properties", "clipboardText", "folderSize"]
 dolphin = "Properties (Alt+Return) General/Permissions"
 native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, calculate_folder_size_shows_the_size_everywhere_the_folder_is). Every row, Copy full path with its toast, Calculate folder size with its explanation, and the read-failure texts are ported (native/crates/ox-app/src/properties/general_panel.rs). Missing: Change app… is shown but disabled until the Open with dialog arrives with desktop integration. Porting notes: Dolphin can edit permissions and ownership; the Python app shows them read-only."
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, calculate_folder_size_shows_the_size_everywhere_the_folder_is). Every row, Copy full path with its toast, Calculate folder size with its explanation, and the read-failure texts are ported (native/crates/ox-app/src/properties/general_panel.rs). Change app… closes Properties and opens the Open with dialog for the file (the ChangeApp window action). Missing: a window test of Change app…. Porting notes: Dolphin can edit permissions and ownership; the Python app shows them read-only."
 
 [[feature]]
 id = "PROP-004"

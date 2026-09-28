@@ -10,7 +10,8 @@
 //! emits `places-changed`, which every window connects to, when a pin, a
 //! saved share, a visited server, a standard folder ([`known_folders`]) or
 //! a preference changes, and `layout-reset` when Settings restores the
-//! default pane widths. Every window shares the previous-versions service
+//! default pane widths. The network services are [`network_places`]'s.
+//! Every window shares the previous-versions service
 //! ([`previous_versions`]), whose protection the file operations run with,
 //! and the undo journal of the file operations ([`file_operations`]). It
 //! also holds the search cache the windows share ([`search_cache`]), and
@@ -20,6 +21,7 @@
 mod external_open;
 mod file_operations;
 mod known_folders;
+mod network_places;
 mod previous_versions;
 mod search_cache;
 
@@ -32,12 +34,10 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
 use ox_core::places::FolderLocations;
-use ox_core::settings::{Bookmark, PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
+use ox_core::settings::{PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
 use ox_core::versions::PreviousVersions;
 
-use crate::dialogs::SearchCacheChoice;
 use crate::integration::DesktopIntegration;
-use crate::network::{self, NetworkServices};
 use crate::settings_store::{Change, Reply, SettingsStore};
 use crate::theme::Skin;
 use crate::update::Updates;
@@ -301,56 +301,6 @@ impl AppContext {
             callback();
             None
         })
-    }
-
-    /// The network services every window shares.
-    pub(crate) fn network(&self) -> &NetworkServices {
-        &self.imp().network
-    }
-
-    /// The SMB servers and shares browsed this session, oldest first.
-    pub(crate) fn visited_network(&self) -> Vec<Bookmark> {
-        self.network().visited_bookmarks()
-    }
-
-    /// Records a listed SMB location under Network for this session, as
-    /// `remember_network` in winspace.py: the server, or the share the
-    /// location is on. Browsing never saves a bookmark (NET-016).
-    pub(crate) fn remember_network(&self, uri: &str) {
-        if self.network().remember_visited(uri) {
-            self.notify_places_changed();
-        }
-    }
-
-    /// Forgets the servers and shares browsed on `host`, when signing out
-    /// of it.
-    pub(crate) fn forget_network_host(&self, host: &str) {
-        self.network().forget_visited_host(host);
-        self.notify_places_changed();
-    }
-
-    /// Tells the search cache that the server `host` was signed out, and
-    /// whether the user asked to clear its cached file names ("Also clear
-    /// cached filenames for this server").
-    pub(crate) fn announce_server_signed_out(&self, host: &str, search_cache: SearchCacheChoice) {
-        let clear_names = search_cache == SearchCacheChoice::Clear;
-        self.emit_by_name::<()>(SERVER_SIGNED_OUT, &[&host, &clear_names]);
-    }
-
-    /// Reads the kernel's SMB mounts off the main thread, and tells every
-    /// window when they changed, as `environment` in winspace.py reads
-    /// them on every change.
-    pub(crate) fn refresh_stable_mounts(&self) {
-        let context = self.downgrade();
-        glib::spawn_future_local(async move {
-            let mounts = network::read_stable_mounts().await;
-            let Some(context) = context.upgrade() else {
-                return;
-            };
-            if context.network().replace_stable_mounts(mounts) {
-                context.notify_places_changed();
-            }
-        });
     }
 
     /// Tells every window to redraw its sidebar and landing page.

@@ -91,7 +91,7 @@ impl BrowserWindow {
 
     /// Enables the archive commands for what is selected and where.
     pub(super) fn update_archive_actions(&self) {
-        let is_idle = !self.operation_panel().is_busy();
+        let is_idle = !self.is_writing_files();
         let has_archive = self.selected_archive().is_some();
         let folder_is_writable = self
             .current_uri()
@@ -164,10 +164,19 @@ impl BrowserWindow {
         self.context().open_uri(uri, self.upcast_ref(), on_error);
     }
 
+    /// True when no write runs in this window; otherwise says so, as one
+    /// operation runs at a time (OPS-024).
+    fn may_start_archive_operation(&self) -> bool {
+        if self.is_writing_files() {
+            self.show_message(OPERATION_RUNNING);
+            return false;
+        }
+        true
+    }
+
     /// Asks where to extract `archive` (Extract all…).
     fn open_extract_dialog(&self, archive: &ArchiveTarget) {
-        if self.operation_panel().is_busy() {
-            self.show_message(OPERATION_RUNNING);
+        if !self.may_start_archive_operation() {
             return;
         }
         let default_destination = self.default_extraction_folder(&archive.uri);
@@ -284,6 +293,9 @@ impl BrowserWindow {
         let (Some(archive), Some(folder)) = (self.selected_archive(), self.current_uri()) else {
             return;
         };
+        if !self.may_start_archive_operation() {
+            return;
+        }
         let cancel = Cancellation::new();
         self.operation_panel().start(PREPARING, cancel.clone());
         self.update_archive_actions();
@@ -336,6 +348,9 @@ impl BrowserWindow {
         let (Some(first), Some(folder)) = (selected.first(), self.current_uri()) else {
             return;
         };
+        if !self.may_start_archive_operation() {
+            return;
+        }
         let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
         let first_name = first.entry().name.clone();
         let cancel = Cancellation::new();

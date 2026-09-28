@@ -564,3 +564,30 @@ fn capture_sign_in(test: &TestWindow, theme: &str) {
     );
     prompts.finish(&operation, ox_core::network::MountOutcome::Failed);
 }
+
+/// Sign out and Disconnect wait for the window's file operation, so a
+/// mount never goes away under a write.
+///
+/// parity: OPS-024
+#[gtk::test]
+fn sign_out_and_disconnect_wait_for_a_running_file_operation() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let operation = test.window.begin_operation("Preparing copy…");
+    assert!(operation.is_some(), "no other operation runs");
+
+    test.activate("sign-out", Some("smb://studio-nas/projects"));
+    let sign_out_refusal = test.window.shown_message().to_string();
+    test.activate("disconnect", Some("file:///media/demo/USB"));
+    let disconnect_refusal = test.window.shown_message().to_string();
+    test.window.end_operation();
+
+    assert_eq!(
+        sign_out_refusal,
+        "Finish the current file operation before signing out."
+    );
+    assert_eq!(
+        disconnect_refusal,
+        "Finish the current operation before disconnecting."
+    );
+}

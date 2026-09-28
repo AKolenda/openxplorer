@@ -20,6 +20,10 @@ use crate::properties::RestoreRequest;
 
 use super::BrowserWindow;
 
+/// Shown when Restore a copy is asked for while a write runs, as the
+/// Python bridge refused a second `operate`.
+const OPERATION_RUNNING: &str = "Another file operation is still running.";
+
 impl BrowserWindow {
     /// Asks where to restore a copy of a previous version, then copies it
     /// there.
@@ -42,6 +46,11 @@ impl BrowserWindow {
     /// Copies the version at `source` into `destination` with Keep both,
     /// then says how it went.
     fn restore_copy(&self, source: String, destination: String) {
+        // One operation at a time (OPS-024).
+        if self.is_writing_files() {
+            self.show_message(OPERATION_RUNNING);
+            return;
+        }
         let request = TransferRequest {
             mode: TransferMode::Copy,
             uris: vec![source],

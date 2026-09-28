@@ -56,14 +56,12 @@ impl BrowserWindow {
     }
 
     /// Whether this window writes files, which Disconnect and Sign out
-    /// wait for. File operations are not wired into the window yet (the
-    /// "Complete safe file-operation workflows" milestone of ROADMAP.md),
-    /// so it never does.
-    #[expect(
-        clippy::unused_self,
-        reason = "the window's file operations will report its writes here"
-    )]
+    /// wait for, so a mount never goes away under a write (OPS-024).
     pub(super) fn write_activity(&self) -> WriteActivity {
-        WriteActivity::Idle
+        if self.is_writing_files() {
+            WriteActivity::Writing
+        } else {
+            WriteActivity::Idle
+        }
     }
 }
