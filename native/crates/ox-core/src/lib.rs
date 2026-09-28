@@ -20,6 +20,8 @@
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
 //! | [`search`] | The metadata-only filename search cache and its index service | `search_index.py`, `index_service.py`, `local_watch.py` |
 //! | [`archive`] | ZIP browsing, opening a member as a private copy, and extraction | `archives.py`, `zip_extraction.py`, `native_opening.py`, `winspace.py` |
+//! | [`versions`] | Previous versions and the read-only rule for snapshots | `previous_versions.py`, `file_services.py`, `ui/snapshot-meta.js` |
+//! | [`sizes`] | On-demand folder sizes | `folder_sizes.py`, `mount_support.py` |
 
 pub mod archive;
 pub mod clipboard;
@@ -31,7 +33,9 @@ pub mod network;
 pub mod places;
 pub mod search;
 pub mod settings;
+pub mod sizes;
 pub mod transfer;
+pub mod versions;
 
 mod private_storage;
 #[cfg(test)]

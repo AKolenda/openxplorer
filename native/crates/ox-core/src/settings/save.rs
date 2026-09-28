@@ -2,20 +2,19 @@
 //! The settings lock and the atomic, private replace of `settings.json`.
 //!
 //! Ports the `flock` of `settings_mutation` and the temporary-file-and-
-//! rename of `Settings.save` in `desktop/core.py`, built on the checks in
-//! `crate::private_storage`, whose [`StorageError`] every step here
-//! returns. Keeping an unreadable file as a backup
+//! rename of `Settings.save` in `desktop/core.py`, built on the checks and
+//! the atomic replace in `crate::private_storage`, whose [`StorageError`]
+//! every step here returns. Keeping an unreadable file as a backup
 //! ([`OldFile::KeepAsBackup`]) goes beyond the Python app.
 
-use std::fs::{self, File, OpenOptions, Permissions};
-use std::io::{self, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::fs::{self, File};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::private_storage::{
-    private_directory, private_file, private_file_if_present, PrivateFileOptions, StorageError, WithPath,
-    FILE_MODE,
+    parent_directory, private_directory, private_file, private_file_if_present, replace_file_with,
+    reserve_unique_name, PrivateFileOptions, StorageError, WithPath,
 };
 
 /// An exclusive `flock` on `settings.lock`, released when dropped.
@@ -64,8 +63,9 @@ pub(super) enum OldFile {
 
 /// Atomically replaces `target` with `contents`: a private temporary file
 /// named `<prefix><random>` in the same directory is written, flushed to
-/// disk and renamed over the target, so readers see either the old or the
-/// new file, never a mix. Returns where the old file was kept, if it was.
+/// disk and renamed over the target ([`replace_file_with`]), so readers
+/// see either the old or the new file, never a mix. Returns where the old
+/// file was kept, if it was.
 ///
 /// Safety rule "never write through a link" (`Settings.save` in core.py):
 /// an existing target must itself be a private file, so a symlinked or
@@ -83,60 +83,29 @@ pub(super) fn replace_private_file(
     contents: &[u8],
     old_file: OldFile,
 ) -> Result<Option<PathBuf>, StorageError> {
-    let directory = parent_directory(target);
-    private_directory(directory)?;
+    private_directory(parent_directory(target))?;
     // Safety rule "never write through a link": a symlinked or hard-linked
     // target is refused here, before anything is written. Only the check
     // matters; the opened file is closed at once.
     private_file_if_present(target, PrivateFileOptions::default())?;
-    let temporary = UniqueFile::create(directory, prefix)?;
-    let backup = publish_or_discard(temporary, target, contents, old_file)?;
-    sync_directory(directory);
-    Ok(backup)
+    replace_file_with(target, prefix, contents, |temporary| {
+        keep_old_file_and_publish(temporary, target, old_file)
+    })
 }
 
-/// [`write_and_publish`], removing the temporary file if any step fails.
-///
-/// Safety rule "a failed save leaves no temporary file": a change that
-/// fails leaves the settings directory with the files it had before.
-fn publish_or_discard(
-    mut temporary: UniqueFile,
+/// Keeps the old target if asked, then renames the written `temporary`
+/// file over `target`. The old file is moved aside only once the new
+/// contents are on disk.
+fn keep_old_file_and_publish(
+    temporary: &Path,
     target: &Path,
-    contents: &[u8],
     old_file: OldFile,
 ) -> Result<Option<PathBuf>, StorageError> {
-    let published = write_and_publish(&mut temporary, target, contents, old_file);
-    if published.is_err() {
-        // Safety rule "a failed save leaves no temporary file": the new
-        // file never took the target's place, so the copy is useless.
-        // Removing it is best effort; a leftover is private and named with
-        // the temporary prefix.
-        let _ = fs::remove_file(&temporary.path);
-    }
-    published
-}
-
-/// Writes and flushes the temporary file, keeps the old target if asked,
-/// and renames the temporary file over the target. The explicit `fchmod`
-/// makes the mode exactly 0600 whatever the umask. The old file is moved
-/// aside only once the new contents are on disk.
-fn write_and_publish(
-    temporary: &mut UniqueFile,
-    target: &Path,
-    contents: &[u8],
-    old_file: OldFile,
-) -> Result<Option<PathBuf>, StorageError> {
-    let path = temporary.path.as_path();
-    let file = &mut temporary.file;
-    file.set_permissions(Permissions::from_mode(FILE_MODE))
-        .with_path(path)?;
-    file.write_all(contents).with_path(path)?;
-    file.sync_all().with_path(path)?;
     let backup = match old_file {
         OldFile::KeepAsBackup => move_aside(target)?,
         OldFile::Discard => None,
     };
-    publish(path, target, backup.as_deref())?;
+    publish(temporary, target, backup.as_deref())?;
     Ok(backup)
 }
 
@@ -167,11 +136,7 @@ fn publish(temporary: &Path, target: &Path, backup: Option<&Path>) -> Result<(),
 fn move_aside(path: &Path) -> Result<Option<PathBuf>, StorageError> {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     let prefix = format!("{name}.unreadable-{}-", unix_seconds());
-    let UniqueFile {
-        file: placeholder,
-        path: backup,
-    } = UniqueFile::create(parent_directory(path), &prefix)?;
-    drop(placeholder);
+    let backup = reserve_unique_name(parent_directory(path), &prefix)?;
     let Err(error) = fs::rename(path, &backup) else {
         return Ok(Some(backup));
     };
@@ -185,46 +150,6 @@ fn move_aside(path: &Path) -> Result<Option<PathBuf>, StorageError> {
     }
 }
 
-/// A newly created private file with a name no other file had, like the
-/// pair Python's `tempfile.mkstemp` returns.
-#[derive(Debug)]
-struct UniqueFile {
-    file: File,
-    path: PathBuf,
-}
-
-impl UniqueFile {
-    /// Creates `<prefix><random UUID>` in `directory` with mode 0600.
-    /// `create_new` (`O_CREAT | O_EXCL`) never opens an existing file or
-    /// follows a symlink, so a taken name fails instead of being
-    /// overwritten.
-    fn create(directory: &Path, prefix: &str) -> Result<Self, StorageError> {
-        let path = directory.join(format!("{prefix}{}", glib::uuid_string_random()));
-        let file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(FILE_MODE)
-            .open(&path)
-            .with_path(&path)?;
-        Ok(Self { file, path })
-    }
-}
-
-/// Makes a rename in `directory` durable. A failure here does not undo the
-/// rename, so it is ignored.
-fn sync_directory(directory: &Path) {
-    if let Ok(handle) = File::open(directory) {
-        let _ = handle.sync_all();
-    }
-}
-
-/// The directory containing `path`; the current directory for a bare name.
-fn parent_directory(path: &Path) -> &Path {
-    path.parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or(Path::new("."))
-}
-
 /// Seconds since the Unix epoch; 0 if the clock is set before it.
 fn unix_seconds() -> u64 {
     SystemTime::now()
@@ -234,9 +159,11 @@ fn unix_seconds() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::symlink;
+    use std::fs::Permissions;
+    use std::os::unix::fs::{symlink, PermissionsExt};
 
     use super::*;
+    use crate::private_storage::FILE_MODE;
     use crate::test_support::mode;
 
     /// parity: SET-012, SAFE-009
@@ -317,21 +244,7 @@ mod tests {
         assert!(!backup.exists());
     }
 
-    /// Safety rule "a failed save leaves no temporary file".
-    /// parity: SET-012
-    #[test]
-    fn a_failed_save_removes_its_temporary_file() {
-        let root = tempfile::tempdir().unwrap();
-        let temporary = UniqueFile::create(root.path(), ".settings-").unwrap();
-        let target_in_missing_directory = root.path().join("missing/settings.json");
-
-        let saved = publish_or_discard(temporary, &target_in_missing_directory, b"{}", OldFile::Discard);
-
-        assert!(saved.is_err());
-        assert_eq!(
-            fs::read_dir(root.path()).unwrap().count(),
-            0,
-            "no temporary file remains"
-        );
-    }
+    // Safety rule "a failed save leaves no temporary file" is enforced and
+    // tested once, in `private_storage::replace`
+    // (`a_failed_save_removes_its_temporary_file`).
 }

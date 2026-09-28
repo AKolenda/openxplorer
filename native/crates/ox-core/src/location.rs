@@ -49,7 +49,7 @@ mod parts;
 mod text;
 mod virtual_place;
 
-pub(crate) use text::{python_strip, unquote_lossy};
+pub(crate) use text::{decode_uri_component, python_strip, unquote_lossy};
 
 pub use classify::{is_network_filesystem, is_smb_share_root};
 pub use display::{crumb_divider, device_root, parent_location, same_location, DeviceLabel, LocationContext};
