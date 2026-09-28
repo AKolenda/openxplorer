@@ -151,14 +151,15 @@ impl SettingsPage {
     ///
     /// # Panics
     ///
-    /// Before [`SettingsPage::bind`], which builds every category.
+    /// Before the pages are built, the first time Settings is shown or
+    /// opened ([`SettingsPage::build_pages_once`]).
     pub(super) fn category_section(&self, category: Category) -> SettingsSection {
         self.imp()
             .category_sections
             .borrow()
             .get(&category)
             .cloned()
-            .expect("SettingsPage::bind builds every category")
+            .expect("the pages are built before a category is asked for")
     }
 
     /// Types `text` into the settings search, as the user would.
@@ -240,9 +241,9 @@ impl SettingsPage {
         category_of(row).is_some_and(|category| self.matches_in(category) > 0)
     }
 
-    /// Shows the first row that matches the search and gives its control
-    /// keyboard focus, as Enter in the Python app's search clicked the
-    /// first result. False when nothing matches.
+    /// Shows the first setting, a status card or a row, that matches the
+    /// search and gives its control keyboard focus, as Enter in the Python
+    /// app's search clicked the first result. False when nothing matches.
     pub(super) fn jump_to_first_match(&self) -> bool {
         if self.imp().query.borrow().is_empty() {
             return false;
