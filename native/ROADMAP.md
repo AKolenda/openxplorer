@@ -56,12 +56,29 @@ without freezing navigation:
 - The Recycle Bin as a folder, with Restore, Delete permanently and Empty.
 - The context menus of files, folders, blank space (both styles), tabs and
   Quick access pins, with the enable rules of the command bar.
+- Drag and drop ([`window/file_drag`](crates/ox-app/src/window/file_drag.rs),
+  [`window/file_drop`](crates/ox-app/src/window/file_drop.rs)): items and
+  sidebar folders drag out to other apps and windows (copy only unless Shift
+  or Ctrl+Shift is held as the drag starts); drops on folder rows, blank
+  space, sidebar places, crumbs and tabs copy, Shift moves, Ctrl+Shift links
+  and Alt asks with a drop menu; folders dropped on Quick access are pinned;
+  items dropped on a program run it with their paths.
+- Tabs ([`window/tab_moves`](crates/ox-app/src/window/tab_moves.rs)) reorder
+  by drag, move onto another window's strip, tear out into a new window below
+  the strip or over the desktop, and move through the tab menu, keeping their
+  history, selection, scroll position, view and sort.
+- Real drags in a private headless GNOME Shell session, driven through
+  Mutter's RemoteDesktop API, confirmed copies to and from GNOME Files, a
+  Shift-move, pinning, the rubber band, tab reordering, merging, tear-out,
+  and that Escape keeps a dragged tab.
 
 Still to do:
 
-- Native file drag-and-drop, cross-window moves, and tabs moved between windows.
-- Renaming in place, dimmed cut items, the Recycle Bin's Original location and
-  Date deleted columns and its sidebar entry.
+- Folders dropped on the empty tab bar opening as tabs, folders opening while
+  a drag hovers over them, scrolling while a drag nears a view's edge, the
+  Trash's drop rules, and `.desktop` launchers as drop targets.
+- The Recycle Bin's Original location and Date deleted columns and its
+  sidebar entry.
 - Preserve staging, replacement, cancellation and source-version safety rules
   under real local, remote and removable-device failures.
 
