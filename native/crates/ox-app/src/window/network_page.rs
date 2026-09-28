@@ -24,6 +24,23 @@ use super::location_kind::is_smb_location;
 use super::window_action::WindowAction;
 use super::{unported, BrowserWindow};
 
+/// The network glyph of the banner (`icon('network',38)` in
+/// `renderNetwork`).
+const BANNER_GLYPH: i32 = 38;
+/// Pixels between the banner's glyph, words and button
+/// (`.network-banner{gap:18px}`).
+const BANNER_GAP: i32 = 18;
+/// The "+" before "Map location".
+const MAP_GLYPH: i32 = 14;
+/// Pixels between the "+" and "Map location".
+const MAP_GLYPH_GAP: i32 = 7;
+/// Pixels between the address field and its buttons
+/// (`.network-manual{gap:9px}`).
+const ADDRESS_FIELD_GAP: i32 = 9;
+/// The network glyph of a connected or saved location's card
+/// (`icon('network',34)`).
+const LOCATION_CARD_GLYPH: i32 = 34;
+
 /// The note under the discovered servers (`.discovery-note`).
 const DISCOVERY_NOTE: &str = "Discovery depends on devices advertising themselves and on local \
 firewall/network settings. It does not guarantee a list of every host.";
@@ -56,10 +73,10 @@ fn banner() -> gtk::Box {
         .css_classes(["banner-hint"])
         .build();
     words.append(&hint);
-    let glyph = icons::glyph(Glyph::Network, 38);
+    let glyph = icons::glyph(Glyph::Network, BANNER_GLYPH);
     glyph.add_css_class("banner-glyph");
     let banner = gtk::Box::builder()
-        .spacing(18)
+        .spacing(BANNER_GAP)
         .css_classes(["network-banner"])
         .build();
     banner.append(&glyph);
@@ -92,8 +109,8 @@ fn server_address_field() -> gtk::Box {
         address,
         move |_| open_typed_address(&address)
     ));
-    let map_content = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-    map_content.append(&icons::glyph(Glyph::Plus, 14));
+    let map_content = gtk::Box::new(gtk::Orientation::Horizontal, MAP_GLYPH_GAP);
+    map_content.append(&icons::glyph(Glyph::Plus, MAP_GLYPH));
     map_content.append(&gtk::Label::new(Some("Map location")));
     // Opens the connect dialog (`connectDialog`).
     let map = command_button(
@@ -103,7 +120,7 @@ fn server_address_field() -> gtk::Box {
     );
     map.set_child(Some(&map_content));
     let field = gtk::Box::builder()
-        .spacing(9)
+        .spacing(ADDRESS_FIELD_GAP)
         .css_classes(["network-manual"])
         .build();
     field.append(&address);
@@ -148,7 +165,7 @@ fn discovered_servers(body: &gtk::Box) {
 
 fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&icons::glyph(Glyph::Network, 34));
+    content.append(&icons::glyph(Glyph::Network, LOCATION_CARD_GLYPH));
     let address = locations.display_location(&location.uri);
     content.append(&card_texts(&location.label, &address));
     location_card("drive-card", &location.uri, &content)

@@ -314,6 +314,7 @@ mod tests {
         assert_eq!(session.active_id(), Some(only));
     }
 
+    /// parity: NAV-016
     #[test]
     fn old_results_cannot_repopulate_a_navigated_or_closed_tab() {
         let mut session = Session::default();
@@ -327,6 +328,7 @@ mod tests {
         assert!(!session.accepts(id, second));
     }
 
+    /// parity: TAB-005
     #[test]
     fn tab_cycling_wraps_in_both_directions() {
         let mut session = Session::default();
@@ -347,6 +349,7 @@ mod tests {
         assert!(session.can_activate(second));
     }
 
+    /// parity: NAV-016
     #[test]
     fn ending_the_listing_of_a_closed_tab_says_so() {
         let mut session = Session::default();

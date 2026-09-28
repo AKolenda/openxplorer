@@ -198,6 +198,7 @@ fn the_folder_watch_survives_a_reload() {
     assert_eq!(watch_id(&test), before);
 }
 
+/// parity: VIEW-055
 #[gtk::test]
 fn a_change_seen_while_listing_lists_the_folder_once_more() {
     let fixture = Fixture::standard();

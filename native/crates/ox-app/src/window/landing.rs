@@ -158,6 +158,8 @@ fn quick_access(body: &gtk::Box, places: &Places, style: ArtStyle) {
 /// measured the file system. Never blocks: the card is drawn first.
 fn show_capacity(texts: &gtk::Box, uri: &str) {
     let file = gio::File::for_uri(uri);
+    // Held weakly until GIO answers, so measuring never keeps a card that
+    // was replaced meanwhile.
     let texts = texts.downgrade();
     glib::spawn_future_local(async move {
         let Some(capacity) = measure_capacity(&file).await else {

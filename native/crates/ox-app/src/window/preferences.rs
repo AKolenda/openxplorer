@@ -167,24 +167,21 @@ impl BrowserWindow {
         let workspace = &self.chrome().workspace;
         let drag = gtk::GestureDrag::new();
         drag.set_propagation_phase(gtk::PropagationPhase::Capture);
+        // Where the drag started, shared by its begin and end handlers.
         let start = Rc::new(Cell::new(0));
-        let paned = workspace.downgrade();
         drag.connect_drag_begin(glib::clone!(
             #[strong]
             start,
-            #[strong]
-            paned,
-            move |_, _, _| {
-                if let Some(paned) = paned.upgrade() {
-                    start.set(paned.position());
-                }
-            }
+            #[weak(rename_to = paned)]
+            workspace,
+            move |_, _, _| start.set(paned.position())
         ));
         drag.connect_drag_end(glib::clone!(
             #[weak(rename_to = window)]
             self,
+            #[weak(rename_to = paned)]
+            workspace,
             move |_, _, _| {
-                let Some(paned) = paned.upgrade() else { return };
                 if paned.position() != start.get() {
                     window.save_preference(Preference::SidebarWidth(paned.position()));
                 }

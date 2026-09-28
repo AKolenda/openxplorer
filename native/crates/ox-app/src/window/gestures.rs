@@ -99,19 +99,21 @@ pub(super) fn connect_history_buttons(
 /// breadcrumbs do in app.js; GTK scrolls sideways only with Shift.
 pub(super) fn scroll_sideways_with_wheel(scroller: &gtk::ScrolledWindow) {
     let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
-    let target = scroller.downgrade();
-    wheel.connect_scroll(move |_, _, delta_y| {
-        let Some(scroller) = target.upgrade() else {
-            return glib::Propagation::Proceed;
-        };
-        let adjustment = scroller.hadjustment();
-        if adjustment.upper() <= adjustment.page_size() {
-            return glib::Propagation::Proceed;
+    wheel.connect_scroll(glib::clone!(
+        #[weak]
+        scroller,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, _, delta_y| {
+            let adjustment = scroller.hadjustment();
+            if adjustment.upper() <= adjustment.page_size() {
+                return glib::Propagation::Proceed;
+            }
+            let step = adjustment.step_increment().max(MIN_WHEEL_STEP);
+            adjustment.set_value(adjustment.value() + delta_y * step);
+            glib::Propagation::Stop
         }
-        let step = adjustment.step_increment().max(MIN_WHEEL_STEP);
-        adjustment.set_value(adjustment.value() + delta_y * step);
-        glib::Propagation::Stop
-    });
+    ));
     scroller.add_controller(wheel);
 }
 

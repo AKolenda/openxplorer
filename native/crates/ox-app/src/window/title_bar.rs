@@ -20,6 +20,12 @@ use super::tab_strip::TabStrip;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
+/// The "+" glyph of the new-tab button (`.newtab svg{width:14px}`).
+const NEW_TAB_GLYPH: i32 = 14;
+/// The open-windows button's glyph, at app.js's default icon size
+/// (`icon(name, size=18)`).
+const OPEN_WINDOWS_GLYPH: i32 = 18;
+
 /// The title bar of `window` around `tabs`, to set as its title bar.
 pub(super) fn title_bar(window: &gtk::Window, tabs: &TabStrip) -> gtk::WindowHandle {
     let bar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -35,7 +41,7 @@ pub(super) fn title_bar(window: &gtk::Window, tabs: &TabStrip) -> gtk::WindowHan
 
 fn new_tab_button() -> gtk::Button {
     let button = gtk::Button::builder()
-        .child(&icons::glyph(Glyph::Plus, 14))
+        .child(&icons::glyph(Glyph::Plus, NEW_TAB_GLYPH))
         .tooltip_text("New tab (Ctrl+T)")
         .action_name(WindowAction::NewTab.detailed_name())
         .valign(gtk::Align::End)
@@ -58,7 +64,7 @@ fn drag_area() -> gtk::Box {
 fn open_windows_button() -> gtk::MenuButton {
     let popover = MenuPopover::new(Vec::new());
     let button = gtk::MenuButton::builder()
-        .child(&icons::glyph(Glyph::Desktop, 18))
+        .child(&icons::glyph(Glyph::Desktop, OPEN_WINDOWS_GLYPH))
         .tooltip_text("Open windows")
         .popover(&popover)
         .valign(gtk::Align::Center)

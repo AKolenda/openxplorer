@@ -356,15 +356,13 @@ impl BrowserWindow {
     /// Middle-click on a folder opens it in a tab without selecting it;
     /// files are never launched this way.
     fn folder_middle_click(&self, view: &gtk::Widget) -> gtk::GestureClick {
-        let view = view.downgrade();
         gestures::middle_click(glib::clone!(
             #[weak(rename_to = window)]
             self,
+            #[weak]
+            view,
             move |gesture, x, y| {
-                let Some(view) = view.upgrade() else { return };
-                let position = window.folder_pane().owners().position_at(&view, x, y);
-                let item = position.and_then(|position| window.folder_pane().model().item(position));
-                let Some(Activation::Folder(uri)) = item.map(|item| activation_for(item.entry())) else {
+                let Some(uri) = window.folder_at(&view, x, y) else {
                     return;
                 };
                 window.reset_typeahead();
@@ -372,6 +370,18 @@ impl BrowserWindow {
                 action.activate_from(&window, Some(&uri.to_variant()));
             }
         ))
+    }
+
+    /// The location of the folder at (`x`, `y`) in `view`, if a folder is
+    /// there.
+    fn folder_at(&self, view: &gtk::Widget, x: f64, y: f64) -> Option<String> {
+        let pane = self.folder_pane();
+        let position = pane.owners().position_at(view, x, y)?;
+        let item = pane.model().item(position)?;
+        match activation_for(item.entry()) {
+            Activation::Folder(uri) => Some(uri),
+            Activation::File | Activation::Refused(_) => None,
+        }
     }
 }
 

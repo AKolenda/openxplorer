@@ -151,16 +151,16 @@ impl AddressBar {
     /// the breadcrumbs (`blur` → `finishAddress`).
     fn show_crumbs_when_focus_leaves(&self) {
         let focus = gtk::EventControllerFocus::new();
-        let stack = self.stack.downgrade();
-        focus.connect_leave(move |_| {
-            let Some(stack) = stack.upgrade() else {
-                return;
-            };
-            // Hiding the entry makes it lose focus again; do nothing then.
-            if stack.visible_child_name().as_deref() == Some(AddressMode::Entry.name()) {
-                stack.set_visible_child_name(AddressMode::Crumbs.name());
+        focus.connect_leave(glib::clone!(
+            #[weak(rename_to = stack)]
+            self.stack,
+            move |_| {
+                // Hiding the entry makes it lose focus again; do nothing then.
+                if stack.visible_child_name().as_deref() == Some(AddressMode::Entry.name()) {
+                    stack.set_visible_child_name(AddressMode::Crumbs.name());
+                }
             }
-        });
+        ));
         self.entry.add_controller(focus);
     }
 

@@ -13,6 +13,12 @@ use super::window_action::WindowAction;
 
 /// The folder or network glyph above the title.
 const STATE_GLYPH: i32 = 44;
+/// Pixels between the glyph, the title, the message and Try again
+/// (`.empty-state{gap:12px}`).
+const PART_GAP: i32 = 12;
+/// The widest the message gets before it wraps, in characters: about the
+/// 460 pixels of `.empty-state p{max-width:460px}`.
+const MESSAGE_WIDTH_CHARS: i32 = 65;
 
 /// What the empty page says.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,7 +60,7 @@ impl EmptyPage {
     pub fn new() -> Self {
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .spacing(12)
+            .spacing(PART_GAP)
             .halign(gtk::Align::Center)
             .valign(gtk::Align::Center)
             .css_classes(["empty-state"])
@@ -64,7 +70,7 @@ impl EmptyPage {
         let title = centred_text();
         title.add_css_class("empty-title");
         let message = centred_text();
-        message.set_max_width_chars(65);
+        message.set_max_width_chars(MESSAGE_WIDTH_CHARS);
         message.set_selectable(true);
         let retry = gtk::Button::builder()
             .label("Try again")
