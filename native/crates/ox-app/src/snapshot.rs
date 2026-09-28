@@ -302,16 +302,19 @@ impl Milestones {
     /// The line the hook prints for benchmarks.
     fn summary(&self) -> String {
         format!(
-            "OpenXplorer snapshot: first frame at {} us, first listing at {} us (monotonic clock)",
+            "OpenXplorer snapshot: first frame {}, first listing {} (monotonic clock)",
             describe_moment(self.first_frame.get()),
             describe_moment(self.first_listing.get()),
         )
     }
 }
 
-/// A milestone's time in microseconds, or "never" before it is reached.
+/// When a milestone was reached ("at 1234 us"), or "never" before it is.
 fn describe_moment(moment: Option<i64>) -> String {
-    moment.map_or_else(|| "never".to_owned(), |micros| micros.to_string())
+    match moment {
+        Some(micros) => format!("at {micros} us"),
+        None => "never".to_owned(),
+    }
 }
 
 /// Resizes `window` so its title bar and contents take `size`: a window's
@@ -467,7 +470,10 @@ mod tests {
     #[test]
     fn the_start_up_milestones_read_never_until_reached() {
         let milestones = Milestones::default();
-        assert!(milestones.summary().contains("first frame at never us"));
+        assert_eq!(
+            milestones.summary(),
+            "OpenXplorer snapshot: first frame never, first listing never (monotonic clock)"
+        );
         milestones.note_frame(Listing::Running);
         let first_frame = milestones.first_frame.get().expect("a frame was noted");
         milestones.note_frame(Listing::Running);
@@ -478,8 +484,10 @@ mod tests {
         );
         assert!(milestones
             .summary()
-            .contains(&format!("first frame at {first_frame} us")));
-        assert!(milestones.summary().contains("first listing at never us"));
+            .contains(&format!("first frame at {first_frame} us,")));
+        assert!(milestones
+            .summary()
+            .contains("first listing never (monotonic clock)"));
         milestones.note_frame(Listing::Drawn);
         assert!(
             milestones.first_listing.get().is_some(),
