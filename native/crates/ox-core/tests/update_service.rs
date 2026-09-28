@@ -11,6 +11,7 @@
 mod update_support;
 
 use std::cell::RefCell;
+use std::fs;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -226,30 +227,44 @@ fn new_windows_are_blocked_during_update_and_until_restart() {
     assert!(ServiceFixture::new().service.check_new_window().is_ok());
 }
 
-/// An installation whose caller stopped waiting leaves the application
-/// waiting for a restart, not locked and not usable: the package manager
-/// may still be running.
+/// An installation whose caller stopped waiting keeps the application
+/// locked until APT has finished: quitting, closing a window and
+/// restarting are refused while it runs, then the installed build decides
+/// the phase as usual.
 /// parity: UPD-005
 #[test]
-fn an_abandoned_installation_leaves_the_application_waiting_for_a_restart() {
+fn an_abandoned_installation_keeps_the_application_locked_until_apt_finishes() {
     let fixture = ServiceFixture::checked();
     let (reached, installing) = mpsc::channel();
     let (release, released) = mpsc::channel::<()>();
     let released = Mutex::new(released);
-    let hold_apt = move || {
+    let executable = fixture.executable.clone();
+    let hold_apt_then_upgrade = move || {
         reached.send(()).unwrap();
         released.lock().unwrap().recv().unwrap();
+        fs::write(&executable, b"Fictional build 1.0.1").unwrap();
     };
-    fixture.updates.packages.on_install(Arc::new(hold_apt));
+    fixture
+        .updates
+        .packages
+        .on_install(Arc::new(hold_apt_then_upgrade));
     let installation = fixture.service.install(confirmed(Activity::Idle), |_| {});
 
-    // Polls the installation once, then stops waiting for it.
-    let abandoned = installation.now_or_never();
+    // Polls the installation once on the fixture's main context, then
+    // stops waiting for it.
+    let abandoned = fixture.context.block_on(async { installation.now_or_never() });
     installing.recv().unwrap();
 
     assert!(abandoned.is_none());
-    assert_eq!(fixture.service.phase(), UpdatePhase::RestartRequired);
-    assert!(fixture.service.check_request(AppRequest::Files).is_err());
+    let service = &fixture.service;
+    assert_eq!(service.phase(), UpdatePhase::Installing);
+    assert!(service.check_request(AppRequest::Files).is_err());
+    assert!(service.check_quit().is_err());
+    assert!(service.check_close_window().is_err());
+    assert!(service.restart(Activity::Idle).is_err());
+    assert!(fixture.launched().is_empty());
     release.send(()).unwrap();
-    update_support::wait_until_idle(fixture.service.updater());
+    fixture.wait_until_installation_ends();
+    assert_eq!(service.phase(), UpdatePhase::RestartRequired);
+    assert!(service.check_quit().is_ok());
 }

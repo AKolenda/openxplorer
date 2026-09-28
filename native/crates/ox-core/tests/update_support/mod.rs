@@ -15,8 +15,6 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::thread;
-use std::time::{Duration, Instant};
 
 use ox_core::transfer::Cancellation;
 use ox_core::update::{
@@ -421,14 +419,4 @@ fn probe_task(updater: &Updater) -> Result<(), UpdateError> {
         &|_| {},
         &Cancellation::new(),
     )
-}
-
-/// Waits until a task that nobody awaits any more has finished, so it does
-/// not outlive the test's temporary folder.
-pub fn wait_until_idle(updater: &Updater) {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while matches!(probe_task(updater), Err(UpdateError::TaskRunning)) {
-        assert!(Instant::now() < deadline, "the abandoned task finishes");
-        thread::sleep(Duration::from_millis(10));
-    }
 }

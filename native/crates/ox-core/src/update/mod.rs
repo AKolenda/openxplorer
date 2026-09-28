@@ -21,7 +21,9 @@
 //!   `dpkg-deb`, and always deleted ([`Updater::install`]).
 //! - Only the packaged build installs; Flatpak and other packages update
 //!   through their own package manager ([`Installation`]).
-//! - APT is never interrupted ([`PackageCommand::time_limit`]).
+//! - APT is never interrupted ([`PackageCommand::time_limit`]), and the
+//!   application stays locked until the installation's worker has ended,
+//!   even if nobody awaits it any more ([`UpdateService::install`]).
 //! - While an update installs, and until the restart after it, windows
 //!   leave files alone ([`UpdateService::check_request`]).
 //! - A restart runs only the fixed launcher ([`RESTART_COMMAND`]), and a

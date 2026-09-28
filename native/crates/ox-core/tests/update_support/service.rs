@@ -9,6 +9,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use ox_core::transfer::Cancellation;
 use ox_core::update::{
@@ -129,6 +131,18 @@ impl ServiceFixture {
             };
             futures_util::future::join(installation, watch).await.0
         })
+    }
+
+    /// Runs the fixture's main context, as the application's main loop
+    /// would, until no installation is running any more, so an abandoned
+    /// installation does not outlive the test's temporary folder.
+    pub fn wait_until_installation_ends(&self) {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while self.service.phase() == UpdatePhase::Installing {
+            assert!(Instant::now() < deadline, "the installation ends");
+            self.context.iteration(false);
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 
     /// Every command the launcher was asked to start.

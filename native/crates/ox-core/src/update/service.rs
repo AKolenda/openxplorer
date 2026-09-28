@@ -8,14 +8,15 @@ use std::cell::Cell;
 use std::fmt;
 use std::io;
 use std::panic;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 
 use super::{
-    Confirmation, InstallProgress, InstalledBuild, ReleaseVersion, RestartLauncher, RuntimeIdentity,
-    UpdateError, UpdateStatus, Updater, RESTART_COMMAND,
+    Confirmation, InstallProgress, Installation, InstalledBuild, ReleaseVersion, RestartLauncher,
+    RuntimeIdentity, UpdateError, UpdateStatus, Updater, RESTART_COMMAND,
 };
 use crate::transfer::Cancellation;
 
@@ -102,14 +103,28 @@ pub struct UpdateServiceParts {
     pub launcher: Box<dyn RestartLauncher>,
 }
 
-/// The update service. It lives on the main thread; checks and
+/// The update service. It lives on the main thread, whose main context
+/// must keep running (the application's main loop does); checks and
 /// installations run on GIO worker threads.
+///
+/// The updater is not reachable from outside: every check and
+/// installation goes through the service's rules.
 pub struct UpdateService {
     updater: Arc<Updater>,
     running: RuntimeIdentity,
     installed_build: InstalledBuild,
     launcher: Box<dyn RestartLauncher>,
-    phase: Cell<UpdatePhase>,
+    /// Shared with the task that waits for an installation's worker and
+    /// sets the phase when the worker ends.
+    phase: Rc<Cell<UpdatePhase>>,
+}
+
+/// What an installation's worker thread hands back.
+struct WorkerOutcome {
+    /// How the installation ended.
+    result: Result<(), UpdateError>,
+    /// The installed build's identity, read after the installation.
+    installed: io::Result<RuntimeIdentity>,
 }
 
 impl UpdateService {
@@ -120,7 +135,7 @@ impl UpdateService {
             running: parts.running,
             installed_build: parts.installed_build,
             launcher: parts.launcher,
-            phase: Cell::new(UpdatePhase::Idle),
+            phase: Rc::new(Cell::new(UpdatePhase::Idle)),
         }
     }
 
@@ -129,9 +144,15 @@ impl UpdateService {
         self.phase.get()
     }
 
-    /// The updater.
-    pub fn updater(&self) -> &Updater {
-        &self.updater
+    /// How this build was installed, which decides whether it may install
+    /// updates itself.
+    pub fn installation(&self) -> Installation {
+        self.updater.installation()
+    }
+
+    /// The version an installation installed, if one did.
+    pub fn installed_version(&self) -> Option<ReleaseVersion> {
+        self.updater.installed_version()
     }
 
     /// Whether a window may do `request` now.
@@ -214,8 +235,8 @@ impl UpdateService {
     }
 
     /// Installs an update on a worker thread, locking the application
-    /// until it ends. `on_progress` hears each step on this thread, before
-    /// the installation resolves.
+    /// until the worker ends. `on_progress` hears each step on this
+    /// thread, before the installation resolves.
     ///
     /// Safety rule "nothing else runs while the package manager does"
     /// (`updateInstall` in `dispatch`): the user must have confirmed and
@@ -227,16 +248,16 @@ impl UpdateService {
     /// application waits for a restart if they differ or cannot be
     /// compared.
     ///
+    /// Safety rule "the lock lasts as long as the package manager":
+    /// dropping the returned future neither stops the installation nor
+    /// unlocks the application, which stays locked until the worker ends.
+    /// Cancel with [`InstallRequest::cancel`] instead.
+    ///
     /// # Errors
     ///
     /// [`UpdateError::UpdateRunning`], [`UpdateError::RestartRequired`],
     /// [`UpdateError::NotConfirmed`], [`UpdateError::WorkInProgress`], and
     /// every error of [`Updater::install`].
-    ///
-    /// Await it to the end: if the future is dropped before it resolves,
-    /// the application waits for a restart, because the package manager
-    /// may still be running. Cancel with [`InstallRequest::cancel`]
-    /// instead.
     ///
     /// # Panics
     ///
@@ -255,17 +276,16 @@ impl UpdateService {
         if request.activity == Activity::Busy {
             return Err(UpdateError::WorkInProgress);
         }
-        let lock = InstallationLock::lock(&self.phase);
         let (progress_sender, progress) = mpsc::unbounded();
-        let installation = self.spawn_installation(request, progress_sender);
+        let installation = self.start_installation(request, progress_sender);
         let delivery = progress.for_each(|step| {
             on_progress(step);
             std::future::ready(())
         });
-        let (outcome, ()) = futures_util::future::join(installation, delivery).await;
-        let (result, installed) = outcome.unwrap_or_else(|panic| panic::resume_unwind(panic));
-        lock.release(phase_after_installation(installed, &self.running));
-        result
+        let (finished, ()) = futures_util::future::join(installation, delivery).await;
+        // Nothing aborts the waiting task, so it fails only by passing on
+        // the worker's panic.
+        finished.unwrap_or_else(|failure| panic::resume_unwind(failure.into_panic()))
     }
 
     /// Restarts into the installed update.
@@ -291,13 +311,35 @@ impl UpdateService {
         self.launcher.launch(&RESTART_COMMAND)
     }
 
-    /// Runs the installation and then reads the installed build's
-    /// identity, both on one worker thread.
-    fn spawn_installation(
+    /// Locks the application, starts the installation's worker, and
+    /// starts a task on this thread's main context that waits for the
+    /// worker and then unlocks the application. The returned handle
+    /// resolves to the installation's result.
+    ///
+    /// Safety rule "the lock lasts as long as the package manager"
+    /// (`install_update`'s `finally` in `desktop/winspace.py`): the
+    /// application leaves [`UpdatePhase::Installing`] only when the worker
+    /// has ended, whether or not anyone still awaits the installation.
+    /// While APT may run, quitting, closing a window and restarting stay
+    /// refused; quitting would close the pipes APT writes its output to.
+    fn start_installation(
         &self,
         request: InstallRequest,
         progress: mpsc::UnboundedSender<InstallProgress>,
-    ) -> gio::JoinHandle<(Result<(), UpdateError>, io::Result<RuntimeIdentity>)> {
+    ) -> glib::JoinHandle<Result<(), UpdateError>> {
+        self.phase.set(UpdatePhase::Installing);
+        let worker = self.spawn_worker(request, progress);
+        let unlock = unlock_when_finished(worker, Rc::clone(&self.phase), self.running.clone());
+        glib::MainContext::ref_thread_default().spawn_local(unlock)
+    }
+
+    /// Runs the installation and then reads the installed build's
+    /// identity, both on one worker thread.
+    fn spawn_worker(
+        &self,
+        request: InstallRequest,
+        progress: mpsc::UnboundedSender<InstallProgress>,
+    ) -> gio::JoinHandle<WorkerOutcome> {
         let updater = Arc::clone(&self.updater);
         let installed_build = self.installed_build.clone();
         gio::spawn_blocking(move || {
@@ -306,7 +348,10 @@ impl UpdateService {
                 let _ = progress.unbounded_send(step);
             };
             let result = updater.install(request.version, request.confirmation, &report, &request.cancel);
-            (result, installed_build.read_identity())
+            WorkerOutcome {
+                result,
+                installed: installed_build.read_identity(),
+            }
         })
     }
 
@@ -342,35 +387,30 @@ impl fmt::Debug for UpdateService {
     }
 }
 
-/// The application's lock while an installation runs.
+/// Waits for an installation's `worker`, then moves `phase` from
+/// [`UpdatePhase::Installing`] to what the installed build calls for, and
+/// hands on the installation's result. See
+/// [`UpdateService::start_installation`].
 ///
-/// Safety rule "an unfinished installation needs a restart": if the lock
-/// is dropped before it is released (the installation's future was dropped
-/// or its worker panicked), the package manager may still be running or
-/// may have changed files, so the application waits for a restart.
-struct InstallationLock<'a> {
-    phase: &'a Cell<UpdatePhase>,
-}
-
-impl<'a> InstallationLock<'a> {
-    /// Locks the application for an installation.
-    fn lock(phase: &'a Cell<UpdatePhase>) -> Self {
-        phase.set(UpdatePhase::Installing);
-        Self { phase }
-    }
-
-    /// Unlocks it into `phase` once the installation has finished.
-    fn release(self, phase: UpdatePhase) {
-        self.phase.set(phase);
-    }
-}
-
-impl Drop for InstallationLock<'_> {
-    fn drop(&mut self) {
-        if self.phase.get() == UpdatePhase::Installing {
-            self.phase.set(UpdatePhase::RestartRequired);
+/// # Panics
+///
+/// Resumes a panic of the worker after the application waits for a
+/// restart: a panicking installation is a bug, and it may have changed
+/// files.
+async fn unlock_when_finished(
+    worker: gio::JoinHandle<WorkerOutcome>,
+    phase: Rc<Cell<UpdatePhase>>,
+    running: RuntimeIdentity,
+) -> Result<(), UpdateError> {
+    let outcome = match worker.await {
+        Ok(outcome) => outcome,
+        Err(panic) => {
+            phase.set(UpdatePhase::RestartRequired);
+            panic::resume_unwind(panic)
         }
-    }
+    };
+    phase.set(phase_after_installation(outcome.installed, &running));
+    outcome.result
 }
 
 /// The phase after an installation: a restart is required when the
