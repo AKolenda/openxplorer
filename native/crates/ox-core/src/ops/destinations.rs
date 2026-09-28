@@ -9,11 +9,18 @@
 //! - Skip and Replace keep the source's name: a finished item is exactly
 //!   `folder/name`.
 //! - Keep both uses the name if it is free, and otherwise the first free
-//!   `(copy N)` name. The folder's names are read before the run, and the
-//!   finished items are replayed in order against them, each claiming its
-//!   name. Only a program creating that same `(copy N)` name during the
-//!   run could make the answer wrong; the undo of a copy moves copies to
-//!   the Trash, never deleting them, so even then nothing is lost.
+//!   `(copy N)` name, where the filesystem decides what is free. On a
+//!   case-insensitive drive (FAT, exFAT, most SMB shares) `A (copy 2).txt`
+//!   takes `a (copy 2).txt` too, so the engine's choice cannot be worked
+//!   out from the names alone without risking the user's own item.
+//!   Instead the folder is listed before and after the run, and only a
+//!   name that appeared during the run can be a copy: each finished item,
+//!   in order, claims the first of its own name and its `(copy N)` names
+//!   that appeared and that no earlier item claimed. Only another program
+//!   creating one of those names during the run could make the answer
+//!   wrong, and even then it names an item that did not exist before the
+//!   run; the undo of a copy moves copies to the Trash, never deleting
+//!   them, so nothing is lost.
 //! - A Keep-both move is not tracked: its source is gone, so the source's
 //!   kind, which decides where `(copy N)` goes, cannot be read afterwards.
 
@@ -79,12 +86,11 @@ impl DestinationTracker {
     }
 
     /// Where each of the finished `done` items is now, in order. Items
-    /// whose place is not known exactly, or that are no longer there, are
-    /// left out.
+    /// whose place is not known exactly are left out.
     pub(crate) fn landed(&self, done: &[String]) -> Vec<Landed> {
         match &self.rule {
             NamingRule::SameName => done.iter().map(|source| self.same_name(source)).collect(),
-            NamingRule::KeepBoth { names_before } => self.replay_keep_both(done, names_before.clone()),
+            NamingRule::KeepBoth { names_before } => self.keep_both(done, names_before),
             NamingRule::Unknown => Vec::new(),
         }
     }
@@ -99,43 +105,76 @@ impl DestinationTracker {
         }
     }
 
-    /// Replays the engine's Keep-both choices for `done`, in order, each
-    /// claiming the first name that was still free.
-    fn replay_keep_both(&self, done: &[String], mut taken: HashSet<OsString>) -> Vec<Landed> {
+    /// Finds the Keep-both copies of `done` among the names that appeared
+    /// in the folder since `names_before` were read.
+    fn keep_both(&self, done: &[String], names_before: &HashSet<OsString>) -> Vec<Landed> {
+        // Listed even after a cancellation: the items that finished stay in
+        // place, and Undo must still find them.
+        let Some(names_after) = names_in(&self.folder, &Cancellation::new()) else {
+            return Vec::new();
+        };
+        let mut appeared = AppearedNames::between(names_before, names_after);
         let mut landed = Vec::new();
         for source in done {
-            let Some(name) = keep_both_name(&GioNode::new(source), &taken) else {
+            let Some(name) = appeared.claim_for(&GioNode::new(source)) else {
                 continue;
             };
-            let destination = self.folder.child(&name);
-            taken.insert(name);
-            if destination.exists(None) {
-                landed.push(Landed {
-                    source: source.clone(),
-                    destination: destination.uri(),
-                });
-            }
+            landed.push(Landed {
+                source: source.clone(),
+                destination: self.folder.child(&name).uri(),
+            });
         }
         landed
     }
 }
 
-/// The name Keep both gave `source` when `taken` were the names in use:
-/// its own if free, otherwise the first free `(copy N)` name.
-fn keep_both_name(source: &GioNode, taken: &HashSet<OsString>) -> Option<OsString> {
-    let name = source.name();
-    if !taken.contains(&name) {
-        return Some(name);
+/// The names that appeared in a folder during a run, each to be claimed by
+/// the finished item the engine gave it.
+#[derive(Debug)]
+struct AppearedNames {
+    unclaimed: HashSet<OsString>,
+}
+
+impl AppearedNames {
+    /// The names in `after` that are not in `before`, compared byte for
+    /// byte: on a case-insensitive drive, `A (copy 2).txt` before the run
+    /// and `a (copy 3).txt` after it are different items.
+    fn between(before: &HashSet<OsString>, after: HashSet<OsString>) -> Self {
+        let unclaimed = after.into_iter().filter(|name| !before.contains(name)).collect();
+        Self { unclaimed }
     }
-    let text = name.to_str()?;
+
+    /// Claims the name Keep both gave `source`: the first of its own name
+    /// and its `(copy N)` names that appeared and is not claimed yet.
+    /// `None` when none did, so the item's place is not known.
+    fn claim_for(&mut self, source: &GioNode) -> Option<OsString> {
+        if self.unclaimed.is_empty() {
+            return None;
+        }
+        let own_name = source.name();
+        if self.unclaimed.remove(&own_name) {
+            return Some(own_name);
+        }
+        // The engine gives no `(copy N)` name to a name that is not text.
+        let text = own_name.to_str()?;
+        let kind = item_kind(source)?;
+        let copy_name = (2..COPY_NUMBER_LIMIT)
+            .filter_map(|number| new_copy_name(text, number, kind).ok())
+            .map(OsString::from)
+            .find(|candidate| self.unclaimed.contains(candidate))?;
+        self.unclaimed.remove(&copy_name);
+        Some(copy_name)
+    }
+}
+
+/// Whether `(copy N)` names `source` as a folder or as a file, as the
+/// engine decides it; `None` when `source` cannot be inspected.
+fn item_kind(source: &GioNode) -> Option<ItemKind> {
     let kind = match source.info(None).ok()?.kind {
         NodeKind::Directory => ItemKind::Folder,
         NodeKind::File | NodeKind::Symlink | NodeKind::Special => ItemKind::File,
     };
-    (2..COPY_NUMBER_LIMIT)
-        .filter_map(|number| new_copy_name(text, number, kind).ok())
-        .map(OsString::from)
-        .find(|candidate| !taken.contains(candidate))
+    Some(kind)
 }
 
 /// The names in `folder`, hidden ones included, or `None` when it cannot
@@ -149,30 +188,37 @@ fn names_in(folder: &GioNode, cancel: &Cancellation) -> Option<HashSet<OsString>
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::path::Path;
 
     use gio::prelude::*;
 
     use super::*;
 
-    fn uri_of(path: &std::path::Path) -> String {
-        gio::File::for_path(path).uri().to_string()
+    /// A new source file at `path`, in a folder created for it.
+    fn source_file(path: &Path) -> GioNode {
+        fs::create_dir_all(path.parent().expect("a parent")).expect("a source folder");
+        fs::write(path, b"x").expect("a source file");
+        GioNode::new(&gio::File::for_path(path).uri())
+    }
+
+    /// The names that appeared when a folder holding `before` came to hold
+    /// `before` and `added`.
+    fn appeared(before: &[&str], added: &[&str]) -> AppearedNames {
+        let before: HashSet<OsString> = before.iter().map(OsString::from).collect();
+        let mut after = before.clone();
+        after.extend(added.iter().map(OsString::from));
+        AppearedNames::between(&before, after)
     }
 
     #[test]
     fn keep_both_claims_the_first_free_copy_name_in_order() {
         let temp = tempfile::tempdir().expect("a temporary folder");
-        let first = temp.path().join("one").join("a.txt");
-        let second = temp.path().join("two").join("a.txt");
-        for path in [&first, &second] {
-            fs::create_dir_all(path.parent().expect("a parent")).expect("a source folder");
-            fs::write(path, b"x").expect("a source file");
-        }
-        let mut taken = HashSet::new();
-        taken.insert(OsString::from("a.txt"));
+        let first = source_file(&temp.path().join("one").join("a.txt"));
+        let second = source_file(&temp.path().join("two").join("a.txt"));
+        let mut names = appeared(&["a.txt"], &["a (copy 2).txt", "a (copy 3).txt"]);
 
-        let first_name = keep_both_name(&GioNode::new(&uri_of(&first)), &taken).expect("a free name");
-        taken.insert(first_name.clone());
-        let second_name = keep_both_name(&GioNode::new(&uri_of(&second)), &taken).expect("a free name");
+        let first_name = names.claim_for(&first).expect("a copy name");
+        let second_name = names.claim_for(&second).expect("a copy name");
 
         assert_eq!(first_name, OsString::from("a (copy 2).txt"));
         assert_eq!(second_name, OsString::from("a (copy 3).txt"));
@@ -183,11 +229,53 @@ mod tests {
         let temp = tempfile::tempdir().expect("a temporary folder");
         let folder = temp.path().join("Folder.v1");
         fs::create_dir(&folder).expect("a source folder");
-        let mut taken = HashSet::new();
-        taken.insert(OsString::from("Folder.v1"));
+        let source = GioNode::new(&gio::File::for_path(&folder).uri());
+        let mut names = appeared(&["Folder.v1"], &["Folder.v1 (copy 2)"]);
 
-        let name = keep_both_name(&GioNode::new(&uri_of(&folder)), &taken);
+        let name = names.claim_for(&source);
 
         assert_eq!(name, Some(OsString::from("Folder.v1 (copy 2)")));
+    }
+
+    #[test]
+    fn a_free_name_is_claimed_as_it_is() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let source = source_file(&temp.path().join("one").join("b.txt"));
+        let mut names = appeared(&["a.txt"], &["b.txt"]);
+
+        let name = names.claim_for(&source);
+
+        assert_eq!(name, Some(OsString::from("b.txt")));
+    }
+
+    /// On FAT, exFAT and most SMB shares a name differing only in case is
+    /// taken, so the engine skips it; the copy must never be recorded
+    /// under the name of the user's own item, which Undo would trash.
+    #[test]
+    fn on_a_case_insensitive_drive_a_copy_never_names_the_users_own_item() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let report = source_file(&temp.path().join("one").join("a.txt"));
+        let notes = source_file(&temp.path().join("one").join("b.txt"));
+        let mut names = appeared(
+            &["a.txt", "A (copy 2).txt", "B.txt"],
+            &["a (copy 3).txt", "b (copy 2).txt"],
+        );
+
+        let report_copy = names.claim_for(&report);
+        let notes_copy = names.claim_for(&notes);
+
+        assert_eq!(report_copy, Some(OsString::from("a (copy 3).txt")));
+        assert_eq!(notes_copy, Some(OsString::from("b (copy 2).txt")));
+    }
+
+    #[test]
+    fn an_item_without_a_new_name_in_the_folder_is_left_out() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let source = source_file(&temp.path().join("one").join("a.txt"));
+        let mut names = appeared(&["a.txt", "a (copy 2).txt"], &[]);
+
+        let name = names.claim_for(&source);
+
+        assert_eq!(name, None);
     }
 }
