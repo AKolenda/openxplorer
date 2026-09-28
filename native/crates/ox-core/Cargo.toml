@@ -17,6 +17,14 @@ percent-encoding.workspace = true
 thiserror.workspace = true
 libc.workspace = true
 rustix.workspace = true
+# ZIP member decompression for `archive`: raw deflate, bzip2 and LZMA are the
+# methods besides "stored" that desktop/zip_extraction.py accepts. All three
+# are pure Rust, so no C library is linked.
+flate2 = "1.1"
+bzip2 = "0.6"
+lzma-rust2 = { version = "0.21", default-features = false, features = ["std", "optimization"] }
+# The CRC-32 every extracted or previewed ZIP member is checked against.
+crc32fast = "1.5"
 
 [dev-dependencies]
 tempfile.workspace = true

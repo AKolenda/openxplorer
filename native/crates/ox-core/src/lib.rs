@@ -18,6 +18,7 @@
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
 
+pub mod archive;
 pub mod clipboard;
 pub mod entry;
 pub mod format;
