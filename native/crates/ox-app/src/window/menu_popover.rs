@@ -20,7 +20,7 @@ use super::unported;
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
 
-/// A menu row's glyph: 16 pixels, as WinUI's menu icons (ui-spec.md I05;
+/// A menu row's glyph: 16 pixels, as Windows 11 draws menu icons (ui-spec.md I05;
 /// the web app's classic menus drew 15).
 const ROW_GLYPH: i32 = 16;
 

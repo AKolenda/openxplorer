@@ -113,6 +113,17 @@ fn landing_page() -> (gtk::Box, gtk::ScrolledWindow) {
     (landing, landing_scroll)
 }
 
+/// The folder pane's pages, one of them shown: the listing, the empty
+/// or error page and the landing page.
+fn page_stack(views: &gtk::Stack, empty: &EmptyPage, landing_scroll: &gtk::ScrolledWindow) -> gtk::Stack {
+    let stack = gtk::Stack::builder().hexpand(true).vexpand(true).build();
+    stack.add_css_class("folder-pane");
+    stack.add_named(views, Some(ContentPage::Listing.name()));
+    stack.add_named(&empty.root, Some(ContentPage::Empty.name()));
+    stack.add_named(landing_scroll, Some(ContentPage::Landing.name()));
+    stack
+}
+
 fn scrolled(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
     gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Automatic)
@@ -161,11 +172,7 @@ impl Content {
         let views = view_stack(&details_scroll, &grid_scroll);
         let empty = EmptyPage::new();
         let (landing, landing_scroll) = landing_page();
-        let stack = gtk::Stack::builder().hexpand(true).vexpand(true).build();
-        stack.add_css_class("folder-pane");
-        stack.add_named(&views, Some(ContentPage::Listing.name()));
-        stack.add_named(&empty.root, Some(ContentPage::Empty.name()));
-        stack.add_named(&landing_scroll, Some(ContentPage::Landing.name()));
+        let stack = page_stack(&views, &empty, &landing_scroll);
         let loading_line = LoadingLine::new();
         let root = gtk::Overlay::builder().child(&stack).build();
         root.add_overlay(&loading_line.widget);
@@ -177,10 +184,7 @@ impl Content {
             details_scroll,
             grid,
             grid_scroll,
-            grid_scale: Rc::new(Cell::new(GridScale {
-                icon_size: IconSize::Large,
-                text_size: crate::text_size::DEFAULT,
-            })),
+            grid_scale: Rc::new(Cell::new(GridScale::default())),
             model,
             icons,
             owners,
@@ -343,6 +347,16 @@ struct GridScale {
     icon_size: IconSize,
     /// In percent.
     text_size: u32,
+}
+
+impl Default for GridScale {
+    /// Large icons at the default text size, as a new window starts.
+    fn default() -> Self {
+        Self {
+            icon_size: IconSize::Large,
+            text_size: crate::text_size::DEFAULT,
+        }
+    }
 }
 
 /// Sets the icon view's columns for its pane's width, once GTK has

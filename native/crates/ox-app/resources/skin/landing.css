@@ -9,8 +9,9 @@
    the title and subtitle keep one pixel more below them. */
 .landing { background-color: @ox_bg; }
 .landing .page { padding: 25px 28px; }
-/* No negative tracking (T11). */
-.landing .page-title { font-weight: 600; margin-bottom: 8px; }
+/* The web title's -.4px tracking stays: the spec's 0 (T11) would widen
+   "This PC" by 2px, off the current app's pixels. */
+.landing .page-title { font-weight: 600; letter-spacing: -.4px; margin-bottom: 8px; }
 .landing .page-subtitle { color: @ox_muted; margin-bottom: 4px; }
 .landing .section-title { font-weight: 600; margin: 24px 0 15px 0; }
 window.ox .landing .section-title button { color: @ox_accent; padding: 4px 8px; font-weight: normal; }

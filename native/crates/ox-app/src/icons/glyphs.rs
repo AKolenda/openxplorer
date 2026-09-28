@@ -3,10 +3,12 @@
 //!
 //! The path data is the `paths` table at the top of `desktop/ui/app.js`
 //! (24-unit viewBox, 1.35 stroke, round caps and joins; `more` uses a
-//! 3-unit stroke so its dots are visible). [`GlyphPaintable`] draws a path
-//! with `gsk::Path` and implements `GtkSymbolicPaintable`, so a `GtkImage`
-//! paints it in the widget's CSS `color` and it follows hover, disabled and
-//! dark styles without any image files.
+//! 3-unit stroke so its dots are visible). From 16 pixels up the stroke is
+//! never thinner than one pixel ([`Glyph::stroke_width`]).
+//! [`GlyphPaintable`] draws a path with `gsk::Path` and implements
+//! `GtkSymbolicPaintable`, so a `GtkImage` paints it in the widget's CSS
+//! `color` and it follows hover, disabled and dark styles without any
+//! image files.
 //!
 //! Glyphs are named by the [`Glyph`] enum, so a misspelt name does not
 //! compile. (app.js looked names up at run time and silently drew the

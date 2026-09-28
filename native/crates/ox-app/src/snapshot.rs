@@ -205,7 +205,8 @@ pub(crate) fn save_when_listed(
 }
 
 /// When the snapshot's window drew its first frame and its first
-/// listing, in microseconds on GLib's monotonic clock.
+/// listing, in microseconds on the monotonic clock
+/// (`g_get_monotonic_time`).
 #[derive(Debug, Default)]
 struct Milestones {
     first_frame: Cell<Option<i64>>,

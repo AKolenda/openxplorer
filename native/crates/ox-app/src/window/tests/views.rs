@@ -274,7 +274,7 @@ fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
     let tiles = descendants::<FileCell>(grid);
     let bounds = tiles
         .iter()
-        .filter_map(|cell| cell.parent())
+        .filter_map(WidgetExt::parent)
         .filter_map(|tile| tile.compute_bounds(&scroll))
         .map(|rect| {
             (
