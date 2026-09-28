@@ -50,6 +50,12 @@ pub fn summarize_restore(result: &TransferResult) -> OperationSummary {
     summarize_items("restored", result)
 }
 
+/// The summary of Create links, which the Python app did not have:
+/// `2 item(s) linked.` in the wording of the other toasts.
+pub fn summarize_links(result: &TransferResult) -> OperationSummary {
+    summarize_items("linked", result)
+}
+
 /// The summary of an Undo: `Rename undone.` when every step succeeded,
 /// otherwise the [`RESULT_TITLE`] report of what happened.
 pub fn summarize_undo(record: &UndoRecord, result: &TransferResult) -> OperationSummary {

@@ -32,6 +32,18 @@ impl TabId {
     pub(super) fn from_variant(variant: &glib::Variant) -> Option<Self> {
         variant.get::<u64>().map(TabId)
     }
+
+    /// The id as the number inside a compound action target, such as the
+    /// tab and window of `win.move-tab-into-window`.
+    pub(super) const fn to_raw(self) -> u64 {
+        self.0
+    }
+
+    /// The id a compound action target names by [`Self::to_raw`]. A number
+    /// that names no open tab changes nothing where it is used.
+    pub(super) const fn from_raw(raw: u64) -> Self {
+        TabId(raw)
+    }
 }
 
 /// Whether a new tab becomes the active one.
@@ -85,6 +97,9 @@ pub(super) struct Tab {
     pub selected: Vec<String>,
     /// The vertical scroll position, restored when the tab is shown again.
     pub scroll: f64,
+    /// A scroll position to restore once the listing finishes: a tab moved
+    /// from another window keeps its place in its folder (TAB-039).
+    pub scroll_after_listing: Option<f64>,
     /// The running listing; dropping it cancels it.
     pub listing: Option<Listing>,
     /// The folder watch, kept while the tab shows the same folder.
@@ -102,6 +117,7 @@ impl Tab {
             error: None,
             selected: Vec::new(),
             scroll: 0.0,
+            scroll_after_listing: None,
             listing: None,
             watch: None,
         }
@@ -148,16 +164,64 @@ impl Session {
     ///
     /// Only after `u64::MAX` tabs in one window.
     pub(super) fn add(&mut self, uri: &str, placement: TabPlacement) -> TabId {
-        self.next_id = self
-            .next_id
-            .checked_add(1)
-            .expect("tab IDs cannot be exhausted in one session");
-        let id = TabId(self.next_id);
+        let id = self.next_tab_id();
         self.tabs.push(Tab::new(id, uri));
         if placement == TabPlacement::Foreground || self.active.is_none() {
             self.active = Some(id);
         }
         id
+    }
+
+    /// Adds a tab that moved here from another window, with its `history`,
+    /// before tab `before` or at the end, and brings it to the front.
+    ///
+    /// # Panics
+    ///
+    /// Only after `u64::MAX` tabs in one window.
+    pub(super) fn insert_moved(&mut self, history: History, before: Option<TabId>) -> TabId {
+        let id = self.next_tab_id();
+        let mut tab = Tab::new(id, history.current());
+        tab.history = history;
+        let index = self.index_before(before);
+        self.tabs.insert(index, tab);
+        self.active = Some(id);
+        id
+    }
+
+    /// Moves tab `id` before tab `before`, or to the end when `before` is
+    /// `None` or not open (`reorderTab` in app.js). The active tab stays
+    /// the same.
+    pub(super) fn move_before(&mut self, id: TabId, before: Option<TabId>) {
+        if before == Some(id) {
+            return;
+        }
+        let Some(from) = self.tabs.iter().position(|tab| tab.id == id) else {
+            return;
+        };
+        let tab = self.tabs.remove(from);
+        let index = self.index_before(before);
+        self.tabs.insert(index, tab);
+    }
+
+    /// The index a tab placed before tab `before` gets: that tab's index,
+    /// or the end.
+    fn index_before(&self, before: Option<TabId>) -> usize {
+        before
+            .and_then(|before| self.tabs.iter().position(|tab| tab.id == before))
+            .unwrap_or(self.tabs.len())
+    }
+
+    /// A new tab id.
+    ///
+    /// # Panics
+    ///
+    /// Only after `u64::MAX` tabs in one window.
+    fn next_tab_id(&mut self) -> TabId {
+        self.next_id = self
+            .next_id
+            .checked_add(1)
+            .expect("tab IDs cannot be exhausted in one session");
+        TabId(self.next_id)
     }
 
     /// The open tabs, left to right.
@@ -349,6 +413,52 @@ mod tests {
         session.activate(first);
         assert_ne!(session.active_id(), Some(first), "a closed tab stays closed");
         assert!(session.can_activate(second));
+    }
+
+    fn tab_order(session: &Session) -> Vec<TabId> {
+        session.tabs().iter().map(|tab| tab.id).collect()
+    }
+
+    /// parity: TAB-032
+    #[test]
+    fn a_reordered_tab_goes_before_the_named_tab_or_to_the_end() {
+        let (mut session, [first, second, third]) = three_tabs();
+
+        session.move_before(third, Some(first));
+        let before_first = tab_order(&session);
+        session.move_before(third, None);
+        let at_the_end = tab_order(&session);
+        session.move_before(second, Some(second));
+
+        assert_eq!(before_first, [third, first, second]);
+        assert_eq!(at_the_end, [first, second, third]);
+        assert_eq!(
+            tab_order(&session),
+            [first, second, third],
+            "a tab dropped on itself stays"
+        );
+        assert_eq!(
+            session.active_id(),
+            Some(third),
+            "reordering keeps the active tab"
+        );
+    }
+
+    /// parity: TAB-033, TAB-039
+    #[test]
+    fn a_moved_tab_keeps_its_history_and_goes_in_front_where_it_was_dropped() {
+        let (mut session, [first, second, _]) = three_tabs();
+        let mut history = History::new("file:///moved/a");
+        history.push("file:///moved/b");
+        history.go(-1);
+
+        let moved = session.insert_moved(history.clone(), Some(second));
+
+        assert_eq!(tab_order(&session)[..3], [first, moved, second]);
+        assert_eq!(session.active_id(), Some(moved));
+        let tab = session.tab(moved).expect("the moved tab is open");
+        assert_eq!(tab.history, history);
+        assert_eq!(tab.uri(), "file:///moved/a");
     }
 
     /// parity: NAV-016

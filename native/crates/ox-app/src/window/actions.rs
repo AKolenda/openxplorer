@@ -49,7 +49,7 @@ pub(super) fn text_action(
 }
 
 /// An action whose target is a tab.
-fn tab_action(
+pub(super) fn tab_action(
     window_action: WindowAction,
     run: impl Fn(&BrowserWindow, TabId) + 'static,
 ) -> gio::ActionEntry<BrowserWindow> {
@@ -127,6 +127,7 @@ impl BrowserWindow {
     /// Adds every window action (`win.*`).
     pub(super) fn install_actions(&self) {
         self.install_tab_actions();
+        self.install_tab_move_actions();
         self.install_navigation_actions();
         self.install_selection_actions();
         self.install_view_actions();
@@ -167,6 +168,7 @@ impl BrowserWindow {
             text_action(WindowAction::OpenTabBackground, |window, uri| {
                 window.open_tab_or_report(uri, TabPlacement::Background);
             }),
+            text_action(WindowAction::DropChoice, BrowserWindow::answer_drop_menu),
         ]);
     }
 

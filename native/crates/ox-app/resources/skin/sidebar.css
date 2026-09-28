@@ -27,6 +27,16 @@
 .sidebar list > row:active { background-color: @ox_pressed; }
 .sidebar list > row:selected { background-color: @ox_selected; color: @ox_text; }
 .sidebar list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+/* A place whose folder a drop would go into (DND-011), and the accent line
+   where folders dropped on Quick access would be pinned: above the row
+   they would go before, or under the last pin (`.drop-before::after`,
+   `.quick-drop-tail.drop-end`, DND-014). */
+.sidebar list > row.file-drop-active {
+  background-color: @ox_selected;
+  box-shadow: inset 0 0 0 2px @ox_accent;
+}
+.sidebar list > row.drop-before { box-shadow: inset 0 2px @ox_accent; }
+.sidebar list > row.drop-end { box-shadow: inset 0 -2px @ox_accent; }
 /* The row's parts sit 12px apart (`gap:12px`), as margins because the
    web row pulls its chevron into the padding with negative margins,
    which a GTK box cannot do. The icon box (.side-icon) is 20px around

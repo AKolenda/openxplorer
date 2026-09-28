@@ -3,9 +3,8 @@
 //!
 //! Ports the `contextmenu` handler of `setupTabDrag` in
 //! `desktop/ui/app.js`: Move tab to new window, Move tab to window…,
-//! Duplicate tab, Open windows… and Close tab. Moving tabs between windows
-//! arrives with drag and drop, so its two items are disabled with a
-//! tooltip that says so ([`super::unported`]).
+//! Duplicate tab, Open windows… and Close tab. The two moves are
+//! [`super::tab_moves`]'s.
 
 use gtk::subclass::prelude::*;
 
@@ -20,16 +19,18 @@ use super::BrowserWindow;
 pub(super) fn tab_menu(id: TabId, uri: &str) -> Vec<MenuEntry> {
     let tab = id.to_variant();
     vec![
-        MenuItem::new(
+        MenuItem::with_target(
             "Move tab to new window",
             Icon::Share,
             WindowAction::MoveTabToNewWindow,
+            tab.clone(),
         )
         .into(),
-        MenuItem::new(
+        MenuItem::with_target(
             "Move tab to window…",
             Icon::Desktop,
             WindowAction::MoveTabToWindow,
+            tab.clone(),
         )
         .into(),
         MenuItem::with_text_target("Duplicate tab", Icon::Copy, WindowAction::OpenTab, uri).into(),

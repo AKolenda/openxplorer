@@ -160,7 +160,7 @@ impl BrowserWindow {
 
     /// Remembers the active tab's selection and scroll position before
     /// another tab is shown.
-    fn save_tab_view(&self) {
+    pub(super) fn save_tab_view(&self) {
         self.save_selection();
         let scroll = self.folder_pane().scroll_position();
         if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
@@ -182,7 +182,7 @@ impl BrowserWindow {
 
     /// Puts the active tab's items, selection and scroll position on
     /// screen, and lists a tab that was opened in the background.
-    fn show_tab(&self, id: TabId) {
+    pub(super) fn show_tab(&self, id: TabId) {
         self.reset_typeahead();
         self.hide_message();
         let Some(view) = self.saved_tab_view(id) else {

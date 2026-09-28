@@ -34,6 +34,7 @@
 //! | `recycle_bin` | Restore, Delete permanently and Empty in the Recycle Bin |
 //! | `duplicate` | Duplicate |
 //! | `journal` | Undo and Redo |
+//! | `links` | Create links, from a drop |
 //! | `clipboard` | Cut, Copy and the desktop's file clipboard |
 //! | `transfer` | Pasting into a folder, with the name-conflict check |
 //! | `conflict_dialog` | The name-conflict dialog |
@@ -48,6 +49,7 @@ mod delete;
 mod duplicate;
 mod inline_rename;
 mod journal;
+mod links;
 mod name_dialog;
 mod names;
 mod new_items;

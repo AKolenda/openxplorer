@@ -12,7 +12,10 @@
 //! ([`super::tab_menu`]). The close button inside claims its own clicks.
 //!
 //! [`TabStrip`] is a widget subclass whose scroller and tab list are the
-//! template `resources/ui/tab-strip.ui`; the tabs are built here.
+//! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
+//! shows while tabs and files are dragged is [`drag_marks`]'s.
+
+mod drag_marks;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -26,6 +29,8 @@ use super::session::TabId;
 use super::tab_menu::tab_menu;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
+
+pub(super) use drag_marks::TabInsertion;
 
 /// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
 const ICON_SIZE: i32 = 16;
@@ -56,7 +61,7 @@ pub(super) struct TabView {
 }
 
 mod imp {
-    use std::cell::OnceCell;
+    use std::cell::{OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
@@ -65,6 +70,8 @@ mod imp {
     use crate::window::gestures;
     use crate::window::menu_popover::MenuPopover;
     use crate::window::tab_layout::TabLayout;
+
+    use super::TabView;
 
     /// Private state of [`super::TabStrip`]: the template's widgets.
     #[derive(Debug, Default, gtk::CompositeTemplate)]
@@ -84,6 +91,8 @@ mod imp {
         pub(super) layout: TemplateChild<TabLayout>,
         /// The tabs' context menu, built by `constructed`.
         pub(super) menu: OnceCell<MenuPopover>,
+        /// Each tab shown and its widget, left to right.
+        pub(super) shown: RefCell<Vec<(TabView, gtk::Box)>>,
     }
 
     #[glib::object_subclass]
@@ -144,13 +153,16 @@ impl TabStrip {
         let imp = self.imp();
         remove_children(&*imp.tab_list);
         let mut active = None;
+        let mut shown = Vec::with_capacity(tabs.len());
         for tab in tabs {
             let widget = tab_widget(tab);
             imp.tab_list.append(&widget);
             if tab.active {
-                active = Some(widget);
+                active = Some(widget.clone());
             }
+            shown.push((tab.clone(), widget));
         }
+        imp.shown.replace(shown);
         let Some(active) = active else {
             return;
         };
@@ -161,6 +173,19 @@ impl TabStrip {
             viewport,
             move || viewport.scroll_to(&active, None)
         ));
+    }
+
+    /// The tab at (`x`, `y`) in the strip, if any: where a file drop
+    /// would go (TAB-018).
+    pub(super) fn tab_at(&self, x: f64, y: f64) -> Option<TabView> {
+        let picked = self.pick(x, y, gtk::PickFlags::DEFAULT)?;
+        let shown = self.imp().shown.borrow();
+        std::iter::successors(Some(picked), WidgetExt::parent).find_map(|widget| {
+            shown
+                .iter()
+                .find(|(_, tab_widget)| *tab_widget.upcast_ref::<gtk::Widget>() == widget)
+                .map(|(tab, _)| tab.clone())
+        })
     }
 
     /// Opens the tab menu `entries` at `point` in the strip.
@@ -257,11 +282,14 @@ fn run_on(widget: Option<gtk::Widget>, action: WindowAction, id: &glib::Variant)
     }
 }
 
-/// A primary click anywhere on the tab shows it.
+/// A primary click anywhere on the tab shows it, on release as `click` in
+/// app.js. Showing a tab draws the strip anew, which on the press would
+/// cancel a drag of the tab before it starts; a drag cancels the click, so
+/// a dragged tab is not shown (TAB-004).
 fn select_on_click(id: glib::Variant) -> gtk::GestureClick {
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_PRIMARY);
-    click.connect_pressed(move |gesture, _, _, _| {
+    click.connect_released(move |gesture, _, _, _| {
         run_on(gesture.widget(), WindowAction::SelectTab, &id);
     });
     click

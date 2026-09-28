@@ -238,7 +238,7 @@ pub(crate) fn connect_file_cells(
         let cell = list_item.child().and_downcast::<FileCell>();
         if let (Some(item), Some(cell)) = (bound_item(list_item), cell) {
             cell.bind(&item);
-            bind_owners.style_for_cut(&cell, &item);
+            bind_owners.style_cell(&cell, &item);
         }
     });
 }

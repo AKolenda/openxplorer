@@ -156,8 +156,15 @@ pub(crate) enum WindowAction {
     SignOut,
     /// Moves a tab into a window of its own.
     MoveTabToNewWindow,
-    /// Moves a tab into another open window.
+    /// Lists the other open windows to move a tab into ("Move tab to
+    /// window…").
     MoveTabToWindow,
+    /// Moves a tab into another open window; the target is the tab's id
+    /// and the window's.
+    MoveTabIntoWindow,
+    /// Runs the drop the drop menu asks about as the string target says:
+    /// `copy`, `move`, `link` or `cancel`.
+    DropChoice,
     /// Opens the connect dialog for a network share.
     MapNetworkLocation,
     /// Looks for SMB servers that advertise themselves.
@@ -249,6 +256,8 @@ impl WindowAction {
             WindowAction::SignOut => "sign-out",
             WindowAction::MoveTabToNewWindow => "move-tab-to-new-window",
             WindowAction::MoveTabToWindow => "move-tab-to-window",
+            WindowAction::MoveTabIntoWindow => "move-tab-into-window",
+            WindowAction::DropChoice => "drop-choice",
             WindowAction::MapNetworkLocation => "map-network-location",
             WindowAction::DiscoverServers => "discover-servers",
             WindowAction::CacheFolder => "cache-folder",

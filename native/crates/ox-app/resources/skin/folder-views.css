@@ -165,11 +165,42 @@ gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_out
 .empty-state image { opacity: .6; color: @ox_muted; }
 .empty-state button { padding: 8px 20px; }
 
-/* A folder view that takes the files dragged over it shows an accent
-   outline; no outline means no drop (DND-011). */
-columnview.files:drop(active), gridview.files:drop(active) {
+/* ---- Drag and drop (DND-007, DND-011, DND-026; style.css
+   .file-dragging .drag-source, .file-drop-active, .tab-drag-hint) ---- */
+/* Items this window is dragging out fade until the drag ends. */
+.files .drag-source { opacity: 0.55; }
+/* The folder a drop would go into: the whole view for the folder shown,
+   or the row or tile of a folder under the pointer. No outline means no
+   drop. */
+columnview.files.file-drop-active, gridview.files.file-drop-active,
+columnview.files > listview > row.file-drop-active,
+gridview.files > child.file-drop-active {
   outline: 2px solid @ox_accent;
   outline-offset: -2px;
+}
+columnview.files > listview > row.file-drop-active,
+gridview.files > child.file-drop-active { background-color: @ox_selected; }
+/* The note over the folder pane that says what a release would do:
+   "Open with <program>", or "Release to open this tab in a new window". */
+.drag-hint {
+  margin: 12px;
+  padding: 11px 15px;
+  border: 1px solid @ox_border;
+  border-radius: 6px;
+  background-color: @ox_chrome;
+  color: @ox_text;
+  box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
+}
+/* The picture that follows the pointer: the first item's art and, for
+   several items, their number on an accent badge. */
+.drag-icon .drag-count {
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background-color: @ox_accent;
+  color: @ox_on_accent;
+  font-weight: 600;
 }
 
 /* The text field that renames an item in place (OPS-010): a compact

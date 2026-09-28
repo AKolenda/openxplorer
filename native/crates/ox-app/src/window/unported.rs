@@ -18,9 +18,6 @@ use super::BrowserWindow;
 /// The `native/ROADMAP.md` milestone that brings a command or a setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Milestone {
-    /// The rest of "Complete safe file-operation workflows": file drag and
-    /// drop, and tabs moved between windows.
-    DragAndDrop,
     /// The "Network and devices" service.
     NetworkAndDevices,
     /// The "Search and metadata" service: the search index.
@@ -43,7 +40,6 @@ impl Milestone {
     /// How tooltips and disabled settings name the milestone.
     pub(crate) const fn description(self) -> &'static str {
         match self {
-            Milestone::DragAndDrop => "drag and drop between windows",
             Milestone::NetworkAndDevices => "network and device support",
             Milestone::SearchAndMetadata => "cached search",
             Milestone::ItemDetails => "properties, folder sizes and Open with",
@@ -54,7 +50,7 @@ impl Milestone {
     }
 
     /// The sentence a disabled control shows under its usual text: "Not in
-    /// the native preview yet: arrives with drag and drop between windows."
+    /// the native preview yet: arrives with packaging and updates."
     pub(crate) fn notice(self) -> String {
         format!(
             "Not in the native preview yet: arrives with {}.",
@@ -77,9 +73,7 @@ const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand 
 }
 
 /// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 14] = [
-    command(WindowAction::MoveTabToNewWindow, Milestone::DragAndDrop),
-    command(WindowAction::MoveTabToWindow, Milestone::DragAndDrop),
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 12] = [
     command(WindowAction::MapNetworkLocation, Milestone::NetworkAndDevices),
     command(WindowAction::DiscoverServers, Milestone::NetworkAndDevices),
     command(WindowAction::SignOut, Milestone::NetworkAndDevices),
@@ -130,8 +124,8 @@ mod tests {
     #[test]
     fn a_disabled_command_names_the_milestone_that_brings_it() {
         assert_eq!(
-            tooltip(WindowAction::MoveTabToNewWindow, "Move tab to new window"),
-            "Move tab to new window\nNot in the native preview yet: arrives with drag and drop between windows."
+            tooltip(WindowAction::CheckUpdates, "Check for updates"),
+            "Check for updates\nNot in the native preview yet: arrives with packaging and updates."
         );
     }
 

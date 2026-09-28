@@ -48,6 +48,7 @@
 //! | `chosen_transfer` | A copy or move with an answer per name conflict |
 //! | `destinations` | Where a copy's or move's items are now |
 //! | `duplicate` | Duplicate in place |
+//! | `links` | Symbolic links to dropped items |
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
 //! | `results` | Adding up per-item results into one result |
 //! | `progress` | Progress labels and throttling |
@@ -76,6 +77,7 @@ mod duplicate;
 mod error;
 mod folder_groups;
 mod journal;
+mod links;
 mod new_from_template;
 mod progress;
 mod recycle_bin;
@@ -99,6 +101,7 @@ pub use delete_plan::{
 pub use duplicate::duplicate_items;
 pub use error::OpsError;
 pub use journal::{JournalDirection, JournalEntry, UndoJournal, UNDO_LIMIT};
+pub use links::{create_links, LinkRequest};
 pub use new_from_template::{create_from_template, NewFromTemplate};
 pub use progress::{starting_label, PROGRESS_INTERVAL};
 pub use recycle_bin::{
@@ -107,8 +110,8 @@ pub use recycle_bin::{
 };
 pub use rename::{rename_item, RenamedItem};
 pub use report::{
-    summarize, summarize_duplicate, summarize_journal_step, summarize_restore, summarize_undo,
-    OperationSummary, RESULT_TITLE, STOPPED_TITLE,
+    summarize, summarize_duplicate, summarize_journal_step, summarize_links, summarize_restore,
+    summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
 pub use tab_transfer::{

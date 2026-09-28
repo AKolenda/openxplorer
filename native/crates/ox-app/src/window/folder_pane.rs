@@ -116,6 +116,7 @@ impl FolderPane {
         let parts = PaneParts::new();
         let overlay = gtk::Overlay::builder().child(&parts.stack).build();
         overlay.add_overlay(&parts.loading_line);
+        overlay.add_overlay(&parts.drag_hint);
         overlay.set_parent(self);
         self.imp()
             .parts
@@ -176,6 +177,21 @@ impl FolderPane {
     /// [`LoadingLine::set_loading`](super::loading_line::LoadingLine::set_loading)).
     pub(super) fn set_loading(&self, loading: bool) {
         self.parts().loading_line.set_loading(loading);
+    }
+
+    /// Shows `hint` over the pane, saying what a drag would do there, or
+    /// hides the note.
+    pub(super) fn show_drag_hint(&self, hint: Option<&str>) {
+        let label = &self.parts().drag_hint;
+        label.set_label(hint.unwrap_or_default());
+        label.set_visible(hint.is_some());
+    }
+
+    /// The note over the pane while a drag shows one, for tests.
+    #[cfg(test)]
+    pub(super) fn drag_hint(&self) -> Option<String> {
+        let label = &self.parts().drag_hint;
+        label.is_visible().then(|| label.label().to_string())
     }
 
     /// The loading line, for tests.

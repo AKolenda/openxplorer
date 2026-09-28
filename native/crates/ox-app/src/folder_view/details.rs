@@ -76,7 +76,7 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
         let label = list_item.child().and_downcast::<gtk::Label>();
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
             label.set_text(&cell_text(column, &item));
-            bind_owners.style_for_cut(&label, &item);
+            bind_owners.style_cell(&label, &item);
         }
     });
     factory

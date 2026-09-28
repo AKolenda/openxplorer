@@ -261,7 +261,11 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
             "Close tab",
         ]
     );
-    assert!(!menu.row("Move tab to new window").is_sensitive());
+    assert!(
+        menu.row("Move tab to new window").is_sensitive(),
+        "tabs move between windows"
+    );
+    assert!(menu.row("Move tab to window…").is_sensitive());
     menu.row("Duplicate tab").emit_activate();
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));

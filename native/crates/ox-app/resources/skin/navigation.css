@@ -48,6 +48,11 @@
 .address button.crumb:hover { background-color: @ox_hover; border-color: @ox_border; }
 .address button.crumb:focus-visible { background-color: @ox_hover; border-color: @ox_focus_outer; outline: none; }
 /* C12: the web's dividers were the muted colour at 70% opacity. */
+/* The crumb whose folder a drop would go into (DND-011). */
+.address button.crumb.file-drop-active {
+  background-color: @ox_selected;
+  border-color: @ox_accent;
+}
 .address .crumb-divider { color: @ox_text_tertiary; padding: 0 1px; }
 .address button.address-chevron { min-width: 22px; min-height: 24px; }
 .address entry {

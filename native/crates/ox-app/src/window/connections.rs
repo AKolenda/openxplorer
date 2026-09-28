@@ -44,6 +44,8 @@ impl BrowserWindow {
         self.connect_filter();
         self.connect_address_entry();
         self.connect_view_activation();
+        self.connect_drag_and_drop();
+        self.connect_tab_drag_and_drop();
         self.follow_skin();
         gestures::connect_history_buttons(
             self,

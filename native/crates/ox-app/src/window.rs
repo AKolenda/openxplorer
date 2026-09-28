@@ -21,8 +21,9 @@
 //! ([`mounting`]), the skin ([`appearance`]), activation, actions, input
 //! ([`type_to_select`]), the file operations and their [`dialog`]s
 //! ([`file_ops`]), dragging and dropping files ([`file_drag`],
-//! [`file_drop`]), the context menus ([`context_menu`], [`tab_menu`]), and
-//! what the window connects and lets go of ([`connections`]).
+//! [`file_drop`]), moving tabs ([`tab_moves`]), the context menus
+//! ([`context_menu`], [`tab_menu`]), and what the window connects and lets
+//! go of ([`connections`]).
 //! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
 //! [`search_box::SearchBox::connect_query_changed`]), so the controller
@@ -73,6 +74,7 @@ mod sidebar;
 mod status_bar;
 mod tab_layout;
 mod tab_menu;
+mod tab_moves;
 mod tab_strip;
 mod title_bar;
 mod toast;
@@ -124,13 +126,18 @@ mod imp {
     use super::command_bar::CommandBar;
     use super::connections::ExternalHandlers;
     use super::details_pane::DetailsPane;
+    use super::file_drag::OutgoingDrag;
+    use super::file_drop::{FirstOffer, PendingDrop, ProgramChecks};
     use super::file_ops::FileOperations;
     use super::folder_pane::FolderPane;
+    use super::menu_popover::MenuPopover;
     use super::search_box::SearchBox;
     use super::session::Session;
+    use super::session::TabId;
     use super::settings_tab::SettingsTabState;
     use super::sidebar::Sidebar;
     use super::status_bar::StatusBar;
+    use super::tab_moves::OutgoingTabDrag;
     use super::tab_strip::TabStrip;
     use super::toast::Toast;
     use super::transfer_panel::TransferPanel;
@@ -229,6 +236,25 @@ mod imp {
         /// The running file operation, Trash support and the file
         /// clipboard.
         pub(super) file_operations: RefCell<FileOperations>,
+        /// The file drag this window started, while it lasts.
+        pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
+        /// Until when clicks that open items are ignored, around a drag.
+        pub(super) item_clicks_resume_at: Cell<Option<std::time::Instant>>,
+        /// Which files under a drag are programs (DND-026).
+        pub(super) program_checks: RefCell<ProgramChecks>,
+        /// Where the last drop happened, in the folder pane's
+        /// coordinates, for the drop menu.
+        pub(super) drop_point: Cell<(f64, f64)>,
+        /// The drop that waits for the drop menu's answer.
+        pub(super) pending_drop: RefCell<Option<PendingDrop>>,
+        /// What the drag over the window offered when it arrived.
+        pub(super) first_offer: RefCell<Option<FirstOffer>>,
+        /// The drop menu, built when first needed.
+        pub(super) drop_menu: OnceCell<MenuPopover>,
+        /// The tab a file drag hovers over, and the timer that shows it.
+        pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
+        /// The tab drag this window started, while it lasts.
+        pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
     }
 
     #[glib::object_subclass]

@@ -11,8 +11,9 @@
 //!
 //! [`Sidebar`] is a `GtkBox` subclass that keeps the entries its rows show,
 //! so the list's header function and middle-click handler read them
-//! through the pane itself.
+//! through the pane itself. Where a drop on it goes is [`drop_spots`]'s.
 
+mod drop_spots;
 mod entries;
 mod menu;
 mod row;
@@ -28,6 +29,7 @@ use super::menu_popover::MenuPopover;
 use super::window_action::WindowAction;
 use super::{gestures, preferences, unported};
 
+pub(super) use drop_spots::SidebarDropSpot;
 pub(super) use entries::sidebar_entries;
 use entries::{RowTarget, Section, SidebarEntry};
 
@@ -241,7 +243,7 @@ impl Sidebar {
     }
 
     /// The location of the row at `y` in the list, if it opens one.
-    fn location_at(&self, y: f64) -> Option<String> {
+    pub(super) fn location_at(&self, y: f64) -> Option<String> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let row = self.list().row_at_y(y as i32)?;
         let index = usize::try_from(row.index()).ok()?;

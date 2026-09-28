@@ -280,6 +280,18 @@ impl TestWindow {
             .collect()
     }
 
+    /// The position of the item called `name` in the view.
+    ///
+    /// # Panics
+    ///
+    /// When no item of that name is listed.
+    pub(crate) fn position_of(&self, name: &str) -> u32 {
+        let model = self.window.folder_model();
+        (0..model.n_items())
+            .find(|position| model.name_at(*position).as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("{name} is listed"))
+    }
+
     /// The names of the selected items, in display order.
     pub(crate) fn selected_names(&self) -> Vec<String> {
         let items = self.window.folder_model().selected_items();
@@ -314,6 +326,49 @@ impl TestWindow {
 impl Drop for TestWindow {
     fn drop(&mut self) {
         self.window.close();
+        settle();
+    }
+}
+
+/// The browser windows open now other than `known`.
+pub(crate) fn windows_besides(known: &[&BrowserWindow]) -> Vec<BrowserWindow> {
+    let windows = application().windows();
+    windows
+        .into_iter()
+        .filter_map(|window| window.downcast::<BrowserWindow>().ok())
+        .filter(|window| !known.contains(&window))
+        .collect()
+}
+
+/// A window the app opened by itself during a test, such as a torn-out
+/// tab's, closed when dropped even after a failed assertion.
+#[derive(Debug)]
+pub(crate) struct OpenedWindows(Vec<BrowserWindow>);
+
+impl OpenedWindows {
+    /// The one window opened besides `known`, once there is one.
+    ///
+    /// # Panics
+    ///
+    /// When none opens within [`WAIT_LIMIT`], or more than one does.
+    pub(crate) fn only(known: &[&BrowserWindow]) -> Self {
+        wait_until("a new window", || !windows_besides(known).is_empty());
+        let opened = windows_besides(known);
+        assert_eq!(opened.len(), 1, "exactly one window opens");
+        OpenedWindows(opened)
+    }
+
+    /// The window that opened.
+    pub(crate) fn window(&self) -> &BrowserWindow {
+        &self.0[0]
+    }
+}
+
+impl Drop for OpenedWindows {
+    fn drop(&mut self) {
+        for window in &self.0 {
+            window.close();
+        }
         settle();
     }
 }

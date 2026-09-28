@@ -226,7 +226,7 @@ mod tests {
         let group = SettingsGroup::pending("Advanced", PENDING);
         let (row, _) = row_with_a_button();
         group.add_row(&row);
-        let other = Availability::Unported(Milestone::DragAndDrop);
+        let other = Availability::Unported(Milestone::Distribution);
 
         row.set_availability(other);
 
