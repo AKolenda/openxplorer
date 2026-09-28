@@ -70,17 +70,17 @@ pub(crate) enum SnapshotError {
     Write {
         /// The file that could not be written.
         path: PathBuf,
-        /// Why.
+        /// GDK's reason for refusing the write.
         source: glib::BoolError,
     },
 }
 
-/// A window size in pixels.
+/// The size of a window's title bar and contents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct WindowSize {
-    /// The width.
+    /// Width in logical pixels, as `gtk::Window::set_default_size` takes it.
     pub width: i32,
-    /// The height.
+    /// Height in logical pixels.
     pub height: i32,
 }
 
@@ -190,9 +190,9 @@ pub(crate) fn save_when_listed(
         if let Some(size) = size {
             fit_content(window.upcast_ref(), size);
         }
-        let is_listed = window.is_listed();
-        milestones.note_frame(is_listed);
-        let readiness = timing.readiness(is_listed);
+        let listing = Listing::of(window);
+        milestones.note_frame(listing);
+        let readiness = timing.readiness(listing);
         if readiness == Readiness::Waiting {
             return glib::ControlFlow::Continue;
         }
@@ -205,6 +205,26 @@ pub(crate) fn save_when_listed(
         }
         glib::ControlFlow::Break
     });
+}
+
+/// Where the window's first listing is on a frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Listing {
+    /// Still running, or not started yet.
+    Running,
+    /// Finished, so this frame draws it.
+    Drawn,
+}
+
+impl Listing {
+    /// Where the listing of `window`'s active tab is now.
+    fn of(window: &BrowserWindow) -> Self {
+        if window.is_listed() {
+            Listing::Drawn
+        } else {
+            Listing::Running
+        }
+    }
 }
 
 /// Whether the window can be saved on this frame.
@@ -236,10 +256,10 @@ impl SaveTiming {
         }
     }
 
-    /// The readiness on a frame where the window `is_listed` or not.
-    fn readiness(&self, is_listed: bool) -> Readiness {
+    /// The readiness on a frame that shows `listing`.
+    fn readiness(&self, listing: Listing) -> Readiness {
         let timed_out = self.started.elapsed() > LISTING_PATIENCE;
-        if !is_listed && !timed_out {
+        if listing == Listing::Running && !timed_out {
             return Readiness::Waiting;
         }
         let frames = self.frames_since_listed.get() + 1;
@@ -264,14 +284,13 @@ struct Milestones {
 }
 
 impl Milestones {
-    /// Notes that a frame is about to be drawn, showing a finished listing
-    /// when `is_listed`.
-    fn note_frame(&self, is_listed: bool) {
+    /// Notes that a frame showing `listing` is about to be drawn.
+    fn note_frame(&self, listing: Listing) {
         let now = glib::monotonic_time();
         if self.first_frame.get().is_none() {
             self.first_frame.set(Some(now));
         }
-        if is_listed && self.first_listing.get().is_none() {
+        if listing == Listing::Drawn && self.first_listing.get().is_none() {
             self.first_listing.set(Some(now));
         }
     }
@@ -300,9 +319,10 @@ fn fit_content(window: &gtk::Window, size: WindowSize) {
     };
     let frame_width = pixels(outer.width() - content.width());
     let frame_height = pixels(outer.height() - content.height());
-    let wanted = (size.width + frame_width, size.height + frame_height);
-    if window.default_size() != wanted {
-        window.set_default_size(wanted.0, wanted.1);
+    let width = size.width + frame_width;
+    let height = size.height + frame_height;
+    if window.default_size() != (width, height) {
+        window.set_default_size(width, height);
     }
 }
 
@@ -322,24 +342,40 @@ fn pixels(measure: f32) -> i32 {
 /// [`SnapshotError::NotDrawn`] before the window is shown, and
 /// [`SnapshotError::Write`] when the file cannot be written.
 pub(crate) fn save_png(window: &gtk::Window, path: &Path) -> Result<(), SnapshotError> {
-    let renderer = window.renderer().ok_or(SnapshotError::NotDrawn)?;
-    let paintable = gtk::WidgetPaintable::new(Some(window));
+    let content = content_bounds(window).ok_or(SnapshotError::NotDrawn)?;
+    render_png(window, Some(content), path)
+}
+
+/// Saves what the surface `native` (a window or a popover) draws now as a
+/// PNG at `path`, cropped to `crop` in logical pixels from the surface's
+/// outer edge, or whole.
+///
+/// # Errors
+///
+/// [`SnapshotError::NotDrawn`] before the surface is shown, and
+/// [`SnapshotError::Write`] when the file cannot be written.
+pub(crate) fn render_png(
+    native: &impl IsA<gtk::Native>,
+    crop: Option<graphene::Rect>,
+    path: &Path,
+) -> Result<(), SnapshotError> {
+    let native = native.upcast_ref::<gtk::Native>();
+    let renderer = native.renderer().ok_or(SnapshotError::NotDrawn)?;
+    let paintable = gtk::WidgetPaintable::new(Some(native));
     let snapshot = gtk::Snapshot::new();
-    // One picture pixel per device pixel, as the screen shows the window
+    // One picture pixel per device pixel, as the screen shows the surface
     // (two per logical pixel with GDK_SCALE=2). The paintable is drawn at
     // its own size: any other size scales the picture, which blurs
     // one-pixel lines.
     #[expect(clippy::cast_precision_loss, reason = "scale factors are small integers")]
-    let scale = window.scale_factor() as f32;
+    let scale = native.scale_factor() as f32;
     snapshot.scale(scale, scale);
-    let bounds = content_bounds(window)
-        .ok_or(SnapshotError::NotDrawn)?
-        .scale(scale, scale);
     let width = f64::from(paintable.intrinsic_width());
     let height = f64::from(paintable.intrinsic_height());
     paintable.snapshot(&snapshot, width, height);
     let node = snapshot.to_node().ok_or(SnapshotError::NotDrawn)?;
-    let texture = renderer.render_texture(&node, Some(&bounds));
+    let device_crop = crop.map(|area| area.scale(scale, scale));
+    let texture = renderer.render_texture(&node, device_crop.as_ref());
     texture.save_to_png(path).map_err(|source| SnapshotError::Write {
         path: path.to_owned(),
         source,
@@ -417,20 +453,20 @@ mod tests {
     #[test]
     fn the_window_is_saved_once_the_listing_has_settled() {
         let timing = SaveTiming::starting_now();
-        assert_eq!(timing.readiness(false), Readiness::Waiting);
+        assert_eq!(timing.readiness(Listing::Running), Readiness::Waiting);
         for _ in 1..SETTLE_FRAMES {
-            assert_eq!(timing.readiness(true), Readiness::Waiting);
+            assert_eq!(timing.readiness(Listing::Drawn), Readiness::Waiting);
         }
-        assert_eq!(timing.readiness(true), Readiness::Settled);
+        assert_eq!(timing.readiness(Listing::Drawn), Readiness::Settled);
     }
 
     #[test]
     fn the_start_up_milestones_read_never_until_reached() {
         let milestones = Milestones::default();
         assert!(milestones.summary().contains("first frame at never us"));
-        milestones.note_frame(false);
+        milestones.note_frame(Listing::Running);
         let first_frame = milestones.first_frame.get().expect("a frame was noted");
-        milestones.note_frame(false);
+        milestones.note_frame(Listing::Running);
         assert_eq!(
             milestones.first_frame.get(),
             Some(first_frame),
@@ -440,7 +476,7 @@ mod tests {
             .summary()
             .contains(&format!("first frame at {first_frame} us")));
         assert!(milestones.summary().contains("first listing at never us"));
-        milestones.note_frame(true);
+        milestones.note_frame(Listing::Drawn);
         assert!(
             milestones.first_listing.get().is_some(),
             "a listed frame is noted"

@@ -29,6 +29,9 @@ const WAIT_LIMIT: Duration = Duration::from_secs(8);
 /// How often a waiting test checks its condition again.
 const POLL_INTERVAL: Duration = Duration::from_millis(5);
 
+/// Frames a capture waits for, so the layout has settled.
+const CAPTURE_SETTLE_FRAMES: u32 = 3;
+
 /// The standard fixture's visible items, as the details view sorts them:
 /// folders first, then names in natural order.
 pub(crate) const STANDARD_NAMES: [&str; 4] = ["Documents", "Notes 2.txt", "Notes 10.txt", "Résumé.txt"];
@@ -334,7 +337,7 @@ pub(crate) fn capture(window: &BrowserWindow, filename: &str) {
     let Some(directory) = capture_directory() else {
         return;
     };
-    wait_for_frames(window, 3);
+    wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
     let path = directory.join(filename);
     // A window that was just resized may not be drawable for a frame or two.
     wait_until("the window to be saved", || {
@@ -349,18 +352,9 @@ pub(crate) fn capture_popover(window: &BrowserWindow, popover: &gtk::Popover, fi
     let Some(directory) = capture_directory() else {
         return;
     };
-    wait_for_frames(window, 3);
-    let renderer = popover.renderer().expect("an open popover has a renderer");
-    let paintable = gtk::WidgetPaintable::new(Some(popover));
-    let snapshot = gtk::Snapshot::new();
-    let width = f64::from(paintable.intrinsic_width());
-    let height = f64::from(paintable.intrinsic_height());
-    paintable.snapshot(&snapshot, width, height);
-    let node = snapshot.to_node().expect("an open popover draws something");
-    renderer
-        .render_texture(&node, None)
-        .save_to_png(directory.join(filename))
-        .expect("the capture directory is writable");
+    wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
+    crate::snapshot::render_png(popover, None, &directory.join(filename))
+        .expect("an open popover is drawn and the capture directory is writable");
 }
 
 /// Waits until `window` has drawn `count` frames, so a capture shows the
