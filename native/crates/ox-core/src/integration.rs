@@ -59,7 +59,7 @@ mod brave;
 mod default_apps;
 mod file_manager_bus;
 mod file_manager_request;
-mod host_command;
+pub(crate) mod host_command;
 mod mime_type;
 mod opening;
 mod private_file;

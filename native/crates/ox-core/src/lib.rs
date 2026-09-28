@@ -16,6 +16,7 @@
 //! | [`network`] | SMB sign-in, credentials, mounts, sign-out and discovery | `session_credentials.py`, `auth_bridge.py`, `mount_support.py`, `winspace.py` |
 //! | [`clipboard`] | File clipboard formats shared with GNOME and KDE | `file_clipboard.py` |
 //! | [`format`](mod@format) | Size and date text | `ui/app.js` |
+//! | [`folder_locations`] | Moving a standard folder safely | `folder_locations.py` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
 //! | [`search`] | The metadata-only filename search cache and its index service | `search_index.py`, `index_service.py`, `local_watch.py` |
@@ -30,6 +31,7 @@
 pub mod archive;
 pub mod clipboard;
 pub mod entry;
+pub mod folder_locations;
 pub mod format;
 pub mod gio_node;
 pub mod integration;
