@@ -17,6 +17,7 @@
 //! | [`format`](mod@format) | Size and date text | `ui/app.js` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
+//! | [`ops`] | File operations as the interface starts them: New, Rename, paste conflicts, the Delete plan, copy and move, Duplicate, the Recycle Bin, Undo and tab moves | `winspace.py`, `file_services.py`, `gio_backend.py`, `tab_transfers.py`, `ui/app.js` |
 
 pub mod clipboard;
 pub mod entry;
