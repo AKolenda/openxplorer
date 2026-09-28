@@ -462,6 +462,10 @@ mod tests {
             let pattern = time_pattern_from_sample(case.sample, case.day_period, "UTC");
             assert_eq!(pattern.as_deref(), Some(case.pattern), "{}", case.source);
         }
+    }
+
+    #[test]
+    fn incomplete_or_unrecognised_time_samples_fall_back() {
         assert_eq!(time_pattern_from_sample("PM", "PM", "UTC"), None);
         assert_eq!(time_pattern_from_sample("13:44:55:13", "", "UTC"), None);
         assert_eq!(time_pattern_from_sample("13 Uhr", "", "UTC"), None);
@@ -480,6 +484,8 @@ mod tests {
     }
 
     /// The test process never calls `setlocale`, so it runs in the C locale.
+    ///
+    /// parity: LOOK-026
     #[test]
     fn the_c_locale_gives_the_us_order() {
         let patterns = LocalePatterns::from_current_locale();

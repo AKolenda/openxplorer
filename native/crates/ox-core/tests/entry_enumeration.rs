@@ -1,115 +1,130 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Real GIO enumeration against disposable local folders, without a GTK display.
+//! Real GIO listings of disposable local folders, awaited on a plain
+//! `glib::MainContext` without GTK or a display.
+//!
+//! Complements the hand-filled `GFileInfo` tests in `ox-core/src/entry`,
+//! which port `desktop/tests/test_gio_serialization.py`, with what the
+//! local GIO backend actually reports.
+
+use std::fs;
+use std::path::Path;
 
 use gio::prelude::*;
-use ox_core::entry::{enumerate, enumerate_blocking, Entry, EnumerateError};
-use std::fs;
-use std::sync::{Arc, Mutex};
+use ox_core::entry::{enumerate_folder, Entry, EntryError};
+use tempfile::TempDir;
 
-#[test]
-fn listing_batches_entries_and_preserves_metadata() {
+/// A temporary folder holding `files`, each written with `contents`.
+fn folder_with_files(files: &[(&str, &[u8])]) -> TempDir {
     let folder = tempfile::tempdir().expect("temporary folder");
-    fs::write(folder.path().join("Plan.txt"), b"draft").expect("fixture file");
-    fs::write(folder.path().join(".hidden"), b"secret").expect("hidden fixture");
-    fs::create_dir(folder.path().join("Projects")).expect("fixture directory");
-    let uri = gio::File::for_path(folder.path()).uri();
-    let mut batches = Vec::new();
-    let summary =
-        enumerate_blocking(&uri, false, None, 1, &mut |batch| batches.push(batch)).expect("listing");
-    assert_eq!(summary.count, 2);
-    assert_eq!(batches.len(), 2);
-    assert!(batches.iter().all(|batch| batch.len() == 1));
-    let entries: Vec<_> = batches.into_iter().flatten().collect();
-    let file = entries
+    for (name, contents) in files {
+        fs::write(folder.path().join(name), contents).expect("fixture file");
+    }
+    folder
+}
+
+/// Lists `folder` to the end and returns every row delivered.
+fn list(folder: &Path) -> Result<Vec<Entry>, EntryError> {
+    let uri = gio::File::for_path(folder).uri();
+    let mut entries = Vec::new();
+    let listing = enumerate_folder(&uri, |batch| entries.extend(batch));
+    glib::MainContext::new().block_on(listing)?;
+    Ok(entries)
+}
+
+/// The row named `name`; the test fails when there is none.
+fn find<'a>(entries: &'a [Entry], name: &str) -> &'a Entry {
+    entries
         .iter()
-        .find(|entry| entry.name == "Plan.txt")
-        .expect("file row");
+        .find(|entry| entry.name == name)
+        .unwrap_or_else(|| panic!("no row named {name}"))
+}
+
+/// parity: VIEW-002
+#[test]
+fn listing_preserves_file_and_folder_metadata() {
+    let folder = folder_with_files(&[("Plan.txt", b"draft")]);
+    fs::create_dir(folder.path().join("Projects")).expect("fixture directory");
+
+    let entries = list(folder.path()).expect("listing");
+
+    assert_eq!(entries.len(), 2);
+    let file = find(&entries, "Plan.txt");
     assert_eq!(file.size, Some(5));
     assert!(!file.is_dir);
     assert!(file.can_operate);
-    let directory = entries
-        .iter()
-        .find(|entry| entry.name == "Projects")
-        .expect("folder row");
+    assert!(
+        file.modified.is_some_and(|seconds| seconds > 0),
+        "{:?}",
+        file.modified
+    );
+    assert_eq!(file.content_type.as_deref(), Some("text/plain"));
+    let directory = find(&entries, "Projects");
     assert!(directory.is_dir);
     assert_eq!(directory.size, None);
     assert_eq!(directory.type_label, "File folder");
 }
 
+/// parity: VIEW-024
 #[test]
-fn hidden_toggle_changes_the_listing_and_empty_folders_finish() {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    let uri = gio::File::for_path(folder.path()).uri();
-    let mut entries = Vec::new();
-    let summary =
-        enumerate_blocking(&uri, false, None, 0, &mut |batch| entries.extend(batch)).expect("empty listing");
-    assert_eq!(summary.count, 0);
-    assert!(entries.is_empty());
-    fs::write(folder.path().join(".hidden"), b"x").expect("fixture");
-    let summary =
-        enumerate_blocking(&uri, true, None, 0, &mut |batch| entries.extend(batch)).expect("hidden listing");
-    assert_eq!(summary.count, 1);
-    assert!(entries[0].hidden);
+fn hidden_items_are_listed_and_flagged() {
+    let folder = folder_with_files(&[("Plan.txt", b"draft"), (".secret", b"x")]);
+
+    let entries = list(folder.path()).expect("listing");
+
+    assert!(find(&entries, ".secret").is_hidden);
+    assert!(!find(&entries, "Plan.txt").is_hidden);
+}
+
+/// parity: VIEW-024
+#[test]
+fn names_in_a_hidden_list_are_flagged_hidden() {
+    let folder = folder_with_files(&[
+        ("Notes.txt", b"x"),
+        ("Plan.txt", b"x"),
+        (".hidden", b"Notes.txt\n"),
+    ]);
+
+    let entries = list(folder.path()).expect("listing");
+
+    assert!(find(&entries, "Notes.txt").is_hidden);
+    assert!(!find(&entries, "Plan.txt").is_hidden);
 }
 
 #[test]
-fn cancelling_after_a_batch_stops_delivery() {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    for name in ["one", "two", "three"] {
-        fs::write(folder.path().join(name), b"x").expect("fixture");
-    }
-    let uri = gio::File::for_path(folder.path()).uri();
-    let cancel = gio::Cancellable::new();
-    let mut delivered = Vec::new();
-    let result = enumerate_blocking(&uri, true, Some(&cancel), 1, &mut |batch| {
-        delivered.extend(batch);
-        cancel.cancel();
-    });
-    assert_eq!(result, Err(EnumerateError::Cancelled));
-    assert_eq!(delivered.len(), 1);
+fn an_empty_folder_finishes_without_rows() {
+    let folder = folder_with_files(&[]);
+    assert_eq!(list(folder.path()), Ok(Vec::new()));
 }
 
-#[test]
-fn cancelled_before_start_delivers_no_rows() {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    let cancel = gio::Cancellable::new();
-    cancel.cancel();
-    let mut delivered = Vec::<Entry>::new();
-    let uri = gio::File::for_path(folder.path()).uri();
-    let result = enumerate_blocking(&uri, true, Some(&cancel), 128, &mut |batch| {
-        delivered.extend(batch)
-    });
-    assert_eq!(result, Err(EnumerateError::Cancelled));
-    assert!(delivered.is_empty());
-}
-
-#[test]
-fn worker_listing_completes_without_a_gtk_main_loop() {
-    let folder = tempfile::tempdir().expect("temporary folder");
-    fs::write(folder.path().join("Plan.txt"), b"draft").expect("fixture");
-    let uri = gio::File::for_path(folder.path()).uri().to_string();
-    let entries = Arc::new(Mutex::new(Vec::new()));
-    let received = entries.clone();
-    let task = enumerate(&uri, true, &gio::Cancellable::new(), 128, move |batch| {
-        received.lock().expect("test callback lock").extend(batch);
-    });
-    assert_eq!(task.wait().expect("worker result").count, 1);
-    assert_eq!(entries.lock().expect("test lock")[0].name, "Plan.txt");
-}
-
+/// parity: VIEW-002, NAV-040
 #[test]
 fn symlink_to_a_folder_is_browsable_without_recursing_into_it() {
-    let folder = tempfile::tempdir().expect("temporary folder");
+    let folder = folder_with_files(&[]);
     fs::create_dir(folder.path().join("Projects")).expect("fixture directory");
     std::os::unix::fs::symlink("Projects", folder.path().join("Shortcut")).expect("symlink");
-    let uri = gio::File::for_path(folder.path()).uri();
-    let mut entries = Vec::new();
-    enumerate_blocking(&uri, true, None, 128, &mut |batch| entries.extend(batch)).expect("listing");
+
+    let entries = list(folder.path()).expect("listing");
+
     assert_eq!(entries.len(), 2);
-    let link = entries
-        .iter()
-        .find(|entry| entry.name == "Shortcut")
-        .expect("link");
-    assert!(link.symlink);
+    let link = find(&entries, "Shortcut");
+    assert!(link.is_symlink);
     assert!(link.is_dir);
+}
+
+/// parity: OPS-037
+#[test]
+fn a_missing_folder_reports_not_found() {
+    let folder = folder_with_files(&[]);
+    let error = list(&folder.path().join("gone")).expect_err("nothing to list");
+    assert_eq!(error.code(), "not-found");
+    assert!(!error.needs_mount());
+}
+
+/// parity: OPS-037
+#[test]
+fn listing_a_file_reports_not_directory() {
+    let folder = folder_with_files(&[("Plan.txt", b"draft")]);
+    let file = folder.path().join("Plan.txt");
+    let error = list(&file).expect_err("a file is not a folder");
+    assert_eq!(error.code(), "not-directory");
 }

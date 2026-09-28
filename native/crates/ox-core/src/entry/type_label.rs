@@ -1,103 +1,81 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Text for the Type column.
 //!
-//! `entry_from_info` in `desktop/gio_backend.py` uses the classifier's
-//! folder wording ("File folder", "Network share", "Network location") for
-//! navigable items and `Gio.content_type_get_description` for everything
-//! else, falling back to "File". GIO's own wording already matches Explorer
-//! for most types ("PDF document", "PNG image", "Zip archive", "MPEG-4
-//! video", "Markdown document"). A few differ from the names the interface
-//! uses in its sample data (`desktop/ui/app.js`, the preview listing):
-//! shared-mime-info and LibreOffice register "Plain text document" and
-//! "Microsoft Word Document", where OpenXplorer shows "Text document" and
-//! "Word document". Those are overridden here; every other type keeps its
-//! GIO description.
+//! Ports the type description of `entry_from_info` in
+//! `desktop/gio_backend.py`: the classifier's folder wording ("File
+//! folder", "Network share", "Network location") for navigable items,
+//! otherwise `Gio.content_type_get_description`, otherwise "File".
+//!
+//! GIO's descriptions come from shared-mime-info. They follow the user's
+//! language and already use Explorer's wording for Office documents
+//! ("Microsoft Word Document", "Microsoft Excel Worksheet"), so they are
+//! shown unchanged, as in the Python app.
 
-/// Content types whose GIO description is replaced, with the replacement.
-const OVERRIDES: [(&str, &str); 7] = [
-    ("text/plain", "Text document"),
-    ("application/msword", "Word document"),
-    (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Word document",
-    ),
-    ("application/vnd.ms-excel", "Excel worksheet"),
-    (
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Excel worksheet",
-    ),
-    ("application/vnd.ms-powerpoint", "PowerPoint presentation"),
-    (
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "PowerPoint presentation",
-    ),
-];
+use super::classify::FolderType;
 
-/// Label for an item whose type is unknown.
-pub const GENERIC_FILE: &str = "File";
+/// Label for an item whose content type is unknown or has no description.
+const UNKNOWN_TYPE: &str = "File";
 
-/// The OpenXplorer wording for `content_type`, when it differs from GIO's.
-pub fn override_for(content_type: &str) -> Option<&'static str> {
-    OVERRIDES
-        .iter()
-        .find(|(mime, _)| *mime == content_type)
-        .map(|(_, label)| *label)
-}
-
-/// Type column text: the classifier's folder wording, then an override,
-/// then GIO's description of the content type, then "File".
-pub fn type_label(folder_type: Option<&str>, content_type: Option<&str>) -> String {
+/// Type column text: the label of `folder_type` for navigable items,
+/// otherwise GIO's description of `content_type`, otherwise "File".
+pub(super) fn type_label(folder_type: Option<FolderType>, content_type: Option<&str>) -> String {
     if let Some(folder_type) = folder_type {
-        return folder_type.to_string();
+        return folder_type.label().to_owned();
     }
-    let Some(content_type) = content_type.filter(|c| !c.is_empty()) else {
-        return GENERIC_FILE.to_string();
+    let Some(content_type) = content_type.filter(|mime| !mime.is_empty()) else {
+        return UNKNOWN_TYPE.to_owned();
     };
-    if let Some(label) = override_for(content_type) {
-        return label.to_string();
-    }
     let description = gio::content_type_get_description(content_type);
     if description.is_empty() {
-        GENERIC_FILE.to_string()
+        UNKNOWN_TYPE.to_owned()
     } else {
-        description.to_string()
+        description.into()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entry::test_support::FOLDER_MIME_TYPE;
 
+    /// parity: VIEW-002
     #[test]
     fn folder_wording_wins() {
         assert_eq!(
-            type_label(Some("Network share"), Some("inode/directory")),
+            type_label(Some(FolderType::NetworkShare), Some(FOLDER_MIME_TYPE)),
             "Network share"
         );
-        assert_eq!(type_label(Some("File folder"), None), "File folder");
+        assert_eq!(type_label(Some(FolderType::FileFolder), None), "File folder");
     }
 
+    /// Regression: the port replaced GIO's localised descriptions of text and
+    /// Office files with English wording from the web interface's preview
+    /// data, so the column mixed languages and lost Explorer's wording.
+    ///
+    /// parity: VIEW-002
     #[test]
-    fn office_and_text_types_use_the_interface_wording() {
-        let docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-        let xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-        assert_eq!(type_label(None, Some(docx)), "Word document");
-        assert_eq!(type_label(None, Some("application/msword")), "Word document");
-        assert_eq!(type_label(None, Some(xlsx)), "Excel worksheet");
-        assert_eq!(type_label(None, Some("text/plain")), "Text document");
-    }
-
-    #[test]
-    fn other_types_keep_the_gio_description() {
-        for mime in [
+    fn file_types_show_the_gio_description_unchanged() {
+        let content_types = [
+            "text/plain",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "application/pdf",
             "image/png",
             "application/zip",
             "video/mp4",
             "text/markdown",
-        ] {
-            let expected = gio::content_type_get_description(mime).to_string();
-            assert_eq!(type_label(None, Some(mime)), expected, "{mime}");
+        ];
+        for content_type in content_types {
+            let description = gio::content_type_get_description(content_type);
+            assert_eq!(
+                type_label(None, Some(content_type)),
+                description.as_str(),
+                "{content_type}"
+            );
         }
     }
 

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Sidebar regression cases from `desktop/tests/test_v07.py`, `environment()`
-//! in `desktop/winspace.py`, and `read_user_dirs` in
-//! `desktop/folder_locations.py`, which runs on the same files as the Rust
-//! parser. Every file is inside a temporary directory.
+//! Sidebar regression cases: the `NetworkTests` of `desktop/tests/test_v07.py`,
+//! the Quick access rules of `environment` in `desktop/winspace.py`, and
+//! `read_user_dirs` in `desktop/folder_locations.py`, which runs on the same
+//! files as the Rust parser. Every file is inside a temporary directory.
 
 mod python_support;
 
@@ -26,11 +26,20 @@ fn bookmark(uri: &str, label: &str) -> Bookmark {
     }
 }
 
-/// A saved share that is not connected.
-fn saved(uri: &str, label: &str) -> SavedShare {
+/// A saved share that no current mount serves.
+fn saved_share(uri: &str, label: &str) -> SavedShare {
     SavedShare {
         bookmark: bookmark(uri, label),
-        connected: false,
+        is_connected: false,
+    }
+}
+
+/// An active GIO network mount.
+fn active_mount(uri: &str, label: &str) -> NetworkMount {
+    NetworkMount {
+        uri: uri.into(),
+        label: label.into(),
+        is_mounted: true,
     }
 }
 
@@ -41,15 +50,6 @@ fn known_folder_row(folder: KnownFolder, uri: &str) -> Place {
         label: folder.label().into(),
         known_folder: Some(folder),
         is_shared: false,
-    }
-}
-
-/// A mounted GIO network mount.
-fn mounted(uri: &str, label: &str) -> NetworkMount {
-    NetworkMount {
-        uri: uri.into(),
-        label: label.into(),
-        mounted: true,
     }
 }
 
@@ -70,14 +70,76 @@ fn quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order() {
         quick_order: vec!["smb://nas/work".into(), "file:///missing".into()],
         ..SettingsData::default()
     };
+
     let rows = compose_quick_access(&settings, &known, &[]);
+
     let labels: Vec<&str> = rows.iter().map(|row| row.label.as_str()).collect();
     assert_eq!(labels, ["Work", "Documents", "Other"]);
     assert!(rows[0].is_shared);
+    assert_eq!(rows[0].known_folder, None, "a pin is not a standard folder");
     assert_eq!(rows[1].known_folder, Some(KnownFolder::Documents));
+    assert_eq!(rows[1].glyph(), Some("documents"));
 }
 
-/// parity: NET-006
+/// A standard folder and the glyph the Python app draws for it.
+struct KnownFolderCase {
+    label: &'static str,
+    glyph: &'static str,
+    color: &'static str,
+}
+
+/// The standard folders in sidebar order.
+const KNOWN_FOLDER_CASES: [KnownFolderCase; 6] = [
+    KnownFolderCase {
+        label: "Desktop",
+        glyph: "desktop",
+        color: "#3b8ec7",
+    },
+    KnownFolderCase {
+        label: "Downloads",
+        glyph: "downloads",
+        color: "#138266",
+    },
+    KnownFolderCase {
+        label: "Documents",
+        glyph: "documents",
+        color: "#4a94d1",
+    },
+    KnownFolderCase {
+        label: "Pictures",
+        glyph: "pictures",
+        color: "#9a79cb",
+    },
+    KnownFolderCase {
+        label: "Music",
+        glyph: "music",
+        color: "#c66b9c",
+    },
+    KnownFolderCase {
+        label: "Videos",
+        glyph: "videos",
+        color: "#b48540",
+    },
+];
+
+/// parity: SIDE-005, LOOK-015
+#[test]
+fn known_folders_use_the_standard_glyphs_and_colours() {
+    let folders = FolderLocations::from_environment()
+        .read_paths()
+        .quick_access_places();
+
+    assert_eq!(folders.len(), KNOWN_FOLDER_CASES.len());
+    for (folder, case) in folders.iter().zip(KNOWN_FOLDER_CASES) {
+        assert_eq!(folder.label, case.label);
+        assert_eq!(folder.glyph(), Some(case.glyph), "{}", case.label);
+        assert_eq!(folder.glyph_color(), Some(case.color), "{}", case.label);
+        assert!(folder.known_folder.is_some(), "{}", case.label);
+        assert!(folder.uri.starts_with("file:///"), "{}", folder.uri);
+    }
+}
+
+/// parity: NET-006, LOOK-016
 #[test]
 fn mount_badges_respect_path_boundaries_and_escaping() {
     // Documents lives on the share mounted at "/mnt/Team (1)"; Downloads
@@ -96,7 +158,9 @@ fn mount_badges_respect_path_boundaries_and_escaping() {
 }
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_default_port_and_case`,
-/// `test_custom_port_distinct` and `test_host_aliases_not_merged`.
+/// `desktop/tests/test_v07.py::NetworkTests::test_custom_port_distinct` and
+/// `desktop/tests/test_v07.py::NetworkTests::test_host_aliases_not_merged`
+///
 /// parity: NET-018
 #[test]
 fn network_identity_preserves_custom_ports_and_host_aliases() {
@@ -116,38 +180,48 @@ fn network_identity_preserves_custom_ports_and_host_aliases() {
 }
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_saved_label_preserved_and_mount_deduplicated`
+///
 /// parity: NET-018
 #[test]
 fn saved_labels_win_and_connected_state_merges() {
-    let shares = [saved("smb://nas/Work", "My Work")];
-    let mounts = [mounted("smb://NAS:445/work/", "work")];
-    let rows = merge_network_locations(&shares, &mounts, &[], &[]);
+    let saved = [saved_share("smb://nas/Work", "My Work")];
+    let mounts = [active_mount("smb://NAS:445/work/", "work")];
+    let rows = merge_network_locations(&saved, &mounts, &[], &[]);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].uri, "smb://nas/Work");
     assert_eq!(rows[0].label, "My Work");
-    assert!(rows[0].saved && rows[0].connected);
+    assert!(rows[0].is_saved);
+    assert!(rows[0].is_connected);
 }
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_connected_unsaved_share`
+///
 /// parity: NET-018
 #[test]
-fn a_mounted_share_is_connected_but_not_saved() {
-    let rows = merge_network_locations(&[], &[mounted("smb://nas/work", "Work")], &[], &[]);
+fn a_mounted_share_is_listed_connected_but_not_saved() {
+    let mounts = [active_mount("smb://nas/work", "Work")];
+    let rows = merge_network_locations(&[], &mounts, &[], &[]);
     assert_eq!(rows.len(), 1);
-    assert!(rows[0].connected);
-    assert!(!rows[0].saved);
+    assert_eq!(rows[0].kind, NetworkKind::Share);
+    assert!(rows[0].is_connected);
+    assert!(!rows[0].is_saved);
 }
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_uri_not_label_is_unique_key`
+///
 /// parity: NET-018
 #[test]
-fn shares_with_the_same_label_on_different_hosts_stay_apart() {
-    let shares = [saved("smb://a/work", "Work"), saved("smb://b/work", "Work")];
-    assert_eq!(merge_network_locations(&shares, &[], &[], &[]).len(), 2);
+fn rows_are_told_apart_by_location_not_label() {
+    let saved = [
+        saved_share("smb://a/work", "Work"),
+        saved_share("smb://b/work", "Work"),
+    ];
+    assert_eq!(merge_network_locations(&saved, &[], &[], &[]).len(), 2);
 }
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_unsaved_host_session_entry`
-/// and `test_stable_cifs_mount`.
+/// and `desktop/tests/test_v07.py::NetworkTests::test_stable_cifs_mount`
+///
 /// parity: NET-006, NET-018
 #[test]
 fn visited_servers_and_stable_mounts_need_no_saved_bookmark() {
@@ -162,41 +236,43 @@ fn visited_servers_and_stable_mounts_need_no_saved_bookmark() {
         (rows[0].uri.as_str(), rows[0].label.as_str(), rows[0].kind),
         ("file:///mnt/Work", "Work", NetworkKind::Mount)
     );
-    assert!(rows[0].connected);
+    assert!(rows[0].is_connected);
     assert_eq!(
         (rows[1].label.as_str(), rows[1].kind),
         ("nas", NetworkKind::Server)
     );
-    assert!(!rows[1].connected);
-    assert!(rows.iter().all(|row| !row.saved));
+    assert!(!rows[1].is_connected);
+    assert!(rows.iter().all(|row| !row.is_saved));
 }
 
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_ignore_local_and_unmounted`
-/// and `test_invalid_saved_ignored`.
-/// parity: NET-018
+/// and `desktop/tests/test_v07.py::NetworkTests::test_invalid_saved_ignored`
+///
+/// parity: NET-018, SAFE-010
 #[test]
 fn malformed_and_non_network_contributors_are_ignored() {
-    let shares = [
-        saved("https://example.invalid", "Bad"),
+    let saved = [
+        saved_share("https://example.invalid", "Bad"),
         SavedShare {
-            connected: true,
-            ..saved("smb://user:secret@nas/share", "Bad")
+            is_connected: true,
+            ..saved_share("smb://user:secret@nas/share", "Bad")
         },
-        saved("", ""),
+        saved_share("", ""),
     ];
     let mounts = [
         NetworkMount {
-            mounted: false,
-            ..mounted("smb://nas/work", "")
+            uri: "smb://nas/work".into(),
+            label: String::new(),
+            is_mounted: false,
         },
-        mounted("file:///mnt/disk", ""),
+        active_mount("file:///mnt/disk", ""),
     ];
     let stable = [StableMount {
         path: "/mnt/disk".into(),
         label: String::new(),
         filesystem: "ext4".into(),
     }];
-    assert!(merge_network_locations(&shares, &mounts, &stable, &[]).is_empty());
+    assert!(merge_network_locations(&saved, &mounts, &stable, &[]).is_empty());
 }
 
 /// One `user-dirs.dirs` fixture.

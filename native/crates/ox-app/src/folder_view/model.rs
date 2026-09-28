@@ -95,7 +95,7 @@ impl FolderModel {
         let state = Rc::clone(&filter_state);
         let filter = gtk::CustomFilter::new(move |object| {
             let item = as_item(object);
-            state.borrow().accepts(item.lower_name(), item.entry().hidden)
+            state.borrow().accepts(item.lower_name(), item.entry().is_hidden)
         });
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);

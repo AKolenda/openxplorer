@@ -11,8 +11,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use super::quick_access::Place;
 use super::user_dirs::{self, UserDirs};
-use super::Place;
 use crate::location::file_uri;
 
 /// `GLib` log domain for problems with `user-dirs.dirs`.

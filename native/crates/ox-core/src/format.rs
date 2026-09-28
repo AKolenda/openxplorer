@@ -107,22 +107,25 @@ fn round_half_up(numerator: u128, denominator: u128) -> u128 {
 
 /// Local date for the Date modified column, for example `09/26/2026` in
 /// the US, `26.09.2026` in Germany or `2026年09月26日` in Japan; `—` when
-/// the time is unknown (zero) or out of range.
-pub fn date_text(unix_seconds: u64) -> String {
-    local_time(unix_seconds)
+/// the time is unknown (`None`) or out of range.
+pub fn date_text(unix_seconds: Option<u64>) -> String {
+    unix_seconds
+        .and_then(local_time)
         .and_then(|time| format_date(&time))
-        .unwrap_or_else(|| UNKNOWN_DATE.to_string())
+        .unwrap_or_else(|| UNKNOWN_DATE.to_owned())
 }
 
 /// Local date and time for the Properties dialog's Created, Modified and
 /// Accessed rows: the [`date_text`] date and the locale's clock time, for
 /// example `09/26/2026, 7:35:35 PM` in the US or `26.09.2026, 19:35:35` in
-/// Germany; `Not provided` when the time is unknown (zero) or out of range.
-/// See the module documentation for how this differs from the web UI.
-pub fn date_time_text(unix_seconds: u64) -> String {
-    local_time(unix_seconds)
+/// Germany; `Not provided` when the time is unknown (`None`) or out of
+/// range. See the module documentation for how this differs from the web
+/// UI.
+pub fn date_time_text(unix_seconds: Option<u64>) -> String {
+    unix_seconds
+        .and_then(local_time)
         .and_then(|time| format_date_time(&time))
-        .unwrap_or_else(|| UNKNOWN_TIMESTAMP.to_string())
+        .unwrap_or_else(|| UNKNOWN_TIMESTAMP.to_owned())
 }
 
 /// [`date_text`] for a time GIO already returned as a [`DateTime`], in the
@@ -152,12 +155,9 @@ fn format_date_time_with(time: &DateTime, patterns: &LocalePatterns) -> Option<S
     Some(format!("{date}, {clock}"))
 }
 
-/// The local time for a Unix timestamp; `None` for zero, which the file
-/// listing uses for "unknown", and for times `glib::DateTime` cannot represent.
+/// The local time for a Unix timestamp; `None` for times a [`DateTime`]
+/// cannot hold.
 fn local_time(unix_seconds: u64) -> Option<DateTime> {
-    if unix_seconds == 0 {
-        return None;
-    }
     let seconds = i64::try_from(unix_seconds).ok()?;
     DateTime::from_unix_local(seconds).ok()
 }
@@ -297,22 +297,24 @@ mod tests {
     }
 
     /// Ported from `desktop/ui/app.js::dateText` (`n ? … : '—'`) and
-    /// `timestamp` (`value ? … : 'Not provided'`).
+    /// `timestamp` (`value ? … : 'Not provided'`). The web interface got 0
+    /// for an unknown time; here it is `None`, and the entry module reads a
+    /// reported 0 as `None` too.
     ///
     /// parity: VIEW-001
     #[test]
     fn unknown_times_use_the_web_placeholders() {
-        assert_eq!(date_text(0), "—");
-        assert_eq!(date_time_text(0), "Not provided");
-        assert_eq!(date_text(u64::MAX), "—");
-        assert_eq!(date_time_text(u64::MAX), "Not provided");
+        assert_eq!(date_text(None), "—");
+        assert_eq!(date_time_text(None), "Not provided");
+        assert_eq!(date_text(Some(u64::MAX)), "—");
+        assert_eq!(date_time_text(Some(u64::MAX)), "Not provided");
     }
 
     /// Without `setlocale` the process uses the C locale, whose `%x` is
     /// `%m/%d/%y`: the result is the US order with a four-digit year, as
     /// `toLocaleDateString` gives for `en-US`.
     ///
-    /// parity: VIEW-001
+    /// parity: VIEW-001, LOOK-026
     #[test]
     fn dates_follow_the_c_locale_with_a_full_year() {
         let time = DateTime::from_utc(2026, 9, 6, 19, 5, 7.0).expect("valid date");
@@ -350,7 +352,7 @@ mod tests {
     /// parity: VIEW-001
     #[test]
     fn column_dates_have_a_four_digit_year_and_two_digit_fields() {
-        let text = date_text(SEPTEMBER_21_UNIX_SECONDS);
+        let text = date_text(Some(SEPTEMBER_21_UNIX_SECONDS));
         assert_eq!(text.len(), 10, "{text}");
         assert!(text.contains("2026"), "{text}");
     }
@@ -361,8 +363,8 @@ mod tests {
     /// parity: VIEW-001
     #[test]
     fn date_time_text_begins_with_the_column_date_text() {
-        let column_date = date_text(SEPTEMBER_21_UNIX_SECONDS);
-        let timestamp = date_time_text(SEPTEMBER_21_UNIX_SECONDS);
+        let column_date = date_text(Some(SEPTEMBER_21_UNIX_SECONDS));
+        let timestamp = date_time_text(Some(SEPTEMBER_21_UNIX_SECONDS));
         assert!(timestamp.starts_with(&column_date), "{timestamp}");
     }
 }
