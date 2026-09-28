@@ -106,6 +106,18 @@ impl StatusCard {
         card
     }
 
+    /// Says `title` as the card's state, such as whether `OpenXplorer` is
+    /// the default file explorer once that has been read.
+    pub(crate) fn set_title(&self, title: &str) {
+        self.imp().title_label.set_text(title);
+    }
+
+    /// The card's one-line state.
+    #[cfg(test)]
+    pub(crate) fn title(&self) -> String {
+        self.imp().title_label.text().into()
+    }
+
     /// Shows the card while nothing is typed or when its title, text or
     /// buttons match `query`, and says whether it matches a search.
     pub(crate) fn apply_query(&self, query: &SearchQuery) -> bool {

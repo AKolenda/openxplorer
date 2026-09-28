@@ -27,6 +27,9 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/settings-group.ui")]
     pub(crate) struct SettingsGroup {
+        /// The title, its buttons and the milestone line.
+        #[template_child]
+        pub(super) heading: TemplateChild<gtk::Box>,
         /// The group's name.
         #[template_child]
         pub(super) title_label: TemplateChild<gtk::Label>,
@@ -78,6 +81,7 @@ impl SettingsGroup {
         let title_label = &group.imp().title_label;
         title_label.set_text(title);
         title_label.set_visible(!title.is_empty());
+        group.show_heading_when_it_has_content();
         group
     }
 
@@ -91,7 +95,18 @@ impl SettingsGroup {
         let notice = availability.notice();
         imp.notice_label.set_text(notice.as_deref().unwrap_or_default());
         imp.notice_label.set_visible(notice.is_some());
+        group.show_heading_when_it_has_content();
         group
+    }
+
+    /// Shows the heading while it has a title, a button or a milestone
+    /// line; an empty heading would still take its margin.
+    fn show_heading_when_it_has_content(&self) {
+        let imp = self.imp();
+        let has_title = !imp.title_label.text().is_empty();
+        let has_actions = imp.actions.first_child().is_some();
+        let has_notice = imp.notice_label.is_visible();
+        imp.heading.set_visible(has_title || has_actions || has_notice);
     }
 
     /// Adds `row` at the end. A row pending the milestone the heading
@@ -126,6 +141,7 @@ impl SettingsGroup {
     /// Puts `action` at the right of the heading.
     pub(crate) fn add_heading_action(&self, action: &impl IsA<gtk::Widget>) {
         self.imp().actions.append(action);
+        self.show_heading_when_it_has_content();
     }
 
     /// The group's setting rows, in order.

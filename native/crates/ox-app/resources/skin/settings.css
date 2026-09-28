@@ -69,7 +69,9 @@ window.ox button.settings-back:hover { color: @ox_text; }
 .settings-content { padding: 36px 40px 40px 64px; }
 .settings .page-title { font-weight: 600; letter-spacing: -.3px; }
 .settings .page-lead { color: @ox_muted; margin: 4px 0 22px 0; }
-window.ox button.page-back { min-width: 32px; min-height: 32px; }
+window.ox button.page-back,
+window.ox button.page-chevron { min-width: 32px; min-height: 32px; }
+window.ox button.page-chevron image { color: @ox_muted; }
 .settings .settings-no-matches { color: @ox_muted; margin: 36px 64px; }
 
 /* ---- Groups and rows ---- */

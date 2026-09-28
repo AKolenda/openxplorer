@@ -81,6 +81,19 @@ pub(crate) fn page_button(label: &str) -> gtk::Button {
     button
 }
 
+/// A flat chevron at the end of a row that opens a page of its own, as the
+/// mockup's `.iconbtn`; screen readers and the tooltip call it `name`.
+pub(crate) fn chevron_button(name: &str) -> gtk::Button {
+    let button = gtk::Button::builder()
+        .child(&icons::image(Icon::ChevronRight16, CHEVRON_GLYPH))
+        .tooltip_text(name)
+        .valign(gtk::Align::Center)
+        .css_classes(["page-chevron"])
+        .build();
+    button.update_property(&[gtk::accessible::Property::Label(name)]);
+    button
+}
+
 /// An on/off switch, centred on its row. GTK draws on and off shapes in
 /// it with icons from the desktop theme, which the app does not use
 /// (`native/README.md`, Icons), so they stay hidden; which side the knob is

@@ -154,6 +154,21 @@ impl SettingRow {
         *self.imp().text.get().expect("SettingRow::new sets the text")
     }
 
+    /// Shows `description` under the title in place of the row's own, for
+    /// a line that states something read later, such as the app that opens
+    /// ZIP files. The search still finds the row by its own words.
+    pub(crate) fn set_description(&self, description: &str) {
+        let label = &self.imp().description_label;
+        label.set_text(description);
+        label.set_visible(!description.is_empty());
+    }
+
+    /// The line the row shows under its title.
+    #[cfg(test)]
+    pub(crate) fn shown_description(&self) -> String {
+        self.imp().description_label.text().into()
+    }
+
     /// Puts `control` after the row's other controls, named for screen
     /// readers as `name` says. On an unported row it is disabled at once,
     /// like the controls added before [`Self::set_availability`].

@@ -210,9 +210,8 @@ fn the_search_filters_rows_across_every_category() {
             typed: "brave",
             categories: &[Category::DefaultApps, Category::BraveAndDownloads],
             shown: &[
-                "Include Show in folder",
-                "Show in folder",
-                "Zorin + Brave setup and troubleshooting",
+                "Brave and other apps",
+                "Troubleshooting",
                 "Disable Show in folder",
             ],
         },
@@ -224,7 +223,7 @@ fn the_search_filters_rows_across_every_category() {
     }
     let count = &settings.page.imp().match_count;
     assert!(count.is_visible());
-    assert_eq!(count.text(), "5 matching settings");
+    assert_eq!(count.text(), "4 matching settings");
 }
 
 /// A search for what a setting shows, and the category, status card and
@@ -255,7 +254,7 @@ fn the_search_finds_what_buttons_options_and_headings_show() {
             typed: "make openxplorer default",
             category: Category::DefaultApps,
             shows_status_card: true,
-            shown: &["Include Show in folder", "Also open ZIP files in OpenXplorer"],
+            shown: &[],
         },
         ShownTextCase {
             typed: "refresh status",
@@ -388,42 +387,58 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
     );
 }
 
+/// A setting of the Python page, by the words that named it there, and
+/// the native row that offers it.
+struct PythonSetting {
+    python: &'static str,
+    row: &'static str,
+}
+
+const fn offered_by(python: &'static str, row: &'static str) -> PythonSetting {
+    PythonSetting { python, row }
+}
+
 /// "Every setting the current app offers stays available" (SET-019): each
 /// setting, action and piece of advice of `renderSettingsPage` and
-/// `appendV07Settings` has a row.
+/// `appendV07Settings` has a row, which a search for its Python wording
+/// finds. Some Python controls share a row now, such as the two ZIP
+/// controls that became the ZIP files switch.
 ///
 /// parity: SET-019
 #[gtk::test]
 fn every_setting_of_the_python_page_has_a_row() {
     let settings = SettingsTest::open();
     let python_settings = [
-        "Theme",
-        "Text size",
-        "Right-click menu",
-        "Sidebar and column widths",
-        "Folders to index",
-        "Watch folders for live changes",
-        "Network / fallback checks",
-        "Calculate folder sizes",
-        "Folders",
-        "SMB links",
-        "ZIP files",
-        "Include Show in folder",
-        "Also open ZIP files in OpenXplorer",
-        "Use OpenXplorer for ZIPs",
-        "Show in folder",
-        "Zorin + Brave setup and troubleshooting",
-        "Restore previous",
-        "Restore ZIP handler",
-        "Disable Show in folder",
-        "Open windows",
-        "New window",
-        "Move tabs between windows",
-        "Use Linux Downloads in Brave",
-        "OpenXplorer · License & source",
+        offered_by("Theme", "Theme"),
+        offered_by("Text size", "Text size"),
+        offered_by("Right-click menu", "Right-click menu"),
+        offered_by("Reset sidebar and column widths", "Sidebar and column widths"),
+        offered_by("Folders to index", "Folders to index"),
+        offered_by("Watch folders for live changes", "Watch folders for live changes"),
+        offered_by("Network / fallback checks", "Network / fallback checks"),
+        offered_by("Calculate folder sizes", "Calculate folder sizes"),
+        offered_by("Folders", "Folders"),
+        offered_by("SMB links", "SMB links"),
+        offered_by("ZIP files", "ZIP files"),
+        offered_by("Include Show in folder", "Brave and other apps"),
+        offered_by("Also open ZIP files in OpenXplorer", "ZIP files"),
+        offered_by("Use OpenXplorer for ZIPs", "ZIP files"),
+        offered_by("Test Show in folder", "Brave and other apps"),
+        offered_by("Enable Show in folder", "Brave and other apps"),
+        offered_by("Zorin + Brave setup and troubleshooting", "Troubleshooting"),
+        offered_by("Restore previous", "Restore previous"),
+        offered_by("Restore ZIP handler", "Restore ZIP handler"),
+        offered_by("Disable Show in folder", "Disable Show in folder"),
+        offered_by("Open windows", "Open windows"),
+        offered_by("New window", "New window"),
+        offered_by("Move tabs between windows", "Move tabs between windows"),
+        offered_by("Use Linux Downloads in Brave", "Use Linux Downloads in Brave"),
+        offered_by("OpenXplorer · License & source", "OpenXplorer · License & source"),
     ];
-    for title in python_settings {
-        settings.row(title);
+    for setting in python_settings {
+        let row = settings.row(setting.row);
+        settings.page.search(setting.python);
+        assert!(row.is_visible(), "{:?} finds {:?}", setting.python, setting.row);
     }
 }
 
@@ -643,7 +658,7 @@ fn escape_on_a_subpage_returns_to_its_category() {
 #[gtk::test]
 fn default_apps_reads_which_app_opens_each_route() {
     let settings = SettingsTest::open();
-    let values: Vec<gtk::Label> = ["Folders", "SMB links", "ZIP files"]
+    let values: Vec<gtk::Label> = ["Folders", "SMB links"]
         .into_iter()
         .map(|title| {
             let control = settings.row(title).controls().into_iter().next();
@@ -652,9 +667,22 @@ fn default_apps_reads_which_app_opens_each_route() {
                 .expect("the route shows its app")
         })
         .collect();
+    let zip_files = settings.row("ZIP files");
+    let section = settings.page.category_section(Category::DefaultApps);
+    let card = descendants::<StatusCard>(&section)
+        .into_iter()
+        .next()
+        .expect("Default apps has a status card");
     wait_until("GIO to answer", || {
-        values
+        let routes_read = values
             .iter()
-            .all(|value| value.text() != "Checking the current default…")
+            .all(|value| value.text() != "Checking the current default…");
+        let zip_read = zip_files.shown_description() != "Checking the current default…";
+        routes_read && zip_read
     });
+    assert!(
+        card.title().starts_with("OpenXplorer is"),
+        "the card states the result: {}",
+        card.title()
+    );
 }
