@@ -4,15 +4,15 @@
 
 The Debian package, the RPM, the Arch package and the Flatpak all install
 through this tool, so the program, the desktop entry, the AppStream
-metainfo, the icon, the licences and the mount helper land in the same
-places with the same modes whichever format builds them. It ports the file
-layout of desktop/tools/build_deb.py; native/packaging/README.md explains
-each decision.
+metainfo, the icon, the D-Bus service file, the licences and the mount
+helper land in the same places with the same modes whichever format builds
+them. It ports the file layout of desktop/tools/build_deb.py;
+native/packaging/README.md explains each decision.
 """
 from __future__ import annotations
 
 import argparse
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 import enum
 import json
@@ -32,6 +32,9 @@ CARGO_MANIFEST = NATIVE / 'Cargo.toml'
 # folders, byte for byte (crates/ox-app/resources/icons/SOURCES.md): the
 # owner's rule is that every icon is an unmodified Fluent file.
 APP_ICON = NATIVE / 'crates/ox-app/resources/icons/hicolor/scalable/places/ox-file-folder-flat.svg'
+
+# The D-Bus activation file; build_service_file fills in its placeholders.
+DBUS_SERVICE_TEMPLATE = PACKAGING_DATA / 'dbus-service.in'
 
 # The administrator mount helper and the modules it imports, in import
 # order: mount_share.py -> mount_support.py -> core.py -> private_storage.py.
@@ -110,6 +113,10 @@ class InstalledPaths:
     # package, and a Flatpak cannot add commands to the host.
     mount_helper: PurePosixPath | None
 
+    def command(self, channel: Channel) -> PurePosixPath:
+        """Return the command that starts the app, as desktop and service files name it."""
+        return self.commands / channel.package
+
 
 def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
     """Return where a package of this channel and layout installs its files."""
@@ -171,6 +178,16 @@ class Staging:
 
 
 @dataclass(frozen=True)
+class Crate:
+    """A third-party Rust crate compiled into the program."""
+
+    name: str
+    version: str
+    licence: str
+    folder: Path
+
+
+@dataclass(frozen=True)
 class InstallRequest:
     """What to install, and where to put it."""
 
@@ -181,19 +198,19 @@ class InstallRequest:
     staging: Path
 
 
-def install(request: InstallRequest) -> None:
+def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
     """Install every file of one package into its staging folder.
 
-    Raises OSError when a source file is missing or the staging folder is not
-    writable, and subprocess.CalledProcessError when Cargo cannot list the
-    crates.
+    crates are the Rust crates linked into the program (see linked_crates),
+    whose licences travel with it. Raises OSError when a source file is
+    missing or the staging folder is not writable.
     """
     paths = installed_paths(request.channel, request.layout)
     staging = Staging(request.staging)
     install_program(staging, request.channel, request.program, paths)
-    install_desktop_data(staging, request.channel, paths.share)
+    install_desktop_data(staging, request.channel, paths)
     install_licences(staging, paths.licences)
-    install_crate_licences(staging, paths.licences / 'rust-crates')
+    install_crate_licences(staging, paths.licences / 'rust-crates', crates)
     if paths.mount_helper is not None:
         install_python_commands(staging, request.channel, paths.commands, paths.mount_helper)
 
@@ -202,19 +219,28 @@ def install_program(staging: Staging, channel: Channel, program: Path,
                     paths: InstalledPaths) -> None:
     """Install the program and, where it lives outside PATH, its command."""
     staging.copy(program, paths.program, PROGRAM_MODE)
-    command = paths.commands / channel.package
+    command = paths.command(channel)
     if command != paths.program:
         staging.link(command, paths.program)
 
 
-def install_desktop_data(staging: Staging, channel: Channel, share: PurePosixPath) -> None:
-    """Install the desktop entry, the AppStream metainfo and the launcher icon."""
+def install_desktop_data(staging: Staging, channel: Channel, paths: InstalledPaths) -> None:
+    """Install the desktop entry, metainfo, launcher icon and D-Bus service file."""
     app_id = channel.app_id
+    share = paths.share
     staging.copy(PACKAGING_DATA / f'{app_id}.desktop',
                  share / 'applications' / f'{app_id}.desktop', DATA_MODE)
     staging.copy(PACKAGING_DATA / f'{app_id}.metainfo.xml',
                  share / 'metainfo' / f'{app_id}.metainfo.xml', DATA_MODE)
     staging.copy(APP_ICON, share / 'icons/hicolor/scalable/apps' / f'{app_id}.svg', DATA_MODE)
+    service = build_service_file(app_id, paths.command(channel))
+    staging.write(service, share / 'dbus-1/services' / f'{app_id}.service', DATA_MODE)
+
+
+def build_service_file(app_id: str, command: PurePosixPath) -> str:
+    """Return the D-Bus activation file that starts command for app_id's bus name."""
+    template = DBUS_SERVICE_TEMPLATE.read_text(encoding='utf-8')
+    return template.replace('@APP_ID@', app_id).replace('@COMMAND@', str(command))
 
 
 def install_licences(staging: Staging, licences: PurePosixPath) -> None:
@@ -238,28 +264,27 @@ def install_python_commands(staging: Staging, channel: Channel, commands: PurePo
     staging.link(commands / LEGACY_MOUNT_HELPER_COMMAND, command)
 
 
-@dataclass(frozen=True)
-class Crate:
-    """A third-party Rust crate compiled into the program."""
-
-    name: str
-    version: str
-    licence: str
-    folder: Path
-
-
-def install_crate_licences(staging: Staging, destination: PurePosixPath) -> None:
-    """Install each compiled crate's licence files and an index of their licences.
+def install_crate_licences(staging: Staging, destination: PurePosixPath,
+                           crates: Sequence[Crate]) -> None:
+    """Install each linked crate's licence files and an index of their licences.
 
     MIT and Apache-2.0 require their notices to travel with the binary.
     """
-    crates = program_crates(cargo_metadata())
     index = [f'{crate.name} {crate.version}: {crate.licence}' for crate in crates]
     staging.write('\n'.join(index) + '\n', destination / 'INDEX.txt', DATA_MODE)
     for crate in crates:
         folder = destination / f'{crate.name}-{crate.version}'
         for source in licence_files(crate.folder):
             staging.copy(source, folder / source.name, DATA_MODE)
+
+
+def linked_crates() -> list[Crate]:
+    """Return the third-party crates the program links, as Cargo resolves them here.
+
+    Raises subprocess.CalledProcessError when Cargo cannot list the crates,
+    and RuntimeError when rustc or Cargo's answer is not what this expects.
+    """
+    return program_crates(cargo_metadata())
 
 
 def cargo_metadata() -> dict[str, Any]:
@@ -292,14 +317,16 @@ def program_crates(metadata: dict[str, Any]) -> list[Crate]:
     """
     packages = {package['id']: package for package in metadata['packages']}
     reachable = normal_dependencies(metadata['resolve']['nodes'], app_package_id(packages))
-    crates = [
-        Crate(name=package['name'], version=package['version'],
-              licence=package.get('license') or 'see its licence files',
-              folder=Path(package['manifest_path']).parent)
-        for package in (packages[package_id] for package_id in reachable)
-        if package['source'] is not None
-    ]
+    linked = [packages[package_id] for package_id in reachable]
+    crates = [crate_of(package) for package in linked if package['source'] is not None]
     return sorted(crates, key=lambda crate: (crate.name, crate.version))
+
+
+def crate_of(package: dict[str, Any]) -> Crate:
+    """Return the Crate a package entry of cargo metadata describes."""
+    return Crate(name=package['name'], version=package['version'],
+                 licence=package.get('license') or 'see its licence files',
+                 folder=Path(package['manifest_path']).parent)
 
 
 def app_package_id(packages: dict[str, dict[str, Any]]) -> str:
@@ -360,7 +387,7 @@ def main(argv: list[str] | None = None) -> int:
     request = InstallRequest(channel=Channel(arguments.app_id), layout=Layout(arguments.layout),
                              program=arguments.program, staging=arguments.destdir)
     try:
-        install(request)
+        install(request, linked_crates())
     except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
         print(f'Installing the package files failed: {error}', file=sys.stderr)
         return 1

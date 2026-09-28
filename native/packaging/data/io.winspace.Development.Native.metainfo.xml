@@ -16,7 +16,7 @@
   </developer>
   <description>
     <p>A preview of the next OpenXplorer, drawn with native GTK 4 widgets instead of a web page. It browses local folders, SMB shares and connected phones in the familiar tabbed window styled after Windows 11 File Explorer.</p>
-    <p>The preview is incomplete and runs beside the current OpenXplorer without replacing it. It shares its settings, and it never changes file associations, browser preferences or network mounts.</p>
+    <p>The preview is incomplete and runs beside the current OpenXplorer without replacing it. It never changes file associations, browser preferences or network mounts.</p>
   </description>
   <launchable type="desktop-id">io.winspace.Development.Native.desktop</launchable>
   <icon type="stock">io.winspace.Development.Native</icon>
@@ -37,10 +37,11 @@
   </branding>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.1.0" date="2026-09-28" type="development"><description><p>First packaged native preview: browse folders, shares and devices with the native GTK 4 interface. File operations are not available in the interface yet.</p></description></release>
+    <release version="0.1.0" date="2026-09-28" type="development"><description><p>First packaged native preview of the GTK 4 interface, for trying it beside the current OpenXplorer.</p></description></release>
   </releases>
   <url type="homepage">https://openxplorer.app</url>
   <url type="help">https://openxplorer.app/docs/installation/</url>
+  <url type="vcs-browser">https://github.com/AKolenda/openxplorer</url>
   <keywords>
     <keyword>File Explorer</keyword>
     <keyword>File Manager</keyword>

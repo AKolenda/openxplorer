@@ -50,6 +50,7 @@
   </releases>
   <url type="homepage">https://openxplorer.app</url>
   <url type="help">https://openxplorer.app/docs/installation/</url>
+  <url type="vcs-browser">https://github.com/AKolenda/openxplorer</url>
   <keywords>
     <keyword>File Explorer</keyword>
     <keyword>File Manager</keyword>

@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The Flatpak of the native preview, which installs beside the Python app
+# under its own application ID. io.winspace.Development.yml builds the stable
+# app; the two differ only in the ID and the command (test_flatpak_manifests.py
+# keeps them in step). native/packaging/README.md, "Flatpak", explains the
+# build and each permission.
+id: io.winspace.Development.Native
+# GNOME 51 is the newest stable GNOME runtime. Its base is Freedesktop
+# 26.08, whose rust-stable extension provides the compiler.
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: openxplorer-native
+finish-args:
+  # The window: Wayland, and X11 only on desktops without Wayland. X11
+  # needs the shared-memory IPC namespace to draw at a usable speed.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # GTK 4 renders with the GPU.
+  - --device=dri
+  # A file manager shows, copies and changes the user's files wherever they
+  # are: the home folder, other disks under /media, /run/media and /mnt, and
+  # /opt and /srv. System folders stay the sandbox's own (/usr, /etc).
+  - --filesystem=host
+  # GVfs: the sandbox's GIO asks the host's GVfs daemons for smb://, mtp://,
+  # trash:/// and the drive and phone list (org.gtk.vfs.*), reaches their
+  # private peer-to-peer sockets in $XDG_RUNTIME_DIR/gvfsd, and opens files on
+  # shares through their FUSE paths in $XDG_RUNTIME_DIR/gvfs.
+  - --talk-name=org.gtk.vfs.*
+  - --filesystem=xdg-run/gvfsd
+  - --filesystem=xdg-run/gvfs
+  # SMB passwords the user asks to remember are kept in the desktop's Secret
+  # Service under the Python app's schema io.winspace.SmbCredentials, so both
+  # apps find each other's saved sign-ins.
+  - --talk-name=org.freedesktop.secrets
+  # "Show in folder" (opt-in): the app answers org.freedesktop.FileManager1
+  # only after the user turns the integration on in Settings. Flatpak only
+  # permits owning the name; it never claims it by itself.
+  - --own-name=org.freedesktop.FileManager1
+  # Host programs through flatpak-spawn --host: Open in Terminal starts the
+  # host's terminal, and making OpenXplorer the default file manager (opt-in)
+  # runs the host's xdg-mime. Files open in host applications through the
+  # OpenURI portal instead.
+  - --talk-name=org.freedesktop.Flatpak
+  # "Check for updates" asks GitHub whether a newer release exists; Flatpak
+  # installs it. SMB and phone traffic goes through GVfs on the host.
+  - --share=network
+  # Not granted, because the desktop portals, which every Flatpak may use,
+  # cover them: opening files with other applications (OpenURI), moving files
+  # to the Trash, notifications, and the desktop's dark style and accent
+  # colour (Settings).
+modules:
+  - name: openxplorer
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        # cargo-sources.json unpacks every crate into cargo/vendor and writes
+        # cargo/config.toml, which replaces crates.io with that folder, so the
+        # build never uses the network.
+        CARGO_HOME: /run/build/openxplorer/cargo
+        CARGO_NET_OFFLINE: 'true'
+        # The application ID the binary registers (native/crates/ox-app/build.rs).
+        OX_APP_ID: io.winspace.Development.Native
+    build-commands:
+      - cargo build --release --locked --offline --manifest-path native/Cargo.toml
+        --package ox-app --bin openxplorer-native
+      # The shared install layout of every package format (/app/bin, the
+      # desktop entry, metainfo, icon, D-Bus service file and licences).
+      - python3 native/tools/package_data.py --app-id io.winspace.Development.Native
+        --layout flatpak --program native/target/release/openxplorer-native --destdir /
+    sources:
+      # The native sources, without a local build folder.
+      - type: dir
+        path: ../..
+        dest: native
+        skip:
+          - target
+      - type: dir
+        path: ../../../licenses
+        dest: licenses
+      - type: file
+        path: ../../../LICENSE
+      - type: file
+        path: ../../../THIRD_PARTY_NOTICES.md
+      # Every crate in Cargo.lock, written by native/tools/flatpak_cargo_sources.py.
+      - cargo-sources.json

@@ -1,21 +1,23 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # The launcher of the native preview, which runs beside the Python app. It
-# claims no MIME type, so installing it can never make the preview a
-# default handler; native/packaging/README.md explains each key.
+# follows the stable launcher (io.winspace.Development.desktop) but claims no
+# MIME type, so installing it never makes the preview a default handler, and
+# offers only the quick action the preview supports.
 [Desktop Entry]
 Type=Application
 Name=OpenXplorer Native Preview
 GenericName=File Explorer
-Comment=Preview of the native OpenXplorer file manager
 Keywords=File Explorer;file explorer;File Manager;files;folders;SMB;NAS;network;archives;
+Comment=Preview of the native OpenXplorer file manager
 Exec=openxplorer-native %U
 TryExec=openxplorer-native
 Icon=io.winspace.Development.Native
 Terminal=false
 Categories=System;FileTools;FileManager;
 StartupNotify=true
-Actions=new-window;
+StartupWMClass=io.winspace.Development.Native
+Actions=NewWindow;
 
-[Desktop Action new-window]
+[Desktop Action NewWindow]
 Name=New window
 Exec=openxplorer-native --new-window

@@ -45,21 +45,29 @@ RELEASE_VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)
 MAINTAINER = 'OpenXplorer contributors <maintainer@example.invalid>'
 HOMEPAGE = 'https://openxplorer.app'
 
-# dpkg-shlibdeps adds every library the program links, at the version its
-# symbols need. GTK is raised to 4.14, the oldest version the app is built
+# The dependency grouping native/packaging/README.md describes.
+# Depends: dpkg-shlibdeps adds every library the program links, at the version
+# its symbols need. GTK is raised to 4.14, the oldest version the app is built
 # and tested against (the v4_14 feature in native/Cargo.toml).
 GTK_PACKAGE = 'libgtk-4-1'
 MINIMUM_GTK = f'{GTK_PACKAGE} (>= 4.14)'
 # The folder the launcher icon is installed in.
 DEPENDS = ('hicolor-icon-theme',)
+# Recommends: what features beyond local browsing need. APT installs these by
+# default, and the app explains a missing one when the feature is used.
 RECOMMENDS = (
     # GVfs: smb:// and mtp:// browsing, the Recycle Bin and local paths of
-    # shares for other applications. Browsing local folders works without it.
+    # shares for other applications.
     'gvfs',
     'gvfs-backends',
     'gvfs-fuse',
     # A Secret Service provider, which remembers SMB passwords.
     'gnome-keyring | keepassxc',
+    # xdg-mime, which makes OpenXplorer the default file manager on request.
+    'xdg-utils',
+    # Open in Terminal, and Open in archive manager.
+    'gnome-terminal | x-terminal-emulator',
+    'file-roller',
 )
 STABLE_RECOMMENDS = (
     # The administrator prompt of in-app updates.
@@ -68,12 +76,8 @@ STABLE_RECOMMENDS = (
     'python3 (>= 3.10)',
     'cifs-utils',
 )
-SUGGESTS = (
-    # xdg-mime makes OpenXplorer the default file manager, on request only.
-    'xdg-utils',
-    # Open in Terminal.
-    'gnome-terminal | x-terminal-emulator',
-)
+# The maintainer scripts that run native/packaging/debian/refresh-caches.
+MAINTAINER_SCRIPTS_REFRESHING_CACHES = ('postinst', 'postrm')
 # The package name before 0.8.0, as desktop/tools/build_deb.py declares.
 STABLE_RELATIONS = {
     'Replaces': 'winspace-explorer (<< 0.8.0)',
@@ -154,13 +158,14 @@ def check_stable_version(version: str, python_version: str) -> None:
             'first (native/packaging/README.md, "Moving existing users to the native app").')
 
 
-def package_identity(channel: Channel, version: str, build_architecture: str) -> PackageIdentity:
+def package_identity(channel: Channel, version: str, machine: str) -> PackageIdentity:
     """Return the package's name, version and architecture.
 
-    The stable package says "all" because the 1.1.x updater accepts nothing
-    else; its preinst refuses any processor but the build's.
+    machine is the Debian architecture the program is built for. The stable
+    package says "all" because the 1.1.x updater accepts nothing else; its
+    preinst refuses any processor but machine.
     """
-    architecture = 'all' if channel is Channel.STABLE else build_architecture
+    architecture = 'all' if channel is Channel.STABLE else machine
     return PackageIdentity(channel.package, version, architecture)
 
 
@@ -222,7 +227,6 @@ def control_text(identity: PackageIdentity, channel: Channel, depends: str,
         'Installed-Size': str(installed_kib),
         'Depends': depends,
         'Recommends': ', '.join(recommends),
-        'Suggests': ', '.join(SUGGESTS),
         **(STABLE_RELATIONS if channel is Channel.STABLE else {}),
         'Section': 'utils',
         'Priority': 'optional',
@@ -254,8 +258,18 @@ def install_debian_files(stage: Path, channel: Channel) -> None:
     target.chmod(package_data.DATA_MODE)
 
 
-def write_preinst(control: Path, architecture: str) -> None:
-    """Write the stable package's preinst, which refuses a foreign processor."""
+def write_maintainer_scripts(control: Path, channel: Channel, architecture: str) -> None:
+    """Write postinst and postrm, which refresh caches, and the stable preinst.
+
+    The preinst refuses a processor the program was not built for; see
+    native/packaging/debian/preinst.in.
+    """
+    for name in MAINTAINER_SCRIPTS_REFRESHING_CACHES:
+        script = control / name
+        shutil.copyfile(DEBIAN_DATA / 'refresh-caches', script)
+        script.chmod(package_data.PROGRAM_MODE)
+    if channel is not Channel.STABLE:
+        return
     template = (DEBIAN_DATA / 'preinst.in').read_text(encoding='utf-8')
     preinst = control / 'preinst'
     preinst.write_text(template.replace('@ARCHITECTURE@', architecture), encoding='utf-8')
@@ -332,7 +346,8 @@ def build(request: DebianBuild) -> Path:
     output = request.output_directory.resolve() / identity.file_name
     with tempfile.TemporaryDirectory(prefix='openxplorer-deb-') as temporary:
         stage = Path(temporary) / 'root'
-        package_data.install(InstallRequest(request.channel, Layout.DEBIAN, program, stage))
+        install_request = InstallRequest(request.channel, Layout.DEBIAN, program, stage)
+        package_data.install(install_request, package_data.linked_crates())
         install_debian_files(stage, request.channel)
         stage_control(stage, request.channel, identity, architecture)
         normalise(stage, epoch)
@@ -344,7 +359,7 @@ def build(request: DebianBuild) -> Path:
 
 def stage_control(stage: Path, channel: Channel, identity: PackageIdentity,
                   architecture: str) -> None:
-    """Write DEBIAN/: control, md5sums and, for the stable package, preinst."""
+    """Write DEBIAN/: control, md5sums and the maintainer scripts."""
     control = stage / 'DEBIAN'
     control.mkdir()
     program = package_data.installed_paths(channel, Layout.DEBIAN).program
@@ -352,8 +367,7 @@ def stage_control(stage: Path, channel: Channel, identity: PackageIdentity,
     text = control_text(identity, channel, depends_field(libraries), installed_size_kib(stage))
     (control / 'control').write_text(text, encoding='utf-8')
     (control / 'control').chmod(package_data.DATA_MODE)
-    if channel is Channel.STABLE:
-        write_preinst(control, architecture)
+    write_maintainer_scripts(control, channel, architecture)
     write_md5sums(stage)
 
 
