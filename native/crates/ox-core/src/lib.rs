@@ -18,6 +18,7 @@
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
 //! | [`versions`] | Previous versions and the read-only rule for snapshots | `previous_versions.py`, `file_services.py`, `ui/snapshot-meta.js` |
+//! | [`sizes`] | On-demand folder sizes | `folder_sizes.py`, `mount_support.py` |
 
 pub mod clipboard;
 pub mod entry;
@@ -26,6 +27,7 @@ pub mod gio_node;
 pub mod location;
 pub mod places;
 pub mod settings;
+pub mod sizes;
 pub mod transfer;
 pub mod versions;
 
