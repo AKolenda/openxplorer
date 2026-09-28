@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The paste-conflict check, copy and move requests, the Delete plan and
-//! Duplicate on temporary local files through the production GIO adapter.
-//! The transfer engine's own safety rules are tested in `transfer.rs`;
-//! these cases cover what the interface's requests add around it. Moving
-//! to the Trash and Undo are in `ops_recycle_bin.rs` and `ops_undo.rs`.
+//! The paste-conflict check and copy, move and delete requests on
+//! temporary local files through the production GIO adapter. The transfer
+//! engine's own safety rules are tested in `transfer.rs`; these cases cover
+//! what the interface's requests add around it. The Delete plan, Duplicate,
+//! moving to the Trash and Undo are in `ops_delete_plan.rs`,
+//! `ops_duplicate.rs`, `ops_recycle_bin.rs` and `ops_undo.rs`.
 
+#[path = "ops_support/folders.rs"]
+mod folders;
 mod ops_support;
 #[path = "ops_support/snapshots.rs"]
 mod snapshots;
@@ -14,14 +17,10 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use gio::prelude::*;
-
-use ox_core::ops::{
-    duplicate_items, find_conflicts, plan_delete, run_transfer, trash_support, DeleteItem, OperationContext,
-    OpsError, TransferRequest, UndoRecord,
-};
+use ox_core::ops::{find_conflicts, run_transfer, OperationContext, OpsError, TransferRequest, UndoRecord};
 use ox_core::transfer::{Cancellation, ConflictPolicy, Progress, TransferMode, MAX_ITEMS};
 
+use folders::Folders;
 use ops_support::{block_on, file_uri};
 use snapshots::{snapshot_protection, READ_ONLY};
 
@@ -32,29 +31,6 @@ fn request(mode: TransferMode, sources: &[&Path], folder: &Path, policy: Conflic
         uris: sources.iter().map(|path| file_uri(path)).collect(),
         destination_folder: Some(file_uri(folder)),
         policy,
-    }
-}
-
-/// A source folder `src` and a destination folder `dst` in a temporary
-/// folder.
-struct Folders {
-    temp: tempfile::TempDir,
-}
-
-impl Folders {
-    fn new() -> Self {
-        let temp = tempfile::tempdir().unwrap();
-        fs::create_dir(temp.path().join("src")).unwrap();
-        fs::create_dir(temp.path().join("dst")).unwrap();
-        Self { temp }
-    }
-
-    fn source(&self) -> std::path::PathBuf {
-        self.temp.path().join("src")
-    }
-
-    fn destination(&self) -> std::path::PathBuf {
-        self.temp.path().join("dst")
     }
 }
 
@@ -110,6 +86,25 @@ fn a_conflict_check_needs_a_folder_and_between_one_and_the_maximum_items() {
     assert!(
         matches!(share, Err(OpsError::Failed(message)) if message.starts_with("Open the network share first"))
     );
+}
+
+/// A cancelled check must never read as "no conflicts", which would start
+/// the copy the user just stopped.
+#[test]
+fn a_cancelled_conflict_check_reports_the_cancellation() {
+    let folders = Folders::new();
+    fs::write(folders.source().join("a.txt"), b"incoming").unwrap();
+    let uris = [file_uri(&folders.source().join("a.txt"))];
+    let cancelled = Cancellation::new();
+    cancelled.cancel();
+
+    let conflicts = block_on(find_conflicts(
+        &uris,
+        &file_uri(&folders.destination()),
+        &cancelled,
+    ));
+
+    assert_eq!(conflicts, Err(OpsError::Cancelled));
 }
 
 /// Ported from `desktop/tests/test_rc2.py::DispatchTests::test_operate_dispatch_protects_backup_descendants`.
@@ -172,7 +167,6 @@ fn a_copy_reports_its_copies_and_how_to_undo_it() {
     assert_eq!(fs::read(dst.join("taken.txt")).unwrap(), b"existing");
 }
 
-/// parity: OPS-027
 #[test]
 fn replace_reports_its_items_but_cannot_be_undone() {
     let folders = Folders::new();
@@ -296,128 +290,4 @@ fn a_move_out_of_a_protected_folder_is_refused_before_anything_changes() {
 
     assert_eq!(moved, Err(OpsError::Failed(READ_ONLY.into())));
     assert!(snapshot.join("old.txt").exists());
-}
-
-#[test]
-fn duplicate_names_each_copy_like_keep_both_and_reports_the_copies() {
-    let temp = tempfile::tempdir().unwrap();
-    fs::write(temp.path().join("report.pdf"), b"pdf").unwrap();
-    fs::write(temp.path().join("report (copy 2).pdf"), b"older duplicate").unwrap();
-    fs::create_dir(temp.path().join("Folder.v1")).unwrap();
-    fs::write(temp.path().join("Folder.v1").join("inside.txt"), b"inside").unwrap();
-    let items = [
-        file_uri(&temp.path().join("report.pdf")),
-        file_uri(&temp.path().join("Folder.v1")),
-    ];
-
-    let outcome = block_on(duplicate_items(&items, &OperationContext::default(), |_| {})).unwrap();
-
-    let copies = vec![
-        file_uri(&temp.path().join("report (copy 3).pdf")),
-        file_uri(&temp.path().join("Folder.v1 (copy 2)")),
-    ];
-    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
-    assert_eq!(outcome.created, copies);
-    assert_eq!(outcome.undo, Some(UndoRecord::Duplicate { copies }));
-    assert_eq!(fs::read(temp.path().join("report (copy 3).pdf")).unwrap(), b"pdf");
-    assert_eq!(
-        fs::read(temp.path().join("report (copy 2).pdf")).unwrap(),
-        b"older duplicate"
-    );
-    let inside = temp.path().join("Folder.v1 (copy 2)").join("inside.txt");
-    assert_eq!(fs::read(inside).unwrap(), b"inside");
-}
-
-#[test]
-fn duplicate_copies_items_of_several_folders_into_their_own_folders() {
-    let folders = Folders::new();
-    fs::write(folders.source().join("a.txt"), b"a").unwrap();
-    fs::write(folders.destination().join("a.txt"), b"b").unwrap();
-    let items = [
-        file_uri(&folders.source().join("a.txt")),
-        file_uri(&folders.destination().join("a.txt")),
-    ];
-
-    let outcome = block_on(duplicate_items(&items, &OperationContext::default(), |_| {})).unwrap();
-
-    assert_eq!(fs::read(folders.source().join("a (copy 2).txt")).unwrap(), b"a");
-    assert_eq!(
-        fs::read(folders.destination().join("a (copy 2).txt")).unwrap(),
-        b"b"
-    );
-    assert_eq!(outcome.created.len(), 2);
-}
-
-/// parity: OPS-035
-#[test]
-fn duplicate_refuses_roots_shares_and_protected_folders() {
-    let temp = tempfile::tempdir().unwrap();
-    let snapshot = temp.path().join(".snapshot");
-    fs::create_dir(&snapshot).unwrap();
-    fs::write(snapshot.join("old.txt"), b"old").unwrap();
-    let context = OperationContext::new(snapshot_protection());
-
-    let root = block_on(duplicate_items(&["file:///".into()], &context, |_| {}));
-    let share = block_on(duplicate_items(&["smb://nas/share".into()], &context, |_| {}));
-    let protected = block_on(duplicate_items(
-        &[file_uri(&snapshot.join("old.txt"))],
-        &context,
-        |_| {},
-    ));
-
-    let roots = "Filesystem roots cannot be copied, moved or trashed as items.";
-    assert_eq!(root, Err(OpsError::Failed(roots.into())));
-    assert!(share.is_err());
-    assert_eq!(protected, Err(OpsError::Failed(READ_ONLY.into())));
-    assert_eq!(fs::read_dir(&snapshot).unwrap().count(), 1);
-}
-
-#[test]
-fn local_items_go_to_the_trash_and_a_folder_without_trash_is_deleted_permanently() {
-    let temp = tempfile::tempdir().unwrap();
-    let local = temp.path().join("a.txt");
-    fs::write(&local, b"a").unwrap();
-    let vanished = temp.path().join("gone").join("b.txt");
-    let items = [
-        DeleteItem {
-            uri: file_uri(&local),
-            name: "a.txt".into(),
-        },
-        DeleteItem {
-            uri: file_uri(&vanished),
-            name: "b.txt".into(),
-        },
-    ];
-    let cancel = Cancellation::new();
-
-    let local_trash = block_on(trash_support(&file_uri(temp.path()), &cancel));
-    let plan = block_on(plan_delete(&items, &cancel)).unwrap();
-
-    assert_eq!(local_trash, Ok(true));
-    assert_eq!(plan.to_trash, [file_uri(&local)]);
-    assert_eq!(plan.to_delete, [file_uri(&vanished)]);
-    assert_eq!(plan.confirmation().title, "Delete items?");
-}
-
-#[test]
-fn a_share_that_cannot_answer_counts_as_having_a_trash() {
-    let schemes = gio::Vfs::default().supported_uri_schemes();
-    assert!(
-        schemes.iter().any(|scheme| scheme == "smb"),
-        "this check needs GVfs with its SMB backend (gvfs-backends); found {schemes:?}"
-    );
-    let item = DeleteItem {
-        uri: "smb://example.invalid/share/report.pdf".into(),
-        name: "report.pdf".into(),
-    };
-    let cancel = Cancellation::new();
-
-    let support = block_on(trash_support("smb://example.invalid/share", &cancel));
-    let plan = block_on(plan_delete(std::slice::from_ref(&item), &cancel)).unwrap();
-
-    assert!(matches!(support, Err(OpsError::NotMounted(_))), "{support:?}");
-    assert!(support.unwrap_err().needs_mount());
-    assert_eq!(plan.to_trash, [item.uri]);
-    assert!(plan.to_delete.is_empty());
-    assert_eq!(plan.confirmation().title, "Move to Trash?");
 }

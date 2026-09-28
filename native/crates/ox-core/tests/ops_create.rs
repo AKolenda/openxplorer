@@ -6,6 +6,8 @@
 //! test (see OPS-048), so the template cases here are new and follow
 //! `desktop/file_services.py` line by line.
 
+#[path = "common/fifo.rs"]
+mod fifo;
 mod ops_support;
 #[path = "ops_support/snapshots.rs"]
 mod snapshots;
@@ -13,7 +15,6 @@ mod snapshots;
 use std::fs;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::Path;
-use std::process::Command;
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
@@ -21,6 +22,7 @@ use ox_core::ops::{
     OpsError, Template, TemplateId, UndoRecord, MAX_TEMPLATE_BYTES, MAX_USER_TEMPLATES,
 };
 
+use fifo::make_fifo;
 use ops_support::{block_on, file_uri};
 use snapshots::{snapshot_protection, READ_ONLY};
 
@@ -361,13 +363,4 @@ fn a_template_never_overwrites_and_never_goes_to_a_server_listing() {
         Err(OpsError::Failed(open_share.into()))
     );
     assert_eq!(names_in(temp.path()), ["New document.txt"]);
-}
-
-/// Creates a named pipe at `path` with the system `mkfifo`.
-fn make_fifo(path: &Path) {
-    let status = Command::new("mkfifo")
-        .arg(path)
-        .status()
-        .expect("mkfifo (GNU coreutils)");
-    assert!(status.success(), "mkfifo failed: {status}");
 }

@@ -182,7 +182,7 @@ fn permanent_delete_removes_folders_and_files_without_a_destination() {
 fn a_special_file_is_refused_and_nothing_is_published() {
     let fixture = Fixture::new();
     let fifo = fixture.source_folder.join("pipe");
-    create_named_pipe(&fifo);
+    make_fifo(&fifo);
     let mut engine = fixture.engine(local::local());
 
     let result = fixture.run(&mut engine, &[&fifo], Request::Copy(ConflictPolicy::Skip));
@@ -270,7 +270,7 @@ fn a_special_file_inside_a_folder_fails_the_whole_folder() {
     let tree = fixture.source_folder.join("tree");
     fs::create_dir(&tree).unwrap();
     write(&tree.join("a"), "hello");
-    create_named_pipe(&tree.join("pipe"));
+    make_fifo(&tree.join("pipe"));
     let mut engine = fixture.engine(local::local());
 
     let result = fixture.run(&mut engine, &[&tree], Request::Copy(ConflictPolicy::Skip));
