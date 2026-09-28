@@ -18,7 +18,7 @@
    it). The art is centred on a half pixel, which Chromium draws one pixel
    down. */
 .details .preview image {
-  -gtk-icon-shadow: 0 4px 4px alpha(black, .043);
+  -gtk-icon-shadow: 0 4px 4px @ox_preview_shadow;
   margin-top: 1px;
 }
 .details .dname { font-weight: 600; margin-bottom: 4px; }

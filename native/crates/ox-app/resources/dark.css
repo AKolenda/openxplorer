@@ -68,6 +68,7 @@
 
 /* Status */
 @define-color ox_critical_fill #c42b1c;            /* C33 close hover, full drives */
+@define-color ox_on_critical #ffffff;              /* the close glyph on C33 */
 @define-color ox_success #6ccb5f;                  /* C34 connected */
 
 /* Scroll bars and shadows */
@@ -75,3 +76,7 @@
 @define-color ox_scrollbar_trough alpha(@ox_flyout, .85);  /* §4.12 */
 @define-color ox_shadow_ambient alpha(black, .24);  /* C44 */
 @define-color ox_shadow_key alpha(black, .28);
+/* The current app's own shadows, the same in both themes */
+@define-color ox_tab_shadow alpha(black, .012);     /* the active tab */
+@define-color ox_menu_shadow alpha(black, .2);      /* E03 classic menus */
+@define-color ox_preview_shadow alpha(black, .043); /* the details pane's art */
