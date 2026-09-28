@@ -9,85 +9,32 @@
 //! to the first match, Escape leaves the search, and arrow keys move
 //! through the categories. Escape on a sub-page goes back to its category.
 
-use std::cell::Cell;
-
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 
+use super::category_row::CategoryRow;
 use super::pages::{Category, SettingsView};
 use super::row::SettingRow;
 use super::search::{match_count_text, SearchQuery};
 use super::section::SettingsSection;
 use super::SettingsPage;
-use crate::icons;
+use crate::window::children;
 
 /// The name of the page shown when no setting matches the search.
 const NO_MATCHES_PAGE: &str = "no-matches";
 
-/// A category's glyph in the list.
-const CATEGORY_GLYPH: i32 = 18;
-
 /// Room kept above a row the search jumps to, in pixels.
 const JUMP_MARGIN: f64 = 24.0;
-
-/// One category in the list, and how many of its rows match the search.
-#[derive(Debug)]
-pub(super) struct CategoryRow {
-    /// The list row.
-    pub row: gtk::ListBoxRow,
-    /// The number of matches, shown at the right while searching.
-    pub count: gtk::Label,
-    /// How many rows match the search typed now.
-    pub matches: Cell<usize>,
-}
-
-impl CategoryRow {
-    /// The list row of `category`: the accent bar of the chosen row, its
-    /// coloured glyph, name and count.
-    fn new(category: Category) -> Self {
-        let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        let pill = gtk::Box::builder()
-            .valign(gtk::Align::Center)
-            .css_classes(["pill"])
-            .build();
-        content.append(&pill);
-        let glyph = icons::image(category.icon(), CATEGORY_GLYPH);
-        glyph.add_css_class(category.css_class());
-        content.append(&glyph);
-        let title = gtk::Label::builder()
-            .label(category.title())
-            .xalign(0.0)
-            .hexpand(true)
-            .ellipsize(gtk::pango::EllipsizeMode::End)
-            .build();
-        content.append(&title);
-        let count = gtk::Label::builder()
-            .visible(false)
-            .valign(gtk::Align::Center)
-            .css_classes(["category-count"])
-            .build();
-        content.append(&count);
-        let row = gtk::ListBoxRow::builder().child(&content).build();
-        row.update_property(&[gtk::accessible::Property::Label(category.title())]);
-        Self {
-            row,
-            count,
-            matches: Cell::new(0),
-        }
-    }
-}
 
 impl SettingsPage {
     /// Fills the category list, and connects the list, the search box and
     /// the Escape key.
     pub(super) fn build_navigation(&self) {
         let imp = self.imp();
-        let rows: Vec<CategoryRow> = Category::ALL.into_iter().map(CategoryRow::new).collect();
-        for category_row in &rows {
-            imp.category_list.append(&category_row.row);
+        for category in Category::ALL {
+            imp.category_list.append(&CategoryRow::new(category));
         }
-        imp.category_rows.replace(rows);
         let no_matches = gtk::Label::builder()
             .label("No settings match your search.")
             .valign(gtk::Align::Start)
@@ -196,8 +143,8 @@ impl SettingsPage {
         imp.view.set(view);
         imp.pages.set_visible_child_name(view.key());
         let row = self.category_list_row(view.category());
-        if imp.category_list.selected_row() != row {
-            imp.category_list.select_row(row.as_ref());
+        if let Some(row) = row.filter(|row| !row.is_selected()) {
+            imp.category_list.select_row(Some(&row));
         }
     }
 
@@ -231,11 +178,10 @@ impl SettingsPage {
         let imp = self.imp();
         let query = SearchQuery::parse(typed);
         let mut total = 0;
-        for (category, category_row) in Category::ALL.into_iter().zip(imp.category_rows.borrow().iter()) {
-            let matches = self.category_section(category).apply_query(&query);
-            category_row.matches.set(matches);
-            category_row.count.set_text(&matches.to_string());
-            category_row.count.set_visible(!query.is_empty());
+        for category_row in self.category_rows() {
+            let section = self.category_section(category_row.category());
+            let matches = section.apply_query(&query);
+            category_row.show_matches(matches, &query);
             total += matches;
         }
         imp.match_count.set_text(&match_count_text(total));
@@ -268,14 +214,21 @@ impl SettingsPage {
 
     /// How many rows of `category` match the search typed now.
     fn matches_in(&self, category: Category) -> usize {
-        let rows = self.imp().category_rows.borrow();
-        rows.get(position_of(category)).map_or(0, |row| row.matches.get())
+        let row = self.category_list_row(category);
+        row.map_or(0, |row| row.matches())
+    }
+
+    /// The rows of the category list, top to bottom.
+    pub(super) fn category_rows(&self) -> Vec<CategoryRow> {
+        let rows = children(&*self.imp().category_list);
+        rows.filter_map(|row| row.downcast::<CategoryRow>().ok())
+            .collect()
     }
 
     /// The list row of `category`.
-    fn category_list_row(&self, category: Category) -> Option<gtk::ListBoxRow> {
-        let position = i32::try_from(position_of(category)).ok()?;
-        self.imp().category_list.row_at_index(position)
+    pub(super) fn category_list_row(&self, category: Category) -> Option<CategoryRow> {
+        let rows = self.category_rows();
+        rows.into_iter().find(|row| row.category() == category)
     }
 
     /// Whether the list shows `row`: always, or while searching only when
@@ -354,17 +307,7 @@ impl SettingsPage {
     }
 }
 
-/// The category a list row stands for: the rows follow [`Category::ALL`].
+/// The category a row of the category list stands for.
 fn category_of(row: &gtk::ListBoxRow) -> Option<Category> {
-    let position = usize::try_from(row.index()).ok()?;
-    Category::ALL.get(position).copied()
-}
-
-/// The position of `category` in the list, which follows
-/// [`Category::ALL`].
-fn position_of(category: Category) -> usize {
-    Category::ALL
-        .iter()
-        .position(|listed| *listed == category)
-        .expect("Category::ALL lists every category")
+    row.downcast_ref::<CategoryRow>().map(CategoryRow::category)
 }

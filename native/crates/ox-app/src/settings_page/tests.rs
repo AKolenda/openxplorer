@@ -13,6 +13,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::settings::{ContextMenu, Settings, Theme};
 
+use super::category_row::CategoryRow;
 use super::choice_list::ChoiceList;
 use super::group::SettingsGroup;
 use super::pages::{Category, SettingsView, Subpage};
@@ -73,12 +74,15 @@ impl SettingsTest {
 
     /// The categories the list shows now.
     fn listed_categories(&self) -> Vec<Category> {
-        let rows = self.page.imp().category_rows.borrow();
-        let listed = Category::ALL
-            .into_iter()
-            .zip(rows.iter())
-            .filter(|(_, category_row)| category_row.row.is_child_visible());
-        listed.map(|(category, _)| category).collect()
+        let rows = self.page.category_rows().into_iter();
+        let listed = rows.filter(WidgetExt::is_child_visible);
+        listed.map(|row| row.category()).collect()
+    }
+
+    /// The category the list shows as chosen.
+    fn chosen_category(&self) -> Option<Category> {
+        let chosen = self.page.imp().category_list.selected_row();
+        chosen.and_downcast::<CategoryRow>().map(|row| row.category())
     }
 }
 
@@ -126,10 +130,11 @@ fn choosing_a_category_shows_only_that_category() {
     let pages = &settings.page.imp().pages;
     assert_eq!(pages.visible_child_name().as_deref(), Some("appearance"));
 
-    let rows = settings.page.imp().category_rows.borrow();
-    let default_apps = &rows[2].row;
-    settings.page.imp().category_list.select_row(Some(default_apps));
-    drop(rows);
+    let default_apps = settings
+        .page
+        .category_list_row(Category::DefaultApps)
+        .expect("the list has Default apps");
+    settings.page.imp().category_list.select_row(Some(&default_apps));
 
     assert_eq!(
         settings.page.view(),
@@ -536,13 +541,8 @@ fn escape_on_a_subpage_returns_to_its_category() {
         .page
         .show_view(SettingsView::Subpage(Subpage::Troubleshooting));
     assert_eq!(
-        settings
-            .page
-            .imp()
-            .category_list
-            .selected_row()
-            .map(|row| row.index()),
-        Some(2),
+        settings.chosen_category(),
+        Some(Category::DefaultApps),
         "Default apps stays chosen in the list"
     );
 

@@ -23,6 +23,7 @@ mod about;
 mod appearance;
 mod bindings;
 mod brave;
+mod category_row;
 mod choice_list;
 mod default_apps;
 mod group;
@@ -96,7 +97,6 @@ mod imp {
     use gtk::subclass::prelude::*;
 
     use super::indexed_folders::FolderList;
-    use super::navigation::CategoryRow;
     use super::pages::{Category, SettingsView, Subpage};
     use super::search::SearchQuery;
     use super::section::SettingsSection;
@@ -134,8 +134,6 @@ mod imp {
         pub(super) category_sections: RefCell<HashMap<Category, SettingsSection>>,
         /// The sub-pages.
         pub(super) subpages: RefCell<HashMap<Subpage, SettingsSection>>,
-        /// The list's rows, in [`Category::ALL`] order.
-        pub(super) category_rows: RefCell<Vec<CategoryRow>>,
         /// What the right side shows.
         pub(super) view: Cell<SettingsView>,
         /// What the settings search looks for.
