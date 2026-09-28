@@ -8,7 +8,7 @@
 //! limits the Python app uses. Columns sort by clicking their headers;
 //! sizes and the Size title are right-aligned.
 
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -19,25 +19,16 @@ use ox_core::settings::{Column, ColumnWidths};
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners, IconCells};
 use crate::folder_view::column_titles;
+use crate::folder_view::item::FileItem;
 use crate::folder_view::model::{self, FolderModel};
 use crate::folder_view::sorting::{SortColumn, SortDirection};
 
-/// Icon size in details rows.
-const ROW_ICON: i32 = 21;
+/// Icon edge in details rows (`.name-cell svg{height:21px}`).
+const ROW_ICON_SIZE: i32 = 21;
 
 /// How long column widths must stay unchanged before they are saved, so a
 /// drag saves once instead of on every pixel.
 const RESIZE_SETTLE: Duration = Duration::from_millis(500);
-
-/// The settings column of a details column.
-pub(crate) const fn settings_column(column: SortColumn) -> Column {
-    match column {
-        SortColumn::Name => Column::Name,
-        SortColumn::Modified => Column::Modified,
-        SortColumn::Type => Column::Type,
-        SortColumn::Size => Column::Size,
-    }
-}
 
 /// The web list pads its column header and rows 14 pixels at both ends
 /// (`.column-head{padding:0 14px}`), so its columns stop short of the
@@ -46,6 +37,19 @@ pub(crate) const fn settings_column(column: SortColumn) -> Column {
 /// this much wider than the widths saved in settings, and their titles and
 /// cells pad for it (resources/style.css).
 const EDGE_GUTTER: u32 = 14;
+
+/// GTK's fixed width for a column without one, which shares the space.
+const NO_FIXED_WIDTH: i32 = -1;
+
+/// The settings column of a details column.
+const fn settings_column(column: SortColumn) -> Column {
+    match column {
+        SortColumn::Name => Column::Name,
+        SortColumn::Modified => Column::Modified,
+        SortColumn::Type => Column::Type,
+        SortColumn::Size => Column::Size,
+    }
+}
 
 /// The part of `column`'s width that is the list's end padding.
 const fn edge_gutter(column: SortColumn) -> u32 {
@@ -66,49 +70,68 @@ const fn default_width(column: SortColumn) -> Option<u32> {
     }
 }
 
-/// The text of a non-name cell.
-fn cell_text(column: SortColumn, entry: &ox_core::entry::Entry) -> String {
+/// The text `column` shows for `item`. Folders and files of unknown size
+/// have an empty Size cell.
+fn cell_text(column: SortColumn, item: &FileItem) -> String {
+    let entry = item.entry();
     match column {
         SortColumn::Name => entry.name.clone(),
         SortColumn::Modified => format::date_text(entry.modified),
         SortColumn::Type => entry.type_label.clone(),
-        SortColumn::Size => match (entry.is_dir, entry.size) {
-            (false, Some(size)) => format::pretty_bytes(size),
-            _ => String::new(),
-        },
+        SortColumn::Size => item.file_size().map(format::pretty_bytes).unwrap_or_default(),
     }
 }
 
+/// The Name column's cells: the item's icon beside its name.
 fn name_factory(icons: &Rc<IconCells>, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
-    cells::connect_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON, icons, owners);
+    cells::connect_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON_SIZE, icons, owners);
     factory
 }
 
+/// The cells of the Date modified, Type or Size column: one dim label.
 fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
-    let registry = Rc::clone(owners);
+    let owners = Rc::clone(owners);
     factory.connect_setup(move |_, object| {
         let label = cells::dim_cell_label();
         if column == SortColumn::Size {
+            // `.file-row .size-cell{text-align:right}`
             label.set_xalign(1.0);
         }
         let list_item = cells::list_item(object);
         list_item.set_child(Some(&label));
-        registry.register(&label, list_item);
+        owners.register(&label, list_item);
     });
     factory.connect_bind(move |_, object| {
         let list_item = cells::list_item(object);
         let label = list_item.child().and_downcast::<gtk::Label>();
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
-            label.set_text(&cell_text(column, item.entry()));
+            label.set_text(&cell_text(column, &item));
         }
     });
     factory
 }
 
+/// A resizable column showing `column`, sorted by its header.
+fn new_view_column(
+    column: SortColumn,
+    icons: &Rc<IconCells>,
+    owners: &Rc<CellOwners>,
+) -> gtk::ColumnViewColumn {
+    let factory = match column {
+        SortColumn::Name => name_factory(icons, owners),
+        SortColumn::Modified | SortColumn::Type | SortColumn::Size => text_factory(column, owners),
+    };
+    let view_column = gtk::ColumnViewColumn::new(Some(column.label()), Some(factory));
+    view_column.set_id(Some(column.key()));
+    view_column.set_resizable(true);
+    view_column.set_sorter(Some(&model::column_sorter(column)));
+    view_column
+}
+
 /// Builds the column view over `model` and completes the model's sorter.
-/// The view shows no model until [`FolderModel::attach`] picks it.
+/// The view shows no model until the window makes it the visible view.
 pub(crate) fn build(model: &FolderModel, icons: &Rc<IconCells>, owners: &Rc<CellOwners>) -> gtk::ColumnView {
     let view = gtk::ColumnView::new(None::<gtk::MultiSelection>);
     view.add_css_class("files");
@@ -118,15 +141,7 @@ pub(crate) fn build(model: &FolderModel, icons: &Rc<IconCells>, owners: &Rc<Cell
     view.set_reorderable(false);
     view.set_tab_behavior(gtk::ListTabBehavior::Item);
     for column in SortColumn::ALL {
-        let factory = match column {
-            SortColumn::Name => name_factory(icons, owners),
-            other => text_factory(other, owners),
-        };
-        let view_column = gtk::ColumnViewColumn::new(Some(column.label()), Some(factory));
-        view_column.set_id(Some(column.key()));
-        view_column.set_resizable(true);
-        view_column.set_sorter(Some(&model::column_sorter(column)));
-        view.append_column(&view_column);
+        view.append_column(&new_view_column(column, icons, owners));
     }
     apply_column_widths(&view, None);
     if let Some(sorter) = view.sorter() {
@@ -154,6 +169,16 @@ fn start_width(column: SortColumn, saved: Option<&ColumnWidths>) -> Option<u32> 
     Some(width.clamp(*limits.start(), *limits.end()))
 }
 
+/// GTK's fixed width for `column` starting `width` pixels wide: the width
+/// and the column's end gutter, or [`NO_FIXED_WIDTH`] while Name fills the
+/// space.
+fn fixed_width(column: SortColumn, width: Option<u32>) -> i32 {
+    let Some(width) = width else {
+        return NO_FIXED_WIDTH;
+    };
+    i32::try_from(width + edge_gutter(column)).unwrap_or(NO_FIXED_WIDTH)
+}
+
 /// Applies saved column widths. Name keeps expanding until the user saved
 /// a width for it, as in `applyColumnLayout`.
 pub(crate) fn apply_column_widths(view: &gtk::ColumnView, saved: Option<&ColumnWidths>) {
@@ -163,11 +188,7 @@ pub(crate) fn apply_column_widths(view: &gtk::ColumnView, saved: Option<&ColumnW
         };
         let width = start_width(column, saved);
         view_column.set_expand(width.is_none());
-        let with_gutter = width.map(|width| width + edge_gutter(column));
-        let pixels = with_gutter
-            .and_then(|width| i32::try_from(width).ok())
-            .unwrap_or(-1);
-        view_column.set_fixed_width(pixels);
+        view_column.set_fixed_width(fixed_width(column, width));
     }
 }
 
@@ -192,35 +213,51 @@ fn column_widths(view: &gtk::ColumnView) -> Vec<(Column, f64)> {
         .collect()
 }
 
+/// Reports the column widths to `on_resized` once they stop changing for
+/// [`RESIZE_SETTLE`].
+struct ResizeReporter<F> {
+    view: glib::WeakRef<gtk::ColumnView>,
+    on_resized: F,
+    /// The pending report, restarted by every width change.
+    timer: Cell<Option<glib::SourceId>>,
+}
+
+impl<F: Fn(Vec<(Column, f64)>) + 'static> ResizeReporter<F> {
+    /// A column's width changed: report when the widths have settled.
+    fn restart(self: &Rc<Self>) {
+        if let Some(pending) = self.timer.take() {
+            pending.remove();
+        }
+        let reporter = Rc::clone(self);
+        let timer = glib::timeout_add_local_once(RESIZE_SETTLE, move || reporter.report());
+        self.timer.set(Some(timer));
+    }
+
+    fn report(&self) {
+        // The timer has fired; removing it again would be a GLib error.
+        self.timer.set(None);
+        if let Some(view) = self.view.upgrade() {
+            (self.on_resized)(column_widths(&view));
+        }
+    }
+}
+
 /// Calls `on_resized` with every column width once a resize settles.
 pub(crate) fn connect_columns_resized(
     view: &gtk::ColumnView,
     on_resized: impl Fn(Vec<(Column, f64)>) + 'static,
 ) {
-    let on_resized = Rc::new(on_resized);
-    let timer: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+    let reporter = Rc::new(ResizeReporter {
+        view: view.downgrade(),
+        on_resized,
+        timer: Cell::new(None),
+    });
     for column in SortColumn::ALL {
         let Some(view_column) = view_column(view, column) else {
             continue;
         };
-        let weak_view = view.downgrade();
-        let on_resized = Rc::clone(&on_resized);
-        let timer = Rc::clone(&timer);
-        view_column.connect_fixed_width_notify(move |_| {
-            if let Some(pending) = timer.borrow_mut().take() {
-                pending.remove();
-            }
-            let weak_view = weak_view.clone();
-            let on_resized = Rc::clone(&on_resized);
-            let slot = Rc::clone(&timer);
-            let source = glib::timeout_add_local_once(RESIZE_SETTLE, move || {
-                slot.borrow_mut().take();
-                if let Some(view) = weak_view.upgrade() {
-                    on_resized(column_widths(&view));
-                }
-            });
-            timer.borrow_mut().replace(source);
-        });
+        let reporter = Rc::clone(&reporter);
+        view_column.connect_fixed_width_notify(move |_| reporter.restart());
     }
 }
 
@@ -249,23 +286,23 @@ pub(crate) fn sort_by(view: &gtk::ColumnView, column: SortColumn, direction: Sor
 
 /// The current sort column and direction (Name ascending when unsorted).
 pub(crate) fn current_sort(view: &gtk::ColumnView) -> (SortColumn, SortDirection) {
-    let sorter = view.sorter().and_downcast::<gtk::ColumnViewSorter>();
-    let Some(sorter) = sorter else {
-        return (SortColumn::Name, SortDirection::Ascending);
-    };
-    let column = sorter
-        .primary_sort_column()
-        .and_then(|column| column.id())
-        .and_then(|id| SortColumn::from_key(&id))
-        .unwrap_or(SortColumn::Name);
+    primary_sort(view).unwrap_or((SortColumn::Name, SortDirection::Ascending))
+}
+
+/// The column and direction the view sorts by, or `None` while unsorted.
+pub(crate) fn primary_sort(view: &gtk::ColumnView) -> Option<(SortColumn, SortDirection)> {
+    let sorter = view.sorter().and_downcast::<gtk::ColumnViewSorter>()?;
+    let id = sorter.primary_sort_column()?.id()?;
+    let column = SortColumn::from_key(&id)?;
     let direction = SortDirection::from_sort_type(sorter.primary_sort_order());
-    (column, direction)
+    Some((column, direction))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// parity: VIEW-028
     #[test]
     fn unsaved_columns_start_at_the_python_defaults() {
         assert_eq!(start_width(SortColumn::Name, None), None);
@@ -274,6 +311,7 @@ mod tests {
         assert_eq!(start_width(SortColumn::Size, None), Some(90));
     }
 
+    /// parity: VIEW-028
     #[test]
     fn saved_widths_are_used_within_their_limits() {
         let saved = ColumnWidths {
@@ -288,6 +326,15 @@ mod tests {
         assert_eq!(start_width(SortColumn::Type, Some(&saved)), Some(135));
     }
 
+    #[test]
+    fn the_end_columns_hold_the_lists_padding() {
+        assert_eq!(fixed_width(SortColumn::Name, None), NO_FIXED_WIDTH);
+        assert_eq!(fixed_width(SortColumn::Name, Some(300)), 314);
+        assert_eq!(fixed_width(SortColumn::Modified, Some(152)), 152);
+        assert_eq!(fixed_width(SortColumn::Size, Some(90)), 104);
+    }
+
+    /// parity: VIEW-028
     #[test]
     fn saved_widths_leave_out_the_end_columns_padding() {
         assert_eq!(saved_width(SortColumn::Size, 104), Some(90.0));

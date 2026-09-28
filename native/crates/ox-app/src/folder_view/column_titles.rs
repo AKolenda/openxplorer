@@ -15,6 +15,7 @@
 use gtk::glib;
 use gtk::prelude::*;
 
+use crate::folder_view::details;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::icons::{self, Glyph};
 
@@ -53,10 +54,8 @@ pub(crate) fn style_titles(view: &gtk::ColumnView) {
 /// The box inside each column title, in column order.
 fn title_boxes(view: &gtk::ColumnView) -> Vec<gtk::Box> {
     let header = view.first_child().filter(|child| child.css_name() == "header");
-    let titles = std::iter::successors(header.and_then(|header| header.first_child()), |title| {
-        title.next_sibling()
-    });
-    titles
+    let first_title = header.and_then(|header| header.first_child());
+    std::iter::successors(first_title, WidgetExt::next_sibling)
         .filter_map(|title| title.first_child().and_downcast::<gtk::Box>())
         .collect()
 }
@@ -74,26 +73,24 @@ fn append_caret(title: &gtk::Box) -> gtk::Image {
 /// Shows the arrow of the column the view sorts by, pointing its way,
 /// and hides the others (`aria-sort` in `renderColumns`).
 fn show_sort_caret(view: &gtk::ColumnView, carets: &[gtk::Image]) {
-    let sorted = primary_sort(view);
+    let primary_sort = details::primary_sort(view);
     for (column, caret) in SortColumn::ALL.into_iter().zip(carets) {
-        let direction = sorted.filter(|(by, _)| *by == column).map(|(_, way)| way);
-        caret.set_visible(direction.is_some());
-        for way in [SortDirection::Ascending, SortDirection::Descending] {
-            caret.remove_css_class(way.key());
-        }
-        if let Some(way) = direction {
-            caret.add_css_class(way.key());
-        }
+        let direction = primary_sort
+            .filter(|(sorted_column, _)| *sorted_column == column)
+            .map(|(_, direction)| direction);
+        point_caret(caret, direction);
     }
 }
 
-/// The column and direction the view sorts by, or `None` while unsorted.
-fn primary_sort(view: &gtk::ColumnView) -> Option<(SortColumn, SortDirection)> {
-    let sorter = view.sorter().and_downcast::<gtk::ColumnViewSorter>()?;
-    let id = sorter.primary_sort_column()?.id()?;
-    let column = SortColumn::from_key(&id)?;
-    let direction = SortDirection::from_sort_type(sorter.primary_sort_order());
-    Some((column, direction))
+/// Shows `caret` pointing `direction`, or hides it for `None`.
+fn point_caret(caret: &gtk::Image, direction: Option<SortDirection>) {
+    caret.set_visible(direction.is_some());
+    for other in SortDirection::ALL {
+        caret.remove_css_class(other.key());
+    }
+    if let Some(direction) = direction {
+        caret.add_css_class(direction.key());
+    }
 }
 
 /// The direction each title's arrow shows, in column order: `None` where
@@ -105,13 +102,16 @@ pub(crate) fn shown_carets(view: &gtk::ColumnView) -> Vec<Option<SortDirection>>
             .last_child()
             .filter(|child| child.has_css_class(CARET_CLASS))
     });
-    carets
-        .map(|caret| {
-            let visible = caret.is_visible();
-            let way = [SortDirection::Ascending, SortDirection::Descending]
-                .into_iter()
-                .find(|way| caret.has_css_class(way.key()));
-            way.filter(|_| visible)
-        })
-        .collect()
+    carets.map(|caret| shown_direction(&caret)).collect()
+}
+
+/// The direction a visible caret points; `None` for a hidden one.
+#[cfg(test)]
+fn shown_direction(caret: &gtk::Widget) -> Option<SortDirection> {
+    if !caret.is_visible() {
+        return None;
+    }
+    SortDirection::ALL
+        .into_iter()
+        .find(|direction| caret.has_css_class(direction.key()))
 }
