@@ -104,7 +104,8 @@ impl BrowserWindow {
 
     /// Gives a new window's file list keyboard focus once the window is
     /// shown and its first location is listed, as `#main` has focus when
-    /// app.js starts. A landing page or an empty folder has no list to
+    /// app.js starts, and again after Settings hides (see
+    /// `settings_tab.rs`). A landing page or an empty folder has no list to
     /// focus, so nothing keeps focus: GTK would otherwise leave it on the
     /// first focusable widget, and a focused crumb draws the address bar's
     /// editing line.
@@ -112,7 +113,7 @@ impl BrowserWindow {
         if !(self.is_mapped() && self.is_listed()) {
             return;
         }
-        // Only the first time: later listings leave focus where it is.
+        // Only when asked for: later listings leave focus where it is.
         let awaits_focus = self.imp().file_list_awaits_focus.replace(false);
         if !awaits_focus {
             return;

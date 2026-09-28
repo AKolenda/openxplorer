@@ -14,7 +14,6 @@ use gtk::{gio, glib};
 use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
-use crate::settings_page::{Category, SettingsView};
 use crate::text_size::Step;
 use crate::theme::ThemePreference;
 
@@ -25,7 +24,7 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// An action without a target.
-fn plain_action(
+pub(super) fn plain_action(
     window_action: WindowAction,
     run: impl Fn(&BrowserWindow) + 'static,
 ) -> gio::ActionEntry<BrowserWindow> {
@@ -332,18 +331,6 @@ impl BrowserWindow {
             })
         });
         self.add_action_entries(steps);
-    }
-
-    /// Settings, the Default file explorer… shortcut to it, and the layout
-    /// reset it offers.
-    fn install_settings_actions(&self) {
-        self.add_action_entries([
-            plain_action(WindowAction::Settings, |window| window.open_settings(None)),
-            plain_action(WindowAction::DefaultFileExplorer, |window| {
-                window.open_settings(Some(SettingsView::Category(Category::DefaultApps)));
-            }),
-            plain_action(WindowAction::ResetLayout, BrowserWindow::reset_layout),
-        ]);
     }
 
     /// Ctrl+F: the settings search on the Settings tab, else the search

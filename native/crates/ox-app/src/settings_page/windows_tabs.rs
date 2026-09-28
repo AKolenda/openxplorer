@@ -4,8 +4,8 @@
 //!
 //! Ports the "Windows & tabs" section of `appendV07Settings` in
 //! `desktop/ui/app.js` (SET-009). "Open windows…" opens the menu of the
-//! title bar's windows button (`windowsMenu`), which the window gives the
-//! button, and "New window" runs `app.new-window` (Ctrl+N). The Python
+//! title bar's windows button (`windowsMenu`), and "New window" runs
+//! `app.new-window` (Ctrl+N). The Python
 //! section's paragraph about dragging tabs and files becomes three rows
 //! that wait for the file-operations milestone, which brings that
 //! dragging, and a note with the rest.
@@ -20,7 +20,7 @@ use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
 use crate::application::AppAction;
 use crate::icons::Icon;
-use crate::window::Milestone;
+use crate::window::{list_open_windows_on_click, Milestone};
 
 const OPEN_WINDOWS: RowText = RowText {
     title: "Open windows",
@@ -61,27 +61,28 @@ const DRAGGING_NOTE: &str = "Right-click a tab → Move tab to window… lets yo
                              File drops never remove the source. ZIP contents must be extracted \
                              first; some apps need a mounted network path.";
 
-/// The Windows & tabs page and its "Open windows…" button.
-pub(super) fn build() -> (CategoryPage, gtk::MenuButton) {
+/// The Windows & tabs page.
+pub(super) fn build() -> CategoryPage {
     let category = Category::WindowsAndTabs;
     let windows = CategoryPage::new(category.title(), category.lead(), PageKind::Category);
-    let open_windows = open_windows_button();
-    windows.append_group(&windows_group(&open_windows));
+    windows.append_group(&windows_group());
     windows.append_group(&dragging_group());
     windows.append_extra(&parts::note(Icon::Info, DRAGGING_NOTE));
-    (windows, open_windows)
+    windows
 }
 
-/// "Open windows…" with the windows button's glyph; the window gives it
-/// the title bar's windows menu.
+/// "Open windows…" with the windows button's glyph, opening the title
+/// bar's windows menu.
 fn open_windows_button() -> gtk::MenuButton {
-    parts::menu_button_with_glyph("Open windows…", Icon::Desktop)
+    let button = parts::menu_button_with_glyph("Open windows…", Icon::Desktop);
+    list_open_windows_on_click(&button);
+    button
 }
 
-fn windows_group(open_windows: &gtk::MenuButton) -> SettingsGroup {
+fn windows_group() -> SettingsGroup {
     let group = SettingsGroup::new("Windows");
     let listing = SettingRow::new(OPEN_WINDOWS);
-    listing.add_control(open_windows, ControlName::OwnLabel);
+    listing.add_control(&open_windows_button(), ControlName::OwnLabel);
     group.add_row(&listing);
     let new_window = SettingRow::new(NEW_WINDOW);
     let button = parts::button_with_glyph("New window", Icon::WindowNew);

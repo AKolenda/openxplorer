@@ -224,6 +224,39 @@ fn a_search_that_matches_nothing_says_so() {
     assert!(settings.listed_categories().is_empty());
 }
 
+/// More > Default file explorer… names its category, so it shows all of
+/// it rather than the rows an earlier search left, which may be none.
+///
+/// parity: SET-019
+#[gtk::test]
+fn default_file_explorer_during_a_search_shows_all_of_default_apps() {
+    let settings = SettingsTest::open();
+    settings.page.search("zoom");
+
+    settings.test.activate("default-file-explorer", None);
+
+    assert_eq!(
+        settings.page.view(),
+        SettingsView::Category(Category::DefaultApps)
+    );
+    let imp = settings.page.imp();
+    assert_eq!(imp.search_entry.text(), "", "the search is emptied");
+    assert_eq!(imp.pages.visible_child_name().as_deref(), Some("default-apps"));
+    assert_eq!(settings.listed_categories(), Category::ALL);
+    let every_row = settings.page.category_page(Category::DefaultApps).rows();
+    assert_eq!(settings.shown_rows().len(), every_row.len());
+}
+
+/// Typing on the page outside a text field goes to the settings search.
+///
+/// parity: SET-019
+#[gtk::test]
+fn typing_on_the_page_starts_a_settings_search() {
+    let settings = SettingsTest::open();
+    let capture = settings.page.imp().search_entry.key_capture_widget();
+    assert_eq!(capture, Some(settings.page.clone().upcast()));
+}
+
 /// parity: SET-019
 #[gtk::test]
 fn enter_in_the_search_jumps_to_the_first_match() {

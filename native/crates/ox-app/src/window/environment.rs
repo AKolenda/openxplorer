@@ -127,7 +127,7 @@ impl BrowserWindow {
         self.render_landing_with(&places);
         self.render_tabs();
         self.update_details_pane();
-        self.show_index_candidates(&places);
+        self.update_index_candidates(&places.quick_access);
     }
 
     /// Redraws the landing page when the active tab shows one.

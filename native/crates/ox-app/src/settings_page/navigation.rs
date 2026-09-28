@@ -339,7 +339,8 @@ impl SettingsPage {
         self.focus_chosen_category();
     }
 
-    fn focus_chosen_category(&self) {
+    /// Gives the chosen category's row in the list keyboard focus.
+    pub(super) fn focus_chosen_category(&self) {
         if let Some(row) = self.imp().category_list.selected_row() {
             row.grab_focus();
         }

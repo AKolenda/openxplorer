@@ -141,8 +141,6 @@ mod imp {
         pub(super) query: RefCell<SearchQuery>,
         /// The folders the search index can take.
         pub(super) indexed_folders: OnceCell<FolderList>,
-        /// "Open windows…", whose menu the window provides.
-        pub(super) open_windows_button: OnceCell<gtk::MenuButton>,
         /// Controls that show a preference.
         pub(super) followers: RefCell<Vec<PreferenceFollower>>,
         /// Set while the controls show the current preferences, so their
@@ -226,6 +224,9 @@ impl SettingsPage {
         icons::set_icon(&imp.back_glyph, Icon::ArrowLeft, BACK_GLYPH);
         show_bundled_magnifier(&imp.search_entry);
         show_bundled_clear_icon(&imp.search_entry);
+        // Typing anywhere on the page outside a text field starts a
+        // settings search, as in GNOME Settings.
+        imp.search_entry.set_key_capture_widget(Some(self));
         imp.back_button.connect_clicked(glib::clone!(
             #[weak(rename_to = page)]
             self,
@@ -273,14 +274,7 @@ impl SettingsPage {
             Category::Appearance => appearance::build(self),
             Category::SearchAndIndexing => indexing::build(self),
             Category::DefaultApps => default_apps::build(self),
-            Category::WindowsAndTabs => {
-                let (page, open_windows) = windows_tabs::build();
-                self.imp()
-                    .open_windows_button
-                    .set(open_windows)
-                    .expect("the categories are built once");
-                page
-            }
+            Category::WindowsAndTabs => windows_tabs::build(),
             Category::BraveAndDownloads => brave::build(),
             Category::About => about::build(),
         }
@@ -337,17 +331,19 @@ impl SettingsPage {
         })
     }
 
-    /// "Open windows…" in Windows & tabs, whose menu the window provides.
-    ///
-    /// # Panics
-    ///
-    /// Before [`Self::bind`], which builds it.
-    pub(crate) fn open_windows_button(&self) -> gtk::MenuButton {
-        self.imp()
-            .open_windows_button
-            .get()
-            .cloned()
-            .expect("SettingsPage::bind builds Windows & tabs")
+    /// Settings opened, at `view` when one is asked for, else where it was
+    /// left: reads what may have changed while it was closed and gives the
+    /// chosen category keyboard focus, so arrow keys, Escape and typing
+    /// reach the page at once.
+    pub(crate) fn open(&self, view: Option<SettingsView>) {
+        if let Some(view) = view {
+            // A view asked for by name shows all of it, not the rows an
+            // earlier search left, which may be none.
+            self.search("");
+            self.show_view(view);
+        }
+        self.refresh();
+        self.focus_chosen_category();
     }
 
     /// "Back to files", for tests.

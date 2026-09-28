@@ -65,7 +65,7 @@ impl SettingsPage {
     }
 
     /// Settings opened: reads what may have changed while it was closed.
-    pub(crate) fn refresh(&self) {
+    pub(super) fn refresh(&self) {
         self.show_current_preferences();
         for hook in self.imp().opened_hooks.borrow().iter() {
             hook();

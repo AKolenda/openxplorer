@@ -101,6 +101,7 @@ pub(crate) use button_style::ButtonStyle;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use location_kind::is_local_or_smb_location;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
+pub(crate) use title_bar::list_open_windows_on_click;
 pub(crate) use unported::Milestone;
 pub(crate) use widget_tree::children;
 pub(crate) use window_action::WindowAction;
@@ -144,6 +145,7 @@ mod imp {
     use super::folder_pane::FolderPane;
     use super::search_box::SearchBox;
     use super::session::Session;
+    use super::settings_tab::SettingsTabState;
     use super::sidebar::Sidebar;
     use super::status_bar::StatusBar;
     use super::tab_strip::TabStrip;
@@ -207,9 +209,9 @@ mod imp {
         /// The Settings page, shown on the Settings tab.
         #[template_child]
         pub(super) settings_page: TemplateChild<SettingsPage>,
-        /// The folder shown before Settings opened, which the search index
-        /// offers first (`state.settingsOrigin` in app.js).
-        pub(super) settings_origin: RefCell<Option<String>>,
+        /// The folder shown before Settings and the places Settings offers
+        /// the search index.
+        pub(super) settings_tab: RefCell<SettingsTabState>,
         /// What every window shares: the skin, settings and places. It
         /// comes from the application, so [`super::BrowserWindow::new`]
         /// sets it.
@@ -228,7 +230,8 @@ mod imp {
         /// Set while the window swaps or reloads the model, so the
         /// selection it restores is not saved over the tab's selection.
         pub(super) changing_model: Cell<bool>,
-        /// Set until the file list first takes keyboard focus; see
+        /// Set until the file list takes keyboard focus in a new window or
+        /// after Settings hides; see
         /// [`super::BrowserWindow::focus_new_file_list`].
         pub(super) file_list_awaits_focus: Cell<bool>,
         /// The width band the layout was last fitted to.

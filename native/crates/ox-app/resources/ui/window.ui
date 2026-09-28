@@ -5,7 +5,8 @@
   top to bottom. src/window/mod.rs binds the parts it updates by id. On
   the Settings tab the Settings page takes the place of the navigation
   row, the command bar, the workspace and the status bar
-  (src/window/settings_tab.rs), as `.settings-open` in style.css.
+  (src/window/settings_tab.rs). The status bar follows the settings
+  mockup, which has none; `.settings-open` in style.css kept it.
 
   Buttons name no action here: Rust sets every action name from
   WindowAction, so a misspelt name is a compile error, and draws the

@@ -43,7 +43,7 @@ impl BrowserWindow {
 
 /// Makes the monitor button (`#windows-button`), or Settings' "Open
 /// windows…", open the list of open windows.
-pub(super) fn list_open_windows_on_click(button: &gtk::MenuButton) {
+pub(crate) fn list_open_windows_on_click(button: &gtk::MenuButton) {
     let popover = MenuPopover::new(Vec::new());
     button.set_popover(Some(&popover));
     // Built as it opens, so it lists the windows open now.
