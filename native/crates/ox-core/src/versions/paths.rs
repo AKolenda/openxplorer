@@ -13,15 +13,29 @@ use crate::location::{split_location, unquote_lossy, validate_name, LocationErro
 
 /// Folder names that hold snapshots: `.snapshot` (most NAS systems),
 /// `.snapshots` (Snapper on Btrfs) and `#snapshot` (Synology over SMB).
-const SNAPSHOT_FOLDER_NAMES: [&str; 3] = [".snapshot", ".snapshots", "#snapshot"];
+/// Python's `MARKERS`.
+///
+/// These names, [`SMB_VERSION_PREFIX`] and [`ZFS_SNAPSHOT_FOLDER`] are the
+/// snapshot markers of PROP-021 and PROP-024, defined only here. The
+/// read-only rule ([`is_conventional_snapshot`]) and the "Previous
+/// version" badge ([`snapshot_location`](super::snapshot_location()))
+/// both read them, so they always agree.
+pub(crate) const SNAPSHOT_FOLDER_NAMES: [&str; 3] = [".snapshot", SNAPPER_COLLECTION, "#snapshot"];
+
+/// Snapper's snapshot collection on Btrfs, whose snapshots keep their
+/// files in a [`SNAPPER_FILES_FOLDER`]: `.snapshots/<id>/snapshot`.
+pub(crate) const SNAPPER_COLLECTION: &str = ".snapshots";
+
+/// The folder inside a Snapper snapshot that holds its files.
+pub(crate) const SNAPPER_FILES_FOLDER: &str = "snapshot";
 
 /// The start of the folder names Windows "Previous Versions" shows over
 /// SMB, for example `@GMT-2026.09.05-18.00.00`.
-const SMB_VERSION_PREFIX: &str = "@GMT-";
+pub(crate) const SMB_VERSION_PREFIX: &str = "@GMT-";
 
 /// The two path components of the snapshot folder ZFS exposes in every
 /// dataset: `.zfs/snapshot`.
-const ZFS_SNAPSHOT_FOLDER: [&str; 2] = [".zfs", "snapshot"];
+pub(crate) const ZFS_SNAPSHOT_FOLDER: [&str; 2] = [".zfs", "snapshot"];
 
 /// The characters Python's `quote(name, safe='')` leaves alone: letters,
 /// digits and `_.-~`. Everything else in a name is percent-encoded, `/`

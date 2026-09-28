@@ -6,38 +6,68 @@
 //! a snapshot when a path component marks one (`.snapshot/<name>`,
 //! `.snapshots/<id>/snapshot`, `#snapshot/<name>`,
 //! `.zfs/snapshot/<name>` or `@GMT-…`), percent-encoded or not, or when it
-//! lies below a configured or discovered snapshot collection.
+//! lies below a configured or discovered snapshot collection. The markers
+//! are those of the read-only rule, defined once in `paths`.
 
-use percent_encoding::percent_decode_str;
-
-use super::paths::relative_uri;
-use crate::location::split_location;
+use super::paths::{
+    relative_uri, SMB_VERSION_PREFIX, SNAPPER_COLLECTION, SNAPPER_FILES_FOLDER, SNAPSHOT_FOLDER_NAMES,
+    ZFS_SNAPSHOT_FOLDER,
+};
+use super::SnapshotDate;
+use crate::location::{decode_uri_component, split_location};
 
 /// The label of a snapshot collection folder itself, which holds
 /// snapshots rather than being one.
 pub const SNAPSHOT_COLLECTION: &str = "Snapshot collection";
 
-/// Folder names whose subfolders are snapshots.
-const COLLECTION_NAMES: [&str; 3] = [".snapshot", ".snapshots", "#snapshot"];
-
-/// Snapper's collection, whose snapshots keep their files in a
-/// `snapshot` subfolder: `.snapshots/<id>/snapshot`.
-const SNAPPER_COLLECTION: &str = ".snapshots";
-
-/// The subfolder of a Snapper snapshot, and the ZFS collection's name
-/// after `.zfs`.
-const SNAPSHOT_FOLDER: &str = "snapshot";
-
-/// The start of a Windows "Previous Versions" folder name.
-const SMB_VERSION_PREFIX: &str = "@GMT-";
-
-/// The snapshot a location is inside.
+/// Where among the snapshots a location is: at a snapshot collection
+/// folder itself, or inside one snapshot.
+///
+/// The variant, not the label text, tells the two apart, so a snapshot
+/// that happens to be named "Snapshot collection" is still a snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SnapshotLocation {
-    /// The snapshot's own folder, or the collection folder itself.
-    pub root: String,
-    /// The snapshot's name, or [`SNAPSHOT_COLLECTION`] for a collection.
-    pub label: String,
+pub enum SnapshotLocation {
+    /// The location is a snapshot collection folder, which holds snapshots
+    /// rather than being one.
+    Collection {
+        /// The collection folder.
+        root: String,
+    },
+    /// The location is a snapshot's own folder or lies inside it.
+    Snapshot {
+        /// The snapshot's own folder.
+        root: String,
+        /// The snapshot's name, which carries its date (PROP-020).
+        name: String,
+    },
+}
+
+impl SnapshotLocation {
+    /// The folder a tab's "Previous version" badge covers: the snapshot's
+    /// own folder, or the collection folder.
+    pub fn root(&self) -> &str {
+        match self {
+            Self::Collection { root } | Self::Snapshot { root, .. } => root,
+        }
+    }
+
+    /// The text the banner shows: the snapshot's name, or
+    /// [`SNAPSHOT_COLLECTION`] for a collection.
+    pub fn label(&self) -> &str {
+        match self {
+            Self::Collection { .. } => SNAPSHOT_COLLECTION,
+            Self::Snapshot { name, .. } => name,
+        }
+    }
+
+    /// The date in the snapshot's name (PROP-020); `None` for a
+    /// collection and for a name without a date.
+    pub fn date(&self) -> Option<SnapshotDate> {
+        match self {
+            Self::Collection { .. } => None,
+            Self::Snapshot { name, .. } => SnapshotDate::from_snapshot_name(name),
+        }
+    }
 }
 
 /// The snapshot `uri` is inside, if any. `snapshot_roots` are the known
@@ -50,22 +80,17 @@ pub fn snapshot_location(uri: &str, snapshot_roots: &[String]) -> Option<Snapsho
     let decoded: Vec<String> = encoded
         .iter()
         .copied()
-        .map(decode_component)
+        .map(decode_uri_component)
         .collect::<Option<_>>()?;
     match find_marker(&decoded) {
-        Some(Marker::Collection) => Some(SnapshotLocation {
-            root: uri.to_owned(),
-            label: SNAPSHOT_COLLECTION.to_owned(),
-        }),
-        Some(Marker::Snapshot { last }) => Some(SnapshotLocation {
-            root: format!(
-                "{}://{}{}",
-                parts.scheme,
-                parts.authority,
-                encoded[..=last].join("/")
-            ),
-            label: snapshot_name(&decoded, last).to_owned(),
-        }),
+        Some(Marker::Collection) => Some(SnapshotLocation::Collection { root: uri.to_owned() }),
+        Some(Marker::Snapshot { last }) => {
+            let snapshot_path = encoded[..=last].join("/");
+            Some(SnapshotLocation::Snapshot {
+                root: format!("{}://{}{snapshot_path}", parts.scheme, parts.authority),
+                name: snapshot_name(&decoded, last).to_owned(),
+            })
+        }
         None => configured_snapshot(uri, snapshot_roots),
     }
 }
@@ -84,7 +109,7 @@ enum Marker {
 fn find_marker(components: &[String]) -> Option<Marker> {
     let is_empty_at = |index: usize| components.get(index).is_none_or(String::is_empty);
     for (index, name) in components.iter().enumerate() {
-        if COLLECTION_NAMES.contains(&name.as_str()) {
+        if SNAPSHOT_FOLDER_NAMES.contains(&name.as_str()) {
             let snapshot = index + 1;
             if is_empty_at(snapshot) {
                 return Some(Marker::Collection);
@@ -92,16 +117,15 @@ fn find_marker(components: &[String]) -> Option<Marker> {
             let is_snapper = name == SNAPPER_COLLECTION
                 && components
                     .get(snapshot + 1)
-                    .is_some_and(|next| next == SNAPSHOT_FOLDER);
+                    .is_some_and(|next| next == SNAPPER_FILES_FOLDER);
             let last = if is_snapper { snapshot + 1 } else { snapshot };
             return Some(Marker::Snapshot { last });
         }
-        if name == ".zfs"
-            && components
-                .get(index + 1)
-                .is_some_and(|next| next == SNAPSHOT_FOLDER)
-        {
-            let snapshot = index + 2;
+        let is_zfs_collection = components
+            .get(index..index + ZFS_SNAPSHOT_FOLDER.len())
+            .is_some_and(|pair| pair == ZFS_SNAPSHOT_FOLDER);
+        if is_zfs_collection {
+            let snapshot = index + ZFS_SNAPSHOT_FOLDER.len();
             if is_empty_at(snapshot) {
                 return Some(Marker::Collection);
             }
@@ -118,7 +142,7 @@ fn find_marker(components: &[String]) -> Option<Marker> {
 /// id of a Snapper snapshot, else the folder's own name.
 fn snapshot_name(components: &[String], last: usize) -> &str {
     let is_snapper_files_folder =
-        components[last] == SNAPSHOT_FOLDER && last >= 2 && components[last - 2] == SNAPPER_COLLECTION;
+        components[last] == SNAPPER_FILES_FOLDER && last >= 2 && components[last - 2] == SNAPPER_COLLECTION;
     if is_snapper_files_folder {
         &components[last - 1]
     } else {
@@ -142,32 +166,14 @@ fn snapshot_below(uri: &str, root: &str) -> Option<SnapshotLocation> {
     let collection = root.trim_end_matches('/');
     let snapshot = below.split('/').next().unwrap_or_default();
     if snapshot.is_empty() {
-        return Some(SnapshotLocation {
+        return Some(SnapshotLocation::Collection {
             root: collection.to_owned(),
-            label: SNAPSHOT_COLLECTION.to_owned(),
         });
     }
-    Some(SnapshotLocation {
+    Some(SnapshotLocation::Snapshot {
         root: format!("{collection}/{snapshot}"),
-        label: decode_component(snapshot)?,
+        name: decode_uri_component(snapshot)?,
     })
-}
-
-/// JavaScript's `decodeURIComponent`: `None` for a `%` that does not
-/// start a two-digit hex escape, or escapes that are not UTF-8.
-fn decode_component(component: &str) -> Option<String> {
-    let has_only_complete_escapes = component.split('%').skip(1).all(starts_with_hex_pair);
-    if !has_only_complete_escapes {
-        return None;
-    }
-    let decoded = percent_decode_str(component).decode_utf8().ok()?;
-    Some(decoded.into_owned())
-}
-
-/// True when `text` starts with two hex digits.
-fn starts_with_hex_pair(text: &str) -> bool {
-    let pair = text.as_bytes().get(..2);
-    pair.is_some_and(|pair| pair.iter().all(u8::is_ascii_hexdigit))
 }
 
 #[cfg(test)]
@@ -209,7 +215,8 @@ mod tests {
 
     /// The label of `uri` without configured roots.
     fn label_of(uri: &str) -> Option<String> {
-        snapshot_location(uri, &[]).map(|location| location.label)
+        let location = snapshot_location(uri, &[])?;
+        Some(location.label().to_owned())
     }
 
     /// Ported from `desktop/tests/snapshot_meta.test.cjs` ("Historical
@@ -235,9 +242,9 @@ mod tests {
 
         assert_eq!(
             location,
-            Some(SnapshotLocation {
+            Some(SnapshotLocation::Snapshot {
                 root: "smb://nas/backup/nightly".into(),
-                label: "nightly".into(),
+                name: "nightly".into(),
             })
         );
     }
@@ -272,7 +279,7 @@ mod tests {
         let location = snapshot_location("smb://nas/share/.zfs/snapshot/nightly/child", &[]);
 
         assert_eq!(
-            location.map(|location| location.root).as_deref(),
+            location.as_ref().map(SnapshotLocation::root),
             Some("smb://nas/share/.zfs/snapshot/nightly")
         );
     }
@@ -292,22 +299,59 @@ mod tests {
         let collection = snapshot_location("smb://nas/backup/", &roots);
         let deeper = snapshot_location("smb://nas/backup/deeper/day%201/a", &roots);
 
-        let snapper_root = snapper.map(|location| location.root);
         assert_eq!(
-            snapper_root.as_deref(),
+            snapper.as_ref().map(SnapshotLocation::root),
             Some("file:///home/.snapshots/123/snapshot")
         );
         assert_eq!(
-            collection.map(|location| location.label).as_deref(),
+            collection.as_ref().map(SnapshotLocation::label),
             Some(SNAPSHOT_COLLECTION)
         );
         assert_eq!(
-            deeper,
-            Some(SnapshotLocation {
-                root: "smb://nas/backup/deeper/day%201".into(),
-                label: "day 1".into(),
+            collection,
+            Some(SnapshotLocation::Collection {
+                root: "smb://nas/backup".into(),
             })
         );
+        assert_eq!(
+            deeper,
+            Some(SnapshotLocation::Snapshot {
+                root: "smb://nas/backup/deeper/day%201".into(),
+                name: "day 1".into(),
+            })
+        );
+    }
+
+    /// A snapshot named like the collection label is still a snapshot,
+    /// with its own folder as the root.
+    ///
+    /// parity: PROP-021
+    #[test]
+    fn a_snapshot_named_like_the_collection_label_is_a_snapshot() {
+        let roots = ["smb://nas/backup".to_owned()];
+
+        let location = snapshot_location("smb://nas/backup/Snapshot%20collection/x", &roots);
+
+        assert_eq!(
+            location,
+            Some(SnapshotLocation::Snapshot {
+                root: "smb://nas/backup/Snapshot%20collection".into(),
+                name: SNAPSHOT_COLLECTION.into(),
+            })
+        );
+    }
+
+    /// A snapshot's date comes from its name; a collection has none.
+    ///
+    /// parity: PROP-020, PROP-021
+    #[test]
+    fn only_a_snapshot_has_a_date() {
+        let dated = snapshot_location("smb://nas/share/.snapshot/daily-2026-09-05/a", &[]);
+        let collection = snapshot_location("smb://nas/share/.snapshot/", &[]);
+
+        let date = dated.and_then(|location| location.date());
+        assert_eq!(date.map(|date| date.date_text()).as_deref(), Some("2026-09-05"));
+        assert_eq!(collection.and_then(|location| location.date()), None);
     }
 
     /// `decodeURIComponent` throws on a malformed escape, and

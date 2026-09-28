@@ -10,7 +10,7 @@
 use std::cmp::Reverse;
 use std::sync::Arc;
 
-use super::paths::{child_uri, relative_uri};
+use super::paths::{child_uri, relative_uri, SNAPPER_FILES_FOLDER};
 use super::provider::{CollectionListing, GioSnapshotProvider, SnapshotProvider};
 use super::{PreviousVersions, SnapshotDate, SnapshotLayout, SnapshotSource, VersionsError};
 use crate::entry::{Entry, EntryError};
@@ -33,10 +33,6 @@ pub const PROVIDER_NAME: &str = "Exposed snapshot folders";
 pub const NO_VERSIONS_FOUND: &str = "No matching previous versions were found in readable snapshot \
                                      folders. This does not prove that your server has no snapshots \
                                      or backups.";
-
-/// The folder inside a Snapper snapshot (`.snapshots/<id>/snapshot`) that
-/// holds the files.
-const SNAPPER_FILES_FOLDER: &str = "snapshot";
 
 /// The collection folders looked for at the root of an SMB share. `#` is
 /// escaped because it is part of a URI.

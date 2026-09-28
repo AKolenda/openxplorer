@@ -8,6 +8,8 @@
 //! timezone the server did not say and which is never converted. The
 //! localised medium date ("Sep 5, 2026") is left to the window.
 
+use super::paths::SMB_VERSION_PREFIX;
+
 /// Shown instead of a date when the snapshot's name has none.
 pub const DATE_UNAVAILABLE: &str = "Date unavailable";
 
@@ -20,9 +22,6 @@ pub const NO_DATE_EXPLANATION: &str = "This snapshot has no recognized date in i
 
 /// Where the date of a snapshot whose name has one comes from.
 pub const DATE_FROM_NAME: &str = "From snapshot name";
-
-/// The start of a Windows "Previous Versions" folder name.
-const SMB_VERSION_PREFIX: &str = "@GMT-";
 
 /// The characters that may separate a date from its time: `T`, `_`, a
 /// space or `-`.
