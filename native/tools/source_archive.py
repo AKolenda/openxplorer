@@ -5,9 +5,10 @@
 openxplorer-<version>.tar.gz holds the committed files a package build needs
 (native/, the Python mount helper in desktop/, and the licences), under the
 folder openxplorer-<version>/. With --vendor, openxplorer-<version>-vendor.tar.gz
-adds every crate of Cargo.lock under openxplorer-<version>/vendor/, so an RPM
-build, which may not use the network, compiles offline. Both archives are
-reproducible: sorted entries, root ownership and the last commit's time.
+holds every crate of Cargo.lock under vendor/, which the RPM spec unpacks inside
+the source folder, so an RPM build, which may not use the network, compiles
+offline. Both archives are reproducible: sorted entries, root ownership and the
+last commit's time.
 """
 from __future__ import annotations
 
@@ -26,6 +27,9 @@ from package_data import CARGO_MANIFEST, REPOSITORY
 OUTPUT_DIRECTORY = REPOSITORY / 'dist' / 'native'
 # The committed paths a package build reads.
 SOURCE_PATHS = ('native', 'desktop', 'licenses', 'LICENSE', 'THIRD_PARTY_NOTICES.md')
+# The top folder of the vendored-crate archive, which .cargo/config.toml in
+# the RPM spec names as the replacement for crates.io.
+VENDOR_FOLDER = 'vendor'
 
 
 @dataclass(frozen=True)
@@ -60,7 +64,7 @@ def write_vendor_archive(request: ArchiveRequest) -> Path:
         command = ['cargo', 'vendor', '--locked', '--versioned-dirs',
                    '--manifest-path', str(CARGO_MANIFEST), str(vendor)]
         subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
-        write_reproducible_tar(vendor, f'{request.top_folder}/vendor', output, request.epoch)
+        write_reproducible_tar(vendor, VENDOR_FOLDER, output, request.epoch)
     return output
 
 

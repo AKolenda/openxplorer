@@ -40,6 +40,9 @@ if [[ $pkgname == openxplorer ]]; then
   optdepends+=('python: the persistent SMB mount helper, openxplorer-mount-share'
                'cifs-utils: the persistent SMB mount helper')
 fi
+# Cargo's release profile has no debug information, so a debug package would
+# be empty.
+options=('!debug')
 # The archive is written from the checkout being built, so it has no fixed
 # checksum; a published PKGBUILD names the release's archive and its SHA-256.
 source=("openxplorer-$pkgver.tar.gz")

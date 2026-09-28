@@ -352,8 +352,11 @@ def build(request: DebianBuild) -> Path:
         stage_control(stage, request.channel, identity, architecture)
         normalise(stage, epoch)
         environment = dict(os.environ, SOURCE_DATE_EPOCH=str(epoch))
+        # dpkg-deb's progress goes to standard error, so standard output is
+        # only the package path main() prints, which scripts capture.
         subprocess.run(['dpkg-deb', '--root-owner-group', '--uniform-compression', '-Zxz',
-                        '--build', str(stage), str(output)], check=True, env=environment)
+                        '--build', str(stage), str(output)], check=True, env=environment,
+                       stdout=sys.stderr)
     return output
 
 

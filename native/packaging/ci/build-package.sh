@@ -37,7 +37,7 @@ case "$format" in
         PATH="$HOME/.cargo/bin:$PATH" python3 native/tools/source_archive.py --vendor \
             --output-directory "$HOME/rpmbuild/SOURCES"
         rpmbuild -bb --define "app_id $app_id" native/packaging/rpm/openxplorer.spec
-        package=$(find "$HOME/rpmbuild/RPMS" -name 'openxplorer-native-*.rpm' | head -n 1)
+        package=$(find "$HOME/rpmbuild/RPMS" -name 'openxplorer-native-[0-9]*.rpm' | head -n 1)
         cp "$package" "$output/"
         rpm2cpio "$package" | (cd "$work/tree" && cpio -idm --quiet)
         verify_tree
@@ -46,7 +46,7 @@ case "$format" in
         python3 native/tools/source_archive.py --output-directory "$work"
         cp native/packaging/arch/PKGBUILD "$work/"
         (cd "$work" && _app_id=$app_id makepkg --noconfirm)
-        package=$(find "$work" -maxdepth 1 -name 'openxplorer-native-*.pkg.tar.zst' | head -n 1)
+        package=$(find "$work" -maxdepth 1 -name 'openxplorer-native-[0-9]*.pkg.tar.zst' | head -n 1)
         cp "$package" "$output/"
         tar --zstd -x -f "$package" -C "$work/tree"
         verify_tree
