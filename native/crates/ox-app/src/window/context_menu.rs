@@ -34,7 +34,37 @@ fn context_menu_model() -> gio::Menu {
     append_item(&selection, "Select none", WindowAction::SelectNone);
     append_item(&selection, "Invert selection", WindowAction::InvertSelection);
     menu.append_section(None, &selection);
+    menu.append_section(None, &super::archive_actions::archive_menu_section());
+    menu.append_section(None, &properties_section());
     menu
+}
+
+/// Calculate folder size(s), Previous versions and Properties (the end of
+/// `entryMenu` and `backgroundMenu` in app.js). The size commands show
+/// only while they apply.
+fn properties_section() -> gio::Menu {
+    let section = gio::Menu::new();
+    append_optional_item(
+        &section,
+        "Calculate folder size",
+        WindowAction::CalculateFolderSize,
+    );
+    append_optional_item(
+        &section,
+        "Calculate folder sizes",
+        WindowAction::CalculateFolderSizes,
+    );
+    append_item(&section, "Previous versions", WindowAction::PreviousVersions);
+    append_item(&section, "Properties", WindowAction::Properties);
+    section
+}
+
+/// Adds an item to `menu` that runs `action` and is hidden while the
+/// action is disabled, as app.js leaves such items out.
+pub(super) fn append_optional_item(menu: &gio::Menu, label: &str, action: WindowAction) {
+    let item = gio::MenuItem::new(Some(label), Some(&action.detailed_name()));
+    item.set_attribute_value("hidden-when", Some(&"action-disabled".to_variant()));
+    menu.append_item(&item);
 }
 
 impl BrowserWindow {

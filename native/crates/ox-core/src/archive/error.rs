@@ -146,6 +146,23 @@ pub enum ArchiveError {
     /// ARC-017: a member yielded less than it declared.
     #[error("ZIP member has a truncated size. Extraction stopped.")]
     TruncatedMember,
+    // Compressing: new in the native app (ARC-023).
+    /// Compress was given nothing it can put in a ZIP.
+    #[error("Select files or folders to compress.")]
+    NothingToCompress,
+    /// ARC-023: the new ZIP would need ZIP64, which the writer does not
+    /// write.
+    #[error("ZIP files over 4 GiB or with more than 65,535 items need an archive manager.")]
+    TooLargeToCompress,
+    /// ARC-023: two selected items have the same name, which one ZIP folder
+    /// cannot hold.
+    #[error("Two selected items have the same name. Compress them from one folder.")]
+    DuplicateSelectedNames,
+    /// ARC-023: an item already has the new ZIP's name; it is never
+    /// replaced.
+    #[error("An item with this name already exists. Nothing was replaced.")]
+    ArchiveExists,
+
     /// ARC-013: the extraction failed and its staging folder could not be
     /// removed either.
     #[error(

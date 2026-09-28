@@ -83,6 +83,7 @@ fn tab_view(
         tooltip,
         icon: tab_icon(uri, network),
         active: session.is_active(tab.id),
+        previous_version: None,
     }
 }
 
@@ -117,6 +118,8 @@ impl BrowserWindow {
         search.set_folder_title(&title);
         search.set_enabled(!on_page && !is_device_location(uri));
         self.render_tabs();
+        self.show_snapshot_banner();
+        self.update_properties_actions();
         self.sidebar().select(uri);
         self.render_landing();
         self.show_surface_for(uri);
@@ -154,7 +157,7 @@ impl BrowserWindow {
     /// Redraws the tab strip.
     pub(super) fn render_tabs(&self) {
         let network = self.network_locations();
-        let views: Vec<TabView> = {
+        let mut views: Vec<TabView> = {
             let session = self.imp().session.borrow();
             let locations = self.imp().locations.borrow();
             let tab_views = session
@@ -163,6 +166,7 @@ impl BrowserWindow {
                 .map(|tab| tab_view(tab, &session, &locations, &network));
             tab_views.collect()
         };
+        self.mark_tabs_with_dialogs_and_snapshots(&mut views);
         self.tab_strip().set_tabs(&views);
     }
 

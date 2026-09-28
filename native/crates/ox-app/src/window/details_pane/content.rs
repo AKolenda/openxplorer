@@ -9,7 +9,6 @@
 //! and sidebar row picture it, on the network bar (the owner's icon
 //! mapping, 2026-09-28), where app.js drew the plain folder.
 
-use ox_core::entry::Entry;
 use ox_core::format;
 use ox_core::location::{is_smb_location, parent_location, LocationContext};
 use ox_core::places::NetworkLocation;
@@ -17,6 +16,7 @@ use ox_core::places::NetworkLocation;
 use crate::folder_view::item::FileItem;
 use crate::icons::Art;
 use crate::locations::Page;
+use crate::properties::NOT_SCANNED;
 
 /// The note for SMB folders.
 const NETWORK_NOTE: &str =
@@ -116,7 +116,7 @@ fn item_content(item: &FileItem, locations: &LocationContext) -> PaneContent {
     let container = parent_location(&entry.uri).unwrap_or_else(|| entry.uri.clone());
     let properties = vec![
         Property::new("Type", entry.type_label.clone()),
-        Property::new("Size", size_text(entry)),
+        Property::new("Size", size_text(item)),
         Property::new("Modified", format::date_text(entry.modified)),
         Property::new("Location", locations.display_location(&container)),
     ];
@@ -186,13 +186,15 @@ fn folder_art(facts: &PaneFacts<'_>) -> Art {
     }
 }
 
-/// The size line: folder sizes are not scanned yet, as in the Python app
-/// before a scan.
-fn size_text(entry: &Entry) -> String {
-    match (entry.is_dir, entry.size) {
-        (true, _) => "Not scanned".to_owned(),
-        (false, Some(size)) => format::pretty_bytes(size),
-        (false, None) => String::new(),
+/// The size line: a file's size, a folder's measured size, or "Not
+/// scanned" for a folder never measured (PROP-027).
+fn size_text(item: &FileItem) -> String {
+    let entry = item.entry();
+    match (entry.is_dir, item.folder_size(), entry.size) {
+        (true, Some(measured), _) => measured.size_text(),
+        (true, None, _) => NOT_SCANNED.to_owned(),
+        (false, _, Some(size)) => format::pretty_bytes(size),
+        (false, _, None) => String::new(),
     }
 }
 

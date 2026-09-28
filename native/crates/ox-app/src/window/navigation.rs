@@ -182,6 +182,7 @@ impl BrowserWindow {
     fn show_tab(&self, id: TabId) {
         self.reset_typeahead();
         self.hide_message();
+        self.show_dialog_of_tab(id);
         let Some(view) = self.saved_tab_view(id) else {
             return;
         };
@@ -224,6 +225,7 @@ impl BrowserWindow {
             return;
         }
         self.save_tab_view();
+        self.discard_dialog_of_tab(id);
         let was_active = self.imp().session.borrow().is_active(id);
         self.imp().session.borrow_mut().remove(id);
         if !was_active {

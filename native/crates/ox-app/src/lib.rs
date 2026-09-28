@@ -15,12 +15,15 @@
 
 mod app_context;
 pub mod application;
+mod archive_view;
 mod config;
+mod dialog_layer;
 mod folder_view;
 mod history;
 mod icons;
 mod locations;
 mod places;
+mod properties;
 mod settings_page;
 mod settings_store;
 mod snapshot;

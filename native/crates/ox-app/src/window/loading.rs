@@ -217,6 +217,7 @@ impl BrowserWindow {
         if end == ListingEnd::TabClosed {
             return;
         }
+        self.apply_measured_folder_sizes(id);
         if self.imp().session.borrow().is_active(id) {
             self.restore_selection(id);
             self.update_content();

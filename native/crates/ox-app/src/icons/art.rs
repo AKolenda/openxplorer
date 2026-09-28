@@ -121,6 +121,16 @@ impl Art {
         Art::File(FileType::of(&entry.name, content_type))
     }
 
+    /// The art of a file known only by its name, such as a member of a ZIP
+    /// archive: a ZIP as the folder with the zip badge, else the colour
+    /// icon of the file's type.
+    pub(crate) fn for_file_name(name: &str) -> Self {
+        if is_zip(name, None) {
+            return Art::ZipFolder;
+        }
+        Art::File(FileType::of(name, None))
+    }
+
     /// The art of a network location called `label`: a server, or a share
     /// shown as a folder or, when its label names a drive letter, a drive.
     pub(crate) fn for_network_location(kind: NetworkKind, label: &str, connection: Connection) -> Self {

@@ -13,9 +13,11 @@
       "evidence": []
     },
     "archiveExtract": {
-      "status": "core-tested",
-      "note": "Extraction into a new folder is ported to ox-core and tested: member checks and limits before anything is written, the write guard, private staging published without replacing anything, rollback on damaged data, failed writes and cancellation, and no archive permissions. The native Extract dialog and transfer panel are not wired yet.",
+      "status": "native-tested",
+      "note": "Extract all… and Extract here run the ox-core extractor with the write guard, the operation panel and Cancel, and show or list the result in the native window.",
       "evidence": [
+        "native/crates/ox-app/src/window/tests/archives.rs::extract_all_unpacks_into_a_new_folder_and_shows_it",
+        "native/crates/ox-app/src/window/tests/archives.rs::extract_here_uses_the_next_free_name",
         "native/crates/ox-core/tests/archive_extract.rs::extracts_files_folders_and_empty_files_into_a_new_folder",
         "native/crates/ox-core/tests/archive_extract_checks.rs::unsafe_member_paths_are_refused_with_nothing_written",
         "native/crates/ox-core/tests/archive_extract_rollback.rs::a_crc_failure_rolls_back",
@@ -26,18 +28,21 @@
       ]
     },
     "archiveInspect": {
-      "status": "core-tested",
-      "note": "The preflight is ported to ox-core and tested: every member is checked with the extraction rules and summarised without writing anything, on a worker thread. The native Extract dialog is not wired yet.",
+      "status": "native-tested",
+      "note": "The Extract compressed folder dialog checks the archive on a worker and shows the summary before Extract is allowed.",
       "evidence": [
+        "native/crates/ox-app/src/window/tests/archives.rs::extract_all_unpacks_into_a_new_folder_and_shows_it",
+        "native/crates/ox-app/src/window/tests/archives.rs::extract_refuses_a_bad_name_and_keeps_the_dialog_open",
         "native/crates/ox-core/tests/archive_extract_checks.rs::inspection_summarises_and_writes_nothing",
         "native/crates/ox-core/tests/archive_extract_dispatch.rs::inspection_and_extraction_agree",
         "native/crates/ox-core/tests/archive_gio.rs::background_variants_return_the_blocking_results"
       ]
     },
     "archiveList": {
-      "status": "core-tested",
-      "note": "Listing is ported to ox-core and tested from the central directory alone: unsafe names, links and special files hidden and counted, the 32 MiB directory and 100,000 member limits, and archives on shares read through seekable GIO streams. The native Compressed folder dialog is not wired yet.",
+      "status": "native-tested",
+      "note": "The Compressed folder dialog lists the archive through ox-core in the native window, folder by folder.",
       "evidence": [
+        "native/crates/ox-app/src/window/tests/archives.rs::opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy",
         "native/crates/ox-core/tests/archive_browse.rs::listing_extracts_nothing",
         "native/crates/ox-core/tests/archive_browse.rs::rows_list_folders_first_by_name_ignoring_case",
         "native/crates/ox-core/tests/archive_browse.rs::dangerous_members_are_hidden_and_counted",
@@ -46,9 +51,10 @@
       ]
     },
     "archiveOpenMember": {
-      "status": "core-tested",
-      "note": "Opening one document, image or media member as a read-only copy in a private runtime folder is ported to ox-core and tested, with the type, encryption, size and ratio refusals. Opening the copy with its default application from the native UI is not wired yet.",
+      "status": "native-tested",
+      "note": "The Compressed folder dialog copies one member privately through ox-core and opens the copy with its default application.",
       "evidence": [
+        "native/crates/ox-app/src/window/tests/archives.rs::opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy",
         "native/crates/ox-core/tests/archive_browse.rs::only_the_selected_member_is_copied_read_only",
         "native/crates/ox-core/tests/archive_browse.rs::a_script_is_not_opened",
         "native/crates/ox-core/tests/archive_browse.rs::encrypted_and_oversized_members_are_listed_but_not_opened",
@@ -243,9 +249,13 @@
       "evidence": []
     },
     "folderSize": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Calculate folder size, Calculate folder sizes and the Properties button scan on a worker with progress in the size-scan bar, Cancel scan and one scan per window; the results show in the Size column, the details pane and Properties. Mounting an unmounted share before the scan is not done yet.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::calculate_folder_size_shows_the_size_everywhere_the_folder_is",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::calculate_folder_sizes_measures_every_folder_shown_and_one_scan_runs_at_a_time",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::cancel_scan_stops_the_run_and_says_so"
+      ]
     },
     "handoffReady": {
       "status": "pending",
@@ -365,14 +375,23 @@
       ]
     },
     "previousVersions": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "The Previous versions tab looks versions up through GIO on a worker, lists them with their dates and offers Browse and Restore a copy in the native window.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::previous_versions_lists_the_snapshots_of_the_folder",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::a_file_without_snapshots_explains_that_none_were_found",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::browse_opens_the_snapshot_in_a_marked_tab_with_its_banner",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::restore_a_copy_copies_the_version_into_a_live_folder_only"
+      ]
     },
     "properties": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "The Properties dialog reads the item off the main thread and shows the General and Permissions tabs in the native window; Change app… waits for the Open with dialog.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::alt_enter_opens_the_properties_of_the_selected_file",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::properties_without_a_selection_describe_the_folder",
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::properties_of_a_location_open_for_menus_outside_the_folder_view"
+      ]
     },
     "quit": {
       "status": "pending",
@@ -416,9 +435,11 @@
       "evidence": []
     },
     "snapshotSource": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "The Snapshot source form saves and removes mappings through ox-core on a worker and lists the versions again.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/item_dialogs.rs::the_snapshot_source_form_saves_a_mapping_and_lists_again"
+      ]
     },
     "tabDragLayout": {
       "status": "pending",

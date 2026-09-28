@@ -1,0 +1,171 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* In-window dialogs, Properties, the archive dialogs, the snapshot banner
+   and tab marker, and the folder-size bar (ui-spec.md §4.11 and §4.15;
+   style.css .modal-layer, .modal, .properties-*, .version-*, .archive-*,
+   .extract-*, .snapshot-* and .size-scan). Font sizes follow the text size
+   (theme/fonts.rs). */
+
+/* The scrim over the window's content (C36). */
+ox-dialog-layer { background-color: @ox_smoke; }
+
+/* The dialog surface: radius 8, 1 px stroke, shadow E02. */
+.ox-dialog {
+  background-color: @ox_bg;
+  color: @ox_text;
+  border: 1px solid @ox_dialog_stroke;
+  border-radius: 8px;
+  box-shadow: 0 0 8px @ox_shadow_ambient, 0 32px 64px @ox_shadow_key;
+}
+.ox-dialog .dialog-content { padding: 24px 24px 18px 24px; }
+.ox-dialog .dialog-title { font-weight: 600; margin-bottom: 12px; }
+.ox-dialog .dialog-message { color: @ox_muted; margin-bottom: 14px; }
+.ox-dialog .dialog-error { color: @ox_error; margin-top: 12px; }
+/* The footer: a 1 px top border on the chrome colour, buttons 8 apart. */
+.ox-dialog .dialog-actions {
+  background-color: @ox_chrome;
+  border-top: 1px solid @ox_border;
+  border-radius: 0 0 8px 8px;
+  padding: 18px 24px;
+  border-spacing: 8px;
+}
+window.ox .ox-dialog .dialog-actions button { min-height: 30px; min-width: 90px; padding: 0 16px; }
+
+/* Fields, notes and check boxes. */
+.ox-dialog .field-label { margin: 16px 0 7px 0; }
+.ox-dialog entry { min-height: 33px; }
+.ox-dialog .quiet { color: @ox_muted; margin-bottom: 12px; }
+.ox-dialog .modal-note {
+  color: @ox_muted;
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+  padding: 12px;
+  margin-top: 18px;
+}
+.ox-dialog checkbutton.checkbox-row { margin-top: 14px; }
+
+/* Properties: the tabs, the file header and the name-value grid. */
+.properties-tabs { border-bottom: 1px solid @ox_border; margin-bottom: 18px; }
+window.ox .properties-tabs button {
+  border-radius: 3px 3px 0 0;
+  border: 1px solid transparent;
+  border-bottom-width: 0;
+  padding: 0 15px;
+  min-height: 34px;
+  color: @ox_muted;
+  background: none;
+  box-shadow: none;
+}
+window.ox .properties-tabs button:checked {
+  color: @ox_text;
+  background-color: @ox_chrome;
+  border-color: @ox_border;
+  box-shadow: inset 0 -2px @ox_accent;
+}
+.properties-panel { padding: 0 3px 5px 0; }
+.property-file {
+  border-bottom: 1px solid @ox_border;
+  padding: 6px 0 20px 0;
+  margin-bottom: 14px;
+  border-spacing: 18px;
+}
+.property-name-heading { font-weight: 500; }
+.property-grid { border-spacing: 15px 18px; margin: 18px 0 22px 0; }
+.property-grid .property-name { color: @ox_muted; min-width: 110px; }
+.property-buttons { border-spacing: 7px; margin-bottom: 12px; }
+
+/* Previous versions. */
+.versions-toolbar { border-spacing: 8px; margin-bottom: 12px; }
+.versions-list {
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+  min-height: 150px;
+  padding: 9px;
+}
+.versions-list > .quiet { margin: 8px; }
+.versions-empty-heading { font-weight: 500; margin: 14px 8px 9px 8px; }
+.versions-list > image { margin: 15px 8px 0 8px; color: @ox_muted; }
+.version-columns { color: @ox_muted; padding: 0 4px 6px 4px; border-bottom: 1px solid @ox_border; }
+.version-row { padding: 10px 4px; border-bottom: 1px solid @ox_border; border-spacing: 10px; }
+.version-row:last-child { border-bottom-width: 0; }
+.version-identity { border-spacing: 10px; }
+.version-text .version-label { font-weight: 500; }
+.version-text .version-source, .version-date .version-time { color: @ox_muted; }
+.version-date { min-width: 130px; }
+.version-actions { border-spacing: 6px; }
+window.ox .version-actions button { min-height: 29px; padding: 0 7px; }
+.version-date-note { margin-bottom: 8px; }
+.snapshot-warnings { margin-top: 13px; color: @ox_muted; }
+.snapshot-source-actions { border-spacing: 8px; margin-top: 20px; }
+
+/* The archive browser and the Extract dialog. */
+.archive-toolbar { border-spacing: 12px; margin-bottom: 12px; }
+.archive-path { color: @ox_muted; }
+.archive-list {
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+  min-height: 160px;
+  padding: 6px;
+}
+.archive-list row { padding: 10px; border-radius: 4px; }
+.archive-list row:hover, .archive-list row:focus-visible { background-color: @ox_hover; }
+.archive-row { border-spacing: 12px; }
+.archive-size { color: @ox_muted; }
+.archive-status { color: @ox_muted; padding-top: 10px; }
+.extract-source { border-spacing: 14px; margin-bottom: 15px; }
+.extract-source-name { font-weight: 600; }
+.extract-target {
+  margin-top: 13px;
+  padding: 10px 12px;
+  background-color: @ox_chrome;
+  border-radius: 4px;
+  color: @ox_muted;
+}
+.extract-summary { margin: 14px 0; }
+.extract-summary.error { color: @ox_error; }
+
+/* The banner of a tab inside a snapshot (C35). */
+.snapshot-banner {
+  background-color: @ox_caution_bg;
+  color: @ox_caution_text;
+  border-bottom: 1px solid @ox_caution_border;
+  padding: 9px 18px;
+  border-spacing: 10px;
+}
+.snapshot-banner .snapshot-heading { font-weight: 600; }
+.snapshot-banner .snapshot-safety { opacity: .9; }
+
+/* The tab marker: the amber top edge and the badge. */
+.ox-titlebar .tab.snapshot-tab { box-shadow: inset 0 2px @ox_caution_edge; }
+.snapshot-tab-badge {
+  background-color: @ox_caution_badge_bg;
+  color: @ox_caution_badge_text;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* The folder-size bar above the status bar. */
+.size-scan {
+  min-height: 44px;
+  padding: 8px 18px;
+  background-color: @ox_chrome;
+  border-top: 1px solid @ox_border;
+  border-spacing: 15px;
+}
+window.ox .size-scan button { min-height: 25px; min-width: 82px; }
+
+/* The panel of a running extraction or compression, floating 43 px above
+   the bottom of the folder pane (§4.15 Transfer, shadow E08). */
+.operation-panel {
+  background-color: @ox_flyout;
+  border: 1px solid @ox_flyout_stroke;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 43px;
+  min-width: 420px;
+  border-spacing: 12px;
+  box-shadow: 0 8px 16px @ox_shadow_key;
+}
+.operation-panel progressbar trough { min-height: 4px; background-color: @ox_border; }
+.operation-panel progressbar progress { min-height: 4px; background-color: @ox_accent; }

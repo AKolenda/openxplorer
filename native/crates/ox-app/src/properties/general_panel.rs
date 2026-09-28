@@ -1,0 +1,239 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! The General and Permissions tabs of the Properties dialog.
+//!
+//! Ports the part of `propertiesDialog` in `desktop/ui/app.js` that runs
+//! once the item's properties are read (PROP-003, PROP-006): the icon and
+//! name, then Type, Location, Full path, Size, Opens with, Created,
+//! Modified and Accessed, the Change app…, Copy full path and Calculate
+//! folder size buttons, and the read-only permissions the backend reports.
+
+use gtk::prelude::*;
+use ox_core::format;
+use ox_core::location::{is_smb_server, LocationContext};
+use ox_core::places::KnownFolder;
+use ox_core::versions::{is_conventional_snapshot, snapshot_location};
+
+use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
+use super::metadata::ItemProperties;
+use crate::dialog_layer::{note, quiet_text, PropertyGrid};
+use crate::icons::{self, Art, ArtImage, Icon};
+use crate::window::{ButtonStyle, Milestone, WindowAction};
+
+/// The size of the item's picture at the top of the General tab
+/// (`fileIcon(current, 48)`).
+const HEADER_ART_SIZE: i32 = 48;
+
+/// The glyph size in the tab's buttons.
+const BUTTON_GLYPH: i32 = 16;
+
+/// Under Calculate folder size: what the measured size is, and is not.
+const SIZE_EXPLANATION: &str = "Logical file bytes, measured on demand. Skips links, nested mounts and \
+                                snapshot collections. The result may be partial; it is not ZFS compressed \
+                                or snapshot usage.";
+
+/// Under the permissions: what the tab does not do.
+const PERMISSIONS_NOTE: &str = "These are the permissions reported by Linux/GIO. This page does not edit \
+                                Windows ACLs, take ownership, or change server permissions.";
+
+/// The Permissions tab when the item could not be read.
+const METADATA_UNREADABLE: &str = "Metadata could not be read.";
+
+/// A file's Opens with row without a default application.
+const NO_DEFAULT_APP: &str = "No default application";
+
+/// The toast after Copy full path.
+const PATH_COPIED: &str = "Full path copied.";
+
+/// What the General tab shows besides the item's own properties.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct GeneralFacts<'a> {
+    /// The item, as read.
+    pub properties: &'a ItemProperties,
+    /// Display names for the home folder and devices.
+    pub locations: &'a LocationContext,
+    /// The folder's measured size, if any.
+    pub folder_size: Option<&'a FolderSizeState>,
+    /// The snapshot collections known now, whose items are read-only.
+    pub snapshot_roots: &'a [String],
+}
+
+/// Fills the General tab, replacing "Reading file properties…". Returns
+/// the Size value of a folder, which a folder-size scan updates.
+pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option<gtk::Label> {
+    clear(panel);
+    let properties = facts.properties;
+    let entry = &properties.entry;
+    panel.append(&header(properties));
+    let grid = PropertyGrid::new();
+    let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
+    grid.add_row("Type", &entry.type_label);
+    grid.add_row("Location", &facts.locations.display_location(container));
+    grid.add_row("Full path", &facts.locations.display_location(&entry.uri));
+    let size_value = grid.add_row("Size", &size_text(facts));
+    if let Some(state) = facts.folder_size.filter(|_| entry.is_dir) {
+        size_value.set_tooltip_text(Some(&state.summary_tooltip()));
+    }
+    if !entry.is_dir {
+        let app = properties.default_app.as_deref().unwrap_or(NO_DEFAULT_APP);
+        grid.add_row("Opens with", app);
+    }
+    grid.add_row("Created", &format::date_time_text(properties.created));
+    grid.add_row("Modified", &format::date_time_text(entry.modified));
+    grid.add_row("Accessed", &format::date_time_text(properties.accessed));
+    panel.append(grid.widget());
+    panel.append(&buttons(facts));
+    if entry.is_dir && !is_smb_server(&entry.uri) {
+        panel.append(&quiet_text(SIZE_EXPLANATION));
+    }
+    entry.is_dir.then_some(size_value)
+}
+
+/// The item's picture and name (`.property-file`).
+fn header(properties: &ItemProperties) -> gtk::Box {
+    let header = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .css_classes(["property-file"])
+        .build();
+    header.append(&ArtImage::new(Art::for_entry(&properties.entry), HEADER_ART_SIZE));
+    let name = gtk::Label::builder()
+        .label(&properties.entry.name)
+        .xalign(0.0)
+        .hexpand(true)
+        .wrap(true)
+        .wrap_mode(gtk::pango::WrapMode::WordChar)
+        .selectable(true)
+        .css_classes(["property-name-heading"])
+        .build();
+    header.append(&name);
+    header
+}
+
+/// The Size value: a file's size, or a folder's measured size or "Not
+/// scanned".
+fn size_text(facts: &GeneralFacts<'_>) -> String {
+    let entry = &facts.properties.entry;
+    if !entry.is_dir {
+        return entry.size.map(format::pretty_bytes).unwrap_or_default();
+    }
+    facts
+        .folder_size
+        .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::size_text)
+}
+
+/// Change app…, Copy full path and, for a folder, Calculate folder size.
+fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
+    let entry = &facts.properties.entry;
+    let row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .css_classes(["property-buttons"])
+        .build();
+    let is_read_only =
+        snapshot_location(&entry.uri, facts.snapshot_roots).is_some() || is_conventional_snapshot(&entry.uri);
+    if !entry.is_dir && !is_read_only {
+        row.append(&change_app_button());
+    }
+    row.append(&copy_path_button(facts.locations.display_location(&entry.uri)));
+    if entry.is_dir && !is_smb_server(&entry.uri) {
+        row.append(&calculate_size_button(&entry.uri));
+    }
+    row
+}
+
+/// A bordered button with `glyph` and `label`.
+fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    content.append(&icons::image(glyph, BUTTON_GLYPH));
+    content.append(&gtk::Label::new(Some(label)));
+    let button = gtk::Button::builder().child(&content).build();
+    button.add_css_class(ButtonStyle::Bordered.css_class());
+    button.update_property(&[gtk::accessible::Property::Label(label)]);
+    button
+}
+
+/// Change app… opens the Open with dialog, which arrives with desktop
+/// integration; until then it says so instead of doing nothing.
+fn change_app_button() -> gtk::Button {
+    let button = glyph_button("Change app…", Icon::Grid);
+    button.set_sensitive(false);
+    let notice = Milestone::DesktopIntegration.notice();
+    button.set_tooltip_text(Some(&format!("Change app…\n{notice}")));
+    button
+}
+
+/// Copy full path: puts `path` on the clipboard and says so.
+fn copy_path_button(path: String) -> gtk::Button {
+    let button = glyph_button("Copy full path", Icon::Copy);
+    button.connect_clicked(move |button| {
+        button.clipboard().set_text(&path);
+        if let Some(window) = button.root().and_downcast::<crate::window::BrowserWindow>() {
+            window.show_message(PATH_COPIED);
+        }
+    });
+    button
+}
+
+/// Calculate folder size: measures the folder at `uri`, which shows in
+/// this tab, the details pane and the Size column.
+fn calculate_size_button(uri: &str) -> gtk::Button {
+    let button = glyph_button("Calculate folder size", Icon::HardDrive);
+    WindowAction::CalculateFolderSizeOf.assign_with_target_to(&button, &uri.to_variant());
+    button
+}
+
+/// Fills the Permissions tab.
+pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties) {
+    clear(panel);
+    let grid = PropertyGrid::new();
+    grid.add_row("Owner", properties.owner.as_deref().unwrap_or_default());
+    grid.add_row("Group", properties.group.as_deref().unwrap_or_default());
+    grid.add_row("POSIX mode", &properties.mode_text().unwrap_or_default());
+    let access = properties.access;
+    grid.add_row("Readable", access_text(access.readable));
+    grid.add_row("Writable", access_text(access.writable));
+    grid.add_row("Executable", access_text(access.executable));
+    panel.append(grid.widget());
+    panel.append(&note(PERMISSIONS_NOTE));
+}
+
+/// `Yes`, `No` or `Not reported by this backend`.
+fn access_text(allowed: Option<bool>) -> &'static str {
+    match allowed {
+        Some(true) => "Yes",
+        Some(false) => "No",
+        None => "Not reported by this backend",
+    }
+}
+
+/// Shows why the item could not be read on the General tab, and that
+/// there is no metadata on the Permissions tab.
+pub(super) fn show_read_failure(general: &gtk::Box, permissions: &gtk::Box, message: &str) {
+    clear(general);
+    general.append(&note(message));
+    clear(permissions);
+    permissions.append(&quiet_text(METADATA_UNREADABLE));
+}
+
+/// The Location tab of a standard folder (PROP-017). Relocating a
+/// standard folder needs the folder-location service of
+/// `desktop/folder_locations.py`, which is not ported yet, so the tab
+/// says where the folder is and that moving it comes later.
+pub(super) fn location_panel(folder: KnownFolder) -> gtk::Box {
+    let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let label = folder.label();
+    let intro = format!(
+        "Choose where {label} is stored. Applications that honor Linux’s standard-folder settings will use \
+         this location."
+    );
+    panel.append(&quiet_text(&intro));
+    let notice = "Changing a standard folder's location is not in the native preview yet. Use the \
+                  current OpenXplorer or xdg-user-dirs-update until it arrives.";
+    panel.append(&note(notice));
+    panel
+}
+
+/// Removes every child of `panel`.
+fn clear(panel: &gtk::Box) {
+    while let Some(child) = panel.first_child() {
+        panel.remove(&child);
+    }
+}

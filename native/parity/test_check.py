@@ -276,10 +276,13 @@ class RustTestDiscoveryTests(unittest.TestCase):
                 #[test]
                 pub fn indented_and_public() {}
             }
+
+            #[gtk::test]
+            fn on_the_gtk_test_thread() {}
         ''')
         self.assertEqual(bridge.rust_tests(source), {
             'with_a_comment_between', 'with_another_attribute',
-            'indented_and_public'})
+            'indented_and_public', 'on_the_gtk_test_thread'})
 
 
 def valid_feature(**changes: Any) -> dict[str, Any]:

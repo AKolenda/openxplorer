@@ -12059,8 +12059,8 @@ python_tests = [
 ]
 bridge = ["activateItem"]
 dolphin = "Dolphin browses archives via kio-extras (zip:/)"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_opening/activation.rs (a_folder_named_like_a_zip_opens_as_a_folder, a_zip_by_content_type_is_browsed, a_zip_by_name_in_any_case_is_browsed). Activation in the native UI does not open ZIPs in an archive browser yet."
+native = "done"
+native_note = "native/crates/ox-app/src/window/activation.rs (folders_open_in_the_tab_files_in_an_application_and_zips_in_the_browser); native/crates/ox-app/src/window/tests/archives.rs (opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy); the core rule: native/crates/ox-core/tests/integration_opening/activation.rs. Double-click, Enter, a typed address and a command-line argument open a ZIP in the archive browser. Earlier evidence: native/crates/ox-core/tests/integration_opening/activation.rs (a_folder_named_like_a_zip_opens_as_a_folder, a_zip_by_content_type_is_browsed, a_zip_by_name_in_any_case_is_browsed)."
 
 [[feature]]
 id = "ARC-003"
@@ -12092,8 +12092,8 @@ python_tests = [
 ]
 bridge = ["activateItem", "archiveList", "archiveOpenMember", "open"]
 dolphin = "Browse archives as folders (kio-extras); Browse archives as folders (KIO zip:/)"
-native = "partial"
-native_note = "Listing ported to ox-core: native/crates/ox-core/tests/archive_browse.rs (listing_extracts_nothing, rows_list_folders_first_by_name_ignoring_case, a_folder_inside_the_archive_lists_its_members, an_empty_archive_lists_nothing, a_listing_stops_at_5000_rows); native/crates/ox-core/tests/archive_zip_format.rs reads comments, prepended bytes, ZIP64 and code page 437 names. The Compressed folder dialog, its buttons and notices, and ignoring stale replies are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy); native/crates/ox-app/src/archive_view/browser.rs (hidden_members_and_truncation_are_announced, up_goes_one_folder_higher): the title and message, Up and the path, the help text, rows with icon, name and size or 'Folder', folders by double-click or Enter, supported files as copies with their messages, the archive-manager hint, the empty, hidden and truncated notices, stale listings dropped, and Extract all…, Open in archive manager and Close."
 
 [[feature]]
 id = "ARC-004"
@@ -12114,8 +12114,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_preview_rejects_special_members",
 ]
 bridge = ["archiveList"]
-native = "partial"
-native_note = "native/crates/ox-core/src/archive/member_names.rs (absolute_windows_and_backslash_paths_are_unsafe, ambiguous_and_control_names_are_unsafe, dot_names_are_unsafe_instead_of_failing); native/crates/ox-core/tests/archive_browse.rs (dangerous_members_are_hidden_and_counted, fifos_devices_and_links_are_hidden_and_not_opened, a_name_hiding_text_after_a_nul_is_hidden). The native UI does not show the hidden count yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/src/archive/member_names.rs and tests/archive_browse.rs; the browser says how many are hidden: native/crates/ox-app/src/archive_view/browser.rs (hidden_members_and_truncation_are_announced). Earlier evidence: native/crates/ox-core/src/archive/member_names.rs (absolute_windows_and_backslash_paths_are_unsafe, ambiguous_and_control_names_are_unsafe, dot_names_are_unsafe_instead_of_failing); native/crates/ox-core/tests/archive_browse.rs (dangerous_members_are_hidden_and_counted, fifos_devices_and_links_are_hidden_and_not_opened, a_name_hiding_text_after_a_nul_is_hidden)."
 
 [[feature]]
 id = "ARC-005"
@@ -12173,8 +12173,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_preview_rejects_special_members",
 ]
 bridge = ["archiveOpenMember"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_browse.rs (only_the_selected_member_is_copied_read_only, a_script_is_not_opened, encrypted_and_oversized_members_are_listed_but_not_opened, a_duplicated_member_is_not_opened); native/crates/ox-core/tests/archive_gio.rs (previews_go_to_the_private_runtime_directory). Opening the copy with its default application and showing the notice are not in the native UI yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_browse.rs and archive_gio.rs; native/crates/ox-app/src/window/tests/archives.rs (opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy): the copy is made in $XDG_RUNTIME_DIR/winspace-archive-previews and opened with its default application, and the browser says 'Opened a temporary copy. Changes are not saved back to the ZIP.' as app.js does. Earlier evidence: native/crates/ox-core/tests/archive_browse.rs (only_the_selected_member_is_copied_read_only, a_script_is_not_opened, encrypted_and_oversized_members_are_listed_but_not_opened, a_duplicated_member_is_not_opened); native/crates/ox-core/tests/archive_gio.rs (previews_go_to_the_private_runtime_directory)."
 
 [[feature]]
 id = "ARC-007"
@@ -12221,8 +12221,8 @@ python_tests = [
   "desktop/tests/test_rc2.py::DispatchTests::test_inspect_and_extract_actual_actions",
 ]
 bridge = ["archiveInspect"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (inspection_summarises_and_writes_nothing); native/crates/ox-core/tests/archive_extract_dispatch.rs (inspection_and_extraction_agree). The Extract dialog that shows the summary is not in the native UI yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract_checks.rs and archive_extract_dispatch.rs; native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it); native/crates/ox-app/src/archive_view/extract_dialog.rs (the_summary_counts_files_and_folders_in_the_singular_and_plural). Earlier evidence: native/crates/ox-core/tests/archive_extract_checks.rs (inspection_summarises_and_writes_nothing); native/crates/ox-core/tests/archive_extract_dispatch.rs (inspection_and_extraction_agree)."
 
 [[feature]]
 id = "ARC-009"
@@ -12262,8 +12262,8 @@ python_tests = [
 ]
 bridge = ["archiveInspect", "cancel", "normalise", "open"]
 dolphin = "Extract archive here / to…"
-native = "partial"
-native_note = "Suggested folder names: native/crates/ox-core/src/archive/member_names.rs (suggested_names_drop_the_zip_extension, suggested_names_trim_trailing_dots_and_spaces_and_stay_valid); the cancellable preflight: native/crates/ox-core/tests/archive_extract_checks.rs (inspection_summarises_and_writes_nothing) and native/crates/ox-core/tests/archive_gio.rs (background_variants_return_the_blocking_results). The Extract compressed folder dialog is not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it, the_archive_commands_follow_the_selection); native/crates/ox-app/src/archive_view/extract_dialog.rs (the_target_line_joins_the_destination_and_the_new_name, the_summary_counts_files_and_folders_in_the_singular_and_plural): Extract all… from the context menu of one ZIP while no archive operation runs and from the browser, the dialog's texts, destination default (the ZIP's writable folder, else Downloads, else Home), the suggested name, the live target line, the preflight, the check box, the hint and the three buttons; closing cancels the check."
 
 [[feature]]
 id = "ARC-010"
@@ -12281,8 +12281,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_protected_extraction_descendant_fails_before_writing",
 ]
 bridge = ["archiveInspect", "normalise"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract_dispatch.rs (locations_are_normalised_first, a_server_listing_is_not_a_destination); native/crates/ox-core/tests/archive_extract.rs (a_protected_member_path_stops_the_extraction_before_writing). The dialog and its validation messages are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open); native/crates/ox-app/src/archive_view/extract_dialog.rs: Extract waits for the check, validates the name, normalises the destination and refuses a page, server listing or previous version, keeping the dialog open with the reason. The malformed-summary message has no counterpart: the summary is a typed value. Earlier evidence: native/crates/ox-core/tests/archive_extract_dispatch.rs (locations_are_normalised_first, a_server_listing_is_not_a_destination); native/crates/ox-core/tests/archive_extract.rs (a_protected_member_path_stops_the_extraction_before_writing)."
 
 [[feature]]
 id = "ARC-011"
@@ -12321,8 +12321,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_progress_and_cleanup",
 ]
 bridge = ["archiveExtract", "cancel", "list", "archiveInspect", "normalise"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract_rollback.rs (progress_labels_name_the_check_each_file_and_the_result, progress_ends_complete_and_only_the_new_folder_remains, cancelling_while_writing_removes_the_staging_folder); native/crates/ox-core/tests/archive_extract.rs (an_existing_folder_is_never_merged_into). The transfer panel, the Extraction stopped dialog, the toast and showing the result are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it, extract_here_uses_the_next_free_name); native/crates/ox-app/src/archive_view/extraction.rs (a_failure_says_the_zip_and_existing_files_are_untouched); core rollback: native/crates/ox-core/tests/archive_extract_rollback.rs. The operation panel shows 'Preparing extraction…', progress and Cancel; failures open 'Extraction stopped'; success toasts and shows the folder in the asking tab or a new tab, or lists the destination again. Earlier evidence: native/crates/ox-core/tests/archive_extract_rollback.rs (progress_labels_name_the_check_each_file_and_the_result, progress_ends_complete_and_only_the_new_folder_remains, cancelling_while_writing_removes_the_staging_folder); native/crates/ox-core/tests/archive_extract.rs (an_existing_folder_is_never_merged_into)."
 
 [[feature]]
 id = "ARC-012"
@@ -12355,8 +12355,8 @@ python_tests = [
 ]
 bridge = ["archiveExtract"]
 dolphin = "Ark 'Extract archive here' service menu"
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract.rs (extracts_files_folders_and_empty_files_into_a_new_folder, an_existing_file_keeps_the_name, an_existing_link_keeps_the_name_and_its_target_stays_empty, a_linked_destination_folder_is_refused, the_archive_is_left_unchanged). The native UI does not offer extraction yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract.rs and member_names.rs; native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it) extracts through the native UI. Earlier evidence: native/crates/ox-core/tests/archive_extract.rs (extracts_files_folders_and_empty_files_into_a_new_folder, an_existing_file_keeps_the_name, an_existing_link_keeps_the_name_and_its_target_stays_empty, a_linked_destination_folder_is_refused, the_archive_is_left_unchanged)."
 
 [[feature]]
 id = "ARC-013"
@@ -12391,8 +12391,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_supported_compression_round_trip",
 ]
 bridge = ["archiveExtract", "cancel"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract_rollback.rs (a_crc_failure_rolls_back, a_failed_write_rolls_back, a_short_write_rolls_back, a_folder_created_meanwhile_is_never_replaced, a_staging_folder_that_cannot_be_removed_is_reported_where_it_is); native/crates/ox-core/src/archive/extract/staging.rs (staging_names_are_hidden_random_and_distinct). The native UI does not offer extraction yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract_rollback.rs and extract/staging.rs; native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it) runs the same extractor from the UI. Earlier evidence: native/crates/ox-core/tests/archive_extract_rollback.rs (a_crc_failure_rolls_back, a_failed_write_rolls_back, a_short_write_rolls_back, a_folder_created_meanwhile_is_never_replaced, a_staging_folder_that_cannot_be_removed_is_reported_where_it_is); native/crates/ox-core/src/archive/extract/staging.rs (staging_names_are_hidden_random_and_distinct)."
 
 [[feature]]
 id = "ARC-014"
@@ -12424,8 +12424,8 @@ python_tests = [
   "desktop/tests/test_rc2.py::DispatchTests::test_inspect_and_extract_actual_actions",
 ]
 bridge = ["archiveExtract", "archiveInspect"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (unsafe_member_paths_are_refused_with_nothing_written, a_segment_over_255_bytes_is_refused, a_name_hiding_text_after_a_nul_is_invalid); native/crates/ox-core/src/archive/extract/plan.rs (reserved_device_names_are_refused_with_any_extension_and_case). The native UI does not offer extraction yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract_checks.rs and extract/plan.rs; the UI shows the refusal in the Extract dialog's summary and in 'Extraction stopped' (native/crates/ox-app/src/window/tests/archives.rs). Earlier evidence: native/crates/ox-core/tests/archive_extract_checks.rs (unsafe_member_paths_are_refused_with_nothing_written, a_segment_over_255_bytes_is_refused, a_name_hiding_text_after_a_nul_is_invalid); native/crates/ox-core/src/archive/extract/plan.rs (reserved_device_names_are_refused_with_any_extension_and_case)."
 
 [[feature]]
 id = "ARC-015"
@@ -12442,8 +12442,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_file_directory_conflicts",
 ]
 bridge = ["archiveExtract", "archiveInspect"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (duplicate_names_are_refused, names_differing_only_in_case_or_unicode_form_are_refused, a_path_used_as_file_and_folder_is_refused_in_either_order); native/crates/ox-core/src/archive/extract/plan.rs (a_member_repeated_in_another_case_is_a_duplicate_not_an_ambiguous_folder). The native UI does not offer extraction yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract_checks.rs and extract/plan.rs; the native Extract dialog and Extract here use the same extractor (native/crates/ox-app/src/window/tests/archives.rs). Earlier evidence: native/crates/ox-core/tests/archive_extract_checks.rs (duplicate_names_are_refused, names_differing_only_in_case_or_unicode_form_are_refused, a_path_used_as_file_and_folder_is_refused_in_either_order); native/crates/ox-core/src/archive/extract/plan.rs (a_member_repeated_in_another_case_is_a_duplicate_not_an_ambiguous_folder)."
 
 [[feature]]
 id = "ARC-016"
@@ -12463,8 +12463,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_supported_compression_round_trip",
 ]
 bridge = ["archiveExtract", "archiveInspect"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (a_symbolic_link_member_is_refused, fifos_devices_and_sockets_are_refused, an_encrypted_member_is_refused, an_unsupported_compression_method_is_refused, a_folder_entry_with_data_is_refused); native/crates/ox-core/tests/archive_extract.rs (archives_python_writes_with_each_supported_method_round_trip). The native UI does not offer extraction yet. Porting notes: Dolphin via Ark handles encrypted archives and many formats (tar, 7z, rar); OpenXplorer supports ZIP only."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract_checks.rs and archive_extract.rs; the native Extract dialog and Extract here use the same extractor (native/crates/ox-app/src/window/tests/archives.rs). Earlier evidence: native/crates/ox-core/tests/archive_extract_checks.rs (a_symbolic_link_member_is_refused, fifos_devices_and_sockets_are_refused, an_encrypted_member_is_refused, an_unsupported_compression_method_is_refused, a_folder_entry_with_data_is_refused); native/crates/ox-core/tests/archive_extract.rs (archives_python_writes_with_each_supported_method_round_trip). Porting notes: Dolphin via Ark handles encrypted archives and many formats (tar, 7z, rar); OpenXplorer supports ZIP only."
 
 [[feature]]
 id = "ARC-017"
@@ -12491,8 +12491,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_filename_size_limit",
 ]
 bridge = ["archiveExtract", "archiveInspect"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract_checks.rs (more_entries_than_the_limit_are_refused, implied_folders_count_toward_the_paths_limit, nesting_deeper_than_128_levels_is_refused, members_over_the_total_limit_are_refused, a_member_over_the_size_limit_is_refused, a_member_compressed_beyond_the_ratio_limit_is_refused, a_member_shorter_than_it_declares_stops_the_extraction); native/crates/ox-core/src/archive/extract/limits.rs (written_bytes_stop_at_the_declared_size_and_the_limits); native/crates/ox-core/tests/archive_plan_memory.rs (checking_deep_long_names_takes_memory_in_proportion_to_the_names). The native UI does not offer extraction yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract_checks.rs; the native Extract dialog and Extract here use the same extractor with the default limits (native/crates/ox-app/src/window/tests/archives.rs). Earlier evidence: native/crates/ox-core/tests/archive_extract_checks.rs (more_entries_than_the_limit_are_refused, implied_folders_count_toward_the_paths_limit, nesting_deeper_than_128_levels_is_refused, members_over_the_total_limit_are_refused, a_member_over_the_size_limit_is_refused, a_member_compressed_beyond_the_ratio_limit_is_refused, a_member_shorter_than_it_declares_stops_the_extraction); native/crates/ox-core/src/archive/extract/limits.rs (written_bytes_stop_at_the_declared_size_and_the_limits); native/crates/ox-core/tests/archive_plan_memory.rs (checking_deep_long_names_takes_memory_in_proportion_to_the_names)."
 
 [[feature]]
 id = "ARC-018"
@@ -12507,8 +12507,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_never_restores_executable_or_setuid_mode",
 ]
 bridge = ["archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract.rs (archive_permissions_are_never_applied, a_device_destination_gets_no_unix_modes); native/crates/ox-core/tests/archive_gio.rs (extraction_through_gio_never_applies_archive_permissions). The native UI does not offer extraction yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract.rs and archive_gio.rs; the native UI extracts through GioExtractionOutput (native/crates/ox-app/src/window/archive_actions.rs). Earlier evidence: native/crates/ox-core/tests/archive_extract.rs (archive_permissions_are_never_applied, a_device_destination_gets_no_unix_modes); native/crates/ox-core/tests/archive_gio.rs (extraction_through_gio_never_applies_archive_permissions)."
 
 [[feature]]
 id = "ARC-019"
@@ -12527,8 +12527,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_unicode_spaces",
 ]
 bridge = ["archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract.rs (folders_implied_by_member_paths_are_created, empty_folder_entries_are_created, a_folder_entry_after_its_contents_is_accepted, unicode_and_spaces_in_names_are_kept, an_empty_archive_extracts_to_an_empty_folder). The native UI does not offer extraction yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract.rs; the native UI extracts folders implied by member paths (native/crates/ox-app/src/window/tests/archives.rs extract_all_unpacks_into_a_new_folder_and_shows_it). Earlier evidence: native/crates/ox-core/tests/archive_extract.rs (folders_implied_by_member_paths_are_created, empty_folder_entries_are_created, a_folder_entry_after_its_contents_is_accepted, unicode_and_spaces_in_names_are_kept, an_empty_archive_extracts_to_an_empty_folder)."
 
 [[feature]]
 id = "ARC-020"
@@ -12554,8 +12554,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_invalid_destination_names",
 ]
 bridge = ["archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_extract.rs (a_new_folder_inside_a_configured_snapshot_is_refused, a_protected_member_path_stops_the_extraction_before_writing); native/crates/ox-core/tests/archive_extract_dispatch.rs (a_protected_destination_folder_is_refused, member_destinations_are_checked_before_any_staging). The native UI does not offer extraction yet."
+native = "done"
+native_note = "Core: native/crates/ox-core/tests/archive_extract.rs and archive_extract_dispatch.rs; the native extractor always runs with the previous-versions write guard (native/crates/ox-app/src/window/archive_actions.rs zip_extractor), and a previous version is refused as a destination in the dialog. Earlier evidence: native/crates/ox-core/tests/archive_extract.rs (a_new_folder_inside_a_configured_snapshot_is_refused, a_protected_member_path_stops_the_extraction_before_writing); native/crates/ox-core/tests/archive_extract_dispatch.rs (a_protected_destination_folder_is_refused, member_destinations_are_checked_before_any_staging)."
 
 [[feature]]
 id = "ARC-021"
@@ -12582,7 +12582,8 @@ python_tests = [
 bridge = ["open"]
 dolphin = "“Open with Ark”"
 gnome = "GAppInfo default for application/zip (org.gnome.FileRoller.desktop)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (open_in_archive_manager_hands_the_zip_to_the_desktop): the browser's and the Extract dialog's button close the dialog (cancelling the check) and open the ZIP with the desktop's default application for its type."
 
 [[feature]]
 id = "ARC-022"
@@ -12640,8 +12641,8 @@ python_tests = [
 bridge = ["archiveInspect", "archiveExtract"]
 dolphin = "Ark service menu “Compress → Here (as ZIP/TAR.GZ) / Compress to…”; Ark service menus (Extract/Compress)"
 gnome = "gnome-autoar AutoarCompressor (libgnome-autoar installed; Nautilus 46 “Compress…”) or File Roller's D-Bus/CLI; gnome-autoar (Nautilus 'Compress…' and 'Extract Here')"
-native = "todo"
-native_note = "Porting notes: OpenXplorer offers 'Extract all…' for ZIP only and cannot compress. Explorer offers 'Compress to ZIP file' and 'Extract all'."
+native = "partial"
+native_note = "native/crates/ox-core/src/archive/create.rs (items_are_compressed_into_a_new_zip_without_following_links, an_existing_name_is_never_replaced, the_write_guard_keeps_the_zip_out_of_protected_folders, a_cancelled_compression_leaves_nothing_behind) and create/zip_writer.rs (a_written_archive_reads_back_with_its_names_sizes_and_data); native/crates/ox-app/src/window/tests/archives.rs (compress_to_zip_puts_the_selection_into_a_new_zip_beside_it); native/crates/ox-app/src/archive_view/compress.rs (the_zip_is_named_after_the_first_item_then_numbered). Compress to ZIP file writes a deflated ZIP beside the selection, named after the first item or numbered, privately staged and published without replacing anything, with progress and Cancel; links and special files are left out. Missing: a name prompt, .tar.xz, .7z and password-protected ZIP, and ZIP64 (archives over 4 GiB or 65,535 items are refused). Porting notes: OpenXplorer offers 'Extract all…' for ZIP only and cannot compress. Explorer offers 'Compress to ZIP file' and 'Extract all'."
 
 [[feature]]
 id = "ARC-024"
@@ -12685,8 +12686,8 @@ python_tests = []
 bridge = ["archiveInspect", "archiveExtract"]
 dolphin = "Ark service menu 'Extract archive here, autodetect subfolder' (added through KFileItemActions)"
 gnome = "gnome-autoar AutoarExtractor (Nautilus 'Extract', output-is-dest detection)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer offers only the dialog (ARC-009) and never overwrites (ARC-012). ARC-024 extends this to other archive formats."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_here_uses_the_next_free_name, the_archive_commands_follow_the_selection); native/crates/ox-app/src/archive_view/extraction.rs (extract_here_tries_the_name_then_numbered_names): Extract here extracts beside the archive into '<name>', '<name> (2)', … with every ZIP rule, progress and Cancel, and is disabled in pages, server listings and previous versions. Missing: an archive with exactly one top-level folder is still nested instead of that folder becoming the output. Porting notes: OpenXplorer offers only the dialog (ARC-009) and never overwrites (ARC-012). ARC-024 extends this to other archive formats."
 
 [[feature]]
 id = "PROP-001"
@@ -12715,7 +12716,8 @@ python_tests = [
 ]
 bridge = ["properties"]
 dolphin = "Properties dialog (Alt+Return); Properties (Alt+Return); properties: Alt+Return, Alt+Enter; Dolphin: Alt+Return opens Properties."
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, properties_of_a_location_open_for_menus_outside_the_folder_view). Alt+Enter, the context menu's Properties and Previous versions, `win.properties-of` for any location, the standard-folder title, opening on a given tab and the lone Close button work. Missing: the sidebar, drive and network menus and FileManager1 ShowItemProperties do not call `win.properties-of` yet (their menus and the bus handler belong to other tracks), and the Location tab is a placeholder (PROP-017)."
 
 [[feature]]
 id = "PROP-002"
@@ -12760,8 +12762,8 @@ python_tests = [
 ]
 bridge = ["properties", "clipboardText", "folderSize"]
 dolphin = "Properties (Alt+Return) General/Permissions"
-native = "todo"
-native_note = "Porting notes: Dolphin can edit permissions and ownership; the Python app shows them read-only."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, calculate_folder_size_shows_the_size_everywhere_the_folder_is). Every row, Copy full path with its toast, Calculate folder size with its explanation, and the read-failure texts are ported (native/crates/ox-app/src/properties/general_panel.rs). Missing: Change app… is shown but disabled until the Open with dialog arrives with desktop integration. Porting notes: Dolphin can edit permissions and ownership; the Python app shows them read-only."
 
 [[feature]]
 id = "PROP-004"
@@ -12813,8 +12815,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:1464-1466", "desktop/ui/app.js:1439", "desktop/file_services.py:29"]
 python_tests = ["desktop/tests/ui_release.py::Permissions tab opens"]
 bridge = ["properties"]
-native = "todo"
-native_note = "Porting notes: Read-only; Dolphin allows editing permissions/owner. Native may add editing. Permissions cannot be edited; Dolphin can change them. Editing is PROP-007."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file): Owner, Group, POSIX mode as Python's oct() writes it (native/crates/ox-app/src/properties/metadata.rs the_mode_reads_as_python_writes_it), Readable, Writable, Executable with 'Not reported by this backend', and the read-only note. Porting notes: Read-only; Dolphin allows editing permissions/owner. Native may add editing. Permissions cannot be edited; Dolphin can change them. Editing is PROP-007."
 
 [[feature]]
 id = "PROP-007"
@@ -12876,7 +12878,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Browse opens a new snapshot tab",
 ]
 bridge = ["properties", "previousVersions", "cancel"]
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (properties_belong_to_the_tab_that_opened_them, closing_a_tab_discards_its_properties). The dialog lies on an in-window layer under the title bar, is withdrawn when another tab (Ctrl+Tab, a new tab, Settings) comes to the front and comes back unchanged with its tab, is discarded with its tab, Close or Escape, and its tab's tooltip adds ' · Properties open'. Missing: a GTK test of Escape, and the rule that a tab with open Properties cannot move to another window, which applies once tab moves between windows exist."
 
 [[feature]]
 id = "PROP-009"
@@ -13108,8 +13111,8 @@ python_tests = [
   "desktop/tests/ui_v09.py::Timezone uncertainty disclosed",
 ]
 bridge = ["previousVersions", "cancel"]
-native = "todo"
-native_note = "Porting notes: Not an SMB FSCTL_SRV_ENUMERATE_SNAPSHOTS client; Windows 'Previous Versions' parity is partial."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (previous_versions_lists_the_snapshots_of_the_folder, a_file_without_snapshots_explains_that_none_were_found); native/crates/ox-app/src/properties/versions_panel.rs and version_row.rs port the intro, Refresh and Snapshot source…, the loading text, the column titles and date note, rows with icon, name, source, date and time with their tooltip, Browse and Restore a copy…, the empty result, the truncation note, Availability details and the layouts note; refreshing, the source form and closing cancel a lookup and a stale result is dropped. Porting notes: Not an SMB FSCTL_SRV_ENUMERATE_SNAPSHOTS client; Windows 'Previous Versions' parity is partial."
 
 [[feature]]
 id = "PROP-020"
@@ -13138,8 +13141,8 @@ python_tests = [
   "desktop/tests/snapshot_meta.test.cjs::Reject invalid / unknown manual",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/src/versions/snapshot_date.rs (dates_and_times_are_read_from_snapshot_names, names_without_a_possible_date_have_none, only_a_gmt_name_has_a_timezone, the_date_source_is_named_in_the_web_ui_wording, a_name_with_only_a_date_has_no_time, the_first_date_not_glued_to_digits_counts); native/crates/ox-core/src/versions/snapshot_location.rs (only_a_snapshot_has_a_date); native/crates/ox-core/tests/versions_lookup.rs (a_version_is_dated_by_its_snapshot_name_never_by_its_modification_time). The Previous versions dialog that shows these dates and tooltips is not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/src/versions/snapshot_date.rs and snapshot_location.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (previous_versions_lists_the_snapshots_of_the_folder, browse_opens_the_snapshot_in_a_marked_tab_with_its_banner). The medium date is written '5 Sep 2026' (day, the locale's abbreviated month, year): GLib has no CLDR formats, so the browser's 'Sep 5, 2026' order is not reproduced, as format.rs does for the Properties timestamps. Earlier evidence: native/crates/ox-core/src/versions/snapshot_date.rs (dates_and_times_are_read_from_snapshot_names, names_without_a_possible_date_have_none, only_a_gmt_name_has_a_timezone, the_date_source_is_named_in_the_web_ui_wording, a_name_with_only_a_date_has_no_time, the_first_date_not_glued_to_digits_counts); native/crates/ox-core/src/versions/snapshot_location.rs (only_a_snapshot_has_a_date); native/crates/ox-core/tests/versions_lookup.rs (a_version_is_dated_by_its_snapshot_name_never_by_its_modification_time)."
 
 [[feature]]
 id = "PROP-021"
@@ -13160,8 +13163,8 @@ python_tests = [
   "desktop/tests/snapshot_meta.test.cjs::Historical path smb://nas/share/.snapshot/2026-09-05_180000",
 ]
 bridge = ["environment"]
-native = "partial"
-native_note = "native/crates/ox-core/src/versions/paths.rs (snapshot_folders_are_recognised_by_their_path_components, within_respects_path_boundaries); native/crates/ox-core/src/versions/snapshot_location.rs (snapshots_are_labelled_by_their_names, a_folder_below_a_configured_root_is_a_snapshot, an_ordinary_share_is_not_a_snapshot, encoded_markers_are_recognised, the_root_is_the_snapshot_folder_not_the_descendant, snapper_roots_and_configured_collections_are_located, a_snapshot_named_like_the_collection_label_is_a_snapshot, only_a_snapshot_has_a_date, a_malformed_escape_is_not_a_snapshot); native/crates/ox-core/tests/versions_protection.rs (locations_are_protected_exactly_as_in_the_python_app). The native UI does not mark snapshot locations yet."
+native = "done"
+native_note = "native/crates/ox-core/src/versions/paths.rs and snapshot_location.rs; native/crates/ox-app/src/window/item_dialogs.rs (a_tagged_root_covers_its_folder_and_what_is_below_it_only); native/crates/ox-app/src/window/tests/item_dialogs.rs (browse_opens_the_snapshot_in_a_marked_tab_with_its_banner): tabs and the banner use the detection with the configured and discovered roots. Earlier evidence: native/crates/ox-core/src/versions/paths.rs (snapshot_folders_are_recognised_by_their_path_components, within_respects_path_boundaries); native/crates/ox-core/src/versions/snapshot_location.rs (snapshots_are_labelled_by_their_names, a_folder_below_a_configured_root_is_a_snapshot, an_ordinary_share_is_not_a_snapshot, encoded_markers_are_recognised, the_root_is_the_snapshot_folder_not_the_descendant, snapper_roots_and_configured_collections_are_located, a_snapshot_named_like_the_collection_label_is_a_snapshot, only_a_snapshot_has_a_date, a_malformed_escape_is_not_a_snapshot); native/crates/ox-core/tests/versions_protection.rs (locations_are_protected_exactly_as_in_the_python_app)."
 
 [[feature]]
 id = "PROP-022"
@@ -13199,7 +13202,8 @@ python_tests = [
   "desktop/tests/snapshot_meta.test.cjs::Ordinary share not misidentified",
 ]
 bridge = ["list"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (browse_opens_the_snapshot_in_a_marked_tab_with_its_banner): Browse opens a new foreground tab tagged with the snapshot's root and name, the tab gets the amber edge and 'Previous version' badge with its tooltip, the banner shows the clock, 'Previous version', the date and time with the explanation tooltip and 'Read-only in OpenXplorer · Restore a copy to edit', and a live tab shows none. The Properties dialog stays with its own tab."
 
 [[feature]]
 id = "PROP-023"
@@ -13221,8 +13225,8 @@ python_tests = [
   "desktop/tests/test_operations.py::ProtectedTransferTests::test_configured_backup_descendant_is_protected",
 ]
 bridge = ["snapshotSource", "environment", "previousVersions"]
-native = "partial"
-native_note = "native/crates/ox-core/src/private_storage/replace.rs (a_replace_writes_a_private_file_and_leaves_no_temporary_file); native/crates/ox-core/src/versions/source.rs (an_unknown_layout_is_refused_in_the_python_wording, a_collection_that_contains_its_live_folder_is_refused, saved_entries_the_python_app_would_drop_are_dropped); native/crates/ox-core/src/versions/source_file.rs (saving_makes_a_private_file_in_a_private_directory, a_failed_save_leaves_no_temporary_file_and_keeps_the_old_one, a_linked_sources_file_is_replaced_not_written_through, a_malformed_file_holds_no_sources, only_the_first_sixty_four_saved_entries_are_read); native/crates/ox-core/tests/versions_lookup.rs (a_configured_source_is_used_and_an_empty_result_explains_itself); native/crates/ox-core/tests/versions_protection.rs (configured_backup_descendant_is_protected); native/crates/ox-core/tests/versions_sources.rs (mapping_a_mapped_live_folder_again_replaces_its_mapping, at_most_sixty_four_live_folders_can_be_mapped, a_refused_mapping_leaves_the_saved_sources_unchanged, removing_a_mapping_keeps_the_others, saved_sources_are_read_like_the_python_app_reads_them, an_unreadable_sources_file_holds_no_sources, sources_saved_by_either_app_are_used_by_the_other). The Snapshot source form is not in the native UI yet. Porting notes: No backend test covers configure() or sources()."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (the_snapshot_source_form_saves_a_mapping_and_lists_again); native/crates/ox-app/src/properties/snapshot_source.rs (the_form_suggests_the_share_root_and_its_snapshot_folder); the core rules: native/crates/ox-core/src/versions/source.rs, source_file.rs and native/crates/ox-core/src/private_storage/replace.rs. The window re-reads the snapshot roots when the dialog closes and on every volume change. Earlier evidence: native/crates/ox-core/src/private_storage/replace.rs (a_replace_writes_a_private_file_and_leaves_no_temporary_file); native/crates/ox-core/src/versions/source.rs (an_unknown_layout_is_refused_in_the_python_wording, a_collection_that_contains_its_live_folder_is_refused, saved_entries_the_python_app_would_drop_are_dropped); native/crates/ox-core/src/versions/source_file.rs (saving_makes_a_private_file_in_a_private_directory, a_failed_save_leaves_no_temporary_file_and_keeps_the_old_one, a_linked_sources_file_is_replaced_not_written_through, a_malformed_file_holds_no_sources, only_the_first_sixty_four_saved_entries_are_read); native/crates/ox-core/tests/versions_lookup.rs (a_configured_source_is_used_and_an_empty_result_explains_itself); native/crates/ox-core/tests/versions_protection.rs (configured_backup_descendant_is_protected); native/crates/ox-core/tests/versions_sources.rs (mapping_a_mapped_live_folder_again_replaces_its_mapping, at_most_sixty_four_live_folders_can_be_mapped, a_refused_mapping_leaves_the_saved_sources_unchanged, removing_a_mapping_keeps_the_others, saved_sources_are_read_like_the_python_app_reads_them, an_unreadable_sources_file_holds_no_sources, sources_saved_by_either_app_are_used_by_the_other). Porting notes: No backend test covers configure() or sources()."
 
 [[feature]]
 id = "PROP-024"
@@ -13295,8 +13299,8 @@ python_tests = [
   "desktop/tests/test_operations.py::TransferTests::test_keep_both",
 ]
 bridge = ["normalise", "operate", "previousVersions"]
-native = "partial"
-native_note = "Copy rule: native/crates/ox-core/tests/transfer_cases/operations.rs (configured_snapshot_destination_is_protected_but_restoring_a_copy_is_allowed); the dialog is not implemented."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (restore_a_copy_copies_the_version_into_a_live_folder_only); native/crates/ox-app/src/properties/restore.rs (a_destination_inside_a_snapshot_is_refused): the dialog, its note, Home as the default, normalising the destination, the refusal inside a snapshot, and the copy with Keep both on the transfer engine with progress and Cancel in the operation panel."
 
 [[feature]]
 id = "PROP-026"
@@ -13335,8 +13339,8 @@ python_tests = [
 ]
 bridge = ["folderSize", "cancel"]
 dolphin = "Folder size in Details view; Properties recursive size / folder size column"
-native = "partial"
-native_note = "native/crates/ox-core/src/sizes/scan.rs (progress_between_start_and_end_waits_for_the_interval); native/crates/ox-core/tests/sizes_providers.rs (a_background_scan_publishes_progress_and_returns_the_totals); native/crates/ox-core/tests/sizes_scan.rs (an_empty_folder_is_a_real_zero, file_bytes_are_totalled_recursively, hidden_files_are_counted, scanning_leaves_files_unchanged, a_folder_with_spaces_and_a_hash_in_its_name_is_scanned); native/crates/ox-core/tests/sizes_scan_limits.rs (a_whole_smb_server_is_refused, cancelling_returns_the_totals_counted_so_far, progress_and_completion_are_published). The menu entries, the scan strip, Cancel scan and one scan per window are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (calculate_folder_size_shows_the_size_everywhere_the_folder_is, calculate_folder_sizes_measures_every_folder_shown_and_one_scan_runs_at_a_time, a_request_without_folders_says_what_to_select, cancel_scan_stops_the_run_and_says_so); native/crates/ox-app/src/properties/size_scan_strip.rs (the_bar_names_the_folder_its_position_and_the_totals, the_end_of_a_run_says_how_many_folders_are_exact); native/crates/ox-app/src/window/folder_size_scan.rs (only_folders_and_shares_are_measured_each_once); the scan itself: native/crates/ox-core/src/sizes. Earlier evidence: native/crates/ox-core/src/sizes/scan.rs (progress_between_start_and_end_waits_for_the_interval); native/crates/ox-core/tests/sizes_providers.rs (a_background_scan_publishes_progress_and_returns_the_totals); native/crates/ox-core/tests/sizes_scan.rs (an_empty_folder_is_a_real_zero, file_bytes_are_totalled_recursively, hidden_files_are_counted, scanning_leaves_files_unchanged, a_folder_with_spaces_and_a_hash_in_its_name_is_scanned); native/crates/ox-core/tests/sizes_scan_limits.rs (a_whole_smb_server_is_refused, cancelling_returns_the_totals_counted_so_far, progress_and_completion_are_published)."
 
 [[feature]]
 id = "PROP-027"
@@ -13359,8 +13363,8 @@ python_tests = [
   "desktop/tests/test_v06.py::FolderSizeTests::test_unknown_size_is_not_fabricated_zero",
 ]
 bridge = ["folderSize"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/sizes_scan.rs (an_unknown_size_is_not_counted_as_zero); native/crates/ox-core/tests/sizes_scan_limits.rs (the_entry_limit_marks_the_result_partial). The Size column, details pane and Properties do not show measured sizes yet."
+native = "done"
+native_note = "native/crates/ox-app/src/properties/folder_sizes.rs (sizes_read_scanning_unavailable_exact_or_at_least, tooltips_name_the_status_counts_and_reason, a_folder_is_one_result_with_or_without_its_trailing_slash); native/crates/ox-app/src/window/tests/item_dialogs.rs (calculate_folder_size_shows_the_size_everywhere_the_folder_is): the Size column, its sorting (itemSize), the details pane and Properties show the window's session results. Earlier evidence: native/crates/ox-core/tests/sizes_scan.rs (an_unknown_size_is_not_counted_as_zero); native/crates/ox-core/tests/sizes_scan_limits.rs (the_entry_limit_marks_the_result_partial)."
 
 [[feature]]
 id = "PROP-028"
@@ -13403,8 +13407,8 @@ python_tests = [
   "desktop/tests/test_v06.py::FolderSizeTests::test_spaces_in_path",
 ]
 bridge = ["folderSize"]
-native = "partial"
-native_note = "native/crates/ox-core/src/sizes/gio_provider.rs (a_size_the_backend_does_not_report_stays_unknown); native/crates/ox-core/tests/sizes_providers.rs (a_subfolder_on_another_filesystem_of_a_share_is_skipped, gio_metadata_gives_the_same_totals_without_following_links); native/crates/ox-core/tests/sizes_scan.rs (an_empty_folder_is_a_real_zero, file_bytes_are_totalled_recursively, hidden_files_are_counted, scanning_leaves_files_unchanged, a_symbolic_link_is_not_followed, a_link_cycle_does_not_recurse, a_snapshot_collection_is_excluded, every_snapshot_collection_name_is_excluded, an_explicitly_chosen_snapshot_folder_can_be_scanned, hard_links_count_once, a_fifo_is_excluded_and_never_opened, a_nested_mount_is_excluded, unreadable_entries_are_reported_as_errors, a_failed_subfolder_is_reported_and_not_shown_as_empty, an_unknown_size_is_not_counted_as_zero); native/crates/ox-core/tests/sizes_scan_limits.rs (a_link_to_a_folder_is_refused_as_the_scanned_folder, a_file_is_refused_as_the_scanned_folder). The native UI does not scan folder sizes yet."
+native = "done"
+native_note = "Core rules: native/crates/ox-core/src/sizes/gio_provider.rs, tests/sizes_providers.rs and tests/sizes_scan.rs; the window shows a partial total as '≥ <size>' with the reason: native/crates/ox-app/src/properties/folder_sizes.rs (tooltips_name_the_status_counts_and_reason). Earlier evidence: native/crates/ox-core/src/sizes/gio_provider.rs (a_size_the_backend_does_not_report_stays_unknown); native/crates/ox-core/tests/sizes_providers.rs (a_subfolder_on_another_filesystem_of_a_share_is_skipped, gio_metadata_gives_the_same_totals_without_following_links); native/crates/ox-core/tests/sizes_scan.rs (an_empty_folder_is_a_real_zero, file_bytes_are_totalled_recursively, hidden_files_are_counted, scanning_leaves_files_unchanged, a_symbolic_link_is_not_followed, a_link_cycle_does_not_recurse, a_snapshot_collection_is_excluded, every_snapshot_collection_name_is_excluded, an_explicitly_chosen_snapshot_folder_can_be_scanned, hard_links_count_once, a_fifo_is_excluded_and_never_opened, a_nested_mount_is_excluded, unreadable_entries_are_reported_as_errors, a_failed_subfolder_is_reported_and_not_shown_as_empty, an_unknown_size_is_not_counted_as_zero); native/crates/ox-core/tests/sizes_scan_limits.rs (a_link_to_a_folder_is_refused_as_the_scanned_folder, a_file_is_refused_as_the_scanned_folder)."
 
 [[feature]]
 id = "PROP-029"
@@ -13485,8 +13489,8 @@ sources = [
 python_tests = []
 bridge = ["previousVersions"]
 gnome = "GIO enumerate_children and query_info with NOFOLLOW_SYMLINKS on local paths and GVfs smb://"
-native = "partial"
-native_note = "native/crates/ox-core/src/versions/lookup.rs (an_smb_item_is_looked_up_at_its_share_root, a_local_file_is_looked_up_next_to_it_and_a_folder_inside_it, the_most_specific_configured_source_is_the_only_candidate); native/crates/ox-core/tests/versions_lookup.rs (share_items_are_found_at_the_share_root_and_failures_become_warnings, a_configured_source_is_used_and_an_empty_result_explains_itself, a_folder_is_found_in_snapper_snapshots_next_to_it, at_most_one_hundred_versions_are_returned_and_marked_truncated, at_most_eight_warnings_are_kept, a_version_is_dated_by_its_snapshot_name_never_by_its_modification_time, a_cancelled_lookup_stops_instead_of_reporting_warnings, a_collection_read_by_a_lookup_becomes_read_only); native/crates/ox-core/tests/versions_lookup_gio.rs (gio_finds_versions_in_local_snapshot_folders_without_following_links, a_background_lookup_finds_the_same_versions). The Previous versions dialog is not in the native UI yet. Porting notes: PROP-019 covers the dialog, and PROP-021 and PROP-024 cover detection and read-only marking. No backend test covers the lookup; ui_release's snapshot checks run against preview fixtures."
+native = "done"
+native_note = "native/crates/ox-core/src/versions/lookup.rs and tests/versions_lookup.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (previous_versions_lists_the_snapshots_of_the_folder, a_file_without_snapshots_explains_that_none_were_found) run the lookup through GIO from the dialog. Earlier evidence: native/crates/ox-core/src/versions/lookup.rs (an_smb_item_is_looked_up_at_its_share_root, a_local_file_is_looked_up_next_to_it_and_a_folder_inside_it, the_most_specific_configured_source_is_the_only_candidate); native/crates/ox-core/tests/versions_lookup.rs (share_items_are_found_at_the_share_root_and_failures_become_warnings, a_configured_source_is_used_and_an_empty_result_explains_itself, a_folder_is_found_in_snapper_snapshots_next_to_it, at_most_one_hundred_versions_are_returned_and_marked_truncated, at_most_eight_warnings_are_kept, a_version_is_dated_by_its_snapshot_name_never_by_its_modification_time, a_cancelled_lookup_stops_instead_of_reporting_warnings, a_collection_read_by_a_lookup_becomes_read_only); native/crates/ox-core/tests/versions_lookup_gio.rs (gio_finds_versions_in_local_snapshot_folders_without_following_links, a_background_lookup_finds_the_same_versions). Porting notes: PROP-019 covers the dialog, and PROP-021 and PROP-024 cover detection and read-only marking. No backend test covers the lookup; ui_release's snapshot checks run against preview fixtures."
 
 [[feature]]
 id = "SET-001"

@@ -26,6 +26,7 @@ pub(super) const RULES: &str = concat!(
     include_str!("../../resources/skin/landing.css"),
     include_str!("../../resources/skin/menus.css"),
     include_str!("../../resources/skin/settings.css"),
+    include_str!("../../resources/skin/dialogs.css"),
     include_str!("../../resources/skin/breakpoints.css"),
 );
 

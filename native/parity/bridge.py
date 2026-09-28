@@ -20,6 +20,7 @@ BRIDGE = 'native/parity/bridge.json'
 LEGACY_DISPATCHER = 'desktop/winspace.py'
 STATUSES = frozenset({'pending', 'core-tested', 'native-tested'})
 CITATION = re.compile(r'(?P<path>[^:]+\.rs)::(?P<test>[A-Za-z_]\w*)')
+TEST_ATTRIBUTES = frozenset({'#[test]', '#[gtk::test]'})
 RUST_FUNCTION = re.compile(
     r'(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+(?P<name>\w+)')
 
@@ -128,9 +129,10 @@ def citation_problem(root: Path, citation: str) -> str | None:
 def rust_tests(source: str) -> set[str]:
     """Return the names of the functions that run as tests in Rust code.
 
-    Other attributes and comments may stand between ``#[test]`` and the
-    ``fn`` line; anything else ends the attribute block. A test marked
-    ``#[ignore]`` is left out, because ``cargo test`` skips it.
+    A test is marked ``#[test]``, or ``#[gtk::test]`` for the GTK tests
+    that run on GTK's test thread. Other attributes and comments may stand
+    between it and the ``fn`` line; anything else ends the attribute block.
+    A test marked ``#[ignore]`` is left out, because ``cargo test`` skips it.
     """
     tests = set()
     attributes: list[str] = []
@@ -149,7 +151,8 @@ def rust_tests(source: str) -> set[str]:
 def is_running_test(attributes: list[str]) -> bool:
     """Return whether attributes make a function a test that runs."""
     ignored = any(attribute.startswith('#[ignore') for attribute in attributes)
-    return '#[test]' in attributes and not ignored
+    is_test = any(attribute in TEST_ATTRIBUTES for attribute in attributes)
+    return is_test and not ignored
 
 
 def replacement_blockers(inventory: Inventory) -> list[str]:

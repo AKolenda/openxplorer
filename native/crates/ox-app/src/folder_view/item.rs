@@ -4,7 +4,10 @@
 //! Wraps an [`ox_core::entry::Entry`] with what the views need often and
 //! should compute once: the natural-order sort keys, the lower-cased name
 //! used by the search filter, and the icon art. A row of `renderRows`
-//! in `desktop/ui/app.js` reads the same fields from the entry.
+//! in `desktop/ui/app.js` reads the same fields from the entry. A folder
+//! also carries its measured size once the user asked for it
+//! (`state.folderSizes` in app.js), which the Size column shows and sorts
+//! by.
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
@@ -13,6 +16,7 @@ use ox_core::entry::Entry;
 use crate::folder_view::filter::Visibility;
 use crate::folder_view::sorting::{SortKey, SortName};
 use crate::icons::Art;
+use crate::properties::FolderSizeState;
 
 /// A listed entry with what the views compute from it once, when its
 /// [`FileItem`] is created.
@@ -38,19 +42,23 @@ impl PreparedEntry {
 }
 
 mod imp {
-    use std::cell::OnceCell;
+    use std::cell::{OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::subclass::prelude::*;
 
     use super::PreparedEntry;
+    use crate::properties::FolderSizeState;
 
-    /// Private state of [`super::FileItem`]; set once at construction.
+    /// Private state of [`super::FileItem`]: the entry, set once at
+    /// construction, and a folder's measured size.
     #[derive(Debug, Default)]
     pub(crate) struct FileItem {
         /// The entry and what is computed from it, set by
         /// [`super::FileItem::new`].
         pub(super) prepared: OnceCell<PreparedEntry>,
+        /// What a folder-size scan found, for a folder that was measured.
+        pub(super) folder_size: RefCell<Option<FolderSizeState>>,
     }
 
     #[glib::object_subclass]
@@ -132,6 +140,30 @@ impl FileItem {
             return None;
         }
         entry.size
+    }
+
+    /// What a folder-size scan found for this folder, if it was measured.
+    pub(crate) fn folder_size(&self) -> Option<FolderSizeState> {
+        self.imp().folder_size.borrow().clone()
+    }
+
+    /// Records what a folder-size scan found for this folder.
+    pub(crate) fn set_folder_size(&self, state: FolderSizeState) {
+        self.imp().folder_size.replace(Some(state));
+    }
+
+    /// The size the Size column sorts by: a file's size, a folder's
+    /// measured size, else 0 (`itemSize` in app.js).
+    pub(crate) fn sort_size(&self) -> u64 {
+        if self.entry().is_dir {
+            return self
+                .imp()
+                .folder_size
+                .borrow()
+                .as_ref()
+                .map_or(0, FolderSizeState::sort_bytes);
+        }
+        self.entry().size.unwrap_or(0)
     }
 }
 

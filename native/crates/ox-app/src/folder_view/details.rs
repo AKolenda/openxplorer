@@ -36,16 +36,29 @@ const RESIZE_SETTLE: Duration = Duration::from_millis(500);
 /// unchanged for [`RESIZE_SETTLE`].
 const COLUMNS_RESIZED: &str = "columns-resized";
 
-/// The text `column` shows for `item`. Folders and files of unknown size
-/// have an empty Size cell.
+/// The text `column` shows for `item`. A folder shows its measured size
+/// once measured; folders never measured and files of unknown size have
+/// an empty Size cell.
 fn cell_text(column: SortColumn, item: &FileItem) -> String {
     let entry = item.entry();
     match column {
         SortColumn::Name => entry.name.clone(),
         SortColumn::Modified => format::date_text(entry.modified),
         SortColumn::Type => entry.type_label.clone(),
-        SortColumn::Size => item.file_size().map(format::pretty_bytes).unwrap_or_default(),
+        SortColumn::Size => match item.folder_size() {
+            Some(measured) => measured.size_text(),
+            None => item.file_size().map(format::pretty_bytes).unwrap_or_default(),
+        },
     }
+}
+
+/// The tooltip of `column`'s cell for `item`: how a measured folder size
+/// was counted (`renderRows` in app.js), else none.
+fn cell_tooltip(column: SortColumn, item: &FileItem) -> Option<String> {
+    if column != SortColumn::Size {
+        return None;
+    }
+    item.folder_size().map(|measured| measured.cell_tooltip())
 }
 
 /// The Name column's cells: the item's icon beside its name.
@@ -74,6 +87,7 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
         let label = list_item.child().and_downcast::<gtk::Label>();
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
             label.set_text(&cell_text(column, &item));
+            label.set_tooltip_text(cell_tooltip(column, &item).as_deref());
         }
     });
     factory

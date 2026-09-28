@@ -22,6 +22,19 @@ pub(super) const TAB_WIDTH: i32 = 215;
 pub(super) const MIN_TAB_WIDTH: i32 = 100;
 /// The space between tabs (`.tabs{gap:2px}`).
 pub(super) const TAB_GAP: i32 = 2;
+/// What a tab showing a previous version gets beyond the others, for its
+/// "Previous version" badge (`.tab.snapshot-tab{width:330px}`).
+const SNAPSHOT_TAB_EXTRA: i32 = 330 - TAB_WIDTH;
+
+/// The width `tab` gets beyond the shared tab width: a snapshot tab's
+/// badge needs more room.
+fn extra_width(tab: &gtk::Widget) -> i32 {
+    if tab.has_css_class("snapshot-tab") {
+        SNAPSHOT_TAB_EXTRA
+    } else {
+        0
+    }
+}
 
 /// The widths a tab may take.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,8 +86,8 @@ mod imp {
     use gtk::subclass::prelude::*;
 
     use super::{
-        laid_out_children, strip_width, tab_width, widest_minimum_width, TabWidths, MIN_TAB_WIDTH, TAB_GAP,
-        TAB_WIDTH,
+        extra_width, laid_out_children, strip_width, tab_width, widest_minimum_width, TabWidths,
+        MIN_TAB_WIDTH, TAB_GAP, TAB_WIDTH,
     };
 
     /// Private state of [`super::TabLayout`].
@@ -133,7 +146,8 @@ mod imp {
             let count = i32::try_from(tabs.len()).unwrap_or(i32::MAX);
             let widths = self.widths(&tabs);
             let minimum = strip_width(count, widths.narrowest_allowed());
-            let natural = strip_width(count, widths.widest_allowed());
+            let extras: i32 = tabs.iter().map(extra_width).sum();
+            let natural = strip_width(count, widths.widest_allowed()) + extras;
             (minimum, natural, -1, -1)
         }
 
@@ -143,9 +157,10 @@ mod imp {
             let each = tab_width(width, count, self.widths(&tabs));
             let mut x = 0;
             for tab in tabs {
-                let placement = gtk::Allocation::new(x, 0, each, height);
+                let tab_width = each + extra_width(&tab);
+                let placement = gtk::Allocation::new(x, 0, tab_width, height);
                 tab.size_allocate(&placement, -1);
-                x += each + TAB_GAP;
+                x += tab_width + TAB_GAP;
             }
         }
     }

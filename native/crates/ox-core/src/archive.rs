@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! ZIP archives: browsing them read-only, opening one member as a private
-//! copy, and extracting them into a new folder.
+//! copy, extracting them into a new folder, and compressing items into a
+//! new ZIP.
 //!
 //! Ports `desktop/archives.py`, `desktop/zip_extraction.py`, the archive
 //! reader of `desktop/native_opening.py` and the archive branches of
@@ -18,6 +19,8 @@
 //!   streams.
 //! - ARC-012 to ARC-020: an extraction creates a new folder, checks every
 //!   member first, builds it privately and publishes it all or nothing.
+//! - ARC-023: compressing writes a new ZIP privately and publishes it
+//!   without replacing anything; links are never followed.
 //!
 //! Every operation blocks on I/O; each has an `…_in_background` variant
 //! that runs it on a GIO worker thread for the main loop to await. All of
@@ -29,6 +32,7 @@
 //! | `browse` | Listing an archive folder | `archives.py` |
 //! | `preview` | Opening one member as a private copy | `archives.py` |
 //! | `extract` | Checking and extracting a whole archive | `zip_extraction.py`, `winspace.py` |
+//! | `create` | Compressing items into a new ZIP | new (Dolphin, Explorer) |
 //! | `member_names` | Safe member names, previewable types, suggested folder names | `archives.py`, `zip_extraction.py` |
 //! | `source` | Opening archives: [`ArchiveOpener`] | `archives.py`, `native_opening.py` |
 //! | `gio_reader` | Reading archives on shares in place | `native_opening.py` |
@@ -37,6 +41,7 @@
 //! | `error` | [`ArchiveError`] with the app's messages | all of them |
 
 mod browse;
+mod create;
 mod error;
 mod extract;
 mod gio_reader;
@@ -49,6 +54,7 @@ mod zip;
 pub use browse::{
     default_preview_root, ArchiveBrowser, ArchiveEntry, ArchiveEntryKind, ArchiveListing, MAX_LISTED_ENTRIES,
 };
+pub use create::{CompressionRequest, CreatedArchive, ZipCompressor};
 pub use error::ArchiveError;
 pub use extract::{
     ExtractedFolder, ExtractionLimits, ExtractionOutput, ExtractionRequest, ExtractionSummary,

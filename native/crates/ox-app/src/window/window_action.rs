@@ -130,6 +130,35 @@ pub(crate) enum WindowAction {
     DefaultFileExplorer,
     /// Looks for a newer release.
     CheckUpdates,
+    /// Properties of the first selected item, or of the folder
+    /// (Alt+Enter).
+    Properties,
+    /// Properties on its Previous versions tab.
+    PreviousVersions,
+    /// Properties of the location in the string target, for the menus of
+    /// the sidebar, drives and network places, and `ShowItemProperties`.
+    PropertiesOf,
+    /// Measures the selected folders.
+    CalculateFolderSize,
+    /// Measures every folder shown.
+    CalculateFolderSizes,
+    /// Measures the folder whose URI is the string target (Properties).
+    CalculateFolderSizeOf,
+    /// Cancels the running folder-size scan, or hides the finished bar.
+    CancelSizeScan,
+    /// Opens a snapshot folder in a new tab; the target is `(uri, snapshot
+    /// root, snapshot name)`.
+    BrowseSnapshot,
+    /// Restores a copy of a previous version; the target is `(version
+    /// URI, snapshot name, item name)`.
+    RestoreVersion,
+    /// Extract all…: the selected ZIP into a new folder of the user's
+    /// choice.
+    ExtractAll,
+    /// Extract here: the selected ZIP into a new folder beside it.
+    ExtractHere,
+    /// Compress to ZIP file: the selection into a new ZIP beside it.
+    CompressToZip,
 }
 
 impl WindowAction {
@@ -193,6 +222,18 @@ impl WindowAction {
             WindowAction::License => "license",
             WindowAction::DefaultFileExplorer => "default-file-explorer",
             WindowAction::CheckUpdates => "check-updates",
+            WindowAction::Properties => "properties",
+            WindowAction::PreviousVersions => "previous-versions",
+            WindowAction::PropertiesOf => "properties-of",
+            WindowAction::CalculateFolderSize => "calculate-folder-size",
+            WindowAction::CalculateFolderSizes => "calculate-folder-sizes",
+            WindowAction::CalculateFolderSizeOf => "calculate-folder-size-of",
+            WindowAction::CancelSizeScan => "cancel-size-scan",
+            WindowAction::BrowseSnapshot => "browse-snapshot",
+            WindowAction::RestoreVersion => "restore-version",
+            WindowAction::ExtractAll => "extract-all",
+            WindowAction::ExtractHere => "extract-here",
+            WindowAction::CompressToZip => "compress-to-zip",
         }
     }
 

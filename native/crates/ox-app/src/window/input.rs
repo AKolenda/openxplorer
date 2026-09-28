@@ -292,7 +292,7 @@ impl BrowserWindow {
         let item = pane.model().item(position)?;
         match activation_for(item.entry()) {
             Activation::Folder(uri) => Some(uri),
-            Activation::File | Activation::Refused(_) => None,
+            Activation::File | Activation::Archive | Activation::Refused(_) => None,
         }
     }
 }
