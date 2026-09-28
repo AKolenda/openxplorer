@@ -15,7 +15,7 @@ use gtk::{gdk, glib};
 
 use crate::icons::{self, ArtKind, Glyph};
 
-use super::art_style::ArtStyle;
+use super::appearance::ArtStyle;
 use super::gestures;
 use super::session::TabId;
 use super::tab_layout::TabLayout;
@@ -200,7 +200,7 @@ fn title(text: &str) -> gtk::Label {
         .build()
 }
 
-/// The tab's close button, named "Close <title>" for screen readers.
+/// The tab's close button, named `Close <title>` for screen readers.
 fn close_button(label: &TabLabel) -> gtk::Button {
     let close = gtk::Button::builder()
         .child(&icons::glyph(Glyph::Close, 12))

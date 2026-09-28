@@ -14,7 +14,7 @@ use gtk::prelude::*;
 use crate::icons::{self, ArtKind, Glyph};
 use crate::theme::Appearance;
 
-use super::art_style::ArtStyle;
+use super::appearance::ArtStyle;
 use super::button_style::ButtonStyle;
 
 pub(super) use content::{pane_content, PaneFacts};

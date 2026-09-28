@@ -1,58 +1,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Changing location: tabs, history, Up, and what the frame shows for the
-//! active tab.
+//! Changing location: tabs, history and Up.
 //!
-//! Ports `addTab`, `closeTab`, `switchTab`, `navigate`, `goHistory` and
-//! `renderNavigation` in `desktop/ui/app.js`. Titles, addresses and crumbs
-//! come from the window's [`LocationContext`], so a phone is called by its
-//! mount name everywhere.
-//!
-//! [`LocationContext`]: ox_core::location::LocationContext
+//! Ports `addTab`, `closeTab`, `switchTab`, `navigate` and `goHistory` in
+//! `desktop/ui/app.js`. Each tab keeps its own history, selection and
+//! scroll position; moving to another location forgets the selection and
+//! the scroll position, and showing another tab puts its own back.
+//! [`super::location_view`] draws the result into the frame.
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::{self, is_device_location, parent_location, LocationContext, LocationError};
+use gtk::{gio, glib};
+use ox_core::location::{self, parent_location, LocationError};
 
-use crate::icons::{ArtKind, Glyph};
 use crate::locations::{self, Page};
 
-use super::address_bar::{AddressIcon, CrumbButton};
 use super::loading::LoadMode;
 use super::session::{Direction, TabId, TabPlacement};
-use super::tab_strip::{TabIcon, TabLabel};
 use super::BrowserWindow;
 
-/// The address-bar icon for a location (`address-icon` in
-/// `renderNavigation`): the page's glyph, the network glyph for SMB, a
-/// phone for devices, else the colour folder.
-fn address_icon(uri: &str) -> AddressIcon {
-    if let Some(page) = Page::from_uri(uri) {
-        return AddressIcon::Glyph(page.glyph());
-    }
-    if uri.starts_with("smb:") {
-        AddressIcon::Glyph(Glyph::Network)
-    } else if is_device_location(uri) {
-        AddressIcon::Glyph(Glyph::Phone)
-    } else {
-        AddressIcon::Folder
-    }
-}
-
-/// A tab's icon, as `renderTabs` picks it: the network glyph on the
-/// Network page, a phone for devices, network art for SMB, and the colour
-/// folder everywhere else, This PC included.
-fn tab_icon(uri: &str) -> TabIcon {
-    if Page::from_uri(uri) == Some(Page::Network) {
-        return TabIcon::Glyph(Glyph::Network);
-    }
-    if is_device_location(uri) {
-        TabIcon::Glyph(Glyph::Phone)
-    } else if uri.starts_with("smb:") {
-        TabIcon::Art(ArtKind::NetworkFolder)
-    } else {
-        TabIcon::Art(ArtKind::Folder)
-    }
+/// What a tab needs to be put back on screen.
+#[derive(Debug)]
+struct SavedTabView {
+    /// The tab's items.
+    store: gio::ListStore,
+    /// The URIs of the items it had selected.
+    selected: Vec<String>,
+    /// Its vertical scroll position.
+    scroll: f64,
+    /// It was opened in the background and has not been listed yet.
+    needs_listing: bool,
 }
 
 impl BrowserWindow {
@@ -112,15 +88,8 @@ impl BrowserWindow {
     /// folder stays.
     pub fn navigate(&self, address: &str) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
-        let id = {
-            let mut session = self.imp().session.borrow_mut();
-            let Some(tab) = session.active_mut() else {
-                drop(session);
-                return self.add_tab(&uri);
-            };
-            tab.history.push(&uri);
-            tab.forget_location_state();
-            tab.id
+        let Some(id) = self.push_location(&uri) else {
+            return self.add_tab(&uri);
         };
         self.leave_location();
         self.context().remember_network(&uri);
@@ -136,23 +105,25 @@ impl BrowserWindow {
         }
     }
 
+    /// Adds `uri` to the active tab's history; the tab, or `None` before
+    /// the window has one.
+    fn push_location(&self, uri: &str) -> Option<TabId> {
+        let mut session = self.imp().session.borrow_mut();
+        let tab = session.active_mut()?;
+        tab.history.push(uri);
+        tab.forget_location_state();
+        Some(tab.id)
+    }
+
     /// Clears what belonged to the folder the active tab leaves: the
     /// filter, the selection and the type-to-select prefix.
     fn leave_location(&self) {
-        self.imp().changing_model.set(true);
-        self.chrome().search.clear();
-        self.content().model.set_query("");
-        self.content().model.select_none();
-        self.imp().changing_model.set(false);
+        self.change_model(|| {
+            self.chrome().search.clear();
+            self.content().model.set_query("");
+            self.content().model.select_none();
+        });
         self.reset_typeahead();
-    }
-
-    /// Remembers the active tab's selection, for a reload or tab switch.
-    pub(super) fn save_selection(&self) {
-        let selected = self.content().model.selected_uris();
-        if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
-            tab.selected = selected;
-        }
     }
 
     /// Remembers the active tab's selection and scroll position before
@@ -167,11 +138,13 @@ impl BrowserWindow {
 
     /// Shows another tab.
     pub(super) fn switch_tab(&self, id: TabId) {
-        let session = self.imp().session.borrow();
-        if session.is_active(id) || session.tab(id).is_none() {
+        let can_switch = {
+            let session = self.imp().session.borrow();
+            !session.is_active(id) && session.tab(id).is_some()
+        };
+        if !can_switch {
             return;
         }
-        drop(session);
         self.save_tab_view();
         self.imp().session.borrow_mut().active = Some(id);
         self.show_tab(id);
@@ -182,30 +155,39 @@ impl BrowserWindow {
     fn show_tab(&self, id: TabId) {
         self.reset_typeahead();
         self.chrome().show_message("");
-        let (store, selected, scroll, needs_listing) = {
-            let session = self.imp().session.borrow();
-            let Some(tab) = session.tab(id) else { return };
-            let needs_listing = !tab.loaded && !tab.loading;
-            (tab.store.clone(), tab.selected.clone(), tab.scroll, needs_listing)
+        let Some(view) = self.saved_tab_view(id) else {
+            return;
         };
         let had_focus = self.content().has_focus();
-        let model = &self.content().model;
-        self.imp().changing_model.set(true);
-        self.chrome().search.clear();
-        model.set_query("");
-        model.set_store(Some(&store));
-        model.select_uris(&selected);
-        self.imp().changing_model.set(false);
+        self.change_model(|| {
+            let model = &self.content().model;
+            self.chrome().search.clear();
+            model.set_query("");
+            model.set_store(Some(&view.store));
+            model.select_uris(&view.selected);
+        });
         self.render_navigation();
         self.update_content();
         self.update_details_pane();
-        self.content().restore_scroll_position(scroll);
+        self.content().restore_scroll_position(view.scroll);
         if had_focus {
             self.content().focus();
         }
-        if needs_listing {
+        if view.needs_listing {
             self.load_tab(id, LoadMode::Navigate);
         }
+    }
+
+    /// What tab `id` needs to be shown again, while it is open.
+    fn saved_tab_view(&self, id: TabId) -> Option<SavedTabView> {
+        let session = self.imp().session.borrow();
+        let tab = session.tab(id)?;
+        Some(SavedTabView {
+            store: tab.store.clone(),
+            selected: tab.selected.clone(),
+            scroll: tab.scroll,
+            needs_listing: !tab.loaded && !tab.loading,
+        })
     }
 
     /// Closes a tab; closing the last one closes the window.
@@ -251,18 +233,22 @@ impl BrowserWindow {
     /// Moves one step through the active tab's history; at either end of
     /// it nothing happens.
     pub(super) fn go_history(&self, direction: Direction) {
-        let id = {
-            let mut session = self.imp().session.borrow_mut();
-            let Some(tab) = session.active_mut() else { return };
-            if tab.history.go(direction.offset()).is_none() {
-                return;
-            }
-            tab.forget_location_state();
-            tab.id
+        let Some(id) = self.step_history(direction) else {
+            return;
         };
         self.leave_location();
         self.render_navigation();
         self.load_tab(id, LoadMode::Navigate);
+    }
+
+    /// Moves the active tab's history one step in `direction`; the tab, or
+    /// `None` when there is no step to take.
+    fn step_history(&self, direction: Direction) -> Option<TabId> {
+        let mut session = self.imp().session.borrow_mut();
+        let tab = session.active_mut()?;
+        tab.history.go(direction.offset())?;
+        tab.forget_location_state();
+        Some(tab.id)
     }
 
     /// Opens the folder that contains the current one.
@@ -270,155 +256,6 @@ impl BrowserWindow {
         let parent = self.current_uri().as_deref().and_then(parent_location);
         if let Some(parent) = parent {
             self.navigate_or_report(&parent);
-        }
-    }
-
-    /// Updates the frame after the active tab moved: the address bar
-    /// returns to breadcrumbs.
-    pub(super) fn render_navigation(&self) {
-        self.render_location();
-        if let Some(uri) = self.current_uri() {
-            let address = self.imp().locations.borrow().display_location(&uri);
-            self.chrome().address.show_crumbs(&address);
-        }
-    }
-
-    /// Updates the window title, history buttons, breadcrumbs, tabs,
-    /// sidebar highlight and landing page for the active tab's location.
-    pub(super) fn render_location(&self) {
-        let (uri, can_go_back, can_go_forward) = {
-            let session = self.imp().session.borrow();
-            let Some(tab) = session.active() else { return };
-            let history = &tab.history;
-            (
-                tab.uri().to_owned(),
-                history.can_go_back(),
-                history.can_go_forward(),
-            )
-        };
-        let locations = self.imp().locations.borrow().clone();
-        self.set_title(Some(&format!("{} — OpenXplorer", locations.title_for(&uri))));
-        self.set_action_enabled("back", can_go_back);
-        self.set_action_enabled("forward", can_go_forward);
-        self.set_action_enabled("up", parent_location(&uri).is_some());
-        self.set_action_enabled("pin-folder", Page::from_uri(&uri).is_none());
-        self.render_address(&uri, &locations);
-        let search = &self.chrome().search;
-        search.set_folder_title(&locations.title_for(&uri));
-        search.set_enabled(Page::from_uri(&uri).is_none() && !is_device_location(&uri));
-        self.render_tabs();
-        self.sidebar().select(&uri);
-        self.render_landing();
-    }
-
-    /// Shows `uri` in the address bar: its icon, and its crumbs divided as
-    /// `renderNavigation` divides them.
-    fn render_address(&self, uri: &str, locations: &LocationContext) {
-        let breadcrumbs = locations.breadcrumbs(uri);
-        let crumbs: Vec<CrumbButton> = breadcrumbs
-            .iter()
-            .enumerate()
-            .map(|(index, crumb)| CrumbButton {
-                address: locations.display_location(&crumb.uri),
-                divider_before: location::crumb_divider(uri, &breadcrumbs, index),
-                crumb: crumb.clone(),
-            })
-            .collect();
-        let address = locations.display_location(uri);
-        self.chrome()
-            .address
-            .show_location(&crumbs, &address, address_icon(uri), self.art_style());
-    }
-
-    /// Redraws the tab strip.
-    pub(super) fn render_tabs(&self) {
-        let labels: Vec<TabLabel> = {
-            let session = self.imp().session.borrow();
-            let locations = self.imp().locations.borrow();
-            session
-                .tabs
-                .iter()
-                .map(|tab| {
-                    let uri = tab.uri();
-                    let mut tooltip = locations.display_location(uri);
-                    if uri.starts_with("smb:") {
-                        tooltip.push_str(" · Network location");
-                    }
-                    TabLabel {
-                        id: tab.id,
-                        title: locations.title_for(uri),
-                        tooltip,
-                        icon: tab_icon(uri),
-                        active: session.is_active(tab.id),
-                    }
-                })
-                .collect()
-        };
-        self.chrome().tabs.show(&labels, self.art_style());
-    }
-
-    /// Replaces the breadcrumbs with the editable address (Ctrl+L).
-    pub(super) fn edit_address(&self) {
-        let Some(uri) = self.current_uri() else { return };
-        let address = self.imp().locations.borrow().display_location(&uri);
-        self.chrome().address.edit(&address);
-    }
-
-    /// Ends editing with Enter or Escape: back to the breadcrumbs, with
-    /// keyboard focus in the folder view.
-    pub(super) fn finish_address(&self) {
-        if let Some(uri) = self.current_uri() {
-            let address = self.imp().locations.borrow().display_location(&uri);
-            self.chrome().address.show_crumbs(&address);
-        }
-        self.content().focus();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A location and the tab and address-bar icons it shows.
-    struct IconCase {
-        uri: &'static str,
-        tab: TabIcon,
-        address: AddressIcon,
-    }
-
-    /// parity: TAB-010
-    #[test]
-    fn tabs_and_the_address_bar_show_the_current_apps_icons() {
-        let cases = [
-            IconCase {
-                uri: "file:///tmp/work",
-                tab: TabIcon::Art(ArtKind::Folder),
-                address: AddressIcon::Folder,
-            },
-            IconCase {
-                uri: "smb://nas/media",
-                tab: TabIcon::Art(ArtKind::NetworkFolder),
-                address: AddressIcon::Glyph(Glyph::Network),
-            },
-            IconCase {
-                uri: "mtp://%5Busb%3A001%2C010%5D/",
-                tab: TabIcon::Glyph(Glyph::Phone),
-                address: AddressIcon::Glyph(Glyph::Phone),
-            },
-            IconCase {
-                uri: Page::ThisPc.uri(),
-                tab: TabIcon::Art(ArtKind::Folder),
-                address: AddressIcon::Glyph(Glyph::Desktop),
-            },
-            IconCase {
-                uri: Page::Network.uri(),
-                tab: TabIcon::Glyph(Glyph::Network),
-                address: AddressIcon::Glyph(Glyph::Network),
-            },
-        ];
-        for case in cases {
-            assert_eq!(tab_icon(case.uri), case.tab, "{}", case.uri);
-            assert_eq!(address_icon(case.uri), case.address, "{}", case.uri);
         }
     }
 }

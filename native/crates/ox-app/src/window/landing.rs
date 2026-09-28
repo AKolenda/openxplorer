@@ -23,7 +23,7 @@ use crate::locations::Page;
 use crate::places::{Places, SavedShare};
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
-use super::art_style::ArtStyle;
+use super::appearance::ArtStyle;
 use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
 use super::widget_tree::remove_children;
 use super::{gestures, network_page, unported};

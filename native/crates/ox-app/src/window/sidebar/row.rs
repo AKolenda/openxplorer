@@ -10,7 +10,7 @@
 use gtk::prelude::*;
 
 use crate::icons::{self, Glyph};
-use crate::window::art_style::ArtStyle;
+use crate::window::appearance::ArtStyle;
 
 use super::entries::{RowIcon, RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
 

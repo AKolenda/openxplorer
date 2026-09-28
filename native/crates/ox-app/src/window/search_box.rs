@@ -2,7 +2,7 @@
 //! The search box at the right of the navigation row.
 //!
 //! Ports `.search-wrap` in `desktop/ui/index.html` and `style.css`: a
-//! bordered field reading "Search <folder>" with a thin magnifier at its
+//! bordered field reading `Search <folder>` with a thin magnifier at its
 //! right end, as in Windows 11. A `GtkSearchEntry` does the typing, so its
 //! delayed `search-changed`, Escape handling and clear icon stay; only its
 //! own magnifier, which GTK always draws first, is hidden in favour of the

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A browsing window with independent tab histories and listings.
 //!
+//! Ports the page structure and the controller of `desktop/ui/app.js`.
 //! [`BrowserWindow`] is a `GtkApplicationWindow` subclass. Its parts live
 //! in submodules, one job each: the frame ([`chrome`]), the folder pane
 //! ([`content`]), the sidebar and landing pages ([`environment`]), tab
-//! state ([`session`]), navigation and loading, activation, actions and
+//! state ([`session`]), changing location ([`navigation`]) and drawing it
+//! ([`location_view`]), listing ([`loading`]), the selection
+//! ([`selection`]), the skin ([`appearance`]), activation, actions and
 //! input. Widgets run window actions (`win.go-to`, `win.select-tab`, ...),
 //! so the controller code does not reach into widget trees.
 
@@ -12,7 +15,7 @@ mod about;
 mod actions;
 mod activation;
 mod address_bar;
-mod art_style;
+mod appearance;
 mod breakpoints;
 mod button_style;
 mod caption_buttons;
@@ -30,11 +33,13 @@ mod input;
 mod landing;
 mod loading;
 mod loading_line;
+mod location_view;
 mod menu_popover;
 mod navigation;
 mod network_page;
 mod preferences;
 mod search_box;
+mod selection;
 mod session;
 mod sidebar;
 mod status_bar;
@@ -53,16 +58,14 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::folder_view::model::FolderModel;
-use crate::locations::Page;
 use crate::shared::AppContext;
-use crate::theme::{Appearance, ListenerId, Skin, SkinChange};
+use crate::theme::{ListenerId, Skin};
 use crate::typeahead;
 
 use chrome::Chrome;
 use content::{Content, ContentPage};
-use details_pane::{DetailsPane, PaneFacts};
+use details_pane::DetailsPane;
 use sidebar::Sidebar;
-use status_bar::StatusSubject;
 
 pub(crate) use actions::install_accelerators;
 pub(crate) use content::FolderView;
@@ -70,15 +73,20 @@ pub(crate) use content::FolderView;
 /// Handlers this window registered on objects that outlive it.
 #[derive(Debug, Default)]
 struct ExternalHandlers {
+    /// On the skin shared by every window.
     skin: Option<ListenerId>,
+    /// On the application's `places-changed` signal.
     places: Option<glib::SignalHandlerId>,
+    /// On the volume monitor's mount and volume signals.
     volumes: Vec<glib::SignalHandlerId>,
 }
 
 /// The type-to-select prefix and the timer that clears its hint.
 #[derive(Debug, Default)]
 struct TypeAhead {
+    /// The typed prefix and the matching rules.
     controller: typeahead::Controller,
+    /// Ends the prefix after a pause; it clears itself when it fires.
     timer: Option<glib::SourceId>,
 }
 
@@ -98,15 +106,25 @@ mod imp {
     /// Private state of [`super::BrowserWindow`].
     #[derive(Debug, Default)]
     pub struct BrowserWindow {
+        /// What every window shares: the skin, settings and places.
         pub(super) context: OnceCell<AppContext>,
+        /// The frame around the workspace.
         pub(super) chrome: OnceCell<Chrome>,
+        /// The folder pane.
         pub(super) content: OnceCell<Content>,
+        /// The details pane beside the folder pane.
         pub(super) details_pane: OnceCell<DetailsPane>,
+        /// The navigation pane.
         pub(super) sidebar: OnceCell<Sidebar>,
+        /// The tabs and which one is active.
         pub(super) session: RefCell<Session>,
+        /// Display names of the home folder and the mounted devices.
         pub(super) locations: RefCell<LocationContext>,
+        /// The drives and devices the volume monitor reported last.
         pub(super) volumes: RefCell<Vec<VolumeRow>>,
+        /// The desktop's volume monitor.
         pub(super) volume_monitor: OnceCell<gio::VolumeMonitor>,
+        /// The type-to-select prefix of the folder views.
         pub(super) type_ahead: RefCell<TypeAhead>,
         /// Set while the window swaps or reloads the model, so the
         /// selection it restores is not saved over the tab's selection.
@@ -116,6 +134,7 @@ mod imp {
         pub(super) file_list_awaits_focus: Cell<bool>,
         /// The width band the layout was last fitted to.
         pub(super) window_width: Cell<WindowWidth>,
+        /// What the window must disconnect when it goes away.
         pub(super) handlers: RefCell<ExternalHandlers>,
     }
 
@@ -292,6 +311,12 @@ impl BrowserWindow {
         self.imp().session.borrow().tabs.len()
     }
 
+    /// The items of tab `id`, unfiltered and unsorted, while it is open.
+    fn tab_store(&self, id: session::TabId) -> Option<gio::ListStore> {
+        let session = self.imp().session.borrow();
+        session.tab(id).map(|tab| tab.store.clone())
+    }
+
     /// The active location, or `None` before the first tab is added.
     pub fn current_uri(&self) -> Option<String> {
         let session = self.imp().session.borrow();
@@ -327,11 +352,11 @@ impl BrowserWindow {
     }
 
     fn connect_signals(&self) {
-        self.connect_selection_signals();
+        self.follow_selection();
         self.connect_filter();
         self.connect_address_entry();
         self.connect_view_activation();
-        self.connect_skin();
+        self.follow_skin();
         gestures::connect_history_buttons(
             self,
             glib::clone!(
@@ -342,32 +367,7 @@ impl BrowserWindow {
         );
     }
 
-    fn connect_selection_signals(&self) {
-        let model = &self.content().model;
-        model.selection().connect_selection_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _, _| window.selection_changed()
-        ));
-        model.sorted().connect_items_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _, _, _| window.update_status()
-        ));
-    }
-
-    fn selection_changed(&self) {
-        if !self.imp().changing_model.get() {
-            self.save_selection();
-        }
-        self.update_status();
-        self.update_details_pane();
-        let selected = self.content().model.summary().count;
-        self.set_action_enabled("open", selected == 1);
-        // Copy path copies one item, or the folder when none is selected.
-        self.set_action_enabled("copy-path", selected <= 1);
-    }
-
+    /// Filters the folder as the user types in the search box.
     fn connect_filter(&self) {
         self.chrome().search.entry.connect_search_changed(glib::clone!(
             #[weak(rename_to = window)]
@@ -379,49 +379,8 @@ impl BrowserWindow {
         ));
     }
 
-    fn connect_skin(&self) {
-        let listener = self.skin().connect_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |change| window.skin_changed(change)
-        ));
-        self.imp().handlers.borrow_mut().skin = Some(listener);
-        self.show_appearance_choice();
-        self.content().set_text_size(self.skin().text_size());
-        self.connect_scale_factor_notify(|window| {
-            window.content().icons.redraw();
-            window.render_places();
-            window.update_details_pane();
-        });
-    }
-
-    fn skin_changed(&self, change: SkinChange) {
-        match change {
-            SkinChange::Appearance(appearance) => self.appearance_changed(appearance),
-            SkinChange::TextSize(percent) => self.content().set_text_size(percent),
-        }
-    }
-
-    fn appearance_changed(&self, appearance: Appearance) {
-        self.content().icons.set_appearance(appearance);
-        self.render_places();
-        // Redraws the tabs' and the address bar's colour art too.
-        self.render_location();
-        self.update_details_pane();
-        self.show_appearance_choice();
-    }
-
-    /// Shows the chosen and drawn appearance on the Appearance button and
-    /// in the Appearance menu.
-    fn show_appearance_choice(&self) {
-        let preference = self.skin().preference();
-        let appearance = self.skin().appearance();
-        self.chrome()
-            .commands
-            .show_appearance(appearance, &preference.tooltip(appearance));
-        self.set_action_state("theme", &preference.key().to_variant());
-    }
-
+    /// Lets go of what the window registered on objects that outlive it:
+    /// the skin, places and volume handlers and the type-to-select timer.
     fn disconnect_external_handlers(&self) {
         let handlers = self.imp().handlers.take();
         if let Some(listener) = handlers.skin {
@@ -436,37 +395,5 @@ impl BrowserWindow {
         if let Some(timer) = self.imp().type_ahead.borrow_mut().timer.take() {
             timer.remove();
         }
-    }
-
-    fn update_status(&self) {
-        let on_page = self.current_uri().as_deref().and_then(Page::from_uri).is_some();
-        let subject = if on_page {
-            StatusSubject::Page
-        } else {
-            StatusSubject::Folder {
-                shown: self.content().model.n_items(),
-                loading: self.is_loading(),
-            }
-        };
-        let selected = self.content().model.summary();
-        self.chrome().status.show(subject, selected);
-    }
-
-    fn update_details_pane(&self) {
-        let selection = self.content().model.selected_items();
-        let Some(folder_uri) = self.current_uri() else {
-            return;
-        };
-        let store = self.imp().session.borrow().active().map(|tab| tab.store.clone());
-        let model = &self.content().model;
-        let folder_item_count = store.map_or(0, |store| model.listed_count(&store));
-        let locations = self.imp().locations.borrow();
-        let content = details_pane::pane_content(&PaneFacts {
-            selection: &selection,
-            folder_uri: &folder_uri,
-            folder_item_count,
-            locations: &locations,
-        });
-        self.details_pane().show(&content, self.art_style());
     }
 }

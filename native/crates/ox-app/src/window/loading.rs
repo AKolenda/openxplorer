@@ -101,11 +101,8 @@ impl BrowserWindow {
     }
 
     fn clear_rows(&self, id: TabId) {
-        let store = self.imp().session.borrow().tab(id).map(|tab| tab.store.clone());
-        let Some(store) = store else { return };
-        self.imp().changing_model.set(true);
-        store.remove_all();
-        self.imp().changing_model.set(false);
+        let Some(store) = self.tab_store(id) else { return };
+        self.change_model(|| store.remove_all());
     }
 
     /// Watches `uri` for tab `id`, keeping the existing watch when the tab
@@ -183,14 +180,8 @@ impl BrowserWindow {
             run.held_rows.borrow_mut().extend(entries);
             return;
         }
-        let store = self
-            .imp()
-            .session
-            .borrow()
-            .tab(run.tab)
-            .map(|tab| tab.store.clone());
         let items: Vec<FileItem> = entries.into_iter().map(FileItem::new).collect();
-        if let Some(store) = store {
+        if let Some(store) = self.tab_store(run.tab) {
             store.splice(store.n_items(), 0, &items);
         }
         if self.imp().session.borrow().is_active(run.tab) {
@@ -212,12 +203,8 @@ impl BrowserWindow {
             }
             Err(error) => self.fail_load(id, run.mode, error),
         }
-        let reload_again = {
-            let mut session = self.imp().session.borrow_mut();
-            let Some(tab) = session.tab_mut(id) else { return };
-            tab.loading = false;
-            tab.loaded = true;
-            std::mem::take(&mut tab.reload_pending)
+        let Some(reload_again) = self.end_listing(id) else {
+            return;
         };
         if self.imp().session.borrow().is_active(id) {
             self.restore_selection(id);
@@ -230,13 +217,21 @@ impl BrowserWindow {
         }
     }
 
+    /// Marks tab `id` listed. Returns whether its folder changed while the
+    /// listing ran, so it is listed once more, or `None` when the tab has
+    /// closed.
+    fn end_listing(&self, id: TabId) -> Option<bool> {
+        let mut session = self.imp().session.borrow_mut();
+        let tab = session.tab_mut(id)?;
+        tab.loading = false;
+        tab.loaded = true;
+        Some(std::mem::take(&mut tab.reload_pending))
+    }
+
     /// Merges a completed reload into the rows, keeping unchanged items.
     fn merge_rows(&self, id: TabId, entries: Vec<Entry>) {
-        let store = self.imp().session.borrow().tab(id).map(|tab| tab.store.clone());
-        let Some(store) = store else { return };
-        self.imp().changing_model.set(true);
-        reconcile::update_in_place(&store, entries);
-        self.imp().changing_model.set(false);
+        let Some(store) = self.tab_store(id) else { return };
+        self.change_model(|| reconcile::update_in_place(&store, entries));
     }
 
     /// Records why a listing failed and stops watching a folder that cannot
@@ -260,9 +255,7 @@ impl BrowserWindow {
             .tab(id)
             .map(|tab| tab.selected.clone())
             .unwrap_or_default();
-        self.imp().changing_model.set(true);
-        self.content().model.select_uris(&selected);
-        self.imp().changing_model.set(false);
+        self.change_model(|| self.content().model.select_uris(&selected));
     }
 
     /// The tab's location is a file: show its folder (or home) in place of

@@ -22,7 +22,7 @@ use ox_core::location::same_location;
 
 use crate::icons::{self, Glyph};
 
-use super::art_style::ArtStyle;
+use super::appearance::ArtStyle;
 use super::{gestures, unported};
 
 pub(super) use entries::sidebar_entries;

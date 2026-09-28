@@ -20,7 +20,7 @@ use ox_core::location::Crumb;
 
 use crate::icons::{self, ArtKind, Glyph};
 
-use super::art_style::ArtStyle;
+use super::appearance::ArtStyle;
 use super::gestures;
 use super::widget_tree::remove_children;
 
