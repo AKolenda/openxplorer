@@ -192,7 +192,7 @@ pub(crate) fn save_when_listed(
         }
         let listing = Listing::of(window);
         milestones.note_frame(listing);
-        let readiness = timing.readiness(listing);
+        let readiness = timing.count_frame(listing);
         if readiness == Readiness::Waiting {
             return glib::ControlFlow::Continue;
         }
@@ -242,6 +242,7 @@ enum Readiness {
 /// Decides, frame by frame, when the snapshot is taken.
 #[derive(Debug)]
 struct SaveTiming {
+    /// When the patience for the first listing started.
     started: Instant,
     /// Frames drawn since the listing finished or the patience ran out.
     frames_since_listed: Cell<u32>,
@@ -256,8 +257,11 @@ impl SaveTiming {
         }
     }
 
-    /// The readiness on a frame that shows `listing`.
-    fn readiness(&self, listing: Listing) -> Readiness {
+    /// Counts a frame that shows `listing` and says whether the window can
+    /// be saved on it. Once the listing is drawn, or the patience ran out,
+    /// every call counts towards [`SETTLE_FRAMES`], so call it once per
+    /// frame.
+    fn count_frame(&self, listing: Listing) -> Readiness {
         let timed_out = self.started.elapsed() > LISTING_PATIENCE;
         if listing == Listing::Running && !timed_out {
             return Readiness::Waiting;
@@ -453,11 +457,11 @@ mod tests {
     #[test]
     fn the_window_is_saved_once_the_listing_has_settled() {
         let timing = SaveTiming::starting_now();
-        assert_eq!(timing.readiness(Listing::Running), Readiness::Waiting);
+        assert_eq!(timing.count_frame(Listing::Running), Readiness::Waiting);
         for _ in 1..SETTLE_FRAMES {
-            assert_eq!(timing.readiness(Listing::Drawn), Readiness::Waiting);
+            assert_eq!(timing.count_frame(Listing::Drawn), Readiness::Waiting);
         }
-        assert_eq!(timing.readiness(Listing::Drawn), Readiness::Settled);
+        assert_eq!(timing.count_frame(Listing::Drawn), Readiness::Settled);
     }
 
     #[test]
