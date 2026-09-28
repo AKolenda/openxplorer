@@ -116,6 +116,7 @@ impl Skin {
         skin
     }
 
+    /// The providers the skin draws with.
     fn providers(&self) -> &Providers {
         self.imp()
             .providers
