@@ -19,7 +19,7 @@ use crate::locations::{self, Page};
 
 use super::address_bar::{AddressIcon, CrumbButton};
 use super::loading::LoadMode;
-use super::session::{TabId, TabPlacement};
+use super::session::{Direction, TabId, TabPlacement};
 use super::tab_strip::{TabIcon, TabLabel};
 use super::BrowserWindow;
 
@@ -228,9 +228,10 @@ impl BrowserWindow {
         }
     }
 
-    /// Shows the tab `delta` places from the active one, wrapping around.
-    pub(super) fn cycle_tabs(&self, delta: isize) {
-        let next = self.imp().session.borrow().adjacent(delta);
+    /// Shows the tab next to the active one in `direction`, wrapping
+    /// around at either end.
+    pub(super) fn cycle_tabs(&self, direction: Direction) {
+        let next = self.imp().session.borrow().adjacent(direction);
         if let Some(id) = next {
             self.switch_tab(id);
         }
@@ -247,12 +248,13 @@ impl BrowserWindow {
         }
     }
 
-    /// Moves through the active tab's history; out-of-range steps do nothing.
-    pub fn go_history(&self, delta: isize) {
+    /// Moves one step through the active tab's history; at either end of
+    /// it nothing happens.
+    pub(super) fn go_history(&self, direction: Direction) {
         let id = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.active_mut() else { return };
-            if tab.history.go(delta).is_none() {
+            if tab.history.go(direction.offset()).is_none() {
                 return;
             }
             tab.forget_location_state();

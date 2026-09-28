@@ -41,6 +41,25 @@ pub enum TabPlacement {
     Background,
 }
 
+/// Which way a step goes, through a tab's history or along the tab strip.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Direction {
+    /// Back in history (Alt+Left), or to the previous tab (Ctrl+Shift+Tab).
+    Backward,
+    /// Forward in history (Alt+Right), or to the next tab (Ctrl+Tab).
+    Forward,
+}
+
+impl Direction {
+    /// The step as an offset in a list: -1 or 1.
+    pub const fn offset(self) -> isize {
+        match self {
+            Direction::Backward => -1,
+            Direction::Forward => 1,
+        }
+    }
+}
+
 /// One tab: its history, its items and the state of its listing.
 #[derive(Debug)]
 pub(super) struct Tab {
@@ -188,12 +207,13 @@ impl Session {
         }
     }
 
-    /// The tab `delta` places from the active one, wrapping around.
-    pub fn adjacent(&self, delta: isize) -> Option<TabId> {
+    /// The tab next to the active one in `direction`, wrapping around at
+    /// either end.
+    pub fn adjacent(&self, direction: Direction) -> Option<TabId> {
         let current = self.tabs.iter().position(|tab| Some(tab.id) == self.active)?;
         let count = self.tabs.len();
-        let offset = delta.rem_euclid(count.cast_signed()).cast_unsigned();
-        let target = (current + offset) % count;
+        let steps_right = direction.offset().rem_euclid(count.cast_signed()).cast_unsigned();
+        let target = (current + steps_right) % count;
         Some(self.tabs[target].id)
     }
 }
@@ -228,7 +248,7 @@ mod tests {
         let second = session.add("file:///two", TabPlacement::Foreground);
         session.remove(second);
         assert_eq!(session.active, Some(first));
-        assert_eq!(session.adjacent(1), Some(first));
+        assert_eq!(session.adjacent(Direction::Forward), Some(first));
     }
 
     /// parity: TAB-002
@@ -281,8 +301,8 @@ mod tests {
         let mut session = Session::default();
         let first = session.add("file:///one", TabPlacement::Foreground);
         let second = session.add("file:///two", TabPlacement::Foreground);
-        assert_eq!(session.adjacent(1), Some(first));
+        assert_eq!(session.adjacent(Direction::Forward), Some(first));
         session.active = Some(first);
-        assert_eq!(session.adjacent(-1), Some(second));
+        assert_eq!(session.adjacent(Direction::Backward), Some(second));
     }
 }

@@ -18,7 +18,7 @@ use crate::theme::ThemePreference;
 
 use super::content::FolderView;
 use super::preferences::Preference;
-use super::session::{TabId, TabPlacement};
+use super::session::{Direction, TabId, TabPlacement};
 use super::BrowserWindow;
 
 /// An action without a target.
@@ -129,8 +129,8 @@ impl BrowserWindow {
                     window.close_tab(id);
                 }
             }),
-            plain("next-tab", |window| window.cycle_tabs(1)),
-            plain("previous-tab", |window| window.cycle_tabs(-1)),
+            plain("next-tab", |window| window.cycle_tabs(Direction::Forward)),
+            plain("previous-tab", |window| window.cycle_tabs(Direction::Backward)),
             with_tab("select-tab", BrowserWindow::switch_tab),
             with_tab("close-tab-by-id", BrowserWindow::close_tab),
             with_text("open-tab", |window, uri| {
@@ -144,8 +144,8 @@ impl BrowserWindow {
 
     fn install_navigation_actions(&self) {
         self.add_action_entries([
-            plain("back", |window| window.go_history(-1)),
-            plain("forward", |window| window.go_history(1)),
+            plain("back", |window| window.go_history(Direction::Backward)),
+            plain("forward", |window| window.go_history(Direction::Forward)),
             plain("up", BrowserWindow::go_up),
             plain("refresh", BrowserWindow::refresh),
             plain("location", BrowserWindow::edit_address),

@@ -14,6 +14,7 @@ use crate::test_support::harness::{
     settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, STANDARD_NAMES,
 };
 use crate::window::content::{ContentPage, FolderView};
+use crate::window::session::Direction;
 
 use super::geometry::bounds;
 
@@ -169,7 +170,7 @@ fn navigating_to_another_folder_starts_at_the_top_without_a_selection() {
         .navigate(&fixture.uri_of("Subfolder"))
         .expect("valid folder");
     test.wait_for_listing("the subfolder");
-    test.window.go_history(-1);
+    test.window.go_history(Direction::Backward);
     test.wait_for_listing("the folder again");
     assert!(test.window.content().scroll_position() < 1.0);
     assert!(test.selected_names().is_empty());
@@ -275,7 +276,7 @@ fn the_filter_and_hidden_files_change_what_is_listed_until_the_folder_changes() 
         .expect("valid folder");
     test.wait_for_listing("the empty subfolder");
     assert!(test.names().is_empty());
-    test.window.go_history(-1);
+    test.window.go_history(Direction::Backward);
     test.wait_for_listing("history back");
     assert_eq!(test.names(), STANDARD_NAMES);
     assert_eq!(

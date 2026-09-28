@@ -13,16 +13,21 @@ use gtk::gdk;
 use gtk::glib;
 use gtk::prelude::*;
 
+use super::session::Direction;
+
 /// The mouse's Back side button (X11 button 8).
 const BACK_BUTTON: u32 = 8;
 /// The mouse's Forward side button (X11 button 9).
 const FORWARD_BUTTON: u32 = 9;
 
-/// The history step a mouse button takes, if it is a side button.
-pub(super) fn history_step(button: u32) -> Option<isize> {
+/// The smallest distance a wheel notch scrolls the crumbs or the tabs.
+const MIN_WHEEL_STEP: f64 = 40.0;
+
+/// The way through history a mouse button goes, if it is a side button.
+pub(super) fn history_direction(button: u32) -> Option<Direction> {
     match button {
-        BACK_BUTTON => Some(-1),
-        FORWARD_BUTTON => Some(1),
+        BACK_BUTTON => Some(Direction::Backward),
+        FORWARD_BUTTON => Some(Direction::Forward),
         _ => None,
     }
 }
@@ -65,22 +70,23 @@ pub(super) fn open_folder_on_middle_click(widget: &impl IsA<gtk::Widget>, uri: &
     widget.add_controller(gesture);
 }
 
-/// Calls `step_history` with -1 or 1 when a mouse side button is pressed
-/// anywhere in `window`. Other buttons pass through untouched.
+/// Calls `step_history` with the button's direction when a mouse side
+/// button is pressed anywhere in `window`. Other buttons pass through
+/// untouched.
 pub(super) fn connect_history_buttons(
     window: &impl IsA<gtk::Widget>,
-    step_history: impl Fn(isize) + 'static,
+    step_history: impl Fn(Direction) + 'static,
 ) {
     let gesture = gtk::GestureClick::new();
     gesture.set_button(0);
     gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
     gesture.connect_pressed(move |gesture, _, _, _| {
-        let Some(step) = history_step(gesture.current_button()) else {
+        let Some(direction) = history_direction(gesture.current_button()) else {
             gesture.set_state(gtk::EventSequenceState::Denied);
             return;
         };
         gesture.set_state(gtk::EventSequenceState::Claimed);
-        step_history(step);
+        step_history(direction);
     });
     window.add_controller(gesture);
 }
@@ -98,7 +104,7 @@ pub(super) fn scroll_sideways_with_wheel(scroller: &gtk::ScrolledWindow) {
         if adjustment.upper() <= adjustment.page_size() {
             return glib::Propagation::Proceed;
         }
-        let step = adjustment.step_increment().max(40.0);
+        let step = adjustment.step_increment().max(MIN_WHEEL_STEP);
         adjustment.set_value(adjustment.value() + dy * step);
         glib::Propagation::Stop
     });
@@ -111,10 +117,10 @@ mod tests {
 
     #[test]
     fn side_buttons_step_through_history() {
-        assert_eq!(history_step(BACK_BUTTON), Some(-1));
-        assert_eq!(history_step(FORWARD_BUTTON), Some(1));
-        assert_eq!(history_step(gdk::BUTTON_PRIMARY), None);
-        assert_eq!(history_step(gdk::BUTTON_SECONDARY), None);
+        assert_eq!(history_direction(BACK_BUTTON), Some(Direction::Backward));
+        assert_eq!(history_direction(FORWARD_BUTTON), Some(Direction::Forward));
+        assert_eq!(history_direction(gdk::BUTTON_PRIMARY), None);
+        assert_eq!(history_direction(gdk::BUTTON_SECONDARY), None);
     }
 
     #[test]

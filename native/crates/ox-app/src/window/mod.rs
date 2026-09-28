@@ -336,7 +336,7 @@ impl BrowserWindow {
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
-                move |step| window.go_history(step)
+                move |direction| window.go_history(direction)
             ),
         );
     }
