@@ -89,6 +89,12 @@ columnview.files > listview > row > cell:last-child { padding-right: 26px; }
    pixel down. */
 columnview.files .row-icon { margin-top: 1px; }
 .files .cell-dim { color: @ox_muted; }
+/* Items a cut put on the clipboard, until they are pasted or the
+   clipboard changes (`.file-row.cut`, `.file-tile.cut`; ui-spec.md §4.5
+   row states, CLIP-002). GTK gives no per-item class to its rows and
+   tiles, so their contents fade and the selection behind them stays
+   clear. */
+.files .cut { opacity: 0.5; }
 
 columnview.files rubberband, gridview.files rubberband {
   border: 1px solid @ox_accent;

@@ -4,8 +4,9 @@
 //! With `OX_NATIVE_CAPTURE_DIR` set (passed through the isolated check
 //! environment), these save `native-dialog-delete-*.png`,
 //! `native-dialog-conflict-*.png`, `native-transfer-*.png`,
-//! `native-rename-in-place-*.png` and `native-menu-compact-*.png` there. Without it, they only prove the
-//! surfaces open in both themes.
+//! `native-rename-in-place-*.png`, `native-menu-compact-*.png` and
+//! `native-cut-details-*.png` / `native-cut-icons-*.png` there. Without
+//! it, they only prove the surfaces open in both themes.
 
 use std::path::PathBuf;
 
@@ -62,6 +63,25 @@ fn the_delete_and_conflict_dialogs_are_captured_light_and_dark() {
         capture_dialog(&test, &conflict, &format!("native-dialog-conflict-{theme}.png"));
         conflict.press("Cancel");
         wait_for_no_dialog(&test);
+    }
+}
+
+/// Two cut items, one of them selected, in both views.
+#[gtk::test]
+fn cut_items_are_captured_light_and_dark() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+    test.activate("cut", None);
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    select_names(&test, &["Notes 10.txt"]);
+    for theme in THEMES {
+        test.activate("theme", Some(theme));
+        test.activate("view", Some("details"));
+        capture(&test.window, &format!("native-cut-details-{theme}.png"));
+        test.activate("view", Some("large"));
+        capture(&test.window, &format!("native-cut-icons-{theme}.png"));
     }
 }
 

@@ -11,6 +11,7 @@ mod address_bar;
 mod captures;
 mod chrome;
 mod clipboard;
+mod clipboard_interop;
 mod command_bar;
 mod context_menus;
 mod drag_and_drop;

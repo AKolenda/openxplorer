@@ -131,9 +131,10 @@ fn duplicate_item() -> MenuEntry {
     item("Duplicate", Icon::DocumentCopy, WindowAction::Duplicate).into()
 }
 
-/// Copy path, for one item.
+/// Copy path, for one item, with Explorer's key for "Copy as path"
+/// (CLIP-013).
 fn copy_path_item(facts: &ItemFacts) -> MenuEntry {
-    let copy_path = item("Copy path", Icon::Link, WindowAction::CopyPath);
+    let copy_path = item("Copy path", Icon::Link, WindowAction::CopyPath).with_shortcut("Ctrl+Shift+C");
     copy_path.disabled_when(!facts.is_single).into()
 }
 
@@ -390,6 +391,8 @@ mod tests {
             ("Paste", "Ctrl+V"),
             ("Rename", "F2"),
             ("Move to Trash", "Delete"),
+            // A gain: the Python app had no key for Copy path.
+            ("Copy path", "Ctrl+Shift+C"),
             ("Properties", "Alt+Enter"),
         ];
         let expected: Vec<(String, &str)> = expected

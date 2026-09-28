@@ -15,9 +15,16 @@
 //!   conversion, an oversized payload or an owner change during the read
 //!   all mean "no files" (fail closed, CLIP-005, CLIP-016).
 //! - The window reads the clipboard again whenever it changes and when the
-//!   window becomes active (CLIP-009), which enables Paste.
+//!   window becomes active (CLIP-009), which enables Paste and dims the
+//!   items a cut put on the clipboard (CLIP-002).
 //! - After a move-paste the moved items leave the clipboard, but only
 //!   while it still holds the same cut (CLIP-008).
+//! - The content is local and every format is storable, so GTK hands it
+//!   to a clipboard manager when the application quits (`gtk_main_sync`
+//!   stores the display's clipboard at shutdown), as
+//!   `gtk_clipboard_set_can_store` did in Python (CLIP-010).
+
+use std::collections::HashSet;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -97,6 +104,15 @@ async fn read_files(clipboard: &gdk::Clipboard) -> Option<ClipboardFiles> {
     None
 }
 
+/// The URIs of the items a cut put on the clipboard, which the views dim;
+/// none for a copy (`state.clipboard?.mode==='move'` in `renderRows`).
+fn cut_uris(files: Option<&ClipboardFiles>) -> HashSet<String> {
+    match files {
+        Some(files) if files.mode() == ClipboardMode::Cut => files.uris().iter().cloned().collect(),
+        _ => HashSet::new(),
+    }
+}
+
 /// Makes `files` the clipboard's content, in every format at once.
 fn publish(clipboard: &gdk::Clipboard, files: &ClipboardFiles) -> Result<(), glib::BoolError> {
     let providers: Vec<gdk::ContentProvider> = files
@@ -112,13 +128,18 @@ fn publish(clipboard: &gdk::Clipboard, files: &ClipboardFiles) -> Result<(), gli
 
 impl BrowserWindow {
     /// Copy (Ctrl+C) or Cut (Ctrl+X): puts the selection on the desktop's
-    /// clipboard (`copySelection`).
+    /// clipboard (`copySelection`). The keys run this even where the
+    /// commands are disabled, so a share root or a previous version says
+    /// why it cannot be copied or cut.
     pub(crate) fn copy_selection(&self, mode: ClipboardMode) {
         let items = self.folder_pane().model().selected_items();
-        if items.is_empty() {
+        let command_facts = self.command_facts();
+        // The Recycle Bin's items can only be restored or deleted, which is
+        // why its Cut and Copy commands are off.
+        if items.is_empty() || command_facts.folder.is_recycle_bin {
             return;
         }
-        let facts = self.command_facts().selection;
+        let facts = command_facts.selection;
         if facts.has_inoperable {
             self.show_message("Open the share first, then select its files or folders.");
             return;
@@ -145,13 +166,19 @@ impl BrowserWindow {
     }
 
     /// Reads the desktop's clipboard again and returns its file list
-    /// (`refreshClipboard`). A clipboard whose owner changed while it was
-    /// read holds no files, as far as this read knows.
+    /// (`refreshClipboard`).
     pub(crate) async fn refresh_file_clipboard(&self) -> Option<ClipboardFiles> {
         let clipboard = self.clipboard();
         let generation = self.clipboard_generation();
         let files = read_files(&clipboard).await;
-        let files = files.filter(|_| self.clipboard_generation() == generation);
+        // Safety rule (one owner per read, CLIP-006, CLIP-016): formats
+        // read before and after an owner change could mix two clipboards,
+        // such as one owner's URI list with another's cut marker, so such a
+        // read holds no files. It is not remembered either: the change
+        // started a read of its own, which a stale answer must not undo.
+        if self.clipboard_generation() != generation {
+            return None;
+        }
         self.remember_clipboard(files.clone());
         files
     }
@@ -179,8 +206,11 @@ impl BrowserWindow {
         }
     }
 
-    /// Keeps `files` as the clipboard's file list and updates Paste.
+    /// Keeps `files` as the clipboard's file list, dims the items it cut
+    /// and updates Paste.
     fn remember_clipboard(&self, files: Option<ClipboardFiles>) {
+        let cut_uris = cut_uris(files.as_ref());
+        self.folder_pane().owners().show_cut_items(cut_uris);
         self.imp().file_operations.borrow_mut().clipboard = files;
         self.update_file_commands();
     }

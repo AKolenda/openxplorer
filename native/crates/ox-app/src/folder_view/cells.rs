@@ -218,25 +218,27 @@ impl FileCell {
 
 /// Connects `factory` so every list item shows a [`FileCell`] in
 /// `layout`, with icons of `icon_size` logical pixels and each cell
-/// registered in `owners`.
+/// registered in `owners`, which dims the cells of cut items.
 pub(crate) fn connect_file_cells(
     factory: &gtk::SignalListItemFactory,
     layout: CellLayout,
     icon_size: i32,
     owners: &Rc<CellOwners>,
 ) {
-    let owners = Rc::clone(owners);
+    let setup_owners = Rc::clone(owners);
     factory.connect_setup(move |_, object| {
         let cell = FileCell::new(layout, icon_size);
         let list_item = as_list_item(object);
         list_item.set_child(Some(&cell));
-        owners.register(&cell, list_item);
+        setup_owners.register(&cell, list_item);
     });
+    let bind_owners = Rc::clone(owners);
     factory.connect_bind(move |_, object| {
         let list_item = as_list_item(object);
         let cell = list_item.child().and_downcast::<FileCell>();
         if let (Some(item), Some(cell)) = (bound_item(list_item), cell) {
             cell.bind(&item);
+            bind_owners.style_for_cut(&cell, &item);
         }
     });
 }

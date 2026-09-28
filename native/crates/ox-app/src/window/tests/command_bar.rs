@@ -5,9 +5,10 @@
 //! items and dividers, and the commands that are not ported yet shown
 //! disabled with the milestone that brings them.
 
-use gtk::glib;
 use gtk::prelude::*;
+use gtk::{gdk, glib};
 
+use super::file_ops_support::{press_shortcut, select_names};
 use super::geometry::laid_out;
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
@@ -219,6 +220,7 @@ fn clipboard_text(test: &TestWindow) -> Option<String> {
     read.ok().flatten().map(|text| text.to_string())
 }
 
+/// parity: CLIP-012
 #[gtk::test]
 fn copy_path_copies_the_selected_items_address_or_the_folders() {
     let fixture = Fixture::standard();
@@ -245,6 +247,7 @@ fn copy_path_copies_the_selected_items_address_or_the_folders() {
     );
 }
 
+/// parity: CLIP-012
 #[gtk::test]
 fn copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most() {
     let fixture = Fixture::standard();
@@ -256,4 +259,30 @@ fn copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most() {
     test.wait_for_listing("the fixture folder");
     test.window.folder_model().select_all();
     assert!(!test.window.is_action_enabled("copy-path"), "one path at a time");
+}
+
+/// Explorer's Ctrl+Shift+C ("Copy as path") and Dolphin's Ctrl+Alt+C
+/// ("Copy Location") both run Copy path.
+///
+/// parity: CLIP-013
+#[gtk::test]
+fn copy_path_runs_on_explorers_and_dolphins_keys() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let control = gdk::ModifierType::CONTROL_MASK;
+    select_names(&test, &["Notes 2.txt"]);
+
+    press_shortcut(&test, gdk::Key::c, control | gdk::ModifierType::SHIFT_MASK);
+    let explorer_copy = clipboard_text(&test);
+    select_names(&test, &["Notes 10.txt"]);
+    press_shortcut(&test, gdk::Key::c, control | gdk::ModifierType::ALT_MASK);
+
+    let first = fixture.path("Notes 2.txt").display().to_string();
+    let second = fixture.path("Notes 10.txt").display().to_string();
+    assert_eq!(explorer_copy, Some(first));
+    assert_eq!(clipboard_text(&test), Some(second));
+    assert_eq!(
+        test.window.shown_message().as_str(),
+        "Path copied. Sharing permissions are unchanged."
+    );
 }

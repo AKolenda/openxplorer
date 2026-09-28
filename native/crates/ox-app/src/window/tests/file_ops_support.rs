@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Helpers the file-operation tests share: finding the open dialog,
-//! answering it, selecting items by name, and the guard of every test that
-//! uses the Recycle Bin.
+//! answering it, selecting items by name, pressing the file keys, and the
+//! guard of every test that uses the Recycle Bin.
 
 use std::path::PathBuf;
 
 use gtk::prelude::*;
-use gtk::{gio, glib};
+use gtk::{gdk, gio, glib};
 
 use crate::test_support::harness::{descendants, wait_until, TestWindow};
 use crate::window::dialog::Dialog;
@@ -64,6 +64,56 @@ pub(super) fn is_enabled(test: &TestWindow, name: &str) -> bool {
     test.window
         .lookup_action(name)
         .is_some_and(|action| action.is_enabled())
+}
+
+/// Presses `keyval` with exactly `modifiers` while the folder view has
+/// focus, as far as the window's shortcut controllers go: the shortcut
+/// with that key runs. GTK has no public way to synthesise key events.
+///
+/// # Panics
+///
+/// When no shortcut of the window has that key.
+pub(super) fn press_shortcut(test: &TestWindow, keyval: gdk::Key, modifiers: gdk::ModifierType) {
+    test.window.folder_pane().focus_view();
+    let shortcut = window_shortcuts(test)
+        .into_iter()
+        .find(|shortcut| {
+            let trigger = shortcut.trigger();
+            trigger.is_some_and(|trigger| is_triggered_by(&trigger, keyval, modifiers))
+        })
+        .expect("the window has a shortcut for the key");
+    let action = shortcut.action().expect("every window shortcut has an action");
+    action.activate(gtk::ShortcutActionFlags::empty(), &test.window, None);
+}
+
+/// Every shortcut of the window's own shortcut controllers.
+fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
+    let controllers: Vec<gtk::ShortcutController> = test
+        .window
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .collect();
+    // A shortcut controller lists its shortcuts as plain objects.
+    controllers
+        .iter()
+        .flat_map(|controller| controller.iter::<glib::Object>())
+        .filter_map(Result::ok)
+        .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+        .collect()
+}
+
+/// Whether `trigger`, or one of its alternatives, is `keyval` with exactly
+/// `modifiers`.
+fn is_triggered_by(trigger: &gtk::ShortcutTrigger, keyval: gdk::Key, modifiers: gdk::ModifierType) -> bool {
+    if let Some(alternatives) = trigger.downcast_ref::<gtk::AlternativeTrigger>() {
+        return is_triggered_by(&alternatives.first(), keyval, modifiers)
+            || is_triggered_by(&alternatives.second(), keyval, modifiers);
+    }
+    trigger
+        .downcast_ref::<gtk::KeyvalTrigger>()
+        .is_some_and(|key| key.keyval() == keyval && key.modifiers() == modifiers)
 }
 
 /// Panics unless the Recycle Bin is the private one of this test run, as

@@ -1,14 +1,36 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Cut, Copy and Paste through the display's clipboard, and the
 //! name-conflict dialog, against `copySelection`, `paste` and
-//! `transferWithConflicts` of `desktop/ui/app.js`.
+//! `transferWithConflicts` of `desktop/ui/app.js`: the refusals, the
+//! dimming of cut items and what a clipboard manager may keep. What other
+//! applications put on the clipboard is in `clipboard_interop`.
+
+use std::fs;
+use std::os::unix::net::UnixListener;
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::clipboard::KDE_CUT;
+use ox_core::clipboard::{CUSTOM, GNOME, KDE_CUT, URI_LIST};
 
-use super::file_ops_support::{is_enabled, open_dialog, select_names, wait_for_no_dialog};
+use super::file_ops_support::{is_enabled, open_dialog, press_shortcut, select_names, wait_for_no_dialog};
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
+
+/// The modifier of Ctrl+C, Ctrl+X and Ctrl+V.
+const CONTROL: gdk::ModifierType = gdk::ModifierType::CONTROL_MASK;
+
+/// The toast after copying one item.
+const ONE_ITEM_COPIED: &str = "1 item(s) copied — ready to paste in another window.";
+
+/// Whether the views show the item called `name` dimmed as cut.
+fn is_shown_cut(test: &TestWindow, name: &str) -> bool {
+    let index = test
+        .names()
+        .iter()
+        .position(|shown| shown == name)
+        .expect("the item is listed");
+    let position = u32::try_from(index).expect("a listing has fewer than u32::MAX items");
+    test.window.folder_pane().owners().is_shown_cut(position) == Some(true)
+}
 
 /// Shows the Documents folder of `fixture` in `test`, and waits until the
 /// clipboard's files enable Paste there.
@@ -253,4 +275,107 @@ fn paste_during_a_search_asks_to_open_the_destination_folder() {
         test.window.shown_message() == "Open the destination folder before pasting."
     });
     assert!(!fixture.path("Notes 2 (copy 2).txt").exists());
+}
+
+/// parity: CLIP-002, CLIP-009
+#[gtk::test]
+fn a_cut_dims_its_items_in_both_views_until_the_clipboard_changes() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 10.txt"]);
+
+    test.activate("cut", None);
+
+    wait_until("the cut row to be dimmed", || is_shown_cut(&test, "Notes 10.txt"));
+    assert!(!is_shown_cut(&test, "Notes 2.txt"), "only the cut item is dimmed");
+    test.activate("view", Some("large"));
+    wait_until("the cut tile to be dimmed", || {
+        is_shown_cut(&test, "Notes 10.txt")
+    });
+    test.window.clipboard().set_text("Quarterly plan");
+    wait_until("the dimming to end", || !is_shown_cut(&test, "Notes 10.txt"));
+    test.activate("copy", None);
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    assert!(!is_shown_cut(&test, "Notes 10.txt"), "a copy dims nothing");
+}
+
+/// parity: CLIP-001, CLIP-011
+#[gtk::test]
+fn ctrl_c_on_an_item_that_is_no_file_or_folder_asks_to_open_the_share() {
+    let fixture = Fixture::standard();
+    let _socket = UnixListener::bind(fixture.path("studio.sock")).expect("a socket in the fixture");
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["studio.sock"]);
+
+    press_shortcut(&test, gdk::Key::c, CONTROL);
+
+    assert_eq!(
+        test.window.shown_message(),
+        "Open the share first, then select its files or folders."
+    );
+    assert!(!is_enabled(&test, "copy"), "the Copy command stays off");
+}
+
+/// parity: CLIP-002, CLIP-011
+#[gtk::test]
+fn ctrl_x_in_a_previous_version_is_refused_and_ctrl_c_copies() {
+    let fixture = Fixture::standard();
+    let snapshot = fixture.path(".snapshot/Monday");
+    fs::create_dir_all(&snapshot).expect("a snapshot folder in the fixture");
+    fs::write(snapshot.join("Plan.txt"), b"Synthetic test data\n").expect("a file in the snapshot");
+    let test = TestWindow::open(&fixture.uri_of(".snapshot/Monday"));
+    select_names(&test, &["Plan.txt"]);
+
+    press_shortcut(&test, gdk::Key::x, CONTROL);
+    let cut_message = test.window.shown_message();
+    press_shortcut(&test, gdk::Key::c, CONTROL);
+
+    assert_eq!(
+        cut_message,
+        "Previous versions are read-only. Use Restore a copy."
+    );
+    assert_eq!(test.window.shown_message(), ONE_ITEM_COPIED);
+}
+
+/// `onKey` copies even while an operation runs, where the Copy button is
+/// off.
+///
+/// parity: CLIP-001
+#[gtk::test]
+fn ctrl_c_copies_while_an_operation_runs() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    let _operation = test
+        .window
+        .begin_operation("Copy: Notes 10.txt (1/1)")
+        .expect("no other operation runs");
+
+    press_shortcut(&test, gdk::Key::c, CONTROL);
+
+    let message = test.window.shown_message();
+    test.window.end_operation();
+    assert_eq!(message, ONE_ITEM_COPIED);
+}
+
+/// GTK stores a local clipboard's storable formats with the clipboard
+/// manager when the application quits, as `gtk_clipboard_set_can_store`
+/// asked GTK 3 to.
+///
+/// parity: CLIP-010
+#[gtk::test]
+fn every_published_format_is_offered_for_a_clipboard_manager_to_keep() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+
+    test.activate("copy", None);
+
+    let clipboard = test.window.clipboard();
+    assert!(clipboard.is_local(), "the window owns the clipboard");
+    let content = clipboard.content().expect("a local clipboard has content");
+    let storable = content.storable_formats();
+    for mime_type in [CUSTOM, GNOME, URI_LIST, KDE_CUT] {
+        assert!(storable.contain_mime_type(mime_type), "{mime_type}");
+    }
 }
