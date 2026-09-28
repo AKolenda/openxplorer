@@ -15,7 +15,8 @@
 //! automatically" switch changes.
 //!
 //! Phones, cameras and server share lists cannot be indexed, so pinning
-//! them adds nothing. A pinned share that needs sign-in fails its first
+//! them adds nothing, and neither does pinning a folder an enabled root
+//! already indexes. A pinned share that needs sign-in fails its first
 //! scan without mounting anything, because the crawler never mounts, and
 //! is scanned again when the user signs in
 //! ([`IndexService::resume_server`]).
@@ -24,9 +25,10 @@ use rusqlite::OptionalExtension;
 
 use super::error::SearchError;
 use super::index::{begin_immediate, indexable_root, root_label, SearchIndex};
-use super::root::RootOrigin;
-use super::service::IndexService;
-use super::text::unix_now;
+use super::policy::IndexScope;
+use super::root::{HiddenItems, IndexRoot, RootOrigin};
+use super::service::{IndexService, ScanTrigger};
+use super::text::{folder_prefix, is_at_or_below, unix_now};
 use crate::location::normalise;
 use crate::settings::Bookmark;
 
@@ -48,8 +50,9 @@ pub enum PinIndexing {
 impl IndexService {
     /// Indexes a folder that was just pinned to Quick access and starts
     /// its scan. Nothing changes when the switch is off, when the folder
-    /// already has a root (enabled or switched off by the user), or when
-    /// it cannot be indexed.
+    /// already has a root (enabled or switched off by the user) or lies
+    /// inside an enabled root that indexes it, or when it cannot be
+    /// indexed.
     ///
     /// # Errors
     ///
@@ -62,7 +65,7 @@ impl IndexService {
         let Some(root) = self.index().add_pinned_root(pin)? else {
             return Ok(());
         };
-        self.refresh(&root)
+        self.scan_pinned_root(&root)
     }
 
     /// Stops indexing a folder that was just unpinned, if pinning added
@@ -90,10 +93,16 @@ impl IndexService {
     ///
     /// Database errors. Pins that cannot be indexed are skipped.
     pub fn index_existing_pins(&self, pins: &[Bookmark], indexing: PinIndexing) -> Result<(), SearchError> {
-        if indexing == PinIndexing::Off || self.index().is_migration_applied(EXISTING_PINS_MIGRATION)? {
+        if self.index().is_migration_applied(EXISTING_PINS_MIGRATION)? {
             return Ok(());
         }
-        self.index_every_pin(pins)?;
+        if indexing == PinIndexing::Automatic {
+            self.index_every_pin(pins)?;
+        }
+        // Safety rule "a root the user removed stays removed": with the
+        // switch off the change counts as applied too, because turning the
+        // switch on indexes every pin itself. Otherwise a later start-up
+        // would add back a pinned root the user removed in between.
         self.index().mark_migration_applied(EXISTING_PINS_MIGRATION)
     }
 
@@ -105,9 +114,15 @@ impl IndexService {
     /// # Errors
     ///
     /// Database errors. Pins that cannot be indexed are skipped.
-    pub fn set_pin_indexing(&self, indexing: PinIndexing, pins: &[Bookmark]) -> Result<(), SearchError> {
+    pub fn set_pin_indexing(&self, pins: &[Bookmark], indexing: PinIndexing) -> Result<(), SearchError> {
         match indexing {
-            PinIndexing::Automatic => self.index_every_pin(pins),
+            PinIndexing::Automatic => {
+                self.index_every_pin(pins)?;
+                // Safety rule "a root the user removed stays removed": every
+                // pin is indexed now, so the start-up change of
+                // `index_existing_pins` must never run after this.
+                self.index().mark_migration_applied(EXISTING_PINS_MIGRATION)
+            }
             PinIndexing::Off => self.remove_pinned_roots(),
         }
     }
@@ -116,13 +131,25 @@ impl IndexService {
     fn index_every_pin(&self, pins: &[Bookmark]) -> Result<(), SearchError> {
         for pin in pins {
             match self.index().add_pinned_root(pin) {
-                Ok(Some(root)) => self.refresh(&root)?,
+                Ok(Some(root)) => self.scan_pinned_root(&root)?,
                 // A pin saved by an older version may no longer be a valid
                 // location; it cannot be indexed, and the other pins can.
                 Ok(None) | Err(SearchError::Location(_)) => {}
                 Err(error) => return Err(error),
             }
         }
+        Ok(())
+    }
+
+    /// Starts the first scan of `root`, which pinning just added.
+    ///
+    /// Safety rule "no scan while signing out" (`refresh(explicit=False)`
+    /// in `index_service.py`): pinning does not ask for a scan, so it never
+    /// resumes a server paused for sign-out; the root is scanned once the
+    /// user signs in. Another process queues nothing, because the owner
+    /// scans every root it has not scanned yet on its next tick.
+    fn scan_pinned_root(&self, root: &str) -> Result<(), SearchError> {
+        self.start_scan(root, ScanTrigger::Automatic)?;
         Ok(())
     }
 
@@ -140,8 +167,8 @@ impl IndexService {
 
 impl SearchIndex {
     /// Adds `pin` as an enabled root marked as added by the pin, and
-    /// returns its URI; `None` when the folder cannot be indexed or
-    /// already has a root.
+    /// returns its URI; `None` when the folder cannot be indexed, already
+    /// has a root, or an enabled root already indexes it.
     ///
     /// Safety rule "the user's choice wins": an existing root, including
     /// one the user switched off, is left exactly as it is.
@@ -151,6 +178,9 @@ impl SearchIndex {
             Err(SearchError::DeviceLocation | SearchError::ServerList) => return Ok(None),
             Err(error) => return Err(error),
         };
+        if self.is_indexed_by_enabled_root(&uri)? {
+            return Ok(None);
+        }
         let label = root_label(&pin.label, &uri);
         let connection = self.connect()?;
         let added = connection.execute(
@@ -159,6 +189,35 @@ impl SearchIndex {
             (&uri, &label),
         )?;
         Ok((added == 1).then_some(uri))
+    }
+
+    /// Whether an enabled root already indexes the folder `uri`.
+    ///
+    /// Safety rule "a folder is indexed once" (SRCH-032): a root for a
+    /// folder inside another root would crawl, watch and store that
+    /// subtree twice, and count it twice toward the entry limit.
+    fn is_indexed_by_enabled_root(&self, uri: &str) -> Result<bool, SearchError> {
+        let roots = self.roots()?;
+        let is_indexed = roots
+            .iter()
+            .filter(|root| root.is_enabled() && is_at_or_below(uri, &root.uri))
+            .any(|root| self.root_reaches(root, uri));
+        Ok(is_indexed)
+    }
+
+    /// Whether `root`, at or above the folder `uri`, indexes it: `uri` is
+    /// in the root's scope (not another filesystem, a system folder or
+    /// snapshot history) and not hidden from a root that skips hidden
+    /// items.
+    fn root_reaches(&self, root: &IndexRoot, uri: &str) -> bool {
+        // Without the mount table, other filesystems cannot be told apart;
+        // the pin then gets a root of its own, whose scan reports why.
+        let Ok(scope) = IndexScope::current(&root.uri, self.directory()) else {
+            return false;
+        };
+        let is_hidden_from_root =
+            root.hidden_items == HiddenItems::Skip && has_hidden_name_below(&root.uri, uri);
+        scope.admits(uri) && !is_hidden_from_root
     }
 
     /// Who chose to index `uri`; `None` when it has no root.
@@ -209,5 +268,105 @@ impl SearchIndex {
             (name, unix_now()),
         )?;
         Ok(())
+    }
+}
+
+/// Whether a folder on the way from `root` down to `uri`, `uri` included,
+/// has a hidden name, one that starts with a dot. A name that a `.hidden`
+/// file hides is not known without reading that file, so such a folder
+/// counts as reached.
+fn has_hidden_name_below(root: &str, uri: &str) -> bool {
+    let Some(relative) = uri.strip_prefix(&folder_prefix(root)) else {
+        return false;
+    };
+    relative.split('/').any(|name| name.starts_with('.'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::search::fixtures::open_index;
+    use crate::search::root::Caching;
+
+    /// A pin below an existing root, and whether the pin gets a root of
+    /// its own.
+    struct NestedPinCase {
+        root: &'static str,
+        caching: Caching,
+        hidden_items: HiddenItems,
+        pin: &'static str,
+        gets_own_root: bool,
+    }
+
+    /// The cases of [`a_pin_gets_a_root_only_when_no_enabled_root_indexes_it`].
+    const NESTED_PINS: [NestedPinCase; 5] = [
+        NestedPinCase {
+            root: "smb://nas/share",
+            caching: Caching::Enabled,
+            hidden_items: HiddenItems::Skip,
+            pin: "smb://nas/share/Team",
+            gets_own_root: false,
+        },
+        NestedPinCase {
+            root: "smb://nas/share",
+            caching: Caching::Disabled,
+            hidden_items: HiddenItems::Skip,
+            pin: "smb://nas/share/Team",
+            gets_own_root: true,
+        },
+        NestedPinCase {
+            root: "smb://nas/share",
+            caching: Caching::Enabled,
+            hidden_items: HiddenItems::Skip,
+            pin: "smb://nas/share/.private/Team",
+            gets_own_root: true,
+        },
+        NestedPinCase {
+            root: "smb://nas/share",
+            caching: Caching::Enabled,
+            hidden_items: HiddenItems::Include,
+            pin: "smb://nas/share/.private/Team",
+            gets_own_root: false,
+        },
+        // Whole-disk exclusions leave /var/tmp out of a /var root.
+        NestedPinCase {
+            root: "file:///var",
+            caching: Caching::Enabled,
+            hidden_items: HiddenItems::Skip,
+            pin: "file:///var/tmp/project",
+            gets_own_root: true,
+        },
+    ];
+
+    /// Safety rule "a folder is indexed once", and the folders an enabled
+    /// root does not reach: below a switched-off root, hidden from a root
+    /// that skips hidden items, or excluded as a system folder.
+    ///
+    /// parity: SRCH-040
+    #[test]
+    fn a_pin_gets_a_root_only_when_no_enabled_root_indexes_it() {
+        for case in NESTED_PINS {
+            let directory = tempfile::tempdir().unwrap();
+            let index = open_index(&directory);
+            index
+                .configure(case.root, case.caching, "", case.hidden_items)
+                .unwrap();
+            let pin = Bookmark {
+                uri: case.pin.to_owned(),
+                label: String::new(),
+            };
+
+            let added = index.add_pinned_root(&pin).unwrap();
+
+            let what = format!("{} in {}", case.pin, case.root);
+            assert_eq!(added.is_some(), case.gets_own_root, "{what}");
+        }
+    }
+
+    #[test]
+    fn hidden_names_count_only_below_the_root() {
+        assert!(has_hidden_name_below("smb://nas/share", "smb://nas/share/a/.b/c"));
+        assert!(!has_hidden_name_below("smb://nas/.share", "smb://nas/.share/a"));
+        assert!(!has_hidden_name_below("smb://nas/share", "smb://nas/share"));
     }
 }

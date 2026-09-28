@@ -7,9 +7,13 @@
 
 mod search_support;
 
-use ox_core::search::{Caching, HiddenItems, PinIndexing, RootOrigin, RootStatus};
+use std::time::Duration;
+
+use ox_core::search::{Caching, HiddenItems, IndexSettings, PinIndexing, RootOrigin, RootStatus};
 use ox_core::settings::Bookmark;
-use search_support::{find_root, found_names, root_state, wait_for_status, MemoryShare, TemporaryCache};
+use search_support::{
+    find_root, found_names, root_state, tick_for, wait_for_status, MemoryShare, TemporaryCache,
+};
 
 /// A pin of `uri` labelled `label`.
 fn pin(uri: &str, label: &str) -> Bookmark {
@@ -125,6 +129,78 @@ fn folders_pinned_earlier_are_indexed_once() {
     assert_eq!(found_names(&cache.index, "second.pdf"), ["second.pdf"]);
 }
 
+/// Safety rule "a root the user removed stays removed": the start-up
+/// indexing of earlier pins found the switch off, the user turned it on
+/// and then removed the pinned root, and the next start-up does not add
+/// the root back.
+///
+/// parity: SRCH-040
+#[test]
+fn a_removed_pinned_root_stays_removed_after_the_switch_was_turned_on() {
+    let cache = TemporaryCache::new();
+    let share = MemoryShare::new();
+    let team = share.add_folder(MemoryShare::URI, "Team");
+    let pins = [pin(&team, "Team")];
+    let first_run = cache.start_service(share.clone());
+    first_run.index_existing_pins(&pins, PinIndexing::Off).unwrap();
+    first_run.set_pin_indexing(&pins, PinIndexing::Automatic).unwrap();
+    wait_for_status(&first_run, &team, RootStatus::Ready);
+    first_run.remove(&team).unwrap();
+    first_run.shut_down();
+
+    let next_run = cache.start_service(share.clone());
+    next_run
+        .index_existing_pins(&pins, PinIndexing::Automatic)
+        .unwrap();
+
+    assert!(find_root(&cache.index, &team).is_none());
+}
+
+/// Safety rule "a folder is indexed once": pinning a folder inside an
+/// indexed share adds no second root, so its items are stored once.
+///
+/// parity: SRCH-040
+#[test]
+fn pinning_a_folder_inside_an_indexed_root_adds_no_root() {
+    let cache = TemporaryCache::new();
+    let share = MemoryShare::new();
+    let team = share.add_folder(MemoryShare::URI, "Team");
+    share.add_file(&team, "plan.pdf");
+    let service = cache.index_share(&share);
+
+    service
+        .pin_added(&pin(&team, "Team"), PinIndexing::Automatic)
+        .unwrap();
+
+    assert!(find_root(&cache.index, &team).is_none());
+    assert_eq!(cache.index.status().unwrap().entry_count, 2);
+}
+
+/// Safety rule "no scan while signing out": pinning a folder on a server
+/// the user is signing out of does not resume it; the folder is indexed
+/// once the user signs in again.
+///
+/// parity: SRCH-040, NET-022
+#[test]
+fn a_pin_on_a_server_being_signed_out_of_waits_for_sign_in() {
+    let cache = TemporaryCache::new();
+    let share = MemoryShare::new();
+    let team = share.add_folder(MemoryShare::URI, "Team");
+    share.add_file(&team, "plan.pdf");
+    let service = cache.start_service(share.clone());
+    service.pause_server("nas").unwrap();
+
+    service
+        .pin_added(&pin(&team, "Team"), PinIndexing::Automatic)
+        .unwrap();
+    tick_for(&service, &IndexSettings::default(), Duration::from_millis(600));
+    assert_eq!(root_state(&cache.index, &team).status, RootStatus::NotIndexed);
+    service.resume_server("nas").unwrap();
+
+    wait_for_status(&service, &team, RootStatus::Ready);
+    assert_eq!(found_names(&cache.index, "plan"), ["plan.pdf"]);
+}
+
 /// The switch off: pinning adds nothing and the roots pinning added go;
 /// back on: every pinned folder is indexed again. Roots the user chose
 /// stay throughout.
@@ -150,14 +226,14 @@ fn the_switch_turns_indexing_of_pinned_folders_off_and_on() {
         pin(&chosen, "Chosen"),
     ];
 
-    service.set_pin_indexing(PinIndexing::Off, &pins).unwrap();
+    service.set_pin_indexing(&pins, PinIndexing::Off).unwrap();
     service
         .pin_added(&pin(&later, "Later"), PinIndexing::Off)
         .unwrap();
     assert!(find_root(&cache.index, &pinned).is_none());
     assert!(find_root(&cache.index, &later).is_none());
     assert_eq!(root_state(&cache.index, &chosen).origin, RootOrigin::User);
-    service.set_pin_indexing(PinIndexing::Automatic, &pins).unwrap();
+    service.set_pin_indexing(&pins, PinIndexing::Automatic).unwrap();
 
     assert_eq!(root_state(&cache.index, &pinned).origin, RootOrigin::Pin);
     assert_eq!(root_state(&cache.index, &later).origin, RootOrigin::Pin);
