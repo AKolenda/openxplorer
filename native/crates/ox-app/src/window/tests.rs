@@ -13,6 +13,7 @@ mod chrome;
 mod clipboard;
 mod command_bar;
 mod context_menus;
+mod drag_and_drop;
 mod environment;
 mod file_operations;
 mod file_ops_captures;

@@ -214,9 +214,12 @@ fn right_clicking_a_pin_opens_its_menu() {
         test.window.sidebar().labels().contains(&"Pinned menu".to_owned())
     });
 
+    // The new row is laid out a frame after it is added.
+    wait_until("the pin's menu", || {
+        test.window.sidebar().right_click_row("Pinned menu").is_visible()
+    });
     let menu = test.window.sidebar().right_click_row("Pinned menu");
 
-    assert!(menu.is_visible());
     assert_eq!(menu.row_labels()[0], "Open");
     assert!(menu.row("Unpin from Quick access").is_sensitive());
     assert!(

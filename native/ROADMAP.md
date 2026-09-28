@@ -39,18 +39,29 @@ files, and Python/Rust settings round trips and lock exclusion in both
 directions. Those tests establish the behaviours they exercise. They do not
 establish native SMB, phone, Wayland drag-and-drop or assistive-technology parity.
 
-## Next: complete safe file-operation workflows
+## In progress: complete safe file-operation workflows
 
-Connect GTK actions to the core only when their full interaction is available:
+The window runs the file operations on the core's ops service
+([`window/file_ops`](crates/ox-app/src/window/file_ops.rs)), one at a time and
+without freezing navigation:
 
-- New folder/file, rename, copy/cut/paste, move, Trash, permanent deletion and
-  duplicate. Respect virtual-item restrictions and backend access metadata.
-- Confirm destructive actions and conflicts; show progress, cancellation,
-  partial completion and recoverable errors without freezing navigation.
-- Claim and read the system clipboard asynchronously, reject owner changes,
-  and consume only successfully moved items from the matching cut payload.
+- New folder and the New menu's files, Rename, Duplicate, Move to Trash,
+  Shift+Delete, copy, cut and paste, with the Python app's dialogs,
+  confirmations and completion reports, the transfer panel with Cancel, and
+  Undo and Redo on an application-wide journal.
+- The name-conflict dialog (Skip, Keep both, Replace, Apply to all).
+- The display clipboard, claimed in all four formats and read asynchronously;
+  a read that an owner change overtook is dropped, and a move-paste consumes
+  only its own cut.
+- The Recycle Bin as a folder, with Restore, Delete permanently and Empty.
+- The context menus of files, folders, blank space (both styles), tabs and
+  Quick access pins, with the enable rules of the command bar.
+
+Still to do:
+
 - Native file drag-and-drop, cross-window moves, and tabs moved between windows.
-- Trash browsing, restore to the original path, and explicit empty-Trash flow.
+- Renaming in place, dimmed cut items, the Recycle Bin's Original location and
+  Date deleted columns and its sidebar entry.
 - Preserve staging, replacement, cancellation and source-version safety rules
   under real local, remote and removable-device failures.
 

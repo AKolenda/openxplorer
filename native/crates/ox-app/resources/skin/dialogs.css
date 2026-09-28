@@ -93,8 +93,8 @@ popover.ox-menu.compact > contents {
   padding: 2px 0;
   box-shadow: 0 0 8px @ox_shadow_ambient, 0 14px 28px @ox_shadow_key;
 }
+/* Row height and menu width follow the text size (src/theme/fonts.rs). */
 popover.ox-menu.compact list > row {
-  min-height: 29px;
   margin: 2px 4px;
   padding: 0 11px;
   border-radius: 4px;

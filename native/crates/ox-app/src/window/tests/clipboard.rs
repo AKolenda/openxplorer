@@ -4,6 +4,8 @@
 //! `transferWithConflicts` of `desktop/ui/app.js`.
 
 use gtk::prelude::*;
+use gtk::{gdk, glib};
+use ox_core::clipboard::KDE_CUT;
 
 use super::file_ops_support::{is_enabled, open_dialog, select_names, wait_for_no_dialog};
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
@@ -167,4 +169,88 @@ fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
         .filter(|name| name.contains("(copy"))
         .collect();
     assert_eq!(copies.len(), 1, "Notes 2.txt was skipped: {copies:?}");
+}
+
+/// The bytes the clipboard of `test`'s window offers as `mime_type`.
+fn clipboard_bytes(test: &TestWindow, mime_type: &str) -> Vec<u8> {
+    let clipboard = test.window.clipboard();
+    glib::MainContext::default().block_on(async {
+        let (stream, _) = clipboard
+            .read_future(&[mime_type], glib::Priority::DEFAULT)
+            .await
+            .expect("the clipboard offers the format");
+        let bytes = stream
+            .read_bytes_future(4096, glib::Priority::DEFAULT)
+            .await
+            .expect("the payload reads");
+        bytes.to_vec()
+    })
+}
+
+/// parity: CLIP-004, CLIP-007
+#[gtk::test]
+fn a_cut_offers_every_format_and_the_kde_marker_under_its_real_mime_type() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+
+    test.activate("cut", None);
+
+    let formats = test.window.clipboard().formats();
+    for mime_type in [
+        "application/x-winspace-files",
+        "x-special/gnome-copied-files",
+        "text/uri-list",
+        "application/x-kde-cutselection",
+    ] {
+        assert!(formats.contain_mime_type(mime_type), "{mime_type}");
+    }
+    assert_eq!(KDE_CUT, "application/x-kde-cutselection");
+    assert_eq!(clipboard_bytes(&test, KDE_CUT), b"1");
+    let gnome = String::from_utf8(clipboard_bytes(&test, "x-special/gnome-copied-files")).expect("UTF-8");
+    assert_eq!(gnome, format!("cut\n{}", fixture.uri_of("Notes 2.txt")));
+}
+
+/// parity: CLIP-005, CLIP-006, CLIP-007
+#[gtk::test]
+fn a_cut_from_dolphin_pastes_as_a_move() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let uri_list = format!("{}\r\n", fixture.uri_of("Notes 2.txt"));
+    let dolphin_cut = gdk::ContentProvider::new_union(&[
+        gdk::ContentProvider::for_bytes("text/uri-list", &glib::Bytes::from_owned(uri_list.into_bytes())),
+        gdk::ContentProvider::for_bytes(KDE_CUT, &glib::Bytes::from_static(b"1")),
+    ]);
+
+    test.window
+        .clipboard()
+        .set_content(Some(&dolphin_cut))
+        .expect("the test owns the clipboard");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+
+    wait_until("the item to be moved", || {
+        fixture.path("Documents/Notes 2.txt").is_file()
+    });
+    assert!(!fixture.path("Notes 2.txt").exists(), "a Dolphin cut is a move");
+}
+
+/// parity: CLIP-011
+#[gtk::test]
+fn paste_during_a_search_asks_to_open_the_destination_folder() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    test.window.search_box().entry().set_text("Notes");
+    wait_until("the search to filter", || {
+        test.window.folder_model().is_searching()
+    });
+
+    test.window.paste_from_keyboard();
+
+    wait_until("the refusal", || {
+        test.window.shown_message() == "Open the destination folder before pasting."
+    });
+    assert!(!fixture.path("Notes 2 (copy 2).txt").exists());
 }

@@ -131,7 +131,8 @@ impl BrowserWindow {
     }
 
     /// Gives `view` type-to-select, the window's key handling, prefix
-    /// resets on clicks, middle-click to open a folder and the context menu.
+    /// resets on clicks, middle-click to open a folder, the context menu,
+    /// and file drag and drop.
     fn folder_input(&self, view: &gtk::Widget) {
         let input = self.typing_input(view);
         let keys = gtk::EventControllerKey::new();
@@ -147,6 +148,8 @@ impl BrowserWindow {
         view.add_controller(self.prefix_reset_on_click());
         view.add_controller(self.folder_middle_click(view));
         self.attach_context_menu(view);
+        self.attach_file_drag(view);
+        self.attach_file_drop(view);
     }
 
     /// The input method that turns key presses in `view` into text for

@@ -92,13 +92,19 @@ fn windows_group() -> SettingsGroup {
     group
 }
 
-/// Dragging tabs and files, which arrives with drag and drop.
+/// Dragging tabs and files. Files drag into other apps now; moving tabs
+/// and pinning folders by dropping them on Quick access arrive with the
+/// rest of drag and drop.
 fn dragging_group() -> SettingsGroup {
     let pending = Availability::Unported(Milestone::DragAndDrop);
-    let group = SettingsGroup::pending("Tabs and files", pending);
-    for text in [MOVE_TABS, DRAG_TO_APPS, DROP_ON_FOLDERS] {
+    let group = SettingsGroup::new("Tabs and files");
+    for (text, availability) in [
+        (MOVE_TABS, pending),
+        (DRAG_TO_APPS, Availability::Ready),
+        (DROP_ON_FOLDERS, pending),
+    ] {
         let row = SettingRow::new(text);
-        row.set_availability(pending);
+        row.set_availability(availability);
         group.add_row(&row);
     }
     group

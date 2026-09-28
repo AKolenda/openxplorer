@@ -158,3 +158,10 @@ gridview.files > child:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_out
 .empty-state .empty-title { color: @ox_text; font-weight: 500; }
 .empty-state image { opacity: .6; color: @ox_muted; }
 .empty-state button { padding: 8px 20px; }
+
+/* A folder view that takes the files dragged over it shows an accent
+   outline; no outline means no drop (DND-011). */
+columnview.files:drop(active), gridview.files:drop(active) {
+  outline: 2px solid @ox_accent;
+  outline-offset: -2px;
+}

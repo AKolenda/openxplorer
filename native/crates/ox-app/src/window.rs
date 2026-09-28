@@ -20,7 +20,8 @@
 //! places ([`environment`]), Quick access ([`quick_access`]), mounting
 //! ([`mounting`]), the skin ([`appearance`]), activation, actions, input
 //! ([`type_to_select`]), the file operations and their [`dialog`]s
-//! ([`file_ops`]), the context menus ([`context_menu`], [`tab_menu`]), and
+//! ([`file_ops`]), dragging and dropping files ([`file_drag`],
+//! [`file_drop`]), the context menus ([`context_menu`], [`tab_menu`]), and
 //! what the window connects and lets go of ([`connections`]).
 //! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
@@ -46,6 +47,8 @@ mod details_pane;
 mod dialog;
 mod empty_page;
 mod environment;
+mod file_drag;
+mod file_drop;
 mod file_ops;
 mod folder_pane;
 mod gestures;

@@ -52,13 +52,29 @@ impl BrowserWindow {
         if !self.file_keys_apply() {
             return glib::Propagation::Proceed;
         }
-        action.activate_from(self, None);
+        if action == WindowAction::Paste {
+            self.paste_from_keyboard();
+        } else {
+            action.activate_from(self, None);
+        }
         glib::Propagation::Stop
+    }
+
+    /// Ctrl+V: pastes even where the Paste button is disabled, so a search
+    /// says why nothing is pasted (`onKey` calls `paste()` directly).
+    pub(in crate::window) fn paste_from_keyboard(&self) {
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                window.paste().await;
+            }
+        ));
     }
 
     /// False on the Settings page, in a text field and in the address
     /// bar, where the keys edit text or move between crumbs.
-    fn file_keys_apply(&self) -> bool {
+    pub(in crate::window) fn file_keys_apply(&self) -> bool {
         if self.shows_settings() {
             return false;
         }

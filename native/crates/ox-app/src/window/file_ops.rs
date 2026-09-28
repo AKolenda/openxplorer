@@ -60,6 +60,7 @@ use ox_core::clipboard::ClipboardFiles;
 use ox_core::transfer::Cancellation;
 
 pub(super) use availability::FileCommand;
+pub(super) use transfer::IncomingItems;
 pub(super) use trash_support::TrashSupport;
 
 /// What the window's file operations remember between commands.
@@ -92,5 +93,11 @@ impl FileOperations {
     /// file operation may start.
     fn is_busy(&self) -> bool {
         self.is_running() || self.planning
+    }
+
+    /// True while no operation runs or is being planned, so a drag or a
+    /// drop may start.
+    pub(crate) fn is_idle(&self) -> bool {
+        !self.is_busy()
     }
 }

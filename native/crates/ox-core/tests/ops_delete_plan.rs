@@ -80,7 +80,7 @@ fn a_folder_gio_reports_without_a_trash_is_planned_for_permanent_delete() {
     assert_eq!(plan.confirmation().title, "Delete permanently?");
 }
 
-/// parity: OPS-037
+/// parity: OPS-037, OPS-017
 #[test]
 fn a_share_that_cannot_answer_counts_as_having_a_trash() {
     let schemes = gio::Vfs::default().supported_uri_schemes();

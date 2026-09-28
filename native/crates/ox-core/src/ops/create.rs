@@ -59,8 +59,9 @@ const MAX_NUMBERED_NAMES: u32 = 10_000;
 
 /// Creates an empty folder in the folder at `folder_uri` under the first
 /// free name of `base_name`, `base_name (2)`, `base_name (3)`, ..., as
-/// Windows names new folders. The window then starts renaming it, so New
-/// folder needs no dialog (OPS-001).
+/// Windows names new folders. It is the first half of Explorer's New
+/// folder, which then renames the folder in place; the window asks for the
+/// name first (OPS-001) until it can rename in place (OPS-010).
 ///
 /// # Errors
 ///

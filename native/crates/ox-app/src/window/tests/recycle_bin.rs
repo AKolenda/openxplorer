@@ -69,6 +69,37 @@ fn the_recycle_bin_lists_trashed_items_and_restore_puts_them_back() {
     });
 }
 
+/// parity: OPS-043
+#[gtk::test]
+fn delete_in_the_recycle_bin_deletes_only_the_chosen_items_for_good() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Delete me for good.txt");
+    fixture.write("Keep me trashed.txt");
+    trash(&fixture.path("Delete me for good.txt"));
+    trash(&fixture.path("Keep me trashed.txt"));
+    let test = TestWindow::open(TRASH_URI);
+    let is_listed = |name: &str| test.names().contains(&name.to_owned());
+    wait_until("the trashed files to be listed", || {
+        is_listed("Delete me for good.txt") && is_listed("Keep me trashed.txt")
+    });
+    select_names(&test, &["Delete me for good.txt"]);
+
+    test.activate("trash", None);
+    let dialog = open_dialog(&test);
+
+    assert_eq!(dialog.title_text(), "Delete permanently?");
+    dialog.press("Delete permanently");
+    wait_until("the item to leave the Recycle Bin", || {
+        !is_listed("Delete me for good.txt")
+    });
+    assert!(is_listed("Keep me trashed.txt"));
+    assert!(
+        !fixture.path("Delete me for good.txt").exists(),
+        "nothing was restored"
+    );
+}
+
 /// parity: OPS-040, OPS-042
 #[gtk::test]
 fn empty_recycle_bin_asks_then_deletes_everything_in_it() {

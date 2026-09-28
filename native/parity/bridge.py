@@ -128,8 +128,9 @@ def citation_problem(root: Path, citation: str) -> str | None:
 def rust_tests(source: str) -> set[str]:
     """Return the names of the functions that run as tests in Rust code.
 
-    Other attributes and comments may stand between ``#[test]`` and the
-    ``fn`` line; anything else ends the attribute block. A test marked
+    Other attributes and comments may stand between ``#[test]`` (or
+    ``#[gtk::test]``, which runs a window test on GTK's test thread) and
+    the ``fn`` line; anything else ends the attribute block. A test marked
     ``#[ignore]`` is left out, because ``cargo test`` skips it.
     """
     tests = set()
@@ -146,10 +147,14 @@ def rust_tests(source: str) -> set[str]:
     return tests
 
 
+TEST_ATTRIBUTES = ('#[test]', '#[gtk::test]')
+
+
 def is_running_test(attributes: list[str]) -> bool:
     """Return whether attributes make a function a test that runs."""
     ignored = any(attribute.startswith('#[ignore') for attribute in attributes)
-    return '#[test]' in attributes and not ignored
+    is_test = any(attribute in TEST_ATTRIBUTES for attribute in attributes)
+    return is_test and not ignored
 
 
 def replacement_blockers(inventory: Inventory) -> list[str]:

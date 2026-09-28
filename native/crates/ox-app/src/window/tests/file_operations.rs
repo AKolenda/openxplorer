@@ -114,9 +114,9 @@ fn new_is_disabled_where_nothing_can_be_created() {
     assert!(!is_enabled(&test, "paste"));
 }
 
-/// parity: OPS-009, OPS-010, OPS-029
+/// parity: OPS-009, OPS-010, OPS-029, OPS-031
 #[gtk::test]
-fn rename_selects_the_name_before_its_extension_and_undo_renames_back() {
+fn rename_selects_the_name_before_its_extension_and_undo_and_redo_walk_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt"]);
@@ -146,7 +146,36 @@ fn rename_selects_the_name_before_its_extension_and_undo_renames_back() {
         fixture.path("Notes 2.txt").is_file()
     });
     assert!(!fixture.path("Plans.txt").exists());
-    assert_eq!(test.window.shown_message(), "Rename undone.");
+    wait_until("the undone toast", || {
+        test.window.shown_message() == "Rename undone."
+    });
+    test.activate("redo", None);
+    wait_until("the rename to be redone", || fixture.path("Plans.txt").is_file());
+    assert!(!fixture.path("Notes 2.txt").exists());
+    wait_until("the redone toast", || {
+        test.window.shown_message() == "Rename redone."
+    });
+}
+
+/// parity: CMD-017
+#[gtk::test]
+fn the_file_keys_leave_text_fields_and_the_settings_page_alone() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    test.window.folder_pane().focus_view();
+    let in_file_list = test.window.file_keys_apply();
+    test.window.search_box().focus();
+    let in_search = test.window.file_keys_apply();
+    test.activate("settings", None);
+    let on_settings = test.window.file_keys_apply();
+
+    assert!(in_file_list);
+    assert!(
+        !in_search,
+        "the search field keeps Delete, F2 and the clipboard keys"
+    );
+    assert!(!on_settings);
 }
 
 /// parity: OPS-009

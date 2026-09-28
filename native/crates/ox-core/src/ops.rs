@@ -15,7 +15,7 @@
 //!
 //! Beyond the Python app, from the Dolphin baseline: Duplicate, the
 //! Recycle Bin (list, restore, delete, empty), the created items of every
-//! operation for selecting them, New folder under the next free name,
+//! operation for selecting them, a new folder under the next free name,
 //! Shift+Delete, an answer per item to name conflicts, and an undo journal
 //! with Redo (see [`UndoRecord`] for what can be undone).
 //!

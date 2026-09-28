@@ -12,6 +12,8 @@
 //! (CMD-008) puts a strip of icon buttons above the list: Cut, Copy,
 //! Paste, Rename and Delete in the context menus.
 
+#[cfg(test)]
+mod inspection;
 mod items;
 
 use gtk::glib;
@@ -308,62 +310,6 @@ impl MenuPopover {
             }
         }
     }
-
-    /// The labels of the rows, a divider as `-`, for tests.
-    #[cfg(test)]
-    pub(crate) fn row_labels(&self) -> Vec<String> {
-        let mut labels = Vec::new();
-        for row in self.rows() {
-            if row.header().is_some() {
-                labels.push("-".to_owned());
-            }
-            labels.extend(row_label(&row));
-        }
-        labels
-    }
-
-    /// The rows, for tests.
-    #[cfg(test)]
-    pub(crate) fn rows(&self) -> Vec<gtk::ListBoxRow> {
-        super::widget_tree::children(self.list())
-            .filter_map(|child| child.downcast::<gtk::ListBoxRow>().ok())
-            .collect()
-    }
-
-    /// The row labelled `label`, for tests.
-    #[cfg(test)]
-    pub(crate) fn row(&self, label: &str) -> gtk::ListBoxRow {
-        self.rows()
-            .into_iter()
-            .find(|row| row_label(row).as_deref() == Some(label))
-            .unwrap_or_else(|| panic!("the menu has a {label} row"))
-    }
-
-    /// The labels of the rows showing a check mark, for tests.
-    #[cfg(test)]
-    pub(crate) fn checked_labels(&self) -> Vec<String> {
-        let checked = self.rows().into_iter().filter(|row| row.has_css_class("checked"));
-        checked.filter_map(|row| row_label(&row)).collect()
-    }
-
-    /// The accessible names of the strip's buttons while it shows, for
-    /// tests.
-    #[cfg(test)]
-    pub(crate) fn strip_labels(&self) -> Vec<String> {
-        if !self.strip().is_visible() {
-            return Vec::new();
-        }
-        super::widget_tree::children(self.strip())
-            .filter_map(|child| child.tooltip_text())
-            .map(String::from)
-            .collect()
-    }
-
-    /// The classic or compact look, for tests.
-    #[cfg(test)]
-    pub(super) fn style(&self) -> MenuStyle {
-        self.imp().style.get()
-    }
 }
 
 /// The tooltip of `item`: its label, and for a command that another
@@ -423,13 +369,4 @@ fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
         row.add_css_class("checked");
     }
     row
-}
-
-/// The label of `row`, for tests.
-#[cfg(test)]
-fn row_label(row: &gtk::ListBoxRow) -> Option<String> {
-    let content = row.child()?;
-    let glyph = content.first_child()?;
-    let label = glyph.next_sibling().and_downcast::<gtk::Label>()?;
-    Some(label.text().to_string())
 }

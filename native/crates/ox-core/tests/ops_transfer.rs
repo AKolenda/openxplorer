@@ -237,7 +237,7 @@ fn a_cancelled_copy_stops_before_anything_is_copied() {
     assert_eq!(fs::read(folders.source().join("a.txt")).unwrap(), b"a");
 }
 
-/// parity: OPS-035
+/// parity: OPS-035, OPS-036
 #[test]
 fn requests_with_a_whole_share_or_a_server_listing_are_refused_before_anything_changes() {
     let folders = Folders::new();
