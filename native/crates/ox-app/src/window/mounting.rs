@@ -22,6 +22,7 @@ use crate::devices::Removal;
 use crate::dialogs::NetworkFormDialog;
 use crate::locations::Page;
 
+use super::session::Tab;
 use super::BrowserWindow;
 
 /// The note of "Disconnect this mount?", under the location.
@@ -156,14 +157,26 @@ impl BrowserWindow {
 
     /// Makes every tab inside `root` list again when it is next shown.
     fn mark_stale_inside(&self, root: &str) {
-        let mut session = self.imp().session.borrow_mut();
-        let inside = session
-            .tabs_mut()
-            .iter_mut()
-            .filter(|tab| is_inside(tab.uri(), root));
-        for tab in inside {
-            tab.mark_stale();
-        }
+        self.mark_tabs_stale(|uri| is_inside(uri, root));
+    }
+
+    /// Makes every tab whose location passes `is_stale` list again when it
+    /// is next shown, and drops what those tabs listed. The items are
+    /// dropped after the session is released, because dropping the active
+    /// tab's items runs the view's handlers, which read the session.
+    pub(super) fn mark_tabs_stale(&self, is_stale: impl Fn(&str) -> bool) {
+        let stale: Vec<gio::ListStore> = {
+            let mut session = self.imp().session.borrow_mut();
+            let tabs = session.tabs_mut().iter_mut();
+            tabs.filter(|tab| is_stale(tab.uri()))
+                .map(Tab::mark_stale)
+                .collect()
+        };
+        self.change_model(|| {
+            for items in &stale {
+                items.remove_all();
+            }
+        });
     }
 }
 

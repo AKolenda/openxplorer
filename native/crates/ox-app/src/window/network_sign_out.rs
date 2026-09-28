@@ -180,14 +180,7 @@ impl BrowserWindow {
 
     /// Makes every tab on `host` list again when it is next shown.
     fn mark_host_stale(&self, host: &str) {
-        let mut session = self.imp().session.borrow_mut();
-        let on_host = session
-            .tabs_mut()
-            .iter_mut()
-            .filter(|tab| smb_host_of(tab.uri()).as_deref() == Some(host));
-        for tab in on_host {
-            tab.mark_stale();
-        }
+        self.mark_tabs_stale(|uri| smb_host_of(uri).as_deref() == Some(host));
     }
 
     /// Shows a message box headed `title` saying `detail`, with OK

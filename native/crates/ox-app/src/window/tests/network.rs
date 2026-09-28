@@ -20,8 +20,10 @@ use ox_core::network::{
 };
 
 use crate::dialogs::NetworkFormDialog;
+use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::network::Discoverer;
+use crate::test_support::file_entry;
 use crate::test_support::harness::{
     capture, capture_dialog, descendants, wait_until, Fixture, TestWindow, ThemeGuard,
 };
@@ -325,6 +327,45 @@ fn signing_out_forgets_the_server_and_its_tabs() {
     assert!(!test.window.sidebar().labels().contains(&"share".to_owned()));
     let tabs = test.tab_listing_needs();
     assert!(tabs.contains(&("smb://nas/share".to_owned(), true)), "{tabs:?}");
+}
+
+/// Signing out of the server the window shows drops the rows on screen
+/// without the window's own handlers finding the tabs still in use (the
+/// release build aborted here: a `RefCell` borrowed twice).
+///
+/// parity: NET-020
+#[gtk::test]
+fn signing_out_of_the_server_on_screen_drops_its_rows() {
+    let test = TestWindow::open(Page::Network.uri());
+    test.window
+        .network()
+        .answer_mounts_with(|| Err(NetworkError::NotAFolder));
+    test.window
+        .navigate("smb://example.invalid/share")
+        .expect("an SMB share");
+    wait_until("the failed mount", || test.window.load_error().is_some());
+    let tab = test.active_tab().expect("the share's tab");
+    let rows = test.window.tab_store(tab).expect("the share's rows");
+    rows.append(&FileItem::new(file_entry("Report.txt")));
+    assert_eq!(
+        test.window.folder_pane().model().n_items(),
+        1,
+        "the row is on screen"
+    );
+
+    test.activate("sign-out", Some("smb://example.invalid/share"));
+    let dialog = open_form_dialog();
+    descendants::<gtk::CheckButton>(&dialog)[0].set_active(false);
+    dialog.press_confirm();
+    wait_until("the Network page", || {
+        test.window.current_uri().as_deref() == Some(Page::Network.uri())
+    });
+
+    assert_eq!(rows.n_items(), 0);
+    assert_eq!(
+        test.window.shown_message().as_str(),
+        "Disconnected. Saved credentials are retained."
+    );
 }
 
 /// Forgetting saved credentials needs the keyring; without one the server
