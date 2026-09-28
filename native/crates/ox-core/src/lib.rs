@@ -17,6 +17,7 @@
 //! | [`format`](mod@format) | Size and date text | `ui/app.js` |
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
+//! | [`archive`] | ZIP browsing, opening a member as a private copy, and extraction | `archives.py`, `zip_extraction.py`, `native_opening.py`, `winspace.py` |
 
 pub mod archive;
 pub mod clipboard;
