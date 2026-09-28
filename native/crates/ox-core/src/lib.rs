@@ -23,6 +23,7 @@ pub mod entry;
 pub mod format;
 pub mod gio_node;
 pub mod location;
+pub mod ops;
 pub mod places;
 pub mod settings;
 pub mod transfer;
