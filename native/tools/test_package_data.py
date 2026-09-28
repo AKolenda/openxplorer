@@ -130,7 +130,7 @@ class InstallTests(StagingTestCase):
 
                 winspace = tree.path_of(tree.paths.commands / package_data.LEGACY_COMMAND)
                 self.assertEqual(winspace.resolve(), tree.path_of(tree.paths.program).resolve())
-                self.assertEqual(len(report.passed), 2)
+                self.assertIn('The mount helper starts in isolated mode', report.passed)
 
     def test_files_get_program_and_data_modes(self) -> None:
         tree = self.install(Channel.PREVIEW, Layout.FHS)

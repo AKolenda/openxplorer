@@ -226,6 +226,11 @@ def check_mount_helper(report: Report, tree: InstalledTree, helper: PurePosixPat
     launcher = tree.path_of(tree.paths.commands / package_data.MOUNT_HELPER_COMMAND)
     subprocess.run(['sh', '-n', str(launcher)], check=True)
     report.check('The mount helper launcher passes the shell syntax check', True)
+    # The launcher runs Python in isolated mode, as this does; the helper
+    # must find its modules in its own folder.
+    helper_program = ['python3', '-I', str(installed / 'mount_share.py'), '--help']
+    subprocess.run(helper_program, check=True, stdout=subprocess.DEVNULL)
+    report.check('The mount helper starts in isolated mode', True)
 
 
 def main(argv: list[str] | None = None) -> int:
