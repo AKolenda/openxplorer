@@ -26,7 +26,7 @@ const ROW_GLYPH: i32 = 16;
 
 /// Whether an item shows a check mark.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ItemCheck {
+pub(super) enum ItemCheck {
     /// Never checked.
     Plain,
     /// Checked or not, decided when the menu is built.
@@ -36,9 +36,40 @@ pub enum ItemCheck {
     FollowsAction,
 }
 
+/// The check mark a row shows when the menu opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CheckMark {
+    /// A command, which is never checked.
+    NotCheckable,
+    /// A choice or toggle that is off.
+    Unchecked,
+    /// A choice or toggle that is on: the check glyph replaces the item's.
+    Checked,
+}
+
+impl CheckMark {
+    /// The mark of a choice or toggle that is on when `checked`.
+    fn checked_if(checked: bool) -> Self {
+        if checked {
+            CheckMark::Checked
+        } else {
+            CheckMark::Unchecked
+        }
+    }
+
+    /// The state screen readers announce, `None` for a command.
+    fn accessible_state(self) -> Option<gtk::AccessibleTristate> {
+        match self {
+            CheckMark::NotCheckable => None,
+            CheckMark::Unchecked => Some(gtk::AccessibleTristate::False),
+            CheckMark::Checked => Some(gtk::AccessibleTristate::True),
+        }
+    }
+}
+
 /// One menu item.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MenuItem {
+pub(super) struct MenuItem {
     /// The visible and accessible name.
     pub label: String,
     /// The glyph before the label.
@@ -94,7 +125,7 @@ impl MenuItem {
 
 /// A menu line: an item or a divider.
 #[derive(Debug, Clone, PartialEq)]
-pub enum MenuEntry {
+pub(super) enum MenuEntry {
     /// A clickable item.
     Item(MenuItem),
     /// A thin line between groups.
@@ -183,14 +214,14 @@ glib::wrapper! {
 
 impl MenuPopover {
     /// A menu showing `entries`.
-    pub fn new(entries: Vec<MenuEntry>) -> Self {
+    pub(super) fn new(entries: Vec<MenuEntry>) -> Self {
         let popover: Self = glib::Object::new();
         popover.set_entries(entries);
         popover
     }
 
     /// Replaces the menu's entries.
-    pub fn set_entries(&self, entries: Vec<MenuEntry>) {
+    pub(super) fn set_entries(&self, entries: Vec<MenuEntry>) {
         self.imp().entries.replace(entries);
         self.redraw();
     }
@@ -209,7 +240,7 @@ impl MenuPopover {
                 after_divider = true;
                 continue;
             };
-            let row = item_row(item, self.is_checked(item));
+            let row = item_row(item, self.check_mark(item));
             if std::mem::take(&mut after_divider) {
                 row.add_css_class(AFTER_DIVIDER);
             }
@@ -217,14 +248,15 @@ impl MenuPopover {
         }
     }
 
-    fn is_checked(&self, item: &MenuItem) -> Option<bool> {
+    /// The check mark `item` shows now.
+    fn check_mark(&self, item: &MenuItem) -> CheckMark {
         match &item.check {
-            ItemCheck::Plain => None,
-            ItemCheck::Fixed(checked) => Some(*checked),
+            ItemCheck::Plain => CheckMark::NotCheckable,
+            ItemCheck::Fixed(checked) => CheckMark::checked_if(*checked),
             ItemCheck::FollowsAction => {
                 let state = action_state(self.upcast_ref(), &item.action);
                 let expected = item.target.clone().unwrap_or_else(|| true.to_variant());
-                Some(state.as_ref() == Some(&expected))
+                CheckMark::checked_if(state.as_ref() == Some(&expected))
             }
         }
     }
@@ -272,8 +304,8 @@ fn action_state(widget: &gtk::Widget, detailed_name: &str) -> Option<glib::Varia
 
 /// A row's glyph (the check mark while checked, as app.js draws it), its
 /// label and its shortcut.
-fn item_content(item: &MenuItem, checked: Option<bool>) -> gtk::Box {
-    let glyph = if checked == Some(true) {
+fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
+    let glyph = if check == CheckMark::Checked {
         Glyph::Check
     } else {
         item.glyph
@@ -297,15 +329,14 @@ fn item_content(item: &MenuItem, checked: Option<bool>) -> gtk::Box {
     content
 }
 
-/// The row for `item`; `checked` is `None` for an item that is never
-/// checked.
-fn item_row(item: &MenuItem, checked: Option<bool>) -> gtk::ListBoxRow {
-    let role = match checked {
-        Some(_) => gtk::AccessibleRole::MenuItemCheckbox,
-        None => gtk::AccessibleRole::MenuItem,
+/// The row for `item`, showing `check`.
+fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
+    let role = match check {
+        CheckMark::NotCheckable => gtk::AccessibleRole::MenuItem,
+        CheckMark::Unchecked | CheckMark::Checked => gtk::AccessibleRole::MenuItemCheckbox,
     };
     let row = gtk::ListBoxRow::builder()
-        .child(&item_content(item, checked))
+        .child(&item_content(item, check))
         .accessible_role(role)
         .action_name(&item.action)
         .build();
@@ -315,15 +346,10 @@ fn item_row(item: &MenuItem, checked: Option<bool>) -> gtk::ListBoxRow {
     if unported::is_unported(&item.action) {
         row.set_tooltip_text(Some(&unported::tooltip(&item.action, &item.label)));
     }
-    if let Some(checked) = checked {
-        let state = if checked {
-            gtk::AccessibleTristate::True
-        } else {
-            gtk::AccessibleTristate::False
-        };
+    if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }
-    if checked == Some(true) {
+    if check == CheckMark::Checked {
         row.add_css_class("checked");
     }
     row

@@ -12,7 +12,7 @@ use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::settings::{Column, PreferencesUpdate};
+use ox_core::settings::{Column, PreferencesUpdate, Settings, SettingsError};
 
 use crate::folder_view::details;
 use crate::theme::ThemePreference;
@@ -22,8 +22,16 @@ use super::BrowserWindow;
 
 /// Sidebar width nobody changed (`resetLayout` in app.js).
 const DEFAULT_SIDEBAR_WIDTH: i32 = 210;
-/// The narrowest and widest sidebar the Python app saves.
-const SIDEBAR_WIDTHS: (i32, i32) = (140, 560);
+/// The narrowest sidebar the Python app saves.
+const NARROWEST_SIDEBAR: i32 = 140;
+/// The widest sidebar the Python app saves.
+const WIDEST_SIDEBAR: i32 = 560;
+
+/// Room the folder pane keeps beside the sidebar (`sidebarLimit` in app.js).
+const FOLDER_PANE_ROOM: i32 = 300;
+
+/// How far from the pane handle a double-click still resets the sidebar.
+const HANDLE_REACH: f64 = 6.0;
 
 /// One preference the user changed in this window.
 #[derive(Debug, Clone, PartialEq)]
@@ -61,28 +69,22 @@ impl Preference {
     }
 }
 
-/// Room the folder pane keeps beside the sidebar (`sidebarLimit` in app.js).
-const FOLDER_PANE_ROOM: i32 = 300;
-
-/// How far from the pane handle a double-click still resets the sidebar.
-const HANDLE_REACH: f64 = 6.0;
-
 /// The sidebar width to start with: the saved one within the Python app's
 /// limits, else 210.
 fn start_sidebar_width(saved: Option<u32>) -> i32 {
-    let (narrowest, widest) = SIDEBAR_WIDTHS;
     saved
         .and_then(|width| i32::try_from(width).ok())
-        .map_or(DEFAULT_SIDEBAR_WIDTH, |width| width.clamp(narrowest, widest))
+        .map_or(DEFAULT_SIDEBAR_WIDTH, |width| {
+            width.clamp(NARROWEST_SIDEBAR, WIDEST_SIDEBAR)
+        })
 }
 
 /// The widest the sidebar may be in a workspace `workspace_width` pixels
 /// wide beside a details pane `details_width` wide, so the folder pane
 /// keeps its room (`sidebarLimit` in app.js).
 fn widest_sidebar(workspace_width: i32, details_width: i32) -> i32 {
-    let (narrowest, widest) = SIDEBAR_WIDTHS;
     let room_left = workspace_width - details_width - FOLDER_PANE_ROOM;
-    room_left.clamp(narrowest, widest)
+    room_left.clamp(NARROWEST_SIDEBAR, WIDEST_SIDEBAR)
 }
 
 impl BrowserWindow {
@@ -196,16 +198,15 @@ impl BrowserWindow {
         let reply = glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |result: Result<(), ox_core::settings::SettingsError>| {
+            move |result: Result<(), SettingsError>| {
                 if let Err(error) = result {
                     let message = format!("Changed for this window, but could not be saved: {error}");
                     window.chrome().show_message(&message);
                 }
             }
         );
-        let change = Box::new(move |settings: &mut ox_core::settings::Settings| {
-            settings.update_preferences(&update).map(|_| ())
-        });
+        let change =
+            Box::new(move |settings: &mut Settings| settings.update_preferences(&update).map(|_| ()));
         self.context().change_settings(change, reply);
     }
 }

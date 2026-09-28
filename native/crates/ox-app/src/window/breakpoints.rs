@@ -4,8 +4,9 @@
 //! Ports the `@media(max-width: 1190px / 1050px / 960px / 680px)` rules of
 //! `desktop/ui/style.css`. [`WindowWidth`] names the band the window's
 //! width falls in; the window carries a CSS class for every limit it is
-//! within (`max-1190` and so on), so `resources/style.css` narrows paddings
-//! and widths, and [`BrowserWindow::fit_to_width`] hides what CSS cannot:
+//! within (`max-1190` and so on), so `resources/skin/breakpoints.css`
+//! narrows paddings and widths, and [`BrowserWindow::fit_to_width`] hides
+//! what CSS cannot:
 //! the details pane below 961 pixels, and the search box, some commands,
 //! two columns and the build text below 681. Hiding the details pane this
 //! way leaves the saved preference alone, so it comes back when the window
@@ -17,11 +18,20 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use super::details_pane::PANE_WIDTH;
+use super::tab_layout::TAB_WIDTH;
 use super::BrowserWindow;
+
+/// The details pane's width from 1190 pixels down (`.details{width:235px}`).
+const NARROW_PANE_WIDTH: i32 = 235;
+/// A tab's width from 960 pixels down (`.tab{width:180px}`).
+const NARROW_TAB_WIDTH: i32 = 180;
+/// A tab's width from 680 pixels down (`.tab{width:150px}`).
+const COMPACT_TAB_WIDTH: i32 = 150;
 
 /// The band of widths the window is in, narrowest last.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum WindowWidth {
+pub(super) enum WindowWidth {
     /// Wider than 1190 pixels: the full layout.
     #[default]
     Wide,
@@ -35,31 +45,55 @@ pub(crate) enum WindowWidth {
     Compact,
 }
 
-/// Every width limit, with the CSS class of windows within it.
-const LIMITS: [(i32, WindowWidth, &str); 4] = [
-    (1190, WindowWidth::Medium, "max-1190"),
-    (1050, WindowWidth::Reduced, "max-1050"),
-    (960, WindowWidth::Narrow, "max-960"),
-    (680, WindowWidth::Compact, "max-680"),
+/// One `@media(max-width)` rule of the web stylesheet.
+#[derive(Debug, Clone, Copy)]
+struct WidthLimit {
+    /// The widest window the rule applies to, in pixels.
+    max_width: i32,
+    /// The band that starts at this limit.
+    band: WindowWidth,
+    /// The CSS class of a window within the limit.
+    css_class: &'static str,
+}
+
+/// Every width limit, widest first.
+const LIMITS: [WidthLimit; 4] = [
+    WidthLimit {
+        max_width: 1190,
+        band: WindowWidth::Medium,
+        css_class: "max-1190",
+    },
+    WidthLimit {
+        max_width: 1050,
+        band: WindowWidth::Reduced,
+        css_class: "max-1050",
+    },
+    WidthLimit {
+        max_width: 960,
+        band: WindowWidth::Narrow,
+        css_class: "max-960",
+    },
+    WidthLimit {
+        max_width: 680,
+        band: WindowWidth::Compact,
+        css_class: "max-680",
+    },
 ];
 
 impl WindowWidth {
     /// The band `width` pixels fall in.
     pub fn for_width(width: i32) -> Self {
         // The narrowest limit the width is within decides.
-        let narrowest_first = LIMITS.iter().rev();
-        narrowest_first
-            .map(|(limit, band, _)| (*limit, *band))
-            .find(|(limit, _)| width <= *limit)
-            .map_or(WindowWidth::Wide, |(_, band)| band)
+        let narrowest_within = LIMITS.iter().rev().find(|limit| width <= limit.max_width);
+        narrowest_within.map_or(WindowWidth::Wide, |limit| limit.band)
     }
 
     /// The CSS classes of a window in this band: one per limit it is in.
     pub fn css_classes(self) -> Vec<&'static str> {
         LIMITS
             .iter()
-            .filter(|(_, band, _)| self >= *band)
-            .map(|(_, _, class)| *class)
+            .filter(|limit| self >= limit.band)
+            .map(|limit| limit.css_class)
             .collect()
     }
 
@@ -80,22 +114,22 @@ impl WindowWidth {
         self == WindowWidth::Compact
     }
 
-    /// The details pane's width (`.details{width:235px}` at 1190 pixels).
+    /// The details pane's width: [`PANE_WIDTH`], narrower from 1190 pixels.
     pub fn details_pane_width(self) -> i32 {
         if self >= WindowWidth::Medium {
-            235
+            NARROW_PANE_WIDTH
         } else {
-            262
+            PANE_WIDTH
         }
     }
 
-    /// A tab's width when there is room (`.tab{width:180px}` at 960
-    /// pixels, 150 at 680).
+    /// A tab's width when there is room: [`TAB_WIDTH`], narrower from 960
+    /// and again from 680 pixels.
     pub fn tab_width(self) -> i32 {
         match self {
-            WindowWidth::Wide | WindowWidth::Medium | WindowWidth::Reduced => 215,
-            WindowWidth::Narrow => 180,
-            WindowWidth::Compact => 150,
+            WindowWidth::Wide | WindowWidth::Medium | WindowWidth::Reduced => TAB_WIDTH,
+            WindowWidth::Narrow => NARROW_TAB_WIDTH,
+            WindowWidth::Compact => COMPACT_TAB_WIDTH,
         }
     }
 }
@@ -118,8 +152,8 @@ impl BrowserWindow {
 
     /// Lays the window out for `band`.
     fn fit_to_width(&self, band: WindowWidth) {
-        for (_, _, class) in LIMITS {
-            self.remove_css_class(class);
+        for limit in LIMITS {
+            self.remove_css_class(limit.css_class);
         }
         for class in band.css_classes() {
             self.add_css_class(class);

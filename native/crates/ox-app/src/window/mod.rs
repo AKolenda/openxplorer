@@ -59,7 +59,7 @@ use crate::typeahead;
 
 use chrome::Chrome;
 use content::{Content, ContentPage};
-use details_pane::DetailsPane;
+use details_pane::{DetailsPane, PaneFacts};
 use sidebar::Sidebar;
 use status_bar::StatusSubject;
 
@@ -460,7 +460,7 @@ impl BrowserWindow {
         let model = &self.content().model;
         let folder_item_count = store.map_or(0, |store| model.listed_count(&store));
         let locations = self.imp().locations.borrow();
-        let content = details_pane::pane_content(&details_pane::PaneFacts {
+        let content = details_pane::pane_content(&PaneFacts {
             selection: &selection,
             folder_uri: &folder_uri,
             folder_item_count,
