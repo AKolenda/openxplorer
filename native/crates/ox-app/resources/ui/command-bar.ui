@@ -51,6 +51,7 @@
               <object class="GtkImage" id="appearance_glyph">
                 <property name="halign">center</property>
                 <property name="valign">center</property>
+                <property name="accessible-role">presentation</property>
                 <style>
                   <class name="glyph"/>
                 </style>
@@ -92,6 +93,7 @@
               <object class="GtkImage" id="details_glyph">
                 <property name="halign">center</property>
                 <property name="valign">center</property>
+                <property name="accessible-role">presentation</property>
                 <style>
                   <class name="glyph"/>
                 </style>

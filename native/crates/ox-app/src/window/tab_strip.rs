@@ -17,9 +17,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use crate::icons::{self, ArtKind, Glyph};
+use crate::icons::{self, Art, ArtImage, Icon};
 
-use super::appearance::ArtStyle;
 use super::gestures;
 use super::session::TabId;
 use super::widget_tree::remove_children;
@@ -32,14 +31,8 @@ const ICON_TO_TITLE: i32 = 10;
 /// The glyph of a tab's close button.
 const CLOSE_GLYPH: i32 = 12;
 
-/// A tab's icon.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum TabIcon {
-    /// A line glyph: a landing page or a device.
-    Glyph(Glyph),
-    /// Colour art: a folder, or a folder on a network share.
-    Art(ArtKind),
-}
+/// The CSS class of a tab's icon.
+const TAB_ICON_CLASS: &str = "tab-icon";
 
 /// What the strip shows of one tab.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,8 +43,9 @@ pub(super) struct TabView {
     pub title: String,
     /// The full address.
     pub tooltip: String,
-    /// The tab's icon.
-    pub icon: TabIcon,
+    /// The tab's icon: a glyph for a landing page or a device, else the
+    /// folder, on the network bar for a share.
+    pub icon: Art,
     /// The tab is in front.
     pub active: bool,
 }
@@ -129,12 +123,12 @@ impl TabStrip {
     }
 
     /// Replaces the tabs with `tabs` and scrolls the active one into view.
-    pub(super) fn show(&self, tabs: &[TabView], style: ArtStyle) {
+    pub(super) fn set_tabs(&self, tabs: &[TabView]) {
         let imp = self.imp();
         remove_children(&*imp.tab_list);
         let mut active = None;
         for tab in tabs {
-            let widget = tab_widget(tab, style);
+            let widget = tab_widget(tab);
             imp.tab_list.append(&widget);
             if tab.active {
                 active = Some(widget);
@@ -159,17 +153,16 @@ impl TabStrip {
     }
 }
 
-fn tab_icon(icon: TabIcon, style: ArtStyle) -> gtk::Image {
-    match icon {
-        TabIcon::Glyph(glyph) => icons::glyph(glyph, ICON_SIZE),
-        TabIcon::Art(kind) => style.image(kind, ICON_SIZE),
-    }
+fn tab_icon(icon: Art) -> ArtImage {
+    let image = ArtImage::new(icon, ICON_SIZE);
+    image.add_css_class(TAB_ICON_CLASS);
+    image
 }
 
 /// The widget of `tab`: its icon, title and close button, one focusable
 /// target that shows the tab on a click or Enter and closes it on a
 /// middle-click.
-fn tab_widget(tab: &TabView, style: ArtStyle) -> gtk::Box {
+fn tab_widget(tab: &TabView) -> gtk::Box {
     let widget = gtk::Box::builder()
         .spacing(ICON_TO_TITLE)
         .focusable(true)
@@ -182,7 +175,7 @@ fn tab_widget(tab: &TabView, style: ArtStyle) -> gtk::Box {
     }
     widget.update_property(&[gtk::accessible::Property::Label(&tab.title)]);
     widget.update_state(&[gtk::accessible::State::Selected(Some(tab.active))]);
-    widget.append(&tab_icon(tab.icon, style));
+    widget.append(&tab_icon(tab.icon));
     widget.append(&title(&tab.title));
     widget.append(&close_button(tab));
     let id = tab.id.to_variant();
@@ -239,7 +232,7 @@ fn title(text: &str) -> gtk::Label {
 /// The tab's close button, named `Close <title>` for screen readers.
 fn close_button(tab: &TabView) -> gtk::Button {
     let close = gtk::Button::builder()
-        .child(&icons::glyph(Glyph::Close, CLOSE_GLYPH))
+        .child(&icons::image(Icon::Dismiss16, CLOSE_GLYPH))
         .tooltip_text("Close tab")
         .action_name(WindowAction::CloseTabById.detailed_name())
         .action_target(&tab.id.to_variant())

@@ -16,7 +16,7 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 
 /// The arrow's edge (`.column-head svg{width:10px;height:10px}`).
 const CARET_SIZE: i32 = 10;
@@ -54,7 +54,7 @@ fn title_boxes(view: &gtk::ColumnView) -> Vec<gtk::Box> {
 /// Adds a hidden arrow after the title's label and GTK's indicator,
 /// which the skin hides.
 fn append_caret(title: &gtk::Box) -> gtk::Image {
-    let caret = icons::glyph(Glyph::Down, CARET_SIZE);
+    let caret = icons::image(Icon::ChevronDown16, CARET_SIZE);
     caret.add_css_class(CARET_CLASS);
     caret.set_visible(false);
     title.append(&caret);

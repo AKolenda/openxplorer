@@ -3,12 +3,13 @@
 """Run the native checks with a private display, session bus and disposable user data.
 
 The checks run in this order: the parity inventory tests and validation, this
-driver's own tests, rustfmt, Clippy with the workspace lints, then every
-compiled Rust test executable and the doctests. Each test executable runs under
-xvfb-run and dbus-run-session with its own temporary HOME and XDG directories,
-so GTK, GIO and settings code never reach the user's display, session bus or
-configuration. Every process a test run starts is stopped before its temporary
-HOME is deleted, also when the run times out.
+driver's own tests, the guard against icons drawn in code, rustfmt, Clippy
+with the workspace lints, then every compiled Rust test executable and the
+doctests. Each test executable runs under xvfb-run and dbus-run-session with
+its own temporary HOME and XDG directories, so GTK, GIO and settings code never
+reach the user's display, session bus or configuration. Every process a test
+run starts is stopped before its temporary HOME is deleted, also when the run
+times out.
 
 The isolation covers the desktop session, not the filesystem: tests can still
 reach absolute paths such as /, so they must keep their writes inside
@@ -21,6 +22,7 @@ from collections.abc import Iterator, Sequence
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import signal
@@ -80,6 +82,49 @@ GTK_AND_GIO_SETTINGS = {
     # others), so tests do not see the machine's drives and phones.
     'GVFS_REMOTE_VOLUME_MONITOR_IGNORE': '1',
 }
+
+
+# The owner ruled out icons drawn in code: every icon is an upstream Fluent
+# file, bundled as a GResource and listed with its checksum in
+# crates/ox-app/resources/icons/SOURCES.md. The guard reads the code,
+# stylesheets, GtkBuilder templates and GResource manifests under
+# native/crates, and fails on every way found so far to draw a picture there
+# or to ship one that is not a bundled icon.
+DRAWN_ICON_SOURCE_SUFFIXES = ('.rs', '.css', '.ui', '.xml')
+# The only directory under native/crates that may hold image files: the
+# vendored icons, which the guard never reads.
+BUNDLED_ICON_DIRECTORY = Path('ox-app/resources/icons/hicolor')
+IMAGE_SUFFIXES = ('.svg', '.svgz', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.xpm')
+
+# A quote that opens a string or an attribute value, also written as an XML
+# entity inside a template.
+_QUOTE = r"""(?:["']|&quot;|&apos;)"""
+# One SVG coordinate ("12", "-3", ".5"), or a format! placeholder standing in
+# for one.
+_COORDINATE = r'(?:[-+.]?\d[\d.]*|\{[^{}]*\})'
+# A string literal that names an image file.
+_IMAGE_FILE = r"""["'][^"']*\.(?:svgz?|png|jpe?g|gif|webp|bmp|ico|xpm)["']"""
+
+DRAWN_ICON_PATTERNS = (
+    # SVG path data: a d="M4 12h3" attribute, or a string that starts like
+    # one ("M3 5h18v14H3z", "M.5 2h3v4z", "M{x} {y}h{w}"), also when it
+    # continues on the next line.
+    re.compile(rf'\bd=\\?{_QUOTE}[Mm]\s*[-+.]?\d'),
+    re.compile(rf'{_QUOTE}[Mm]\s*{_COORDINATE}(?:[\s,]*{_COORDINATE})+\s*(?:[A-Za-z]|\\$)'),
+    # Path data assembled from pieces: concat!("M", "3 5h18v14H3z").
+    re.compile(r"""\bconcat!\s*\(\s*["'][Mm]\b"""),
+    # GTK's and Cairo's drawing: parsed or built paths, also imported under
+    # another name, Cairo, drawing areas and the snapshot's shape primitives.
+    re.compile(r'\bPath::parse\s*\('),
+    re.compile(r'\bgsk::(?:\{[^}]*\b)?Path(?:Builder)?\b'),
+    re.compile(r'\bPathBuilder\b'),
+    re.compile(r'\bcairo::|::cairo\b'),
+    re.compile(r'DrawingArea\b|\bset_draw_func\b'),
+    re.compile(r'\.append_(?:fill|stroke|color|border|(?:repeating_)?(?:linear|radial|conic)_gradient)\s*\('),
+    # Pictures embedded in code: a data: URI, or an image file compiled in.
+    re.compile(r'data:image/', re.IGNORECASE),
+    re.compile(rf'\binclude_(?:bytes|str)!\s*\(\s*{_IMAGE_FILE}', re.IGNORECASE),
+)
 
 
 class CheckError(Exception):
@@ -293,6 +338,40 @@ def check_inventories_and_driver() -> None:
     run(python, '-m', 'unittest', 'discover', '-s', 'tools', '-p', 'test_*.py')
 
 
+def drawn_icon_lines(root: Path) -> list[str]:
+    """Return 'path:line: text' for each source line under root that draws an icon."""
+    findings = []
+    sources = sorted(path for path in root.rglob('*') if path.suffix in DRAWN_ICON_SOURCE_SUFFIXES)
+    for path in sources:
+        lines = path.read_text(encoding='utf-8').splitlines()
+        for number, line in enumerate(lines, start=1):
+            if any(pattern.search(line) for pattern in DRAWN_ICON_PATTERNS):
+                findings.append(f'{path.relative_to(root)}:{number}: {line.strip()}')
+    return findings
+
+
+def stray_images(root: Path) -> list[str]:
+    """Return 'path: why' for each image file under root that is not a bundled icon."""
+    bundled = root / BUNDLED_ICON_DIRECTORY
+    findings = []
+    for path in sorted(root.rglob('*')):
+        is_image = path.suffix.lower() in IMAGE_SUFFIXES
+        if is_image and not path.is_relative_to(bundled):
+            findings.append(f'{path.relative_to(root)}: an image outside {BUNDLED_ICON_DIRECTORY}')
+    return findings
+
+
+def check_no_drawn_icons() -> None:
+    """Fail when a crate draws an icon, or holds an image that is not a bundled icon."""
+    print('+ looking for icons drawn in code under crates/', flush=True)
+    crates = NATIVE / 'crates'
+    findings = drawn_icon_lines(crates) + stray_images(crates)
+    if findings:
+        raise CheckError('icons must be bundled Fluent files, never drawn in code or added as '
+                         'other images (see crates/ox-app/resources/icons/SOURCES.md):\n'
+                         + '\n'.join(findings))
+
+
 def check_formatting_and_lints() -> None:
     """Check rustfmt formatting and lint every target with the workspace lints.
 
@@ -324,6 +403,7 @@ def check_rust_tests(test_timeout: float) -> int:
 def run_all_checks(test_timeout: float) -> None:
     """Run every check in order, raising on the first failure."""
     check_inventories_and_driver()
+    check_no_drawn_icons()
     check_formatting_and_lints()
     executable_count = check_rust_tests(test_timeout)
     print(f'Native checks passed ({executable_count} test executables plus doctests).')

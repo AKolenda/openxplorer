@@ -2,15 +2,20 @@
 //! The developer snapshot hook, for visual checks of the window.
 //!
 //! With `OPENXPLORER_SNAPSHOT=<file.png>` set, the app opens one window,
-//! waits until its first listing is drawn, saves the window as a PNG and
-//! quits. These variables shape the picture, for this run only (nothing is
-//! saved to the settings file):
+//! waits until it has the size asked for and its first listing is drawn,
+//! saves the window as a PNG and quits. These variables shape the picture,
+//! for this run only (nothing is saved to the settings file):
 //!
 //! - `OPENXPLORER_START`: the first tab's location, a path or URI (the
-//!   home folder by default);
+//!   home folder by default; `ox:settings` opens Settings);
 //! - `OPENXPLORER_THEME`: `light`, `dark` or `system`;
 //! - `OPENXPLORER_VIEW`: `details` or an icon size (`large`, `medium`, ...);
-//! - `OPENXPLORER_SIZE`: the window's size, `<width>x<height>`.
+//! - `OPENXPLORER_SIZE`: the window's size, `<width>x<height>`;
+//! - `OPENXPLORER_SETTINGS`: opens Settings at a category (`appearance`,
+//!   `search`, `default-apps`, `windows`, `brave`, `about`) or a page one
+//!   of them opens (`indexed-folders`, `folder-sizes`, `troubleshooting`);
+//! - `OPENXPLORER_SETTINGS_SEARCH`: types this into the settings search,
+//!   opening Settings when it is not open.
 //!
 //! The picture is the window's title bar and contents without the frame
 //! GTK draws around a window on a display without a compositor, so it
@@ -23,7 +28,10 @@
 //! Before quitting, the hook prints when the window drew its first frame
 //! and its first listing, on the monotonic clock (`CLOCK_MONOTONIC`, in
 //! microseconds), so a benchmark can time start-up against the moment it
-//! started the app.
+//! started the app. The variables are read in [`request`]; this module
+//! waits for the window and saves it.
+
+mod request;
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -32,15 +40,9 @@ use std::time::{Duration, Instant};
 use gtk::prelude::*;
 use gtk::{glib, graphene};
 
-use crate::theme::ThemePreference;
-use crate::window::{BrowserWindow, FolderView};
+use crate::window::BrowserWindow;
 
-/// The variable naming the PNG to write; its presence turns the hook on.
-const SNAPSHOT_VARIABLE: &str = "OPENXPLORER_SNAPSHOT";
-const START_VARIABLE: &str = "OPENXPLORER_START";
-const THEME_VARIABLE: &str = "OPENXPLORER_THEME";
-const VIEW_VARIABLE: &str = "OPENXPLORER_VIEW";
-const SIZE_VARIABLE: &str = "OPENXPLORER_SIZE";
+pub(crate) use request::{SnapshotRequest, WindowSize};
 
 /// Frames drawn after the listing, so late layout changes (column widths,
 /// scrolled crumbs, icons) are in the picture.
@@ -75,107 +77,9 @@ pub(crate) enum SnapshotError {
     },
 }
 
-/// The size of a window's title bar and contents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct WindowSize {
-    /// Width in logical pixels, as `gtk::Window::set_default_size` takes it.
-    pub width: i32,
-    /// Height in logical pixels.
-    pub height: i32,
-}
-
-impl WindowSize {
-    /// Parses `<width>x<height>`, such as `1440x900`.
-    fn parse(text: &str) -> Option<Self> {
-        let (width, height) = text.trim().split_once('x')?;
-        let width = width.parse().ok().filter(|width| *width > 0)?;
-        let height = height.parse().ok().filter(|height| *height > 0)?;
-        Some(Self { width, height })
-    }
-}
-
-/// What the developer asked the snapshot to show.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SnapshotRequest {
-    /// The PNG to write.
-    pub png: PathBuf,
-    /// The first tab's location, or `None` for the home folder.
-    pub start: Option<String>,
-    /// The theme to draw, or `None` for the saved one.
-    pub theme: Option<ThemePreference>,
-    /// The folder view to show, or `None` for the saved one.
-    pub view: Option<FolderView>,
-    /// The window size, or `None` for the app's default.
-    pub size: Option<WindowSize>,
-}
-
-impl SnapshotRequest {
-    /// The request in the process environment, or `None` when
-    /// `OPENXPLORER_SNAPSHOT` is not set.
-    ///
-    /// # Errors
-    ///
-    /// [`SnapshotError::InvalidValue`] when a variable holds an unknown
-    /// theme, view or size.
-    pub(crate) fn from_environment() -> Result<Option<Self>, SnapshotError> {
-        Self::from_variables(|name| std::env::var(name).ok())
-    }
-
-    /// The request that the variables `lookup` finds describe; separate
-    /// from the process environment so it can be tested.
-    fn from_variables(lookup: impl Fn(&str) -> Option<String>) -> Result<Option<Self>, SnapshotError> {
-        let Some(png) = non_empty(&lookup, SNAPSHOT_VARIABLE) else {
-            return Ok(None);
-        };
-        let theme = parse_variable(&lookup, THEME_VARIABLE, "light, dark or system", |value| {
-            ThemePreference::from_key(value)
-        })?;
-        let view = parse_variable(&lookup, VIEW_VARIABLE, "details or an icon size", |value| {
-            FolderView::from_key(value)
-        })?;
-        let size = parse_variable(&lookup, SIZE_VARIABLE, "<width>x<height>", WindowSize::parse)?;
-        Ok(Some(Self {
-            png: PathBuf::from(png),
-            start: non_empty(&lookup, START_VARIABLE),
-            theme,
-            view,
-            size,
-        }))
-    }
-}
-
-/// The value of the variable `name`, or `None` when it is unset or empty.
-fn non_empty(lookup: impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
-    lookup(name).filter(|value| !value.is_empty())
-}
-
-/// Parses the optional variable `name` with `parse`.
-///
-/// # Errors
-///
-/// [`SnapshotError::InvalidValue`], naming `expected`, when `parse`
-/// refuses the value.
-fn parse_variable<T>(
-    lookup: impl Fn(&str) -> Option<String>,
-    name: &'static str,
-    expected: &'static str,
-    parse: impl Fn(&str) -> Option<T>,
-) -> Result<Option<T>, SnapshotError> {
-    let Some(value) = non_empty(lookup, name) else {
-        return Ok(None);
-    };
-    match parse(&value) {
-        Some(parsed) => Ok(Some(parsed)),
-        None => Err(SnapshotError::InvalidValue {
-            variable: name,
-            value,
-            expected,
-        }),
-    }
-}
-
-/// Saves `window` as `request` asks once its first listing is drawn (or
-/// after [`LISTING_PATIENCE`]), then hands the outcome to `done`.
+/// Saves `window` as `request` asks once it has the size asked for and its
+/// first listing is drawn (or after [`LISTING_PATIENCE`]), then hands the
+/// outcome to `done`.
 pub(crate) fn save_when_listed(
     window: &BrowserWindow,
     request: &SnapshotRequest,
@@ -192,6 +96,13 @@ pub(crate) fn save_when_listed(
         }
         let listing = Listing::of(window);
         milestones.note_frame(listing);
+        // A window that changes its layout as it narrows (Settings does)
+        // takes a few frames to reach the size; the frames that settle the
+        // picture count from then on.
+        let is_resized = size.is_none_or(|size| has_content_size(window.upcast_ref(), size));
+        if !is_resized && !timing.has_timed_out() {
+            return glib::ControlFlow::Continue;
+        }
         let readiness = timing.count_frame(listing);
         if readiness == Readiness::Waiting {
             return glib::ControlFlow::Continue;
@@ -257,12 +168,17 @@ impl SaveTiming {
         }
     }
 
+    /// Whether the patience has run out.
+    fn has_timed_out(&self) -> bool {
+        self.started.elapsed() > LISTING_PATIENCE
+    }
+
     /// Counts a frame that shows `listing` and says whether the window can
     /// be saved on it. Once the listing is drawn, or the patience ran out,
     /// every call counts towards [`SETTLE_FRAMES`], so call it once per
     /// frame.
     fn count_frame(&self, listing: Listing) -> Readiness {
-        let timed_out = self.started.elapsed() > LISTING_PATIENCE;
+        let timed_out = self.has_timed_out();
         if listing == Listing::Running && !timed_out {
             return Readiness::Waiting;
         }
@@ -331,6 +247,14 @@ fn fit_content(window: &gtk::Window, size: WindowSize) {
     if window.default_size() != (width, height) {
         window.set_default_size(width, height);
     }
+}
+
+/// Whether the title bar and contents of `window` take `size` now.
+fn has_content_size(window: &gtk::Window, size: WindowSize) -> bool {
+    let Some(content) = content_bounds(window) else {
+        return false;
+    };
+    pixels(content.width()) == size.width && pixels(content.height()) == size.height
 }
 
 /// Rounds a widget measure to whole pixels; window measures are far
@@ -404,58 +328,7 @@ fn content_bounds(window: &gtk::Window) -> Option<graphene::Rect> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
-    use crate::folder_view::grid::IconSize;
-
-    fn request(variables: &[(&str, &str)]) -> Result<Option<SnapshotRequest>, SnapshotError> {
-        let variables: HashMap<String, String> = variables
-            .iter()
-            .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
-            .collect();
-        SnapshotRequest::from_variables(|name| variables.get(name).cloned())
-    }
-
-    #[test]
-    fn without_a_snapshot_file_the_app_runs_normally() {
-        let asked = request(&[(THEME_VARIABLE, "dark")]).expect("valid variables");
-        assert_eq!(asked, None);
-    }
-
-    #[test]
-    fn the_snapshot_variables_describe_the_window() {
-        let asked = request(&[
-            (SNAPSHOT_VARIABLE, "/tmp/window.png"),
-            (START_VARIABLE, "pc:"),
-            (THEME_VARIABLE, "dark"),
-            (VIEW_VARIABLE, "large"),
-            (SIZE_VARIABLE, "1440x900"),
-        ]);
-        let expected = SnapshotRequest {
-            png: PathBuf::from("/tmp/window.png"),
-            start: Some("pc:".to_owned()),
-            theme: Some(ThemePreference::Dark),
-            view: Some(FolderView::Icons(IconSize::Large)),
-            size: Some(WindowSize {
-                width: 1440,
-                height: 900,
-            }),
-        };
-        assert_eq!(asked.expect("valid variables"), Some(expected));
-    }
-
-    #[test]
-    fn an_unknown_value_is_refused_with_its_variable() {
-        let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (VIEW_VARIABLE, "tiles")]);
-        let message = refused.expect_err("tiles is not a view").to_string();
-        assert_eq!(
-            message,
-            "OPENXPLORER_VIEW cannot be “tiles”: expected details or an icon size"
-        );
-        let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SIZE_VARIABLE, "wide")]);
-        assert!(refused.is_err(), "a size needs a width and a height");
-    }
 
     #[test]
     fn the_window_is_saved_once_the_listing_has_settled() {

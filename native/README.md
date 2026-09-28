@@ -49,8 +49,9 @@ sudo apt install libgtk-4-dev xvfb xauth dbus-x11
 python3 native/tools/check.py
 ```
 
-The driver runs the parity inventory checks, its own tests, rustfmt and Clippy
-with the workspace lints, and compiles every test target. It then runs each
+The driver runs the parity inventory checks, its own tests, the guard against
+icons drawn in code (see [Icons](#icons)), rustfmt and Clippy with the workspace
+lints, and compiles every test target. It then runs each
 test binary, and the doctests, on its own Xvfb display with a private D-Bus
 session and disposable home, config, cache and runtime directories, so tests
 never see the user's display, session bus, settings or remote volume monitors.
@@ -80,6 +81,38 @@ remains the shipped desktop while this preview is incomplete.
 
 The [browsing milestone validation record](VALIDATION.md) lists the local checks
 actually run and their limitations.
+
+## Icons
+
+Every icon is an unmodified file from Microsoft's MIT-licensed Fluent UI System
+Icons or Fluent Emoji, vendored in `crates/ox-app/resources/icons/`.
+[SOURCES.md](crates/ox-app/resources/icons/SOURCES.md) records each file's set,
+version, upstream name and SHA-256, and a test checks the files against it; the
+licence texts are in `licenses/` and `THIRD_PARTY_NOTICES.md`. `build.rs`
+compiles them into the binary as a GResource (`glib-compile-resources` comes
+with the GLib development files), and the app adds it to the display's icon
+theme at startup.
+
+- `src/icons/icon.rs` is the only place icon names live: code shows an
+  `Icon`, never a name or a file. Names start with `ox-`, so a desktop icon
+  theme cannot replace them.
+- Monochrome glyphs are `-symbolic` icons, which GTK paints in the CSS `color`
+  of their image, so they follow light, dark, hover and disabled states.
+- Pictures made of several icons (the zip badge, the green network bar, the red
+  cross of a disconnected share) are `ArtImage`s: real icons layered with
+  `gtk::Overlay` and small boxes the skin colours (`resources/skin/icons.css`).
+  A network location shows the same art everywhere: sidebar, cards, tabs and
+  the details pane.
+- Icons are hidden from screen readers, as app.js marks them `aria-hidden`;
+  the control around an icon names it.
+- The loading spinner is the one picture GTK takes from the desktop theme: it
+  is an animation, and the vendored Fluent set has no spinner. GTK's own
+  images, such as the search box's clear button, show bundled icons.
+- To add an icon, copy the upstream file byte for byte under the `ox-` name,
+  list it in `icons.gresource.xml` and `SOURCES.md`, and add an `Icon` variant.
+  Never draw one: the check driver fails on SVG path data, GTK or Cairo drawing
+  calls and pictures embedded in the code, stylesheets and templates, and on
+  any image file under `crates/` outside `resources/icons/hicolor/`.
 
 ## Code standards
 

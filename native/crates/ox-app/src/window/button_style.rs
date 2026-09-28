@@ -8,7 +8,7 @@
 
 /// How a button that stands on its own is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ButtonStyle {
+pub(crate) enum ButtonStyle {
     /// The one main action of a surface, on the accent colour.
     Accent,
     /// A secondary action with a thin border, such as Open or Try again.
@@ -17,7 +17,7 @@ pub(super) enum ButtonStyle {
 
 impl ButtonStyle {
     /// The CSS class that gives a button this look.
-    pub(super) const fn css_class(self) -> &'static str {
+    pub(crate) const fn css_class(self) -> &'static str {
         match self {
             ButtonStyle::Accent => "accent",
             ButtonStyle::Bordered => "bordered",

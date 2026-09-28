@@ -7,8 +7,8 @@
 //! boxes (see [`super::geometry`] for where the numbers come from).
 //!
 //! The frame's templates (`resources/ui/`) leave two things to Rust: the
-//! window actions of their buttons and their natively drawn glyphs. The
-//! last tests prove that no control is left without either.
+//! window actions of their buttons and their glyphs, which name bundled
+//! icons. The last tests prove that no control is left without either.
 
 use gtk::prelude::*;
 
@@ -216,15 +216,35 @@ fn every_control_of_the_frame_runs_an_action_the_window_has() {
     );
 }
 
+/// Every image the frame can show is a bundled icon, GTK's own included:
+/// the search box's clear button shows the bundled close glyph, not the
+/// desktop theme's. Only the loading spinner, which is not an image, comes
+/// from the theme (see `empty_page.rs`).
+///
+/// parity: LOOK-015
 #[gtk::test]
-fn every_glyph_of_the_frame_is_drawn() {
+fn every_image_of_the_frame_shows_a_bundled_icon() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let glyphs: Vec<gtk::Image> = descendants::<gtk::Image>(&test.window)
+    let images: Vec<gtk::Image> = descendants::<gtk::Image>(&test.window)
         .into_iter()
-        .filter(|image| image.has_css_class("glyph"))
+        .filter(|image| image.is_visible() && image.storage_type() != gtk::ImageType::Empty)
         .collect();
-    assert!(!glyphs.is_empty(), "the frame shows glyphs");
-    let empty = glyphs.iter().filter(|glyph| glyph.paintable().is_none()).count();
-    assert_eq!(empty, 0, "every glyph has a picture");
+    let glyph_count = images.iter().filter(|image| image.has_css_class("glyph")).count();
+    assert!(glyph_count > 0, "the frame shows glyphs");
+    let theme = gtk::IconTheme::for_display(&WidgetExt::display(&test.window));
+    let missing: Vec<String> = images
+        .iter()
+        .map(|image| image.icon_name().map(String::from).unwrap_or_default())
+        .filter(|name| !(name.starts_with("ox-") && theme.has_icon(name)))
+        .collect();
+    assert!(missing.is_empty(), "images without a bundled icon: {missing:?}");
+    let clear = test
+        .window
+        .search_box()
+        .entry()
+        .last_child()
+        .and_downcast::<gtk::Image>();
+    let clear_icon = clear.and_then(|image| image.icon_name());
+    assert_eq!(clear_icon.as_deref(), Some("ox-dismiss-16-symbolic"));
 }

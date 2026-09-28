@@ -15,34 +15,44 @@ use gtk::prelude::*;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
-/// The `native/ROADMAP.md` milestone that brings a command.
+/// The `native/ROADMAP.md` milestone that brings a command or a setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Milestone {
-    /// "Complete safe file-operation workflows".
+pub(crate) enum Milestone {
+    /// "Complete safe file-operation workflows", which also brings file
+    /// and tab drag-and-drop between windows.
     FileOperations,
     /// The "Network and devices" service.
     NetworkAndDevices,
-    /// The "Search and metadata" service.
+    /// The "Search and metadata" service: the search index and folder
+    /// sizes.
     SearchAndMetadata,
-    /// The "Preferences and sessions" service: the Settings page.
-    PreferencesAndSessions,
-    /// The "Desktop integration" service.
+    /// The "Desktop integration" service: default apps, Show in folder and
+    /// the Brave download folder.
     DesktopIntegration,
-    /// The "Distribution" service: the update flow.
+    /// The "Distribution" service: packages, the source they ship with and
+    /// the update flow.
     Distribution,
 }
 
 impl Milestone {
-    /// How the tooltip names the milestone.
-    const fn description(self) -> &'static str {
+    /// How tooltips and disabled settings name the milestone.
+    pub(crate) const fn description(self) -> &'static str {
         match self {
             Milestone::FileOperations => "file operations",
             Milestone::NetworkAndDevices => "network and device support",
             Milestone::SearchAndMetadata => "cached search",
-            Milestone::PreferencesAndSessions => "the Settings page",
             Milestone::DesktopIntegration => "desktop integration",
-            Milestone::Distribution => "the update flow",
+            Milestone::Distribution => "packaging and updates",
         }
+    }
+
+    /// The sentence a disabled control shows under its usual text: "Not in
+    /// the native preview yet: arrives with file operations."
+    pub(crate) fn notice(self) -> String {
+        format!(
+            "Not in the native preview yet: arrives with {}.",
+            self.description()
+        )
     }
 }
 
@@ -60,7 +70,7 @@ const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand 
 }
 
 /// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 20] = [
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 18] = [
     command(WindowAction::NewFolder, Milestone::FileOperations),
     command(WindowAction::NewTextDocument, Milestone::FileOperations),
     command(WindowAction::NewFile, Milestone::FileOperations),
@@ -77,9 +87,9 @@ pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 20] = [
     command(WindowAction::MapNetworkLocation, Milestone::NetworkAndDevices),
     command(WindowAction::DiscoverServers, Milestone::NetworkAndDevices),
     command(WindowAction::CacheFolder, Milestone::SearchAndMetadata),
-    command(WindowAction::Settings, Milestone::PreferencesAndSessions),
-    command(WindowAction::License, Milestone::PreferencesAndSessions),
-    command(WindowAction::DefaultFileExplorer, Milestone::DesktopIntegration),
+    // The dialog names where the installed source and the corresponding
+    // source archive are, which packaging decides.
+    command(WindowAction::License, Milestone::Distribution),
     command(WindowAction::CheckUpdates, Milestone::Distribution),
 ];
 
@@ -99,10 +109,7 @@ pub(super) fn is_unported(action: WindowAction) -> bool {
 /// the milestone that enables it. Other commands keep `tooltip` as it is.
 pub(super) fn tooltip(action: WindowAction, tooltip: &str) -> String {
     match milestone_of(action) {
-        Some(milestone) => format!(
-            "{tooltip}\nNot in the native preview yet: arrives with {}.",
-            milestone.description()
-        ),
+        Some(milestone) => format!("{tooltip}\n{}", milestone.notice()),
         None => tooltip.to_owned(),
     }
 }

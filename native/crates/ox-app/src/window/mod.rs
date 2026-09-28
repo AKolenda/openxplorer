@@ -9,15 +9,17 @@
 //! [`caption_buttons`]), the navigation row ([`navigation_buttons`],
 //! [`address_bar`], [`search_box`]), the [`command_bar`], the [`sidebar`],
 //! the [`folder_pane`], the [`details_pane`], the [`status_bar`] and the
-//! [`toast`].
+//! [`toast`]. On the Settings tab the [`SettingsPage`] takes the place of
+//! everything under the title bar ([`settings_tab`]).
 //!
 //! The controller lives in submodules, one job each: tab state
 //! ([`session`], read through [`active_tab`]), changing location
 //! ([`navigation`]) and drawing it ([`location_view`]), listing
 //! ([`loading`]), the selection ([`selection`]), the desktop's volumes and
 //! places ([`environment`]), Quick access ([`quick_access`]), mounting
-//! ([`mounting`]), the skin ([`appearance`]), activation, actions and
-//! input. Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
+//! ([`mounting`]), the skin ([`appearance`]), activation, actions,
+//! input, and what the window connects and lets go of ([`connections`]).
+//! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
 //! [`search_box::SearchBox::connect_query_changed`]), so the controller
 //! never reaches into another widget's children; it connects directly only
@@ -39,6 +41,7 @@ mod button_style;
 mod caption_buttons;
 mod card_grid;
 mod command_bar;
+mod connections;
 mod context_menu;
 mod copy_path;
 mod details_pane;
@@ -63,6 +66,7 @@ mod quick_access;
 mod search_box;
 mod selection;
 mod session;
+mod settings_tab;
 mod sidebar;
 mod status_bar;
 mod tab_layout;
@@ -76,10 +80,10 @@ mod window_action;
 #[cfg(test)]
 mod tests;
 
-use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use crate::settings_page::SettingsPage;
 use crate::shared::AppContext;
 use crate::theme::Skin;
 use crate::typeahead;
@@ -94,20 +98,14 @@ use status_bar::StatusBar;
 use tab_strip::TabStrip;
 
 pub(crate) use actions::install_accelerators;
+pub(crate) use button_style::ButtonStyle;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use location_kind::is_local_or_smb_location;
-
-/// Handlers this window registered on objects that outlive it.
-#[derive(Debug, Default)]
-struct ExternalHandlers {
-    /// On the skin shared by every window: its appearance and text size
-    /// signals.
-    skin: Vec<glib::SignalHandlerId>,
-    /// On the application's `places-changed` signal.
-    places: Option<glib::SignalHandlerId>,
-    /// On the volume monitor's mount and volume signals.
-    volumes: Vec<glib::SignalHandlerId>,
-}
+pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
+pub(crate) use title_bar::list_open_windows_on_click;
+pub(crate) use unported::Milestone;
+pub(crate) use widget_tree::children;
+pub(crate) use window_action::WindowAction;
 
 /// The type-to-select prefix and the timer that clears its hint.
 #[derive(Debug, Default)]
@@ -130,15 +128,18 @@ mod imp {
     use super::breakpoints::WindowWidth;
     use super::caption_buttons::CaptionButtons;
     use super::command_bar::CommandBar;
+    use super::connections::ExternalHandlers;
     use super::details_pane::DetailsPane;
     use super::folder_pane::FolderPane;
     use super::search_box::SearchBox;
     use super::session::Session;
+    use super::settings_tab::SettingsTabState;
     use super::sidebar::Sidebar;
     use super::status_bar::StatusBar;
     use super::tab_strip::TabStrip;
     use super::toast::Toast;
-    use super::{ExternalHandlers, Typeahead};
+    use super::Typeahead;
+    use crate::settings_page::SettingsPage;
     use crate::shared::AppContext;
     use crate::volumes::VolumeRow;
 
@@ -156,6 +157,9 @@ mod imp {
         /// Lists the open windows.
         #[template_child]
         pub(super) open_windows_button: TemplateChild<gtk::MenuButton>,
+        /// The history buttons, the address and the search box.
+        #[template_child]
+        pub(super) navigation_row: TemplateChild<gtk::Box>,
         /// Back, Forward, Up and Refresh.
         #[template_child]
         pub(super) navigation_buttons: TemplateChild<gtk::Box>,
@@ -168,6 +172,9 @@ mod imp {
         /// New, the edit commands, Sort, View, More, appearance and Details.
         #[template_child]
         pub(super) command_bar: TemplateChild<CommandBar>,
+        /// The workspace, or the Settings page on the Settings tab.
+        #[template_child]
+        pub(super) surfaces: TemplateChild<gtk::Stack>,
         /// The split between the sidebar and the folder and details panes
         /// (`.sidebar-resizer`).
         #[template_child]
@@ -187,6 +194,12 @@ mod imp {
         /// Counts, the type-to-select hint and the view buttons.
         #[template_child]
         pub(super) status_bar: TemplateChild<StatusBar>,
+        /// The Settings page, shown on the Settings tab.
+        #[template_child]
+        pub(super) settings_page: TemplateChild<SettingsPage>,
+        /// The folder shown before Settings and the places Settings offers
+        /// the search index.
+        pub(super) settings_tab: RefCell<SettingsTabState>,
         /// What every window shares: the skin, settings and places. It
         /// comes from the application, so [`super::BrowserWindow::new`]
         /// sets it.
@@ -205,7 +218,8 @@ mod imp {
         /// Set while the window swaps or reloads the model, so the
         /// selection it restores is not saved over the tab's selection.
         pub(super) changing_model: Cell<bool>,
-        /// Set until the file list first takes keyboard focus; see
+        /// Set until the file list takes keyboard focus in a new window or
+        /// after Settings hides; see
         /// [`super::BrowserWindow::focus_new_file_list`].
         pub(super) file_list_awaits_focus: Cell<bool>,
         /// The width band the layout was last fitted to.
@@ -233,6 +247,7 @@ mod imp {
             DetailsPane::ensure_type();
             Toast::ensure_type();
             StatusBar::ensure_type();
+            SettingsPage::ensure_type();
             klass.bind_template();
         }
 
@@ -300,6 +315,7 @@ impl BrowserWindow {
         window.install_actions();
         window.install_input();
         window.connect_signals();
+        window.connect_settings_page();
         window.watch_environment();
         window.apply_preferences();
         window.focus_file_list_once_shown();
@@ -370,6 +386,11 @@ impl BrowserWindow {
         &self.imp().status_bar
     }
 
+    /// The Settings page.
+    fn settings_page(&self) -> &SettingsPage {
+        &self.imp().settings_page
+    }
+
     /// The active folder's sorted, filtered native selection model, for
     /// tests.
     #[cfg(test)]
@@ -393,51 +414,5 @@ impl BrowserWindow {
     #[cfg(test)]
     fn shown_message(&self) -> glib::GString {
         self.imp().toast.text()
-    }
-
-    fn connect_signals(&self) {
-        self.follow_selection();
-        self.connect_filter();
-        self.connect_address_entry();
-        self.connect_view_activation();
-        self.follow_skin();
-        gestures::connect_history_buttons(
-            self,
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |direction| window.go_history(direction)
-            ),
-        );
-    }
-
-    /// Filters the folder as the user types in the search box.
-    fn connect_filter(&self) {
-        self.search_box().connect_query_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |query| {
-                window.folder_pane().model().set_query(query);
-                window.update_content();
-            }
-        ));
-    }
-
-    /// Lets go of what the window registered on objects that outlive it:
-    /// the skin, places and volume handlers and the type-to-select timer.
-    fn disconnect_external_handlers(&self) {
-        let handlers = self.imp().handlers.take();
-        for handler in handlers.skin {
-            self.skin().disconnect(handler);
-        }
-        if let Some(handler) = handlers.places {
-            self.context().disconnect(handler);
-        }
-        for handler in handlers.volumes {
-            self.volume_monitor().disconnect(handler);
-        }
-        if let Some(timer) = self.imp().typeahead.borrow_mut().timer.take() {
-            timer.remove();
-        }
     }
 }

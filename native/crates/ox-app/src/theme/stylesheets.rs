@@ -15,6 +15,7 @@ use super::Appearance;
 /// narrow-window rules come last.
 pub(super) const RULES: &str = concat!(
     include_str!("../../resources/skin/base.css"),
+    include_str!("../../resources/skin/icons.css"),
     include_str!("../../resources/skin/title-bar.css"),
     include_str!("../../resources/skin/navigation.css"),
     include_str!("../../resources/skin/command-bar.css"),
@@ -24,6 +25,7 @@ pub(super) const RULES: &str = concat!(
     include_str!("../../resources/skin/status-bar.css"),
     include_str!("../../resources/skin/landing.css"),
     include_str!("../../resources/skin/menus.css"),
+    include_str!("../../resources/skin/settings.css"),
     include_str!("../../resources/skin/breakpoints.css"),
 );
 

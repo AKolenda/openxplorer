@@ -9,7 +9,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -20,7 +20,7 @@ const NAVIGATION_GLYPH: i32 = 16;
 /// One of the buttons before the address bar.
 #[derive(Debug)]
 struct NavigationButton {
-    glyph: Glyph,
+    glyph: Icon,
     /// The accessible name (`aria-label`).
     name: &'static str,
     /// The tooltip, with the keyboard shortcut (`title`).
@@ -31,25 +31,25 @@ struct NavigationButton {
 /// Back, Forward, Up and Refresh, in that order.
 const NAVIGATION_BUTTONS: [NavigationButton; 4] = [
     NavigationButton {
-        glyph: Glyph::Back,
+        glyph: Icon::ArrowLeft,
         name: "Back",
         tooltip: "Back (Alt+Left)",
         action: WindowAction::Back,
     },
     NavigationButton {
-        glyph: Glyph::Forward,
+        glyph: Icon::ArrowRight,
         name: "Forward",
         tooltip: "Forward (Alt+Right)",
         action: WindowAction::Forward,
     },
     NavigationButton {
-        glyph: Glyph::Up,
+        glyph: Icon::ArrowUp,
         name: "Up",
         tooltip: "Up (Alt+Up)",
         action: WindowAction::Up,
     },
     NavigationButton {
-        glyph: Glyph::Refresh,
+        glyph: Icon::ArrowClockwise,
         name: "Refresh",
         tooltip: "Refresh (F5)",
         action: WindowAction::Refresh,
@@ -68,7 +68,7 @@ impl BrowserWindow {
 
 fn navigation_button(command: &NavigationButton) -> gtk::Button {
     let button = gtk::Button::builder()
-        .child(&icons::glyph(command.glyph, NAVIGATION_GLYPH))
+        .child(&icons::image(command.glyph, NAVIGATION_GLYPH))
         .tooltip_text(command.tooltip)
         .action_name(command.action.detailed_name())
         .build();

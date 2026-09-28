@@ -91,7 +91,8 @@ impl AppState {
         window
     }
 
-    /// Opens the window `request` describes, in its theme, size and view.
+    /// Opens the window `request` describes, in its theme, size and view,
+    /// with Settings open at its page and search when it asks for them.
     pub(super) fn open_snapshot_window(
         &self,
         app: &gtk::Application,
@@ -106,6 +107,13 @@ impl AppState {
         }
         if let Some(view) = request.view {
             window.show_view(view);
+        }
+        let settings_asked = request.settings.is_some() || request.settings_search.is_some();
+        if settings_asked {
+            window.open_settings(request.settings);
+        }
+        if let Some(query) = &request.settings_search {
+            window.search_settings(query);
         }
         window.present();
         window

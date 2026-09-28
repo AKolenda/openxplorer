@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  The Settings page (src/settings_page/mod.rs): at the left the heading,
+  the settings search, the list of categories and "Back to files"; at the
+  right the chosen category's page. src/settings_page/ adds the categories
+  and their pages.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxSettingsPage" parent="GtkBox">
+    <style>
+      <class name="settings"/>
+    </style>
+    <child>
+      <object class="GtkBox" id="navigation">
+        <property name="orientation">vertical</property>
+        <style>
+          <class name="settings-navigation"/>
+        </style>
+        <accessibility>
+          <property name="label">Settings categories</property>
+        </accessibility>
+        <child>
+          <object class="GtkLabel" id="heading">
+            <property name="label">Settings</property>
+            <property name="xalign">0</property>
+            <property name="accessible-role">heading</property>
+            <style>
+              <class name="settings-heading"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="subtitle">
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <style>
+              <class name="settings-subtitle"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkSearchEntry" id="search_entry">
+            <property name="placeholder-text">Search settings</property>
+            <style>
+              <class name="settings-search"/>
+            </style>
+            <accessibility>
+              <property name="label">Search settings</property>
+            </accessibility>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="match_count">
+            <property name="visible">false</property>
+            <property name="xalign">0</property>
+            <property name="accessible-role">status</property>
+            <style>
+              <class name="settings-match-count"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkListBox" id="category_list">
+            <property name="selection-mode">browse</property>
+            <style>
+              <class name="settings-categories"/>
+            </style>
+            <accessibility>
+              <property name="label">Settings categories</property>
+            </accessibility>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="vexpand">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="back_button">
+            <property name="halign">start</property>
+            <property name="tooltip-text">Close Settings and return to your folders</property>
+            <style>
+              <class name="settings-back"/>
+            </style>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">10</property>
+                <child>
+                  <object class="GtkImage" id="back_glyph">
+                    <property name="accessible-role">presentation</property>
+                    <style>
+                      <class name="glyph"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label">Back to files</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <accessibility>
+              <property name="label">Back to files</property>
+            </accessibility>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkStack" id="pages">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <property name="hhomogeneous">false</property>
+        <property name="vhomogeneous">false</property>
+        <style>
+          <class name="settings-pages"/>
+        </style>
+      </object>
+    </child>
+  </template>
+</interface>

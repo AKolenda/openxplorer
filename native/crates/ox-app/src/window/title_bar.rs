@@ -15,7 +15,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::application::AppAction;
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 
 use super::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
@@ -33,17 +33,17 @@ impl BrowserWindow {
     pub(super) fn finish_title_bar(&self) {
         let imp = self.imp();
         let new_tab = &*imp.new_tab_button;
-        new_tab.set_child(Some(&icons::glyph(Glyph::Plus, NEW_TAB_GLYPH)));
+        new_tab.set_child(Some(&icons::image(Icon::Add, NEW_TAB_GLYPH)));
         WindowAction::NewTab.assign_to(new_tab);
         let open_windows = &*imp.open_windows_button;
-        open_windows.set_child(Some(&icons::glyph(Glyph::Desktop, OPEN_WINDOWS_GLYPH)));
+        open_windows.set_child(Some(&icons::image(Icon::Desktop, OPEN_WINDOWS_GLYPH)));
         list_open_windows_on_click(open_windows);
     }
 }
 
-/// Makes the monitor button (`#windows-button`) open the list of open
-/// windows.
-fn list_open_windows_on_click(button: &gtk::MenuButton) {
+/// Makes the monitor button (`#windows-button`), or Settings' "Open
+/// windows…", open the list of open windows.
+pub(crate) fn list_open_windows_on_click(button: &gtk::MenuButton) {
     let popover = MenuPopover::new(Vec::new());
     button.set_popover(Some(&popover));
     // Built as it opens, so it lists the windows open now.
@@ -70,10 +70,11 @@ fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = browsers
         .map(|window| window_item(&window, &this_window))
         .collect();
-    let new_window = MenuItem::new("New window", Glyph::Plus, AppAction::NewWindow).with_shortcut("Ctrl+N");
+    let new_window =
+        MenuItem::new("New window", Icon::WindowNew, AppAction::NewWindow).with_shortcut("Ctrl+N");
     entries.push(MenuEntry::Divider);
     entries.push(new_window.into());
-    entries.push(MenuItem::new("Quit OpenXplorer", Glyph::Close, AppAction::Quit).into());
+    entries.push(MenuItem::new("Quit OpenXplorer", Icon::Dismiss, AppAction::Quit).into());
     entries
 }
 
@@ -86,7 +87,7 @@ fn window_item(window: &BrowserWindow, this_window: &BrowserWindow) -> MenuEntry
     let item = MenuItem {
         target: Some(window.id().to_variant()),
         check: ItemCheck::Fixed(window == this_window),
-        ..MenuItem::new(&title, Glyph::Desktop, AppAction::FocusWindow)
+        ..MenuItem::new(&title, Icon::Desktop, AppAction::FocusWindow)
     };
     item.into()
 }

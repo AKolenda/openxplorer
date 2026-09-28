@@ -32,6 +32,7 @@
       <object class="GtkImage" id="magnifier">
         <property name="halign">center</property>
         <property name="valign">center</property>
+        <property name="accessible-role">presentation</property>
         <style>
           <class name="glyph"/>
           <class name="search-icon"/>

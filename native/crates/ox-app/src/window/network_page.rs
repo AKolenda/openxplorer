@@ -7,14 +7,17 @@
 //! discovery works, and every connected, saved and visited network
 //! location. Server discovery and the connect dialog arrive with the
 //! Network and devices milestone, so their buttons are disabled until then
-//! ([`super::unported`]); Open address works now.
+//! ([`super::unported`]); Open address works now. Each location's card
+//! shows it on the network bar as its sidebar row does (the owner's icon
+//! mapping, 2026-09-28), where app.js drew the network glyph for every
+//! one.
 
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::location::{self, LocationContext};
 use ox_core::places::NetworkLocation;
 
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Art, ArtImage, Icon};
 use crate::places::Places;
 
 use super::button_style::ButtonStyle;
@@ -37,9 +40,9 @@ const MAP_GLYPH_GAP: i32 = 7;
 /// Pixels between the address field and its buttons
 /// (`.network-manual{gap:9px}`).
 const ADDRESS_FIELD_GAP: i32 = 9;
-/// The network glyph of a connected or saved location's card
-/// (`icon('network',34)`).
-const LOCATION_CARD_GLYPH: i32 = 34;
+/// The icon of a connected or saved location's card, as large as app.js
+/// drew its network glyph (`icon('network',34)`).
+const LOCATION_CARD_ICON: i32 = 34;
 
 /// The note under the discovered servers (`.discovery-note`).
 const DISCOVERY_NOTE: &str = "Discovery depends on devices advertising themselves and on local \
@@ -73,7 +76,7 @@ fn banner() -> gtk::Box {
         .css_classes(["banner-hint"])
         .build();
     words.append(&hint);
-    let glyph = icons::glyph(Glyph::Network, BANNER_GLYPH);
+    let glyph = icons::image(Icon::Organization, BANNER_GLYPH);
     glyph.add_css_class("banner-glyph");
     let banner = gtk::Box::builder()
         .spacing(BANNER_GAP)
@@ -110,7 +113,7 @@ fn server_address_field() -> gtk::Box {
         move |_| open_typed_address(&address)
     ));
     let map_content = gtk::Box::new(gtk::Orientation::Horizontal, MAP_GLYPH_GAP);
-    map_content.append(&icons::glyph(Glyph::Plus, MAP_GLYPH));
+    map_content.append(&icons::image(Icon::Add, MAP_GLYPH));
     map_content.append(&gtk::Label::new(Some("Map location")));
     // Opens the connect dialog (`connectDialog`).
     let map = command_button(
@@ -138,7 +141,7 @@ fn open_typed_address(entry: &gtk::Entry) {
 /// "Discovered servers" with their count, and the notice while there are
 /// none. Discovery is not ported, so no server is ever found yet.
 fn discovered_servers(body: &gtk::Box) {
-    let title = section_title("Discovered servers", Glyph::Desktop);
+    let title = section_title("Discovered servers", Icon::Desktop);
     let count = gtk::Label::builder()
         .label("0")
         .hexpand(true)
@@ -165,7 +168,7 @@ fn discovered_servers(body: &gtk::Box) {
 
 fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&icons::glyph(Glyph::Network, LOCATION_CARD_GLYPH));
+    content.append(&ArtImage::new(Art::for_network_row(location), LOCATION_CARD_ICON));
     let address = locations.display_location(&location.uri);
     content.append(&card_texts(&location.label, &address));
     location_card("drive-card", &location.uri, &content)
@@ -173,7 +176,7 @@ fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk:
 
 /// Every connected, saved and visited network location.
 fn connected_and_saved(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&section_title("Connected & saved locations", Glyph::Pin));
+    body.append(&section_title("Connected & saved locations", Icon::Pin));
     let cards = card_grid(DRIVE_GRID);
     for location in &places.network {
         cards.append(&network_card(location, locations));

@@ -11,14 +11,15 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::{self, is_device_location, parent_location, LocationContext};
+use ox_core::places::NetworkLocation;
 
-use crate::icons::{ArtKind, Glyph};
+use crate::icons::{Art, Icon};
 use crate::locations::Page;
 
-use super::address_bar::{AddressIcon, CrumbButton};
-use super::location_kind::is_smb_location;
+use super::address_bar::CrumbButton;
+use super::location_kind::{is_smb_location, smb_location_art};
 use super::session::{Session, Tab};
-use super::tab_strip::{TabIcon, TabView};
+use super::tab_strip::TabView;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -33,38 +34,45 @@ struct ActiveLocation {
 /// The address-bar icon for a location (`address-icon` in
 /// `renderNavigation`): the page's glyph, the network glyph for SMB, a
 /// phone for devices, else the colour folder.
-fn address_icon(uri: &str) -> AddressIcon {
+fn address_icon(uri: &str) -> Icon {
     if let Some(page) = Page::from_uri(uri) {
-        return AddressIcon::Glyph(page.glyph());
+        return page.icon();
     }
     if is_smb_location(uri) {
-        AddressIcon::Glyph(Glyph::Network)
+        Icon::Organization
     } else if is_device_location(uri) {
-        AddressIcon::Glyph(Glyph::Phone)
+        Icon::Phone
     } else {
-        AddressIcon::Folder
+        Icon::FileFolder
     }
 }
 
 /// A tab's icon, as `renderTabs` picks it: the network glyph on the
-/// Network page, a phone for devices, network art for SMB, and the colour
-/// folder everywhere else, This PC included.
-fn tab_icon(uri: &str) -> TabIcon {
-    if Page::from_uri(uri) == Some(Page::Network) {
-        return TabIcon::Glyph(Glyph::Network);
+/// Network page, the gear on Settings, a phone for devices, the colour
+/// folder everywhere else, This PC included, and for SMB the location on
+/// the network bar as its row of `network` shows it in the sidebar.
+fn tab_icon(uri: &str, network: &[NetworkLocation]) -> Art {
+    match Page::from_uri(uri) {
+        Some(page @ (Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
+        Some(Page::ThisPc) | None => {}
     }
     if is_device_location(uri) {
-        TabIcon::Glyph(Glyph::Phone)
+        Art::Glyph(Icon::Phone)
     } else if is_smb_location(uri) {
-        TabIcon::Art(ArtKind::NetworkFolder)
+        smb_location_art(uri, network)
     } else {
-        TabIcon::Art(ArtKind::Folder)
+        Art::Folder
     }
 }
 
 /// How the strip shows `tab`: its title, its address (with "Network
-/// location" for SMB) and its icon.
-fn tab_view(tab: &Tab, session: &Session, locations: &LocationContext) -> TabView {
+/// location" for SMB) and its icon, which for SMB comes from `network`.
+fn tab_view(
+    tab: &Tab,
+    session: &Session,
+    locations: &LocationContext,
+    network: &[NetworkLocation],
+) -> TabView {
     let uri = tab.uri();
     let mut tooltip = locations.display_location(uri);
     if is_smb_location(uri) {
@@ -74,7 +82,7 @@ fn tab_view(tab: &Tab, session: &Session, locations: &LocationContext) -> TabVie
         id: tab.id,
         title: locations.title_for(uri),
         tooltip,
-        icon: tab_icon(uri),
+        icon: tab_icon(uri, network),
         active: session.is_active(tab.id),
     }
 }
@@ -91,7 +99,8 @@ impl BrowserWindow {
     }
 
     /// Updates the window title, history buttons, breadcrumbs, tabs,
-    /// sidebar highlight and landing page for the active tab's location.
+    /// sidebar highlight and landing page for the active tab's location,
+    /// and shows the Settings page on the Settings tab.
     pub(super) fn render_location(&self) {
         let Some(location) = self.active_location() else {
             return;
@@ -111,6 +120,7 @@ impl BrowserWindow {
         self.render_tabs();
         self.sidebar().select(uri);
         self.render_landing();
+        self.show_surface_for(uri);
     }
 
     fn active_location(&self) -> Option<ActiveLocation> {
@@ -139,21 +149,22 @@ impl BrowserWindow {
             .collect();
         let address = locations.display_location(uri);
         self.address_bar()
-            .show_location(&crumbs, &address, address_icon(uri), self.art_style());
+            .show_location(&crumbs, &address, address_icon(uri));
     }
 
     /// Redraws the tab strip.
     pub(super) fn render_tabs(&self) {
+        let network = self.network_locations();
         let views: Vec<TabView> = {
             let session = self.imp().session.borrow();
             let locations = self.imp().locations.borrow();
             let tab_views = session
                 .tabs()
                 .iter()
-                .map(|tab| tab_view(tab, &session, &locations));
+                .map(|tab| tab_view(tab, &session, &locations, &network));
             tab_views.collect()
         };
-        self.tab_strip().show(&views, self.art_style());
+        self.tab_strip().set_tabs(&views);
     }
 
     /// Replaces the breadcrumbs with the editable address (Ctrl+L).
@@ -177,12 +188,13 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{studio_nas_mapped_drive, studio_nas_server};
 
     /// A location and the tab and address-bar icons it shows.
     struct IconCase {
         uri: &'static str,
-        tab: TabIcon,
-        address: AddressIcon,
+        tab: Art,
+        address: Icon,
     }
 
     /// parity: TAB-010
@@ -191,33 +203,55 @@ mod tests {
         let cases = [
             IconCase {
                 uri: "file:///tmp/work",
-                tab: TabIcon::Art(ArtKind::Folder),
-                address: AddressIcon::Folder,
+                tab: Art::Folder,
+                address: Icon::FileFolder,
             },
             IconCase {
                 uri: "smb://nas/media",
-                tab: TabIcon::Art(ArtKind::NetworkFolder),
-                address: AddressIcon::Glyph(Glyph::Network),
+                tab: Art::SHARE,
+                address: Icon::Organization,
             },
             IconCase {
                 uri: "mtp://%5Busb%3A001%2C010%5D/",
-                tab: TabIcon::Glyph(Glyph::Phone),
-                address: AddressIcon::Glyph(Glyph::Phone),
+                tab: Art::Glyph(Icon::Phone),
+                address: Icon::Phone,
             },
             IconCase {
                 uri: Page::ThisPc.uri(),
-                tab: TabIcon::Art(ArtKind::Folder),
-                address: AddressIcon::Glyph(Glyph::Desktop),
+                tab: Art::Folder,
+                address: Icon::Laptop,
             },
             IconCase {
                 uri: Page::Network.uri(),
-                tab: TabIcon::Glyph(Glyph::Network),
-                address: AddressIcon::Glyph(Glyph::Network),
+                tab: Art::Glyph(Icon::Organization),
+                address: Icon::Organization,
+            },
+            // The gear of `icon('settings')` in renderTabs.
+            IconCase {
+                uri: Page::Settings.uri(),
+                tab: Art::Glyph(Icon::Settings),
+                address: Icon::Settings,
             },
         ];
         for case in cases {
-            assert_eq!(tab_icon(case.uri), case.tab, "{}", case.uri);
+            assert_eq!(tab_icon(case.uri, &[]), case.tab, "{}", case.uri);
             assert_eq!(address_icon(case.uri), case.address, "{}", case.uri);
         }
+    }
+
+    /// The owner's icon mapping (2026-09-28) shows a network location the
+    /// same way everywhere, so a tab on a server or a mapped drive shows
+    /// what its sidebar row shows.
+    ///
+    /// parity: LOOK-016
+    #[test]
+    fn a_tab_on_a_server_or_a_mapped_drive_shows_its_sidebar_art() {
+        let server = studio_nas_server();
+        let mapped_drive = studio_nas_mapped_drive();
+        let network = [server.clone(), mapped_drive.clone()];
+        let tab_on = |uri: &str| tab_icon(uri, &network);
+        assert_eq!(tab_on(&server.uri), Art::for_network_row(&server));
+        assert_eq!(tab_on(&mapped_drive.uri), Art::for_network_row(&mapped_drive));
+        assert_eq!(tab_on("smb://studio-nas/projects/2024"), Art::SHARE);
     }
 }

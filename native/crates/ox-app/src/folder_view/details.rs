@@ -18,7 +18,7 @@ use gtk::subclass::prelude::*;
 use ox_core::format;
 use ox_core::settings::{Column, ColumnWidths};
 
-use crate::folder_view::cells::{self, BoundIcons, CellLayout, CellOwners};
+use crate::folder_view::cells::{self, CellLayout, CellOwners};
 use crate::folder_view::column_titles;
 use crate::folder_view::column_widths;
 use crate::folder_view::item::FileItem;
@@ -49,9 +49,9 @@ fn cell_text(column: SortColumn, item: &FileItem) -> String {
 }
 
 /// The Name column's cells: the item's icon beside its name.
-fn name_factory(icons: &Rc<BoundIcons>, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
+fn name_factory(owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
-    cells::connect_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON_SIZE, icons, owners);
+    cells::connect_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON_SIZE, owners);
     factory
 }
 
@@ -80,13 +80,9 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
 }
 
 /// A resizable column showing `column`, sorted by its header.
-fn new_view_column(
-    column: SortColumn,
-    icons: &Rc<BoundIcons>,
-    owners: &Rc<CellOwners>,
-) -> gtk::ColumnViewColumn {
+fn new_view_column(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::ColumnViewColumn {
     let factory = match column {
-        SortColumn::Name => name_factory(icons, owners),
+        SortColumn::Name => name_factory(owners),
         SortColumn::Modified | SortColumn::Type | SortColumn::Size => text_factory(column, owners),
     };
     let view_column = gtk::ColumnViewColumn::new(Some(column.label()), Some(factory));
@@ -195,15 +191,15 @@ glib::wrapper! {
 }
 
 impl DetailsView {
-    /// A details view over `model` whose Name cells draw their art through
-    /// `icons` and whose cells are registered in `owners`. It completes the
-    /// model's sorter and sorts by Name ascending, but shows no model until
-    /// the window makes it the visible view.
-    pub(crate) fn new(model: &FolderModel, icons: &Rc<BoundIcons>, owners: &Rc<CellOwners>) -> Self {
+    /// A details view over `model` whose cells are registered in
+    /// `owners`. It completes the model's sorter and sorts by Name
+    /// ascending, but shows no model until the window makes it the visible
+    /// view.
+    pub(crate) fn new(model: &FolderModel, owners: &Rc<CellOwners>) -> Self {
         let view: Self = glib::Object::new();
         let column_view = view.column_view();
         for column in SortColumn::ALL {
-            column_view.append_column(&new_view_column(column, icons, owners));
+            column_view.append_column(&new_view_column(column, owners));
         }
         view.apply_column_widths(None);
         view.watch_column_widths();
@@ -388,13 +384,11 @@ mod tests {
 
     use super::*;
     use crate::test_support::harness::{wait_for, wait_until};
-    use crate::theme::Appearance;
 
     /// A details view over an empty model, as a new window builds it.
     fn new_details_view() -> DetailsView {
         let model = FolderModel::new();
-        let icons = BoundIcons::new(Appearance::Light);
-        DetailsView::new(&model, &icons, &CellOwners::new())
+        DetailsView::new(&model, &CellOwners::new())
     }
 
     /// The last widths a view reported, `None` until it reports any.

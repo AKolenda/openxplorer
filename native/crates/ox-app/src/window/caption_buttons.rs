@@ -17,7 +17,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 
 use super::widget_tree::remove_children;
 
@@ -89,12 +89,12 @@ impl Caption {
     }
 
     /// The glyph the button shows while the window is in `state`.
-    const fn glyph(self, state: WindowState) -> Glyph {
+    const fn glyph(self, state: WindowState) -> Icon {
         match (self, state) {
-            (Caption::Minimize, _) => Glyph::Minus,
-            (Caption::Maximize, WindowState::Normal) => Glyph::Maximize,
-            (Caption::Maximize, WindowState::Maximized) => Glyph::Restore,
-            (Caption::Close, _) => Glyph::Close,
+            (Caption::Minimize, _) => Icon::Subtract,
+            (Caption::Maximize, WindowState::Normal) => Icon::Maximize,
+            (Caption::Maximize, WindowState::Maximized) => Icon::SquareMultiple,
+            (Caption::Close, _) => Icon::Dismiss,
         }
     }
 
@@ -292,7 +292,7 @@ impl CaptionButtons {
 fn caption_button(caption: Caption, state: WindowState) -> gtk::Button {
     let tooltip = caption.tooltip(state);
     let button = gtk::Button::builder()
-        .child(&icons::glyph(caption.glyph(state), GLYPH_SIZE))
+        .child(&icons::image(caption.glyph(state), GLYPH_SIZE))
         .tooltip_text(tooltip)
         .action_name(caption.action())
         .focus_on_click(false)
@@ -358,9 +358,9 @@ mod tests {
     fn the_maximize_button_offers_restore_when_maximized() {
         let normal = WindowState::Normal;
         let maximized = WindowState::Maximized;
-        assert_eq!(Caption::Maximize.glyph(normal), Glyph::Maximize);
+        assert_eq!(Caption::Maximize.glyph(normal), Icon::Maximize);
         assert_eq!(Caption::Maximize.tooltip(normal), "Maximize");
-        assert_eq!(Caption::Maximize.glyph(maximized), Glyph::Restore);
+        assert_eq!(Caption::Maximize.glyph(maximized), Icon::SquareMultiple);
         assert_eq!(Caption::Maximize.tooltip(maximized), "Restore");
     }
 }

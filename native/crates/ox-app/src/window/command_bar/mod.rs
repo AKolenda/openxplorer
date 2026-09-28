@@ -20,7 +20,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 use crate::theme::Appearance;
 
 use super::breakpoints::WindowWidth;
@@ -49,7 +49,7 @@ enum InCompactWindow {
 /// An icon-only command (`button.command` in index.html).
 #[derive(Debug)]
 struct IconCommand {
-    glyph: Glyph,
+    glyph: Icon,
     action: WindowAction,
     /// The accessible name (`aria-label`).
     name: &'static str,
@@ -61,42 +61,42 @@ struct IconCommand {
 /// Cut to Move to Trash, as index.html lists them.
 const EDIT_COMMANDS: [IconCommand; 6] = [
     IconCommand {
-        glyph: Glyph::Cut,
+        glyph: Icon::Cut,
         action: WindowAction::Cut,
         name: "Cut",
         tooltip: "Cut (Ctrl+X)",
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
-        glyph: Glyph::Copy,
+        glyph: Icon::Copy,
         action: WindowAction::Copy,
         name: "Copy",
         tooltip: "Copy (Ctrl+C)",
         compact: InCompactWindow::Kept,
     },
     IconCommand {
-        glyph: Glyph::Paste,
+        glyph: Icon::ClipboardPaste,
         action: WindowAction::Paste,
         name: "Paste",
         tooltip: "Paste files (Ctrl+V)",
         compact: InCompactWindow::Kept,
     },
     IconCommand {
-        glyph: Glyph::Rename,
+        glyph: Icon::Rename,
         action: WindowAction::Rename,
         name: "Rename",
         tooltip: "Rename (F2)",
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
-        glyph: Glyph::Share,
+        glyph: Icon::Share,
         action: WindowAction::CopyPath,
         name: "Copy path",
         tooltip: "Copy path (does not change sharing permissions)",
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
-        glyph: Glyph::Trash,
+        glyph: Icon::Delete,
         action: WindowAction::Trash,
         name: "Move to Trash",
         tooltip: "Move to Trash (Delete)",
@@ -185,7 +185,7 @@ impl CommandBar {
     fn add_file_commands(&self) {
         let imp = self.imp();
         let group = &*imp.file_commands;
-        group.append(&text_menu_button("New", Glyph::Plus, "new-command", new_menu()));
+        group.append(&text_menu_button("New", Icon::Add, "new-command", new_menu()));
         group.append(&separator());
         for command in &EDIT_COMMANDS {
             let button = icon_button(command);
@@ -197,16 +197,11 @@ impl CommandBar {
         group.append(&separator());
         group.append(&text_menu_button(
             "Sort",
-            Glyph::Sort,
+            Icon::ArrowSort,
             "sort-command",
             sort_menu(),
         ));
-        group.append(&text_menu_button(
-            "View",
-            Glyph::Grid,
-            "view-command",
-            view_menu(),
-        ));
+        group.append(&text_menu_button("View", Icon::Grid, "view-command", view_menu()));
         group.append(&more_button());
     }
 
@@ -230,7 +225,7 @@ impl CommandBar {
     /// Settings page.
     fn finish_settings_button(&self) {
         let settings = &*self.imp().settings_button;
-        settings.set_child(Some(&icons::glyph(Glyph::Settings, ICON_COMMAND_GLYPH)));
+        settings.set_child(Some(&icons::image(Icon::Settings, ICON_COMMAND_GLYPH)));
         let tooltip = unported::tooltip(WindowAction::Settings, SETTINGS_TOOLTIP);
         settings.set_tooltip_text(Some(&tooltip));
         WindowAction::Settings.assign_to(settings);
@@ -240,7 +235,7 @@ impl CommandBar {
     /// hides the button.
     fn finish_details_toggle(&self) {
         let imp = self.imp();
-        icons::set_glyph(&imp.details_glyph, Glyph::Details, TEXT_COMMAND_GLYPH);
+        icons::set_icon(&imp.details_glyph, Icon::PanelRight, TEXT_COMMAND_GLYPH);
         WindowAction::DetailsPane.assign_to(&*imp.details_toggle);
         let details_toggle = imp.details_toggle.get().upcast();
         imp.hidden_when_compact.borrow_mut().push(details_toggle);
@@ -249,7 +244,7 @@ impl CommandBar {
     /// Shows `appearance`'s sun or moon and its "Light" or "Dark" label.
     fn show_appearance_glyph(&self, appearance: Appearance) {
         let imp = self.imp();
-        icons::set_glyph(&imp.appearance_glyph, appearance.glyph(), TEXT_COMMAND_GLYPH);
+        icons::set_icon(&imp.appearance_glyph, appearance.icon(), TEXT_COMMAND_GLYPH);
         imp.appearance_label.set_text(appearance.label());
     }
 
@@ -289,7 +284,7 @@ fn separator() -> gtk::Separator {
 
 fn icon_button(command: &IconCommand) -> gtk::Button {
     let button = gtk::Button::builder()
-        .child(&icons::glyph(command.glyph, ICON_COMMAND_GLYPH))
+        .child(&icons::image(command.glyph, ICON_COMMAND_GLYPH))
         .tooltip_text(unported::tooltip(command.action, command.tooltip))
         .action_name(command.action.detailed_name())
         .valign(gtk::Align::Center)
@@ -301,11 +296,11 @@ fn icon_button(command: &IconCommand) -> gtk::Button {
 
 /// A glyph, a label and the chevron that marks a menu (`setButton` with
 /// `arrow`).
-fn text_menu_content(label: &str, glyph: Glyph) -> gtk::Box {
+fn text_menu_content(label: &str, glyph: Icon) -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&icons::glyph(glyph, TEXT_COMMAND_GLYPH));
+    content.append(&icons::image(glyph, TEXT_COMMAND_GLYPH));
     content.append(&gtk::Label::new(Some(label)));
-    let chevron = icons::glyph(Glyph::Down, TEXT_COMMAND_GLYPH);
+    let chevron = icons::image(Icon::ChevronDown, TEXT_COMMAND_GLYPH);
     chevron.add_css_class("chevron");
     content.append(&chevron);
     content
@@ -313,7 +308,7 @@ fn text_menu_content(label: &str, glyph: Glyph) -> gtk::Box {
 
 /// A command with a label that opens `entries`; `css_class` names it for
 /// the stylesheet and the tests.
-fn text_menu_button(label: &str, glyph: Glyph, css_class: &str, entries: Vec<MenuEntry>) -> gtk::MenuButton {
+fn text_menu_button(label: &str, glyph: Icon, css_class: &str, entries: Vec<MenuEntry>) -> gtk::MenuButton {
     gtk::MenuButton::builder()
         .child(&text_menu_content(label, glyph))
         .popover(&MenuPopover::new(entries))
@@ -324,7 +319,7 @@ fn text_menu_button(label: &str, glyph: Glyph, css_class: &str, entries: Vec<Men
 
 fn more_button() -> gtk::MenuButton {
     let button = gtk::MenuButton::builder()
-        .child(&icons::glyph(Glyph::More, ICON_COMMAND_GLYPH))
+        .child(&icons::image(Icon::MoreHorizontal, ICON_COMMAND_GLYPH))
         .tooltip_text("More options")
         .popover(&MenuPopover::new(more_menu()))
         .valign(gtk::Align::Center)

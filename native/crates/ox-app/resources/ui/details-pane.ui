@@ -59,12 +59,9 @@
                   <class name="detail-preview"/>
                 </style>
                 <property name="center-widget">
-                  <!-- Centred: a GtkImage stretches its picture to fill a
-                       larger allocation, which blurs the art. -->
-                  <object class="GtkImage" id="preview">
-                    <property name="halign">center</property>
-                    <property name="valign">center</property>
-                  </object>
+                  <!-- The item's art, or the copy glyph for several items
+                       (an ArtImage, src/icons/art_image.rs). -->
+                  <object class="OxArtImage" id="preview"/>
                 </property>
               </object>
             </child>
@@ -105,6 +102,7 @@
                       <object class="GtkImage" id="open_glyph">
                         <property name="halign">center</property>
                         <property name="valign">center</property>
+                        <property name="accessible-role">presentation</property>
                         <style>
                           <class name="glyph"/>
                         </style>
@@ -134,6 +132,7 @@
                       <object class="GtkImage" id="pin_item_glyph">
                         <property name="halign">center</property>
                         <property name="valign">center</property>
+                        <property name="accessible-role">presentation</property>
                         <style>
                           <class name="glyph"/>
                         </style>
@@ -163,6 +162,7 @@
                       <object class="GtkImage" id="pin_folder_glyph">
                         <property name="halign">center</property>
                         <property name="valign">center</property>
+                        <property name="accessible-role">presentation</property>
                         <style>
                           <class name="glyph"/>
                         </style>
@@ -207,6 +207,7 @@
                   <object class="GtkImage" id="note_glyph">
                     <property name="halign">center</property>
                     <property name="valign">center</property>
+                    <property name="accessible-role">presentation</property>
                     <style>
                       <class name="glyph"/>
                     </style>

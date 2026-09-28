@@ -20,9 +20,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::same_location;
 
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 
-use super::appearance::ArtStyle;
 use super::window_action::WindowAction;
 use super::{gestures, unported};
 
@@ -31,6 +30,9 @@ use entries::{RowTarget, Section, SidebarEntry};
 
 /// The narrowest the list gets, the Python app's narrowest sidebar.
 const NARROWEST_LIST: i32 = 140;
+
+/// The "+" of Map network location.
+const MAP_NETWORK_GLYPH: i32 = 17;
 
 mod imp {
     use std::cell::{OnceCell, RefCell};
@@ -160,7 +162,7 @@ impl Sidebar {
     }
 
     /// Replaces the rows.
-    pub(super) fn show(&self, entries: Vec<SidebarEntry>, style: ArtStyle) {
+    pub(super) fn set_entries(&self, entries: Vec<SidebarEntry>) {
         let list = self.list();
         list.remove_all();
         let rows: Vec<gtk::ListBoxRow> = entries
@@ -168,7 +170,7 @@ impl Sidebar {
             .enumerate()
             .map(|(index, entry)| {
                 let edges = entries::section_edges(&entries, index);
-                row::sidebar_row(entry, edges, style)
+                row::sidebar_row(entry, edges)
             })
             .collect();
         // The header function reads the entries as the rows are added.
@@ -213,7 +215,7 @@ fn section_separator() -> gtk::Separator {
 /// The "Map network location" button below the list (`#connect-sidebar`).
 fn map_network_button() -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 11);
-    content.append(&icons::glyph(Glyph::Plus, 17));
+    content.append(&icons::image(Icon::Add, MAP_NETWORK_GLYPH));
     content.append(&gtk::Label::new(Some("Map network location")));
     let button = gtk::Button::builder()
         .child(&content)

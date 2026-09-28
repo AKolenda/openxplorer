@@ -14,7 +14,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::folder_view::cells::{self, BoundIcons, CellLayout, CellOwners};
+use crate::folder_view::cells::{self, CellLayout, CellOwners};
 use crate::text_size::{self, TextSize};
 
 /// A large tile's width beyond its icon: the 135-pixel `gridWidth` less
@@ -138,11 +138,10 @@ pub(crate) fn cell_size(size: IconSize, text_size: TextSize) -> CellSize {
     }
 }
 
-/// The registries the views' cells share, which every tile factory the
+/// The registry the views' cells share, which every tile factory the
 /// icon view builds registers its tiles in.
 #[derive(Debug)]
 struct TileRegistries {
-    icons: Rc<BoundIcons>,
     owners: Rc<CellOwners>,
 }
 
@@ -151,13 +150,7 @@ impl TileRegistries {
     fn tile_factory(&self, size: IconSize) -> gtk::SignalListItemFactory {
         let factory = gtk::SignalListItemFactory::new();
         let icon_pixels = size.pixels();
-        cells::connect_file_cells(
-            &factory,
-            CellLayout::IconTile,
-            icon_pixels,
-            &self.icons,
-            &self.owners,
-        );
+        cells::connect_file_cells(&factory, CellLayout::IconTile, icon_pixels, &self.owners);
         factory
     }
 }
@@ -243,13 +236,12 @@ glib::wrapper! {
 }
 
 impl IconView {
-    /// An icon view of Large icons whose tiles draw their art through
-    /// `icons` and are registered in `owners`. It shows no model until the
-    /// window makes it the visible view.
-    pub(crate) fn new(icons: &Rc<BoundIcons>, owners: &Rc<CellOwners>) -> Self {
+    /// An icon view of Large icons whose tiles are registered in
+    /// `owners`. It shows no model until the window makes it the visible
+    /// view.
+    pub(crate) fn new(owners: &Rc<CellOwners>) -> Self {
         let view: Self = glib::Object::new();
         let registries = TileRegistries {
-            icons: Rc::clone(icons),
             owners: Rc::clone(owners),
         };
         view.imp()
@@ -344,11 +336,10 @@ impl IconView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::Appearance;
 
     #[gtk::test]
     fn switching_the_icon_size_restyles_the_tiles() {
-        let view = IconView::new(&BoundIcons::new(Appearance::Light), &CellOwners::new());
+        let view = IconView::new(&CellOwners::new());
         let grid = view.grid();
         assert_eq!(view.icon_size(), IconSize::Large, "a new view shows Large icons");
         assert!(grid.has_css_class(IconSize::Large.css_class()));

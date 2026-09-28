@@ -6,13 +6,14 @@
 //! `desktop/winspace.py`. The volume monitor's changes and the
 //! application's `places-changed` signal (a pin, a saved share, a visited
 //! server or the settings file changed) redraw the sidebar, the landing
-//! page and every label that names a device. Pinning a folder is in
+//! page, the icons of network locations in the tabs and the details pane,
+//! and every label that names a device. Pinning a folder is in
 //! [`super::quick_access`] and mounting a volume in [`super::mounting`].
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::places::FolderLocations;
+use ox_core::places::{FolderLocations, NetworkLocation, Place};
 
 use crate::locations::{self, Page};
 use crate::places::{self, PlaceSources, Places};
@@ -77,38 +78,56 @@ impl BrowserWindow {
         self.read_volumes();
         self.render_places();
         self.render_location();
-        self.update_details_pane();
         self.context().reload_settings();
     }
 
     /// The sidebar and landing sections for the current settings and volumes.
     pub(super) fn places(&self) -> Places {
-        let settings = self.context().settings_data();
         // Read again on every call, as the Python app does, so a folder
         // moved with xdg-user-dirs-update shows at once.
         let known_folders = FolderLocations::from_environment()
             .read_paths()
             .quick_access_places();
+        self.places_with(&known_folders)
+    }
+
+    /// The Network list alone, for the icons of network locations in the
+    /// tabs and the details pane. Unlike [`Self::places`] it reads no file,
+    /// because only Quick access needs the known folders.
+    pub(super) fn network_locations(&self) -> Vec<NetworkLocation> {
+        self.places_with(&[]).network
+    }
+
+    /// The sections for the current settings, volumes and visited servers,
+    /// with `known_folders` in Quick access.
+    fn places_with(&self, known_folders: &[Place]) -> Places {
+        let settings = self.context().settings_data();
         let volumes = self.imp().volumes.borrow();
         let visited_network = self.context().visited_network();
         places::compose(PlaceSources {
             settings: &settings,
-            known_folders: &known_folders,
+            known_folders,
             volumes: &volumes,
             stable_mounts: &[],
             visited_network: &visited_network,
         })
     }
 
-    /// Redraws the sidebar and the landing page.
+    /// Redraws everything that shows a place: the sidebar, the landing
+    /// page, the tabs and the details pane, whose network locations show
+    /// the art of their sidebar rows, and the folders Settings offers the
+    /// search index.
     pub(super) fn render_places(&self) {
         let places = self.places();
         let entries = sidebar::sidebar_entries(&places, &self.imp().locations.borrow());
-        self.sidebar().show(entries, self.art_style());
+        self.sidebar().set_entries(entries);
         if let Some(uri) = self.current_uri() {
             self.sidebar().select(&uri);
         }
         self.render_landing_with(&places);
+        self.render_tabs();
+        self.update_details_pane();
+        self.update_index_candidates(&places.quick_access);
     }
 
     /// Redraws the landing page when the active tab shows one.
@@ -122,6 +141,6 @@ impl BrowserWindow {
         };
         let body = self.folder_pane().landing();
         let locations = self.imp().locations.borrow();
-        landing::render(body, page, places, &locations, self.art_style());
+        landing::render(body, page, places, &locations);
     }
 }

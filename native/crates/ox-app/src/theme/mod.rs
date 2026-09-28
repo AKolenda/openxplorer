@@ -21,6 +21,7 @@ use gtk::{gdk, gio, glib};
 
 pub(crate) use preference::{Appearance, ThemePreference};
 
+use crate::icons;
 use crate::text_size::TextSize;
 use contrast::Contrast;
 use providers::Providers;
@@ -89,8 +90,10 @@ glib::wrapper! {
 }
 
 impl Skin {
-    /// Forces GTK's built-in theme and installs the skin on `display`.
+    /// Forces GTK's built-in theme and installs the skin on `display`: its
+    /// stylesheets and the app's bundled icons.
     pub(crate) fn install(display: &gdk::Display) -> Self {
+        icons::register(display);
         Self::with_providers(Providers::install(display))
     }
 

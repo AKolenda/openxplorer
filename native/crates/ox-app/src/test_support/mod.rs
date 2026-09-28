@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the crate's tests share: listed entries built through ox-core's own
-//! conversion, so they carry every field a real listing does, and the GTK
-//! [`harness`] for tests that open windows.
+//! conversion, so they carry every field a real listing does, rows of the
+//! Network list, the GTK [`harness`] for tests that open windows, and
+//! [`python`], which runs the Python app's settings code.
 
 pub(crate) mod harness;
+pub(crate) mod python;
 
 use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry};
+use ox_core::places::{NetworkKind, NetworkLocation};
 
 /// An entry named `name` in `/tmp/ox-test`, of `file_type`, as a listing
 /// would produce it. Nothing is created on disk.
@@ -26,4 +29,28 @@ pub(crate) fn file_entry(name: &str) -> Entry {
 /// A folder named `name` in `/tmp/ox-test`.
 pub(crate) fn folder_entry(name: &str) -> Entry {
     entry(name, gio::FileType::Directory)
+}
+
+/// The Network row of the SMB server `smb://studio-nas/`, browsed this
+/// session and connected.
+pub(crate) fn studio_nas_server() -> NetworkLocation {
+    NetworkLocation {
+        uri: "smb://studio-nas/".to_owned(),
+        label: "studio-nas".to_owned(),
+        is_saved: false,
+        is_connected: true,
+        kind: NetworkKind::Server,
+    }
+}
+
+/// The Network row of the share `smb://studio-nas/projects`, saved as the
+/// mapped drive "Studio NAS (Z:)" and not connected now.
+pub(crate) fn studio_nas_mapped_drive() -> NetworkLocation {
+    NetworkLocation {
+        uri: "smb://studio-nas/projects".to_owned(),
+        label: "Studio NAS (Z:)".to_owned(),
+        is_saved: true,
+        is_connected: false,
+        kind: NetworkKind::Share,
+    }
 }

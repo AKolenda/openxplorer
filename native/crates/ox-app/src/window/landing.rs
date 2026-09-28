@@ -6,7 +6,10 @@
 //! of Network). This PC lists Quick access (cards in a stretching grid,
 //! [`super::card_grid`]), then Devices and drives (Local Disk, drives and
 //! devices with a capacity bar, unmounted volumes that connect on click),
-//! then the saved network locations with their state.
+//! then the saved network locations with their state. A saved location's
+//! card shows it on the network bar, as its sidebar row does (the owner's
+//! icon mapping, 2026-09-28), where app.js drew a blue server for every
+//! one.
 //!
 //! Cards run [`WindowAction::GoTo`] or [`WindowAction::MountVolume`]; a
 //! middle-click opens a folder in a background tab.
@@ -16,23 +19,18 @@ use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
 use ox_core::location::LocationContext;
-use ox_core::places::{Place, SavedShare};
+use ox_core::places::{NetworkKind, Place, SavedShare};
 
-use crate::icons::{self, ArtKind, Glyph};
+use crate::icons::{self, Art, ArtImage, Connection, Icon};
 use crate::locations::Page;
 use crate::places::Places;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
-use super::appearance::ArtStyle;
 use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
 use super::location_kind::is_smb_location;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
 use super::{gestures, network_page, unported};
-
-/// The class of the server glyph on saved-share cards, which the
-/// stylesheet colours as app.js does (`im.style.color='#4b96c0'`).
-const SHARE_GLYPH_CLASS: &str = "share-glyph";
 
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
@@ -41,8 +39,8 @@ const NEARLY_FULL: f64 = 0.9;
 const SECTION_GLYPH: i32 = 14;
 /// The folder art of a Quick access card (`folderIcon(43)`).
 const QUICK_CARD_ART: i32 = 43;
-/// The glyph of a drive, device or network card.
-const DRIVE_CARD_GLYPH: i32 = 46;
+/// The icon of a drive, device or saved network location's card.
+const DRIVE_CARD_ICON: i32 = 46;
 /// Pixels between a card's picture and its texts.
 pub(super) const CARD_ICON_GAP: i32 = 15;
 
@@ -89,10 +87,10 @@ fn label(text: &str, css_class: &str) -> gtk::Label {
 }
 
 /// A section heading: a glyph and a bold title.
-pub(super) fn section_title(text: &str, glyph: Glyph) -> gtk::Box {
+pub(super) fn section_title(text: &str, glyph: Icon) -> gtk::Box {
     let title = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     title.add_css_class("section-title");
-    title.append(&icons::glyph(glyph, SECTION_GLYPH));
+    title.append(&icons::image(glyph, SECTION_GLYPH));
     title.append(&gtk::Label::new(Some(text)));
     title
 }
@@ -125,15 +123,15 @@ pub(super) fn card_texts(name: &str, subtitle: &str) -> gtk::Box {
     card_texts_with(name, &label(subtitle, "card-sub"))
 }
 
-fn quick_card(place: &Place, style: ArtStyle) -> gtk::Button {
+fn quick_card(place: &Place) -> gtk::Button {
     let network = is_smb_location(&place.uri);
     let (art, subtitle) = if network {
-        (ArtKind::NetworkFolder, "Network folder")
+        (Art::SHARE, "Network folder")
     } else {
-        (ArtKind::Folder, "Stored on this PC")
+        (Art::Folder, "Stored on this PC")
     };
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&style.image(art, QUICK_CARD_ART));
+    content.append(&ArtImage::new(art, QUICK_CARD_ART));
     // "Stored on this PC" is never cut short: in a narrow card it runs
     // into the padding, as `.quick-card .card-sub` lets it.
     let whole_subtitle = gtk::Label::builder()
@@ -145,11 +143,11 @@ fn quick_card(place: &Place, style: ArtStyle) -> gtk::Button {
     location_card("quick-card", &place.uri, &content)
 }
 
-fn quick_access(body: &gtk::Box, places: &Places, style: ArtStyle) {
-    body.append(&section_title("Quick access", Glyph::Pin));
+fn quick_access(body: &gtk::Box, places: &Places) {
+    body.append(&section_title("Quick access", Icon::Pin));
     let cards = card_grid(QUICK_GRID);
     for place in &places.quick_access {
-        cards.append(&quick_card(place, style));
+        cards.append(&quick_card(place));
     }
     body.append(&cards);
 }
@@ -201,8 +199,8 @@ fn capacity_bar(capacity: Capacity) -> gtk::ProgressBar {
 /// A drive card: Local Disk, a drive, a device, or a volume to connect.
 fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
     let glyph = match row.kind {
-        VolumeKind::Device => Glyph::Phone,
-        VolumeKind::Drive => Glyph::Drive,
+        VolumeKind::Device => Icon::Phone,
+        VolumeKind::Drive => Icon::HardDrive,
     };
     let subtitle = match (&row.state, row.kind) {
         (VolumeState::Mounted { .. }, VolumeKind::Device) => "Connected device".to_owned(),
@@ -211,7 +209,7 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
     };
     let texts = card_texts(&row.label, &subtitle);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&icons::glyph(glyph, DRIVE_CARD_GLYPH));
+    content.append(&icons::image(glyph, DRIVE_CARD_ICON));
     content.append(&texts);
     match &row.state {
         VolumeState::Mounted { uri, .. } => {
@@ -239,7 +237,7 @@ fn local_disk() -> VolumeRow {
 }
 
 fn devices_and_drives(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&section_title("Devices and drives", Glyph::Drive));
+    body.append(&section_title("Devices and drives", Icon::HardDrive));
     let cards = card_grid(DRIVE_GRID);
     let drives = std::iter::once(local_disk()).chain(places.drives.iter().cloned());
     for row in drives {
@@ -253,13 +251,19 @@ fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::But
     let address = locations.display_location(&bookmark.uri);
     let texts = card_texts(&bookmark.label, &address);
     texts.append(&share_state(share));
-    // Its colour is the stylesheet's (`.share-glyph`), as app.js colours it.
-    let glyph = icons::glyph(Glyph::Server, DRIVE_CARD_GLYPH);
-    glyph.add_css_class(SHARE_GLYPH_CLASS);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&glyph);
+    content.append(&ArtImage::new(saved_share_art(share), DRIVE_CARD_ICON));
     content.append(&texts);
     location_card("drive-card", &bookmark.uri, &content)
+}
+
+/// A saved share's art: the share, or the drive its label maps it to, on
+/// the network bar, crossed out while it is not mounted. The Network list
+/// counts every saved location as a share, so the card and the sidebar row
+/// show the same.
+fn saved_share_art(share: &SavedShare) -> Art {
+    let connection = Connection::from_mounted(share.is_connected);
+    Art::for_network_location(NetworkKind::Share, &share.bookmark.label, connection)
 }
 
 /// A saved share's state line: a status dot, marked offline while the
@@ -300,7 +304,7 @@ fn map_network_button() -> gtk::Button {
 
 /// The saved network locations with their state (`shares()` in app.js).
 fn saved_shares(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    let title = section_title("Network locations", Glyph::Network);
+    let title = section_title("Network locations", Icon::Organization);
     title.append(&map_network_button());
     body.append(&title);
     let cards = card_grid(DRIVE_GRID);
@@ -336,22 +340,22 @@ fn page_header(body: &gtk::Box, page: Page) {
 }
 
 /// Draws `page` into `body`, replacing what it showed.
-pub(super) fn render(
-    body: &gtk::Box,
-    page: Page,
-    places: &Places,
-    locations: &LocationContext,
-    style: ArtStyle,
-) {
+pub(super) fn render(body: &gtk::Box, page: Page, places: &Places, locations: &LocationContext) {
     remove_children(body);
-    page_header(body, page);
     match page {
         Page::ThisPc => {
-            quick_access(body, places, style);
+            page_header(body, page);
+            quick_access(body, places);
             devices_and_drives(body, places, locations);
             saved_shares(body, places, locations);
         }
-        Page::Network => network_page::render(body, places, locations),
+        Page::Network => {
+            page_header(body, page);
+            network_page::render(body, places, locations);
+        }
+        // The Settings page replaces the whole browsing area, landing
+        // pages included (`super::settings_tab`), so it leaves this empty.
+        Page::Settings => {}
     }
 }
 

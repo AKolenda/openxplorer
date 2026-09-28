@@ -19,6 +19,7 @@ use ox_core::location::file_uri;
 use ox_core::settings::Settings;
 use tempfile::TempDir;
 
+use crate::application::AppAction;
 use crate::shared::AppContext;
 use crate::theme::{Skin, ThemePreference};
 use crate::window::BrowserWindow;
@@ -54,10 +55,22 @@ impl TestProcess {
         app.register(None::<&gio::Cancellable>)
             .expect("the private session bus accepts the test application");
         crate::window::install_accelerators(&app);
+        add_inert_app_actions(&app);
         let display = gdk::Display::default()
             .expect("window tests run on a private display: use native/tools/check.py");
         let skin = Skin::install(&display);
         Self { app, skin }
+    }
+}
+
+/// Adds the application actions windows name (`app.new-window`, ...) to
+/// the test application as actions that do nothing, so the buttons that run
+/// them are enabled as in the real application, and a test never opens a
+/// window it did not ask for.
+fn add_inert_app_actions(app: &gtk::Application) {
+    let actions = [AppAction::NewWindow, AppAction::Quit];
+    for action in actions {
+        app.add_action(&gio::SimpleAction::new(action.name(), None));
     }
 }
 

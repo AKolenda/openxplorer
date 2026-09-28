@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  A group of settings (src/settings_page/group.rs): a small heading with
+  room for an action at its right, the milestone that brings the whole
+  group when the preview lacks it, then the rows in a thin frame.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxSettingsGroup" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <style>
+      <class name="settings-group"/>
+    </style>
+    <child>
+      <object class="GtkBox" id="heading">
+        <property name="orientation">vertical</property>
+        <style>
+          <class name="group-heading"/>
+        </style>
+        <child>
+          <object class="GtkBox">
+            <child>
+              <object class="GtkLabel" id="title_label">
+                <property name="xalign">0</property>
+                <property name="hexpand">true</property>
+                <property name="wrap">true</property>
+                <property name="accessible-role">heading</property>
+                <style>
+                  <class name="group-title"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox" id="actions">
+                <property name="valign">center</property>
+                <property name="spacing">8</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="notice_label">
+            <property name="visible">false</property>
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <style>
+              <class name="setting-notice"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="rows">
+        <property name="orientation">vertical</property>
+        <!-- Rows are clipped to the frame's rounded corners. -->
+        <property name="overflow">hidden</property>
+        <style>
+          <class name="group-rows"/>
+        </style>
+      </object>
+    </child>
+  </template>
+</interface>

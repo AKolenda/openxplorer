@@ -9,26 +9,28 @@
 
 use gtk::prelude::*;
 
-use crate::icons::{self, Glyph};
-use crate::window::appearance::ArtStyle;
+use crate::icons::{self, Art, ArtImage, Icon};
 use crate::window::window_action::WindowAction;
 
-use super::entries::{RowIcon, RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
+use super::entries::{RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
 
 /// Glyph icons are 18 pixels (`.side-icon svg`), art 19 (`folderIcon(19)`).
 const GLYPH_SIZE: i32 = 18;
 const ART_SIZE: i32 = 19;
 
-fn row_icon(icon: RowIcon, style: ArtStyle) -> gtk::Image {
-    let image = match icon {
-        RowIcon::Glyph(glyph, Some(fixed)) => icons::colored_glyph(glyph, GLYPH_SIZE, fixed),
-        RowIcon::Glyph(glyph, None) => icons::glyph(glyph, GLYPH_SIZE),
-        RowIcon::Art(kind) => style.image(kind, ART_SIZE),
+/// The expander chevron of This PC and Network (`icon('down')` at 9px).
+const EXPANDER_SIZE: i32 = 9;
+
+/// The pin of a Quick access row.
+const PIN_SIZE: i32 = 11;
+
+/// A row's icon at its size, with the class the skin spaces it by.
+fn row_icon(icon: Art) -> ArtImage {
+    let (size, class) = match icon {
+        Art::Glyph(_) | Art::TintedGlyph(..) => (GLYPH_SIZE, "side-glyph"),
+        Art::Folder | Art::ZipFolder | Art::File(_) | Art::Network(_) => (ART_SIZE, "side-art"),
     };
-    let class = match icon {
-        RowIcon::Glyph(..) => "side-glyph",
-        RowIcon::Art(_) => "side-art",
-    };
+    let image = ArtImage::new(icon, size);
     image.add_css_class(class);
     image
 }
@@ -44,19 +46,19 @@ fn name_label(text: &str) -> gtk::Label {
 }
 
 /// The chevron, icon, name and pin of `entry`.
-fn row_content(entry: &SidebarEntry, style: ArtStyle) -> gtk::Box {
+fn row_content(entry: &SidebarEntry) -> gtk::Box {
     // The gaps are CSS margins on the parts (see `.side-entry` in
     // resources/skin/sidebar.css), so no box spacing.
     let content = gtk::Box::builder().css_classes(["side-entry"]).build();
     if entry.level == RowLevel::Group {
-        let expander = icons::glyph(Glyph::Down, 9);
+        let expander = icons::image(Icon::ChevronDown16, EXPANDER_SIZE);
         expander.add_css_class("expand");
         content.append(&expander);
     }
-    content.append(&row_icon(entry.icon, style));
+    content.append(&row_icon(entry.icon));
     content.append(&name_label(&entry.label));
     if entry.pinned {
-        let pin = icons::glyph(Glyph::Pin, 11);
+        let pin = icons::image(Icon::Pin, PIN_SIZE);
         pin.add_css_class("pin");
         content.append(&pin);
     }
@@ -95,8 +97,8 @@ fn placement_classes(entry: &SidebarEntry, edges: SectionEdges) -> Vec<&'static 
 }
 
 /// The row for `entry`, which runs `win.go-to` or `win.mount-volume`.
-pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges, style: ArtStyle) -> gtk::ListBoxRow {
-    let overlay = gtk::Overlay::builder().child(&row_content(entry, style)).build();
+pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges) -> gtk::ListBoxRow {
+    let overlay = gtk::Overlay::builder().child(&row_content(entry)).build();
     overlay.add_overlay(&selection_bar());
     let row = gtk::ListBoxRow::builder()
         .child(&overlay)

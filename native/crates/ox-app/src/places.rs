@@ -22,8 +22,8 @@ use gtk::gio;
 use gtk::prelude::*;
 use ox_core::location::{split_location, LocationKind};
 use ox_core::places::{
-    compose_quick_access, merge_network_locations, NetworkLocation, NetworkMount, Place, SavedShare,
-    StableMount,
+    compose_quick_access, merge_network_locations, network_key, NetworkLocation, NetworkMount, Place,
+    SavedShare, StableMount,
 };
 use ox_core::settings::{Bookmark, SettingsData};
 
@@ -133,6 +133,18 @@ fn is_share_connected(share_uri: &str, volumes: &[VolumeRow]) -> bool {
         .filter_map(VolumeRow::uri)
         .map(gio::File::for_uri)
         .any(|root| share.equal(&root) || share.has_prefix(&root))
+}
+
+/// The row of `network` that stands for `uri` itself, not for a folder
+/// inside it. Locations are compared as the merge compares them
+/// (`network_key`): SMB's default port filled in, the path decoded and
+/// case-folded, a trailing slash ignored. `None` when no row matches or
+/// `uri` is not a location.
+pub(crate) fn network_row<'a>(network: &'a [NetworkLocation], uri: &str) -> Option<&'a NetworkLocation> {
+    let wanted = network_key(uri).ok()?;
+    network
+        .iter()
+        .find(|location| network_key(&location.uri).is_ok_and(|key| key == wanted))
 }
 
 /// The Network row a browsed SMB location adds for the session: the server
@@ -284,6 +296,34 @@ mod tests {
                 ("smb://studio/", NetworkKind::Server)
             ]
         );
+    }
+
+    #[test]
+    fn a_location_finds_its_own_network_row_however_it_is_spelt() {
+        let settings = settings_with_share("smb://nas/media", "Media (M:)");
+        let visited = [visited_root("smb://studio/").expect("SMB server")];
+        let places = compose(PlaceSources {
+            settings: &settings,
+            known_folders: &[],
+            volumes: &[],
+            stable_mounts: &[],
+            visited_network: &visited,
+        });
+        let label_of = |uri: &str| network_row(&places.network, uri).map(|row| row.label.as_str());
+        assert_eq!(label_of("smb://nas/media"), Some("Media (M:)"));
+        assert_eq!(
+            label_of("smb://NAS:445/Media/"),
+            Some("Media (M:)"),
+            "the same share"
+        );
+        assert_eq!(label_of("smb://studio/"), Some("studio"));
+        assert_eq!(
+            label_of("smb://nas/media/2024"),
+            None,
+            "a folder inside the share"
+        );
+        assert_eq!(label_of("smb://nas/"), None, "the server was never listed");
+        assert_eq!(label_of("not a location"), None);
     }
 
     /// parity: NET-018

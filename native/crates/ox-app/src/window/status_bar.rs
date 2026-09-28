@@ -16,9 +16,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format;
 
+use crate::config::BUILD_NAME;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::model::SelectionSummary;
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 
 use super::folder_pane::FolderView;
 use super::unported;
@@ -27,9 +28,6 @@ use super::window_action::WindowAction;
 /// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
 /// were 15).
 const BUTTON_GLYPH: i32 = 16;
-
-/// The build shown at the right (`#status-mode`).
-const BUILD_TEXT: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"), " native preview");
 
 /// The class that mutes a hint for typed text no name starts with.
 const MISS_CLASS: &str = "miss";
@@ -158,18 +156,22 @@ impl StatusBar {
     /// glyphs and their actions.
     fn finish_template(&self) {
         let imp = self.imp();
-        imp.build.set_text(BUILD_TEXT);
+        imp.build.set_text(BUILD_NAME);
         self.finish_check_updates_button();
         let large_icons = FolderView::Icons(IconSize::Large);
-        show_view_on(&imp.details_view_button, Glyph::List, FolderView::Details);
-        show_view_on(&imp.icons_view_button, Glyph::Grid, large_icons);
+        show_view_on(
+            &imp.details_view_button,
+            Icon::TextBulletList,
+            FolderView::Details,
+        );
+        show_view_on(&imp.icons_view_button, Icon::Grid, large_icons);
     }
 
     /// "Check for updates" stays disabled, with the milestone that brings
     /// it in its tooltip, until the update flow is ported.
     fn finish_check_updates_button(&self) {
         let check_updates = &*self.imp().check_updates_button;
-        check_updates.set_child(Some(&icons::glyph(Glyph::Refresh, BUTTON_GLYPH)));
+        check_updates.set_child(Some(&icons::image(Icon::ArrowClockwise, BUTTON_GLYPH)));
         let tooltip = unported::tooltip(WindowAction::CheckUpdates, "Check for updates");
         check_updates.set_tooltip_text(Some(&tooltip));
         WindowAction::CheckUpdates.assign_to(check_updates);
@@ -182,7 +184,7 @@ impl StatusBar {
     }
 
     /// Shows the item count and the selection.
-    pub(super) fn show(&self, subject: StatusSubject, selected: SelectionSummary) {
+    pub(super) fn set_counts(&self, subject: StatusSubject, selected: SelectionSummary) {
         let imp = self.imp();
         imp.count.set_text(&count_text(subject));
         let selection = match subject {
@@ -246,8 +248,8 @@ impl StatusBar {
 }
 
 /// Makes `button` show `glyph` and switch to `view`.
-fn show_view_on(button: &gtk::Button, glyph: Glyph, view: FolderView) {
-    button.set_child(Some(&icons::glyph(glyph, BUTTON_GLYPH)));
+fn show_view_on(button: &gtk::Button, glyph: Icon, view: FolderView) {
+    button.set_child(Some(&icons::image(glyph, BUTTON_GLYPH)));
     WindowAction::View.assign_with_target_to(button, &view.key().to_variant());
 }
 
