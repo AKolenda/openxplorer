@@ -13,24 +13,47 @@
       "evidence": []
     },
     "archiveExtract": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Extraction into a new folder is ported to ox-core and tested: member checks and limits before anything is written, the write guard, private staging published without replacing anything, rollback on damaged data, failed writes and cancellation, and no archive permissions. The native Extract dialog and transfer panel are not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/archive_extract.rs::extracts_files_folders_and_empty_files_into_a_new_folder",
+        "native/crates/ox-core/tests/archive_extract_checks.rs::unsafe_member_paths_are_refused_with_nothing_written",
+        "native/crates/ox-core/tests/archive_extract_rollback.rs::a_crc_failure_rolls_back",
+        "native/crates/ox-core/tests/archive_extract_rollback.rs::a_folder_created_meanwhile_is_never_replaced",
+        "native/crates/ox-core/tests/archive_extract_rollback.rs::cancelling_while_writing_removes_the_staging_folder",
+        "native/crates/ox-core/tests/archive_extract_dispatch.rs::member_destinations_are_checked_before_any_staging",
+        "native/crates/ox-core/tests/archive_gio.rs::extraction_through_gio_never_applies_archive_permissions"
+      ]
     },
     "archiveInspect": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "The preflight is ported to ox-core and tested: every member is checked with the extraction rules and summarised without writing anything, on a worker thread. The native Extract dialog is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/archive_extract_checks.rs::inspection_summarises_and_writes_nothing",
+        "native/crates/ox-core/tests/archive_extract_dispatch.rs::inspection_and_extraction_agree",
+        "native/crates/ox-core/tests/archive_gio.rs::background_variants_return_the_blocking_results"
+      ]
     },
     "archiveList": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Listing is ported to ox-core and tested from the central directory alone: unsafe names, links and special files hidden and counted, the 32 MiB directory and 100,000 member limits, and archives on shares read through seekable GIO streams. The native Compressed folder dialog is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/archive_browse.rs::listing_extracts_nothing",
+        "native/crates/ox-core/tests/archive_browse.rs::rows_list_folders_first_by_name_ignoring_case",
+        "native/crates/ox-core/tests/archive_browse.rs::dangerous_members_are_hidden_and_counted",
+        "native/crates/ox-core/tests/archive_browse.rs::more_than_100000_members_are_left_to_an_archive_manager",
+        "native/crates/ox-core/tests/archive_gio.rs::a_real_zip_is_read_through_short_reads"
+      ]
     },
     "archiveOpenMember": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Opening one document, image or media member as a read-only copy in a private runtime folder is ported to ox-core and tested, with the type, encryption, size and ratio refusals. Opening the copy with its default application from the native UI is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/archive_browse.rs::only_the_selected_member_is_copied_read_only",
+        "native/crates/ox-core/tests/archive_browse.rs::a_script_is_not_opened",
+        "native/crates/ox-core/tests/archive_browse.rs::encrypted_and_oversized_members_are_listed_but_not_opened",
+        "native/crates/ox-core/tests/archive_gio.rs::previews_go_to_the_private_runtime_directory"
+      ]
     },
     "authReply": {
       "status": "pending",
@@ -158,14 +181,26 @@
       "evidence": []
     },
     "create": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "ox_core::ops::create_item ports create_item in desktop/gio_backend.py and the checks of the create branch of dispatch: name validation, the refusal inside an SMB server listing, the snapshot write guard, and an exclusive make_directory or create that never overwrites. The native New dialog is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_create.rs::new_folder_and_new_file_appear_under_their_names",
+        "native/crates/ox-core/tests/ops_create.rs::creating_onto_a_taken_name_never_overwrites",
+        "native/crates/ox-core/tests/ops_create.rs::invalid_names_are_refused_before_anything_is_created",
+        "native/crates/ox-core/tests/ops_create.rs::a_server_listing_or_a_protected_folder_gets_no_new_items"
+      ]
     },
     "createTemplate": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "ox_core::ops::create_from_template ports create_from_template in desktop/file_services.py with the OPS-048 rules: the template must be in a fresh list, it is opened without following links or blocking and checked on the descriptor, read in bounded, cancellable blocks, staged in a private file that is published without overwriting and deleted when it is not published. The native New dialog is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_create.rs::a_starter_writes_its_content_to_a_private_new_file",
+        "native/crates/ox-core/tests/ops_create.rs::a_user_template_is_copied_without_its_permissions",
+        "native/crates/ox-core/tests/ops_create.rs::a_template_the_list_does_not_offer_is_refused",
+        "native/crates/ox-core/tests/ops_create.rs::a_template_never_overwrites_and_never_goes_to_a_server_listing",
+        "native/crates/ox-core/src/ops/new_from_template.rs::a_template_swapped_for_a_link_or_a_fifo_is_refused_without_blocking",
+        "native/crates/ox-core/src/ops/new_from_template.rs::a_name_taken_while_publishing_is_kept_and_the_stage_file_is_deleted"
+      ]
     },
     "desktopDefault": {
       "status": "pending",
@@ -345,9 +380,15 @@
       "evidence": []
     },
     "rename": {
-      "status": "pending",
-      "note": "Not ported. ox-core has the pieces (location::validate_name, transfer::check_write_tree, Node::move_native) but nothing that composes them like rename_item in desktop/gio_backend.py: name validation, the root and whole-SMB-share refusal, the same-name no-op, the snapshot write guard, then a move that never overwrites. desktop/tests/gio_integration.py test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected have no Rust port.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "ox_core::ops::rename_item ports rename_item in desktop/gio_backend.py: name validation, the refusal of roots and whole SMB shares, the same-name no-op, the whole-tree snapshot write check, then a same-folder move that never overwrites. test_rename_does_not_overwrite and test_rename_parent_of_backup_is_rejected of desktop/tests/gio_integration.py are ported. The native Rename dialog is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_rename.rs::rename_onto_a_taken_name_changes_nothing",
+        "native/crates/ox-core/tests/ops_rename.rs::a_folder_holding_a_protected_backup_is_not_renamed",
+        "native/crates/ox-core/tests/ops_rename.rs::a_folder_holding_a_configured_snapshot_folder_is_not_renamed",
+        "native/crates/ox-core/tests/ops_rename.rs::renaming_to_the_same_name_changes_nothing_and_leaves_nothing_to_undo",
+        "native/crates/ox-core/tests/ops_rename.rs::invalid_names_roots_and_whole_shares_are_refused"
+      ]
     },
     "revealDisable": {
       "status": "pending",
@@ -385,24 +426,43 @@
       "evidence": []
     },
     "tabTransferReady": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "ox_core::ops::TabTransfers::acknowledge ports ready in desktop/tab_transfers.py: only an acceptance from the claiming window, while both windows are ready, commits the move; anything else keeps the source tab. Filtering the tab state belongs to the native tab-state type, and the native windows do not move tabs yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_tab_transfer.rs::the_acknowledgement_commits_once_to_the_original_source",
+        "native/crates/ox-core/tests/ops_tab_transfer.rs::an_acknowledgement_from_another_window_cannot_close_the_source_tab",
+        "native/crates/ox-core/tests/ops_tab_transfer.rs::an_acknowledgement_after_the_timeout_never_commits",
+        "native/crates/ox-core/tests/ops_tab_transfer.rs::a_refusal_keeps_the_source_tab"
+      ]
     },
     "templates": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "ox_core::ops::list_templates ports PRESETS and list_templates in desktop/file_services.py: the six starters, then at most 100 visible regular files of at most 16 MiB from the Templates folder, listed without following links and without .desktop files. The native New menu is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_create.rs::the_six_starters_come_first_with_their_fixed_names",
+        "native/crates/ox-core/tests/ops_create.rs::only_visible_regular_files_up_to_sixteen_mebibytes_are_user_templates",
+        "native/crates/ox-core/tests/ops_create.rs::at_most_one_hundred_user_templates_are_listed",
+        "native/crates/ox-core/src/ops/templates.rs::a_cancelled_listing_is_a_cancellation_not_the_starters_alone"
+      ]
     },
     "transferConflicts": {
-      "status": "pending",
-      "note": "Not ported. No ox-core function answers the paste-conflict query of desktop/winspace.py: 1 to 100,000 item URIs, a destination that must be a folder (\"Open a destination folder before pasting.\") and the items whose names already exist there. It needs a function and tests, including a dangling symlink as the taken name.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "ox_core::ops::find_conflicts answers the paste-conflict query of desktop/winspace.py: 1 to 100,000 item URIs, a destination that must be a folder (\"Open a destination folder before pasting.\") and the items whose names are taken there, hidden items and dangling links included. A cancelled check is reported as cancelled, never as no conflicts. The native conflict dialog is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_transfer.rs::conflicts_list_the_items_whose_names_are_taken_hidden_and_dangling_ones_included",
+        "native/crates/ox-core/tests/ops_transfer.rs::a_conflict_check_needs_a_folder_and_between_one_and_the_maximum_items",
+        "native/crates/ox-core/tests/ops_transfer.rs::a_cancelled_conflict_check_reports_the_cancellation"
+      ]
     },
     "trashSupport": {
-      "status": "pending",
-      "note": "Not ported. GioNode::can_trash exists but no test calls it, and it maps every error to false, so a not-mounted share would skip the mount retry that trash_support in desktop/gio_backend.py relies on. It must propagate NOT_MOUNTED and be tested on a local folder, an unsupported location and a not-mounted one.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "ox_core::ops::trash_support asks access::can-trash as trash_support in desktop/gio_backend.py does, and is tested on a local folder, a folder GIO reports without a Trash, and a share that is not mounted, which reaches the caller as not-mounted so it can mount and ask again. ox_core::ops::plan_delete applies the per-folder decision of app.js. The mount retry and the native Delete confirmation are not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/ops_delete_plan.rs::an_item_whose_folder_cannot_be_queried_is_planned_for_permanent_delete_like_python",
+        "native/crates/ox-core/tests/ops_delete_plan.rs::a_folder_gio_reports_without_a_trash_is_planned_for_permanent_delete",
+        "native/crates/ox-core/tests/ops_delete_plan.rs::a_share_that_cannot_answer_counts_as_having_a_trash",
+        "native/crates/ox-core/tests/ops_delete_plan.rs::a_cancelled_trash_check_reports_the_cancellation_and_plans_nothing"
+      ]
     },
     "uiReady": {
       "status": "pending",

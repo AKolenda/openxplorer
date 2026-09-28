@@ -19,7 +19,8 @@ use std::sync::Mutex;
 
 use ox_core::transfer::{Cancellation, Node, TransferError};
 
-use super::local::{file_uri, local_path_of, LocalNode, Provider};
+use super::file_uri;
+use super::local::{local_path_of, LocalNode, Provider};
 
 /// One device call, for assertions (Python `CALLS`).
 #[derive(Debug, Clone, PartialEq, Eq)]

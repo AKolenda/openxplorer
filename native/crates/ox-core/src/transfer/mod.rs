@@ -46,10 +46,13 @@
 //! `tests/transfer_cases/` and `tests/gio_node.rs`, against temporary local
 //! files, device test doubles and the production GIO adapter; each port
 //! names the Python test it comes from. Still to come with the features
-//! they test: the rename cases of `gio_integration.py`, the bridge dispatch
-//! of `desktop/tests/test_rc2.py` (its engine half is ported) and the ZIP
-//! extraction cases of `desktop/tests/test_zip_extract.py`. Native backend
-//! limitations are documented in [`crate::gio_node`].
+//! they test: the rename cases of `gio_integration.py` and the bridge
+//! dispatch of `desktop/tests/test_rc2.py` (its engine half is ported). The
+//! ZIP extractor in [`crate::archive`] secures and removes its staging
+//! folder with this module's `secure_local_staging` and
+//! [`Node::delete_staging`]; `desktop/tests/test_zip_extract.py` is ported
+//! to its `tests/archive_*.rs`. Native backend limitations are documented
+//! in [`crate::gio_node`].
 
 mod batch;
 mod cancellation;
@@ -75,10 +78,11 @@ pub use cancellation::Cancellation;
 pub(crate) use commit::verify_installation;
 pub use engine::TransferEngine;
 pub use error::TransferError;
-pub(crate) use guard::nesting_error;
 pub use guard::MAX_DEPTH;
-pub(crate) use modes::PRIVATE_DIRECTORY_MODE;
+pub(crate) use guard::{check_write_tree, nesting_error, SourceChange};
+pub(crate) use modes::{secure_local_staging, PRIVATE_DIRECTORY_MODE};
 pub use names::is_own_staging_name;
+pub(crate) use names::random_hex;
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;
 pub(crate) use staging::{clean_staging, STAGING_LEVELS};

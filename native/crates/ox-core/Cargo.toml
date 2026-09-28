@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 [package]
 name = "ox-core"
-description = "OpenXplorer toolkit-independent core: locations, settings, entries and the transfer engine"
+description = "OpenXplorer toolkit-independent core: locations, settings, entries, the transfer engine and the backend services"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,11 +12,40 @@ publish.workspace = true
 gio.workspace = true
 glib.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+# Brave's preferences hold 17-digit doubles such as zoom levels. The default
+# float parser is not correctly rounded, so a sync would rewrite preferences it
+# must leave alone; float_roundtrip reads every number back exactly, as
+# Python's json does.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 percent-encoding.workspace = true
 thiserror.workspace = true
 libc.workspace = true
-rustix.workspace = true
+# `event`: the search index's inotify watcher waits on its descriptor with
+# poll(2). `process` gives `setsid`, which starts `openxplorer --restart` in its
+# own session as desktop/winspace.py does (`update::SessionLauncher`).
+rustix = { workspace = true, features = ["event", "process"] }
+# The search cache; [workspace.dependencies] says why it links the system
+# SQLite.
+rusqlite.workspace = true
+oo7.workspace = true
+# ZIP decompression and CRC-32 checks for `archive`; see the workspace manifest.
+flate2.workspace = true
+bzip2.workspace = true
+lzma-rust2.workspace = true
+crc32fast.workspace = true
+# The updater's HTTPS client. libsoup is GNOME's HTTP library: it uses the
+# desktop's proxy settings and the system's certificate store through
+# glib-networking, and takes a `gio::Cancellable`. Building needs
+# libsoup-3.0-dev.
+soup3 = "0.9"
+# The updater's private download folder (`release-XXXXXX`, mode 0700), which
+# is deleted with everything in it whether the installation succeeds or fails.
+tempfile.workspace = true
+# Delivering installation progress from the worker thread to the main
+# thread's `UpdateService::install` future. GLib's own futures support
+# already builds both.
+futures-channel = "0.3"
+futures-util = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 tempfile.workspace = true
