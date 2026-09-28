@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Applying and saving the window's view preferences.
 //!
-//! Ports `applyLayout`, `saveLayout` and the `fire('preferences', …)` calls
-//! in `desktop/ui/app.js`. A window starts from the shared settings; view,
-//! hidden files, details pane, theme, text size, sidebar width and column
-//! widths are saved when the user changes them, off the main thread,
-//! through the Python app's own settings file and lock.
+//! Ports `applyLayout`, `saveLayout`, `resetLayout` and the
+//! `fire('preferences', …)` calls in `desktop/ui/app.js`. A window starts
+//! from the shared settings; view, hidden files, details pane, theme, text
+//! size, sidebar width and column widths are saved when the user changes
+//! them, off the main thread, through the Python app's own settings file
+//! and lock. Resetting the layout returns every window's sidebar and
+//! columns to their default widths.
 
 use std::cell::Cell;
 use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::settings::{Column, PreferencesUpdate, Settings, SettingsError};
+use gtk::subclass::prelude::*;
+use ox_core::settings::{Column, PreferencesUpdate, SettingsError};
 
 use crate::theme::ThemePreference;
 
@@ -49,6 +52,8 @@ pub(super) enum Preference {
     SidebarWidth(i32),
     /// The details columns the user sized, in pixels.
     ColumnWidths(Vec<(Column, f64)>),
+    /// The default sidebar width and column widths (`resetLayout`).
+    DefaultLayout,
 }
 
 impl Preference {
@@ -63,6 +68,11 @@ impl Preference {
             Preference::TextSize(size) => update.text_size = Some(size),
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
             Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
+            Preference::DefaultLayout => {
+                update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
+                // An empty list clears every saved column width.
+                update.column_widths = Some(Vec::new());
+            }
         }
         update
     }
@@ -109,6 +119,32 @@ impl BrowserWindow {
         self.save_sidebar_width_after_drags();
         self.keep_sidebar_within_limit();
         self.reset_sidebar_on_double_click();
+        self.follow_layout_reset();
+    }
+
+    /// Settings > "Reset sidebar and column widths": saves the default
+    /// widths and has every window show them.
+    pub(super) fn reset_layout(&self) {
+        self.save_preference(Preference::DefaultLayout);
+        self.context().announce_layout_reset();
+    }
+
+    /// Returns the sidebar and the columns to their default widths whenever
+    /// any window resets the layout.
+    fn follow_layout_reset(&self) {
+        let handler = self.context().connect_layout_reset(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.show_default_layout()
+        ));
+        self.imp().handlers.borrow_mut().layout = Some(handler);
+    }
+
+    /// Shows the 210-pixel sidebar and the columns' default widths, without
+    /// saving them: the window that reset the layout saves it once.
+    fn show_default_layout(&self) {
+        self.workspace().set_position(DEFAULT_SIDEBAR_WIDTH);
+        self.folder_pane().details().apply_column_widths(None);
     }
 
     /// The widest the sidebar may be now, or `None` before the workspace
@@ -200,9 +236,7 @@ impl BrowserWindow {
                 }
             }
         );
-        let change =
-            Box::new(move |settings: &mut Settings| settings.update_preferences(&update).map(|_| ()));
-        self.context().change_settings(change, reply);
+        self.context().update_preferences(update, reply);
     }
 }
 
@@ -229,6 +263,15 @@ mod tests {
         assert_eq!(widest_sidebar(1320, 262), 560);
         assert_eq!(widest_sidebar(900, 262), 338);
         assert_eq!(widest_sidebar(600, 262), 140, "never narrower than 140");
+    }
+
+    /// `resetLayout` in app.js saves `{sidebarWidth: 210, columnWidths: {}}`.
+    #[test]
+    fn resetting_the_layout_saves_the_210_pixel_sidebar_and_clears_the_columns() {
+        let update = Preference::DefaultLayout.into_update();
+        assert_eq!(update.sidebar_width, Some(210.0));
+        assert_eq!(update.column_widths, Some(Vec::new()));
+        assert_eq!(update.theme, None, "nothing else changes");
     }
 
     #[test]

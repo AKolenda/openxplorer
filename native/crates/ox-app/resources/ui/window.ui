@@ -2,7 +2,10 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
   The browsing window's frame: the static layout of desktop/ui/index.html,
-  top to bottom. src/window/mod.rs binds the parts it updates by id.
+  top to bottom. src/window/mod.rs binds the parts it updates by id. On
+  the Settings tab the Settings page takes the place of the navigation
+  row, the command bar, the workspace and the status bar
+  (src/window/settings_tab.rs), as `.settings-open` in style.css.
 
   Buttons name no action here: Rust sets every action name from
   WindowAction, so a misspelt name is a compile error, and draws the
@@ -91,7 +94,7 @@
           <!-- section.navigation: the history buttons, the address and the
                search box, 14 pixels apart by their CSS border-spacing,
                which narrow windows shrink. -->
-          <object class="GtkBox">
+          <object class="GtkBox" id="navigation_row">
             <style>
               <class name="navigation"/>
             </style>
@@ -120,35 +123,56 @@
           <object class="OxCommandBar" id="command_bar"/>
         </child>
         <child>
-          <!-- The toast lies over the workspace, at its bottom centre. -->
+          <!-- The toast lies over the workspace or the Settings page, at
+               its bottom centre. -->
           <object class="GtkOverlay">
             <property name="vexpand">true</property>
             <property name="child">
-              <!-- The sidebar and the panes beside it, split by the 6-pixel
-                   .sidebar-resizer. -->
-              <object class="GtkPaned" id="workspace">
-                <property name="orientation">horizontal</property>
-                <property name="vexpand">true</property>
-                <property name="wide-handle">true</property>
-                <property name="shrink-start-child">false</property>
-                <property name="shrink-end-child">false</property>
-                <property name="resize-start-child">false</property>
-                <style>
-                  <class name="workspace"/>
-                </style>
-                <property name="start-child">
-                  <object class="OxSidebar" id="sidebar"/>
-                </property>
-                <property name="end-child">
-                  <object class="GtkBox">
-                    <child>
-                      <object class="OxFolderPane" id="folder_pane"/>
-                    </child>
-                    <child>
-                      <object class="OxDetailsPane" id="details_pane"/>
-                    </child>
+              <!-- Only the surface shown counts towards the window's size. -->
+              <object class="GtkStack" id="surfaces">
+                <property name="hhomogeneous">false</property>
+                <property name="vhomogeneous">false</property>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">browsing</property>
+                    <property name="child">
+                      <!-- The sidebar and the panes beside it, split by the 6-pixel
+                           .sidebar-resizer. -->
+                      <object class="GtkPaned" id="workspace">
+                        <property name="orientation">horizontal</property>
+                        <property name="vexpand">true</property>
+                        <property name="wide-handle">true</property>
+                        <property name="shrink-start-child">false</property>
+                        <property name="shrink-end-child">false</property>
+                        <property name="resize-start-child">false</property>
+                        <style>
+                          <class name="workspace"/>
+                        </style>
+                        <property name="start-child">
+                          <object class="OxSidebar" id="sidebar"/>
+                        </property>
+                        <property name="end-child">
+                          <object class="GtkBox">
+                            <child>
+                              <object class="OxFolderPane" id="folder_pane"/>
+                            </child>
+                            <child>
+                              <object class="OxDetailsPane" id="details_pane"/>
+                            </child>
+                          </object>
+                        </property>
+                      </object>
+                    </property>
                   </object>
-                </property>
+                </child>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">settings</property>
+                    <property name="child">
+                      <object class="OxSettingsPage" id="settings_page"/>
+                    </property>
+                  </object>
+                </child>
               </object>
             </property>
             <child type="overlay">

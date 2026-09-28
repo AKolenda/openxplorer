@@ -114,8 +114,9 @@ impl BrowserWindow {
     }
 
     /// Redraws everything that shows a place: the sidebar, the landing
-    /// page, and the tabs and the details pane, whose network locations
-    /// show the art of their sidebar rows.
+    /// page, the tabs and the details pane, whose network locations show
+    /// the art of their sidebar rows, and the folders Settings offers the
+    /// search index.
     pub(super) fn render_places(&self) {
         let places = self.places();
         let entries = sidebar::sidebar_entries(&places, &self.imp().locations.borrow());
@@ -126,6 +127,7 @@ impl BrowserWindow {
         self.render_landing_with(&places);
         self.render_tabs();
         self.update_details_pane();
+        self.show_index_candidates(&places);
     }
 
     /// Redraws the landing page when the active tab shows one.

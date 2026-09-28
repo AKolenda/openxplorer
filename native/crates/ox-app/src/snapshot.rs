@@ -2,15 +2,20 @@
 //! The developer snapshot hook, for visual checks of the window.
 //!
 //! With `OPENXPLORER_SNAPSHOT=<file.png>` set, the app opens one window,
-//! waits until its first listing is drawn, saves the window as a PNG and
-//! quits. These variables shape the picture, for this run only (nothing is
-//! saved to the settings file):
+//! waits until it has the size asked for and its first listing is drawn,
+//! saves the window as a PNG and quits. These variables shape the picture,
+//! for this run only (nothing is saved to the settings file):
 //!
 //! - `OPENXPLORER_START`: the first tab's location, a path or URI (the
-//!   home folder by default);
+//!   home folder by default; `ox:settings` opens Settings);
 //! - `OPENXPLORER_THEME`: `light`, `dark` or `system`;
 //! - `OPENXPLORER_VIEW`: `details` or an icon size (`large`, `medium`, ...);
-//! - `OPENXPLORER_SIZE`: the window's size, `<width>x<height>`.
+//! - `OPENXPLORER_SIZE`: the window's size, `<width>x<height>`;
+//! - `OPENXPLORER_SETTINGS`: opens Settings at a category (`appearance`,
+//!   `search`, `default-apps`, `windows`, `brave`, `about`) or a page one
+//!   of them opens (`indexed-folders`, `troubleshooting`);
+//! - `OPENXPLORER_SETTINGS_SEARCH`: types this into the settings search,
+//!   opening Settings when it is not open.
 //!
 //! The picture is the window's title bar and contents without the frame
 //! GTK draws around a window on a display without a compositor, so it
@@ -32,6 +37,7 @@ use std::time::{Duration, Instant};
 use gtk::prelude::*;
 use gtk::{glib, graphene};
 
+use crate::settings_page::SettingsView;
 use crate::theme::ThemePreference;
 use crate::window::{BrowserWindow, FolderView};
 
@@ -41,6 +47,8 @@ const START_VARIABLE: &str = "OPENXPLORER_START";
 const THEME_VARIABLE: &str = "OPENXPLORER_THEME";
 const VIEW_VARIABLE: &str = "OPENXPLORER_VIEW";
 const SIZE_VARIABLE: &str = "OPENXPLORER_SIZE";
+const SETTINGS_VARIABLE: &str = "OPENXPLORER_SETTINGS";
+const SETTINGS_SEARCH_VARIABLE: &str = "OPENXPLORER_SETTINGS_SEARCH";
 
 /// Frames drawn after the listing, so late layout changes (column widths,
 /// scrolled crumbs, icons) are in the picture.
@@ -107,6 +115,10 @@ pub(crate) struct SnapshotRequest {
     pub view: Option<FolderView>,
     /// The window size, or `None` for the app's default.
     pub size: Option<WindowSize>,
+    /// The Settings page to open, or `None` to leave Settings closed.
+    pub settings: Option<SettingsView>,
+    /// What to type into the settings search, or `None` for nothing.
+    pub settings_search: Option<String>,
 }
 
 impl SnapshotRequest {
@@ -134,12 +146,20 @@ impl SnapshotRequest {
             FolderView::from_key(value)
         })?;
         let size = parse_variable(&lookup, SIZE_VARIABLE, "<width>x<height>", WindowSize::parse)?;
+        let settings = parse_variable(
+            &lookup,
+            SETTINGS_VARIABLE,
+            "a settings category or page",
+            SettingsView::from_key,
+        )?;
         Ok(Some(Self {
             png: PathBuf::from(png),
             start: non_empty(&lookup, START_VARIABLE),
             theme,
             view,
             size,
+            settings,
+            settings_search: non_empty(&lookup, SETTINGS_SEARCH_VARIABLE),
         }))
     }
 }
@@ -174,8 +194,9 @@ fn parse_variable<T>(
     }
 }
 
-/// Saves `window` as `request` asks once its first listing is drawn (or
-/// after [`LISTING_PATIENCE`]), then hands the outcome to `done`.
+/// Saves `window` as `request` asks once it has the size asked for and its
+/// first listing is drawn (or after [`LISTING_PATIENCE`]), then hands the
+/// outcome to `done`.
 pub(crate) fn save_when_listed(
     window: &BrowserWindow,
     request: &SnapshotRequest,
@@ -192,6 +213,13 @@ pub(crate) fn save_when_listed(
         }
         let listing = Listing::of(window);
         milestones.note_frame(listing);
+        // A window that changes its layout as it narrows (Settings does)
+        // takes a few frames to reach the size; the frames that settle the
+        // picture count from then on.
+        let is_resized = size.is_none_or(|size| has_content_size(window.upcast_ref(), size));
+        if !is_resized && !timing.has_timed_out() {
+            return glib::ControlFlow::Continue;
+        }
         let readiness = timing.count_frame(listing);
         if readiness == Readiness::Waiting {
             return glib::ControlFlow::Continue;
@@ -257,12 +285,17 @@ impl SaveTiming {
         }
     }
 
+    /// Whether the patience has run out.
+    fn has_timed_out(&self) -> bool {
+        self.started.elapsed() > LISTING_PATIENCE
+    }
+
     /// Counts a frame that shows `listing` and says whether the window can
     /// be saved on it. Once the listing is drawn, or the patience ran out,
     /// every call counts towards [`SETTLE_FRAMES`], so call it once per
     /// frame.
     fn count_frame(&self, listing: Listing) -> Readiness {
-        let timed_out = self.started.elapsed() > LISTING_PATIENCE;
+        let timed_out = self.has_timed_out();
         if listing == Listing::Running && !timed_out {
             return Readiness::Waiting;
         }
@@ -331,6 +364,14 @@ fn fit_content(window: &gtk::Window, size: WindowSize) {
     if window.default_size() != (width, height) {
         window.set_default_size(width, height);
     }
+}
+
+/// Whether the title bar and contents of `window` take `size` now.
+fn has_content_size(window: &gtk::Window, size: WindowSize) -> bool {
+    let Some(content) = content_bounds(window) else {
+        return false;
+    };
+    pixels(content.width()) == size.width && pixels(content.height()) == size.height
 }
 
 /// Rounds a widget measure to whole pixels; window measures are far
@@ -441,8 +482,30 @@ mod tests {
                 width: 1440,
                 height: 900,
             }),
+            settings: None,
+            settings_search: None,
         };
         assert_eq!(asked.expect("valid variables"), Some(expected));
+    }
+
+    #[test]
+    fn the_settings_variables_open_a_page_and_type_a_search() {
+        let asked = request(&[
+            (SNAPSHOT_VARIABLE, "/tmp/settings.png"),
+            (SETTINGS_VARIABLE, "indexed-folders"),
+            (SETTINGS_SEARCH_VARIABLE, "zoom"),
+        ])
+        .expect("valid variables")
+        .expect("a snapshot is asked for");
+        assert_eq!(
+            asked.settings,
+            Some(SettingsView::Subpage(
+                crate::settings_page::Subpage::IndexedFolders
+            ))
+        );
+        assert_eq!(asked.settings_search.as_deref(), Some("zoom"));
+        let refused = request(&[(SNAPSHOT_VARIABLE, "a.png"), (SETTINGS_VARIABLE, "general")]);
+        assert!(refused.is_err(), "general is not a settings page");
     }
 
     #[test]

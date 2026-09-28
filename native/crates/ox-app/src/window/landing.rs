@@ -342,14 +342,20 @@ fn page_header(body: &gtk::Box, page: Page) {
 /// Draws `page` into `body`, replacing what it showed.
 pub(super) fn render(body: &gtk::Box, page: Page, places: &Places, locations: &LocationContext) {
     remove_children(body);
-    page_header(body, page);
     match page {
         Page::ThisPc => {
+            page_header(body, page);
             quick_access(body, places);
             devices_and_drives(body, places, locations);
             saved_shares(body, places, locations);
         }
-        Page::Network => network_page::render(body, places, locations),
+        Page::Network => {
+            page_header(body, page);
+            network_page::render(body, places, locations);
+        }
+        // The Settings page replaces the whole browsing area, landing
+        // pages included (`super::settings_tab`), so it leaves this empty.
+        Page::Settings => {}
     }
 }
 

@@ -19,29 +19,34 @@ use ox_core::location::{DeviceLabel, LocationContext, VirtualPlace};
 use crate::icons::Icon;
 use crate::volumes::{VolumeKind, VolumeRow};
 
-/// A place the window draws as a landing page instead of a folder listing.
+/// A place the window draws itself instead of a folder listing.
 ///
 /// Only these of ox-core's [`VirtualPlace`]s have a page yet; the Recycle
-/// Bin, Recent and Settings arrive with their milestones. The legacy
-/// Home page is not one of them: as in the Python app, `home:` opens the
-/// home folder.
+/// Bin and Recent arrive with their milestones. The legacy Home page is
+/// not one of them: as in the Python app, `home:` opens the home folder.
+/// This PC and Network are landing pages in the folder pane; Settings
+/// takes the place of the whole browsing area, as `.settings-open` does in
+/// `desktop/ui/style.css`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Page {
     /// Quick access, devices and drives, and saved network locations.
     ThisPc,
     /// Connected and saved network locations.
     Network,
+    /// The Settings page.
+    Settings,
 }
 
 impl Page {
-    /// Every page, in sidebar order.
-    pub const ALL: [Page; 2] = [Page::ThisPc, Page::Network];
+    /// Every page, in sidebar order, then Settings.
+    pub const ALL: [Page; 3] = [Page::ThisPc, Page::Network, Page::Settings];
 
     /// The ox-core place the page draws.
     const fn place(self) -> VirtualPlace {
         match self {
             Page::ThisPc => VirtualPlace::ThisPc,
             Page::Network => VirtualPlace::Network,
+            Page::Settings => VirtualPlace::Settings,
         }
     }
 
@@ -62,8 +67,12 @@ impl Page {
     }
 
     /// The page whose title was typed into the address bar ("this pc").
+    ///
+    /// Settings is never typed by title: the address bar is hidden on it,
+    /// and a folder called Settings must still open when its name is typed.
     pub fn from_title(text: &str) -> Option<Page> {
-        VirtualPlace::from_title(text).and_then(Self::from_place)
+        let page = VirtualPlace::from_title(text).and_then(Self::from_place);
+        page.filter(|page| *page != Page::Settings)
     }
 
     /// Heading, tab title and breadcrumb label.
@@ -76,15 +85,17 @@ impl Page {
         match self {
             Page::ThisPc => "Folders, devices, and connected storage.",
             Page::Network => "Find shared storage on your local network, or enter an address.",
+            Page::Settings => "Your explorer, your way.",
         }
     }
 
     /// Glyph for the sidebar, the address bar and the tab: a laptop for
-    /// This PC and connected nodes for Network.
+    /// This PC, connected nodes for Network and the gear for Settings.
     pub const fn icon(self) -> Icon {
         match self {
             Page::ThisPc => Icon::Laptop,
             Page::Network => Icon::Organization,
+            Page::Settings => Icon::Settings,
         }
     }
 }
@@ -163,11 +174,16 @@ mod tests {
     }
 
     #[test]
-    fn only_drawn_pages_can_be_typed_by_title() {
+    fn landing_pages_can_be_typed_by_title_but_settings_cannot() {
         assert_eq!(Page::from_title(" this pc "), Some(Page::ThisPc));
         assert_eq!(Page::from_title("Network"), Some(Page::Network));
         assert_eq!(Page::from_uri("network:"), Some(Page::Network));
-        assert_eq!(Page::from_title("Settings"), None);
+        assert_eq!(
+            Page::from_title("Settings"),
+            None,
+            "a folder may be called Settings"
+        );
+        assert_eq!(Page::from_uri("settings:"), Some(Page::Settings));
         assert_eq!(Page::from_title("/tmp"), None);
     }
 

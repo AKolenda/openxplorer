@@ -14,6 +14,7 @@ use gtk::{gio, glib};
 use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
+use crate::settings_page::{Category, SettingsView};
 use crate::text_size::Step;
 use crate::theme::ThemePreference;
 
@@ -132,6 +133,7 @@ impl BrowserWindow {
         self.install_view_actions();
         self.install_sort_actions();
         self.install_appearance_actions();
+        self.install_settings_actions();
         self.install_unported_actions();
     }
 
@@ -175,9 +177,7 @@ impl BrowserWindow {
             plain_action(WindowAction::Up, BrowserWindow::go_up),
             plain_action(WindowAction::Refresh, BrowserWindow::refresh),
             plain_action(WindowAction::Location, BrowserWindow::edit_address),
-            plain_action(WindowAction::Search, |window| {
-                window.search_box().focus();
-            }),
+            plain_action(WindowAction::Search, BrowserWindow::focus_search),
             text_action(WindowAction::GoTo, BrowserWindow::navigate_or_report),
             text_action(WindowAction::MountVolume, BrowserWindow::mount_volume),
             text_action(
@@ -334,6 +334,28 @@ impl BrowserWindow {
         self.add_action_entries(steps);
     }
 
+    /// Settings, the Default file explorer… shortcut to it, and the layout
+    /// reset it offers.
+    fn install_settings_actions(&self) {
+        self.add_action_entries([
+            plain_action(WindowAction::Settings, |window| window.open_settings(None)),
+            plain_action(WindowAction::DefaultFileExplorer, |window| {
+                window.open_settings(Some(SettingsView::Category(Category::DefaultApps)));
+            }),
+            plain_action(WindowAction::ResetLayout, BrowserWindow::reset_layout),
+        ]);
+    }
+
+    /// Ctrl+F: the settings search on the Settings tab, else the search
+    /// box.
+    fn focus_search(&self) {
+        if self.shows_settings() {
+            self.settings_page().focus_search();
+        } else {
+            self.search_box().focus();
+        }
+    }
+
     /// Opens a tab for `address`, showing a refused address in the
     /// message line.
     fn open_tab_or_report(&self, address: &str, placement: TabPlacement) {
@@ -353,7 +375,7 @@ impl BrowserWindow {
 
 /// The window's keyboard shortcuts of `onKey` that never change: each
 /// action and its accelerators, as GTK parses them.
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 11] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 12] = [
     (WindowAction::NewTab, &["<Primary>t"]),
     (WindowAction::CloseTab, &["<Primary>w"]),
     (WindowAction::NextTab, &["<Primary>Tab", "<Primary>Page_Down"]),
@@ -368,6 +390,7 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 11] = [
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::Search, &["<Primary>f"]),
     (WindowAction::Hidden, &["<Primary>h"]),
+    (WindowAction::Settings, &["<Primary>comma"]),
 ];
 
 /// Ctrl+N, the application's one shortcut: another window.

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the crate's tests share: listed entries built through ox-core's own
 //! conversion, so they carry every field a real listing does, rows of the
-//! Network list, and the GTK [`harness`] for tests that open windows.
+//! Network list, the GTK [`harness`] for tests that open windows, and
+//! [`python`], which runs the Python app's settings code.
 
 pub(crate) mod harness;
+pub(crate) mod python;
 
 use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry};

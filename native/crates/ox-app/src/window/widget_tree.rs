@@ -12,7 +12,7 @@
 use gtk::prelude::*;
 
 /// The children of `widget`, first to last.
-pub(super) fn children(widget: &impl IsA<gtk::Widget>) -> impl Iterator<Item = gtk::Widget> {
+pub(crate) fn children(widget: &impl IsA<gtk::Widget>) -> impl Iterator<Item = gtk::Widget> {
     std::iter::successors(widget.first_child(), WidgetExt::next_sibling)
 }
 

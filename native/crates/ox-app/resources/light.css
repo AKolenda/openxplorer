@@ -86,3 +86,23 @@
 @define-color ox_network_bar #35a854;  /* the green network bar, the current app's pipe in both themes */
 @define-color ox_zip_badge #6b4e00;    /* the zip badge, on the yellow folder in both themes */
 @define-color ox_mapped_drive #5f6368;  /* a mapped network drive's glyph */
+
+/* The Settings page (skin/settings.css; the settings mockup) */
+@define-color ox_status_tint #f5f9fd;         /* a status card */
+@define-color ox_status_tint_border #dfeaf6;
+/* The category glyphs, in the mockup's colours in both themes */
+@define-color ox_category_appearance #9a79cb;
+@define-color ox_category_search @ox_accent;
+@define-color ox_category_default_apps #138266;
+@define-color ox_category_windows #3b8ec7;
+@define-color ox_category_brave #b48540;
+@define-color ox_category_about @ox_muted;
+/* The theme cards show each palette's own surfaces in both themes */
+@define-color ox_preview_light_title #eff1f4;
+@define-color ox_preview_light_sidebar #fafafa;
+@define-color ox_preview_light_content #ffffff;
+@define-color ox_preview_dark_title #191919;
+@define-color ox_preview_dark_sidebar #252525;
+@define-color ox_preview_dark_content #202020;
+@define-color ox_preview_accent #0067c0;
+@define-color ox_preview_line alpha(#888888, .4);

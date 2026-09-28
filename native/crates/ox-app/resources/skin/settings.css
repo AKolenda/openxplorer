@@ -1,0 +1,250 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The Settings page (src/settings_page/): the layout of the settings
+   mockup SET-019 names (native/parity/features.toml) in the skin's tokens.
+   The category list is the mockup's `nav`, a page its `.page`; groups are
+   thin frames with thin lines between rows, never heavy cards. Font sizes
+   follow the text size (src/theme/fonts.rs). */
+
+.settings { background-color: @ox_bg; }
+
+/* ---- The category list (nav, 264px wide with its padding) ---- */
+.settings-navigation {
+  min-width: 228px;
+  padding: 34px 18px 18px 18px;
+  background-color: @ox_sidebar;
+  border-right: 1px solid @ox_border;
+}
+.settings-heading { font-weight: 600; letter-spacing: -.4px; margin: 0 0 2px 6px; }
+.settings-subtitle { color: @ox_muted; margin: 0 0 20px 6px; }
+window.ox entry.settings-search {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid @ox_border;
+  border-radius: 6px;
+  background-color: @ox_field_bg;
+  box-shadow: none;
+  outline: none;
+  color: @ox_text;
+}
+/* The accent line under a focused field, drawn inside so nothing moves. */
+window.ox entry.settings-search:focus-within { box-shadow: inset 0 -2px @ox_accent; }
+window.ox entry.settings-search > image { color: @ox_muted; }
+.settings-match-count { color: @ox_muted; margin: 8px 6px 0 6px; }
+list.settings-categories { background: none; margin-top: 16px; }
+list.settings-categories > row {
+  min-height: 40px;
+  padding: 0 12px 0 0;
+  margin-bottom: 2px;
+  border-radius: 6px;
+  background: none;
+  outline: none;
+  color: @ox_text;
+  transition: background-color 83ms linear;
+}
+list.settings-categories > row:hover { background-color: @ox_hover; }
+list.settings-categories > row:selected { background-color: @ox_selected; }
+list.settings-categories > row:selected label { font-weight: 600; }
+list.settings-categories > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+/* The accent bar of the chosen category, 3 x 18 as the sidebar's. */
+.settings-categories .pill { min-width: 3px; min-height: 18px; border-radius: 2px; }
+list.settings-categories > row:selected .pill { background-color: @ox_accent; }
+.settings-categories .category-count {
+  min-height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  background-color: @ox_hover;
+  color: @ox_muted;
+}
+/* Each category's glyph in the mockup's colour. */
+.settings-categories image.category-appearance { color: @ox_category_appearance; }
+.settings-categories image.category-search { color: @ox_category_search; }
+.settings-categories image.category-default-apps { color: @ox_category_default_apps; }
+.settings-categories image.category-windows { color: @ox_category_windows; }
+.settings-categories image.category-brave { color: @ox_category_brave; }
+.settings-categories image.category-about { color: @ox_category_about; }
+window.ox button.settings-back { padding: 8px 12px; color: @ox_muted; }
+window.ox button.settings-back:hover { color: @ox_text; }
+
+/* ---- A page (.page: 36px from the top, 64px from the list) ---- */
+.settings-content { padding: 36px 40px 40px 64px; }
+.settings .page-title { font-weight: 600; letter-spacing: -.3px; }
+.settings .page-lead { color: @ox_muted; margin: 4px 0 22px 0; }
+window.ox button.page-back { min-width: 32px; min-height: 32px; }
+.settings .settings-no-matches { color: @ox_muted; margin: 36px 64px; }
+
+/* ---- Groups and rows ---- */
+.settings-group { margin-bottom: 26px; }
+.settings .group-heading { margin-bottom: 8px; }
+.settings .group-title { font-weight: 600; }
+.settings .group-rows {
+  border: 1px solid @ox_border;
+  border-radius: 10px;
+  background-color: @ox_card;
+}
+.group-rows > .setting-row { padding: 13px 16px; min-height: 34px; border-top: 1px solid @ox_border; }
+.group-rows > .setting-row:first-child { border-top-width: 0; }
+.settings .setting-title { font-weight: 600; }
+.settings .setting-description { color: @ox_muted; margin-top: 2px; }
+.settings .setting-notice { color: @ox_muted; font-style: italic; margin-top: 4px; }
+.settings .setting-value { color: @ox_muted; }
+/* A row the search found, and the one it jumped to. */
+.group-rows > .setting-row.search-match { box-shadow: inset 3px 0 @ox_accent; }
+.group-rows > .setting-row.jump-target { background-color: @ox_selected; }
+.settings-note { color: @ox_muted; margin: 0 2px 22px 2px; }
+.settings .settings-paragraph { margin: 0 2px 16px 2px; }
+.settings-note image { color: @ox_muted; margin-top: 2px; }
+
+/* ---- Status cards (.hero) ---- */
+.status-card {
+  padding: 18px 20px;
+  margin-bottom: 26px;
+  border: 1px solid @ox_status_tint_border;
+  border-radius: 10px;
+  background-color: @ox_status_tint;
+}
+.status-badge { min-width: 44px; min-height: 44px; border-radius: 22px; background-color: @ox_selected; }
+.status-badge image { color: @ox_accent; }
+.settings .status-title { font-weight: 600; }
+.settings .status-text { color: @ox_muted; }
+
+/* ---- Controls ---- */
+/* A main action the native preview cannot run yet. */
+window.ox .settings button.accent:disabled {
+  border-color: @ox_control_stroke;
+  background-color: @ox_control_fill;
+  color: @ox_text_disabled;
+}
+window.ox button.setting-button,
+window.ox menubutton.setting-button > button { min-height: 30px; padding: 0 14px; border-radius: 5px; }
+window.ox menubutton.bordered > button {
+  border: 1px solid @ox_control_stroke;
+  border-top-color: @ox_control_stroke_top;
+  border-bottom-color: @ox_control_stroke_bottom;
+  background-color: @ox_control_fill;
+}
+window.ox menubutton.bordered > button:hover { background-color: @ox_control_fill_hover; }
+window.ox .settings entry {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid @ox_border;
+  border-bottom-color: @ox_field_bottom;
+  border-radius: 5px;
+  background-color: @ox_field_bg;
+  box-shadow: none;
+  color: @ox_text;
+}
+window.ox .settings entry:disabled { color: @ox_text_disabled; }
+
+/* The compact drop-down (.select) and its list. */
+window.ox menubutton.choice-button > button {
+  min-height: 30px;
+  min-width: 170px;
+  padding: 0 10px;
+  border: 1px solid @ox_control_stroke;
+  border-top-color: @ox_control_stroke_top;
+  border-bottom-color: @ox_control_stroke_bottom;
+  border-radius: 5px;
+  background-color: @ox_control_fill;
+}
+window.ox menubutton.choice-button > button:hover { background-color: @ox_control_fill_hover; }
+window.ox menubutton.choice-button image { color: @ox_muted; }
+popover.choice-list > contents {
+  padding: 4px;
+  border: 1px solid @ox_flyout_stroke;
+  border-radius: 8px;
+  background-color: @ox_flyout;
+  box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
+  color: @ox_text;
+}
+popover.choice-list list { background: none; color: @ox_text; }
+popover.choice-list list > row { min-height: 32px; padding: 0 12px 0 8px; border-radius: 4px; outline: none; }
+popover.choice-list list > row:hover { background-color: @ox_hover; }
+popover.choice-list list > row:focus-visible { box-shadow: inset 0 0 0 1px @ox_focus_outer; }
+popover.choice-list list > row image { color: @ox_accent; opacity: 0; }
+popover.choice-list list > row.chosen image { opacity: 1; }
+
+/* The toggle switch (.switch: 40 x 20, a 12px knob). GTK's on and off
+   shapes are hidden (src/settings_page/parts.rs); the knob's side says the
+   state. */
+window.ox switch {
+  min-width: 38px;
+  min-height: 18px;
+  padding: 0;
+  border: 1px solid @ox_muted;
+  border-radius: 10px;
+  background: none;
+  box-shadow: none;
+  outline: none;
+  transition: background-color 83ms linear, border-color 83ms linear;
+}
+window.ox switch:checked { background-color: @ox_accent; border-color: @ox_accent; }
+window.ox switch > slider {
+  min-width: 12px;
+  min-height: 12px;
+  margin: 3px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  background-color: @ox_muted;
+  box-shadow: none;
+}
+window.ox switch:checked > slider { background-color: @ox_on_accent; }
+window.ox switch:disabled { border-color: @ox_text_disabled; }
+window.ox switch:disabled > slider { background-color: @ox_text_disabled; }
+window.ox switch:checked:disabled { background-color: @ox_text_disabled; }
+window.ox switch:checked:disabled > slider { background-color: @ox_bg; }
+window.ox switch:focus-visible { box-shadow: 0 0 0 2px @ox_focus_outer; }
+
+/* ---- Theme cards (.themes) ---- */
+window.ox button.theme-card,
+window.ox button.theme-card:hover,
+window.ox button.theme-card:checked,
+window.ox button.theme-card:active { padding: 0; background: none; color: @ox_text; }
+window.ox button.theme-card label { font-weight: 600; }
+.theme-cards { margin-top: 12px; }
+.theme-cards > flowboxchild { padding: 0; background: none; }
+.theme-preview {
+  min-width: 196px;
+  border: 1px solid @ox_border;
+  border-radius: 8px;
+}
+window.ox button.theme-card:hover .theme-preview { border-color: @ox_text_tertiary; }
+window.ox button.theme-card:checked .theme-preview { border-color: @ox_accent; box-shadow: 0 0 0 1px @ox_accent; }
+.theme-preview .preview-title { min-height: 16px; }
+.theme-preview .preview-body { min-height: 100px; }
+.theme-preview .preview-sidebar { min-width: 48px; }
+.theme-preview .preview-content { padding: 4px 10px 10px 10px; }
+.theme-preview .preview-accent-line,
+.theme-preview .preview-line,
+.theme-preview .preview-short-line { min-height: 7px; margin-top: 6px; border-radius: 3px; }
+.theme-preview .preview-accent-line { background-color: @ox_preview_accent; margin-right: 76px; }
+.theme-preview .preview-line { background-color: @ox_preview_line; margin-right: 26px; }
+.theme-preview .preview-short-line { background-color: @ox_preview_line; margin-right: 51px; }
+button.theme-card.light .preview-title { background-color: @ox_preview_light_title; }
+button.theme-card.light .preview-sidebar { background-color: @ox_preview_light_sidebar; }
+button.theme-card.light .preview-content { background-color: @ox_preview_light_content; }
+button.theme-card.dark .preview-title { background-color: @ox_preview_dark_title; }
+button.theme-card.dark .preview-sidebar { background-color: @ox_preview_dark_sidebar; }
+button.theme-card.dark .preview-content { background-color: @ox_preview_dark_content; }
+/* System: each part half light, half dark, as the mockup draws it. */
+button.theme-card.system .preview-title {
+  background-image: linear-gradient(to right, @ox_preview_light_title 50%, @ox_preview_dark_title 50%);
+}
+button.theme-card.system .preview-sidebar {
+  background-image: linear-gradient(to right, @ox_preview_light_sidebar 50%, @ox_preview_dark_sidebar 50%);
+}
+button.theme-card.system .preview-content {
+  background-image: linear-gradient(to right, @ox_preview_light_content 50%, @ox_preview_dark_content 50%);
+}
+.theme-card .radio-mark { min-width: 14px; min-height: 14px; border: 1px solid @ox_muted; border-radius: 8px; }
+window.ox button.theme-card:checked .radio-mark { min-width: 6px; min-height: 6px; border: 5px solid @ox_accent; }
+
+/* ---- A narrow window: a narrower list and page padding ---- */
+.settings.narrow .settings-navigation { min-width: 168px; padding: 24px 10px 12px 10px; }
+.settings.narrow .settings-content { padding: 24px 18px 24px 22px; }
+.settings.narrow .theme-preview { min-width: 132px; }
+.settings.narrow .theme-preview .preview-body { min-height: 68px; }
+.settings.narrow .theme-preview .preview-sidebar { min-width: 30px; }
+.settings.narrow .theme-preview .preview-accent-line { margin-right: 50px; }
+.settings.narrow .theme-preview .preview-line { margin-right: 18px; }
+.settings.narrow .theme-preview .preview-short-line { margin-right: 34px; }

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!--
+  One setting (src/settings_page/row.rs): its title, a one-line
+  description and, for a setting the native preview does not have yet, the
+  milestone that brings it, on the left; its compact controls on the
+  right, or below the text in a narrow window.
+-->
+<interface>
+  <requires lib="gtk" version="4.14"/>
+  <template class="OxSettingRow" parent="GtkBox">
+    <property name="spacing">16</property>
+    <style>
+      <class name="setting-row"/>
+    </style>
+    <child>
+      <object class="GtkBox" id="texts">
+        <property name="orientation">vertical</property>
+        <property name="hexpand">true</property>
+        <property name="valign">center</property>
+        <child>
+          <object class="GtkLabel" id="title_label">
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <style>
+              <class name="setting-title"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="description_label">
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <style>
+              <class name="setting-description"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="notice_label">
+            <property name="visible">false</property>
+            <property name="xalign">0</property>
+            <property name="wrap">true</property>
+            <style>
+              <class name="setting-notice"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="control_slot">
+        <property name="valign">center</property>
+        <property name="spacing">8</property>
+        <style>
+          <class name="setting-controls"/>
+        </style>
+      </object>
+    </child>
+  </template>
+</interface>

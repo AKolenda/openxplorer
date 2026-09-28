@@ -16,3 +16,9 @@ popover.ox-menu list > row:focus-visible {
 /* Place glyphs drop their own colours for the text colour, whose contrast
    with the sidebar is always high enough (src/icons/tint.rs). */
 .tinted { color: @ox_text; }
+
+/* Settings: category glyphs in the text colour, as place glyphs above,
+   and stronger frames around switches and groups. */
+.settings-categories image { color: @ox_text; }
+window.ox switch { border-color: @ox_text; }
+.settings .group-rows { border-color: @ox_text_tertiary; }

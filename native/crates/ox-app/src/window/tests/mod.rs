@@ -20,6 +20,7 @@ mod listing;
 mod narrow_windows;
 mod opening;
 mod panes_layout;
+mod settings;
 mod sidebar_layout;
 mod support;
 mod tabs;

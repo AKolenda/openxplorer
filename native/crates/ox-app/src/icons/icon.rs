@@ -27,13 +27,18 @@ pub(crate) enum Icon {
     /// `add_20_regular`: New, the new-tab "+", Map network location and
     /// Larger text.
     Add,
-    /// `arrow_clockwise_20_regular`: Refresh and Check for updates.
+    /// `apps_20_regular`: the Default apps settings.
+    Apps,
+    /// `arrow_clockwise_20_regular`: Refresh, Check for updates, and the
+    /// Refresh and Reset buttons of Settings.
     ArrowClockwise,
     /// `arrow_down_20_regular`: the Descending sort.
     ArrowDown,
-    /// `arrow_download_20_regular`: the Downloads folder.
+    /// `arrow_download_20_regular`: the Downloads folder and the Brave &
+    /// downloads settings.
     ArrowDownload,
-    /// `arrow_left_20_regular`: Back.
+    /// `arrow_left_20_regular`: Back, Back to files and a settings page's
+    /// way back.
     ArrowLeft,
     /// `arrow_reset_20_regular`: Reset text size.
     ArrowReset,
@@ -47,13 +52,18 @@ pub(crate) enum Icon {
     ArrowUp,
     /// `braces_20_regular`: New JSON file.
     Braces,
-    /// `checkmark_20_regular`: a checked menu item.
+    /// `checkmark_20_regular`: a checked menu item and the chosen option of
+    /// a settings drop-down.
     Checkmark,
     /// `chevron_down_20_regular`: the menu carets of New, Sort and View.
     ChevronDown,
     /// `chevron_down_16_regular`: the small carets (the address bar's edit
-    /// chevron, a column title's sort arrow and the sidebar's expanders).
+    /// chevron, a column title's sort arrow, the sidebar's expanders and a
+    /// settings drop-down).
     ChevronDown16,
+    /// `chevron_right_16_regular`: a settings row that opens a page of its
+    /// own.
+    ChevronRight16,
     /// `clipboard_paste_20_regular`: Paste.
     ClipboardPaste,
     /// `code_20_regular`: New HTML document.
@@ -71,7 +81,8 @@ pub(crate) enum Icon {
     /// `delete_20_regular`: Move to Trash.
     Delete,
     /// `desktop_20_regular`: the Desktop folder, the open-windows button and
-    /// its windows, Use system appearance and Discovered servers.
+    /// its windows, Use system appearance, Discovered servers and Settings'
+    /// Open windows….
     Desktop,
     /// `dismiss_20_regular`: the window's close button and Quit
     /// `OpenXplorer`.
@@ -134,7 +145,8 @@ pub(crate) enum Icon {
     ImageColor32,
     /// `image_48_color`: the same at large sizes.
     ImageColor48,
-    /// `info_20_regular`: About this build and the details pane's note.
+    /// `info_20_regular`: About this build, the details pane's note, and the
+    /// About settings and the notes of Settings.
     Info,
     /// `laptop_20_regular`: This PC.
     Laptop,
@@ -151,6 +163,8 @@ pub(crate) enum Icon {
     /// `organization_20_regular`: Network, its page, SMB addresses, Map
     /// network location and a location that cannot be reached.
     Organization,
+    /// `paint_brush_20_regular`: the Appearance settings.
+    PaintBrush,
     /// `panel_right_20_regular`: the details pane toggle.
     PanelRight,
     /// `phone_20_regular`: phones and other devices.
@@ -159,7 +173,8 @@ pub(crate) enum Icon {
     Pin,
     /// `rename_20_regular`: Rename.
     Rename,
-    /// `search_20_regular`: the search box and Cache this folder for search.
+    /// `search_20_regular`: the search box, Cache this folder for search,
+    /// the settings search and the Search & indexing settings.
     Search,
     /// `select_all_off_20_regular`: Select none.
     SelectAllOff,
@@ -171,6 +186,8 @@ pub(crate) enum Icon {
     Settings,
     /// `share_20_regular`: Copy path in the command bar.
     Share,
+    /// `shield_lock_20_regular`: the search index's privacy note.
+    ShieldLock,
     /// `square_multiple_20_regular`: the window's restore button.
     SquareMultiple,
     /// `subtract_20_regular`: the window's minimise button and Smaller text.
@@ -197,7 +214,9 @@ pub(crate) enum Icon {
     WeatherMoon,
     /// `weather_sunny_20_regular`: the light appearance.
     WeatherSunny,
-    /// `window_new_20_regular`: New window.
+    /// `window_multiple_20_regular`: the Windows & tabs settings.
+    WindowMultiple,
+    /// `window_new_20_regular`: New window, in menus and in Settings.
     WindowNew,
 }
 
@@ -208,6 +227,7 @@ impl Icon {
     pub(crate) const fn name(self) -> &'static str {
         match self {
             Icon::Add => "ox-add-20-symbolic",
+            Icon::Apps => "ox-apps-20-symbolic",
             Icon::ArrowClockwise => "ox-arrow-clockwise-20-symbolic",
             Icon::ArrowDown => "ox-arrow-down-20-symbolic",
             Icon::ArrowDownload => "ox-arrow-download-20-symbolic",
@@ -221,6 +241,7 @@ impl Icon {
             Icon::Checkmark => "ox-checkmark-20-symbolic",
             Icon::ChevronDown => "ox-chevron-down-20-symbolic",
             Icon::ChevronDown16 => "ox-chevron-down-16-symbolic",
+            Icon::ChevronRight16 => "ox-chevron-right-16-symbolic",
             Icon::ClipboardPaste => "ox-clipboard-paste-20-symbolic",
             Icon::Code => "ox-code-20-symbolic",
             Icon::CodeColor20 => "ox-code-20-color",
@@ -265,6 +286,7 @@ impl Icon {
             Icon::MusicNote => "ox-music-note-2-20-symbolic",
             Icon::Open => "ox-open-20-symbolic",
             Icon::Organization => "ox-organization-20-symbolic",
+            Icon::PaintBrush => "ox-paint-brush-20-symbolic",
             Icon::PanelRight => "ox-panel-right-20-symbolic",
             Icon::Phone => "ox-phone-20-symbolic",
             Icon::Pin => "ox-pin-16-symbolic",
@@ -275,6 +297,7 @@ impl Icon {
             Icon::Server => "ox-server-20-symbolic",
             Icon::Settings => "ox-settings-20-symbolic",
             Icon::Share => "ox-share-20-symbolic",
+            Icon::ShieldLock => "ox-shield-lock-20-symbolic",
             Icon::SquareMultiple => "ox-square-multiple-20-symbolic",
             Icon::Subtract => "ox-subtract-20-symbolic",
             Icon::Table => "ox-table-20-symbolic",
@@ -288,6 +311,7 @@ impl Icon {
             Icon::VideoColor48 => "ox-video-48-color",
             Icon::WeatherMoon => "ox-weather-moon-20-symbolic",
             Icon::WeatherSunny => "ox-weather-sunny-20-symbolic",
+            Icon::WindowMultiple => "ox-window-multiple-20-symbolic",
             Icon::WindowNew => "ox-window-new-20-symbolic",
         }
     }
@@ -311,8 +335,9 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 82] = [
+pub(crate) const ALL_ICONS: [Icon; 87] = [
     Icon::Add,
+    Icon::Apps,
     Icon::ArrowClockwise,
     Icon::ArrowDown,
     Icon::ArrowDownload,
@@ -326,6 +351,7 @@ pub(crate) const ALL_ICONS: [Icon; 82] = [
     Icon::Checkmark,
     Icon::ChevronDown,
     Icon::ChevronDown16,
+    Icon::ChevronRight16,
     Icon::ClipboardPaste,
     Icon::Code,
     Icon::CodeColor20,
@@ -370,6 +396,7 @@ pub(crate) const ALL_ICONS: [Icon; 82] = [
     Icon::MusicNote,
     Icon::Open,
     Icon::Organization,
+    Icon::PaintBrush,
     Icon::PanelRight,
     Icon::Phone,
     Icon::Pin,
@@ -380,6 +407,7 @@ pub(crate) const ALL_ICONS: [Icon; 82] = [
     Icon::Server,
     Icon::Settings,
     Icon::Share,
+    Icon::ShieldLock,
     Icon::SquareMultiple,
     Icon::Subtract,
     Icon::Table,
@@ -393,6 +421,7 @@ pub(crate) const ALL_ICONS: [Icon; 82] = [
     Icon::VideoColor48,
     Icon::WeatherMoon,
     Icon::WeatherSunny,
+    Icon::WindowMultiple,
     Icon::WindowNew,
 ];
 

@@ -6,7 +6,8 @@
 //! `visited_network`, `launch_default` in `desktop/winspace.py`) and
 //! broadcast `environmentChanged` to every window. Here an [`AppContext`]
 //! emits `places-changed`, which every window connects to, when a pin, a
-//! saved share, a visited server or a preference changes.
+//! saved share, a visited server or a preference changes, and
+//! `layout-reset` when Settings restores the default pane widths.
 
 use std::rc::Rc;
 
@@ -14,7 +15,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
-use ox_core::settings::{Bookmark, RecentEntry, Settings, SettingsData, SettingsError};
+use ox_core::settings::{Bookmark, PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
 
 use crate::places;
 use crate::settings_store::{Change, Reply, SettingsStore};
@@ -22,6 +23,10 @@ use crate::theme::Skin;
 
 /// Emitted when the sidebar or the landing pages may list something else.
 const PLACES_CHANGED: &str = "places-changed";
+
+/// Emitted when every window returns its sidebar and columns to their
+/// default widths ("Reset sidebar and column widths" in Settings).
+const LAYOUT_RESET: &str = "layout-reset";
 
 mod imp {
     use std::cell::{OnceCell, RefCell};
@@ -33,7 +38,7 @@ mod imp {
     use gtk::subclass::prelude::*;
     use ox_core::settings::Bookmark;
 
-    use super::PLACES_CHANGED;
+    use super::{LAYOUT_RESET, PLACES_CHANGED};
     use crate::settings_store::SettingsStore;
     use crate::theme::Skin;
 
@@ -60,7 +65,12 @@ mod imp {
     impl ObjectImpl for AppContext {
         fn signals() -> &'static [Signal] {
             static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
-            SIGNALS.get_or_init(|| vec![Signal::builder(PLACES_CHANGED).build()])
+            SIGNALS.get_or_init(|| {
+                vec![
+                    Signal::builder(PLACES_CHANGED).build(),
+                    Signal::builder(LAYOUT_RESET).build(),
+                ]
+            })
         }
     }
 }
@@ -144,6 +154,33 @@ impl AppContext {
             }
         });
         self.settings().change(change, after);
+    }
+
+    /// Saves every valid value of `update` off the main thread, as
+    /// `update_preferences` in `desktop/core.py` does; `reply` hears the
+    /// outcome.
+    pub(crate) fn update_preferences(
+        &self,
+        update: PreferencesUpdate,
+        reply: impl FnOnce(Result<(), SettingsError>) + 'static,
+    ) {
+        let change: Change =
+            Box::new(move |settings: &mut Settings| settings.update_preferences(&update).map(|_| ()));
+        self.change_settings(change, reply);
+    }
+
+    /// Tells every window to return its sidebar and columns to their
+    /// default widths.
+    pub(crate) fn announce_layout_reset(&self) {
+        self.emit_by_name::<()>(LAYOUT_RESET, &[]);
+    }
+
+    /// Calls `callback` whenever the layout is reset in any window.
+    pub(crate) fn connect_layout_reset(&self, callback: impl Fn() + 'static) -> glib::SignalHandlerId {
+        self.connect_local(LAYOUT_RESET, false, move |_| {
+            callback();
+            None
+        })
     }
 
     /// The SMB servers and shares browsed this session, oldest first.

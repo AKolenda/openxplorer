@@ -92,6 +92,26 @@ const FONT_SIZES: &[FontSize] = &[
     font("popover.menu.ox-menu modelbutton", 12.0),
     font("popover.menu.ox-menu accelerator", 10.0),
     font("tooltip", 12.0),
+    // The Settings page, at the settings mockup's sizes.
+    font(".settings-heading", 28.0),
+    font(".settings-subtitle", 13.0),
+    font("entry.settings-search", 13.0),
+    font(".settings-match-count", 12.0),
+    font("list.settings-categories > row", 13.0),
+    font(".settings-categories .category-count", 11.0),
+    font(".settings .page-title", 24.0),
+    font(".settings .page-lead", 13.5),
+    font(".settings .group-title", 13.0),
+    font(".settings .setting-title", 13.5),
+    font(".settings .setting-description", 12.5),
+    font(".settings .setting-notice", 12.0),
+    font(".settings .setting-value", 12.5),
+    font(".settings .status-title", 15.0),
+    font(".settings .status-text", 12.5),
+    font(".settings .note-text", 12.5),
+    font(".settings .settings-paragraph", 13.0),
+    font(".settings .settings-no-matches", 13.0),
+    font("popover.choice-list list > row", 13.0),
 ];
 
 /// A bar height that grows with the text, as the

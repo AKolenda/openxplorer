@@ -17,7 +17,7 @@ use crate::text_size::Step;
 
 /// A window action, as the window registers it and widgets name it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum WindowAction {
+pub(crate) enum WindowAction {
     /// Opens a tab on the home folder (Ctrl+T).
     NewTab,
     /// Closes the active tab (Ctrl+W).
@@ -86,6 +86,9 @@ pub(super) enum WindowAction {
     /// Makes text larger, smaller or its default size (Ctrl+plus, minus
     /// and 0).
     TextSize(Step),
+    /// Returns every window's sidebar and columns to their default widths
+    /// (Settings > Appearance).
+    ResetLayout,
     /// New ▸ Folder (Ctrl+Shift+N).
     NewFolder,
     /// New ▸ Text document.
@@ -118,11 +121,12 @@ pub(super) enum WindowAction {
     DiscoverServers,
     /// Adds the current folder to the search cache.
     CacheFolder,
-    /// Opens the Settings page (Ctrl+,).
+    /// Opens the Settings page (Ctrl+,), as a tab of its own.
     Settings,
     /// Shows the licence and where the source is.
     License,
-    /// Makes this app the desktop's default file manager.
+    /// Opens Settings at Default apps, where this app becomes the
+    /// desktop's default file manager.
     DefaultFileExplorer,
     /// Looks for a newer release.
     CheckUpdates,
@@ -133,7 +137,7 @@ impl WindowAction {
     ///
     /// This is the one table of every action's name, so it is longer than
     /// a function should be.
-    pub(super) const fn name(self) -> &'static str {
+    pub(crate) const fn name(self) -> &'static str {
         match self {
             WindowAction::NewTab => "new-tab",
             WindowAction::CloseTab => "close-tab",
@@ -168,6 +172,7 @@ impl WindowAction {
             WindowAction::Direction => "direction",
             WindowAction::Theme => "theme",
             WindowAction::TextSize(step) => step.action_name(),
+            WindowAction::ResetLayout => "reset-layout",
             WindowAction::NewFolder => "new-folder",
             WindowAction::NewTextDocument => "new-text-document",
             WindowAction::NewFile => "new-file",
@@ -192,17 +197,17 @@ impl WindowAction {
     }
 
     /// The name widgets, menus and accelerators use: `win.` and the name.
-    pub(super) fn detailed_name(self) -> String {
+    pub(crate) fn detailed_name(self) -> String {
         format!("win.{}", self.name())
     }
 
     /// Makes `control` run this action when it is clicked or toggled.
-    pub(super) fn assign_to(self, control: &impl IsA<gtk::Actionable>) {
+    pub(crate) fn assign_to(self, control: &impl IsA<gtk::Actionable>) {
         control.set_action_name(Some(&self.detailed_name()));
     }
 
     /// Makes `control` run this action with `target` when it is clicked.
-    pub(super) fn assign_with_target_to(self, control: &impl IsA<gtk::Actionable>, target: &glib::Variant) {
+    pub(crate) fn assign_with_target_to(self, control: &impl IsA<gtk::Actionable>, target: &glib::Variant) {
         self.assign_to(control);
         control.set_action_target_value(Some(target));
     }

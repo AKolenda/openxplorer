@@ -9,7 +9,8 @@
 //! [`caption_buttons`]), the navigation row ([`navigation_buttons`],
 //! [`address_bar`], [`search_box`]), the [`command_bar`], the [`sidebar`],
 //! the [`folder_pane`], the [`details_pane`], the [`status_bar`] and the
-//! [`toast`].
+//! [`toast`]. On the Settings tab the [`SettingsPage`] takes the place of
+//! everything under the title bar ([`settings_tab`]).
 //!
 //! The controller lives in submodules, one job each: tab state
 //! ([`session`], read through [`active_tab`]), changing location
@@ -63,6 +64,7 @@ mod quick_access;
 mod search_box;
 mod selection;
 mod session;
+mod settings_tab;
 mod sidebar;
 mod status_bar;
 mod tab_layout;
@@ -80,6 +82,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use crate::settings_page::SettingsPage;
 use crate::shared::AppContext;
 use crate::theme::Skin;
 use crate::typeahead;
@@ -94,8 +97,13 @@ use status_bar::StatusBar;
 use tab_strip::TabStrip;
 
 pub(crate) use actions::install_accelerators;
+pub(crate) use button_style::ButtonStyle;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use location_kind::is_local_or_smb_location;
+pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
+pub(crate) use unported::Milestone;
+pub(crate) use widget_tree::children;
+pub(crate) use window_action::WindowAction;
 
 /// Handlers this window registered on objects that outlive it.
 #[derive(Debug, Default)]
@@ -105,6 +113,8 @@ struct ExternalHandlers {
     skin: Vec<glib::SignalHandlerId>,
     /// On the application's `places-changed` signal.
     places: Option<glib::SignalHandlerId>,
+    /// On the application's `layout-reset` signal.
+    layout: Option<glib::SignalHandlerId>,
     /// On the volume monitor's mount and volume signals.
     volumes: Vec<glib::SignalHandlerId>,
 }
@@ -139,6 +149,7 @@ mod imp {
     use super::tab_strip::TabStrip;
     use super::toast::Toast;
     use super::{ExternalHandlers, Typeahead};
+    use crate::settings_page::SettingsPage;
     use crate::shared::AppContext;
     use crate::volumes::VolumeRow;
 
@@ -156,6 +167,9 @@ mod imp {
         /// Lists the open windows.
         #[template_child]
         pub(super) open_windows_button: TemplateChild<gtk::MenuButton>,
+        /// The history buttons, the address and the search box.
+        #[template_child]
+        pub(super) navigation_row: TemplateChild<gtk::Box>,
         /// Back, Forward, Up and Refresh.
         #[template_child]
         pub(super) navigation_buttons: TemplateChild<gtk::Box>,
@@ -168,6 +182,9 @@ mod imp {
         /// New, the edit commands, Sort, View, More, appearance and Details.
         #[template_child]
         pub(super) command_bar: TemplateChild<CommandBar>,
+        /// The workspace, or the Settings page on the Settings tab.
+        #[template_child]
+        pub(super) surfaces: TemplateChild<gtk::Stack>,
         /// The split between the sidebar and the folder and details panes
         /// (`.sidebar-resizer`).
         #[template_child]
@@ -187,6 +204,12 @@ mod imp {
         /// Counts, the type-to-select hint and the view buttons.
         #[template_child]
         pub(super) status_bar: TemplateChild<StatusBar>,
+        /// The Settings page, shown on the Settings tab.
+        #[template_child]
+        pub(super) settings_page: TemplateChild<SettingsPage>,
+        /// The folder shown before Settings opened, which the search index
+        /// offers first (`state.settingsOrigin` in app.js).
+        pub(super) settings_origin: RefCell<Option<String>>,
         /// What every window shares: the skin, settings and places. It
         /// comes from the application, so [`super::BrowserWindow::new`]
         /// sets it.
@@ -233,6 +256,7 @@ mod imp {
             DetailsPane::ensure_type();
             Toast::ensure_type();
             StatusBar::ensure_type();
+            SettingsPage::ensure_type();
             klass.bind_template();
         }
 
@@ -300,6 +324,7 @@ impl BrowserWindow {
         window.install_actions();
         window.install_input();
         window.connect_signals();
+        window.connect_settings_page();
         window.watch_environment();
         window.apply_preferences();
         window.focus_file_list_once_shown();
@@ -370,6 +395,11 @@ impl BrowserWindow {
         &self.imp().status_bar
     }
 
+    /// The Settings page.
+    fn settings_page(&self) -> &SettingsPage {
+        &self.imp().settings_page
+    }
+
     /// The active folder's sorted, filtered native selection model, for
     /// tests.
     #[cfg(test)]
@@ -430,7 +460,7 @@ impl BrowserWindow {
         for handler in handlers.skin {
             self.skin().disconnect(handler);
         }
-        if let Some(handler) = handlers.places {
+        for handler in [handlers.places, handlers.layout].into_iter().flatten() {
             self.context().disconnect(handler);
         }
         for handler in handlers.volumes {

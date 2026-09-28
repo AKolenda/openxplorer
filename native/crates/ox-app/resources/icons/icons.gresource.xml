@@ -11,6 +11,7 @@
 <gresources>
   <gresource prefix="/io/winspace/Development/Native/icons">
     <file>scalable/actions/ox-add-20-symbolic.svg</file>
+    <file>scalable/actions/ox-apps-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-clockwise-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-down-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-left-20-symbolic.svg</file>
@@ -23,6 +24,7 @@
     <file>scalable/actions/ox-checkmark-20-symbolic.svg</file>
     <file>scalable/actions/ox-chevron-down-16-symbolic.svg</file>
     <file>scalable/actions/ox-chevron-down-20-symbolic.svg</file>
+    <file>scalable/actions/ox-chevron-right-16-symbolic.svg</file>
     <file>scalable/actions/ox-clipboard-paste-20-symbolic.svg</file>
     <file>scalable/actions/ox-code-20-symbolic.svg</file>
     <file>scalable/actions/ox-copy-20-symbolic.svg</file>
@@ -40,6 +42,7 @@
     <file>scalable/actions/ox-maximize-20-symbolic.svg</file>
     <file>scalable/actions/ox-more-horizontal-20-symbolic.svg</file>
     <file>scalable/actions/ox-open-20-symbolic.svg</file>
+    <file>scalable/actions/ox-paint-brush-20-symbolic.svg</file>
     <file>scalable/actions/ox-panel-right-20-symbolic.svg</file>
     <file>scalable/actions/ox-rename-20-symbolic.svg</file>
     <file>scalable/actions/ox-search-20-symbolic.svg</file>
@@ -51,6 +54,7 @@
     <file>scalable/actions/ox-subtract-20-symbolic.svg</file>
     <file>scalable/actions/ox-table-20-symbolic.svg</file>
     <file>scalable/actions/ox-text-bullet-list-ltr-20-symbolic.svg</file>
+    <file>scalable/actions/ox-window-multiple-20-symbolic.svg</file>
     <file>scalable/actions/ox-window-new-20-symbolic.svg</file>
     <file>scalable/devices/ox-hard-drive-20-symbolic.svg</file>
     <file>scalable/devices/ox-laptop-20-symbolic.svg</file>
@@ -90,6 +94,7 @@
     <file>scalable/places/ox-organization-20-symbolic.svg</file>
     <file>scalable/places/ox-video-20-symbolic.svg</file>
     <file>scalable/status/ox-info-20-symbolic.svg</file>
+    <file>scalable/status/ox-shield-lock-20-symbolic.svg</file>
     <file>scalable/status/ox-weather-moon-20-symbolic.svg</file>
     <file>scalable/status/ox-weather-sunny-20-symbolic.svg</file>
   </gresource>

@@ -48,12 +48,13 @@ fn address_icon(uri: &str) -> Icon {
 }
 
 /// A tab's icon, as `renderTabs` picks it: the network glyph on the
-/// Network page, a phone for devices, the colour folder everywhere else,
-/// This PC included, and for SMB the location on the network bar as its
-/// row of `network` shows it in the sidebar.
+/// Network page, the gear on Settings, a phone for devices, the colour
+/// folder everywhere else, This PC included, and for SMB the location on
+/// the network bar as its row of `network` shows it in the sidebar.
 fn tab_icon(uri: &str, network: &[NetworkLocation]) -> Art {
-    if Page::from_uri(uri) == Some(Page::Network) {
-        return Art::Glyph(Icon::Organization);
+    match Page::from_uri(uri) {
+        Some(page @ (Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
+        Some(Page::ThisPc) | None => {}
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
@@ -98,7 +99,8 @@ impl BrowserWindow {
     }
 
     /// Updates the window title, history buttons, breadcrumbs, tabs,
-    /// sidebar highlight and landing page for the active tab's location.
+    /// sidebar highlight and landing page for the active tab's location,
+    /// and shows the Settings page on the Settings tab.
     pub(super) fn render_location(&self) {
         let Some(location) = self.active_location() else {
             return;
@@ -118,6 +120,7 @@ impl BrowserWindow {
         self.render_tabs();
         self.sidebar().select(uri);
         self.render_landing();
+        self.show_surface_for(uri);
     }
 
     fn active_location(&self) -> Option<ActiveLocation> {
@@ -222,6 +225,12 @@ mod tests {
                 uri: Page::Network.uri(),
                 tab: Art::Glyph(Icon::Organization),
                 address: Icon::Organization,
+            },
+            // The gear of `icon('settings')` in renderTabs.
+            IconCase {
+                uri: Page::Settings.uri(),
+                tab: Art::Glyph(Icon::Settings),
+                address: Icon::Settings,
             },
         ];
         for case in cases {

@@ -44,8 +44,7 @@ impl TextSize {
         LEVELS[self.level]
     }
 
-    /// Every supported size, smallest first.
-    #[cfg(test)]
+    /// Every supported size, smallest first, as Settings offers them.
     pub(crate) fn all() -> impl Iterator<Item = TextSize> {
         (0..LEVELS.len()).map(|level| TextSize { level })
     }

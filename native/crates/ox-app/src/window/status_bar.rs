@@ -16,6 +16,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::format;
 
+use crate::config::BUILD_NAME;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::model::SelectionSummary;
 use crate::icons::{self, Icon};
@@ -27,9 +28,6 @@ use super::window_action::WindowAction;
 /// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
 /// were 15).
 const BUTTON_GLYPH: i32 = 16;
-
-/// The build shown at the right (`#status-mode`).
-const BUILD_TEXT: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"), " native preview");
 
 /// The class that mutes a hint for typed text no name starts with.
 const MISS_CLASS: &str = "miss";
@@ -158,7 +156,7 @@ impl StatusBar {
     /// glyphs and their actions.
     fn finish_template(&self) {
         let imp = self.imp();
-        imp.build.set_text(BUILD_TEXT);
+        imp.build.set_text(BUILD_NAME);
         self.finish_check_updates_button();
         let large_icons = FolderView::Icons(IconSize::Large);
         show_view_on(

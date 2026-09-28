@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The application's identity on the session bus.
+//! The application's identity on the session bus, and the name of the
+//! build.
 //!
 //! Ports `APP_ID` in `desktop/runtime_guard.py`.
 
@@ -7,3 +8,7 @@
 /// `io.winspace.Development` so both can run side by side; the native app
 /// takes over that ID (a compatibility contract) when it becomes the default.
 pub(crate) const APP_ID: &str = "io.winspace.Development.Native";
+
+/// What this build is called in the status bar, About this build and the
+/// About settings (`#status-mode` in `desktop/ui/app.js`).
+pub(crate) const BUILD_NAME: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"), " native preview");

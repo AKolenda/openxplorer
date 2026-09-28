@@ -19,6 +19,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::folder_view::details::DetailsColumns;
+use crate::settings_page::PageWidth;
 
 use super::details_pane::PANE_WIDTH;
 use super::tab_layout::TAB_WIDTH;
@@ -117,6 +118,17 @@ impl WindowWidth {
         self == WindowWidth::Compact
     }
 
+    /// How much room the Settings page has: from 960 pixels down its rows
+    /// put their controls under the text (`@media(max-width:900px)` in the
+    /// Python settings page wrapped them).
+    pub(super) fn settings_page_width(self) -> PageWidth {
+        if self >= WindowWidth::Narrow {
+            PageWidth::Narrow
+        } else {
+            PageWidth::Roomy
+        }
+    }
+
     /// The details pane's width: [`PANE_WIDTH`], narrower from 1190 pixels.
     pub(super) fn details_pane_width(self) -> i32 {
         if self >= WindowWidth::Medium {
@@ -174,6 +186,7 @@ impl BrowserWindow {
             DetailsColumns::All
         };
         self.folder_pane().details().show_columns(details_columns);
+        self.settings_page().fit_to_width(band.settings_page_width());
         self.render_landing();
     }
 
