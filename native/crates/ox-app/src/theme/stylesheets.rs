@@ -30,7 +30,10 @@ pub(super) const RULES: &str = concat!(
 /// ([`super::contrast`]).
 pub(super) const HIGH_CONTRAST_RULES: &str = include_str!("../../resources/skin/high-contrast.css");
 
+/// The colour tokens of [`Appearance::Light`].
 const LIGHT_PALETTE: &str = include_str!("../../resources/light.css");
+
+/// The colour tokens of [`Appearance::Dark`].
 const DARK_PALETTE: &str = include_str!("../../resources/dark.css");
 
 /// The palette that draws `appearance`.
@@ -153,7 +156,7 @@ mod tests {
 
     #[gtk::test]
     fn every_stylesheet_parses_without_errors() {
-        let text_sizes = crate::text_size::LEVELS.map(super::super::css_for_text_size);
+        let text_sizes = crate::text_size::LEVELS.map(crate::theme::css_for_text_size);
         let sheets = [RULES, HIGH_CONTRAST_RULES, LIGHT_PALETTE, DARK_PALETTE]
             .into_iter()
             .map(str::to_owned)
