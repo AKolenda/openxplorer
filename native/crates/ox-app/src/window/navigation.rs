@@ -140,7 +140,7 @@ impl BrowserWindow {
     /// filter, the selection and the type-to-select prefix.
     fn leave_location(&self) {
         self.imp().changing_model.set(true);
-        self.chrome().clear_filter();
+        self.chrome().search.clear();
         self.content().model.set_query("");
         self.content().model.select_none();
         self.imp().changing_model.set(false);
@@ -191,7 +191,7 @@ impl BrowserWindow {
         let had_focus = self.content().has_focus();
         let model = &self.content().model;
         self.imp().changing_model.set(true);
-        self.chrome().clear_filter();
+        self.chrome().search.clear();
         model.set_query("");
         model.set_store(Some(&store));
         model.select_uris(&selected);

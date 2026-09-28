@@ -34,13 +34,14 @@ fn press(test: &TestWindow, key: gdk::Key) -> bool {
 }
 
 fn hint(test: &TestWindow) -> String {
-    test.window.chrome().status.hint.text().to_string()
+    let label = test.window.chrome().status.typeahead_hint_label();
+    label.text().to_string()
 }
 
 /// Whether the hint is drawn in the light palette's `hex` colour.
 fn hint_is_drawn_in(test: &TestWindow, hex: &str) -> bool {
     let expected = gdk::RGBA::parse(hex).expect("a CSS colour");
-    let drawn = test.window.chrome().status.hint.color();
+    let drawn = test.window.chrome().status.typeahead_hint_label().color();
     let channels = [
         (drawn.red(), expected.red()),
         (drawn.green(), expected.green()),

@@ -19,6 +19,7 @@ use crate::typeahead::{self, TypeSelect};
 
 use super::activation::{activation_for, Activation};
 use super::gestures;
+use super::status_bar::TypeaheadMatch;
 use super::BrowserWindow;
 
 /// Keys that only modify another key; pressing one keeps the prefix, so
@@ -289,13 +290,12 @@ impl BrowserWindow {
         }
         let matched_name = position.map(|position| self.content().model.name_at(position));
         let hint = typeahead_hint(result, matched_name.as_deref());
-        let label = &self.chrome().status.hint;
-        label.set_text(&hint);
-        if position.is_some() {
-            label.remove_css_class("miss");
+        let outcome = if position.is_some() {
+            TypeaheadMatch::Found
         } else {
-            label.add_css_class("miss");
-        }
+            TypeaheadMatch::Missed
+        };
+        self.chrome().status.show_typeahead_hint(&hint, outcome);
         self.restart_typeahead_timer();
     }
 
@@ -328,7 +328,7 @@ impl BrowserWindow {
         if let Some(timer) = timer {
             timer.remove();
         }
-        self.chrome().status.hint.set_text("");
+        self.chrome().status.clear_typeahead_hint();
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;

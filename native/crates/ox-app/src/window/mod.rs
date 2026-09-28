@@ -41,6 +41,7 @@ mod status_bar;
 mod tab_layout;
 mod tab_strip;
 mod title_bar;
+mod toast;
 mod unported;
 mod widget_tree;
 

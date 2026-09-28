@@ -201,7 +201,7 @@ fn copy_path_copies_the_selected_items_address_or_the_folders() {
         Some(folder.as_str()),
         "nothing selected"
     );
-    let message = test.window.chrome().message.text();
+    let message = test.window.chrome().toast.text();
     assert_eq!(
         message.as_str(),
         "Path copied. Sharing permissions are unchanged."
@@ -221,7 +221,7 @@ fn copy_path_asks_for_a_folder_on_a_page_and_one_item_at_most() {
     let fixture = Fixture::standard();
     let test = laid_out(Page::ThisPc.uri());
     test.activate("copy-path", None);
-    let message = test.window.chrome().message.text();
+    let message = test.window.chrome().toast.text();
     assert_eq!(message.as_str(), "Open a folder first.");
     test.window.navigate(&fixture.uri()).expect("the fixture folder");
     test.wait_for_listing("the fixture folder");

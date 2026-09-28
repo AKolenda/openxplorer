@@ -61,6 +61,11 @@ impl SearchBox {
     pub fn set_enabled(&self, enabled: bool) {
         self.root.set_sensitive(enabled);
     }
+
+    /// Empties the box, which ends the filter.
+    pub fn clear(&self) {
+        self.entry.set_text("");
+    }
 }
 
 /// Hides the magnifier `GtkSearchEntry` puts before the text; it is the

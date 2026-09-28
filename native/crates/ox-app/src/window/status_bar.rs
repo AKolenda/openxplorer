@@ -18,6 +18,16 @@ use crate::icons::{self, Glyph};
 use super::content::FolderView;
 use super::unported;
 
+/// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
+/// were 15).
+const BUTTON_GLYPH: i32 = 16;
+
+/// The build shown at the right (`#status-mode`).
+const BUILD_TEXT: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"), " native preview");
+
+/// The class that mutes a hint for typed text no name starts with.
+const MISS_CLASS: &str = "miss";
+
 /// What the status bar reports about the active tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum StatusSubject {
@@ -30,6 +40,15 @@ pub(super) enum StatusSubject {
         /// The folder is still being listed.
         loading: bool,
     },
+}
+
+/// Whether typed text found a name, which decides how its hint is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TypeaheadMatch {
+    /// A name starts with the typed text: the hint is in the accent colour.
+    Found,
+    /// No name does: the hint is muted, as it is not an error.
+    Missed,
 }
 
 /// The item count (`#status-count`): "Ready" on a landing page, else how
@@ -64,13 +83,6 @@ pub(super) fn selection_text(selected: SelectionSummary) -> String {
     }
 }
 
-/// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
-/// were 15).
-const BUTTON_GLYPH: i32 = 16;
-
-/// The build shown at the right (`#status-mode`).
-const BUILD_TEXT: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"), " native preview");
-
 /// The status bar's widgets.
 #[derive(Debug)]
 pub(super) struct StatusBar {
@@ -78,8 +90,7 @@ pub(super) struct StatusBar {
     pub root: gtk::Box,
     count: gtk::Label,
     selection: gtk::Label,
-    /// The type-to-select hint.
-    pub hint: gtk::Label,
+    typeahead_hint: gtk::Label,
     build: gtk::Label,
     details_view: gtk::Button,
     icons_view: gtk::Button,
@@ -90,7 +101,7 @@ impl StatusBar {
     pub fn new() -> Self {
         let count = gtk::Label::builder().label("Ready").xalign(0.0).build();
         let selection = gtk::Label::builder().xalign(0.0).build();
-        let hint = gtk::Label::builder()
+        let typeahead_hint = gtk::Label::builder()
             .xalign(0.0)
             .ellipsize(pango::EllipsizeMode::End)
             .css_classes(["typeahead-hint"])
@@ -104,13 +115,9 @@ impl StatusBar {
         let details_view = view_button(Glyph::List, "Details view", FolderView::Details);
         let icons_view = view_button(Glyph::Grid, "Large icons", FolderView::Icons(IconSize::Large));
         let root = gtk::Box::builder().spacing(18).css_classes(["statusbar"]).build();
-        for part in [
-            count.upcast_ref::<gtk::Widget>(),
-            selection.upcast_ref(),
-            hint.upcast_ref(),
-        ] {
-            root.append(part);
-        }
+        root.append(&count);
+        root.append(&selection);
+        root.append(&typeahead_hint);
         root.append(&spacer);
         root.append(&build);
         root.append(&check_updates_button());
@@ -120,7 +127,7 @@ impl StatusBar {
             root,
             count,
             selection,
-            hint,
+            typeahead_hint,
             build,
             details_view,
             icons_view,
@@ -144,6 +151,20 @@ impl StatusBar {
         self.selection.set_text(&selection);
     }
 
+    /// Shows the type-to-select `hint`, drawn as its `outcome` asks.
+    pub fn show_typeahead_hint(&self, hint: &str, outcome: TypeaheadMatch) {
+        self.typeahead_hint.set_text(hint);
+        match outcome {
+            TypeaheadMatch::Found => self.typeahead_hint.remove_css_class(MISS_CLASS),
+            TypeaheadMatch::Missed => self.typeahead_hint.add_css_class(MISS_CLASS),
+        }
+    }
+
+    /// Clears the type-to-select hint.
+    pub fn clear_typeahead_hint(&self) {
+        self.typeahead_hint.set_text("");
+    }
+
     /// Highlights the button of `view`. Every icon size counts as the icon
     /// view, as the Python app's single grid view did.
     pub fn show_view(&self, view: FolderView) {
@@ -159,6 +180,12 @@ impl StatusBar {
     #[cfg(test)]
     pub fn texts(&self) -> (String, String) {
         (self.count.text().to_string(), self.selection.text().to_string())
+    }
+
+    /// The type-to-select hint's label, for tests.
+    #[cfg(test)]
+    pub fn typeahead_hint_label(&self) -> &gtk::Label {
+        &self.typeahead_hint
     }
 
     /// The view buttons that show as active, for tests.
@@ -201,14 +228,14 @@ fn check_updates_button() -> gtk::Button {
 mod tests {
     use super::*;
 
-    fn folder(shown: u32, loading: bool) -> String {
+    fn folder_count(shown: u32, loading: bool) -> String {
         count_text(StatusSubject::Folder { shown, loading })
     }
 
     #[test]
     fn the_status_counts_items_and_says_when_it_is_loading() {
-        assert_eq!(folder(1, false), "1 item");
-        assert_eq!(folder(4, true), "4 items · Loading…");
+        assert_eq!(folder_count(1, false), "1 item");
+        assert_eq!(folder_count(4, true), "4 items · Loading…");
     }
 
     #[test]

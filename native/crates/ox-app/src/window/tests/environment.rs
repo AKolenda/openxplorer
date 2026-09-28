@@ -118,7 +118,7 @@ fn pinning_the_current_folder_adds_it_to_quick_access() {
         [fixture.uri()]
     );
     test.activate("pin-folder", None);
-    let message = test.window.chrome().message.text();
+    let message = test.window.chrome().toast.text();
     assert_eq!(message.as_str(), "Already pinned to Quick access.");
 }
 
