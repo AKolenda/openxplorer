@@ -46,6 +46,7 @@ impl FilterState {
         is_listed && self.matches_every_term(lowercase_name)
     }
 
+    /// True when every search term occurs in `lowercase_name`.
     fn matches_every_term(&self, lowercase_name: &str) -> bool {
         self.terms
             .iter()

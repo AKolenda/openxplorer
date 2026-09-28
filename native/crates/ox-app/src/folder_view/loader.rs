@@ -67,7 +67,7 @@ async fn enumerate(folder: &gio::File, on_batch: &impl Fn(Vec<Entry>)) -> Result
             glib::Priority::DEFAULT,
         )
         .await?;
-    let mut batches = BatchMerger::new(on_batch, MERGE_WINDOW);
+    let mut merger = BatchMerger::new(on_batch, MERGE_WINDOW);
     let mut request = FIRST_BATCH;
     loop {
         let infos = enumerator
@@ -80,10 +80,10 @@ async fn enumerate(folder: &gio::File, on_batch: &impl Fn(Vec<Entry>)) -> Result
             let child = enumerator.child(info);
             entry::entry_from_info(&child, info)
         });
-        batches.add(entries);
+        merger.add(entries);
         request = LATER_BATCH;
     }
-    batches.finish();
+    merger.finish();
     // Closing is best effort; the enumerator is dropped either way.
     let _ = enumerator.close_future(glib::Priority::LOW).await;
     Ok(())
@@ -130,6 +130,7 @@ impl<'a, F: Fn(Vec<Entry>)> BatchMerger<'a, F> {
         }
     }
 
+    /// Hands the pending rows on as one batch.
     fn show_pending(&mut self) {
         (self.on_batch)(std::mem::take(&mut self.pending));
         self.last_shown = Some(Instant::now());

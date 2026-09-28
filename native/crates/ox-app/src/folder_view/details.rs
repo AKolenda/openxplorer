@@ -233,6 +233,7 @@ impl<F: Fn(Vec<(Column, f64)>) + 'static> ResizeReporter<F> {
         self.timer.set(Some(timer));
     }
 
+    /// The widths have settled: hands them to `on_resized`.
     fn report(&self) {
         // The timer has fired; removing it again would be a GLib error.
         self.timer.set(None);

@@ -140,6 +140,7 @@ impl FileCell {
         cell
     }
 
+    /// The icon left of a one-line name that is cut off with an ellipsis.
     fn lay_out_as_row(&self) {
         self.set_orientation(gtk::Orientation::Horizontal);
         self.set_spacing(ROW_ICON_GAP);
@@ -151,6 +152,7 @@ impl FileCell {
         label.set_single_line_mode(true);
     }
 
+    /// The icon above a centred name wrapped to [`TILE_NAME_LINES`].
     fn lay_out_as_tile(&self) {
         self.set_orientation(gtk::Orientation::Vertical);
         self.set_spacing(TILE_ICON_GAP);
