@@ -22,12 +22,14 @@
 //! | [`archive`] | ZIP browsing, opening a member as a private copy, and extraction | `archives.py`, `zip_extraction.py`, `native_opening.py`, `winspace.py` |
 //! | [`versions`] | Previous versions and the read-only rule for snapshots | `previous_versions.py`, `file_services.py`, `ui/snapshot-meta.js` |
 //! | [`sizes`] | On-demand folder sizes | `folder_sizes.py`, `mount_support.py` |
+//! | [`integration`] | Default apps, Show in folder, Brave's download folder, opening files, Open in Terminal | `desktop_integration.py`, `reveal_integration.py`, `filemanager_bus.py`, `brave_integration.py`, `activation.py`, `native_opening.py`, `terminal_integration.py`, `app_catalog.py` |
 
 pub mod archive;
 pub mod clipboard;
 pub mod entry;
 pub mod format;
 pub mod gio_node;
+pub mod integration;
 pub mod location;
 pub mod network;
 pub mod places;

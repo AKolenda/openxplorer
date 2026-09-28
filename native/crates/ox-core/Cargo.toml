@@ -12,7 +12,11 @@ publish.workspace = true
 gio.workspace = true
 glib.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+# Brave's preferences hold 17-digit doubles such as zoom levels. The default
+# float parser is not correctly rounded, so a sync would rewrite preferences it
+# must leave alone; float_roundtrip reads every number back exactly, as
+# Python's json does.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 percent-encoding.workspace = true
 thiserror.workspace = true
 libc.workspace = true
