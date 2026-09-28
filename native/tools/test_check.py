@@ -314,5 +314,64 @@ class FailureReportTests(unittest.TestCase):
                          '--test-timeout if the test is only slow.\n')
 
 
+class DrawnIconTests(unittest.TestCase):
+    """Icons are bundled files: SVG path data in Rust or CSS sources fails the check."""
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory(prefix='openxplorer-drawn-icons-')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def write(self, name: str, text: str) -> None:
+        """Write one source file under the temporary crates directory."""
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + '\n', encoding='utf-8')
+
+    def test_svg_path_data_in_rust_or_css_is_found(self) -> None:
+        """Each way the old hand-drawn icons were written is reported with its line."""
+        cases = {
+            'a d attribute': ('art/svg.rs', 'const FOLDER: &str = r##"<path d="M4 12a3 3 0 0 1 3-3Z"/>"##;'),
+            'an escaped d attribute': ('art.rs', 'let folder = "<path d=\\"M4 12h3\\"/>";'),
+            'a path table': ('glyphs.rs', 'Glyph::Terminal => "M3 5h18v14H3zM6 9l3 3-3 3M12 15h5",'),
+            'a relative move': ('glyphs.rs', 'Glyph::Close => "m6 6 12 12M18 6 6 18",'),
+            'a parsed path': ('glyphs.rs', 'let path = gsk::Path::parse(glyph.path_data());'),
+            'a data URI': ('skin.css', 'image { -gtk-icon-source: url("data:image/svg+xml,<svg/>"); }'),
+        }
+        for case, (name, line) in cases.items():
+            with self.subTest(case=case):
+                self.write(name, line)
+                self.assertEqual(check.drawn_icon_lines(self.root), [f'{name}:1: {line}'])
+                (self.root / name).unlink()
+
+    def test_named_icons_and_other_text_pass(self) -> None:
+        """Icon names, CSS rules and text that only looks a little like a path are fine."""
+        self.write('window/tab_strip.rs', '\n'.join([
+            'let close = icons::image(Icon::Dismiss16, CLOSE_GLYPH);',
+            'image.set_icon_name(Some("ox-add-20-symbolic"));',
+            'let chip = "M3 Pro";',
+            'assert_eq!(label, "Media (M:)");',
+        ]))
+        self.write('skin/title-bar.css', '.tab > .tab-icon { margin-left: 2px; }')
+        self.assertEqual(check.drawn_icon_lines(self.root), [])
+
+    def test_the_vendored_svg_files_are_not_read(self) -> None:
+        """The bundled icons are SVG files with path data of their own."""
+        self.write('resources/icons/ox-add-20-symbolic.svg', '<svg><path d="M10 2.5v15"/></svg>')
+        self.assertEqual(check.drawn_icon_lines(self.root), [])
+
+    def test_the_check_fails_and_lists_every_drawn_icon(self) -> None:
+        """The failure names each file and line, so the drawing can be found."""
+        self.write('crates/ox-app/src/glyphs.rs', 'let path = gsk::Path::parse("M5 12h14");')
+        with (patch.object(check, 'NATIVE', self.root),
+              contextlib.redirect_stdout(io.StringIO())):
+            with self.assertRaisesRegex(check.CheckError, r'ox-app/src/glyphs\.rs:1: '):
+                check.check_no_drawn_icons()
+
+    def test_the_native_crates_draw_no_icons(self) -> None:
+        """The real sources pass the guard."""
+        self.assertEqual(check.drawn_icon_lines(check.NATIVE / 'crates'), [])
+
+
 if __name__ == '__main__':
     unittest.main()

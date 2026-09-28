@@ -3,8 +3,8 @@
 """Run the native checks with a private display, session bus and disposable user data.
 
 The checks run in this order: the parity inventory tests and validation, this
-driver's own tests, rustfmt, Clippy with the workspace lints, then every
-compiled Rust test executable and the doctests. Each test executable runs under
+driver's own tests, the guard against icons drawn in code, rustfmt, Clippy with
+the workspace lints, then every compiled Rust test executable and the doctests. Each test executable runs under
 xvfb-run and dbus-run-session with its own temporary HOME and XDG directories,
 so GTK, GIO and settings code never reach the user's display, session bus or
 configuration. Every process a test run starts is stopped before its temporary
@@ -21,6 +21,7 @@ from collections.abc import Iterator, Sequence
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import signal
@@ -80,6 +81,21 @@ GTK_AND_GIO_SETTINGS = {
     # others), so tests do not see the machine's drives and phones.
     'GVFS_REMOTE_VOLUME_MONITOR_IGNORE': '1',
 }
+
+
+# The icons are upstream Fluent files bundled as a GResource
+# (native/crates/ox-app/resources/icons/SOURCES.md); the owner ruled out icons
+# drawn in code. These patterns find SVG path data in Rust and CSS sources: a
+# `d="M..."` attribute, a string literal that is a path ("M3 5h18v14H3z"), a
+# path handed to gsk::Path::parse, and SVG embedded as a data: URI.
+DRAWN_ICON_PATTERNS = (
+    re.compile(r"""\bd\s*=\s*\\?["']\s*[Mm]"""),
+    re.compile(r"""["'][Mm]\s?-?\d[\d.]*(?:[\s,]+-?\d[\d.]*)+\s?[A-Za-z]"""),
+    re.compile(r'\bPath::parse\s*\('),
+    re.compile(r'data:image/svg', re.IGNORECASE),
+)
+# The sources the guard reads: code and stylesheets, never the vendored .svg files.
+DRAWN_ICON_SOURCE_SUFFIXES = ('.rs', '.css')
 
 
 class CheckError(Exception):
@@ -293,6 +309,27 @@ def check_inventories_and_driver() -> None:
     run(python, '-m', 'unittest', 'discover', '-s', 'tools', '-p', 'test_*.py')
 
 
+def drawn_icon_lines(root: Path) -> list[str]:
+    """Return 'path:line: text' for each Rust or CSS source line under root that draws an icon."""
+    findings = []
+    sources = sorted(path for path in root.rglob('*') if path.suffix in DRAWN_ICON_SOURCE_SUFFIXES)
+    for path in sources:
+        lines = path.read_text(encoding='utf-8').splitlines()
+        for number, line in enumerate(lines, start=1):
+            if any(pattern.search(line) for pattern in DRAWN_ICON_PATTERNS):
+                findings.append(f'{path.relative_to(root)}:{number}: {line.strip()}')
+    return findings
+
+
+def check_no_drawn_icons() -> None:
+    """Fail when a crate draws an icon from SVG path data instead of bundling a file."""
+    print('+ looking for icons drawn in code under crates/', flush=True)
+    findings = drawn_icon_lines(NATIVE / 'crates')
+    if findings:
+        raise CheckError('icons must be bundled files, not SVG path data in code '
+                         '(see crates/ox-app/resources/icons/SOURCES.md):\n' + '\n'.join(findings))
+
+
 def check_formatting_and_lints() -> None:
     """Check rustfmt formatting and lint every target with the workspace lints.
 
@@ -324,6 +361,7 @@ def check_rust_tests(test_timeout: float) -> int:
 def run_all_checks(test_timeout: float) -> None:
     """Run every check in order, raising on the first failure."""
     check_inventories_and_driver()
+    check_no_drawn_icons()
     check_formatting_and_lints()
     executable_count = check_rust_tests(test_timeout)
     print(f'Native checks passed ({executable_count} test executables plus doctests).')
