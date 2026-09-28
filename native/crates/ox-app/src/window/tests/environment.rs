@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use gtk::prelude::*;
-use ox_core::settings::{PinRequest, Settings};
+use ox_core::settings::{BookmarkRequest, Settings};
 
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
@@ -185,7 +185,7 @@ fn pins_another_process_saved_appear_after_a_refresh() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let mut python_app = Settings::open(test.settings_directory());
-    let pin = PinRequest::new(fixture.uri_of("Documents"), "Pinned elsewhere");
+    let pin = BookmarkRequest::new(fixture.uri_of("Documents"), "Pinned elsewhere");
     python_app
         .pin_many(&[pin], None, None)
         .expect("the settings file takes a pin");

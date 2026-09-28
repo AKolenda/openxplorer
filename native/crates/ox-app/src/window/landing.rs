@@ -16,11 +16,11 @@ use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
 use ox_core::location::LocationContext;
-use ox_core::places::Place;
+use ox_core::places::{Place, SavedShare};
 
 use crate::icons::{self, ArtKind, Glyph};
 use crate::locations::Page;
-use crate::places::{Places, SavedShare};
+use crate::places::Places;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
 use super::appearance::ArtStyle;
@@ -268,10 +268,10 @@ fn share_state(share: &SavedShare) -> gtk::Box {
     let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     dot.add_css_class("status-dot");
     dot.set_valign(gtk::Align::Center);
-    if !share.connected {
+    if !share.is_connected {
         dot.add_css_class("offline");
     }
-    let state_text = if share.connected {
+    let state_text = if share.is_connected {
         "Mounted in this session"
     } else {
         "Connect on open"

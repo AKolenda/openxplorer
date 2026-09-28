@@ -55,10 +55,11 @@ Connect GTK actions to the core only when their full interaction is available:
   under real local, remote and removable-device failures.
 
 The local GIO deletion adapter pins directory descriptors so an ancestor
-replaced by a symlink cannot redirect recursion. It currently refuses paths
-through symlink ancestors and permanent deletion of remote directories. Those
-limits must be resolved or given an explicit product decision before replacing
-the existing desktop; passing simulated transfer tests does not close them.
+replaced by a symlink cannot redirect recursion. Deleting inside a folder
+reached through a symbolic link, and permanently deleting folders on shares and
+phones, work again and are tested on local folders and a simulated MTP device.
+Real SMB and phone deletion must still be checked by hand before replacing the
+existing desktop; passing simulated transfer tests does not close that.
 
 Behavioural sources: [operations.py](../desktop/operations.py),
 [file_clipboard.py](../desktop/file_clipboard.py),

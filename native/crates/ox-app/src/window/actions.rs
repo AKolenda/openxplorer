@@ -219,7 +219,7 @@ impl BrowserWindow {
 
     fn install_view_actions(&self) {
         let preferences = self.context().settings_data().preferences;
-        let view = FolderView::from_setting(&preferences.view);
+        let view = FolderView::from_setting(preferences.view);
         self.add_action_entries([
             choice_action(WindowAction::View, view.key(), |window, key| {
                 let Some(view) = FolderView::from_key(key) else {
@@ -234,10 +234,14 @@ impl BrowserWindow {
                 preferences.show_hidden,
                 BrowserWindow::set_hidden_files_shown,
             ),
-            toggle_action(WindowAction::DetailsPane, preferences.details, |window, shown| {
-                window.fit_details_pane();
-                window.save_preference(Preference::DetailsPane(shown));
-            }),
+            toggle_action(
+                WindowAction::DetailsPane,
+                preferences.show_details_pane,
+                |window, shown| {
+                    window.fit_details_pane();
+                    window.save_preference(Preference::DetailsPane(shown));
+                },
+            ),
         ]);
     }
 

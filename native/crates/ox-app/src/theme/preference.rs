@@ -3,7 +3,10 @@
 //!
 //! Ports the theme handling of `applyTheme` in `desktop/ui/app.js`: the
 //! saved `preferences.theme` is `system`, `light` or `dark`, and `system`
-//! follows the desktop's colour scheme.
+//! follows the desktop's colour scheme. The saved value is ox-core's
+//! [`Theme`]; this module adds what the window draws for it.
+
+use ox_core::settings::Theme;
 
 use crate::icons::Glyph;
 
@@ -48,30 +51,38 @@ pub(crate) enum ThemePreference {
     Dark,
 }
 
+impl From<Theme> for ThemePreference {
+    /// The choice saved in settings as `theme`.
+    fn from(theme: Theme) -> Self {
+        match theme {
+            Theme::System => ThemePreference::System,
+            Theme::Light => ThemePreference::Light,
+            Theme::Dark => ThemePreference::Dark,
+        }
+    }
+}
+
+impl From<ThemePreference> for Theme {
+    /// The value settings save for the choice.
+    fn from(preference: ThemePreference) -> Self {
+        match preference {
+            ThemePreference::System => Theme::System,
+            ThemePreference::Light => Theme::Light,
+            ThemePreference::Dark => Theme::Dark,
+        }
+    }
+}
+
 impl ThemePreference {
-    /// Parses `system`, `light` or `dark`; anything else means `system`,
-    /// as in `applyTheme`.
-    pub(crate) fn parse(value: &str) -> Self {
-        Self::from_key(value).unwrap_or_default()
-    }
-
-    /// The preference for an action-state key, or `None` for another value.
+    /// The preference for an action-state key (the settings value), or
+    /// `None` for another value.
     pub(crate) fn from_key(key: &str) -> Option<Self> {
-        match key {
-            "system" => Some(ThemePreference::System),
-            "light" => Some(ThemePreference::Light),
-            "dark" => Some(ThemePreference::Dark),
-            _ => None,
-        }
+        Theme::from_key(key).map(Self::from)
     }
 
-    /// The settings and action-state value.
-    pub(crate) const fn key(self) -> &'static str {
-        match self {
-            ThemePreference::System => "system",
-            ThemePreference::Light => "light",
-            ThemePreference::Dark => "dark",
-        }
+    /// The action-state value, which is also the settings value.
+    pub(crate) fn key(self) -> &'static str {
+        Theme::from(self).as_str()
     }
 
     /// The appearance for this choice while the desktop draws `desktop`.
@@ -100,12 +111,28 @@ impl ThemePreference {
 mod tests {
     use super::*;
 
+    /// The saved theme a window starts from: settings drop an unknown
+    /// value, which leaves the default, System (`applyTheme`).
+    fn saved_choice(saved: &str) -> ThemePreference {
+        ThemePreference::from(Theme::from_key(saved).unwrap_or_default())
+    }
+
     /// parity: LOOK-003
     #[test]
     fn saved_themes_parse_and_anything_else_means_system() {
-        assert_eq!(ThemePreference::parse("dark"), ThemePreference::Dark);
-        assert_eq!(ThemePreference::parse("light"), ThemePreference::Light);
-        assert_eq!(ThemePreference::parse("sepia"), ThemePreference::System);
+        assert_eq!(saved_choice("dark"), ThemePreference::Dark);
+        assert_eq!(saved_choice("light"), ThemePreference::Light);
+        assert_eq!(saved_choice("sepia"), ThemePreference::System);
+    }
+
+    #[test]
+    fn every_choice_round_trips_through_settings_and_action_keys() {
+        for theme in Theme::ALL {
+            let preference = ThemePreference::from(theme);
+            assert_eq!(Theme::from(preference), theme);
+            assert_eq!(ThemePreference::from_key(preference.key()), Some(preference));
+        }
+        assert_eq!(ThemePreference::from_key("sepia"), None);
     }
 
     /// parity: LOOK-003

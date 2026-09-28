@@ -4,7 +4,7 @@
 //! Network page's banner, address field and notes, and Open address.
 
 use gtk::prelude::*;
-use ox_core::settings::{BookmarkAction, BookmarkKind, Settings};
+use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
 
 use super::geometry::{bounds, laid_out, Bounds};
 use crate::locations::Page;
@@ -119,8 +119,7 @@ fn a_saved_share_card_draws_its_server_glyph_in_the_share_blue() {
         .bookmark(
             BookmarkAction::Add,
             BookmarkKind::Share,
-            "smb://nas/media",
-            "Media",
+            &BookmarkRequest::new("smb://nas/media", "Media"),
         )
         .expect("the settings file takes a share");
     test.activate("refresh", None);

@@ -6,6 +6,8 @@
 //! the Python app's saved `view` preference, which the native app extends
 //! with the four icon sizes of Windows 11 File Explorer.
 
+use ox_core::settings::View;
+
 use crate::folder_view::grid::IconSize;
 
 /// Which view lists the items.
@@ -36,20 +38,19 @@ impl FolderView {
 
     /// The view saved in settings. The Python app knows one icon view,
     /// "grid", which is Large icons.
-    pub(crate) fn from_setting(view: &str) -> FolderView {
-        if view == "grid" {
-            FolderView::Icons(IconSize::Large)
-        } else {
-            FolderView::Details
+    pub(crate) fn from_setting(view: View) -> FolderView {
+        match view {
+            View::Details => FolderView::Details,
+            View::Grid => FolderView::Icons(IconSize::Large),
         }
     }
 
     /// The value settings store: only `details` and `grid` are valid for
     /// the Python app, so every icon size is saved as `grid`.
-    pub(crate) fn setting(self) -> &'static str {
+    pub(crate) fn setting(self) -> View {
         match self {
-            FolderView::Details => "details",
-            FolderView::Icons(_) => "grid",
+            FolderView::Details => View::Details,
+            FolderView::Icons(_) => View::Grid,
         }
     }
 

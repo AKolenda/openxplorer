@@ -20,9 +20,10 @@ use std::path::PathBuf;
 
 use gtk::gio;
 use gtk::prelude::*;
-use ox_core::location::split_location;
+use ox_core::location::{split_location, LocationKind};
 use ox_core::places::{
-    compose_quick_access, merge_network_locations, NetworkLocation, NetworkMount, Place, StableMount,
+    compose_quick_access, merge_network_locations, NetworkLocation, NetworkMount, Place, SavedShare,
+    StableMount,
 };
 use ox_core::settings::{Bookmark, SettingsData};
 
@@ -44,25 +45,6 @@ pub(crate) struct PlaceSources<'a> {
     pub stable_mounts: &'a [StableMount],
     /// SMB servers and shares browsed this session.
     pub visited_network: &'a [Bookmark],
-}
-
-/// A saved network share and whether it is mounted now.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SavedShare {
-    /// The share as saved in settings.
-    pub bookmark: Bookmark,
-    /// A current mount equals or contains the share.
-    pub connected: bool,
-}
-
-impl SavedShare {
-    /// `share` with its connection state among the mounted `volumes`.
-    fn among(share: &Bookmark, volumes: &[VolumeRow]) -> Self {
-        Self {
-            bookmark: share.clone(),
-            connected: is_share_connected(&share.uri, volumes),
-        }
-    }
 }
 
 /// The composed sections.
@@ -97,10 +79,10 @@ pub(crate) fn compose(sources: PlaceSources<'_>) -> Places {
         .settings
         .shares
         .iter()
-        .map(|share| SavedShare::among(share, sources.volumes))
+        .map(|share| saved_share_among(share, sources.volumes))
         .collect();
     let network = merge_network_locations(
-        &with_connection_state(&saved_shares),
+        &saved_shares,
         &network_mounts(sources.volumes),
         sources.stable_mounts,
         sources.visited_network,
@@ -113,13 +95,13 @@ pub(crate) fn compose(sources: PlaceSources<'_>) -> Places {
     }
 }
 
-/// The saved shares as `(bookmark, connected)` pairs, the form
-/// `merge_network_locations` reads.
-fn with_connection_state(shares: &[SavedShare]) -> Vec<(Bookmark, bool)> {
-    shares
-        .iter()
-        .map(|share| (share.bookmark.clone(), share.connected))
-        .collect()
+/// `share` with its connection state: connected when a current mount
+/// among `volumes` equals or contains it.
+fn saved_share_among(share: &Bookmark, volumes: &[VolumeRow]) -> SavedShare {
+    SavedShare {
+        bookmark: share.clone(),
+        is_connected: is_share_connected(&share.uri, volumes),
+    }
 }
 
 /// The mounted SMB rows, in the form `merge_network_locations` reads.
@@ -138,7 +120,7 @@ fn network_mount(row: &VolumeRow) -> Option<NetworkMount> {
     Some(NetworkMount {
         uri: uri.to_owned(),
         label: row.label.clone(),
-        mounted: true,
+        is_mounted: true,
     })
 }
 
@@ -159,13 +141,13 @@ fn is_share_connected(share_uri: &str, volumes: &[VolumeRow]) -> bool {
 /// empty so the merge names it after the share or server.
 pub(crate) fn visited_root(uri: &str) -> Option<Bookmark> {
     let parts = split_location(uri).ok()?;
-    if parts.scheme != "smb" {
+    if parts.kind() != LocationKind::Smb {
         return None;
     }
     let share = parts.path.split('/').find(|segment| !segment.is_empty());
     let root = match share {
-        Some(share) => format!("smb://{}/{share}", parts.netloc),
-        None => format!("smb://{}/", parts.netloc),
+        Some(share) => format!("smb://{}/{share}", parts.authority),
+        None => format!("smb://{}/", parts.authority),
     };
     Some(Bookmark {
         uri: root,
@@ -227,8 +209,8 @@ mod tests {
         assert_eq!(drives, ["Backup"]);
         assert_eq!(places.network.len(), 1);
         assert_eq!(places.network[0].uri, "smb://nas/media");
-        assert!(places.network[0].connected);
-        assert!(!places.network[0].saved);
+        assert!(places.network[0].is_connected);
+        assert!(!places.network[0].is_saved);
     }
 
     /// parity: NET-018
@@ -239,17 +221,17 @@ mod tests {
         assert_eq!(places.network.len(), 1);
         let row = &places.network[0];
         assert_eq!(
-            (row.label.as_str(), row.saved, row.connected),
+            (row.label.as_str(), row.is_saved, row.is_connected),
             ("Media", true, true)
         );
-        assert!(places.saved_shares[0].connected);
+        assert!(places.saved_shares[0].is_connected);
     }
 
     #[test]
     fn a_saved_share_inside_a_mounted_share_is_connected() {
         let settings = settings_with_share("smb://nas/media/2024", "2024");
         let places = compose_with(&settings, &[mounted("media on nas", "smb://nas/media")], &[]);
-        assert!(places.saved_shares[0].connected);
+        assert!(places.saved_shares[0].is_connected);
     }
 
     /// parity: NET-018
@@ -257,8 +239,8 @@ mod tests {
     fn an_unmounted_saved_share_is_not_connected() {
         let settings = settings_with_share("smb://nas/media", "Media");
         let places = compose_with(&settings, &[], &[]);
-        assert!(!places.network[0].connected);
-        assert!(places.network[0].saved);
+        assert!(!places.network[0].is_connected);
+        assert!(places.network[0].is_saved);
     }
 
     /// parity: NET-006

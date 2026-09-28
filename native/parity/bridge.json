@@ -111,8 +111,8 @@
         "native/crates/ox-core/tests/transfer_cases/failures.rs::cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_old_name",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::cancellation_never_hides_a_backup_that_requires_manual_recovery",
         "native/crates/ox-core/tests/gio_node.rs::cancellation_prevents_copy_move_and_recursive_delete",
-        "native/crates/ox-core/tests/gio_node.rs::cancellation_during_local_delete_preflight_preserves_the_file",
-        "native/crates/ox-core/tests/entry_enumeration.rs::cancelling_after_a_batch_stops_delivery"
+        "native/crates/ox-core/tests/gio_node_cases/removal.rs::cancellation_during_local_delete_preflight_preserves_the_file",
+        "native/crates/ox-core/src/entry/enumerate.rs::dropping_the_listing_stops_delivery"
       ]
     },
     "chrome": {
@@ -221,11 +221,12 @@
       "status": "core-tested",
       "note": "GIO enumeration covers batching, hidden files, symlinks and cancellation on temporary local folders. Remote authentication remains pending.",
       "evidence": [
-        "native/crates/ox-core/tests/entry_enumeration.rs::listing_batches_entries_and_preserves_metadata",
-        "native/crates/ox-core/tests/entry_enumeration.rs::hidden_toggle_changes_the_listing_and_empty_folders_finish",
-        "native/crates/ox-core/tests/entry_enumeration.rs::cancelling_after_a_batch_stops_delivery",
-        "native/crates/ox-core/tests/entry_enumeration.rs::cancelled_before_start_delivers_no_rows",
-        "native/crates/ox-core/tests/entry_enumeration.rs::worker_listing_completes_without_a_gtk_main_loop",
+        "native/crates/ox-core/tests/entry_enumeration.rs::listing_preserves_file_and_folder_metadata",
+        "native/crates/ox-core/src/entry/enumerate.rs::the_top_of_a_large_folder_arrives_first",
+        "native/crates/ox-core/src/entry/enumerate.rs::later_batches_are_merged_until_the_window_has_passed",
+        "native/crates/ox-core/tests/entry_enumeration.rs::hidden_items_are_listed_and_flagged",
+        "native/crates/ox-core/tests/entry_enumeration.rs::an_empty_folder_finishes_without_rows",
+        "native/crates/ox-core/src/entry/enumerate.rs::dropping_the_listing_stops_delivery",
         "native/crates/ox-core/tests/entry_enumeration.rs::symlink_to_a_folder_is_browsable_without_recursing_into_it"
       ]
     },
@@ -264,7 +265,7 @@
       "note": "Canonical locations tested against Python and external address fixtures; address-bar integration is separate.",
       "evidence": [
         "native/crates/ox-core/tests/location_external.rs::normalise_matches_python",
-        "native/crates/ox-core/tests/location_python.rs::matches_python"
+        "native/crates/ox-core/tests/location_python.rs::typed_addresses_are_normalised_like_core_py"
       ]
     },
     "open": {
@@ -284,22 +285,24 @@
     },
     "operate": {
       "status": "core-tested",
-      "note": "Core operation and local GIO failure cases are regression-tested; GTK confirmations/progress and real SMB/MTP behavior remain unverified. Remote folder permanent deletion is intentionally unsupported by the preview adapter.",
+      "note": "Core operation and local GIO failure cases are regression-tested, and permanent deletion of phone folders is tested on a simulated MTP device; GTK confirmations/progress and real SMB/MTP behavior remain unverified.",
       "evidence": [
         "native/crates/ox-core/tests/transfer_cases/operations.rs::recursive_copy_preserves_sources_hidden_files_links_and_modes",
-        "native/crates/ox-core/tests/transfer_cases/operations.rs::conflict_policies_never_overwrite_without_replace",
-        "native/crates/ox-core/tests/transfer_cases/operations.rs::replace_merges_folders_and_retains_destination_only_children",
-        "native/crates/ox-core/tests/transfer_cases/operations.rs::self_and_descendant_destinations_are_rejected_including_symlink_aliases",
-        "native/crates/ox-core/tests/transfer_cases/operations.rs::protected_descendants_stop_mutations_before_any_item_changes",
-        "native/crates/ox-core/tests/transfer_cases/operations.rs::delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete",
+        "native/crates/ox-core/tests/transfer_cases/conflicts.rs::conflict_policies_never_overwrite_without_replace",
+        "native/crates/ox-core/tests/transfer_cases/replace.rs::replace_merges_folders_and_retains_destination_only_children",
+        "native/crates/ox-core/tests/transfer_cases/containment.rs::self_and_descendant_destinations_are_rejected_including_symlink_aliases",
+        "native/crates/ox-core/tests/transfer_cases/snapshots.rs::protected_descendants_stop_mutations_before_any_item_changes",
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::deleting_a_link_keeps_its_target",
+        "native/crates/ox-core/tests/transfer_cases/operations.rs::unsupported_trash_never_falls_back_to_delete",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::native_move_failure_never_degrades_to_copy_then_delete",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::a_name_taken_while_copying_is_not_overwritten_at_publication",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::replacement_install_failure_or_false_success_restores_the_old_name",
-        "native/crates/ox-core/tests/transfer_cases/devices.rs::uploads_publish_only_through_moves_the_device_can_perform",
+        "native/crates/ox-core/tests/transfer_cases/devices.rs::uploads_publish_by_one_same_folder_rename_from_a_staged_sibling",
         "native/crates/ox-core/tests/gio_node.rs::complete_engine_stages_and_publishes_a_recursive_local_copy",
-        "native/crates/ox-core/tests/gio_node.rs::roots_and_whole_network_shares_are_refused_before_mutation",
-        "native/crates/ox-core/tests/gio_node.rs::protected_descendants_are_preflighted_before_gio_permanent_deletion",
-        "native/crates/ox-core/tests/gio_node.rs::cross_filesystem_move_is_refused_without_copying_or_removing_the_source"
+        "native/crates/ox-core/tests/gio_node_cases/removal.rs::roots_and_whole_network_shares_are_refused_before_mutation",
+        "native/crates/ox-core/tests/gio_node_cases/removal.rs::protected_descendants_are_preflighted_before_gio_permanent_deletion",
+        "native/crates/ox-core/tests/gio_node.rs::cross_filesystem_move_is_refused_without_copying_or_removing_the_source",
+        "native/crates/ox-core/tests/transfer_cases/mtp_adapter.rs::the_engine_deletes_a_phone_folder_after_checking_every_item"
       ]
     },
     "pin": {
@@ -307,7 +310,7 @@
       "note": "Stored pin/network preferences and GIO pin classification tested; complete pin/reorder/unpin UI remains pending.",
       "evidence": [
         "native/crates/ox-core/src/settings/tests.rs::add_pin_preserves_file_tree",
-        "native/crates/ox-core/src/settings/tests.rs::bulk_pin_and_reload",
+        "native/crates/ox-core/src/settings/tests.rs::a_pinned_batch_is_read_back_after_the_shown_order",
         "native/crates/ox-core/src/settings/tests.rs::invalid_batch_writes_nothing",
         "native/crates/ox-core/src/entry/inspect.rs::pin_inspects_browse_item_but_saves_real_share_target",
         "native/crates/ox-core/src/entry/inspect.rs::verify_pin_uses_validated_target_not_browse_uri",
@@ -320,8 +323,8 @@
       "evidence": [
         "native/crates/ox-core/src/settings/tests.rs::settings_private_and_atomic",
         "native/crates/ox-core/src/settings/tests.rs::two_windows_preserve_each_others_preferences",
-        "native/crates/ox-core/src/settings/tests.rs::system_theme_and_legacy_migration",
-        "native/crates/ox-core/src/settings/tests.rs::settings_still_persist",
+        "native/crates/ox-core/src/settings/tests.rs::a_version_1_file_is_read_and_can_switch_to_the_system_theme",
+        "native/crates/ox-core/src/settings/tests.rs::preferences_still_persist_in_private_storage",
         "native/crates/ox-core/src/settings/tests.rs::settings_lock_symlink_refused",
         "native/crates/ox-core/src/settings/tests.rs::unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write"
       ]

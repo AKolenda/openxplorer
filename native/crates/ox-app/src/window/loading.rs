@@ -19,7 +19,7 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::entry::{Entry, EnumerateError};
+use ox_core::entry::{Entry, EntryError};
 use ox_core::location::parent_location;
 
 use crate::folder_view::item::FileItem;
@@ -199,15 +199,15 @@ impl BrowserWindow {
         }
     }
 
-    fn finish_load(&self, run: &LoadRun, result: Result<(), EnumerateError>) {
+    fn finish_load(&self, run: &LoadRun, result: Result<(), EntryError>) {
         let id = run.tab;
         if !self.imp().session.borrow().accepts(id, run.generation) {
             return;
         }
         match result {
             Ok(()) if run.mode == LoadMode::Reload => self.merge_rows(id, run.held_rows.take()),
-            Ok(()) | Err(EnumerateError::Cancelled) => {}
-            Err(EnumerateError::NotDirectory(_)) => {
+            Ok(()) | Err(EntryError::Cancelled) => {}
+            Err(EntryError::NotDirectory(_)) => {
                 self.open_folder_of_file(id, run.mode);
                 return;
             }
@@ -237,7 +237,7 @@ impl BrowserWindow {
     /// Records why a listing failed and stops watching a folder that cannot
     /// be read. A failed reload shows the error instead of stale rows; a
     /// first listing keeps the rows that arrived, with the error above them.
-    fn fail_load(&self, id: TabId, mode: LoadMode, error: EnumerateError) {
+    fn fail_load(&self, id: TabId, mode: LoadMode, error: EntryError) {
         if mode == LoadMode::Reload {
             self.clear_rows(id);
         }

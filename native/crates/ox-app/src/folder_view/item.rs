@@ -111,7 +111,7 @@ impl FileItem {
 
     /// Whether GIO marks the item hidden, for the filter.
     pub(crate) fn visibility(&self) -> Visibility {
-        if self.entry().hidden {
+        if self.entry().is_hidden {
             Visibility::Hidden
         } else {
             Visibility::Visible

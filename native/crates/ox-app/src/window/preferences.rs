@@ -56,10 +56,10 @@ impl Preference {
     fn into_update(self) -> PreferencesUpdate {
         let mut update = PreferencesUpdate::default();
         match self {
-            Preference::View(view) => update.view = Some(view.setting().to_owned()),
+            Preference::View(view) => update.view = Some(view.setting()),
             Preference::ShowHidden(show) => update.show_hidden = Some(show),
-            Preference::DetailsPane(show) => update.details = Some(show),
-            Preference::Theme(theme) => update.theme = Some(theme.key().to_owned()),
+            Preference::DetailsPane(show) => update.show_details_pane = Some(show),
+            Preference::Theme(theme) => update.theme = Some(theme.into()),
             Preference::TextSize(size) => update.text_size = Some(size),
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
             Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
@@ -96,7 +96,7 @@ impl BrowserWindow {
             .set_show_hidden(preferences.show_hidden);
         // `win.details-pane` starts from the same preferences.
         self.fit_details_pane();
-        self.show_view(FolderView::from_setting(&preferences.view));
+        self.show_view(FolderView::from_setting(preferences.view));
         let workspace = self.workspace();
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
         let details_view = self.folder_pane().details();
@@ -208,6 +208,8 @@ impl BrowserWindow {
 
 #[cfg(test)]
 mod tests {
+    use ox_core::settings::View;
+
     use crate::folder_view::grid::IconSize;
 
     use super::*;
@@ -232,8 +234,8 @@ mod tests {
     #[test]
     fn every_icon_size_is_saved_as_the_python_grid_view() {
         let update = Preference::View(FolderView::Icons(IconSize::Small)).into_update();
-        assert_eq!(update.view.as_deref(), Some("grid"));
+        assert_eq!(update.view, Some(View::Grid));
         let update = Preference::View(FolderView::Details).into_update();
-        assert_eq!(update.view.as_deref(), Some("details"));
+        assert_eq!(update.view, Some(View::Details));
     }
 }

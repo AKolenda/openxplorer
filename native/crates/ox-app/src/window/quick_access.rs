@@ -11,7 +11,7 @@ use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::pin_target;
 use ox_core::location::same_location;
-use ox_core::settings::{PinRequest, SettingsError};
+use ox_core::settings::{BookmarkRequest, SettingsError};
 
 use crate::locations::Page;
 use crate::settings_store::Change;
@@ -26,7 +26,9 @@ impl BrowserWindow {
             return;
         };
         let entry = item.entry();
-        match pin_target(entry, &entry.name) {
+        // Without a label the pin is named after the folder
+        // (`label or entry['name']` in Python).
+        match pin_target(entry, None) {
             Ok(target) => self.pin(target.uri, target.label),
             Err(error) => self.show_message(&error.to_string()),
         }
@@ -49,7 +51,7 @@ impl BrowserWindow {
             return;
         }
         let change: Change = Box::new(move |settings| {
-            let request = PinRequest::new(uri, label);
+            let request = BookmarkRequest::new(uri, label);
             // Not dropped on a row, so the pin goes at the end, and no
             // sidebar order to save with it.
             let drop_target: Option<&str> = None;

@@ -9,7 +9,7 @@
 use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::entry::EnumerateError;
+use ox_core::entry::EntryError;
 
 use crate::folder_view::item::FileItem;
 use crate::folder_view::loader::Listing;
@@ -80,7 +80,7 @@ pub(super) struct Tab {
     /// Whether the location is listed, being listed or never was.
     pub listing_state: ListingState,
     /// Why the last listing failed.
-    pub error: Option<EnumerateError>,
+    pub error: Option<EntryError>,
     /// URIs of the selected items, restored after a reload or tab switch.
     pub selected: Vec<String>,
     /// The vertical scroll position, restored when the tab is shown again.

@@ -51,7 +51,7 @@ impl AppState {
     /// the desktop's appearance falls back to.
     fn with_skin(app: &gtk::Application, skin: Skin, gtk_preference: Appearance, settings: Settings) -> Self {
         let preferences = &settings.data().preferences;
-        skin.set_preference(ThemePreference::parse(&preferences.theme));
+        skin.set_preference(ThemePreference::from(preferences.theme));
         skin.set_text_size(TextSize::from_percent(preferences.text_size));
         let system_scheme = follow_system_scheme(&skin, gtk_preference);
         let contrast_setting = follow_contrast(&skin);

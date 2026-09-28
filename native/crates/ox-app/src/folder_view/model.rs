@@ -341,7 +341,7 @@ mod tests {
     fn the_folder_counts_hidden_items_only_while_they_are_shown() {
         let (model, store) = model_with(&["a.txt", "b.txt"]);
         let mut cache = file_entry(".cache");
-        cache.hidden = true;
+        cache.is_hidden = true;
         store.append(&FileItem::new(cache));
         model.set_query("a.txt");
         assert_eq!(

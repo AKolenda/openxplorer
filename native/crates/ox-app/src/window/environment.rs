@@ -12,6 +12,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
+use ox_core::places::FolderLocations;
 
 use crate::locations::{self, Page};
 use crate::places::{self, PlaceSources, Places};
@@ -83,7 +84,11 @@ impl BrowserWindow {
     /// The sidebar and landing sections for the current settings and volumes.
     pub(super) fn places(&self) -> Places {
         let settings = self.context().settings_data();
-        let known_folders = ox_core::places::known_folders();
+        // Read again on every call, as the Python app does, so a folder
+        // moved with xdg-user-dirs-update shows at once.
+        let known_folders = FolderLocations::from_environment()
+            .read_paths()
+            .quick_access_places();
         let volumes = self.imp().volumes.borrow();
         let visited_network = self.context().visited_network();
         places::compose(PlaceSources {

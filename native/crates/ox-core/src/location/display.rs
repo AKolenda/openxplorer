@@ -409,11 +409,6 @@ mod tests {
         assert_eq!(context().device_name(PHONE_ROOT), "Pixel 7");
         assert_eq!(context().device_name("file:///"), "Connected device");
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 
     #[test]
     fn one_trailing_slash_does_not_matter() {

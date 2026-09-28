@@ -39,7 +39,7 @@ mod imp {
 
     /// Private state of [`super::AppContext`].
     #[derive(Debug, Default)]
-    pub struct AppContext {
+    pub(crate) struct AppContext {
         /// The skin every window draws with.
         pub(super) skin: OnceCell<Skin>,
         /// The shared settings file and its queue of changes.
@@ -67,12 +67,7 @@ mod imp {
 
 glib::wrapper! {
     /// The state every window of one application shares.
-    //
-    // Nominally `pub`, with its `imp` struct, only because the `pub`
-    // `BrowserWindow::new` in window/mod.rs takes it (rustc's
-    // `private_interfaces`); the private `shared` module keeps it inside
-    // the crate. It narrows to `pub(crate)` together with `BrowserWindow`.
-    pub struct AppContext(ObjectSubclass<imp::AppContext>);
+    pub(crate) struct AppContext(ObjectSubclass<imp::AppContext>);
 }
 
 impl AppContext {
@@ -217,7 +212,7 @@ impl AppContext {
 
     /// Records `recent` at the top of the recently opened files.
     fn remember_open(&self, recent: RecentEntry) {
-        let change: Change = Box::new(move |settings| settings.remember_open(&recent));
+        let change: Change = Box::new(move |settings| settings.remember_open(recent));
         // Recording a recent file is best effort, as in the Python app: the
         // file already opened, and a busy settings lock must not say otherwise.
         self.change_settings(change, |_| {});
@@ -246,6 +241,7 @@ fn recent_entry(entry: &Entry) -> RecentEntry {
         type_name: entry.type_label.clone(),
         is_dir: entry.is_dir,
         size: entry.size.unwrap_or(0),
-        modified: entry.modified,
+        // `settings.json` keeps 0 for an unknown time, as core.py does.
+        modified: entry.modified.unwrap_or(0),
     }
 }

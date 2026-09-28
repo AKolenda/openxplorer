@@ -12,7 +12,7 @@
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::entry::{self, Entry, EntryKind, EnumerateError};
+use ox_core::entry::{self, Entry, EntryError, EntryKind};
 
 use crate::locations::{self, Page};
 
@@ -61,7 +61,7 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
 }
 
 /// Queries `uri` without blocking the interface.
-async fn query_entry(uri: &str) -> Result<Entry, EnumerateError> {
+async fn query_entry(uri: &str) -> Result<Entry, EntryError> {
     let file = gio::File::for_uri(uri);
     let info = file
         .query_info_future(
@@ -69,8 +69,7 @@ async fn query_entry(uri: &str) -> Result<Entry, EnumerateError> {
             gio::FileQueryInfoFlags::NONE,
             glib::Priority::DEFAULT,
         )
-        .await
-        .map_err(|error| EnumerateError::from_glib(&error))?;
+        .await?;
     Ok(entry::entry_from_info(&file, &info))
 }
 
@@ -149,17 +148,17 @@ impl BrowserWindow {
         ));
     }
 
-    fn open_typed_location(&self, uri: &str, place: Option<&str>, result: Result<Entry, EnumerateError>) {
+    fn open_typed_location(&self, uri: &str, place: Option<&str>, result: Result<Entry, EntryError>) {
         let entry = match (result, place) {
             (Ok(entry), _) => entry,
-            (Err(EnumerateError::NotFound(_)), Some(place)) => {
+            (Err(EntryError::NotFound(_)), Some(place)) => {
                 self.finish_address();
                 self.navigate_or_report(place);
                 return;
             }
             // An unmounted share opens in the tab, which says why it is
             // unavailable and offers Try again.
-            (Err(EnumerateError::NotMounted(_)), _) => {
+            (Err(EntryError::NotMounted(_)), _) => {
                 self.finish_address();
                 self.navigate_or_report(uri);
                 return;
@@ -197,7 +196,7 @@ impl BrowserWindow {
     }
 
     /// Opens one incoming location, whose metadata query gave `result`.
-    fn open_incoming(&self, uri: &str, tab: IncomingTab, result: Result<Entry, EnumerateError>) {
+    fn open_incoming(&self, uri: &str, tab: IncomingTab, result: Result<Entry, EntryError>) {
         let Ok(entry) = result else {
             // A missing or unreadable location opens as a tab that says so.
             self.open_incoming_folder(uri, tab);

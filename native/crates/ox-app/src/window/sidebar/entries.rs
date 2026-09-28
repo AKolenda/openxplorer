@@ -89,10 +89,10 @@ fn color(hex: &str) -> gdk::RGBA {
 }
 
 fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
-    let known = place.icon.and_then(Glyph::for_known_folder);
+    let known = place.glyph().and_then(Glyph::for_known_folder);
     let shared = place.is_shared || is_smb_location(&place.uri);
     let icon = match known {
-        Some(glyph) => RowIcon::Glyph(glyph, place.color.map(color)),
+        Some(glyph) => RowIcon::Glyph(glyph, place.glyph_color().map(color)),
         None if shared => RowIcon::Art(ArtKind::NetworkFolder),
         None => RowIcon::Art(ArtKind::Folder),
     };
@@ -131,9 +131,9 @@ fn drive_entry(row: &VolumeRow, locations: &LocationContext) -> SidebarEntry {
 
 /// The state text of a network row, as `renderSidebar` titles it.
 fn network_state(location: &NetworkLocation) -> &'static str {
-    if location.connected {
+    if location.is_connected {
         "Connected"
-    } else if location.saved {
+    } else if location.is_saved {
         "Saved · connect on open"
     } else {
         "Opened this session"
@@ -241,6 +241,7 @@ pub(in crate::window) fn section_edges(entries: &[SidebarEntry], index: usize) -
 mod tests {
     use std::path::PathBuf;
 
+    use ox_core::places::KnownFolder;
     use ox_core::settings::{Bookmark, SettingsData};
 
     use super::*;
@@ -341,10 +342,10 @@ mod tests {
         for hex in [HOME_COLOR, THIS_PC_COLOR, NETWORK_COLOR] {
             assert!(gdk::RGBA::parse(hex).is_ok(), "{hex}");
         }
-        for place in ox_core::places::known_folders() {
-            let hex = place.color.expect("known folders have a colour");
+        for folder in KnownFolder::QUICK_ACCESS {
+            let hex = folder.glyph_color().expect("Quick access folders have a colour");
             assert!(gdk::RGBA::parse(hex).is_ok(), "{hex}");
-            let icon = place.icon.expect("known folders have a glyph");
+            let icon = folder.glyph();
             assert!(Glyph::for_known_folder(icon).is_some(), "{icon}");
         }
     }

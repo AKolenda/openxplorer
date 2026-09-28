@@ -9,9 +9,9 @@
 //! its current tab, the rest as tabs). Ctrl+N and `--new-window` open
 //! another window.
 //!
-//! [`Application`] is a `GtkApplication` subclass: GTK calls its `startup`,
+//! `Application` is a `GtkApplication` subclass: GTK calls its `startup`,
 //! `activate`, `open` and `handle_local_options` methods, and it keeps the
-//! [`AppState`] it creates at startup, which does the work ([`state`]).
+//! `AppState` it creates at startup, which does the work (`state.rs`).
 
 mod state;
 
@@ -280,7 +280,7 @@ impl Application {
 /// Runs the preview under its own application ID, so installed
 /// file-manager defaults and the production app's D-Bus name are untouched.
 /// With `OPENXPLORER_SNAPSHOT` set it saves a picture of one window and
-/// quits instead ([`crate::snapshot`]).
+/// quits instead (see `snapshot.rs`).
 pub fn run() -> glib::ExitCode {
     let launch = match SnapshotRequest::from_environment() {
         Ok(Some(request)) => Launch::Snapshot(request),

@@ -80,3 +80,5 @@
 @define-color ox_tab_shadow alpha(black, .012);     /* the active tab */
 @define-color ox_menu_shadow alpha(black, .2);      /* E03 classic menus */
 @define-color ox_preview_shadow alpha(black, .043); /* the details pane's art */
+/* The current app's own glyph colour, the same in both themes */
+@define-color ox_share_glyph #4b96c0;  /* a saved share's server glyph */

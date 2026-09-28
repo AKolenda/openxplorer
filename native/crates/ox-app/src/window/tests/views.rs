@@ -3,6 +3,7 @@
 //! and appearance.
 
 use gtk::prelude::*;
+use ox_core::settings::View;
 
 use crate::folder_view::cells::FileCell;
 use crate::folder_view::column_titles;
@@ -172,7 +173,7 @@ fn changed_view_preferences_are_saved_for_new_windows() {
     test.activate("hidden", None);
     wait_until("the preferences to be saved", || {
         let preferences = test.context.settings_data().preferences;
-        preferences.view == "grid" && preferences.show_hidden
+        preferences.view == View::Grid && preferences.show_hidden
     });
     let second = test.open_beside(&fixture.uri());
     let pane = second.window.folder_pane();

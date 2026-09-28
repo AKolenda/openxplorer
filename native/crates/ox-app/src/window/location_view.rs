@@ -133,7 +133,7 @@ impl BrowserWindow {
             .enumerate()
             .map(|(index, crumb)| CrumbButton {
                 address: locations.display_location(&crumb.uri),
-                divider_before: location::crumb_divider(uri, &breadcrumbs, index),
+                divider_before: location::crumb_divider(uri, index),
                 crumb: crumb.clone(),
             })
             .collect();
