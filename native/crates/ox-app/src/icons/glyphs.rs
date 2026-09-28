@@ -391,17 +391,18 @@ impl GlyphPaintable {
 mod tests {
     use super::*;
 
+    /// A stroke width in pixels for `glyph` drawn `size` pixels wide.
+    fn stroke_pixels(glyph: Glyph, size: i32) -> f32 {
+        let size_in_pixels = f32::from(u8::try_from(size).expect("a small icon"));
+        glyph.stroke_width(size) * size_in_pixels / VIEWBOX_SIZE
+    }
+
     /// parity: LOOK-015
     #[test]
     fn every_glyph_parses_as_a_gsk_path() {
         for glyph in Glyph::ALL {
             assert!(gsk::Path::parse(glyph.path_data()).is_ok(), "{glyph:?}");
         }
-    }
-
-    /// A stroke width in pixels for `glyph` drawn `size` pixels wide.
-    fn stroke_pixels(glyph: Glyph, size: i32) -> f32 {
-        glyph.stroke_width(size) * f32::from(u8::try_from(size).expect("a small icon")) / VIEWBOX_SIZE
     }
 
     /// parity: LOOK-015

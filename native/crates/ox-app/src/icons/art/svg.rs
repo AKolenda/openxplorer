@@ -208,33 +208,43 @@ const fn badge(style: DocumentStyle) -> Badge {
 
 /// The markup of `badge`, drawn over the page.
 fn badge_markup(badge: Badge) -> String {
-    let color = badge.color;
     match badge.mark {
-        BadgeMark::Letters(letters) => {
-            let font_size = if letters.chars().count() > 1 { 10 } else { 14 };
-            format!(
-                concat!(
-                    r#"<rect x="4" y="18" width="30" height="19" rx="2" fill="{color}"/>"#,
-                    r#"<text x="19" y="31" font-size="{font_size}" text-anchor="middle" fill="white" "#,
-                    r#"font-family="sans-serif" font-weight="600">{letters}</text>"#
-                ),
-                color = color,
-                font_size = font_size,
-                letters = letters
-            )
-        }
-        BadgeMark::Picture => format!(
-            concat!(
-                r##"<path d="M14 36V20h20v16Z" fill="#e3dcf7"/>"##,
-                r##"<path d="m14 34 7-8 5 5 4-4 4 7Z" fill="{color}"/>"##,
-                r##"<circle cx="29" cy="23" r="2" fill="#f0b253"/>"##
-            ),
-            color = color
-        ),
-        BadgeMark::Lines => {
-            format!(r#"<path d="M15 22h17M15 27h17M15 32h12" stroke="{color}" stroke-width="2"/>"#)
-        }
+        BadgeMark::Letters(letters) => letters_badge(badge.color, letters),
+        BadgeMark::Picture => picture_badge(badge.color),
+        BadgeMark::Lines => lines_badge(badge.color),
     }
+}
+
+/// A `color` label with white `letters`, smaller when there are several.
+fn letters_badge(color: &str, letters: &str) -> String {
+    let font_size = if letters.chars().count() > 1 { 10 } else { 14 };
+    format!(
+        concat!(
+            r#"<rect x="4" y="18" width="30" height="19" rx="2" fill="{color}"/>"#,
+            r#"<text x="19" y="31" font-size="{font_size}" text-anchor="middle" fill="white" "#,
+            r#"font-family="sans-serif" font-weight="600">{letters}</text>"#
+        ),
+        color = color,
+        font_size = font_size,
+        letters = letters
+    )
+}
+
+/// A small landscape picture with `color` hills.
+fn picture_badge(color: &str) -> String {
+    format!(
+        concat!(
+            r##"<path d="M14 36V20h20v16Z" fill="#e3dcf7"/>"##,
+            r##"<path d="m14 34 7-8 5 5 4-4 4 7Z" fill="{color}"/>"##,
+            r##"<circle cx="29" cy="23" r="2" fill="#f0b253"/>"##
+        ),
+        color = color
+    )
+}
+
+/// Three text lines in `color`.
+fn lines_badge(color: &str) -> String {
+    format!(r#"<path d="M15 22h17M15 27h17M15 32h12" stroke="{color}" stroke-width="2"/>"#)
 }
 
 #[cfg(test)]
