@@ -32,6 +32,19 @@ pub const TRUSTED_HOSTS: [&str; 4] = [
 /// The standard HTTPS port, the only port a trusted address may name.
 const HTTPS_PORT: i32 = 443;
 
+/// How addresses are parsed: the path, query and fragment stay
+/// percent-encoded, as libsoup's own `SOUP_HTTP_URI_FLAGS` keep them.
+///
+/// Safety rule "the address checked is the address requested": decoded,
+/// a signed download address would reach GitHub with `%2B` sent as `+`,
+/// `%20` as a raw space and `%26` splitting one parameter in two, and the
+/// download host answers 400. Python's urllib sends a redirect's
+/// `Location` unchanged. The host is still decoded, so the host check and
+/// the request name the same host.
+const HTTP_URI_FLAGS: glib::UriFlags = glib::UriFlags::ENCODED_PATH
+    .union(glib::UriFlags::ENCODED_QUERY)
+    .union(glib::UriFlags::ENCODED_FRAGMENT);
+
 /// An address the updater may contact.
 ///
 /// Safety rule "only fixed upstream HTTPS endpoints" (`trusted_url` in
@@ -58,7 +71,7 @@ impl TrustedUrl {
     /// not a URL at all.
     pub fn parse(url: &str) -> Result<Self, UpdateError> {
         refuse_control_characters(url)?;
-        let uri = glib::Uri::parse(url, glib::UriFlags::NONE).map_err(|_| UpdateError::UntrustedLocation)?;
+        let uri = glib::Uri::parse(url, HTTP_URI_FLAGS).map_err(|_| UpdateError::UntrustedLocation)?;
         Self::checked(url.to_owned(), uri)
     }
 
@@ -85,7 +98,7 @@ impl TrustedUrl {
         refuse_control_characters(location)?;
         let target = self
             .uri
-            .parse_relative(location, glib::UriFlags::NONE)
+            .parse_relative(location, HTTP_URI_FLAGS)
             .map_err(|_| UpdateError::UntrustedLocation)?;
         let text = target.to_str().to_string();
         Self::checked(text, target)
@@ -191,5 +204,34 @@ mod tests {
         );
         assert!(url.is_latest_release());
         assert!(!target.is_latest_release());
+    }
+
+    /// Regression: addresses were percent-decoded, so libsoup sent GitHub's
+    /// signed download redirect with `+`, a raw space and a split
+    /// parameter, and every installer download failed with HTTP 400.
+    /// parity: UPD-002
+    #[test]
+    fn a_redirect_keeps_its_percent_encoding_byte_for_byte() {
+        let latest = TrustedUrl::latest_release();
+        let location = "https://release-assets.githubusercontent.com/a?sig=Ab%2Bc%3D\
+                        &rscd=attachment%3B%20filename%3Dx.deb&x=a%26b";
+
+        let target = latest.redirect(location).unwrap();
+
+        assert_eq!(target.as_str(), location);
+        assert_eq!(target.as_uri().to_str(), location);
+    }
+
+    /// The same rule for an address checked directly, such as a release's
+    /// installer address.
+    /// parity: UPD-002
+    #[test]
+    fn a_checked_address_keeps_its_percent_encoding_byte_for_byte() {
+        let address = "https://github.com/a%20b/c?name=x%2By%26z#part%3D1";
+
+        let url = TrustedUrl::parse(address).unwrap();
+
+        assert_eq!(url.as_str(), address);
+        assert_eq!(url.as_uri().to_str(), address);
     }
 }
