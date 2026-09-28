@@ -35,15 +35,20 @@ struct SettingsTest {
     fixture: Fixture,
 }
 
+/// The Settings page of `test`'s window.
+fn settings_page_of(test: &TestWindow) -> SettingsPage {
+    descendants::<SettingsPage>(&test.window)
+        .into_iter()
+        .next()
+        .expect("the window has a Settings page")
+}
+
 impl SettingsTest {
     fn open() -> Self {
         let fixture = Fixture::standard();
         let test = TestWindow::open(&fixture.uri());
         test.activate("settings", None);
-        let page = descendants::<SettingsPage>(&test.window)
-            .into_iter()
-            .next()
-            .expect("the window has a Settings page");
+        let page = settings_page_of(&test);
         Self { test, page, fixture }
     }
 
@@ -139,6 +144,37 @@ impl Drop for TextSizeGuard {
     fn drop(&mut self) {
         skin().set_text_size(self.0);
     }
+}
+
+/// Most windows never show Settings, so a window builds the page's rows
+/// the first time Settings is shown, not when the window is created.
+#[gtk::test]
+fn a_window_builds_its_settings_rows_when_settings_is_first_shown() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let page = settings_page_of(&test);
+    assert!(
+        descendants::<SettingRow>(&page).is_empty(),
+        "no rows before Settings opens"
+    );
+
+    test.activate("settings", None);
+
+    assert!(!descendants::<SettingRow>(&page).is_empty());
+    assert_eq!(page.view(), SettingsView::Category(Category::Appearance));
+}
+
+/// A window whose first tab is Settings, as `OPENXPLORER_START=ox:settings`
+/// opens one, shows the page without Settings being opened by a command.
+#[gtk::test]
+fn a_window_started_at_settings_shows_its_rows() {
+    let test = TestWindow::open(crate::locations::Page::Settings.uri());
+
+    let page = settings_page_of(&test);
+    wait_until("the Settings page to be built", || {
+        !descendants::<SettingRow>(&page).is_empty()
+    });
+    assert!(page.is_mapped());
 }
 
 /// parity: SET-019

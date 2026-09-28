@@ -137,7 +137,7 @@ impl SettingsPage {
     }
 
     /// Shows `view` on the right and highlights its category on the left.
-    pub(crate) fn show_view(&self, view: SettingsView) {
+    pub(super) fn show_view(&self, view: SettingsView) {
         let imp = self.imp();
         imp.view.set(view);
         imp.pages.set_visible_child_name(view.key());
@@ -163,6 +163,7 @@ impl SettingsPage {
 
     /// Types `text` into the settings search, as the user would.
     pub(crate) fn search(&self, text: &str) {
+        self.build_pages_once();
         self.imp().search_entry.set_text(text);
     }
 
@@ -242,7 +243,7 @@ impl SettingsPage {
     /// Shows the first row that matches the search and gives its control
     /// keyboard focus, as Enter in the Python app's search clicked the
     /// first result. False when nothing matches.
-    pub(crate) fn jump_to_first_match(&self) -> bool {
+    pub(super) fn jump_to_first_match(&self) -> bool {
         if self.imp().query.borrow().is_empty() {
             return false;
         }

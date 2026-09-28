@@ -13,9 +13,10 @@
 //! [`parts`] and [`choice_list`]. The list and the search are in
 //! [`navigation`].
 //!
-//! Every row reads and writes the shared settings file through ox-core,
-//! with the Python app's keys and checks, so both apps stay in step, and
-//! changes show at once in every window. A row the native preview cannot
+//! A window builds the page the first time Settings is shown
+//! ([`building`]). Every row reads and writes the shared settings file
+//! through ox-core, with the Python app's keys and checks, so both apps
+//! stay in step, and changes show at once in every window. A row the native preview cannot
 //! run yet keeps its place and wording, and says which milestone brings
 //! it ([`row::Availability`]).
 
@@ -23,6 +24,7 @@ mod about;
 mod appearance;
 mod bindings;
 mod brave;
+mod building;
 mod category_row;
 mod choice_list;
 mod default_apps;
@@ -51,10 +53,10 @@ use crate::locations::Page;
 use crate::shared::AppContext;
 use crate::window::{show_bundled_clear_icon, show_bundled_magnifier};
 
-use section::SettingsSection;
-
 pub(crate) use indexed_folders::{index_candidates, CandidateSources, IndexCandidate};
-pub(crate) use pages::{Category, SettingsView, Subpage};
+#[cfg(test)]
+pub(crate) use pages::Subpage;
+pub(crate) use pages::{Category, SettingsView};
 pub(crate) use row::PageWidth;
 
 /// Emitted when "Back to files" is clicked.
@@ -99,6 +101,7 @@ mod imp {
 
     use super::indexed_folders::FolderList;
     use super::pages::{Category, SettingsView, Subpage};
+    use super::row::PageWidth;
     use super::search::SearchQuery;
     use super::section::SettingsSection;
     use super::{OpenedHook, PreferenceFollower, SharedHandler, BACK_TO_FILES, MESSAGE};
@@ -131,6 +134,12 @@ mod imp {
         pub(super) pages: TemplateChild<gtk::Stack>,
         /// The windows' shared state, set by `SettingsPage::bind`.
         pub(super) context: OnceCell<AppContext>,
+        /// Set once the categories and sub-pages are built, the first time
+        /// Settings is shown.
+        pub(super) is_built: Cell<bool>,
+        /// The width the page was last fitted to, which the sections take
+        /// when they are built.
+        pub(super) page_width: Cell<PageWidth>,
         /// The categories' pages.
         pub(super) category_sections: RefCell<HashMap<Category, SettingsSection>>,
         /// The sub-pages.
@@ -204,7 +213,17 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for SettingsPage {}
+    impl WidgetImpl for SettingsPage {
+        /// Settings is shown: the first time, the page builds its
+        /// sections; every time, it reads what may have changed while it
+        /// was hidden.
+        fn map(&self) {
+            self.obj().build_pages_once();
+            self.parent_map();
+            self.obj().refresh();
+        }
+    }
+
     impl BoxImpl for SettingsPage {}
 }
 
@@ -234,8 +253,9 @@ impl SettingsPage {
         ));
     }
 
-    /// Builds every category from the settings `context` shares, and keeps
-    /// the rows showing its values from now on.
+    /// Shows the settings `context` shares, and keeps the rows showing its
+    /// values from now on. The rows are built the first time Settings is
+    /// shown or opened.
     ///
     /// # Panics
     ///
@@ -245,11 +265,7 @@ impl SettingsPage {
             .context
             .set(context.clone())
             .expect("a settings page is bound once");
-        self.add_category_sections();
-        self.add_subpages();
-        self.build_navigation();
         self.follow_shared_state();
-        self.show_view(SettingsView::default());
     }
 
     /// The windows' shared state.
@@ -258,61 +274,6 @@ impl SettingsPage {
             .context
             .get()
             .expect("the window binds its settings page when it is created")
-    }
-
-    fn add_category_sections(&self) {
-        for category in Category::ALL {
-            let page = self.build_category(category);
-            self.add_page(category.key(), &page);
-            self.imp().category_sections.borrow_mut().insert(category, page);
-        }
-    }
-
-    /// The page of `category`, from the category's own module.
-    fn build_category(&self, category: Category) -> SettingsSection {
-        match category {
-            Category::Appearance => appearance::build(self),
-            Category::SearchAndIndexing => indexing::build(self),
-            Category::DefaultApps => default_apps::build(self),
-            Category::WindowsAndTabs => windows_tabs::build(),
-            Category::BraveAndDownloads => brave::build(),
-            Category::About => about::build(),
-        }
-    }
-
-    fn add_subpages(&self) {
-        let (indexed_page, folder_list) = indexed_folders::build();
-        self.imp()
-            .indexed_folders
-            .set(folder_list)
-            .expect("the sub-pages are built once");
-        let subpages = [
-            (Subpage::IndexedFolders, indexed_page),
-            (Subpage::FolderSizes, indexing::build_folder_sizes()),
-            (Subpage::Troubleshooting, default_apps::build_troubleshooting()),
-        ];
-        for (subpage, page) in subpages {
-            if let Some(back) = page.back_button() {
-                back.connect_clicked(glib::clone!(
-                    #[weak(rename_to = settings)]
-                    self,
-                    move |_| settings.show_view(SettingsView::Category(subpage.category()))
-                ));
-            }
-            self.add_page(subpage.key(), &page);
-            self.imp().subpages.borrow_mut().insert(subpage, page);
-        }
-    }
-
-    /// Adds `page` to the stack as `name`, scrolling on its own.
-    fn add_page(&self, name: &str, page: &SettingsSection) {
-        let content = gtk::Box::builder().css_classes(["settings-content"]).build();
-        content.append(page);
-        let scrolled = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .child(&content)
-            .build();
-        self.imp().pages.add_named(&scrolled, Some(name));
     }
 
     /// Calls `on_back` when "Back to files" is clicked.
@@ -333,17 +294,18 @@ impl SettingsPage {
     }
 
     /// Settings opened, at `view` when one is asked for, else where it was
-    /// left: reads what may have changed while it was closed and gives the
-    /// chosen category keyboard focus, so arrow keys, Escape and typing
-    /// reach the page at once.
+    /// left, with keyboard focus on the chosen category, so arrow keys,
+    /// Escape and typing reach the page at once. Showing the page reads
+    /// what may have changed while it was hidden.
     pub(crate) fn open(&self, view: Option<SettingsView>) {
+        // Built here too: a window opened at Settings is not shown yet.
+        self.build_pages_once();
         if let Some(view) = view {
             // A view asked for by name shows all of it, not the rows an
             // earlier search left, which may be none.
             self.search("");
             self.show_view(view);
         }
-        self.refresh();
         self.focus_chosen_category();
     }
 
@@ -360,23 +322,14 @@ impl SettingsPage {
         }
     }
 
-    /// Lays every page out for a window `width` wide.
+    /// Lays every page out for a window `width` wide, and the pages built
+    /// later too.
     pub(crate) fn fit_to_width(&self, width: PageWidth) {
-        let pages = self.all_pages();
-        for page in pages {
-            page.fit_to_width(width);
-        }
+        self.imp().page_width.set(width);
+        self.fit_sections_to_width();
         match width {
             PageWidth::Roomy => self.remove_css_class(NARROW_CLASS),
             PageWidth::Narrow => self.add_css_class(NARROW_CLASS),
         }
-    }
-
-    /// Every category page and sub-page.
-    fn all_pages(&self) -> Vec<SettingsSection> {
-        let imp = self.imp();
-        let categories = imp.category_sections.borrow();
-        let subpages = imp.subpages.borrow();
-        categories.values().chain(subpages.values()).cloned().collect()
     }
 }
