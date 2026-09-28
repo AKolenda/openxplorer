@@ -23,7 +23,9 @@ mod dialogs;
 mod folder_view;
 mod history;
 mod icons;
+mod integration;
 mod locations;
+mod modal;
 mod network;
 mod places;
 mod properties;
@@ -34,6 +36,7 @@ mod snapshot;
 mod text_size;
 mod theme;
 mod typeahead;
+mod update;
 mod volumes;
 mod window;
 

@@ -21,3 +21,5 @@ window.ox .statusbar button {
   color: @ox_muted;
 }
 window.ox .statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
+/* A newer release, or a restart into an installed one, waits for the user. */
+window.ox .statusbar button.update-available { color: @ox_accent; }

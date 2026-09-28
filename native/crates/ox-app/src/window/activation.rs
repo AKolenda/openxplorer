@@ -37,7 +37,7 @@ pub(super) enum Activation {
 
 /// Where a folder from the command line or another app opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum IncomingTab {
+pub(super) enum IncomingTab {
     /// The active tab moves to it: the first location, as `openIncoming`.
     Active,
     /// A new tab in front: every later location.
@@ -66,7 +66,7 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
 }
 
 /// Queries `uri` without blocking the interface.
-async fn query_entry(uri: &str) -> Result<Entry, EntryError> {
+pub(super) async fn query_entry(uri: &str) -> Result<Entry, EntryError> {
     let file = gio::File::for_uri(uri);
     let info = file
         .query_info_future(
@@ -203,7 +203,7 @@ impl BrowserWindow {
     }
 
     /// Opens one incoming location, whose metadata query gave `result`.
-    fn open_incoming(&self, uri: &str, tab: IncomingTab, result: Result<Entry, EntryError>) {
+    pub(super) fn open_incoming(&self, uri: &str, tab: IncomingTab, result: Result<Entry, EntryError>) {
         let Ok(entry) = result else {
             // A missing or unreadable location opens as a tab that says so.
             self.open_incoming_folder(uri, tab);

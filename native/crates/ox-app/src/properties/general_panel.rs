@@ -17,7 +17,7 @@ use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::ItemProperties;
 use crate::dialog_layer::{note, quiet_text, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
-use crate::window::{ButtonStyle, Milestone, WindowAction};
+use crate::window::{ButtonStyle, WindowAction};
 
 /// The size of the item's picture at the top of the General tab
 /// (`fileIcon(current, 48)`).
@@ -130,7 +130,7 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
     let is_read_only =
         snapshot_location(&entry.uri, facts.snapshot_roots).is_some() || is_conventional_snapshot(&entry.uri);
     if !entry.is_dir && !is_read_only {
-        row.append(&change_app_button());
+        row.append(&change_app_button(&entry.uri));
     }
     row.append(&copy_path_button(facts.locations.display_location(&entry.uri)));
     if entry.is_dir && !is_smb_server(&entry.uri) {
@@ -150,13 +150,10 @@ fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
     button
 }
 
-/// Change app… opens the Open with dialog, which arrives with desktop
-/// integration; until then it says so instead of doing nothing.
-fn change_app_button() -> gtk::Button {
+/// Change app…: the Open with dialog for the file at `uri`.
+fn change_app_button(uri: &str) -> gtk::Button {
     let button = glyph_button("Change app…", Icon::Grid);
-    button.set_sensitive(false);
-    let notice = Milestone::DesktopIntegration.notice();
-    button.set_tooltip_text(Some(&format!("Change app…\n{notice}")));
+    WindowAction::ChangeApp.assign_with_target_to(&button, &uri.to_variant());
     button
 }
 

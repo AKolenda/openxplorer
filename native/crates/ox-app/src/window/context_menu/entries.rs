@@ -15,6 +15,7 @@
 //! names it ([`crate::window::unported`]).
 
 use crate::icons::Icon;
+use crate::integration::EditorShortcut;
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
 use crate::window::window_action::WindowAction;
 
@@ -57,6 +58,8 @@ pub(crate) struct ItemFacts {
     /// It is a search result, listed away from its folder
     /// (`state.query`).
     pub(crate) is_search_result: bool,
+    /// The installed code editors, each offered as "Open in <editor>".
+    pub(crate) editors: Vec<EditorShortcut>,
     /// Delete's label: "Move to Trash" or "Delete permanently".
     pub(crate) delete_label: &'static str,
 }
@@ -76,8 +79,8 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
     MenuItem::new(label, glyph, action)
 }
 
-/// The Open group: Open, Extract all…, the Terminal entry, Open with,
-/// for folders Open in new tab and Pin to Quick access, and for a search
+/// The Open group: Open, the extraction commands, the applications, for
+/// folders Open in new tab and Pin to Quick access, and for a search
 /// result Open file location (SRCH-015).
 fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let several = !facts.is_single;
@@ -87,26 +90,9 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         .disabled_when(several || (!is_folder && facts.is_read_only));
     let mut entries: Vec<MenuEntry> = vec![open.into()];
     if facts.shape == ItemShape::ZipArchive {
-        let extract = item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll).disabled_when(several);
-        // Beyond the Python app, as Dolphin's "Extract here".
-        let extract_here = item("Extract here", Icon::FolderZip, WindowAction::ExtractHere);
-        entries.push(extract.into());
-        entries.push(extract_here.disabled_when(several).into());
+        entries.extend(extraction_items(several));
     }
-    let terminal_label = if is_folder {
-        "Open in Terminal"
-    } else {
-        "Open containing folder in Terminal"
-    };
-    let terminal = item(terminal_label, Icon::WindowConsole, WindowAction::OpenInTerminal);
-    entries.push(terminal.disabled_when(several || facts.is_read_only).into());
-    let open_with_label = if is_folder {
-        "Open folder with…"
-    } else {
-        "Open with…"
-    };
-    let open_with = item(open_with_label, Icon::Apps, WindowAction::OpenWith);
-    entries.push(open_with.disabled_when(several || facts.is_read_only).into());
+    entries.extend(application_items(facts));
     if is_folder {
         let new_tab = MenuItem::with_text_target(
             "Open in new tab",
@@ -121,6 +107,47 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     if facts.is_search_result {
         let open_location = item("Open file location", Icon::Folder, WindowAction::OpenFileLocation);
         entries.push(open_location.disabled_when(several).into());
+    }
+    entries
+}
+
+/// Extract all… and, beyond the Python app, Dolphin's Extract here.
+fn extraction_items(several: bool) -> [MenuEntry; 2] {
+    let extract_all = item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll);
+    let extract_here = item("Extract here", Icon::FolderZip, WindowAction::ExtractHere);
+    [
+        extract_all.disabled_when(several).into(),
+        extract_here.disabled_when(several).into(),
+    ]
+}
+
+/// The Terminal entry (`terminalMenuItem`), Open with and one "Open in
+/// <editor>" per installed code editor (`uniqueEditors`), all for one
+/// item outside a previous version.
+fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    let is_unavailable = !facts.is_single || facts.is_read_only;
+    let is_folder = facts.shape == ItemShape::Folder;
+    let terminal_label = if is_folder {
+        "Open in Terminal"
+    } else {
+        "Open containing folder in Terminal"
+    };
+    let open_with_label = if is_folder {
+        "Open folder with…"
+    } else {
+        "Open with…"
+    };
+    let terminal = item(terminal_label, Icon::WindowConsole, WindowAction::OpenInTerminal);
+    let open_with = item(open_with_label, Icon::Apps, WindowAction::OpenWith);
+    let mut entries = vec![
+        terminal.disabled_when(is_unavailable).into(),
+        open_with.disabled_when(is_unavailable).into(),
+    ];
+    for editor in &facts.editors {
+        let label = format!("Open in {}", editor.name);
+        let open_in_editor =
+            MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id);
+        entries.push(open_in_editor.disabled_when(is_unavailable).into());
     }
     entries
 }
@@ -328,6 +355,8 @@ pub(crate) fn recycle_bin_background_menu() -> Vec<MenuEntry> {
 
 #[cfg(test)]
 mod tests {
+    use gtk::prelude::ToVariant;
+
     use super::*;
     use crate::window::menu_popover::ItemAvailability;
 
@@ -340,6 +369,7 @@ mod tests {
             is_read_only: false,
             is_single: true,
             is_search_result: false,
+            editors: Vec::new(),
             delete_label: "Move to Trash",
         }
     }
@@ -478,6 +508,34 @@ mod tests {
                 "Properties",
             ]
         );
+    }
+
+    /// parity: OPEN-017
+    #[test]
+    fn each_code_editor_is_offered_after_open_with_for_one_item() {
+        let code = EditorShortcut {
+            id: "code.desktop".to_owned(),
+            name: "Visual Studio Code".to_owned(),
+        };
+        let facts = ItemFacts {
+            editors: vec![code],
+            ..file()
+        };
+        let several = ItemFacts {
+            is_single: false,
+            ..facts.clone()
+        };
+
+        let entries = item_menu(&facts, MenuStyle::Classic).entries;
+
+        assert_eq!(labels(&entries)[3], "Open in Visual Studio Code");
+        let MenuEntry::Item(editor) = &entries[3] else {
+            panic!("an editor is an item");
+        };
+        assert_eq!(editor.action, WindowAction::OpenInEditor.into());
+        assert_eq!(editor.target, Some("code.desktop".to_variant()));
+        let disabled_for_several = disabled(&item_menu(&several, MenuStyle::Classic).entries);
+        assert!(disabled_for_several.contains(&"Open in Visual Studio Code".to_owned()));
     }
 
     /// parity: SRCH-015

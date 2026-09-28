@@ -13,9 +13,11 @@ const DETAIL: &str = "An independent Windows 11–inspired file manager for Zori
 Desktop: GTK 4 + GIO/GVfs.\n\n\
 This preview browses folders, copies, moves, renames and deletes files, \
 signs in to network shares, connects and removes drives and devices, \
-searches folders and the search index, and has the Settings page. Desktop \
-integration is not ported yet; the installed \
-OpenXplorer keeps doing those.";
+searches folders and the search index, shows Properties, previous \
+versions and folder sizes, opens and extracts ZIP files, and has the \
+Settings page, desktop integration (default apps, Show in folder, Open \
+with, Open in Terminal, Brave's download folder) and Check for updates. \
+What it still lacks, the installed OpenXplorer keeps doing.";
 
 impl BrowserWindow {
     /// Shows the build's description in a message box over the window.

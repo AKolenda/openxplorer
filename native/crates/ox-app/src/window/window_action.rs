@@ -143,10 +143,6 @@ pub(crate) enum WindowAction {
     Unpin,
     /// Shows the menu of open windows (the tab menu's "Open windows…").
     OpenWindows,
-    /// Opens a terminal in the folder.
-    OpenInTerminal,
-    /// Chooses the application that opens the item.
-    OpenWith,
     /// Moves a tab into a window of its own.
     MoveTabToNewWindow,
     /// Lists the other open windows to move a tab into ("Move tab to
@@ -223,6 +219,18 @@ pub(crate) enum WindowAction {
     ExtractHere,
     /// Compress to ZIP file: the selection into a new ZIP beside it.
     CompressToZip,
+    /// Open with…: the Open with dialog for the one selected item, or the
+    /// folder.
+    OpenWith,
+    /// Change app… in Properties: the Open with dialog for the file whose
+    /// URI is the string target.
+    ChangeApp,
+    /// Open in Terminal: the terminal in the selected folder, the folder
+    /// of the selected file, or the folder shown.
+    OpenInTerminal,
+    /// Opens the selected item in the code editor whose desktop ID is the
+    /// string target.
+    OpenInEditor,
 }
 
 impl WindowAction {
@@ -291,8 +299,6 @@ impl WindowAction {
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::Unpin => "unpin",
             WindowAction::OpenWindows => "open-windows",
-            WindowAction::OpenInTerminal => "open-in-terminal",
-            WindowAction::OpenWith => "open-with",
             WindowAction::MoveTabToNewWindow => "move-tab-to-new-window",
             WindowAction::MoveTabToWindow => "move-tab-to-window",
             WindowAction::MoveTabIntoWindow => "move-tab-into-window",
@@ -324,6 +330,10 @@ impl WindowAction {
             WindowAction::ExtractAll => "extract-all",
             WindowAction::ExtractHere => "extract-here",
             WindowAction::CompressToZip => "compress-to-zip",
+            WindowAction::OpenWith => "open-with",
+            WindowAction::ChangeApp => "change-app",
+            WindowAction::OpenInTerminal => "open-in-terminal",
+            WindowAction::OpenInEditor => "open-in-editor",
         }
     }
 

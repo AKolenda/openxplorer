@@ -169,6 +169,7 @@ impl BrowserWindow {
             is_read_only: self.imp().locations.borrow().is_snapshot_location(&entry.uri),
             is_single,
             is_search_result: self.is_searching(),
+            editors: self.context().desktop_integration().known_editor_shortcuts(),
             delete_label: self.delete_label(),
         }
     }

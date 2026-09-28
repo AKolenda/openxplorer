@@ -37,6 +37,8 @@ pub(super) struct ExternalHandlers {
     pub(super) clipboard: Option<glib::SignalHandlerId>,
     /// On the shared search cache's status and contents signals.
     pub(super) search_cache: Vec<glib::SignalHandlerId>,
+    /// On the application's updates, which the status bar shows.
+    pub(super) updates: Option<glib::SignalHandlerId>,
 }
 
 impl BrowserWindow {
@@ -82,6 +84,9 @@ impl BrowserWindow {
         }
         for handler in handlers.search_cache {
             self.context().search_cache().disconnect(handler);
+        }
+        if let Some(handler) = handlers.updates {
+            self.context().updates().disconnect(handler);
         }
         self.imp().typeahead.borrow_mut().stop_timer();
     }

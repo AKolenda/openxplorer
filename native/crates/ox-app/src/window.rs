@@ -25,8 +25,13 @@
 //! ([`type_to_select`]), the file operations and their [`dialog`]s
 //! ([`file_ops`]), dragging and dropping files ([`file_drag`],
 //! [`file_drop`]), moving tabs ([`tab_moves`]), the context menus
-//! ([`context_menu`], [`tab_menu`]), and what the window connects and lets
-//! go of ([`connections`]).
+//! ([`context_menu`], [`tab_menu`]), searching ([`folder_search`],
+//! [`cache_folder`]), Properties and previous versions ([`item_dialogs`],
+//! [`snapshot_tabs`], [`version_restore`]), folder sizes
+//! ([`folder_size_scan`]), ZIP archives ([`archive_actions`]), requests
+//! from other applications and the command line ([`external_requests`]),
+//! Open with, Open in Terminal and updates ([`integration_actions`]), and
+//! what the window connects and lets go of ([`connections`]).
 //! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
 //! [`search_box::SearchBox::connect_query_changed`]), so the controller
@@ -53,6 +58,7 @@ mod details_pane;
 mod dialog;
 mod empty_page;
 mod environment;
+mod external_requests;
 mod file_drag;
 mod file_drop;
 mod file_ops;
@@ -61,6 +67,7 @@ mod folder_search;
 mod folder_size_scan;
 mod gestures;
 mod input;
+mod integration_actions;
 mod item_dialogs;
 mod landing;
 mod listing_state;
@@ -346,6 +353,12 @@ mod imp {
 
     impl WindowImpl for BrowserWindow {
         fn close_request(&self) -> glib::Propagation {
+            // Safety rule "an update locks the application" (UPD-005): no
+            // window closes while an update installs.
+            if let Some(refusal) = self.obj().close_refusal() {
+                self.obj().show_message(&refusal);
+                return glib::Propagation::Stop;
+            }
             // Let go of keyboard focus first. On Wayland, GTK's input method
             // otherwise keeps the focused address entry and later asks a
             // destroyed widget for its cursor position (a Gtk-CRITICAL).

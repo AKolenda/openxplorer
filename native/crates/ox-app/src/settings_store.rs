@@ -11,6 +11,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use gtk::{gio, glib};
@@ -62,6 +63,12 @@ impl SettingsStore {
     /// A copy of the data as last read or changed.
     pub(crate) fn data(&self) -> SettingsData {
         self.settings.borrow().data().clone()
+    }
+
+    /// The settings folder (`~/.config/winspace`), which also keeps the
+    /// desktop integration's records.
+    pub(crate) fn directory(&self) -> PathBuf {
+        self.settings.borrow().directory().to_owned()
     }
 
     /// Why the last read fell back to defaults, if it did.

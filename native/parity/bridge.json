@@ -8,9 +8,12 @@
       "evidence": []
     },
     "applications": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "The Open with dialog lists, filters and chooses the installed applications.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::open_with_lists_filters_and_launches_the_chosen_application",
+        "native/crates/ox-app/src/integration/applications.rs::a_folder_lists_installed_applications_but_never_openxplorer"
+      ]
     },
     "archiveExtract": {
       "status": "native-tested",
@@ -103,19 +106,27 @@
       ]
     },
     "braveRestore": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "The dialog's Restore previous calls ox-core's restore for exactly one profile with consent; not tested from the dialog.",
+      "evidence": [
+        "native/crates/ox-core/tests/integration_brave/restore.rs::restoring_puts_back_only_the_download_folders"
+      ]
     },
     "braveStatus": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "The Brave dialog lists the native profiles and says whether Brave runs.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::the_brave_dialog_lists_profiles_and_needs_consent",
+        "native/crates/ox-app/src/integration/brave_dialog.rs::the_status_says_whether_brave_can_be_changed_now"
+      ]
     },
     "braveSync": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Apply to Brave calls ox-core's sync after its consent and selection checks; the dialog's refusals are tested, a sync from the dialog is not.",
+      "evidence": [
+        "native/crates/ox-core/tests/integration_brave/sync.rs::syncing_changes_only_the_two_download_folders",
+        "native/crates/ox-app/src/integration/tests.rs::the_brave_dialog_lists_profiles_and_needs_consent"
+      ]
     },
     "cacheClear": {
       "status": "core-tested",
@@ -258,19 +269,27 @@
       ]
     },
     "desktopDefault": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Make OpenXplorer default, with the Show in folder and ZIP options, from Settings > Default apps.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::making_openxplorer_the_default_can_be_undone"
+      ]
     },
     "desktopRestore": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Restore previous in Settings > Default apps puts the recorded handlers back and turns Show in folder off.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::making_openxplorer_the_default_can_be_undone"
+      ]
     },
     "desktopStatus": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Settings > Default apps reads the handlers, the restore record and the Show in folder owner off the main thread.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/tests.rs::default_apps_reads_which_app_opens_each_route",
+        "native/crates/ox-app/src/integration/status.rs::a_route_names_openxplorer_the_app_its_id_or_nothing",
+        "native/crates/ox-app/src/integration/status.rs::show_in_folder_says_who_answers_it"
+      ]
     },
     "detachTab": {
       "status": "native-tested",
@@ -372,9 +391,12 @@
       ]
     },
     "newWindow": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "New window (Ctrl+N, Settings, the windows menu and --new-window) opens a window in the same application.",
+      "evidence": [
+        "native/crates/ox-app/src/application/state.rs::ctrl_n_opens_another_window_at_the_current_folder",
+        "native/crates/ox-app/src/application/state.rs::new_window_opens_its_locations_in_a_window_of_its_own"
+      ]
     },
     "normalise": {
       "status": "core-tested",
@@ -390,14 +412,18 @@
       "evidence": []
     },
     "openTerminal": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "win.open-in-terminal runs ox-core's prepared terminal launch with the previous-versions write guard; no UI test starts a terminal.",
+      "evidence": [
+        "native/crates/ox-core/tests/integration_terminal/folder.rs::a_local_folder_opens_in_itself"
+      ]
     },
     "openWith": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Open checks the chosen application again and launches it (recorded in the test); \"Always use this app\" is not exercised, as a test must not change associations.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::open_with_lists_filters_and_launches_the_chosen_application"
+      ]
     },
     "operate": {
       "status": "native-tested",
@@ -486,19 +512,26 @@
       ]
     },
     "revealDisable": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Disable Show in folder removes the unmodified session files and gives the name up.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::show_in_folder_owns_file_manager1_until_disabled"
+      ]
     },
     "revealEnable": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Enable Show in folder writes the session files and owns FileManager1 on the session bus.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::show_in_folder_owns_file_manager1_until_disabled"
+      ]
     },
     "revealTest": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Test sends ShowFolders for the home folder through the bus, and is refused while OpenXplorer does not own the name.",
+      "evidence": [
+        "native/crates/ox-app/src/integration/tests.rs::show_in_folder_owns_file_manager1_until_disabled",
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::show_in_folder_starts_disabled_and_its_test_needs_the_service"
+      ]
     },
     "search": {
       "status": "core-tested",
@@ -591,19 +624,27 @@
       ]
     },
     "updateCheck": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Software updates checks at once through ox-core's updater (simulated GitHub); the status bar and About show a release found.",
+      "evidence": [
+        "native/crates/ox-app/src/update/tests.rs::checking_offers_a_newer_release_and_the_status_bar_says_so",
+        "native/crates/ox-app/src/update/tests.rs::a_flatpak_is_told_to_update_through_flatpak"
+      ]
     },
     "updateInstall": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Install update… downloads, verifies and installs through the simulated package tools, locking every window meanwhile.",
+      "evidence": [
+        "native/crates/ox-app/src/update/tests.rs::installing_verifies_installs_and_offers_the_restart",
+        "native/crates/ox-app/src/update/tests.rs::an_installing_update_locks_every_window"
+      ]
     },
     "updateRestart": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Restart now starts only /usr/bin/openxplorer --restart.",
+      "evidence": [
+        "native/crates/ox-app/src/update/tests.rs::installing_verifies_installs_and_offers_the_restart"
+      ]
     },
     "window": {
       "status": "pending",
@@ -621,14 +662,18 @@
       "evidence": []
     },
     "zipDefault": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Use OpenXplorer for ZIPs on the ZIP files row.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::zip_files_are_taken_over_and_given_back_on_their_own"
+      ]
     },
     "zipRestore": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Restore ZIP handler in Settings > Default apps > Advanced.",
+      "evidence": [
+        "native/crates/ox-app/src/settings_page/default_apps/tests.rs::zip_files_are_taken_over_and_given_back_on_their_own"
+      ]
     }
   }
 }

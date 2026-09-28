@@ -48,7 +48,7 @@
       </object>
     </child>
     <child>
-      <!-- #check-updates, disabled until the update flow is ported. -->
+      <!-- #check-updates: the Software updates dialog. -->
       <object class="GtkButton" id="check_updates_button">
         <property name="valign">center</property>
         <accessibility>

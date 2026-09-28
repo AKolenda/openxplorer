@@ -191,7 +191,7 @@ mod tests {
         keywords: "undo",
     };
 
-    const PENDING: Availability = Availability::Unported(Milestone::DesktopIntegration);
+    const PENDING: Availability = Availability::Unported(Milestone::Distribution);
 
     /// A row of [`RESTORE`] with one button.
     fn row_with_a_button() -> (SettingRow, gtk::Button) {
@@ -222,15 +222,15 @@ mod tests {
 
     /// parity: SET-019
     #[gtk::test]
-    fn a_row_pending_another_milestone_than_its_heading_names_its_own() {
-        let group = SettingsGroup::pending("Advanced", PENDING);
+    fn a_row_pending_a_milestone_its_heading_does_not_name_names_its_own() {
+        let group = SettingsGroup::new("Advanced");
         let (row, _) = row_with_a_button();
         group.add_row(&row);
-        let other = Availability::Unported(Milestone::Distribution);
 
-        row.set_availability(other);
+        row.set_availability(PENDING);
 
-        assert_eq!(row.shown_notice(), other.notice());
+        assert_eq!(row.shown_notice(), PENDING.notice());
+        assert_eq!(group.shown_notice(), None);
     }
 
     /// parity: SET-019

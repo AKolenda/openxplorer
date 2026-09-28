@@ -13,7 +13,9 @@
 //! default pane widths. Every window shares the previous-versions service
 //! ([`previous_versions`]), whose protection the file operations run with,
 //! and the undo journal of the file operations ([`file_operations`]). It
-//! also holds the search cache the windows share ([`search_cache`]).
+//! also holds the search cache the windows share ([`search_cache`]), and
+//! the application's [`Updates`] and [`DesktopIntegration`], so every
+//! window shows the same update and integration state.
 
 mod external_open;
 mod file_operations;
@@ -21,6 +23,7 @@ mod known_folders;
 mod previous_versions;
 mod search_cache;
 
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -33,9 +36,11 @@ use ox_core::settings::{Bookmark, PreferencesUpdate, RecentEntry, Settings, Sett
 use ox_core::versions::PreviousVersions;
 
 use crate::dialogs::SearchCacheChoice;
+use crate::integration::DesktopIntegration;
 use crate::network::{self, NetworkServices};
 use crate::settings_store::{Change, Reply, SettingsStore};
 use crate::theme::Skin;
+use crate::update::Updates;
 
 /// Emitted when the sidebar or the landing pages may list something else.
 const PLACES_CHANGED: &str = "places-changed";
@@ -66,10 +71,12 @@ mod imp {
     use ox_core::versions::PreviousVersions;
 
     use super::{JOURNAL_CHANGED, LAYOUT_RESET, PLACES_CHANGED, SERVER_SIGNED_OUT};
+    use crate::integration::DesktopIntegration;
     use crate::network::NetworkServices;
     use crate::search::SearchCache;
     use crate::settings_store::SettingsStore;
     use crate::theme::Skin;
+    use crate::update::Updates;
 
     /// Private state of [`super::AppContext`].
     #[derive(Debug, Default)]
@@ -98,6 +105,10 @@ mod imp {
         pub(super) previous_versions: OnceCell<Arc<PreviousVersions>>,
         /// The search cache and its index service.
         pub(super) search_cache: SearchCache,
+        /// The application's updates, made on first use.
+        pub(super) updates: OnceCell<Updates>,
+        /// The desktop integration, made on first use.
+        pub(super) desktop_integration: OnceCell<DesktopIntegration>,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,
@@ -178,6 +189,51 @@ impl AppContext {
     /// The settings as last read or changed.
     pub(crate) fn settings_data(&self) -> SettingsData {
         self.settings().data()
+    }
+
+    /// The settings folder (`~/.config/winspace`).
+    pub(crate) fn settings_directory(&self) -> PathBuf {
+        self.settings().directory()
+    }
+
+    /// The application's updates, shared by every window.
+    pub(crate) fn updates(&self) -> &Updates {
+        self.imp().updates.get_or_init(Updates::for_this_build)
+    }
+
+    /// Uses `updates` instead of this build's, for tests with a simulated
+    /// GitHub and package manager.
+    ///
+    /// # Panics
+    ///
+    /// When the updates were used already.
+    #[cfg(test)]
+    pub(crate) fn use_updates(&self, updates: Updates) {
+        self.imp()
+            .updates
+            .set(updates)
+            .expect("the test sets the updates before using them");
+    }
+
+    /// The desktop integration, shared by every window.
+    pub(crate) fn desktop_integration(&self) -> &DesktopIntegration {
+        self.imp()
+            .desktop_integration
+            .get_or_init(|| DesktopIntegration::new(&self.settings_directory()))
+    }
+
+    /// Uses `integration` instead of the desktop's, for tests that must
+    /// not change the associations of the session they run in.
+    ///
+    /// # Panics
+    ///
+    /// When the integration was used already.
+    #[cfg(test)]
+    pub(crate) fn use_desktop_integration(&self, integration: DesktopIntegration) {
+        self.imp()
+            .desktop_integration
+            .set(integration)
+            .expect("the test sets the integration before using it");
     }
 
     /// Why the settings fell back to defaults at startup, if they did.

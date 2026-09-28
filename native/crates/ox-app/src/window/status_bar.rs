@@ -5,7 +5,8 @@
 //! in `desktop/ui/app.js`: the item count, the selection, the
 //! type-to-select hint, then at the right the build, "Check for updates"
 //! and the Details and Large icons view buttons, the current view's
-//! button highlighted.
+//! button highlighted. "Check for updates" takes the accent colour when a
+//! check in any window found a newer release (UPD-001).
 //!
 //! [`StatusBar`] is a `GtkBox` subclass laid out by the template
 //! `resources/ui/status-bar.ui`; this module adds the glyphs, the build
@@ -23,7 +24,6 @@ use crate::icons::{self, Icon};
 use crate::search::SearchCount;
 
 use super::folder_pane::FolderView;
-use super::unported;
 use super::window_action::WindowAction;
 
 /// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
@@ -32,6 +32,12 @@ const BUTTON_GLYPH: i32 = 16;
 
 /// The class that mutes a hint for typed text no name starts with.
 const MISS_CLASS: &str = "miss";
+
+/// The class of "Check for updates" while an update needs the user.
+const UPDATE_CLASS: &str = "update-available";
+
+/// The label and tooltip of the updates button (`#check-updates`).
+const CHECK_FOR_UPDATES: &str = "Check for updates";
 
 /// What the status bar reports about the active tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,14 +178,33 @@ impl StatusBar {
         show_view_on(&imp.icons_view_button, Icon::Grid, large_icons);
     }
 
-    /// "Check for updates" stays disabled, with the milestone that brings
-    /// it in its tooltip, until the update flow is ported.
+    /// "Check for updates" opens the Software updates dialog.
     fn finish_check_updates_button(&self) {
         let check_updates = &*self.imp().check_updates_button;
         check_updates.set_child(Some(&icons::image(Icon::ArrowClockwise, BUTTON_GLYPH)));
-        let tooltip = unported::tooltip(WindowAction::CheckUpdates, "Check for updates");
-        check_updates.set_tooltip_text(Some(&tooltip));
+        check_updates.set_tooltip_text(Some(CHECK_FOR_UPDATES));
         WindowAction::CheckUpdates.assign_to(check_updates);
+    }
+
+    /// Says on "Check for updates" what a check found that needs the
+    /// user: a newer release, or a restart into an installed one. The
+    /// button then takes the accent colour, and its tooltip says why.
+    pub(super) fn show_update_notice(&self, notice: Option<&str>) {
+        let check_updates = &*self.imp().check_updates_button;
+        let Some(notice) = notice else {
+            check_updates.remove_css_class(UPDATE_CLASS);
+            check_updates.set_tooltip_text(Some(CHECK_FOR_UPDATES));
+            return;
+        };
+        check_updates.add_css_class(UPDATE_CLASS);
+        check_updates.set_tooltip_text(Some(&format!("{CHECK_FOR_UPDATES}\n{notice}")));
+    }
+
+    /// The tooltip of "Check for updates", for tests.
+    #[cfg(test)]
+    pub(super) fn check_updates_tooltip(&self) -> String {
+        let check_updates = &*self.imp().check_updates_button;
+        check_updates.tooltip_text().unwrap_or_default().to_string()
     }
 
     /// Shows or hides the build text, which a compact window has no room

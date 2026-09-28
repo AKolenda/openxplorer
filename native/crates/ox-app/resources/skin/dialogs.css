@@ -3,7 +3,8 @@
    (ui-spec.md §4.9, §4.11, §4.15; style.css .modal, .transfer, .menu.win11
    and .context-strip). */
 
-/* ---- Dialogs (§4.11, E02; src/window/dialog.rs) ---- */
+/* ---- Dialogs (§4.11, E02; src/window/dialog.rs, src/update/dialog.rs
+   and the dialogs of src/integration/) ---- */
 window.ox.ox-dialog {
   background-color: @ox_bg;
   color: @ox_text;

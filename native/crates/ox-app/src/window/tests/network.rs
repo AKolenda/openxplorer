@@ -539,8 +539,7 @@ fn the_network_surfaces_are_captured() {
             test.activate(action, target);
             let dialog = open_form_dialog();
             capture_dialog(
-                &test.window,
-                dialog.upcast_ref(),
+                dialog.upcast_ref::<gtk::Window>(),
                 &format!("native-{name}-{theme}.png"),
             );
             dialog.press_cancel();
@@ -560,8 +559,7 @@ fn capture_sign_in(test: &TestWindow, theme: &str) {
     wait_until("the sign-in dialog", || sign_in.shown_dialog().is_some());
     let dialog = sign_in.shown_dialog().expect("the sign-in dialog");
     capture_dialog(
-        &test.window,
-        dialog.upcast_ref(),
+        dialog.upcast_ref::<gtk::Window>(),
         &format!("native-sign-in-{theme}.png"),
     );
     prompts.finish(&operation, ox_core::network::MountOutcome::Failed);

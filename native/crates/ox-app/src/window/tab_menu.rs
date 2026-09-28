@@ -42,8 +42,9 @@ pub(super) fn tab_menu(id: TabId, uri: &str) -> Vec<MenuEntry> {
 
 impl BrowserWindow {
     /// "Open windows…": opens the title bar's list of open windows
-    /// (`windowsMenu`).
-    pub(super) fn show_open_windows(&self) {
+    /// (`windowsMenu`), for the tab menu, `--windows` and the launcher's
+    /// "Open windows…" (TAB-044).
+    pub(crate) fn show_open_windows(&self) {
         self.imp().open_windows_button.popup();
     }
 }

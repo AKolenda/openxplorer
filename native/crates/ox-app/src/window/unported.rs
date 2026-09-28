@@ -18,12 +18,6 @@ use super::BrowserWindow;
 /// The `native/ROADMAP.md` milestone that brings a command or a setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Milestone {
-    /// The rest of the "Search and metadata" service: Open with. The
-    /// search index, folder sizes and Properties have arrived.
-    SearchAndMetadata,
-    /// The "Desktop integration" service: default apps, Show in folder,
-    /// the terminal and the Brave download folder.
-    DesktopIntegration,
     /// The "Distribution" service: packages, the source they ship with and
     /// the update flow.
     Distribution,
@@ -33,8 +27,6 @@ impl Milestone {
     /// How tooltips and disabled settings name the milestone.
     pub(crate) const fn description(self) -> &'static str {
         match self {
-            Milestone::SearchAndMetadata => "Open with",
-            Milestone::DesktopIntegration => "desktop integration",
             Milestone::Distribution => "packaging and updates",
         }
     }
@@ -63,13 +55,10 @@ const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand 
 }
 
 /// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 4] = [
-    command(WindowAction::OpenWith, Milestone::SearchAndMetadata),
-    command(WindowAction::OpenInTerminal, Milestone::DesktopIntegration),
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 1] = [
     // The dialog names where the installed source and the corresponding
     // source archive are, which packaging decides.
     command(WindowAction::License, Milestone::Distribution),
-    command(WindowAction::CheckUpdates, Milestone::Distribution),
 ];
 
 /// The milestone that brings the command `action`, or `None` for a
@@ -106,8 +95,8 @@ mod tests {
     #[test]
     fn a_disabled_command_names_the_milestone_that_brings_it() {
         assert_eq!(
-            tooltip(WindowAction::CheckUpdates, "Check for updates"),
-            "Check for updates\nNot in the native preview yet: arrives with packaging and updates."
+            tooltip(WindowAction::License, "License & source"),
+            "License & source\nNot in the native preview yet: arrives with packaging and updates."
         );
     }
 
