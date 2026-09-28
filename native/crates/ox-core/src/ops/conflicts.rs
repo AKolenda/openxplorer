@@ -7,7 +7,7 @@
 //! Skip policy, so a name that appears after the check is still never
 //! overwritten.
 
-use super::context::on_worker;
+use super::context::{on_worker, unless_cancelled};
 use super::error::OpsError;
 use crate::gio_node::GioNode;
 use crate::location::{normalise, require_item_uri};
@@ -21,7 +21,9 @@ use crate::transfer::{Cancellation, Node, NodeKind, MAX_ITEMS};
 ///
 /// No items or more than [`MAX_ITEMS`], a share or device root among them,
 /// a destination that is not a folder ("Open a destination folder before
-/// pasting."), cancellation, or the backend's failure.
+/// pasting."), or the backend's failure. A cancelled check is always
+/// [`OpsError::Cancelled`], never a shorter list the interface would read
+/// as "no conflicts" and start copying.
 pub async fn find_conflicts(
     uris: &[String],
     destination_folder: &str,
@@ -53,9 +55,11 @@ fn find_conflicts_blocking(
     }
     let mut conflicts = Vec::new();
     for uri in items {
-        cancel.check()?;
         let name = GioNode::new(&uri).name();
-        if folder.child(&name).exists(Some(cancel)) {
+        let destination = folder.child(&name);
+        // OPS-027: a query the user cancelled answers "free", and "no
+        // conflicts" starts the copy at once, so it must not count.
+        if unless_cancelled(cancel, || destination.exists(Some(cancel)))? {
             conflicts.push(uri);
         }
     }

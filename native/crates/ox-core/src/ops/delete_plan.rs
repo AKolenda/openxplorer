@@ -8,9 +8,10 @@
 //! reports a Trash the item goes there, elsewhere (SMB shares, most remote
 //! backends) it is deleted permanently, and the confirmation says which.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use super::context::on_worker;
+use super::context::{on_worker, unless_cancelled};
 use super::error::OpsError;
 use crate::gio_node::GioNode;
 use crate::location::{normalise, parent_location};
@@ -21,13 +22,18 @@ use crate::transfer::{Cancellation, Node};
 ///
 /// # Errors
 ///
-/// An address that is not a supported location, or
-/// [`OpsError::NotMounted`] when the share must be mounted first; mount it
-/// and ask again. Every other failure answers `false`.
+/// An address that is not a supported location, [`OpsError::NotMounted`]
+/// when the share must be mounted first (mount it and ask again), or
+/// [`OpsError::Cancelled`]. Every other failure answers `false`, as
+/// `trash_support` in `desktop/gio_backend.py` does.
 pub async fn trash_support(folder_uri: &str, cancel: &Cancellation) -> Result<bool, OpsError> {
     let folder = GioNode::new(&normalise(folder_uri)?);
     let cancel = cancel.clone();
-    on_worker(move || folder.can_trash(Some(&cancel)).map_err(OpsError::from)).await
+    on_worker(move || {
+        let answer = unless_cancelled(&cancel, || folder.can_trash(Some(&cancel)))?;
+        Ok(answer?)
+    })
+    .await
 }
 
 /// The Delete command's label for an item in a folder whose Trash support
@@ -77,11 +83,17 @@ pub struct DeleteConfirmation {
 /// Decides what Delete does with each of `items`, asking each folder about
 /// its Trash once.
 ///
+/// OPS-017: a folder on a share that is not mounted, which GIO cannot be
+/// asked about, counts as having a Trash, so that failure never turns into
+/// a permanent delete; the Trash attempt then fails visibly instead. Any
+/// other failed query answers "no Trash", as `trash_support` in
+/// `desktop/gio_backend.py` does, and the confirmation then says that the
+/// items are deleted permanently.
+///
 /// # Errors
 ///
-/// Only cancellation. OPS-017: a folder whose Trash support cannot be
-/// determined counts as having a Trash, so a failed check never turns into
-/// a permanent delete; the Trash attempt then fails visibly instead.
+/// Only [`OpsError::Cancelled`], also when the user cancels during the
+/// last folder's query, so a cancelled plan never reaches a confirmation.
 pub async fn plan_delete(items: &[DeleteItem], cancel: &Cancellation) -> Result<DeletePlan, OpsError> {
     let items = items.to_vec();
     let cancel = cancel.clone();
@@ -98,10 +110,13 @@ fn plan_delete_blocking(items: &[DeleteItem], cancel: &Cancellation) -> Result<D
     };
     for item in items {
         cancel.check()?;
-        let folder = trash_scope(&item.uri);
-        let has_trash = *trash_by_folder
-            .entry(folder)
-            .or_insert_with_key(|folder| folder_has_trash(folder, cancel));
+        let has_trash = match trash_by_folder.entry(trash_scope(&item.uri)) {
+            Entry::Occupied(known) => *known.get(),
+            Entry::Vacant(unknown) => {
+                let answer = folder_has_trash(unknown.key(), cancel)?;
+                *unknown.insert(answer)
+            }
+        };
         if has_trash {
             plan.to_trash.push(item.uri.clone());
         } else {
@@ -117,9 +132,18 @@ fn trash_scope(uri: &str) -> String {
     parent_location(uri).unwrap_or_else(|| uri.to_owned())
 }
 
-/// OPS-017: `true` unless GIO definitely reports no Trash.
-fn folder_has_trash(folder_uri: &str, cancel: &Cancellation) -> bool {
-    GioNode::new(folder_uri).can_trash(Some(cancel)).unwrap_or(true)
+/// Whether items in the folder at `folder_uri` go to the Trash, by the
+/// rules of [`plan_delete`].
+///
+/// # Errors
+///
+/// [`OpsError::Cancelled`]: a query the user cancelled answers "no Trash",
+/// which must never plan a permanent delete.
+fn folder_has_trash(folder_uri: &str, cancel: &Cancellation) -> Result<bool, OpsError> {
+    let answer = unless_cancelled(cancel, || GioNode::new(folder_uri).can_trash(Some(cancel)))?;
+    // OPS-017: the only failure `can_trash` reports is a share that is not
+    // mounted, and it counts as having a Trash.
+    Ok(answer.unwrap_or(true))
 }
 
 /// One item's name, or `N selected items`.
@@ -167,6 +191,8 @@ impl DeletePlan {
 
 #[cfg(test)]
 mod tests {
+    use gio::prelude::*;
+
     use super::*;
 
     fn plan(to_trash: &[&str], to_delete: &[&str], selection_text: &str) -> DeletePlan {
@@ -236,6 +262,18 @@ mod tests {
         assert_eq!(delete_command_label(Some(false)), "Delete permanently");
         assert_eq!(delete_command_label(Some(true)), "Move to Trash");
         assert_eq!(delete_command_label(None), "Move to Trash");
+    }
+
+    #[test]
+    fn a_cancelled_trash_query_is_a_cancellation_not_a_permanent_delete() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let folder_uri = gio::File::for_path(temp.path()).uri().to_string();
+        let cancelled = Cancellation::new();
+        cancelled.cancel();
+
+        let answer = folder_has_trash(&folder_uri, &cancelled);
+
+        assert_eq!(answer, Err(OpsError::Cancelled));
     }
 
     #[test]

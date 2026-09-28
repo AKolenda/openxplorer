@@ -1,19 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Duplicate: a copy of each selected item next to itself (OPS-034).
+//! Duplicate: a copy of each selected item next to itself.
 //!
-//! New in the native app, from the Dolphin baseline. It is a copy into the
-//! item's own folder with the Keep both policy, so it has every safety rule
-//! of a copy (private staging, publishing that never overwrites, the write
-//! protection) and the app's own duplicate names: `report (copy 2).pdf`,
-//! then `(copy 3)`, as Keep both names them (XFER-008). Items from several
-//! folders, as a search can select, are copied into their own folders one
-//! folder at a time.
+//! New in the native app, from the Dolphin baseline ("Duplicate Here"). It
+//! is a copy into the item's own folder with the Keep both policy, so it
+//! has every safety rule of a copy (private staging, publishing that never
+//! overwrites, the write protection) and the app's own duplicate names:
+//! `report (copy 2).pdf`, then `(copy 3)`, as Keep both names them
+//! (XFER-008). Items from several folders, as a search can select, are
+//! copied into their own folders one folder at a time.
+//!
+//! OPS-034 in `native/parity/features.toml` names duplicates the Dolphin
+//! way instead (`report copy.pdf`), which the transfer engine's Keep both
+//! cannot produce. Until OPS-034 records which names Duplicate uses, this
+//! module does not claim it.
 
 use super::context::{on_worker, OperationContext};
 use super::destinations::DestinationTracker;
 use super::error::OpsError;
 use super::folder_groups::{FolderGroup, FolderGroups};
-use super::results::merge_results;
+use super::results::{merge_results, record_failure};
 use super::run_transfer::{gio_transfer_engine, TransferOutcome};
 use super::undo::UndoRecord;
 use crate::gio_node::GioNode;
@@ -27,8 +32,9 @@ use crate::transfer::{ConflictPolicy, Node, Operation, Progress, TransferEngine,
 /// # Errors
 ///
 /// No items or more than [`MAX_ITEMS`], a share, device or filesystem
-/// root among them, or a protected folder. Failures of single items are
-/// reported in [`TransferOutcome::result`].
+/// root among them, or a protected folder. Failures of single items and of
+/// single folders, and the user's cancellation, are reported in
+/// [`TransferOutcome::result`].
 pub async fn duplicate_items(
     uris: &[String],
     context: &OperationContext,
@@ -70,7 +76,8 @@ fn duplicate_items_blocking(
 /// Duplicates the items of one folder and adds what happened to
 /// `outcome`. A folder that cannot be copied into any more (it vanished)
 /// is reported as an error of the whole duplicate, after the folders that
-/// were already done.
+/// were already done; a cancellation marks the outcome cancelled, which
+/// stops the remaining folders.
 fn duplicate_in_folder(
     engine: &mut TransferEngine,
     group: &FolderGroup,
@@ -98,7 +105,7 @@ fn duplicate_in_folder(
         }
         Err(error) => {
             let folder_name = GioNode::new(&group.folder_uri).display_name();
-            outcome.result.errors.push(format!("{folder_name}: {error}"));
+            record_failure(&mut outcome.result, &folder_name, &error.into());
         }
     }
 }

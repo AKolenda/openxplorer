@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! What every file operation runs with, and where its blocking work runs.
+//! What every file operation runs with, where its blocking work runs, and
+//! how its yes-or-no questions to GIO honour the cancellation.
 //!
 //! The Python bridge gives each write a `GioCancellation` and the
 //! `assert_writable` guard of `desktop/previous_versions.py`, and runs it
@@ -126,6 +127,26 @@ where
     }
 }
 
+/// The answer of `query`, a yes-or-no question to GIO, unless the user
+/// cancelled while it ran.
+///
+/// Queries such as `Node::exists` and `Node::can_trash` answer "no" when
+/// GIO fails, and GIO fails a query the user's cancellation abandoned. Read
+/// as an answer, that "no" would make a taken name look free or a folder
+/// look as if it had no Trash, and could start the very step the user just
+/// stopped. So every such query is asked through this function, which
+/// reports the cancellation instead.
+///
+/// # Errors
+///
+/// [`OpsError::Cancelled`] when `cancel` is cancelled once `query` has
+/// returned, whatever it answered.
+pub(crate) fn unless_cancelled<T>(cancel: &Cancellation, query: impl FnOnce() -> T) -> Result<T, OpsError> {
+    let answer = query();
+    cancel.check()?;
+    Ok(answer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,7 +164,6 @@ mod tests {
         })
     }
 
-    /// parity: XFER-020
     #[test]
     fn protection_refuses_only_what_its_guard_refuses() {
         let protection = snapshot_protection();
@@ -170,5 +190,20 @@ mod tests {
         assert_eq!(value, Ok(7));
         assert_eq!(refused, Err(OpsError::Cancelled));
         assert_eq!(panicked, Err(OpsError::failed(WORKER_STOPPED)));
+    }
+
+    #[test]
+    fn a_query_answered_after_a_cancellation_reports_the_cancellation() {
+        let live = Cancellation::new();
+        let cancelled = Cancellation::new();
+
+        let answered = unless_cancelled(&live, || false);
+        let abandoned = unless_cancelled(&cancelled, || {
+            cancelled.cancel();
+            false
+        });
+
+        assert_eq!(answered, Ok(false));
+        assert_eq!(abandoned, Err(OpsError::Cancelled));
     }
 }

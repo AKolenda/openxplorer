@@ -15,7 +15,7 @@ use std::str::FromStr;
 
 use gio::prelude::*;
 
-use super::context::on_worker;
+use super::context::{on_worker, unless_cancelled};
 use super::error::OpsError;
 use crate::transfer::Cancellation;
 
@@ -204,7 +204,8 @@ impl TemplateList {
 ///
 /// # Errors
 ///
-/// Cancellation, or a failure while the folder is listed.
+/// [`OpsError::Cancelled`] (never a list of the starters alone), or a
+/// failure while the folder is listed.
 pub async fn list_templates(folder: &Path, cancel: &Cancellation) -> Result<TemplateList, OpsError> {
     let folder = folder.to_path_buf();
     let cancel = cancel.clone();
@@ -218,7 +219,11 @@ pub(crate) fn list_templates_blocking(
 ) -> Result<TemplateList, OpsError> {
     let mut templates: Vec<Template> = BuiltinTemplate::ALL.into_iter().map(Template::builtin).collect();
     let directory = gio::File::for_path(folder);
-    if directory.query_exists(Some(cancel.cancellable())) {
+    // A query the user cancelled answers "missing". The starters alone would
+    // then make New from template call a chosen user template unavailable
+    // instead of reporting the cancellation.
+    let has_folder = unless_cancelled(cancel, || directory.query_exists(Some(cancel.cancellable())))?;
+    if has_folder {
         let user_templates = user_templates(&directory, cancel)?;
         templates.extend(user_templates);
     }
@@ -290,6 +295,18 @@ mod tests {
         let user = TemplateId::User("Letter.odt".into());
         assert_eq!(user.to_string(), "user:Letter.odt");
         assert_eq!("user:Letter.odt".parse::<TemplateId>(), Ok(user));
+    }
+
+    #[test]
+    fn a_cancelled_listing_is_a_cancellation_not_the_starters_alone() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        std::fs::write(temp.path().join("Letter.odt"), b"letter").expect("a user template");
+        let cancelled = Cancellation::new();
+        cancelled.cancel();
+
+        let listed = list_templates_blocking(temp.path(), &cancelled);
+
+        assert_eq!(listed, Err(OpsError::Cancelled));
     }
 
     #[test]
