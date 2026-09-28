@@ -40,7 +40,7 @@ impl ArtKind {
     /// True when the art uses theme colours (document paper, the network
     /// badge, a glyph on the pipe), so it is drawn and cached per
     /// [`Appearance`].
-    fn depends_on_theme(self) -> bool {
+    fn has_theme_colours(self) -> bool {
         matches!(
             self,
             ArtKind::Document(_) | ArtKind::SharedFolder | ArtKind::NetworkGlyph(_)
@@ -139,9 +139,9 @@ struct CacheKey {
     kind: ArtKind,
     /// The edge in device pixels.
     pixels: i32,
-    /// The appearance, for art that [depends on the
-    /// theme](ArtKind::depends_on_theme); `None` for the rest, which looks
-    /// the same in both.
+    /// The appearance, for art that [uses theme
+    /// colours](ArtKind::has_theme_colours); `None` for the rest, which
+    /// looks the same in both.
     appearance: Option<Appearance>,
 }
 
@@ -159,7 +159,7 @@ pub(super) fn texture(kind: ArtKind, appearance: Appearance, pixels: i32) -> Opt
     let key = CacheKey {
         kind,
         pixels,
-        appearance: kind.depends_on_theme().then_some(appearance),
+        appearance: kind.has_theme_colours().then_some(appearance),
     };
     let cached = TEXTURES.with(|cache| cache.borrow().get(&key).cloned());
     if cached.is_some() {
@@ -191,7 +191,7 @@ mod tests {
 
     /// parity: ARC-001
     #[test]
-    fn zip_detection_matches_app_js() {
+    fn zip_is_detected_by_name_in_any_case_or_by_content_type() {
         assert!(is_zip("Brand kit.ZIP", None));
         assert!(is_zip("download", Some("application/x-zip-compressed")));
         assert!(!is_zip("notes.zip.txt", Some("text/plain")));
