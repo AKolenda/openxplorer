@@ -176,9 +176,9 @@ glib::wrapper! {
 }
 
 impl Application {
-    /// The application for `launch`, under the preview's own ID. A
-    /// snapshot runs as an instance of its own, so it never hands its
-    /// window to a running preview.
+    /// The application for `launch`, under the build's ID
+    /// ([`crate::config::APP_ID`]). A snapshot runs as an instance of its
+    /// own, so it never hands its window to a running instance.
     fn new(launch: Launch) -> Self {
         let mut flags = gio::ApplicationFlags::HANDLES_OPEN;
         if matches!(launch, Launch::Snapshot(_)) {
@@ -277,8 +277,9 @@ impl Application {
     }
 }
 
-/// Runs the preview under its own application ID, so installed
-/// file-manager defaults and the production app's D-Bus name are untouched.
+/// Runs the app under the build's application ID (`APP_ID` in
+/// `config.rs`); the preview's own ID leaves installed
+/// file-manager defaults and the Python app's D-Bus name untouched.
 /// With `OPENXPLORER_SNAPSHOT` set it saves a picture of one window and
 /// quits instead (see `snapshot.rs`).
 pub fn run() -> glib::ExitCode {
