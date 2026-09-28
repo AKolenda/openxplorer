@@ -12,6 +12,7 @@ use super::contrast::Contrast;
 use super::fonts::css_for_text_size;
 use super::stylesheets;
 use super::Appearance;
+use crate::icons;
 use crate::text_size::TextSize;
 
 /// A provider's place in the skin's cascade. Each layer sits one step
@@ -19,7 +20,8 @@ use crate::text_size::TextSize;
 /// over the layers before it.
 #[derive(Debug, Clone, Copy)]
 enum Layer {
-    /// The rules of every region of the window.
+    /// The rules of every region of the window, and the colours of the
+    /// places' glyphs ([`icons::tint_stylesheet`]).
     Rules,
     /// Font sizes and heights generated for the text size.
     TextSize,
@@ -66,6 +68,7 @@ impl Providers {
         force_builtin_theme(&settings);
         let providers = Self::starting(Some(settings));
         add_to_display(display, &provider_with(stylesheets::RULES), Layer::Rules);
+        add_to_display(display, &provider_with(&icons::tint_stylesheet()), Layer::Rules);
         add_to_display(display, &providers.text_size, Layer::TextSize);
         add_to_display(display, &providers.palette, Layer::Palette);
         add_to_display(display, &providers.high_contrast, Layer::HighContrast);

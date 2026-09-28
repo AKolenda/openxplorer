@@ -12,13 +12,13 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::{self, is_device_location, parent_location, LocationContext};
 
-use crate::icons::{ArtKind, Glyph};
+use crate::icons::{Art, Icon};
 use crate::locations::Page;
 
-use super::address_bar::{AddressIcon, CrumbButton};
+use super::address_bar::CrumbButton;
 use super::location_kind::is_smb_location;
 use super::session::{Session, Tab};
-use super::tab_strip::{TabIcon, TabView};
+use super::tab_strip::TabView;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -33,32 +33,32 @@ struct ActiveLocation {
 /// The address-bar icon for a location (`address-icon` in
 /// `renderNavigation`): the page's glyph, the network glyph for SMB, a
 /// phone for devices, else the colour folder.
-fn address_icon(uri: &str) -> AddressIcon {
+fn address_icon(uri: &str) -> Icon {
     if let Some(page) = Page::from_uri(uri) {
-        return AddressIcon::Glyph(page.glyph());
+        return page.icon();
     }
     if is_smb_location(uri) {
-        AddressIcon::Glyph(Glyph::Network)
+        Icon::Organization
     } else if is_device_location(uri) {
-        AddressIcon::Glyph(Glyph::Phone)
+        Icon::Phone
     } else {
-        AddressIcon::Folder
+        Icon::FileFolder
     }
 }
 
 /// A tab's icon, as `renderTabs` picks it: the network glyph on the
-/// Network page, a phone for devices, network art for SMB, and the colour
-/// folder everywhere else, This PC included.
-fn tab_icon(uri: &str) -> TabIcon {
+/// Network page, a phone for devices, a share on the network bar for SMB,
+/// and the colour folder everywhere else, This PC included.
+fn tab_icon(uri: &str) -> Art {
     if Page::from_uri(uri) == Some(Page::Network) {
-        return TabIcon::Glyph(Glyph::Network);
+        return Art::Glyph(Icon::Organization);
     }
     if is_device_location(uri) {
-        TabIcon::Glyph(Glyph::Phone)
+        Art::Glyph(Icon::Phone)
     } else if is_smb_location(uri) {
-        TabIcon::Art(ArtKind::NetworkFolder)
+        Art::SHARE
     } else {
-        TabIcon::Art(ArtKind::Folder)
+        Art::Folder
     }
 }
 
@@ -139,7 +139,7 @@ impl BrowserWindow {
             .collect();
         let address = locations.display_location(uri);
         self.address_bar()
-            .show_location(&crumbs, &address, address_icon(uri), self.art_style());
+            .show_location(&crumbs, &address, address_icon(uri));
     }
 
     /// Redraws the tab strip.
@@ -153,7 +153,7 @@ impl BrowserWindow {
                 .map(|tab| tab_view(tab, &session, &locations));
             tab_views.collect()
         };
-        self.tab_strip().show(&views, self.art_style());
+        self.tab_strip().show(&views);
     }
 
     /// Replaces the breadcrumbs with the editable address (Ctrl+L).
@@ -181,8 +181,8 @@ mod tests {
     /// A location and the tab and address-bar icons it shows.
     struct IconCase {
         uri: &'static str,
-        tab: TabIcon,
-        address: AddressIcon,
+        tab: Art,
+        address: Icon,
     }
 
     /// parity: TAB-010
@@ -191,28 +191,28 @@ mod tests {
         let cases = [
             IconCase {
                 uri: "file:///tmp/work",
-                tab: TabIcon::Art(ArtKind::Folder),
-                address: AddressIcon::Folder,
+                tab: Art::Folder,
+                address: Icon::FileFolder,
             },
             IconCase {
                 uri: "smb://nas/media",
-                tab: TabIcon::Art(ArtKind::NetworkFolder),
-                address: AddressIcon::Glyph(Glyph::Network),
+                tab: Art::SHARE,
+                address: Icon::Organization,
             },
             IconCase {
                 uri: "mtp://%5Busb%3A001%2C010%5D/",
-                tab: TabIcon::Glyph(Glyph::Phone),
-                address: AddressIcon::Glyph(Glyph::Phone),
+                tab: Art::Glyph(Icon::Phone),
+                address: Icon::Phone,
             },
             IconCase {
                 uri: Page::ThisPc.uri(),
-                tab: TabIcon::Art(ArtKind::Folder),
-                address: AddressIcon::Glyph(Glyph::Desktop),
+                tab: Art::Folder,
+                address: Icon::Laptop,
             },
             IconCase {
                 uri: Page::Network.uri(),
-                tab: TabIcon::Glyph(Glyph::Network),
-                address: AddressIcon::Glyph(Glyph::Network),
+                tab: Art::Glyph(Icon::Organization),
+                address: Icon::Organization,
             },
         ];
         for case in cases {

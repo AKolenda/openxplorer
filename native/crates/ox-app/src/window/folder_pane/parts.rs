@@ -9,11 +9,10 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 
-use crate::folder_view::cells::{BoundIcons, CellOwners};
+use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
 use crate::folder_view::grid::{IconSize, IconView};
 use crate::folder_view::model::FolderModel;
-use crate::theme::Appearance;
 use crate::window::empty_page::EmptyPage;
 use crate::window::loading_line::LoadingLine;
 
@@ -32,8 +31,6 @@ pub(super) struct PaneParts {
     pub(super) icon_view: IconView,
     /// The active tab's filtered, sorted and selectable items.
     pub(super) model: FolderModel,
-    /// Bound item icons, redrawn when the theme or scale changes.
-    pub(super) icons: Rc<BoundIcons>,
     /// Maps cell widgets to their rows.
     pub(super) owners: Rc<CellOwners>,
     /// The empty, loading and error page.
@@ -45,13 +42,12 @@ pub(super) struct PaneParts {
 }
 
 impl PaneParts {
-    /// The pane's widgets, drawing item icons in `appearance`.
-    pub(super) fn new(appearance: Appearance) -> Self {
+    /// The pane's widgets, showing nothing yet.
+    pub(super) fn new() -> Self {
         let model = FolderModel::new();
-        let icons = BoundIcons::new(appearance);
         let owners = CellOwners::new();
-        let details = DetailsView::new(&model, &icons, &owners);
-        let icon_view = IconView::new(&icons, &owners);
+        let details = DetailsView::new(&model, &owners);
+        let icon_view = IconView::new(&owners);
         let views = view_stack(&details, &icon_view);
         let empty = EmptyPage::new();
         let (landing, landing_scroll) = landing_page();
@@ -62,7 +58,6 @@ impl PaneParts {
             details,
             icon_view,
             model,
-            icons,
             owners,
             empty,
             landing,

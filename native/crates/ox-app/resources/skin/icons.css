@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The pieces of composed icons (src/icons/art_image.rs), which replace the
+   drawings of networkIcon and zipFolderIcon in app.js with real icons: the
+   Windows-style green network bar under a network location, the zip badge,
+   and the red cross of a disconnected share on its white disc. The owner's
+   icon mapping (2026-09-27 and 2026-09-28) sets the colours. */
+
+/* GTK's own theme spaces every box inside a grid tile; the pieces of an
+   icon sit flush. */
+art box { margin: 0; border-spacing: 0; }
+art .network-stem,
+art .network-bar { background-color: @ox_network_bar; }
+art .network-bar { border-radius: 1px; }
+art .zip-badge { color: @ox_zip_badge; }
+art .disconnected-badge { color: @ox_critical_fill; }
+art .badge-plate { background-color: @ox_on_critical; border-radius: 9999px; }
+/* The glyphs that stand on the bar: a mapped drive in neutral grey, as
+   Windows draws one, and a server in the current app's share blue. */
+art .mapped-drive { color: @ox_mapped_drive; }
+art .server { color: @ox_share_glyph; }

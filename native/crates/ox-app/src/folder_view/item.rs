@@ -3,7 +3,7 @@
 //!
 //! Wraps an [`ox_core::entry::Entry`] with what the views need often and
 //! should compute once: the natural-order sort keys, the lower-cased name
-//! used by the search filter, and the icon art kind. A row of `renderRows`
+//! used by the search filter, and the icon art. A row of `renderRows`
 //! in `desktop/ui/app.js` reads the same fields from the entry.
 
 use gtk::glib;
@@ -12,7 +12,7 @@ use ox_core::entry::Entry;
 
 use crate::folder_view::filter::Visibility;
 use crate::folder_view::sorting::{SortKey, SortName};
-use crate::icons::{art, ArtKind};
+use crate::icons::Art;
 
 /// A listed entry with what the views compute from it once, when its
 /// [`FileItem`] is created.
@@ -21,7 +21,7 @@ struct PreparedEntry {
     name_sort_key: SortKey,
     type_sort_key: SortKey,
     lowercase_name: String,
-    art: ArtKind,
+    art: Art,
     entry: Entry,
 }
 
@@ -31,7 +31,7 @@ impl PreparedEntry {
             name_sort_key: SortKey::new(&entry.name),
             type_sort_key: SortKey::new(&entry.type_label),
             lowercase_name: entry.name.to_lowercase(),
-            art: art::kind_for_entry(&entry),
+            art: Art::for_entry(&entry),
             entry,
         }
     }
@@ -119,7 +119,7 @@ impl FileItem {
     }
 
     /// The icon art for the item.
-    pub(crate) fn art(&self) -> ArtKind {
+    pub(crate) fn art(&self) -> Art {
         self.prepared().art
     }
 

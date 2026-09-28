@@ -8,7 +8,7 @@
 
 use ox_core::settings::Theme;
 
-use crate::icons::Glyph;
+use crate::icons::Icon;
 
 /// The appearance actually drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -30,11 +30,11 @@ impl Appearance {
         }
     }
 
-    /// Glyph of the theme button.
-    pub(crate) const fn glyph(self) -> Glyph {
+    /// Glyph of the theme button: a sun or a moon.
+    pub(crate) const fn icon(self) -> Icon {
         match self {
-            Appearance::Light => Glyph::Sun,
-            Appearance::Dark => Glyph::Moon,
+            Appearance::Light => Icon::WeatherSunny,
+            Appearance::Dark => Icon::WeatherMoon,
         }
     }
 }

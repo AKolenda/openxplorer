@@ -30,10 +30,8 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
 .tab:not(.active):hover { background-color: @ox_tab_hover; }
 .tab:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }
 /* The 16px icon (I03) sits where the web's 17px one did, and the title
-   starts 10px after it (S06), at x=50 as in the current app. A margin,
-   not a min-width: GtkImage stretches its picture to fill a wider
-   allocation, which blurs the art. */
-.tab > image:first-child { margin-left: 2px; }
+   starts 10px after it (S06), at x=50 as in the current app. */
+.tab > .tab-icon { margin-left: 2px; }
 /* Half-pixel centring: where the web layout centres a box at x.5 pixels,
    Chromium draws it from the next pixel down (or right), while GTK rounds
    down. A one-pixel margin on the far side puts these on the same pixels

@@ -81,3 +81,8 @@
 @define-color ox_preview_shadow alpha(black, .043); /* the details pane's art */
 /* The current app's own glyph colour, the same in both themes */
 @define-color ox_share_glyph #4b96c0;  /* a saved share's server glyph */
+
+/* Composed icons (skin/icons.css; icon mapping, 2026-09-27 and 2026-09-28) */
+@define-color ox_network_bar #35a854;  /* the green network bar, the current app's pipe in both themes */
+@define-color ox_zip_badge #6b4e00;    /* the zip badge, on the yellow folder in both themes */
+@define-color ox_mapped_drive #5f6368;  /* a mapped network drive's glyph */

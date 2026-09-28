@@ -16,7 +16,7 @@ use std::path::PathBuf;
 
 use ox_core::location::{DeviceLabel, LocationContext, VirtualPlace};
 
-use crate::icons::Glyph;
+use crate::icons::Icon;
 use crate::volumes::{VolumeKind, VolumeRow};
 
 /// A place the window draws as a landing page instead of a folder listing.
@@ -79,11 +79,12 @@ impl Page {
         }
     }
 
-    /// Glyph for the sidebar, the address bar and the tab.
-    pub const fn glyph(self) -> Glyph {
+    /// Glyph for the sidebar, the address bar and the tab: a laptop for
+    /// This PC and connected nodes for Network.
+    pub const fn icon(self) -> Icon {
         match self {
-            Page::ThisPc => Glyph::Desktop,
-            Page::Network => Glyph::Network,
+            Page::ThisPc => Icon::Laptop,
+            Page::Network => Icon::Organization,
         }
     }
 }

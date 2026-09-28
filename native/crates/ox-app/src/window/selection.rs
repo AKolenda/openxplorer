@@ -97,6 +97,6 @@ impl BrowserWindow {
             folder_item_count,
             locations: &locations,
         });
-        self.details_pane().show(&content, self.art_style());
+        self.details_pane().show(&content);
     }
 }

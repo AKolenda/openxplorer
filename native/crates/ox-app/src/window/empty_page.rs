@@ -6,7 +6,7 @@
 
 use gtk::prelude::*;
 
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 
 use super::button_style::ButtonStyle;
 use super::window_action::WindowAction;
@@ -66,7 +66,7 @@ impl EmptyPage {
             .css_classes(["empty-state"])
             .build();
         let spinner = gtk::Spinner::new();
-        let icon = icons::glyph(Glyph::FolderLine, STATE_GLYPH);
+        let icon = icons::image(Icon::Folder, STATE_GLYPH);
         let title = centred_text();
         title.add_css_class("empty-title");
         let message = centred_text();
@@ -101,10 +101,10 @@ impl EmptyPage {
         self.spinner.set_spinning(loading);
         self.icon.set_visible(!loading);
         let glyph = match state {
-            EmptyState::Unavailable(_) => Glyph::Network,
-            _ => Glyph::FolderLine,
+            EmptyState::Unavailable(_) => Icon::Organization,
+            _ => Icon::Folder,
         };
-        icons::set_glyph(&self.icon, glyph, STATE_GLYPH);
+        icons::set_icon(&self.icon, glyph, STATE_GLYPH);
         let (title, message) = match state {
             EmptyState::Loading => ("Loading…", ""),
             EmptyState::Unavailable(error) => ("This location is unavailable", error.as_str()),

@@ -9,8 +9,8 @@
 //!
 //! [`DetailsPane`] is a widget subclass whose static tree is the template
 //! `resources/ui/details-pane.ui`. This module adds what a template cannot
-//! express: the natively drawn glyphs, the window actions of the buttons
-//! and the Properties rows, one per property shown.
+//! express: the glyphs, the window actions of the buttons and the
+//! Properties rows, one per property shown.
 
 mod content;
 
@@ -18,10 +18,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::icons::{self, ArtKind, Glyph};
-use crate::theme::Appearance;
+use crate::icons::{self, Art, Icon};
 
-use super::appearance::ArtStyle;
 use super::window_action::WindowAction;
 
 pub(super) use content::{pane_content, PaneFacts};
@@ -53,7 +51,10 @@ const VALUE_COLUMN: i32 = 1;
 
 mod imp {
     use gtk::glib;
+    use gtk::prelude::*;
     use gtk::subclass::prelude::*;
+
+    use crate::icons::ArtImage;
 
     /// Private state of [`super::DetailsPane`]: the template's widgets
     /// that change with the selection.
@@ -69,7 +70,7 @@ mod imp {
         pub(super) close_button: TemplateChild<gtk::Button>,
         /// The art or glyph at the top.
         #[template_child]
-        pub(super) preview: TemplateChild<gtk::Image>,
+        pub(super) preview: TemplateChild<ArtImage>,
         /// The item's or folder's name.
         #[template_child]
         pub(super) name: TemplateChild<gtk::Label>,
@@ -113,6 +114,7 @@ mod imp {
 
         fn class_init(klass: &mut Self::Class) {
             klass.set_layout_manager_type::<gtk::BinLayout>();
+            ArtImage::ensure_type();
             klass.bind_template();
         }
 
@@ -126,9 +128,9 @@ mod imp {
             self.parent_constructed();
             let pane = self.obj();
             pane.set_width(super::PANE_WIDTH);
-            pane.draw_glyphs();
+            pane.show_glyphs();
             pane.bind_actions();
-            pane.show_placeholder(super::Appearance::Light);
+            pane.show_placeholder();
         }
 
         fn dispose(&self) {
@@ -147,15 +149,15 @@ glib::wrapper! {
 }
 
 impl DetailsPane {
-    /// Paints the glyphs the template leaves empty.
-    fn draw_glyphs(&self) {
+    /// Shows the glyphs the template leaves empty.
+    fn show_glyphs(&self) {
         let imp = self.imp();
-        let close = icons::glyph(Glyph::Close, CLOSE_GLYPH);
+        let close = icons::image(Icon::Dismiss16, CLOSE_GLYPH);
         imp.close_button.set_child(Some(&close));
-        icons::set_glyph(&imp.open_glyph, Glyph::Share, SMALL_GLYPH);
-        icons::set_glyph(&imp.pin_item_glyph, Glyph::Pin, SMALL_GLYPH);
-        icons::set_glyph(&imp.pin_folder_glyph, Glyph::Pin, SMALL_GLYPH);
-        icons::set_glyph(&imp.note_glyph, Glyph::Info, SMALL_GLYPH);
+        icons::set_icon(&imp.open_glyph, Icon::Open, SMALL_GLYPH);
+        icons::set_icon(&imp.pin_item_glyph, Icon::Pin, SMALL_GLYPH);
+        icons::set_icon(&imp.pin_folder_glyph, Icon::Pin, SMALL_GLYPH);
+        icons::set_icon(&imp.note_glyph, Icon::Info, SMALL_GLYPH);
     }
 
     /// Gives each button its window action; the close button switches the
@@ -168,11 +170,9 @@ impl DetailsPane {
         WindowAction::PinFolder.assign_to(&*imp.pin_folder_button);
     }
 
-    /// Draws the folder art a pane shows before its first
-    /// [`Self::show`], in `appearance` at the default scale.
-    pub(super) fn show_placeholder(&self, appearance: Appearance) {
-        let style = ArtStyle { appearance, scale: 1 };
-        style.draw_into(&self.imp().preview, ArtKind::Folder, PREVIEW_SIZE);
+    /// Shows the folder art a pane shows before its first [`Self::show`].
+    fn show_placeholder(&self) {
+        self.imp().preview.show(Art::Folder, PREVIEW_SIZE);
     }
 
     /// Makes the pane `width` pixels wide ([`PANE_WIDTH`], or less in a
@@ -181,12 +181,12 @@ impl DetailsPane {
         self.set_width_request(width);
     }
 
-    /// Shows `content`, drawing its art in `style`.
-    pub(super) fn show(&self, content: &PaneContent, style: ArtStyle) {
+    /// Shows `content`.
+    pub(super) fn show(&self, content: &PaneContent) {
         let imp = self.imp();
         match content.preview {
-            Preview::Art(kind) => style.draw_into(&imp.preview, kind, PREVIEW_SIZE),
-            Preview::Several => icons::set_glyph(&imp.preview, Glyph::Copy, SEVERAL_ITEMS_GLYPH),
+            Preview::Art(art) => imp.preview.show(art, PREVIEW_SIZE),
+            Preview::Several => imp.preview.show(Art::Glyph(Icon::Copy), SEVERAL_ITEMS_GLYPH),
         }
         imp.name.set_text(&content.name);
         imp.kind.set_text(&content.kind);

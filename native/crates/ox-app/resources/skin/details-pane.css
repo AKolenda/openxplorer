@@ -17,10 +17,8 @@
    GTK's cairo renderer drops a shadow this faint, its GL renderers draw
    it). The art is centred on a half pixel, which Chromium draws one pixel
    down. */
-.details .detail-preview image {
-  -gtk-icon-shadow: 0 4px 4px @ox_preview_shadow;
-  margin-top: 1px;
-}
+.details .detail-preview image { -gtk-icon-shadow: 0 4px 4px @ox_preview_shadow; }
+.details .detail-preview art { margin-top: 1px; }
 .details .detail-name { font-weight: 600; margin-bottom: 4px; }
 .details .detail-type { color: @ox_muted; margin-bottom: 17px; }
 /* Open, or Pin to Quick access: a bordered button 32px tall. */

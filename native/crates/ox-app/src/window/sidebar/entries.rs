@@ -8,11 +8,11 @@
 //! [`sidebar_entries`] turns composed [`Places`] into rows without GTK, so
 //! the order is tested on its own.
 
-use gtk::gdk;
 use ox_core::location::{LocationContext, NETWORK_URI, PC_URI};
-use ox_core::places::{NetworkKind, NetworkLocation, Place};
+use ox_core::places::{NetworkLocation, Place};
 
-use crate::icons::{ArtKind, Glyph};
+use crate::icons::{Art, Connection, Icon, Storage, Tint};
+use crate::locations::Page;
 use crate::places::Places;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 use crate::window::location_kind::is_smb_location;
@@ -41,15 +41,6 @@ pub(in crate::window) enum RowLevel {
     Child,
 }
 
-/// How a row's icon is drawn.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::window) enum RowIcon {
-    /// A line glyph, in a fixed colour or the text colour.
-    Glyph(Glyph, Option<gdk::RGBA>),
-    /// Colour art (folders and network locations).
-    Art(ArtKind),
-}
-
 /// What activating a row does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::window) enum RowTarget {
@@ -60,7 +51,7 @@ pub(in crate::window) enum RowTarget {
 }
 
 /// One sidebar row.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::window) struct SidebarEntry {
     /// The group the row belongs to.
     pub section: Section,
@@ -68,8 +59,9 @@ pub(in crate::window) struct SidebarEntry {
     pub level: RowLevel,
     /// The visible name, which is also the accessible name.
     pub label: String,
-    /// How the row's icon is drawn.
-    pub icon: RowIcon,
+    /// The row's icon: a glyph, in its place's colour for Home, This PC,
+    /// Network and the standard folders, or colour art.
+    pub icon: Art,
     /// What activating the row does.
     pub target: RowTarget,
     /// Hover text and accessible description.
@@ -78,29 +70,17 @@ pub(in crate::window) struct SidebarEntry {
     pub pinned: bool,
 }
 
-/// Colours of the fixed rows (`add(...)` calls in `renderSidebar`).
-const HOME_COLOR: &str = "#0078d4";
-const THIS_PC_COLOR: &str = "#347ba7";
-const NETWORK_COLOR: &str = "#318db9";
-
-/// A CSS hex colour from the Python app's tables, which the tests check.
-fn color(hex: &str) -> gdk::RGBA {
-    gdk::RGBA::parse(hex).expect("the Python app's colour tables hold valid CSS colours")
-}
-
 fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
-    let known = place.glyph().and_then(Glyph::for_known_folder);
-    let shared = place.is_shared || is_smb_location(&place.uri);
-    let icon = match known {
-        Some(glyph) => RowIcon::Glyph(glyph, place.glyph_color().map(color)),
-        None if shared => RowIcon::Art(ArtKind::NetworkFolder),
-        None => RowIcon::Art(ArtKind::Folder),
+    let storage = if place.is_shared || is_smb_location(&place.uri) {
+        Storage::Network
+    } else {
+        Storage::Local
     };
     SidebarEntry {
         section: Section::QuickAccess,
         level: RowLevel::Place,
         label: place.label.clone(),
-        icon,
+        icon: Art::for_quick_access(place.known_folder, storage),
         target: RowTarget::Location(place.uri.clone()),
         tooltip: locations.display_location(&place.uri),
         pinned: true,
@@ -109,8 +89,8 @@ fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
 
 fn drive_entry(row: &VolumeRow, locations: &LocationContext) -> SidebarEntry {
     let glyph = match row.kind {
-        VolumeKind::Device => Glyph::Phone,
-        VolumeKind::Drive => Glyph::Drive,
+        VolumeKind::Device => Icon::Phone,
+        VolumeKind::Drive => Icon::HardDrive,
     };
     let (target, tooltip) = match &row.state {
         VolumeState::Mounted { uri, .. } => {
@@ -122,7 +102,7 @@ fn drive_entry(row: &VolumeRow, locations: &LocationContext) -> SidebarEntry {
         section: Section::ThisPc,
         level: RowLevel::Child,
         label: row.label.clone(),
-        icon: RowIcon::Glyph(glyph, None),
+        icon: Art::Glyph(glyph),
         target,
         tooltip,
         pinned: false,
@@ -141,24 +121,22 @@ fn network_state(location: &NetworkLocation) -> &'static str {
 }
 
 fn network_entry(location: &NetworkLocation, locations: &LocationContext) -> SidebarEntry {
-    let art = match location.kind {
-        NetworkKind::Server => ArtKind::NetworkGlyph(Glyph::Server),
-        NetworkKind::Share | NetworkKind::Mount => ArtKind::NetworkFolder,
-    };
+    let connection = Connection::from_mounted(location.is_connected);
     let address = locations.display_location(&location.uri);
     SidebarEntry {
         section: Section::Network,
         level: RowLevel::Child,
         label: location.label.clone(),
-        icon: RowIcon::Art(art),
+        icon: Art::for_network_location(location.kind, &location.label, connection),
         target: RowTarget::Location(location.uri.clone()),
         tooltip: format!("{address} · {}", network_state(location)),
         pinned: false,
     }
 }
 
-/// A top-level row with a coloured glyph: Home, This PC or Network.
-fn fixed_entry(section: Section, label: &str, glyph: Glyph, glyph_color: &str, uri: &str) -> SidebarEntry {
+/// A top-level row with a coloured glyph: Home, This PC or Network, in
+/// the colours of the `add(...)` calls in `renderSidebar`.
+fn fixed_entry(section: Section, label: &str, icon: Art, uri: &str) -> SidebarEntry {
     let level = if section == Section::Home {
         RowLevel::Place
     } else {
@@ -168,7 +146,7 @@ fn fixed_entry(section: Section, label: &str, glyph: Glyph, glyph_color: &str, u
         section,
         level,
         label: label.to_owned(),
-        icon: RowIcon::Glyph(glyph, Some(color(glyph_color))),
+        icon,
         target: RowTarget::Location(uri.to_owned()),
         tooltip: label.to_owned(),
         pinned: false,
@@ -180,7 +158,7 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
         section: Section::ThisPc,
         level: RowLevel::Child,
         label: "Local Disk".to_owned(),
-        icon: RowIcon::Glyph(Glyph::Drive, None),
+        icon: Art::Glyph(Icon::HardDrive),
         target: RowTarget::Location("file:///".to_owned()),
         tooltip: locations.display_location("file:///"),
         pinned: false,
@@ -190,16 +168,13 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
 /// The sidebar rows, in the Python app's order.
 pub(in crate::window) fn sidebar_entries(places: &Places, locations: &LocationContext) -> Vec<SidebarEntry> {
     let home_uri = locations.home_uri();
-    let mut home = fixed_entry(Section::Home, "Home", Glyph::Home, HOME_COLOR, &home_uri);
+    let home_icon = Art::TintedGlyph(Icon::Home, Tint::Home);
+    let mut home = fixed_entry(Section::Home, "Home", home_icon, &home_uri);
     home.tooltip = locations.display_location(&home_uri);
-    let this_pc = fixed_entry(Section::ThisPc, "This PC", Glyph::Desktop, THIS_PC_COLOR, PC_URI);
-    let network = fixed_entry(
-        Section::Network,
-        "Network",
-        Glyph::Network,
-        NETWORK_COLOR,
-        NETWORK_URI,
-    );
+    let this_pc_icon = Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc);
+    let this_pc = fixed_entry(Section::ThisPc, "This PC", this_pc_icon, PC_URI);
+    let network_icon = Art::TintedGlyph(Page::Network.icon(), Tint::Network);
+    let network = fixed_entry(Section::Network, "Network", network_icon, NETWORK_URI);
     let quick_access = places
         .quick_access
         .iter()
@@ -338,16 +313,51 @@ mod tests {
     }
 
     #[test]
-    fn fixed_and_known_folder_colours_are_valid() {
-        for hex in [HOME_COLOR, THIS_PC_COLOR, NETWORK_COLOR] {
-            assert!(gdk::RGBA::parse(hex).is_ok(), "{hex}");
-        }
+    fn home_this_pc_and_network_show_their_glyphs_in_their_own_colours() {
+        let entries = entries_for(&SettingsData::default(), &[]);
+        let icon_of = |label: &str| {
+            let entry = entries.iter().find(|entry| entry.label == label);
+            entry.map(|entry| entry.icon)
+        };
+        assert_eq!(icon_of("Home"), Some(Art::TintedGlyph(Icon::Home, Tint::Home)));
+        assert_eq!(
+            icon_of("This PC"),
+            Some(Art::TintedGlyph(Icon::Laptop, Tint::ThisPc))
+        );
+        assert_eq!(
+            icon_of("Network"),
+            Some(Art::TintedGlyph(Icon::Organization, Tint::Network))
+        );
+        assert_eq!(icon_of("Local Disk"), Some(Art::Glyph(Icon::HardDrive)));
+    }
+
+    #[test]
+    fn every_quick_access_folder_has_a_glyph_in_its_colour() {
         for folder in KnownFolder::QUICK_ACCESS {
-            let hex = folder.glyph_color().expect("Quick access folders have a colour");
-            assert!(gdk::RGBA::parse(hex).is_ok(), "{hex}");
-            let icon = folder.glyph();
-            assert!(Glyph::for_known_folder(icon).is_some(), "{icon}");
+            let tint = Tint::for_known_folder(folder).expect("Quick access folders have a colour");
+            let glyph = Icon::for_known_folder(folder).expect("Quick access folders have a glyph");
+            assert_eq!(Art::for_known_folder(folder), Art::TintedGlyph(glyph, tint));
         }
+    }
+
+    /// parity: LOOK-016
+    #[test]
+    fn a_saved_share_that_is_not_mounted_shows_the_red_cross() {
+        let settings = SettingsData {
+            shares: vec![Bookmark {
+                uri: "smb://studio-nas/projects".into(),
+                label: "Studio NAS (Z:)".into(),
+            }],
+            ..SettingsData::default()
+        };
+        let entries = entries_for(&settings, &[]);
+        let share = entries.last().expect("the saved share's row");
+        let disconnected_drive = Art::for_network_location(
+            ox_core::places::NetworkKind::Share,
+            "Studio NAS (Z:)",
+            Connection::Disconnected,
+        );
+        assert_eq!(share.icon, disconnected_drive);
     }
 
     #[test]

@@ -24,9 +24,8 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::location::Crumb;
 
-use crate::icons::{self, ArtKind, Glyph};
+use crate::icons::{self, Icon};
 
-use super::appearance::ArtStyle;
 use super::gestures;
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
@@ -66,15 +65,6 @@ pub(super) struct CrumbButton {
     /// The `/` or `\\` drawn before the crumb, if any
     /// ([`ox_core::location::crumb_divider`]).
     pub divider_before: Option<&'static str>,
-}
-
-/// The icon at the start of the address bar.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum AddressIcon {
-    /// A line glyph: a page, a network location or a device.
-    Glyph(Glyph),
-    /// The colour folder of local folders.
-    Folder,
 }
 
 mod imp {
@@ -143,8 +133,8 @@ impl AddressBar {
     /// action, and the crumbs' scrolling and click handling.
     fn finish_template(&self) {
         let imp = self.imp();
-        icons::set_glyph(&imp.icon, Glyph::FolderLine, ICON_SIZE);
-        let chevron = icons::glyph(Glyph::Down, CHEVRON_GLYPH);
+        icons::set_icon(&imp.icon, Icon::FileFolder, ICON_SIZE);
+        let chevron = icons::image(Icon::ChevronDown16, CHEVRON_GLYPH);
         imp.edit_button.set_child(Some(&chevron));
         WindowAction::Location.assign_to(&*imp.edit_button);
         self.keep_current_folder_visible();
@@ -235,18 +225,9 @@ impl AddressBar {
 
     /// Shows the location's crumbs, address text and icon. Text the user
     /// is typing is left alone.
-    pub(super) fn show_location(
-        &self,
-        crumbs: &[CrumbButton],
-        address: &str,
-        icon: AddressIcon,
-        style: ArtStyle,
-    ) {
+    pub(super) fn show_location(&self, crumbs: &[CrumbButton], address: &str, icon: Icon) {
         let imp = self.imp();
-        match icon {
-            AddressIcon::Glyph(glyph) => icons::set_glyph(&imp.icon, glyph, ICON_SIZE),
-            AddressIcon::Folder => style.draw_into(&imp.icon, ArtKind::Folder, ICON_SIZE),
-        }
+        icons::set_icon(&imp.icon, icon, ICON_SIZE);
         self.set_tooltip_text(Some(&format!(
             "{address} · Click blank space or press Ctrl+L to edit"
         )));

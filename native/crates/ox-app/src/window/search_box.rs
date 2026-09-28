@@ -16,7 +16,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 
 /// The trailing magnifier's glyph.
 const MAGNIFIER_GLYPH: i32 = 15;
@@ -75,7 +75,7 @@ impl SearchBox {
     fn finish_template(&self) {
         let imp = self.imp();
         hide_leading_magnifier(&imp.entry);
-        icons::set_glyph(&imp.magnifier, Glyph::Search, MAGNIFIER_GLYPH);
+        icons::set_icon(&imp.magnifier, Icon::Search, MAGNIFIER_GLYPH);
     }
 
     /// Calls `on_query_changed` with the text once typing pauses, and at

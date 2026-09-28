@@ -9,6 +9,7 @@ use crate::folder_view::cells::FileCell;
 use crate::folder_view::column_titles;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
+use crate::icons::{Art, FileType};
 use crate::test_support::harness::{
     application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
@@ -143,7 +144,8 @@ fn both_views_show_each_name_with_its_icon() {
         let cells = descendants::<FileCell>(&view_widget);
         let notes = cells.iter().find(|cell| cell.name() == "Notes 2.txt");
         let notes = notes.unwrap_or_else(|| panic!("the {view} view shows Notes 2.txt"));
-        assert!(notes.has_art(), "the {view} view draws the item's icon");
+        let text_icon = Some(Art::File(FileType::Text));
+        assert_eq!(notes.art(), text_icon, "the {view} view shows the item's icon");
     }
 }
 

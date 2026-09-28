@@ -104,7 +104,7 @@ impl BrowserWindow {
     pub(super) fn render_places(&self) {
         let places = self.places();
         let entries = sidebar::sidebar_entries(&places, &self.imp().locations.borrow());
-        self.sidebar().show(entries, self.art_style());
+        self.sidebar().show(entries);
         if let Some(uri) = self.current_uri() {
             self.sidebar().select(&uri);
         }
@@ -122,6 +122,6 @@ impl BrowserWindow {
         };
         let body = self.folder_pane().landing();
         let locations = self.imp().locations.borrow();
-        landing::render(body, page, places, &locations, self.art_style());
+        landing::render(body, page, places, &locations);
     }
 }

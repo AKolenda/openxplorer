@@ -130,7 +130,7 @@ fn hover_and_pressed_states_are_captured_light_and_dark() {
     sort_button.set_state_flags(gtk::StateFlags::ACTIVE, false);
     for theme in THEMES {
         test.activate("theme", Some(theme));
-        // A new theme redraws the tabs and the sidebar with new widgets.
+        // Hovered again for each theme, as a user would.
         for widget in hovered_widgets(&test) {
             widget.set_state_flags(gtk::StateFlags::PRELIGHT, false);
         }

@@ -59,12 +59,9 @@
                   <class name="detail-preview"/>
                 </style>
                 <property name="center-widget">
-                  <!-- Centred: a GtkImage stretches its picture to fill a
-                       larger allocation, which blurs the art. -->
-                  <object class="GtkImage" id="preview">
-                    <property name="halign">center</property>
-                    <property name="valign">center</property>
-                  </object>
+                  <!-- The item's art, or the copy glyph for several items
+                       (an ArtImage, src/icons/art_image.rs). -->
+                  <object class="OxArtImage" id="preview"/>
                 </property>
               </object>
             </child>

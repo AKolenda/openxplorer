@@ -14,7 +14,7 @@ use gtk::prelude::*;
 use ox_core::location::{self, LocationContext};
 use ox_core::places::NetworkLocation;
 
-use crate::icons::{self, Glyph};
+use crate::icons::{self, Icon};
 use crate::places::Places;
 
 use super::button_style::ButtonStyle;
@@ -73,7 +73,7 @@ fn banner() -> gtk::Box {
         .css_classes(["banner-hint"])
         .build();
     words.append(&hint);
-    let glyph = icons::glyph(Glyph::Network, BANNER_GLYPH);
+    let glyph = icons::image(Icon::Organization, BANNER_GLYPH);
     glyph.add_css_class("banner-glyph");
     let banner = gtk::Box::builder()
         .spacing(BANNER_GAP)
@@ -110,7 +110,7 @@ fn server_address_field() -> gtk::Box {
         move |_| open_typed_address(&address)
     ));
     let map_content = gtk::Box::new(gtk::Orientation::Horizontal, MAP_GLYPH_GAP);
-    map_content.append(&icons::glyph(Glyph::Plus, MAP_GLYPH));
+    map_content.append(&icons::image(Icon::Add, MAP_GLYPH));
     map_content.append(&gtk::Label::new(Some("Map location")));
     // Opens the connect dialog (`connectDialog`).
     let map = command_button(
@@ -138,7 +138,7 @@ fn open_typed_address(entry: &gtk::Entry) {
 /// "Discovered servers" with their count, and the notice while there are
 /// none. Discovery is not ported, so no server is ever found yet.
 fn discovered_servers(body: &gtk::Box) {
-    let title = section_title("Discovered servers", Glyph::Desktop);
+    let title = section_title("Discovered servers", Icon::Desktop);
     let count = gtk::Label::builder()
         .label("0")
         .hexpand(true)
@@ -165,7 +165,7 @@ fn discovered_servers(body: &gtk::Box) {
 
 fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&icons::glyph(Glyph::Network, LOCATION_CARD_GLYPH));
+    content.append(&icons::image(Icon::Organization, LOCATION_CARD_GLYPH));
     let address = locations.display_location(&location.uri);
     content.append(&card_texts(&location.label, &address));
     location_card("drive-card", &location.uri, &content)
@@ -173,7 +173,7 @@ fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk:
 
 /// Every connected, saved and visited network location.
 fn connected_and_saved(body: &gtk::Box, places: &Places, locations: &LocationContext) {
-    body.append(&section_title("Connected & saved locations", Glyph::Pin));
+    body.append(&section_title("Connected & saved locations", Icon::Pin));
     let cards = card_grid(DRIVE_GRID);
     for location in &places.network {
         cards.append(&network_card(location, locations));

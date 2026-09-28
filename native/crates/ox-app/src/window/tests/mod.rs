@@ -13,6 +13,7 @@ mod chrome;
 mod command_bar;
 mod environment;
 mod geometry;
+mod icons;
 mod input;
 mod landing_pages;
 mod listing;

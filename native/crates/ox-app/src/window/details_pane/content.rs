@@ -12,7 +12,7 @@ use ox_core::format;
 use ox_core::location::{parent_location, LocationContext};
 
 use crate::folder_view::item::FileItem;
-use crate::icons::ArtKind;
+use crate::icons::Art;
 use crate::locations::Page;
 use crate::window::location_kind::is_smb_location;
 
@@ -25,8 +25,8 @@ const LOCAL_NOTE: &str = "Select an item to see its properties. Double-click to 
 /// The picture at the top of the pane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::window) enum Preview {
-    /// The one selected item's art.
-    Art(ArtKind),
+    /// The one selected item's art, or the folder's.
+    Art(Art),
     /// The copy glyph for several items.
     Several,
 }
@@ -166,7 +166,7 @@ fn folder_heading(facts: &PaneFacts<'_>) -> FolderHeading {
         };
     }
     FolderHeading {
-        preview: Preview::Art(ArtKind::Folder),
+        preview: Preview::Art(Art::Folder),
         name: facts.locations.title_for(facts.folder_uri),
         kind: "Folder",
     }

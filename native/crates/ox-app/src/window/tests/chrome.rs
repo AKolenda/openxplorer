@@ -7,8 +7,8 @@
 //! boxes (see [`super::geometry`] for where the numbers come from).
 //!
 //! The frame's templates (`resources/ui/`) leave two things to Rust: the
-//! window actions of their buttons and their natively drawn glyphs. The
-//! last tests prove that no control is left without either.
+//! window actions of their buttons and their glyphs, which name bundled
+//! icons. The last tests prove that no control is left without either.
 
 use gtk::prelude::*;
 
@@ -216,8 +216,9 @@ fn every_control_of_the_frame_runs_an_action_the_window_has() {
     );
 }
 
+/// parity: LOOK-015
 #[gtk::test]
-fn every_glyph_of_the_frame_is_drawn() {
+fn every_glyph_of_the_frame_shows_a_bundled_icon() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let glyphs: Vec<gtk::Image> = descendants::<gtk::Image>(&test.window)
@@ -225,6 +226,11 @@ fn every_glyph_of_the_frame_is_drawn() {
         .filter(|image| image.has_css_class("glyph"))
         .collect();
     assert!(!glyphs.is_empty(), "the frame shows glyphs");
-    let empty = glyphs.iter().filter(|glyph| glyph.paintable().is_none()).count();
-    assert_eq!(empty, 0, "every glyph has a picture");
+    let theme = gtk::IconTheme::for_display(&WidgetExt::display(&test.window));
+    let missing: Vec<String> = glyphs
+        .iter()
+        .map(|glyph| glyph.icon_name().map(String::from).unwrap_or_default())
+        .filter(|name| !(name.starts_with("ox-") && theme.has_icon(name)))
+        .collect();
+    assert!(missing.is_empty(), "glyphs without a bundled icon: {missing:?}");
 }

@@ -18,12 +18,11 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::folder_view::cells::{BoundIcons, CellOwners};
+use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
 use crate::folder_view::grid::IconView;
 use crate::folder_view::model::FolderModel;
 use crate::text_size::TextSize;
-use crate::theme::Appearance;
 
 use super::empty_page::EmptyState;
 
@@ -112,11 +111,9 @@ glib::wrapper! {
 }
 
 impl FolderPane {
-    /// Builds the pages, empty and in the details view. Item icons are
-    /// drawn light until the window sets the skin's appearance through
-    /// [`BoundIcons::set_appearance`], before anything is listed.
+    /// Builds the pages, empty and in the details view.
     fn build_parts(&self) {
-        let parts = PaneParts::new(Appearance::Light);
+        let parts = PaneParts::new();
         let overlay = gtk::Overlay::builder().child(&parts.stack).build();
         overlay.add_overlay(&parts.loading_line);
         overlay.set_parent(self);
@@ -144,11 +141,6 @@ impl FolderPane {
     /// The icon view.
     pub(super) fn icon_view(&self) -> &IconView {
         &self.parts().icon_view
-    }
-
-    /// Bound item icons, redrawn when the theme or scale changes.
-    pub(super) fn icons(&self) -> &BoundIcons {
-        &self.parts().icons
     }
 
     /// Maps cell widgets to their rows.
