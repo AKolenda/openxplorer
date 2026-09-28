@@ -175,7 +175,7 @@ impl Content {
         let stack = page_stack(&views, &empty, &landing_scroll);
         let loading_line = LoadingLine::new();
         let root = gtk::Overlay::builder().child(&stack).build();
-        root.add_overlay(&loading_line.widget);
+        root.add_overlay(&loading_line);
         let content = Self {
             root,
             stack,
@@ -224,8 +224,8 @@ impl Content {
 
     /// The loading line, for tests.
     #[cfg(test)]
-    pub fn loading_line(&self) -> &gtk::Box {
-        &self.loading_line.widget
+    pub fn loading_line(&self) -> &LoadingLine {
+        &self.loading_line
     }
 
     /// The view that lists items now.

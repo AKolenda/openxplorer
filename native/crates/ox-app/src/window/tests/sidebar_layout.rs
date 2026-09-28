@@ -18,7 +18,7 @@ fn row_named(test: &TestWindow, label: &str) -> gtk::ListBoxRow {
     let index = i32::try_from(index).expect("a short sidebar");
     test.window
         .sidebar()
-        .list
+        .list()
         .row_at_index(index)
         .expect("a row for every label")
 }
@@ -45,7 +45,7 @@ fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
     let test = with_two_pins(&fixture);
     let home = bounds(&test, &row_named(&test, "Home"));
     assert_eq!(home, (7, 173, 196, 35), "Home is 14 pixels below the command bar");
-    let quick_access: Vec<_> = descendants::<gtk::ListBoxRow>(&test.window.sidebar().list)
+    let quick_access: Vec<_> = descendants::<gtk::ListBoxRow>(test.window.sidebar().list())
         .into_iter()
         .filter(|row| row.has_css_class("quick-access"))
         .map(|row| bounds(&test, &row))
@@ -87,7 +87,7 @@ fn the_selected_row_shows_the_accent_bar_at_its_edge() {
 fn the_sidebar_is_210_pixels_with_a_6_pixel_resizer() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let (_, _, sidebar_width, _) = bounds(&test, &test.window.sidebar().root);
+    let (_, _, sidebar_width, _) = bounds(&test, test.window.sidebar());
     assert_eq!(sidebar_width, 210);
     let (list_x, _, _, _) = bounds(&test, &test.window.content().root);
     assert_eq!(list_x, 216, "the file list starts after the resizer");

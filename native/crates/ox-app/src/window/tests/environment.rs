@@ -36,7 +36,7 @@ fn the_sidebar_starts_with_home_and_lists_this_pc_and_network() {
 fn sidebar_rows_are_named_by_their_label_and_described_by_their_address() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let rows = descendants::<gtk::ListBoxRow>(&test.window.sidebar().list);
+    let rows = descendants::<gtk::ListBoxRow>(test.window.sidebar().list());
     assert!(!rows.is_empty());
     assert_eq!(
         rows.len(),
@@ -62,7 +62,7 @@ fn the_home_row_is_selected_in_the_home_folder() {
     let test = TestWindow::open(&fixture.uri());
     test.window.navigate(&home).expect("the home folder");
     test.wait_for_listing("the home folder");
-    let selected = test.window.sidebar().list.selected_row();
+    let selected = test.window.sidebar().list().selected_row();
     assert_eq!(selected.map(|row| row.index()), Some(0), "Home is the first row");
 }
 

@@ -231,7 +231,7 @@ impl BrowserWindow {
         pane.append(&self.content().root);
         pane.append(&self.details_pane().root);
         let workspace = &self.chrome().workspace;
-        workspace.set_start_child(Some(&self.sidebar().root));
+        workspace.set_start_child(Some(self.sidebar()));
         workspace.set_end_child(Some(&pane));
     }
 

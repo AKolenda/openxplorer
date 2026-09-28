@@ -9,39 +9,69 @@
 //! takes longer than [`APPEARANCE_DELAY`], so folders that list at once
 //! never flash it (ui-spec.md M06).
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::time::Duration;
 
 use gtk::glib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
 /// How long a listing runs before the line shows: Fluent's `durationFast`.
 const APPEARANCE_DELAY: Duration = Duration::from_millis(150);
 
-/// The loading line and the timer that will show it.
-#[derive(Debug)]
-pub(super) struct LoadingLine {
-    /// The line, to lay over the top of the folder pane.
-    pub widget: gtk::Box,
-    pending: Rc<RefCell<Option<glib::SourceId>>>,
+mod imp {
+    use std::cell::RefCell;
+
+    use gtk::glib;
+    use gtk::prelude::*;
+    use gtk::subclass::prelude::*;
+
+    /// Private state of [`super::LoadingLine`].
+    #[derive(Debug, Default)]
+    pub struct LoadingLine {
+        /// The timer that will show the line, while one runs. It clears
+        /// itself when it fires, so it is never removed twice.
+        pub(super) pending: RefCell<Option<glib::SourceId>>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for LoadingLine {
+        const NAME: &'static str = "OxLoadingLine";
+        type Type = super::LoadingLine;
+        type ParentType = gtk::Box;
+    }
+
+    impl ObjectImpl for LoadingLine {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let line = self.obj();
+            line.set_valign(gtk::Align::Start);
+            line.set_hexpand(true);
+            line.set_can_target(false);
+            line.set_visible(false);
+            line.add_css_class("loading-line");
+            line.update_property(&[gtk::accessible::Property::Label("Loading")]);
+        }
+
+        fn dispose(&self) {
+            self.obj().cancel_pending();
+        }
+    }
+
+    impl WidgetImpl for LoadingLine {}
+    impl BoxImpl for LoadingLine {}
+}
+
+glib::wrapper! {
+    /// The loading line, to lay over the top of the folder pane.
+    pub struct LoadingLine(ObjectSubclass<imp::LoadingLine>)
+        @extends gtk::Box, gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl LoadingLine {
     /// A hidden line.
     pub fn new() -> Self {
-        let widget = gtk::Box::builder()
-            .valign(gtk::Align::Start)
-            .hexpand(true)
-            .can_target(false)
-            .visible(false)
-            .css_classes(["loading-line"])
-            .build();
-        widget.update_property(&[gtk::accessible::Property::Label("Loading")]);
-        Self {
-            widget,
-            pending: Rc::new(RefCell::new(None)),
-        }
+        glib::Object::new()
     }
 
     /// Shows the line [`APPEARANCE_DELAY`] after a listing starts, or hides
@@ -49,34 +79,31 @@ impl LoadingLine {
     pub fn set_loading(&self, loading: bool) {
         if !loading {
             self.cancel_pending();
-            self.widget.set_visible(false);
+            self.set_visible(false);
             return;
         }
-        let already_on_its_way = self.widget.is_visible() || self.pending.borrow().is_some();
+        let already_on_its_way = self.is_visible() || self.imp().pending.borrow().is_some();
         if already_on_its_way {
             return;
         }
-        let line = self.widget.downgrade();
-        let pending = Rc::clone(&self.pending);
-        let timer = glib::timeout_add_local_once(APPEARANCE_DELAY, move || {
-            pending.take();
-            if let Some(line) = line.upgrade() {
-                line.set_visible(true);
-            }
-        });
-        self.pending.replace(Some(timer));
+        let timer = glib::timeout_add_local_once(
+            APPEARANCE_DELAY,
+            glib::clone!(
+                #[weak(rename_to = line)]
+                self,
+                move || {
+                    line.imp().pending.take();
+                    line.set_visible(true);
+                }
+            ),
+        );
+        self.imp().pending.replace(Some(timer));
     }
 
     fn cancel_pending(&self) {
-        if let Some(timer) = self.pending.take() {
+        if let Some(timer) = self.imp().pending.take() {
             timer.remove();
         }
-    }
-}
-
-impl Drop for LoadingLine {
-    fn drop(&mut self) {
-        self.cancel_pending();
     }
 }
 
@@ -93,14 +120,11 @@ mod tests {
         let line = LoadingLine::new();
         let started = Instant::now();
         line.set_loading(true);
-        assert!(
-            !line.widget.is_visible(),
-            "a listing that just started shows no line"
-        );
-        wait_until("the loading line", || line.widget.is_visible());
+        assert!(!line.is_visible(), "a listing that just started shows no line");
+        wait_until("the loading line", || line.is_visible());
         assert!(started.elapsed() >= APPEARANCE_DELAY);
         line.set_loading(false);
-        assert!(!line.widget.is_visible(), "the line goes when the listing ends");
+        assert!(!line.is_visible(), "the line goes when the listing ends");
     }
 
     #[gtk::test]
@@ -109,6 +133,6 @@ mod tests {
         line.set_loading(true);
         line.set_loading(false);
         wait_for(APPEARANCE_DELAY * 2);
-        assert!(!line.widget.is_visible());
+        assert!(!line.is_visible());
     }
 }
