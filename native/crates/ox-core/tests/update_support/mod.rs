@@ -183,9 +183,9 @@ impl Read for BrokenConnection {
     }
 }
 
-/// Runs before the fixture `pkexec apt-get install` answers, for example to
-/// replace installed files or to wait.
-pub type InstallHook = Arc<dyn Fn() + Send + Sync>;
+/// Runs before a fixture command answers, for example to replace installed
+/// files, to wait, or to cancel the installation.
+pub type CommandHook = Arc<dyn Fn() + Send + Sync>;
 
 /// A package manager that checks each command as Python's `run_fixture`
 /// does, records it and answers from fixtures. Clones share state.
@@ -200,7 +200,8 @@ struct PackageState {
     inspection: CommandOutput,
     installation: CommandOutput,
     query: CommandOutput,
-    install_hook: Option<InstallHook>,
+    inspection_hook: Option<CommandHook>,
+    install_hook: Option<CommandHook>,
 }
 
 impl PackageFixture {
@@ -215,6 +216,7 @@ impl PackageFixture {
             )),
             installation: success(""),
             query: success(&format!("install ok installed\n{NEXT}")),
+            inspection_hook: None,
             install_hook: None,
         };
         Self {
@@ -237,8 +239,13 @@ impl PackageFixture {
         self.lock().query = output;
     }
 
+    /// Runs `hook` whenever `dpkg-deb` inspects the installer.
+    pub fn on_inspection(&self, hook: CommandHook) {
+        self.lock().inspection_hook = Some(hook);
+    }
+
     /// Runs `hook` whenever the installation command runs.
-    pub fn on_install(&self, hook: InstallHook) {
+    pub fn on_install(&self, hook: CommandHook) {
         self.lock().install_hook = Some(hook);
     }
 
@@ -276,7 +283,11 @@ impl PackageManager for PackageFixture {
             PackageCommand::InspectInstaller(installer) => {
                 assert_private_download(installer, &state.updates_folder);
                 assert!(command.time_limit().is_some(), "dpkg-deb has a time limit");
-                Ok(state.inspection.clone())
+                let hook = state.inspection_hook.clone();
+                let answer = state.inspection.clone();
+                drop(state);
+                run_hook(hook);
+                Ok(answer)
             }
             PackageCommand::Install(installer) => {
                 assert!(installer.is_file(), "the verified installer is still there");
@@ -284,13 +295,19 @@ impl PackageManager for PackageFixture {
                 let hook = state.install_hook.clone();
                 let answer = state.installation.clone();
                 drop(state);
-                if let Some(hook) = hook {
-                    hook();
-                }
+                run_hook(hook);
                 Ok(answer)
             }
             PackageCommand::QueryInstalled => Ok(state.query.clone()),
         }
+    }
+}
+
+/// Runs `hook`, if there is one, without the fixture's state locked, so it
+/// may wait or use the fixture.
+fn run_hook(hook: Option<CommandHook>) {
+    if let Some(hook) = hook {
+        hook();
     }
 }
 
@@ -333,9 +350,18 @@ pub fn mode(path: &Path) -> u32 {
 /// Installs `version` with the user's confirmation, collecting the
 /// progress messages.
 pub fn install(updater: &Updater, version: ReleaseVersion) -> (Result<(), UpdateError>, Vec<String>) {
+    install_cancellable(updater, version, &Cancellation::new())
+}
+
+/// [`install`], which `cancel` can stop.
+pub fn install_cancellable(
+    updater: &Updater,
+    version: ReleaseVersion,
+    cancel: &Cancellation,
+) -> (Result<(), UpdateError>, Vec<String>) {
     let progress = RefCell::new(Vec::new());
     let record = |step: InstallProgress| progress.borrow_mut().push(step.to_string());
-    let result = updater.install(version, Confirmation::Confirmed, &record, &Cancellation::new());
+    let result = updater.install(version, Confirmation::Confirmed, &record, cancel);
     (result, progress.into_inner())
 }
 

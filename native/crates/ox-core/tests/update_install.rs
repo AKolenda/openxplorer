@@ -7,14 +7,16 @@
 
 mod update_support;
 
+use std::sync::Arc;
+
 use ox_core::transfer::Cancellation;
 use ox_core::update::{
     Confirmation, FetchError, Installation, PackageCommand, ReleaseVersion, UpdateError, LATEST_RELEASE_URL,
     REPOSITORY,
 };
 use update_support::{
-    failure, install, mode, next_installer_url, release_answer, success, Response, UpdaterFixture, CURRENT,
-    NEXT, PACKAGE,
+    failure, install, install_cancellable, mode, next_installer_url, release_answer, success, Response,
+    UpdaterFixture, CURRENT, NEXT, PACKAGE,
 };
 
 /// A command line as text.
@@ -161,28 +163,44 @@ fn install_requires_matching_previously_checked_newer_version() {
     fixture.assert_idle_and_clean(&updater);
 }
 
+/// A download that does not match the release, and the error it must give.
+struct DownloadCase {
+    name: &'static str,
+    payload: Vec<u8>,
+    is_expected: fn(&UpdateError) -> bool,
+}
+
 /// Ported from `desktop/tests/test_updater.py::UpdaterTests::test_bad_checksum_short_download_and_oversized_download_never_prompt`
 /// parity: UPD-003
 #[test]
 fn bad_checksum_short_download_and_oversized_download_never_prompt() {
     let fixture = UpdaterFixture::new();
     let updater = fixture.checked_updater();
-    let wrong_bytes = vec![b'X'; PACKAGE.len()];
-    let short = PACKAGE[..PACKAGE.len() - 1].to_vec();
-    let oversized = [PACKAGE, b"oversize"].concat();
+    let cases = [
+        DownloadCase {
+            name: "wrong bytes",
+            payload: vec![b'X'; PACKAGE.len()],
+            is_expected: |error| matches!(error, UpdateError::ChecksumMismatch),
+        },
+        DownloadCase {
+            name: "short",
+            payload: PACKAGE[..PACKAGE.len() - 1].to_vec(),
+            is_expected: |error| matches!(error, UpdateError::ChecksumMismatch),
+        },
+        DownloadCase {
+            name: "oversized",
+            payload: [PACKAGE, b"oversize"].concat(),
+            is_expected: |error| matches!(error, UpdateError::InstallerTooLarge),
+        },
+    ];
 
-    for payload in [wrong_bytes, short, oversized] {
-        fixture.server.answer_installer(Response::Body(payload.clone()));
+    for case in cases {
+        fixture.server.answer_installer(Response::Body(case.payload));
 
         let (result, _) = install(&updater, NEXT);
 
-        assert!(
-            matches!(
-                result,
-                Err(UpdateError::ChecksumMismatch | UpdateError::InstallerTooLarge)
-            ),
-            "{payload:?}: {result:?}"
-        );
+        let error = result.unwrap_err();
+        assert!((case.is_expected)(&error), "{}: {error:?}", case.name);
         assert!(fixture.packages.commands().is_empty());
         assert_eq!(updater.installed_version(), None);
         fixture.assert_idle_and_clean(&updater);
@@ -330,5 +348,28 @@ fn a_cancelled_installation_never_prompts() {
 
     assert!(matches!(result, Err(UpdateError::Cancelled)));
     assert!(fixture.packages.commands().is_empty());
+    fixture.assert_idle_and_clean(&updater);
+}
+
+/// Cancelling while `dpkg-deb` inspects the verified download still stops
+/// the installation before the administrator prompt: the last moment
+/// cancelling can.
+/// parity: UPD-003
+#[test]
+fn cancelling_during_the_inspection_never_prompts() {
+    let fixture = UpdaterFixture::new();
+    let updater = fixture.checked_updater();
+    let cancel = Cancellation::new();
+    let cancel_during_inspection = cancel.clone();
+    fixture
+        .packages
+        .on_inspection(Arc::new(move || cancel_during_inspection.cancel()));
+
+    let (result, progress) = install_cancellable(&updater, NEXT, &cancel);
+
+    assert!(matches!(result, Err(UpdateError::Cancelled)), "{result:?}");
+    assert_eq!(fixture.packages.programs(), ["/usr/bin/dpkg-deb"]);
+    assert_eq!(progress, ["Downloading OpenXplorer 1.0.1…"]);
+    assert_eq!(updater.installed_version(), None);
     fixture.assert_idle_and_clean(&updater);
 }
