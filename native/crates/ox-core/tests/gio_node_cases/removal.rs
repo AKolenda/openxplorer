@@ -225,7 +225,7 @@ fn cancellation_during_local_delete_preflight_preserves_the_file() {
 #[test]
 fn trash_support_reports_an_unmounted_share_instead_of_denying_trash() {
     if std::env::var_os("OX_DISTRO_CI").is_some() {
-        eprintln!("skipped under OX_DISTRO_CI: {}", "distributions' GVfs SMB backends answer an unreachable host differently; the native job covers this");
+        eprintln!("skipped under OX_DISTRO_CI: distributions' GVfs SMB backends answer an unreachable host differently; the native job covers this");
         return;
     }
     let schemes = gio::Vfs::default().supported_uri_schemes();
