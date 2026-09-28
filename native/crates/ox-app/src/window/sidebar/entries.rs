@@ -6,15 +6,19 @@
 //! once, under Network.
 //!
 //! [`sidebar_entries`] turns composed [`Places`] into rows without GTK, so
-//! the order is tested on its own.
+//! the order is tested on its own. Drives and network locations carry
+//! their context menu ([`PlaceMenu`]), and a drive that can be removed its
+//! eject button (DEV-007).
 
 use ox_core::location::{is_smb_location, LocationContext, NETWORK_URI, PC_URI};
 use ox_core::places::{NetworkLocation, Place};
 
+use crate::devices::Removal;
 use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
 use crate::places::Places;
-use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
+use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
+use crate::window::place_menus::PlaceMenu;
 
 /// A group of rows; a separator is drawn where the group changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +71,35 @@ pub(in crate::window) struct SidebarEntry {
     pub tooltip: String,
     /// Shows the pin glyph of a Quick access row.
     pub pinned: bool,
+    /// The row's context menu, for drives and network locations.
+    pub menu: Option<PlaceMenu>,
+    /// The eject button of a drive that can be removed.
+    pub eject: Option<EjectButton>,
+}
+
+/// The eject button at the end of a removable drive's row, as GNOME's
+/// places sidebar and Dolphin's show it (DEV-007).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::window) struct EjectButton {
+    /// Eject the medium, or unmount a drive that cannot be ejected.
+    pub removal: Removal,
+    /// The drive's root.
+    pub uri: String,
+    /// The tooltip and accessible name, such as "Eject".
+    pub label: &'static str,
+}
+
+impl EjectButton {
+    /// The button of the mounted drive at `uri`, or `None` when the drive
+    /// can be neither ejected nor unmounted.
+    fn for_drive(uri: &str, kind: VolumeKind, controls: MountControls) -> Option<Self> {
+        let removal = Removal::for_eject_button(controls)?;
+        Some(Self {
+            removal,
+            uri: uri.to_owned(),
+            label: removal.label(kind),
+        })
+    }
 }
 
 fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
@@ -83,6 +116,8 @@ fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
         target: RowTarget::Location(place.uri.clone()),
         tooltip: locations.display_location(&place.uri),
         pinned: true,
+        menu: None,
+        eject: None,
     }
 }
 
@@ -105,7 +140,29 @@ fn drive_entry(row: &VolumeRow, locations: &LocationContext) -> SidebarEntry {
         target,
         tooltip,
         pinned: false,
+        menu: Some(drive_menu(row)),
+        eject: drive_eject_button(row),
     }
+}
+
+/// A drive's menu (`driveMenu`): a mounted drive's, or Mount volume.
+fn drive_menu(row: &VolumeRow) -> PlaceMenu {
+    match &row.state {
+        VolumeState::Mounted { uri, controls } => PlaceMenu::Drive {
+            uri: uri.clone(),
+            kind: row.kind,
+            controls: *controls,
+        },
+        VolumeState::Mountable { id } => PlaceMenu::Volume { id: id.clone() },
+    }
+}
+
+/// The eject button of a mounted drive that can be removed.
+fn drive_eject_button(row: &VolumeRow) -> Option<EjectButton> {
+    let VolumeState::Mounted { uri, controls } = &row.state else {
+        return None;
+    };
+    EjectButton::for_drive(uri, row.kind, *controls)
 }
 
 /// The state text of a network row, as `renderSidebar` titles it.
@@ -129,6 +186,8 @@ fn network_entry(location: &NetworkLocation, locations: &LocationContext) -> Sid
         target: RowTarget::Location(location.uri.clone()),
         tooltip: format!("{address} · {}", network_state(location)),
         pinned: false,
+        menu: Some(PlaceMenu::Network(location.clone())),
+        eject: None,
     }
 }
 
@@ -148,18 +207,27 @@ fn fixed_entry(section: Section, label: &str, icon: Art, uri: &str) -> SidebarEn
         target: RowTarget::Location(uri.to_owned()),
         tooltip: label.to_owned(),
         pinned: false,
+        menu: None,
+        eject: None,
     }
 }
 
 fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
+    let root = "file:///";
     SidebarEntry {
         section: Section::ThisPc,
         level: RowLevel::Child,
         label: "Local Disk".to_owned(),
         icon: Art::Glyph(Icon::HardDrive),
-        target: RowTarget::Location("file:///".to_owned()),
-        tooltip: locations.display_location("file:///"),
+        target: RowTarget::Location(root.to_owned()),
+        tooltip: locations.display_location(root),
         pinned: false,
+        menu: Some(PlaceMenu::Drive {
+            uri: root.to_owned(),
+            kind: VolumeKind::Drive,
+            controls: MountControls::FIXED,
+        }),
+        eject: None,
     }
 }
 
@@ -300,6 +368,46 @@ mod tests {
             .expect("volume row");
         assert_eq!(backup.target, RowTarget::MountVolume("uuid-1".into()));
         assert_eq!(backup.level, RowLevel::Child);
+        assert_eq!(backup.menu, Some(PlaceMenu::Volume { id: "uuid-1".into() }));
+        assert_eq!(backup.eject, None, "nothing to eject before it is mounted");
+    }
+
+    /// A USB stick's row has an eject button and a menu; Local Disk has
+    /// the menu only.
+    ///
+    /// parity: DEV-007, SIDE-017
+    #[test]
+    fn a_removable_drive_has_an_eject_button_and_every_drive_a_menu() {
+        let usb_stick = VolumeRow {
+            label: "USB".into(),
+            kind: VolumeKind::Drive,
+            state: VolumeState::Mounted {
+                uri: "file:///media/u/USB".into(),
+                controls: MountControls {
+                    can_unmount: true,
+                    can_eject: true,
+                    can_stop: true,
+                },
+            },
+        };
+        let entries = entries_for(&SettingsData::default(), &[usb_stick]);
+        let entry_of = |label: &str| {
+            entries
+                .iter()
+                .find(|entry| entry.label == label)
+                .expect("a drive row")
+        };
+        let eject = EjectButton {
+            removal: Removal::Eject,
+            uri: "file:///media/u/USB".into(),
+            label: "Eject",
+        };
+        assert_eq!(entry_of("USB").eject, Some(eject));
+        assert_eq!(entry_of("Local Disk").eject, None);
+        assert!(matches!(
+            entry_of("Local Disk").menu,
+            Some(PlaceMenu::Drive { .. })
+        ));
     }
 
     /// parity: SIDE-001

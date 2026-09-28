@@ -29,6 +29,14 @@ impl TestWindow {
         self.run_tab_action(WindowAction::CloseTabById, id);
     }
 
+    /// Each tab's location and whether it is listed again when shown.
+    pub(super) fn tab_listing_needs(&self) -> Vec<(String, bool)> {
+        let session = self.window.imp().session.borrow();
+        let tabs = session.tabs().iter();
+        tabs.map(|tab| (tab.uri().to_owned(), tab.listing_state.needs_listing()))
+            .collect()
+    }
+
     /// Saves `uri` as a network location called `label`, as the Python
     /// app would, and has the window read the settings again.
     pub(super) fn save_share(&self, uri: &str, label: &str) {

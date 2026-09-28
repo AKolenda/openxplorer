@@ -56,9 +56,15 @@
       ]
     },
     "authReply": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "The window's sign-in dialog answers GVfs through ox-core's prompts: accounts, session or permanent remembering, guest, questions, refusals kept in the dialog, one challenge at a time, and cancelling with the dialog or the window. Tested on emitted GVfs signals without a server.",
+      "evidence": [
+        "native/crates/ox-app/src/network/sign_in_queue/tests.rs::connect_hands_gvfs_the_account_and_empties_the_password",
+        "native/crates/ox-app/src/network/sign_in_queue/tests.rs::connect_as_guest_signs_in_anonymously",
+        "native/crates/ox-app/src/network/sign_in_queue/tests.rs::a_question_offers_its_answers_and_cancel",
+        "native/crates/ox-app/src/network/sign_in_queue/tests.rs::challenges_are_shown_one_at_a_time_in_order",
+        "native/crates/ox-app/src/window/tests/network.rs::closing_the_window_aborts_its_sign_ins"
+      ]
     },
     "beginFileDrag": {
       "status": "native-tested",
@@ -197,9 +203,13 @@
       ]
     },
     "connect": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Map network location validates, mounts and checks the share in ox-core; the native dialog, its errors and its refusals are tested. Connecting to a real share needs a server (manual acceptance).",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::map_network_location_keeps_its_errors_inside_the_dialog",
+        "native/crates/ox-app/src/window/tests/network.rs::a_server_being_signed_out_is_neither_listed_nor_mapped",
+        "native/crates/ox-core/src/network/mounting/tests.rs::map_network_location_refuses_bad_input_before_mounting"
+      ]
     },
     "create": {
       "status": "native-tested",
@@ -251,9 +261,13 @@
       ]
     },
     "discover": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "The Network page discovers servers on its first visit in three passes, merges them, and stops on Stop; ox-core reads GVfs's network browser without passwords. The page's tests use a fixed answer.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::the_network_page_discovers_servers_on_its_first_visit",
+        "native/crates/ox-app/src/network/discovery.rs::stop_ends_the_passes_and_keeps_what_was_found",
+        "native/crates/ox-core/src/network/discovery.rs::discovery_aborts_every_password_request"
+      ]
     },
     "environment": {
       "status": "pending",
@@ -316,9 +330,12 @@
       "evidence": []
     },
     "mountVolume": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Clicking an unmounted volume mounts it with GTK's mount operation and opens it; a volume that went away shows 'Could not mount device'. Mounting real media needs hardware (manual acceptance).",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::mounting_a_volume_that_went_away_says_so",
+        "native/crates/ox-core/src/network/volumes.rs::a_volume_that_went_away_is_reported_as_gone"
+      ]
     },
     "moveTabToWindow": {
       "status": "native-tested",
@@ -455,9 +472,13 @@
       "evidence": []
     },
     "signOut": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "native-tested",
+      "note": "Sign out of server asks what to forget, disconnects the server's mounts, forgets its credentials, marks its tabs, shows Network and reports failures. Clearing the search cache waits for the window to run one.",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::signing_out_forgets_the_server_and_its_tabs",
+        "native/crates/ox-app/src/window/tests/network.rs::signing_out_without_a_keyring_says_the_credentials_remain",
+        "native/crates/ox-core/src/network/sign_out/tests.rs::signing_out_forgets_every_saved_credential_of_that_server_only"
+      ]
     },
     "snapshotSource": {
       "status": "pending",
@@ -521,9 +542,12 @@
       "evidence": []
     },
     "unmount": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Disconnect asks first and unmounts with GTK's mount operation; Eject and Safely remove are added. The refusals are tested; removing real media needs hardware (manual acceptance).",
+      "evidence": [
+        "native/crates/ox-app/src/window/tests/network.rs::disconnect_asks_first_and_reports_a_location_without_a_mount",
+        "native/crates/ox-core/src/network/volumes.rs::disconnect_waits_for_this_windows_writes"
+      ]
     },
     "updateCheck": {
       "status": "pending",

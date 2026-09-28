@@ -15,6 +15,7 @@
     <file>scalable/actions/ox-arrow-clockwise-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-counterclockwise-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-down-20-symbolic.svg</file>
+    <file>scalable/actions/ox-arrow-eject-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-left-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-redo-20-symbolic.svg</file>
     <file>scalable/actions/ox-arrow-reset-20-symbolic.svg</file>
@@ -56,7 +57,6 @@
     <file>scalable/actions/ox-select-all-on-20-symbolic.svg</file>
     <file>scalable/actions/ox-settings-20-symbolic.svg</file>
     <file>scalable/actions/ox-share-20-symbolic.svg</file>
-    <file>scalable/actions/ox-sign-out-20-symbolic.svg</file>
     <file>scalable/actions/ox-square-multiple-20-symbolic.svg</file>
     <file>scalable/actions/ox-subtract-20-symbolic.svg</file>
     <file>scalable/actions/ox-table-20-symbolic.svg</file>

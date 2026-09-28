@@ -10,9 +10,10 @@
 use gtk::prelude::*;
 
 use crate::icons::{self, Art, ArtImage, Icon};
+use crate::window::place_menus::removal_action;
 use crate::window::window_action::WindowAction;
 
-use super::entries::{RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
+use super::entries::{EjectButton, RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
 
 /// Glyph icons are 18 pixels (`.side-icon svg`), art 19 (`folderIcon(19)`).
 const GLYPH_SIZE: i32 = 18;
@@ -23,6 +24,9 @@ const EXPANDER_SIZE: i32 = 9;
 
 /// The pin of a Quick access row.
 const PIN_SIZE: i32 = 11;
+
+/// The eject glyph of a removable drive's row.
+const EJECT_SIZE: i32 = 14;
 
 /// A row's icon at its size, with the class the skin spaces it by.
 fn row_icon(icon: Art) -> ArtImage {
@@ -62,7 +66,24 @@ fn row_content(entry: &SidebarEntry) -> gtk::Box {
         pin.add_css_class("pin");
         content.append(&pin);
     }
+    if let Some(eject) = &entry.eject {
+        content.append(&eject_button(eject));
+    }
     content
+}
+
+/// The eject button of a removable drive: runs Eject, or Disconnect for a
+/// drive that can only be unmounted.
+fn eject_button(eject: &EjectButton) -> gtk::Button {
+    let button = gtk::Button::builder()
+        .child(&icons::image(Icon::ArrowEject, EJECT_SIZE))
+        .tooltip_text(eject.label)
+        .valign(gtk::Align::Center)
+        .css_classes(["side-eject"])
+        .build();
+    button.update_property(&[gtk::accessible::Property::Label(eject.label)]);
+    removal_action(eject.removal).assign_with_target_to(&button, &eject.uri.to_variant());
+    button
 }
 
 /// The accent bar that marks the selected row.

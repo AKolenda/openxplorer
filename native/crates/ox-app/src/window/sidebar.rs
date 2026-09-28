@@ -6,12 +6,16 @@
 //! list-row headers so keyboard and screen-reader users never land on an
 //! empty separator row, and the "Map network location" button pinned below
 //! the list (`.sidebar-bottom`). Rows run [`WindowAction::GoTo`] or
-//! [`WindowAction::MountVolume`]; a middle-click opens a place in a tab,
-//! and a right-click on a Quick access pin opens its menu ([`menu`]).
+//! [`WindowAction::MountVolume`]; a middle-click opens a place in a tab.
+//! A right-click opens the row's menu: a Quick access pin's ([`menu`],
+//! `sidebarMenu` in app.js), or a drive's or a network location's
+//! (`driveMenu` and `networkLocationMenu`,
+//! [`PlaceMenu`](super::place_menus::PlaceMenu)).
 //!
 //! [`Sidebar`] is a `GtkBox` subclass that keeps the entries its rows show,
-//! so the list's header function and middle-click handler read them
-//! through the pane itself. Where a drop on it goes is [`drop_spots`]'s.
+//! so the list's header function and its middle-click and right-click
+//! handlers read them through the pane itself. Where a drop on it goes is
+//! [`drop_spots`]'s.
 
 mod drop_spots;
 mod entries;
@@ -25,9 +29,9 @@ use ox_core::location::same_location;
 
 use crate::icons::{self, Icon};
 
-use super::menu_popover::MenuPopover;
+use super::menu_popover::{MenuEntry, MenuPopover};
 use super::window_action::WindowAction;
-use super::{gestures, preferences, unported};
+use super::{gestures, preferences};
 
 pub(super) use drop_spots::SidebarDropSpot;
 pub(super) use entries::sidebar_entries;
@@ -52,7 +56,7 @@ mod imp {
         pub(super) list: OnceCell<gtk::ListBox>,
         /// What each row shows and does, in row order.
         pub(super) entries: RefCell<Vec<SidebarEntry>>,
-        /// The pins' context menu, built by `constructed`.
+        /// The rows' context menu, built by `constructed`.
         pub(super) menu: OnceCell<MenuPopover>,
     }
 
@@ -105,7 +109,7 @@ impl Sidebar {
         list.update_property(&[gtk::accessible::Property::Label("Navigation pane")]);
         self.separate_sections(&list);
         self.open_places_on_middle_click(&list);
-        self.open_pin_menu_on_right_click(&list);
+        self.open_menus_on_right_click(&list);
         let scroller = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
             // The list is never narrower than the narrowest saved sidebar.
@@ -162,8 +166,9 @@ impl Sidebar {
         list.add_controller(gesture);
     }
 
-    /// A right-click on a Quick access pin opens its menu there.
-    fn open_pin_menu_on_right_click(&self, list: &gtk::ListBox) {
+    /// A right-click on a Quick access pin, a drive or a network location
+    /// opens its menu there.
+    fn open_menus_on_right_click(&self, list: &gtk::ListBox) {
         let menu = MenuPopover::new(Vec::new());
         menu.set_offset(0, 0);
         menu.set_parent(self);
@@ -177,7 +182,7 @@ impl Sidebar {
             #[weak(rename_to = sidebar)]
             self,
             move |gesture, _, x, y| {
-                if sidebar.show_pin_menu(x, y) {
+                if sidebar.show_menu(x, y) {
                     gesture.set_state(gtk::EventSequenceState::Claimed);
                 }
             }
@@ -185,10 +190,10 @@ impl Sidebar {
         list.add_controller(click);
     }
 
-    /// Opens the menu of the pin at (`x`, `y`) of the list; false where no
-    /// pin is.
-    fn show_pin_menu(&self, x: f64, y: f64) -> bool {
-        let Some(uri) = self.pin_at(y) else {
+    /// Opens the menu of the row at (`x`, `y`) of the list; false where
+    /// the row has none.
+    fn show_menu(&self, x: f64, y: f64) -> bool {
+        let Some(entries) = self.menu_entries_at(y) else {
             return false;
         };
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
@@ -197,7 +202,7 @@ impl Sidebar {
             return false;
         };
         let menu = self.imp().menu.get().expect("constructed builds the menu");
-        menu.set_entries(menu::pin_menu(&uri));
+        menu.set_entries(entries);
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let target = gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
         menu.set_pointing_to(Some(&target));
@@ -205,22 +210,27 @@ impl Sidebar {
         true
     }
 
-    /// The location of the Quick access pin at `y` in the list, if one is
-    /// there.
-    fn pin_at(&self, y: f64) -> Option<String> {
+    /// The menu of the row at `y` in the list: a pin's, or a drive's or a
+    /// network location's; `None` for a row without one.
+    fn menu_entries_at(&self, y: f64) -> Option<Vec<MenuEntry>> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let row = self.list().row_at_y(y as i32)?;
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
-        let entry = entries.get(index).filter(|entry| entry.pinned)?;
-        match &entry.target {
-            RowTarget::Location(uri) => Some(uri.clone()),
-            RowTarget::MountVolume(_) => None,
+        let entry = entries.get(index)?;
+        if entry.pinned {
+            let RowTarget::Location(uri) = &entry.target else {
+                return None;
+            };
+            return Some(menu::pin_menu(uri));
         }
+        let place_menu = entry.menu.as_ref()?.entries();
+        // A drive the system keeps mounted may have nothing to offer.
+        (!place_menu.is_empty()).then_some(place_menu)
     }
 
-    /// Right-clicks the row labelled `label` and returns the pins' menu,
-    /// for tests.
+    /// Right-clicks the row labelled `label` and returns the sidebar's
+    /// menu, for tests.
     #[cfg(test)]
     pub(super) fn right_click_row(&self, label: &str) -> MenuPopover {
         let index = self
@@ -234,7 +244,7 @@ impl Sidebar {
             .expect("every entry has a row");
         let bounds = row.compute_bounds(self.list()).expect("a shown row has bounds");
         let middle = f64::from(bounds.y() + bounds.height() / 2.0);
-        self.show_pin_menu(1.0, middle);
+        self.show_menu(1.0, middle);
         self.imp()
             .menu
             .get()
@@ -313,10 +323,7 @@ fn map_network_button() -> gtk::Box {
     let button = gtk::Button::builder()
         .child(&content)
         .action_name(WindowAction::MapNetworkLocation.detailed_name())
-        .tooltip_text(unported::tooltip(
-            WindowAction::MapNetworkLocation,
-            "Map network location",
-        ))
+        .tooltip_text("Map network location")
         .build();
     let footer = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)

@@ -12,7 +12,7 @@ use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry};
 use ox_core::places::{NetworkKind, NetworkLocation};
 
-use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
+use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 
 /// An entry named `name` in `/tmp/ox-test`, of `file_type`, as a listing
 /// would produce it. Nothing is created on disk.
@@ -42,7 +42,7 @@ pub(crate) fn mounted_volume(label: &str, uri: &str, kind: VolumeKind) -> Volume
         kind,
         state: VolumeState::Mounted {
             uri: uri.into(),
-            can_unmount: true,
+            controls: MountControls::UNMOUNTABLE,
         },
     }
 }

@@ -18,8 +18,6 @@ use super::BrowserWindow;
 /// The `native/ROADMAP.md` milestone that brings a command or a setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Milestone {
-    /// The "Network and devices" service.
-    NetworkAndDevices,
     /// The "Search and metadata" service: the search index.
     SearchAndMetadata,
     /// The rest of "Search and metadata": properties, folder sizes and
@@ -40,7 +38,6 @@ impl Milestone {
     /// How tooltips and disabled settings name the milestone.
     pub(crate) const fn description(self) -> &'static str {
         match self {
-            Milestone::NetworkAndDevices => "network and device support",
             Milestone::SearchAndMetadata => "cached search",
             Milestone::ItemDetails => "properties, folder sizes and Open with",
             Milestone::ArchivesAndRecovery => "archives and previous versions",
@@ -73,10 +70,7 @@ const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand 
 }
 
 /// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 12] = [
-    command(WindowAction::MapNetworkLocation, Milestone::NetworkAndDevices),
-    command(WindowAction::DiscoverServers, Milestone::NetworkAndDevices),
-    command(WindowAction::SignOut, Milestone::NetworkAndDevices),
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 9] = [
     command(WindowAction::CacheFolder, Milestone::SearchAndMetadata),
     command(WindowAction::OpenWith, Milestone::ItemDetails),
     command(WindowAction::CalculateFolderSize, Milestone::ItemDetails),

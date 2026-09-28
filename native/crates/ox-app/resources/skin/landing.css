@@ -80,4 +80,6 @@ window.ox .landing .network-manual button { padding: 5px 12px; min-width: 0; }
 }
 .landing .network-manual entry:focus-within { border-bottom-color: @ox_accent; box-shadow: inset 0 -1px @ox_accent; }
 .landing .network-count { color: @ox_muted; font-weight: normal; }
+/* "SMB · Discovered" under a discovered server's address. */
+.landing .network-protocol { color: @ox_accent; margin-top: 4px; }
 .landing .discovery-note { color: @ox_muted; margin: 15px 0 0 0; line-height: 1.13; }

@@ -311,6 +311,43 @@ def run_in_own_session(command: Sequence[str], environment: dict[str, str], time
         raise subprocess.CalledProcessError(returncode, list(command))
 
 
+def fuse_mounts_under(root: Path, mount_table: str) -> list[Path]:
+    """Return the FUSE mount points below root in mount_table, deepest first.
+
+    mount_table is the text of /proc/self/mountinfo, whose fifth field is
+    the mount point (with spaces written as \\040) and whose filesystem type
+    follows the ' - ' separator.
+    """
+    points = []
+    for line in mount_table.splitlines():
+        mount_fields, separator, filesystem_fields = line.partition(' - ')
+        fields = mount_fields.split()
+        if not separator or len(fields) < 5 or not filesystem_fields.startswith('fuse'):
+            continue
+        point = Path(fields[4].replace('\\040', ' '))
+        if point.is_relative_to(root):
+            points.append(point)
+    return sorted(points, key=lambda point: len(point.parts), reverse=True)
+
+
+def release_fuse_mounts(root: Path) -> None:
+    """Detach the FUSE mounts a run left below root, so root can be deleted.
+
+    The app asks the desktop portal for the colour scheme; on the private bus
+    that starts xdg-document-portal, which mounts $XDG_RUNTIME_DIR/doc.
+    Stopping the run's processes leaves that mount dead, and deleting the
+    runtime directory would then fail on it. A lazy unmount detaches it.
+    Without fusermount3 there is no FUSE, so there is nothing to detach.
+    """
+    mount_table = Path('/proc/self/mountinfo').read_text(encoding='utf-8')
+    unmount = shutil.which('fusermount3')
+    if unmount is None:
+        return
+    for point in fuse_mounts_under(root.resolve(), mount_table):
+        subprocess.run([unmount, '-u', '-z', str(point)], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def run_isolated(command: Sequence[str], timeout: float) -> None:
     """Run a command on a private display and bus with disposable user data.
 
@@ -328,6 +365,8 @@ def run_isolated(command: Sequence[str], timeout: float) -> None:
             raise CheckTimeoutError(command, timeout) from None
         except subprocess.CalledProcessError as error:
             raise subprocess.CalledProcessError(error.returncode, list(command)) from None
+        finally:
+            release_fuse_mounts(root)
 
 
 def check_inventories_and_driver() -> None:

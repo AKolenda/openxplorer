@@ -33,7 +33,13 @@ pub(super) fn pin_menu(uri: &str) -> Vec<MenuEntry> {
         .into(),
     ];
     if is_smb_location(uri) {
-        entries.push(MenuItem::new("Sign out of server…", Icon::SignOut, WindowAction::SignOut).into());
+        let sign_out = MenuItem::with_text_target(
+            "Sign out of server…",
+            Icon::ArrowEject,
+            WindowAction::SignOut,
+            uri,
+        );
+        entries.push(sign_out.into());
     }
     entries.extend([
         MenuEntry::Divider,

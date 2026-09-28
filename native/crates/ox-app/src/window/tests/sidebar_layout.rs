@@ -106,15 +106,14 @@ fn the_sidebar_is_210_pixels_with_a_6_pixel_resizer() {
     assert_eq!(list.x, 216, "the file list starts after the resizer");
 }
 
-/// parity: SIDE-001
+/// parity: SIDE-001, NET-001
 #[gtk::test]
-fn map_network_location_waits_below_the_list_for_its_milestone() {
+fn map_network_location_sits_below_the_list() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let button = button_for(&test, "win.map-network-location");
-    assert!(!button.is_sensitive(), "connecting to a share is not ported yet");
-    let tooltip = button.tooltip_text().unwrap_or_default();
-    assert!(tooltip.contains("network and device support"), "{tooltip}");
+    assert!(button.is_sensitive(), "Map network location opens its dialog");
+    assert_eq!(button.tooltip_text().as_deref(), Some("Map network location"));
     let place = bounds(&test, &button);
     let window_height = test.window.height();
     assert_eq!((place.x, place.width, place.height), (7, 196, 34));

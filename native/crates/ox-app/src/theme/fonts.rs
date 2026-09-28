@@ -85,6 +85,22 @@ const FONT_SIZES: &[FontSize] = &[
     font(".landing .network-manual entry", 12.0),
     font(".landing .network-count", 11.0),
     font(".landing .discovery-note", 11.0),
+    font(".landing .network-protocol", 10.0),
+    // The network dialogs (`.modal` and `.auth-*` in style.css; the title
+    // at the dialog title's size of ui-spec.md T10).
+    font(".ox-dialog .dialog-title", 20.0),
+    font(".ox-dialog .dialog-message", 12.0),
+    font(".ox-dialog .field-label", 12.0),
+    font(".ox-dialog entry", 13.0),
+    font(".ox-dialog checkbutton", 12.0),
+    font(".ox-dialog .dialog-note", 11.0),
+    font(".ox-dialog .dialog-error", 12.0),
+    font(".ox-dialog .dialog-actions button", 12.0),
+    font(".sign-in-dialog .sign-in-caption", 12.0),
+    font(".sign-in-dialog .sign-in-target", 12.0),
+    font(".sign-in-dialog .sign-in-note", 10.0),
+    font(".sign-in-dialog button.sign-in-guest", 12.0),
+    font(".sign-in-dialog .sign-in-choices button", 12.0),
     font(".empty-state .empty-title", 16.0),
     font(".empty-state", 12.0),
     font("popover.ox-menu list > row", 12.0),
@@ -169,7 +185,8 @@ const SOLID_FRAME_PADDING: i32 = 3;
 
 /// The solid window frame's title-colour band, which ends where the title
 /// bar does: the frame's padding plus the title bar at `scale`. Dialogs
-/// have no title bar, so they have no band.
+/// have no title bar, so they have no band
+/// (`resources/skin/network-dialogs.css`).
 fn solid_frame_rule(scale: f64) -> String {
     let band = SOLID_FRAME_PADDING + TITLE_BAR.height(scale);
     format!(

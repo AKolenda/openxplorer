@@ -210,7 +210,13 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
         entries.push(cache.into());
     }
     if facts.location != ItemLocation::Local {
-        entries.push(item("Sign out of server…", Icon::SignOut, WindowAction::SignOut).into());
+        let sign_out = MenuItem::with_text_target(
+            "Sign out of server…",
+            Icon::ArrowEject,
+            WindowAction::SignOut,
+            &facts.navigation_uri,
+        );
+        entries.push(sign_out.into());
     }
     entries.push(MenuEntry::Divider);
     entries.extend(details_group(facts));

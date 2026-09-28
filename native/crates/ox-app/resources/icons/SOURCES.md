@@ -37,6 +37,7 @@ it.
 | `actions/ox-arrow-clockwise-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_clockwise_20_regular.svg` | e216c5859ca5368c3ce795d1ffaf19b4be5e5ba2df6d09e7ff544d3c2fef0466 |
 | `actions/ox-arrow-counterclockwise-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_counterclockwise_20_regular.svg` | 932290054023ca03b2f567d1c351d5d53fc1b73a312cc8df9902c6dcc09aea1e |
 | `actions/ox-arrow-down-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_down_20_regular.svg` | c1548448de9cc56a3569bb51e54e954337eff72fa6d6e68a910c1586033780f8 |
+| `actions/ox-arrow-eject-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_eject_20_regular.svg` | c308ecfb2513a7def3bcd991c233b3f1e32106adfda35ea048eb95323540269b |
 | `actions/ox-arrow-left-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_left_20_regular.svg` | d94a8b83b6764b02c7e80a80d7854b37eaa2ce0b505f289ed2a0e3b2a1d2f82c |
 | `actions/ox-arrow-redo-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_redo_20_regular.svg` | 8f73a88da11b8732934b8136c55e8bab7470f81dedaf3aa11019ac5f472d7564 |
 | `actions/ox-arrow-reset-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/arrow_reset_20_regular.svg` | 0b1fff894154d44bdf4a6e2645f3a2dfa9d1389ff8b1deb8f973095fe37532a1 |
@@ -78,7 +79,6 @@ it.
 | `actions/ox-select-all-on-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/select_all_on_20_regular.svg` | 199464932860850ba995faf317487f035e08707fd062dc682607deb69ec261f9 |
 | `actions/ox-settings-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/settings_20_regular.svg` | 082803991d9af2fdb934957c5c8cddb04885665c7669d73d0c3d3dfee7ac7e6a |
 | `actions/ox-share-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/share_20_regular.svg` | c0f5d5c7dd6ea4bb52da116b5809256f349384b24339945891164b6854f98c5a |
-| `actions/ox-sign-out-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/sign_out_20_regular.svg` | e745e7d39c62b0f8ee56e27f333d285556346852124ee3016e78fdfe5f015450 |
 | `actions/ox-square-multiple-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/square_multiple_20_regular.svg` | de601d733420494510b8129cc413f76463435f7366a727faefde9b9e9a457a9f |
 | `actions/ox-subtract-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/subtract_20_regular.svg` | a724aae5ef54510875cf0b1dda4b49e6bb39dcb9f44dad450cdb1f64d5feb85b |
 | `actions/ox-table-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/table_20_regular.svg` | 01abb91aad998f162fd39dd5989844c43afd428597b9824dcb7ba1e2cd965572 |

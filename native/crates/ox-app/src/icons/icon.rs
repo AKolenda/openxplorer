@@ -36,6 +36,10 @@ pub(crate) enum Icon {
     ArrowCounterclockwise,
     /// `arrow_down_20_regular`: the Descending sort.
     ArrowDown,
+    /// `arrow_eject_20_regular`: Eject, Safely remove, Disconnect and
+    /// Sign out of server, the commands app.js drew with its eject
+    /// glyph, and the eject button of a removable drive's sidebar row.
+    ArrowEject,
     /// `arrow_download_20_regular`: the Downloads folder and the Brave &
     /// downloads settings.
     ArrowDownload,
@@ -200,8 +204,6 @@ pub(crate) enum Icon {
     Share,
     /// `shield_lock_20_regular`: the search index's privacy note.
     ShieldLock,
-    /// `sign_out_20_regular`: Sign out of server.
-    SignOut,
     /// `square_multiple_20_regular`: the window's restore button.
     SquareMultiple,
     /// `subtract_20_regular`: the window's minimise button and Smaller text.
@@ -247,6 +249,7 @@ impl Icon {
             Icon::ArrowClockwise => "ox-arrow-clockwise-20-symbolic",
             Icon::ArrowCounterclockwise => "ox-arrow-counterclockwise-20-symbolic",
             Icon::ArrowDown => "ox-arrow-down-20-symbolic",
+            Icon::ArrowEject => "ox-arrow-eject-20-symbolic",
             Icon::ArrowDownload => "ox-arrow-download-20-symbolic",
             Icon::ArrowLeft => "ox-arrow-left-20-symbolic",
             Icon::ArrowRedo => "ox-arrow-redo-20-symbolic",
@@ -320,7 +323,6 @@ impl Icon {
             Icon::Settings => "ox-settings-20-symbolic",
             Icon::Share => "ox-share-20-symbolic",
             Icon::ShieldLock => "ox-shield-lock-20-symbolic",
-            Icon::SignOut => "ox-sign-out-20-symbolic",
             Icon::SquareMultiple => "ox-square-multiple-20-symbolic",
             Icon::Subtract => "ox-subtract-20-symbolic",
             Icon::Table => "ox-table-20-symbolic",
@@ -365,6 +367,7 @@ pub(crate) const ALL_ICONS: [Icon; 95] = [
     Icon::ArrowClockwise,
     Icon::ArrowCounterclockwise,
     Icon::ArrowDown,
+    Icon::ArrowEject,
     Icon::ArrowDownload,
     Icon::ArrowLeft,
     Icon::ArrowRedo,
@@ -438,7 +441,6 @@ pub(crate) const ALL_ICONS: [Icon; 95] = [
     Icon::Settings,
     Icon::Share,
     Icon::ShieldLock,
-    Icon::SignOut,
     Icon::SquareMultiple,
     Icon::Subtract,
     Icon::Table,

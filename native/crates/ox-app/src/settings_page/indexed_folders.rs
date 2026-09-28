@@ -253,7 +253,7 @@ mod tests {
     use ox_core::places::KnownFolder;
 
     use super::*;
-    use crate::volumes::{VolumeKind, VolumeState};
+    use crate::volumes::{MountControls, VolumeKind, VolumeState};
 
     fn locations() -> LocationContext {
         LocationContext {
@@ -277,7 +277,7 @@ mod tests {
             kind,
             state: VolumeState::Mounted {
                 uri: uri.to_owned(),
-                can_unmount: true,
+                controls: MountControls::UNMOUNTABLE,
             },
         }
     }

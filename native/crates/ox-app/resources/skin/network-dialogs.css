@@ -1,0 +1,97 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The network dialogs: Map network location, Sign out, Disconnect and the
+   sign-in dialog (ui-spec.md §4.11; style.css .modal and .auth-*). A dialog
+   is a window of its own with the `ox` and `ox-dialog` classes, so the
+   window rules of base.css reach it; font sizes follow the text size
+   (src/theme/fonts.rs). */
+
+/* ---- The dialog (E02, R: 8px corners, §4.11 "Surface") ---- */
+window.ox.ox-dialog { background-color: @ox_bg; }
+/* Without a compositor a dialog keeps the frame of base.css, but not the
+   title-coloured band a browser window paints behind its tab strip. */
+window.ox.ox-dialog.solid-csd { box-shadow: inset 0 0 0 3px @ox_border; }
+.ox-dialog .dialog-content { padding: 24px; }
+.ox-dialog .dialog-title { font-weight: 600; margin-bottom: 12px; }
+.ox-dialog .dialog-message { color: @ox_muted; line-height: 1.3; }
+.ox-dialog .dialog-fields { margin-top: 3px; }
+.ox-dialog .field-label { margin: 17px 0 7px 0; }
+/* A dialog text input (§4.11 "Text input", C28). */
+.ox-dialog entry {
+  min-height: 33px;
+  padding: 0 11px;
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-bottom-color: @ox_input_bottom;
+  border-radius: 4px;
+  box-shadow: none;
+  outline: none;
+}
+.ox-dialog entry:focus-within { border-bottom-color: @ox_accent; box-shadow: inset 0 -1px @ox_accent; }
+.ox-dialog checkbutton.checkbox-row { margin-top: 15px; }
+.ox-dialog checkbutton check:checked { background-color: @ox_accent; border-color: @ox_accent; color: @ox_on_accent; }
+/* .modal-note (R10: 4px corners). */
+.ox-dialog .dialog-note {
+  color: @ox_muted;
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+  padding: 12px;
+  margin-top: 20px;
+}
+.ox-dialog .dialog-error { color: @ox_critical_fill; margin-top: 15px; }
+/* The footer (§4.11 "Footer"): Cancel and the primary button on the
+   chrome colour below a line. */
+.ox-dialog .dialog-actions {
+  padding: 18px 24px;
+  border-top: 1px solid @ox_border;
+  background-color: @ox_chrome;
+}
+/* §4.11 "Buttons": 32 high, at least 92 wide. */
+window.ox.ox-dialog .dialog-actions button,
+window.ox.ox-dialog .sign-in-choices button {
+  min-height: 20px;
+  min-width: 56px;
+  padding: 5px 17px;
+}
+
+/* ---- The sign-in dialog (.auth-*) ---- */
+/* The caption bar: the shield, "OpenXplorer Security" and the close
+   button with its red hover (§4.11 "Auth caption bar"). */
+.sign-in-dialog .sign-in-caption {
+  min-height: 43px;
+  padding-left: 20px;
+  background-color: @ox_chrome;
+  border-bottom: 1px solid @ox_border;
+  color: @ox_muted;
+}
+.sign-in-dialog .sign-in-shield { color: @ox_accent; }
+window.ox .sign-in-dialog button.sign-in-close { min-width: 44px; min-height: 42px; border-radius: 0; }
+window.ox .sign-in-dialog button.sign-in-close:hover { background-color: @ox_critical_fill; color: @ox_on_critical; }
+.sign-in-dialog .sign-in-body { padding: 24px 28px 20px 28px; }
+.sign-in-dialog .sign-in-heading { margin-bottom: 19px; }
+.sign-in-dialog .sign-in-heading .dialog-title { margin-bottom: 0; }
+/* The computer in a 52px badge (.auth-device). */
+.sign-in-dialog .sign-in-device {
+  border-radius: 8px;
+  background-color: @ox_selected;
+  border: 1px solid @ox_border;
+  color: @ox_accent;
+}
+.sign-in-dialog .sign-in-description { margin-bottom: 16px; }
+.sign-in-dialog .sign-in-retry { color: @ox_critical_fill; }
+.sign-in-dialog .sign-in-target {
+  padding: 10px 12px;
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+  background-color: @ox_chrome;
+  color: @ox_muted;
+  margin-bottom: 5px;
+}
+.sign-in-dialog .sign-in-target image { color: @ox_accent; }
+.sign-in-dialog .field-label { margin: 16px 0 7px 0; }
+.sign-in-dialog entry.sign-in-password { padding-right: 42px; }
+window.ox .sign-in-dialog button.sign-in-eye { min-width: 36px; min-height: 33px; margin-right: 1px; color: @ox_muted; }
+.sign-in-dialog checkbutton.sign-in-remember { margin-top: 22px; }
+.sign-in-dialog .sign-in-note { color: @ox_muted; margin-top: 12px; padding-left: 26px; }
+window.ox .sign-in-dialog button.sign-in-guest { color: @ox_accent; margin-top: 16px; padding: 0; }
+.sign-in-dialog .sign-in-choices { margin-top: 16px; }

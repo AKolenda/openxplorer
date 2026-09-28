@@ -224,6 +224,25 @@ class EnvironmentTests(unittest.TestCase):
             self.assertEqual(environment['GSETTINGS_BACKEND'], 'memory')
 
 
+class FuseMountTests(unittest.TestCase):
+    """fuse_mounts_under() finds the portal mounts a run leaves in its root."""
+
+    def test_only_fuse_mounts_below_the_root_are_found_deepest_first(self) -> None:
+        """Other filesystems and FUSE mounts elsewhere are left alone."""
+        root = Path('/tmp/openxplorer-native-test-abc')
+        mount_table = '\n'.join([
+            '81 33 0:82 / /tmp/openxplorer-native-test-abc/runtime/doc rw - fuse.portal portal rw',
+            '82 81 0:83 / /tmp/openxplorer-native-test-abc/runtime/doc/by\\040app rw - fuse.portal portal rw',
+            '83 33 0:84 / /run/user/1000/doc rw - fuse.portal portal rw',
+            '84 33 0:85 / /tmp/openxplorer-native-test-abc/home rw - tmpfs tmpfs rw',
+            'a line without the separator',
+        ])
+        self.assertEqual(check.fuse_mounts_under(root, mount_table), [
+            root / 'runtime/doc/by app',
+            root / 'runtime/doc',
+        ])
+
+
 class TestExecutableTests(unittest.TestCase):
     """executables_in() picks the test executables out of Cargo's JSON messages."""
 

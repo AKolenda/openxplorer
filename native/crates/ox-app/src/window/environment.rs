@@ -3,12 +3,13 @@
 //! pins and network locations, drawn into the sidebar and landing pages.
 //!
 //! Ports `refreshEnvironment` in `desktop/ui/app.js` and `environment` in
-//! `desktop/winspace.py`. The volume monitor's changes and the
-//! application's `places-changed` signal (a pin, a saved share, a visited
-//! server or the settings file changed) redraw the sidebar, the landing
-//! page, the icons of network locations in the tabs and the details pane,
-//! and every label that names a device. Pinning a folder is in
-//! [`super::quick_access`] and mounting a volume in [`super::mounting`].
+//! `desktop/winspace.py`. The volume monitor's changes to mounts, volumes
+//! and drives (DEV-002) and the application's `places-changed` signal (a
+//! pin, a saved share, a visited server, a kernel SMB mount or the
+//! settings file changed) redraw the sidebar, the landing page, the icons
+//! of network locations in the tabs and the details pane, and every label
+//! that names a device. Pinning a folder is in [`super::quick_access`] and
+//! mounting a volume in [`super::mounting`].
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -42,6 +43,7 @@ impl BrowserWindow {
     pub(super) fn watch_environment(&self) {
         self.read_volumes();
         self.render_places();
+        self.context().refresh_stable_mounts();
         let monitor = self.volume_monitor();
         let window = self.downgrade();
         let handlers = [
@@ -51,6 +53,9 @@ impl BrowserWindow {
             monitor.connect_volume_added(redraw_on_change(&window)),
             monitor.connect_volume_removed(redraw_on_change(&window)),
             monitor.connect_volume_changed(redraw_on_change(&window)),
+            monitor.connect_drive_connected(redraw_on_change(&window)),
+            monitor.connect_drive_disconnected(redraw_on_change(&window)),
+            monitor.connect_drive_changed(redraw_on_change(&window)),
         ];
         let places = self.context().connect_places_changed(glib::clone!(
             #[weak(rename_to = window)]
@@ -79,6 +84,7 @@ impl BrowserWindow {
         self.render_places();
         self.render_location();
         self.context().reload_settings();
+        self.context().refresh_stable_mounts();
     }
 
     /// The sidebar and landing sections for the current settings, volumes
@@ -100,12 +106,13 @@ impl BrowserWindow {
     fn places_with(&self, known_folders: &[Place]) -> Places {
         let settings = self.context().settings_data();
         let volumes = self.imp().volumes.borrow();
+        let stable_mounts = self.context().network().stable_mounts();
         let visited_network = self.context().visited_network();
         places::compose(PlaceSources {
             settings: &settings,
             known_folders,
             volumes: &volumes,
-            stable_mounts: &[],
+            stable_mounts: &stable_mounts,
             visited_network: &visited_network,
         })
     }
@@ -138,6 +145,7 @@ impl BrowserWindow {
         };
         let body = self.folder_pane().landing();
         let locations = self.imp().locations.borrow();
-        landing::render(body, page, places, &locations);
+        let discovery = self.network().discovery().state();
+        landing::render(body, page, places, &locations, &discovery);
     }
 }

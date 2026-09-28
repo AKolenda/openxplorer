@@ -16,10 +16,13 @@
 mod app_context;
 pub mod application;
 mod config;
+mod devices;
+mod dialogs;
 mod folder_view;
 mod history;
 mod icons;
 mod locations;
+mod network;
 mod places;
 mod settings_page;
 mod settings_store;

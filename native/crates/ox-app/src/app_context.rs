@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the windows of one application share: the skin, the settings file,
-//! the standard folders, the network locations visited this session and
-//! the way files are opened.
+//! the standard folders, the network services (the keyring, sign-outs and
+//! the network locations visited this session) and the way files are
+//! opened.
 //!
 //! The Python app kept these on its `Gtk.Application` (`settings_store`,
 //! `visited_network`, `launch_default` in `desktop/winspace.py`) and
@@ -26,7 +27,8 @@ use ox_core::places::FolderLocations;
 use ox_core::settings::{Bookmark, PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
 use ox_core::versions::PreviousVersions;
 
-use crate::places;
+use crate::dialogs::SearchCacheChoice;
+use crate::network::{self, NetworkServices};
 use crate::settings_store::{Change, Reply, SettingsStore};
 use crate::theme::Skin;
 
@@ -41,20 +43,25 @@ const LAYOUT_RESET: &str = "layout-reset";
 /// relabels the commands.
 const JOURNAL_CHANGED: &str = "journal-changed";
 
+/// Emitted with a server's host and whether to clear its cached file
+/// names, once Sign out of server finished (NET-022).
+const SERVER_SIGNED_OUT: &str = "server-signed-out";
+
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
     use std::rc::Rc;
     use std::sync::{Arc, OnceLock};
 
     use gtk::glib::subclass::Signal;
+    use gtk::prelude::*;
     use gtk::subclass::prelude::*;
     use gtk::{gio, glib};
     use ox_core::ops::UndoJournal;
     use ox_core::places::Place;
-    use ox_core::settings::Bookmark;
     use ox_core::versions::PreviousVersions;
 
-    use super::{JOURNAL_CHANGED, LAYOUT_RESET, PLACES_CHANGED};
+    use super::{JOURNAL_CHANGED, LAYOUT_RESET, PLACES_CHANGED, SERVER_SIGNED_OUT};
+    use crate::network::NetworkServices;
     use crate::settings_store::SettingsStore;
     use crate::theme::Skin;
 
@@ -65,8 +72,9 @@ mod imp {
         pub(super) skin: OnceCell<Skin>,
         /// The shared settings file and its queue of changes.
         pub(super) settings: OnceCell<Rc<SettingsStore>>,
-        /// SMB servers and shares browsed this session, oldest first.
-        pub(super) visited_network: RefCell<Vec<Bookmark>>,
+        /// The keyring, the servers being signed out, the network
+        /// locations browsed this session and the kernel's SMB mounts.
+        pub(super) network: NetworkServices,
         /// Quick access rows of the standard folders, as last read from
         /// `user-dirs.dirs`.
         pub(super) known_folders: RefCell<Vec<Place>>,
@@ -101,6 +109,9 @@ mod imp {
                     Signal::builder(PLACES_CHANGED).build(),
                     Signal::builder(LAYOUT_RESET).build(),
                     Signal::builder(JOURNAL_CHANGED).build(),
+                    Signal::builder(SERVER_SIGNED_OUT)
+                        .param_types([String::static_type(), bool::static_type()])
+                        .build(),
                 ]
             })
         }
@@ -228,25 +239,54 @@ impl AppContext {
         })
     }
 
-    /// The SMB servers and shares browsed this session, oldest first.
-    pub(crate) fn visited_network(&self) -> Vec<Bookmark> {
-        self.imp().visited_network.borrow().clone()
+    /// The network services every window shares.
+    pub(crate) fn network(&self) -> &NetworkServices {
+        &self.imp().network
     }
 
-    /// Records a browsed SMB location under Network for this session, as
+    /// The SMB servers and shares browsed this session, oldest first.
+    pub(crate) fn visited_network(&self) -> Vec<Bookmark> {
+        self.network().visited_bookmarks()
+    }
+
+    /// Records a listed SMB location under Network for this session, as
     /// `remember_network` in winspace.py: the server, or the share the
-    /// location is on. Browsing never saves a bookmark.
+    /// location is on. Browsing never saves a bookmark (NET-016).
     pub(crate) fn remember_network(&self, uri: &str) {
-        let Some(root) = places::visited_root(uri) else {
-            return;
-        };
-        let visited = &self.imp().visited_network;
-        let is_known = visited.borrow().iter().any(|known| known.uri == root.uri);
-        if is_known {
-            return;
+        if self.network().remember_visited(uri) {
+            self.notify_places_changed();
         }
-        visited.borrow_mut().push(root);
+    }
+
+    /// Forgets the servers and shares browsed on `host`, when signing out
+    /// of it.
+    pub(crate) fn forget_network_host(&self, host: &str) {
+        self.network().forget_visited_host(host);
         self.notify_places_changed();
+    }
+
+    /// Tells the search cache that the server `host` was signed out, and
+    /// whether the user asked to clear its cached file names ("Also clear
+    /// cached filenames for this server").
+    pub(crate) fn announce_server_signed_out(&self, host: &str, search_cache: SearchCacheChoice) {
+        let clear_names = search_cache == SearchCacheChoice::Clear;
+        self.emit_by_name::<()>(SERVER_SIGNED_OUT, &[&host, &clear_names]);
+    }
+
+    /// Reads the kernel's SMB mounts off the main thread, and tells every
+    /// window when they changed, as `environment` in winspace.py reads
+    /// them on every change.
+    pub(crate) fn refresh_stable_mounts(&self) {
+        let context = self.downgrade();
+        glib::spawn_future_local(async move {
+            let mounts = network::read_stable_mounts().await;
+            let Some(context) = context.upgrade() else {
+                return;
+            };
+            if context.network().replace_stable_mounts(mounts) {
+                context.notify_places_changed();
+            }
+        });
     }
 
     /// Tells every window to redraw its sidebar and landing page.
