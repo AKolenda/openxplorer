@@ -16,6 +16,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -26,11 +27,19 @@ use gtk::{gio, glib};
 /// Quiet time before a burst of change notifications triggers a refresh.
 const CHANGE_DEBOUNCE: Duration = Duration::from_millis(350);
 
-/// Identifies a live [`Watch`] across threads.
-type WatchId = u64;
-
 /// Hands out watch ids; an id is never reused in one process.
 static NEXT_WATCH_ID: AtomicU64 = AtomicU64::new(0);
+
+/// Identifies a live [`Watch`] across threads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct WatchId(u64);
+
+impl WatchId {
+    /// An id no other watch of this process has had.
+    fn next() -> Self {
+        Self(NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 /// The change callback of one watch and its pending debounce timer.
 struct Subscriber {
@@ -94,6 +103,10 @@ fn debounce_elapsed(id: WatchId) {
 }
 
 /// Watches one folder for changes. Dropping it stops watching.
+///
+/// A watch lives on the main thread: dropping it removes its callback
+/// from that thread's `SUBSCRIBERS` and its debounce timer from that
+/// thread's main context. It is therefore neither `Send` nor `Sync`.
 #[derive(Debug)]
 pub(crate) struct Watch {
     uri: String,
@@ -102,6 +115,10 @@ pub(crate) struct Watch {
     stop: gio::Cancellable,
     /// The monitor thread's own main context.
     monitor_context: glib::MainContext,
+    /// Main-thread-only rule: this `Rc` marker keeps the compiler from
+    /// letting a watch move to, or be dropped on, another thread, where
+    /// its callback would stay registered and keep running.
+    _main_thread_only: PhantomData<Rc<()>>,
 }
 
 impl Watch {
@@ -148,8 +165,12 @@ impl MonitorThread {
         let monitor_context = self.monitor_context.clone();
         // A monitor reports on the thread-default context of the thread that
         // creates it, so this thread's own context must be the default.
-        // Acquiring it cannot fail: no other thread iterates it.
-        let _ = monitor_context.with_thread_default(|| self.monitor_until_stopped());
+        // Only this thread iterates it, so acquiring it should not fail; if
+        // it does, the folder is not watched and F5 still refreshes it.
+        let watched = monitor_context.with_thread_default(|| self.monitor_until_stopped());
+        if let Err(error) = watched {
+            glib::g_warning!("openxplorer", "Could not watch {} for changes: {error}", self.uri);
+        }
     }
 
     /// Creates the monitor and forwards its changes to the GTK thread
@@ -179,7 +200,7 @@ impl MonitorThread {
 /// The monitor is created on a thread of its own. Until it exists, and for
 /// locations that cannot be monitored at all, changes are not seen.
 pub(crate) fn watch_folder(uri: &str, on_change: impl Fn() + 'static) -> Watch {
-    let id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);
+    let id = WatchId::next();
     let subscriber = Subscriber {
         on_change: Rc::new(on_change),
         debounce_timer: None,
@@ -190,6 +211,7 @@ pub(crate) fn watch_folder(uri: &str, on_change: impl Fn() + 'static) -> Watch {
         id,
         stop: gio::Cancellable::new(),
         monitor_context: glib::MainContext::new(),
+        _main_thread_only: PhantomData,
     };
     let thread = MonitorThread {
         uri: watch.uri.clone(),
