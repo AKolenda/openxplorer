@@ -26,6 +26,35 @@ use state::{active_window, AppState};
 /// The `--new-window` command-line option.
 const NEW_WINDOW_OPTION: &str = "new-window";
 
+/// The application actions (`app.*`), which menus and shortcuts run by
+/// name; the enum keeps those names in one place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AppAction {
+    /// Opens another window (Ctrl+N, `newWindow` in app.js).
+    NewWindow,
+    /// Brings the window whose id is the `u32` target to the front
+    /// (`focusWindow`).
+    FocusWindow,
+    /// Closes every window, which ends the application.
+    Quit,
+}
+
+impl AppAction {
+    /// The name the application registers the action under.
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            AppAction::NewWindow => "new-window",
+            AppAction::FocusWindow => "focus-window",
+            AppAction::Quit => "quit",
+        }
+    }
+
+    /// The name widgets, menus and accelerators use: `app.` and the name.
+    pub(crate) fn detailed_name(self) -> String {
+        format!("app.{}", self.name())
+    }
+}
+
 /// How this process was started.
 #[derive(Debug)]
 enum Launch {
@@ -45,7 +74,7 @@ fn focus_window(app: &gtk::Application, id: u32) {
         return;
     }
     if let Some(window) = active_window(app) {
-        window.notify("That window is no longer open.");
+        window.show_message("That window is no longer open.");
     }
 }
 
@@ -176,14 +205,14 @@ impl Application {
 
     /// Adds `app.new-window`, `app.focus-window` and `app.quit`.
     fn install_actions(&self) {
-        let new_window = gio::ActionEntry::builder("new-window")
+        let new_window = gio::ActionEntry::builder(AppAction::NewWindow.name())
             .activate(|app: &Self, _, _| {
                 if let Some(state) = app.imp().state.get() {
                     state.new_window(app.upcast_ref());
                 }
             })
             .build();
-        let focus_window = gio::ActionEntry::builder("focus-window")
+        let focus_window = gio::ActionEntry::builder(AppAction::FocusWindow.name())
             .parameter_type(Some(glib::VariantTy::UINT32))
             .activate(|app: &Self, _, target| {
                 if let Some(id) = target.and_then(glib::Variant::get::<u32>) {
@@ -191,7 +220,7 @@ impl Application {
                 }
             })
             .build();
-        let quit = gio::ActionEntry::builder("quit")
+        let quit = gio::ActionEntry::builder(AppAction::Quit.name())
             .activate(|app: &Self, _, _| close_every_window(app.upcast_ref()))
             .build();
         self.add_action_entries([new_window, focus_window, quit]);
@@ -211,10 +240,17 @@ impl Application {
 
     /// `--new-window` asks the running instance (or this one, when it is
     /// the first) for another window; the launch then goes on as usual.
+    /// The request needs the application registered on the session bus
+    /// first, so it reaches the running instance.
     fn handle_new_window_option(&self, options: &glib::VariantDict) {
-        if options.contains(NEW_WINDOW_OPTION) && self.register(None::<&gio::Cancellable>).is_ok() {
-            self.activate_action("new-window", None);
+        if !options.contains(NEW_WINDOW_OPTION) {
+            return;
         }
+        if let Err(error) = self.register(None::<&gio::Cancellable>) {
+            eprintln!("OpenXplorer: could not open a new window: {error}");
+            return;
+        }
+        self.activate_action(AppAction::NewWindow.name(), None);
     }
 
     /// Opens the window `request` describes, saves it once its first

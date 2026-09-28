@@ -138,15 +138,13 @@ impl BrowserWindow {
 
     /// Shows another tab.
     pub(super) fn switch_tab(&self, id: TabId) {
-        let can_switch = {
-            let session = self.imp().session.borrow();
-            !session.is_active(id) && session.tab(id).is_some()
-        };
+        let can_switch = self.imp().session.borrow().can_activate(id);
         if !can_switch {
             return;
         }
+        // The tab in front keeps its selection and scroll position first.
         self.save_tab_view();
-        self.imp().session.borrow_mut().active = Some(id);
+        self.imp().session.borrow_mut().activate(id);
         self.show_tab(id);
     }
 
@@ -154,7 +152,7 @@ impl BrowserWindow {
     /// screen, and lists a tab that was opened in the background.
     fn show_tab(&self, id: TabId) {
         self.reset_typeahead();
-        self.chrome().show_message("");
+        self.chrome().hide_message();
         let Some(view) = self.saved_tab_view(id) else {
             return;
         };
@@ -186,7 +184,7 @@ impl BrowserWindow {
             store: tab.store.clone(),
             selected: tab.selected.clone(),
             scroll: tab.scroll,
-            needs_listing: !tab.loaded && !tab.loading,
+            needs_listing: tab.listing_state.needs_listing(),
         })
     }
 
@@ -203,7 +201,7 @@ impl BrowserWindow {
             self.render_tabs();
             return;
         }
-        let next = self.imp().session.borrow().active;
+        let next = self.imp().session.borrow().active_id();
         match next {
             Some(next) => self.show_tab(next),
             None => self.close(),
@@ -224,7 +222,7 @@ impl BrowserWindow {
     pub(super) fn refresh(&self) {
         self.context().reload_settings();
         self.save_selection();
-        let active = self.imp().session.borrow().active;
+        let active = self.imp().session.borrow().active_id();
         if let Some(id) = active {
             self.load_tab(id, LoadMode::Reload);
         }

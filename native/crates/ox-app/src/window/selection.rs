@@ -16,6 +16,7 @@ use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts};
 use super::status_bar::StatusSubject;
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 impl BrowserWindow {
@@ -42,9 +43,9 @@ impl BrowserWindow {
         self.update_status();
         self.update_details_pane();
         let selected = self.content().model.summary().count;
-        self.set_action_enabled("open", selected == 1);
+        self.set_action_enabled(WindowAction::Open, selected == 1);
         // Copy path copies one item, or the folder when none is selected.
-        self.set_action_enabled("copy-path", selected <= 1);
+        self.set_action_enabled(WindowAction::CopyPath, selected <= 1);
     }
 
     /// Runs `change`, which swaps, reloads or clears the folder model,
@@ -85,7 +86,7 @@ impl BrowserWindow {
         let Some(folder_uri) = self.current_uri() else {
             return;
         };
-        let active = self.imp().session.borrow().active;
+        let active = self.imp().session.borrow().active_id();
         let store = active.and_then(|id| self.tab_store(id));
         let model = &self.content().model;
         let folder_item_count = store.map_or(0, |store| model.listed_count(&store));

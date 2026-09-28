@@ -14,8 +14,8 @@
 //! tab on a middle-click. GTK's own Left and Right focus movement already
 //! walks between crumbs.
 
-use gtk::gdk;
 use gtk::prelude::*;
+use gtk::{gdk, glib};
 use ox_core::location::Crumb;
 
 use crate::icons::{self, ArtKind, Glyph};
@@ -23,6 +23,7 @@ use crate::icons::{self, ArtKind, Glyph};
 use super::appearance::ArtStyle;
 use super::gestures;
 use super::widget_tree::remove_children;
+use super::window_action::WindowAction;
 
 /// The location icon: 16 pixels (ui-spec.md §4.2; the web app's was 17).
 const ICON_SIZE: i32 = 16;
@@ -132,18 +133,17 @@ impl AddressBar {
     fn edit_on_blank_click(&self) {
         let click = gtk::GestureClick::new();
         click.set_button(gdk::BUTTON_PRIMARY);
-        let stack = self.stack.downgrade();
-        click.connect_released(move |gesture, _, _, _| {
-            let Some(stack) = stack.upgrade() else {
-                return;
-            };
-            if stack.visible_child_name().as_deref() != Some(AddressMode::Crumbs.name()) {
-                return;
+        click.connect_released(glib::clone!(
+            #[weak(rename_to = stack)]
+            self.stack,
+            move |gesture, _, _, _| {
+                if stack.visible_child_name().as_deref() != Some(AddressMode::Crumbs.name()) {
+                    return;
+                }
+                WindowAction::Location.activate_from(&stack, None);
+                gesture.set_state(gtk::EventSequenceState::Claimed);
             }
-            // The action exists on every browser window.
-            let _ = stack.activate_action("win.location", None);
-            gesture.set_state(gtk::EventSequenceState::Claimed);
-        });
+        ));
         self.crumb_scroll.add_controller(click);
     }
 
@@ -255,7 +255,7 @@ fn edit_button() -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::glyph(Glyph::Down, 12))
         .tooltip_text("Edit location (Ctrl+L)")
-        .action_name("win.location")
+        .action_name(WindowAction::Location.detailed_name())
         .valign(gtk::Align::Center)
         .css_classes(["address-chevron"])
         .build();
@@ -279,7 +279,7 @@ fn crumb_button(crumb: &CrumbButton) -> gtk::Button {
     let button = gtk::Button::builder()
         .label(&crumb.crumb.label)
         .tooltip_text(&crumb.address)
-        .action_name("win.go-to")
+        .action_name(WindowAction::GoTo.detailed_name())
         .action_target(&uri.to_variant())
         .css_classes(["crumb"])
         .build();

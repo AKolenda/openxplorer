@@ -31,8 +31,10 @@ mod environment;
 mod gestures;
 mod input;
 mod landing;
+mod listing_state;
 mod loading;
 mod loading_line;
+mod location_kind;
 mod location_view;
 mod menu_popover;
 mod navigation;
@@ -49,6 +51,7 @@ mod title_bar;
 mod toast;
 mod unported;
 mod widget_tree;
+mod window_action;
 
 #[cfg(test)]
 mod tests;
@@ -68,6 +71,7 @@ use sidebar::Sidebar;
 
 pub(crate) use actions::install_accelerators;
 pub(crate) use content::FolderView;
+pub(crate) use location_kind::is_local_or_smb_location;
 
 /// Handlers this window registered on objects that outlive it.
 #[derive(Debug, Default)]
@@ -182,10 +186,6 @@ glib::wrapper! {
 impl BrowserWindow {
     /// Creates an empty window of `app` sharing `context`. Add a tab with
     /// [`Self::add_tab`] before presenting it.
-    ///
-    /// # Panics
-    ///
-    /// Never: a new window has none of its parts yet.
     pub fn new(app: &gtk::Application, context: &AppContext) -> Self {
         let window: Self = glib::Object::builder()
             .property("application", app)
@@ -200,13 +200,20 @@ impl BrowserWindow {
         let content = Content::new(appearance);
         let details_pane = DetailsPane::new(appearance);
         let sidebar = Sidebar::new();
-        let parts_are_new = imp.context.set(context.clone()).is_ok()
-            && imp.chrome.set(chrome).is_ok()
-            && imp.content.set(content).is_ok()
-            && imp.details_pane.set(details_pane).is_ok()
-            && imp.sidebar.set(sidebar).is_ok()
-            && imp.volume_monitor.set(gio::VolumeMonitor::get()).is_ok();
-        assert!(parts_are_new, "a new window has none of its parts yet");
+        imp.context
+            .set(context.clone())
+            .expect("a new window has no context yet");
+        imp.chrome.set(chrome).expect("a new window has no chrome yet");
+        imp.content
+            .set(content)
+            .expect("a new window has no folder pane yet");
+        imp.details_pane
+            .set(details_pane)
+            .expect("a new window has no details pane yet");
+        imp.sidebar.set(sidebar).expect("a new window has no sidebar yet");
+        imp.volume_monitor
+            .set(gio::VolumeMonitor::get())
+            .expect("a new window has no volume monitor yet");
         window.lay_out_workspace();
         window.install_actions();
         window.install_input();
@@ -309,7 +316,7 @@ impl BrowserWindow {
 
     /// Number of tabs in this window.
     pub fn tab_count(&self) -> usize {
-        self.imp().session.borrow().tabs.len()
+        self.imp().session.borrow().tabs().len()
     }
 
     /// The items of tab `id`, unfiltered and unsorted, while it is open.
@@ -328,7 +335,7 @@ impl BrowserWindow {
     /// page counts as listed).
     pub fn is_listed(&self) -> bool {
         let session = self.imp().session.borrow();
-        session.active().is_some_and(|tab| tab.loaded && !tab.loading)
+        session.active().is_some_and(|tab| tab.listing_state.is_listed())
     }
 
     /// Whether the active tab is still receiving directory entries.
@@ -337,7 +344,7 @@ impl BrowserWindow {
             .session
             .borrow()
             .active()
-            .is_some_and(|tab| tab.loading)
+            .is_some_and(|tab| tab.listing_state.is_listing())
     }
 
     /// The active listing's failure, if one occurred, for tests.
@@ -348,8 +355,9 @@ impl BrowserWindow {
         Some(error.to_string())
     }
 
-    /// Shows a recoverable startup or integration message in the window.
-    pub fn notify(&self, message: &str) {
+    /// Shows a recoverable startup or integration message in the window's
+    /// toast.
+    pub fn show_message(&self, message: &str) {
         self.chrome().show_message(message);
     }
 

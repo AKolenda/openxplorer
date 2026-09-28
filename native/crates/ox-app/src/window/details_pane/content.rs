@@ -14,6 +14,7 @@ use ox_core::location::{parent_location, LocationContext};
 use crate::folder_view::item::FileItem;
 use crate::icons::ArtKind;
 use crate::locations::Page;
+use crate::window::location_kind::is_smb_location;
 
 /// The note for SMB folders.
 const NETWORK_NOTE: &str =
@@ -181,12 +182,8 @@ fn size_text(entry: &Entry) -> String {
     }
 }
 
-fn is_network(uri: &str) -> bool {
-    uri.starts_with("smb:")
-}
-
 fn note_for(uri: &str) -> &'static str {
-    if is_network(uri) {
+    if is_smb_location(uri) {
         NETWORK_NOTE
     } else {
         LOCAL_NOTE
@@ -195,7 +192,7 @@ fn note_for(uri: &str) -> &'static str {
 
 /// Where a folder's items are stored, as the Storage row says.
 fn storage_of(uri: &str) -> &'static str {
-    if is_network(uri) {
+    if is_smb_location(uri) {
         "Network share"
     } else {
         "This computer"

@@ -17,6 +17,7 @@ use crate::icons::{self, Glyph};
 
 use super::content::FolderView;
 use super::unported;
+use super::window_action::WindowAction;
 
 /// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
 /// were 15).
@@ -203,7 +204,7 @@ fn view_button(glyph: Glyph, tooltip: &str, view: FolderView) -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::glyph(glyph, BUTTON_GLYPH))
         .tooltip_text(tooltip)
-        .action_name("win.view")
+        .action_name(WindowAction::View.detailed_name())
         .action_target(&view.key().to_variant())
         .valign(gtk::Align::Center)
         .build();
@@ -216,8 +217,8 @@ fn view_button(glyph: Glyph, tooltip: &str, view: FolderView) -> gtk::Button {
 fn check_updates_button() -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::glyph(Glyph::Refresh, BUTTON_GLYPH))
-        .tooltip_text(unported::tooltip("win.check-updates", "Check for updates"))
-        .action_name("win.check-updates")
+        .tooltip_text(unported::tooltip(WindowAction::CheckUpdates, "Check for updates"))
+        .action_name(WindowAction::CheckUpdates.detailed_name())
         .valign(gtk::Align::Center)
         .build();
     button.update_property(&[gtk::accessible::Property::Label("Check for updates")]);

@@ -320,7 +320,9 @@ impl BrowserWindow {
     }
 
     fn restart_typeahead_timer(&self) {
-        let timeout = Duration::from_millis(typeahead::TIMEOUT_MS.unsigned_abs());
+        let timeout_ms =
+            u64::try_from(typeahead::TIMEOUT_MS).expect("the type-to-select timeout is positive");
+        let timeout = Duration::from_millis(timeout_ms);
         let timer = glib::timeout_add_local_once(
             timeout,
             glib::clone!(
@@ -367,7 +369,7 @@ impl BrowserWindow {
                 };
                 window.reset_typeahead();
                 let action = gestures::open_action(gesture.current_event_state());
-                let _ = WidgetExt::activate_action(&window, action, Some(&uri.to_variant()));
+                action.activate_from(&window, Some(&uri.to_variant()));
             }
         ))
     }

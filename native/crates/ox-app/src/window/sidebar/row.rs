@@ -11,6 +11,7 @@ use gtk::prelude::*;
 
 use crate::icons::{self, Glyph};
 use crate::window::appearance::ArtStyle;
+use crate::window::window_action::WindowAction;
 
 use super::entries::{RowIcon, RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
 
@@ -108,10 +109,10 @@ pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges, style: ArtS
         gtk::accessible::Property::Description(&entry.tooltip),
     ]);
     let (action, target) = match &entry.target {
-        RowTarget::Location(uri) => ("win.go-to", uri),
-        RowTarget::MountVolume(id) => ("win.mount-volume", id),
+        RowTarget::Location(uri) => (WindowAction::GoTo, uri),
+        RowTarget::MountVolume(id) => (WindowAction::MountVolume, id),
     };
-    row.set_action_name(Some(action));
+    row.set_action_name(Some(&action.detailed_name()));
     row.set_action_target_value(Some(&target.to_variant()));
     row
 }

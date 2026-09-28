@@ -154,7 +154,13 @@ impl BrowserWindow {
         }
         let change: Change = Box::new(move |settings| {
             let request = PinRequest::new(uri, label);
-            settings.pin_many(&[request], None, None).map(|_| ())
+            // Not dropped on a row, so the pin goes at the end, and no
+            // sidebar order to save with it.
+            let drop_target: Option<&str> = None;
+            let shown_order: Option<&[String]> = None;
+            settings
+                .pin_many(&[request], drop_target, shown_order)
+                .map(|_pins| ())
         });
         self.context().change_settings(
             change,

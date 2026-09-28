@@ -8,8 +8,8 @@
 //! devices with a capacity bar, unmounted volumes that connect on click),
 //! then the saved network locations with their state.
 //!
-//! Cards activate `win.go-to` or `win.mount-volume`; a middle-click opens a
-//! folder in a background tab.
+//! Cards run [`WindowAction::GoTo`] or [`WindowAction::MountVolume`]; a
+//! middle-click opens a folder in a background tab.
 
 use gtk::gio;
 use gtk::glib;
@@ -25,14 +25,14 @@ use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
 use super::appearance::ArtStyle;
 use super::card_grid::{card_grid, DRIVE_GRID, QUICK_GRID};
+use super::location_kind::is_smb_location;
 use super::widget_tree::remove_children;
+use super::window_action::WindowAction;
 use super::{gestures, network_page, unported};
 
-/// The action of the "Map network location" heading button.
-const MAP_NETWORK_ACTION: &str = "win.map-network-location";
-
-/// Colour of the server glyph on saved-share cards (`im.style.color`).
-const SHARE_GLYPH_COLOR: &str = "#4b96c0";
+/// The class of the server glyph on saved-share cards, which the
+/// stylesheet colours as app.js does (`im.style.color='#4b96c0'`).
+const SHARE_GLYPH_CLASS: &str = "share-glyph";
 
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
@@ -102,7 +102,7 @@ pub(super) fn location_card(css_class: &str, uri: &str, content: &gtk::Box) -> g
     let card = gtk::Button::builder()
         .child(content)
         .css_classes([css_class])
-        .action_name("win.go-to")
+        .action_name(WindowAction::GoTo.detailed_name())
         .action_target(&uri.to_variant())
         .build();
     gestures::open_folder_on_middle_click(&card, uri);
@@ -110,7 +110,7 @@ pub(super) fn location_card(css_class: &str, uri: &str, content: &gtk::Box) -> g
 }
 
 /// A card's name above `subtitle`.
-fn texts_with(name: &str, subtitle: &gtk::Label) -> gtk::Box {
+fn card_texts_with(name: &str, subtitle: &gtk::Label) -> gtk::Box {
     let texts = gtk::Box::new(gtk::Orientation::Vertical, 4);
     texts.set_hexpand(true);
     texts.set_valign(gtk::Align::Center);
@@ -121,12 +121,12 @@ fn texts_with(name: &str, subtitle: &gtk::Label) -> gtk::Box {
 }
 
 /// A card's name above a subtitle that ends in "…" when it is too long.
-pub(super) fn texts(name: &str, subtitle: &str) -> gtk::Box {
-    texts_with(name, &label(subtitle, "card-sub"))
+pub(super) fn card_texts(name: &str, subtitle: &str) -> gtk::Box {
+    card_texts_with(name, &label(subtitle, "card-sub"))
 }
 
 fn quick_card(place: &Place, style: ArtStyle) -> gtk::Button {
-    let network = place.uri.starts_with("smb:");
+    let network = is_smb_location(&place.uri);
     let (art, subtitle) = if network {
         (ArtKind::NetworkFolder, "Network folder")
     } else {
@@ -141,7 +141,7 @@ fn quick_card(place: &Place, style: ArtStyle) -> gtk::Button {
         .xalign(0.0)
         .css_classes(["card-sub"])
         .build();
-    content.append(&texts_with(&place.label, &whole_subtitle));
+    content.append(&card_texts_with(&place.label, &whole_subtitle));
     location_card("quick-card", &place.uri, &content)
 }
 
@@ -156,19 +156,19 @@ fn quick_access(body: &gtk::Box, places: &Places, style: ArtStyle) {
 
 /// Adds "N free of M" and a bar under a drive card's texts once GIO has
 /// measured the file system. Never blocks: the card is drawn first.
-fn show_capacity(card_texts: &gtk::Box, uri: &str) {
+fn show_capacity(texts: &gtk::Box, uri: &str) {
     let file = gio::File::for_uri(uri);
-    let card_texts = card_texts.downgrade();
+    let texts = texts.downgrade();
     glib::spawn_future_local(async move {
         let Some(capacity) = measure_capacity(&file).await else {
             return;
         };
         // A card replaced while GIO measured shows nothing.
-        let Some(card_texts) = card_texts.upgrade() else {
+        let Some(texts) = texts.upgrade() else {
             return;
         };
-        card_texts.append(&capacity_bar(capacity));
-        card_texts.append(&label(&capacity.text(), "card-sub"));
+        texts.append(&capacity_bar(capacity));
+        texts.append(&label(&capacity.text(), "card-sub"));
     });
 }
 
@@ -207,19 +207,19 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
         (VolumeState::Mounted { uri, .. }, VolumeKind::Drive) => locations.display_location(uri),
         (VolumeState::Mountable { .. }, _) => "Click to connect".to_owned(),
     };
-    let card_texts = texts(&row.label, &subtitle);
+    let texts = card_texts(&row.label, &subtitle);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
     content.append(&icons::glyph(glyph, DRIVE_CARD_GLYPH));
-    content.append(&card_texts);
+    content.append(&texts);
     match &row.state {
         VolumeState::Mounted { uri, .. } => {
-            show_capacity(&card_texts, uri);
+            show_capacity(&texts, uri);
             location_card("drive-card", uri, &content)
         }
         VolumeState::Mountable { id } => gtk::Button::builder()
             .child(&content)
             .css_classes(["drive-card"])
-            .action_name("win.mount-volume")
+            .action_name(WindowAction::MountVolume.detailed_name())
             .action_target(&id.to_variant())
             .build(),
     }
@@ -248,16 +248,15 @@ fn devices_and_drives(body: &gtk::Box, places: &Places, locations: &LocationCont
 
 fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::Button {
     let bookmark = &share.bookmark;
-    let glyph_color = gtk::gdk::RGBA::parse(SHARE_GLYPH_COLOR).expect("a valid CSS colour literal");
-    let card_texts = texts(&bookmark.label, &locations.display_location(&bookmark.uri));
-    card_texts.append(&share_state(share));
+    let address = locations.display_location(&bookmark.uri);
+    let texts = card_texts(&bookmark.label, &address);
+    texts.append(&share_state(share));
+    // Its colour is the stylesheet's (`.share-glyph`), as app.js colours it.
+    let glyph = icons::glyph(Glyph::Server, DRIVE_CARD_GLYPH);
+    glyph.add_css_class(SHARE_GLYPH_CLASS);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
-    content.append(&icons::colored_glyph(
-        Glyph::Server,
-        DRIVE_CARD_GLYPH,
-        glyph_color,
-    ));
-    content.append(&card_texts);
+    content.append(&glyph);
+    content.append(&texts);
     location_card("drive-card", &bookmark.uri, &content)
 }
 
@@ -267,10 +266,12 @@ fn share_state(share: &SavedShare) -> gtk::Box {
     let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     dot.add_css_class("status-dot");
     dot.set_valign(gtk::Align::Center);
+    if !share.connected {
+        dot.add_css_class("offline");
+    }
     let state_text = if share.connected {
         "Mounted in this session"
     } else {
-        dot.add_css_class("offline");
         "Connect on open"
     };
     let state = gtk::Box::new(gtk::Orientation::Horizontal, 5);
@@ -285,8 +286,11 @@ fn share_state(share: &SavedShare) -> gtk::Box {
 fn map_network_button() -> gtk::Button {
     gtk::Button::builder()
         .label("Map network location")
-        .action_name(MAP_NETWORK_ACTION)
-        .tooltip_text(unported::tooltip(MAP_NETWORK_ACTION, "Map network location"))
+        .action_name(WindowAction::MapNetworkLocation.detailed_name())
+        .tooltip_text(unported::tooltip(
+            WindowAction::MapNetworkLocation,
+            "Map network location",
+        ))
         .hexpand(true)
         .halign(gtk::Align::End)
         .build()

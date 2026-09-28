@@ -12,21 +12,27 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib, graphene};
 
 use super::widget_tree::children;
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// How far into a row, and from the view's corner without one, a menu
 /// opened from the keyboard points.
 const KEYBOARD_MENU_INSET: i32 = 40;
 
+/// Adds an item to `menu` that runs `action`.
+fn append_item(menu: &gio::Menu, label: &str, action: WindowAction) {
+    menu.append(Some(label), Some(&action.detailed_name()));
+}
+
 /// The right-click and keyboard context menu of one view.
 fn context_menu_model() -> gio::Menu {
     let menu = gio::Menu::new();
-    menu.append(Some("Open"), Some("win.open"));
-    menu.append(Some("Refresh"), Some("win.refresh"));
+    append_item(&menu, "Open", WindowAction::Open);
+    append_item(&menu, "Refresh", WindowAction::Refresh);
     let selection = gio::Menu::new();
-    selection.append(Some("Select all"), Some("win.select-all"));
-    selection.append(Some("Select none"), Some("win.select-none"));
-    selection.append(Some("Invert selection"), Some("win.invert-selection"));
+    append_item(&selection, "Select all", WindowAction::SelectAll);
+    append_item(&selection, "Select none", WindowAction::SelectNone);
+    append_item(&selection, "Invert selection", WindowAction::InvertSelection);
     menu.append_section(None, &selection);
     menu
 }
@@ -124,7 +130,7 @@ fn context_menu_of(view: &gtk::Widget) -> Option<gtk::PopoverMenu> {
 /// entries keep their own text menus on those keys.
 fn context_menu_shortcut() -> gtk::ShortcutController {
     let trigger = gtk::ShortcutTrigger::parse_string("Menu|<Shift>F10");
-    let action = gtk::NamedAction::new("win.context-menu");
+    let action = gtk::NamedAction::new(&WindowAction::ContextMenu.detailed_name());
     let shortcuts = gtk::ShortcutController::new();
     shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
     shortcuts

@@ -16,6 +16,7 @@ use crate::theme::Appearance;
 
 use super::appearance::ArtStyle;
 use super::button_style::ButtonStyle;
+use super::window_action::WindowAction;
 
 pub(super) use content::{pane_content, PaneFacts};
 use content::{PaneAction, PaneContent, Preview, Property};
@@ -41,6 +42,10 @@ const PROPERTY_NAME_WIDTH: i32 = 73;
 const PROPERTY_ROW_GAP: i32 = 15;
 /// Pixels between a property's name and its value.
 const PROPERTY_COLUMN_GAP: i32 = 8;
+/// The Properties column of the names.
+const NAME_COLUMN: i32 = 0;
+/// The Properties column of the values.
+const VALUE_COLUMN: i32 = 1;
 
 /// The pane's widgets.
 #[derive(Debug)]
@@ -76,11 +81,11 @@ impl DetailsPane {
         inner.append(&name);
         let kind = pane_label("dtype");
         inner.append(&kind);
-        let open = pane_button("Open", Glyph::Share, "win.open");
+        let open = pane_button("Open", Glyph::Share, WindowAction::Open);
         inner.append(&open);
-        let pin_item = pane_button("Pin to Quick access", Glyph::Pin, "win.pin-selected");
+        let pin_item = pane_button("Pin to Quick access", Glyph::Pin, WindowAction::PinSelected);
         inner.append(&pin_item);
-        let pin_folder = pane_button("Pin to Quick access", Glyph::Pin, "win.pin-folder");
+        let pin_folder = pane_button("Pin to Quick access", Glyph::Pin, WindowAction::PinFolder);
         inner.append(&pin_folder);
         inner.append(&section_title("Properties"));
         let properties = gtk::Grid::builder()
@@ -138,25 +143,44 @@ impl DetailsPane {
         }
         for (row, property) in (0..).zip(properties) {
             self.properties
-                .attach(&property_name(property.name), 0, row, 1, 1);
+                .attach(&property_name(property.name), NAME_COLUMN, row, 1, 1);
             self.properties
-                .attach(&property_value(&property.value), 1, row, 1, 1);
+                .attach(&property_value(&property.value), VALUE_COLUMN, row, 1, 1);
         }
     }
 
-    /// The property rows shown, for tests.
+    /// The property rows shown, top to bottom, for tests.
     #[cfg(test)]
-    pub fn shown_properties(&self) -> Vec<(String, String)> {
-        let text = |column: i32, row: i32| {
-            self.properties
-                .child_at(column, row)
-                .and_downcast::<gtk::Label>()
-                .map(|label| label.text().to_string())
-        };
-        (0..)
-            .map_while(|row| Some((text(0, row)?, text(1, row)?)))
-            .collect()
+    pub fn shown_properties(&self) -> Vec<ShownProperty> {
+        let mut shown = Vec::new();
+        for row in 0.. {
+            let name = self.property_text(NAME_COLUMN, row);
+            let value = self.property_text(VALUE_COLUMN, row);
+            let (Some(name), Some(value)) = (name, value) else {
+                break;
+            };
+            shown.push(ShownProperty { name, value });
+        }
+        shown
     }
+
+    /// The text in `column` of Properties row `row`, for tests.
+    #[cfg(test)]
+    fn property_text(&self, column: i32, row: i32) -> Option<String> {
+        let label = self.properties.child_at(column, row);
+        let label = label.and_downcast::<gtk::Label>()?;
+        Some(label.text().to_string())
+    }
+}
+
+/// A Properties row as the pane shows it, for tests.
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShownProperty {
+    /// The name on the left, such as "Items".
+    pub name: String,
+    /// The value on the right.
+    pub value: String,
 }
 
 /// A wrapping label. Its natural width is a few words, so a long name or
@@ -197,14 +221,14 @@ fn property_value(value: &str) -> gtk::Label {
 }
 
 /// A full-width pane button.
-fn pane_button(label: &str, glyph: Glyph, action: &str) -> gtk::Button {
+fn pane_button(label: &str, glyph: Glyph, action: WindowAction) -> gtk::Button {
     let child = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     child.set_halign(gtk::Align::Center);
     child.append(&icons::glyph(glyph, SMALL_GLYPH));
     child.append(&gtk::Label::new(Some(label)));
     gtk::Button::builder()
         .child(&child)
-        .action_name(action)
+        .action_name(action.detailed_name())
         .css_classes(["dbutton", ButtonStyle::Bordered.css_class()])
         .build()
 }
@@ -251,7 +275,7 @@ fn header() -> gtk::Box {
     let close = gtk::Button::builder()
         .child(&icons::glyph(Glyph::Close, 12))
         .tooltip_text("Close details pane")
-        .action_name("win.details-pane")
+        .action_name(WindowAction::DetailsPane.detailed_name())
         .css_classes(["x"])
         .build();
     header.append(&title);

@@ -20,7 +20,7 @@ use crate::snapshot::SnapshotRequest;
 use crate::theme::contrast::ContrastSetting;
 use crate::theme::system::SystemScheme;
 use crate::theme::{Skin, ThemePreference};
-use crate::window::BrowserWindow;
+use crate::window::{is_local_or_smb_location, BrowserWindow};
 
 /// What lives as long as the application: the shared state and the
 /// watches on the desktop's colour scheme and contrast.
@@ -44,7 +44,7 @@ impl AppState {
 
     /// The application state around an installed `skin`.
     fn with_skin(app: &gtk::Application, skin: Rc<Skin>, settings: Settings) -> Self {
-        let preferences = settings.data().preferences.clone();
+        let preferences = &settings.data().preferences;
         skin.set_preference(ThemePreference::parse(&preferences.theme));
         skin.set_text_size(preferences.text_size);
         let system_scheme = follow_system_scheme(&skin);
@@ -71,12 +71,14 @@ impl AppState {
         let home = file_uri(&glib::home_dir());
         let start = start.unwrap_or(home.as_str());
         if let Err(error) = window.add_tab(start) {
-            window.notify(error.message());
-            // The home folder always resolves; a window never opens empty.
-            let _ = window.add_tab(&home);
+            window.show_message(error.message());
+            // Fall back to the home folder, so the window never opens empty.
+            if let Err(error) = window.add_tab(&home) {
+                window.show_message(error.message());
+            }
         }
         if let Some(warning) = self.context.settings_warning() {
-            window.notify(&warning);
+            window.show_message(&warning);
         }
         window
     }
@@ -123,7 +125,7 @@ impl AppState {
     /// folder, else at home (app.js `newWindow`).
     pub(super) fn new_window(&self, app: &gtk::Application) {
         let current = active_window(app).and_then(|window| window.current_uri());
-        let start = current.filter(|uri| uri.starts_with("file:") || uri.starts_with("smb:"));
+        let start = current.filter(|uri| is_local_or_smb_location(uri));
         self.open_window(app, start.as_deref());
     }
 }

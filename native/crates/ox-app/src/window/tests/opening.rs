@@ -95,10 +95,10 @@ fn command_line_locations_open_in_the_current_tab_then_in_new_tabs() {
     });
     test.wait_for_listing("the new tab");
     let session = test.window.imp().session.borrow();
-    let uris: Vec<&str> = session.tabs.iter().map(Tab::uri).collect();
+    let uris: Vec<&str> = session.tabs().iter().map(Tab::uri).collect();
     assert_eq!(uris, [fixture.uri_of("Documents"), fixture.uri()]);
     assert!(
-        session.tabs[0].history.can_go_back(),
+        session.tabs()[0].history.can_go_back(),
         "the first location keeps the tab's history"
     );
     assert_eq!(test.context.recorded_launches(), [fixture.uri_of("Notes 2.txt")]);

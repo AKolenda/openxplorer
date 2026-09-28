@@ -11,6 +11,7 @@
 use gtk::gio;
 use gtk::prelude::*;
 
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// The `native/ROADMAP.md` milestone that brings a command.
@@ -47,56 +48,55 @@ impl Milestone {
 /// A disabled command and the milestone that brings it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct UnportedCommand {
-    /// The window action's name, without `win.`.
-    pub action: &'static str,
+    /// The disabled window action.
+    pub action: WindowAction,
     /// When it arrives.
     pub milestone: Milestone,
 }
 
-const fn command(action: &'static str, milestone: Milestone) -> UnportedCommand {
+const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand {
     UnportedCommand { action, milestone }
 }
 
 /// Every command that is shown but disabled.
 pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 20] = [
-    command("new-folder", Milestone::FileOperations),
-    command("new-text-document", Milestone::FileOperations),
-    command("new-file", Milestone::FileOperations),
-    command("new-markdown-document", Milestone::FileOperations),
-    command("new-csv-file", Milestone::FileOperations),
-    command("new-json-file", Milestone::FileOperations),
-    command("new-html-document", Milestone::FileOperations),
-    command("new-from-template", Milestone::FileOperations),
-    command("cut", Milestone::FileOperations),
-    command("copy", Milestone::FileOperations),
-    command("paste", Milestone::FileOperations),
-    command("rename", Milestone::FileOperations),
-    command("trash", Milestone::FileOperations),
-    command("map-network-location", Milestone::NetworkAndDevices),
-    command("discover-servers", Milestone::NetworkAndDevices),
-    command("cache-folder", Milestone::SearchAndMetadata),
-    command("settings", Milestone::PreferencesAndSessions),
-    command("license", Milestone::PreferencesAndSessions),
-    command("default-file-explorer", Milestone::DesktopIntegration),
-    command("check-updates", Milestone::Distribution),
+    command(WindowAction::NewFolder, Milestone::FileOperations),
+    command(WindowAction::NewTextDocument, Milestone::FileOperations),
+    command(WindowAction::NewFile, Milestone::FileOperations),
+    command(WindowAction::NewMarkdownDocument, Milestone::FileOperations),
+    command(WindowAction::NewCsvFile, Milestone::FileOperations),
+    command(WindowAction::NewJsonFile, Milestone::FileOperations),
+    command(WindowAction::NewHtmlDocument, Milestone::FileOperations),
+    command(WindowAction::NewFromTemplate, Milestone::FileOperations),
+    command(WindowAction::Cut, Milestone::FileOperations),
+    command(WindowAction::Copy, Milestone::FileOperations),
+    command(WindowAction::Paste, Milestone::FileOperations),
+    command(WindowAction::Rename, Milestone::FileOperations),
+    command(WindowAction::Trash, Milestone::FileOperations),
+    command(WindowAction::MapNetworkLocation, Milestone::NetworkAndDevices),
+    command(WindowAction::DiscoverServers, Milestone::NetworkAndDevices),
+    command(WindowAction::CacheFolder, Milestone::SearchAndMetadata),
+    command(WindowAction::Settings, Milestone::PreferencesAndSessions),
+    command(WindowAction::License, Milestone::PreferencesAndSessions),
+    command(WindowAction::DefaultFileExplorer, Milestone::DesktopIntegration),
+    command(WindowAction::CheckUpdates, Milestone::Distribution),
 ];
 
-/// The milestone that brings the command `action` (with or without its
-/// `win.` prefix), or `None` for a command that works.
-fn milestone_of(action: &str) -> Option<Milestone> {
-    let name = action.strip_prefix("win.").unwrap_or(action);
-    let unported = UNPORTED_COMMANDS.iter().find(|command| command.action == name);
+/// The milestone that brings the command `action`, or `None` for a
+/// command that works.
+fn milestone_of(action: WindowAction) -> Option<Milestone> {
+    let unported = UNPORTED_COMMANDS.iter().find(|command| command.action == action);
     unported.map(|command| command.milestone)
 }
 
 /// Whether `action` is a command that is shown but disabled.
-pub(super) fn is_unported(action: &str) -> bool {
+pub(super) fn is_unported(action: WindowAction) -> bool {
     milestone_of(action).is_some()
 }
 
 /// The tooltip of a disabled command's control: its usual tooltip, then
 /// the milestone that enables it. Other commands keep `tooltip` as it is.
-pub(super) fn tooltip(action: &str, tooltip: &str) -> String {
+pub(super) fn tooltip(action: WindowAction, tooltip: &str) -> String {
     match milestone_of(action) {
         Some(milestone) => format!(
             "{tooltip}\nNot in the native preview yet: arrives with {}.",
@@ -110,7 +110,7 @@ impl BrowserWindow {
     /// Adds every unported command as a disabled window action.
     pub(super) fn install_unported_actions(&self) {
         for command in UNPORTED_COMMANDS {
-            let action = gio::SimpleAction::new(command.action, None);
+            let action = gio::SimpleAction::new(command.action.name(), None);
             action.set_enabled(false);
             self.add_action(&action);
         }
@@ -124,13 +124,13 @@ mod tests {
     #[test]
     fn a_disabled_command_names_the_milestone_that_brings_it() {
         assert_eq!(
-            tooltip("win.cut", "Cut (Ctrl+X)"),
+            tooltip(WindowAction::Cut, "Cut (Ctrl+X)"),
             "Cut (Ctrl+X)\nNot in the native preview yet: arrives with file operations."
         );
     }
 
     #[test]
     fn a_working_command_keeps_its_tooltip() {
-        assert_eq!(tooltip("win.copy-path", "Copy path"), "Copy path");
+        assert_eq!(tooltip(WindowAction::CopyPath, "Copy path"), "Copy path");
     }
 }

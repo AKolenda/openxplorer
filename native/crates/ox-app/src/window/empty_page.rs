@@ -9,6 +9,7 @@ use gtk::prelude::*;
 use crate::icons::{self, Glyph};
 
 use super::button_style::ButtonStyle;
+use super::window_action::WindowAction;
 
 /// The folder or network glyph above the title.
 const STATE_GLYPH: i32 = 44;
@@ -67,7 +68,7 @@ impl EmptyPage {
         message.set_selectable(true);
         let retry = gtk::Button::builder()
             .label("Try again")
-            .action_name("win.refresh")
+            .action_name(WindowAction::Refresh.detailed_name())
             .halign(gtk::Align::Center)
             .css_classes([ButtonStyle::Bordered.css_class()])
             .visible(false)
@@ -121,6 +122,8 @@ impl EmptyPage {
     #[cfg(test)]
     pub fn offers_try_again(&self) -> bool {
         let retry = &self.retry;
-        retry.is_visible() && retry.action_name().as_deref() == Some("win.refresh")
+        let refresh = WindowAction::Refresh.detailed_name();
+        let runs_refresh = retry.action_name().as_deref() == Some(refresh.as_str());
+        retry.is_visible() && runs_refresh
     }
 }

@@ -202,7 +202,7 @@ fn the_folder_watch_survives_a_reload() {
 fn a_change_seen_while_listing_lists_the_folder_once_more() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let id = test.window.imp().session.borrow().active.expect("one tab");
+    let id = test.active_tab().expect("one tab");
     test.window.refresh();
     fixture.write("late change.txt");
     test.window.folder_changed(id);
@@ -212,7 +212,7 @@ fn a_change_seen_while_listing_lists_the_folder_once_more() {
         .session
         .borrow()
         .tab(id)
-        .is_some_and(|tab| tab.reload_pending);
+        .is_some_and(|tab| tab.listing_state.has_pending_reload());
     assert!(pending, "a change during a listing waits for it to finish");
     wait_until("the second listing", || {
         test.names().contains(&"late change.txt".to_owned()) && !test.window.is_loading()

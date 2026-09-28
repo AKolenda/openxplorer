@@ -5,8 +5,8 @@
 //! `style.css`: the rows of [`entries::sidebar_entries`], separated by
 //! list-row headers so keyboard and screen-reader users never land on an
 //! empty separator row, and the "Map network location" button pinned below
-//! the list (`.sidebar-bottom`). Rows activate `win.go-to` or
-//! `win.mount-volume`; a middle-click opens a place in a tab.
+//! the list (`.sidebar-bottom`). Rows run [`WindowAction::GoTo`] or
+//! [`WindowAction::MountVolume`]; a middle-click opens a place in a tab.
 //!
 //! [`Sidebar`] is a `GtkBox` subclass that keeps the entries its rows show,
 //! so the list's header function and middle-click handler read them
@@ -23,13 +23,11 @@ use ox_core::location::same_location;
 use crate::icons::{self, Glyph};
 
 use super::appearance::ArtStyle;
+use super::window_action::WindowAction;
 use super::{gestures, unported};
 
 pub(super) use entries::sidebar_entries;
 use entries::{RowTarget, Section, SidebarEntry};
-
-/// The action of the "Map network location" button (`#connect-sidebar`).
-const MAP_NETWORK_ACTION: &str = "win.map-network-location";
 
 /// The narrowest the list gets, the Python app's narrowest sidebar.
 const NARROWEST_LIST: i32 = 140;
@@ -149,8 +147,7 @@ impl Sidebar {
                     return;
                 };
                 let action = gestures::open_action(gesture.current_event_state());
-                // The action exists on every browser window.
-                let _ = sidebar.activate_action(action, Some(&uri.to_variant()));
+                action.activate_from(&sidebar, Some(&uri.to_variant()));
             }
         ));
         list.add_controller(gesture);
@@ -219,15 +216,18 @@ fn section_separator() -> gtk::Separator {
     line
 }
 
-/// The "Map network location" button below the list.
+/// The "Map network location" button below the list (`#connect-sidebar`).
 fn map_network_button() -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 11);
     content.append(&icons::glyph(Glyph::Plus, 17));
     content.append(&gtk::Label::new(Some("Map network location")));
     let button = gtk::Button::builder()
         .child(&content)
-        .action_name(MAP_NETWORK_ACTION)
-        .tooltip_text(unported::tooltip(MAP_NETWORK_ACTION, "Map network location"))
+        .action_name(WindowAction::MapNetworkLocation.detailed_name())
+        .tooltip_text(unported::tooltip(
+            WindowAction::MapNetworkLocation,
+            "Map network location",
+        ))
         .build();
     let footer = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)

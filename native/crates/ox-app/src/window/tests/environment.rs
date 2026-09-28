@@ -8,14 +8,13 @@ use ox_core::settings::{PinRequest, Settings};
 
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow};
-use crate::window::details_pane::PANE_WIDTH;
+use crate::window::details_pane::{ShownProperty, PANE_WIDTH};
 use crate::window::landing;
 
-fn property<'a>(properties: &'a [(String, String)], key: &str) -> Option<&'a str> {
-    properties
-        .iter()
-        .find(|(name, _)| name == key)
-        .map(|(_, value)| value.as_str())
+/// The value of the property called `name` among `properties`.
+fn property<'a>(properties: &'a [ShownProperty], name: &str) -> Option<&'a str> {
+    let property = properties.iter().find(|property| property.name == name)?;
+    Some(property.value.as_str())
 }
 
 #[gtk::test]
@@ -174,8 +173,8 @@ fn the_details_pane_lists_a_file_and_the_folder() {
     test.activate("hidden", None);
     test.window.folder_model().select_only(1);
     let file = pane.shown_properties();
-    let keys: Vec<&str> = file.iter().map(|(key, _)| key.as_str()).collect();
-    assert_eq!(keys, ["Type", "Size", "Modified", "Location"]);
+    let names: Vec<&str> = file.iter().map(|property| property.name.as_str()).collect();
+    assert_eq!(names, ["Type", "Size", "Modified", "Location"]);
     let folder_address = fixture.root().display().to_string();
     assert_eq!(property(&file, "Location"), Some(folder_address.as_str()));
 }

@@ -20,6 +20,7 @@ use gtk::subclass::prelude::*;
 
 use super::details_pane::PANE_WIDTH;
 use super::tab_layout::TAB_WIDTH;
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// The details pane's width from 1190 pixels down (`.details{width:235px}`).
@@ -180,7 +181,7 @@ impl BrowserWindow {
     /// so the saved preference, as it is.
     pub(super) fn fit_details_pane(&self) {
         let switched_on = self
-            .action_state("details-pane")
+            .window_action_state(WindowAction::DetailsPane)
             .and_then(|state| state.get::<bool>())
             .unwrap_or(true);
         let room = self.window_width().has_room_for_details();

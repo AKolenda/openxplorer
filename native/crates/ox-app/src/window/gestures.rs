@@ -14,11 +14,14 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use super::session::Direction;
+use super::window_action::WindowAction;
 
 /// The mouse's Back side button (X11 button 8).
 const BACK_BUTTON: u32 = 8;
 /// The mouse's Forward side button (X11 button 9).
 const FORWARD_BUTTON: u32 = 9;
+/// What `GtkGestureSingle` takes as "listen to every button".
+const EVERY_BUTTON: u32 = 0;
 
 /// The smallest distance a wheel notch scrolls the crumbs or the tabs.
 const MIN_WHEEL_STEP: f64 = 40.0;
@@ -34,17 +37,18 @@ pub(super) fn history_direction(button: u32) -> Option<Direction> {
 
 /// The action that opens a folder from a middle-click, and whether the tab
 /// comes to the front: only with Shift.
-pub(super) fn open_action(modifiers: gdk::ModifierType) -> &'static str {
+pub(super) fn open_action(modifiers: gdk::ModifierType) -> WindowAction {
     if modifiers.contains(gdk::ModifierType::SHIFT_MASK) {
-        "win.open-tab"
+        WindowAction::OpenTab
     } else {
-        "win.open-tab-background"
+        WindowAction::OpenTabBackground
     }
 }
 
 /// A middle-button gesture that claims its press, so neither primary-paste
 /// nor the title bar's middle-click action sees it, and calls `on_click`
-/// with the release position and modifiers.
+/// with the gesture and the release position. The modifiers held are
+/// `gesture.current_event_state()`.
 pub(super) fn middle_click(on_click: impl Fn(&gtk::GestureClick, f64, f64) + 'static) -> gtk::GestureClick {
     let gesture = gtk::GestureClick::new();
     gesture.set_button(gdk::BUTTON_MIDDLE);
@@ -63,9 +67,7 @@ pub(super) fn open_folder_on_middle_click(widget: &impl IsA<gtk::Widget>, uri: &
             return;
         };
         let action = open_action(gesture.current_event_state());
-        // The action exists on every browser window; a widget outside one
-        // has nothing to open, so a failure is ignored.
-        let _ = widget.activate_action(action, Some(&uri.to_variant()));
+        action.activate_from(&widget, Some(&uri.to_variant()));
     });
     widget.add_controller(gesture);
 }
@@ -78,7 +80,9 @@ pub(super) fn connect_history_buttons(
     step_history: impl Fn(Direction) + 'static,
 ) {
     let gesture = gtk::GestureClick::new();
-    gesture.set_button(0);
+    // Every button reaches the handler, which denies all but the side
+    // buttons, so other clicks go on to the widgets below.
+    gesture.set_button(EVERY_BUTTON);
     gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
     gesture.connect_pressed(move |gesture, _, _, _| {
         let Some(direction) = history_direction(gesture.current_button()) else {
@@ -125,7 +129,10 @@ mod tests {
 
     #[test]
     fn shift_brings_a_middle_clicked_tab_to_the_front() {
-        assert_eq!(open_action(gdk::ModifierType::empty()), "win.open-tab-background");
-        assert_eq!(open_action(gdk::ModifierType::SHIFT_MASK), "win.open-tab");
+        assert_eq!(
+            open_action(gdk::ModifierType::empty()),
+            WindowAction::OpenTabBackground
+        );
+        assert_eq!(open_action(gdk::ModifierType::SHIFT_MASK), WindowAction::OpenTab);
     }
 }

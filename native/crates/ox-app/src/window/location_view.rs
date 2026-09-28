@@ -16,8 +16,10 @@ use crate::icons::{ArtKind, Glyph};
 use crate::locations::Page;
 
 use super::address_bar::{AddressIcon, CrumbButton};
+use super::location_kind::is_smb_location;
 use super::session::{Session, Tab};
-use super::tab_strip::{TabIcon, TabLabel};
+use super::tab_strip::{TabIcon, TabView};
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// Where the active tab is and where its history can go from there.
@@ -35,7 +37,7 @@ fn address_icon(uri: &str) -> AddressIcon {
     if let Some(page) = Page::from_uri(uri) {
         return AddressIcon::Glyph(page.glyph());
     }
-    if uri.starts_with("smb:") {
+    if is_smb_location(uri) {
         AddressIcon::Glyph(Glyph::Network)
     } else if is_device_location(uri) {
         AddressIcon::Glyph(Glyph::Phone)
@@ -53,7 +55,7 @@ fn tab_icon(uri: &str) -> TabIcon {
     }
     if is_device_location(uri) {
         TabIcon::Glyph(Glyph::Phone)
-    } else if uri.starts_with("smb:") {
+    } else if is_smb_location(uri) {
         TabIcon::Art(ArtKind::NetworkFolder)
     } else {
         TabIcon::Art(ArtKind::Folder)
@@ -62,13 +64,13 @@ fn tab_icon(uri: &str) -> TabIcon {
 
 /// How the strip shows `tab`: its title, its address (with "Network
 /// location" for SMB) and its icon.
-fn tab_label(tab: &Tab, session: &Session, locations: &LocationContext) -> TabLabel {
+fn tab_view(tab: &Tab, session: &Session, locations: &LocationContext) -> TabView {
     let uri = tab.uri();
     let mut tooltip = locations.display_location(uri);
-    if uri.starts_with("smb:") {
+    if is_smb_location(uri) {
         tooltip.push_str(" · Network location");
     }
-    TabLabel {
+    TabView {
         id: tab.id,
         title: locations.title_for(uri),
         tooltip,
@@ -98,10 +100,10 @@ impl BrowserWindow {
         let on_page = Page::from_uri(uri).is_some();
         let title = self.imp().locations.borrow().title_for(uri);
         self.set_title(Some(&format!("{title} — OpenXplorer")));
-        self.set_action_enabled("back", location.can_go_back);
-        self.set_action_enabled("forward", location.can_go_forward);
-        self.set_action_enabled("up", parent_location(uri).is_some());
-        self.set_action_enabled("pin-folder", !on_page);
+        self.set_action_enabled(WindowAction::Back, location.can_go_back);
+        self.set_action_enabled(WindowAction::Forward, location.can_go_forward);
+        self.set_action_enabled(WindowAction::Up, parent_location(uri).is_some());
+        self.set_action_enabled(WindowAction::PinFolder, !on_page);
         self.render_address(uri);
         let search = &self.chrome().search;
         search.set_folder_title(&title);
@@ -143,16 +145,16 @@ impl BrowserWindow {
 
     /// Redraws the tab strip.
     pub(super) fn render_tabs(&self) {
-        let labels: Vec<TabLabel> = {
+        let views: Vec<TabView> = {
             let session = self.imp().session.borrow();
             let locations = self.imp().locations.borrow();
-            let tab_labels = session
-                .tabs
+            let tab_views = session
+                .tabs()
                 .iter()
-                .map(|tab| tab_label(tab, &session, &locations));
-            tab_labels.collect()
+                .map(|tab| tab_view(tab, &session, &locations));
+            tab_views.collect()
         };
-        self.chrome().tabs.show(&labels, self.art_style());
+        self.chrome().tabs.show(&views, self.art_style());
     }
 
     /// Replaces the breadcrumbs with the editable address (Ctrl+L).

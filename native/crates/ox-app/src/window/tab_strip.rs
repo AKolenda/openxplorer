@@ -20,11 +20,14 @@ use super::gestures;
 use super::session::TabId;
 use super::tab_layout::TabLayout;
 use super::widget_tree::remove_children;
+use super::window_action::WindowAction;
 
 /// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
 const ICON_SIZE: i32 = 16;
 /// The gap between the icon and the title (ui-spec.md S06).
 const ICON_TO_TITLE: i32 = 10;
+/// The glyph of a tab's close button.
+const CLOSE_GLYPH: i32 = 12;
 
 /// A tab's icon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,9 +38,9 @@ pub(super) enum TabIcon {
     Art(ArtKind),
 }
 
-/// One tab as the strip shows it.
+/// What the strip shows of one tab.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct TabLabel {
+pub(super) struct TabView {
     /// The tab shown.
     pub id: TabId,
     /// The tab's title.
@@ -97,26 +100,26 @@ impl TabStrip {
         self.layout.set_tab_width(width);
     }
 
-    /// Replaces the tabs and scrolls the active one into view.
-    pub fn show(&self, labels: &[TabLabel], style: ArtStyle) {
+    /// Replaces the tabs with `tabs` and scrolls the active one into view.
+    pub fn show(&self, tabs: &[TabView], style: ArtStyle) {
         remove_children(&self.tabs);
         let mut active = None;
-        for label in labels {
-            let tab = tab(label, style);
-            self.tabs.append(&tab);
-            if label.active {
-                active = Some(tab);
+        for tab in tabs {
+            let widget = tab_widget(tab, style);
+            self.tabs.append(&widget);
+            if tab.active {
+                active = Some(widget);
             }
         }
-        if let Some(active) = active {
-            // After the new tabs are laid out, so their positions are known.
-            let viewport = self.viewport.downgrade();
-            glib::idle_add_local_once(move || {
-                if let Some(viewport) = viewport.upgrade() {
-                    viewport.scroll_to(&active, None);
-                }
-            });
-        }
+        let Some(active) = active else {
+            return;
+        };
+        // After the new tabs are laid out, so their positions are known.
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = viewport)]
+            self.viewport,
+            move || viewport.scroll_to(&active, None)
+        ));
     }
 
     /// The tab list, for tests.
@@ -133,36 +136,39 @@ fn tab_icon(icon: TabIcon, style: ArtStyle) -> gtk::Image {
     }
 }
 
-fn tab(label: &TabLabel, style: ArtStyle) -> gtk::Box {
-    let tab = gtk::Box::builder()
+/// The widget of `tab`: its icon, title and close button, one focusable
+/// target that shows the tab on a click or Enter and closes it on a
+/// middle-click.
+fn tab_widget(tab: &TabView, style: ArtStyle) -> gtk::Box {
+    let widget = gtk::Box::builder()
         .spacing(ICON_TO_TITLE)
         .focusable(true)
         .accessible_role(gtk::AccessibleRole::Tab)
-        .tooltip_text(&label.tooltip)
+        .tooltip_text(&tab.tooltip)
         .css_classes(["tab"])
         .build();
-    if label.active {
-        tab.add_css_class("active");
+    if tab.active {
+        widget.add_css_class("active");
     }
-    tab.update_property(&[gtk::accessible::Property::Label(&label.title)]);
-    tab.update_state(&[gtk::accessible::State::Selected(Some(label.active))]);
-    tab.append(&tab_icon(label.icon, style));
-    tab.append(&title(&label.title));
-    tab.append(&close_button(label));
-    let id = label.id.to_variant();
-    tab.add_controller(select_on_click(id.clone()));
-    tab.add_controller(select_on_enter(id.clone()));
-    tab.add_controller(gestures::middle_click(move |gesture, _, _| {
-        run_on(gesture.widget(), "win.close-tab-by-id", &id);
+    widget.update_property(&[gtk::accessible::Property::Label(&tab.title)]);
+    widget.update_state(&[gtk::accessible::State::Selected(Some(tab.active))]);
+    widget.append(&tab_icon(tab.icon, style));
+    widget.append(&title(&tab.title));
+    widget.append(&close_button(tab));
+    let id = tab.id.to_variant();
+    widget.add_controller(select_on_click(id.clone()));
+    widget.add_controller(select_on_enter(id.clone()));
+    widget.add_controller(gestures::middle_click(move |gesture, _, _| {
+        run_on(gesture.widget(), WindowAction::CloseTabById, &id);
     }));
-    tab
+    widget
 }
 
-/// Runs the window action `action` from `widget`, when there is one.
-fn run_on(widget: Option<gtk::Widget>, action: &str, target: &glib::Variant) {
+/// Runs the tab action `action` on the tab `id` from `widget`, when the
+/// gesture still has one.
+fn run_on(widget: Option<gtk::Widget>, action: WindowAction, id: &glib::Variant) {
     if let Some(widget) = widget {
-        // Every browser window has the tab actions.
-        let _ = widget.activate_action(action, Some(target));
+        action.activate_from(&widget, Some(id));
     }
 }
 
@@ -171,7 +177,7 @@ fn select_on_click(id: glib::Variant) -> gtk::GestureClick {
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_PRIMARY);
     click.connect_pressed(move |gesture, _, _, _| {
-        run_on(gesture.widget(), "win.select-tab", &id);
+        run_on(gesture.widget(), WindowAction::SelectTab, &id);
     });
     click
 }
@@ -184,7 +190,7 @@ fn select_on_enter(id: glib::Variant) -> gtk::EventControllerKey {
         if !activates {
             return glib::Propagation::Proceed;
         }
-        run_on(keys.widget(), "win.select-tab", &id);
+        run_on(keys.widget(), WindowAction::SelectTab, &id);
         glib::Propagation::Stop
     });
     keys
@@ -201,17 +207,17 @@ fn title(text: &str) -> gtk::Label {
 }
 
 /// The tab's close button, named `Close <title>` for screen readers.
-fn close_button(label: &TabLabel) -> gtk::Button {
+fn close_button(tab: &TabView) -> gtk::Button {
     let close = gtk::Button::builder()
-        .child(&icons::glyph(Glyph::Close, 12))
+        .child(&icons::glyph(Glyph::Close, CLOSE_GLYPH))
         .tooltip_text("Close tab")
-        .action_name("win.close-tab-by-id")
-        .action_target(&label.id.to_variant())
+        .action_name(WindowAction::CloseTabById.detailed_name())
+        .action_target(&tab.id.to_variant())
         .focus_on_click(false)
         .valign(gtk::Align::Center)
         .css_classes(["tab-close"])
         .build();
-    let name = format!("Close {}", label.title);
+    let name = format!("Close {}", tab.title);
     close.update_property(&[gtk::accessible::Property::Label(&name)]);
     close
 }

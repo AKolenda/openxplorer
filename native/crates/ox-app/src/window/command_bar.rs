@@ -11,14 +11,18 @@
 
 use gtk::prelude::*;
 
+use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
-use crate::folder_view::sorting::SortColumn;
+use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::icons::{self, Glyph};
-use crate::theme::Appearance;
+use crate::text_size::Step;
+use crate::theme::{Appearance, ThemePreference};
 
 use super::breakpoints::WindowWidth;
+use super::content::FolderView;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::unported;
+use super::window_action::WindowAction;
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -40,7 +44,7 @@ enum InCompactWindow {
 #[derive(Debug)]
 struct IconCommand {
     glyph: Glyph,
-    action: &'static str,
+    action: WindowAction,
     /// The accessible name (`aria-label`).
     name: &'static str,
     /// The tooltip (`title`).
@@ -52,42 +56,42 @@ struct IconCommand {
 const EDIT_COMMANDS: [IconCommand; 6] = [
     IconCommand {
         glyph: Glyph::Cut,
-        action: "win.cut",
+        action: WindowAction::Cut,
         name: "Cut",
         tooltip: "Cut (Ctrl+X)",
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
         glyph: Glyph::Copy,
-        action: "win.copy",
+        action: WindowAction::Copy,
         name: "Copy",
         tooltip: "Copy (Ctrl+C)",
         compact: InCompactWindow::Kept,
     },
     IconCommand {
         glyph: Glyph::Paste,
-        action: "win.paste",
+        action: WindowAction::Paste,
         name: "Paste",
         tooltip: "Paste files (Ctrl+V)",
         compact: InCompactWindow::Kept,
     },
     IconCommand {
         glyph: Glyph::Rename,
-        action: "win.rename",
+        action: WindowAction::Rename,
         name: "Rename",
         tooltip: "Rename (F2)",
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
         glyph: Glyph::Share,
-        action: "win.copy-path",
+        action: WindowAction::CopyPath,
         name: "Copy path",
         tooltip: "Copy path (does not change sharing permissions)",
         compact: InCompactWindow::Hidden,
     },
     IconCommand {
         glyph: Glyph::Trash,
-        action: "win.trash",
+        action: WindowAction::Trash,
         name: "Move to Trash",
         tooltip: "Move to Trash (Delete)",
         compact: InCompactWindow::Kept,
@@ -120,7 +124,7 @@ impl CommandBar {
         root.append(&theme);
         let settings = icon_button(&IconCommand {
             glyph: Glyph::Settings,
-            action: "win.settings",
+            action: WindowAction::Settings,
             name: "Settings",
             tooltip: "Settings (Ctrl+,)",
             compact: InCompactWindow::Kept,
@@ -172,7 +176,7 @@ impl CommandBar {
 /// buttons stay at the right.
 fn file_commands(hidden_when_compact: &mut Vec<gtk::Widget>) -> gtk::ScrolledWindow {
     let group = gtk::Box::builder().css_classes(["command-group"]).build();
-    group.append(&text_menu_button("New", Glyph::Plus, new_menu()));
+    group.append(&text_menu_button("New", Glyph::Plus, "new-command", new_menu()));
     group.append(&separator());
     for command in &EDIT_COMMANDS {
         let button = icon_button(command);
@@ -182,8 +186,18 @@ fn file_commands(hidden_when_compact: &mut Vec<gtk::Widget>) -> gtk::ScrolledWin
         group.append(&button);
     }
     group.append(&separator());
-    group.append(&text_menu_button("Sort", Glyph::Sort, sort_menu()));
-    group.append(&text_menu_button("View", Glyph::Grid, view_menu()));
+    group.append(&text_menu_button(
+        "Sort",
+        Glyph::Sort,
+        "sort-command",
+        sort_menu(),
+    ));
+    group.append(&text_menu_button(
+        "View",
+        Glyph::Grid,
+        "view-command",
+        view_menu(),
+    ));
     group.append(&more_button());
     gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::External)
@@ -205,7 +219,7 @@ fn icon_button(command: &IconCommand) -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::glyph(command.glyph, ICON_COMMAND_GLYPH))
         .tooltip_text(unported::tooltip(command.action, command.tooltip))
-        .action_name(command.action)
+        .action_name(command.action.detailed_name())
         .valign(gtk::Align::Center)
         .css_classes(["command"])
         .build();
@@ -225,83 +239,109 @@ fn text_menu_content(label: &str, glyph: Glyph) -> gtk::Box {
     content
 }
 
-fn text_menu_button(label: &str, glyph: Glyph, entries: Vec<MenuEntry>) -> gtk::MenuButton {
+/// A command with a label that opens `entries`; `css_class` names it for
+/// the stylesheet and the tests.
+fn text_menu_button(label: &str, glyph: Glyph, css_class: &str, entries: Vec<MenuEntry>) -> gtk::MenuButton {
     gtk::MenuButton::builder()
         .child(&text_menu_content(label, glyph))
         .popover(&MenuPopover::new(entries))
         .valign(gtk::Align::Center)
-        .css_classes([
-            "command",
-            "text-command",
-            &format!("{}-command", label.to_lowercase()),
-        ])
+        .css_classes(["command", "text-command", css_class])
         .build()
+}
+
+/// A menu line that runs `action`.
+fn item(label: &str, glyph: Glyph, action: WindowAction) -> MenuEntry {
+    MenuItem::new(label, glyph, action).into()
 }
 
 /// The New menu (`openNewMenu`).
 fn new_menu() -> Vec<MenuEntry> {
-    let item = |label: &str, glyph: Glyph, action: &str| MenuEntry::Item(MenuItem::new(label, glyph, action));
     vec![
-        MenuItem::new("Folder", Glyph::FolderLine, "win.new-folder")
+        MenuItem::new("Folder", Glyph::FolderLine, WindowAction::NewFolder)
             .with_shortcut("Ctrl+Shift+N")
             .into(),
-        item("Text document", Glyph::Documents, "win.new-text-document"),
-        item("File…", Glyph::Documents, "win.new-file"),
+        item("Text document", Glyph::Documents, WindowAction::NewTextDocument),
+        item("File…", Glyph::Documents, WindowAction::NewFile),
         MenuEntry::Divider,
-        item("Markdown document", Glyph::Documents, "win.new-markdown-document"),
-        item("CSV file", Glyph::List, "win.new-csv-file"),
-        item("JSON file", Glyph::Documents, "win.new-json-file"),
-        item("HTML document", Glyph::Documents, "win.new-html-document"),
+        item(
+            "Markdown document",
+            Glyph::Documents,
+            WindowAction::NewMarkdownDocument,
+        ),
+        item("CSV file", Glyph::List, WindowAction::NewCsvFile),
+        item("JSON file", Glyph::Documents, WindowAction::NewJsonFile),
+        item("HTML document", Glyph::Documents, WindowAction::NewHtmlDocument),
         MenuEntry::Divider,
-        item("From template…", Glyph::Copy, "win.new-from-template"),
+        item("From template…", Glyph::Copy, WindowAction::NewFromTemplate),
     ]
+}
+
+/// The Sort menu's item for `column`.
+fn column_item(column: SortColumn) -> MenuEntry {
+    MenuItem::choice(column.label(), Glyph::Sort, WindowAction::Sort, column.key()).into()
+}
+
+/// The Sort menu's item for `direction`.
+fn direction_item(label: &str, glyph: Glyph, direction: SortDirection) -> MenuEntry {
+    MenuItem::choice(label, glyph, WindowAction::Direction, direction.key()).into()
 }
 
 /// The Sort menu: the columns, then the direction. The direction has an
 /// item each, where app.js had one item that flips it.
 fn sort_menu() -> Vec<MenuEntry> {
-    let columns = SortColumn::ALL
-        .into_iter()
-        .map(|column| MenuItem::choice(column.label(), Glyph::Sort, "win.sort", column.key()).into());
-    let mut entries: Vec<MenuEntry> = columns.collect();
-    entries.push(MenuEntry::Divider);
-    entries.push(MenuItem::choice("Ascending", Glyph::Up, "win.direction", "ascending").into());
-    entries.push(MenuItem::choice("Descending", Glyph::Down, "win.direction", "descending").into());
+    let mut entries: Vec<MenuEntry> = SortColumn::ALL.into_iter().map(column_item).collect();
+    entries.extend([
+        MenuEntry::Divider,
+        direction_item("Ascending", Glyph::Up, SortDirection::Ascending),
+        direction_item("Descending", Glyph::Down, SortDirection::Descending),
+    ]);
     entries
+}
+
+/// The View menu's item for `view`.
+fn view_item(label: &str, glyph: Glyph, view: FolderView) -> MenuEntry {
+    MenuItem::choice(label, glyph, WindowAction::View, view.key()).into()
+}
+
+/// The View menu's item for a text-size `step`, showing its `shortcut`.
+fn text_size_item(label: &str, glyph: Glyph, step: Step, shortcut: &'static str) -> MenuEntry {
+    MenuItem::new(label, glyph, WindowAction::TextSize(step))
+        .with_shortcut(shortcut)
+        .into()
 }
 
 /// The View menu: the views (every icon size the native app has), the
 /// hidden-files and details-pane toggles, then the text size.
 fn view_menu() -> Vec<MenuEntry> {
-    let mut entries = vec![MenuItem::choice("Details", Glyph::List, "win.view", "details").into()];
+    let mut entries = vec![view_item("Details", Glyph::List, FolderView::Details)];
     let icon_sizes = IconSize::ALL
         .into_iter()
-        .map(|size| MenuItem::choice(size.label(), Glyph::Grid, "win.view", size.key()).into());
+        .map(|size| view_item(size.label(), Glyph::Grid, FolderView::Icons(size)));
     entries.extend(icon_sizes);
     entries.extend([
         MenuEntry::Divider,
-        MenuItem::toggle("Show hidden files", Glyph::Eye, "win.hidden").into(),
-        MenuItem::toggle("Details pane", Glyph::Details, "win.details-pane").into(),
+        MenuItem::toggle("Show hidden files", Glyph::Eye, WindowAction::Hidden).into(),
+        MenuItem::toggle("Details pane", Glyph::Details, WindowAction::DetailsPane).into(),
         MenuEntry::Divider,
-        MenuItem::new("Larger text", Glyph::Plus, "win.text-larger")
-            .with_shortcut("Ctrl++")
-            .into(),
-        MenuItem::new("Smaller text", Glyph::Minus, "win.text-smaller")
-            .with_shortcut("Ctrl+−")
-            .into(),
-        MenuItem::new("Reset text size", Glyph::Refresh, "win.text-reset")
-            .with_shortcut("Ctrl+0")
-            .into(),
+        text_size_item("Larger text", Glyph::Plus, Step::Increase, "Ctrl++"),
+        text_size_item("Smaller text", Glyph::Minus, Step::Decrease, "Ctrl+−"),
+        text_size_item("Reset text size", Glyph::Refresh, Step::Reset, "Ctrl+0"),
     ]);
     entries
+}
+
+/// The appearance menu's item for `preference`.
+fn theme_item(label: &str, glyph: Glyph, preference: ThemePreference) -> MenuEntry {
+    MenuItem::choice(label, glyph, WindowAction::Theme, preference.key()).into()
 }
 
 /// The three appearance choices (`appearanceMenu`).
 fn appearance_items() -> [MenuEntry; 3] {
     [
-        MenuItem::choice("Light appearance", Glyph::Sun, "win.theme", "light").into(),
-        MenuItem::choice("Dark appearance", Glyph::Moon, "win.theme", "dark").into(),
-        MenuItem::choice("Use system appearance", Glyph::Desktop, "win.theme", "system").into(),
+        theme_item("Light appearance", Glyph::Sun, ThemePreference::Light),
+        theme_item("Dark appearance", Glyph::Moon, ThemePreference::Dark),
+        theme_item("Use system appearance", Glyph::Desktop, ThemePreference::System),
     ]
 }
 
@@ -309,33 +349,40 @@ fn appearance_items() -> [MenuEntry; 3] {
 /// menu used to hold.
 fn more_menu() -> Vec<MenuEntry> {
     let mut entries = vec![
-        MenuItem::new("New window", Glyph::Plus, "app.new-window")
+        MenuItem::new("New window", Glyph::Plus, AppAction::NewWindow)
             .with_shortcut("Ctrl+N")
             .into(),
-        MenuItem::new("Settings", Glyph::Settings, "win.settings").into(),
-        MenuItem::new(
+        item("Settings", Glyph::Settings, WindowAction::Settings),
+        item(
             "Default file explorer…",
             Glyph::FolderLine,
-            "win.default-file-explorer",
-        )
-        .into(),
-        MenuItem::new("Cache this folder for search", Glyph::Search, "win.cache-folder").into(),
-        MenuItem::new("Map network location", Glyph::Network, "win.map-network-location").into(),
-        MenuItem::new("Pin current folder", Glyph::Pin, "win.pin-folder").into(),
+            WindowAction::DefaultFileExplorer,
+        ),
+        item(
+            "Cache this folder for search",
+            Glyph::Search,
+            WindowAction::CacheFolder,
+        ),
+        item(
+            "Map network location",
+            Glyph::Network,
+            WindowAction::MapNetworkLocation,
+        ),
+        item("Pin current folder", Glyph::Pin, WindowAction::PinFolder),
         MenuEntry::Divider,
     ];
     entries.extend(appearance_items());
-    entries.push(MenuItem::toggle("Show hidden files", Glyph::Eye, "win.hidden").into());
+    entries.push(MenuItem::toggle("Show hidden files", Glyph::Eye, WindowAction::Hidden).into());
     entries.extend([
         MenuEntry::Divider,
-        MenuItem::new("Select all", Glyph::List, "win.select-all")
+        MenuItem::new("Select all", Glyph::List, WindowAction::SelectAll)
             .with_shortcut("Ctrl+A")
             .into(),
-        MenuItem::new("Select none", Glyph::Cancel, "win.select-none").into(),
-        MenuItem::new("Invert selection", Glyph::Refresh, "win.invert-selection").into(),
+        item("Select none", Glyph::Cancel, WindowAction::SelectNone),
+        item("Invert selection", Glyph::Refresh, WindowAction::InvertSelection),
         MenuEntry::Divider,
-        MenuItem::new("License & source", Glyph::Documents, "win.license").into(),
-        MenuItem::new("About this build", Glyph::Info, "win.about").into(),
+        item("License & source", Glyph::Documents, WindowAction::License),
+        item("About this build", Glyph::Info, WindowAction::About),
     ]);
     entries
 }
@@ -376,7 +423,7 @@ fn details_toggle() -> gtk::ToggleButton {
     content.append(&gtk::Label::new(Some("Details")));
     gtk::ToggleButton::builder()
         .child(&content)
-        .action_name("win.details-pane")
+        .action_name(WindowAction::DetailsPane.detailed_name())
         .valign(gtk::Align::Center)
         .css_classes(["command", "text-command", "details-toggle"])
         .build()

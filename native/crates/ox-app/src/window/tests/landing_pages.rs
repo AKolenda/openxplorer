@@ -4,10 +4,11 @@
 //! Network page's banner, address field and notes, and Open address.
 
 use gtk::prelude::*;
+use ox_core::settings::{BookmarkAction, BookmarkKind, Settings};
 
 use super::geometry::{bounds, laid_out, Bounds};
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture};
+use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture};
 
 /// The labels `widget` shows, in order.
 fn texts_in(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
@@ -99,4 +100,33 @@ fn open_address_refuses_anything_but_an_smb_server() {
     let message = test.window.chrome().toast.text();
     assert_eq!(message.as_str(), "Enter an SMB server or share.");
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
+}
+
+/// The server glyph of the first saved-share card in `landing`.
+fn share_glyph(landing: &gtk::Box) -> Option<gtk::Image> {
+    descendants::<gtk::Image>(landing)
+        .into_iter()
+        .find(|image| image.has_css_class("share-glyph"))
+}
+
+/// app.js colours a saved share's server glyph `#4b96c0`; the stylesheet
+/// gives it that colour now, not code.
+#[gtk::test]
+fn a_saved_share_card_draws_its_server_glyph_in_the_share_blue() {
+    let test = laid_out(Page::ThisPc.uri());
+    let mut python_app = Settings::open(test.settings_directory());
+    python_app
+        .bookmark(
+            BookmarkAction::Add,
+            BookmarkKind::Share,
+            "smb://nas/media",
+            "Media",
+        )
+        .expect("the settings file takes a share");
+    test.activate("refresh", None);
+    let landing = &test.window.content().landing;
+    wait_until("the saved share's card", || share_glyph(landing).is_some());
+    wait_for_frames(&test.window, 2);
+    let glyph = share_glyph(landing).expect("the card is drawn");
+    assert_eq!(glyph.color().to_str(), "rgb(75,150,192)");
 }

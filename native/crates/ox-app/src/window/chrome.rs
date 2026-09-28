@@ -18,6 +18,7 @@ use super::status_bar::StatusBar;
 use super::tab_strip::TabStrip;
 use super::title_bar::title_bar;
 use super::toast::Toast;
+use super::window_action::WindowAction;
 
 /// The glyphs of the Back, Forward, Up and Refresh buttons.
 const NAVIGATION_GLYPH: i32 = 16;
@@ -31,7 +32,7 @@ struct NavigationButton {
     name: &'static str,
     /// The tooltip, with the keyboard shortcut (`title`).
     tooltip: &'static str,
-    action: &'static str,
+    action: WindowAction,
 }
 
 /// Back, Forward, Up and Refresh, in that order.
@@ -40,25 +41,25 @@ const NAVIGATION_BUTTONS: [NavigationButton; 4] = [
         glyph: Glyph::Back,
         name: "Back",
         tooltip: "Back (Alt+Left)",
-        action: "win.back",
+        action: WindowAction::Back,
     },
     NavigationButton {
         glyph: Glyph::Forward,
         name: "Forward",
         tooltip: "Forward (Alt+Right)",
-        action: "win.forward",
+        action: WindowAction::Forward,
     },
     NavigationButton {
         glyph: Glyph::Up,
         name: "Up",
         tooltip: "Up (Alt+Up)",
-        action: "win.up",
+        action: WindowAction::Up,
     },
     NavigationButton {
         glyph: Glyph::Refresh,
         name: "Refresh",
         tooltip: "Refresh (F5)",
-        action: "win.refresh",
+        action: WindowAction::Refresh,
     },
 ];
 
@@ -77,7 +78,8 @@ pub(super) struct Chrome {
     pub status: StatusBar,
     /// The message at the bottom of the window.
     pub toast: Toast,
-    /// The sidebar beside the folder and details panes.
+    /// The split between the sidebar and the folder and details panes
+    /// (`.sidebar-resizer`).
     pub workspace: gtk::Paned,
 }
 
@@ -93,7 +95,7 @@ impl Chrome {
         let workspace = workspace();
         let toast = Toast::new();
         let overlay = gtk::Overlay::builder().child(&workspace).vexpand(true).build();
-        overlay.add_overlay(toast.widget());
+        overlay.add_overlay(&toast);
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.append(&navigation_row(&address, &search));
         root.append(&commands.root);
@@ -111,10 +113,14 @@ impl Chrome {
         }
     }
 
-    /// Shows `message` in the toast (see [`Toast::show`]); an empty message
-    /// hides it.
+    /// Shows `message` in the toast (see [`Toast::show`]).
     pub fn show_message(&self, message: &str) {
         self.toast.show(message);
+    }
+
+    /// Hides the toast's message at once (see [`Toast::hide`]).
+    pub fn hide_message(&self) {
+        self.toast.hide();
     }
 }
 
@@ -135,7 +141,7 @@ fn navigation_button(command: &NavigationButton) -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::glyph(command.glyph, NAVIGATION_GLYPH))
         .tooltip_text(command.tooltip)
-        .action_name(command.action)
+        .action_name(command.action.detailed_name())
         .build();
     button.update_property(&[gtk::accessible::Property::Label(command.name)]);
     button

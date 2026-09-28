@@ -9,8 +9,9 @@
 use gtk::prelude::*;
 
 use super::geometry::{bounds, button_for, laid_out, Bounds};
+use super::support::{app_menu, menu_button_with_class};
+use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
-use crate::window::menu_popover::MenuPopover;
 
 /// parity: TAB-010
 #[gtk::test]
@@ -110,16 +111,10 @@ fn the_open_windows_menu_lists_every_window_then_new_window_and_quit() {
     let fixture = Fixture::standard();
     let first = laid_out(&fixture.uri());
     let second = first.open_beside(&fixture.uri_of("Documents"));
-    let button = descendants::<gtk::MenuButton>(&first.window)
-        .into_iter()
-        .find(|button| button.has_css_class("windows-button"))
-        .expect("the title bar has the open-windows button");
+    let button = menu_button_with_class(&first, "windows-button");
     button.popup();
     wait_for_frames(&first.window, 2);
-    let menu = button
-        .popover()
-        .and_downcast::<MenuPopover>()
-        .expect("an app menu");
+    let menu = app_menu(&button);
     let labels = menu.row_labels();
     let checked = menu.checked_labels();
     button.popdown();
@@ -142,14 +137,8 @@ fn the_open_windows_menu_lists_every_window_then_new_window_and_quit() {
 fn a_disabled_menu_item_names_the_milestone_that_brings_it() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    let new_button = descendants::<gtk::MenuButton>(&test.window)
-        .into_iter()
-        .find(|button| button.has_css_class("new-command"))
-        .expect("the command bar has New");
-    let menu = new_button
-        .popover()
-        .and_downcast::<MenuPopover>()
-        .expect("an app menu");
+    let new_button = menu_button_with_class(&test, "new-command");
+    let menu = app_menu(&new_button);
     let folder = menu.rows().into_iter().next().expect("New lists Folder first");
     let tooltip = folder.tooltip_text().unwrap_or_default();
     assert_eq!(
@@ -163,7 +152,7 @@ fn a_disabled_menu_item_names_the_milestone_that_brings_it() {
 /// line.
 #[gtk::test]
 fn a_new_window_on_a_landing_page_leaves_the_address_bar_alone() {
-    let test = laid_out("pc:");
+    let test = laid_out(Page::ThisPc.uri());
     let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
     let address = &test.window.chrome().address.root;
     let in_address = focus.is_some_and(|widget| widget.is_ancestor(address));

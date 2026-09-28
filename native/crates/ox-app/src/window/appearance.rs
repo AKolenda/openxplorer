@@ -17,6 +17,7 @@ use gtk::subclass::prelude::*;
 use crate::icons::{self, ArtKind};
 use crate::theme::{Appearance, SkinChange};
 
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// The appearance and scale factor colour art is drawn for.
@@ -91,6 +92,6 @@ impl BrowserWindow {
         self.chrome()
             .commands
             .show_appearance(appearance, &preference.tooltip(appearance));
-        self.set_action_state("theme", &preference.key().to_variant());
+        self.set_action_state(WindowAction::Theme, &preference.key().to_variant());
     }
 }

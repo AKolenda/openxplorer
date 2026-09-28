@@ -15,6 +15,7 @@ use ox_core::places::{NetworkKind, NetworkLocation, Place};
 use crate::icons::{ArtKind, Glyph};
 use crate::places::Places;
 use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
+use crate::window::location_kind::is_smb_location;
 
 /// A group of rows; a separator is drawn where the group changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,7 +90,7 @@ fn color(hex: &str) -> gdk::RGBA {
 
 fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
     let known = place.icon.and_then(Glyph::for_known_folder);
-    let shared = place.is_shared || place.uri.starts_with("smb:");
+    let shared = place.is_shared || is_smb_location(&place.uri);
     let icon = match known {
         Some(glyph) => RowIcon::Glyph(glyph, place.color.map(color)),
         None if shared => RowIcon::Art(ArtKind::NetworkFolder),

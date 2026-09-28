@@ -19,25 +19,20 @@ use crate::places::Places;
 
 use super::button_style::ButtonStyle;
 use super::card_grid::{card_grid, DRIVE_GRID};
-use super::landing::{location_card, section_title, texts, CARD_ICON_GAP};
+use super::landing::{card_texts, location_card, section_title, CARD_ICON_GAP};
+use super::location_kind::is_smb_location;
+use super::window_action::WindowAction;
 use super::{unported, BrowserWindow};
-
-/// Starts looking for advertised SMB servers (`discoverNetwork`).
-const DISCOVER_ACTION: &str = "win.discover-servers";
-/// Opens the connect dialog (`connectDialog`).
-const MAP_NETWORK_ACTION: &str = "win.map-network-location";
-/// Opens the server or share typed in the address field.
-const OPEN_ADDRESS_ACTION: &str = "win.open-server-address";
 
 /// The note under the discovered servers (`.discovery-note`).
 const DISCOVERY_NOTE: &str = "Discovery depends on devices advertising themselves and on local \
 firewall/network settings. It does not guarantee a list of every host.";
 
 /// A button for a command that may not be ported yet.
-fn command_button(label: &str, action: &str, style: ButtonStyle) -> gtk::Button {
+fn command_button(label: &str, action: WindowAction, style: ButtonStyle) -> gtk::Button {
     gtk::Button::builder()
         .label(label)
-        .action_name(action)
+        .action_name(action.detailed_name())
         .tooltip_text(unported::tooltip(action, label))
         .valign(gtk::Align::Center)
         .css_classes([style.css_class()])
@@ -69,9 +64,10 @@ fn banner() -> gtk::Box {
         .build();
     banner.append(&glyph);
     banner.append(&words);
+    // Starts looking for advertised SMB servers (`discoverNetwork`).
     banner.append(&command_button(
         "Discover servers",
-        DISCOVER_ACTION,
+        WindowAction::DiscoverServers,
         ButtonStyle::Accent,
     ));
     banner
@@ -99,7 +95,12 @@ fn server_address_field() -> gtk::Box {
     let map_content = gtk::Box::new(gtk::Orientation::Horizontal, 7);
     map_content.append(&icons::glyph(Glyph::Plus, 14));
     map_content.append(&gtk::Label::new(Some("Map location")));
-    let map = command_button("Map location", MAP_NETWORK_ACTION, ButtonStyle::Bordered);
+    // Opens the connect dialog (`connectDialog`).
+    let map = command_button(
+        "Map location",
+        WindowAction::MapNetworkLocation,
+        ButtonStyle::Bordered,
+    );
     map.set_child(Some(&map_content));
     let field = gtk::Box::builder()
         .spacing(9)
@@ -113,9 +114,8 @@ fn server_address_field() -> gtk::Box {
 
 /// Runs Open address for the text in `entry`.
 fn open_typed_address(entry: &gtk::Entry) {
-    let typed = entry.text();
-    // The action exists on every browser window.
-    let _ = entry.activate_action(OPEN_ADDRESS_ACTION, Some(&typed.to_variant()));
+    let typed = entry.text().to_variant();
+    WindowAction::OpenServerAddress.activate_from(entry, Some(&typed));
 }
 
 /// "Discovered servers" with their count, and the notice while there are
@@ -150,7 +150,7 @@ fn network_card(location: &NetworkLocation, locations: &LocationContext) -> gtk:
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
     content.append(&icons::glyph(Glyph::Network, 34));
     let address = locations.display_location(&location.uri);
-    content.append(&texts(&location.label, &address));
+    content.append(&card_texts(&location.label, &address));
     location_card("drive-card", &location.uri, &content)
 }
 
@@ -177,7 +177,7 @@ impl BrowserWindow {
     /// refuses anything else as the Network page's field does.
     pub(super) fn open_server_address(&self, typed: &str) {
         match location::normalise_location(typed, None, &glib::home_dir()) {
-            Ok(uri) if uri.starts_with("smb:") => self.navigate_or_report(&uri),
+            Ok(uri) if is_smb_location(&uri) => self.navigate_or_report(&uri),
             Ok(_) => self.chrome().show_message("Enter an SMB server or share."),
             Err(error) => self.chrome().show_message(error.message()),
         }

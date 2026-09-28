@@ -9,12 +9,12 @@ use crate::window::session::TabId;
 
 fn tab_ids(test: &TestWindow) -> Vec<TabId> {
     let session = test.window.imp().session.borrow();
-    session.tabs.iter().map(|tab| tab.id).collect()
+    session.tabs().iter().map(|tab| tab.id).collect()
 }
 
 fn is_listed(test: &TestWindow, id: TabId) -> bool {
     let session = test.window.imp().session.borrow();
-    session.tab(id).is_some_and(|tab| tab.loaded)
+    session.tab(id).is_some_and(|tab| tab.listing_state.is_listed())
 }
 
 fn open_three_tabs(fixture: &Fixture) -> TestWindow {
@@ -37,7 +37,7 @@ fn closing_the_active_tab_shows_the_tab_to_its_right() {
     test.activate_tab(middle);
     test.activate("close-tab", None);
     assert_eq!(test.window.tab_count(), 2);
-    assert_eq!(test.window.imp().session.borrow().active, Some(right));
+    assert_eq!(test.active_tab(), Some(right));
 }
 
 /// parity: TAB-005
@@ -49,12 +49,12 @@ fn ctrl_tab_cycles_through_the_tabs_and_wraps() {
         panic!("three tabs are open");
     };
     test.activate("next-tab", None);
-    assert_eq!(test.window.imp().session.borrow().active, Some(left));
+    assert_eq!(test.active_tab(), Some(left));
     test.activate("next-tab", None);
-    assert_eq!(test.window.imp().session.borrow().active, Some(middle));
+    assert_eq!(test.active_tab(), Some(middle));
     test.activate("previous-tab", None);
     test.activate("previous-tab", None);
-    assert_eq!(test.window.imp().session.borrow().active, Some(tab_ids(&test)[2]));
+    assert_eq!(test.active_tab(), Some(tab_ids(&test)[2]));
 }
 
 #[gtk::test]
@@ -188,20 +188,6 @@ fn tabs_are_announced_as_tabs_with_their_selected_state() {
             tab,
             gtk::AccessibleState::Selected
         ));
-    }
-}
-
-impl TestWindow {
-    /// Shows tab `id`, as clicking it does.
-    fn activate_tab(&self, id: TabId) {
-        WidgetExt::activate_action(&self.window, "win.select-tab", Some(&id.to_variant()))
-            .expect("the window has the action");
-    }
-
-    /// Closes tab `id`, as its close button does.
-    fn activate_tab_close(&self, id: TabId) {
-        WidgetExt::activate_action(&self.window, "win.close-tab-by-id", Some(&id.to_variant()))
-            .expect("the window has the action");
     }
 }
 

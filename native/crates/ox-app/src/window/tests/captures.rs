@@ -13,13 +13,12 @@
 use std::time::Duration;
 
 use gtk::prelude::*;
-use gtk::subclass::prelude::*;
 
+use super::support::{app_menu, menu_button_with_class};
 use crate::locations::Page;
 use crate::test_support::harness::{
     capture, capture_popover, descendants, wait_for, wait_until, Fixture, TestWindow, ThemeGuard,
 };
-use crate::window::menu_popover::MenuPopover;
 use crate::window::widget_tree::children;
 
 /// Longer than the skin's 83 ms colour transitions (ui-spec.md M01).
@@ -54,11 +53,10 @@ fn three_tabs_are_captured_light_and_dark() {
         .add_tab(&fixture.uri_of("Documents"))
         .expect("valid folder");
     test.wait_for_listing("the second tab");
-    let middle = test.window.imp().session.borrow().active.expect("a tab in front");
+    let middle = test.active_tab().expect("a tab in front");
     test.window.add_tab(Page::ThisPc.uri()).expect("This PC");
     test.wait_for_listing("This PC");
-    WidgetExt::activate_action(&test.window, "win.select-tab", Some(&middle.to_variant()))
-        .expect("the window has the action");
+    test.activate_tab(middle);
     test.wait_for_listing("the middle tab");
     test.activate("theme", Some("light"));
     capture(&test.window, "native-tabs-3-light.png");
@@ -85,14 +83,8 @@ fn the_menus_are_captured_light_and_dark() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let new_button = descendants::<gtk::MenuButton>(&test.window)
-        .into_iter()
-        .find(|button| button.has_css_class("new-command"))
-        .expect("the command bar has New");
-    let new_menu = new_button
-        .popover()
-        .and_downcast::<MenuPopover>()
-        .expect("an app menu");
+    let new_button = menu_button_with_class(&test, "new-command");
+    let new_menu = app_menu(&new_button);
     let view = test.window.content().view_widget();
     let context_menu = descendants::<gtk::PopoverMenu>(&view)
         .into_iter()
@@ -127,17 +119,13 @@ fn hover_and_pressed_states_are_captured_light_and_dark() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let folder_tab = test.window.imp().session.borrow().active.expect("a tab in front");
+    let folder_tab = test.active_tab().expect("a tab in front");
     test.window.add_tab(Page::ThisPc.uri()).expect("This PC");
     test.wait_for_listing("This PC");
-    WidgetExt::activate_action(&test.window, "win.select-tab", Some(&folder_tab.to_variant()))
-        .expect("the window has the action");
+    test.activate_tab(folder_tab);
     test.wait_for_listing("the folder tab");
     test.window.folder_model().select_only(1);
-    let sort = descendants::<gtk::MenuButton>(&test.window)
-        .into_iter()
-        .find(|button| button.has_css_class("sort-command"))
-        .expect("the command bar has Sort");
+    let sort = menu_button_with_class(&test, "sort-command");
     let sort_button = sort.first_child().expect("a menu button holds a button");
     sort_button.set_state_flags(gtk::StateFlags::ACTIVE, false);
     for theme in THEMES {

@@ -13,9 +13,11 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use crate::application::AppAction;
 use crate::icons::{self, Glyph};
 
 use super::unported;
+use super::window_action::WindowAction;
 
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
@@ -67,6 +69,46 @@ impl CheckMark {
     }
 }
 
+/// The action a menu item runs: the window's, or the application's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum MenuAction {
+    /// A window action (`win.*`).
+    Window(WindowAction),
+    /// An application action (`app.*`).
+    Application(AppAction),
+}
+
+impl From<WindowAction> for MenuAction {
+    fn from(action: WindowAction) -> Self {
+        MenuAction::Window(action)
+    }
+}
+
+impl From<AppAction> for MenuAction {
+    fn from(action: AppAction) -> Self {
+        MenuAction::Application(action)
+    }
+}
+
+impl MenuAction {
+    /// The name a row runs the action by, such as `win.sort`.
+    fn detailed_name(self) -> String {
+        match self {
+            MenuAction::Window(action) => action.detailed_name(),
+            MenuAction::Application(action) => action.detailed_name(),
+        }
+    }
+
+    /// The action's state as `widget`'s window sees it.
+    fn state(self, widget: &gtk::Widget) -> Option<glib::Variant> {
+        let window = widget.root().and_downcast::<gtk::ApplicationWindow>()?;
+        match self {
+            MenuAction::Window(action) => window.action_state(action.name()),
+            MenuAction::Application(action) => window.application()?.action_state(action.name()),
+        }
+    }
+}
+
 /// One menu item.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct MenuItem {
@@ -74,8 +116,8 @@ pub(super) struct MenuItem {
     pub label: String,
     /// The glyph before the label.
     pub glyph: Glyph,
-    /// The detailed action it runs, such as `win.sort`.
-    pub action: String,
+    /// The action it runs.
+    pub action: MenuAction,
     /// The action's parameter.
     pub target: Option<glib::Variant>,
     /// The keyboard shortcut shown at the right, such as `Ctrl+N`.
@@ -86,11 +128,11 @@ pub(super) struct MenuItem {
 
 impl MenuItem {
     /// An item that runs `action` without a parameter.
-    pub fn new(label: &str, glyph: Glyph, action: &str) -> Self {
+    pub fn new(label: &str, glyph: Glyph, action: impl Into<MenuAction>) -> Self {
         Self {
             label: label.to_owned(),
             glyph,
-            action: action.to_owned(),
+            action: action.into(),
             target: None,
             shortcut: None,
             check: ItemCheck::Plain,
@@ -98,7 +140,7 @@ impl MenuItem {
     }
 
     /// A choice of the string action `action`, checked while it is chosen.
-    pub fn choice(label: &str, glyph: Glyph, action: &str, value: &str) -> Self {
+    pub fn choice(label: &str, glyph: Glyph, action: WindowAction, value: &str) -> Self {
         Self {
             target: Some(value.to_variant()),
             check: ItemCheck::FollowsAction,
@@ -107,7 +149,7 @@ impl MenuItem {
     }
 
     /// An item for the boolean action `action`, checked while it is on.
-    pub fn toggle(label: &str, glyph: Glyph, action: &str) -> Self {
+    pub fn toggle(label: &str, glyph: Glyph, action: WindowAction) -> Self {
         Self {
             check: ItemCheck::FollowsAction,
             ..Self::new(label, glyph, action)
@@ -243,8 +285,9 @@ impl MenuPopover {
                 continue;
             };
             let row = item_row(item, self.check_mark(item));
-            if std::mem::take(&mut after_divider) {
+            if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
+                after_divider = false;
             }
             list.append(&row);
         }
@@ -256,7 +299,7 @@ impl MenuPopover {
             ItemCheck::Plain => CheckMark::NotCheckable,
             ItemCheck::Fixed(checked) => CheckMark::checked_if(*checked),
             ItemCheck::FollowsAction => {
-                let state = action_state(self.upcast_ref(), &item.action);
+                let state = item.action.state(self.upcast_ref());
                 let expected = item.target.clone().unwrap_or_else(|| true.to_variant());
                 CheckMark::checked_if(state.as_ref() == Some(&expected))
             }
@@ -289,18 +332,6 @@ impl MenuPopover {
     pub fn checked_labels(&self) -> Vec<String> {
         let checked = self.rows().into_iter().filter(|row| row.has_css_class("checked"));
         checked.filter_map(|row| row_label(&row)).collect()
-    }
-}
-
-/// The state of the `win.` or `app.` action `detailed_name` as seen from
-/// `widget`'s window.
-fn action_state(widget: &gtk::Widget, detailed_name: &str) -> Option<glib::Variant> {
-    let (group, name) = detailed_name.split_once('.')?;
-    let window = widget.root().and_downcast::<gtk::ApplicationWindow>()?;
-    match group {
-        "win" => window.action_state(name),
-        "app" => window.application()?.action_state(name),
-        _ => None,
     }
 }
 
@@ -340,13 +371,15 @@ fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
     let row = gtk::ListBoxRow::builder()
         .child(&item_content(item, check))
         .accessible_role(role)
-        .action_name(&item.action)
+        .action_name(item.action.detailed_name())
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
     row.set_action_target_value(item.target.as_ref());
     // A disabled item says which milestone brings it.
-    if unported::is_unported(&item.action) {
-        row.set_tooltip_text(Some(&unported::tooltip(&item.action, &item.label)));
+    if let MenuAction::Window(action) = item.action {
+        if unported::is_unported(action) {
+            row.set_tooltip_text(Some(&unported::tooltip(action, &item.label)));
+        }
     }
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);

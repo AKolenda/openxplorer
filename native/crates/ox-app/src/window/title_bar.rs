@@ -11,11 +11,13 @@
 use gtk::glib;
 use gtk::prelude::*;
 
+use crate::application::AppAction;
 use crate::icons::{self, Glyph};
 
 use super::caption_buttons::CaptionButtons;
 use super::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use super::tab_strip::TabStrip;
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 /// The title bar of `window` around `tabs`, to set as its title bar.
@@ -35,7 +37,7 @@ fn new_tab_button() -> gtk::Button {
     let button = gtk::Button::builder()
         .child(&icons::glyph(Glyph::Plus, 14))
         .tooltip_text("New tab (Ctrl+T)")
-        .action_name("win.new-tab")
+        .action_name(WindowAction::NewTab.detailed_name())
         .valign(gtk::Align::End)
         .css_classes(["newtab"])
         .build();
@@ -88,10 +90,10 @@ fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = browsers
         .map(|window| window_item(&window, &this_window))
         .collect();
-    let new_window = MenuItem::new("New window", Glyph::Plus, "app.new-window").with_shortcut("Ctrl+N");
+    let new_window = MenuItem::new("New window", Glyph::Plus, AppAction::NewWindow).with_shortcut("Ctrl+N");
     entries.push(MenuEntry::Divider);
     entries.push(new_window.into());
-    entries.push(MenuItem::new("Quit OpenXplorer", Glyph::Close, "app.quit").into());
+    entries.push(MenuItem::new("Quit OpenXplorer", Glyph::Close, AppAction::Quit).into());
     entries
 }
 
@@ -104,7 +106,7 @@ fn window_item(window: &BrowserWindow, this_window: &BrowserWindow) -> MenuEntry
     let item = MenuItem {
         target: Some(window.id().to_variant()),
         check: ItemCheck::Fixed(window == this_window),
-        ..MenuItem::new(&title, Glyph::Desktop, "app.focus-window")
+        ..MenuItem::new(&title, Glyph::Desktop, AppAction::FocusWindow)
     };
     item.into()
 }

@@ -28,6 +28,7 @@ use crate::locations::Page;
 
 use super::content::ContentPage;
 use super::empty_page::EmptyState;
+use super::listing_state::{ListingEnd, ListingState, ReloadTiming};
 use super::session::TabId;
 use super::BrowserWindow;
 
@@ -38,6 +39,15 @@ pub(super) enum LoadMode {
     Navigate,
     /// The same location again: keep the rows until the listing is done.
     Reload,
+}
+
+/// The start of a load: what is listed, and which load it is.
+#[derive(Debug)]
+struct LoadStart {
+    /// The location the tab shows.
+    uri: String,
+    /// Results of an older generation are ignored.
+    generation: u64,
 }
 
 /// One listing of one tab.
@@ -57,41 +67,42 @@ impl BrowserWindow {
         let is_active = self.imp().session.borrow().is_active(id);
         if is_active {
             self.reset_typeahead();
-            self.chrome().show_message("");
+            self.chrome().hide_message();
         }
-        let Some((uri, generation)) = self.begin_load(id) else {
+        let Some(start) = self.begin_load(id) else {
             return;
         };
-        if Page::from_uri(&uri).is_some() {
+        if Page::from_uri(&start.uri).is_some() {
             self.finish_page(id);
             return;
         }
-        self.keep_watching(id, &uri);
+        self.keep_watching(id, &start.uri);
         if mode == LoadMode::Navigate {
             self.clear_rows(id);
         }
         if is_active {
             self.update_content();
         }
-        let listing = self.start_listing(id, &uri, generation, mode);
+        let listing = self.start_listing(id, &start, mode);
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.listing = Some(listing);
         }
     }
 
-    /// Starts a load of tab `id`; its location and generation.
-    fn begin_load(&self, id: TabId) -> Option<(String, u64)> {
+    /// Starts a load of tab `id`, or `None` once the tab has closed.
+    fn begin_load(&self, id: TabId) -> Option<LoadStart> {
         let mut session = self.imp().session.borrow_mut();
         let tab = session.tab_mut(id)?;
         let generation = tab.begin_load();
-        Some((tab.uri().to_owned(), generation))
+        let uri = tab.uri().to_owned();
+        Some(LoadStart { uri, generation })
     }
 
-    /// A landing page needs no listing and no watch.
+    /// A landing page needs no listing and no watch: it is listed as soon
+    /// as it is shown.
     fn finish_page(&self, id: TabId) {
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
-            tab.loading = false;
-            tab.loaded = true;
+            tab.listing_state = ListingState::Listed;
             tab.watch = None;
         }
         if self.imp().session.borrow().is_active(id) {
@@ -134,13 +145,12 @@ impl BrowserWindow {
     /// The watched folder changed: list it again, or once more after the
     /// listing that is running now.
     pub(super) fn folder_changed(&self, id: TabId) {
-        let loading = {
+        let timing = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.tab_mut(id) else { return };
-            tab.reload_pending = tab.loading;
-            tab.loading
+            tab.listing_state.schedule_reload()
         };
-        if loading {
+        if timing == ReloadTiming::AfterRunningListing {
             return;
         }
         if self.imp().session.borrow().is_active(id) {
@@ -149,16 +159,16 @@ impl BrowserWindow {
         self.load_tab(id, LoadMode::Reload);
     }
 
-    fn start_listing(&self, id: TabId, uri: &str, generation: u64, mode: LoadMode) -> loader::Listing {
+    fn start_listing(&self, id: TabId, start: &LoadStart, mode: LoadMode) -> loader::Listing {
         let run = Rc::new(LoadRun {
             tab: id,
-            generation,
+            generation: start.generation,
             mode,
             held_rows: RefCell::default(),
         });
         let batch_run = Rc::clone(&run);
         loader::list_folder(
-            uri,
+            &start.uri,
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
@@ -203,29 +213,19 @@ impl BrowserWindow {
             }
             Err(error) => self.fail_load(id, run.mode, error),
         }
-        let Some(reload_again) = self.end_listing(id) else {
+        let end = self.imp().session.borrow_mut().end_listing(id);
+        if end == ListingEnd::TabClosed {
             return;
-        };
+        }
         if self.imp().session.borrow().is_active(id) {
             self.restore_selection(id);
             self.update_content();
             self.update_details_pane();
             self.focus_new_file_list();
         }
-        if reload_again {
+        if end == ListingEnd::ListAgain {
             self.folder_changed(id);
         }
-    }
-
-    /// Marks tab `id` listed. Returns whether its folder changed while the
-    /// listing ran, so it is listed once more, or `None` when the tab has
-    /// closed.
-    fn end_listing(&self, id: TabId) -> Option<bool> {
-        let mut session = self.imp().session.borrow_mut();
-        let tab = session.tab_mut(id)?;
-        tab.loading = false;
-        tab.loaded = true;
-        Some(std::mem::take(&mut tab.reload_pending))
     }
 
     /// Merges a completed reload into the rows, keeping unchanged items.
@@ -270,7 +270,7 @@ impl BrowserWindow {
             let file = tab.uri().to_owned();
             let folder = parent_location(&file).unwrap_or(home);
             tab.history.replace_current(&folder);
-            tab.loading = false;
+            tab.listing_state.stop();
             tab.watch = None;
             file
         };
@@ -289,7 +289,8 @@ impl BrowserWindow {
             let session = self.imp().session.borrow();
             let Some(tab) = session.active() else { return };
             let page = Page::from_uri(tab.uri());
-            (page, tab.loading, tab.error.as_ref().map(ToString::to_string))
+            let loading = tab.listing_state.is_listing();
+            (page, loading, tab.error.as_ref().map(ToString::to_string))
         };
         let content = self.content();
         content.set_loading(loading && page.is_none());
