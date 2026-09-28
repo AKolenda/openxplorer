@@ -85,11 +85,15 @@ fn point_caret(caret: &gtk::Image, direction: Option<SortDirection>) {
     }
 }
 
-/// The direction each title's arrow shows, in column order: `None` where
-/// no arrow is visible.
+/// The direction each shown title's arrow shows, in column order: `None`
+/// where no arrow is visible. A hidden column's title is left out.
 #[cfg(test)]
 pub(crate) fn shown_carets(view: &gtk::ColumnView) -> Vec<Option<SortDirection>> {
-    let carets = title_boxes(view).into_iter().filter_map(|title| {
+    let shown_titles = title_boxes(view).into_iter().filter(|title| {
+        let button = title.parent();
+        button.is_some_and(|button| button.is_visible())
+    });
+    let carets = shown_titles.filter_map(|title| {
         title
             .last_child()
             .filter(|child| child.has_css_class(CARET_CLASS))

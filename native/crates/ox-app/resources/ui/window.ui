@@ -155,7 +155,18 @@
                         <property name="end-child">
                           <object class="GtkBox">
                             <child>
-                              <object class="OxFolderPane" id="folder_pane"/>
+                              <!-- The search strip sits above the columns
+                                   (#search-info in index.html). -->
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="hexpand">true</property>
+                                <child>
+                                  <object class="OxSearchInfoStrip" id="search_strip"/>
+                                </child>
+                                <child>
+                                  <object class="OxFolderPane" id="folder_pane"/>
+                                </child>
+                              </object>
                             </child>
                             <child>
                               <object class="OxDetailsPane" id="details_pane"/>

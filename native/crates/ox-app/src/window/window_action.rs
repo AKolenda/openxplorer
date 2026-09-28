@@ -119,8 +119,12 @@ pub(crate) enum WindowAction {
     MapNetworkLocation,
     /// Looks for SMB servers that advertise themselves.
     DiscoverServers,
-    /// Adds the current folder to the search cache.
+    /// Caches the current folder for search, or stops caching it (a
+    /// check item).
     CacheFolder,
+    /// Opens the folder of the one selected search result, with the
+    /// result selected.
+    OpenFileLocation,
     /// Opens the Settings page (Ctrl+,), as a tab of its own.
     Settings,
     /// Shows the licence and where the source is.
@@ -189,6 +193,7 @@ impl WindowAction {
             WindowAction::MapNetworkLocation => "map-network-location",
             WindowAction::DiscoverServers => "discover-servers",
             WindowAction::CacheFolder => "cache-folder",
+            WindowAction::OpenFileLocation => "open-file-location",
             WindowAction::Settings => "settings",
             WindowAction::License => "license",
             WindowAction::DefaultFileExplorer => "default-file-explorer",

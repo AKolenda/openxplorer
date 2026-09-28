@@ -7,7 +7,8 @@
 //! address, activating an item, the skin, the history buttons) for as long
 //! as it lives. Handlers it registers on objects that outlive it, the skin
 //! every window shares, the application's signals and the volume monitor,
-//! are kept in [`ExternalHandlers`] and disconnected in `dispose`, so a
+//! and the search cache, are kept in [`ExternalHandlers`] and disconnected
+//! in `dispose`, so a
 //! closed window leaves nothing connected behind.
 
 use gtk::glib;
@@ -29,13 +30,17 @@ pub(super) struct ExternalHandlers {
     pub(super) layout: Option<glib::SignalHandlerId>,
     /// On the volume monitor's mount and volume signals.
     pub(super) volumes: Vec<glib::SignalHandlerId>,
+    /// On the shared search cache's status and contents signals.
+    pub(super) search_cache: Vec<glib::SignalHandlerId>,
 }
 
 impl BrowserWindow {
     /// Follows the window's own widgets.
     pub(super) fn connect_signals(&self) {
         self.follow_selection();
-        self.connect_filter();
+        self.connect_search();
+        let search_cache = self.follow_search_cache();
+        self.imp().handlers.borrow_mut().search_cache = search_cache;
         self.connect_address_entry();
         self.connect_view_activation();
         self.follow_skin();
@@ -47,18 +52,6 @@ impl BrowserWindow {
                 move |direction| window.go_history(direction)
             ),
         );
-    }
-
-    /// Filters the folder as the user types in the search box.
-    fn connect_filter(&self) {
-        self.search_box().connect_query_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |query| {
-                window.folder_pane().model().set_query(query);
-                window.update_content();
-            }
-        ));
     }
 
     /// Lets go of what the window registered on objects that outlive it:
@@ -73,6 +66,9 @@ impl BrowserWindow {
         }
         for handler in handlers.volumes {
             self.volume_monitor().disconnect(handler);
+        }
+        for handler in handlers.search_cache {
+            self.context().search_cache().disconnect(handler);
         }
         self.imp().typeahead.borrow_mut().stop_timer();
     }

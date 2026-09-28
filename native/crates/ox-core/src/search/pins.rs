@@ -12,7 +12,13 @@
 //! [`IndexService::pin_removed`] when a pin changes,
 //! [`IndexService::index_existing_pins`] once at start-up, and
 //! [`IndexService::set_pin_indexing`] when the "Index pinned folders
-//! automatically" switch changes.
+//! automatically" switch changes; [`SearchIndex::pin_indexing`] reads the
+//! switch back.
+//!
+//! The switch is kept in the cache (the `index_options` table), not in
+//! `settings.json`: both apps rewrite the settings file with only the keys
+//! they know, so the Python app would drop it, and the roots it governs
+//! are stored here too.
 //!
 //! Phones, cameras and server share lists cannot be indexed, so pinning
 //! them adds nothing, and neither does pinning a folder an enabled root
@@ -36,6 +42,9 @@ use crate::settings::Bookmark;
 /// folders were indexed automatically.
 const EXISTING_PINS_MIGRATION: &str = "index-existing-pins";
 
+/// The row of `index_options` that holds the switch.
+const PIN_INDEXING_OPTION: &str = "pin-indexing";
+
 /// The "Index pinned folders automatically" switch in the Search &
 /// indexing settings; on by default.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -45,6 +54,26 @@ pub enum PinIndexing {
     Automatic,
     /// Pinning does not change the search cache.
     Off,
+}
+
+impl PinIndexing {
+    /// The word `index_options` stores.
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::Off => "off",
+        }
+    }
+
+    /// The switch a stored word names; a word this version does not write
+    /// reads as the default, on.
+    fn from_stored(word: &str) -> Self {
+        if word == Self::Off.as_str() {
+            Self::Off
+        } else {
+            Self::Automatic
+        }
+    }
 }
 
 impl IndexService {
@@ -107,14 +136,15 @@ impl IndexService {
     }
 
     /// Follows a change of the "Index pinned folders automatically"
-    /// switch. Turning it on indexes every pinned folder that has no root;
-    /// turning it off removes the roots pinning added, while roots the
-    /// user chose stay.
+    /// switch and remembers it for [`SearchIndex::pin_indexing`]. Turning
+    /// it on indexes every pinned folder that has no root; turning it off
+    /// removes the roots pinning added, while roots the user chose stay.
     ///
     /// # Errors
     ///
     /// Database errors. Pins that cannot be indexed are skipped.
     pub fn set_pin_indexing(&self, pins: &[Bookmark], indexing: PinIndexing) -> Result<(), SearchError> {
+        self.index().store_pin_indexing(indexing)?;
         match indexing {
             PinIndexing::Automatic => {
                 self.index_every_pin(pins)?;
@@ -166,6 +196,36 @@ impl IndexService {
 }
 
 impl SearchIndex {
+    /// The "Index pinned folders automatically" switch as last set in any
+    /// process; on until the user turns it off.
+    ///
+    /// # Errors
+    ///
+    /// Database errors.
+    pub fn pin_indexing(&self) -> Result<PinIndexing, SearchError> {
+        let connection = self.connect()?;
+        let stored: Option<String> = connection
+            .query_row(
+                "SELECT value FROM index_options WHERE name=?1",
+                [PIN_INDEXING_OPTION],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let indexing = stored.as_deref().map(PinIndexing::from_stored);
+        Ok(indexing.unwrap_or_default())
+    }
+
+    /// Remembers the switch for [`SearchIndex::pin_indexing`].
+    fn store_pin_indexing(&self, indexing: PinIndexing) -> Result<(), SearchError> {
+        let connection = self.connect()?;
+        connection.execute(
+            "INSERT INTO index_options(name, value) VALUES(?1, ?2)
+             ON CONFLICT(name) DO UPDATE SET value=excluded.value",
+            (PIN_INDEXING_OPTION, indexing.as_str()),
+        )?;
+        Ok(())
+    }
+
     /// Adds `pin` as an enabled root marked as added by the pin, and
     /// returns its URI; `None` when the folder cannot be indexed, already
     /// has a root, or an enabled root already indexes it.
@@ -361,6 +421,24 @@ mod tests {
             let what = format!("{} in {}", case.pin, case.root);
             assert_eq!(added.is_some(), case.gets_own_root, "{what}");
         }
+    }
+
+    /// The switch is on in a new cache, and every handle on the cache,
+    /// such as another process's, reads the choice last stored.
+    ///
+    /// parity: SRCH-040
+    #[test]
+    fn the_switch_is_on_until_turned_off_and_is_remembered() {
+        let directory = tempfile::tempdir().unwrap();
+        let index = open_index(&directory);
+        assert_eq!(index.pin_indexing().unwrap(), PinIndexing::Automatic);
+
+        index.store_pin_indexing(PinIndexing::Off).unwrap();
+
+        let other_process = SearchIndex::open(directory.path()).unwrap();
+        assert_eq!(other_process.pin_indexing().unwrap(), PinIndexing::Off);
+        index.store_pin_indexing(PinIndexing::Automatic).unwrap();
+        assert_eq!(other_process.pin_indexing().unwrap(), PinIndexing::Automatic);
     }
 
     #[test]

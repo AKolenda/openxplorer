@@ -9,9 +9,11 @@
 //! emits `places-changed`, which every window connects to, when a pin, a
 //! saved share, a visited server, a standard folder ([`known_folders`]) or
 //! a preference changes, and `layout-reset` when Settings restores the
-//! default pane widths.
+//! default pane widths. It also holds the search cache the windows share
+//! ([`search_cache`]).
 
 mod known_folders;
+mod search_cache;
 
 use std::rc::Rc;
 
@@ -45,6 +47,7 @@ mod imp {
     use ox_core::settings::Bookmark;
 
     use super::{LAYOUT_RESET, PLACES_CHANGED};
+    use crate::search::SearchCache;
     use crate::settings_store::SettingsStore;
     use crate::theme::Skin;
 
@@ -66,6 +69,8 @@ mod imp {
         /// The number of the latest reading of `user-dirs.dirs` started; a
         /// reading that finishes after a newer one started is dropped.
         pub(super) latest_folder_reading: Cell<u64>,
+        /// The search cache and its index service.
+        pub(super) search_cache: SearchCache,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,

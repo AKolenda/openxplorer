@@ -24,10 +24,22 @@ fn append_item(menu: &gio::Menu, label: &str, action: WindowAction) {
     menu.append(Some(label), Some(&action.detailed_name()));
 }
 
+/// "Open file location", shown only while one search result is selected
+/// (`if(state.query)` in `entryMenu`, SRCH-015).
+fn open_file_location_item() -> gio::MenuItem {
+    let item = gio::MenuItem::new(
+        Some("Open file location"),
+        Some(&WindowAction::OpenFileLocation.detailed_name()),
+    );
+    item.set_attribute_value("hidden-when", Some(&"action-disabled".to_variant()));
+    item
+}
+
 /// The right-click and keyboard context menu of one view.
 fn context_menu_model() -> gio::Menu {
     let menu = gio::Menu::new();
     append_item(&menu, "Open", WindowAction::Open);
+    menu.append_item(&open_file_location_item());
     append_item(&menu, "Refresh", WindowAction::Refresh);
     let selection = gio::Menu::new();
     append_item(&selection, "Select all", WindowAction::SelectAll);

@@ -314,6 +314,9 @@ impl TestWindow {
 impl Drop for TestWindow {
     fn drop(&mut self) {
         self.window.close();
+        // The search cache's thread would otherwise tick on in a settings
+        // directory that is about to be deleted.
+        self.context.search_cache().shut_down();
         settle();
     }
 }

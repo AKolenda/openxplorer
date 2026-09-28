@@ -1,0 +1,111 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* The search information strip above the columns while searching
+   (style.css .search-info, .search-caption, .cache-link,
+   .cache-freshness; src/search/info_strip.rs). */
+
+.search-info {
+  min-height: 26px;
+  padding: 7px 14px;
+  border-bottom: 1px solid @ox_border;
+  background-color: @ox_chrome;
+  color: @ox_text;
+  font-size: 0.85em;
+}
+.search-info .search-glyph { color: @ox_accent; }
+.search-info .search-caption { color: @ox_text; }
+
+/* The scope list is the app's compact drop-down, at the strip's size
+   (`.search-info select{padding:3px 5px;max-width:200px}`). */
+window.ox .search-info menubutton.choice-button > button {
+  min-height: 24px;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+/* "Cache this folder": an accent link (`.cache-link`). */
+.search-info button.cache-link {
+  min-height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  box-shadow: none;
+  color: @ox_accent;
+}
+.search-info button.cache-link:hover { background-color: @ox_hover; }
+.search-info button.cache-link image { color: @ox_accent; }
+
+/* The note on cached results (`.cache-freshness`). */
+.search-info .cache-freshness { color: @ox_muted; font-size: 0.9em; }
+
+/* "Clear search": a 23px square at the end. */
+.search-info button.search-clear {
+  min-width: 23px;
+  min-height: 23px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  box-shadow: none;
+  color: @ox_muted;
+}
+.search-info button.search-clear:hover { background-color: @ox_hover; color: @ox_text; }
+
+/* ---- Search & indexing: the Indexed folders page
+   (src/settings_page/indexed_folders; the settings mockup's .chip, .tag,
+   .iconbtn and .grid). ---- */
+.status-chip {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+.status-chip.ready { background-color: alpha(@ox_success, .12); color: @ox_success; }
+.status-chip.running { background-color: @ox_selected; color: @ox_accent; }
+.status-chip.warning { background-color: alpha(@ox_caution, .14); color: @ox_caution; }
+.status-chip.idle { background-color: @ox_hover; color: @ox_muted; }
+.pinned-tag {
+  padding: 1px 7px;
+  border-radius: 9px;
+  background-color: @ox_hover;
+  color: @ox_muted;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+.pinned-tag image { color: @ox_muted; }
+window.ox button.folder-action {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  box-shadow: none;
+  color: @ox_muted;
+}
+window.ox button.folder-action:hover { background-color: @ox_hover; color: @ox_text; }
+.settings .empty-group { padding: 13px 16px; }
+
+/* The table of folders to add, framed like a group. */
+.index-suggestions {
+  margin-bottom: 26px;
+  border: 1px solid @ox_border;
+  border-radius: 10px;
+  background-color: @ox_card;
+}
+.suggestion-grid { padding: 4px 16px 10px 16px; }
+.settings .suggestion-heading { color: @ox_muted; font-weight: 600; padding: 8px 0 4px 0; }
+.suggestion-footer {
+  padding: 10px 16px;
+  border-top: 1px solid @ox_border;
+  border-radius: 0 0 10px 10px;
+  background-color: @ox_chrome;
+}
+.suggestion-footer label { font-weight: 600; }
+window.ox button.link-button {
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: @ox_accent;
+}
+window.ox button.link-button:hover { background-color: @ox_hover; }

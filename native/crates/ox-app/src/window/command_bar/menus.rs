@@ -68,7 +68,7 @@ fn direction_item(label: &str, glyph: Icon, direction: SortDirection) -> MenuEnt
 /// The Sort menu: the columns, then the direction. The direction has an
 /// item each, where app.js had one item that flips it.
 pub(super) fn sort_menu() -> Vec<MenuEntry> {
-    let mut entries: Vec<MenuEntry> = SortColumn::ALL.into_iter().map(column_item).collect();
+    let mut entries: Vec<MenuEntry> = SortColumn::IN_SORT_MENU.into_iter().map(column_item).collect();
     entries.extend([
         MenuEntry::Divider,
         direction_item("Ascending", Icon::ArrowUp, SortDirection::Ascending),
@@ -136,11 +136,12 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
             Icon::Folder,
             WindowAction::DefaultFileExplorer,
         ),
-        item(
+        MenuItem::toggle(
             "Cache this folder for search",
             Icon::Search,
             WindowAction::CacheFolder,
-        ),
+        )
+        .into(),
         item(
             "Map network location",
             Icon::Organization,

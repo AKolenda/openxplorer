@@ -34,6 +34,7 @@ mod address_bar;
 mod appearance;
 mod breakpoints;
 mod button_style;
+mod cache_folder;
 mod caption_buttons;
 mod card_grid;
 mod command_bar;
@@ -44,6 +45,7 @@ mod details_pane;
 mod empty_page;
 mod environment;
 mod folder_pane;
+mod folder_search;
 mod gestures;
 mod input;
 mod landing;
@@ -125,6 +127,7 @@ mod imp {
     use super::toast::Toast;
     use super::type_to_select::Typeahead;
     use crate::app_context::AppContext;
+    use crate::search::{FolderSearch, SearchInfoStrip};
     use crate::settings_page::SettingsPage;
     use crate::volumes::VolumeRow;
 
@@ -167,6 +170,9 @@ mod imp {
         /// The navigation pane.
         #[template_child]
         pub(super) sidebar: TemplateChild<Sidebar>,
+        /// What a search looked at, above the columns while searching.
+        #[template_child]
+        pub(super) search_strip: TemplateChild<SearchInfoStrip>,
         /// The folder pane.
         #[template_child]
         pub(super) folder_pane: TemplateChild<FolderPane>,
@@ -200,6 +206,8 @@ mod imp {
         pub(super) volumes: RefCell<Vec<VolumeRow>>,
         /// The type-to-select prefix of the folder views.
         pub(super) typeahead: RefCell<Typeahead>,
+        /// The search box's search.
+        pub(super) search: RefCell<FolderSearch>,
         /// Set while the window swaps or reloads the model, so the
         /// selection it restores is not saved over the tab's selection.
         pub(super) changing_model: Cell<bool>,
@@ -228,6 +236,7 @@ mod imp {
             SearchBox::ensure_type();
             CommandBar::ensure_type();
             Sidebar::ensure_type();
+            SearchInfoStrip::ensure_type();
             FolderPane::ensure_type();
             DetailsPane::ensure_type();
             Toast::ensure_type();

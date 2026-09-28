@@ -27,8 +27,8 @@ pub(super) enum EmptyState {
     Loading,
     /// The folder could not be listed: the error text and a Try again button.
     Unavailable(String),
-    /// The filter hides every item.
-    NoMatches,
+    /// A search found nothing; the message says why (SRCH-013).
+    NoMatches(String),
     /// The folder has no items.
     EmptyFolder,
 }
@@ -112,7 +112,7 @@ impl EmptyPage {
         let (title, message) = match state {
             EmptyState::Loading => ("Loading…", ""),
             EmptyState::Unavailable(error) => ("This location is unavailable", error.as_str()),
-            EmptyState::NoMatches => ("No matching items", "Try a different filter."),
+            EmptyState::NoMatches(reason) => ("No matching items", reason.as_str()),
             EmptyState::EmptyFolder => ("This folder is empty", ""),
         };
         self.title.set_text(title);
@@ -126,6 +126,12 @@ impl EmptyPage {
     #[cfg(test)]
     pub(super) fn title(&self) -> String {
         self.title.text().to_string()
+    }
+
+    /// The message shown under the title, for tests.
+    #[cfg(test)]
+    pub(super) fn message(&self) -> String {
+        self.message.text().to_string()
     }
 
     /// True when a Try again button that refreshes is shown, for tests.

@@ -16,6 +16,7 @@ use ox_core::location::{file_uri, location_kind, LocationKind, VirtualPlace};
 use ox_core::settings::{Appearance, Settings};
 
 use crate::app_context::AppContext;
+use crate::search::CacheLocation;
 use crate::snapshot::SnapshotRequest;
 use crate::text_size::TextSize;
 use crate::theme::contrast::ContrastSetting;
@@ -56,11 +57,19 @@ impl AppState {
         let system_scheme = follow_system_scheme(&skin, gtk_preference);
         let contrast_setting = follow_contrast(&skin);
         crate::window::install_accelerators(app);
+        let context = AppContext::new(skin, settings);
+        context.start_search_cache(CacheLocation::UserCache);
         Self {
-            context: AppContext::new(skin, settings),
+            context,
             _system_scheme: system_scheme,
             _contrast_setting: contrast_setting,
         }
+    }
+
+    /// Stops what outlives the windows and must not outlive the app: the
+    /// search index service.
+    pub(super) fn shut_down(&self) {
+        self.context.search_cache().shut_down();
     }
 
     /// Opens a window whose first tab shows `start`, or the home folder.
@@ -114,6 +123,9 @@ impl AppState {
         }
         if let Some(query) = &request.settings_search {
             window.search_settings(query);
+        }
+        if let Some(query) = &request.search {
+            window.search_folder(query);
         }
         window.present();
         window

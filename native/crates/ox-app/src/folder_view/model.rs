@@ -32,6 +32,7 @@ fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> Ordering {
     match column {
         SortColumn::Name => a.sort_name().key.natural_cmp(b.sort_name().key),
         SortColumn::Modified => a.entry().modified.cmp(&b.entry().modified),
+        SortColumn::FolderPath => a.folder_path().key.natural_cmp(&b.folder_path().key),
         SortColumn::Type => a.type_sort_key().natural_cmp(b.type_sort_key()),
         SortColumn::Size => {
             let a_size = a.entry().size.unwrap_or(0);
@@ -170,11 +171,6 @@ impl FolderModel {
     /// Sets the search text; returns true when the shown items changed.
     pub(crate) fn set_query(&self, query: &str) -> bool {
         self.update_filter(|state| state.set_query(query))
-    }
-
-    /// True while the search box filters the folder.
-    pub(crate) fn is_searching(&self) -> bool {
-        self.filter_state.borrow().is_searching()
     }
 
     /// Shows or hides hidden items; returns true when that changed.

@@ -108,7 +108,7 @@ impl SettingsPage {
     }
 
     /// Runs `show`, during which control changes are not the user's.
-    fn while_showing_preferences(&self, show: impl FnOnce()) {
+    pub(super) fn while_showing_preferences(&self, show: impl FnOnce()) {
         let showing = &self.imp().showing_preferences;
         let was_showing = showing.replace(true);
         show();

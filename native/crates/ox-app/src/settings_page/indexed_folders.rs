@@ -1,38 +1,45 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The Indexed folders page: the folders the search index can take, and a
-//! field to add another.
+//! The Indexed folders page: the folders the search index keeps, and the
+//! folders to add to it.
 //!
 //! Ports `renderSettingsCache` and the "Add a folder" field of
-//! `renderSettingsPage` in `desktop/ui/app.js` (SET-006, SET-007). The
-//! Python app listed these inline, in a long list that filled the page;
-//! here they open from the "Folders to index" row, with the limits of
-//! indexing under them. Indexing is not in the native preview yet: the
-//! native app cannot read the Python index (the database of
-//! `desktop/index_service.py`), so a folder's status is left out rather
-//! than guessed, and its switch waits for cached search. The list offers
-//! the same folders, once each: the folder shown before Settings opened,
-//! Home, Quick access, saved shares, the Local Disk and mounted drives,
-//! never pages, devices or SMB servers.
+//! `renderSettingsPage` in `desktop/ui/app.js` (SET-006, SET-007) in the
+//! layout of the settings mockup. The Python app listed every candidate
+//! folder in one long list with a check box each; here the page opens from
+//! the "Folders to index" row and shows two groups. "Indexed folders"
+//! lists the folders the index keeps, each with its state and buttons
+//! ([`root_row`]). "Add folders to the index" has the path field and the
+//! table of the other candidates ([`suggestions`]), which offers the same
+//! folders as Python, once each: the folder shown before Settings opened,
+//! the folders indexed before, Home, Quick access, saved shares, the Local
+//! Disk and mounted drives, never pages, devices or SMB servers. Every
+//! button runs an [`IndexCommand`] ([`commands`]).
 
+mod candidates;
+mod commands;
+mod root_row;
+mod suggestions;
+
+use std::cell::RefCell;
+
+use gtk::glib;
 use gtk::prelude::*;
-use ox_core::location::{is_device_location, is_smb_server, same_location, LocationContext, VirtualPlace};
-use ox_core::places::Place;
-use ox_core::settings::Bookmark;
+use ox_core::location::{same_location, LocationContext};
+use ox_core::search::IndexRoot;
+
+pub(crate) use candidates::{index_candidates, CandidateSources, IndexCandidate};
+pub(crate) use commands::IndexCommand;
+pub(crate) use root_row::grouped_number;
+use suggestions::IndexSuggestions;
 
 use super::group::SettingsGroup;
 use super::parts;
-use super::row::{Availability, ControlName, RowLayout, SettingRow};
+use super::row::{ControlName, RowLayout, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
-use crate::icons::{Art, ArtImage, Icon};
-use crate::volumes::VolumeRow;
-use crate::window::{ButtonStyle, Milestone};
-
-/// The root of the local file system (`add('file:///','Local Disk')`).
-const LOCAL_DISK_URI: &str = "file:///";
-
-/// A folder's picture in the list (`folderIcon(24)` in app.js).
-const FOLDER_ART: i32 = 28;
+use super::SettingsPage;
+use crate::icons::Icon;
+use crate::window::ButtonStyle;
 
 /// The page's line under its title: the Python section's help text.
 const LEAD: &str = "Check a folder to index the names and paths of its files and subfolders. SMB \
@@ -46,348 +53,159 @@ const LIMITS_NOTE: &str = "Local changes update the index after a short debounce
                            mounted volume separately. Initial scans are limited to 1 million \
                            entries.";
 
+/// What the "Indexed folders" group says while the index keeps nothing.
+const NOTHING_INDEXED: &str = "No folders are indexed yet. Add one below, or pin a folder to Quick access.";
+
 const ADD_FOLDER: RowText = RowText {
     title: "Add a folder",
     description: "A path relative to the folder you came from, or a share such as \\\\nas\\share.",
-    keywords: "",
+    keywords: "custom directory path local disk smb nas",
 };
 
-/// Where the candidate folders come from.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct CandidateSources<'a> {
-    /// The folder shown before Settings opened (`state.settingsOrigin`).
-    pub origin: Option<&'a str>,
-    /// Quick access: standard folders and pins.
-    pub quick_access: &'a [Place],
-    /// The saved network shares.
-    pub shares: &'a [Bookmark],
-    /// The drives and devices the volume monitor reports.
-    pub volumes: &'a [VolumeRow],
-    /// Names the folders and says where they are.
-    pub locations: &'a LocationContext,
-}
+/// An indexed folder as its row shows it: the root and how its folder is
+/// named and placed.
+type IndexedRow = (IndexRoot, IndexCandidate);
 
-/// A folder the search index can take.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct IndexCandidate {
-    /// The folder's canonical URI.
-    pub uri: String,
-    /// Its name in the list.
-    pub label: String,
-    /// Where it is: a path, or `\\server\share` for SMB.
-    pub path: String,
-    /// Whether it is on an SMB share, reached as `smb://` or inside a
-    /// mounted CIFS share, which shows the network bar.
-    pub is_network: bool,
-}
-
-/// The candidates of `renderSettingsCache`, in its order and once each.
-/// `renderSettingsCache` also lists the existing index roots after the
-/// origin; the native preview adds them once cached search reads them
-/// (the Search and metadata milestone).
-pub(crate) fn index_candidates(sources: &CandidateSources<'_>) -> Vec<IndexCandidate> {
-    let home = sources.locations.home_uri();
-    let mut offers: Vec<Offer<'_>> = Vec::new();
-    offers.extend(sources.origin.map(Offer::untitled));
-    offers.push(Offer::labelled(&home, "Home"));
-    let pins = sources.quick_access.iter();
-    offers.extend(pins.map(|place| Offer::labelled(&place.uri, &place.label)));
-    let shares = sources.shares.iter();
-    offers.extend(shares.map(|share| Offer::labelled(&share.uri, &share.label)));
-    offers.push(Offer::labelled(LOCAL_DISK_URI, "Local Disk"));
-    offers.extend(sources.volumes.iter().filter_map(Offer::mounted));
-    let mut candidates: Vec<IndexCandidate> = Vec::new();
-    for offer in offers {
-        let is_listed = candidates
-            .iter()
-            .any(|candidate| same_location(&candidate.uri, offer.uri));
-        if !is_listed && can_be_indexed(offer.uri) {
-            candidates.push(offer.into_candidate(sources.locations));
-        }
-    }
-    candidates
-}
-
-/// A folder offered to the list, which keeps it unless it is listed
-/// already or cannot be indexed.
-#[derive(Debug, Clone, Copy)]
-struct Offer<'a> {
-    uri: &'a str,
-    /// Its name, or `None` to call it by its title (`titleFor`).
-    label: Option<&'a str>,
-}
-
-impl<'a> Offer<'a> {
-    fn labelled(uri: &'a str, label: &'a str) -> Self {
-        Self {
-            uri,
-            label: Some(label),
-        }
-    }
-
-    fn untitled(uri: &'a str) -> Self {
-        Self { uri, label: None }
-    }
-
-    /// A mounted drive; `None` for one that still has to be mounted.
-    fn mounted(volume: &'a VolumeRow) -> Option<Self> {
-        Some(Self::labelled(volume.uri()?, &volume.label))
-    }
-
-    fn into_candidate(self, locations: &LocationContext) -> IndexCandidate {
-        let label = match self.label {
-            Some(label) => label.to_owned(),
-            None => locations.title_for(self.uri),
-        };
-        IndexCandidate {
-            uri: self.uri.to_owned(),
-            label,
-            path: locations.display_location(self.uri),
-            is_network: locations.is_network_location(self.uri),
-        }
-    }
-}
-
-/// Whether `uri` is a folder the index can take: not an app page, a GIO
-/// virtual folder, a device or an SMB server.
-fn can_be_indexed(uri: &str) -> bool {
-    let is_place = VirtualPlace::from_uri(uri).is_some();
-    !uri.is_empty() && !is_place && !is_device_location(uri) && !is_smb_server(uri)
-}
-
-/// The list of candidate folders on the page, which the window refills
-/// whenever the places change.
+/// The Indexed folders page's lists, which the window refills whenever
+/// the places or the cache status change.
 #[derive(Debug)]
-pub(super) struct FolderList {
-    /// The group the folders are listed in.
-    group: SettingsGroup,
+pub(super) struct IndexedFolders {
+    /// The folders the index keeps.
+    indexed: SettingsGroup,
+    /// The folders to add.
+    suggestions: IndexSuggestions,
+    /// What the indexed list shows now, so an unchanged status rebuilds
+    /// nothing.
+    shown: RefCell<Vec<IndexedRow>>,
 }
 
-impl FolderList {
-    /// Replaces the listed folders with `candidates`.
-    pub(super) fn show(&self, candidates: &[IndexCandidate]) {
-        self.group.remove_rows();
-        for candidate in candidates {
-            self.group.add_plain_row(&candidate_row(candidate));
+impl IndexedFolders {
+    /// Shows the enabled `roots` as indexed folders and the other
+    /// `candidates` in the table; their buttons run commands on `page`.
+    pub(super) fn show(&self, candidates: &[IndexCandidate], roots: &[IndexRoot], page: &SettingsPage) {
+        let enabled: Vec<&IndexRoot> = roots.iter().filter(|root| root.is_enabled()).collect();
+        let is_indexed = |uri: &str| enabled.iter().any(|root| same_location(&root.uri, uri));
+        let suggested: Vec<IndexCandidate> = candidates
+            .iter()
+            .filter(|candidate| !is_indexed(&candidate.uri))
+            .cloned()
+            .collect();
+        self.suggestions.show(&suggested);
+        let indexed: Vec<IndexedRow> = enabled
+            .into_iter()
+            .map(|root| (root.clone(), candidate_of(root, candidates)))
+            .collect();
+        if *self.shown.borrow() != indexed {
+            self.show_indexed(&indexed, page);
+            self.shown.replace(indexed);
         }
     }
 
-    /// The names of the folders listed now, as their rows show them.
+    /// Rebuilds the rows of "Indexed folders".
+    fn show_indexed(&self, indexed: &[IndexedRow], page: &SettingsPage) {
+        self.indexed.remove_rows();
+        if indexed.is_empty() {
+            let empty = parts::wrapped_label(NOTHING_INDEXED, "setting-description");
+            empty.add_css_class("empty-group");
+            self.indexed.add_plain_row(&empty);
+        }
+        for (root, candidate) in indexed {
+            let row = root_row::root_row(root, &candidate.path, candidate.is_network, page);
+            self.indexed.add_plain_row(&row);
+        }
+    }
+
+    /// The table of folders to add, for tests.
+    #[cfg(test)]
+    pub(super) fn suggestions(&self) -> &IndexSuggestions {
+        &self.suggestions
+    }
+
+    /// The names of the indexed folders, then of the folders to add, as
+    /// the page lists them.
     #[cfg(test)]
     pub(super) fn shown_labels(&self) -> Vec<String> {
-        let labels = crate::test_support::harness::descendants::<gtk::Label>(&self.group);
-        let titles = labels
-            .into_iter()
-            .filter(|label| label.has_css_class("setting-title"));
-        titles.map(|title| title.text().into()).collect()
+        let shown = self.shown.borrow();
+        let indexed = shown.iter().map(|(root, _)| root.label.clone());
+        indexed.chain(self.suggestions.listed_labels()).collect()
     }
 }
 
-/// The Indexed folders page and its list of folders.
-pub(super) fn build() -> (SettingsSection, FolderList) {
-    let indexed = SettingsSection::new("Indexed folders", LEAD, PageKind::Subpage);
-    let pending = Availability::Unported(Milestone::SearchAndMetadata);
-    let add_group = SettingsGroup::pending("Add folders to the index", pending);
-    add_group.add_row(&add_folder_row(pending));
-    indexed.append_group(&add_group);
-    let group = SettingsGroup::pending("Folders", pending);
-    indexed.append_group(&group);
-    indexed.append_text(&parts::note(Icon::Info, LIMITS_NOTE));
-    (indexed, FolderList { group })
+/// How `root` is listed: as the candidate for its folder, or else by its
+/// own label and display path.
+fn candidate_of(root: &IndexRoot, candidates: &[IndexCandidate]) -> IndexCandidate {
+    let listed = candidates
+        .iter()
+        .find(|candidate| same_location(&candidate.uri, &root.uri));
+    let mut candidate = listed
+        .cloned()
+        .unwrap_or_else(|| candidates::indexed_root(root, &LocationContext::default()));
+    candidate.label.clone_from(&root.label);
+    candidate
 }
 
-/// The path field and "Add" (SET-007), waiting for cached search.
-fn add_folder_row(pending: Availability) -> SettingRow {
-    let row = SettingRow::new(ADD_FOLDER);
+/// The Indexed folders page and its lists.
+pub(super) fn build(page: &SettingsPage) -> (SettingsSection, IndexedFolders) {
+    let section = SettingsSection::new("Indexed folders", LEAD, PageKind::Subpage);
+    let indexed = SettingsGroup::new("Indexed folders");
+    section.append_group(&indexed);
+    let add_group = SettingsGroup::new("Add folders to the index");
+    let add_field = add_folder_field();
+    add_group.add_row(&add_folder_row(&add_field, page));
+    section.append_group(&add_group);
+    let suggestions = IndexSuggestions::new(page);
+    section.append_text(&suggestions);
+    section.append_text(&parts::note(Icon::Info, LIMITS_NOTE));
+    let folders = IndexedFolders {
+        indexed,
+        suggestions,
+        shown: RefCell::default(),
+    };
+    (section, folders)
+}
+
+/// The path field of "Add a folder" (SET-007): wide, and never cutting
+/// off what was typed.
+fn add_folder_field() -> gtk::Entry {
     let field = gtk::Entry::builder()
         .placeholder_text("Add a folder: /home/you/Projects or \\\\nas\\share")
         .hexpand(true)
         .width_chars(36)
         .build();
     field.update_property(&[gtk::accessible::Property::Label("Folder to cache")]);
-    row.add_control(&field, ControlName::RowTitle);
-    row.add_control(
-        &parts::button("Add", ButtonStyle::Bordered),
-        ControlName::OwnLabel,
-    );
+    field
+}
+
+/// "Add a folder": the path field and "Index", which indexes the folder
+/// typed, relative to the folder shown before Settings, and empties the
+/// field (SET-007).
+fn add_folder_row(field: &gtk::Entry, page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(ADD_FOLDER);
+    row.add_control(field, ControlName::RowTitle);
+    let index = parts::button("Index", ButtonStyle::Accent);
+    row.add_control(&index, ControlName::OwnLabel);
+    field.connect_activate(glib::clone!(
+        #[weak]
+        page,
+        move |field| page.index_typed_folder(field)
+    ));
+    index.connect_clicked(glib::clone!(
+        #[weak]
+        page,
+        #[weak]
+        field,
+        move |_| page.index_typed_folder(&field)
+    ));
     row.set_roomy_layout(RowLayout::ControlsBelow);
-    row.set_availability(pending);
     row
 }
 
-/// A folder's row: its picture, name and path, and a switch named "Cache
-/// <label>" as the Python checkbox is. The Python row's status waits for
-/// cached search, which reads the index.
-fn candidate_row(candidate: &IndexCandidate) -> gtk::Box {
-    let row = gtk::Box::builder()
-        .spacing(14)
-        .css_classes(["setting-row", "folder-row"])
-        .build();
-    let art = if candidate.is_network {
-        Art::SHARE
-    } else {
-        Art::Folder
-    };
-    row.append(&ArtImage::new(art, FOLDER_ART));
-    let texts = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .hexpand(true)
-        .valign(gtk::Align::Center)
-        .build();
-    texts.append(&parts::wrapped_label(&candidate.label, "setting-title"));
-    texts.append(&parts::wrapped_label(&candidate.path, "setting-description"));
-    row.append(&texts);
-    let switch = parts::switch();
-    switch.set_sensitive(false);
-    let name = format!("Cache {}", candidate.label);
-    switch.update_property(&[gtk::accessible::Property::Label(&name)]);
-    row.append(&switch);
-    row.set_tooltip_text(Some(&Milestone::SearchAndMetadata.notice()));
-    row
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use ox_core::places::KnownFolder;
-
-    use super::*;
-    use crate::volumes::{VolumeKind, VolumeState};
-
-    fn locations() -> LocationContext {
-        LocationContext {
-            home: Some(PathBuf::from("/home/demo")),
-            ..LocationContext::default()
-        }
-    }
-
-    fn pin(label: &str, uri: &str) -> Place {
-        Place {
-            label: label.to_owned(),
-            uri: uri.to_owned(),
-            known_folder: None,
-            is_shared: false,
-        }
-    }
-
-    fn mounted(label: &str, uri: &str, kind: VolumeKind) -> VolumeRow {
-        VolumeRow {
-            label: label.to_owned(),
-            kind,
-            state: VolumeState::Mounted {
-                uri: uri.to_owned(),
-                can_unmount: true,
-            },
-        }
-    }
-
-    fn share(label: &str, uri: &str) -> Bookmark {
-        Bookmark {
-            uri: uri.to_owned(),
-            label: label.to_owned(),
-        }
-    }
-
-    /// Ported from the candidate rules of `renderSettingsCache` in
-    /// `desktop/ui/app.js`.
-    #[test]
-    fn candidates_are_the_origin_home_pins_shares_disk_and_drives_once_each() {
-        let documents = Place {
-            known_folder: Some(KnownFolder::Documents),
-            ..pin("Documents", "file:///home/demo/Documents")
-        };
-        let quick_access = [documents, pin("Home again", "file:///home/demo/")];
-        let shares = [
-            share("Media (M:)", "smb://nas/media"),
-            share("The server", "smb://nas/"),
-        ];
-        let volumes = [
-            mounted("Backup", "file:///media/demo/Backup", VolumeKind::Drive),
-            mounted("Pixel 7", "mtp://%5Busb%3A001%2C010%5D/", VolumeKind::Device),
-        ];
-        let locations = locations();
-        let sources = CandidateSources {
-            origin: Some("file:///home/demo/Projects"),
-            quick_access: &quick_access,
-            shares: &shares,
-            volumes: &volumes,
-            locations: &locations,
-        };
-
-        let candidates = index_candidates(&sources);
-
-        let labels: Vec<&str> = candidates
-            .iter()
-            .map(|candidate| candidate.label.as_str())
-            .collect();
-        assert_eq!(
-            labels,
-            [
-                "Projects",
-                "Home",
-                "Documents",
-                "Media (M:)",
-                "Local Disk",
-                "Backup"
-            ],
-            "the server, the phone and a second spelling of Home are left out"
-        );
-        assert_eq!(candidates[3].path, "\\\\nas\\media");
-        assert_eq!(candidates[4].path, "/");
-    }
-
-    #[test]
-    fn pages_and_virtual_folders_are_never_indexed() {
-        let locations = locations();
-        let sources = CandidateSources {
-            origin: Some(VirtualPlace::ThisPc.uri()),
-            quick_access: &[],
-            shares: &[],
-            volumes: &[],
-            locations: &locations,
-        };
-
-        let candidates = index_candidates(&sources);
-
-        let labels: Vec<&str> = candidates
-            .iter()
-            .map(|candidate| candidate.label.as_str())
-            .collect();
-        assert_eq!(labels, ["Home", "Local Disk"]);
-        assert!(!can_be_indexed("trash:///"));
-        assert!(!can_be_indexed("network:///"));
-    }
-
-    /// A share shows the network bar however it is reached, as `smb://` or
-    /// inside a mounted CIFS share, as `networkLocation` in app.js decides.
-    #[test]
-    fn folders_on_shares_are_marked_as_network_folders() {
-        let locations = LocationContext {
-            network_mounts: vec![PathBuf::from("/mnt/media")],
-            ..locations()
-        };
-        let quick_access = [pin("Films", "file:///mnt/media/Films")];
-        let shares = [share("Projects", "smb://nas/projects")];
-        let sources = CandidateSources {
-            origin: None,
-            quick_access: &quick_access,
-            shares: &shares,
-            volumes: &[],
-            locations: &locations,
-        };
-
-        let candidates = index_candidates(&sources);
-
-        let network: Vec<&str> = candidates
-            .iter()
-            .filter(|candidate| candidate.is_network)
-            .map(|candidate| candidate.label.as_str())
-            .collect();
-        assert_eq!(
-            network,
-            ["Films", "Projects"],
-            "Home and the Local Disk are local"
-        );
+impl SettingsPage {
+    /// Indexes the folder typed into `field` and empties it.
+    fn index_typed_folder(&self, field: &gtk::Entry) {
+        let typed = field.text().to_string();
+        let base = self.index_origin();
+        self.run_index_command(IndexCommand::IndexTyped { typed, base });
+        field.set_text("");
     }
 }

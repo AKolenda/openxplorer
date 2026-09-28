@@ -20,6 +20,7 @@ use crate::config::BUILD_NAME;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::model::SelectionSummary;
 use crate::icons::{self, Icon};
+use crate::search::SearchCount;
 
 use super::folder_pane::FolderView;
 use super::unported;
@@ -44,6 +45,8 @@ pub(super) enum StatusSubject {
         /// The folder is still being listed.
         loading: bool,
     },
+    /// The results of a search (VIEW-050).
+    Search(SearchCount),
 }
 
 /// Whether typed text found a name, which decides how its hint is drawn.
@@ -58,8 +61,10 @@ pub(super) enum TypeaheadMatch {
 /// The item count (`#status-count`): "Ready" on a landing page, else how
 /// many items are shown, and "Loading…" while the folder is listed.
 pub(super) fn count_text(subject: StatusSubject) -> String {
-    let StatusSubject::Folder { shown, loading } = subject else {
-        return "Ready".to_owned();
+    let (shown, loading) = match subject {
+        StatusSubject::Page => return "Ready".to_owned(),
+        StatusSubject::Search(count) => return count.text(),
+        StatusSubject::Folder { shown, loading } => (shown, loading),
     };
     let items = if shown == 1 {
         "1 item".to_owned()
@@ -189,7 +194,7 @@ impl StatusBar {
         imp.count.set_text(&count_text(subject));
         let selection = match subject {
             StatusSubject::Page => String::new(),
-            StatusSubject::Folder { .. } => selection_text(selected),
+            StatusSubject::Folder { .. } | StatusSubject::Search(_) => selection_text(selected),
         };
         imp.selection.set_visible(!selection.is_empty());
         imp.selection.set_text(&selection);
@@ -261,12 +266,14 @@ mod tests {
         count_text(StatusSubject::Folder { shown, loading })
     }
 
+    /// parity: VIEW-050
     #[test]
     fn the_status_counts_items_and_says_when_it_is_loading() {
         assert_eq!(folder_count(1, false), "1 item");
         assert_eq!(folder_count(4, true), "4 items · Loading…");
     }
 
+    /// parity: VIEW-050
     #[test]
     fn the_selection_shows_its_count_and_file_size() {
         assert_eq!(selection_text(SelectionSummary::default()), "");
@@ -285,6 +292,7 @@ mod tests {
         assert_eq!(selection_text(folders), "3 selected");
     }
 
+    /// parity: VIEW-050
     #[test]
     fn a_landing_page_is_ready() {
         assert_eq!(count_text(StatusSubject::Page), "Ready");

@@ -222,6 +222,7 @@ impl BrowserWindow {
             self.update_content();
             self.update_details_pane();
             self.focus_new_file_list();
+            self.reveal_located_item(id);
         }
         if end == ListingEnd::ListAgain {
             self.folder_changed(id);
@@ -305,8 +306,7 @@ impl BrowserWindow {
             let state = match error {
                 Some(error) => EmptyState::Unavailable(error),
                 None if loading => EmptyState::Loading,
-                None if pane.model().is_searching() => EmptyState::NoMatches,
-                None => EmptyState::EmptyFolder,
+                None => self.search_empty_state().unwrap_or(EmptyState::EmptyFolder),
             };
             pane.show_empty(&state);
         }

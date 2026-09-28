@@ -133,6 +133,7 @@ impl BrowserWindow {
         self.install_sort_actions();
         self.install_appearance_actions();
         self.install_settings_actions();
+        self.install_search_actions();
         self.install_unported_actions();
     }
 

@@ -112,6 +112,12 @@ impl StatusCard {
         self.imp().title_label.set_text(title);
     }
 
+    /// Says `text` under the card's state, such as how many names are
+    /// indexed.
+    pub(crate) fn set_text(&self, text: &str) {
+        self.imp().text_label.set_text(text);
+    }
+
     /// The card's one-line state.
     #[cfg(test)]
     pub(crate) fn title(&self) -> String {

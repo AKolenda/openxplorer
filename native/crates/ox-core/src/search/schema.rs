@@ -29,6 +29,7 @@ const TABLES: &str = "
     CREATE INDEX IF NOT EXISTS entries_parent ON entries(parent);
     CREATE TABLE IF NOT EXISTS index_requests (key TEXT PRIMARY KEY, kind TEXT, uri TEXT, created REAL);
     CREATE TABLE IF NOT EXISTS index_migrations(name TEXT PRIMARY KEY, applied REAL NOT NULL);
+    CREATE TABLE IF NOT EXISTS index_options(name TEXT PRIMARY KEY, value TEXT NOT NULL);
 ";
 
 /// Columns added to `roots` after the first release, with their

@@ -300,7 +300,7 @@ mod tests {
         let saved = Availability::SavedForLater(Milestone::SearchAndMetadata);
         assert_eq!(
             saved.notice().as_deref(),
-            Some("Saved for the installed OpenXplorer; this preview follows it once it has cached search.")
+            Some("Saved for the installed OpenXplorer; this preview follows it once it has folder sizes.")
         );
         assert_eq!(Availability::Ready.notice(), None);
     }

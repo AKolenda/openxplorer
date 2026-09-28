@@ -23,8 +23,8 @@ pub(crate) enum Milestone {
     FileOperations,
     /// The "Network and devices" service.
     NetworkAndDevices,
-    /// The "Search and metadata" service: the search index and folder
-    /// sizes.
+    /// The rest of the "Search and metadata" service: folder sizes. The
+    /// search index has arrived.
     SearchAndMetadata,
     /// The "Desktop integration" service: default apps, Show in folder and
     /// the Brave download folder.
@@ -40,7 +40,7 @@ impl Milestone {
         match self {
             Milestone::FileOperations => "file operations",
             Milestone::NetworkAndDevices => "network and device support",
-            Milestone::SearchAndMetadata => "cached search",
+            Milestone::SearchAndMetadata => "folder sizes",
             Milestone::DesktopIntegration => "desktop integration",
             Milestone::Distribution => "packaging and updates",
         }
@@ -70,7 +70,7 @@ const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand 
 }
 
 /// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 18] = [
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 17] = [
     command(WindowAction::NewFolder, Milestone::FileOperations),
     command(WindowAction::NewTextDocument, Milestone::FileOperations),
     command(WindowAction::NewFile, Milestone::FileOperations),
@@ -86,7 +86,6 @@ pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 18] = [
     command(WindowAction::Trash, Milestone::FileOperations),
     command(WindowAction::MapNetworkLocation, Milestone::NetworkAndDevices),
     command(WindowAction::DiscoverServers, Milestone::NetworkAndDevices),
-    command(WindowAction::CacheFolder, Milestone::SearchAndMetadata),
     // The dialog names where the installed source and the corresponding
     // source archive are, which packaging decides.
     command(WindowAction::License, Milestone::Distribution),
