@@ -56,9 +56,8 @@ fn scan_and_record(shared: &Shared, job: &ScanJob, storage: RootStorage) {
     };
     shared.forget_watches(root);
     shared.notify();
-    let mut crawl = Crawl::new(shared, job, &generation, storage);
-    let outcome = match crawl.run() {
-        Ok(()) => crawl.outcome(),
+    let outcome = match walk_root(shared, job, &generation, storage) {
+        Ok(outcome) => outcome,
         Err(error) => ScanOutcome::Incomplete {
             error: error.to_string(),
         },
@@ -72,6 +71,20 @@ fn scan_and_record(shared: &Shared, job: &ScanJob, storage: RootStorage) {
         };
         let _ = shared.index.finish_scan(root, &generation, &failure);
     }
+}
+
+/// Reads every folder of the root that its scope admits and says how the
+/// scan ended.
+fn walk_root(
+    shared: &Shared,
+    job: &ScanJob,
+    generation: &ScanGeneration,
+    storage: RootStorage,
+) -> Result<ScanOutcome, SearchError> {
+    let scope = shared.scope_of(&job.root.uri)?;
+    let mut crawl = Crawl::new(shared, job, generation, scope, storage);
+    crawl.run()?;
+    Ok(crawl.outcome())
 }
 
 /// A folder waiting to be read, with its depth below the root.
@@ -102,18 +115,20 @@ struct Crawl<'a> {
 }
 
 impl<'a> Crawl<'a> {
-    /// A scan of `job`'s root that stores under `generation`.
+    /// A scan of `job`'s root within `scope` that stores under
+    /// `generation`.
     fn new(
         shared: &'a Shared,
         job: &'a ScanJob,
         generation: &'a ScanGeneration,
+        scope: IndexScope,
         storage: RootStorage,
     ) -> Self {
         Self {
             shared,
             job,
             generation,
-            scope: shared.scope_of(&job.root.uri),
+            scope,
             storage,
             stored: 0,
             errors: Vec::new(),

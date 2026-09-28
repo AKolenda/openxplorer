@@ -12,8 +12,8 @@ use std::time::Instant;
 
 use gio::prelude::*;
 
+use super::error::SearchError;
 use super::index::SearchIndex;
-use super::mounts::read_mounts;
 use super::ownership::Ownership;
 use super::policy::{IndexScope, RootStorage};
 use super::reader::FolderReader;
@@ -225,8 +225,13 @@ impl Shared {
     }
 
     /// What may be indexed below `root`.
-    pub(super) fn scope_of(&self, root: &str) -> IndexScope {
-        IndexScope::for_root(root, self.index.directory(), &read_mounts())
+    ///
+    /// # Errors
+    ///
+    /// As [`IndexScope::current`]: a scan or update fails rather than
+    /// index beyond the root's filesystem.
+    pub(super) fn scope_of(&self, root: &str) -> Result<IndexScope, SearchError> {
+        IndexScope::current(root, self.index.directory())
     }
 
     /// Watches `folder` of a local root (`monitor` in Python). Called

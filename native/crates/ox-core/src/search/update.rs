@@ -60,7 +60,7 @@ pub(super) fn run_update(shared: &Shared, job: &UpdateJob) {
 /// Re-reads the changed folder and every folder that appeared below it.
 fn update_folders(shared: &Shared, job: &UpdateJob, storage: RootStorage) -> Result<UpdateEnd, SearchError> {
     let root = &job.root.uri;
-    let scope = shared.scope_of(root);
+    let scope = shared.scope_of(root)?;
     let mut pending = vec![job.folder.clone()];
     let mut seen = HashSet::new();
     while let Some(folder) = pending.pop() {

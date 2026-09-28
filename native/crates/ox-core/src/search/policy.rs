@@ -43,18 +43,27 @@ pub(crate) enum RootStorage {
 impl RootStorage {
     /// Where the files of `root` are stored now.
     pub(crate) fn current(root: &str) -> Self {
-        Self::of(root, &read_mounts())
+        let mounts = read_mounts().ok();
+        Self::of(root, mounts.as_deref())
     }
 
-    /// Where the files of `root` are stored, given the current `mounts`.
+    /// Where the files of `root` are stored, given the current `mounts`;
+    /// `None` when the mount table could not be read.
     ///
     /// Only a `file:` folder on a local filesystem is local. Python looked
     /// up the path of any other location, such as `sftp://host/home/demo`,
     /// in this computer's mount table, and so watched the unrelated local
     /// folder `/home/demo`; here every location that is not a local folder
     /// is checked on a timer, as a network location is.
-    pub(crate) fn of(root: &str, mounts: &[Mount]) -> Self {
+    pub(crate) fn of(root: &str, mounts: Option<&[Mount]>) -> Self {
         let Some(path) = local_path(root) else {
+            return Self::Network;
+        };
+        // Safety rule "an unknown filesystem is checked on a timer": without
+        // the mount table a CIFS or NFS mount cannot be recognised, and
+        // inotify there would miss changes made by other computers. Timed
+        // checks work on every filesystem.
+        let Some(mounts) = mounts else {
             return Self::Network;
         };
         let is_network_mount = mount_for_path(&path, mounts)
@@ -75,7 +84,38 @@ pub(crate) struct IndexScope {
 }
 
 impl IndexScope {
-    /// The scope of `root` (`policy` in Python).
+    /// The scope of `root` with the current mount table (`policy` in
+    /// Python).
+    ///
+    /// # Errors
+    ///
+    /// [`SearchError::Io`] when the mount table cannot be read for a local
+    /// root; see [`IndexScope::with_mount_table`].
+    pub(crate) fn current(root: &str, index_directory: &Path) -> Result<Self, SearchError> {
+        Self::with_mount_table(root, index_directory, read_mounts)
+    }
+
+    /// The scope of `root`, reading the mount table with `read_mounts`
+    /// only for a local root, as Python's `policy` did.
+    ///
+    /// Safety rule "an unreadable mount table stops the scan": without it,
+    /// the other filesystems below a local root cannot be excluded, and a
+    /// `/` root would index every mounted volume and share. Python's
+    /// `read_text` raised here and the scan failed; the error is passed on
+    /// the same way, never read as "no mounts".
+    fn with_mount_table(
+        root: &str,
+        index_directory: &Path,
+        read_mounts: impl FnOnce() -> Result<Vec<Mount>, SearchError>,
+    ) -> Result<Self, SearchError> {
+        if local_path(root).is_none() {
+            return Ok(Self::for_root(root, index_directory, &[]));
+        }
+        let mounts = read_mounts()?;
+        Ok(Self::for_root(root, index_directory, &mounts))
+    }
+
+    /// The scope of `root` given the current `mounts`.
     ///
     /// Safety rule "index one filesystem, never system or index folders":
     /// below a local root, the system folders, every other mounted
@@ -260,13 +300,14 @@ mod tests {
             Mount::new(PathBuf::from("/mnt/nas"), "nfs4"),
             Mount::new("/mnt/usb", "vfat"),
         ];
-        assert_eq!(RootStorage::of("smb://nas/share", &mounts), RootStorage::Network);
+        let mounts = Some(mounts.as_slice());
+        assert_eq!(RootStorage::of("smb://nas/share", mounts), RootStorage::Network);
         assert_eq!(
-            RootStorage::of("file:///mnt/nas/projects", &mounts),
+            RootStorage::of("file:///mnt/nas/projects", mounts),
             RootStorage::Network
         );
-        assert_eq!(RootStorage::of("file:///mnt/usb", &mounts), RootStorage::Local);
-        assert_eq!(RootStorage::of("file:///home/demo", &mounts), RootStorage::Local);
+        assert_eq!(RootStorage::of("file:///mnt/usb", mounts), RootStorage::Local);
+        assert_eq!(RootStorage::of("file:///home/demo", mounts), RootStorage::Local);
     }
 
     /// A remote location that is not SMB is never watched as if it were
@@ -277,9 +318,41 @@ mod tests {
     fn other_remote_locations_are_network_roots() {
         let mounts = [Mount::new("/", "ext4")];
         assert_eq!(
-            RootStorage::of("sftp://host/home/demo", &mounts),
+            RootStorage::of("sftp://host/home/demo", Some(&mounts)),
             RootStorage::Network
         );
-        assert_eq!(RootStorage::of("dav://host/files", &mounts), RootStorage::Network);
+        assert_eq!(
+            RootStorage::of("dav://host/files", Some(&mounts)),
+            RootStorage::Network
+        );
+    }
+
+    /// Safety rule "an unknown filesystem is checked on a timer".
+    ///
+    /// parity: SRCH-030
+    #[test]
+    fn a_local_root_counts_as_network_without_the_mount_table() {
+        assert_eq!(RootStorage::of("file:///home/demo", None), RootStorage::Network);
+    }
+
+    /// Safety rule "an unreadable mount table stops the scan": a local
+    /// root fails, and a share, which needs no mount table, does not.
+    ///
+    /// parity: SRCH-031
+    #[test]
+    fn an_unreadable_mount_table_fails_only_local_scopes() {
+        let unreadable = || {
+            Err(SearchError::Io {
+                path: PathBuf::from("/proc/self/mountinfo"),
+                error: std::io::Error::from_raw_os_error(libc::EACCES),
+            })
+        };
+        let directory = Path::new(INDEX_DIRECTORY);
+
+        let local = IndexScope::with_mount_table("file:///", directory, unreadable);
+        let share = IndexScope::with_mount_table("smb://nas/share", directory, unreadable);
+
+        assert!(matches!(local, Err(SearchError::Io { .. })));
+        assert!(share.is_ok_and(|scope| scope.admits("smb://nas/share/a.pdf")));
     }
 }
