@@ -50,6 +50,9 @@ impl BrowserWindow {
         self.set_action_enabled(WindowAction::PinSelected, selected == 1);
         self.update_file_commands();
         self.update_open_location_action(selected);
+        self.update_properties_actions();
+        self.update_size_actions();
+        self.update_archive_actions();
     }
 
     /// Runs `change`, which swaps, reloads or clears the folder model,

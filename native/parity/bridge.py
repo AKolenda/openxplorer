@@ -20,6 +20,7 @@ BRIDGE = 'native/parity/bridge.json'
 LEGACY_DISPATCHER = 'desktop/winspace.py'
 STATUSES = frozenset({'pending', 'core-tested', 'native-tested'})
 CITATION = re.compile(r'(?P<path>[^:]+\.rs)::(?P<test>[A-Za-z_]\w*)')
+TEST_ATTRIBUTES = frozenset({'#[test]', '#[gtk::test]'})
 RUST_FUNCTION = re.compile(
     r'(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+(?P<name>\w+)')
 

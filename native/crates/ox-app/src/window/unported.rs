@@ -18,15 +18,9 @@ use super::BrowserWindow;
 /// The `native/ROADMAP.md` milestone that brings a command or a setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Milestone {
-    /// The rest of the "Search and metadata" service: folder sizes. The
-    /// search index has arrived.
+    /// The rest of the "Search and metadata" service: Open with. The
+    /// search index, folder sizes and Properties have arrived.
     SearchAndMetadata,
-    /// The rest of "Search and metadata": properties, folder sizes and
-    /// Open with.
-    ItemDetails,
-    /// The "Archives and recovery" service: ZIP extraction and previous
-    /// versions.
-    ArchivesAndRecovery,
     /// The "Desktop integration" service: default apps, Show in folder,
     /// the terminal and the Brave download folder.
     DesktopIntegration,
@@ -39,9 +33,7 @@ impl Milestone {
     /// How tooltips and disabled settings name the milestone.
     pub(crate) const fn description(self) -> &'static str {
         match self {
-            Milestone::SearchAndMetadata => "folder sizes",
-            Milestone::ItemDetails => "properties, folder sizes and Open with",
-            Milestone::ArchivesAndRecovery => "archives and previous versions",
+            Milestone::SearchAndMetadata => "Open with",
             Milestone::DesktopIntegration => "desktop integration",
             Milestone::Distribution => "packaging and updates",
         }
@@ -71,12 +63,8 @@ const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand 
 }
 
 /// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 8] = [
-    command(WindowAction::OpenWith, Milestone::ItemDetails),
-    command(WindowAction::CalculateFolderSize, Milestone::ItemDetails),
-    command(WindowAction::Properties, Milestone::ItemDetails),
-    command(WindowAction::ExtractAll, Milestone::ArchivesAndRecovery),
-    command(WindowAction::PreviousVersions, Milestone::ArchivesAndRecovery),
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 4] = [
+    command(WindowAction::OpenWith, Milestone::SearchAndMetadata),
     command(WindowAction::OpenInTerminal, Milestone::DesktopIntegration),
     // The dialog names where the installed source and the corresponding
     // source archive are, which packaging decides.

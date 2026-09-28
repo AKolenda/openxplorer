@@ -38,8 +38,9 @@ const RESIZE_SETTLE: Duration = Duration::from_millis(500);
 /// unchanged for [`RESIZE_SETTLE`].
 const COLUMNS_RESIZED: &str = "columns-resized";
 
-/// The text `column` shows for `item`. Folders and files of unknown size
-/// have an empty Size cell.
+/// The text `column` shows for `item`. A folder shows its measured size
+/// once measured; folders never measured and files of unknown size have
+/// an empty Size cell.
 fn cell_text(column: SortColumn, item: &FileItem) -> String {
     let entry = item.entry();
     match column {
@@ -47,7 +48,22 @@ fn cell_text(column: SortColumn, item: &FileItem) -> String {
         SortColumn::Modified => format::date_text(entry.modified),
         SortColumn::FolderPath => item.folder_path().text.clone(),
         SortColumn::Type => entry.type_label.clone(),
-        SortColumn::Size => item.file_size().map(format::pretty_bytes).unwrap_or_default(),
+        SortColumn::Size => match item.folder_size() {
+            Some(measured) => measured.size_text(),
+            None => item.file_size().map(format::pretty_bytes).unwrap_or_default(),
+        },
+    }
+}
+
+/// The tooltip of `column`'s cell for `item` (`renderRows` in app.js): a
+/// search result's full path in Folder path (`row.title=displayUri(e.uri)`
+/// while searching), how a measured folder size was counted in Size, else
+/// none.
+fn cell_tooltip(column: SortColumn, item: &FileItem) -> Option<String> {
+    match column {
+        SortColumn::FolderPath => Some(display_path(&item.entry().uri)),
+        SortColumn::Size => item.folder_size().map(|measured| measured.cell_tooltip()),
+        SortColumn::Name | SortColumn::Modified | SortColumn::Type => None,
     }
 }
 
@@ -80,11 +96,7 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
             label.set_text(&cell_text(column, &item));
             bind_owners.style_cell(&label, &item);
-            if column == SortColumn::FolderPath {
-                // A search result's full path (`row.title=displayUri(e.uri)`
-                // while searching in app.js).
-                label.set_tooltip_text(Some(&display_path(&item.entry().uri)));
-            }
+            label.set_tooltip_text(cell_tooltip(column, &item).as_deref());
         }
     });
     factory

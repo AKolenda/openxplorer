@@ -1,38 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the file operations of every window share: the undo journal
-//! (OPS-029, OPS-031) and the previous-versions protection (XFER-020).
+//! (OPS-029, OPS-031). Their previous-versions protection (XFER-020) is
+//! [`super::previous_versions`]'s.
 //!
-//! The Python app kept one `PreviousVersions` service for the whole
-//! application (`desktop/winspace.py`) and had no Undo. Like Dolphin's
-//! undo manager, the journal here belongs to the application: Undo in any
-//! window reverses the newest operation of any window, and every window
-//! hears `journal-changed` to relabel its Undo and Redo commands.
-
-use std::sync::Arc;
+//! The Python app had no Undo. Like Dolphin's undo manager, the journal
+//! here belongs to the application: Undo in any window reverses the newest
+//! operation of any window, and every window hears `journal-changed` to
+//! relabel its Undo and Redo commands.
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::ops::{JournalDirection, JournalEntry, UndoRecord, WriteProtection};
-use ox_core::versions::PreviousVersions;
+use ox_core::ops::{JournalDirection, JournalEntry, UndoRecord};
 
 use super::{AppContext, JOURNAL_CHANGED};
 
 impl AppContext {
-    /// The protection every file operation runs with: previous versions
-    /// (snapshots and backups) are never changed in place
-    /// (`PreviousVersions.assert_writable` in `desktop/previous_versions.py`).
-    pub(crate) fn write_protection(&self) -> WriteProtection {
-        WriteProtection::new(self.previous_versions().write_guard())
-    }
-
-    fn previous_versions(&self) -> &Arc<PreviousVersions> {
-        self.imp()
-            .previous_versions
-            .get()
-            .expect("AppContext::new creates the previous-versions service")
-    }
-
     /// The label of the Undo or Redo command, such as `Undo: Rename`;
     /// `None` while it has nothing to do.
     pub(crate) fn journal_label(&self, direction: JournalDirection) -> Option<String> {

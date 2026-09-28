@@ -13,6 +13,7 @@
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{self, Entry, EntryError, EntryKind};
+use ox_core::integration;
 
 use crate::locations::{self, Page};
 
@@ -26,9 +27,10 @@ const NOT_OPENABLE: &str = "This item is not a regular file or a readable folder
 pub(super) enum Activation {
     /// Open this folder in the tab.
     Folder(String),
-    /// Open the file in its default application. ZIP archives are opened
-    /// the same way until the archive dialog is ported.
+    /// Open the file in its default application.
     File,
+    /// Browse the ZIP archive in the archive browser (ARC-002).
+    Archive,
     /// Refuse, with this message.
     Refused(&'static str),
 }
@@ -56,6 +58,9 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
         EntryKind::Special | EntryKind::Unknown | EntryKind::Symlink
     ) {
         return Activation::Refused(NOT_OPENABLE);
+    }
+    if integration::Activation::for_entry(entry) == Ok(integration::Activation::BrowseArchive) {
+        return Activation::Archive;
     }
     Activation::File
 }
@@ -85,6 +90,7 @@ impl BrowserWindow {
         match activation_for(entry) {
             Activation::Folder(uri) => self.navigate_or_report(&uri),
             Activation::File => self.open_file(entry),
+            Activation::Archive => self.open_archive(entry),
             Activation::Refused(message) => self.show_message(message),
         }
     }
@@ -109,6 +115,7 @@ impl BrowserWindow {
             async move {
                 match query_entry(&uri).await {
                     Ok(entry) if activation_for(&entry) == Activation::File => window.open_file(&entry),
+                    Ok(entry) if activation_for(&entry) == Activation::Archive => window.open_archive(&entry),
                     Ok(_) => {}
                     Err(error) => window.show_message(&error.to_string()),
                 }
@@ -205,6 +212,7 @@ impl BrowserWindow {
         match activation_for(&entry) {
             Activation::Folder(folder) => self.open_incoming_folder(&folder, tab),
             Activation::File => self.open_file(&entry),
+            Activation::Archive => self.open_archive(&entry),
             Activation::Refused(message) => self.show_message(message),
         }
     }
@@ -227,12 +235,18 @@ mod tests {
     use super::*;
     use crate::test_support::{file_entry, folder_entry};
 
+    /// parity: ARC-002
     #[test]
-    fn folders_open_in_the_tab_and_files_in_an_application() {
+    fn folders_open_in_the_tab_files_in_an_application_and_zips_in_the_browser() {
         let folder = folder_entry("Projects");
         assert_eq!(activation_for(&folder), Activation::Folder(folder.uri.clone()));
         assert_eq!(activation_for(&file_entry("notes.txt")), Activation::File);
-        assert_eq!(activation_for(&file_entry("photos.zip")), Activation::File);
+        assert_eq!(activation_for(&file_entry("photos.zip")), Activation::Archive);
+        assert_eq!(activation_for(&file_entry("PHOTOS.ZIP")), Activation::Archive);
+        assert_eq!(
+            activation_for(&folder_entry("Archive.zip")),
+            Activation::Folder(folder_entry("Archive.zip").uri)
+        );
     }
 
     #[test]

@@ -283,6 +283,9 @@ class RustTestDiscoveryTests(unittest.TestCase):
                 #[gtk::test]
                 fn on_the_gtk_test_thread() {}
             }
+
+            #[gtk::test]
+            fn on_the_gtk_test_thread() {}
         ''')
         self.assertEqual(bridge.rust_tests(source), {
             'with_a_comment_between', 'with_another_attribute',

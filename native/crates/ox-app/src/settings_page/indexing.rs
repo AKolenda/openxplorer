@@ -27,13 +27,12 @@ use super::group::SettingsGroup;
 use super::indexed_folders::{grouped_number, IndexCommand};
 use super::pages::{Category, SettingsView, Subpage};
 use super::parts;
-use super::row::{Availability, ControlName, SettingRow};
+use super::row::{ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
 use super::status_card::{StatusCard, StatusText};
 use super::{SettingsPage, SharedHandler, MESSAGE};
 use crate::icons::Icon;
-use crate::window::Milestone;
 
 const FOLDERS_TO_INDEX: RowText = RowText {
     title: "Folders to index",
@@ -329,9 +328,7 @@ impl SettingsPage {
 /// the row that opens how sizes are counted.
 fn folder_sizes_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new("Folder sizes");
-    let command = SettingRow::new(FOLDER_SIZES);
-    command.set_availability(Availability::Unported(Milestone::SearchAndMetadata));
-    group.add_row(&command);
+    group.add_row(&SettingRow::new(FOLDER_SIZES));
     let details = SettingRow::new(HOW_SIZES_ARE_COUNTED);
     let open = parts::chevron_button(HOW_SIZES_ARE_COUNTED.title);
     open.connect_clicked(glib::clone!(

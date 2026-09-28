@@ -39,6 +39,7 @@ mod activation;
 mod active_tab;
 mod address_bar;
 mod appearance;
+mod archive_actions;
 mod breakpoints;
 mod button_style;
 mod cache_folder;
@@ -57,8 +58,10 @@ mod file_drop;
 mod file_ops;
 mod folder_pane;
 mod folder_search;
+mod folder_size_scan;
 mod gestures;
 mod input;
+mod item_dialogs;
 mod landing;
 mod listing_state;
 mod loading;
@@ -80,6 +83,7 @@ mod selection;
 mod session;
 mod settings_tab;
 mod sidebar;
+mod snapshot_tabs;
 mod status_bar;
 mod tab_layout;
 mod tab_menu;
@@ -90,6 +94,7 @@ mod toast;
 mod transfer_panel;
 mod type_to_select;
 mod unported;
+mod version_restore;
 mod widget_tree;
 mod window_action;
 
@@ -274,6 +279,13 @@ mod imp {
         pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
         /// The tab drag this window started, while it lasts.
         pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
+        /// The in-window dialogs, Properties by tab, and the tabs that
+        /// browse snapshots.
+        pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
+        /// Measured folder sizes and the running folder-size scan.
+        pub(super) size_scans: super::folder_size_scan::SizeScans,
+        /// The panel of a running extraction or compression.
+        pub(super) archive_operations: super::archive_actions::ArchiveOperations,
     }
 
     #[glib::object_subclass]
@@ -368,6 +380,9 @@ impl BrowserWindow {
             .expect("a new window has no context yet");
         window.start_network();
         window.install_actions();
+        window.install_size_scans();
+        window.install_item_dialogs();
+        window.install_archive_actions();
         window.install_input();
         window.connect_signals();
         window.connect_settings_page();

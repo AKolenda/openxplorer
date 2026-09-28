@@ -392,12 +392,16 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 12] = [
 /// Ctrl+N, the application's one shortcut: another window.
 const NEW_WINDOW_ACCELERATORS: &[&str] = &["<Primary>n"];
 
+/// Alt+Enter: Properties of the selection or the folder (`onKey`).
+const PROPERTIES_ACCELERATORS: &[&str] = &["<Alt>Return", "<Alt>KP_Enter"];
+
 /// Installs the keyboard shortcuts of every window action, and Ctrl+N.
 pub(crate) fn install_accelerators(app: &gtk::Application) {
     for (action, keys) in WINDOW_ACCELERATORS {
         app.set_accels_for_action(&action.detailed_name(), keys);
     }
     app.set_accels_for_action(&AppAction::NewWindow.detailed_name(), NEW_WINDOW_ACCELERATORS);
+    app.set_accels_for_action(&WindowAction::Properties.detailed_name(), PROPERTIES_ACCELERATORS);
     for step in Step::ALL {
         let keys = step.accelerators();
         let keys: Vec<&str> = keys.iter().map(String::as_str).collect();

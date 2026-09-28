@@ -108,3 +108,14 @@
 @define-color ox_preview_dark_content #202020;
 @define-color ox_preview_accent #0067c0;
 @define-color ox_preview_line alpha(#888888, .4);
+
+/* Dialogs, the snapshot banner and tab marker (skin/in-window-dialogs.css) */
+@define-color ox_smoke alpha(black, .3);           /* C36 modal scrim */
+@define-color ox_dialog_stroke alpha(#757575, .4); /* C43 */
+@define-color ox_error #ff9b96;                    /* --error: dialog errors */
+@define-color ox_caution_bg #302a20;               /* C35 snapshot banner */
+@define-color ox_caution_text #ecc993;
+@define-color ox_caution_border #51422a;
+@define-color ox_caution_badge_bg #443721;         /* C35 snapshot tab badge */
+@define-color ox_caution_badge_text #f4cc82;
+@define-color ox_caution_edge #c48c2f;             /* C35 snapshot tab top */

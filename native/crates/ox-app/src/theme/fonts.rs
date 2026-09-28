@@ -128,6 +128,16 @@ const FONT_SIZES: &[FontSize] = &[
     font(".settings .settings-paragraph", 13.0),
     font(".settings .settings-no-matches", 13.0),
     font("popover.choice-list list > row", 13.0),
+    // In-window dialogs, the snapshot banner and the size-scan bar
+    // (in-window-dialogs.css), at ui-spec.md's 12 px minimum (T04, T10).
+    font(".ox-dialog", 12.0),
+    font(".properties-dialog .dialog-title", 18.0),
+    font(".ox-dialog .property-name-heading", 14.0),
+    font(".ox-dialog .extract-source-name", 15.0),
+    font(".ox-dialog .versions-empty-heading", 13.0),
+    font(".snapshot-banner", 12.0),
+    font(".snapshot-tab-badge", 12.0),
+    font(".size-scan", 12.0),
 ];
 
 /// A bar height that grows with the text, as the

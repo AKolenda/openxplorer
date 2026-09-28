@@ -39,6 +39,9 @@ const ICON_TO_TITLE: i32 = 10;
 /// The glyph of a tab's close button.
 const CLOSE_GLYPH: i32 = 12;
 
+/// The clock in a snapshot tab's badge (`icon('clock', 12)`).
+const SNAPSHOT_BADGE_GLYPH: i32 = 12;
+
 /// The CSS class of a tab's icon.
 const TAB_ICON_CLASS: &str = "tab-icon";
 
@@ -58,6 +61,9 @@ pub(super) struct TabView {
     pub icon: Art,
     /// The tab is in front.
     pub active: bool,
+    /// The name of the snapshot the tab shows a previous version from,
+    /// which marks the tab (PROP-022).
+    pub previous_version: Option<String>,
 }
 
 mod imp {
@@ -241,6 +247,9 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
     widget.update_state(&[gtk::accessible::State::Selected(Some(tab.active))]);
     widget.append(&tab_icon(tab.icon));
     widget.append(&title(&tab.title));
+    if let Some(snapshot) = &tab.previous_version {
+        mark_previous_version(&widget, &tab.title, snapshot);
+    }
     widget.append(&close_button(tab));
     let id = tab.id.to_variant();
     widget.add_controller(select_on_click(id.clone()));
@@ -272,6 +281,24 @@ fn menu_on_right_click(id: TabId, uri: String) -> gtk::GestureClick {
         }
     });
     click
+}
+
+/// Marks a tab that shows a previous version from the snapshot `snapshot`:
+/// the amber top edge and the "Previous version" badge (`renderTabs` in
+/// app.js).
+fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
+    widget.add_css_class("snapshot-tab");
+    let badge = gtk::Box::builder()
+        .spacing(4)
+        .valign(gtk::Align::Center)
+        .tooltip_text(format!("Previous version · {snapshot}"))
+        .css_classes(["snapshot-tab-badge"])
+        .build();
+    badge.append(&icons::image(Icon::Clock, SNAPSHOT_BADGE_GLYPH));
+    badge.append(&gtk::Label::new(Some("Previous version")));
+    widget.append(&badge);
+    let name = format!("{title} — Previous version — {snapshot}");
+    widget.update_property(&[gtk::accessible::Property::Label(&name)]);
 }
 
 /// Runs the tab action `action` on the tab `id` from `widget`, when the

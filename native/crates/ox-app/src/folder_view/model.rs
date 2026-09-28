@@ -27,18 +27,15 @@ fn as_item(object: &glib::Object) -> &FileItem {
 }
 
 /// Compares two items by one column, without folders-first or tie-breaks.
-/// Sizes that are not known count as 0, as in app.js.
+/// Sizes that are not known, and folders never measured, count as 0, as
+/// in app.js.
 fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> Ordering {
     match column {
         SortColumn::Name => a.sort_name().key.natural_cmp(b.sort_name().key),
         SortColumn::Modified => a.entry().modified.cmp(&b.entry().modified),
         SortColumn::FolderPath => a.folder_path().key.natural_cmp(&b.folder_path().key),
         SortColumn::Type => a.type_sort_key().natural_cmp(b.type_sort_key()),
-        SortColumn::Size => {
-            let a_size = a.entry().size.unwrap_or(0);
-            let b_size = b.entry().size.unwrap_or(0);
-            a_size.cmp(&b_size)
-        }
+        SortColumn::Size => a.sort_size().cmp(&b.sort_size()),
     }
 }
 

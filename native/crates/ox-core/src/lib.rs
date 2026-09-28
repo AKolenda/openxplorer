@@ -19,7 +19,7 @@
 //! | [`transfer`] | Copy, move, Trash and permanent delete | `operations.py` |
 //! | [`gio_node`] | The transfer engine's GIO and GVfs adapter | `gio_backend.py` |
 //! | [`search`] | The metadata-only filename search cache and its index service | `search_index.py`, `index_service.py`, `local_watch.py` |
-//! | [`archive`] | ZIP browsing, opening a member as a private copy, and extraction | `archives.py`, `zip_extraction.py`, `native_opening.py`, `winspace.py` |
+//! | [`archive`] | ZIP browsing, opening a member as a private copy, extraction and compression | `archives.py`, `zip_extraction.py`, `native_opening.py`, `winspace.py` |
 //! | [`versions`] | Previous versions and the read-only rule for snapshots | `previous_versions.py`, `file_services.py`, `ui/snapshot-meta.js` |
 //! | [`sizes`] | On-demand folder sizes | `folder_sizes.py`, `mount_support.py` |
 //! | [`integration`] | Default apps, Show in folder, Brave's download folder, opening files, Open in Terminal | `desktop_integration.py`, `reveal_integration.py`, `filemanager_bus.py`, `brave_integration.py`, `activation.py`, `native_opening.py`, `terminal_integration.py`, `app_catalog.py` |

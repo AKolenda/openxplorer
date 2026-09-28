@@ -10,12 +10,15 @@
 //! emits `places-changed`, which every window connects to, when a pin, a
 //! saved share, a visited server, a standard folder ([`known_folders`]) or
 //! a preference changes, and `layout-reset` when Settings restores the
-//! default pane widths. The file operations of every window share the
-//! undo journal and the previous-versions protection ([`file_operations`]).
-//! It also holds the search cache the windows share ([`search_cache`]).
+//! default pane widths. Every window shares the previous-versions service
+//! ([`previous_versions`]), whose protection the file operations run with,
+//! and the undo journal of the file operations ([`file_operations`]). It
+//! also holds the search cache the windows share ([`search_cache`]).
 
+mod external_open;
 mod file_operations;
 mod known_folders;
+mod previous_versions;
 mod search_cache;
 
 use std::rc::Rc;

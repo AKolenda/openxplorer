@@ -88,7 +88,10 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = vec![open.into()];
     if facts.shape == ItemShape::ZipArchive {
         let extract = item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll).disabled_when(several);
+        // Beyond the Python app, as Dolphin's "Extract here".
+        let extract_here = item("Extract here", Icon::FolderZip, WindowAction::ExtractHere);
         entries.push(extract.into());
+        entries.push(extract_here.disabled_when(several).into());
     }
     let terminal_label = if is_folder {
         "Open in Terminal"
@@ -146,6 +149,17 @@ fn copy_path_item(facts: &ItemFacts) -> MenuEntry {
     copy_path.disabled_when(!facts.is_single).into()
 }
 
+/// Compress to ZIP file, which the Python app did not have (Windows 11's
+/// "Compress to ZIP file").
+fn compress_item() -> MenuEntry {
+    item(
+        "Compress to ZIP file",
+        Icon::FolderZip,
+        WindowAction::CompressToZip,
+    )
+    .into()
+}
+
 /// The end of both styles: Calculate folder size for folders, Previous
 /// versions and Properties.
 fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
@@ -181,6 +195,7 @@ fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     let mut entries = open_group(facts);
     entries.push(duplicate_item());
     entries.push(copy_path_item(facts));
+    entries.push(compress_item());
     entries.push(MenuEntry::Divider);
     entries.extend(details_group(facts));
     entries.push(MenuEntry::Divider);
@@ -208,6 +223,7 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
         delete.into(),
         duplicate_item(),
         copy_path_item(facts),
+        compress_item(),
     ]);
     if facts.shape == ItemShape::Folder {
         let cache = item(
@@ -260,7 +276,7 @@ pub(crate) fn background_menu(undo_label: &str, redo_label: &str) -> Vec<MenuEnt
         .into(),
         MenuEntry::Divider,
         item("Pin this folder", Icon::Pin, WindowAction::PinFolder).into(),
-        item(
+        MenuItem::toggle(
             "Cache this folder for search",
             Icon::Search,
             WindowAction::CacheFolder,
@@ -269,7 +285,7 @@ pub(crate) fn background_menu(undo_label: &str, redo_label: &str) -> Vec<MenuEnt
         item(
             "Calculate folder sizes",
             Icon::HardDrive,
-            WindowAction::CalculateFolderSize,
+            WindowAction::CalculateFolderSizes,
         )
         .into(),
         MenuEntry::Divider,
@@ -383,6 +399,7 @@ mod tests {
                 "Move to Trash",
                 "Duplicate",
                 "Copy path",
+                "Compress to ZIP file",
                 "Cache this folder for search",
                 "-",
                 "Calculate folder size",
@@ -430,8 +447,9 @@ mod tests {
         let entries = labels(&item_menu(&facts, MenuStyle::Classic).entries);
 
         assert_eq!(entries[1], "Extract all…");
-        assert_eq!(entries[2], "Open containing folder in Terminal");
-        assert_eq!(entries[3], "Open with…");
+        assert_eq!(entries[2], "Extract here");
+        assert_eq!(entries[3], "Open containing folder in Terminal");
+        assert_eq!(entries[4], "Open with…");
         assert!(entries.contains(&"Delete permanently".to_owned()));
         assert!(entries.contains(&"Sign out of server…".to_owned()));
         assert!(!entries.contains(&"Calculate folder size".to_owned()));
@@ -502,6 +520,7 @@ mod tests {
                 "Pin to Quick access",
                 "Duplicate",
                 "Copy path",
+                "Compress to ZIP file",
                 "-",
                 "Calculate folder size",
                 "Previous versions",

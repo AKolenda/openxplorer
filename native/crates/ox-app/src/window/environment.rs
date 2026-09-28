@@ -70,7 +70,9 @@ impl BrowserWindow {
     /// Reads the volume monitor and rebuilds the device names.
     fn read_volumes(&self) {
         let rows = volumes::from_monitor(self.volume_monitor());
-        let context = locations::location_context(glib::home_dir(), &rows);
+        let mut context = locations::location_context(glib::home_dir(), &rows);
+        // Snapshot folders are read-only and mark the tabs inside them.
+        context.snapshot_roots = self.context().previous_versions().snapshot_roots();
         self.imp().volumes.replace(rows);
         self.imp().locations.replace(context);
     }

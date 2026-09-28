@@ -76,6 +76,9 @@ pub(crate) enum Icon {
     ChevronRight16,
     /// `clipboard_paste_20_regular`: Paste.
     ClipboardPaste,
+    /// `clock_20_regular`: Previous versions, and the banner of a tab that
+    /// browses one (`icon('clock')` in app.js).
+    Clock,
     /// `code_20_regular`: New HTML document.
     Code,
     /// `code_20_color`: code, HTML and JSON files at small sizes.
@@ -265,6 +268,7 @@ impl Icon {
             Icon::ChevronDown16 => "ox-chevron-down-16-symbolic",
             Icon::ChevronRight16 => "ox-chevron-right-16-symbolic",
             Icon::ClipboardPaste => "ox-clipboard-paste-20-symbolic",
+            Icon::Clock => "ox-clock-20-symbolic",
             Icon::Code => "ox-code-20-symbolic",
             Icon::CodeColor20 => "ox-code-20-color",
             Icon::CodeColor24 => "ox-code-24-color",
@@ -361,7 +365,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 95] = [
+pub(crate) const ALL_ICONS: [Icon; 96] = [
     Icon::Add,
     Icon::Apps,
     Icon::ArrowClockwise,
@@ -383,6 +387,7 @@ pub(crate) const ALL_ICONS: [Icon; 95] = [
     Icon::ChevronDown16,
     Icon::ChevronRight16,
     Icon::ClipboardPaste,
+    Icon::Clock,
     Icon::Code,
     Icon::CodeColor20,
     Icon::CodeColor24,
