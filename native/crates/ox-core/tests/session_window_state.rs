@@ -5,15 +5,16 @@
 
 use ox_core::location::{HOME_URI, NETWORK_URI, SETTINGS_URI};
 use ox_core::session::{
-    FileManagerMethod, FileManagerRequest, SettingsSection, SortDirection, SortField, TabSnapshot, TabView,
+    FileManagerMethod, FileManagerRequest, SettingsSection, SortDirection, SortField, TabSnapshot,
     WindowStateError, MAX_SCROLL,
 };
+use ox_core::settings::View;
 use serde_json::json;
 
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_tab_roundtrip`
 /// parity: TAB-038
 #[test]
-fn tab_roundtrip() {
+fn a_tab_snapshot_survives_a_json_round_trip() {
     let state = json!({
         "uri": "smb://nas/work",
         "history": ["file:///home/demo", "smb://nas/work"],
@@ -30,7 +31,7 @@ fn tab_roundtrip() {
     assert_eq!(snapshot.index, 1);
     assert_eq!(snapshot.history, ["file:///home/demo", "smb://nas/work"]);
     assert_eq!(snapshot.selection, ["smb://nas/work/report.pdf"]);
-    assert_eq!(snapshot.view, TabView::Grid);
+    assert_eq!(snapshot.view, View::Grid);
     assert_eq!(snapshot.sort, SortField::Size);
     assert_eq!(snapshot.direction, SortDirection::Descending);
     assert!((snapshot.scroll - 1600.0).abs() < f64::EPSILON);
@@ -40,7 +41,7 @@ fn tab_roundtrip() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_no_password_fields_forwarded`
 /// parity: TAB-038
 #[test]
-fn no_password_fields_forwarded() {
+fn password_fields_are_never_forwarded() {
     let state = json!({"uri": "home:", "password": "not a real password"});
 
     let snapshot = TabSnapshot::from_json(&state).unwrap();
@@ -53,7 +54,7 @@ fn no_password_fields_forwarded() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_unknown_scheme_rejected`
 /// parity: TAB-038
 #[test]
-fn unknown_scheme_rejected() {
+fn a_location_with_an_unknown_scheme_is_refused() {
     let result = TabSnapshot::from_json(&json!({"uri": "javascript:alert(1)"}));
 
     assert!(matches!(result, Err(WindowStateError::Location(_))));
@@ -62,7 +63,7 @@ fn unknown_scheme_rejected() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_bad_history_position_rejected`
 /// parity: TAB-038
 #[test]
-fn bad_history_position_rejected() {
+fn a_history_position_must_be_an_integer_inside_the_history() {
     for index in [json!(true), json!(-1), json!(1), json!(0.0), json!("0")] {
         let result = TabSnapshot::from_json(&json!({"uri": "home:", "index": index}));
 
@@ -73,7 +74,7 @@ fn bad_history_position_rejected() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_mismatching_history_resets_safely`
 /// parity: TAB-038
 #[test]
-fn mismatching_history_resets_safely() {
+fn a_history_without_the_location_resets_to_the_location() {
     let state = json!({"uri": "home:", "history": ["network:"], "index": 0});
 
     let snapshot = TabSnapshot::from_json(&state).unwrap();
@@ -85,7 +86,7 @@ fn mismatching_history_resets_safely() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_history_size_limit`
 /// parity: TAB-038, NAV-005
 #[test]
-fn history_size_limit() {
+fn a_history_holds_1_to_200_locations() {
     let longest = TabSnapshot::from_json(&json!({"history": vec!["home:"; 200]}));
     let too_long = TabSnapshot::from_json(&json!({"history": vec!["home:"; 201]}));
     let empty = TabSnapshot::from_json(&json!({"history": []}));
@@ -100,7 +101,7 @@ fn history_size_limit() {
 /// JSON has no infinity, so Python's `float('inf')` arrives as text.
 /// parity: TAB-038
 #[test]
-fn infinite_scroll_rejected() {
+fn an_infinite_scroll_position_is_refused_and_a_huge_one_clamped() {
     for scroll in [json!("inf"), json!("-Infinity"), json!("nan")] {
         let result = TabSnapshot::from_json(&json!({"scroll": scroll}));
 
@@ -113,7 +114,7 @@ fn infinite_scroll_rejected() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_selection_size_limit`
 /// parity: TAB-038
 #[test]
-fn selection_size_limit() {
+fn a_selection_is_a_list_of_at_most_10000_items() {
     let too_many = TabSnapshot::from_json(&json!({"selection": vec!["/tmp/a"; 10_001]}));
     let not_a_list = TabSnapshot::from_json(&json!({"selection": "/tmp/a"}));
 
@@ -138,7 +139,7 @@ fn selected_items_are_file_locations() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_settings_supported`
 /// parity: TAB-038
 #[test]
-fn settings_supported() {
+fn a_settings_tab_keeps_its_known_section() {
     let state = json!({"uri": "settings:", "settingsSection": "brave"});
 
     let snapshot = TabSnapshot::from_json(&state).unwrap();
@@ -159,7 +160,7 @@ fn unknown_view_and_sort_fall_back_to_the_defaults() {
     let snapshot = TabSnapshot::from_json(&state).unwrap();
 
     assert_eq!(snapshot.uri, HOME_URI);
-    assert_eq!(snapshot.view, TabView::Details);
+    assert_eq!(snapshot.view, View::Details);
     assert_eq!(snapshot.sort, SortField::Name);
     assert_eq!(snapshot.direction, SortDirection::Ascending);
     assert_eq!(
@@ -173,7 +174,7 @@ fn unknown_view_and_sort_fall_back_to_the_defaults() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_showitems_keeps_file_path`
 /// parity: INT-014, SAFE-017
 #[test]
-fn showitems_keeps_file_path() {
+fn show_items_keeps_a_file_location() {
     let request = FileManagerRequest::new("ShowItems", &["file:///tmp/movie.mp4"]).unwrap();
 
     assert_eq!(request.method, FileManagerMethod::ShowItems);
@@ -183,7 +184,7 @@ fn showitems_keeps_file_path() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_showfolders_and_properties`
 /// parity: INT-014
 #[test]
-fn showfolders_and_properties() {
+fn show_folders_and_item_properties_keep_their_locations() {
     for name in ["ShowFolders", "ShowItemProperties"] {
         let request = FileManagerRequest::new(name, &["smb://nas/work"]).unwrap();
 
@@ -195,7 +196,7 @@ fn showfolders_and_properties() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_unsupported_method_rejected`
 /// parity: SAFE-017
 #[test]
-fn unsupported_method_rejected() {
+fn an_unsupported_method_is_refused() {
     let result = FileManagerRequest::new("Execute", &["/tmp/script"]);
 
     assert_eq!(result, Err(WindowStateError::UnsupportedMethod));
@@ -204,7 +205,7 @@ fn unsupported_method_rejected() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_empty_request_rejected`
 /// parity: SAFE-017
 #[test]
-fn empty_request_rejected() {
+fn a_request_without_locations_is_refused() {
     let result = FileManagerRequest::new("ShowItems", &[] as &[&str]);
 
     assert_eq!(result, Err(WindowStateError::RequestLength));
@@ -213,7 +214,7 @@ fn empty_request_rejected() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_reveal_limit`
 /// parity: SAFE-017
 #[test]
-fn reveal_limit() {
+fn a_request_accepts_100_locations_and_refuses_101() {
     let most = FileManagerRequest::new("ShowItems", &vec!["/tmp/x"; 100]);
     let too_many = FileManagerRequest::new("ShowItems", &vec!["/tmp/x"; 101]);
 
@@ -224,7 +225,7 @@ fn reveal_limit() {
 /// Ported from `desktop/tests/test_v07.py::HandoffTests::test_no_virtual_locations_in_external_requests`
 /// parity: SAFE-017
 #[test]
-fn no_virtual_locations_in_external_requests() {
+fn app_pages_and_other_schemes_are_refused_in_external_requests() {
     for uri in [
         "settings:",
         "home:",

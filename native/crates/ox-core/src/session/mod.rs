@@ -21,6 +21,6 @@ mod tab;
 pub use error::WindowStateError;
 pub use file_manager::{FileManagerMethod, FileManagerRequest, MAX_REQUEST_LOCATIONS};
 pub use tab::{
-    SettingsSection, SortDirection, SortField, TabSnapshot, TabView, MAX_HISTORY_ENTRIES, MAX_SCROLL,
+    SettingsSection, SortDirection, SortField, TabSnapshot, MAX_HISTORY_ENTRIES, MAX_SCROLL,
     MAX_SELECTED_ITEMS,
 };

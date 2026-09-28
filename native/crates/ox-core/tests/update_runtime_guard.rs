@@ -105,7 +105,7 @@ fn impatient(bus: ScriptedBus) -> InstanceGuard<ScriptedBus> {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_identity_changes_with_python_and_ui`
 /// parity: UPD-008
 #[test]
-fn identity_changes_with_python_and_ui() {
+fn the_identity_changes_with_the_python_and_ui_files() {
     let root = tempfile::tempdir().unwrap();
     let folder = root.path();
     fs::create_dir(folder.join("ui")).unwrap();
@@ -147,7 +147,7 @@ fn identity_ignores_files_that_are_not_part_of_the_build() {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_new_process`
 /// parity: UPD-008
 #[test]
-fn new_process() {
+fn a_launch_with_no_running_instance_continues_without_asking_anything_to_quit() {
     let guard = impatient(ScriptedBus::new(&[None], None));
 
     let status = guard
@@ -162,7 +162,7 @@ fn new_process() {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_existing_current_process`
 /// parity: UPD-008
 #[test]
-fn existing_current_process() {
+fn a_current_running_instance_is_left_running() {
     let guard = impatient(ScriptedBus::new(&[Some(OWNER)], Some(installed())));
 
     let status = guard
@@ -176,7 +176,7 @@ fn existing_current_process() {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_old_process_needs_consent`
 /// parity: UPD-008
 #[test]
-fn old_process_needs_consent() {
+fn an_outdated_instance_is_not_stopped_without_consent() {
     let guard = impatient(ScriptedBus::new(&[Some(OWNER)], Some(older())));
 
     let error = guard
@@ -191,7 +191,7 @@ fn old_process_needs_consent() {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_decline_never_stops`
 /// parity: UPD-008
 #[test]
-fn decline_never_stops() {
+fn declining_the_restart_never_stops_the_instance() {
     let guard = impatient(ScriptedBus::new(&[Some(OWNER)], Some(older())));
     let decline = |_: &InstanceStatus| false;
 
@@ -204,7 +204,7 @@ fn decline_never_stops() {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_confirm_stops_only_exact_owner`
 /// parity: UPD-008
 #[test]
-fn confirm_stops_only_exact_owner() {
+fn confirming_asks_only_the_exact_owner_to_quit() {
     let guard = guard(ScriptedBus::new(&[Some(OWNER), Some(OWNER), None], Some(older())));
     let asked = RefCell::new(None);
     let confirm = |status: &InstanceStatus| {
@@ -225,7 +225,7 @@ fn confirm_stops_only_exact_owner() {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_explicit_restart_of_current_process`
 /// parity: UPD-008, UPD-009
 #[test]
-fn explicit_restart_of_current_process() {
+fn an_explicit_restart_asks_even_a_current_instance_to_quit() {
     let guard = guard(ScriptedBus::new(
         &[Some(OWNER), Some(OWNER), None],
         Some(installed()),
@@ -244,7 +244,7 @@ fn explicit_restart_of_current_process() {
 /// request and keeps its name, which is what a writing instance does.
 /// parity: UPD-008, UPD-009
 #[test]
-fn refused_quit_is_not_ignored() {
+fn a_refused_quit_stops_the_launch() {
     let bus = ScriptedBus {
         refuses_quit: true,
         ..ScriptedBus::new(&[Some(OWNER)], Some(older()))
@@ -261,7 +261,7 @@ fn refused_quit_is_not_ignored() {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_session_stop_waits_for_release`
 /// parity: UPD-008, UPD-009
 #[test]
-fn session_stop_waits_for_release() {
+fn stopping_waits_until_the_instance_releases_its_name() {
     let guard = guard(ScriptedBus::new(&[Some(OWNER), None], None));
 
     guard.stop(OWNER).unwrap();
@@ -272,7 +272,7 @@ fn session_stop_waits_for_release() {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_busy_process_is_never_forced`
 /// parity: UPD-008, UPD-009
 #[test]
-fn busy_process_is_never_forced() {
+fn a_busy_instance_is_never_killed() {
     let guard = impatient(ScriptedBus::new(&[Some(OWNER)], None));
 
     let error = guard.stop(OWNER).unwrap_err();
@@ -285,7 +285,7 @@ fn busy_process_is_never_forced() {
 /// Ported from `desktop/tests/test_rc2.py::RuntimeTests::test_owner_changed_during_restart`
 /// parity: UPD-009
 #[test]
-fn owner_changed_during_restart() {
+fn another_instance_taking_the_name_during_restart_is_reported() {
     let guard = impatient(ScriptedBus::new(&[Some(":1.80")], None));
 
     let error = guard.stop(OWNER).unwrap_err();

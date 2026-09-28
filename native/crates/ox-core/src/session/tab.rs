@@ -11,6 +11,7 @@ use serde_json::{json, Map, Value};
 
 use super::WindowStateError;
 use crate::location;
+use crate::settings::View;
 
 /// The most back-and-forward entries a tab keeps.
 pub const MAX_HISTORY_ENTRIES: usize = 200;
@@ -24,16 +25,6 @@ pub const MAX_SCROLL: f64 = 1e9;
 /// Where a tab without a location opens: the Home page.
 const HOME_PAGE: &str = "home:";
 
-/// How a tab shows its folder.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum TabView {
-    /// The details list.
-    #[default]
-    Details,
-    /// Icons in a grid.
-    Grid,
-}
-
 /// What a tab sorts by.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum SortField {
@@ -46,6 +37,26 @@ pub enum SortField {
     Type,
     /// Size.
     Size,
+}
+
+impl SortField {
+    /// Every sort field, in the order of the Details columns.
+    const ALL: [Self; 4] = [Self::Name, Self::Modified, Self::Type, Self::Size];
+
+    /// The field's name in the JSON form.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Name => "name",
+            Self::Modified => "modified",
+            Self::Type => "type",
+            Self::Size => "size",
+        }
+    }
+
+    /// The field named `name`, if there is one.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|field| field.as_str() == name)
+    }
 }
 
 /// Which way a tab sorts.
@@ -119,7 +130,7 @@ pub struct TabSnapshot {
     /// The selected items' locations.
     pub selection: Vec<String>,
     /// How the folder is shown.
-    pub view: TabView,
+    pub view: View,
     /// What it is sorted by.
     pub sort: SortField,
     /// Which way it is sorted.
@@ -171,8 +182,13 @@ impl TabSnapshot {
                 .into_iter()
                 .map(item_location)
                 .collect::<Result<_, _>>()?,
-            view: view(fields),
-            sort: sort_field(fields),
+            // Anything but a known name reads as the default, as in Python.
+            view: text_field(fields, "view")
+                .and_then(View::from_key)
+                .unwrap_or_default(),
+            sort: text_field(fields, "sort")
+                .and_then(SortField::from_name)
+                .unwrap_or_default(),
             direction: sort_direction(fields),
             settings_section: text_field(fields, "settingsSection").and_then(SettingsSection::from_name),
         })
@@ -186,8 +202,8 @@ impl TabSnapshot {
             "index": self.index,
             "scroll": self.scroll,
             "selection": self.selection,
-            "view": if self.view == TabView::Grid { "grid" } else { "details" },
-            "sort": sort_name(self.sort),
+            "view": self.view.as_str(),
+            "sort": self.sort.as_str(),
             "descending": self.direction == SortDirection::Descending,
             "settingsSection": self.settings_section.map(SettingsSection::as_str),
         })
@@ -261,41 +277,12 @@ fn scroll_position(value: Option<&Value>) -> Result<f64, WindowStateError> {
     Ok(number.clamp(0.0, MAX_SCROLL))
 }
 
-/// `grid` or else details.
-fn view(fields: &Map<String, Value>) -> TabView {
-    if text_field(fields, "view") == Some("grid") {
-        TabView::Grid
-    } else {
-        TabView::Details
-    }
-}
-
-/// One of the four sort fields, or else name.
-fn sort_field(fields: &Map<String, Value>) -> SortField {
-    match text_field(fields, "sort") {
-        Some("modified") => SortField::Modified,
-        Some("type") => SortField::Type,
-        Some("size") => SortField::Size,
-        _ => SortField::Name,
-    }
-}
-
 /// Descending only for a JSON `true`, as Python's `is True`.
 fn sort_direction(fields: &Map<String, Value>) -> SortDirection {
     if fields.get("descending") == Some(&Value::Bool(true)) {
         SortDirection::Descending
     } else {
         SortDirection::Ascending
-    }
-}
-
-/// The name of a sort field in the JSON form.
-fn sort_name(field: SortField) -> &'static str {
-    match field {
-        SortField::Name => "name",
-        SortField::Modified => "modified",
-        SortField::Type => "type",
-        SortField::Size => "size",
     }
 }
 
@@ -308,23 +295,47 @@ fn text_field<'a>(fields: &'a Map<String, Value>, name: &str) -> Option<&'a str>
 mod tests {
     use super::*;
 
+    /// A scroll value and how Python's `float` reads it.
+    struct ScrollCase {
+        value: Value,
+        expected: Result<f64, WindowStateError>,
+    }
+
+    impl ScrollCase {
+        fn reads_as(value: Value, position: f64) -> Self {
+            Self {
+                value,
+                expected: Ok(position),
+            }
+        }
+
+        fn is_refused(value: Value) -> Self {
+            Self {
+                value,
+                expected: Err(WindowStateError::ScrollPosition),
+            }
+        }
+    }
+
     #[test]
     fn scroll_positions_are_read_as_python_float_reads_them() {
         let cases = [
-            (json!(1600), Ok(1600.0)),
-            (json!(-5), Ok(0.0)),
-            (json!(2e9), Ok(MAX_SCROLL)),
-            (json!(true), Ok(1.0)),
-            (json!(" 12.5 "), Ok(12.5)),
-            (json!("inf"), Err(WindowStateError::ScrollPosition)),
-            (json!("nan"), Err(WindowStateError::ScrollPosition)),
-            (json!("wide"), Err(WindowStateError::ScrollPosition)),
-            (json!(null), Err(WindowStateError::ScrollPosition)),
-            (json!([1]), Err(WindowStateError::ScrollPosition)),
+            ScrollCase::reads_as(json!(1600), 1600.0),
+            ScrollCase::reads_as(json!(-5), 0.0),
+            ScrollCase::reads_as(json!(2e9), MAX_SCROLL),
+            ScrollCase::reads_as(json!(true), 1.0),
+            ScrollCase::reads_as(json!(" 12.5 "), 12.5),
+            ScrollCase::is_refused(json!("inf")),
+            ScrollCase::is_refused(json!("nan")),
+            ScrollCase::is_refused(json!("wide")),
+            ScrollCase::is_refused(json!(null)),
+            ScrollCase::is_refused(json!([1])),
         ];
 
-        for (value, expected) in cases {
-            assert_eq!(scroll_position(Some(&value)), expected, "{value}");
+        for case in cases {
+            let position = scroll_position(Some(&case.value));
+
+            assert_eq!(position, case.expected, "{}", case.value);
         }
         assert_eq!(scroll_position(None), Ok(0.0));
     }
@@ -335,5 +346,13 @@ mod tests {
             assert_eq!(SettingsSection::from_name(section.as_str()), Some(section));
         }
         assert_eq!(SettingsSection::from_name("Brave"), None);
+    }
+
+    #[test]
+    fn sort_fields_round_trip() {
+        for field in SortField::ALL {
+            assert_eq!(SortField::from_name(field.as_str()), Some(field));
+        }
+        assert_eq!(SortField::from_name("Size"), None);
     }
 }
