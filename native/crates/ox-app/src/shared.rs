@@ -67,6 +67,11 @@ mod imp {
 
 glib::wrapper! {
     /// The state every window of one application shares.
+    //
+    // Nominally `pub`, with its `imp` struct, only because the `pub`
+    // `BrowserWindow::new` in window/mod.rs takes it (rustc's
+    // `private_interfaces`); the private `shared` module keeps it inside
+    // the crate. It narrows to `pub(crate)` together with `BrowserWindow`.
     pub struct AppContext(ObjectSubclass<imp::AppContext>);
 }
 
