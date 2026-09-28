@@ -10,12 +10,12 @@
 
 use gtk::prelude::*;
 
-use super::category_page::{CategoryPage, PageKind};
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts::{self, StatusText};
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
+use super::section::{PageKind, SettingsSection};
 use crate::config::BUILD_NAME;
 use crate::icons::Icon;
 use crate::window::{ButtonStyle, Milestone, WindowAction};
@@ -56,9 +56,9 @@ const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
 };
 
 /// The About page.
-pub(super) fn build() -> CategoryPage {
+pub(super) fn build() -> SettingsSection {
     let category = Category::About;
-    let about = CategoryPage::new(category.title(), category.lead(), PageKind::Category);
+    let about = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     about.append_extra(&build_card());
     let pending = Availability::Unported(Milestone::Distribution);
     about.append_group(&action_group(&UPDATES, pending));

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The right side of Settings for one category, or for a page one of its
-//! rows opens: a title, the line under it, then status cards, groups of
-//! rows and notes.
+//! A section of Settings: the right side for one category, or for a
+//! sub-page one of its rows opens. A title, the line under it, then status
+//! cards, groups of rows and notes.
 //!
 //! Replaces the stacked `.settings-section` cards of `renderSettingsPage`
 //! in `desktop/ui/app.js`: only the chosen category shows (SET-019). The
@@ -27,7 +27,7 @@ const WIDEST_PAGE: i32 = 820;
 /// The back arrow of a sub-page.
 const BACK_GLYPH: i32 = 18;
 
-/// Whether a page is a category or a page a row opened.
+/// Whether a section is a category's page or a sub-page a row opened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PageKind {
     /// A category chosen in the list.
@@ -43,9 +43,9 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    /// Private state of [`super::CategoryPage`].
+    /// Private state of [`super::SettingsSection`].
     #[derive(Debug, Default)]
-    pub(crate) struct CategoryPage {
+    pub(crate) struct SettingsSection {
         /// The title, the lead and the body, top to bottom: the page's one
         /// child.
         pub(super) column: OnceCell<gtk::Box>,
@@ -55,7 +55,7 @@ mod imp {
         pub(super) back_button: OnceCell<gtk::Button>,
     }
 
-    impl CategoryPage {
+    impl SettingsSection {
         /// The page's one child.
         pub(super) fn column(&self) -> &gtk::Box {
             self.column.get().expect("constructed builds the column")
@@ -63,13 +63,13 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for CategoryPage {
-        const NAME: &'static str = "OxCategoryPage";
-        type Type = super::CategoryPage;
+    impl ObjectSubclass for SettingsSection {
+        const NAME: &'static str = "OxSettingsSection";
+        type Type = super::SettingsSection;
         type ParentType = gtk::Widget;
     }
 
-    impl ObjectImpl for CategoryPage {
+    impl ObjectImpl for SettingsSection {
         fn constructed(&self) {
             self.parent_constructed();
             let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -88,7 +88,7 @@ mod imp {
     // The page lays its column out itself rather than through a layout
     // manager: GTK asks a layout manager for sizes instead of `measure`,
     // which widens the page here.
-    impl WidgetImpl for CategoryPage {
+    impl WidgetImpl for SettingsSection {
         fn request_mode(&self) -> gtk::SizeRequestMode {
             self.column().request_mode()
         }
@@ -113,13 +113,14 @@ mod imp {
 }
 
 glib::wrapper! {
-    /// One page of Settings.
-    pub(crate) struct CategoryPage(ObjectSubclass<imp::CategoryPage>)
+    /// One section of Settings: a category's page or a sub-page, of the
+    /// kind [`PageKind`] says.
+    pub(crate) struct SettingsSection(ObjectSubclass<imp::SettingsSection>)
         @extends gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
-impl CategoryPage {
+impl SettingsSection {
     /// An empty page titled `title`, with `lead` under the title.
     pub(crate) fn new(title: &str, lead: &str, kind: PageKind) -> Self {
         let page: Self = glib::Object::new();
@@ -163,7 +164,10 @@ impl CategoryPage {
     }
 
     fn body(&self) -> &gtk::Box {
-        self.imp().body.get().expect("CategoryPage::new builds the body")
+        self.imp()
+            .body
+            .get()
+            .expect("SettingsSection::new builds the body")
     }
 
     /// The arrow back to the category, on a sub-page.

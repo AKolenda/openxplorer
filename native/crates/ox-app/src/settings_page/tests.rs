@@ -49,7 +49,7 @@ impl SettingsTest {
     fn row(&self, title: &str) -> SettingRow {
         let rows = Category::ALL
             .into_iter()
-            .flat_map(|category| self.page.category_page(category).rows());
+            .flat_map(|category| self.page.category_section(category).rows());
         rows.into_iter()
             .find(|row| row.text().title == title)
             .unwrap_or_else(|| panic!("Settings has a row titled {title:?}"))
@@ -66,7 +66,7 @@ impl SettingsTest {
     /// The titles of the rows the category page shown now shows.
     fn shown_rows(&self) -> Vec<&'static str> {
         let category = self.page.view().category();
-        let rows = self.page.category_page(category).rows();
+        let rows = self.page.category_section(category).rows();
         let shown = rows.into_iter().filter(WidgetExt::is_visible);
         shown.map(|row| row.text().title).collect()
     }
@@ -243,7 +243,7 @@ fn default_file_explorer_during_a_search_shows_all_of_default_apps() {
     assert_eq!(imp.search_entry.text(), "", "the search is emptied");
     assert_eq!(imp.pages.visible_child_name().as_deref(), Some("default-apps"));
     assert_eq!(settings.listed_categories(), Category::ALL);
-    let every_row = settings.page.category_page(Category::DefaultApps).rows();
+    let every_row = settings.page.category_section(Category::DefaultApps).rows();
     assert_eq!(settings.shown_rows().len(), every_row.len());
 }
 
@@ -370,7 +370,7 @@ fn rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone() {
     let settings = SettingsTest::open();
     let groups = Category::ALL
         .into_iter()
-        .flat_map(|category| settings.page.category_page(category).groups());
+        .flat_map(|category| settings.page.category_section(category).groups());
     for group in groups {
         for row in group.rows() {
             assert_row_follows_its_availability(&row, &group);

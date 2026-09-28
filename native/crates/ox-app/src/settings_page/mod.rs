@@ -8,9 +8,10 @@
 //! as flat groups of rows. [`SettingsPage`] is a `GtkBox` subclass whose
 //! frame is the template `resources/ui/settings-page.ui`; each category
 //! builds its page in a module of its own ([`appearance`], [`indexing`],
-//! [`default_apps`], [`windows_tabs`], [`brave`], [`about`]), from the
-//! pieces in [`row`], [`group`], [`category_page`], [`parts`] and
-//! [`choice_list`]. The list and the search are in [`navigation`].
+//! [`default_apps`], [`windows_tabs`], [`brave`], [`about`]) as a
+//! [`section::SettingsSection`], from the pieces in [`row`], [`group`],
+//! [`parts`] and [`choice_list`]. The list and the search are in
+//! [`navigation`].
 //!
 //! Every row reads and writes the shared settings file through ox-core,
 //! with the Python app's keys and checks, so both apps stay in step, and
@@ -22,7 +23,6 @@ mod about;
 mod appearance;
 mod bindings;
 mod brave;
-mod category_page;
 mod choice_list;
 mod default_apps;
 mod group;
@@ -33,6 +33,7 @@ mod pages;
 mod parts;
 mod row;
 mod search;
+mod section;
 mod windows_tabs;
 
 #[cfg(test)]
@@ -48,7 +49,7 @@ use crate::locations::Page;
 use crate::shared::AppContext;
 use crate::window::{show_bundled_clear_icon, show_bundled_magnifier};
 
-use category_page::CategoryPage;
+use section::SettingsSection;
 
 pub(crate) use indexed_folders::{index_candidates, CandidateSources, IndexCandidate};
 pub(crate) use pages::{Category, SettingsView, Subpage};
@@ -94,11 +95,11 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::category_page::CategoryPage;
     use super::indexed_folders::FolderList;
     use super::navigation::CategoryRow;
     use super::pages::{Category, SettingsView, Subpage};
     use super::search::SearchQuery;
+    use super::section::SettingsSection;
     use super::{OpenedHook, PreferenceFollower, SharedHandler, BACK_TO_FILES, MESSAGE};
     use crate::shared::AppContext;
 
@@ -130,9 +131,9 @@ mod imp {
         /// The windows' shared state, set by `SettingsPage::bind`.
         pub(super) context: OnceCell<AppContext>,
         /// The categories' pages.
-        pub(super) category_pages: RefCell<HashMap<Category, CategoryPage>>,
+        pub(super) category_sections: RefCell<HashMap<Category, SettingsSection>>,
         /// The sub-pages.
-        pub(super) subpages: RefCell<HashMap<Subpage, CategoryPage>>,
+        pub(super) subpages: RefCell<HashMap<Subpage, SettingsSection>>,
         /// The list's rows, in [`Category::ALL`] order.
         pub(super) category_rows: RefCell<Vec<CategoryRow>>,
         /// What the right side shows.
@@ -245,7 +246,7 @@ impl SettingsPage {
             .context
             .set(context.clone())
             .expect("a settings page is bound once");
-        self.add_category_pages();
+        self.add_category_sections();
         self.add_subpages();
         self.build_navigation();
         self.follow_shared_state();
@@ -260,16 +261,16 @@ impl SettingsPage {
             .expect("the window binds its settings page when it is created")
     }
 
-    fn add_category_pages(&self) {
+    fn add_category_sections(&self) {
         for category in Category::ALL {
             let page = self.build_category(category);
             self.add_page(category.key(), &page);
-            self.imp().category_pages.borrow_mut().insert(category, page);
+            self.imp().category_sections.borrow_mut().insert(category, page);
         }
     }
 
     /// The page of `category`, from the category's own module.
-    fn build_category(&self, category: Category) -> CategoryPage {
+    fn build_category(&self, category: Category) -> SettingsSection {
         match category {
             Category::Appearance => appearance::build(self),
             Category::SearchAndIndexing => indexing::build(self),
@@ -304,7 +305,7 @@ impl SettingsPage {
     }
 
     /// Adds `page` to the stack as `name`, scrolling on its own.
-    fn add_page(&self, name: &str, page: &CategoryPage) {
+    fn add_page(&self, name: &str, page: &SettingsSection) {
         let content = gtk::Box::builder().css_classes(["settings-content"]).build();
         content.append(page);
         let scrolled = gtk::ScrolledWindow::builder()
@@ -372,9 +373,9 @@ impl SettingsPage {
     }
 
     /// Every category page and sub-page.
-    fn all_pages(&self) -> Vec<CategoryPage> {
+    fn all_pages(&self) -> Vec<SettingsSection> {
         let imp = self.imp();
-        let categories = imp.category_pages.borrow();
+        let categories = imp.category_sections.borrow();
         let subpages = imp.subpages.borrow();
         categories.values().chain(subpages.values()).cloned().collect()
     }

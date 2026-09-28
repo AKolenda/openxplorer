@@ -14,13 +14,13 @@ use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate};
 
 use super::bindings::{position_u32, Choice, PreferenceBinding};
-use super::category_page::{CategoryPage, PageKind};
 use super::choice_list::ChoiceButton;
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
 use super::row::{Availability, ControlName, RowLayout, SettingRow};
 use super::search::RowText;
+use super::section::{PageKind, SettingsSection};
 use super::SettingsPage;
 use crate::icons::Icon;
 use crate::text_size::TextSize;
@@ -91,9 +91,9 @@ const THEME_CARDS: [ThemeCard; 3] = [
 ];
 
 /// The Appearance page.
-pub(super) fn build(page: &SettingsPage) -> CategoryPage {
+pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::Appearance;
-    let appearance = CategoryPage::new(category.title(), category.lead(), PageKind::Category);
+    let appearance = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     appearance.append_group(&theme_group());
     appearance.append_group(&text_and_menus_group(page));
     appearance.append_group(&layout_group());

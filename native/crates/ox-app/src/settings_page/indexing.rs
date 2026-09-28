@@ -16,12 +16,12 @@ use gtk::prelude::*;
 use ox_core::settings::PreferencesUpdate;
 
 use super::bindings::{Choice, PreferenceBinding};
-use super::category_page::{CategoryPage, PageKind};
 use super::group::SettingsGroup;
 use super::pages::{Category, SettingsView, Subpage};
 use super::parts::{self, StatusText};
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
+use super::section::{PageKind, SettingsSection};
 use super::SettingsPage;
 use crate::icons::Icon;
 use crate::window::Milestone;
@@ -101,9 +101,9 @@ const FOLDER_SIZES_NOTE: &str = "Scans run on demand, outside the browsing worke
                                  scan and any queued folders. Recalculate to pick up later changes.";
 
 /// The Search & indexing page.
-pub(super) fn build(page: &SettingsPage) -> CategoryPage {
+pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::SearchAndIndexing;
-    let indexing = CategoryPage::new(category.title(), category.lead(), PageKind::Category);
+    let indexing = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     indexing.append_extra(&status_card());
     indexing.append_group(&folders_group(page));
     indexing.append_group(&options_group(page));

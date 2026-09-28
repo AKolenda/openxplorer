@@ -7,12 +7,12 @@
 //! not have yet, so its button waits for that milestone; the Python
 //! section's advice stays as notes.
 
-use super::category_page::{CategoryPage, PageKind};
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
+use super::section::{PageKind, SettingsSection};
 use crate::icons::Icon;
 use crate::window::{ButtonStyle, Milestone};
 
@@ -33,9 +33,9 @@ const MANUAL_NOTE: &str = "Flatpak/Snap, custom profiles, or managed browsers: o
                            manually. SMB bookmarks are not persistent download paths.";
 
 /// The Brave & downloads page.
-pub(super) fn build() -> CategoryPage {
+pub(super) fn build() -> SettingsSection {
     let category = Category::BraveAndDownloads;
-    let brave = CategoryPage::new(category.title(), category.lead(), PageKind::Category);
+    let brave = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     let group = SettingsGroup::new("Download folder");
     let row = SettingRow::new(USE_LINUX_DOWNLOADS);
     let sync = parts::button("Use Linux Downloads in Brave…", ButtonStyle::Accent);

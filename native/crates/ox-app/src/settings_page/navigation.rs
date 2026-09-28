@@ -15,10 +15,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 
-use super::category_page::CategoryPage;
 use super::pages::{Category, SettingsView};
 use super::row::SettingRow;
 use super::search::{match_count_text, SearchQuery};
+use super::section::SettingsSection;
 use super::SettingsPage;
 use crate::icons;
 
@@ -206,9 +206,9 @@ impl SettingsPage {
     /// # Panics
     ///
     /// Before [`SettingsPage::bind`], which builds every category.
-    pub(super) fn category_page(&self, category: Category) -> CategoryPage {
+    pub(super) fn category_section(&self, category: Category) -> SettingsSection {
         self.imp()
-            .category_pages
+            .category_sections
             .borrow()
             .get(&category)
             .cloned()
@@ -232,7 +232,7 @@ impl SettingsPage {
         let query = SearchQuery::parse(typed);
         let mut total = 0;
         for (category, category_row) in Category::ALL.into_iter().zip(imp.category_rows.borrow().iter()) {
-            let matches = self.category_page(category).apply_query(&query);
+            let matches = self.category_section(category).apply_query(&query);
             category_row.matches.set(matches);
             category_row.count.set_text(&matches.to_string());
             category_row.count.set_visible(!query.is_empty());
@@ -295,7 +295,7 @@ impl SettingsPage {
             return false;
         }
         let first_match = Category::ALL.into_iter().find_map(|category| {
-            let rows = self.category_page(category).rows();
+            let rows = self.category_section(category).rows();
             let row = rows.into_iter().find(WidgetExt::is_visible)?;
             Some((category, row))
         });

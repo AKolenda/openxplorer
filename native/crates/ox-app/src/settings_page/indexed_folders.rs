@@ -19,11 +19,11 @@ use ox_core::location::{is_device_location, is_smb_server, same_location, Locati
 use ox_core::places::Place;
 use ox_core::settings::Bookmark;
 
-use super::category_page::{CategoryPage, PageKind};
 use super::group::SettingsGroup;
 use super::parts;
 use super::row::{Availability, ControlName, RowLayout, SettingRow};
 use super::search::RowText;
+use super::section::{PageKind, SettingsSection};
 use crate::icons::{Art, ArtImage};
 use crate::volumes::VolumeRow;
 use crate::window::{ButtonStyle, Milestone};
@@ -176,8 +176,8 @@ impl FolderList {
 }
 
 /// The Indexed folders page and its list of folders.
-pub(super) fn build() -> (CategoryPage, FolderList) {
-    let indexed = CategoryPage::new("Indexed folders", LEAD, PageKind::Subpage);
+pub(super) fn build() -> (SettingsSection, FolderList) {
+    let indexed = SettingsSection::new("Indexed folders", LEAD, PageKind::Subpage);
     let pending = Availability::Unported(Milestone::SearchAndMetadata);
     let add_group = SettingsGroup::new("Add folders to the index");
     add_group.set_shared_availability(pending);

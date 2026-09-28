@@ -14,12 +14,12 @@
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
-use super::category_page::{CategoryPage, PageKind};
 use super::group::SettingsGroup;
 use super::pages::{Category, SettingsView, Subpage};
 use super::parts::{self, StatusText};
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
+use super::section::{PageKind, SettingsSection};
 use super::SettingsPage;
 use crate::icons::Icon;
 use crate::window::{ButtonStyle, Milestone};
@@ -142,9 +142,9 @@ const GUIDE: [&str; 7] = [
 ];
 
 /// The Default apps page.
-pub(super) fn build(page: &SettingsPage) -> CategoryPage {
+pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::DefaultApps;
-    let default_apps = CategoryPage::new(category.title(), category.lead(), PageKind::Category);
+    let default_apps = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     let pending = Availability::Unported(Milestone::DesktopIntegration);
     default_apps.append_extra(&status_card());
     default_apps.append_group(&routes_group(page));
@@ -332,8 +332,8 @@ fn advanced_group(pending: Availability) -> SettingsGroup {
 }
 
 /// The Zorin + Brave setup and troubleshooting page.
-pub(super) fn build_troubleshooting() -> CategoryPage {
-    let guide = CategoryPage::new(
+pub(super) fn build_troubleshooting() -> SettingsSection {
+    let guide = SettingsSection::new(
         TROUBLESHOOTING.title,
         "Make OpenXplorer Zorin's file explorer and Brave's Show in folder, and undo it.",
         PageKind::Subpage,

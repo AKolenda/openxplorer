@@ -12,12 +12,12 @@
 
 use gtk::prelude::*;
 
-use super::category_page::{CategoryPage, PageKind};
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
+use super::section::{PageKind, SettingsSection};
 use crate::application::AppAction;
 use crate::icons::Icon;
 use crate::window::{list_open_windows_on_click, Milestone};
@@ -62,9 +62,9 @@ const DRAGGING_NOTE: &str = "Right-click a tab → Move tab to window… lets yo
                              first; some apps need a mounted network path.";
 
 /// The Windows & tabs page.
-pub(super) fn build() -> CategoryPage {
+pub(super) fn build() -> SettingsSection {
     let category = Category::WindowsAndTabs;
-    let windows = CategoryPage::new(category.title(), category.lead(), PageKind::Category);
+    let windows = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     windows.append_group(&windows_group());
     windows.append_group(&dragging_group());
     windows.append_extra(&parts::note(Icon::Info, DRAGGING_NOTE));
