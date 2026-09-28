@@ -65,6 +65,10 @@ impl EmptyPage {
             .valign(gtk::Align::Center)
             .css_classes(["empty-state"])
             .build();
+        // The one picture the app takes from the desktop theme: GTK spins
+        // the theme's process-working-symbolic, as WinUI spins its
+        // ProgressRing. It is an animation, not an icon of the owner's
+        // icon mapping, and the vendored Fluent set has no spinner.
         let spinner = gtk::Spinner::new();
         let icon = icons::image(Icon::Folder, STATE_GLYPH);
         let title = centred_text();

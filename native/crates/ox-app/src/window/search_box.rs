@@ -4,9 +4,10 @@
 //! Ports `.search-wrap` in `desktop/ui/index.html` and `style.css`: a
 //! bordered field reading `Search <folder>` with a thin magnifier at its
 //! right end, as in Windows 11. A `GtkSearchEntry` does the typing, so its
-//! delayed `search-changed`, Escape handling and clear icon stay; only its
-//! own magnifier, which GTK always draws first, is hidden in favour of the
-//! trailing one.
+//! delayed `search-changed`, Escape handling and clear button stay; only
+//! its own magnifier, which GTK always draws first, is hidden in favour of
+//! the trailing one, and its clear button shows the bundled close glyph
+//! instead of the desktop theme's `edit-clear-symbolic`.
 //!
 //! [`SearchBox`] is a `GtkBox` subclass laid out by the template
 //! `resources/ui/search-box.ui`. The window hears the typed text through
@@ -20,6 +21,9 @@ use crate::icons::{self, Icon};
 
 /// The trailing magnifier's glyph.
 const MAGNIFIER_GLYPH: i32 = 15;
+/// The clear button's glyph: 16 pixels, GTK's own size for an entry's
+/// icons (the initial `-gtk-icon-size`), so the field keeps its layout.
+const CLEAR_GLYPH: i32 = 16;
 
 mod imp {
     use gtk::glib;
@@ -71,10 +75,12 @@ glib::wrapper! {
 }
 
 impl SearchBox {
-    /// Swaps the entry's leading magnifier for the trailing one.
+    /// Swaps the entry's leading magnifier for the trailing one, and its
+    /// clear icon for the bundled one.
     fn finish_template(&self) {
         let imp = self.imp();
         hide_leading_magnifier(&imp.entry);
+        show_bundled_clear_icon(&imp.entry);
         icons::set_icon(&imp.magnifier, Icon::Search, MAGNIFIER_GLYPH);
     }
 
@@ -120,5 +126,15 @@ fn hide_leading_magnifier(entry: &gtk::SearchEntry) {
     let leading = entry.first_child().and_downcast::<gtk::Image>();
     if let Some(image) = leading {
         image.set_visible(false);
+    }
+}
+
+/// Shows the bundled close glyph in the button that empties the entry: its
+/// last child image in GTK 4, which GTK names once and then only shows
+/// while there is text.
+fn show_bundled_clear_icon(entry: &gtk::SearchEntry) {
+    let clear = entry.last_child().and_downcast::<gtk::Image>();
+    if let Some(image) = clear {
+        icons::set_icon(&image, Icon::Dismiss16, CLEAR_GLYPH);
     }
 }
