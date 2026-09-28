@@ -63,7 +63,7 @@ impl BrowserWindow {
             return;
         };
         if Page::from_uri(&uri).is_some() {
-            self.finish_page(id, is_active);
+            self.finish_page(id);
             return;
         }
         self.keep_watching(id, &uri);
@@ -88,13 +88,13 @@ impl BrowserWindow {
     }
 
     /// A landing page needs no listing and no watch.
-    fn finish_page(&self, id: TabId, is_active: bool) {
+    fn finish_page(&self, id: TabId) {
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.loading = false;
             tab.loaded = true;
             tab.watch = None;
         }
-        if is_active {
+        if self.imp().session.borrow().is_active(id) {
             self.render_landing();
             self.update_content();
         }
@@ -299,7 +299,7 @@ impl BrowserWindow {
             (page, tab.loading, tab.error.as_ref().map(ToString::to_string))
         };
         let content = self.content();
-        content.show_loading_line(loading && page.is_none());
+        content.set_loading(loading && page.is_none());
         if page.is_some() {
             content.show_page(ContentPage::Landing);
         } else if content.model.n_items() > 0 {

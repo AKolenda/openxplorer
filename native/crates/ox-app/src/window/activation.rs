@@ -35,6 +35,15 @@ pub(super) enum Activation {
     Refused(&'static str),
 }
 
+/// Where a folder from the command line or another app opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IncomingTab {
+    /// The active tab moves to it: the first location, as `openIncoming`.
+    Active,
+    /// A new tab in front: every later location.
+    New,
+}
+
 /// What activating `entry` does, from freshly queried metadata.
 pub(super) fn activation_for(entry: &Entry) -> Activation {
     let not_a_file = !matches!(
@@ -197,28 +206,39 @@ impl BrowserWindow {
             self,
             async move {
                 for (index, uri) in uris.iter().enumerate() {
+                    let tab = if index == 0 {
+                        IncomingTab::Active
+                    } else {
+                        IncomingTab::New
+                    };
                     let result = query_entry(uri).await;
-                    window.open_incoming(uri, index == 0, result);
+                    window.open_incoming(uri, tab, result);
                 }
             }
         ));
     }
 
-    fn open_incoming(&self, uri: &str, is_first: bool, result: Result<Entry, EnumerateError>) {
+    /// Opens one incoming location, whose metadata query gave `result`.
+    fn open_incoming(&self, uri: &str, tab: IncomingTab, result: Result<Entry, EnumerateError>) {
         let outcome = match result.map(|entry| (activation_for(&entry), entry)) {
-            Ok((Activation::Folder(folder), _)) if is_first => self.navigate(&folder),
-            Ok((Activation::Folder(folder), _)) => self.add_tab(&folder),
+            Ok((Activation::Folder(folder), _)) => self.open_incoming_folder(&folder, tab),
             Ok((Activation::File, entry)) => {
                 self.open_file(&entry);
                 Ok(())
             }
             Ok((Activation::Refused(message), _)) => Err(location::LocationError::new(message)),
             // A missing or unreadable location opens as a tab that says so.
-            Err(_) if is_first => self.navigate(uri),
-            Err(_) => self.add_tab(uri),
+            Err(_) => self.open_incoming_folder(uri, tab),
         };
         if let Err(error) = outcome {
             self.chrome().show_message(error.message());
+        }
+    }
+
+    fn open_incoming_folder(&self, uri: &str, tab: IncomingTab) -> Result<(), location::LocationError> {
+        match tab {
+            IncomingTab::Active => self.navigate(uri),
+            IncomingTab::New => self.add_tab(uri),
         }
     }
 }

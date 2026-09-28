@@ -124,14 +124,14 @@ impl BrowserWindow {
         for class in band.css_classes() {
             self.add_css_class(class);
         }
-        self.show_details_pane_if_room();
+        self.fit_details_pane();
         self.details_pane().set_width(band.details_pane_width());
         let compact = band.is_compact();
         let chrome = self.chrome();
         chrome.tabs.set_tab_width(band.tab_width());
         chrome.search.root.set_visible(!compact);
         chrome.commands.fit_to_width(band);
-        chrome.status.show_build(!compact);
+        chrome.status.set_build_visible(!compact);
         crate::folder_view::details::show_date_and_type(&self.content().details, !compact);
         self.render_landing();
     }
@@ -141,20 +141,16 @@ impl BrowserWindow {
         self.imp().window_width.get()
     }
 
-    /// Shows the details pane when `switched_on` and the window has room.
-    pub(super) fn place_details_pane(&self, switched_on: bool) {
-        let room = self.window_width().has_room_for_details();
-        self.details_pane().root.set_visible(switched_on && room);
-    }
-
     /// Shows the details pane while `win.details-pane` is on and the window
-    /// has room for it.
-    fn show_details_pane_if_room(&self) {
+    /// has room for it. Hiding it for lack of room leaves the action, and
+    /// so the saved preference, as it is.
+    pub(super) fn fit_details_pane(&self) {
         let switched_on = self
             .action_state("details-pane")
             .and_then(|state| state.get::<bool>())
             .unwrap_or(true);
-        self.place_details_pane(switched_on);
+        let room = self.window_width().has_room_for_details();
+        self.details_pane().root.set_visible(switched_on && room);
     }
 }
 

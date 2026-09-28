@@ -218,7 +218,7 @@ impl Content {
 
     /// Shows the loading line over the items while `loading` lasts (see
     /// [`LoadingLine::set_loading`]).
-    pub fn show_loading_line(&self, loading: bool) {
+    pub fn set_loading(&self, loading: bool) {
         self.loading_line.set_loading(loading);
     }
 

@@ -17,6 +17,9 @@ use crate::icons::{self, Glyph};
 
 use super::widget_tree::remove_children;
 
+/// The edge of a caption glyph: thin 12-pixel lines, as index.html draws them.
+const GLYPH_SIZE: i32 = 12;
+
 /// One caption button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Caption {
@@ -26,6 +29,28 @@ pub(super) enum Caption {
     Maximize,
     /// Close the window.
     Close,
+}
+
+/// Whether the window is maximised, which decides what the middle caption
+/// offers.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum WindowState {
+    /// The window has a size of its own.
+    #[default]
+    Normal,
+    /// The window fills the screen.
+    Maximized,
+}
+
+impl WindowState {
+    /// The state `window` is in now.
+    fn of(window: &gtk::Window) -> Self {
+        if window.is_maximized() {
+            WindowState::Maximized
+        } else {
+            WindowState::Normal
+        }
+    }
 }
 
 impl Caption {
@@ -47,13 +72,24 @@ impl Caption {
         }
     }
 
-    /// The glyph and tooltip (index.html's `title`) in `maximized` state.
-    const fn look(self, maximized: bool) -> (Glyph, &'static str) {
-        match (self, maximized) {
-            (Caption::Minimize, _) => (Glyph::Minus, "Minimize"),
-            (Caption::Maximize, false) => (Glyph::Maximize, "Maximize"),
-            (Caption::Maximize, true) => (Glyph::Restore, "Restore"),
-            (Caption::Close, _) => (Glyph::Close, "Close window"),
+    /// The glyph the button shows while the window is in `state`.
+    const fn glyph(self, state: WindowState) -> Glyph {
+        match (self, state) {
+            (Caption::Minimize, _) => Glyph::Minus,
+            (Caption::Maximize, WindowState::Normal) => Glyph::Maximize,
+            (Caption::Maximize, WindowState::Maximized) => Glyph::Restore,
+            (Caption::Close, _) => Glyph::Close,
+        }
+    }
+
+    /// The tooltip and accessible name (index.html's `title`) while the
+    /// window is in `state`.
+    const fn tooltip(self, state: WindowState) -> &'static str {
+        match (self, state) {
+            (Caption::Minimize, _) => "Minimize",
+            (Caption::Maximize, WindowState::Normal) => "Maximize",
+            (Caption::Maximize, WindowState::Maximized) => "Restore",
+            (Caption::Close, _) => "Close window",
         }
     }
 
@@ -78,19 +114,29 @@ pub(super) fn captions_for(layout: &str, side: gtk::PackType) -> Vec<Caption> {
     names.split(',').filter_map(Caption::from_layout_name).collect()
 }
 
+/// The desktop settings the buttons follow and the handler that follows
+/// them, disconnected when the buttons go away.
+#[derive(Debug)]
+struct LayoutWatch {
+    settings: gtk::Settings,
+    handler: glib::SignalHandlerId,
+}
+
 mod imp {
-    use std::cell::{Cell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
+    use super::{LayoutWatch, WindowState};
+
     /// Private state of [`super::CaptionButtons`].
     #[derive(Debug, Default)]
     pub struct CaptionButtons {
-        pub(super) side: Cell<Option<gtk::PackType>>,
-        pub(super) maximized: Cell<bool>,
-        pub(super) settings: RefCell<Option<(gtk::Settings, glib::SignalHandlerId)>>,
+        pub(super) side: OnceCell<gtk::PackType>,
+        pub(super) window_state: Cell<WindowState>,
+        pub(super) layout_watch: RefCell<Option<LayoutWatch>>,
     }
 
     #[glib::object_subclass]
@@ -102,8 +148,8 @@ mod imp {
 
     impl ObjectImpl for CaptionButtons {
         fn dispose(&self) {
-            if let Some((settings, handler)) = self.settings.take() {
-                settings.disconnect(handler);
+            if let Some(watch) = self.layout_watch.take() {
+                watch.settings.disconnect(watch.handler);
             }
         }
     }
@@ -122,19 +168,24 @@ glib::wrapper! {
 impl CaptionButtons {
     /// The caption buttons the desktop puts on `side` of `window`'s title
     /// bar, kept in step with the desktop setting and the window state.
+    ///
+    /// # Panics
+    ///
+    /// Never: a new object has no side yet.
     pub fn new(window: &gtk::Window, side: gtk::PackType) -> Self {
         let buttons: Self = glib::Object::builder()
             .property("orientation", gtk::Orientation::Horizontal)
             .build();
         buttons.add_css_class("caption-buttons");
-        buttons.imp().side.set(Some(side));
+        let side_is_new = buttons.imp().side.set(side).is_ok();
+        assert!(side_is_new, "a new object has no side yet");
         buttons.follow_decoration_layout(&window.settings());
         window.connect_maximized_notify(glib::clone!(
             #[weak]
             buttons,
-            move |window| buttons.set_maximized(window.is_maximized())
+            move |window| buttons.set_window_state(WindowState::of(window))
         ));
-        buttons.set_maximized(window.is_maximized());
+        buttons.set_window_state(WindowState::of(window));
         buttons
     }
 
@@ -144,38 +195,42 @@ impl CaptionButtons {
             self,
             move |_| buttons.rebuild()
         ));
-        self.imp().settings.replace(Some((settings.clone(), handler)));
+        let watch = LayoutWatch {
+            settings: settings.clone(),
+            handler,
+        };
+        self.imp().layout_watch.replace(Some(watch));
     }
 
-    fn set_maximized(&self, maximized: bool) {
-        self.imp().maximized.set(maximized);
+    fn set_window_state(&self, state: WindowState) {
+        self.imp().window_state.set(state);
         self.rebuild();
     }
 
     /// The captions shown, in order.
     fn captions(&self) -> Vec<Caption> {
-        let settings = self.imp().settings.borrow();
-        let layout = settings
+        let watch = self.imp().layout_watch.borrow();
+        let layout = watch
             .as_ref()
-            .and_then(|(settings, _)| settings.gtk_decoration_layout())
+            .and_then(|watch| watch.settings.gtk_decoration_layout())
             .unwrap_or_default();
-        let side = self.imp().side.get().unwrap_or(gtk::PackType::End);
-        captions_for(&layout, side)
+        let side = self.imp().side.get().expect("CaptionButtons::new sets the side");
+        captions_for(&layout, *side)
     }
 
     fn rebuild(&self) {
         remove_children(self);
-        let maximized = self.imp().maximized.get();
+        let state = self.imp().window_state.get();
         for caption in self.captions() {
-            self.append(&caption_button(caption, maximized));
+            self.append(&caption_button(caption, state));
         }
     }
 }
 
-fn caption_button(caption: Caption, maximized: bool) -> gtk::Button {
-    let (glyph, tooltip) = caption.look(maximized);
+fn caption_button(caption: Caption, state: WindowState) -> gtk::Button {
+    let tooltip = caption.tooltip(state);
     let button = gtk::Button::builder()
-        .child(&icons::glyph(glyph, 12))
+        .child(&icons::glyph(caption.glyph(state), GLYPH_SIZE))
         .tooltip_text(tooltip)
         .action_name(caption.action())
         .focus_on_click(false)
@@ -239,7 +294,11 @@ mod tests {
 
     #[test]
     fn the_maximize_button_offers_restore_when_maximized() {
-        assert_eq!(Caption::Maximize.look(false), (Glyph::Maximize, "Maximize"));
-        assert_eq!(Caption::Maximize.look(true), (Glyph::Restore, "Restore"));
+        let normal = WindowState::Normal;
+        let maximized = WindowState::Maximized;
+        assert_eq!(Caption::Maximize.glyph(normal), Glyph::Maximize);
+        assert_eq!(Caption::Maximize.tooltip(normal), "Maximize");
+        assert_eq!(Caption::Maximize.glyph(maximized), Glyph::Restore);
+        assert_eq!(Caption::Maximize.tooltip(maximized), "Restore");
     }
 }

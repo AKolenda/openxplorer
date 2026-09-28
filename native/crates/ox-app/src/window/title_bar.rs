@@ -86,7 +86,7 @@ fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
         .into_iter()
         .filter_map(|window| window.downcast::<BrowserWindow>().ok());
     let mut entries: Vec<MenuEntry> = browsers
-        .map(|window| window_item(&window, window == this_window))
+        .map(|window| window_item(&window, &this_window))
         .collect();
     let new_window = MenuItem::new("New window", Glyph::Plus, "app.new-window").with_shortcut("Ctrl+N");
     entries.push(MenuEntry::Divider);
@@ -95,13 +95,15 @@ fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
     entries
 }
 
-fn window_item(window: &BrowserWindow, is_this_window: bool) -> MenuEntry {
+/// The item that brings `window` to the front, checked when it is
+/// `this_window`, the one whose menu is open.
+fn window_item(window: &BrowserWindow, this_window: &BrowserWindow) -> MenuEntry {
     let title = window
         .title()
         .map_or_else(|| "OpenXplorer".to_owned(), |title| title.to_string());
     let item = MenuItem {
         target: Some(window.id().to_variant()),
-        check: ItemCheck::Fixed(is_this_window),
+        check: ItemCheck::Fixed(window == this_window),
         ..MenuItem::new(&title, Glyph::Desktop, "app.focus-window")
     };
     item.into()

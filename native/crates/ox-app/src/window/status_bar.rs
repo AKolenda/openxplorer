@@ -129,8 +129,8 @@ impl StatusBar {
 
     /// Shows or hides the build text, which a compact window has no room
     /// for (`.status-mode{display:none}` at 680 pixels).
-    pub fn show_build(&self, shown: bool) {
-        self.build.set_visible(shown);
+    pub fn set_build_visible(&self, visible: bool) {
+        self.build.set_visible(visible);
     }
 
     /// Shows the item count and the selection.
