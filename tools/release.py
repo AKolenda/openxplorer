@@ -30,7 +30,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tempfile
 import tomllib
 from typing import NoReturn
 import zipfile
@@ -82,6 +81,11 @@ STABLE_APP_ID = 'io.winspace.Development'
 FLATPAK_MANIFEST = NATIVE / 'packaging/flatpak' / f'{STABLE_APP_ID}.yml'
 FLATPAK_BUNDLE = f'{STABLE_APP_ID}.flatpak'
 FLATPAK_REMOTE = 'https://dl.flathub.org/repo/flathub.flatpakrepo'
+# flatpak-builder's build folder and cache. It must lie outside the repository,
+# so neither the source archive nor the public-data audit reads it, and outside
+# /tmp, which the org.flatpak.Builder Flatpak does not share with the host.
+FLATPAK_WORK = Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache') / \
+    'openxplorer-flatpak-build'
 # The file names of the release's packages besides the Debian one, as the
 # RPM spec, the PKGBUILD and the Flatpak manifest name them. The preview's
 # names (openxplorer-native..., ...Development.Native.flatpak) never match.
@@ -271,12 +275,13 @@ def build_flatpak_bundle(work: Path) -> Path:
 
     The build needs the GNOME 51 SDK and the rust-stable extension installed
     for the user (native/packaging/README.md, "Flatpak"). work keeps
-    flatpak-builder's cache between runs; it lies outside the repository, so
-    neither the source archive nor the public-data audit reads it.
+    flatpak-builder's cache between runs (see FLATPAK_WORK).
     """
     work.mkdir(parents=True, exist_ok=True)
     repository = work / 'repo'
-    subprocess.run([*flatpak_builder(), '--user', '--force-clean',
+    # rofiles-fuse only protects the cache from build commands that modify
+    # hard-linked files; the org.flatpak.Builder Flatpak cannot mount it.
+    subprocess.run([*flatpak_builder(), '--user', '--force-clean', '--disable-rofiles-fuse',
                     f'--state-dir={work / "state"}', f'--repo={repository}',
                     str(work / 'build'), str(FLATPAK_MANIFEST)], check=True)
     bundle = DIST / FLATPAK_BUNDLE
@@ -326,9 +331,9 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--flatpak', action='store_true',
                         help=f'also build {FLATPAK_BUNDLE} here with flatpak-builder')
     parser.add_argument('--flatpak-work', type=Path,
-                        default=Path(tempfile.gettempdir()) / 'openxplorer-flatpak',
+                        default=FLATPAK_WORK,
                         help="flatpak-builder's build folder and cache, outside the "
-                             'repository (default: %(default)s)')
+                             'repository and /tmp (default: %(default)s)')
     return parser.parse_args(argv)
 
 
