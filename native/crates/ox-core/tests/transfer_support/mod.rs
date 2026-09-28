@@ -9,12 +9,17 @@
 //! | `mtp_device` | A simulated phone behind real `mtp://` URIs for the production adapter |
 //! | `versions` | The previous-version write guard |
 //! | `shared` | Helpers the `gio_node` test binary uses too |
+//! | `uri`, `fifo` | Test-file URIs and named pipes, shared with the `ops_*` tests (`tests/common/`) |
 
 pub mod device;
 pub mod faults;
+#[path = "../common/fifo.rs"]
+mod fifo;
 pub mod local;
 pub mod mtp_device;
 mod shared;
+#[path = "../common/uri.rs"]
+mod uri;
 pub mod versions;
 
 use std::ffi::OsStr;
@@ -29,9 +34,10 @@ use ox_core::transfer::{
     TransferError, TransferResult,
 };
 
-pub use local::file_uri;
+pub use fifo::make_fifo;
 use local::{LocalNode, Provider};
 pub use shared::{gio_engine, mode_of, set_mode, RestoreOwnerAccess};
+pub use uri::file_uri;
 
 /// What a test run asks the engine to do. Copies and moves go into the
 /// fixture's destination folder unless the variant names another folder;
@@ -275,15 +281,6 @@ pub fn random_bytes(count: usize) -> Vec<u8> {
         .and_then(|mut source| source.read_exact(&mut bytes))
         .expect("read /dev/urandom");
     bytes
-}
-
-/// Creates a named pipe (a special file) with the system `mkfifo`.
-pub fn create_named_pipe(path: &Path) {
-    let status = std::process::Command::new("mkfifo")
-        .arg(path)
-        .status()
-        .expect("run mkfifo");
-    assert!(status.success(), "mkfifo failed");
 }
 
 /// The file inside a folder made by [`create_source`].

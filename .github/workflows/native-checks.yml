@@ -41,17 +41,20 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Install GTK 4, SQLite, libsoup 3, the private-display test tools and the keyring
+      - name: Install GTK 4, SQLite, libsoup 3, GVfs, the private-display test tools and the keyring
         # The search cache links the system SQLite (libsqlite3-dev).
         # libsoup-3.0-dev builds the updater's HTTPS client (the soup3 crate).
         # xvfb and xauth provide xvfb-run and Xvfb. dbus-x11 depends on
-        # dbus-daemon, which provides dbus-run-session. python3-gi and
-        # gir1.2-glib-2.0 let the interoperability tests import the Python
-        # app's GIO modules. gnome-keyring is started on the private bus for
-        # the keyring tests, and gir1.2-secret-1 is the Python app's libsecret.
+        # dbus-daemon, which provides dbus-run-session. gvfs provides the
+        # trash:/// backend the Recycle Bin and Undo tests use, and
+        # gvfs-backends the smb:// backend of the not-mounted share tests.
+        # python3-gi and gir1.2-glib-2.0 let the interoperability tests import
+        # the Python app's GIO modules. gnome-keyring is started on the private
+        # bus for the keyring tests, and gir1.2-secret-1 is the Python app's
+        # libsecret.
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libsqlite3-dev libsoup-3.0-dev xvfb xauth dbus-x11 python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1
+          sudo apt-get install -y libgtk-4-dev libsqlite3-dev libsoup-3.0-dev xvfb xauth dbus-x11 gvfs gvfs-backends python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1
       - name: Install Rust 1.92.0, the minimum supported version
         # Must match rust-version in native/Cargo.toml.
         run: |

@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 use ox_core::transfer::{Cancellation, Node, NodeInfo, TransferError};
 
-use super::{file_uri, LocalNode};
+use super::LocalNode;
+use crate::transfer_support::file_uri;
 
 /// Overridable behaviour of [`LocalNode`], like a Python subclass. Each
 /// method answers the [`Node`] method of the same name for `node`.

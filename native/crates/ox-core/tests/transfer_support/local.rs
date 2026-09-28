@@ -26,11 +26,6 @@ use rustix::fs::{renameat_with, RenameFlags, CWD};
 
 pub use provider::{local, Provider};
 
-/// The `file://` URI of `path`.
-pub fn file_uri(path: &Path) -> String {
-    gio::File::for_path(path).uri().to_string()
-}
-
 /// The local path behind any URI this double produces
 /// (`<scheme>://<authority>/<escaped path>`), whatever its scheme.
 pub fn path_from_uri(uri: &str) -> PathBuf {
