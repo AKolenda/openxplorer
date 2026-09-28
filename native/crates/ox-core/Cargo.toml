@@ -18,11 +18,9 @@ thiserror.workspace = true
 libc.workspace = true
 # The search index's inotify watcher waits on its descriptor with poll(2).
 rustix = { workspace = true, features = ["event"] }
-# The search cache is the SQLite database the Python app shares. It links the
-# system SQLite, as Python's sqlite3 module does, so building needs its
-# development files (libsqlite3-dev on Ubuntu). "hooks" provides the progress
-# handler that cancels a running search.
-rusqlite = { version = "0.38", default-features = false, features = ["hooks"] }
+# The search cache; [workspace.dependencies] says why it links the system
+# SQLite.
+rusqlite.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
