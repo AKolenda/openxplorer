@@ -5,9 +5,11 @@
 //! Ports the "Appearance & layout" section of `renderSettingsPage`,
 //! `textSizeControls` and `menuPreferenceControls` in
 //! `desktop/ui/app.js` (SET-005). The theme is chosen from three preview
-//! cards, as in the settings mockup; they run the window's `win.theme`
-//! action, as the Appearance menu does, so every window changes at once.
-//! Text size changes at once too, through the shared skin.
+//! cards, as in the settings mockup. Each card's radio button, one group
+//! of three, runs the window's `win.theme` action, as the Appearance menu
+//! does, so every window changes at once; screen readers hear one choice
+//! of three, and the arrow keys move between them. Text size changes at
+//! once too, through the shared skin.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -35,9 +37,10 @@ const THEME: RowText = RowText {
 
 const TEXT_SIZE: RowText = RowText {
     title: "Text size",
-    description: "Ctrl + makes text larger, Ctrl − smaller, and Ctrl 0 resets it. \
-                  Saved for all windows; desktop scaling is unchanged.",
-    keywords: "zoom font larger smaller ctrl plus minus reset accessibility scale",
+    description: "Ctrl + and Ctrl − change it anywhere; Ctrl 0 resets. Desktop scaling is unchanged.",
+    keywords: "zoom font larger smaller ctrl plus minus reset accessibility scale. Ctrl + makes \
+               text larger, Ctrl − smaller, and Ctrl 0 resets it. Saved for all windows; desktop \
+               scaling is unchanged.",
 };
 
 const RIGHT_CLICK_MENU: RowText = RowText {
@@ -63,6 +66,9 @@ const MENU_STYLES: [Choice<ContextMenu>; 2] = [
         label: "Windows 11 · Compact actions",
     },
 ];
+
+/// The class of the chosen theme's card.
+const CHOSEN_CLASS: &str = "chosen";
 
 /// A theme card: the choice it stands for, its name and its CSS class.
 struct ThemeCard {
@@ -110,9 +116,8 @@ fn theme_group() -> SettingsGroup {
     group
 }
 
-/// The three theme cards, in a row that wraps in a narrow window. Each
-/// runs `win.theme` with its choice, and shows itself chosen while that
-/// is the window's theme.
+/// The three theme cards, in a row that wraps in a narrow window, their
+/// radio buttons one group.
 fn theme_cards() -> gtk::FlowBox {
     let cards = gtk::FlowBox::builder()
         .selection_mode(gtk::SelectionMode::None)
@@ -122,37 +127,70 @@ fn theme_cards() -> gtk::FlowBox {
         .homogeneous(true)
         .css_classes(["theme-cards"])
         .build();
+    let mut first_radio: Option<gtk::CheckButton> = None;
     for card in THEME_CARDS {
+        let radio = theme_radio(&card, first_radio.as_ref());
         let child = gtk::FlowBoxChild::builder()
-            .child(&theme_card(&card))
+            .child(&theme_card(&card, &radio))
             .focusable(false)
             .build();
         cards.append(&child);
+        first_radio.get_or_insert(radio);
     }
     cards
 }
 
-fn theme_card(card: &ThemeCard) -> gtk::ToggleButton {
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
-    content.append(&theme_preview());
-    let caption = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    caption.append(
-        &gtk::Box::builder()
-            .css_classes(["radio-mark"])
-            .valign(gtk::Align::Center)
-            .build(),
-    );
-    caption.append(&gtk::Label::new(Some(card.name)));
-    content.append(&caption);
-    let button = gtk::ToggleButton::builder()
-        .child(&content)
+/// The radio button under a card, "System", "Light" or "Dark", in the
+/// group of `first`. It runs `win.theme` with the card's choice and is on
+/// while that is the window's theme; screen readers hear it as one choice
+/// of the group, and the arrow keys move to the next and choose it.
+fn theme_radio(card: &ThemeCard, first: Option<&gtk::CheckButton>) -> gtk::CheckButton {
+    let radio = gtk::CheckButton::builder()
+        .label(card.name)
+        .accessible_role(gtk::AccessibleRole::Radio)
+        .css_classes(["theme-radio"])
+        .build();
+    radio.set_group(first);
+    let target = card.preference.key().to_variant();
+    WindowAction::Theme.assign_with_target_to(&radio, &target);
+    radio
+}
+
+/// A card: the preview in the card's colours over its `radio`. Clicking
+/// the preview chooses the card too, and the chosen card is outlined.
+fn theme_card(card: &ThemeCard, radio: &gtk::CheckButton) -> gtk::Box {
+    let theme_card = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(8)
         .css_classes(["theme-card", card.css_class])
         .build();
-    let name = format!("{} theme", card.name);
-    button.update_property(&[gtk::accessible::Property::Label(&name)]);
-    let target = card.preference.key().to_variant();
-    WindowAction::Theme.assign_with_target_to(&button, &target);
-    button
+    let preview = theme_preview();
+    let click = gtk::GestureClick::new();
+    click.connect_released(glib::clone!(
+        #[weak]
+        radio,
+        move |_, _, _, _| {
+            radio.activate();
+        }
+    ));
+    preview.add_controller(click);
+    theme_card.append(&preview);
+    theme_card.append(radio);
+    radio.connect_active_notify(glib::clone!(
+        #[weak]
+        theme_card,
+        move |radio| outline_when_chosen(&theme_card, radio)
+    ));
+    theme_card
+}
+
+/// Outlines `theme_card` while its `radio` is on.
+fn outline_when_chosen(theme_card: &gtk::Box, radio: &gtk::CheckButton) {
+    if radio.is_active() {
+        theme_card.add_css_class(CHOSEN_CLASS);
+    } else {
+        theme_card.remove_css_class(CHOSEN_CLASS);
+    }
 }
 
 /// A small window in the card's colours: a title strip, a sidebar and

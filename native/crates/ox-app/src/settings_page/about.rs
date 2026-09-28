@@ -48,9 +48,9 @@ const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
     heading: "License & source",
     text: RowText {
         title: "OpenXplorer · License & source",
-        description: "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty. \
-                      Original component notices are preserved.",
-        keywords: "licence agpl source code copyright mit notice",
+        description: "Copyright (c) 2026 OpenXplorer contributors. AGPL-3.0-only. No warranty.",
+        keywords: "licence agpl source code copyright mit notice. Original component notices are \
+                   preserved.",
     },
     button: "Read license & source information",
     action: WindowAction::License,

@@ -18,14 +18,15 @@ use crate::window::{ButtonStyle, Milestone};
 
 const USE_LINUX_DOWNLOADS: RowText = RowText {
     title: "Use Linux Downloads in Brave",
-    description: "Use the Linux Downloads location in selected native Brave profiles. Fully quit \
-                  Brave first, including background processes.",
-    keywords: "brave download location downloads sync save as browser profile",
+    description: "Selected native Brave profiles save to your Linux Downloads folder.",
+    keywords: "brave download location downloads sync save as browser profile. Use the Linux \
+               Downloads location in selected native Brave profiles.",
 };
 
-/// What the sync changes, from the Python section.
-const SYNC_NOTE: &str = "OpenXplorer backs up Preferences and changes only the download and Save \
-                         as directories. This is a one-time sync, not a managed browser policy.";
+/// What to do first and what the sync changes, from the Python section.
+const SYNC_NOTE: &str = "Fully quit Brave first, including background processes. OpenXplorer \
+                         backs up Preferences and changes only the download and Save as \
+                         directories. This is a one-time sync, not a managed browser policy.";
 
 /// What to do where the sync cannot reach, from the Python section.
 const MANUAL_NOTE: &str = "Flatpak/Snap, custom profiles, or managed browsers: open \

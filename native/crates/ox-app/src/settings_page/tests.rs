@@ -73,6 +73,15 @@ impl SettingsTest {
         shown.map(|row| row.text().title).collect()
     }
 
+    /// The radio button of the theme card `name`, such as "Dark".
+    fn theme_radio(&self, name: &str) -> gtk::CheckButton {
+        let radios = descendants::<gtk::CheckButton>(&self.page).into_iter();
+        let mut theme_radios = radios.filter(|radio| radio.has_css_class("theme-radio"));
+        theme_radios
+            .find(|radio| radio.label().as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("Appearance has a {name} card"))
+    }
+
     /// Whether the category page shown now shows its status card.
     fn shows_status_card(&self) -> bool {
         let category = self.page.view().category();
@@ -498,15 +507,14 @@ fn rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone() {
 fn a_theme_card_applies_the_theme_and_saves_it_for_both_apps() {
     let _theme = ThemeGuard::keep();
     let settings = SettingsTest::open();
-    let dark_card = descendants::<gtk::ToggleButton>(&settings.page)
-        .into_iter()
-        .find(|card| card.has_css_class("dark"))
-        .expect("Appearance has a Dark card");
+    let dark = settings.theme_radio("Dark");
 
-    dark_card.emit_clicked();
+    dark.activate();
 
     assert_eq!(skin().preference(), ThemePreference::Dark);
-    assert!(dark_card.is_active());
+    assert!(dark.is_active());
+    let dark_card = dark.parent().expect("the radio is in its card");
+    assert!(dark_card.has_css_class("chosen"), "the chosen card is outlined");
     wait_until("the theme to be saved", || {
         settings.saved_preferences().theme == Theme::Dark
     });
@@ -514,6 +522,31 @@ fn a_theme_card_applies_the_theme_and_saves_it_for_both_apps() {
         python_preference(settings.test.settings_directory(), "theme"),
         "dark"
     );
+}
+
+/// The theme cards are one choice of three: screen readers hear radio
+/// buttons, and an arrow key moves to the next card and chooses it.
+///
+/// parity: SET-019
+#[gtk::test]
+fn the_arrow_keys_move_between_the_theme_cards_and_choose_them() {
+    let _theme = ThemeGuard::keep();
+    let settings = SettingsTest::open();
+    let light = settings.theme_radio("Light");
+    let dark = settings.theme_radio("Dark");
+    for radio in [&settings.theme_radio("System"), &light, &dark] {
+        assert!(gtk::test_accessible_has_role(radio, gtk::AccessibleRole::Radio));
+    }
+    light.activate();
+    wait_until("the cards to be laid out", || dark.width() > 0);
+    assert!(light.grab_focus());
+
+    // What the window does with the Right arrow key.
+    settings.test.window.child_focus(gtk::DirectionType::Right);
+
+    assert!(dark.has_focus(), "the next card has keyboard focus");
+    assert!(dark.is_active());
+    assert_eq!(skin().preference(), ThemePreference::Dark);
 }
 
 /// parity: SET-019, VIEW-045
