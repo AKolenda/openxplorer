@@ -10,6 +10,7 @@ use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
 
+use crate::folder_view::filter::Visibility;
 use crate::folder_view::sorting::{SortKey, SortName};
 use crate::icons::{art, ArtKind};
 
@@ -106,6 +107,15 @@ impl FileItem {
     /// Lower-cased name for the search filter.
     pub(crate) fn lowercase_name(&self) -> &str {
         &self.prepared().lowercase_name
+    }
+
+    /// Whether GIO marks the item hidden, for the filter.
+    pub(crate) fn visibility(&self) -> Visibility {
+        if self.entry().hidden {
+            Visibility::Hidden
+        } else {
+            Visibility::Visible
+        }
     }
 
     /// The icon art for the item.

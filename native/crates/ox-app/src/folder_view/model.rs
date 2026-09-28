@@ -98,7 +98,7 @@ impl FolderModel {
         let state = Rc::clone(&filter_state);
         let filter = gtk::CustomFilter::new(move |object| {
             let item = as_item(object);
-            state.borrow().accepts(item.lowercase_name(), item.entry().hidden)
+            state.borrow().accepts(item.lowercase_name(), item.visibility())
         });
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
@@ -147,11 +147,11 @@ impl FolderModel {
     /// hidden ones count only while hidden files are shown, as the Python
     /// backend lists them (`enumerate_folder(uri, showHidden)`).
     pub fn listed_count(&self, store: &gio::ListStore) -> u32 {
-        let shows_hidden = self.filter_state.borrow().shows_hidden();
+        let filter = self.filter_state.borrow();
         let listed = store
             .iter::<FileItem>()
             .filter_map(Result::ok)
-            .filter(|item| shows_hidden || !item.entry().hidden)
+            .filter(|item| filter.lists(item.visibility()))
             .count();
         u32::try_from(listed).unwrap_or(u32::MAX)
     }
@@ -161,11 +161,10 @@ impl FolderModel {
         self.sort_model.item(position).and_downcast::<FileItem>()
     }
 
-    /// The display name at a position ("" past the end).
-    pub fn name_at(&self, position: u32) -> String {
-        self.item(position)
-            .map(|item| item.entry().name.clone())
-            .unwrap_or_default()
+    /// The display name at a position, or `None` past the end.
+    pub fn name_at(&self, position: u32) -> Option<String> {
+        let item = self.item(position)?;
+        Some(item.entry().name.clone())
     }
 
     /// Sets the search text; returns true when the shown items changed.
@@ -336,6 +335,29 @@ mod tests {
         model.select_all();
         model.select_uris(&[]);
         assert!(model.selected_uris().is_empty());
+    }
+
+    #[gtk::test]
+    fn the_folder_counts_hidden_items_only_while_they_are_shown() {
+        let (model, store) = model_with(&["a.txt", "b.txt"]);
+        let mut cache = file_entry(".cache");
+        cache.hidden = true;
+        store.append(&FileItem::new(cache));
+        model.set_query("a.txt");
+        assert_eq!(
+            model.listed_count(&store),
+            2,
+            "a search does not change the count"
+        );
+        model.set_show_hidden(true);
+        assert_eq!(model.listed_count(&store), 3);
+    }
+
+    #[gtk::test]
+    fn a_position_past_the_end_has_no_name() {
+        let (model, _store) = model_with(&["a.txt", "b.txt"]);
+        assert_eq!(model.name_at(1).as_deref(), Some("b.txt"));
+        assert_eq!(model.name_at(2), None);
     }
 
     /// parity: NAV-014

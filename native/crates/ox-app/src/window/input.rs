@@ -15,7 +15,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use crate::typeahead::{self, TypeSelect};
+use crate::folder_view::model::FolderModel;
+use crate::typeahead::{self, PrefixMatch, Rows};
 
 use super::activation::{activation_for, Activation};
 use super::gestures;
@@ -45,11 +46,26 @@ fn is_modifier_key(key: gdk::Key) -> bool {
 }
 
 /// The status-bar hint for a type-to-select result.
-pub(super) fn typeahead_hint(result: &TypeSelect, matched_name: Option<&str>) -> String {
-    match (result.text.is_empty(), matched_name) {
+pub(super) fn typeahead_hint(result: &PrefixMatch, matched_name: Option<&str>) -> String {
+    match (result.prefix.is_empty(), matched_name) {
         (true, _) => String::new(),
-        (false, Some(name)) => format!("Jump to: {} — {name}", result.text),
-        (false, None) => format!("No name starts with “{}”", result.text),
+        (false, Some(name)) => format!("Jump to: {} — {name}", result.prefix),
+        (false, None) => format!("No name starts with “{}”", result.prefix),
+    }
+}
+
+/// The current time on `GLib`'s monotonic clock, which type-to-select
+/// times its prefix with. The clock starts at zero and never goes back.
+fn monotonic_now() -> Duration {
+    Duration::from_micros(glib::monotonic_time().unsigned_abs())
+}
+
+/// The folder's rows in display order, as type-to-select searches them.
+fn typeahead_rows(model: &FolderModel) -> Rows<impl Fn(u32) -> String + '_> {
+    Rows {
+        count: model.n_items(),
+        name_at: |row| model.name_at(row).unwrap_or_default(),
+        current: model.first_selected(),
     }
 }
 
@@ -214,8 +230,8 @@ impl BrowserWindow {
     /// Escape clears the prefix, and only without one the selection.
     /// `None` for every other key.
     fn prefix_editing_key(&self, input: &gtk::IMMulticontext, key: gdk::Key) -> Option<glib::Propagation> {
-        let now = glib::monotonic_time() / 1000;
-        let prefix_active = self.imp().type_ahead.borrow().controller.active(now);
+        let now = monotonic_now();
+        let prefix_active = self.imp().type_ahead.borrow().controller.is_active(now);
         match key {
             gdk::Key::Escape if prefix_active => {
                 input.reset();
@@ -244,16 +260,14 @@ impl BrowserWindow {
         click
     }
 
-    fn erase_typed_character(&self, now: i64) {
-        let model = &self.content().model;
-        let count = model.n_items() as usize;
-        let current = model.first_selected().map(|index| index as usize);
-        let result = self.imp().type_ahead.borrow_mut().controller.backspace(
-            count,
-            |index| model.name_at(u32::try_from(index).unwrap_or(u32::MAX)),
-            current,
-            now,
-        );
+    fn erase_typed_character(&self, now: Duration) {
+        let rows = typeahead_rows(&self.content().model);
+        let result = self
+            .imp()
+            .type_ahead
+            .borrow_mut()
+            .controller
+            .backspace(&rows, now);
         if let Some(result) = result {
             self.apply_typeahead(&result);
         }
@@ -262,36 +276,34 @@ impl BrowserWindow {
     /// Adds text the input method committed to the typed prefix and
     /// selects the next matching name.
     pub(super) fn type_text(&self, text: &str) {
-        let model = &self.content().model;
         for character in text.chars() {
-            let now = glib::monotonic_time() / 1000;
-            let current = model.first_selected().map(|index| index as usize);
-            let count = model.n_items() as usize;
+            let now = monotonic_now();
+            // Each character moves the selection the next one starts from.
+            let rows = typeahead_rows(&self.content().model);
             let typed = character.to_string();
-            let result = self.imp().type_ahead.borrow_mut().controller.push(
-                &typed,
-                count,
-                |index| model.name_at(u32::try_from(index).unwrap_or(u32::MAX)),
-                current,
-                now,
-            );
+            let result = self
+                .imp()
+                .type_ahead
+                .borrow_mut()
+                .controller
+                .push(&typed, &rows, now);
             if let Some(result) = result {
                 self.apply_typeahead(&result);
             }
         }
     }
 
-    fn apply_typeahead(&self, result: &TypeSelect) {
-        let position = result.index.and_then(|index| u32::try_from(index).ok());
-        if let Some(position) = position {
-            self.content().model.select_only(position);
-            self.content().reveal(position);
+    fn apply_typeahead(&self, result: &PrefixMatch) {
+        let model = &self.content().model;
+        if let Some(row) = result.row {
+            model.select_only(row);
+            self.content().reveal(row);
         }
-        let matched_name = position.map(|position| self.content().model.name_at(position));
+        let matched_name = result.row.and_then(|row| model.name_at(row));
         let hint = typeahead_hint(result, matched_name.as_deref());
         let label = &self.chrome().status.hint;
         label.set_text(&hint);
-        if position.is_some() {
+        if result.row.is_some() {
             label.remove_css_class("miss");
         } else {
             label.add_css_class("miss");
@@ -300,9 +312,8 @@ impl BrowserWindow {
     }
 
     fn restart_typeahead_timer(&self) {
-        let timeout = Duration::from_millis(typeahead::TIMEOUT_MS.unsigned_abs());
         let timer = glib::timeout_add_local_once(
-            timeout,
+            typeahead::PREFIX_TIMEOUT,
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
@@ -357,10 +368,10 @@ impl BrowserWindow {
 mod tests {
     use super::*;
 
-    fn result(text: &str, index: Option<usize>) -> TypeSelect {
-        TypeSelect {
-            text: text.into(),
-            index,
+    fn result(prefix: &str, row: Option<u32>) -> PrefixMatch {
+        PrefixMatch {
+            prefix: prefix.into(),
+            row,
             cycling: false,
         }
     }
