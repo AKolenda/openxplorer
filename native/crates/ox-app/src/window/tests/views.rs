@@ -225,13 +225,13 @@ fn text_size_steps_stay_between_80_and_200_percent() {
     for _ in 0..10 {
         test.activate("text-larger", None);
     }
-    assert_eq!(skin.text_size(), 200);
+    assert_eq!(skin.text_size().percent(), 200);
     for _ in 0..10 {
         test.activate("text-smaller", None);
     }
-    assert_eq!(skin.text_size(), 80);
+    assert_eq!(skin.text_size().percent(), 80);
     test.activate("text-reset", None);
-    assert_eq!(skin.text_size(), 100);
+    assert_eq!(skin.text_size().percent(), 100);
     skin.set_text_size(before);
 }
 

@@ -16,6 +16,7 @@ use gtk::prelude::*;
 use crate::folder_view::cells::{CellOwners, IconCells};
 use crate::folder_view::grid::{self, IconSize};
 use crate::folder_view::{details, model::FolderModel};
+use crate::text_size::TextSize;
 use crate::theme::Appearance;
 
 use super::empty_page::{EmptyPage, EmptyState};
@@ -319,11 +320,11 @@ impl Content {
         }
     }
 
-    /// Draws the icon view's cells for text of `percent` size.
-    pub fn set_text_size(&self, percent: u32) {
+    /// Draws the icon view's cells for text of `size`.
+    pub fn set_text_size(&self, size: TextSize) {
         let scale = self.grid_scale.get();
         self.grid_scale.set(GridScale {
-            text_size: percent,
+            text_size: size,
             ..scale
         });
         set_grid_columns(&self.grid, &self.grid_scroll, self.grid_scale.get());
@@ -345,8 +346,7 @@ impl Content {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct GridScale {
     icon_size: IconSize,
-    /// In percent.
-    text_size: u32,
+    text_size: TextSize,
 }
 
 impl Default for GridScale {
@@ -354,7 +354,7 @@ impl Default for GridScale {
     fn default() -> Self {
         Self {
             icon_size: IconSize::Large,
-            text_size: crate::text_size::DEFAULT,
+            text_size: TextSize::DEFAULT,
         }
     }
 }

@@ -51,6 +51,7 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
+    use crate::text_size::TextSize;
 
     /// `css` without its comments, which mention tokens in prose.
     fn without_comments(css: &str) -> String {
@@ -156,7 +157,7 @@ mod tests {
 
     #[gtk::test]
     fn every_stylesheet_parses_without_errors() {
-        let text_sizes = crate::text_size::LEVELS.map(crate::theme::css_for_text_size);
+        let text_sizes = TextSize::all().map(crate::theme::css_for_text_size);
         let sheets = [RULES, HIGH_CONTRAST_RULES, LIGHT_PALETTE, DARK_PALETTE]
             .into_iter()
             .map(str::to_owned)

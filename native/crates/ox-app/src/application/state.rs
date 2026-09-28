@@ -17,6 +17,7 @@ use ox_core::settings::Settings;
 
 use crate::shared::AppContext;
 use crate::snapshot::SnapshotRequest;
+use crate::text_size::TextSize;
 use crate::theme::contrast::ContrastSetting;
 use crate::theme::system::SystemScheme;
 use crate::theme::{Skin, ThemePreference};
@@ -46,7 +47,7 @@ impl AppState {
     fn with_skin(app: &gtk::Application, skin: Rc<Skin>, settings: Settings) -> Self {
         let preferences = &settings.data().preferences;
         skin.set_preference(ThemePreference::parse(&preferences.theme));
-        skin.set_text_size(preferences.text_size);
+        skin.set_text_size(TextSize::from_percent(preferences.text_size));
         let system_scheme = follow_system_scheme(&skin);
         let contrast_setting = follow_contrast(&skin);
         crate::window::install_accelerators(app);

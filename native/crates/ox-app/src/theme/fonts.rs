@@ -7,12 +7,12 @@
 //! from one table of base sizes (the values in `desktop/ui/style.css`).
 
 use crate::folder_view::grid::{self, IconSize};
-use crate::text_size;
+use crate::text_size::{self, TextSize};
 
-/// The stylesheet for a text size in percent: every font size, the bars,
-/// rows, menus and tiles whose height follows the text, one rule per line.
-pub(crate) fn css_for_text_size(percent: u32) -> String {
-    let metrics = text_size::metrics(percent);
+/// The stylesheet for `text_size`: every font size, the bars, rows, menus
+/// and tiles whose height follows the text, one rule per line.
+pub(crate) fn css_for_text_size(text_size: TextSize) -> String {
+    let metrics = text_size::metrics(text_size);
     let scale = metrics.scale;
     let mut rules: Vec<String> = Vec::new();
     rules.extend(FONT_SIZES.iter().map(|font| font.rule(scale)));
@@ -20,7 +20,7 @@ pub(crate) fn css_for_text_size(percent: u32) -> String {
     rules.push(solid_frame_rule(scale));
     rules.push(details_row_rule(metrics.detail_row));
     rules.push(menu_rules(scale));
-    rules.extend(IconSize::ALL.map(|size| tile_rule(size, percent)));
+    rules.extend(IconSize::ALL.map(|icon_size| tile_rule(icon_size, text_size)));
     rules.join("\n") + "\n"
 }
 
@@ -178,15 +178,16 @@ fn menu_rules(scale: f64) -> String {
 /// next row, a 1-pixel margin on each side (style.css).
 const TILE_VERTICAL_CHROME: i32 = 12 + 12 + 1 + 1;
 
-/// A tile's size for icons of `size`. Its height fills the cell less the
-/// padding and the gap. Its width comes from the column the window sets
-/// (`columns_for_width` in `folder_view/grid.rs`), so the minimum is only
-/// the icon, which lets GTK use every column the window asks for.
-fn tile_rule(size: IconSize, percent: u32) -> String {
-    let cell = grid::cell_size(size, percent);
+/// A tile's size for icons of `icon_size` at `text_size`. Its height fills
+/// the cell less the padding and the gap. Its width comes from the column
+/// the window sets (`columns_for_width` in `folder_view/grid.rs`), so the
+/// minimum is only the icon, which lets GTK use every column the window
+/// asks for.
+fn tile_rule(icon_size: IconSize, text_size: TextSize) -> String {
+    let cell = grid::cell_size(icon_size, text_size);
     let height = cell.height - TILE_VERTICAL_CHROME;
-    let width = size.pixels();
-    let class = size.css_class();
+    let width = icon_size.pixels();
+    let class = icon_size.css_class();
     format!("gridview.files.{class} > child {{ min-width: {width}px; min-height: {height}px; }}")
 }
 
@@ -194,9 +195,15 @@ fn tile_rule(size: IconSize, percent: u32) -> String {
 mod tests {
     use super::*;
 
+    /// The stylesheet at `percent`, one of the levels.
+    fn css_at(percent: u32) -> String {
+        css_for_text_size(TextSize::from_percent(percent))
+    }
+
+    /// parity: VIEW-044
     #[test]
     fn default_size_matches_the_web_stylesheet() {
-        let css = css_for_text_size(100);
+        let css = css_at(100);
         assert!(css.contains("window.ox { font-size: 13.00px; }"));
         assert!(css.contains(".statusbar { font-size: 11.00px; }"));
         assert!(css.contains("columnview.files > listview > row { min-height: 36px; }"));
@@ -211,21 +218,22 @@ mod tests {
     /// parity: VIEW-044
     #[test]
     fn larger_text_scales_fonts_and_rows() {
-        let css = css_for_text_size(200);
+        let css = css_at(200);
         assert!(css.contains("window.ox { font-size: 26.00px; }"));
         assert!(css.contains("row { min-height: 60px; }"));
     }
 
+    /// parity: VIEW-044
     #[test]
     fn the_title_bar_and_the_frame_band_grow_together() {
-        let css = css_for_text_size(200);
+        let css = css_at(200);
         assert!(css.contains(".ox-titlebar { min-height: 62px; }"));
         assert!(css.contains("box-shadow: inset 0 65px @ox_title"));
     }
 
     #[test]
     fn every_rule_is_well_formed() {
-        let css = css_for_text_size(125);
+        let css = css_at(125);
         for line in css.lines() {
             assert!(line.ends_with('}'), "{line}");
             assert_eq!(line.matches('{').count(), 1, "{line}");

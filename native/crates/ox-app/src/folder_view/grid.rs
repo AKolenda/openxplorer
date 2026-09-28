@@ -11,7 +11,7 @@ use std::rc::Rc;
 use gtk::prelude::*;
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners, IconCells};
-use crate::text_size;
+use crate::text_size::{self, TextSize};
 
 /// Icon sizes of Explorer's icon layouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,11 +131,11 @@ pub(crate) struct CellSize {
     pub height: i32,
 }
 
-/// The cell of tiles of `size` at `text_size` percent: `gridWidth` ×
+/// The cell of tiles of `size` at `text_size`: `gridWidth` ×
 /// `gridRow` from `metrics()` in text-size.js for large icons (135 × 130
 /// at 100%), widened and heightened with the icon for the other sizes,
 /// which the Python app does not have.
-pub(crate) fn cell_size(size: IconSize, text_size: u32) -> CellSize {
+pub(crate) fn cell_size(size: IconSize, text_size: TextSize) -> CellSize {
     let metrics = text_size::metrics(text_size);
     let growth = size.pixels() - IconSize::Large.pixels();
     CellSize {
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn large_icon_cells_are_the_web_grid_cells() {
-        let cell = cell_size(IconSize::Large, 100);
+        let cell = cell_size(IconSize::Large, TextSize::from_percent(100));
         assert_eq!(
             cell,
             CellSize {
@@ -181,7 +181,7 @@ mod tests {
                 height: 130
             }
         );
-        let larger_text = cell_size(IconSize::Large, 150);
+        let larger_text = cell_size(IconSize::Large, TextSize::from_percent(150));
         assert_eq!(
             larger_text,
             CellSize {
@@ -189,7 +189,7 @@ mod tests {
                 height: 153
             }
         );
-        assert!(cell_size(IconSize::ExtraLarge, 100).width > cell.width);
+        assert!(cell_size(IconSize::ExtraLarge, TextSize::from_percent(100)).width > cell.width);
     }
 
     /// A pane width and the columns `renderRows` gives it.

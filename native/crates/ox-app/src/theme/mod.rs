@@ -20,7 +20,7 @@ use gtk::gdk;
 pub(crate) use fonts::css_for_text_size;
 pub use preference::{Appearance, ThemePreference};
 
-use crate::text_size;
+use crate::text_size::TextSize;
 use contrast::Contrast;
 
 /// What changed in a [`Skin`], as its listeners hear it.
@@ -29,8 +29,8 @@ pub enum SkinChange {
     /// The palette or the theme preference changed; this appearance is
     /// drawn now.
     Appearance(Appearance),
-    /// Text is drawn at this size now, in percent.
-    TextSize(u32),
+    /// Text is drawn at this size now.
+    TextSize(TextSize),
 }
 
 /// Identifies a callback registered with [`Skin::connect_changed`].
@@ -60,7 +60,7 @@ pub struct Skin {
     /// Whether the high-contrast rules are loaded.
     contrast: Cell<Contrast>,
     /// The text size in percent, always one of the levels.
-    text_size: Cell<u32>,
+    text_size: Cell<TextSize>,
     /// The user's theme choice.
     preference: Cell<ThemePreference>,
     /// The desktop's colour scheme, which [`ThemePreference::System`]
@@ -90,7 +90,7 @@ impl Skin {
     pub(crate) fn install(display: &gdk::Display) -> Self {
         force_builtin_theme(&gtk::Settings::for_display(display));
         add_provider(display, stylesheets::RULES, Layer::Rules);
-        let default_text_size = css_for_text_size(text_size::DEFAULT);
+        let default_text_size = css_for_text_size(TextSize::DEFAULT);
         let text_size_provider = add_provider(display, &default_text_size, Layer::TextSize);
         let light_palette = stylesheets::palette(Appearance::Light);
         let palette_provider = add_provider(display, light_palette, Layer::Palette);
@@ -101,7 +101,7 @@ impl Skin {
             contrast_provider,
             appearance: Cell::new(Appearance::Light),
             contrast: Cell::new(Contrast::Normal),
-            text_size: Cell::new(text_size::DEFAULT),
+            text_size: Cell::new(TextSize::DEFAULT),
             preference: Cell::new(ThemePreference::System),
             desktop_appearance: Cell::new(Appearance::Light),
             next_listener: Cell::new(0),
@@ -155,21 +155,18 @@ impl Skin {
         true
     }
 
-    /// The text size in percent.
-    pub(crate) fn text_size(&self) -> u32 {
+    /// The size text is drawn at.
+    pub(crate) fn text_size(&self) -> TextSize {
         self.text_size.get()
     }
 
-    /// Applies a text size in percent, or the default for a size that is
-    /// not one of the levels, and tells the listeners when it changed.
-    pub(crate) fn set_text_size(&self, percent: u32) {
-        let percent = text_size::normalize(percent);
-        if self.text_size.replace(percent) == percent {
+    /// Draws text at `size` and tells the listeners when it changed.
+    pub(crate) fn set_text_size(&self, size: TextSize) {
+        if self.text_size.replace(size) == size {
             return;
         }
-        self.text_size_provider
-            .load_from_string(&css_for_text_size(percent));
-        self.notify(SkinChange::TextSize(percent));
+        self.text_size_provider.load_from_string(&css_for_text_size(size));
+        self.notify(SkinChange::TextSize(size));
     }
 
     /// The contrast drawn now, for tests that follow the desktop setting.

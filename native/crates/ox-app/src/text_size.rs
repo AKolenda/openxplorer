@@ -6,24 +6,54 @@
 //! Ctrl+minus smaller and Ctrl+0 resets it; row heights and icon-view cells
 //! follow the text so large text never clips.
 //!
+//! A [`TextSize`] is always one of the levels: the saved percentage is
+//! normalised once, when it is read, and nothing downstream checks it
+//! again.
+//!
 //! The keys live in one table ([`Step::keys`]) that the window installs as
 //! GTK application accelerators. GTK matches accelerators with exactly the
 //! listed modifiers, so Ctrl+Alt and `AltGr` combinations never resize text,
 //! as `action()` in text-size.js requires.
 
 /// Supported text sizes, in percent (`levels` in text-size.js).
-pub(crate) const LEVELS: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
+const LEVELS: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
 
-/// The default text size, in percent.
-pub(crate) const DEFAULT: u32 = 100;
+/// The position of 100%, the default size, in [`LEVELS`].
+const DEFAULT_LEVEL: usize = 2;
 
-/// `percent` when it is one of the [`LEVELS`], else [`DEFAULT`], as
-/// `normalize` in text-size.js.
-pub(crate) fn normalize(percent: u32) -> u32 {
-    if LEVELS.contains(&percent) {
-        percent
-    } else {
-        DEFAULT
+/// A supported text size: always one of the levels of text-size.js.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TextSize {
+    /// The position in [`LEVELS`].
+    level: usize,
+}
+
+impl TextSize {
+    /// 100%: the size a new installation starts at and Ctrl+0 returns to.
+    pub(crate) const DEFAULT: TextSize = TextSize { level: DEFAULT_LEVEL };
+
+    /// The size for a saved `percent`, or [`Self::DEFAULT`] when it is not
+    /// one of the levels, as `normalize` in text-size.js.
+    pub(crate) fn from_percent(percent: u32) -> Self {
+        let level = LEVELS.iter().position(|listed| *listed == percent);
+        level.map_or(Self::DEFAULT, |level| Self { level })
+    }
+
+    /// The size in percent, as the settings file stores it.
+    pub(crate) fn percent(self) -> u32 {
+        LEVELS[self.level]
+    }
+
+    /// Every supported size, smallest first.
+    #[cfg(test)]
+    pub(crate) fn all() -> impl Iterator<Item = TextSize> {
+        (0..LEVELS.len()).map(|level| TextSize { level })
+    }
+}
+
+impl Default for TextSize {
+    fn default() -> Self {
+        Self::DEFAULT
     }
 }
 
@@ -42,17 +72,16 @@ impl Step {
     /// Every command, in menu order.
     pub(crate) const ALL: [Step; 3] = [Step::Increase, Step::Decrease, Step::Reset];
 
-    /// The size after this step from `percent`, as `step` in text-size.js:
-    /// stepping stops at the smallest and the largest level, and a size
-    /// that is not a level steps from the default.
-    pub(crate) fn apply(self, percent: u32) -> u32 {
-        let index = level_index(percent);
+    /// The size after this step from `size`, as `step` in text-size.js:
+    /// stepping stops at the smallest and the largest level.
+    pub(crate) fn apply(self, size: TextSize) -> TextSize {
         let largest = LEVELS.len() - 1;
-        match self {
-            Step::Increase => LEVELS[(index + 1).min(largest)],
-            Step::Decrease => LEVELS[index.saturating_sub(1)],
-            Step::Reset => DEFAULT,
-        }
+        let level = match self {
+            Step::Increase => (size.level + 1).min(largest),
+            Step::Decrease => size.level.saturating_sub(1),
+            Step::Reset => DEFAULT_LEVEL,
+        };
+        TextSize { level }
     }
 
     /// The window action that performs the step.
@@ -89,15 +118,6 @@ impl Step {
     }
 }
 
-/// The position of `percent`, normalised, in [`LEVELS`].
-fn level_index(percent: u32) -> usize {
-    let level = normalize(percent);
-    LEVELS
-        .iter()
-        .position(|listed| *listed == level)
-        .expect("normalize always returns one of the levels")
-}
-
 /// Layout sizes derived from the text size, in pixels at scale 1 (the
 /// object `metrics()` in text-size.js returns).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -119,10 +139,10 @@ pub(crate) fn ceil_pixels(value: f64) -> i32 {
     value.ceil() as i32
 }
 
-/// The metrics at `percent`, with the formulas and minimums of `metrics()`
+/// The metrics at `size`, with the formulas and minimums of `metrics()`
 /// in text-size.js.
-pub(crate) fn metrics(percent: u32) -> Metrics {
-    let scale = f64::from(normalize(percent)) / 100.0;
+pub(crate) fn metrics(size: TextSize) -> Metrics {
+    let scale = f64::from(size.percent()) / 100.0;
     let detail_row = ceil_pixels(24.0 * scale + 14.0).max(38);
     let grid_growth = ceil_pixels((scale - 1.0) * 46.0).max(0);
     let grid_width = ceil_pixels(90.0 * scale + 45.0).max(135);
@@ -138,6 +158,11 @@ pub(crate) fn metrics(percent: u32) -> Metrics {
 mod tests {
     use super::*;
 
+    /// The size for `percent`, which the test means to be a level.
+    fn size(percent: u32) -> TextSize {
+        TextSize::from_percent(percent)
+    }
+
     /// The step whose table lists `key`, as `action()` in text-size.js
     /// would classify a Ctrl press of that key.
     fn step_for(key: &str) -> Option<Step> {
@@ -150,7 +175,7 @@ mod tests {
     #[test]
     fn supported_levels_are_kept() {
         for percent in LEVELS {
-            assert_eq!(normalize(percent), percent);
+            assert_eq!(size(percent).percent(), percent);
         }
     }
 
@@ -160,8 +185,17 @@ mod tests {
     #[test]
     fn other_values_fall_back_to_the_default() {
         for percent in [0, 99, 125 + 1, 1000, u32::MAX] {
-            assert_eq!(normalize(percent), DEFAULT, "{percent}");
+            assert_eq!(TextSize::from_percent(percent).percent(), 100, "{percent}");
         }
+    }
+
+    /// parity: VIEW-044
+    #[test]
+    fn every_level_is_listed_once_smallest_first() {
+        let percents: Vec<u32> = TextSize::all().map(TextSize::percent).collect();
+        assert_eq!(percents, LEVELS);
+        assert_eq!(TextSize::DEFAULT.percent(), 100);
+        assert_eq!(TextSize::default(), TextSize::DEFAULT);
     }
 
     /// Ported from `desktop/tests/text_size.test.cjs::Ctrl + / Ctrl - / Ctrl 0`
@@ -198,6 +232,7 @@ mod tests {
         assert_eq!(step_for("c"), None);
     }
 
+    /// parity: VIEW-043
     #[test]
     fn every_accelerator_holds_ctrl_and_menus_show_ctrl_plus_first() {
         for step in Step::ALL {
@@ -215,17 +250,18 @@ mod tests {
     /// parity: VIEW-044
     #[test]
     fn stepping_is_bounded() {
-        assert_eq!(Step::Decrease.apply(80), 80);
-        assert_eq!(Step::Increase.apply(200), 200);
-        assert_eq!(Step::Increase.apply(100), 110);
-        assert_eq!(Step::Decrease.apply(150), 125);
-        assert_eq!(Step::Reset.apply(175), DEFAULT);
+        assert_eq!(Step::Decrease.apply(size(80)).percent(), 80);
+        assert_eq!(Step::Increase.apply(size(200)).percent(), 200);
+        assert_eq!(Step::Increase.apply(size(100)).percent(), 110);
+        assert_eq!(Step::Decrease.apply(size(150)).percent(), 125);
+        assert_eq!(Step::Reset.apply(size(175)).percent(), 100);
     }
 
+    /// parity: VIEW-044
     #[test]
     fn a_size_that_is_not_a_level_steps_from_the_default() {
-        assert_eq!(Step::Increase.apply(101), 110);
-        assert_eq!(Step::Decrease.apply(0), 90);
+        assert_eq!(Step::Increase.apply(TextSize::from_percent(101)).percent(), 110);
+        assert_eq!(Step::Decrease.apply(TextSize::from_percent(0)).percent(), 90);
     }
 
     /// Ported from `desktop/tests/text_size.test.cjs::default metrics unchanged`
@@ -239,7 +275,7 @@ mod tests {
             grid_row: 130,
             grid_width: 135,
         };
-        assert_eq!(metrics(100), expected);
+        assert_eq!(metrics(size(100)), expected);
     }
 
     /// Ported from `desktop/tests/text_size.test.cjs::large text row clearance`
@@ -248,7 +284,7 @@ mod tests {
     #[test]
     fn large_text_keeps_row_clearance() {
         for percent in LEVELS {
-            let sized = metrics(percent);
+            let sized = metrics(size(percent));
             let line_height = 12.0 * sized.scale * 1.45;
             assert!(f64::from(sized.detail_row) >= line_height, "{percent}");
             assert!(sized.grid_row >= 130);
