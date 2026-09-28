@@ -4,39 +4,50 @@
 //! `desktop/operations.py`.
 //!
 //! Rules enforced here:
-//! - A copy is built under an unguessable `.winspace-transfer-<32 hex>.part`
-//!   name and published only when complete, so a partial copy is never
-//!   visible under its final name.
-//! - Local and network destinations get a private staging folder (created
-//!   with an exclusive `mkdir`, owner-only when local) holding `payload`.
-//! - Device directories (MTP) are built under a hidden sibling name and
-//!   published with a same-folder rename. Device files are built under their
-//!   final filename inside a private folder and moved out without renaming.
-//!   Every cleanup root is reserved by an exclusive mkdir before copying.
-//! - A copy within one device (MTP CopyObject) keeps the source's name
-//!   whatever target is requested, so it is built under that name inside a
-//!   private folder, renamed there, and moved out under the same name.
-//! - A device's success report is never trusted: the final name must exist
-//!   and the staged name must be gone.
-//! - Only staging this item created is recorded for cleanup; a failed
-//!   `mkdir` grants no right to delete anything.
+//! - XFER-001: a copy is built under an unguessable
+//!   `.winspace-transfer-<32 hex>.part` name and published only when
+//!   complete, so a partial copy is never visible under its final name.
+//!   Local and network destinations get a private staging folder (created
+//!   exclusively with `create_directory`, owner-only when local) holding
+//!   `payload`.
+//! - XFER-021: device destinations (MTP) build the item itself under a
+//!   hidden sibling name and publish it with a same-folder rename (MTP
+//!   `SetObjectPropValue`). Uploads therefore never need MTP `MoveObject`,
+//!   which devices such as Android 7 and 8 do not offer. A device's success
+//!   report is never trusted: the final name must exist and the staged name
+//!   must be gone.
+//! - XFER-023: a copy within one device (MTP `CopyObject`) keeps the
+//!   source's name whatever target is requested, so it is built under that
+//!   name inside a private folder, renamed there, and moved out under the
+//!   same name. As in the Python app, that last move needs MTP
+//!   `MoveObject`; a device without it gets an error that says so.
+//! - XFER-002: only staging this item created is recorded for cleanup: a
+//!   failed exclusive `create_directory`, or an upload refused because its
+//!   name exists, grants no right to delete anything.
 
+use std::ffi::OsString;
+
+use super::cancellation::Cancellation;
 use super::commit::{commit_replace, publish_staged, verify_installation};
 use super::copy::Copier;
+use super::error::TransferError;
 use super::modes::{secure_local_staging, DirectoryModes};
 use super::names::{child_node, staging_name, PAYLOAD_NAME};
-use super::node::{Cancellation, Node, TransferError, WriteGuard};
-use super::types::Progress;
+use super::node::{ItemIdentity, Node, NodeKind, WriteGuard};
+use super::staging::StagingPlace;
+use super::types::{ConflictPolicy, Progress};
 
 /// Staging the engine created for one item.
 pub(crate) enum Stage {
     /// The item itself under a hidden name beside its final name (device
-    /// destinations).
+    /// uploads).
     Sibling(Box<dyn Node>),
     /// A private folder holding the item: `payload`, or the source's own
-    /// name for a copy within one device, or the final name for an upload.
+    /// name for a copy within one device.
     Folder {
+        /// The private `.winspace-transfer-<hex>.part` folder.
         folder: Box<dyn Node>,
+        /// The item being built inside it.
         item: Box<dyn Node>,
     },
 }
@@ -53,128 +64,193 @@ impl Stage {
     /// The completed item that gets published.
     fn item(&self) -> &dyn Node {
         match self {
-            Stage::Sibling(item) => item.as_ref(),
-            Stage::Folder { item, .. } => item.as_ref(),
+            Stage::Sibling(item) | Stage::Folder { item, .. } => item.as_ref(),
         }
     }
 }
 
 /// The staging one item owns, for cleanup after it finishes or fails.
 #[derive(Default)]
-pub(crate) struct StageSlot {
+pub(crate) struct ItemStaging {
     /// Set as soon as staging exists; cleared once nothing is left to remove.
     pub(crate) stage: Option<Stage>,
-    /// The destination is a device: cleanup is retried and reported as an
-    /// "item".
-    pub(crate) device: bool,
+    /// Where the staging lives, which decides how cleanup is retried.
+    pub(crate) place: StagingPlace,
+    /// The local staging folder the engine created, recorded when it was
+    /// made private; `None` for remote and device staging.
+    pub(crate) created: Option<ItemIdentity>,
 }
 
-/// One top-level copy into `dest_dir` under the name `destination`.
+impl ItemStaging {
+    /// Removes the private folder of a published copy.
+    ///
+    /// The folder is empty by then. A plain delete removes only an empty
+    /// folder, so it can never take the published item with it.
+    ///
+    /// # Errors
+    ///
+    /// The backend's error; the folder then stays recorded for cleanup.
+    pub(crate) fn remove_empty_folder(&mut self) -> Result<(), TransferError> {
+        if let Some(stage) = &self.stage {
+            stage.root().delete()?;
+        }
+        self.stage = None;
+        Ok(())
+    }
+}
+
+/// How one copy is staged, chosen from the destination's capabilities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    /// `payload` inside a private folder: local and network destinations.
+    Payload,
+    /// The item itself under a hidden sibling name: device uploads.
+    Sibling,
+    /// The source's own name inside a private folder: a file copy within
+    /// one device, where MTP `CopyObject` keeps the source name.
+    SameDeviceCopy,
+}
+
+/// One top-level copy into `destination_folder` under the name
+/// `destination`.
 pub(crate) struct StagedCopy<'a> {
+    /// The user's item; it is only read.
     pub(crate) source: &'a dyn Node,
-    pub(crate) is_directory: bool,
-    pub(crate) dest_dir: &'a dyn Node,
+    /// What `source` is, inspected without following links.
+    pub(crate) source_kind: NodeKind,
+    /// The folder the copy is published in.
+    pub(crate) destination_folder: &'a dyn Node,
+    /// The final name, chosen by the conflict policy.
     pub(crate) destination: &'a dyn Node,
-    /// The user chose Replace: overwrite files and merge folders.
-    pub(crate) replace: bool,
+    /// Replace overwrites files and merges folders; every other policy
+    /// publishes without overwriting.
+    pub(crate) policy: ConflictPolicy,
     pub(crate) cancel: &'a Cancellation,
+    /// Asked about every destination a Replace changes.
     pub(crate) guard: Option<&'a WriteGuard>,
+    /// Receives byte progress.
     pub(crate) emit: &'a mut dyn FnMut(Progress),
 }
 
 impl StagedCopy<'_> {
-    /// Builds, publishes and verifies the copy. `slot` receives the staging
-    /// as soon as it exists, so the caller can clean it up on any failure.
-    pub(crate) fn run(mut self, slot: &mut StageSlot) -> Result<(), TransferError> {
-        let token = staging_name()?;
+    /// Builds, publishes and verifies the copy. `staging` receives the
+    /// staging as soon as it exists, so the caller can clean it up on any
+    /// failure.
+    ///
+    /// # Errors
+    ///
+    /// Any failure while staging, publishing or verifying. Nothing is
+    /// visible under the final name unless publishing succeeded.
+    pub(crate) fn run(mut self, staging: &mut ItemStaging) -> Result<(), TransferError> {
+        let stage_name = staging_name()?;
         let mut modes = DirectoryModes::default();
-        let device = self.dest_dir.stage_as_sibling();
-        slot.device = device;
-        let same_device_file = !self.is_directory && self.source.native_copy_keeps_name(self.dest_dir);
-        if device && self.is_directory {
-            self.build_sibling_directory(&token, &mut modes, slot)?;
-        } else {
-            self.build_in_folder(&token, same_device_file, &mut modes, slot)?;
+        staging.place = StagingPlace::of(self.destination_folder);
+        let layout = self.layout();
+        match layout {
+            Layout::Sibling => self.build_sibling(&stage_name, &mut modes, staging)?,
+            Layout::Payload | Layout::SameDeviceCopy => {
+                self.build_in_folder(&stage_name, layout, &mut modes, staging)?;
+            }
         }
         self.cancel.check()?;
-        let stage = slot
+        // Building succeeded, so the stage is recorded; this keeps that
+        // invariant without a panic.
+        let stage = staging
             .stage
             .as_ref()
             .ok_or_else(|| TransferError::failed("The copy was not staged. Nothing was published."))?;
-        // A native rename in the destination folder. Replace is only reached
-        // after the user explicitly chose it; every other policy keeps the
-        // no-overwrite race guard.
-        if self.replace {
-            commit_replace(
-                stage.item(),
-                self.destination,
-                self.cancel,
-                self.guard,
-                Some(&mut modes),
-            )?;
-        } else {
-            publish_staged(stage.item(), self.destination, &mut modes, self.cancel)?;
-        }
-        if device {
+        self.publish(stage, &mut modes)
+            .map_err(|error| explain_publish_error(error, layout))?;
+        if staging.place == StagingPlace::Device {
+            // XFER-021: a device's success report is not proof.
             verify_device_publication(stage, self.destination)?;
-            if let Stage::Sibling(_) = stage {
+            if matches!(stage, Stage::Sibling(_)) {
                 // The staged item now is the published item: nothing is
                 // left to clean up.
-                slot.stage = None;
+                staging.stage = None;
             }
         }
         Ok(())
     }
 
-    /// Exclusively reserves and builds a directory under its sibling name.
-    fn build_sibling_directory(
-        &mut self,
-        token: &str,
-        modes: &mut DirectoryModes,
-        slot: &mut StageSlot,
-    ) -> Result<(), TransferError> {
-        let staged_item = child_node(self.dest_dir, token)?;
-        // A failed exclusive mkdir grants no right to clean up this path.
-        staged_item.mkdir(Some(self.cancel))?;
-        let stage = slot.stage.insert(Stage::Sibling(staged_item));
-        let children = self.source.children(Some(self.cancel))?;
-        let mut copier = Copier::new(self.cancel, token, modes, &mut *self.emit);
-        for child in children {
-            let target = child_node(stage.item(), &child.name())?;
-            copier.copy(child.as_ref(), target.as_ref(), 1)?;
+    /// Where this copy is built: a same-device file copy must follow MTP
+    /// `CopyObject`, other device copies stage beside the final name, and
+    /// everything else uses a private folder.
+    fn layout(&self) -> Layout {
+        let is_file = self.source_kind != NodeKind::Directory;
+        if is_file && self.source.native_copy_keeps_name(self.destination_folder) {
+            Layout::SameDeviceCopy
+        } else if self.destination_folder.has_sibling_staging() {
+            Layout::Sibling
+        } else {
+            Layout::Payload
         }
-        Ok(())
     }
 
-    /// Builds the item inside a new private folder named `token`.
+    /// XFER-021: builds the item itself under the hidden name `stage_name`
+    /// beside its final name.
+    fn build_sibling(
+        &mut self,
+        stage_name: &str,
+        modes: &mut DirectoryModes,
+        staging: &mut ItemStaging,
+    ) -> Result<(), TransferError> {
+        let staged_item = child_node(self.destination_folder, stage_name)?;
+        // Nothing can exist under a fresh random name unless another program
+        // created it, and then it is not ours to use or remove.
+        if staged_item.exists(Some(self.cancel)) {
+            return Err(TransferError::failed(
+                "Could not reserve a private staging name. Nothing was changed.",
+            ));
+        }
+        let mut copier = Copier::new(self.cancel, stage_name, modes, &mut *self.emit);
+        if self.source_kind == NodeKind::Directory {
+            // XFER-002: a failed exclusive folder creation grants no right to
+            // clean up this path.
+            staged_item.create_directory(Some(self.cancel))?;
+            let stage = staging.stage.insert(Stage::Sibling(staged_item));
+            return copier.copy_children(self.source, stage.item(), 1);
+        }
+        // Recorded before copying, so a failed or cancelled upload is removed.
+        let stage = staging.stage.insert(Stage::Sibling(staged_item));
+        let uploaded = copier.copy(self.source, stage.item(), 0);
+        if matches!(uploaded, Err(TransferError::Exists(_))) {
+            // XFER-002: the copy never overwrites, so another program took
+            // the name after the check above, and its item must survive
+            // cleanup.
+            staging.stage = None;
+        }
+        uploaded
+    }
+
+    /// Builds the item inside a new private folder named `stage_name`.
     fn build_in_folder(
         &mut self,
-        token: &str,
-        same_device_file: bool,
+        stage_name: &str,
+        layout: Layout,
         modes: &mut DirectoryModes,
-        slot: &mut StageSlot,
+        staging: &mut ItemStaging,
     ) -> Result<(), TransferError> {
-        let folder = child_node(self.dest_dir, token)?;
-        // A copy within one MTP device runs as CopyObject, which keeps the
-        // SOURCE name whatever target is requested: copy under that name.
-        let item_name = if same_device_file {
+        let folder = child_node(self.destination_folder, stage_name)?;
+        // XFER-023: a copy within one MTP device runs as CopyObject, which
+        // keeps the SOURCE name whatever target is requested: copy under
+        // that name.
+        let item_name = if layout == Layout::SameDeviceCopy {
             self.source.name()
-        } else if self.dest_dir.stage_as_sibling() {
-            // MTP can move across folders only when the name is unchanged.
-            // Upload under the final name, safely inside our own namespace.
-            self.destination.name()
         } else {
-            PAYLOAD_NAME.to_string()
+            OsString::from(PAYLOAD_NAME)
         };
-        let item = child_node(folder.as_ref(), &item_name)?;
-        // Reserve a private namespace. A failed mkdir never grants
-        // permission to delete that name during cleanup.
-        folder.mkdir(Some(self.cancel))?;
-        let stage = slot.stage.insert(Stage::Folder { folder, item });
-        secure_local_staging(stage.root())?;
-        let mut copier = Copier::new(self.cancel, token, modes, &mut *self.emit);
+        let item = child_node(folder.as_ref(), item_name)?;
+        // XFER-002: reserve a private namespace. A failed folder creation
+        // never grants permission to delete that name during cleanup.
+        folder.create_directory(Some(self.cancel))?;
+        let stage = staging.stage.insert(Stage::Folder { folder, item });
+        // XFER-004: the folder that was made private is the only one cleanup
+        // may empty.
+        staging.created = secure_local_staging(stage.root())?;
+        let mut copier = Copier::new(self.cancel, stage_name, modes, &mut *self.emit);
         copier.copy(self.source, stage.item(), 0)?;
-        if same_device_file {
+        if layout == Layout::SameDeviceCopy {
             self.rename_device_copy(stage)?;
         }
         Ok(())
@@ -186,19 +262,58 @@ impl StagedCopy<'_> {
         let Stage::Folder { folder, item } = stage else {
             return Ok(());
         };
+        // XFER-023: a device's success report is not proof that the copy
+        // exists where the private folder expects it.
         if !item.exists(Some(self.cancel)) {
             return Err(TransferError::failed(
-                "The device did not place the copy in its private staging folder. Nothing was published.",
+                "The device did not place the copy in its private staging folder. \
+                 Nothing was published.",
             ));
         }
         let final_name = self.destination.name();
         if final_name != self.source.name() {
-            let renamed = child_node(folder.as_ref(), &final_name)?;
+            let renamed = child_node(folder.as_ref(), final_name)?;
             item.move_native(renamed.as_ref(), Some(self.cancel))?;
             *item = renamed;
         }
         Ok(())
     }
+
+    /// XFER-001: installs the completed item under its final name with a
+    /// native rename in the destination folder. Replace is only reached
+    /// after the user explicitly chose it; every other policy keeps the
+    /// no-overwrite race guard (XFER-007).
+    fn publish(&self, stage: &Stage, modes: &mut DirectoryModes) -> Result<(), TransferError> {
+        if self.policy == ConflictPolicy::Replace {
+            commit_replace(
+                stage.item(),
+                self.destination,
+                self.cancel,
+                self.guard,
+                Some(modes),
+            )
+        } else {
+            publish_staged(stage.item(), self.destination, modes, self.cancel)
+        }
+    }
+}
+
+/// A copy within one device ends with a move out of its private folder
+/// (MTP `MoveObject`), which devices such as Android 7 and 8 phones do not
+/// offer. Their refusal is explained in those terms rather than as the
+/// generic unsupported move, which blames a cross-filesystem move.
+fn explain_publish_error(error: TransferError, layout: Layout) -> TransferError {
+    let is_move_object_refusal =
+        layout == Layout::SameDeviceCopy && matches!(error, TransferError::NotSupported(_));
+    if !is_move_object_refusal {
+        return error;
+    }
+    TransferError::NotSupported(
+        "This device cannot move items between folders, so a copy within the device \
+         cannot be finished. Nothing was published. Copy the item to this computer \
+         first, then copy it back to the device."
+            .into(),
+    )
 }
 
 /// Never trusts a device's success report for the final name.

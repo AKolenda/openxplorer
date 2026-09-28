@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Transfer request and progress types.
+//! Transfer request and progress types: the operation of a run, the
+//! protocol names of modes and conflict policies accepted by
+//! `TransferEngine.run` in `desktop/operations.py`, its progress events and
+//! its `Result`.
 
-use super::node::TransferError;
 use std::str::FromStr;
 
-/// What a run does with its items.
+use super::error::TransferError;
+
+/// The kind of [`Operation`] a run performs, by its protocol name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransferMode {
     /// Copy into the destination folder; sources are never changed.
@@ -27,11 +31,6 @@ impl TransferMode {
             TransferMode::Trash => "trash",
             TransferMode::Delete => "delete",
         }
-    }
-
-    /// Trash and delete remove items and take no destination.
-    pub fn is_removal(self) -> bool {
-        matches!(self, TransferMode::Trash | TransferMode::Delete)
     }
 }
 
@@ -90,6 +89,44 @@ impl FromStr for ConflictPolicy {
     }
 }
 
+/// What one run does, with exactly the settings that operation takes:
+/// copies and moves go into a destination folder under a conflict policy;
+/// Trash and permanent delete take neither. A request in the app's
+/// protocol becomes an operation through [`Operation::from_request`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operation<'a> {
+    /// Copy into a folder; sources are never changed.
+    Copy {
+        /// The URI of the folder the items go into.
+        destination_folder: &'a str,
+        /// What happens when an item's name is taken there.
+        policy: ConflictPolicy,
+    },
+    /// Native move or rename into a folder, never a copy-then-delete.
+    Move {
+        /// The URI of the folder the items go into.
+        destination_folder: &'a str,
+        /// What happens when an item's name is taken there.
+        policy: ConflictPolicy,
+    },
+    /// Move to the Trash, never falling back to a permanent delete.
+    Trash,
+    /// Permanent delete, only after explicit confirmation.
+    Delete,
+}
+
+impl Operation<'_> {
+    /// The mode of this operation.
+    pub fn mode(self) -> TransferMode {
+        match self {
+            Operation::Copy { .. } => TransferMode::Copy,
+            Operation::Move { .. } => TransferMode::Move,
+            Operation::Trash => TransferMode::Trash,
+            Operation::Delete => TransferMode::Delete,
+        }
+    }
+}
+
 /// Progress for the transfer panel. `fraction` is per file for copies and
 /// the batch position for Trash and delete.
 #[derive(Debug, Clone, PartialEq)]
@@ -99,6 +136,19 @@ pub struct Progress {
     pub label: String,
     /// Between 0 and 1.
     pub fraction: f64,
+}
+
+/// `part / whole` as a [`Progress::fraction`], at most 1; 0 when `whole` is
+/// 0 (a file whose size is unknown or empty).
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a progress bar needs far less precision than f64 keeps"
+)]
+pub(crate) fn progress_fraction(part: u64, whole: u64) -> f64 {
+    if whole == 0 {
+        return 0.0;
+    }
+    (part as f64 / whole as f64).min(1.0)
 }
 
 /// The outcome of one run. Every item ends in exactly one of `done`,
@@ -114,4 +164,51 @@ pub struct TransferResult {
     pub errors: Vec<String>,
     /// The user cancelled; later items were not started.
     pub cancelled: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Port of `test_unknown_operation_rejected` in
+    /// `desktop/tests/test_operations.py`. Only the parsing can be tested:
+    /// an unknown name never becomes a [`TransferMode`] or
+    /// [`ConflictPolicy`], so the engine cannot be asked to run one.
+    ///
+    /// parity: XFER-019
+    #[test]
+    fn protocol_names_round_trip_and_unknown_ones_are_refused() {
+        for mode in [
+            TransferMode::Copy,
+            TransferMode::Move,
+            TransferMode::Trash,
+            TransferMode::Delete,
+        ] {
+            assert_eq!(mode.as_str().parse::<TransferMode>(), Ok(mode));
+        }
+        for policy in [
+            ConflictPolicy::Skip,
+            ConflictPolicy::Replace,
+            ConflictPolicy::KeepBoth,
+        ] {
+            assert_eq!(policy.as_str().parse::<ConflictPolicy>(), Ok(policy));
+        }
+        assert_eq!(
+            "erase".parse::<TransferMode>(),
+            Err(TransferError::failed("Unknown operation."))
+        );
+        assert_eq!(
+            "overwrite".parse::<ConflictPolicy>(),
+            Err(TransferError::failed(
+                "Choose Skip duplicates, Keep both, or Replace existing."
+            ))
+        );
+    }
+
+    #[test]
+    fn progress_fractions_stay_between_zero_and_one() {
+        assert!(progress_fraction(0, 0).abs() < f64::EPSILON);
+        assert!((progress_fraction(1, 4) - 0.25).abs() < f64::EPSILON);
+        assert!((progress_fraction(9, 4) - 1.0).abs() < f64::EPSILON);
+    }
 }

@@ -43,11 +43,17 @@ impl PreviousVersions {
             .push(snapshots.to_string());
     }
 
-    /// Refuses protected locations with [`READ_ONLY`].
-    pub fn assert_writable(&self, uri: &str) -> Result<(), TransferError> {
+    /// Refuses protected locations with [`READ_ONLY`]. Port of
+    /// `PreviousVersions.assert_writable` in `desktop/previous_versions.py`,
+    /// which raises the refusal where this returns it.
+    ///
+    /// # Errors
+    ///
+    /// [`READ_ONLY`] for a location inside a snapshot folder.
+    pub fn check_writable(&self, uri: &str) -> Result<(), TransferError> {
         let configured = self.snapshot_roots.lock().expect("snapshot roots");
-        let protected = conventional_snapshot(uri) || configured.iter().any(|root| within(uri, root));
-        if protected {
+        let is_in_configured_snapshot = configured.iter().any(|root| is_within(uri, root));
+        if is_conventional_snapshot(uri) || is_in_configured_snapshot {
             Err(TransferError::failed(READ_ONLY))
         } else {
             Ok(())
@@ -57,12 +63,12 @@ impl PreviousVersions {
     /// The guard as the engine takes it.
     pub fn guard(self: &Arc<Self>) -> impl Fn(&str) -> Result<(), TransferError> + Send + Sync + 'static {
         let versions = Arc::clone(self);
-        move |uri: &str| versions.assert_writable(uri)
+        move |uri: &str| versions.check_writable(uri)
     }
 }
 
-/// `conventional_snapshot` in `previous_versions.py`.
-fn conventional_snapshot(uri: &str) -> bool {
+/// Port of `conventional_snapshot` in `previous_versions.py`.
+fn is_conventional_snapshot(uri: &str) -> bool {
     let after_scheme = uri.split_once("://").map_or(uri, |(_, rest)| rest);
     let path = after_scheme.find('/').map_or("", |slash| &after_scheme[slash..]);
     let decoded = percent_decode_str(path).decode_utf8_lossy();
@@ -74,8 +80,8 @@ fn conventional_snapshot(uri: &str) -> bool {
     marked || zfs
 }
 
-/// `within` in `previous_versions.py`.
-fn within(uri: &str, root: &str) -> bool {
+/// Port of `within` in `previous_versions.py`.
+fn is_within(uri: &str, root: &str) -> bool {
     let root = root.trim_end_matches('/');
     uri.trim_end_matches('/') == root || uri.starts_with(&format!("{root}/"))
 }

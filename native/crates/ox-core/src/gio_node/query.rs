@@ -1,36 +1,40 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Metadata and enumeration without following links.
+//! Metadata and enumeration without following symbolic links.
+//!
+//! Ports `GioNode.info` and `GioNode.children` in `desktop/gio_backend.py`.
 
 use gio::prelude::*;
 
-use super::{check, raw, GioNode};
-use crate::transfer::{Cancellation, Node, NodeInfo, NodeKind, TransferError};
+use super::{byte_count, gio_cancellable, GioNode};
+use crate::transfer::{check_cancelled, Cancellation, Node, NodeInfo, NodeKind, TransferError};
+
+/// The attributes [`GioNode::query_info`] reads.
+const INFO_ATTRIBUTES: &str = "standard::type,standard::size,unix::mode";
+
+/// The permission bits of `unix::mode`, without the file type bits.
+const PERMISSION_BITS: u32 = 0o7777;
 
 impl GioNode {
+    /// Kind, size and mode of this item, not of a link's target (XFER-017).
     pub(super) fn query_info(&self, cancel: Option<&Cancellation>) -> Result<NodeInfo, TransferError> {
-        check(cancel)?;
-        self.require_utf8_name()?;
+        check_cancelled(cancel)?;
         let info = self.file.query_info(
-            "standard::type,standard::size,unix::mode",
+            INFO_ATTRIBUTES,
             gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-            raw(cancel),
+            gio_cancellable(cancel),
         )?;
-        let kind = match info.file_type() {
-            gio::FileType::Directory => NodeKind::Directory,
-            gio::FileType::Regular => NodeKind::File,
-            gio::FileType::SymbolicLink => NodeKind::Symlink,
-            _ => NodeKind::Special,
-        };
         let mode = info
             .has_attribute("unix::mode")
-            .then(|| info.attribute_uint32("unix::mode") & 0o7777);
+            .then(|| info.attribute_uint32("unix::mode") & PERMISSION_BITS);
         Ok(NodeInfo {
-            kind,
-            size: info.size().max(0) as u64,
+            kind: node_kind(info.file_type()),
+            size: byte_count(info.size()),
             mode,
         })
     }
 
+    /// The items of this folder. XFER-017: a link to a folder is refused,
+    /// so the engine never walks into a link's target.
     pub(super) fn list_children(
         &self,
         cancel: Option<&Cancellation>,
@@ -40,51 +44,65 @@ impl GioNode {
                 "Only real folders can be enumerated during a transfer.",
             ));
         }
-        let enumerator = self.file.enumerate_children(
-            "standard::name",
-            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-            raw(cancel),
-        )?;
-        let result = self.collect_children(&enumerator, cancel);
-        // Closing must happen on success, cancellation and enumeration error.
-        // Preserve the enumeration error if both operations fail.
-        let (closed, close_error) = enumerator.close(gio::Cancellable::NONE);
-        let children = result?;
-        if let Some(error) = close_error {
-            return Err(error.into());
-        }
-        if !closed {
-            return Err(TransferError::failed("The folder listing could not be closed."));
-        }
+        let files = enumerate_files(&self.file, cancel)?;
+        let children = files
+            .into_iter()
+            .map(|file| Box::new(Self::from_file(file)) as Box<dyn Node>)
+            .collect();
         Ok(children)
     }
+}
 
-    fn collect_children(
-        &self,
-        enumerator: &gio::FileEnumerator,
-        cancel: Option<&Cancellation>,
-    ) -> Result<Vec<Box<dyn Node>>, TransferError> {
-        let mut children: Vec<Box<dyn Node>> = Vec::new();
-        loop {
-            check(cancel)?;
-            let Some(info) = enumerator.next_file(raw(cancel))? else {
-                break;
-            };
-            let child = Self::from_file(enumerator.child(&info));
-            child.require_utf8_name()?;
-            children.push(Box::new(child));
-        }
-        Ok(children)
+/// The kind of item GIO reports, without following links.
+fn node_kind(file_type: gio::FileType) -> NodeKind {
+    match file_type {
+        gio::FileType::Directory => NodeKind::Directory,
+        gio::FileType::Regular => NodeKind::File,
+        gio::FileType::SymbolicLink => NodeKind::Symlink,
+        _ => NodeKind::Special,
     }
+}
 
-    fn require_utf8_name(&self) -> Result<(), TransferError> {
-        if self.file.basename().is_some_and(|name| name.to_str().is_none()) {
-            // Node names are strings. Never silently replace invalid bytes
-            // and publish a copy under a different name.
-            return Err(TransferError::failed(
-                "This item's name is not valid UTF-8. Rename it before transferring.",
-            ));
-        }
-        Ok(())
+/// Every item in `folder`, including hidden ones, without following links.
+/// The listing is closed on success, cancellation and error alike.
+///
+/// # Errors
+///
+/// The folder cannot be listed or the listing cannot be closed, or
+/// [`TransferError::Cancelled`].
+pub(super) fn enumerate_files(
+    folder: &gio::File,
+    cancel: Option<&Cancellation>,
+) -> Result<Vec<gio::File>, TransferError> {
+    let enumerator = folder.enumerate_children(
+        "standard::name",
+        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+        gio_cancellable(cancel),
+    )?;
+    let listed = collect_files(&enumerator, cancel);
+    // Preserve the enumeration error if closing fails as well.
+    let (closed, close_error) = enumerator.close(gio::Cancellable::NONE);
+    let files = listed?;
+    if let Some(error) = close_error {
+        return Err(error.into());
+    }
+    if !closed {
+        return Err(TransferError::failed("The folder listing could not be closed."));
+    }
+    Ok(files)
+}
+
+/// Reads every item of an open listing.
+fn collect_files(
+    enumerator: &gio::FileEnumerator,
+    cancel: Option<&Cancellation>,
+) -> Result<Vec<gio::File>, TransferError> {
+    let mut files = Vec::new();
+    loop {
+        check_cancelled(cancel)?;
+        let Some(info) = enumerator.next_file(gio_cancellable(cancel))? else {
+            return Ok(files);
+        };
+        files.push(enumerator.child(&info));
     }
 }

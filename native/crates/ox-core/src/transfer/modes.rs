@@ -5,26 +5,33 @@
 //! `_restore_directory_modes` in `desktop/operations.py`.
 //!
 //! Rules enforced here:
-//! - Only `file:` items with a real path get Unix modes. MTP, AFC and many
-//!   SMB backends expose a FUSE path but do not implement `chmod`; their
-//!   random staging names stay private to the connected session instead.
-//! - Modes are changed through a directory opened with `O_NOFOLLOW`, so a
-//!   path swapped for a symbolic link cannot redirect the change.
-//! - While a copy is being built, every staged folder is owner-only
-//!   (`0700`); the source's exact modes are restored children-first, just
-//!   before the completed subtree is published.
+//! - XFER-004: only `file:` items with a real path get Unix modes. MTP, AFC
+//!   and many SMB backends expose a FUSE path but do not implement `chmod`;
+//!   their random staging names stay private to the connected session
+//!   instead. Modes are changed through a directory opened with
+//!   `O_NOFOLLOW`, so a path swapped for a symbolic link cannot redirect
+//!   the change.
+//! - XFER-005: while a copy is being built, every staged folder is
+//!   owner-only (`0700`); the source's exact modes are restored
+//!   children-first, just before the completed subtree is published.
 
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions, Permissions};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use super::node::{Cancellation, Node, TransferError};
+use super::cancellation::Cancellation;
+use super::error::TransferError;
+use super::node::{ItemIdentity, Node};
 
 /// Owner-only access for staging folders.
 pub(crate) const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
 
 /// Opens a directory for `fchmod` without following a symbolic link.
+///
+/// # Errors
+///
+/// When `path` is not a folder, is a symbolic link, or cannot be opened.
 pub(crate) fn open_directory_nofollow(path: &Path) -> std::io::Result<File> {
     OpenOptions::new()
         .read(true)
@@ -33,12 +40,17 @@ pub(crate) fn open_directory_nofollow(path: &Path) -> std::io::Result<File> {
 }
 
 /// Sets `mode` on an already opened directory (`fchmod`).
+///
+/// # Errors
+///
+/// The kernel's refusal, for example on a filesystem without Unix modes.
 pub(crate) fn set_mode(directory: &File, mode: u32) -> std::io::Result<()> {
     directory.set_permissions(Permissions::from_mode(mode))
 }
 
-/// The path to apply Unix modes to: only real local items qualify.
-pub(crate) fn local_directory_path(node: &dyn Node) -> Option<PathBuf> {
+/// The path to apply Unix modes to. XFER-004: only real local items
+/// qualify, never a `GVfs` FUSE path of a remote item.
+pub(crate) fn path_for_unix_modes(node: &(impl Node + ?Sized)) -> Option<PathBuf> {
     if node.uri().starts_with("file:") {
         node.path()
     } else {
@@ -46,21 +58,36 @@ pub(crate) fn local_directory_path(node: &dyn Node) -> Option<PathBuf> {
     }
 }
 
-/// Makes an engine-created local staging folder owner-only (`0700`). Does
-/// nothing for GVfs backends (MTP, AFC, SMB), even when they expose a FUSE
-/// path. Also used by the ZIP extractor for its own staging folder
-/// (`desktop/zip_extraction.py`).
-pub fn secure_local_staging(node: &dyn Node) -> Result<(), TransferError> {
-    match local_directory_path(node) {
-        Some(path) => apply_mode(&path, PRIVATE_DIRECTORY_MODE),
-        None => Ok(()),
-    }
+/// Makes an engine-created local staging folder owner-only (`0700`) and
+/// returns the identity of the folder that got the mode. Does nothing for
+/// `GVfs` backends (MTP, AFC, SMB), even when they expose a FUSE path, and
+/// returns `None` for them. The Python ZIP extractor
+/// (`desktop/zip_extraction.py`) secures its staging folder the same way;
+/// its port will use this too.
+///
+/// # Errors
+///
+/// When the folder cannot be opened without following links, or its mode
+/// cannot be changed.
+pub(crate) fn secure_local_staging(
+    node: &(impl Node + ?Sized),
+) -> Result<Option<ItemIdentity>, TransferError> {
+    let Some(path) = path_for_unix_modes(node) else {
+        return Ok(None);
+    };
+    let directory = apply_mode(&path, PRIVATE_DIRECTORY_MODE)?;
+    let metadata = directory.metadata()?;
+    Ok(Some(ItemIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+    }))
 }
 
-fn apply_mode(path: &Path, mode: u32) -> Result<(), TransferError> {
+/// Sets `mode` on the folder at `path` and returns the folder, still open.
+fn apply_mode(path: &Path, mode: u32) -> Result<File, TransferError> {
     let directory = open_directory_nofollow(path)?;
     set_mode(&directory, mode)?;
-    Ok(())
+    Ok(directory)
 }
 
 /// A staged local folder's final mode, applied just before publishing.
@@ -89,6 +116,7 @@ impl DirectoryModes {
         self.pending.remove(uri)
     }
 
+    /// True when `uri` waits for its final mode.
     fn contains(&self, uri: &str) -> bool {
         self.pending.contains_key(uri)
     }
@@ -99,11 +127,17 @@ impl DirectoryModes {
     }
 }
 
-/// Restores the recorded modes of `source` and its staged descendants,
-/// children before parents, so a restrictive parent mode cannot block
-/// restoring its children. Called only right before a complete subtree is
-/// published: restrictive source modes must not prevent building, merging
-/// or cleaning a staging folder the engine exclusively owns.
+/// XFER-005: restores the recorded modes of `source` and its staged
+/// descendants, children before parents, so a restrictive parent mode
+/// cannot block restoring its children. Called only right before a complete
+/// subtree is published: restrictive source modes must not prevent
+/// building, merging or cleaning a staging folder the engine exclusively
+/// owns.
+///
+/// # Errors
+///
+/// The first folder that cannot be listed or given its mode, or
+/// [`TransferError::Cancelled`].
 pub(crate) fn restore_directory_modes(
     source: &dyn Node,
     modes: &mut DirectoryModes,
@@ -125,11 +159,13 @@ pub(crate) fn restore_directory_modes(
 mod tests {
     use super::*;
 
+    /// The permission bits of `path`, without following a link.
     fn mode_of(path: &Path) -> u32 {
         let metadata = std::fs::symlink_metadata(path).expect("the test path exists");
         metadata.permissions().mode() & 0o7777
     }
 
+    /// parity: XFER-004
     #[test]
     fn modes_are_applied_through_a_no_follow_descriptor() {
         let temp = tempfile::tempdir().expect("a temp dir");
