@@ -14,6 +14,7 @@ mod private_trash;
 #[path = "ops_support/snapshots.rs"]
 mod snapshots;
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
@@ -159,6 +160,29 @@ fn restore_into_a_protected_location_is_refused() {
     assert!(!snapshot.join("old.txt").exists());
 }
 
+/// Every location the restored tree recreates is checked, not only the
+/// original location of the folder itself.
+///
+/// parity: XFER-020
+#[test]
+fn restoring_a_folder_that_holds_a_protected_backup_is_refused() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let project = temp.path().join("project");
+    fs::create_dir_all(project.join(".snapshot")).unwrap();
+    fs::write(project.join(".snapshot").join("version.txt"), b"backup").unwrap();
+
+    trash(&[&project]);
+    let item = recycled_from(&project);
+    let context = OperationContext::new(snapshot_protection());
+    let outcome = block_on(restore_from_recycle_bin(&[item.uri], &context)).unwrap();
+
+    assert_eq!(outcome.result.errors, [format!("project: {READ_ONLY}")]);
+    assert_eq!(outcome.undo, None);
+    assert!(!project.exists());
+    assert_eq!(recycled_from(&project).name, "project");
+}
+
 #[test]
 fn deleting_from_the_recycle_bin_removes_only_the_chosen_items() {
     let _recycle_bin = use_recycle_bin();
@@ -217,17 +241,24 @@ fn emptying_the_recycle_bin_deletes_everything_in_it_folders_included() {
     trash(&[&folder, &file]);
     let before = recycle_bin();
     let temp_root = std::env::temp_dir();
-    // Everything about to be deleted was trashed by these tests.
-    assert!(before.iter().all(|item| item
-        .original_path
-        .as_ref()
-        .is_some_and(|path| path.starts_with(&temp_root))));
+    // Everything about to be deleted was trashed by these tests; see
+    // `private_trash.rs` for why another volume's Trash is checked here.
+    assert!(
+        before.iter().all(|item| item
+            .original_path
+            .as_ref()
+            .is_some_and(|path| path.starts_with(&temp_root))),
+        "the Recycle Bin holds items these tests did not trash: {before:?}"
+    );
 
     let result = block_on(empty_recycle_bin(&Cancellation::new())).unwrap();
     let count = block_on(recycle_bin_item_count(&Cancellation::new())).unwrap();
 
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert_eq!(result.done.len(), before.len());
+    let listed: HashSet<&String> = before.iter().map(|item| &item.uri).collect();
+    let emptied: HashSet<&String> = result.done.iter().collect();
+    assert_eq!(emptied, listed, "emptying deleted only what was checked");
     assert_eq!(count, 0);
     assert!(recycle_bin().is_empty());
 }

@@ -2,10 +2,21 @@
 //! The safety check of every test that moves items to the Trash or reads,
 //! restores or empties the Recycle Bin.
 //!
-//! These tests use the real `trash:///` backend, so they must never reach
-//! the user's own Recycle Bin. `native/tools/check.py` runs every test
-//! binary with a private `XDG_DATA_HOME` in a temporary folder; a test
-//! that finds any other data folder stops before it changes anything.
+//! These tests use the real `trash:///` backend of `GVfs` (gvfsd-trash).
+//! `native/tools/check.py` runs every test binary with a private
+//! `XDG_DATA_HOME` in a temporary folder, so the home Trash these tests
+//! fill and empty is the test run's own; a test that finds any other data
+//! folder stops before it changes anything.
+//!
+//! `trash:///` also lists the Trash of every other mounted volume (its
+//! `.Trash-$UID` folder), which no environment variable redirects: items
+//! the user trashed on a USB drive appear there too. So the tests restore
+//! and delete only items they trashed themselves, and the one test that
+//! empties the Recycle Bin first checks that every listed item came from
+//! the test run's temporary folders, and afterwards that it deleted
+//! exactly those. An item trashed on another volume in the moment between
+//! that check and the emptying would still be deleted: that window cannot
+//! be closed while the real Empty Recycle Bin is tested.
 
 use std::path::PathBuf;
 

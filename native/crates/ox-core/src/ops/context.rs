@@ -13,7 +13,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use super::error::OpsError;
-use crate::transfer::{Cancellation, TransferEngine, TransferError, WriteGuard};
+use crate::transfer::{
+    check_write_tree, Cancellation, Node, SourceChange, TransferEngine, TransferError, WriteGuard,
+};
 
 /// Locations that must never change, such as previous versions
 /// (snapshots). The app installs the check of its previous-versions
@@ -51,8 +53,34 @@ impl WriteProtection {
         }
     }
 
-    /// True when some location is protected, so a tree must be walked
-    /// before it changes.
+    /// XFER-020: asks the protection about `destination` and every location
+    /// below it, paired with `source`'s tree, before anything changes; about
+    /// `source`'s tree too when `source_change` is [`SourceChange::Changed`].
+    /// Nothing is followed through links. This is the transfer engine's own
+    /// preflight, so the rule is enforced by one walk everywhere.
+    ///
+    /// # Errors
+    ///
+    /// The refusal for the first protected location, the nesting limit,
+    /// cancellation, or a failure to inspect or list the tree.
+    pub(crate) fn check_tree(
+        &self,
+        source: &dyn Node,
+        destination: &dyn Node,
+        cancel: &Cancellation,
+        source_change: SourceChange,
+    ) -> Result<(), OpsError> {
+        check_write_tree(
+            self.guard.as_deref(),
+            source,
+            Some(destination),
+            cancel,
+            source_change,
+        )?;
+        Ok(())
+    }
+
+    /// True when some location is protected.
     pub(crate) fn is_restricted(&self) -> bool {
         self.guard.is_some()
     }

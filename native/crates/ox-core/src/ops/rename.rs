@@ -15,10 +15,9 @@ use super::context::{on_worker, OperationContext};
 use super::create::name_taken_or;
 use super::error::OpsError;
 use super::undo::UndoRecord;
-use super::write_check::check_renamed_tree;
 use crate::gio_node::GioNode;
 use crate::location::{require_item_uri, validate_name};
-use crate::transfer::Node;
+use crate::transfer::{Node, SourceChange};
 
 /// A finished rename.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,13 +128,18 @@ fn are_in_same_folder(first: &GioNode, second: &GioNode) -> bool {
     first_folder.equal(&gio::File::for_uri(&second_folder.uri()))
 }
 
-/// XFER-020, then the native same-folder move that never overwrites.
+/// The whole-tree write check, then the native same-folder move that never
+/// overwrites.
 fn move_within_folder(
     source: &GioNode,
     destination: &dyn Node,
     context: &OperationContext,
 ) -> Result<(), OpsError> {
-    check_renamed_tree(&context.protection, source, destination, &context.cancel)?;
+    // XFER-020: every location in the renamed tree and its new location,
+    // as `_check_write_tree` with `source_writable=True`, which
+    // `rename_item` in `desktop/gio_backend.py` runs.
+    let protection = &context.protection;
+    protection.check_tree(source, destination, &context.cancel, SourceChange::Changed)?;
     source.move_native(destination, Some(&context.cancel))?;
     Ok(())
 }

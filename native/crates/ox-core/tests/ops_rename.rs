@@ -13,7 +13,7 @@ use std::fs;
 use ox_core::ops::{rename_item, undo, OperationContext, OpsError, UndoRecord};
 
 use ops_support::{block_on, file_uri};
-use snapshots::{snapshot_protection, READ_ONLY};
+use snapshots::{snapshot_protection, snapshot_protection_with_folders, READ_ONLY};
 
 /// Ported from `desktop/tests/gio_integration.py::GioLocalIntegration::test_rename_does_not_overwrite`.
 ///
@@ -56,6 +56,29 @@ fn a_folder_holding_a_protected_backup_is_not_renamed() {
         fs::read(project.join(".snapshot").join("version.txt")).unwrap(),
         b"backup"
     );
+    assert!(!temp.path().join("renamed").exists());
+}
+
+/// The rename counterpart of
+/// `desktop/tests/test_operations.py::ProtectedTransferTests::test_configured_backup_descendant_is_protected`:
+/// a snapshot folder configured in the previous-versions settings is
+/// protected like a conventional `.snapshot` folder.
+///
+/// parity: XFER-020
+#[test]
+fn a_folder_holding_a_configured_snapshot_folder_is_not_renamed() {
+    let temp = tempfile::tempdir().unwrap();
+    let project = temp.path().join("project");
+    let history = project.join("history");
+    fs::create_dir_all(&history).unwrap();
+    fs::write(history.join("version.txt"), b"backup").unwrap();
+    let (live, snapshots) = (file_uri(&project), file_uri(&history));
+    let protection = snapshot_protection_with_folders(&[(&live, &snapshots)]);
+
+    let renamed = block_on(rename_item(&live, "renamed", &OperationContext::new(protection)));
+
+    assert_eq!(renamed, Err(OpsError::Failed(READ_ONLY.into())));
+    assert_eq!(fs::read(history.join("version.txt")).unwrap(), b"backup");
     assert!(!temp.path().join("renamed").exists());
 }
 

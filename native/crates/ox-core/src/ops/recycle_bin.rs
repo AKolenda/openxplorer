@@ -12,8 +12,9 @@
 //! - Restoring never overwrites: an item whose original name is taken
 //!   again stays in the Recycle Bin, and the error says so.
 //! - Missing parent folders of the original location are created again
-//!   (OPS-041), and the write protection is asked about the original
-//!   location first.
+//!   (OPS-041). Before anything changes, the write protection is asked
+//!   about the original location and every location the item's tree
+//!   recreates below it (XFER-020).
 //! - Only whole items, directly in the Recycle Bin, are restored or
 //!   deleted: the backend treats the insides of a trashed folder as part of
 //!   that item.
@@ -22,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use gio::prelude::*;
 
-use super::context::{on_worker, OperationContext};
+use super::context::{on_worker, unless_cancelled, OperationContext};
 use super::error::OpsError;
 use super::results::record_failure;
 use super::run_transfer::TransferOutcome;
@@ -30,7 +31,7 @@ use super::undo::UndoRecord;
 use crate::entry::{entry_from_info, ATTRIBUTES};
 use crate::gio_node::GioNode;
 use crate::location::TRASH_URI;
-use crate::transfer::{Cancellation, Node, TransferResult};
+use crate::transfer::{Cancellation, Node, SourceChange, TransferResult};
 
 /// One item in the Recycle Bin.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -219,8 +220,13 @@ fn restore_item(uri: &str, context: &OperationContext) -> Result<String, OpsErro
 fn put_back(item: &gio::File, original_path: &Path, context: &OperationContext) -> Result<String, OpsError> {
     let target = gio::File::for_path(original_path);
     let target_uri = target.uri().to_string();
-    context.protection.check(&target_uri)?;
-    if GioNode::from_file(target.clone()).exists(Some(&context.cancel)) {
+    let destination = GioNode::from_file(target.clone());
+    // XFER-020: the original location and every location the item's tree
+    // recreates below it. The Recycle Bin itself is no protected location.
+    let source = GioNode::from_file(item.clone());
+    let protection = &context.protection;
+    protection.check_tree(&source, &destination, &context.cancel, SourceChange::Kept)?;
+    if unless_cancelled(&context.cancel, || destination.exists(Some(&context.cancel)))? {
         return Err(name_taken_in_original_folder(original_path));
     }
     recreate_original_folder(&target, context)?;

@@ -27,6 +27,12 @@
 //! clone of its cancellation it holds, so the Python bridge's job tokens
 //! (the `cancel` request) have no counterpart here.
 //!
+//! Wording: the place `trash:///` is the Recycle Bin in every message, as
+//! [`crate::location`] names it. The Delete command, its confirmation and
+//! its completion toast keep the Python app's "Move to Trash" texts word
+//! for word (OPS-015, CMD-003, OPS-023), and Undo names that command as it
+//! is labelled ("Undo: Move to Trash").
+//!
 //! | Module | Responsibility |
 //! |---|---|
 //! | `context` | The cancellation and write protection of an operation, and its worker |
@@ -35,7 +41,6 @@
 //! | `templates` | The built-in and user templates New offers |
 //! | `new_from_template` | New from template, staged privately and published without overwriting |
 //! | `rename` | Rename, and renaming back for Undo |
-//! | `write_check` | The write-protection walk before a rename |
 //! | `conflicts` | The name-conflict check before a paste or drop |
 //! | `delete_plan` | Trash support and the Delete confirmation |
 //! | `run_transfer` | Copy, move, Trash and permanent delete through the engine |
@@ -79,7 +84,6 @@ mod tab_transfer;
 mod templates;
 mod undo;
 mod undo_apply;
-mod write_check;
 
 pub use conflicts::find_conflicts;
 pub use context::{OperationContext, WriteProtection};
