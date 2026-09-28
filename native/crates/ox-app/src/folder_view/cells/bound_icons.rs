@@ -40,12 +40,12 @@ impl BoundIcon {
 
 /// Bound item icons, redrawn when the theme or scale changes.
 #[derive(Debug)]
-pub(crate) struct IconCells {
+pub(crate) struct BoundIcons {
     appearance: Cell<Appearance>,
     bound: RefCell<Vec<BoundIcon>>,
 }
 
-impl IconCells {
+impl BoundIcons {
     /// A registry drawing in `appearance`, shared by the views' cell
     /// factories.
     pub fn new(appearance: Appearance) -> Rc<Self> {

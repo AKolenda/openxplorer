@@ -86,10 +86,10 @@ fn show_sort_caret(view: &gtk::ColumnView, carets: &[gtk::Image]) {
 fn point_caret(caret: &gtk::Image, direction: Option<SortDirection>) {
     caret.set_visible(direction.is_some());
     for other in SortDirection::ALL {
-        caret.remove_css_class(other.key());
+        caret.remove_css_class(other.css_class());
     }
     if let Some(direction) = direction {
-        caret.add_css_class(direction.key());
+        caret.add_css_class(direction.css_class());
     }
 }
 
@@ -113,5 +113,5 @@ fn shown_direction(caret: &gtk::Widget) -> Option<SortDirection> {
     }
     SortDirection::ALL
         .into_iter()
-        .find(|direction| caret.has_css_class(direction.key()))
+        .find(|direction| caret.has_css_class(direction.css_class()))
 }

@@ -45,7 +45,7 @@ mod imp {
     use super::PreparedEntry;
 
     /// Private state of [`super::FileItem`]; set once at construction.
-    #[derive(Default)]
+    #[derive(Debug, Default)]
     pub struct FileItem {
         /// The entry and what is computed from it, set by
         /// [`super::FileItem::new`].
@@ -68,10 +68,6 @@ glib::wrapper! {
 
 impl FileItem {
     /// Wraps a listed entry.
-    ///
-    /// # Panics
-    ///
-    /// Never: a new object has no entry yet.
     pub(crate) fn new(entry: Entry) -> Self {
         let item: Self = glib::Object::new();
         item.imp()

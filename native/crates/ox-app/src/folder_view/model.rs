@@ -26,15 +26,6 @@ fn as_item(object: &glib::Object) -> &FileItem {
         .expect("folder models hold FileItems")
 }
 
-/// GTK's spelling of a standard ordering.
-fn to_gtk_ordering(order: Ordering) -> gtk::Ordering {
-    match order {
-        Ordering::Less => gtk::Ordering::Smaller,
-        Ordering::Equal => gtk::Ordering::Equal,
-        Ordering::Greater => gtk::Ordering::Larger,
-    }
-}
-
 /// Compares two items by one column, without folders-first or tie-breaks.
 /// Sizes that are not known count as 0, as in app.js.
 fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> Ordering {
@@ -55,7 +46,7 @@ fn compare_column(column: SortColumn, a: &FileItem, b: &FileItem) -> Ordering {
 pub(crate) fn column_sorter(column: SortColumn) -> gtk::CustomSorter {
     gtk::CustomSorter::new(move |a, b| {
         let order = compare_column(column, as_item(a), as_item(b));
-        to_gtk_ordering(order)
+        order.into()
     })
 }
 
@@ -65,7 +56,7 @@ fn folders_first() -> gtk::CustomSorter {
         let a_is_folder = as_item(a).entry().is_dir;
         let b_is_folder = as_item(b).entry().is_dir;
         // Reversed, so `true` sorts first.
-        to_gtk_ordering(b_is_folder.cmp(&a_is_folder))
+        b_is_folder.cmp(&a_is_folder).into()
     })
 }
 
@@ -73,13 +64,13 @@ fn folders_first() -> gtk::CustomSorter {
 fn names_ascending() -> gtk::CustomSorter {
     gtk::CustomSorter::new(|a, b| {
         let order = sorting::compare_names(as_item(a).sort_name(), as_item(b).sort_name());
-        to_gtk_ordering(order)
+        order.into()
     })
 }
 
 /// Counts for the status bar.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct SelectionSummary {
+pub(crate) struct SelectionSummary {
     /// Selected items.
     pub count: u32,
     /// Total size of the selected files (folders count as 0).
@@ -90,7 +81,7 @@ pub struct SelectionSummary {
 
 /// Filter, sort and selection over the active tab's store.
 #[derive(Debug)]
-pub struct FolderModel {
+pub(crate) struct FolderModel {
     /// Shared with the filter's callback, which GTK calls with no access
     /// to the model.
     filter_state: Rc<RefCell<FilterState>>,

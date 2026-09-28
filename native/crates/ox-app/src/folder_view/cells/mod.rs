@@ -5,7 +5,7 @@
 //! ([`FileCell`]), as the name cell of `renderRows` in `desktop/ui/app.js`
 //! does. Names that are cut off show the full name in a tooltip, as
 //! `row.title` does. Two registries follow the cells the views bind:
-//! [`IconCells`] redraws their art when the theme or the screen scale
+//! [`BoundIcons`] redraws their art when the theme or the screen scale
 //! changes, and [`CellOwners`] turns a click position back into a row.
 
 mod bound_icons;
@@ -17,7 +17,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{glib, pango};
 
-pub(crate) use bound_icons::IconCells;
+pub(crate) use bound_icons::BoundIcons;
 pub(crate) use cell_owners::CellOwners;
 
 use crate::folder_view::item::FileItem;
@@ -33,7 +33,7 @@ const TILE_ICON_GAP: i32 = 8;
 const TILE_NAME_LINES: i32 = 2;
 
 /// The list item behind a factory object (column cells are list items too).
-pub(crate) fn list_item(object: &glib::Object) -> &gtk::ListItem {
+pub(crate) fn as_list_item(object: &glib::Object) -> &gtk::ListItem {
     object
         .downcast_ref::<gtk::ListItem>()
         .expect("list factories receive list items")
@@ -166,14 +166,14 @@ impl FileCell {
     }
 
     /// Shows `item`, drawing its art through `icons`.
-    pub(crate) fn bind(&self, item: &FileItem, icons: &IconCells) {
+    pub(crate) fn bind(&self, item: &FileItem, icons: &BoundIcons) {
         let imp = self.imp();
         icons.bind(&imp.image, item, imp.icon_size.get());
         imp.label.set_text(&item.entry().name);
     }
 
     /// Forgets the shown item's art.
-    pub(crate) fn unbind(&self, icons: &IconCells) {
+    pub(crate) fn unbind(&self, icons: &BoundIcons) {
         icons.unbind(&self.imp().image);
     }
 
@@ -197,19 +197,19 @@ pub(crate) fn connect_file_cells(
     factory: &gtk::SignalListItemFactory,
     layout: CellLayout,
     icon_size: i32,
-    icons: &Rc<IconCells>,
+    icons: &Rc<BoundIcons>,
     owners: &Rc<CellOwners>,
 ) {
     let owners = Rc::clone(owners);
     factory.connect_setup(move |_, object| {
         let cell = FileCell::new(layout, icon_size);
-        let list_item = list_item(object);
+        let list_item = as_list_item(object);
         list_item.set_child(Some(&cell));
         owners.register(&cell, list_item);
     });
     let bind_icons = Rc::clone(icons);
     factory.connect_bind(move |_, object| {
-        let list_item = list_item(object);
+        let list_item = as_list_item(object);
         let cell = list_item.child().and_downcast::<FileCell>();
         if let (Some(item), Some(cell)) = (bound_item(list_item), cell) {
             cell.bind(&item, &bind_icons);
@@ -217,7 +217,7 @@ pub(crate) fn connect_file_cells(
     });
     let unbind_icons = Rc::clone(icons);
     factory.connect_unbind(move |_, object| {
-        if let Some(cell) = list_item(object).child().and_downcast::<FileCell>() {
+        if let Some(cell) = as_list_item(object).child().and_downcast::<FileCell>() {
             cell.unbind(&unbind_icons);
         }
     });

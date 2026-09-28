@@ -46,7 +46,8 @@ impl NewListing {
 
     /// The entries nothing took, in listing order.
     fn into_remaining(self) -> Vec<FileItem> {
-        self.entries.into_iter().flatten().map(FileItem::new).collect()
+        let untaken = self.entries.into_iter().flatten();
+        untaken.map(FileItem::new).collect()
     }
 }
 

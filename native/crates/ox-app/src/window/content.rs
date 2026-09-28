@@ -13,7 +13,7 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 
-use crate::folder_view::cells::{CellOwners, IconCells};
+use crate::folder_view::cells::{BoundIcons, CellOwners};
 use crate::folder_view::grid::{self, IconSize};
 use crate::folder_view::{details, model::FolderModel};
 use crate::theme::Appearance;
@@ -149,7 +149,7 @@ pub(super) struct Content {
     /// The active tab's filtered, sorted and selectable items.
     pub model: FolderModel,
     /// Bound item icons, redrawn when the theme or scale changes.
-    pub icons: Rc<IconCells>,
+    pub icons: Rc<BoundIcons>,
     /// Maps cell widgets to their rows.
     pub owners: Rc<CellOwners>,
     /// The empty, loading and error page.
@@ -163,7 +163,7 @@ impl Content {
     /// An empty folder pane in the details view, drawing icons in `appearance`.
     pub fn new(appearance: Appearance) -> Self {
         let model = FolderModel::new();
-        let icons = IconCells::new(appearance);
+        let icons = BoundIcons::new(appearance);
         let owners = CellOwners::new();
         let details = details::build(&model, &icons, &owners);
         let grid = grid::build(&icons, &owners, IconSize::Large);

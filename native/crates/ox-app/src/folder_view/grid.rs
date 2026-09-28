@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 
-use crate::folder_view::cells::{self, CellLayout, CellOwners, IconCells};
+use crate::folder_view::cells::{self, BoundIcons, CellLayout, CellOwners};
 use crate::text_size;
 
 /// A large tile's width beyond its icon: the 135-pixel `gridWidth` less
@@ -97,7 +97,7 @@ impl IconSize {
 }
 
 /// The icon view's tiles: `size` icons above their names.
-fn factory(icons: &Rc<IconCells>, owners: &Rc<CellOwners>, size: IconSize) -> gtk::SignalListItemFactory {
+fn factory(icons: &Rc<BoundIcons>, owners: &Rc<CellOwners>, size: IconSize) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     cells::connect_file_cells(&factory, CellLayout::IconTile, size.pixels(), icons, owners);
     factory
@@ -105,7 +105,7 @@ fn factory(icons: &Rc<IconCells>, owners: &Rc<CellOwners>, size: IconSize) -> gt
 
 /// Builds the icon view. It shows no model until the window makes it the
 /// visible view.
-pub(crate) fn build(icons: &Rc<IconCells>, owners: &Rc<CellOwners>, size: IconSize) -> gtk::GridView {
+pub(crate) fn build(icons: &Rc<BoundIcons>, owners: &Rc<CellOwners>, size: IconSize) -> gtk::GridView {
     let view = gtk::GridView::new(None::<gtk::MultiSelection>, Some(factory(icons, owners, size)));
     view.add_css_class("files");
     view.add_css_class(size.css_class());
@@ -117,7 +117,7 @@ pub(crate) fn build(icons: &Rc<IconCells>, owners: &Rc<CellOwners>, size: IconSi
 /// Switches the grid to another icon size.
 pub(crate) fn set_icon_size(
     view: &gtk::GridView,
-    icons: &Rc<IconCells>,
+    icons: &Rc<BoundIcons>,
     owners: &Rc<CellOwners>,
     size: IconSize,
 ) {

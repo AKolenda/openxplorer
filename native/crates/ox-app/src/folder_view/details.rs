@@ -17,7 +17,7 @@ use gtk::prelude::*;
 use ox_core::format;
 use ox_core::settings::{Column, ColumnWidths};
 
-use crate::folder_view::cells::{self, CellLayout, CellOwners, IconCells};
+use crate::folder_view::cells::{self, BoundIcons, CellLayout, CellOwners};
 use crate::folder_view::column_titles;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::model::{self, FolderModel};
@@ -83,7 +83,7 @@ fn cell_text(column: SortColumn, item: &FileItem) -> String {
 }
 
 /// The Name column's cells: the item's icon beside its name.
-fn name_factory(icons: &Rc<IconCells>, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
+fn name_factory(icons: &Rc<BoundIcons>, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     cells::connect_file_cells(&factory, CellLayout::DetailsRow, ROW_ICON_SIZE, icons, owners);
     factory
@@ -99,12 +99,12 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
             // `.file-row .size-cell{text-align:right}`
             label.set_xalign(1.0);
         }
-        let list_item = cells::list_item(object);
+        let list_item = cells::as_list_item(object);
         list_item.set_child(Some(&label));
         owners.register(&label, list_item);
     });
     factory.connect_bind(move |_, object| {
-        let list_item = cells::list_item(object);
+        let list_item = cells::as_list_item(object);
         let label = list_item.child().and_downcast::<gtk::Label>();
         if let (Some(item), Some(label)) = (cells::bound_item(list_item), label) {
             label.set_text(&cell_text(column, &item));
@@ -116,7 +116,7 @@ fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListI
 /// A resizable column showing `column`, sorted by its header.
 fn new_view_column(
     column: SortColumn,
-    icons: &Rc<IconCells>,
+    icons: &Rc<BoundIcons>,
     owners: &Rc<CellOwners>,
 ) -> gtk::ColumnViewColumn {
     let factory = match column {
@@ -132,7 +132,7 @@ fn new_view_column(
 
 /// Builds the column view over `model` and completes the model's sorter.
 /// The view shows no model until the window makes it the visible view.
-pub(crate) fn build(model: &FolderModel, icons: &Rc<IconCells>, owners: &Rc<CellOwners>) -> gtk::ColumnView {
+pub(crate) fn build(model: &FolderModel, icons: &Rc<BoundIcons>, owners: &Rc<CellOwners>) -> gtk::ColumnView {
     let view = gtk::ColumnView::new(None::<gtk::MultiSelection>);
     view.add_css_class("files");
     view.set_enable_rubberband(true);

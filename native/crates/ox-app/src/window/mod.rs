@@ -49,7 +49,6 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
-use crate::folder_view::model::FolderModel;
 use crate::locations::Page;
 use crate::shared::AppContext;
 use crate::theme::{Appearance, ListenerId, Skin, SkinChange};
@@ -279,8 +278,10 @@ impl BrowserWindow {
             .expect("BrowserWindow::new gets the volume monitor")
     }
 
-    /// The active folder's sorted, filtered native selection model.
-    pub fn folder_model(&self) -> &FolderModel {
+    /// The active folder's sorted, filtered native selection model, for
+    /// tests of what the views show.
+    #[cfg(test)]
+    pub(crate) fn folder_model(&self) -> &crate::folder_view::model::FolderModel {
         &self.content().model
     }
 

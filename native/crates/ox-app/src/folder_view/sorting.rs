@@ -86,6 +86,15 @@ impl SortDirection {
         Self::ALL.into_iter().find(|direction| direction.key() == key)
     }
 
+    /// CSS class of a column title's sort arrow pointing this way;
+    /// `resources/skin/folder-views.css` turns `.sort-caret.ascending` up.
+    pub const fn css_class(self) -> &'static str {
+        match self {
+            SortDirection::Ascending => "ascending",
+            SortDirection::Descending => "descending",
+        }
+    }
+
     /// GTK's sort type for this direction.
     pub fn to_sort_type(self) -> gtk::SortType {
         match self {
