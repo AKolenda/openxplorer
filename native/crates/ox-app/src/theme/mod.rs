@@ -6,6 +6,7 @@
 //! forced underneath the skin so the desktop theme (Zorin's) cannot leak
 //! into it; only this application's GTK settings change, never GNOME's.
 
+pub mod contrast;
 mod fonts;
 mod stylesheets;
 pub mod system;
@@ -16,6 +17,8 @@ use std::rc::Rc;
 use gtk::gdk;
 
 pub use fonts::css_for_text_size;
+
+use contrast::Contrast;
 
 use crate::icons::Glyph;
 
@@ -131,7 +134,9 @@ pub struct ListenerId(usize);
 pub struct Skin {
     palette: gtk::CssProvider,
     text: gtk::CssProvider,
+    contrast_rules: gtk::CssProvider,
     appearance: Cell<Appearance>,
+    contrast: Cell<Contrast>,
     text_size: Cell<u32>,
     preference: Cell<ThemePreference>,
     system_dark: Cell<bool>,
@@ -166,14 +171,18 @@ impl Skin {
         palette.load_from_string(stylesheets::palette(Appearance::Light));
         let text = gtk::CssProvider::new();
         text.load_from_string(&css_for_text_size(crate::text_size::DEFAULT));
+        let contrast_rules = gtk::CssProvider::new();
         let priority = gtk::STYLE_PROVIDER_PRIORITY_APPLICATION;
         gtk::style_context_add_provider_for_display(display, &base, priority);
         gtk::style_context_add_provider_for_display(display, &text, priority + 1);
         gtk::style_context_add_provider_for_display(display, &palette, priority + 2);
+        gtk::style_context_add_provider_for_display(display, &contrast_rules, priority + 3);
         Self {
             palette,
             text,
+            contrast_rules,
             appearance: Cell::new(Appearance::Light),
+            contrast: Cell::new(Contrast::Normal),
             text_size: Cell::new(crate::text_size::DEFAULT),
             preference: Cell::new(ThemePreference::System),
             system_dark: Cell::new(false),
@@ -273,6 +282,24 @@ impl Skin {
     /// The text size in percent.
     pub fn text_size(&self) -> u32 {
         self.text_size.get()
+    }
+
+    /// The contrast drawn now.
+    pub fn contrast(&self) -> Contrast {
+        self.contrast.get()
+    }
+
+    /// Adds the high-contrast rules for [`Contrast::High`] and removes
+    /// them for [`Contrast::Normal`].
+    pub fn set_contrast(&self, contrast: Contrast) {
+        if self.contrast.replace(contrast) == contrast {
+            return;
+        }
+        let rules = match contrast {
+            Contrast::Normal => "",
+            Contrast::High => stylesheets::HIGH_CONTRAST_RULES,
+        };
+        self.contrast_rules.load_from_string(rules);
     }
 
     /// Applies a text size (percent) and tells the listeners. Returns false

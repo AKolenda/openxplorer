@@ -20,6 +20,7 @@ use ox_core::settings::Settings;
 
 use crate::shared::AppContext;
 use crate::snapshot::{self, SnapshotRequest};
+use crate::theme::contrast::ContrastSetting;
 use crate::theme::system::SystemScheme;
 use crate::theme::{Skin, ThemePreference};
 use crate::window::BrowserWindow;
@@ -28,12 +29,14 @@ use crate::window::BrowserWindow;
 const NEW_WINDOW_OPTION: &str = "new-window";
 
 /// What lives as long as the application: the shared state and the
-/// desktop colour-scheme watch.
+/// watches on the desktop's colour scheme and contrast.
 #[derive(Debug)]
 struct Desktop {
     context: AppContext,
     /// Kept alive so the skin follows the desktop's light or dark scheme.
     _system_scheme: Rc<SystemScheme>,
+    /// Kept alive so the skin follows the desktop's high-contrast setting.
+    _contrast_setting: ContrastSetting,
 }
 
 impl Desktop {
@@ -57,10 +60,12 @@ impl Desktop {
             }
         });
         skin.set_system_dark(system_scheme.is_dark());
+        let contrast_setting = follow_contrast(&skin);
         crate::window::install_accelerators(app);
         Self {
             context: AppContext::new(skin, settings),
             _system_scheme: system_scheme,
+            _contrast_setting: contrast_setting,
         }
     }
 
@@ -329,6 +334,18 @@ fn connect_snapshot(
     ));
 }
 
+/// Applies the desktop's contrast to `skin` now and on every change.
+fn follow_contrast(skin: &Rc<Skin>) -> ContrastSetting {
+    let follower = Rc::downgrade(skin);
+    let setting = ContrastSetting::watch(move |contrast| {
+        if let Some(skin) = follower.upgrade() {
+            skin.set_contrast(contrast);
+        }
+    });
+    skin.set_contrast(setting.contrast());
+    setting
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -337,6 +354,7 @@ mod tests {
 
     use super::*;
     use crate::test_support::harness::{application, settle, skin, wait_until, Fixture};
+    use crate::theme::contrast::Contrast;
 
     /// A desktop on the shared test application, with its own settings.
     fn desktop() -> (Desktop, TempDir) {
@@ -363,6 +381,28 @@ mod tests {
 
     fn location(path: &Path) -> gio::File {
         gio::File::for_path(path)
+    }
+
+    /// The web app's `prefers-contrast: more` rules follow GNOME's
+    /// accessibility setting; without its schema the contrast stays normal.
+    #[gtk::test]
+    fn the_skin_follows_the_desktop_high_contrast_setting() {
+        let (_desktop, _settings) = desktop();
+        let schema = gio::SettingsSchemaSource::default()
+            .and_then(|source| source.lookup("org.gnome.desktop.a11y.interface", true));
+        let Some(schema) = schema else {
+            assert_eq!(skin().contrast(), Contrast::Normal);
+            return;
+        };
+        let accessibility = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
+        accessibility
+            .set_boolean("high-contrast", true)
+            .expect("the test settings backend is writable");
+        wait_until("the high-contrast rules", || skin().contrast() == Contrast::High);
+        accessibility
+            .set_boolean("high-contrast", false)
+            .expect("the test settings backend is writable");
+        wait_until("the normal rules", || skin().contrast() == Contrast::Normal);
     }
 
     #[gtk::test]

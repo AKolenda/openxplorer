@@ -26,6 +26,10 @@ pub(super) const RULES: &str = concat!(
     include_str!("../../resources/skin/breakpoints.css"),
 );
 
+/// Rules added while the desktop asks for high contrast
+/// ([`super::contrast`]).
+pub(super) const HIGH_CONTRAST_RULES: &str = include_str!("../../resources/skin/high-contrast.css");
+
 const LIGHT_PALETTE: &str = include_str!("../../resources/light.css");
 const DARK_PALETTE: &str = include_str!("../../resources/dark.css");
 
@@ -97,7 +101,10 @@ mod tests {
     /// would silently leave a control unstyled in one appearance.
     #[test]
     fn every_token_the_skin_uses_is_defined_in_both_palettes() {
-        let rules_use = referenced_tokens(RULES);
+        let rules_use: BTreeSet<_> = referenced_tokens(RULES)
+            .union(&referenced_tokens(HIGH_CONTRAST_RULES))
+            .cloned()
+            .collect();
         assert!(rules_use.contains("ox_accent"), "the scan finds tokens");
         for appearance in [Appearance::Light, Appearance::Dark] {
             let defined = defined_tokens(palette(appearance));
@@ -147,7 +154,7 @@ mod tests {
     #[gtk::test]
     fn every_stylesheet_parses_without_errors() {
         let text_sizes = crate::text_size::LEVELS.map(super::super::css_for_text_size);
-        let sheets = [RULES, LIGHT_PALETTE, DARK_PALETTE]
+        let sheets = [RULES, HIGH_CONTRAST_RULES, LIGHT_PALETTE, DARK_PALETTE]
             .into_iter()
             .map(str::to_owned)
             .chain(text_sizes);
