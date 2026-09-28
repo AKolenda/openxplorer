@@ -17,6 +17,21 @@
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, gsk};
 
+/// The glyphs' coordinate space: a 24-unit square (the SVG viewBox).
+const VIEWBOX_SIZE: f32 = 24.0;
+
+/// The stroke of the web app's `paths` table, in viewBox units.
+const WEB_STROKE_WIDTH: f32 = 1.35;
+
+/// The heavier stroke of the `more` dots, so they are visible.
+const MORE_DOTS_STROKE_WIDTH: f32 = 3.0;
+
+/// The smallest glyph drawn with a stroke of at least one pixel.
+const MONOLINE_FROM_SIZE: i32 = 16;
+
+/// Ink for a glyph drawn outside a styled widget: the light theme's text.
+const FALLBACK_INK: gdk::RGBA = gdk::RGBA::new(0.14, 0.14, 0.14, 1.0);
+
 /// One line icon from the `paths` table in app.js, plus `restore` for the
 /// maximised caption button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -243,7 +258,7 @@ impl Glyph {
     /// visibly bolder, which awaits the owner's sign-off.
     pub fn stroke_width(self, size: i32) -> f32 {
         if self == Glyph::More {
-            return 3.0;
+            return MORE_DOTS_STROKE_WIDTH;
         }
         if size < MONOLINE_FROM_SIZE {
             return WEB_STROKE_WIDTH;
@@ -276,16 +291,16 @@ mod imp {
     use gtk::{gdk, glib, gsk};
 
     /// Private state of [`super::GlyphPaintable`].
-    #[derive(Default)]
+    #[derive(Debug, Default)]
     pub struct GlyphPaintable {
         /// The glyph's stroke path in the 24-unit viewBox.
-        pub path: OnceCell<gsk::Path>,
+        pub(super) path: OnceCell<gsk::Path>,
         /// Stroke width in viewBox units.
-        pub stroke_width: Cell<f32>,
+        pub(super) stroke_width: Cell<f32>,
         /// Edge in logical pixels.
-        pub size: Cell<i32>,
+        pub(super) size: Cell<i32>,
         /// A fixed colour, or `None` to follow the CSS colour.
-        pub color: Cell<Option<gdk::RGBA>>,
+        pub(super) color: Cell<Option<gdk::RGBA>>,
     }
 
     #[glib::object_subclass]
@@ -346,18 +361,6 @@ mod imp {
     }
 }
 
-/// The glyphs' coordinate space: a 24-unit square (the SVG viewBox).
-const VIEWBOX_SIZE: f32 = 24.0;
-
-/// The stroke of the web app's `paths` table, in viewBox units.
-const WEB_STROKE_WIDTH: f32 = 1.35;
-
-/// The smallest glyph drawn with a stroke of at least one pixel.
-const MONOLINE_FROM_SIZE: i32 = 16;
-
-/// Ink for a glyph drawn outside a styled widget: the light theme's text.
-const FALLBACK_INK: gdk::RGBA = gdk::RGBA::new(0.14, 0.14, 0.14, 1.0);
-
 glib::wrapper! {
     /// A stroke glyph that paints in the current CSS colour.
     pub struct GlyphPaintable(ObjectSubclass<imp::GlyphPaintable>)
@@ -388,6 +391,7 @@ impl GlyphPaintable {
 mod tests {
     use super::*;
 
+    /// parity: LOOK-015
     #[test]
     fn every_glyph_parses_as_a_gsk_path() {
         for glyph in Glyph::ALL {
@@ -400,6 +404,7 @@ mod tests {
         glyph.stroke_width(size) * f32::from(u8::try_from(size).expect("a small icon")) / VIEWBOX_SIZE
     }
 
+    /// parity: LOOK-015
     #[test]
     fn the_more_dots_use_a_heavier_stroke() {
         assert!((Glyph::More.stroke_width(16) - 3.0).abs() < f32::EPSILON);
@@ -424,6 +429,7 @@ mod tests {
         );
     }
 
+    /// parity: LOOK-015
     #[test]
     fn known_folder_icons_have_glyphs() {
         assert_eq!(Glyph::for_known_folder("downloads"), Some(Glyph::Downloads));
