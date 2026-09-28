@@ -17,11 +17,18 @@ use rustix::fs::Access;
 
 use super::TerminalError;
 use crate::entry::{Entry, EntryError, EntryKind};
-use crate::location::{file_uri, is_smb_server, normalise, split_location, LocationContext};
+use crate::location::{file_uri, is_smb_server, normalise, split_location, unquote_lossy};
 use crate::transfer::Cancellation;
 
 /// The longest folder path accepted, in characters.
 const MAX_DIRECTORY_CHARS: usize = 16_384;
+
+/// Folder names that hold snapshots: `MARKERS` in `previous_versions.py`.
+const SNAPSHOT_FOLDER_NAMES: [&str; 3] = [".snapshot", ".snapshots", "#snapshot"];
+
+/// The start of the Windows "Previous versions" folder names that SMB
+/// servers show, for example `@GMT-2024.01.01-00.00.00`.
+const PREVIOUS_VERSION_PREFIX: &str = "@GMT-";
 
 /// What preparing a terminal folder needs from the rest of the app.
 pub trait DirectoryChecks {
@@ -177,10 +184,35 @@ fn check_live_location<C: DirectoryChecks>(checks: &C, uri: &str) -> Result<(), 
     check_writable(checks, uri)?;
     // The conventional snapshot folders (`.snapshot`, `@GMT-…`,
     // `.zfs/snapshot`, ...) are refused even where no source is configured.
-    if LocationContext::default().is_snapshot_location(uri) {
+    if is_conventional_snapshot(uri)? {
         return Err(TerminalError::PreviousVersion);
     }
     Ok(())
+}
+
+/// True if a folder on the path of `uri` holds snapshots. Ports
+/// `conventional_snapshot` in `previous_versions.py`.
+///
+/// Safety rule "a name that is not UTF-8 cannot hide a snapshot": the
+/// path is decoded as Python's `unquote` decodes it, replacing bytes that
+/// are not UTF-8 instead of giving up. A link into `.snapshot/caf\xE9`
+/// resolves to a URI with `caf%E9` in it, and its `.snapshot` must still
+/// be seen; the web UI's strict decoding
+/// ([`LocationContext::is_snapshot_location`](crate::location::LocationContext::is_snapshot_location))
+/// would see no folders at all there.
+///
+/// # Errors
+///
+/// [`TerminalError::Location`] when `uri` does not split into a location.
+fn is_conventional_snapshot(uri: &str) -> Result<bool, TerminalError> {
+    let parts = split_location(uri)?;
+    let path = unquote_lossy(&parts.path);
+    let names: Vec<&str> = path.split('/').collect();
+    let has_snapshot_folder = names
+        .iter()
+        .any(|name| SNAPSHOT_FOLDER_NAMES.contains(name) || name.starts_with(PREVIOUS_VERSION_PREFIX));
+    let is_in_zfs_snapshot = names.windows(2).any(|pair| pair == [".zfs", "snapshot"]);
+    Ok(has_snapshot_folder || is_in_zfs_snapshot)
 }
 
 /// The app's write guard, as a [`TerminalError`].

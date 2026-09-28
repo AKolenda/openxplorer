@@ -4,7 +4,9 @@
 //! and `DispatchTests::test_terminal_branch_connected`.
 
 use std::cell::RefCell;
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
@@ -252,6 +254,27 @@ fn a_link_into_a_snapshot_is_refused_after_resolving() {
     );
 }
 
+/// A snapshot folder whose name is Latin-1, as on an older CIFS share,
+/// behind a link with a UTF-8 name. Python's `unquote` still finds the
+/// `.snapshot` of the resolved folder.
+/// parity: OPEN-017
+#[test]
+fn a_link_into_a_snapshot_with_a_non_utf8_name_is_refused() {
+    let root = temporary_folder();
+    let snapshot = root.path().join(".snapshot").join(OsStr::from_bytes(b"caf\xE9"));
+    fs::create_dir_all(snapshot.join("sub")).expect("snapshot");
+    let latest = root.path().join("latest");
+    symlink(&snapshot, &latest).expect("link");
+    let folder = latest.join("sub");
+
+    let refused = prepare(&file_uri(&folder), &TestChecks::folder_at(&folder));
+
+    assert!(
+        matches!(refused, Err(TerminalError::PreviousVersion)),
+        "{refused:?}"
+    );
+}
+
 /// Ported from `desktop/tests/test_terminal_security.py::TerminalTests::test_custom_snapshot_guard_called_for_local_alias`
 /// parity: OPEN-017
 #[test]
@@ -363,7 +386,7 @@ fn a_cancelled_request_stops() {
 }
 
 /// Ported from `desktop/tests/test_rc2.py::DispatchTests::test_terminal_branch_connected`
-/// parity: OPEN-017, OPEN-021
+/// parity: OPEN-017
 #[test]
 fn a_real_folder_is_prepared_through_gio() {
     let root = temporary_folder();
