@@ -20,7 +20,7 @@ use crate::theme::Appearance;
 
 /// Which piece of art to draw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ArtKind {
+pub(crate) enum ArtKind {
     /// The yellow folder.
     Folder,
     /// A folder with a zipper, for ZIP archives.
@@ -53,7 +53,7 @@ impl ArtKind {
 /// Items are drawn by style rather than by raw extension, so every file
 /// type without a look of its own shares one cached texture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DocumentStyle {
+pub(crate) enum DocumentStyle {
     /// `pdf`.
     Pdf,
     /// `docx`, `doc`.
@@ -155,7 +155,7 @@ thread_local! {
 ///
 /// The cache is keyed by [`ArtKind`], never by a file name or extension, so
 /// it stays bounded: a few dozen kinds at the sizes and scales in use.
-pub(crate) fn texture(kind: ArtKind, appearance: Appearance, pixels: i32) -> Option<gdk::Texture> {
+pub(super) fn texture(kind: ArtKind, appearance: Appearance, pixels: i32) -> Option<gdk::Texture> {
     let key = CacheKey {
         kind,
         pixels,

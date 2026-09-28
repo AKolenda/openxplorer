@@ -16,7 +16,7 @@ use gtk::subclass::prelude::*;
 use gtk::{glib, pango};
 
 use crate::folder_view::item::FileItem;
-use crate::icons;
+use crate::icons::ArtStyle;
 use crate::theme::Appearance;
 
 /// The list item behind a factory object (column cells are list items too).
@@ -240,8 +240,11 @@ impl IconCells {
 
     /// Draws `item`'s art into `image` at `size` and remembers the pair.
     pub fn bind(&self, image: &gtk::Image, item: &FileItem, size: i32) {
-        let scale = image.scale_factor().max(1);
-        icons::set_art(image, item.art(), size, self.appearance(), scale);
+        let style = ArtStyle {
+            appearance: self.appearance(),
+            scale: image.scale_factor().max(1),
+        };
+        style.draw_into(image, item.art(), size);
         let mut bound = self.bound.borrow_mut();
         bound.retain(|icon| !icon.shows_in(image) && icon.image.upgrade().is_some());
         bound.push(BoundIcon {
@@ -269,8 +272,11 @@ impl IconCells {
         let appearance = self.appearance();
         for icon in self.bound.borrow().iter() {
             if let Some(image) = icon.image.upgrade() {
-                let scale = image.scale_factor().max(1);
-                icons::set_art(&image, icon.item.art(), icon.size, appearance, scale);
+                let style = ArtStyle {
+                    appearance,
+                    scale: image.scale_factor().max(1),
+                };
+                style.draw_into(&image, icon.item.art(), icon.size);
             }
         }
     }

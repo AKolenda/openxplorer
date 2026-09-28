@@ -237,7 +237,8 @@ impl DetailsPane {
             .build();
         let root = pane_scroller(&inner);
         inner.append(&header());
-        let preview = icons::art_image(ArtKind::Folder, PREVIEW_SIZE, appearance, 1);
+        let style = ArtStyle { appearance, scale: 1 };
+        let preview = style.image(ArtKind::Folder, PREVIEW_SIZE);
         inner.append(&preview_frame(&preview));
         let name = pane_label("dname");
         name.set_selectable(true);

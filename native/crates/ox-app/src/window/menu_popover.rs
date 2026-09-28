@@ -26,7 +26,7 @@ const ROW_GLYPH: i32 = 16;
 
 /// Whether an item shows a check mark.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ItemCheck {
+pub(super) enum ItemCheck {
     /// Never checked.
     Plain,
     /// Checked or not, decided when the menu is built.
@@ -38,7 +38,7 @@ pub enum ItemCheck {
 
 /// One menu item.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MenuItem {
+pub(super) struct MenuItem {
     /// The visible and accessible name.
     pub label: String,
     /// The glyph before the label.
@@ -94,7 +94,7 @@ impl MenuItem {
 
 /// A menu line: an item or a divider.
 #[derive(Debug, Clone, PartialEq)]
-pub enum MenuEntry {
+pub(super) enum MenuEntry {
     /// A clickable item.
     Item(MenuItem),
     /// A thin line between groups.
@@ -183,14 +183,14 @@ glib::wrapper! {
 
 impl MenuPopover {
     /// A menu showing `entries`.
-    pub fn new(entries: Vec<MenuEntry>) -> Self {
+    pub(super) fn new(entries: Vec<MenuEntry>) -> Self {
         let popover: Self = glib::Object::new();
         popover.set_entries(entries);
         popover
     }
 
     /// Replaces the menu's entries.
-    pub fn set_entries(&self, entries: Vec<MenuEntry>) {
+    pub(super) fn set_entries(&self, entries: Vec<MenuEntry>) {
         self.imp().entries.replace(entries);
         self.redraw();
     }

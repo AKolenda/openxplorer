@@ -106,7 +106,7 @@ impl FileItem {
     }
 
     /// The icon art for the item.
-    pub fn art(&self) -> ArtKind {
+    pub(crate) fn art(&self) -> ArtKind {
         self.data().art
     }
 

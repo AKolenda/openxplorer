@@ -34,9 +34,19 @@ const FALLBACK_INK: gdk::RGBA = gdk::RGBA::new(0.14, 0.14, 0.14, 1.0);
 
 /// One line icon from the `paths` table in app.js, plus `restore` for the
 /// maximised caption button.
+///
+/// The table is ported whole. Six glyphs are not drawn yet; each keeps an
+/// `expect(dead_code)` naming the feature that draws it and the
+/// `native/ROADMAP.md` milestone that ports it ("Then: recover the
+/// remaining Python application services" or "Next: complete safe
+/// file-operation workflows").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Glyph {
-    /// A terminal window.
+pub(crate) enum Glyph {
+    /// A terminal window (Open in Terminal).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Open in Terminal (ROADMAP: application services)")
+    )]
     Terminal,
     /// A gear.
     Settings,
@@ -60,7 +70,11 @@ pub enum Glyph {
     Refresh,
     /// A downward chevron.
     Down,
-    /// A rightward chevron (breadcrumb divider).
+    /// A rightward chevron (the Settings search results).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Settings search (ROADMAP: application services)")
+    )]
     Chevron,
     /// A magnifier.
     Search,
@@ -112,7 +126,11 @@ pub enum Glyph {
     Phone,
     /// A check mark.
     Check,
-    /// A shield with a check mark.
+    /// A shield with a check mark (the sign-in dialog).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "sign-in dialog (ROADMAP: application services)")
+    )]
     Shield,
     /// An "i" in a circle.
     Info,
@@ -120,11 +138,23 @@ pub enum Glyph {
     Sun,
     /// A crescent moon.
     Moon,
-    /// An eject symbol.
+    /// An eject symbol (Sign out of server).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Sign out of server (ROADMAP: application services)")
+    )]
     Eject,
-    /// A clock.
+    /// A clock (previous versions).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "previous versions (ROADMAP: application services)")
+    )]
     Clock,
-    /// A chain link.
+    /// A chain link (the context menu's Copy path).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "context-menu Copy path (ROADMAP: file operations)")
+    )]
     Link,
     /// An eye.
     Eye,
@@ -136,7 +166,8 @@ pub enum Glyph {
 
 impl Glyph {
     /// Every glyph, in the order of the app.js table.
-    pub const ALL: [Glyph; 48] = [
+    #[cfg(test)]
+    const ALL: [Glyph; 48] = [
         Glyph::Terminal,
         Glyph::Settings,
         Glyph::Plus,
@@ -189,7 +220,7 @@ impl Glyph {
 
     /// The SVG path data, verbatim from app.js. An exhaustive table, hence
     /// its length.
-    pub const fn path_data(self) -> &'static str {
+    pub(super) const fn path_data(self) -> &'static str {
         match self {
             Glyph::Terminal => "M3 5h18v14H3zM6 9l3 3-3 3M12 15h5",
             Glyph::Settings => {
@@ -256,7 +287,7 @@ impl Glyph {
     /// monoline stroke of Windows 11's icons (ui-spec.md I10). Smaller
     /// glyphs keep the web app's thinner line: a whole pixel there is
     /// visibly bolder, which awaits the owner's sign-off.
-    pub fn stroke_width(self, size: i32) -> f32 {
+    fn stroke_width(self, size: i32) -> f32 {
         if self == Glyph::More {
             return MORE_DOTS_STROKE_WIDTH;
         }
@@ -270,7 +301,7 @@ impl Glyph {
 
     /// The glyph for a known-folder icon name in ox-core's Quick access
     /// table (`desktop`, `downloads`, ...), or `None` for another name.
-    pub fn for_known_folder(icon: &str) -> Option<Glyph> {
+    pub(crate) fn for_known_folder(icon: &str) -> Option<Glyph> {
         match icon {
             "desktop" => Some(Glyph::Desktop),
             "downloads" => Some(Glyph::Downloads),
@@ -292,7 +323,7 @@ mod imp {
 
     /// Private state of [`super::GlyphPaintable`].
     #[derive(Debug, Default)]
-    pub struct GlyphPaintable {
+    pub(crate) struct GlyphPaintable {
         /// The glyph's stroke path in the 24-unit viewBox.
         pub(super) path: OnceCell<gsk::Path>,
         /// Stroke width in viewBox units.
@@ -363,7 +394,7 @@ mod imp {
 
 glib::wrapper! {
     /// A stroke glyph that paints in the current CSS colour.
-    pub struct GlyphPaintable(ObjectSubclass<imp::GlyphPaintable>)
+    pub(crate) struct GlyphPaintable(ObjectSubclass<imp::GlyphPaintable>)
         @implements gdk::Paintable, gtk::SymbolicPaintable;
 }
 
@@ -375,7 +406,7 @@ impl GlyphPaintable {
     ///
     /// Never for the glyphs of [`Glyph`]: every path in the table parses,
     /// which `every_glyph_parses_as_a_gsk_path` checks.
-    pub fn new(glyph: Glyph, size: i32, color: Option<gdk::RGBA>) -> Self {
+    pub(crate) fn new(glyph: Glyph, size: i32, color: Option<gdk::RGBA>) -> Self {
         let paintable: Self = glib::Object::new();
         let imp = paintable.imp();
         let path = gsk::Path::parse(glyph.path_data()).expect("glyph paths are valid SVG path data");

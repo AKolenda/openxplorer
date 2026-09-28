@@ -3,8 +3,8 @@
 //!
 //! Ports the icon helpers of `desktop/ui/app.js` (`icon()` and the art
 //! functions). Glyphs ([`glyph`]) follow the widget's CSS colour; art
-//! ([`art_image`], [`set_art`]) is rasterised at the widget's scale factor
-//! so it stays sharp on high-resolution screens.
+//! ([`ArtStyle::image`], [`ArtStyle::draw_into`]) is rasterised at the
+//! window's scale factor so it stays sharp on high-resolution screens.
 
 pub(crate) mod art;
 mod glyphs;
@@ -47,23 +47,36 @@ pub(crate) fn set_glyph(image: &gtk::Image, glyph: Glyph, size: i32) {
     image.set_pixel_size(size);
 }
 
-/// An image showing colour art at `size` logical pixels. It is centred in
-/// its allocation, because a `GtkImage` stretches its picture to fill a
-/// larger one, which blurs the art.
-pub(crate) fn art_image(kind: ArtKind, size: i32, appearance: Appearance, scale: i32) -> gtk::Image {
-    let image = gtk::Image::builder()
-        .halign(gtk::Align::Center)
-        .valign(gtk::Align::Center)
-        .build();
-    set_art(&image, kind, size, appearance, scale);
-    image
+/// How colour art is drawn in one window: light or dark, at the window's
+/// display scale. The web app's SVG art scales with the screen by itself;
+/// GTK images are pixel textures, so every piece of art needs both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ArtStyle {
+    /// Light or dark art.
+    pub appearance: Appearance,
+    /// Device pixels per logical pixel: the window's scale factor.
+    pub scale: i32,
 }
 
-/// Replaces an image's content with colour art, rasterised for the
-/// display `scale` (device pixels per logical pixel).
-pub(crate) fn set_art(image: &gtk::Image, kind: ArtKind, size: i32, appearance: Appearance, scale: i32) {
-    let device_pixels = size * scale.max(1);
-    let texture = art::texture(kind, appearance, device_pixels);
-    image.set_paintable(texture.as_ref());
-    image.set_pixel_size(size);
+impl ArtStyle {
+    /// A new image of `kind` art at `size` logical pixels. It is centred in
+    /// its allocation, because a `GtkImage` stretches its picture to fill a
+    /// larger one, which blurs the art.
+    pub(crate) fn image(self, kind: ArtKind, size: i32) -> gtk::Image {
+        let image = gtk::Image::builder()
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .build();
+        self.draw_into(&image, kind, size);
+        image
+    }
+
+    /// Replaces `image`'s content with `kind` art at `size` logical
+    /// pixels, rasterised for the display scale.
+    pub(crate) fn draw_into(self, image: &gtk::Image, kind: ArtKind, size: i32) {
+        let device_pixels = size * self.scale.max(1);
+        let texture = art::texture(kind, self.appearance, device_pixels);
+        image.set_paintable(texture.as_ref());
+        image.set_pixel_size(size);
+    }
 }
