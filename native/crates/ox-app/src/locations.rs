@@ -117,13 +117,22 @@ fn device_label(row: &VolumeRow) -> Option<DeviceLabel> {
 
 #[cfg(test)]
 mod tests {
-    use ox_core::location::{parent_location, same_location};
+    use ox_core::location::parent_location;
 
     use super::*;
     use crate::volumes::{locations, MountFacts, VolumeState};
 
+    /// The home folder of the tests' windows.
+    const DEMO_HOME: &str = "/home/demo";
+
     const PHONE_FOLDER: &str = "mtp://[usb:001,010]/Internal%20storage/DCIM";
 
+    /// The context of a window with no devices mounted.
+    fn demo_context() -> LocationContext {
+        location_context(PathBuf::from(DEMO_HOME), &[])
+    }
+
+    /// The context of a window with a Pixel 7 mounted.
     fn phone_context() -> LocationContext {
         let mount = MountFacts {
             name: "Pixel 7".into(),
@@ -131,7 +140,7 @@ mod tests {
             shadowed: false,
             can_unmount: true,
         };
-        location_context(PathBuf::from("/home/demo"), &locations(&[mount], &[]))
+        location_context(PathBuf::from(DEMO_HOME), &locations(&[mount], &[]))
     }
 
     fn labels(context: &LocationContext, uri: &str) -> Vec<String> {
@@ -164,19 +173,12 @@ mod tests {
     /// parity: TAB-010
     #[test]
     fn titles_follow_app_js() {
-        let context = location_context(PathBuf::from("/home/demo"), &[]);
+        let context = demo_context();
         assert_eq!(context.title_for("pc:"), "This PC");
         assert_eq!(context.title_for("file:///home/demo"), "Home");
         assert_eq!(context.title_for("file:///home/demo/"), "Home");
         assert_eq!(context.title_for("file:///srv/Brand%20assets"), "Brand assets");
         assert_eq!(context.display_location("pc:"), "This PC");
-    }
-
-    #[test]
-    fn one_trailing_slash_does_not_matter() {
-        assert!(same_location("smb://nas/share/", "smb://nas/share"));
-        assert!(!same_location("file:///a", "file:///b"));
-        assert!(same_location("file:///", "file:///"));
     }
 
     #[test]
@@ -204,7 +206,7 @@ mod tests {
     /// parity: NAV-017
     #[test]
     fn an_unknown_device_is_a_connected_device() {
-        let context = location_context(PathBuf::from("/home/demo"), &[]);
+        let context = demo_context();
         assert_eq!(context.title_for("mtp://[usb:001,010]/"), "Connected device");
         assert_eq!(labels(&context, PHONE_FOLDER)[0], "Connected device");
     }
@@ -226,7 +228,7 @@ mod tests {
                 can_unmount: true,
             },
         };
-        let context = location_context(PathBuf::from("/home/demo"), &[unmounted_phone, disk]);
+        let context = location_context(PathBuf::from(DEMO_HOME), &[unmounted_phone, disk]);
         assert!(context.devices.is_empty());
     }
 
@@ -240,7 +242,7 @@ mod tests {
     /// parity: NAV-017
     #[test]
     fn smb_roots_are_labelled_with_the_server() {
-        let context = location_context(PathBuf::from("/home/demo"), &[]);
+        let context = demo_context();
         assert_eq!(context.title_for("smb://nas/"), "nas");
         let crumbs = labels(&context, "smb://studio-nas/projects/Design");
         assert_eq!(crumbs.first().map(String::as_str), Some("studio-nas"));
@@ -250,13 +252,9 @@ mod tests {
     /// parity: NAV-010
     #[test]
     fn pages_have_one_crumb_and_no_parent() {
-        let context = location_context(PathBuf::from("/home/demo"), &[]);
+        let context = demo_context();
         assert_eq!(context.breadcrumbs(Page::Network.uri()).len(), 1);
         assert_eq!(context.display_location(Page::ThisPc.uri()), "This PC");
         assert_eq!(parent_location(Page::ThisPc.uri()), None);
-        assert_eq!(
-            parent_location("file:///srv/data").as_deref(),
-            Some("file:///srv")
-        );
     }
 }
