@@ -140,8 +140,10 @@ impl Skin {
     pub(crate) fn set_preference(&self, preference: ThemePreference) {
         let imp = self.imp();
         let changed = imp.preference.replace(preference) != preference;
-        let redrawn = self.draw(preference.resolve(imp.desktop_appearance.get()));
-        if changed && !redrawn {
+        let appearance = preference.resolve(imp.desktop_appearance.get());
+        if appearance != self.appearance() {
+            self.draw(appearance);
+        } else if changed {
             self.emit_by_name::<()>(APPEARANCE_CHANGED, &[]);
         }
     }
@@ -153,15 +155,14 @@ impl Skin {
         self.draw(self.preference().resolve(desktop));
     }
 
-    /// Switches the palette to `appearance` and tells the windows.
-    /// Returns false when it was drawn already.
-    fn draw(&self, appearance: Appearance) -> bool {
+    /// Switches the palette to `appearance` and tells the windows; does
+    /// nothing when it is drawn already.
+    fn draw(&self, appearance: Appearance) {
         if self.imp().appearance.replace(appearance) == appearance {
-            return false;
+            return;
         }
         self.providers().draw_palette(appearance);
         self.emit_by_name::<()>(APPEARANCE_CHANGED, &[]);
-        true
     }
 
     /// The size text is drawn at.
@@ -233,4 +234,56 @@ fn desktop_settings(schema_id: &str) -> Option<gio::Settings> {
     let schema = gio::SettingsSchemaSource::default()?.lookup(schema_id, true)?;
     let settings = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
     Some(settings)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use super::*;
+    use crate::test_support::harness::{self, ThemeGuard};
+
+    /// Counts the `appearance-changed` signals `skin` emits.
+    fn count_appearance_changes(skin: &Skin) -> Rc<Cell<u32>> {
+        let count = Rc::new(Cell::new(0));
+        let counter = Rc::clone(&count);
+        skin.connect_appearance_changed(move || counter.set(counter.get() + 1));
+        count
+    }
+
+    /// A new theme choice is announced even when the palette stays, so
+    /// every window's Appearance menu shows it; the same choice again is
+    /// not announced.
+    #[gtk::test]
+    fn a_new_theme_choice_is_announced_even_when_the_palette_stays() {
+        let skin = Skin::detached();
+        skin.set_desktop_appearance(Appearance::Light);
+        let changes = count_appearance_changes(&skin);
+
+        skin.set_preference(ThemePreference::Light);
+        assert_eq!(changes.get(), 1, "System to Light on a light desktop");
+
+        skin.set_preference(ThemePreference::Light);
+        assert_eq!(changes.get(), 1, "Light chosen again");
+
+        skin.set_preference(ThemePreference::Dark);
+        assert_eq!(changes.get(), 2, "Light to Dark redraws once");
+        assert_eq!(skin.appearance(), Appearance::Dark);
+    }
+
+    /// GTK's own widgets under the skin, such as its dialogs, follow the
+    /// drawn palette through the dark variant of the skin's display.
+    #[gtk::test]
+    fn the_drawn_palette_switches_the_display_dark_variant() {
+        let _theme = ThemeGuard::keep();
+        let display = gdk::Display::default().expect("GTK tests run on a private display");
+        let display_settings = gtk::Settings::for_display(&display);
+
+        harness::skin().set_preference(ThemePreference::Dark);
+        assert!(display_settings.is_gtk_application_prefer_dark_theme());
+
+        harness::skin().set_preference(ThemePreference::Light);
+        assert!(!display_settings.is_gtk_application_prefer_dark_theme());
+    }
 }
