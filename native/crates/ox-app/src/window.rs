@@ -18,7 +18,9 @@
 //! ([`loading`]), the selection ([`selection`]), the desktop's volumes and
 //! places ([`environment`]), Quick access ([`quick_access`]), mounting
 //! ([`mounting`]), the skin ([`appearance`]), activation, actions, input
-//! ([`type_to_select`]), and what the window connects and lets go of
+//! ([`type_to_select`]), requests from other applications and the command
+//! line ([`external_requests`]), Open with, Open in Terminal and updates
+//! ([`integration_actions`]), and what the window connects and lets go of
 //! ([`connections`]).
 //! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
@@ -43,9 +45,11 @@ mod copy_path;
 mod details_pane;
 mod empty_page;
 mod environment;
+mod external_requests;
 mod folder_pane;
 mod gestures;
 mod input;
+mod integration_actions;
 mod landing;
 mod listing_state;
 mod loading;
@@ -268,6 +272,12 @@ mod imp {
 
     impl WindowImpl for BrowserWindow {
         fn close_request(&self) -> glib::Propagation {
+            // Safety rule "an update locks the application" (UPD-005): no
+            // window closes while an update installs.
+            if let Some(refusal) = self.obj().close_refusal() {
+                self.obj().show_message(&refusal);
+                return glib::Propagation::Stop;
+            }
             // Let go of keyboard focus first. On Wayland, GTK's input method
             // otherwise keeps the focused address entry and later asks a
             // destroyed widget for its cursor position (a Gtk-CRITICAL).

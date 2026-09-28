@@ -59,6 +59,12 @@ impl SettingsPage {
         });
     }
 
+    /// Shows `message` in the window's message line, such as the outcome
+    /// of a change to the default apps.
+    pub(super) fn report(&self, message: &str) {
+        self.emit_by_name::<()>(MESSAGE, &[&message]);
+    }
+
     /// Runs `hook` each time Settings opens.
     pub(super) fn when_opened(&self, hook: impl Fn() + 'static) {
         self.imp().opened_hooks.borrow_mut().push(Box::new(hook));

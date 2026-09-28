@@ -191,7 +191,7 @@ mod tests {
         keywords: "undo",
     };
 
-    const PENDING: Availability = Availability::Unported(Milestone::DesktopIntegration);
+    const PENDING: Availability = Availability::Unported(Milestone::NetworkAndDevices);
 
     /// A row of [`RESTORE`] with one button.
     fn row_with_a_button() -> (SettingRow, gtk::Button) {

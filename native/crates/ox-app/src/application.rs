@@ -2,32 +2,46 @@
 //! Application lifetime: startup, launches, command-line options and the
 //! application actions.
 //!
-//! Ports `activate_app` and `open_files` in `desktop/winspace.py` and the
-//! window commands of `windowsMenu` in `desktop/ui/app.js`. Launching the
-//! app again presents the open window instead of adding one; locations from
-//! the command line or another app open in the active window (the first in
-//! its current tab, the rest as tabs). Ctrl+N and `--new-window` open
-//! another window.
+//! Ports `OpenXplorer` and `main` in `desktop/winspace.py` and the window
+//! commands of `windowsMenu` in `desktop/ui/app.js`. The application is
+//! unique: a later launch hands its command line and working directory to
+//! the running instance and exits (INT-001). Launching again presents the
+//! open window, or lists the windows when several are open; locations
+//! from the command line or another app open in the active window (the
+//! first in its current tab, the rest as tabs). Ctrl+N and `--new-window`
+//! open another window. Before the application starts, the launch guard
+//! handles `--version`, `--quit` and `--restart` and checks for an outdated
+//! running instance ([`LaunchCheck`]).
 //!
 //! `Application` is a `GtkApplication` subclass: GTK calls its `startup`,
-//! `activate`, `open` and `handle_local_options` methods, and it keeps the
+//! `activate`, `open` and `command_line` methods, and it keeps the
 //! `AppState` it creates at startup, which does the work (`state.rs`).
 
+mod command_line;
+mod requests;
 mod state;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use crate::config::APP_ID;
 use crate::snapshot::{self, SnapshotError, SnapshotRequest};
+use crate::update::{LaunchCheck, RuntimeInfo};
 
+use command_line::{CommandLineError, CommandOption, CommandRequest};
 use state::{active_window, AppState};
 
-/// The `--new-window` command-line option.
-const NEW_WINDOW_OPTION: &str = "new-window";
+/// The exit status of a command line the running instance refused, as
+/// `argparse` errors had.
+const INVALID_COMMAND_LINE: u8 = 2;
 
-/// The application actions (`app.*`), which menus and shortcuts run by
-/// name; the enum keeps those names in one place.
+/// The renderer GTK draws with when `--software-rendering` is given: Cairo
+/// on the processor, without the GPU (UPD-013).
+const SOFTWARE_RENDERER: &str = "cairo";
+
+/// The application actions (`app.*`), which menus, shortcuts and launcher
+/// quick actions run by name; the enum keeps those names in one place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AppAction {
     /// Opens another window (Ctrl+N, `newWindow` in app.js).
@@ -35,6 +49,11 @@ pub(crate) enum AppAction {
     /// Brings the window whose id is the `u32` target to the front
     /// (`focusWindow`).
     FocusWindow,
+    /// Lists the open windows (`showWindows`, the launcher's "Open
+    /// windows…").
+    Windows,
+    /// Opens Settings in the active window (`showSettings`).
+    Settings,
     /// Closes every window, which ends the application.
     Quit,
 }
@@ -45,6 +64,8 @@ impl AppAction {
         match self {
             AppAction::NewWindow => "new-window",
             AppAction::FocusWindow => "focus-window",
+            AppAction::Windows => "windows",
+            AppAction::Settings => "settings",
             AppAction::Quit => "quit",
         }
     }
@@ -59,7 +80,7 @@ impl AppAction {
 #[derive(Debug)]
 enum Launch {
     /// A normal launch: the running instance, or this one when it is the
-    /// first, shows a window.
+    /// first, does what the command line asks.
     Interactive,
     /// The developer snapshot hook ([`crate::snapshot`]): one window, saved
     /// as a picture, in an instance of its own.
@@ -78,18 +99,8 @@ fn focus_window(app: &gtk::Application, id: u32) {
     }
 }
 
-/// "Quit OpenXplorer": closes every window through its close request, so
-/// each one lets go of its tabs as a closed window does, and the
-/// application ends with the last one.
-fn close_every_window(app: &gtk::Application) {
-    for window in app.windows() {
-        window.close();
-    }
-}
-
 mod imp {
     use std::cell::{Cell, OnceCell};
-    use std::ops::ControlFlow;
 
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
@@ -119,22 +130,25 @@ mod imp {
     impl ObjectImpl for Application {
         fn constructed(&self) {
             self.parent_constructed();
-            self.obj().add_new_window_option();
+            super::command_line::add_options(&*self.obj());
             self.obj().install_actions();
         }
     }
 
     impl ApplicationImpl for Application {
-        /// Creates the shared state once GTK has started.
+        /// Names the application, then creates the shared state once GTK
+        /// has started.
         fn startup(&self) {
             self.parent_startup();
             let app = self.obj();
+            app.name_for_the_desktop();
             if let Some(state) = AppState::new(app.upcast_ref(), Settings::open_default()) {
                 self.state.set(state).expect("GTK starts an application once");
             }
         }
 
-        /// Launching the app shows a window, or takes the snapshot.
+        /// A launch without a command line, such as D-Bus activation from
+        /// the dock: presents a window, or takes the snapshot.
         fn activate(&self) {
             let app = self.obj();
             let Some(state) = self.state.get() else {
@@ -146,8 +160,8 @@ mod imp {
             }
         }
 
-        /// Another app or the command line asks to open `files`. A
-        /// snapshot shows only the location it was asked for.
+        /// Another app asks to open `files`. A snapshot shows only the
+        /// location it was asked for.
         fn open(&self, files: &[gio::File], _hint: &str) {
             let app = self.obj();
             let Some(state) = self.state.get() else {
@@ -158,10 +172,9 @@ mod imp {
             }
         }
 
-        /// Handles `--new-window`; the launch then goes on as usual.
-        fn handle_local_options(&self, options: &glib::VariantDict) -> ControlFlow<glib::ExitCode> {
-            self.obj().handle_new_window_option(options);
-            ControlFlow::Continue(())
+        /// A launch's command line, this process's own or a later one's.
+        fn command_line(&self, command_line: &gio::ApplicationCommandLine) -> glib::ExitCode {
+            self.obj().run_command_line(command_line)
         }
     }
 
@@ -176,16 +189,16 @@ glib::wrapper! {
 }
 
 impl Application {
-    /// The application for `launch`, under the preview's own ID. A
-    /// snapshot runs as an instance of its own, so it never hands its
-    /// window to a running preview.
+    /// The application for `launch`, under the build's ID. A snapshot
+    /// runs as an instance of its own, so it never hands its window to a
+    /// running instance.
     fn new(launch: Launch) -> Self {
-        let mut flags = gio::ApplicationFlags::HANDLES_OPEN;
+        let mut flags = gio::ApplicationFlags::HANDLES_OPEN | gio::ApplicationFlags::HANDLES_COMMAND_LINE;
         if matches!(launch, Launch::Snapshot(_)) {
             flags |= gio::ApplicationFlags::NON_UNIQUE;
         }
         let app: Self = glib::Object::builder()
-            .property("application-id", crate::config::APP_ID)
+            .property("application-id", APP_ID)
             .property("flags", flags)
             .build();
         app.imp()
@@ -203,7 +216,21 @@ impl Application {
             .expect("Application::new sets the launch before GTK runs it")
     }
 
-    /// Adds `app.new-window`, `app.focus-window` and `app.quit`.
+    /// Names the application as the desktop sees it (`startup` in
+    /// winspace.py): the program name is the application ID, so the X11
+    /// window class matches the launcher's `StartupWMClass`, and windows
+    /// show the app's icon. Also publishes the build's identity for later
+    /// launches ([`RuntimeInfo`]).
+    fn name_for_the_desktop(&self) {
+        glib::set_application_name("OpenXplorer");
+        glib::set_prgname(Some(APP_ID));
+        gtk::Window::set_default_icon_name(APP_ID);
+        RuntimeInfo::install(self);
+    }
+
+    /// Adds `app.new-window`, `app.focus-window`, `app.windows`,
+    /// `app.settings` and `app.quit`, which the launcher's quick actions
+    /// and the windows menu run.
     fn install_actions(&self) {
         let new_window = gio::ActionEntry::builder(AppAction::NewWindow.name())
             .activate(|app: &Self, _, _| {
@@ -220,38 +247,42 @@ impl Application {
                 }
             })
             .build();
-        let quit = gio::ActionEntry::builder(AppAction::Quit.name())
-            .activate(|app: &Self, _, _| close_every_window(app.upcast_ref()))
-            .build();
-        self.add_action_entries([new_window, focus_window, quit]);
+        let windows = Self::state_entry(AppAction::Windows, AppState::show_windows);
+        let settings = Self::state_entry(AppAction::Settings, AppState::open_settings);
+        let quit = Self::state_entry(AppAction::Quit, |state, app| {
+            state.quit_safely(app);
+        });
+        self.add_action_entries([new_window, focus_window, windows, settings, quit]);
     }
 
-    /// Accepts `--new-window` on the command line.
-    fn add_new_window_option(&self) {
-        self.add_main_option(
-            NEW_WINDOW_OPTION,
-            glib::Char::from(0),
-            glib::OptionFlags::NONE,
-            glib::OptionArg::None,
-            "Open a new window",
-            None,
-        );
+    /// An action that runs `run` on the application state.
+    fn state_entry(
+        action: AppAction,
+        run: impl Fn(&AppState, &gtk::Application) + 'static,
+    ) -> gio::ActionEntry<Self> {
+        gio::ActionEntry::builder(action.name())
+            .activate(move |app: &Self, _, _| {
+                if let Some(state) = app.imp().state.get() {
+                    run(state, app.upcast_ref());
+                }
+            })
+            .build()
     }
 
-    /// `--new-window` asks the running instance (or this one, when it is
-    /// the first) for another window; the launch then goes on as usual.
-    /// The request needs the application registered on the session bus
-    /// first, so it reaches the running instance; when it cannot register,
-    /// the command line says why.
-    fn handle_new_window_option(&self, options: &glib::VariantDict) {
-        if !options.contains(NEW_WINDOW_OPTION) {
-            return;
+    /// Does what `command_line` asks (`command_line` in winspace.py), or
+    /// says on its terminal why it cannot.
+    fn run_command_line(&self, command_line: &gio::ApplicationCommandLine) -> glib::ExitCode {
+        let Some(state) = self.imp().state.get() else {
+            return glib::ExitCode::FAILURE;
+        };
+        if let Launch::Snapshot(request) = self.launch() {
+            self.take_snapshot(state, request);
+            return glib::ExitCode::SUCCESS;
         }
-        if let Err(error) = self.register(None::<&gio::Cancellable>) {
-            eprintln!("OpenXplorer: could not open a new window: {error}");
-            return;
+        match CommandRequest::from_command_line(command_line) {
+            Ok(request) => state.run_command(self.upcast_ref(), request),
+            Err(error) => refuse_command_line(&error),
         }
-        self.activate_action(AppAction::NewWindow.name(), None);
     }
 
     /// Opens the window `request` describes, saves it once its first
@@ -277,11 +308,50 @@ impl Application {
     }
 }
 
-/// Runs the preview under its own application ID, so installed
-/// file-manager defaults and the production app's D-Bus name are untouched.
-/// With `OPENXPLORER_SNAPSHOT` set it saves a picture of one window and
-/// quits instead (see `snapshot.rs`).
+/// Refuses a command line the launch check let through, which only a
+/// location that stopped being valid on the way can do, with status 2.
+fn refuse_command_line(error: &CommandLineError) -> glib::ExitCode {
+    glib::g_warning!(ox_core::LOG_DOMAIN, "Refused a command line: {error}");
+    glib::ExitCode::from(INVALID_COMMAND_LINE)
+}
+
+/// Checks the command line in the launching process, which has the
+/// terminal the user typed it in: an invalid one is reported there and
+/// the launch exits with status 2, before it reaches the running
+/// instance (`argparse` in `main`).
+fn check_command_line(arguments: &[String]) -> Result<(), CommandLineError> {
+    let (options, locations): (Vec<&String>, Vec<&String>) = arguments
+        .iter()
+        .skip(1)
+        .partition(|argument| argument.starts_with("--"));
+    let has_option = |option: CommandOption| {
+        let name = format!("--{}", option.name());
+        options.iter().any(|given| **given == name)
+    };
+    let resolved = locations
+        .into_iter()
+        .map(gio::File::for_commandline_arg)
+        .map(|file| ox_core::location::normalise(&file.uri()))
+        .collect::<Result<Vec<_>, _>>()?;
+    CommandRequest::from_options(has_option, resolved).map(drop)
+}
+
+/// Asks GTK to draw without the GPU when the command line has
+/// `--software-rendering`. It must run before GTK or any thread starts,
+/// and applies only when this process becomes the running instance.
+fn choose_renderer(arguments: &[String]) {
+    let option = format!("--{}", CommandOption::SoftwareRendering.name());
+    let asks_software = arguments.iter().skip(1).any(|argument| *argument == option);
+    if asks_software && std::env::var_os("GSK_RENDERER").is_none() {
+        std::env::set_var("GSK_RENDERER", SOFTWARE_RENDERER);
+    }
+}
+
+/// Runs the app under the build's application ID. With
+/// `OPENXPLORER_SNAPSHOT` set it saves a picture of one window and quits
+/// instead (see `snapshot.rs`); otherwise the launch guard runs first.
 pub fn run() -> glib::ExitCode {
+    let arguments: Vec<String> = std::env::args().collect();
     let launch = match SnapshotRequest::from_environment() {
         Ok(Some(request)) => Launch::Snapshot(request),
         Ok(None) => Launch::Interactive,
@@ -290,8 +360,20 @@ pub fn run() -> glib::ExitCode {
             return glib::ExitCode::FAILURE;
         }
     };
+    choose_renderer(&arguments);
+    if let Err(error) = check_command_line(&arguments) {
+        eprintln!("{error}");
+        return glib::ExitCode::from(INVALID_COMMAND_LINE);
+    }
+    let arguments = match launch {
+        Launch::Snapshot(_) => arguments,
+        Launch::Interactive => match LaunchCheck::run(arguments) {
+            LaunchCheck::Continue(arguments) => arguments,
+            LaunchCheck::Exit(status) => return status,
+        },
+    };
     let app = Application::new(launch);
-    let status = app.run();
+    let status = app.run_with_args(&arguments);
     if app.imp().snapshot_failed.get() {
         glib::ExitCode::FAILURE
     } else {

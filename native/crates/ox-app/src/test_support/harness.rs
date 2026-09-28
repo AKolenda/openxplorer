@@ -237,12 +237,28 @@ impl TestWindow {
         Self::with_skin(&skin())
     }
 
+    /// A window like [`Self::open`] whose shared state `prepare` sets up
+    /// before the window uses it, such as a simulated update service or an
+    /// in-memory table of default applications.
+    pub(crate) fn open_prepared(uri: &str, prepare: impl FnOnce(&AppContext)) -> Self {
+        let test = Self::prepared(&skin(), prepare);
+        test.show(uri);
+        test
+    }
+
     /// A window with its own settings file and no tab yet, following
     /// `skin`.
     fn with_skin(skin: &Skin) -> Self {
+        Self::prepared(skin, |_| {})
+    }
+
+    /// A window following `skin`, with no tab yet, whose shared state
+    /// `prepare` sets up first.
+    fn prepared(skin: &Skin, prepare: impl FnOnce(&AppContext)) -> Self {
         let settings = tempfile::tempdir().expect("the test home has room for settings");
         let context = AppContext::new(skin.clone(), Settings::open(settings.path()));
         context.record_launches();
+        prepare(&context);
         Self {
             window: BrowserWindow::new(&application(), &context),
             context,
@@ -368,6 +384,19 @@ pub(crate) fn capture_popover(window: &BrowserWindow, popover: &gtk::Popover, fi
     wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
     crate::snapshot::render_png(popover, None, &directory.join(filename))
         .expect("an open popover is drawn and the capture directory is writable");
+}
+
+/// Saves a PNG of the whole `dialog`, its shadow included, into
+/// `$OX_NATIVE_CAPTURE_DIR`, when set.
+pub(crate) fn capture_dialog(dialog: &impl IsA<gtk::Window>, filename: &str) {
+    let Some(directory) = capture_directory() else {
+        return;
+    };
+    let path = directory.join(filename);
+    // A dialog that was just shown may not be drawable for a frame or two.
+    wait_until("the dialog to be saved", || {
+        crate::snapshot::render_png(dialog.upcast_ref::<gtk::Window>(), None, &path).is_ok()
+    });
 }
 
 /// Waits until `window` has drawn `count` frames, so a capture shows the

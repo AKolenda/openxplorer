@@ -12,8 +12,10 @@ use crate::config::BUILD_NAME;
 const DETAIL: &str = "An independent Windows 11–inspired file manager for Zorin.\n\n\
 Desktop: GTK 4 + GIO/GVfs.\n\n\
 This preview browses folders, network locations and devices, and has the \
-Settings page. File operations, cached search, network sign-in and desktop \
-integration are not ported yet; the installed OpenXplorer keeps doing those.";
+Settings page, desktop integration (default apps, Show in folder, Open with, \
+Open in Terminal, Brave's download folder) and Check for updates. File \
+operations, cached search and network sign-in are not ported yet; the \
+installed OpenXplorer keeps doing those.";
 
 impl BrowserWindow {
     /// Shows the build's description in a message box over the window.

@@ -58,10 +58,14 @@ impl BrowserWindow {
     }
 
     /// Remembers the active tab's selection, for a reload or tab switch.
+    /// A selection a Show in folder request asked for is kept until its
+    /// listing shows it.
     pub(super) fn save_selection(&self) {
         let selected = self.folder_pane().model().selected_uris();
         if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
-            tab.selected = selected;
+            if !tab.reveals_selection {
+                tab.selected = selected;
+            }
         }
     }
 

@@ -254,6 +254,7 @@ fn the_search_filters_rows_across_every_category() {
             typed: "brave",
             categories: &[Category::DefaultApps, Category::BraveAndDownloads],
             shown: &[
+                "Include Show in folder",
                 "Brave and other apps",
                 "Troubleshooting",
                 "Disable Show in folder",
@@ -267,7 +268,7 @@ fn the_search_filters_rows_across_every_category() {
     }
     let count = &settings.page.imp().match_count;
     assert!(count.is_visible());
-    assert_eq!(count.text(), "4 matching settings");
+    assert_eq!(count.text(), "5 matching settings");
 }
 
 /// A search for what a setting shows, and the category, status card and
@@ -298,7 +299,7 @@ fn the_search_finds_what_buttons_options_and_headings_show() {
             typed: "make openxplorer default",
             category: Category::DefaultApps,
             shows_status_card: true,
-            shown: &[],
+            shown: &["Include Show in folder", "Also open ZIP files"],
         },
         ShownTextCase {
             typed: "refresh status",
@@ -445,8 +446,8 @@ const fn offered_by(python: &'static str, row: &'static str) -> PythonSetting {
 /// "Every setting the current app offers stays available" (SET-019): each
 /// setting, action and piece of advice of `renderSettingsPage` and
 /// `appendV07Settings` has a row, which a search for its Python wording
-/// finds. Some Python controls share a row now, such as the two ZIP
-/// controls that became the ZIP files switch.
+/// finds. Some Python controls share a row now, such as "Use `OpenXplorer`
+/// for ZIPs", which is the ZIP files row's button.
 ///
 /// parity: SET-019
 #[gtk::test]
@@ -464,8 +465,8 @@ fn every_setting_of_the_python_page_has_a_row() {
         offered_by("Folders", "Folders"),
         offered_by("SMB links", "SMB links"),
         offered_by("ZIP files", "ZIP files"),
-        offered_by("Include Show in folder", "Brave and other apps"),
-        offered_by("Also open ZIP files in OpenXplorer", "ZIP files"),
+        offered_by("Include Show in folder", "Include Show in folder"),
+        offered_by("Also open ZIP files in OpenXplorer", "Also open ZIP files"),
         offered_by("Use OpenXplorer for ZIPs", "ZIP files"),
         offered_by("Test Show in folder", "Brave and other apps"),
         offered_by("Enable Show in folder", "Brave and other apps"),
@@ -486,6 +487,10 @@ fn every_setting_of_the_python_page_has_a_row() {
     }
 }
 
+/// Rows that work but disable their button while there is nothing for it
+/// to do, as Restore previous with no handler recorded (INT-030).
+const ROWS_FOLLOWING_THEIR_STATE: [&str; 3] = ["Restore previous", "Restore ZIP handler", "ZIP files"];
+
 /// Checks that `row` of `group` is enabled or disabled as its availability
 /// says, and names its milestone, on itself or in the group's heading.
 fn assert_row_follows_its_availability(row: &SettingRow, group: &SettingsGroup) {
@@ -496,7 +501,8 @@ fn assert_row_follows_its_availability(row: &SettingRow, group: &SettingsGroup) 
     let disabled = controls.iter().all(|control| !control.is_sensitive());
     let milestone = match row.availability() {
         Availability::Ready => {
-            assert!(enabled, "{title} works");
+            let follows_state = ROWS_FOLLOWING_THEIR_STATE.contains(&title);
+            assert!(enabled || follows_state, "{title} works");
             assert_eq!(notice, None, "{title} needs no milestone");
             return;
         }
@@ -525,12 +531,9 @@ fn rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone() {
             assert_row_follows_its_availability(&row, &group);
         }
     }
-    let restore_previous = settings.row("Restore previous");
-    let tooltip = restore_previous.tooltip_text().unwrap_or_default();
-    assert!(
-        tooltip.ends_with("arrives with desktop integration."),
-        "{tooltip}"
-    );
+    let move_tabs = settings.row("Move tabs between windows");
+    let tooltip = move_tabs.tooltip_text().unwrap_or_default();
+    assert!(tooltip.ends_with("arrives with file operations."), "{tooltip}");
 }
 
 /// Choosing a theme card runs `win.theme`, which the Appearance menu runs

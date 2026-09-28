@@ -5,8 +5,10 @@
 //! Ports `activate_app`, `open_files` and `create_window` in
 //! `desktop/winspace.py` and `newWindow` in `desktop/ui/app.js`, and keeps
 //! the skin in step with the desktop's colour scheme and contrast for as
-//! long as the application runs. [`AppState`] works on any
-//! `GtkApplication`, so the tests drive it on the shared test application.
+//! long as the application runs. It also attaches the desktop
+//! integration, whose `FileManager1` requests open in the active window
+//! ([`super::requests`]). [`AppState`] works on any `GtkApplication`, so
+//! the tests drive it on the shared test application.
 
 use std::rc::Rc;
 
@@ -56,39 +58,29 @@ impl AppState {
         let system_scheme = follow_system_scheme(&skin, gtk_preference);
         let contrast_setting = follow_contrast(&skin);
         crate::window::install_accelerators(app);
+        let context = AppContext::new(skin, settings);
+        attach_desktop_integration(app, &context);
         Self {
-            context: AppContext::new(skin, settings),
+            context,
             _system_scheme: system_scheme,
             _contrast_setting: contrast_setting,
         }
     }
 
+    /// What every window of the application shares.
+    pub(super) fn context(&self) -> &AppContext {
+        &self.context
+    }
+
     /// Opens a window whose first tab shows `start`, or the home folder.
     fn open_window(&self, app: &gtk::Application, start: Option<&str>) -> BrowserWindow {
-        let window = self.build_window(app, start);
-        window.present();
-        window
+        open_window(app, &self.context, start)
     }
 
     /// A window whose first tab shows `start`, or the home folder, not
     /// shown yet.
     fn build_window(&self, app: &gtk::Application, start: Option<&str>) -> BrowserWindow {
-        let window = BrowserWindow::new(app, &self.context);
-        let home = file_uri(&glib::home_dir());
-        let start = start.unwrap_or(home.as_str());
-        if let Err(error) = window.add_tab(start) {
-            window.show_message(&error.to_string());
-            // A window never opens empty. The home page name resolves
-            // without the location check, which could refuse the home
-            // folder's own path (BrowserWindow::resolve_address).
-            if let Err(error) = window.add_tab(VirtualPlace::Home.uri()) {
-                window.show_message(&error.to_string());
-            }
-        }
-        if let Some(warning) = self.context.settings_warning() {
-            window.show_message(&warning);
-        }
-        window
+        build_window(app, &self.context, start)
     }
 
     /// Opens the window `request` describes, in its theme, size and view,
@@ -119,13 +111,17 @@ impl AppState {
         window
     }
 
-    /// Presents the open window, or opens the first one.
+    /// Presents the open window, lists the windows when several are open,
+    /// or opens the first one (`activate_app`).
     pub(super) fn activate(&self, app: &gtk::Application) {
-        match active_window(app) {
-            Some(window) => window.present(),
-            None => {
-                self.open_window(app, None);
-            }
+        let Some(window) = active_window(app) else {
+            self.open_window(app, None);
+            return;
+        };
+        if browser_windows_of(app).count() > 1 {
+            self.show_windows(app);
+        } else {
+            window.present();
         }
     }
 
@@ -138,8 +134,15 @@ impl AppState {
     }
 
     /// Ctrl+N: another window at the active folder when it is a real
-    /// folder, else at home (app.js `newWindow`).
+    /// folder, else at home (app.js `newWindow`). New windows are refused
+    /// while an update installs and until its restart (TAB-043).
     pub(super) fn new_window(&self, app: &gtk::Application) {
+        if let Some(refusal) = self.context.updates().new_window_refusal() {
+            if let Some(window) = active_window(app) {
+                window.show_message(&refusal);
+            }
+            return;
+        }
         let current = active_window(app).and_then(|window| window.current_uri());
         let start = current.filter(|uri| can_start_a_new_window_in(uri));
         self.open_window(app, start.as_deref());
@@ -156,11 +159,67 @@ fn can_start_a_new_window_in(uri: &str) -> bool {
 /// The focused browser window, else the most recent one.
 pub(super) fn active_window(app: &gtk::Application) -> Option<BrowserWindow> {
     let focused = app.active_window().and_downcast::<BrowserWindow>();
-    focused.or_else(|| {
-        app.windows()
-            .into_iter()
-            .find_map(|window| window.downcast::<BrowserWindow>().ok())
-    })
+    focused.or_else(|| browser_windows_of(app).next())
+}
+
+/// The browser windows of `app`, most recent first.
+fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
+    let windows = app.windows();
+    windows
+        .into_iter()
+        .filter_map(|window| window.downcast::<BrowserWindow>().ok())
+}
+
+/// Opens a window of `app` whose first tab shows `start`, or the home
+/// folder (`create_window`).
+pub(super) fn open_window(
+    app: &gtk::Application,
+    context: &AppContext,
+    start: Option<&str>,
+) -> BrowserWindow {
+    let window = build_window(app, context, start);
+    window.present();
+    window
+}
+
+/// A window whose first tab shows `start`, or the home folder, not shown
+/// yet.
+fn build_window(app: &gtk::Application, context: &AppContext, start: Option<&str>) -> BrowserWindow {
+    let window = BrowserWindow::new(app, context);
+    let home = file_uri(&glib::home_dir());
+    let start = start.unwrap_or(home.as_str());
+    if let Err(error) = window.add_tab(start) {
+        window.show_message(&error.to_string());
+        // A window never opens empty. The home page name resolves
+        // without the location check, which could refuse the home
+        // folder's own path (BrowserWindow::resolve_address).
+        if let Err(error) = window.add_tab(VirtualPlace::Home.uri()) {
+            window.show_message(&error.to_string());
+        }
+    }
+    if let Some(warning) = context.settings_warning() {
+        window.show_message(&warning);
+    }
+    window
+}
+
+/// Attaches the desktop integration to `app`: `FileManager1` requests
+/// open in its active window, and the Show in folder service starts when
+/// it is enabled.
+fn attach_desktop_integration(app: &gtk::Application, context: &AppContext) {
+    let show = glib::clone!(
+        #[weak]
+        app,
+        #[weak]
+        context,
+        #[upgrade_or]
+        Err(ox_core::integration::RequestNotOpened),
+        move |request, startup_id: String| {
+            super::requests::show_file_manager_request(&app, &context, &request, &startup_id);
+            Ok(())
+        }
+    );
+    context.desktop_integration().attach(app, show);
 }
 
 /// Applies the desktop's light or dark scheme to `skin` now and on every
@@ -192,9 +251,11 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
+    use ox_core::location::SETTINGS_URI;
     use ox_core::settings::Theme;
     use tempfile::TempDir;
 
+    use super::super::command_line::CommandRequest;
     use super::*;
     use crate::test_support::harness::{application, settle, skin, wait_until, Fixture, ThemeGuard};
     use crate::theme::contrast::{self, Contrast};
@@ -391,6 +452,88 @@ mod tests {
             let _app = TestApp::with_saved_theme(case.saved);
             assert_eq!(skin().theme(), case.theme, "{}", case.saved);
         }
+    }
+
+    /// `--new-window` opens a window of its own at the first location, with
+    /// the other locations as tabs.
+    ///
+    /// parity: INT-006, TAB-042
+    #[gtk::test]
+    fn new_window_opens_its_locations_in_a_window_of_its_own() {
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        app.state.activate(&application());
+        let locations = vec![fixture.uri(), fixture.uri_of("Documents")];
+
+        app.state
+            .run_command(&application(), CommandRequest::NewWindow(locations));
+
+        let windows = browser_windows();
+        assert_eq!(windows.len(), 2);
+        let opened = windows
+            .iter()
+            .find(|window| window.tab_count() == 2 || window.current_uri() == Some(fixture.uri()))
+            .expect("the new window shows the locations");
+        wait_until("both locations to open", || opened.tab_count() == 2);
+        assert_eq!(opened.current_uri(), Some(fixture.uri_of("Documents")));
+    }
+
+    /// `--settings` and the launcher's Settings action open Settings in the
+    /// open window, without a second window.
+    ///
+    /// parity: SET-002
+    #[gtk::test]
+    fn settings_opens_in_the_open_window() {
+        let app = TestApp::new();
+        app.state.activate(&application());
+
+        app.state.run_command(&application(), CommandRequest::Settings);
+
+        let [window] = &browser_windows()[..] else {
+            panic!("one window stays open");
+        };
+        assert_eq!(window.current_uri().as_deref(), Some(SETTINGS_URI));
+    }
+
+    /// Settings opens a window when none is open.
+    ///
+    /// parity: SET-002
+    #[gtk::test]
+    fn settings_opens_a_window_when_none_is_open() {
+        let app = TestApp::new();
+
+        app.state.run_command(&application(), CommandRequest::Settings);
+
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+        assert_eq!(window.current_uri().as_deref(), Some(SETTINGS_URI));
+    }
+
+    /// `--select` shows each file in its folder, selected, as
+    /// `FileManager1.ShowItems` does.
+    ///
+    /// parity: INT-007
+    #[gtk::test]
+    fn select_shows_the_file_selected_in_its_folder() {
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        app.state.activate(&application());
+
+        app.state.run_command(
+            &application(),
+            CommandRequest::Select(vec![fixture.uri_of("Notes 2.txt")]),
+        );
+
+        let [window] = &browser_windows()[..] else {
+            panic!("the open window shows the file");
+        };
+        wait_until("the file's folder", || {
+            window.current_uri() == Some(fixture.uri())
+        });
+        wait_until("the selection", || {
+            window.folder_model().selected_uris() == [fixture.uri_of("Notes 2.txt")]
+        });
     }
 
     #[gtk::test]

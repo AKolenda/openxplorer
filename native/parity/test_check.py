@@ -258,6 +258,10 @@ class RustTestDiscoveryTests(unittest.TestCase):
             #[cfg(unix)]
             fn with_another_attribute() {}
 
+            /// parity: OPS-001
+            #[gtk::test]
+            fn a_window_test() {}
+
             #[test]
             #[ignore]
             fn ignored() {}
@@ -279,7 +283,7 @@ class RustTestDiscoveryTests(unittest.TestCase):
         ''')
         self.assertEqual(bridge.rust_tests(source), {
             'with_a_comment_between', 'with_another_attribute',
-            'indented_and_public'})
+            'a_window_test', 'indented_and_public'})
 
 
 def valid_feature(**changes: Any) -> dict[str, Any]:

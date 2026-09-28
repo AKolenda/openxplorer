@@ -29,6 +29,8 @@ pub(super) struct ExternalHandlers {
     pub(super) layout: Option<glib::SignalHandlerId>,
     /// On the volume monitor's mount and volume signals.
     pub(super) volumes: Vec<glib::SignalHandlerId>,
+    /// On the application's updates, which the status bar shows.
+    pub(super) updates: Option<glib::SignalHandlerId>,
 }
 
 impl BrowserWindow {
@@ -73,6 +75,9 @@ impl BrowserWindow {
         }
         for handler in handlers.volumes {
             self.volume_monitor().disconnect(handler);
+        }
+        if let Some(handler) = handlers.updates {
+            self.context().updates().disconnect(handler);
         }
         self.imp().typeahead.borrow_mut().stop_timer();
     }

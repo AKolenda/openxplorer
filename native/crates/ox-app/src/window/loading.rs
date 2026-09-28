@@ -247,15 +247,19 @@ impl BrowserWindow {
         }
     }
 
+    /// Selects the tab's saved selection again, and scrolls to its first
+    /// item when a Show in folder request asked for that.
     fn restore_selection(&self, id: TabId) {
-        let selected = self
-            .imp()
-            .session
-            .borrow()
-            .tab(id)
-            .map(|tab| tab.selected.clone())
-            .unwrap_or_default();
+        let (selected, reveals) = {
+            let mut session = self.imp().session.borrow_mut();
+            let Some(tab) = session.tab_mut(id) else { return };
+            (tab.selected.clone(), std::mem::take(&mut tab.reveals_selection))
+        };
         self.change_model(|| self.folder_pane().model().select_uris(&selected));
+        let first = self.folder_pane().model().first_selected();
+        if let (true, Some(position)) = (reveals, first) {
+            self.folder_pane().reveal(position);
+        }
     }
 
     /// The tab's location is a file: show its folder (or home) in place of

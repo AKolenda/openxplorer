@@ -83,6 +83,9 @@ pub(super) struct Tab {
     pub error: Option<EntryError>,
     /// URIs of the selected items, restored after a reload or tab switch.
     pub selected: Vec<String>,
+    /// The next listing scrolls to the first selected item, as a
+    /// `FileManager1` `ShowItems` request asks.
+    pub reveals_selection: bool,
     /// The vertical scroll position, restored when the tab is shown again.
     pub scroll: f64,
     /// The running listing; dropping it cancels it.
@@ -101,6 +104,7 @@ impl Tab {
             listing_state: ListingState::NotListed,
             error: None,
             selected: Vec::new(),
+            reveals_selection: false,
             scroll: 0.0,
             listing: None,
             watch: None,

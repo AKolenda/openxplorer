@@ -130,6 +130,15 @@ pub(crate) enum WindowAction {
     DefaultFileExplorer,
     /// Looks for a newer release.
     CheckUpdates,
+    /// Open with…: the Open with dialog for the one selected item, or the
+    /// folder.
+    OpenWith,
+    /// Open in Terminal: the terminal in the selected folder, the folder
+    /// of the selected file, or the folder shown.
+    OpenInTerminal,
+    /// Opens the selected item in the code editor whose desktop ID is the
+    /// string target.
+    OpenInEditor,
 }
 
 impl WindowAction {
@@ -193,6 +202,9 @@ impl WindowAction {
             WindowAction::License => "license",
             WindowAction::DefaultFileExplorer => "default-file-explorer",
             WindowAction::CheckUpdates => "check-updates",
+            WindowAction::OpenWith => "open-with",
+            WindowAction::OpenInTerminal => "open-in-terminal",
+            WindowAction::OpenInEditor => "open-in-editor",
         }
     }
 

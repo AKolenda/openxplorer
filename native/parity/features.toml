@@ -2394,7 +2394,8 @@ python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_closed_window_removed",
 ]
 bridge = ["windows", "focusWindow", "newWindow", "quit"]
-native = "todo"
+native = "partial"
+native_note = "--windows and the launcher's app.windows action open the title bar's windows menu (native/crates/ox-app/src/window/external_requests.rs), and launching again with several windows open lists them (native/crates/ox-app/src/application/state.rs). Not tested yet."
 
 [[feature]]
 id = "TAB-045"
@@ -2580,7 +2581,8 @@ python_tests = [
   "desktop/tests/test_updater.py::BridgeTests::test_quit_and_window_close_refuse_while_update_runs",
 ]
 bridge = ["quit"]
-native = "todo"
+native = "partial"
+native_note = "Quit OpenXplorer closes every window, stops the Show in folder service and quits, and is refused while an update installs (native/crates/ox-app/src/application/requests.rs). Refusing while file operations run comes with them; not tested yet."
 
 [[feature]]
 id = "TAB-053"
@@ -11602,8 +11604,8 @@ python_tests = [
 bridge = ["applications", "openWith"]
 dolphin = "Open With… dialog; Open With… (KOpenWithDialog); KOpenWithDialog; KOpenWithDialog (“Other Application…”)"
 gnome = "GtkAppChooserDialog / GAppInfo set_as_default_for_type; g_app_info_get_all_for_type / get_recommended; Gio.AppInfo.get_all_for_type / set_as_default_for_type; g_app_info_get_all_for_type / get_recommended_for_type / get_all, g_app_info_should_show (GTK's GtkAppChooserWidget covers similar ground)"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_opening/app_catalog.rs (a_launcher_listed_twice_is_offered_once, of_two_launchers_with_one_name_the_primary_one_is_offered, the_current_default_represents_its_name, url_handler_helpers_are_not_offered, hidden_launchers_are_not_offered, launchers_without_an_id_are_not_offered, openxplorer_is_not_offered_to_open_items, launchers_that_take_neither_files_nor_uris_are_not_offered, names_differing_in_case_and_spacing_are_one_application, applications_are_listed_by_name). The Open with dialog (filter, rows, checkboxes and toasts) is not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_opening/app_catalog.rs (a_launcher_listed_twice_is_offered_once, of_two_launchers_with_one_name_the_primary_one_is_offered, the_current_default_represents_its_name, url_handler_helpers_are_not_offered, hidden_launchers_are_not_offered, launchers_without_an_id_are_not_offered, openxplorer_is_not_offered_to_open_items, launchers_that_take_neither_files_nor_uris_are_not_offered, names_differing_in_case_and_spacing_are_one_application, applications_are_listed_by_name). native/crates/ox-app/src/integration/applications.rs (each_application_says_why_it_is_offered, the_default_is_chosen_first_when_it_can_open_the_item, a_folder_lists_installed_applications_but_never_openxplorer); native/crates/ox-app/src/integration/tests.rs (open_with_lists_filters_and_launches_the_chosen_application, open_folder_with_never_offers_to_change_the_default). The menus' \"Open folder with…\" wording and Properties' \"Change app…\" come with the context menus and Properties."
 
 [[feature]]
 id = "OPEN-012"
@@ -11627,8 +11629,8 @@ python_tests = [
 bridge = ["openWith"]
 dolphin = "KOpenWithDialog “Remember application association for all files of type …”"
 gnome = "g_app_info_set_as_default_for_type; g_app_info_set_as_default_for_type → ~/.config/mimeapps.list"
-native = "todo"
-native_note = "Porting notes: No automated test."
+native = "partial"
+native_note = "native/crates/ox-app/src/integration/tests.rs (open_with_lists_filters_and_launches_the_chosen_application): the chosen application is checked again and launched. \"Always use this app\" calls set_as_default_for_type and never applies to folders (native/crates/ox-app/src/integration/applications.rs), but is not tested: a test must not change the associations. Porting notes: No automated test."
 
 [[feature]]
 id = "OPEN-013"
@@ -11706,7 +11708,7 @@ python_tests = [
 ]
 bridge = ["openWith", "environment"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/integration_opening/app_catalog.rs (of_two_launchers_with_one_name_the_primary_one_is_offered, url_handler_helpers_are_not_offered, distinct_editors_each_get_a_shortcut, other_applications_get_no_editor_shortcut). The Open in <name> menu entries are not in the native UI yet."
+native_note = "native/crates/ox-core/tests/integration_opening/app_catalog.rs (of_two_launchers_with_one_name_the_primary_one_is_offered, url_handler_helpers_are_not_offered, distinct_editors_each_get_a_shortcut, other_applications_get_no_editor_shortcut). The item menu lists \"Open in <editor>\" for each installed editor and win.open-in-editor opens the item through Open with's checks, toasting \"Opened with <name>\" (native/crates/ox-app/src/window/integration_actions.rs); disabled for several items. No UI test yet."
 
 [[feature]]
 id = "OPEN-016"
@@ -11799,7 +11801,7 @@ bridge = ["openTerminal"]
 dolphin = "Open Terminal Here (Shift+F4); Open Terminal Here (Alt+Shift+F4) / F4 terminal panel; Tools → Open Terminal (Shift+F4) and the “Open Terminal Here” context action (ShowOpenTerminal)"
 gnome = "nautilus-extension-gnome-terminal equivalent: GSubprocess argv spawn with the x-terminal-emulator alternative (xdg-terminal-exec on newer desktops)"
 native = "partial"
-native_note = "native/crates/ox-core/tests/integration_terminal/folder.rs (a_local_folder_opens_in_itself, a_file_opens_its_folder, a_folder_named_like_a_file_opens_in_itself, a_share_opens_as_a_local_shell_in_its_mount, a_server_listing_is_refused_before_it_is_queried, a_share_without_a_local_mount_explains_how_to_mount_it, a_symbolic_link_is_refused, a_special_file_is_refused, an_item_of_unknown_type_is_refused, a_snapshot_folder_is_refused, a_link_into_a_snapshot_is_refused_after_resolving, a_link_into_a_snapshot_with_a_non_utf8_name_is_refused, the_write_guard_also_checks_the_resolved_local_folder, web_script_and_credential_addresses_are_refused, a_cancelled_request_stops, a_real_folder_is_prepared_through_gio, the_whole_request_runs_on_a_worker_thread_and_stops_when_cancelled). The Open in Terminal menu entries and toasts are not in the native UI yet."
+native_note = "native/crates/ox-core/tests/integration_terminal/folder.rs (a_local_folder_opens_in_itself, a_file_opens_its_folder, a_folder_named_like_a_file_opens_in_itself, a_share_opens_as_a_local_shell_in_its_mount, a_server_listing_is_refused_before_it_is_queried, a_share_without_a_local_mount_explains_how_to_mount_it, a_symbolic_link_is_refused, a_special_file_is_refused, an_item_of_unknown_type_is_refused, a_snapshot_folder_is_refused, a_link_into_a_snapshot_is_refused_after_resolving, a_link_into_a_snapshot_with_a_non_utf8_name_is_refused, the_write_guard_also_checks_the_resolved_local_folder, web_script_and_credential_addresses_are_refused, a_cancelled_request_stops, a_real_folder_is_prepared_through_gio, the_whole_request_runs_on_a_worker_thread_and_stops_when_cancelled). win.open-in-terminal opens the terminal in the selected folder, the selected file's folder or the folder shown, and toasts \"Opened <terminal> in <path>\" or the refusal (native/crates/ox-app/src/window/integration_actions.rs, native/crates/ox-app/src/integration/terminal.rs). The menu says \"Open in Terminal\" for every item until the context menus (native/ops-ui) name \"Open containing folder in Terminal\"; no UI test starts a terminal."
 
 [[feature]]
 id = "OPEN-018"
@@ -13542,7 +13544,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:1553-1557", "desktop/winspace.py:1661"]
 python_tests = ["desktop/tests/test_v07.py::AppManagerTests::test_open_settings_uses_window"]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/application/state.rs (settings_opens_in_the_open_window, settings_opens_a_window_when_none_is_open): --settings and the app.settings launcher action."
 
 [[feature]]
 id = "SET-003"
@@ -14483,8 +14486,8 @@ python_tests = [
 bridge = ["windows", "focusWindow", "newWindow"]
 dolphin = "KDBusService single instance: a second `dolphin` call attaches to the running process"
 gnome = "GApplication D-Bus uniqueness; GtkApplication unique bus name (org.gtk.Application / org.freedesktop.Application); GApplicationCommandLine forwarding with G_APPLICATION_HANDLES_COMMAND_LINE|HANDLES_OPEN; Gio.Application actions exported via the .desktop file Actions= and GtkApplication; Mutter/Zorin panel right-click menu."
-native = "todo"
-native_note = "Porting notes: The native preview uses io.winspace.Development.Native. The final build must keep io.winspace.Development, which AGENTS.md treats as a compatibility contract."
+native = "partial"
+native_note = "native/crates/ox-app/src/application.rs: a unique GApplication with HANDLES_COMMAND_LINE, so a later launch hands its command line and working directory to the running instance and exits. The preview runs as io.winspace.Development.Native; no test starts two processes yet. Porting notes: The native preview uses io.winspace.Development.Native. The final build must keep io.winspace.Development, which AGENTS.md treats as a compatibility contract."
 
 [[feature]]
 id = "INT-002"
@@ -14566,8 +14569,8 @@ python_tests = [
 bridge = ["quit", "newWindow", "windows"]
 dolphin = "dolphin --new-window, --select, --daemon (and --split, which has no OpenXplorer equivalent)"
 gnome = "g_application_add_main_option + GApplicationCommandLine (get_arguments, get_cwd, get_options_dict)"
-native = "todo"
-native_note = "Porting notes: --split is tracked with split view (VIEW), not here."
+native = "partial"
+native_note = "native/crates/ox-app/src/application/command_line.rs (each_option_asks_for_its_own_action, select_needs_a_file, the_options_keep_the_python_names): locations, --new-window, --windows, --settings, --select, --filemanager-service, --software-rendering and --quit, checked in the launching process so invalid input exits with status 2; native/crates/ox-app/src/update/launch_guard.rs handles --version, --quit and --restart before the application starts. Missing: --check and --diagnose. Porting notes: --split is tracked with split view (VIEW), not here."
 
 [[feature]]
 id = "INT-005"
@@ -14604,7 +14607,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:1662-1664"]
 python_tests = ["desktop/tests/test_v07.py::AppManagerTests::test_glib_parsed_new_window_flag"]
 bridge = []
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/application/state.rs (new_window_opens_its_locations_in_a_window_of_its_own): the first location opens in the new window, the others as tabs. --software-rendering applies only when the launch starts the application: GTK chooses its renderer once per process."
 
 [[feature]]
 id = "INT-007"
@@ -14618,7 +14622,8 @@ sources = ["desktop/winspace.py:1657-1659"]
 python_tests = ["desktop/tests/test_v07.py::AppManagerTests::test_select_routes_to_reveal"]
 bridge = []
 dolphin = "dolphin --select"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/application/state.rs (select_shows_the_file_selected_in_its_folder); native/crates/ox-app/src/application/command_line.rs (select_needs_a_file); native/crates/ox-app/src/integration/tests.rs (show_items_selects_the_files_in_their_folders)."
 
 [[feature]]
 id = "INT-008"
@@ -14663,8 +14668,8 @@ python_tests = [
 bridge = ["desktopDefault", "desktopStatus", "desktopRestore", "zipDefault", "zipRestore"]
 dolphin = "KDE System Settings → Default Applications → File manager (mimeapps.list)"
 gnome = "xdg-mime default (mimeapps.list); mimeapps.list [Default Applications]. Python shells out to xdg-mime; native code should use g_app_info_get_default_for_type / g_app_info_set_as_default_for_type and drop the xdg-utils dependency; xdg-mime / GAppInfo default for inode/directory and x-scheme-handler/smb"
-native = "partial"
-native_note = "native/crates/ox-core/src/integration/default_apps/xdg_mime.rs (the_change_names_the_handler_before_the_type); native/crates/ox-core/tests/integration_default_apps.rs (folder_and_zip_defaults_are_reported_independently, making_the_folder_default_leaves_zip_files_alone, reapplying_keeps_the_original_handler_on_record, a_handler_that_cannot_be_recorded_is_refused_before_any_change, the_record_of_previous_handlers_is_private, a_change_the_desktop_does_not_confirm_is_reported). The Default apps settings page is not in the native UI yet. Porting notes: When default, GNOME's Home key and other apps' folder opening route to OpenXplorer."
+native = "done"
+native_note = "native/crates/ox-core/src/integration/default_apps/xdg_mime.rs (the_change_names_the_handler_before_the_type); native/crates/ox-core/tests/integration_default_apps.rs (folder_and_zip_defaults_are_reported_independently, making_the_folder_default_leaves_zip_files_alone, reapplying_keeps_the_original_handler_on_record, a_handler_that_cannot_be_recorded_is_refused_before_any_change, the_record_of_previous_handlers_is_private, a_change_the_desktop_does_not_confirm_is_reported). native/crates/ox-app/src/settings_page/default_apps/tests.rs (making_openxplorer_the_default_can_be_undone): Make OpenXplorer default in Settings > Default apps takes folders and SMB links only, the card says so and the toast reads \"Requested associations updated. Review each status below.\" Porting notes: When default, GNOME's Home key and other apps' folder opening route to OpenXplorer."
 
 [[feature]]
 id = "INT-009"
@@ -14682,8 +14687,8 @@ python_tests = [
   "desktop/tests/test_rc3.py::DefaultsTests::test_explicit_zip_option_changes_all_zip_aliases",
 ]
 bridge = ["desktopDefault", "desktopRestore"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_default_apps.rs (making_the_folder_default_leaves_zip_files_alone, including_zip_takes_over_every_zip_alias). The two checkboxes are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_default_apps.rs (making_the_folder_default_leaves_zip_files_alone, including_zip_takes_over_every_zip_alias). native/crates/ox-app/src/settings_page/default_apps/tests.rs (making_openxplorer_the_default_can_be_undone): \"Include Show in folder\" starts on and \"Also open ZIP files\" off; both are read when Make default is clicked (native/crates/ox-app/src/integration/changes.rs)."
 
 [[feature]]
 id = "INT-010"
@@ -14709,8 +14714,8 @@ python_tests = [
   "desktop/tests/ui_rc3_contract.py::Folder default does not falsely claim ZIP ownership",
 ]
 bridge = ["desktopStatus"]
-native = "partial"
-native_note = "native/crates/ox-core/src/integration/default_apps/xdg_mime.rs (the_query_asks_xdg_mime_for_the_default_of_one_type, each_failure_of_xdg_mime_has_the_python_apps_message); native/crates/ox-core/tests/integration_default_apps.rs (folder_and_zip_defaults_are_reported_independently, reading_the_status_only_queries, a_missing_handler_is_reported_empty_and_not_as_openxplorer, the_status_can_be_read_on_a_worker_thread). The native settings page does not show the status yet."
+native = "done"
+native_note = "native/crates/ox-core/src/integration/default_apps/xdg_mime.rs (the_query_asks_xdg_mime_for_the_default_of_one_type, each_failure_of_xdg_mime_has_the_python_apps_message); native/crates/ox-core/tests/integration_default_apps.rs (folder_and_zip_defaults_are_reported_independently, reading_the_status_only_queries, a_missing_handler_is_reported_empty_and_not_as_openxplorer, the_status_can_be_read_on_a_worker_thread). The native settings page does not show the status yet. native/crates/ox-app/src/integration/status.rs (a_route_names_openxplorer_the_app_its_id_or_nothing); native/crates/ox-app/src/settings_page/tests.rs (default_apps_reads_which_app_opens_each_route): Default apps reads the handlers through xdg-mime off the main thread each time Settings opens, after each change and on Refresh status."
 
 [[feature]]
 id = "INT-011"
@@ -14733,8 +14738,8 @@ python_tests = [
   "desktop/tests/test_rc3.py::DefaultsTests::test_missing_handler_not_overpromised",
 ]
 bridge = ["desktopRestore", "revealDisable"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_default_apps.rs (restoring_zip_keeps_openxplorer_for_folders, restoring_keeps_a_handler_the_user_chose_later, restoring_everything_puts_every_recorded_handler_back, restoring_without_a_record_asks_for_the_desktop_settings). The Restore previous button and its notes are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_default_apps.rs (restoring_zip_keeps_openxplorer_for_folders, restoring_keeps_a_handler_the_user_chose_later, restoring_everything_puts_every_recorded_handler_back, restoring_without_a_record_asks_for_the_desktop_settings). native/crates/ox-app/src/settings_page/default_apps/tests.rs (making_openxplorer_the_default_can_be_undone): Restore previous is disabled until a handler is recorded, puts Dolphin back and toasts \"Previous recorded handlers restored.\"; it also turns Show in folder off (native/crates/ox-app/src/integration/changes.rs)."
 
 [[feature]]
 id = "INT-012"
@@ -14767,8 +14772,8 @@ python_tests = [
   "desktop/tests/ui_rc3_contract.py::ZIP opt-in starts unchecked",
 ]
 bridge = ["zipDefault", "zipRestore", "desktopStatus"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_default_apps.rs (including_zip_takes_over_every_zip_alias, the_zip_default_leaves_folder_types_with_their_handler, restoring_zip_keeps_openxplorer_for_folders). The ZIP opening controls and their toasts are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_default_apps.rs (including_zip_takes_over_every_zip_alias, the_zip_default_leaves_folder_types_with_their_handler, restoring_zip_keeps_openxplorer_for_folders). native/crates/ox-app/src/integration/status.rs (the_zip_line_says_whether_openxplorer_opens_zip_files); native/crates/ox-app/src/settings_page/default_apps/tests.rs (zip_files_are_taken_over_and_given_back_on_their_own)."
 
 [[feature]]
 id = "INT-013"
@@ -14829,8 +14834,8 @@ bridge = [
 ]
 dolphin = "DBusInterface ShowFolders/ShowItems/ShowItemProperties; dolphin --daemon provides org.freedesktop.FileManager1 (org.kde.dolphin.FileManager1.service)"
 gnome = "org.freedesktop.FileManager1; org.freedesktop.FileManager1 D-Bus interface; org.freedesktop.FileManager1 on the session bus; org.freedesktop.FileManager1 (freedesktop file-manager interface), g_bus_own_name(REPLACE) + g_dbus_connection_register_object; Nautilus 46 serves it through org.freedesktop.FileManager1.service (nautilus --gapplication-service)"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_file_manager/requests.rs (show_items_keeps_the_file_itself, an_unsupported_method_is_rejected, a_request_without_locations_is_rejected, more_than_100_locations_are_rejected, app_pages_cannot_be_requested_from_outside); native/crates/ox-core/tests/integration_file_manager/service.rs (enabling_owns_the_standard_name_and_serves_the_standard_path, enabling_takes_the_name_over_from_an_owner_that_allows_it, enabling_twice_registers_once, acquiring_and_releasing_the_name_is_reported, disabling_releases_the_name_and_the_object, show_items_reaches_the_app_with_the_startup_id, an_unsupported_location_is_refused_without_reaching_the_app, an_unknown_method_is_refused, a_path_that_looks_like_a_command_stays_an_escaped_location, a_request_the_app_cannot_open_is_reported_as_failed). The native app does not register the service or open the requested locations yet, and ownership changes refresh no Settings status yet. Porting notes: OpenXplorer requires opt-in for the D-Bus registration. This machine has Nautilus, Dolphin and Thunar FileManager1 service files; the per-user file in ~/.local/share/dbus-1/services takes precedence. The app's own text says portal routing (Flatpak/Snap browsers) is a separate check; verify it natively."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_file_manager/requests.rs (show_items_keeps_the_file_itself, an_unsupported_method_is_rejected, a_request_without_locations_is_rejected, more_than_100_locations_are_rejected, app_pages_cannot_be_requested_from_outside); native/crates/ox-core/tests/integration_file_manager/service.rs (enabling_owns_the_standard_name_and_serves_the_standard_path, enabling_takes_the_name_over_from_an_owner_that_allows_it, enabling_twice_registers_once, acquiring_and_releasing_the_name_is_reported, disabling_releases_the_name_and_the_object, show_items_reaches_the_app_with_the_startup_id, an_unsupported_location_is_refused_without_reaching_the_app, an_unknown_method_is_refused, a_path_that_looks_like_a_command_stays_an_escaped_location, a_request_the_app_cannot_open_is_reported_as_failed). native/crates/ox-app/src/integration/tests.rs (show_in_folder_owns_file_manager1_until_disabled, the_service_refuses_invalid_requests_before_the_app_sees_them): the app owns the name while Show in folder is enabled, requests reach the active window with the caller's startup ID, and ownership changes re-read the Default apps status. Porting notes: OpenXplorer requires opt-in for the D-Bus registration. This machine has Nautilus, Dolphin and Thunar FileManager1 service files; the per-user file in ~/.local/share/dbus-1/services takes precedence. The app's own text says portal routing (Flatpak/Snap browsers) is a separate check; verify it natively."
 
 [[feature]]
 id = "INT-014"
@@ -14867,7 +14872,7 @@ bridge = ["list", "properties", "uiReady", "focusWindow"]
 dolphin = "OpenExternallyCalledFolderInNewTab"
 gnome = "org.freedesktop.FileManager1 ShowFolders/ShowItems/ShowItemProperties; org.freedesktop.FileManager1 D-Bus interface (ShowItems/ShowFolders/ShowItemProperties).; org.freedesktop.FileManager1.ShowItems"
 native = "partial"
-native_note = "native/crates/ox-core/tests/session_window_state.rs (show_items_keeps_a_file_location, show_folders_and_item_properties_keep_their_locations); native/crates/ox-core/tests/integration_file_manager/requests.rs (show_items_keeps_the_file_itself, show_folders_and_show_item_properties_are_accepted); native/crates/ox-core/tests/integration_file_manager/service.rs (show_items_reaches_the_app_with_the_startup_id). ox-core checks the three requests and hands them to the app; opening and reusing tabs, selecting and scrolling to the items and showing Properties are not in the native UI yet. Porting notes: OpenXplorer's ShowFolders always adds tabs and is not configurable."
+native_note = "native/crates/ox-core/tests/session_window_state.rs (show_items_keeps_a_file_location, show_folders_and_item_properties_keep_their_locations); native/crates/ox-core/tests/integration_file_manager/requests.rs (show_items_keeps_the_file_itself, show_folders_and_show_item_properties_are_accepted); native/crates/ox-core/tests/integration_file_manager/service.rs (show_items_reaches_the_app_with_the_startup_id). native/crates/ox-app/src/window/external_requests.rs (items_are_grouped_by_their_folder_in_request_order); native/crates/ox-app/src/integration/tests.rs (show_items_selects_the_files_in_their_folders, show_folders_opens_each_folder_in_a_tab). Missing: ShowItemProperties opens the parent with the item selected but does not show Properties yet; it needs the Properties dialog (native/props-ui). Porting notes: OpenXplorer's ShowFolders always adds tabs and is not configurable."
 
 [[feature]]
 id = "INT-015"
@@ -14916,8 +14921,8 @@ python_tests = [
 bridge = ["revealEnable", "desktopDefault", "revealDisable", "desktopRestore"]
 dolphin = "org.kde.dolphin.FileManager1.service → dolphin --daemon"
 gnome = "~/.local/share/dbus-1/services + ~/.config/autostart; D-Bus session activation files in $XDG_DATA_HOME/dbus-1/services, XDG autostart, g_application_hold"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_reveal.rs (show_in_folder_is_off_until_enabled, enabling_writes_exactly_two_private_per_user_files, enabling_twice_is_harmless, disabling_removes_exactly_the_managed_files, a_foreign_override_is_refused_and_left_unchanged, disabling_keeps_a_file_the_user_modified, a_symlinked_file_is_refused, both_files_start_the_service_without_a_window, nothing_outside_the_user_folders_is_written_or_stopped, the_service_file_is_byte_for_byte_the_legacy_one, the_autostart_entry_keeps_the_legacy_name, the_autostart_entry_is_byte_for_byte_the_legacy_one, a_failed_write_removes_the_files_already_written, the_record_keeps_the_state_before_the_first_enable, inside_flatpak_enabling_is_refused_without_writing, enabling_runs_on_a_worker_thread). The Enable Show in folder button is not in the native UI yet. Porting notes: The Exec path /usr/bin/winspace and the managed marker are compatibility contracts (AGENTS.md)."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_reveal.rs (show_in_folder_is_off_until_enabled, enabling_writes_exactly_two_private_per_user_files, enabling_twice_is_harmless, disabling_removes_exactly_the_managed_files, a_foreign_override_is_refused_and_left_unchanged, disabling_keeps_a_file_the_user_modified, a_symlinked_file_is_refused, both_files_start_the_service_without_a_window, nothing_outside_the_user_folders_is_written_or_stopped, the_service_file_is_byte_for_byte_the_legacy_one, the_autostart_entry_keeps_the_legacy_name, the_autostart_entry_is_byte_for_byte_the_legacy_one, a_failed_write_removes_the_files_already_written, the_record_keeps_the_state_before_the_first_enable, inside_flatpak_enabling_is_refused_without_writing, enabling_runs_on_a_worker_thread). native/crates/ox-app/src/integration/tests.rs (show_in_folder_owns_file_manager1_until_disabled): Enable writes the session files (the D-Bus service file checked) and starts the service; Disable removes them. Porting notes: The Exec path /usr/bin/winspace and the managed marker are compatibility contracts (AGENTS.md)."
 
 [[feature]]
 id = "INT-016"
@@ -14950,8 +14955,8 @@ python_tests = [
 ]
 bridge = ["revealEnable", "revealTest", "revealDisable", "desktopStatus"]
 gnome = "org.freedesktop.FileManager1 D-Bus name"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_reveal.rs (show_in_folder_is_off_until_enabled, a_foreign_override_is_refused_and_left_unchanged); native/crates/ox-core/tests/integration_file_manager/service.rs (acquiring_and_releasing_the_name_is_reported); native/crates/ox-core/tests/integration_file_manager/status.rs (the_status_names_openxplorer_while_it_owns_the_name, the_status_names_another_owner_by_its_process, the_status_is_empty_while_nobody_owns_the_name). The status line and the Enable, Test and Disable buttons are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_reveal.rs (show_in_folder_is_off_until_enabled, a_foreign_override_is_refused_and_left_unchanged); native/crates/ox-core/tests/integration_file_manager/service.rs (acquiring_and_releasing_the_name_is_reported); native/crates/ox-core/tests/integration_file_manager/status.rs (the_status_names_openxplorer_while_it_owns_the_name, the_status_names_another_owner_by_its_process, the_status_is_empty_while_nobody_owns_the_name). native/crates/ox-app/src/integration/status.rs (show_in_folder_says_who_answers_it); native/crates/ox-app/src/integration/tests.rs (show_in_folder_owns_file_manager1_until_disabled); native/crates/ox-app/src/settings_page/default_apps/tests.rs (show_in_folder_starts_disabled_and_its_test_needs_the_service): the status line, Enable, Test (\"Test request sent through FileManager1.\") and Disable Show in folder."
 
 [[feature]]
 id = "INT-017"
@@ -14970,7 +14975,8 @@ python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_service_flag_does_not_create_window",
 ]
 bridge = []
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/integration/file_manager_service.rs holds the application while the service answers and releases it on Disable and Quit; --filemanager-service starts the service only when Show in folder is enabled and never asks to restart (native/crates/ox-app/src/update/launch_guard.rs). Tested in-process by show_in_folder_owns_file_manager1_until_disabled; a service-only process is not tested yet."
 
 [[feature]]
 id = "INT-018"
@@ -15004,8 +15010,8 @@ python_tests = [
   "desktop/tests/test_v07.py::BraveTests::test_proc_unrelated_ignored",
 ]
 bridge = ["braveStatus"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_brave/status.rs (native_profiles_are_detected_with_their_names, a_profile_whose_preferences_are_not_a_file_is_not_offered, a_symlinked_profile_folder_is_ignored, flatpak_and_snap_installs_are_reported_for_manual_setup, a_brave_process_is_detected, other_processes_are_not_brave, a_process_table_that_cannot_be_read_counts_as_brave_running, inside_flatpak_the_status_says_brave_cannot_be_reached, the_status_can_be_read_on_a_worker_thread). The native UI does not show the Brave status yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_brave/status.rs (native_profiles_are_detected_with_their_names, a_profile_whose_preferences_are_not_a_file_is_not_offered, a_symlinked_profile_folder_is_ignored, flatpak_and_snap_installs_are_reported_for_manual_setup, a_brave_process_is_detected, other_processes_are_not_brave, a_process_table_that_cannot_be_read_counts_as_brave_running, inside_flatpak_the_status_says_brave_cannot_be_reached, the_status_can_be_read_on_a_worker_thread). native/crates/ox-app/src/integration/brave_dialog.rs (the_status_says_whether_brave_can_be_changed_now, a_profile_names_its_channel_and_folder); native/crates/ox-app/src/integration/tests.rs (the_brave_dialog_lists_profiles_and_needs_consent)."
 
 [[feature]]
 id = "INT-020"
@@ -15058,8 +15064,8 @@ python_tests = [
   "desktop/tests/test_v07.py::BraveTests::test_proc_unrelated_ignored",
 ]
 bridge = ["braveStatus", "braveSync", "braveRestore"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_brave/sync.rs (syncing_needs_explicit_consent, syncing_waits_until_brave_is_closed, syncing_changes_only_the_two_download_folders, syncing_keeps_unrelated_decimal_preferences_exactly, backups_records_and_preferences_are_private, a_profile_outside_the_detected_ones_is_refused, a_missing_download_folder_is_refused, the_home_folder_is_not_a_download_folder, an_smb_address_is_not_a_download_folder, symlinked_preferences_are_never_written, brave_starting_during_a_sync_leaves_the_profile_unchanged, preferences_changed_during_a_sync_are_not_overwritten, a_download_group_that_is_not_an_object_is_refused, several_profiles_are_updated_together, a_relative_download_folder_is_refused, only_one_to_forty_distinct_profiles_can_be_selected, a_volatile_system_folder_is_not_a_download_folder, inside_flatpak_brave_is_never_changed). The 'Use this Downloads folder in Brave' dialog, its checkboxes, messages and toasts are not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_brave/sync.rs (syncing_needs_explicit_consent, syncing_waits_until_brave_is_closed, syncing_changes_only_the_two_download_folders, syncing_keeps_unrelated_decimal_preferences_exactly, backups_records_and_preferences_are_private, a_profile_outside_the_detected_ones_is_refused, a_missing_download_folder_is_refused, the_home_folder_is_not_a_download_folder, an_smb_address_is_not_a_download_folder, symlinked_preferences_are_never_written, brave_starting_during_a_sync_leaves_the_profile_unchanged, preferences_changed_during_a_sync_are_not_overwritten, a_download_group_that_is_not_an_object_is_refused, several_profiles_are_updated_together, a_relative_download_folder_is_refused, only_one_to_forty_distinct_profiles_can_be_selected, a_volatile_system_folder_is_not_a_download_folder, inside_flatpak_brave_is_never_changed). native/crates/ox-app/src/integration/brave_dialog.rs (the_status_says_whether_brave_can_be_changed_now, a_sync_reports_each_profile_that_failed); native/crates/ox-app/src/integration/tests.rs (the_brave_dialog_lists_profiles_and_needs_consent): Settings > Brave & downloads opens \"Use this Downloads folder in Brave\" on the Downloads folder of user-dirs.dirs."
 
 [[feature]]
 id = "INT-021"
@@ -15077,7 +15083,7 @@ python_tests = [
 ]
 bridge = ["braveRestore"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/integration_brave/restore.rs (restoring_puts_back_only_the_download_folders, restoring_keeps_unrelated_decimal_preferences_exactly, restoring_keeps_a_folder_the_user_changed_later, restoring_needs_explicit_consent, restoring_without_a_record_changes_nothing, restoring_removes_the_undo_record); native/crates/ox-core/tests/integration_brave/sync.rs (inside_flatpak_brave_is_never_changed). The dialog's Restore previous button is not in the native UI yet."
+native_note = "native/crates/ox-core/tests/integration_brave/restore.rs (restoring_puts_back_only_the_download_folders, restoring_keeps_unrelated_decimal_preferences_exactly, restoring_keeps_a_folder_the_user_changed_later, restoring_needs_explicit_consent, restoring_without_a_record_changes_nothing, restoring_removes_the_undo_record); native/crates/ox-core/tests/integration_brave/sync.rs (inside_flatpak_brave_is_never_changed). The Brave dialog's Restore previous needs the consent and exactly one profile (native/crates/ox-app/src/integration/brave_dialog.rs); its UI flow is not tested yet."
 
 [[feature]]
 id = "INT-022"
@@ -15094,7 +15100,8 @@ python_tests = [
   "desktop/tests/native_runtime_guard.py::Runtime identity read through real org.gtk.Actions",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/update/launch_guard.rs (the_runtime_info_action_reports_this_builds_identity): the runtime-info application action holds the SHA-256 identity of the running executable."
 
 [[feature]]
 id = "INT-023"
@@ -15115,7 +15122,7 @@ bridge = ["open", "openWith", "activateItem"]
 dolphin = "KStartupInfo / KWindowSystem activation tokens"
 gnome = "gtk_window_set_startup_id (X11 startup-notification or Wayland xdg-activation token), GdkAppLaunchContext passed to g_app_info_launch; GdkAppLaunchContext"
 native = "partial"
-native_note = "native/crates/ox-core/tests/integration_file_manager/service.rs (show_items_reaches_the_app_with_the_startup_id, a_long_startup_id_is_cut_to_4096_characters). ox-core hands the caller's startup ID to the app; applying it with set_startup_id before present() and launching applications with the window's GdkAppLaunchContext are not in the native UI yet. Porting notes: Focus behaviour is unverified on a real Wayland session; the native app must verify it with xdg-activation."
+native_note = "native/crates/ox-core/tests/integration_file_manager/service.rs (show_items_reaches_the_app_with_the_startup_id, a_long_startup_id_is_cut_to_4096_characters). The window raised for a FileManager1 request gets the caller's startup ID before present() (native/crates/ox-app/src/application/requests.rs), and Open with launches with the window display's launch context (native/crates/ox-app/src/window/integration_actions.rs). Not verified on a real Wayland session yet. Porting notes: Focus behaviour is unverified on a real Wayland session; the native app must verify it with xdg-activation."
 
 [[feature]]
 id = "INT-024"
@@ -15251,8 +15258,8 @@ python_tests = [
   "desktop/tests/ui_rc3_contract.py::Folder default does not falsely claim ZIP ownership",
 ]
 bridge = ["desktopStatus", "desktopDefault", "desktopRestore"]
-native = "todo"
-native_note = "Porting notes: INT-008 to INT-012 cover the backend, the two checkboxes, the ZIP controls and the Show in folder controls; this feature is the card itself. The 'Browser preview' note is WebKit-preview only."
+native = "done"
+native_note = "native/crates/ox-app/src/settings_page/default_apps/tests.rs (making_openxplorer_the_default_can_be_undone, zip_files_are_taken_over_and_given_back_on_their_own); native/crates/ox-app/src/settings_page/default_apps/view.rs (the_card_states_whether_openxplorer_is_the_default). Make default is enabled again after every status read, Restore previous only with a record, and both are disabled while a change runs. Porting notes: INT-008 to INT-012 cover the backend, the two checkboxes, the ZIP controls and the Show in folder controls; this feature is the card itself. The 'Browser preview' note is WebKit-preview only."
 
 [[feature]]
 id = "INT-031"
@@ -15303,8 +15310,8 @@ python_tests = [
   "desktop/tests/test_updater.py::UpdaterTests::test_oversized_or_invalid_metadata_response_fails_and_releases_lock",
 ]
 bridge = ["updateCheck"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/update_check.rs (check_uses_fixed_endpoint_and_only_returns_public_metadata, failed_check_discards_stale_release_and_releases_lock, oversized_or_invalid_metadata_response_fails_and_releases_lock). The Software updates dialog is not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/update_check.rs (check_uses_fixed_endpoint_and_only_returns_public_metadata, failed_check_discards_stale_release_and_releases_lock, oversized_or_invalid_metadata_response_fails_and_releases_lock). native/crates/ox-app/src/update/state.rs (every_state_has_the_python_dialogs_status_line, the_versions_line_names_the_available_release); native/crates/ox-app/src/update/tests.rs (checking_offers_a_newer_release_and_the_status_bar_says_so): the status bar's Check for updates and Settings > About open Software updates, which checks at once; a release found shows in every window's status bar and in About."
 
 [[feature]]
 id = "UPD-002"
@@ -15342,8 +15349,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_stable_version_upgrades_candidates",
 ]
 bridge = ["updateCheck"]
-native = "partial"
-native_note = "native/crates/ox-core/src/update/github.rs (requests_carry_the_media_type_timeout_and_user_agent, an_untrusted_redirect_target_is_never_contacted, a_redirect_past_the_tenth_is_an_http_error_with_its_status, a_final_answer_after_ten_redirects_is_read, a_redirect_without_a_location_is_an_http_error, only_a_2xx_final_status_is_success, a_percent_encoded_location_reaches_the_client_unchanged, redirects_keep_the_first_requests_media_type); native/crates/ox-core/src/update/trust.rs (a_redirect_keeps_its_percent_encoding_byte_for_byte, a_checked_address_keeps_its_percent_encoding_byte_for_byte); native/crates/ox-core/tests/update_check.rs (check_uses_fixed_endpoint_and_only_returns_public_metadata, failed_check_discards_stale_release_and_releases_lock, oversized_or_invalid_metadata_response_fails_and_releases_lock); native/crates/ox-core/tests/update_python.rs (versions_urls_and_releases_match_the_python_updater, the_port_refuses_addresses_python_would_have_let_through); native/crates/ox-core/tests/update_release.rs (stable_versions_are_compared_numerically, versions_reject_prereleases_path_fragments_and_shell_content, only_stable_public_release_records_are_used, installer_must_have_exact_upstream_name_and_url, installer_size_and_digest_are_required, malformed_asset_list_is_rejected_with_actionable_error, notes_and_release_link_are_bounded_or_derived_locally, releases_from_the_organization_repository_are_accepted, a_release_carries_its_installer_digest_and_size, only_allowlisted_https_hosts_and_standard_ports_are_accepted, redirects_apply_the_same_trust_boundary). The native UI does not check for updates yet."
+native = "done"
+native_note = "native/crates/ox-core/src/update/github.rs (requests_carry_the_media_type_timeout_and_user_agent, an_untrusted_redirect_target_is_never_contacted, a_redirect_past_the_tenth_is_an_http_error_with_its_status, a_final_answer_after_ten_redirects_is_read, a_redirect_without_a_location_is_an_http_error, only_a_2xx_final_status_is_success, a_percent_encoded_location_reaches_the_client_unchanged, redirects_keep_the_first_requests_media_type); native/crates/ox-core/src/update/trust.rs (a_redirect_keeps_its_percent_encoding_byte_for_byte, a_checked_address_keeps_its_percent_encoding_byte_for_byte); native/crates/ox-core/tests/update_check.rs (check_uses_fixed_endpoint_and_only_returns_public_metadata, failed_check_discards_stale_release_and_releases_lock, oversized_or_invalid_metadata_response_fails_and_releases_lock); native/crates/ox-core/tests/update_python.rs (versions_urls_and_releases_match_the_python_updater, the_port_refuses_addresses_python_would_have_let_through); native/crates/ox-core/tests/update_release.rs (stable_versions_are_compared_numerically, versions_reject_prereleases_path_fragments_and_shell_content, only_stable_public_release_records_are_used, installer_must_have_exact_upstream_name_and_url, installer_size_and_digest_are_required, malformed_asset_list_is_rejected_with_actionable_error, notes_and_release_link_are_bounded_or_derived_locally, releases_from_the_organization_repository_are_accepted, a_release_carries_its_installer_digest_and_size, only_allowlisted_https_hosts_and_standard_ports_are_accepted, redirects_apply_the_same_trust_boundary). native/crates/ox-app/src/update/tests.rs (checking_offers_a_newer_release_and_the_status_bar_says_so): the interface checks through ox-core's updater, against a simulated GitHub."
 
 [[feature]]
 id = "UPD-003"
@@ -15382,8 +15389,8 @@ python_tests = [
 ]
 bridge = ["updateInstall"]
 gnome = "polkit (pkexec) + APT"
-native = "partial"
-native_note = "native/crates/ox-core/tests/update_check.rs (concurrent_tasks_are_rejected_without_network_or_processes); native/crates/ox-core/tests/update_install.rs (success_verifies_bytes_and_metadata_before_admin_prompt_and_cleans_up, installation_runs_only_the_fixed_package_commands, install_requires_literal_confirmation_before_any_network_or_process, install_requires_matching_previously_checked_newer_version, bad_checksum_short_download_and_oversized_download_never_prompt, wrong_package_identity_version_or_architecture_never_prompt, download_failure_cleans_partial_files_and_releases_lock, a_refused_download_names_its_http_status, polkit_cancellation_or_apt_failure_cleans_up_without_marking_installed, package_inspection_failure_cleans_up_and_does_not_prompt, installed_version_is_verified_after_package_manager_returns_success, a_cancelled_installation_never_prompts, cancelling_during_the_inspection_never_prompts); native/crates/ox-core/tests/update_service.rs (confirmation_is_required_before_worker_or_busy_state, active_work_in_any_window_blocks_install, only_version_confirmation_and_progress_cross_to_the_installation). The native UI does not offer Install update yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/update_check.rs (concurrent_tasks_are_rejected_without_network_or_processes); native/crates/ox-core/tests/update_install.rs (success_verifies_bytes_and_metadata_before_admin_prompt_and_cleans_up, installation_runs_only_the_fixed_package_commands, install_requires_literal_confirmation_before_any_network_or_process, install_requires_matching_previously_checked_newer_version, bad_checksum_short_download_and_oversized_download_never_prompt, wrong_package_identity_version_or_architecture_never_prompt, download_failure_cleans_partial_files_and_releases_lock, a_refused_download_names_its_http_status, polkit_cancellation_or_apt_failure_cleans_up_without_marking_installed, package_inspection_failure_cleans_up_and_does_not_prompt, installed_version_is_verified_after_package_manager_returns_success, a_cancelled_installation_never_prompts, cancelling_during_the_inspection_never_prompts); native/crates/ox-core/tests/update_service.rs (confirmation_is_required_before_worker_or_busy_state, active_work_in_any_window_blocks_install, only_version_confirmation_and_progress_cross_to_the_installation). native/crates/ox-app/src/update/tests.rs (installing_verifies_installs_and_offers_the_restart): Install update… downloads, verifies and runs dpkg-deb, pkexec apt-get and dpkg-query in order (simulated), then shows \"OpenXplorer <v> is installed. Restart to use the update.\""
 
 [[feature]]
 id = "UPD-004"
@@ -15399,8 +15406,8 @@ python_tests = [
   "desktop/tests/test_updater.py::UpdaterTests::test_source_build_cannot_install",
 ]
 bridge = ["updateCheck", "updateInstall"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/update_check.rs (source_build_cannot_install, a_flatpak_build_refuses_to_install_and_names_flatpak); native/crates/ox-core/tests/update_release.rs (install_capability_requires_exact_system_install_and_executable_tools, flatpaks_and_other_packages_update_through_their_package_manager, only_package_managed_folders_hold_other_packages, the_native_executable_is_detected_by_its_installation_folder). The native UI does not offer Install update yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/update_check.rs (source_build_cannot_install, a_flatpak_build_refuses_to_install_and_names_flatpak); native/crates/ox-core/tests/update_release.rs (install_capability_requires_exact_system_install_and_executable_tools, flatpaks_and_other_packages_update_through_their_package_manager, only_package_managed_folders_hold_other_packages, the_native_executable_is_detected_by_its_installation_folder). native/crates/ox-app/src/update/state.rs (a_build_that_cannot_install_says_what_updates_it); native/crates/ox-app/src/update/tests.rs (a_flatpak_is_told_to_update_through_flatpak): Install update… is disabled and the dialog says to update through GNOME Software or flatpak update."
 
 [[feature]]
 id = "UPD-005"
@@ -15448,7 +15455,7 @@ python_tests = [
 ]
 bridge = ["updateInstall", "updateCheck", "updateRestart"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/update_install.rs (install_requires_literal_confirmation_before_any_network_or_process); native/crates/ox-core/tests/update_restart.rs (installed_update_blocks_files_but_allows_status_without_new_check, modified_installed_files_require_restart_after_success_or_failure, identity_read_failure_always_clears_busy_and_requires_restart); native/crates/ox-core/tests/update_service.rs (running_update_blocks_file_actions_and_other_updates_in_every_window, a_running_update_refuses_another_check_or_installation, confirmation_is_required_before_worker_or_busy_state, active_work_in_any_window_blocks_install, queued_install_blocks_second_window_before_worker_starts, only_version_confirmation_and_progress_cross_to_the_installation, a_worker_that_dies_does_not_leave_the_application_locked, quit_and_window_close_refuse_while_update_runs, new_windows_are_blocked_during_update_and_until_restart, an_abandoned_installation_keeps_the_application_locked_until_apt_finishes). The dialog, its progress messages and the inert window are not in the native UI yet."
+native_note = "native/crates/ox-core/tests/update_install.rs (install_requires_literal_confirmation_before_any_network_or_process); native/crates/ox-core/tests/update_restart.rs (installed_update_blocks_files_but_allows_status_without_new_check, modified_installed_files_require_restart_after_success_or_failure, identity_read_failure_always_clears_busy_and_requires_restart); native/crates/ox-core/tests/update_service.rs (running_update_blocks_file_actions_and_other_updates_in_every_window, a_running_update_refuses_another_check_or_installation, confirmation_is_required_before_worker_or_busy_state, active_work_in_any_window_blocks_install, queued_install_blocks_second_window_before_worker_starts, only_version_confirmation_and_progress_cross_to_the_installation, a_worker_that_dies_does_not_leave_the_application_locked, quit_and_window_close_refuse_while_update_runs, new_windows_are_blocked_during_update_and_until_restart, an_abandoned_installation_keeps_the_application_locked_until_apt_finishes). native/crates/ox-app/src/update/tests.rs (an_installing_update_locks_every_window): while APT runs every window is insensitive and refuses to close, and the dialog cannot be dismissed; new windows are refused. Missing: running file operations must refuse Install update… once they are ported (they join work_in_windows in native/crates/ox-app/src/window/integration_actions.rs)."
 
 [[feature]]
 id = "UPD-006"
@@ -15477,7 +15484,7 @@ python_tests = [
 ]
 bridge = ["updateCheck", "updateInstall", "updateRestart"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/update_restart.rs (installed_update_blocks_files_but_allows_status_without_new_check, modified_installed_files_require_restart_after_success_or_failure, an_installation_that_changed_nothing_needs_no_restart, identity_read_failure_always_clears_busy_and_requires_restart); native/crates/ox-core/tests/update_service.rs (new_windows_are_blocked_during_update_and_until_restart). The dialog's failure and restart states are not in the native UI yet."
+native_note = "native/crates/ox-core/tests/update_restart.rs (installed_update_blocks_files_but_allows_status_without_new_check, modified_installed_files_require_restart_after_success_or_failure, an_installation_that_changed_nothing_needs_no_restart, identity_read_failure_always_clears_busy_and_requires_restart); native/crates/ox-core/tests/update_service.rs (new_windows_are_blocked_during_update_and_until_restart). native/crates/ox-app/src/update/state.rs (every_state_has_the_python_dialogs_status_line, only_a_restart_is_offered_once_files_changed); native/crates/ox-app/src/update/tests.rs (installing_verifies_installs_and_offers_the_restart): failure texts, Restart now and refused new windows. Missing: after an installation, file requests are not refused until the restart."
 
 [[feature]]
 id = "UPD-007"
@@ -15495,8 +15502,8 @@ python_tests = [
   "desktop/tests/ui_regressions.cjs::Restart uses the separate native action",
 ]
 bridge = ["updateRestart"]
-native = "partial"
-native_note = "native/crates/ox-core/src/update/process.rs (the_launcher_starts_in_a_session_of_its_own); native/crates/ox-core/tests/update_restart.rs (pending_restart_allows_safe_quit, restart_requires_pending_update_idle_writes_and_fixed_launcher). The Restart now button is not in the native UI yet."
+native = "done"
+native_note = "native/crates/ox-core/src/update/process.rs (the_launcher_starts_in_a_session_of_its_own); native/crates/ox-core/tests/update_restart.rs (pending_restart_allows_safe_quit, restart_requires_pending_update_idle_writes_and_fixed_launcher). native/crates/ox-app/src/update/tests.rs (installing_verifies_installs_and_offers_the_restart): Restart now starts only /usr/bin/openxplorer --restart."
 
 [[feature]]
 id = "UPD-008"
@@ -15547,7 +15554,7 @@ python_tests = [
 bridge = ["quit"]
 gnome = "GtkApplication single-instance D-Bus name (org.gtk.Actions)."
 native = "partial"
-native_note = "native/crates/ox-core/tests/update_instance_bus.rs (nobody_owns_an_application_that_does_not_run, the_identity_is_read_through_org_gtk_actions, a_normal_launch_leaves_the_current_instance_running, an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed, a_legacy_instance_is_detected_and_quits_safely); native/crates/ox-core/tests/update_runtime_guard.rs (the_identity_changes_with_the_python_and_ui_files, identity_ignores_files_that_are_not_part_of_the_build, a_launch_with_no_running_instance_continues_without_asking_anything_to_quit, a_current_running_instance_is_left_running, an_outdated_instance_is_not_stopped_without_consent, declining_the_restart_never_stops_the_instance, confirming_asks_only_the_exact_owner_to_quit, an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, a_process_without_an_identity_is_a_legacy_process, a_match_needs_version_protocol_and_build). The native app does not run the check at launch or show the restart dialog yet."
+native_note = "native/crates/ox-core/tests/update_instance_bus.rs (nobody_owns_an_application_that_does_not_run, the_identity_is_read_through_org_gtk_actions, a_normal_launch_leaves_the_current_instance_running, an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed, a_legacy_instance_is_detected_and_quits_safely); native/crates/ox-core/tests/update_runtime_guard.rs (the_identity_changes_with_the_python_and_ui_files, identity_ignores_files_that_are_not_part_of_the_build, a_launch_with_no_running_instance_continues_without_asking_anything_to_quit, a_current_running_instance_is_left_running, an_outdated_instance_is_not_stopped_without_consent, declining_the_restart_never_stops_the_instance, confirming_asks_only_the_exact_owner_to_quit, an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, a_process_without_an_identity_is_a_legacy_process, a_match_needs_version_protocol_and_build). The launch guard runs before the application starts and asks \"Restart OpenXplorer to finish updating\" when the running instance's runtime-info differs (native/crates/ox-app/src/update/launch_guard.rs); not tested with two processes yet."
 
 [[feature]]
 id = "UPD-009"
@@ -15568,7 +15575,7 @@ python_tests = [
 ]
 bridge = []
 native = "partial"
-native_note = "native/crates/ox-core/tests/update_instance_bus.rs (an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed); native/crates/ox-core/tests/update_runtime_guard.rs (an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, another_instance_taking_the_name_during_restart_is_reported, a_failed_quit_from_an_instance_that_already_quit_is_fine). The native app has no --restart option yet."
+native_note = "native/crates/ox-core/tests/update_instance_bus.rs (an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed); native/crates/ox-core/tests/update_runtime_guard.rs (an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, another_instance_taking_the_name_during_restart_is_reported, a_failed_quit_from_an_instance_that_already_quit_is_fine). The native app has no --restart option yet. native/crates/ox-app/src/update/launch_guard.rs (the_restart_option_is_not_passed_on): openxplorer --restart asks the running instance to quit, waits and starts, exiting with status 3 on the guard's errors; not tested with two processes yet."
 
 [[feature]]
 id = "UPD-010"
@@ -15589,7 +15596,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
+native = "partial"
+native_note = "--version prints \"OpenXplorer <version>\" (native/crates/ox-app/src/update/launch_guard.rs). Missing: --check and --diagnose."
 
 [[feature]]
 id = "UPD-011"
@@ -15657,7 +15665,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/test_v07.py::AppManagerTests::test_glib_parsed_software_flag"]
 bridge = []
-native = "todo"
+native = "partial"
+native_note = "--software-rendering makes GTK draw with Cairo when the launch starts the application (native/crates/ox-app/src/application.rs); GTK cannot switch the renderer of a running instance."
 
 [[feature]]
 id = "UPD-014"
