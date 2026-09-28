@@ -12,9 +12,8 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::application::AppAction;
-use crate::folder_view::details;
 use crate::folder_view::grid::IconSize;
-use crate::folder_view::sorting::{SortColumn, SortDirection};
+use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::text_size::Step;
 use crate::theme::ThemePreference;
 
@@ -270,16 +269,20 @@ impl BrowserWindow {
 
     /// Sorts the details view by `column`, keeping the direction.
     fn sort_by_column(&self, column: SortColumn) {
-        let view = self.folder_pane().details();
-        let (_, direction) = details::current_sort(view);
-        details::sort_by(view, column, direction);
+        let details = self.folder_pane().details();
+        details.sort_by(SortOrder {
+            column,
+            ..details.sort_order()
+        });
     }
 
     /// Sorts the details view in `direction`, keeping the column.
     fn sort_in_direction(&self, direction: SortDirection) {
-        let view = self.folder_pane().details();
-        let (column, _) = details::current_sort(view);
-        details::sort_by(view, column, direction);
+        let details = self.folder_pane().details();
+        details.sort_by(SortOrder {
+            direction,
+            ..details.sort_order()
+        });
     }
 
     /// Show hidden files: lists or hides them, and saves the choice.
@@ -293,16 +296,16 @@ impl BrowserWindow {
 
     /// Keeps the Sort menu in step with sorting by a column header.
     fn follow_header_sorting(&self) {
-        let Some(sorter) = self.folder_pane().details().sorter() else {
+        let Some(sorter) = self.folder_pane().details().column_view().sorter() else {
             return;
         };
         sorter.connect_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |_, _| {
-                let (column, direction) = details::current_sort(window.folder_pane().details());
-                window.set_action_state(WindowAction::Sort, &column.key().to_variant());
-                window.set_action_state(WindowAction::Direction, &direction.key().to_variant());
+                let order = window.folder_pane().details().sort_order();
+                window.set_action_state(WindowAction::Sort, &order.column.key().to_variant());
+                window.set_action_state(WindowAction::Direction, &order.direction.key().to_variant());
             }
         ));
     }

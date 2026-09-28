@@ -14,7 +14,6 @@ use gtk::glib;
 use gtk::prelude::*;
 use ox_core::settings::{Column, PreferencesUpdate, Settings, SettingsError};
 
-use crate::folder_view::details;
 use crate::theme::ThemePreference;
 
 use super::folder_pane::FolderView;
@@ -101,15 +100,12 @@ impl BrowserWindow {
         let workspace = self.workspace();
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
         let details_view = self.folder_pane().details();
-        details::apply_column_widths(details_view, preferences.column_widths.as_ref());
-        details::connect_columns_resized(
-            details_view,
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |widths| window.save_preference(Preference::ColumnWidths(widths))
-            ),
-        );
+        details_view.apply_column_widths(preferences.column_widths.as_ref());
+        details_view.connect_columns_resized(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |widths| window.save_preference(Preference::ColumnWidths(widths))
+        ));
         self.save_sidebar_width_after_drags();
         self.keep_sidebar_within_limit();
         self.reset_sidebar_on_double_click();

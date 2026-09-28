@@ -7,10 +7,13 @@
 //! Forward move within the list without changing it.
 
 /// The locations a tab has visited, with the current position.
+///
+/// `entries` is never empty and `position` always points into it, so
+/// [`History::current`] cannot fail.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct History {
+pub(crate) struct History {
     entries: Vec<String>,
-    index: usize,
+    position: usize,
 }
 
 impl History {
@@ -18,13 +21,13 @@ impl History {
     pub fn new(uri: &str) -> Self {
         Self {
             entries: vec![uri.to_string()],
-            index: 0,
+            position: 0,
         }
     }
 
     /// The location currently shown.
     pub fn current(&self) -> &str {
-        &self.entries[self.index]
+        &self.entries[self.position]
     }
 
     /// Records a navigation to `uri`. Returns false (and changes nothing)
@@ -33,36 +36,36 @@ impl History {
         if self.current() == uri {
             return false;
         }
-        self.entries.truncate(self.index + 1);
+        self.entries.truncate(self.position + 1);
         self.entries.push(uri.to_string());
-        self.index = self.entries.len() - 1;
+        self.position = self.entries.len() - 1;
         true
     }
 
     /// Replaces the current location without adding an entry, for example
     /// when a location resolves to a different canonical URI.
     pub fn replace_current(&mut self, uri: &str) {
-        self.entries[self.index] = uri.to_string();
+        self.entries[self.position] = uri.to_string();
     }
 
     /// True when Back has somewhere to go.
     pub fn can_go_back(&self) -> bool {
-        self.index > 0
+        self.position > 0
     }
 
     /// True when Forward has somewhere to go.
     pub fn can_go_forward(&self) -> bool {
-        self.index + 1 < self.entries.len()
+        self.position + 1 < self.entries.len()
     }
 
     /// Moves `delta` steps (negative for Back) and returns the new current
     /// location, or `None` (without moving) when that is out of range.
     pub fn go(&mut self, delta: isize) -> Option<&str> {
-        let target = self.index.checked_add_signed(delta)?;
+        let target = self.position.checked_add_signed(delta)?;
         if target >= self.entries.len() {
             return None;
         }
-        self.index = target;
+        self.position = target;
         Some(self.current())
     }
 }
@@ -71,6 +74,7 @@ impl History {
 mod tests {
     use super::*;
 
+    /// parity: NAV-001
     #[test]
     fn a_new_history_has_nowhere_to_go() {
         let history = History::new("file:///a");
@@ -79,6 +83,7 @@ mod tests {
         assert!(!history.can_go_forward());
     }
 
+    /// parity: NAV-005
     #[test]
     fn navigating_to_the_current_location_adds_nothing() {
         let mut history = History::new("file:///a");
@@ -86,6 +91,7 @@ mod tests {
         assert!(!history.can_go_back());
     }
 
+    /// parity: NAV-001, NAV-005
     #[test]
     fn back_and_forward_move_without_changing_entries() {
         let mut history = History::new("file:///a");
@@ -99,6 +105,7 @@ mod tests {
         assert_eq!(history.go(1), None);
     }
 
+    /// parity: NAV-005
     #[test]
     fn navigating_after_back_drops_forward_entries() {
         let mut history = History::new("file:///a");

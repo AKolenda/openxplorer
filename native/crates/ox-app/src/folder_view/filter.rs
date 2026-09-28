@@ -5,9 +5,20 @@
 //! only with "Show hidden files", and every whitespace-separated search term
 //! must occur somewhere in the name, ignoring case.
 
+/// Whether GIO marks an item hidden (a dot file, or one named in its
+/// folder's `.hidden` file).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Visibility {
+    /// Listed whether or not hidden files are shown.
+    Visible,
+    /// Listed only with "Show hidden files".
+    Hidden,
+}
+
 /// The current search text and hidden-file preference.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct FilterState {
+pub(crate) struct FilterState {
+    /// The lower-cased search terms; empty while nothing is searched.
     terms: Vec<String>,
     show_hidden: bool,
 }
@@ -28,25 +39,33 @@ impl FilterState {
         changed
     }
 
-    /// True when hidden items are listed.
-    pub fn shows_hidden(&self) -> bool {
-        self.show_hidden
-    }
-
     /// True when a search is active.
     pub fn is_searching(&self) -> bool {
         !self.terms.is_empty()
     }
 
-    /// Whether an item is shown. `lower_name` is the lower-cased display name.
-    pub fn accepts(&self, lower_name: &str, hidden: bool) -> bool {
-        let visible = self.show_hidden || !hidden;
-        visible && self.terms.iter().all(|term| lower_name.contains(term.as_str()))
+    /// True when an item of `visibility` is listed at all, searched or
+    /// not: hidden items only while "Show hidden files" is on.
+    pub fn lists(&self, visibility: Visibility) -> bool {
+        self.show_hidden || visibility == Visibility::Visible
+    }
+
+    /// Whether an item is shown: it is listed, and `lowercase_name`, its
+    /// lower-cased display name, holds every search term.
+    pub fn accepts(&self, lowercase_name: &str, visibility: Visibility) -> bool {
+        self.lists(visibility) && self.matches_every_term(lowercase_name)
+    }
+
+    /// True when every search term occurs in `lowercase_name`.
+    fn matches_every_term(&self, lowercase_name: &str) -> bool {
+        self.terms
+            .iter()
+            .all(|term| lowercase_name.contains(term.as_str()))
     }
 }
 
 /// Splits search text into lower-cased terms.
-pub fn query_terms(query: &str) -> Vec<String> {
+fn query_terms(query: &str) -> Vec<String> {
     query
         .to_lowercase()
         .split_whitespace()
@@ -58,26 +77,43 @@ pub fn query_terms(query: &str) -> Vec<String> {
 mod tests {
     use super::*;
 
-    fn state(query: &str, show_hidden: bool) -> FilterState {
-        let mut state = FilterState::default();
-        state.set_query(query);
-        state.set_show_hidden(show_hidden);
-        state
+    /// A filter searching for `query` with hidden files not shown.
+    fn searching(query: &str) -> FilterState {
+        let mut filter = FilterState::default();
+        filter.set_query(query);
+        filter
     }
 
+    /// parity: SRCH-003
     #[test]
     fn every_term_must_match_somewhere() {
-        let filter = state("  Report  2026 ", false);
-        assert!(filter.accepts("quarterly report 2026.docx", false));
-        assert!(!filter.accepts("quarterly report 2025.docx", false));
+        let filter = searching("  Report  2026 ");
+        assert!(filter.accepts("quarterly report 2026.docx", Visibility::Visible));
+        assert!(!filter.accepts("quarterly report 2025.docx", Visibility::Visible));
     }
 
+    /// parity: SRCH-003, VIEW-023
     #[test]
     fn empty_search_shows_everything_visible() {
-        let filter = state("", false);
-        assert!(filter.accepts("anything", false));
-        assert!(!filter.accepts(".cache", true));
-        assert!(state("", true).accepts(".cache", true));
+        let filter = searching("");
+        assert!(filter.accepts("anything", Visibility::Visible));
+        assert!(!filter.accepts(".cache", Visibility::Hidden));
+        let mut showing_hidden = searching("");
+        showing_hidden.set_show_hidden(true);
+        assert!(showing_hidden.accepts(".cache", Visibility::Hidden));
+    }
+
+    /// parity: VIEW-023
+    #[test]
+    fn hidden_items_are_listed_only_while_hidden_files_are_shown() {
+        let mut filter = searching("report");
+        assert!(
+            filter.lists(Visibility::Visible),
+            "a search does not unlist items"
+        );
+        assert!(!filter.lists(Visibility::Hidden));
+        filter.set_show_hidden(true);
+        assert!(filter.lists(Visibility::Hidden));
     }
 
     #[test]

@@ -150,7 +150,7 @@ const TILE_VERTICAL_CHROME: i32 = 12 + 12 + 1 + 1;
 
 /// A tile's size for icons of `size`. Its height fills the cell less the
 /// padding and the gap. Its width comes from the column the window sets
-/// (`columns_for_width` in `folder_view/grid.rs`), so the minimum is only
+/// (`CellSize::columns_in` in `folder_view/grid.rs`), so the minimum is only
 /// the icon, which lets GTK use every column the window asks for.
 fn tile_css(size: IconSize, percent: u32) -> String {
     let cell = grid::cell_size(size, percent);

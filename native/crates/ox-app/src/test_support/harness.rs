@@ -235,7 +235,7 @@ impl TestWindow {
     pub fn names(&self) -> Vec<String> {
         let model = self.window.folder_model();
         (0..model.n_items())
-            .map(|position| model.name_at(position))
+            .filter_map(|position| model.name_at(position))
             .collect()
     }
 

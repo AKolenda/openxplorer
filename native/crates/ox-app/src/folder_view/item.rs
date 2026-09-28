@@ -3,31 +3,34 @@
 //!
 //! Wraps an [`ox_core::entry::Entry`] with what the views need often and
 //! should compute once: the natural-order sort keys, the lower-cased name
-//! used by the search filter, and the icon art kind.
+//! used by the search filter, and the icon art kind. A row of `renderRows`
+//! in `desktop/ui/app.js` reads the same fields from the entry.
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
 
-use crate::folder_view::sorting;
+use crate::folder_view::filter::Visibility;
+use crate::folder_view::sorting::{SortKey, SortName};
 use crate::icons::{art, ArtKind};
 
-/// Everything a [`FileItem`] holds, computed once when it is created.
+/// A listed entry with what the views compute from it once, when its
+/// [`FileItem`] is created.
 #[derive(Debug)]
-pub struct ItemData {
-    name_key: String,
-    type_key: String,
-    lower_name: String,
+struct PreparedEntry {
+    name_sort_key: SortKey,
+    type_sort_key: SortKey,
+    lowercase_name: String,
     art: ArtKind,
     entry: Entry,
 }
 
-impl ItemData {
+impl PreparedEntry {
     fn new(entry: Entry) -> Self {
         Self {
-            name_key: sorting::sort_key(&entry.name),
-            type_key: sorting::sort_key(&entry.type_label),
-            lower_name: entry.name.to_lowercase(),
+            name_sort_key: SortKey::new(&entry.name),
+            type_sort_key: SortKey::new(&entry.type_label),
+            lowercase_name: entry.name.to_lowercase(),
             art: art::kind_for_entry(&entry),
             entry,
         }
@@ -40,13 +43,14 @@ mod imp {
     use gtk::glib;
     use gtk::subclass::prelude::*;
 
-    use super::ItemData;
+    use super::PreparedEntry;
 
     /// Private state of [`super::FileItem`]; set once at construction.
-    #[derive(Default)]
+    #[derive(Debug, Default)]
     pub struct FileItem {
-        /// The entry and what is computed from it, set by [`super::FileItem::new`].
-        pub data: OnceCell<ItemData>,
+        /// The entry and what is computed from it, set by
+        /// [`super::FileItem::new`].
+        pub(super) prepared: OnceCell<PreparedEntry>,
     }
 
     #[glib::object_subclass]
@@ -65,58 +69,79 @@ glib::wrapper! {
 
 impl FileItem {
     /// Wraps a listed entry.
-    ///
-    /// # Panics
-    ///
-    /// Never: a new object has no data yet.
-    pub fn new(entry: Entry) -> Self {
+    pub(crate) fn new(entry: Entry) -> Self {
         let item: Self = glib::Object::new();
         item.imp()
-            .data
-            .set(ItemData::new(entry))
-            .expect("a new FileItem has no data yet");
+            .prepared
+            .set(PreparedEntry::new(entry))
+            .expect("a new FileItem has no entry yet");
         item
     }
 
-    fn data(&self) -> &ItemData {
+    fn prepared(&self) -> &PreparedEntry {
         self.imp()
-            .data
+            .prepared
             .get()
-            .expect("FileItem::new is the only constructor and sets the data")
+            .expect("FileItem::new is the only constructor and sets the entry")
     }
 
     /// The listed entry.
-    pub fn entry(&self) -> &Entry {
-        &self.data().entry
+    pub(crate) fn entry(&self) -> &Entry {
+        &self.prepared().entry
     }
 
-    /// Natural-order key of the name.
-    pub fn name_key(&self) -> &str {
-        &self.data().name_key
+    /// The name with its natural-order key, as the Name column sorts it.
+    pub(crate) fn sort_name(&self) -> SortName<'_> {
+        let prepared = self.prepared();
+        SortName {
+            key: &prepared.name_sort_key,
+            name: &prepared.entry.name,
+        }
     }
 
     /// Natural-order key of the type label.
-    pub fn type_key(&self) -> &str {
-        &self.data().type_key
+    pub(crate) fn type_sort_key(&self) -> &SortKey {
+        &self.prepared().type_sort_key
     }
 
     /// Lower-cased name for the search filter.
-    pub fn lower_name(&self) -> &str {
-        &self.data().lower_name
+    pub(crate) fn lowercase_name(&self) -> &str {
+        &self.prepared().lowercase_name
+    }
+
+    /// Whether GIO marks the item hidden, for the filter.
+    pub(crate) fn visibility(&self) -> Visibility {
+        if self.entry().hidden {
+            Visibility::Hidden
+        } else {
+            Visibility::Visible
+        }
     }
 
     /// The icon art for the item.
-    pub fn art(&self) -> ArtKind {
-        self.data().art
+    pub(crate) fn art(&self) -> ArtKind {
+        self.prepared().art
     }
 
-    /// Where activating the item goes: a virtual folder's target, or the
-    /// item itself.
-    pub fn open_uri(&self) -> &str {
+    /// The size of a file; `None` for folders and for files of unknown
+    /// size, which show an empty Size cell and add nothing to a selection's
+    /// total.
+    pub(crate) fn file_size(&self) -> Option<u64> {
         let entry = self.entry();
-        match (&entry.target_uri, entry.is_virtual) {
-            (Some(target), true) => target,
-            _ => &entry.uri,
+        if entry.is_dir {
+            return None;
         }
+        entry.size
     }
+}
+
+/// A tab's store holding a file called each of `names`, for tests of the
+/// models built over it.
+#[cfg(test)]
+pub(crate) fn store_of_files(names: &[&str]) -> gtk::gio::ListStore {
+    let store = gtk::gio::ListStore::new::<FileItem>();
+    for name in names {
+        store.append(&FileItem::new(crate::test_support::file_entry(name)));
+    }
+    store
 }

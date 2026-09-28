@@ -410,3 +410,24 @@ mod tests {
         assert_eq!(context().device_name("file:///"), "Connected device");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_trailing_slash_does_not_matter() {
+        assert!(same_location("smb://nas/share/", "smb://nas/share"));
+        assert!(!same_location("file:///a", "file:///b"));
+        assert!(same_location("file:///", "file:///"));
+    }
+
+    /// parity: NAV-010
+    #[test]
+    fn a_folder_has_its_parent_as_up_target() {
+        assert_eq!(
+            parent_location("file:///srv/data").as_deref(),
+            Some("file:///srv")
+        );
+    }
+}

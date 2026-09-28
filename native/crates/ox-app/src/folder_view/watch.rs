@@ -16,6 +16,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -26,16 +27,26 @@ use gtk::{gio, glib};
 /// Quiet time before a burst of change notifications triggers a refresh.
 const CHANGE_DEBOUNCE: Duration = Duration::from_millis(350);
 
-/// Identifies a live [`Watch`] across threads.
-type WatchId = u64;
-
 /// Hands out watch ids; an id is never reused in one process.
 static NEXT_WATCH_ID: AtomicU64 = AtomicU64::new(0);
+
+/// Identifies a live [`Watch`] across threads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct WatchId(u64);
+
+impl WatchId {
+    /// An id no other watch of this process has had.
+    fn next() -> Self {
+        Self(NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 /// The change callback of one watch and its pending debounce timer.
 struct Subscriber {
     on_change: Rc<dyn Fn()>,
-    debounce: Option<glib::SourceId>,
+    /// Runs `on_change` once the changes have been quiet for
+    /// [`CHANGE_DEBOUNCE`]; restarted by every change.
+    debounce_timer: Option<glib::SourceId>,
 }
 
 thread_local! {
@@ -60,31 +71,30 @@ fn changes_listing(event: gio::FileMonitorEvent) -> bool {
 }
 
 /// On the main thread: a watched folder changed. Restarts the debounce
-/// timer, so a burst of changes refreshes once.
+/// timer, so a burst of changes refreshes once. A watch dropped after its
+/// monitor thread sent the change is no longer registered and is skipped.
 fn folder_changed(id: WatchId) {
-    let is_watched = SUBSCRIBERS.with(|subscribers| subscribers.borrow().contains_key(&id));
+    let is_watched = SUBSCRIBERS.with_borrow(|subscribers| subscribers.contains_key(&id));
     if !is_watched {
         return;
     }
     let timer = glib::timeout_add_local_once(CHANGE_DEBOUNCE, move || debounce_elapsed(id));
-    let previous = SUBSCRIBERS.with(|subscribers| {
-        let mut subscribers = subscribers.borrow_mut();
+    let previous_timer = SUBSCRIBERS.with_borrow_mut(|subscribers| {
         let subscriber = subscribers.get_mut(&id)?;
-        subscriber.debounce.replace(timer)
+        subscriber.debounce_timer.replace(timer)
     });
-    if let Some(previous) = previous {
-        previous.remove();
+    if let Some(previous_timer) = previous_timer {
+        previous_timer.remove();
     }
 }
 
 /// On the main thread: the changes settled. The callback runs outside the
 /// registry borrow, because it may start or stop watches.
 fn debounce_elapsed(id: WatchId) {
-    let on_change = SUBSCRIBERS.with(|subscribers| {
-        let mut subscribers = subscribers.borrow_mut();
+    let on_change = SUBSCRIBERS.with_borrow_mut(|subscribers| {
         let subscriber = subscribers.get_mut(&id)?;
         // The timer has fired; removing it again would be a GLib error.
-        subscriber.debounce = None;
+        subscriber.debounce_timer = None;
         Some(Rc::clone(&subscriber.on_change))
     });
     if let Some(on_change) = on_change {
@@ -93,12 +103,22 @@ fn debounce_elapsed(id: WatchId) {
 }
 
 /// Watches one folder for changes. Dropping it stops watching.
+///
+/// A watch lives on the main thread: dropping it removes its callback
+/// from that thread's `SUBSCRIBERS` and its debounce timer from that
+/// thread's main context. It is therefore neither `Send` nor `Sync`.
 #[derive(Debug)]
 pub(crate) struct Watch {
     uri: String,
     id: WatchId,
+    /// Cancelled when the watch is dropped, which ends the monitor thread.
     stop: gio::Cancellable,
+    /// The monitor thread's own main context.
     monitor_context: glib::MainContext,
+    /// Main-thread-only rule: this `Rc` marker keeps the compiler from
+    /// letting a watch move to, or be dropped on, another thread, where
+    /// its callback would stay registered and keep running.
+    _main_thread_only: PhantomData<Rc<()>>,
 }
 
 impl Watch {
@@ -120,8 +140,8 @@ impl Drop for Watch {
         // ends the monitor thread's wait for events.
         self.stop.cancel();
         self.monitor_context.wakeup();
-        let subscriber = SUBSCRIBERS.with(|subscribers| subscribers.borrow_mut().remove(&self.id));
-        if let Some(timer) = subscriber.and_then(|subscriber| subscriber.debounce) {
+        let subscriber = SUBSCRIBERS.with_borrow_mut(|subscribers| subscribers.remove(&self.id));
+        if let Some(timer) = subscriber.and_then(|subscriber| subscriber.debounce_timer) {
             timer.remove();
         }
     }
@@ -132,7 +152,9 @@ struct MonitorThread {
     uri: String,
     id: WatchId,
     stop: gio::Cancellable,
-    context: glib::MainContext,
+    /// The thread's own context, which the monitor reports on.
+    monitor_context: glib::MainContext,
+    /// The GTK thread's context, which runs [`folder_changed`].
     main_context: glib::MainContext,
 }
 
@@ -140,13 +162,19 @@ impl MonitorThread {
     /// Monitors until the watch is dropped. A location that cannot be
     /// monitored ends the thread at once; F5 still refreshes it.
     fn run(self) {
-        let context = self.context.clone();
+        let monitor_context = self.monitor_context.clone();
         // A monitor reports on the thread-default context of the thread that
         // creates it, so this thread's own context must be the default.
-        // Acquiring it cannot fail: no other thread iterates it.
-        let _ = context.with_thread_default(|| self.monitor_until_stopped());
+        // Only this thread iterates it, so acquiring it should not fail; if
+        // it does, the folder is not watched and F5 still refreshes it.
+        let watched = monitor_context.with_thread_default(|| self.monitor_until_stopped());
+        if let Err(error) = watched {
+            glib::g_warning!("openxplorer", "Could not watch {} for changes: {error}", self.uri);
+        }
     }
 
+    /// Creates the monitor and forwards its changes to the GTK thread
+    /// until the watch is dropped.
     fn monitor_until_stopped(&self) {
         let folder = gio::File::for_uri(&self.uri);
         let flags = gio::FileMonitorFlags::WATCH_MOVES;
@@ -161,7 +189,7 @@ impl MonitorThread {
             }
         });
         while !self.stop.is_cancelled() {
-            self.context.iteration(true);
+            self.monitor_context.iteration(true);
         }
         monitor.cancel();
     }
@@ -172,23 +200,24 @@ impl MonitorThread {
 /// The monitor is created on a thread of its own. Until it exists, and for
 /// locations that cannot be monitored at all, changes are not seen.
 pub(crate) fn watch_folder(uri: &str, on_change: impl Fn() + 'static) -> Watch {
-    let id = NEXT_WATCH_ID.fetch_add(1, Ordering::Relaxed);
+    let id = WatchId::next();
     let subscriber = Subscriber {
         on_change: Rc::new(on_change),
-        debounce: None,
+        debounce_timer: None,
     };
-    SUBSCRIBERS.with(|subscribers| subscribers.borrow_mut().insert(id, subscriber));
+    SUBSCRIBERS.with_borrow_mut(|subscribers| subscribers.insert(id, subscriber));
     let watch = Watch {
         uri: uri.to_owned(),
         id,
         stop: gio::Cancellable::new(),
         monitor_context: glib::MainContext::new(),
+        _main_thread_only: PhantomData,
     };
     let thread = MonitorThread {
         uri: watch.uri.clone(),
         id,
         stop: watch.stop.clone(),
-        context: watch.monitor_context.clone(),
+        monitor_context: watch.monitor_context.clone(),
         main_context: glib::MainContext::default(),
     };
     let spawned = std::thread::Builder::new()

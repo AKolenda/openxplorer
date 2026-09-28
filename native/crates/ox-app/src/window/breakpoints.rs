@@ -18,6 +18,8 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use crate::folder_view::details::DetailsColumns;
+
 use super::details_pane::PANE_WIDTH;
 use super::tab_layout::TAB_WIDTH;
 use super::window_action::WindowAction;
@@ -166,7 +168,12 @@ impl BrowserWindow {
         self.search_box().set_visible(!compact);
         self.command_bar().fit_to_width(band);
         self.status_bar().set_build_visible(!compact);
-        crate::folder_view::details::show_date_and_type(self.folder_pane().details(), !compact);
+        let details_columns = if compact {
+            DetailsColumns::NameAndSize
+        } else {
+            DetailsColumns::All
+        };
+        self.folder_pane().details().show_columns(details_columns);
         self.render_landing();
     }
 

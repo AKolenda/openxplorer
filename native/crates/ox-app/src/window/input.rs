@@ -16,7 +16,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use crate::typeahead::{self, TypeSelect};
+use crate::folder_view::model::FolderModel;
+use crate::typeahead::{self, PrefixMatch, Rows};
 
 use super::activation::{activation_for, Activation};
 use super::folder_pane::PanePage;
@@ -47,18 +48,28 @@ fn is_modifier_key(key: gdk::Key) -> bool {
     )
 }
 
-/// The time the type-to-select rules count in: milliseconds on the
-/// monotonic clock.
-fn now_in_milliseconds() -> i64 {
-    glib::monotonic_time() / 1000
+/// The status-bar hint for a type-to-select result.
+pub(super) fn typeahead_hint(result: &PrefixMatch, matched_name: Option<&str>) -> String {
+    match (result.prefix.is_empty(), matched_name) {
+        (true, _) => String::new(),
+        (false, Some(name)) => format!("Jump to: {} — {name}", result.prefix),
+        (false, None) => format!("No name starts with “{}”", result.prefix),
+    }
 }
 
-/// The status-bar hint for a type-to-select result.
-pub(super) fn typeahead_hint(result: &TypeSelect, matched_name: Option<&str>) -> String {
-    match (result.text.is_empty(), matched_name) {
-        (true, _) => String::new(),
-        (false, Some(name)) => format!("Jump to: {} — {name}", result.text),
-        (false, None) => format!("No name starts with “{}”", result.text),
+/// The current time on `GLib`'s monotonic clock, which type-to-select
+/// times its prefix with. The clock never reads below zero and never goes
+/// backwards.
+fn monotonic_now() -> Duration {
+    Duration::from_micros(glib::monotonic_time().unsigned_abs())
+}
+
+/// The folder's rows in display order, as type-to-select searches them.
+fn typeahead_rows(model: &FolderModel) -> Rows<impl Fn(u32) -> String + '_> {
+    Rows {
+        count: model.n_items(),
+        name_at: |row| model.name_at(row).unwrap_or_default(),
+        current: model.first_selected(),
     }
 }
 
@@ -66,8 +77,8 @@ impl BrowserWindow {
     /// Adds keyboard and pointer handling to both folder views, and makes
     /// Escape in the address entry return to the breadcrumbs.
     pub(super) fn install_input(&self) {
-        let details = self.folder_pane().details().clone();
-        let grid = self.folder_pane().grid().clone();
+        let details = self.folder_pane().details().column_view().clone();
+        let grid = self.folder_pane().icon_view().grid().clone();
         self.folder_input(details.upcast_ref());
         self.folder_input(grid.upcast_ref());
         self.address_bar().connect_cancelled(glib::clone!(
@@ -140,8 +151,10 @@ impl BrowserWindow {
         let on_row = activate.clone();
         self.folder_pane()
             .details()
+            .column_view()
             .connect_activate(move |_, position| on_row(position));
         self.folder_pane()
+            .icon_view()
             .grid()
             .connect_activate(move |_, position| activate(position));
     }
@@ -251,8 +264,8 @@ impl BrowserWindow {
     /// Escape clears the prefix, and only without one the selection.
     /// `None` for every other key.
     fn prefix_editing_key(&self, input: &gtk::IMMulticontext, key: gdk::Key) -> Option<glib::Propagation> {
-        let now = now_in_milliseconds();
-        let prefix_active = self.imp().typeahead.borrow().controller.active(now);
+        let now = monotonic_now();
+        let prefix_active = self.imp().typeahead.borrow().controller.is_active(now);
         match key {
             gdk::Key::Escape if prefix_active => {
                 input.reset();
@@ -283,16 +296,9 @@ impl BrowserWindow {
 
     /// Backspace: removes the last typed character and selects what the
     /// shorter prefix matches.
-    fn erase_typed_character(&self, now: i64) {
-        let model = self.folder_pane().model();
-        let count = model.n_items() as usize;
-        let current = model.first_selected().map(|position| position as usize);
-        let result = self.imp().typeahead.borrow_mut().controller.backspace(
-            count,
-            |index| self.name_at_index(index),
-            current,
-            now,
-        );
+    fn erase_typed_character(&self, now: Duration) {
+        let rows = typeahead_rows(self.folder_pane().model());
+        let result = self.imp().typeahead.borrow_mut().controller.backspace(&rows, now);
         if let Some(result) = result {
             self.apply_typeahead(&result);
         }
@@ -306,39 +312,31 @@ impl BrowserWindow {
         }
     }
 
+    /// Adds one typed character to the prefix. Each character moves the
+    /// selection the next one starts from, so the rows are read again.
     fn type_character(&self, character: char) {
-        let model = self.folder_pane().model();
-        let count = model.n_items() as usize;
-        let current = model.first_selected().map(|position| position as usize);
+        let rows = typeahead_rows(self.folder_pane().model());
         let typed = character.to_string();
-        let result = self.imp().typeahead.borrow_mut().controller.push(
-            &typed,
-            count,
-            |index| self.name_at_index(index),
-            current,
-            now_in_milliseconds(),
-        );
+        let result = self
+            .imp()
+            .typeahead
+            .borrow_mut()
+            .controller
+            .push(&typed, &rows, monotonic_now());
         if let Some(result) = result {
             self.apply_typeahead(&result);
         }
     }
 
-    /// The name shown at `index` of the list, as the type-to-select rules
-    /// count positions.
-    fn name_at_index(&self, index: usize) -> String {
-        let position = u32::try_from(index).unwrap_or(u32::MAX);
-        self.folder_pane().model().name_at(position)
-    }
-
-    fn apply_typeahead(&self, result: &TypeSelect) {
-        let position = result.index.and_then(|index| u32::try_from(index).ok());
-        if let Some(position) = position {
-            self.folder_pane().model().select_only(position);
-            self.folder_pane().reveal(position);
+    fn apply_typeahead(&self, result: &PrefixMatch) {
+        let model = self.folder_pane().model();
+        if let Some(row) = result.row {
+            model.select_only(row);
+            self.folder_pane().reveal(row);
         }
-        let matched_name = position.map(|position| self.folder_pane().model().name_at(position));
+        let matched_name = result.row.and_then(|row| model.name_at(row));
         let hint = typeahead_hint(result, matched_name.as_deref());
-        let outcome = if position.is_some() {
+        let outcome = if result.row.is_some() {
             TypeaheadMatch::Found
         } else {
             TypeaheadMatch::Missed
@@ -348,11 +346,8 @@ impl BrowserWindow {
     }
 
     fn restart_typeahead_timer(&self) {
-        let timeout_ms =
-            u64::try_from(typeahead::TIMEOUT_MS).expect("the type-to-select timeout is positive");
-        let timeout = Duration::from_millis(timeout_ms);
         let timer = glib::timeout_add_local_once(
-            timeout,
+            typeahead::PREFIX_TIMEOUT,
             glib::clone!(
                 #[weak(rename_to = window)]
                 self,
@@ -417,10 +412,10 @@ impl BrowserWindow {
 mod tests {
     use super::*;
 
-    fn result(text: &str, index: Option<usize>) -> TypeSelect {
-        TypeSelect {
-            text: text.into(),
-            index,
+    fn result(prefix: &str, row: Option<u32>) -> PrefixMatch {
+        PrefixMatch {
+            prefix: prefix.into(),
+            row,
             cycling: false,
         }
     }

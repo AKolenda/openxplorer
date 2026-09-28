@@ -9,9 +9,10 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 
-use crate::folder_view::cells::{CellOwners, IconCells};
-use crate::folder_view::grid::{self, IconSize};
-use crate::folder_view::{details, model::FolderModel};
+use crate::folder_view::cells::{BoundIcons, CellOwners};
+use crate::folder_view::details::DetailsView;
+use crate::folder_view::grid::{IconSize, IconView};
+use crate::folder_view::model::FolderModel;
 use crate::theme::Appearance;
 use crate::window::empty_page::EmptyPage;
 use crate::window::loading_line::LoadingLine;
@@ -26,17 +27,13 @@ pub(super) struct PaneParts {
     /// The details or the icon view ([`FolderView`]).
     pub(super) views: gtk::Stack,
     /// The details view.
-    pub(super) details: gtk::ColumnView,
-    /// The scroller around the details view.
-    pub(super) details_scroll: gtk::ScrolledWindow,
+    pub(super) details: DetailsView,
     /// The icon view.
-    pub(super) grid: gtk::GridView,
-    /// The scroller around the icon view.
-    pub(super) grid_scroll: gtk::ScrolledWindow,
+    pub(super) icon_view: IconView,
     /// The active tab's filtered, sorted and selectable items.
     pub(super) model: FolderModel,
     /// Bound item icons, redrawn when the theme or scale changes.
-    pub(super) icons: Rc<IconCells>,
+    pub(super) icons: Rc<BoundIcons>,
     /// Maps cell widgets to their rows.
     pub(super) owners: Rc<CellOwners>,
     /// The empty, loading and error page.
@@ -51,13 +48,11 @@ impl PaneParts {
     /// The pane's widgets, drawing item icons in `appearance`.
     pub(super) fn new(appearance: Appearance) -> Self {
         let model = FolderModel::new();
-        let icons = IconCells::new(appearance);
+        let icons = BoundIcons::new(appearance);
         let owners = CellOwners::new();
-        let details = details::build(&model, &icons, &owners);
-        let grid = grid::build(&icons, &owners, IconSize::Large);
-        let details_scroll = scrolled(&details);
-        let grid_scroll = scrolled(&grid);
-        let views = view_stack(&details_scroll, &grid_scroll);
+        let details = DetailsView::new(&model, &icons, &owners);
+        let icon_view = IconView::new(&icons, &owners);
+        let views = view_stack(&details, &icon_view);
         let empty = EmptyPage::new();
         let (landing, landing_scroll) = landing_page();
         let stack = page_stack(&views, &empty, &landing_scroll);
@@ -65,9 +60,7 @@ impl PaneParts {
             stack,
             views,
             details,
-            details_scroll,
-            grid,
-            grid_scroll,
+            icon_view,
             model,
             icons,
             owners,
@@ -79,11 +72,11 @@ impl PaneParts {
 }
 
 /// The details and icon views, one of them shown.
-fn view_stack(details_scroll: &gtk::ScrolledWindow, grid_scroll: &gtk::ScrolledWindow) -> gtk::Stack {
+fn view_stack(details: &DetailsView, icon_view: &IconView) -> gtk::Stack {
     let views = gtk::Stack::new();
-    views.add_named(details_scroll, Some(FolderView::Details.stack_name()));
+    views.add_named(details, Some(FolderView::Details.stack_name()));
     let icons = FolderView::Icons(IconSize::Large);
-    views.add_named(grid_scroll, Some(icons.stack_name()));
+    views.add_named(icon_view, Some(icons.stack_name()));
     views
 }
 
