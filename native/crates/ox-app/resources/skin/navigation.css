@@ -33,9 +33,9 @@
   border-bottom-color: @ox_accent;
   box-shadow: inset 0 -1px @ox_accent;
 }
-/* The 16px location icon (§4.2) keeps the web's 17px icon's centre, so the
+/* The 16px location icon (§4.2) takes the web's 17px icon's room, so the
    crumbs still start at x=217. */
-.address .address-icon { margin: 0 1px 0 1px; }
+.address .address-icon { margin-left: 1px; }
 
 /* ---- Breadcrumbs ---- */
 .address button.crumb {

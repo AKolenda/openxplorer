@@ -27,6 +27,8 @@ popover.ox-menu list > row:active { background-color: @ox_pressed; }
 popover.ox-menu list > row:focus-visible { background-color: @ox_selected; box-shadow: inset 0 0 0 1px @ox_focus_outer; }
 popover.ox-menu list > row:disabled { color: @ox_text_disabled; }
 popover.ox-menu list > row .shortcut { color: @ox_muted; padding-left: 12px; }
+/* A disabled row greys its shortcut too, as the web's opacity did. */
+popover.ox-menu list > row:disabled .shortcut { color: @ox_text_disabled; }
 popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-color: @ox_border; }
 
 /* ---- The folder views' context menu, a GtkPopoverMenu until it becomes
@@ -36,6 +38,7 @@ popover.menu.ox-menu modelbutton:hover, popover.menu.ox-menu modelbutton:selecte
 popover.menu.ox-menu modelbutton:active { background-color: @ox_pressed; }
 popover.menu.ox-menu modelbutton:disabled { color: @ox_text_disabled; }
 popover.menu.ox-menu modelbutton accelerator { color: @ox_muted; margin-left: 12px; }
+popover.menu.ox-menu modelbutton:disabled accelerator { color: @ox_text_disabled; }
 popover.menu.ox-menu separator { margin: 4px 5px; background-color: @ox_border; min-height: 1px; }
 
 /* ---- Toast (§4.15, E08) ---- */

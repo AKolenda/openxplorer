@@ -7,9 +7,10 @@
    collapse, so rows keep only the top one and separators give back a
    pixel below. Quick access rows sit in a box of their own, inset 4px
    (3px margin, 1px border) with no row margins and 4px below the last.
-   The pane is padded 12px 8px (§4.4, the web's 13px 7px). */
+   The pane keeps the web's 13px 7px padding: the spec's 12px 8px (§4.4)
+   would move every row a pixel, off the current app's pixels. */
 .sidebar { background-color: @ox_sidebar; }
-.sidebar list { background: none; padding: 12px 8px 0 8px; color: @ox_text; }
+.sidebar list { background: none; padding: 13px 7px 0 7px; color: @ox_text; }
 .sidebar list > row {
   min-height: 35px;
   border-radius: 4px;
@@ -47,7 +48,7 @@
 .sidebar .side-separator { min-height: 1px; background-color: @ox_border; margin: 12px 13px 11px 13px; }
 
 /* ---- Map network location ---- */
-.sidebar-bottom { border-top: 1px solid @ox_border; margin: 0 8px; padding: 9px 0 11px 0; }
+.sidebar-bottom { border-top: 1px solid @ox_border; margin: 0 7px; padding: 9px 0 11px 0; }
 window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
 /* The 17px glyph is centred on a half pixel as above. */
 .sidebar-bottom image { color: @ox_accent; margin-top: 1px; }

@@ -5,8 +5,9 @@
 use gtk::prelude::*;
 
 use crate::folder_view::cells::FileCell;
+use crate::folder_view::column_titles;
 use crate::folder_view::grid::IconSize;
-use crate::folder_view::sorting::SortColumn;
+use crate::folder_view::sorting::{SortColumn, SortDirection};
 use crate::test_support::harness::{
     application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
@@ -65,6 +66,26 @@ fn the_sort_menu_leaves_one_arrow_on_the_sorted_column() {
     assert_eq!(
         header_arrows(&test),
         ["descending", "unsorted", "unsorted", "unsorted"]
+    );
+}
+
+/// The sorted column shows the current app's chevron, up while
+/// ascending, and no other column shows an arrow (`renderColumns`).
+/// parity: VIEW-014
+#[gtk::test]
+fn only_the_sorted_column_shows_the_apps_arrow() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let details = &test.window.content().details;
+    assert_eq!(
+        column_titles::shown_carets(details),
+        [Some(SortDirection::Ascending), None, None, None]
+    );
+    test.activate("sort", Some("size"));
+    test.activate("direction", Some("descending"));
+    assert_eq!(
+        column_titles::shown_carets(details),
+        [None, None, None, Some(SortDirection::Descending)]
     );
 }
 

@@ -2,6 +2,7 @@
 //! Native folder models, asynchronous loading and virtualized views.
 
 pub(crate) mod cells;
+pub(crate) mod column_titles;
 pub(crate) mod details;
 pub(crate) mod filter;
 pub(crate) mod grid;

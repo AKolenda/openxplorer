@@ -18,6 +18,7 @@ use ox_core::format;
 use ox_core::settings::{Column, ColumnWidths};
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners, IconCells};
+use crate::folder_view::column_titles;
 use crate::folder_view::model::{self, FolderModel};
 use crate::folder_view::sorting::{SortColumn, SortDirection};
 
@@ -128,10 +129,10 @@ pub(crate) fn build(model: &FolderModel, icons: &Rc<IconCells>, owners: &Rc<Cell
         view.append_column(&view_column);
     }
     apply_column_widths(&view, None);
-    align_size_title_right(&view);
     if let Some(sorter) = view.sorter() {
         model.attach_column_sorter(&sorter);
     }
+    column_titles::style_titles(&view);
     sort_by(&view, SortColumn::Name, SortDirection::Ascending);
     view
 }
@@ -191,21 +192,6 @@ fn column_widths(view: &gtk::ColumnView) -> Vec<(Column, f64)> {
         .collect()
 }
 
-/// Right-aligns the Size title over its right-aligned values
-/// (`.column:last-child .column-label{justify-content:flex-end}`). GTK has
-/// no alignment setting for a column title, so this aligns the box that
-/// GTK 4.14 puts inside each title button (label and sort arrow), which
-/// keeps the arrow beside the text.
-fn align_size_title_right(view: &gtk::ColumnView) {
-    let header = view.first_child().filter(|child| child.css_name() == "header");
-    let size_title = header.and_then(|header| header.last_child());
-    let title_content = size_title.and_then(|title| title.first_child());
-    match title_content {
-        Some(content) => content.set_halign(gtk::Align::End),
-        None => glib::g_warning!("openxplorer", "The Size column title has an unexpected structure"),
-    }
-}
-
 /// Calls `on_resized` with every column width once a resize settles.
 pub(crate) fn connect_columns_resized(
     view: &gtk::ColumnView,
@@ -252,9 +238,10 @@ pub(crate) fn show_date_and_type(view: &gtk::ColumnView, shown: bool) {
 pub(crate) fn sort_by(view: &gtk::ColumnView, column: SortColumn, direction: SortDirection) {
     let (current, _) = current_sort(view);
     if current != column {
-        // GTK redraws the arrow only on the column it sorts by now, so the
-        // previously sorted header would keep a stale arrow. Clearing the
-        // sorter first removes that arrow.
+        // GTK updates the sort indicator only on the column it sorts by
+        // now, so the previously sorted title would keep a stale
+        // `ascending` or `descending` class. Clearing the sorter first
+        // resets it.
         view.sort_by_column(None, direction.to_sort_type());
     }
     view.sort_by_column(view_column(view, column).as_ref(), direction.to_sort_type());

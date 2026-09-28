@@ -64,11 +64,11 @@ pub(super) fn selection_text(selected: SelectionSummary) -> String {
     }
 }
 
-/// The build shown at the right (`#status-mode`).
 /// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
 /// were 15).
 const BUTTON_GLYPH: i32 = 16;
 
+/// The build shown at the right (`#status-mode`).
 const BUILD_TEXT: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"), " native preview");
 
 /// The status bar's widgets.

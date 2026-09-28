@@ -15,7 +15,8 @@
 //! The picture is the window's title bar and contents without the frame
 //! GTK draws around a window on a display without a compositor, so it
 //! lines up with the captures of the current app (`#app` in
-//! `tools/capture-screenshots.py`). The app then runs as a separate
+//! `tools/capture-screenshots.py`), at the display's scale (twice the
+//! size with `GDK_SCALE=2`). The app then runs as a separate
 //! instance, so it never hands the request to a running preview.
 //! The Python app has no such hook.
 
@@ -223,12 +224,19 @@ fn pixels(measure: f32) -> i32 {
 /// [`SnapshotError::NotDrawn`] before the window is shown, and
 /// [`SnapshotError::Write`] when the file cannot be written.
 pub(crate) fn save_png(window: &gtk::Window, path: &Path) -> Result<(), SnapshotError> {
-    let bounds = content_bounds(window).ok_or(SnapshotError::NotDrawn)?;
     let renderer = window.renderer().ok_or(SnapshotError::NotDrawn)?;
     let paintable = gtk::WidgetPaintable::new(Some(window));
     let snapshot = gtk::Snapshot::new();
-    // At its own size: any other size scales the picture, which blurs
+    // One picture pixel per device pixel, as the screen shows the window
+    // (two per logical pixel with GDK_SCALE=2). The paintable is drawn at
+    // its own size: any other size scales the picture, which blurs
     // one-pixel lines.
+    #[expect(clippy::cast_precision_loss, reason = "scale factors are small integers")]
+    let scale = window.scale_factor() as f32;
+    snapshot.scale(scale, scale);
+    let bounds = content_bounds(window)
+        .ok_or(SnapshotError::NotDrawn)?
+        .scale(scale, scale);
     let width = f64::from(paintable.intrinsic_width());
     let height = f64::from(paintable.intrinsic_height());
     paintable.snapshot(&snapshot, width, height);

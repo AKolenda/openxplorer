@@ -37,20 +37,20 @@ columnview.files > header > button:last-child {
   background-image: linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
 }
 columnview.files > header > button:last-child:hover { background-color: @ox_hover; }
+/* Only the sorted column shows an arrow: the app's 10px chevron, turned
+   up while ascending (src/folder_view/column_titles.rs). GTK's own filled
+   triangle takes no room, so the right-aligned Size title ends where its
+   values end. The arrow is centred on a half pixel, which Chromium draws
+   one pixel down. */
 columnview.files > header > button sort-indicator {
-  min-width: 10px;
-  min-height: 10px;
-  -gtk-icon-size: 10px;
-  margin-left: 6px;
-  color: @ox_muted;
-}
-/* Only the sorted column draws an arrow, and the others keep no room for
-   one, so the right-aligned Size title ends where its values end. */
-columnview.files > header > button sort-indicator.unsorted {
-  min-width: 0;
+  -gtk-icon-source: none;
   -gtk-icon-size: 0;
-  margin-left: 0;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
 }
+columnview.files > header > button .sort-caret { margin: 1px 0 0 6px; color: @ox_muted; }
+columnview.files > header > button .sort-caret.ascending { transform: rotate(180deg); }
 
 /* ---- Details view: rows ---- */
 /* Rows are inset 12px as in the web list. GTK places each cell at its
