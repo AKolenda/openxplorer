@@ -13807,7 +13807,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "todo"
-native_note = "Owner-requested usability improvement over the current single long settings page; it must keep every current setting (see the other SET features)."
+native_note = "Owner-requested usability improvement over the current single long settings page; it must keep every current setting (see the other SET features). Design target: the mockup /tmp/ox-work/settings-mock/index.html (open it with ?page=search, appearance or default, and &theme=dark) and its renders /tmp/ox-shots/progress/settings-mock-*.png: category list with coloured icons, a status summary card per category where useful, flat grouped rows, and the Search & indexing page as a list of indexed folders with status chips (Ready, Indexing with progress, Sign-in needed), per-folder refresh and remove, suggested folders as add-chips, then Options. Shares use the green network bar."
 
 [[feature]]
 id = "LOOK-001"
