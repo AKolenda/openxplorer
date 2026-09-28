@@ -213,10 +213,18 @@ impl Application {
 
     /// `--new-window` asks the running instance (or this one, when it is
     /// the first) for another window; the launch then goes on as usual.
+    /// When the application cannot register, the command line says why.
     fn handle_new_window_option(&self, options: &glib::VariantDict) {
-        if options.contains(NEW_WINDOW_OPTION) && self.register(None::<&gio::Cancellable>).is_ok() {
-            self.activate_action(NEW_WINDOW_ACTION, None);
+        if !options.contains(NEW_WINDOW_OPTION) {
+            return;
         }
+        // Registering finds the running instance, which then runs the
+        // action; unregistered, activating it would do nothing.
+        if let Err(error) = self.register(None::<&gio::Cancellable>) {
+            eprintln!("OpenXplorer: could not open a new window: {error}");
+            return;
+        }
+        self.activate_action(NEW_WINDOW_ACTION, None);
     }
 
     /// Opens the window `request` describes, saves it once its first
