@@ -34,6 +34,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(5);
 pub(crate) const STANDARD_NAMES: [&str; 4] = ["Documents", "Notes 2.txt", "Notes 10.txt", "Résumé.txt"];
 
 /// The application and skin of the test process.
+#[derive(Debug)]
 struct TestProcess {
     app: gtk::Application,
     skin: Rc<Skin>,
@@ -122,6 +123,7 @@ pub(crate) fn descendants<T: IsA<gtk::Widget>>(widget: &impl IsA<gtk::Widget>) -
 }
 
 /// A folder tree in a temporary directory, deleted when dropped.
+#[derive(Debug)]
 pub(crate) struct Fixture {
     /// Owns the temporary directory, which is deleted with the fixture.
     _directory: TempDir,
@@ -188,6 +190,7 @@ impl Fixture {
 }
 
 /// A window of the test application, closed when dropped.
+#[derive(Debug)]
 pub(crate) struct TestWindow {
     /// The window under test.
     pub(crate) window: BrowserWindow,
@@ -289,6 +292,7 @@ impl Drop for TestWindow {
 
 /// Keeps the shared skin's theme choice for the length of a test that
 /// changes it.
+#[derive(Debug)]
 pub(crate) struct ThemeGuard(ThemePreference);
 
 impl ThemeGuard {

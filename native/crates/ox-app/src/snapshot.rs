@@ -228,6 +228,7 @@ struct SaveTiming {
 }
 
 impl SaveTiming {
+    /// Starts the patience now, before the window's first frame.
     fn starting_now() -> Self {
         Self {
             started: Instant::now(),
