@@ -146,6 +146,20 @@ fn folder_has_trash(folder_uri: &str, cancel: &Cancellation) -> Result<bool, Ops
     Ok(can_trash.unwrap_or(true))
 }
 
+/// The confirmation of Shift+Delete, which deletes `items` permanently
+/// even where a Trash exists (OPS-016). It names the item, or counts
+/// several, as the Delete confirmation does.
+pub fn permanent_delete_confirmation(items: &[DeleteItem]) -> DeleteConfirmation {
+    let what = selection_text(items);
+    DeleteConfirmation {
+        title: "Delete permanently?",
+        body: format!(
+            "{what}\n\nThe items are deleted permanently, without the Trash, and cannot be recovered."
+        ),
+        confirm_label: "Delete permanently",
+    }
+}
+
 /// One item's name, or `N selected items`.
 fn selection_text(items: &[DeleteItem]) -> String {
     match items {
@@ -255,6 +269,24 @@ mod tests {
 
         assert_eq!(selection_text(&one), "report.pdf");
         assert_eq!(selection_text(&two), "2 selected items");
+    }
+
+    /// parity: OPS-016
+    #[test]
+    fn shift_delete_asks_to_delete_the_named_items_permanently() {
+        let one = [DeleteItem {
+            uri: "file:///tmp/report.pdf".into(),
+            name: "report.pdf".into(),
+        }];
+
+        let confirmation = permanent_delete_confirmation(&one);
+
+        assert_eq!(confirmation.title, "Delete permanently?");
+        assert_eq!(
+            confirmation.body,
+            "report.pdf\n\nThe items are deleted permanently, without the Trash, and cannot be recovered."
+        );
+        assert_eq!(confirmation.confirm_label, "Delete permanently");
     }
 
     #[test]

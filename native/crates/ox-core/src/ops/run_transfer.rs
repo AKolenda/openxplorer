@@ -78,6 +78,18 @@ fn run_transfer_blocking(
     context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<TransferOutcome, OpsError> {
+    let mut engine = gio_transfer_engine(&context.protection, progress);
+    run_on_engine(&mut engine, request, context)
+}
+
+/// Checks `request` and runs it on `engine`, which a caller running
+/// several requests as one operation reuses, so their progress reaches
+/// one sink.
+pub(super) fn run_on_engine(
+    engine: &mut TransferEngine,
+    request: &TransferRequest,
+    context: &OperationContext,
+) -> Result<TransferOutcome, OpsError> {
     // OPS-035: the Python bridge refuses the whole request, before any
     // item changes, when one of them is a share or device root.
     let items = request
@@ -93,7 +105,6 @@ fn run_transfer_blocking(
     }
     let operation = Operation::from_request(request.mode, destination.as_deref(), request.policy)?;
     let tracking = RunTracking::before_run(operation, &context.cancel);
-    let mut engine = gio_transfer_engine(&context.protection, progress);
     let result = engine.run(operation, &items, &context.cancel)?;
     Ok(tracking.finish(result))
 }
@@ -263,7 +274,7 @@ fn trash_undo(trashed: &[String], since: u64) -> Option<UndoRecord> {
 
 /// The current time in whole seconds since the Unix epoch, the precision
 /// of a Recycle Bin item's deletion date.
-fn unix_seconds_now() -> u64 {
+pub(super) fn unix_seconds_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs())

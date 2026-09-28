@@ -54,6 +54,59 @@ pub async fn create_item(
     on_worker(move || create_item_blocking(&folder_uri, &name, kind, &context)).await
 }
 
+/// The most numbered names New folder tries before it gives up.
+const MAX_NUMBERED_NAMES: u32 = 10_000;
+
+/// Creates an empty folder in the folder at `folder_uri` under the first
+/// free name of `base_name`, `base_name (2)`, `base_name (3)`, ..., as
+/// Windows names new folders. The window then starts renaming it, so New
+/// folder needs no dialog (OPS-001).
+///
+/// # Errors
+///
+/// As [`create_item`], except that a taken name tries the next number;
+/// after [`MAX_NUMBERED_NAMES`] taken names the refusal says to rename
+/// some of them.
+pub async fn create_numbered_folder(
+    folder_uri: &str,
+    base_name: &str,
+    context: &OperationContext,
+) -> Result<CreatedItem, OpsError> {
+    let folder_uri = folder_uri.to_owned();
+    let base_name = base_name.to_owned();
+    let context = context.clone();
+    on_worker(move || create_numbered_folder_blocking(&folder_uri, &base_name, &context)).await
+}
+
+/// [`create_numbered_folder`] on the calling thread. Each attempt is an
+/// exclusive creation, so a folder that appears meanwhile is never taken
+/// over; it only moves the new folder to the next number.
+fn create_numbered_folder_blocking(
+    folder_uri: &str,
+    base_name: &str,
+    context: &OperationContext,
+) -> Result<CreatedItem, OpsError> {
+    for number in 1..=MAX_NUMBERED_NAMES {
+        let name = numbered_name(base_name, number);
+        match create_item_blocking(folder_uri, &name, ItemKind::Folder, context) {
+            Err(OpsError::Exists(_)) => {}
+            outcome => return outcome,
+        }
+    }
+    Err(OpsError::failed(format!(
+        "Too many folders are called “{base_name}”. Rename some of them, then try again."
+    )))
+}
+
+/// `base_name` for the first attempt, then `base_name (number)`.
+fn numbered_name(base_name: &str, number: u32) -> String {
+    if number == 1 {
+        base_name.to_owned()
+    } else {
+        format!("{base_name} ({number})")
+    }
+}
+
 /// [`create_item`] on the calling thread.
 fn create_item_blocking(
     folder_uri: &str,
@@ -101,5 +154,41 @@ pub(crate) fn name_taken_or(error: OpsError, name: &str) -> OpsError {
             "An item named “{name}” already exists. Nothing was overwritten."
         )),
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder_uri(path: &std::path::Path) -> String {
+        gio::File::for_path(path).uri().to_string()
+    }
+
+    #[test]
+    fn numbered_names_follow_windows() {
+        assert_eq!(numbered_name("New folder", 1), "New folder");
+        assert_eq!(numbered_name("New folder", 2), "New folder (2)");
+    }
+
+    /// parity: OPS-001, OPS-008
+    #[test]
+    fn a_new_folder_takes_the_next_free_number_and_leaves_the_others_alone() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        std::fs::create_dir(temp.path().join("New folder")).expect("a taken name");
+        std::fs::write(temp.path().join("New folder (2)"), b"a file").expect("a taken name");
+        let context = OperationContext::default();
+
+        let created = glib::MainContext::new().block_on(create_numbered_folder(
+            &folder_uri(temp.path()),
+            "New folder",
+            &context,
+        ));
+
+        let created = created.expect("a free name");
+        assert_eq!(created.uri, folder_uri(&temp.path().join("New folder (3)")));
+        assert!(temp.path().join("New folder (3)").is_dir());
+        let taken = std::fs::read(temp.path().join("New folder (2)")).expect("the file stays");
+        assert_eq!(taken, b"a file");
     }
 }

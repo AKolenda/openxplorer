@@ -6,6 +6,7 @@
 //! "Operation result" dialog listing each; a request refused before it
 //! started opens "Operation stopped" with the refusal.
 
+use super::journal::JournalDirection;
 use super::undo::UndoRecord;
 use crate::transfer::{TransferMode, TransferResult};
 
@@ -29,23 +30,54 @@ pub enum OperationSummary {
 /// The summary of a finished `mode` run, word for word as `app.js`
 /// writes it.
 pub fn summarize(mode: TransferMode, result: &TransferResult) -> OperationSummary {
-    if is_complete_success(result) {
-        let verb = match mode {
-            TransferMode::Copy => "copied",
-            TransferMode::Move => "moved",
-            TransferMode::Delete => "permanently deleted",
-            TransferMode::Trash => "sent to Trash",
-        };
-        return OperationSummary::Toast(format!("{} item(s) {verb}.", result.done.len()));
-    }
-    OperationSummary::Report(report_lines(result))
+    let verb = match mode {
+        TransferMode::Copy => "copied",
+        TransferMode::Move => "moved",
+        TransferMode::Delete => "permanently deleted",
+        TransferMode::Trash => "sent to Trash",
+    };
+    summarize_items(verb, result)
+}
+
+/// The summary of Duplicate, which the Python app did not have:
+/// `2 item(s) duplicated.` in the wording of the other toasts.
+pub fn summarize_duplicate(result: &TransferResult) -> OperationSummary {
+    summarize_items("duplicated", result)
+}
+
+/// The summary of Restore from the Recycle Bin: `2 item(s) restored.`
+pub fn summarize_restore(result: &TransferResult) -> OperationSummary {
+    summarize_items("restored", result)
 }
 
 /// The summary of an Undo: `Rename undone.` when every step succeeded,
 /// otherwise the [`RESULT_TITLE`] report of what happened.
 pub fn summarize_undo(record: &UndoRecord, result: &TransferResult) -> OperationSummary {
+    summarize_journal_step(JournalDirection::Undo, record.title(), result)
+}
+
+/// The summary of an Undo or Redo of the operation titled `title`:
+/// `Rename undone.` or `Rename redone.` when every step succeeded,
+/// otherwise the [`RESULT_TITLE`] report of what happened.
+pub fn summarize_journal_step(
+    direction: JournalDirection,
+    title: &str,
+    result: &TransferResult,
+) -> OperationSummary {
+    if !is_complete_success(result) {
+        return OperationSummary::Report(report_lines(result));
+    }
+    let verb = match direction {
+        JournalDirection::Undo => "undone",
+        JournalDirection::Redo => "redone",
+    };
+    OperationSummary::Toast(format!("{title} {verb}."))
+}
+
+/// `N item(s) <verb>.` when every item succeeded, otherwise the report.
+fn summarize_items(verb: &str, result: &TransferResult) -> OperationSummary {
     if is_complete_success(result) {
-        return OperationSummary::Toast(format!("{} undone.", record.title()));
+        return OperationSummary::Toast(format!("{} item(s) {verb}.", result.done.len()));
     }
     OperationSummary::Report(report_lines(result))
 }
@@ -138,5 +170,22 @@ mod tests {
 
         assert_eq!(done, OperationSummary::Toast("Rename undone.".into()));
         assert_eq!(failed, OperationSummary::Report("0 completed.\nb: gone".into()));
+    }
+
+    /// parity: OPS-031, OPS-034
+    #[test]
+    fn duplicate_restore_and_redo_have_toasts_in_the_same_wording() {
+        let two_done = result(2, 0, &[], false);
+
+        let duplicated = summarize_duplicate(&two_done);
+        let restored = summarize_restore(&two_done);
+        let redone = summarize_journal_step(JournalDirection::Redo, "New folder", &two_done);
+
+        assert_eq!(
+            duplicated,
+            OperationSummary::Toast("2 item(s) duplicated.".into())
+        );
+        assert_eq!(restored, OperationSummary::Toast("2 item(s) restored.".into()));
+        assert_eq!(redone, OperationSummary::Toast("New folder redone.".into()));
     }
 }
