@@ -30,8 +30,8 @@ pub async fn trash_support(folder_uri: &str, cancel: &Cancellation) -> Result<bo
     let folder = GioNode::new(&normalise(folder_uri)?);
     let cancel = cancel.clone();
     on_worker(move || {
-        let answer = unless_cancelled(&cancel, || folder.can_trash(Some(&cancel)))?;
-        Ok(answer?)
+        let can_trash = unless_cancelled(&cancel, || folder.can_trash(Some(&cancel)))?;
+        Ok(can_trash?)
     })
     .await
 }
@@ -140,10 +140,10 @@ fn trash_scope(uri: &str) -> String {
 /// [`OpsError::Cancelled`]: a query the user cancelled answers "no Trash",
 /// which must never plan a permanent delete.
 fn folder_has_trash(folder_uri: &str, cancel: &Cancellation) -> Result<bool, OpsError> {
-    let answer = unless_cancelled(cancel, || GioNode::new(folder_uri).can_trash(Some(cancel)))?;
+    let can_trash = unless_cancelled(cancel, || GioNode::new(folder_uri).can_trash(Some(cancel)))?;
     // OPS-017: the only failure `can_trash` reports is a share that is not
     // mounted, and it counts as having a Trash.
-    Ok(answer.unwrap_or(true))
+    Ok(can_trash.unwrap_or(true))
 }
 
 /// One item's name, or `N selected items`.

@@ -35,7 +35,7 @@
 //!
 //! | Module | Responsibility |
 //! |---|---|
-//! | `context` | The cancellation and write protection of an operation, and its worker |
+//! | `context` | The cancellation and write protection of an operation, its worker, and GIO queries that honour the cancellation |
 //! | `error` | [`OpsError`] and the bridge's error codes |
 //! | `create` | New folder and New file |
 //! | `templates` | The built-in and user templates New offers |
