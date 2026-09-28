@@ -26,7 +26,7 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
   color: @ox_tab_text_inactive;
   transition: background-color 83ms linear, color 83ms linear;
 }
-.tab.active { background-color: @ox_chrome; color: @ox_text; box-shadow: 0 -1px 2px alpha(black, .012); }
+.tab.active { background-color: @ox_chrome; color: @ox_text; box-shadow: 0 -1px 2px @ox_tab_shadow; }
 .tab:not(.active):hover { background-color: @ox_tab_hover; }
 .tab:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }
 /* The 16px icon (I03) sits where the web's 17px one did, and the title
@@ -68,5 +68,5 @@ window.ox:backdrop .ox-titlebar button.caption { color: @ox_text_tertiary; }
 .ox-titlebar button.caption:active,
 .ox-titlebar button.newtab:active,
 .ox-titlebar menubutton.windows-button > button:active { background-color: @ox_title_pressed; }
-.ox-titlebar button.caption.close:hover { background-color: @ox_critical_fill; color: white; }
-.ox-titlebar button.caption.close:active { background-color: alpha(@ox_critical_fill, .9); color: alpha(white, .7); }
+.ox-titlebar button.caption.close:hover { background-color: @ox_critical_fill; color: @ox_on_critical; }
+.ox-titlebar button.caption.close:active { background-color: alpha(@ox_critical_fill, .9); color: alpha(@ox_on_critical, .7); }

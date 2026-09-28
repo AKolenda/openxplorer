@@ -324,7 +324,7 @@ impl BrowserWindow {
             plain_action(WindowAction::TextSize(step), move |window| {
                 let size = step.apply(window.skin().text_size());
                 window.skin().set_text_size(size);
-                window.save_preference(Preference::TextSize(size));
+                window.save_preference(Preference::TextSize(size.percent()));
             })
         });
         self.add_action_entries(steps);

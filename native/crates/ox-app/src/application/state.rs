@@ -12,14 +12,15 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::location::file_uri;
+use ox_core::location::{file_uri, VirtualPlace};
 use ox_core::settings::Settings;
 
 use crate::shared::AppContext;
 use crate::snapshot::SnapshotRequest;
+use crate::text_size::TextSize;
 use crate::theme::contrast::ContrastSetting;
-use crate::theme::system::SystemScheme;
-use crate::theme::{Skin, ThemePreference};
+use crate::theme::system::{self, SystemScheme};
+use crate::theme::{Appearance, Skin, ThemePreference};
 use crate::window::{is_local_or_smb_location, BrowserWindow};
 
 /// What lives as long as the application: the shared state and the
@@ -38,16 +39,21 @@ impl AppState {
     /// desktop's colour scheme. `None` without a display.
     pub(super) fn new(app: &gtk::Application, settings: Settings) -> Option<Self> {
         let display = gtk::gdk::Display::default()?;
-        let skin = Rc::new(Skin::install(&display));
-        Some(Self::with_skin(app, skin, settings))
+        // Installing the skin forces GTK's dark preference off, so it is
+        // read first.
+        let gtk_preference = system::gtk_preference(&display);
+        let skin = Skin::install(&display);
+        Some(Self::with_skin(app, skin, gtk_preference, settings))
     }
 
-    /// The application state around an installed `skin`.
-    fn with_skin(app: &gtk::Application, skin: Rc<Skin>, settings: Settings) -> Self {
+    /// The application state around an installed `skin`. `gtk_preference`
+    /// is GTK's dark preference from before the skin was installed, which
+    /// the desktop's appearance falls back to.
+    fn with_skin(app: &gtk::Application, skin: Skin, gtk_preference: Appearance, settings: Settings) -> Self {
         let preferences = &settings.data().preferences;
         skin.set_preference(ThemePreference::parse(&preferences.theme));
-        skin.set_text_size(preferences.text_size);
-        let system_scheme = follow_system_scheme(&skin);
+        skin.set_text_size(TextSize::from_percent(preferences.text_size));
+        let system_scheme = follow_system_scheme(&skin, gtk_preference);
         let contrast_setting = follow_contrast(&skin);
         crate::window::install_accelerators(app);
         Self {
@@ -72,8 +78,10 @@ impl AppState {
         let start = start.unwrap_or(home.as_str());
         if let Err(error) = window.add_tab(start) {
             window.show_message(error.message());
-            // Fall back to the home folder, so the window never opens empty.
-            if let Err(error) = window.add_tab(&home) {
+            // A window never opens empty. The home page name resolves
+            // without the location check, which could refuse the home
+            // folder's own path (BrowserWindow::resolve_address).
+            if let Err(error) = window.add_tab(VirtualPlace::Home.uri()) {
                 window.show_message(error.message());
             }
         }
@@ -141,26 +149,25 @@ pub(super) fn active_window(app: &gtk::Application) -> Option<BrowserWindow> {
 }
 
 /// Applies the desktop's light or dark scheme to `skin` now and on every
-/// change.
-fn follow_system_scheme(skin: &Rc<Skin>) -> Rc<SystemScheme> {
-    let follower = Rc::downgrade(skin);
-    let scheme = SystemScheme::new(move |dark| {
-        if let Some(skin) = follower.upgrade() {
-            skin.set_system_dark(dark);
-        }
-    });
-    skin.set_system_dark(scheme.is_dark());
+/// change; `gtk_preference` decides when the desktop's keys do not.
+fn follow_system_scheme(skin: &Skin, gtk_preference: Appearance) -> Rc<SystemScheme> {
+    let on_change = glib::clone!(
+        #[weak]
+        skin,
+        move |appearance| skin.set_desktop_appearance(appearance)
+    );
+    let scheme = SystemScheme::new(gtk_preference, on_change);
+    skin.set_desktop_appearance(scheme.appearance());
     scheme
 }
 
 /// Applies the desktop's contrast to `skin` now and on every change.
-fn follow_contrast(skin: &Rc<Skin>) -> ContrastSetting {
-    let follower = Rc::downgrade(skin);
-    let setting = ContrastSetting::watch(move |contrast| {
-        if let Some(skin) = follower.upgrade() {
-            skin.set_contrast(contrast);
-        }
-    });
+fn follow_contrast(skin: &Skin) -> ContrastSetting {
+    let setting = ContrastSetting::watch(glib::clone!(
+        #[weak]
+        skin,
+        move |contrast| skin.set_contrast(contrast)
+    ));
     skin.set_contrast(setting.contrast());
     setting
 }
@@ -173,15 +180,40 @@ mod tests {
 
     use super::*;
     use crate::test_support::harness::{application, settle, skin, wait_until, Fixture};
-    use crate::theme::contrast::Contrast;
+    use crate::theme::contrast::{self, Contrast};
 
-    /// Application state on the shared test application, with its own
-    /// settings.
-    fn app_state() -> (AppState, TempDir) {
-        let settings = tempfile::tempdir().expect("the test home has room for settings");
-        let state = AppState::with_skin(&application(), skin(), Settings::open(settings.path()));
-        state.context.record_launches();
-        (state, settings)
+    /// Application state on the shared test application with its own
+    /// settings. Dropping it closes every window the test opened, even
+    /// after a failed assertion, so the next test starts with none.
+    struct TestApp {
+        state: AppState,
+        /// Owns the settings folder, deleted after the windows close.
+        _settings: TempDir,
+    }
+
+    impl TestApp {
+        fn new() -> Self {
+            let settings = tempfile::tempdir().expect("the test home has room for settings");
+            // The private test display's GTK settings do not prefer dark.
+            let gtk_preference = Appearance::Light;
+            let state = AppState::with_skin(
+                &application(),
+                skin(),
+                gtk_preference,
+                Settings::open(settings.path()),
+            );
+            state.context.record_launches();
+            Self {
+                state,
+                _settings: settings,
+            }
+        }
+    }
+
+    impl Drop for TestApp {
+        fn drop(&mut self) {
+            close_all_windows();
+        }
     }
 
     fn browser_windows() -> Vec<BrowserWindow> {
@@ -199,7 +231,7 @@ mod tests {
         settle();
     }
 
-    fn location(path: &Path) -> gio::File {
+    fn gio_file(path: &Path) -> gio::File {
         gio::File::for_path(path)
     }
 
@@ -207,52 +239,49 @@ mod tests {
     /// accessibility setting; without its schema the contrast stays normal.
     #[gtk::test]
     fn the_skin_follows_the_desktop_high_contrast_setting() {
-        let (_state, _settings) = app_state();
-        let schema = gio::SettingsSchemaSource::default()
-            .and_then(|source| source.lookup("org.gnome.desktop.a11y.interface", true));
-        let Some(schema) = schema else {
+        let _app = TestApp::new();
+        let Some(accessibility) = contrast::accessibility_settings() else {
             assert_eq!(skin().contrast(), Contrast::Normal);
             return;
         };
-        let accessibility = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
         accessibility
-            .set_boolean("high-contrast", true)
+            .set_boolean(contrast::HIGH_CONTRAST_KEY, true)
             .expect("the test settings backend is writable");
         wait_until("the high-contrast rules", || skin().contrast() == Contrast::High);
         accessibility
-            .set_boolean("high-contrast", false)
+            .set_boolean(contrast::HIGH_CONTRAST_KEY, false)
             .expect("the test settings backend is writable");
         wait_until("the normal rules", || skin().contrast() == Contrast::Normal);
     }
 
     #[gtk::test]
     fn launching_again_presents_the_open_window_instead_of_adding_one() {
-        let (state, _settings) = app_state();
-        state.activate(&application());
-        state.activate(&application());
+        let app = TestApp::new();
+        app.state.activate(&application());
+        app.state.activate(&application());
         assert_eq!(browser_windows().len(), 1);
-        close_all_windows();
     }
 
+    /// parity: TAB-042
     #[gtk::test]
     fn a_new_window_starts_in_the_home_folder() {
-        let (state, _settings) = app_state();
-        state.activate(&application());
+        let app = TestApp::new();
+        app.state.activate(&application());
         let [window] = &browser_windows()[..] else {
             panic!("one window is open");
         };
         let home = file_uri(&glib::home_dir());
         assert_eq!(window.current_uri(), Some(home));
-        close_all_windows();
     }
 
     #[gtk::test]
     fn opened_folders_go_to_the_active_window_first_tab_first() {
-        let (state, _settings) = app_state();
+        // Declared first so it outlives the app, whose windows show it.
         let fixture = Fixture::standard();
-        state.activate(&application());
-        let files = [location(&fixture.path("Documents")), location(fixture.root())];
-        state.open(&application(), &files);
+        let app = TestApp::new();
+        app.state.activate(&application());
+        let files = [gio_file(&fixture.path("Documents")), gio_file(fixture.root())];
+        app.state.open(&application(), &files);
         let [window] = &browser_windows()[..] else {
             panic!("the open window takes the locations");
         };
@@ -264,22 +293,22 @@ mod tests {
         );
         WidgetExt::activate_action(window, "win.previous-tab", None).expect("tab actions exist");
         assert_eq!(window.current_uri(), Some(fixture.uri_of("Documents")));
-        close_all_windows();
     }
 
     /// parity: TAB-042
     #[gtk::test]
     fn ctrl_n_opens_another_window_at_the_current_folder() {
-        let (state, _settings) = app_state();
+        // Declared first so it outlives the app, whose windows show it.
         let fixture = Fixture::standard();
-        state.activate(&application());
-        state.open(&application(), &[location(fixture.root())]);
+        let app = TestApp::new();
+        app.state.activate(&application());
+        app.state.open(&application(), &[gio_file(fixture.root())]);
         let first = browser_windows()[0].clone();
         wait_until("the folder to open", || {
             first.current_uri() == Some(fixture.uri())
         });
         first.present();
-        state.new_window(&application());
+        app.state.new_window(&application());
         let windows = browser_windows();
         assert_eq!(windows.len(), 2);
         let second = windows
@@ -287,15 +316,14 @@ mod tests {
             .find(|window| **window != first)
             .expect("a second window");
         assert_eq!(second.current_uri(), Some(fixture.uri()));
-        close_all_windows();
     }
 
     /// parity: TAB-050
     #[gtk::test]
     fn closing_one_window_releases_it_while_another_stays_open() {
-        let (state, _settings) = app_state();
-        let first = state.open_window(&application(), None).downgrade();
-        let second = state.open_window(&application(), None).downgrade();
+        let app = TestApp::new();
+        let first = app.state.open_window(&application(), None).downgrade();
+        let second = app.state.open_window(&application(), None).downgrade();
         first.upgrade().expect("the first window is open").close();
         settle();
         assert!(first.upgrade().is_none(), "a closed window is released");

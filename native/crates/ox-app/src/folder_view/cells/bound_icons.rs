@@ -15,7 +15,7 @@ use gtk::glib;
 use gtk::prelude::*;
 
 use crate::folder_view::item::FileItem;
-use crate::icons;
+use crate::icons::ArtStyle;
 use crate::theme::Appearance;
 
 /// One bound icon: the image, the item it shows and its logical size.
@@ -96,6 +96,9 @@ impl BoundIcons {
 /// Draws `item`'s art into `image` at `size` logical pixels, sharp at the
 /// image's screen scale.
 fn draw_art(image: &gtk::Image, item: &FileItem, size: i32, appearance: Appearance) {
-    let scale = image.scale_factor().max(1);
-    icons::set_art(image, item.art(), size, appearance, scale);
+    let style = ArtStyle {
+        appearance,
+        scale: image.scale_factor().max(1),
+    };
+    style.draw_into(image, item.art(), size);
 }

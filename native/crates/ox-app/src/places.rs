@@ -38,7 +38,8 @@ pub(crate) struct PlaceSources<'a> {
     /// Rows from the volume monitor.
     pub volumes: &'a [VolumeRow],
     /// Kernel CIFS/SMB3 mounts. ox-core does not read the mount table yet
-    /// (`read_mounts` in `desktop/mount_support.py`), so the window passes
+    /// (`read_mounts` in `desktop/mount_support.py`; the "Network and
+    /// devices" services in `native/ROADMAP.md`), so the window passes
     /// none; the composition already handles them.
     pub stable_mounts: &'a [StableMount],
     /// SMB servers and shares browsed this session.
@@ -52,6 +53,16 @@ pub(crate) struct SavedShare {
     pub bookmark: Bookmark,
     /// A current mount equals or contains the share.
     pub connected: bool,
+}
+
+impl SavedShare {
+    /// `share` with its connection state among the mounted `volumes`.
+    fn among(share: &Bookmark, volumes: &[VolumeRow]) -> Self {
+        Self {
+            bookmark: share.clone(),
+            connected: is_share_connected(&share.uri, volumes),
+        }
+    }
 }
 
 /// The composed sections.
@@ -86,10 +97,10 @@ pub(crate) fn compose(sources: PlaceSources<'_>) -> Places {
         .settings
         .shares
         .iter()
-        .map(|share| saved_share(share, sources.volumes))
+        .map(|share| SavedShare::among(share, sources.volumes))
         .collect();
     let network = merge_network_locations(
-        &saved_with_state(&saved_shares),
+        &with_connection_state(&saved_shares),
         &network_mounts(sources.volumes),
         sources.stable_mounts,
         sources.visited_network,
@@ -102,14 +113,9 @@ pub(crate) fn compose(sources: PlaceSources<'_>) -> Places {
     }
 }
 
-fn saved_share(share: &Bookmark, volumes: &[VolumeRow]) -> SavedShare {
-    SavedShare {
-        bookmark: share.clone(),
-        connected: is_share_connected(&share.uri, volumes),
-    }
-}
-
-fn saved_with_state(shares: &[SavedShare]) -> Vec<(Bookmark, bool)> {
+/// The saved shares as `(bookmark, connected)` pairs, the form
+/// `merge_network_locations` reads.
+fn with_connection_state(shares: &[SavedShare]) -> Vec<(Bookmark, bool)> {
     shares
         .iter()
         .map(|share| (share.bookmark.clone(), share.connected))
@@ -121,20 +127,24 @@ fn network_mounts(volumes: &[VolumeRow]) -> Vec<NetworkMount> {
     volumes
         .iter()
         .filter(|row| row.is_network())
-        .filter_map(|row| {
-            let uri = row.uri()?.to_owned();
-            Some(NetworkMount {
-                uri,
-                label: row.label.clone(),
-                mounted: true,
-            })
-        })
+        .filter_map(network_mount)
         .collect()
+}
+
+/// The network mount of a mounted row, or `None` for a row that still has
+/// to be mounted.
+fn network_mount(row: &VolumeRow) -> Option<NetworkMount> {
+    let uri = row.uri()?;
+    Some(NetworkMount {
+        uri: uri.to_owned(),
+        label: row.label.clone(),
+        mounted: true,
+    })
 }
 
 /// True when a mounted row's root is the share or contains it, compared
 /// with GIO's own `equal` and `has_prefix`, as winspace.py does.
-pub(crate) fn is_share_connected(share_uri: &str, volumes: &[VolumeRow]) -> bool {
+fn is_share_connected(share_uri: &str, volumes: &[VolumeRow]) -> bool {
     let share = gio::File::for_uri(share_uri);
     volumes
         .iter()
@@ -188,6 +198,13 @@ mod tests {
         }
     }
 
+    fn settings_with_share(uri: &str, label: &str) -> SettingsData {
+        SettingsData {
+            shares: vec![bookmark(uri, label)],
+            ..SettingsData::default()
+        }
+    }
+
     fn compose_with(settings: &SettingsData, volumes: &[VolumeRow], stable: &[StableMount]) -> Places {
         compose(PlaceSources {
             settings,
@@ -198,6 +215,7 @@ mod tests {
         })
     }
 
+    /// parity: NET-018
     #[test]
     fn an_smb_mount_is_listed_under_network_and_not_among_the_drives() {
         let volumes = [
@@ -213,12 +231,10 @@ mod tests {
         assert!(!places.network[0].saved);
     }
 
+    /// parity: NET-018
     #[test]
     fn a_saved_share_that_is_mounted_appears_once_and_connected() {
-        let settings = SettingsData {
-            shares: vec![bookmark("smb://nas/media", "Media")],
-            ..SettingsData::default()
-        };
+        let settings = settings_with_share("smb://nas/media", "Media");
         let places = compose_with(&settings, &[mounted("media on nas", "smb://nas/media")], &[]);
         assert_eq!(places.network.len(), 1);
         let row = &places.network[0];
@@ -230,16 +246,22 @@ mod tests {
     }
 
     #[test]
+    fn a_saved_share_inside_a_mounted_share_is_connected() {
+        let settings = settings_with_share("smb://nas/media/2024", "2024");
+        let places = compose_with(&settings, &[mounted("media on nas", "smb://nas/media")], &[]);
+        assert!(places.saved_shares[0].connected);
+    }
+
+    /// parity: NET-018
+    #[test]
     fn an_unmounted_saved_share_is_not_connected() {
-        let settings = SettingsData {
-            shares: vec![bookmark("smb://nas/media", "Media")],
-            ..SettingsData::default()
-        };
+        let settings = settings_with_share("smb://nas/media", "Media");
         let places = compose_with(&settings, &[], &[]);
         assert!(!places.network[0].connected);
         assert!(places.network[0].saved);
     }
 
+    /// parity: NET-006
     #[test]
     fn a_pin_inside_a_cifs_mount_is_marked_shared() {
         let settings = SettingsData {
@@ -256,12 +278,10 @@ mod tests {
         assert_eq!(places.network[0].kind, NetworkKind::Mount);
     }
 
+    /// parity: NET-018
     #[test]
     fn visited_servers_are_listed_after_saved_shares() {
-        let settings = SettingsData {
-            shares: vec![bookmark("smb://nas/media", "Media")],
-            ..SettingsData::default()
-        };
+        let settings = settings_with_share("smb://nas/media", "Media");
         let visited = [visited_root("smb://studio/").expect("SMB server")];
         let places = compose(PlaceSources {
             settings: &settings,
@@ -284,6 +304,7 @@ mod tests {
         );
     }
 
+    /// parity: NET-018
     #[test]
     fn visited_roots_are_the_server_or_the_share() {
         let root = |uri: &str| visited_root(uri).map(|bookmark| bookmark.uri);

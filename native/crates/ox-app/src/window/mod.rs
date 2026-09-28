@@ -81,7 +81,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::shared::AppContext;
-use crate::theme::{ListenerId, Skin};
+use crate::theme::Skin;
 use crate::typeahead;
 
 use address_bar::AddressBar;
@@ -100,8 +100,9 @@ pub(crate) use location_kind::is_local_or_smb_location;
 /// Handlers this window registered on objects that outlive it.
 #[derive(Debug, Default)]
 struct ExternalHandlers {
-    /// On the skin shared by every window.
-    skin: Option<ListenerId>,
+    /// On the skin shared by every window: its appearance and text size
+    /// signals.
+    skin: Vec<glib::SignalHandlerId>,
     /// On the application's `places-changed` signal.
     places: Option<glib::SignalHandlerId>,
     /// On the volume monitor's mount and volume signals.
@@ -426,8 +427,8 @@ impl BrowserWindow {
     /// the skin, places and volume handlers and the type-to-select timer.
     fn disconnect_external_handlers(&self) {
         let handlers = self.imp().handlers.take();
-        if let Some(listener) = handlers.skin {
-            self.skin().disconnect_changed(listener);
+        for handler in handlers.skin {
+            self.skin().disconnect(handler);
         }
         if let Some(handler) = handlers.places {
             self.context().disconnect(handler);

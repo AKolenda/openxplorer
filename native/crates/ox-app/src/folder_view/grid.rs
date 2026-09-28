@@ -15,7 +15,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::{self, BoundIcons, CellLayout, CellOwners};
-use crate::text_size;
+use crate::text_size::{self, TextSize};
 
 /// A large tile's width beyond its icon: the 135-pixel `gridWidth` less
 /// the 56-pixel icon of Large icons. Larger icons widen the tile by as
@@ -124,11 +124,11 @@ impl CellSize {
     }
 }
 
-/// The cell of tiles of `size` at `text_size` percent: `gridWidth` ×
+/// The cell of tiles of `size` at `text_size`: `gridWidth` ×
 /// `gridRow` from `metrics()` in text-size.js for large icons (135 × 130
 /// at 100%), widened and heightened with the icon for the other sizes,
 /// which the Python app does not have.
-pub(crate) fn cell_size(size: IconSize, text_size: u32) -> CellSize {
+pub(crate) fn cell_size(size: IconSize, text_size: TextSize) -> CellSize {
     let metrics = text_size::metrics(text_size);
     let icon_growth = size.pixels() - IconSize::Large.pixels();
     let width_for_icon = size.pixels() + TILE_WIDTH_BEYOND_ICON;
@@ -170,7 +170,7 @@ mod imp {
     use gtk::subclass::prelude::*;
 
     use super::{IconSize, TileRegistries};
-    use crate::text_size;
+    use crate::text_size::TextSize;
 
     /// Private state of [`super::IconView`].
     #[derive(Debug)]
@@ -185,8 +185,8 @@ mod imp {
         pub(super) registries: OnceCell<TileRegistries>,
         /// The icon size the tiles show.
         pub(super) icon_size: Cell<IconSize>,
-        /// The text size in percent, which sizes the cells too.
-        pub(super) text_size: Cell<u32>,
+        /// The text size, which sizes the cells too.
+        pub(super) text_size: Cell<TextSize>,
     }
 
     impl Default for IconView {
@@ -197,7 +197,7 @@ mod imp {
                 grid: gtk::GridView::default(),
                 registries: OnceCell::new(),
                 icon_size: Cell::new(IconSize::Large),
-                text_size: Cell::new(text_size::DEFAULT),
+                text_size: Cell::new(TextSize::DEFAULT),
             }
         }
     }
@@ -285,9 +285,9 @@ impl IconView {
         self.fit_columns();
     }
 
-    /// Sizes the cells for text of `percent` size.
-    pub(crate) fn set_text_size(&self, percent: u32) {
-        self.imp().text_size.set(percent);
+    /// Sizes the cells for text of `size`.
+    pub(crate) fn set_text_size(&self, size: TextSize) {
+        self.imp().text_size.set(size);
         self.fit_columns();
     }
 
@@ -372,7 +372,7 @@ mod tests {
     /// parity: VIEW-005
     #[test]
     fn large_icon_cells_are_the_web_grid_cells() {
-        let cell = cell_size(IconSize::Large, 100);
+        let cell = cell_size(IconSize::Large, TextSize::from_percent(100));
         assert_eq!(
             cell,
             CellSize {
@@ -380,7 +380,7 @@ mod tests {
                 height: 130
             }
         );
-        let larger_text = cell_size(IconSize::Large, 150);
+        let larger_text = cell_size(IconSize::Large, TextSize::from_percent(150));
         assert_eq!(
             larger_text,
             CellSize {
@@ -388,7 +388,7 @@ mod tests {
                 height: 153
             }
         );
-        assert!(cell_size(IconSize::ExtraLarge, 100).width > cell.width);
+        assert!(cell_size(IconSize::ExtraLarge, TextSize::from_percent(100)).width > cell.width);
     }
 
     /// A pane width and the columns `renderRows` gives it.
@@ -400,7 +400,7 @@ mod tests {
     /// parity: VIEW-005
     #[test]
     fn grid_columns_follow_the_width_as_render_rows_counts_them() {
-        let large_icon_cell = cell_size(IconSize::Large, 100);
+        let large_icon_cell = cell_size(IconSize::Large, TextSize::from_percent(100));
         assert_eq!(large_icon_cell.width, 135, "the web's gridWidth");
         let cases = [
             ColumnCase {

@@ -24,19 +24,28 @@ use crate::theme::{Skin, ThemePreference};
 use crate::window::BrowserWindow;
 
 /// How long a test waits for the window to settle before it fails.
-const PATIENCE: Duration = Duration::from_secs(8);
+const WAIT_LIMIT: Duration = Duration::from_secs(8);
+
+/// How often a waiting test checks its condition again.
+const POLL_INTERVAL: Duration = Duration::from_millis(5);
+
+/// Frames a capture waits for, so the layout has settled.
+const CAPTURE_SETTLE_FRAMES: u32 = 3;
 
 /// The standard fixture's visible items, as the details view sorts them:
 /// folders first, then names in natural order.
 pub(crate) const STANDARD_NAMES: [&str; 4] = ["Documents", "Notes 2.txt", "Notes 10.txt", "Résumé.txt"];
 
 /// The application and skin of the test process.
-struct Shared {
+#[derive(Debug)]
+struct TestProcess {
     app: gtk::Application,
-    skin: Rc<Skin>,
+    skin: Skin,
 }
 
-impl Shared {
+impl TestProcess {
+    /// Registers the test application on the private session bus and
+    /// installs the skin on the private display.
     fn new() -> Self {
         let app = gtk::Application::builder()
             .application_id("io.winspace.Development.Native.Test")
@@ -47,24 +56,24 @@ impl Shared {
         crate::window::install_accelerators(&app);
         let display = gdk::Display::default()
             .expect("window tests run on a private display: use native/tools/check.py");
-        let skin = Rc::new(Skin::install(&display));
+        let skin = Skin::install(&display);
         Self { app, skin }
     }
 }
 
 thread_local! {
     /// Created on first use by GTK's test thread, which runs every window test.
-    static SHARED: Shared = Shared::new();
+    static TEST_PROCESS: TestProcess = TestProcess::new();
 }
 
 /// The test application.
 pub(crate) fn application() -> gtk::Application {
-    SHARED.with(|shared| shared.app.clone())
+    TEST_PROCESS.with(|process| process.app.clone())
 }
 
 /// The skin every test window shares.
-pub(crate) fn skin() -> Rc<Skin> {
-    SHARED.with(|shared| Rc::clone(&shared.skin))
+pub(crate) fn skin() -> Skin {
+    TEST_PROCESS.with(|process| process.skin.clone())
 }
 
 /// Handles everything already queued on the main loop.
@@ -79,16 +88,16 @@ pub(crate) fn settle() {
 ///
 /// # Panics
 ///
-/// When it does not hold within [`PATIENCE`]; the message names `what`.
+/// When it does not hold within [`WAIT_LIMIT`]; the message names `what`.
 pub(crate) fn wait_until(what: &str, condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + PATIENCE;
+    let deadline = Instant::now() + WAIT_LIMIT;
     loop {
         settle();
         if condition() {
             return;
         }
         assert!(Instant::now() < deadline, "timed out waiting for {what}");
-        thread::sleep(Duration::from_millis(5));
+        thread::sleep(POLL_INTERVAL);
     }
 }
 
@@ -98,7 +107,7 @@ pub(crate) fn wait_for(duration: Duration) {
     let deadline = Instant::now() + duration;
     while Instant::now() < deadline {
         settle();
-        thread::sleep(Duration::from_millis(5));
+        thread::sleep(POLL_INTERVAL);
     }
 }
 
@@ -117,12 +126,16 @@ pub(crate) fn descendants<T: IsA<gtk::Widget>>(widget: &impl IsA<gtk::Widget>) -
 }
 
 /// A folder tree in a temporary directory, deleted when dropped.
+#[derive(Debug)]
 pub(crate) struct Fixture {
+    /// Owns the temporary directory, which is deleted with the fixture.
     _directory: TempDir,
+    /// "Example projects" inside it.
     root: PathBuf,
 }
 
 impl Fixture {
+    /// An empty "Example projects" folder.
     fn empty() -> Self {
         let directory = tempfile::tempdir().expect("the test home has room for fixtures");
         let root = directory.path().join("Example projects");
@@ -135,7 +148,7 @@ impl Fixture {
 
     /// "Example projects": a Documents folder, three text files and a
     /// hidden file.
-    pub fn standard() -> Self {
+    pub(crate) fn standard() -> Self {
         let fixture = Self::empty();
         fs::create_dir(fixture.path("Documents")).expect("fixture subfolder");
         for name in ["Notes 10.txt", "Notes 2.txt", "Résumé.txt", ".private"] {
@@ -145,7 +158,7 @@ impl Fixture {
     }
 
     /// A folder of `count` files, enough to scroll.
-    pub fn with_files(count: usize) -> Self {
+    pub(crate) fn with_files(count: usize) -> Self {
         let fixture = Self::empty();
         for number in 0..count {
             fixture.write(&format!("file {number:04}.txt"));
@@ -154,35 +167,38 @@ impl Fixture {
     }
 
     /// Creates a small file called `name` in the folder.
-    pub fn write(&self, name: &str) {
+    pub(crate) fn write(&self, name: &str) {
         fs::write(self.path(name), b"Synthetic test data\n").expect("fixture file");
     }
 
     /// The path of `name` in the folder.
-    pub fn path(&self, name: &str) -> PathBuf {
+    pub(crate) fn path(&self, name: &str) -> PathBuf {
         self.root.join(name)
     }
 
     /// The folder itself.
-    pub fn root(&self) -> &Path {
+    pub(crate) fn root(&self) -> &Path {
         &self.root
     }
 
     /// The folder's canonical URI, as tabs store it.
-    pub fn uri(&self) -> String {
+    pub(crate) fn uri(&self) -> String {
         file_uri(&self.root)
     }
 
     /// The canonical URI of `name` in the folder.
-    pub fn uri_of(&self, name: &str) -> String {
+    pub(crate) fn uri_of(&self, name: &str) -> String {
         file_uri(&self.path(name))
     }
 }
 
 /// A window of the test application, closed when dropped.
+#[derive(Debug)]
 pub(crate) struct TestWindow {
-    pub window: BrowserWindow,
-    pub context: AppContext,
+    /// The window under test.
+    pub(crate) window: BrowserWindow,
+    /// Its application state, shared with windows opened beside it.
+    pub(crate) context: AppContext,
     /// Kept alive while the window reads and writes settings there.
     settings_directory: Rc<TempDir>,
 }
@@ -190,17 +206,29 @@ pub(crate) struct TestWindow {
 impl TestWindow {
     /// A window with its own settings file, showing `uri` once listed.
     /// Opening files is recorded instead of starting applications.
-    pub fn open(uri: &str) -> Self {
-        let test = Self::without_tabs();
+    pub(crate) fn open(uri: &str) -> Self {
+        Self::open_with_skin(uri, &skin())
+    }
+
+    /// A window like [`Self::open`] that follows `skin` instead of the
+    /// shared one, for tests that watch what a window connects to it.
+    pub(crate) fn open_with_skin(uri: &str, skin: &Skin) -> Self {
+        let test = Self::with_skin(skin);
         test.show(uri);
         test
     }
 
     /// A window with its own settings file and no tab yet, for tests that
     /// watch the first listing.
-    pub fn without_tabs() -> Self {
+    pub(crate) fn without_tabs() -> Self {
+        Self::with_skin(&skin())
+    }
+
+    /// A window with its own settings file and no tab yet, following
+    /// `skin`.
+    fn with_skin(skin: &Skin) -> Self {
         let settings = tempfile::tempdir().expect("the test home has room for settings");
-        let context = AppContext::new(skin(), Settings::open(settings.path()));
+        let context = AppContext::new(skin.clone(), Settings::open(settings.path()));
         context.record_launches();
         Self {
             window: BrowserWindow::new(&application(), &context),
@@ -210,7 +238,7 @@ impl TestWindow {
     }
 
     /// A second window sharing this window's application state.
-    pub fn open_beside(&self, uri: &str) -> Self {
+    pub(crate) fn open_beside(&self, uri: &str) -> Self {
         let beside = Self {
             window: BrowserWindow::new(&application(), &self.context),
             context: self.context.clone(),
@@ -221,7 +249,7 @@ impl TestWindow {
     }
 
     /// Adds a tab for `uri`, presents the window and waits for the listing.
-    pub fn show(&self, uri: &str) {
+    pub(crate) fn show(&self, uri: &str) {
         self.window
             .add_tab(uri)
             .expect("test locations are valid addresses");
@@ -232,7 +260,7 @@ impl TestWindow {
     }
 
     /// The names shown, in display order.
-    pub fn names(&self) -> Vec<String> {
+    pub(crate) fn names(&self) -> Vec<String> {
         let model = self.window.folder_model();
         (0..model.n_items())
             .filter_map(|position| model.name_at(position))
@@ -240,32 +268,32 @@ impl TestWindow {
     }
 
     /// The names of the selected items, in display order.
-    pub fn selected_names(&self) -> Vec<String> {
+    pub(crate) fn selected_names(&self) -> Vec<String> {
         let items = self.window.folder_model().selected_items();
         items.iter().map(|item| item.entry().name.clone()).collect()
     }
 
     /// Runs the window action `name` (`win.` omitted) with a string target.
-    pub fn activate(&self, name: &str, target: Option<&str>) {
+    pub(crate) fn activate(&self, name: &str, target: Option<&str>) {
         let target = target.map(ToVariant::to_variant);
         WidgetExt::activate_action(&self.window, &format!("win.{name}"), target.as_ref())
             .expect("the window has the action");
     }
 
     /// The string state of the window action `name`.
-    pub fn action_state(&self, name: &str) -> Option<String> {
+    pub(crate) fn action_state(&self, name: &str) -> Option<String> {
         let state = self.window.lookup_action(name)?.state()?;
         state.get::<String>()
     }
 
     /// Waits until the active tab has finished listing.
-    pub fn wait_for_listing(&self, what: &str) {
+    pub(crate) fn wait_for_listing(&self, what: &str) {
         wait_until(what, || !self.window.is_loading());
     }
 
     /// The directory of the window's settings file, for tests that change
     /// it as another process would.
-    pub fn settings_directory(&self) -> &Path {
+    pub(crate) fn settings_directory(&self) -> &Path {
         self.settings_directory.path()
     }
 }
@@ -279,10 +307,12 @@ impl Drop for TestWindow {
 
 /// Keeps the shared skin's theme choice for the length of a test that
 /// changes it.
+#[derive(Debug)]
 pub(crate) struct ThemeGuard(ThemePreference);
 
 impl ThemeGuard {
-    pub fn keep() -> Self {
+    /// Remembers the current choice; dropping the guard restores it.
+    pub(crate) fn keep() -> Self {
         Self(skin().preference())
     }
 }
@@ -307,9 +337,9 @@ pub(crate) fn capture(window: &BrowserWindow, filename: &str) {
     let Some(directory) = capture_directory() else {
         return;
     };
-    wait_for_frames(window, 3);
-    // A window that was just resized may not be drawable for a frame or two.
+    wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
     let path = directory.join(filename);
+    // A window that was just resized may not be drawable for a frame or two.
     wait_until("the window to be saved", || {
         crate::snapshot::save_png(window.upcast_ref(), &path).is_ok()
     });
@@ -322,18 +352,9 @@ pub(crate) fn capture_popover(window: &BrowserWindow, popover: &gtk::Popover, fi
     let Some(directory) = capture_directory() else {
         return;
     };
-    wait_for_frames(window, 3);
-    let renderer = popover.renderer().expect("an open popover has a renderer");
-    let paintable = gtk::WidgetPaintable::new(Some(popover));
-    let snapshot = gtk::Snapshot::new();
-    let width = f64::from(paintable.intrinsic_width());
-    let height = f64::from(paintable.intrinsic_height());
-    paintable.snapshot(&snapshot, width, height);
-    let node = snapshot.to_node().expect("an open popover draws something");
-    renderer
-        .render_texture(&node, None)
-        .save_to_png(directory.join(filename))
-        .expect("the capture directory is writable");
+    wait_for_frames(window, CAPTURE_SETTLE_FRAMES);
+    crate::snapshot::render_png(popover, None, &directory.join(filename))
+        .expect("an open popover is drawn and the capture directory is writable");
 }
 
 /// Waits until `window` has drawn `count` frames, so a capture shows the

@@ -12,7 +12,7 @@ use crate::test_support::harness::{
     application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::text_size::Step;
-use crate::theme::Appearance;
+use crate::theme::{Appearance, Skin};
 use crate::window::folder_pane::FolderView;
 
 use super::geometry::{pixels, Bounds};
@@ -228,13 +228,13 @@ fn text_size_steps_stay_between_80_and_200_percent() {
     for _ in 0..10 {
         test.activate("text-larger", None);
     }
-    assert_eq!(skin.text_size(), 200);
+    assert_eq!(skin.text_size().percent(), 200);
     for _ in 0..10 {
         test.activate("text-smaller", None);
     }
-    assert_eq!(skin.text_size(), 80);
+    assert_eq!(skin.text_size().percent(), 80);
     test.activate("text-reset", None);
-    assert_eq!(skin.text_size(), 100);
+    assert_eq!(skin.text_size().percent(), 100);
     skin.set_text_size(before);
 }
 
@@ -252,22 +252,27 @@ fn a_theme_chosen_in_one_window_reaches_every_window() {
     assert_eq!(button.as_deref(), Some("Appearance: dark. Click to change."));
 }
 
+/// The windows follow skins on no display, so the test can ask each skin
+/// whether anything is still connected to it: two windows share one skin
+/// and a third, open at the same time, has its own.
+///
 /// parity: TAB-050
 #[gtk::test]
 fn closing_a_window_disconnects_it_from_the_shared_skin() {
     let fixture = Fixture::standard();
-    let listeners = skin().listener_count();
-    let first = TestWindow::open(&fixture.uri());
+    let shared = Skin::detached();
+    let lone = Skin::detached();
+    let first = TestWindow::open_with_skin(&fixture.uri(), &shared);
     let second = first.open_beside(&fixture.uri());
-    assert_eq!(skin().listener_count(), listeners + 2);
+    let third = TestWindow::open_with_skin(&fixture.uri(), &lone);
+    assert!(shared.has_listeners());
+    assert!(lone.has_listeners());
+    drop(third);
+    assert!(!lone.has_listeners(), "the closed window left no handler");
     drop(second);
-    assert_eq!(
-        skin().listener_count(),
-        listeners + 1,
-        "the closed window left no listener"
-    );
+    assert!(shared.has_listeners(), "the open window still follows the skin");
     drop(first);
-    assert_eq!(skin().listener_count(), listeners);
+    assert!(!shared.has_listeners(), "the last window left no handler");
 }
 
 /// Where the icon view's tiles are, relative to the view's scroller.

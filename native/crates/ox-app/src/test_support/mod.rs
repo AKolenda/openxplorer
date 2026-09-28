@@ -8,6 +8,8 @@ pub(crate) mod harness;
 use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry};
 
+/// An entry named `name` in `/tmp/ox-test`, of `file_type`, as a listing
+/// would produce it. Nothing is created on disk.
 fn entry(name: &str, file_type: gio::FileType) -> Entry {
     let info = gio::FileInfo::new();
     info.set_file_type(file_type);

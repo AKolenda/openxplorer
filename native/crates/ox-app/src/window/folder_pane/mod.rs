@@ -22,6 +22,7 @@ use crate::folder_view::cells::{BoundIcons, CellOwners};
 use crate::folder_view::details::DetailsView;
 use crate::folder_view::grid::IconView;
 use crate::folder_view::model::FolderModel;
+use crate::text_size::TextSize;
 use crate::theme::Appearance;
 
 use super::empty_page::EmptyState;
@@ -282,8 +283,8 @@ impl FolderPane {
         }
     }
 
-    /// Draws the icon view's cells for text of `percent` size.
-    pub(super) fn set_text_size(&self, percent: u32) {
-        self.icon_view().set_text_size(percent);
+    /// Draws the icon view's cells for text of `size`.
+    pub(super) fn set_text_size(&self, size: TextSize) {
+        self.icon_view().set_text_size(size);
     }
 }

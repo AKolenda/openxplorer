@@ -14,32 +14,11 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::icons::{self, ArtKind};
-use crate::theme::{Appearance, SkinChange};
+pub(super) use crate::icons::ArtStyle;
+use crate::theme::Appearance;
 
 use super::window_action::WindowAction;
 use super::BrowserWindow;
-
-/// The appearance and scale factor colour art is drawn for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct ArtStyle {
-    /// Light or dark art.
-    pub appearance: Appearance,
-    /// The screen's scale factor.
-    pub scale: i32,
-}
-
-impl ArtStyle {
-    /// A new image of `kind` art, `size` pixels square.
-    pub(super) fn image(self, kind: ArtKind, size: i32) -> gtk::Image {
-        icons::art_image(kind, size, self.appearance, self.scale)
-    }
-
-    /// Makes `image` show `kind` art, `size` pixels square.
-    pub(super) fn draw_into(self, image: &gtk::Image, kind: ArtKind, size: i32) {
-        icons::set_art(image, kind, size, self.appearance, self.scale);
-    }
-}
 
 impl BrowserWindow {
     /// The style the window's art is drawn in now.
@@ -53,12 +32,17 @@ impl BrowserWindow {
     /// Applies the skin's current appearance and text size, and follows
     /// them and the screen's scale factor from now on.
     pub(super) fn follow_skin(&self) {
-        let listener = self.skin().connect_changed(glib::clone!(
+        let appearance_handler = self.skin().connect_appearance_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |change| window.skin_changed(change)
+            move || window.appearance_changed(window.skin().appearance())
         ));
-        self.imp().handlers.borrow_mut().skin = Some(listener);
+        let text_size_handler = self.skin().connect_text_size_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.folder_pane().set_text_size(window.skin().text_size())
+        ));
+        self.imp().handlers.borrow_mut().skin = vec![appearance_handler, text_size_handler];
         let appearance = self.skin().appearance();
         // The template builds the panes light; nothing is drawn in them yet.
         self.folder_pane().icons().set_appearance(appearance);
@@ -70,13 +54,6 @@ impl BrowserWindow {
             window.render_places();
             window.update_details_pane();
         });
-    }
-
-    fn skin_changed(&self, change: SkinChange) {
-        match change {
-            SkinChange::Appearance(appearance) => self.appearance_changed(appearance),
-            SkinChange::TextSize(percent) => self.folder_pane().set_text_size(percent),
-        }
     }
 
     fn appearance_changed(&self, appearance: Appearance) {

@@ -171,8 +171,8 @@ impl DetailsPane {
     /// Draws the folder art a pane shows before its first
     /// [`Self::show`], in `appearance` at the default scale.
     pub(super) fn show_placeholder(&self, appearance: Appearance) {
-        let preview = &*self.imp().preview;
-        icons::set_art(preview, ArtKind::Folder, PREVIEW_SIZE, appearance, 1);
+        let style = ArtStyle { appearance, scale: 1 };
+        style.draw_into(&self.imp().preview, ArtKind::Folder, PREVIEW_SIZE);
     }
 
     /// Makes the pane `width` pixels wide ([`PANE_WIDTH`], or less in a

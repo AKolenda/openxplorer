@@ -3,9 +3,10 @@
 //!
 //! Ports `desktop/ui/style.css` as `native/docs/ui-spec.md` refines it.
 //! The rules live in `resources/skin/`, one file per region of the
-//! window, and refer to colours only by `@ox_*` tokens. `light.css` and
-//! `dark.css` define every token, one palette per appearance, so switching
-//! appearance swaps one small provider and never touches the rules.
+//! window, and refer to colours only by `@ox_*` tokens (or `transparent`).
+//! `light.css` and `dark.css` define every token, one palette per
+//! appearance, so switching appearance swaps one small provider and never
+//! touches the rules.
 
 use super::Appearance;
 
@@ -30,7 +31,10 @@ pub(super) const RULES: &str = concat!(
 /// ([`super::contrast`]).
 pub(super) const HIGH_CONTRAST_RULES: &str = include_str!("../../resources/skin/high-contrast.css");
 
+/// The colour tokens of [`Appearance::Light`].
 const LIGHT_PALETTE: &str = include_str!("../../resources/light.css");
+
+/// The colour tokens of [`Appearance::Dark`].
 const DARK_PALETTE: &str = include_str!("../../resources/dark.css");
 
 /// The palette that draws `appearance`.
@@ -47,7 +51,9 @@ mod tests {
     use std::collections::BTreeSet;
     use std::rc::Rc;
 
+    use super::super::fonts::css_for_text_size;
     use super::*;
+    use crate::text_size::TextSize;
 
     /// `css` without its comments, which mention tokens in prose.
     fn without_comments(css: &str) -> String {
@@ -117,6 +123,43 @@ mod tests {
         }
     }
 
+    /// A colour written into a rule would not follow the appearance.
+    #[test]
+    fn the_rules_name_colours_only_by_token() {
+        for rules in [RULES, HIGH_CONTRAST_RULES] {
+            let code = without_comments(rules);
+            let raw = raw_colours(&code);
+            assert!(raw.is_empty(), "raw colours in the skin: {raw:?}");
+        }
+        let written = raw_colours("a { color: alpha(white, .7); background: #c42b1c; }");
+        assert_eq!(written, ["white", "#c42b1c"], "the scan finds raw colours");
+    }
+
+    /// The colour keywords and hex colours `code` writes out instead of
+    /// naming a token.
+    fn raw_colours(code: &str) -> Vec<&str> {
+        let words = code.split(|character: char| {
+            !(character.is_ascii_alphanumeric() || character == '#' || character == '_')
+        });
+        words
+            .filter(|word| is_colour_keyword(word) || is_hex_colour(word))
+            .collect()
+    }
+
+    /// `black`, `white` or a CSS function that spells a colour out.
+    fn is_colour_keyword(word: &str) -> bool {
+        matches!(word, "black" | "white" | "rgb" | "rgba" | "hsl" | "hsla")
+    }
+
+    /// `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`.
+    fn is_hex_colour(word: &str) -> bool {
+        let Some(digits) = word.strip_prefix('#') else {
+            return false;
+        };
+        let is_colour_length = matches!(digits.len(), 3 | 4 | 6 | 8);
+        is_colour_length && digits.chars().all(|digit| digit.is_ascii_hexdigit())
+    }
+
     #[test]
     fn every_palette_token_is_used() {
         let light = palette(Appearance::Light);
@@ -153,7 +196,7 @@ mod tests {
 
     #[gtk::test]
     fn every_stylesheet_parses_without_errors() {
-        let text_sizes = crate::text_size::LEVELS.map(super::super::css_for_text_size);
+        let text_sizes = TextSize::all().map(css_for_text_size);
         let sheets = [RULES, HIGH_CONTRAST_RULES, LIGHT_PALETTE, DARK_PALETTE]
             .into_iter()
             .map(str::to_owned)

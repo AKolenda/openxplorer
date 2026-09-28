@@ -70,17 +70,17 @@ pub(crate) enum SnapshotError {
     Write {
         /// The file that could not be written.
         path: PathBuf,
-        /// Why.
+        /// GDK's reason for refusing the write.
         source: glib::BoolError,
     },
 }
 
-/// A window size in pixels.
+/// The size of a window's title bar and contents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct WindowSize {
-    /// The width.
+    /// Width in logical pixels, as `gtk::Window::set_default_size` takes it.
     pub width: i32,
-    /// The height.
+    /// Height in logical pixels.
     pub height: i32,
 }
 
@@ -117,26 +117,26 @@ impl SnapshotRequest {
     ///
     /// [`SnapshotError::InvalidValue`] when a variable holds an unknown
     /// theme, view or size.
-    pub fn from_environment() -> Result<Option<Self>, SnapshotError> {
+    pub(crate) fn from_environment() -> Result<Option<Self>, SnapshotError> {
         Self::from_variables(|name| std::env::var(name).ok())
     }
 
-    /// The request that `variable` describes; separate from the process
-    /// environment so it can be tested.
-    fn from_variables(variable: impl Fn(&str) -> Option<String>) -> Result<Option<Self>, SnapshotError> {
-        let Some(png) = variable(SNAPSHOT_VARIABLE).filter(|png| !png.is_empty()) else {
+    /// The request that the variables `lookup` finds describe; separate
+    /// from the process environment so it can be tested.
+    fn from_variables(lookup: impl Fn(&str) -> Option<String>) -> Result<Option<Self>, SnapshotError> {
+        let Some(png) = non_empty(&lookup, SNAPSHOT_VARIABLE) else {
             return Ok(None);
         };
-        let theme = parse_variable(&variable, THEME_VARIABLE, "light, dark or system", |value| {
+        let theme = parse_variable(&lookup, THEME_VARIABLE, "light, dark or system", |value| {
             ThemePreference::from_key(value)
         })?;
-        let view = parse_variable(&variable, VIEW_VARIABLE, "details or an icon size", |value| {
+        let view = parse_variable(&lookup, VIEW_VARIABLE, "details or an icon size", |value| {
             FolderView::from_key(value)
         })?;
-        let size = parse_variable(&variable, SIZE_VARIABLE, "<width>x<height>", WindowSize::parse)?;
+        let size = parse_variable(&lookup, SIZE_VARIABLE, "<width>x<height>", WindowSize::parse)?;
         Ok(Some(Self {
             png: PathBuf::from(png),
-            start: variable(START_VARIABLE).filter(|start| !start.is_empty()),
+            start: non_empty(&lookup, START_VARIABLE),
             theme,
             view,
             size,
@@ -144,14 +144,24 @@ impl SnapshotRequest {
     }
 }
 
+/// The value of the variable `name`, or `None` when it is unset or empty.
+fn non_empty(lookup: impl Fn(&str) -> Option<String>, name: &str) -> Option<String> {
+    lookup(name).filter(|value| !value.is_empty())
+}
+
 /// Parses the optional variable `name` with `parse`.
+///
+/// # Errors
+///
+/// [`SnapshotError::InvalidValue`], naming `expected`, when `parse`
+/// refuses the value.
 fn parse_variable<T>(
-    variable: impl Fn(&str) -> Option<String>,
+    lookup: impl Fn(&str) -> Option<String>,
     name: &'static str,
     expected: &'static str,
     parse: impl Fn(&str) -> Option<T>,
 ) -> Result<Option<T>, SnapshotError> {
-    let Some(value) = variable(name).filter(|value| !value.is_empty()) else {
+    let Some(value) = non_empty(lookup, name) else {
         return Ok(None);
     };
     match parse(&value) {
@@ -173,27 +183,20 @@ pub(crate) fn save_when_listed(
 ) {
     let png = request.png.clone();
     let size = request.size;
-    let started = Instant::now();
     let milestones = Milestones::default();
-    let frames_since_listed = Cell::new(0);
+    let timing = SaveTiming::starting_now();
     let done = RefCell::new(Some(done));
     window.add_tick_callback(move |window, _| {
         if let Some(size) = size {
             fit_content(window.upcast_ref(), size);
         }
-        milestones.note_frame();
-        if window.is_listed() {
-            milestones.note_first_listing();
-        }
-        let waited_too_long = started.elapsed() > LISTING_PATIENCE;
-        if !window.is_listed() && !waited_too_long {
+        let listing = Listing::of(window);
+        milestones.note_frame(listing);
+        let readiness = timing.count_frame(listing);
+        if readiness == Readiness::Waiting {
             return glib::ControlFlow::Continue;
         }
-        frames_since_listed.set(frames_since_listed.get() + 1);
-        if frames_since_listed.get() < SETTLE_FRAMES {
-            return glib::ControlFlow::Continue;
-        }
-        if waited_too_long {
+        if readiness == Readiness::TimedOut {
             eprintln!("OpenXplorer snapshot: the first listing did not finish; saving the window as it is");
         }
         eprintln!("{}", milestones.summary());
@@ -202,6 +205,77 @@ pub(crate) fn save_when_listed(
         }
         glib::ControlFlow::Break
     });
+}
+
+/// Where the window's first listing is on a frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Listing {
+    /// Still running, or not started yet.
+    Running,
+    /// Finished, so this frame draws it.
+    Drawn,
+}
+
+impl Listing {
+    /// Where the listing of `window`'s active tab is now.
+    fn of(window: &BrowserWindow) -> Self {
+        if window.is_listed() {
+            Listing::Drawn
+        } else {
+            Listing::Running
+        }
+    }
+}
+
+/// Whether the window can be saved on this frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Readiness {
+    /// Not yet: the listing is running or has not settled.
+    Waiting,
+    /// The listing has been drawn for [`SETTLE_FRAMES`] frames.
+    Settled,
+    /// The listing did not finish within [`LISTING_PATIENCE`]; the window
+    /// is saved as it is after [`SETTLE_FRAMES`] more frames.
+    TimedOut,
+}
+
+/// Decides, frame by frame, when the snapshot is taken.
+#[derive(Debug)]
+struct SaveTiming {
+    /// When the patience for the first listing started.
+    started: Instant,
+    /// Frames drawn since the listing finished or the patience ran out.
+    frames_since_listed: Cell<u32>,
+}
+
+impl SaveTiming {
+    /// Starts the patience now, before the window's first frame.
+    fn starting_now() -> Self {
+        Self {
+            started: Instant::now(),
+            frames_since_listed: Cell::new(0),
+        }
+    }
+
+    /// Counts a frame that shows `listing` and says whether the window can
+    /// be saved on it. Once the listing is drawn, or the patience ran out,
+    /// every call counts towards [`SETTLE_FRAMES`], so call it once per
+    /// frame.
+    fn count_frame(&self, listing: Listing) -> Readiness {
+        let timed_out = self.started.elapsed() > LISTING_PATIENCE;
+        if listing == Listing::Running && !timed_out {
+            return Readiness::Waiting;
+        }
+        let frames = self.frames_since_listed.get() + 1;
+        self.frames_since_listed.set(frames);
+        if frames < SETTLE_FRAMES {
+            Readiness::Waiting
+        } else if timed_out {
+            Readiness::TimedOut
+        } else {
+            Readiness::Settled
+        }
+    }
 }
 
 /// When the snapshot's window drew its first frame and its first
@@ -214,29 +288,32 @@ struct Milestones {
 }
 
 impl Milestones {
-    /// Notes that a frame is about to be drawn.
-    fn note_frame(&self) {
+    /// Notes that a frame showing `listing` is about to be drawn.
+    fn note_frame(&self, listing: Listing) {
+        let now = glib::monotonic_time();
         if self.first_frame.get().is_none() {
-            self.first_frame.set(Some(glib::monotonic_time()));
+            self.first_frame.set(Some(now));
         }
-    }
-
-    /// Notes that the frame about to be drawn shows a finished listing.
-    fn note_first_listing(&self) {
-        if self.first_listing.get().is_none() {
-            self.first_listing.set(Some(glib::monotonic_time()));
+        if listing == Listing::Drawn && self.first_listing.get().is_none() {
+            self.first_listing.set(Some(now));
         }
     }
 
     /// The line the hook prints for benchmarks.
     fn summary(&self) -> String {
-        let time =
-            |moment: Option<i64>| moment.map_or_else(|| "never".to_owned(), |micros| micros.to_string());
         format!(
-            "OpenXplorer snapshot: first frame at {} us, first listing at {} us (monotonic clock)",
-            time(self.first_frame.get()),
-            time(self.first_listing.get()),
+            "OpenXplorer snapshot: first frame {}, first listing {} (monotonic clock)",
+            describe_moment(self.first_frame.get()),
+            describe_moment(self.first_listing.get()),
         )
+    }
+}
+
+/// When a milestone was reached ("at 1234 us"), or "never" before it is.
+fn describe_moment(moment: Option<i64>) -> String {
+    match moment {
+        Some(micros) => format!("at {micros} us"),
+        None => "never".to_owned(),
     }
 }
 
@@ -249,9 +326,10 @@ fn fit_content(window: &gtk::Window, size: WindowSize) {
     };
     let frame_width = pixels(outer.width() - content.width());
     let frame_height = pixels(outer.height() - content.height());
-    let wanted = (size.width + frame_width, size.height + frame_height);
-    if window.default_size() != wanted {
-        window.set_default_size(wanted.0, wanted.1);
+    let width = size.width + frame_width;
+    let height = size.height + frame_height;
+    if window.default_size() != (width, height) {
+        window.set_default_size(width, height);
     }
 }
 
@@ -271,24 +349,40 @@ fn pixels(measure: f32) -> i32 {
 /// [`SnapshotError::NotDrawn`] before the window is shown, and
 /// [`SnapshotError::Write`] when the file cannot be written.
 pub(crate) fn save_png(window: &gtk::Window, path: &Path) -> Result<(), SnapshotError> {
-    let renderer = window.renderer().ok_or(SnapshotError::NotDrawn)?;
-    let paintable = gtk::WidgetPaintable::new(Some(window));
+    let content = content_bounds(window).ok_or(SnapshotError::NotDrawn)?;
+    render_png(window, Some(content), path)
+}
+
+/// Saves what the surface `native` (a window or a popover) draws now as a
+/// PNG at `path`, cropped to `crop` in logical pixels from the surface's
+/// outer edge, or whole.
+///
+/// # Errors
+///
+/// [`SnapshotError::NotDrawn`] before the surface is shown, and
+/// [`SnapshotError::Write`] when the file cannot be written.
+pub(crate) fn render_png(
+    native: &impl IsA<gtk::Native>,
+    crop: Option<graphene::Rect>,
+    path: &Path,
+) -> Result<(), SnapshotError> {
+    let native = native.upcast_ref::<gtk::Native>();
+    let renderer = native.renderer().ok_or(SnapshotError::NotDrawn)?;
+    let paintable = gtk::WidgetPaintable::new(Some(native));
     let snapshot = gtk::Snapshot::new();
-    // One picture pixel per device pixel, as the screen shows the window
+    // One picture pixel per device pixel, as the screen shows the surface
     // (two per logical pixel with GDK_SCALE=2). The paintable is drawn at
     // its own size: any other size scales the picture, which blurs
     // one-pixel lines.
     #[expect(clippy::cast_precision_loss, reason = "scale factors are small integers")]
-    let scale = window.scale_factor() as f32;
+    let scale = native.scale_factor() as f32;
     snapshot.scale(scale, scale);
-    let bounds = content_bounds(window)
-        .ok_or(SnapshotError::NotDrawn)?
-        .scale(scale, scale);
     let width = f64::from(paintable.intrinsic_width());
     let height = f64::from(paintable.intrinsic_height());
     paintable.snapshot(&snapshot, width, height);
     let node = snapshot.to_node().ok_or(SnapshotError::NotDrawn)?;
-    let texture = renderer.render_texture(&node, Some(&bounds));
+    let device_crop = crop.map(|area| area.scale(scale, scale));
+    let texture = renderer.render_texture(&node, device_crop.as_ref());
     texture.save_to_png(path).map_err(|source| SnapshotError::Write {
         path: path.to_owned(),
         source,
@@ -364,12 +458,25 @@ mod tests {
     }
 
     #[test]
+    fn the_window_is_saved_once_the_listing_has_settled() {
+        let timing = SaveTiming::starting_now();
+        assert_eq!(timing.count_frame(Listing::Running), Readiness::Waiting);
+        for _ in 1..SETTLE_FRAMES {
+            assert_eq!(timing.count_frame(Listing::Drawn), Readiness::Waiting);
+        }
+        assert_eq!(timing.count_frame(Listing::Drawn), Readiness::Settled);
+    }
+
+    #[test]
     fn the_start_up_milestones_read_never_until_reached() {
         let milestones = Milestones::default();
-        assert!(milestones.summary().contains("first frame at never us"));
-        milestones.note_frame();
+        assert_eq!(
+            milestones.summary(),
+            "OpenXplorer snapshot: first frame never, first listing never (monotonic clock)"
+        );
+        milestones.note_frame(Listing::Running);
         let first_frame = milestones.first_frame.get().expect("a frame was noted");
-        milestones.note_frame();
+        milestones.note_frame(Listing::Running);
         assert_eq!(
             milestones.first_frame.get(),
             Some(first_frame),
@@ -377,7 +484,14 @@ mod tests {
         );
         assert!(milestones
             .summary()
-            .contains(&format!("first frame at {first_frame} us")));
-        assert!(milestones.summary().contains("first listing at never us"));
+            .contains(&format!("first frame at {first_frame} us,")));
+        assert!(milestones
+            .summary()
+            .contains("first listing never (monotonic clock)"));
+        milestones.note_frame(Listing::Drawn);
+        assert!(
+            milestones.first_listing.get().is_some(),
+            "a listed frame is noted"
+        );
     }
 }
