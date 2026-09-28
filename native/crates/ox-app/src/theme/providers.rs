@@ -47,6 +47,9 @@ impl Layer {
 /// provider is not kept.
 #[derive(Debug)]
 pub(super) struct Providers {
+    /// The GTK settings of the display the skin is installed on, whose
+    /// dark variant follows the palette; `None` when detached.
+    settings: Option<gtk::Settings>,
     /// The colour tokens of the drawn [`Appearance`].
     palette: gtk::CssProvider,
     /// Font sizes and heights for the text size.
@@ -59,8 +62,9 @@ impl Providers {
     /// Forces GTK's built-in theme on `display` and adds the skin over it:
     /// the light palette at the default text size and normal contrast.
     pub(super) fn install(display: &gdk::Display) -> Self {
-        force_builtin_theme(&gtk::Settings::for_display(display));
-        let providers = Self::starting();
+        let settings = gtk::Settings::for_display(display);
+        force_builtin_theme(&settings);
+        let providers = Self::starting(Some(settings));
         add_to_display(display, &provider_with(stylesheets::RULES), Layer::Rules);
         add_to_display(display, &providers.text_size, Layer::TextSize);
         add_to_display(display, &providers.palette, Layer::Palette);
@@ -68,16 +72,20 @@ impl Providers {
         providers
     }
 
-    /// Providers on no display, for a skin that draws nothing.
+    /// Providers on no display, for a skin that draws nothing: neither
+    /// their stylesheets nor any display's GTK settings change what a
+    /// window shows.
     #[cfg(test)]
     pub(super) fn detached() -> Self {
-        Self::starting()
+        Self::starting(None)
     }
 
     /// The providers loaded with what a skin starts with: the light
-    /// palette, the default text size and no high-contrast rules.
-    fn starting() -> Self {
+    /// palette, the default text size and no high-contrast rules. Drawing
+    /// a palette switches the dark variant of `settings`, when given.
+    fn starting(settings: Option<gtk::Settings>) -> Self {
         Self {
+            settings,
             palette: provider_with(stylesheets::palette(Appearance::Light)),
             text_size: provider_with(&css_for_text_size(TextSize::DEFAULT)),
             high_contrast: provider_with(""),
@@ -88,9 +96,9 @@ impl Providers {
     pub(super) fn draw_palette(&self, appearance: Appearance) {
         self.palette.load_from_string(stylesheets::palette(appearance));
         // GTK's built-in theme draws whatever the skin leaves unstyled, so
-        // it switches variant too. This is the application's own setting;
-        // GNOME's is never changed.
-        if let Some(settings) = gtk::Settings::default() {
+        // it switches variant too. These are the settings of the skin's own
+        // display in this application; GNOME's are never changed.
+        if let Some(settings) = &self.settings {
             settings.set_gtk_application_prefer_dark_theme(appearance == Appearance::Dark);
         }
     }
@@ -128,4 +136,24 @@ fn provider_with(css: &str) -> gtk::CssProvider {
 /// Adds `provider` to `display` at `layer`.
 fn add_to_display(display: &gdk::Display, provider: &gtk::CssProvider, layer: Layer) {
     gtk::style_context_add_provider_for_display(display, provider, layer.priority());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A detached skin draws on no display, so drawing its palette leaves
+    /// the dark variant of the display's GTK settings as it was.
+    #[gtk::test]
+    fn detached_providers_leave_the_display_settings_alone() {
+        let settings = gtk::Settings::default().expect("GTK tests run on a private display");
+        let prefers_dark = settings.is_gtk_application_prefer_dark_theme();
+        let other_appearance = if prefers_dark {
+            Appearance::Light
+        } else {
+            Appearance::Dark
+        };
+        Providers::detached().draw_palette(other_appearance);
+        assert_eq!(settings.is_gtk_application_prefer_dark_theme(), prefers_dark);
+    }
 }
