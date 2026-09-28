@@ -213,9 +213,7 @@ mod tests {
         let file = entry_for_uri("smb://nas/work/README", &info);
         assert!(!file.is_dir);
         assert_eq!(file.size, Some(0));
-        // The Python test stubs GIO; here the real description is shown.
-        let description = gio::content_type_get_description("text/plain");
-        assert_eq!(file.type_label, description.as_str());
+        assert_eq!(file.type_label, "Text document");
     }
 
     /// Ported from `desktop/tests/test_gio_serialization.py::GioSerializationTests::test_missing_file_size_does_not_claim_zero`

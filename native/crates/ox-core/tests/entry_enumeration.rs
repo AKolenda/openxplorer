@@ -64,6 +64,64 @@ fn listing_preserves_file_and_folder_metadata() {
     assert_eq!(directory.type_label, "File folder");
 }
 
+/// A file of the demo Documents folder and the Type column text it must
+/// show.
+struct DocumentCase {
+    name: &'static str,
+    type_label: &'static str,
+}
+
+/// Regression: the Documents folder showed GIO's raw descriptions ("Word
+/// 2007 document", "Excel 2007 spreadsheet", "Plain text document")
+/// instead of the interface's names. GIO reads the content type from each
+/// real file here, so the whole listing path is exercised, not only the
+/// label table.
+///
+/// parity: VIEW-002
+#[test]
+fn documents_are_listed_with_the_interface_type_names() {
+    let cases = [
+        DocumentCase {
+            name: "Meeting notes.docx",
+            type_label: "Word document",
+        },
+        DocumentCase {
+            name: "Project budget.xlsx",
+            type_label: "Excel worksheet",
+        },
+        DocumentCase {
+            name: "Q3 presentation.pptx",
+            type_label: "PowerPoint presentation",
+        },
+        DocumentCase {
+            name: "Read me.txt",
+            type_label: "Text document",
+        },
+        DocumentCase {
+            name: "Website assets.zip",
+            type_label: "Compressed folder",
+        },
+    ];
+    // Empty files would all be `application/x-zerosize`, so each holds a
+    // few bytes; GIO then names the type by its extension.
+    let files: Vec<(&str, &[u8])> = cases
+        .iter()
+        .map(|case| (case.name, b"sample".as_slice()))
+        .collect();
+    let folder = folder_with_files(&files);
+
+    let entries = list(folder.path()).expect("listing");
+
+    for case in cases {
+        assert_eq!(
+            find(&entries, case.name).type_label,
+            case.type_label,
+            "{}",
+            case.name
+        );
+    }
+}
+
 /// parity: VIEW-024
 #[test]
 fn hidden_items_are_listed_and_flagged() {

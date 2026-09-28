@@ -2749,7 +2749,7 @@ bridge = ["list", "properties"]
 dolphin = "KFileItem::mimeComment (QMimeDatabase)"
 gnome = "g_content_type_get_description (shared-mime-info)"
 native = "partial"
-native_note = "native/crates/ox-core/src/entry/info.rs (real_zero_byte_file_remains_zero_bytes, missing_file_size_does_not_claim_zero); native/crates/ox-core/src/entry/type_label.rs (folder_wording_wins, other_types_keep_the_gio_description)."
+native_note = "native/crates/ox-core/src/entry/info.rs (real_zero_byte_file_remains_zero_bytes, missing_file_size_does_not_claim_zero); native/crates/ox-core/src/entry/type_label.rs (folder_wording_wins, office_text_zip_and_video_files_use_the_interface_names, other_types_keep_the_gio_description); native/crates/ox-core/tests/entry_enumeration.rs (documents_are_listed_with_the_interface_type_names); native/crates/ox-app/src/window/tests/views.rs (the_type_column_shows_the_interface_names_for_documents). Word, Excel, PowerPoint, plain text, ZIP and MP4 files show the interface names of the preview listing in desktop/ui/app.js (Word document, Excel worksheet, PowerPoint presentation, Text document, Compressed folder, MP4 video), because GIO words them differently depending on the installed MIME definitions; every other type shows the GIO description."
 
 [[feature]]
 id = "VIEW-003"
