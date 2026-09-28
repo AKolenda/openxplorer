@@ -12,7 +12,7 @@ use crate::test_support::harness::{
     application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::text_size::Step;
-use crate::theme::Appearance;
+use crate::theme::{Appearance, Skin};
 use crate::window::content::FolderView;
 
 use super::geometry::{pixels, Bounds};
@@ -249,22 +249,27 @@ fn a_theme_chosen_in_one_window_reaches_every_window() {
     assert_eq!(button.as_deref(), Some("Appearance: dark. Click to change."));
 }
 
+/// Each window follows a skin of its own here, so the test sees which
+/// window still has handlers connected.
+///
 /// parity: TAB-050
 #[gtk::test]
 fn closing_a_window_disconnects_it_from_the_shared_skin() {
     let fixture = Fixture::standard();
-    let listeners = skin().listener_count();
-    let first = TestWindow::open(&fixture.uri());
-    let second = first.open_beside(&fixture.uri());
-    assert_eq!(skin().listener_count(), listeners + 2);
+    let first_skin = Skin::detached();
+    let second_skin = Skin::detached();
+    let first = TestWindow::open_with_skin(&fixture.uri(), &first_skin);
+    let second = TestWindow::open_with_skin(&fixture.uri(), &second_skin);
+    assert!(first_skin.has_listeners());
+    assert!(second_skin.has_listeners());
     drop(second);
-    assert_eq!(
-        skin().listener_count(),
-        listeners + 1,
-        "the closed window left no listener"
+    assert!(!second_skin.has_listeners(), "the closed window left no handler");
+    assert!(
+        first_skin.has_listeners(),
+        "the open window still follows its skin"
     );
     drop(first);
-    assert_eq!(skin().listener_count(), listeners);
+    assert!(!first_skin.has_listeners());
 }
 
 /// Where the icon view's tiles are, relative to the view's scroller.

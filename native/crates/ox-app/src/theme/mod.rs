@@ -2,282 +2,227 @@
 //! The Explorer skin: stylesheets, light and dark palettes and text size.
 //!
 //! Ports `applyTheme` in `desktop/ui/app.js` and `system_dark` /
-//! `apply_native_theme` in `desktop/winspace.py`. GTK's built-in theme is
-//! forced underneath the skin so the desktop theme (Zorin's) cannot leak
-//! into it; only this application's GTK settings change, never GNOME's.
+//! `apply_native_theme` in `desktop/winspace.py`. One [`Skin`] per display
+//! holds the providers ([`providers`]) and what they draw; windows connect
+//! to its `appearance-changed` and `text-size-changed` signals, as they
+//! connect to `places-changed` on the shared
+//! [`AppContext`](crate::shared::AppContext).
 
 pub(crate) mod contrast;
 mod fonts;
 mod preference;
+mod providers;
 mod stylesheets;
 pub(crate) mod system;
 
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
 use gtk::gdk;
+use gtk::glib;
+use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
-pub(crate) use fonts::css_for_text_size;
-pub use preference::{Appearance, ThemePreference};
+pub(crate) use preference::{Appearance, ThemePreference};
 
 use crate::text_size::TextSize;
 use contrast::Contrast;
+use providers::Providers;
 
-/// What changed in a [`Skin`], as its listeners hear it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SkinChange {
-    /// The palette or the theme preference changed; this appearance is
-    /// drawn now.
-    Appearance(Appearance),
-    /// Text is drawn at this size now.
-    TextSize(TextSize),
-}
+/// Emitted when the palette or the theme choice changed.
+const APPEARANCE_CHANGED: &str = "appearance-changed";
 
-/// Identifies a callback registered with [`Skin::connect_changed`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ListenerId(usize);
+/// Emitted when text is drawn at another size.
+const TEXT_SIZE_CHANGED: &str = "text-size-changed";
 
-/// A window's callback for [`SkinChange`]s. Shared, so [`Skin::notify`]
-/// can call it after releasing the list.
-struct SkinListener {
-    id: ListenerId,
-    callback: Rc<dyn Fn(SkinChange)>,
-}
+mod imp {
+    use std::cell::{Cell, OnceCell};
+    use std::sync::OnceLock;
 
-/// The CSS providers of one display, shared by every window.
-///
-/// The skin also remembers the desktop's appearance, so a window can
-/// change the [`ThemePreference`] without asking the desktop again.
-pub struct Skin {
-    /// The colour tokens of the drawn [`Appearance`].
-    palette_provider: gtk::CssProvider,
-    /// Font sizes and heights for the text size.
-    text_size_provider: gtk::CssProvider,
-    /// The high-contrast rules, empty at normal contrast.
-    contrast_provider: gtk::CssProvider,
-    /// The appearance the palette draws.
-    appearance: Cell<Appearance>,
-    /// Whether the high-contrast rules are loaded.
-    contrast: Cell<Contrast>,
-    /// The text size in percent, always one of the levels.
-    text_size: Cell<TextSize>,
-    /// The user's theme choice.
-    preference: Cell<ThemePreference>,
-    /// The desktop's colour scheme, which [`ThemePreference::System`]
-    /// follows.
-    desktop_appearance: Cell<Appearance>,
-    /// The number the next [`ListenerId`] gets.
-    next_listener: Cell<usize>,
-    /// The windows' callbacks, in registration order.
-    listeners: RefCell<Vec<SkinListener>>,
-}
+    use gtk::glib;
+    use gtk::glib::subclass::Signal;
+    use gtk::subclass::prelude::*;
 
-impl std::fmt::Debug for Skin {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("Skin")
-            .field("appearance", &self.appearance.get())
-            .field("preference", &self.preference.get())
-            .field("text_size", &self.text_size.get())
-            .field("listeners", &self.listener_count())
-            .finish_non_exhaustive()
+    use super::{Appearance, Contrast, Providers, TextSize, ThemePreference};
+    use super::{APPEARANCE_CHANGED, TEXT_SIZE_CHANGED};
+
+    /// Private state of [`super::Skin`].
+    #[derive(Debug, Default)]
+    pub(crate) struct Skin {
+        /// The providers the skin reloads; set once, when it is created.
+        pub(super) providers: OnceCell<Providers>,
+        /// The appearance the palette draws.
+        pub(super) appearance: Cell<Appearance>,
+        /// Whether the high-contrast rules are loaded.
+        pub(super) contrast: Cell<Contrast>,
+        /// The size text is drawn at.
+        pub(super) text_size: Cell<TextSize>,
+        /// The user's theme choice.
+        pub(super) preference: Cell<ThemePreference>,
+        /// The desktop's colour scheme, which [`ThemePreference::System`]
+        /// follows.
+        pub(super) desktop_appearance: Cell<Appearance>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for Skin {
+        const NAME: &'static str = "OxSkin";
+        type Type = super::Skin;
+    }
+
+    impl ObjectImpl for Skin {
+        fn signals() -> &'static [Signal] {
+            static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
+            SIGNALS.get_or_init(|| {
+                vec![
+                    Signal::builder(APPEARANCE_CHANGED).build(),
+                    Signal::builder(TEXT_SIZE_CHANGED).build(),
+                ]
+            })
+        }
     }
 }
 
+glib::wrapper! {
+    /// The skin of one display, shared by every window: what the CSS
+    /// providers draw and the choices behind it.
+    ///
+    /// The skin also remembers the desktop's appearance, so a window can
+    /// change the [`ThemePreference`] without asking the desktop again.
+    pub(crate) struct Skin(ObjectSubclass<imp::Skin>);
+}
+
 impl Skin {
-    /// Forces GTK's built-in theme and installs the skin on `display`, one
-    /// provider per [`Layer`].
+    /// Forces GTK's built-in theme and installs the skin on `display`.
     pub(crate) fn install(display: &gdk::Display) -> Self {
-        force_builtin_theme(&gtk::Settings::for_display(display));
-        add_provider(display, stylesheets::RULES, Layer::Rules);
-        let default_text_size = css_for_text_size(TextSize::DEFAULT);
-        let text_size_provider = add_provider(display, &default_text_size, Layer::TextSize);
-        let light_palette = stylesheets::palette(Appearance::Light);
-        let palette_provider = add_provider(display, light_palette, Layer::Palette);
-        let contrast_provider = add_provider(display, "", Layer::HighContrast);
-        Self {
-            palette_provider,
-            text_size_provider,
-            contrast_provider,
-            appearance: Cell::new(Appearance::Light),
-            contrast: Cell::new(Contrast::Normal),
-            text_size: Cell::new(TextSize::DEFAULT),
-            preference: Cell::new(ThemePreference::System),
-            desktop_appearance: Cell::new(Appearance::Light),
-            next_listener: Cell::new(0),
-            listeners: RefCell::new(Vec::new()),
-        }
+        Self::with_providers(Providers::install(display))
+    }
+
+    /// A skin on no display, for tests that watch what windows connect to
+    /// it without restyling the shared test display.
+    #[cfg(test)]
+    pub(crate) fn detached() -> Self {
+        Self::with_providers(Providers::detached())
+    }
+
+    /// A skin that draws with `providers`.
+    ///
+    /// # Panics
+    ///
+    /// Never: a new skin has no providers yet.
+    fn with_providers(providers: Providers) -> Self {
+        let skin: Self = glib::Object::new();
+        skin.imp()
+            .providers
+            .set(providers)
+            .expect("a new skin has no providers yet");
+        skin
+    }
+
+    fn providers(&self) -> &Providers {
+        self.imp()
+            .providers
+            .get()
+            .expect("Skin::with_providers is the only constructor and sets the providers")
     }
 
     /// The appearance currently drawn.
     pub(crate) fn appearance(&self) -> Appearance {
-        self.appearance.get()
+        self.imp().appearance.get()
     }
 
     /// The display-wide preference shared by every window.
     pub(crate) fn preference(&self) -> ThemePreference {
-        self.preference.get()
+        self.imp().preference.get()
     }
 
     /// Applies a shared preference and synchronizes all window palettes.
-    /// Listeners hear about it even when the drawn appearance stays the
-    /// same, so every window's Appearance menu shows the new choice.
+    /// Windows hear `appearance-changed` even when the drawn appearance
+    /// stays the same, so every window's Appearance menu shows the new
+    /// choice.
     pub(crate) fn set_preference(&self, preference: ThemePreference) {
-        let changed = self.preference.replace(preference) != preference;
-        let redrawn = self.draw(preference.resolve(self.desktop_appearance.get()));
+        let imp = self.imp();
+        let changed = imp.preference.replace(preference) != preference;
+        let redrawn = self.draw(preference.resolve(imp.desktop_appearance.get()));
         if changed && !redrawn {
-            self.notify_appearance();
+            self.emit_by_name::<()>(APPEARANCE_CHANGED, &[]);
         }
     }
 
     /// Records the desktop's colour scheme and follows it when the
     /// preference is [`ThemePreference::System`].
     pub(crate) fn set_desktop_appearance(&self, desktop: Appearance) {
-        self.desktop_appearance.set(desktop);
+        self.imp().desktop_appearance.set(desktop);
         self.draw(self.preference().resolve(desktop));
     }
 
-    /// Switches the palette to `appearance` and tells the listeners.
+    /// Switches the palette to `appearance` and tells the windows.
     /// Returns false when it was drawn already.
     fn draw(&self, appearance: Appearance) -> bool {
-        if self.appearance.replace(appearance) == appearance {
+        if self.imp().appearance.replace(appearance) == appearance {
             return false;
         }
-        self.palette_provider
-            .load_from_string(stylesheets::palette(appearance));
-        // GTK's built-in theme draws whatever the skin leaves unstyled, so
-        // it switches variant too. This is the application's own setting;
-        // GNOME's is never changed.
-        if let Some(settings) = gtk::Settings::default() {
-            settings.set_gtk_application_prefer_dark_theme(appearance == Appearance::Dark);
-        }
-        self.notify_appearance();
+        self.providers().draw_palette(appearance);
+        self.emit_by_name::<()>(APPEARANCE_CHANGED, &[]);
         true
     }
 
     /// The size text is drawn at.
     pub(crate) fn text_size(&self) -> TextSize {
-        self.text_size.get()
+        self.imp().text_size.get()
     }
 
-    /// Draws text at `size` and tells the listeners when it changed.
+    /// Draws text at `size` and tells the windows when it changed.
     pub(crate) fn set_text_size(&self, size: TextSize) {
-        if self.text_size.replace(size) == size {
+        if self.imp().text_size.replace(size) == size {
             return;
         }
-        self.text_size_provider.load_from_string(&css_for_text_size(size));
-        self.notify(SkinChange::TextSize(size));
+        self.providers().draw_text_size(size);
+        self.emit_by_name::<()>(TEXT_SIZE_CHANGED, &[]);
     }
 
     /// The contrast drawn now, for tests that follow the desktop setting.
     #[cfg(test)]
     pub(crate) fn contrast(&self) -> Contrast {
-        self.contrast.get()
+        self.imp().contrast.get()
     }
 
     /// Adds the high-contrast rules for [`Contrast::High`] and removes
     /// them for [`Contrast::Normal`].
     pub(crate) fn set_contrast(&self, contrast: Contrast) {
-        if self.contrast.replace(contrast) == contrast {
+        if self.imp().contrast.replace(contrast) == contrast {
             return;
         }
-        let rules = match contrast {
-            Contrast::Normal => "",
-            Contrast::High => stylesheets::HIGH_CONTRAST_RULES,
-        };
-        self.contrast_provider.load_from_string(rules);
+        self.providers().draw_contrast(contrast);
     }
 
-    /// Registers a window's callback for palette and text-size changes;
-    /// disconnect it when the window closes.
-    ///
-    /// # Panics
-    ///
-    /// Only after `usize::MAX` registrations in one process.
-    pub(crate) fn connect_changed(&self, callback: impl Fn(SkinChange) + 'static) -> ListenerId {
-        let number = self.next_listener.get();
-        let next = number
-            .checked_add(1)
-            .expect("appearance listener IDs cannot be exhausted");
-        self.next_listener.set(next);
-        let id = ListenerId(number);
-        self.listeners.borrow_mut().push(SkinListener {
-            id,
-            callback: Rc::new(callback),
-        });
-        id
+    /// Calls `callback` whenever the palette or the theme choice changed;
+    /// a window disconnects the returned handler when it closes.
+    pub(crate) fn connect_appearance_changed(&self, callback: impl Fn() + 'static) -> glib::SignalHandlerId {
+        self.connect_local(APPEARANCE_CHANGED, false, move |_| {
+            callback();
+            None
+        })
     }
 
-    /// Removes a callback returned by [`Self::connect_changed`].
-    pub(crate) fn disconnect_changed(&self, id: ListenerId) {
-        self.listeners.borrow_mut().retain(|listener| listener.id != id);
+    /// Calls `callback` whenever text is drawn at another size; a window
+    /// disconnects the returned handler when it closes.
+    pub(crate) fn connect_text_size_changed(&self, callback: impl Fn() + 'static) -> glib::SignalHandlerId {
+        self.connect_local(TEXT_SIZE_CHANGED, false, move |_| {
+            callback();
+            None
+        })
     }
 
-    /// Number of registered callbacks; closing a window must lower it.
-    pub(crate) fn listener_count(&self) -> usize {
-        self.listeners.borrow().len()
+    /// True while anything is connected to the skin's signals; a closed
+    /// window must leave nothing behind.
+    #[cfg(test)]
+    pub(crate) fn has_listeners(&self) -> bool {
+        self.is_connected(APPEARANCE_CHANGED) || self.is_connected(TEXT_SIZE_CHANGED)
     }
 
-    /// Tells the listeners which appearance is drawn now.
-    fn notify_appearance(&self) {
-        self.notify(SkinChange::Appearance(self.appearance()));
+    /// True while a handler is connected to the signal `name`.
+    #[cfg(test)]
+    fn is_connected(&self, name: &str) -> bool {
+        let signal = glib::subclass::SignalId::lookup(name, Self::static_type())
+            .expect("the skin registers both of its signals");
+        glib::signal::signal_has_handler_pending(self, signal, None, true)
     }
-
-    /// Calls every listener with `change`. They are copied out first, so a
-    /// listener may connect or disconnect others.
-    fn notify(&self, change: SkinChange) {
-        let callbacks: Vec<_> = self
-            .listeners
-            .borrow()
-            .iter()
-            .map(|listener| Rc::clone(&listener.callback))
-            .collect();
-        for callback in callbacks {
-            callback(change);
-        }
-    }
-}
-
-/// Uses GTK's own theme under the skin, in its light variant until the
-/// skin draws dark.
-fn force_builtin_theme(settings: &gtk::Settings) {
-    settings.set_gtk_theme_name(Some("Default"));
-    settings.set_gtk_application_prefer_dark_theme(false);
-}
-
-/// A provider's place in the skin's cascade. Each layer sits one step
-/// above the one before it, above the application priority, so it wins
-/// over the layers before it.
-#[derive(Debug, Clone, Copy)]
-enum Layer {
-    /// The rules of every region of the window.
-    Rules,
-    /// Font sizes and heights generated for the text size.
-    TextSize,
-    /// The colour tokens the rules use.
-    Palette,
-    /// The high-contrast rules.
-    HighContrast,
-}
-
-impl Layer {
-    /// The GTK style priority of this layer.
-    fn priority(self) -> u32 {
-        let steps_above_application = match self {
-            Layer::Rules => 0,
-            Layer::TextSize => 1,
-            Layer::Palette => 2,
-            Layer::HighContrast => 3,
-        };
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + steps_above_application
-    }
-}
-
-/// Adds a provider with `css` to `display` at `layer`, and returns it so
-/// it can be reloaded.
-fn add_provider(display: &gdk::Display, css: &str, layer: Layer) -> gtk::CssProvider {
-    let provider = gtk::CssProvider::new();
-    provider.load_from_string(css);
-    gtk::style_context_add_provider_for_display(display, &provider, layer.priority());
-    provider
 }

@@ -50,6 +50,7 @@ mod tests {
     use std::collections::BTreeSet;
     use std::rc::Rc;
 
+    use super::super::fonts::css_for_text_size;
     use super::*;
     use crate::text_size::TextSize;
 
@@ -157,7 +158,7 @@ mod tests {
 
     #[gtk::test]
     fn every_stylesheet_parses_without_errors() {
-        let text_sizes = TextSize::all().map(crate::theme::css_for_text_size);
+        let text_sizes = TextSize::all().map(css_for_text_size);
         let sheets = [RULES, HIGH_CONTRAST_RULES, LIGHT_PALETTE, DARK_PALETTE]
             .into_iter()
             .map(str::to_owned)

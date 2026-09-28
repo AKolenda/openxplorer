@@ -39,12 +39,12 @@ impl AppState {
     /// desktop's colour scheme. `None` without a display.
     pub(super) fn new(app: &gtk::Application, settings: Settings) -> Option<Self> {
         let display = gtk::gdk::Display::default()?;
-        let skin = Rc::new(Skin::install(&display));
+        let skin = Skin::install(&display);
         Some(Self::with_skin(app, skin, settings))
     }
 
     /// The application state around an installed `skin`.
-    fn with_skin(app: &gtk::Application, skin: Rc<Skin>, settings: Settings) -> Self {
+    fn with_skin(app: &gtk::Application, skin: Skin, settings: Settings) -> Self {
         let preferences = &settings.data().preferences;
         skin.set_preference(ThemePreference::parse(&preferences.theme));
         skin.set_text_size(TextSize::from_percent(preferences.text_size));
@@ -151,7 +151,7 @@ pub(super) fn active_window(app: &gtk::Application) -> Option<BrowserWindow> {
 
 /// Applies the desktop's light or dark scheme to `skin` now and on every
 /// change.
-fn follow_system_scheme(skin: &Rc<Skin>) -> Rc<SystemScheme> {
+fn follow_system_scheme(skin: &Skin) -> Rc<SystemScheme> {
     let scheme = SystemScheme::new(glib::clone!(
         #[weak]
         skin,
@@ -162,7 +162,7 @@ fn follow_system_scheme(skin: &Rc<Skin>) -> Rc<SystemScheme> {
 }
 
 /// Applies the desktop's contrast to `skin` now and on every change.
-fn follow_contrast(skin: &Rc<Skin>) -> ContrastSetting {
+fn follow_contrast(skin: &Skin) -> ContrastSetting {
     let setting = ContrastSetting::watch(glib::clone!(
         #[weak]
         skin,

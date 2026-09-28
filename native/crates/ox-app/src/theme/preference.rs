@@ -8,9 +8,11 @@
 use crate::icons::Glyph;
 
 /// The appearance actually drawn.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Appearance {
-    /// Light surfaces with dark text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub(crate) enum Appearance {
+    /// Light surfaces with dark text; the skin draws it until told
+    /// otherwise.
+    #[default]
     Light,
     /// Dark surfaces with light text.
     Dark,
@@ -35,9 +37,10 @@ impl Appearance {
 }
 
 /// The user's choice in settings (`preferences.theme`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ThemePreference {
-    /// Follow the desktop colour scheme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ThemePreference {
+    /// Follow the desktop colour scheme; the choice when none is saved.
+    #[default]
     System,
     /// Use the light palette regardless of the desktop preference.
     Light,
@@ -49,7 +52,7 @@ impl ThemePreference {
     /// Parses `system`, `light` or `dark`; anything else means `system`,
     /// as in `applyTheme`.
     pub(crate) fn parse(value: &str) -> Self {
-        Self::from_key(value).unwrap_or(ThemePreference::System)
+        Self::from_key(value).unwrap_or_default()
     }
 
     /// The preference for an action-state key, or `None` for another value.

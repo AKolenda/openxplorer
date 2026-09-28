@@ -14,9 +14,10 @@ const ACCESSIBILITY_SCHEMA: &str = "org.gnome.desktop.a11y.interface";
 const HIGH_CONTRAST_KEY: &str = "high-contrast";
 
 /// How much contrast the desktop asks for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum Contrast {
     /// The skin as designed.
+    #[default]
     Normal,
     /// Stronger outlines for the selected sidebar row and keyboard focus.
     High,

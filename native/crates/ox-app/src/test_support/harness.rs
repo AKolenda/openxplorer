@@ -37,7 +37,7 @@ pub(crate) const STANDARD_NAMES: [&str; 4] = ["Documents", "Notes 2.txt", "Notes
 #[derive(Debug)]
 struct TestProcess {
     app: gtk::Application,
-    skin: Rc<Skin>,
+    skin: Skin,
 }
 
 impl TestProcess {
@@ -53,7 +53,7 @@ impl TestProcess {
         crate::window::install_accelerators(&app);
         let display = gdk::Display::default()
             .expect("window tests run on a private display: use native/tools/check.py");
-        let skin = Rc::new(Skin::install(&display));
+        let skin = Skin::install(&display);
         Self { app, skin }
     }
 }
@@ -69,8 +69,8 @@ pub(crate) fn application() -> gtk::Application {
 }
 
 /// The skin every test window shares.
-pub(crate) fn skin() -> Rc<Skin> {
-    TEST_PROCESS.with(|process| Rc::clone(&process.skin))
+pub(crate) fn skin() -> Skin {
+    TEST_PROCESS.with(|process| process.skin.clone())
 }
 
 /// Handles everything already queued on the main loop.
@@ -204,7 +204,13 @@ impl TestWindow {
     /// A window with its own settings file, showing `uri` once listed.
     /// Opening files is recorded instead of starting applications.
     pub(crate) fn open(uri: &str) -> Self {
-        let test = Self::without_tabs();
+        Self::open_with_skin(uri, &skin())
+    }
+
+    /// A window like [`Self::open`] that follows `skin` instead of the
+    /// shared one, for tests that watch what a window connects to it.
+    pub(crate) fn open_with_skin(uri: &str, skin: &Skin) -> Self {
+        let test = Self::with_skin(skin);
         test.show(uri);
         test
     }
@@ -212,8 +218,14 @@ impl TestWindow {
     /// A window with its own settings file and no tab yet, for tests that
     /// watch the first listing.
     pub(crate) fn without_tabs() -> Self {
+        Self::with_skin(&skin())
+    }
+
+    /// A window with its own settings file and no tab yet, following
+    /// `skin`.
+    fn with_skin(skin: &Skin) -> Self {
         let settings = tempfile::tempdir().expect("the test home has room for settings");
-        let context = AppContext::new(skin(), Settings::open(settings.path()));
+        let context = AppContext::new(skin.clone(), Settings::open(settings.path()));
         context.record_launches();
         Self {
             window: BrowserWindow::new(&application(), &context),

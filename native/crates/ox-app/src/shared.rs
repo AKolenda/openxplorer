@@ -41,7 +41,7 @@ mod imp {
     #[derive(Debug, Default)]
     pub struct AppContext {
         /// The skin every window draws with.
-        pub(super) skin: OnceCell<Rc<Skin>>,
+        pub(super) skin: OnceCell<Skin>,
         /// The shared settings file and its queue of changes.
         pub(super) settings: OnceCell<Rc<SettingsStore>>,
         /// SMB servers and shares browsed this session, oldest first.
@@ -76,7 +76,7 @@ impl AppContext {
     /// # Panics
     ///
     /// Never: a new object has no skin or settings yet.
-    pub fn new(skin: Rc<Skin>, settings: Settings) -> Self {
+    pub(crate) fn new(skin: Skin, settings: Settings) -> Self {
         let context: Self = glib::Object::new();
         let imp = context.imp();
         imp.skin.set(skin).expect("a new AppContext has no skin yet");
@@ -87,7 +87,7 @@ impl AppContext {
     }
 
     /// The display skin shared by every window.
-    pub fn skin(&self) -> &Rc<Skin> {
+    pub(crate) fn skin(&self) -> &Skin {
         self.imp()
             .skin
             .get()
