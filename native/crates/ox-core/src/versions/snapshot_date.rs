@@ -282,11 +282,13 @@ struct Cursor<'a> {
 }
 
 impl<'a> Cursor<'a> {
+    /// A cursor at `position` in `characters`.
     fn new(characters: &'a [char], position: usize) -> Self {
         Self { characters, position }
     }
 
-    fn next(&self) -> Option<char> {
+    /// The character at the cursor, without reading it.
+    fn peek(&self) -> Option<char> {
         self.characters.get(self.position).copied()
     }
 
@@ -317,9 +319,9 @@ impl<'a> Cursor<'a> {
 
     /// Reads one of `choices`.
     fn one_of(&mut self, choices: &[char]) -> Option<char> {
-        let next = self.next().filter(|next| choices.contains(next))?;
+        let character = self.peek().filter(|character| choices.contains(character))?;
         self.position += 1;
-        Some(next)
+        Some(character)
     }
 
     /// Reads one of `choices` if it is next.
@@ -330,7 +332,7 @@ impl<'a> Cursor<'a> {
     /// True at the end of the name or before a character that is not a
     /// digit, so a number read before it is complete.
     fn is_at_number_end(&self) -> bool {
-        self.next().is_none_or(|next| !next.is_ascii_digit())
+        self.peek().is_none_or(|character| !character.is_ascii_digit())
     }
 }
 

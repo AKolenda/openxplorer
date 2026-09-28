@@ -37,7 +37,7 @@
 //! | `lookup` | Finding the versions of an item |
 //! | `provider` | [`SnapshotProvider`] and its GIO implementation |
 //! | `snapshot_date` | [`SnapshotDate`]: the date in a snapshot's name |
-//! | `snapshot_location` | [`snapshot_location`]: which snapshot a location is in |
+//! | `snapshot_location` | [`snapshot_location()`]: which snapshot a location is in |
 //! | `error` | [`VersionsError`] |
 
 mod error;

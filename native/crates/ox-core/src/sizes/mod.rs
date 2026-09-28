@@ -14,9 +14,10 @@
 //!   entered. Hard links count once. Anything left out or unreadable makes
 //!   the result partial; an unknown size is never counted as zero.
 //! - PROP-029: a scan stops as partial after [`MAX_ENTRIES`] items or
-//!   [`MAX_DURATION`], a cancelled scan returns what it counted, and an
-//!   error on the scanned folder itself reaches the caller so that an
-//!   unmounted share can be mounted and scanned again.
+//!   [`MAX_DURATION`], a scan cancelled after its folder was read returns
+//!   what it counted, and an error on the scanned folder itself reaches
+//!   the caller so that an unmounted share can be mounted and scanned
+//!   again.
 //! - PROP-030: network shares are read through GIO metadata only.
 //!
 //! | Module | Responsibility |

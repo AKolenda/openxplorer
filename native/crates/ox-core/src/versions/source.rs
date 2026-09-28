@@ -161,20 +161,40 @@ mod tests {
         assert_eq!(error.to_string(), "Unknown snapshot folder layout.");
     }
 
+    /// A live folder and a collection folder that is it or contains it.
+    struct ContainingCase {
+        live: &'static str,
+        collection: &'static str,
+    }
+
+    /// Collections that would make their live folder read-only.
+    const CONTAINING_CASES: [ContainingCase; 3] = [
+        ContainingCase {
+            live: "smb://nas/share",
+            collection: "smb://nas/share",
+        },
+        ContainingCase {
+            live: "smb://nas/share/work",
+            collection: "smb://nas/share",
+        },
+        ContainingCase {
+            live: "/srv/data",
+            collection: "/srv",
+        },
+    ];
+
     /// parity: PROP-023
     #[test]
     fn a_collection_that_contains_its_live_folder_is_refused() {
-        for (live, collection) in [
-            ("smb://nas/share", "smb://nas/share"),
-            ("smb://nas/share/work", "smb://nas/share"),
-            ("/srv/data", "/srv"),
-        ] {
-            let error = SnapshotSource::new(live, collection, SnapshotLayout::Direct).unwrap_err();
+        for case in CONTAINING_CASES {
+            let error = SnapshotSource::new(case.live, case.collection, SnapshotLayout::Direct).unwrap_err();
 
             assert_eq!(
                 error.to_string(),
                 "The snapshot folder must not contain the current live folder.",
-                "{live} in {collection}"
+                "{} in {}",
+                case.live,
+                case.collection
             );
         }
     }

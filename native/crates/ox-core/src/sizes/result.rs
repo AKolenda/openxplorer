@@ -126,26 +126,55 @@ impl FolderSize {
 mod tests {
     use super::*;
 
+    /// A status and the `status` and `reason` the Python app reports for
+    /// it.
+    struct StatusCase {
+        status: ScanStatus,
+        name: &'static str,
+        reason: &'static str,
+    }
+
+    /// Every status, with every reason a partial result can have.
+    const STATUS_CASES: [StatusCase; 6] = [
+        StatusCase {
+            status: ScanStatus::Scanning,
+            name: "scanning",
+            reason: "",
+        },
+        StatusCase {
+            status: ScanStatus::Complete,
+            name: "complete",
+            reason: "",
+        },
+        StatusCase {
+            status: ScanStatus::Cancelled,
+            name: "cancelled",
+            reason: "Cancelled by user",
+        },
+        StatusCase {
+            status: ScanStatus::Partial(PartialReason::TimeLimitReached),
+            name: "partial",
+            reason: "Time limit reached",
+        },
+        StatusCase {
+            status: ScanStatus::Partial(PartialReason::ScanLimitReached),
+            name: "partial",
+            reason: "Scan limit reached",
+        },
+        StatusCase {
+            status: ScanStatus::Partial(PartialReason::EntriesExcluded),
+            name: "partial",
+            reason: "Some links, mounts, snapshot collections or unreadable entries were excluded",
+        },
+    ];
+
     /// parity: PROP-029
     #[test]
     fn statuses_and_reasons_use_the_python_wording() {
-        let cases = [
-            (ScanStatus::Scanning, "scanning", ""),
-            (ScanStatus::Complete, "complete", ""),
-            (ScanStatus::Cancelled, "cancelled", "Cancelled by user"),
-            (
-                ScanStatus::Partial(PartialReason::TimeLimitReached),
-                "partial",
-                "Time limit reached",
-            ),
-            (
-                ScanStatus::Partial(PartialReason::ScanLimitReached),
-                "partial",
-                "Scan limit reached",
-            ),
-        ];
-        for (status, name, reason) in cases {
-            assert_eq!((status.as_str(), status.reason()), (name, reason));
+        for case in STATUS_CASES {
+            let reported = (case.status.as_str(), case.status.reason());
+
+            assert_eq!(reported, (case.name, case.reason), "{:?}", case.status);
         }
     }
 }

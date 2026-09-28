@@ -38,9 +38,14 @@ pub fn scan_folder_size(
 }
 
 /// [`scan_folder_size`] on a GIO worker thread, so the window can await
-/// the totals without blocking. Cancelling `cancel` stops the scan between
-/// two metadata reads and aborts a GIO read in progress; the scan then
-/// returns what it counted.
+/// the totals without blocking.
+///
+/// Cancelling `cancel` stops the scan between two metadata reads and
+/// aborts a GIO read in progress. Once the metadata of the scanned folder
+/// itself was read, the scan returns what it counted with
+/// [`ScanStatus::Cancelled`](super::ScanStatus::Cancelled); before that it
+/// returns `Err(SizeError::Read(EntryError::Cancelled))`. Both are the
+/// user's Cancel, not an unavailable size.
 ///
 /// `progress` runs on the worker thread. A window forwards the totals to
 /// its main context, for example with `glib::MainContext::invoke` and a
@@ -49,6 +54,10 @@ pub fn scan_folder_size(
 /// # Errors
 ///
 /// As [`scan_folder_size`].
+///
+/// # Panics
+///
+/// Re-raises a panic of the scan on the worker thread, which is a bug.
 pub async fn scan_folder_size_in_background(
     uri: String,
     cancel: Cancellation,

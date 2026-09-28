@@ -101,15 +101,18 @@ impl<'a> FolderSizeScan<'a> {
 
     /// Totals the folder at `uri`. `progress` receives the totals when the
     /// scan starts, at most every 200 ms while it runs, and when it ends.
-    /// Problems below the folder are counted, not returned, and a cancelled
-    /// scan returns what it counted.
+    /// Problems below the folder are counted, not returned. A scan
+    /// cancelled after the metadata of the folder itself was read returns
+    /// what it counted, with [`ScanStatus::Cancelled`].
     ///
     /// # Errors
     ///
     /// [`SizeError::Location`] for an address the location rules refuse,
     /// [`SizeError::ServerRoot`] for a whole SMB server,
     /// [`SizeError::NotAFolder`] for a file or a link, and
-    /// [`SizeError::Read`] when the folder itself cannot be read.
+    /// [`SizeError::Read`] when the folder itself cannot be read. A scan
+    /// cancelled before or while the folder's metadata is read returns
+    /// [`SizeError::Read`] with [`EntryError::Cancelled`].
     pub fn run(
         &self,
         uri: &str,
@@ -398,7 +401,7 @@ mod tests {
     /// Progress is reported at the start and the end, and in between at
     /// most once per [`PROGRESS_INTERVAL`] of the clock.
     ///
-    /// parity: PROP-026
+    /// parity: PROP-026, PERF-006
     #[test]
     fn progress_between_start_and_end_waits_for_the_interval() {
         let folder = tempfile::tempdir().unwrap();

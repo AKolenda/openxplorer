@@ -166,6 +166,10 @@ impl PreviousVersions {
     /// # Errors
     ///
     /// As [`find_versions`](Self::find_versions).
+    ///
+    /// # Panics
+    ///
+    /// Re-raises a panic of the lookup on the worker thread, which is a bug.
     pub async fn find_versions_in_background(
         self: Arc<Self>,
         uri: String,
