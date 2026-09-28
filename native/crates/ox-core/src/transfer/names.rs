@@ -30,13 +30,15 @@ const RANDOM_DIGITS: usize = 32;
 pub(crate) const PAYLOAD_NAME: &str = "payload";
 
 /// 32 lowercase hexadecimal digits from `/dev/urandom` (like
-/// `uuid.uuid4().hex` in Python: unpredictable, not merely unique).
+/// `uuid.uuid4().hex` in Python: unpredictable, not merely unique). The
+/// engine's names and the ZIP extractor's staging names in
+/// [`crate::archive`] use them.
 ///
 /// # Errors
 ///
 /// When the kernel's random source cannot be read. Each caller explains
 /// the failure in terms of the name it asked for.
-fn random_hex() -> io::Result<String> {
+pub(crate) fn random_hex() -> io::Result<String> {
     let mut bytes = [0u8; RANDOM_DIGITS / 2];
     let mut source = std::fs::File::open("/dev/urandom")?;
     source.read_exact(&mut bytes)?;

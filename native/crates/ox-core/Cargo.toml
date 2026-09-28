@@ -22,6 +22,11 @@ rustix = { workspace = true, features = ["event"] }
 # SQLite.
 rusqlite.workspace = true
 oo7.workspace = true
+# ZIP decompression and CRC-32 checks for `archive`; see the workspace manifest.
+flate2.workspace = true
+bzip2.workspace = true
+lzma-rust2.workspace = true
+crc32fast.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -13,24 +13,47 @@
       "evidence": []
     },
     "archiveExtract": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Extraction into a new folder is ported to ox-core and tested: member checks and limits before anything is written, the write guard, private staging published without replacing anything, rollback on damaged data, failed writes and cancellation, and no archive permissions. The native Extract dialog and transfer panel are not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/archive_extract.rs::extracts_files_folders_and_empty_files_into_a_new_folder",
+        "native/crates/ox-core/tests/archive_extract_checks.rs::unsafe_member_paths_are_refused_with_nothing_written",
+        "native/crates/ox-core/tests/archive_extract_rollback.rs::a_crc_failure_rolls_back",
+        "native/crates/ox-core/tests/archive_extract_rollback.rs::a_folder_created_meanwhile_is_never_replaced",
+        "native/crates/ox-core/tests/archive_extract_rollback.rs::cancelling_while_writing_removes_the_staging_folder",
+        "native/crates/ox-core/tests/archive_extract_dispatch.rs::member_destinations_are_checked_before_any_staging",
+        "native/crates/ox-core/tests/archive_gio.rs::extraction_through_gio_never_applies_archive_permissions"
+      ]
     },
     "archiveInspect": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "The preflight is ported to ox-core and tested: every member is checked with the extraction rules and summarised without writing anything, on a worker thread. The native Extract dialog is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/archive_extract_checks.rs::inspection_summarises_and_writes_nothing",
+        "native/crates/ox-core/tests/archive_extract_dispatch.rs::inspection_and_extraction_agree",
+        "native/crates/ox-core/tests/archive_gio.rs::background_variants_return_the_blocking_results"
+      ]
     },
     "archiveList": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Listing is ported to ox-core and tested from the central directory alone: unsafe names, links and special files hidden and counted, the 32 MiB directory and 100,000 member limits, and archives on shares read through seekable GIO streams. The native Compressed folder dialog is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/archive_browse.rs::listing_extracts_nothing",
+        "native/crates/ox-core/tests/archive_browse.rs::rows_list_folders_first_by_name_ignoring_case",
+        "native/crates/ox-core/tests/archive_browse.rs::dangerous_members_are_hidden_and_counted",
+        "native/crates/ox-core/tests/archive_browse.rs::more_than_100000_members_are_left_to_an_archive_manager",
+        "native/crates/ox-core/tests/archive_gio.rs::a_real_zip_is_read_through_short_reads"
+      ]
     },
     "archiveOpenMember": {
-      "status": "pending",
-      "note": "Port and verify this desktop workflow in the native application.",
-      "evidence": []
+      "status": "core-tested",
+      "note": "Opening one document, image or media member as a read-only copy in a private runtime folder is ported to ox-core and tested, with the type, encryption, size and ratio refusals. Opening the copy with its default application from the native UI is not wired yet.",
+      "evidence": [
+        "native/crates/ox-core/tests/archive_browse.rs::only_the_selected_member_is_copied_read_only",
+        "native/crates/ox-core/tests/archive_browse.rs::a_script_is_not_opened",
+        "native/crates/ox-core/tests/archive_browse.rs::encrypted_and_oversized_members_are_listed_but_not_opened",
+        "native/crates/ox-core/tests/archive_gio.rs::previews_go_to_the_private_runtime_directory"
+      ]
     },
     "authReply": {
       "status": "pending",

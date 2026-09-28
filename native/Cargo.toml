@@ -35,6 +35,14 @@ rusqlite = { version = "0.38", default-features = false, features = ["hooks"] }
 # libsecret). Pure Rust with an encrypted session, so no C library or -dev
 # package is needed; async-io keeps it independent of Tokio.
 oo7 = { version = "0.6", default-features = false, features = ["async-std", "native_crypto"] }
+# ZIP member decompression for ox-core's `archive`: raw deflate, bzip2 and LZMA
+# are the methods besides "stored" that desktop/zip_extraction.py accepts. All
+# three are pure Rust, so no C library is linked.
+flate2 = "1.1"
+bzip2 = "0.6"
+lzma-rust2 = { version = "0.21", default-features = false, features = ["std", "optimization"] }
+# The CRC-32 every extracted or previewed ZIP member is checked against.
+crc32fast = "1.5"
 tempfile = "3"
 ox-core = { path = "crates/ox-core" }
 
