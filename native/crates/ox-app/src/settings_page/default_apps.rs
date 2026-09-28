@@ -251,8 +251,7 @@ fn handler_label(desktop_id: Option<&str>) -> String {
 /// The two choices "Make `OpenXplorer` default" applies, starting as the
 /// Python checkboxes do: Show in folder on, ZIP files off.
 fn make_default_options_group(pending: Availability) -> SettingsGroup {
-    let group = SettingsGroup::new("When you make OpenXplorer the default");
-    group.set_shared_availability(pending);
+    let group = SettingsGroup::pending("When you make OpenXplorer the default", pending);
     let show_in_folder = parts::switch();
     show_in_folder.set_active(true);
     group.add_row(&pending_row(
@@ -286,8 +285,7 @@ fn pending_row(
 
 /// A group of one row with `buttons`, all waiting for `pending`.
 fn button_group(title: &str, text: RowText, buttons: &[&str], pending: Availability) -> SettingsGroup {
-    let group = SettingsGroup::new(title);
-    group.set_shared_availability(pending);
+    let group = SettingsGroup::pending(title, pending);
     let row = SettingRow::new(text);
     for label in buttons {
         row.add_control(
@@ -317,8 +315,7 @@ fn help_group(page: &SettingsPage) -> SettingsGroup {
 
 /// The undo actions, rarely needed, at the bottom.
 fn advanced_group(pending: Availability) -> SettingsGroup {
-    let group = SettingsGroup::new("Advanced");
-    group.set_shared_availability(pending);
+    let group = SettingsGroup::pending("Advanced", pending);
     for text in [RESTORE_PREVIOUS, RESTORE_ZIP_HANDLER, DISABLE_SHOW_IN_FOLDER] {
         let row = SettingRow::new(text);
         row.add_control(

@@ -42,10 +42,16 @@ impl Availability {
             Availability::Ready => None,
             Availability::Unported(milestone) => Some(milestone.notice()),
             Availability::SavedForLater(milestone) => Some(format!(
-                "Saved for OpenXplorer; the native preview follows it with {}.",
+                "Saved for the installed OpenXplorer; this preview follows it once it has {}.",
                 milestone.description()
             )),
         }
+    }
+
+    /// Whether a row's controls take input: an unported row's are
+    /// disabled, so none of them looks as if it did something.
+    const fn enables_controls(self) -> bool {
+        !matches!(self, Availability::Unported(_))
     }
 }
 
@@ -103,6 +109,8 @@ mod imp {
         pub(super) text: OnceCell<RowText>,
         /// Whether the preview can do what the row controls.
         pub(super) availability: Cell<Availability>,
+        /// What the heading of the row's group says for every row.
+        pub(super) heading_availability: Cell<Availability>,
         /// Where the controls go while the window has room.
         pub(super) roomy_layout: Cell<RowLayout>,
     }
@@ -152,7 +160,8 @@ impl SettingRow {
     }
 
     /// Puts `control` after the row's other controls, named for screen
-    /// readers as `name` says.
+    /// readers as `name` says. On an unported row it is disabled at once,
+    /// like the controls added before [`Self::set_availability`].
     pub(crate) fn add_control(&self, control: &impl IsA<gtk::Widget>, name: ControlName) {
         let imp = self.imp();
         let title: &gtk::Accessible = imp.title_label.upcast_ref();
@@ -161,7 +170,11 @@ impl SettingRow {
             ControlName::RowTitle => gtk::accessible::Relation::LabelledBy(&[title]),
             ControlName::OwnLabel => gtk::accessible::Relation::DescribedBy(&[title, description]),
         };
-        control.upcast_ref::<gtk::Widget>().update_relation(&[relation]);
+        let control = control.upcast_ref::<gtk::Widget>();
+        control.update_relation(&[relation]);
+        if !self.availability().enables_controls() {
+            control.set_sensitive(false);
+        }
         imp.control_slot.append(control);
     }
 
@@ -176,25 +189,36 @@ impl SettingRow {
     }
 
     /// Marks what the preview can do with the row: an unported row's
-    /// controls are disabled, and both kinds of pending row name their
-    /// milestone in a line under the description and in a tooltip.
+    /// controls are disabled, those added later too, and both kinds of
+    /// pending row name their milestone in a tooltip and in a line under
+    /// the description, unless the group's heading names it already.
     pub(crate) fn set_availability(&self, availability: Availability) {
         let imp = self.imp();
         imp.availability.set(availability);
         let notice = availability.notice();
         imp.notice_label.set_text(notice.as_deref().unwrap_or_default());
-        imp.notice_label.set_visible(notice.is_some());
         self.set_tooltip_text(notice.as_deref());
-        let is_unported = matches!(availability, Availability::Unported(_));
+        self.show_notice_unless_heading_has_it();
         for control in self.controls() {
-            control.set_sensitive(!is_unported);
+            control.set_sensitive(availability.enables_controls());
         }
     }
 
-    /// Leaves the milestone out of the row, for a group whose heading
-    /// states it for every row.
-    pub(crate) fn hide_notice(&self) {
-        self.imp().notice_label.set_visible(false);
+    /// Tells the row what its group's heading says for every row, so a row
+    /// pending the same milestone does not repeat it, whichever of the two
+    /// was set first.
+    pub(super) fn set_heading_availability(&self, heading: Availability) {
+        self.imp().heading_availability.set(heading);
+        self.show_notice_unless_heading_has_it();
+    }
+
+    /// Shows the milestone line when the row has one the heading lacks.
+    fn show_notice_unless_heading_has_it(&self) {
+        let imp = self.imp();
+        let availability = imp.availability.get();
+        let heading_has_it = availability == imp.heading_availability.get();
+        let shows_notice = availability.notice().is_some() && !heading_has_it;
+        imp.notice_label.set_visible(shows_notice);
     }
 
     /// The milestone line the row shows, if it shows one.
@@ -263,5 +287,20 @@ impl SettingRow {
                 slot.set_halign(gtk::Align::Fill);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_saved_setting_says_the_installed_app_follows_it_now() {
+        let saved = Availability::SavedForLater(Milestone::SearchAndMetadata);
+        assert_eq!(
+            saved.notice().as_deref(),
+            Some("Saved for the installed OpenXplorer; this preview follows it once it has cached search.")
+        );
+        assert_eq!(Availability::Ready.notice(), None);
     }
 }

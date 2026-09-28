@@ -81,13 +81,24 @@ impl SettingsGroup {
         group
     }
 
+    /// An empty group headed `title` whose every row waits for what
+    /// `availability` names: the heading names the milestone once, and
+    /// rows pending the same milestone leave it out.
+    pub(crate) fn pending(title: &str, availability: Availability) -> Self {
+        let group = Self::new(title);
+        let imp = group.imp();
+        imp.shared_availability.set(availability);
+        let notice = availability.notice();
+        imp.notice_label.set_text(notice.as_deref().unwrap_or_default());
+        imp.notice_label.set_visible(notice.is_some());
+        group
+    }
+
     /// Adds `row` at the end. A row pending the milestone the heading
-    /// already names does not repeat it.
+    /// already names does not repeat it, whether its availability was set
+    /// before or after.
     pub(crate) fn add_row(&self, row: &SettingRow) {
-        let shared = self.imp().shared_availability.get();
-        if shared != Availability::Ready && row.availability() == shared {
-            row.hide_notice();
-        }
+        row.set_heading_availability(self.imp().shared_availability.get());
         self.imp().rows.append(row);
     }
 
@@ -103,16 +114,6 @@ impl SettingsGroup {
         while let Some(row) = rows.first_child() {
             rows.remove(&row);
         }
-    }
-
-    /// Names in the heading what the preview can do with every row, which
-    /// the rows added afterwards then leave out.
-    pub(crate) fn set_shared_availability(&self, availability: Availability) {
-        let imp = self.imp();
-        imp.shared_availability.set(availability);
-        let notice = availability.notice();
-        imp.notice_label.set_text(notice.as_deref().unwrap_or_default());
-        imp.notice_label.set_visible(notice.is_some());
     }
 
     /// The milestone line the heading shows, if it shows one.
@@ -146,5 +147,74 @@ impl SettingsGroup {
         for row in self.rows() {
             row.fit_to_width(width);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings_page::row::ControlName;
+    use crate::settings_page::search::RowText;
+    use crate::window::Milestone;
+
+    const RESTORE: RowText = RowText {
+        title: "Restore previous",
+        description: "Restores the recorded file handlers.",
+        keywords: "undo",
+    };
+
+    const PENDING: Availability = Availability::Unported(Milestone::DesktopIntegration);
+
+    /// A row of [`RESTORE`] with one button.
+    fn row_with_a_button() -> (SettingRow, gtk::Button) {
+        let row = SettingRow::new(RESTORE);
+        let button = gtk::Button::with_label(RESTORE.title);
+        row.add_control(&button, ControlName::OwnLabel);
+        (row, button)
+    }
+
+    /// The heading names the milestone once, whether a row's availability
+    /// was set before or after the row joined the group.
+    ///
+    /// parity: SET-019
+    #[gtk::test]
+    fn a_pending_group_names_its_milestone_once_whatever_the_order() {
+        let group = SettingsGroup::pending("Advanced", PENDING);
+        let (set_before, _) = row_with_a_button();
+        set_before.set_availability(PENDING);
+        group.add_row(&set_before);
+        let (set_after, _) = row_with_a_button();
+        group.add_row(&set_after);
+        set_after.set_availability(PENDING);
+
+        assert_eq!(group.shown_notice(), PENDING.notice());
+        assert_eq!(set_before.shown_notice(), None);
+        assert_eq!(set_after.shown_notice(), None);
+    }
+
+    /// parity: SET-019
+    #[gtk::test]
+    fn a_row_pending_another_milestone_than_its_heading_names_its_own() {
+        let group = SettingsGroup::pending("Advanced", PENDING);
+        let (row, _) = row_with_a_button();
+        group.add_row(&row);
+        let other = Availability::Unported(Milestone::FileOperations);
+
+        row.set_availability(other);
+
+        assert_eq!(row.shown_notice(), other.notice());
+    }
+
+    /// parity: SET-019
+    #[gtk::test]
+    fn a_control_added_after_the_row_is_marked_unported_is_disabled_too() {
+        let (row, added_before) = row_with_a_button();
+        row.set_availability(PENDING);
+        let added_after = gtk::Button::with_label("Test");
+
+        row.add_control(&added_after, ControlName::OwnLabel);
+
+        assert!(!added_before.is_sensitive());
+        assert!(!added_after.is_sensitive());
     }
 }

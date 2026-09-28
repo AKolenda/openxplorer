@@ -44,6 +44,9 @@ mod imp {
         pub(super) list: OnceCell<gtk::ListBox>,
         /// The chosen option's label on the button.
         pub(super) button_label: OnceCell<gtk::Label>,
+        /// The button that opens the list; it holds the list, so the list
+        /// holds it weakly.
+        pub(super) button: glib::WeakRef<gtk::MenuButton>,
     }
 
     impl ChoiceList {
@@ -147,12 +150,14 @@ impl ChoiceList {
             .button_label
             .set(label)
             .expect("a new choice list has no button yet");
-        gtk::MenuButton::builder()
+        let button = gtk::MenuButton::builder()
             .child(&content)
             .popover(self)
             .valign(gtk::Align::Center)
             .css_classes(["choice-button"])
-            .build()
+            .build();
+        self.imp().button.set(Some(&button));
+        button
     }
 
     /// One row per option: the check mark's place, then the label.
@@ -183,11 +188,16 @@ impl ChoiceList {
         options.get(position).cloned().unwrap_or_default()
     }
 
-    /// Shows the chosen option on the button and marks its row.
+    /// Shows the chosen option on the button and marks its row. A screen
+    /// reader hears it as the button's description, after the row's title
+    /// that names the button: "Text size, 100% (default)".
     fn show_choice(&self) {
         let chosen = self.chosen_label();
         if let Some(label) = self.imp().button_label.get() {
             label.set_text(&chosen);
+        }
+        if let Some(button) = self.imp().button.upgrade() {
+            button.update_property(&[gtk::accessible::Property::Description(&chosen)]);
         }
         let selected = self.selected();
         let mut position = 0;
@@ -229,5 +239,29 @@ impl ChoiceList {
         if let Some(row) = self.list().row_at_index(position) {
             row.grab_focus();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// GTK cannot read an accessible description back, so the test checks
+    /// that the button has one; `show_choice` sets it to the chosen label.
+    #[gtk::test]
+    fn the_button_describes_the_chosen_option_to_screen_readers() {
+        let labels = ["30 seconds".to_owned(), "1 minute".to_owned()];
+        let drop_down = ChoiceButton::new(&labels);
+        // Choosing closes the list, which needs a window to hand focus to.
+        let window = gtk::Window::builder().child(&drop_down.button).build();
+
+        drop_down.choices.choose_labelled("1 minute");
+
+        assert_eq!(drop_down.choices.chosen_label(), "1 minute");
+        assert!(gtk::test_accessible_has_property(
+            &drop_down.button,
+            gtk::AccessibleProperty::Description
+        ));
+        window.destroy();
     }
 }

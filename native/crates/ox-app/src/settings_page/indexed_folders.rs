@@ -179,12 +179,10 @@ impl FolderList {
 pub(super) fn build() -> (SettingsSection, FolderList) {
     let indexed = SettingsSection::new("Indexed folders", LEAD, PageKind::Subpage);
     let pending = Availability::Unported(Milestone::SearchAndMetadata);
-    let add_group = SettingsGroup::new("Add folders to the index");
-    add_group.set_shared_availability(pending);
+    let add_group = SettingsGroup::pending("Add folders to the index", pending);
     add_group.add_row(&add_folder_row(pending));
     indexed.append_group(&add_group);
-    let group = SettingsGroup::new("Folders");
-    group.set_shared_availability(pending);
+    let group = SettingsGroup::pending("Folders", pending);
     indexed.append_group(&group);
     let list = FolderList {
         group,
