@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Helpers the window tests share: driving tabs as their widgets do, and
-//! finding the menus of the command bar and the title bar.
+//! Helpers the window tests share: driving tabs as their widgets do,
+//! saving a network location as the Python app would, finding the menus of
+//! the command bar and the title bar, and reading the art on screen.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
 
+use crate::icons::{Art, ArtImage};
 use crate::test_support::harness::{descendants, TestWindow};
 use crate::window::menu_popover::MenuPopover;
 use crate::window::session::TabId;
@@ -24,6 +27,20 @@ impl TestWindow {
     /// Closes tab `id`, as its close button does.
     pub(super) fn activate_tab_close(&self, id: TabId) {
         self.run_tab_action(WindowAction::CloseTabById, id);
+    }
+
+    /// Saves `uri` as a network location called `label`, as the Python
+    /// app would, and has the window read the settings again.
+    pub(super) fn save_share(&self, uri: &str, label: &str) {
+        let mut python_app = Settings::open(self.settings_directory());
+        python_app
+            .bookmark(
+                BookmarkAction::Add,
+                BookmarkKind::Share,
+                &BookmarkRequest::new(uri, label),
+            )
+            .expect("the settings file takes a share");
+        self.activate("refresh", None);
     }
 
     fn run_tab_action(&self, action: WindowAction, id: TabId) {
@@ -47,4 +64,19 @@ pub(super) fn app_menu(button: &gtk::MenuButton) -> MenuPopover {
         .popover()
         .and_downcast::<MenuPopover>()
         .expect("the button opens an app menu")
+}
+
+/// What every [`ArtImage`] in `widget` shows.
+pub(super) fn arts_in(widget: &impl IsA<gtk::Widget>) -> Vec<Art> {
+    descendants::<ArtImage>(widget)
+        .iter()
+        .filter_map(ArtImage::art)
+        .collect()
+}
+
+/// The [`ArtImage`] in `widget` that shows `art`, if any.
+pub(super) fn art_image_showing(widget: &impl IsA<gtk::Widget>, art: Art) -> Option<ArtImage> {
+    descendants::<ArtImage>(widget)
+        .into_iter()
+        .find(|image| image.art() == Some(art))
 }

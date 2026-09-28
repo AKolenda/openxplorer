@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The bundled icons as the window paints them: glyphs in the text colour
 //! of each appearance, the places' glyphs in their own colours, and those
-//! in the text colour while the desktop asks for high contrast.
+//! in the text colour while the desktop asks for high contrast; the green
+//! network bar and the red cross in theirs.
 
 use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::{gdk, graphene};
+use ox_core::places::NetworkKind;
 
 use super::geometry::button_for;
+use super::support::art_image_showing;
+use crate::icons::{Art, Connection};
 use crate::test_support::harness::{
-    descendants, skin, wait_for, wait_for_frames, Fixture, TestWindow, ThemeGuard,
+    descendants, skin, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::theme::contrast::Contrast;
 
@@ -24,6 +28,18 @@ const CHANNEL_TOLERANCE: f32 = 0.02;
 /// A pixel covered at least this much shows its ink's colour exactly
 /// enough to compare, once its premultiplied colour is divided back out.
 const INKED_ALPHA: u8 = 128;
+
+/// The green network bar, the current app's pipe, in both appearances
+/// (`@ox_network_bar`).
+const NETWORK_BAR_GREEN: &str = "#35a854";
+
+/// The red cross of a disconnected share, in both appearances
+/// (`@ox_critical_fill`).
+const CROSS_RED: &str = "#c42b1c";
+
+/// A pixel in GDK's default memory format: blue, green, red and alpha,
+/// premultiplied.
+type Pixel = [u8; 4];
 
 /// Restores normal contrast when a test that raised it ends, even when an
 /// assertion fails, so later tests see the skin as designed.
@@ -60,29 +76,41 @@ fn sidebar_glyph(test: &TestWindow, tint_class: &str) -> gtk::Image {
         .unwrap_or_else(|| panic!("the sidebar shows a {tint_class} glyph"))
 }
 
-/// The colour `image` paints its icon in: its most opaque pixels, with
-/// their premultiplied colour divided back out.
-fn painted_ink(image: &gtk::Image) -> gdk::RGBA {
-    let renderer = image
+/// What `widget` looks like on its window, rendered by the window's own
+/// renderer.
+fn painted(widget: &impl IsA<gtk::Widget>) -> gdk::Texture {
+    let renderer = widget
         .native()
         .and_then(|native| native.renderer())
-        .expect("the image is on a drawn window");
-    let paintable = gtk::WidgetPaintable::new(Some(image));
+        .expect("the widget is on a drawn window");
+    let paintable = gtk::WidgetPaintable::new(Some(widget));
     let snapshot = gtk::Snapshot::new();
     let width = f64::from(paintable.intrinsic_width());
     let height = f64::from(paintable.intrinsic_height());
     paintable.snapshot(&snapshot, width, height);
-    let node = snapshot.to_node().expect("the glyph paints something");
-    let texture = renderer.render_texture(&node, None::<&graphene::Rect>);
-    most_opaque_colour(&texture)
+    let node = snapshot.to_node().expect("the widget paints something");
+    renderer.render_texture(&node, None::<&graphene::Rect>)
 }
 
-/// The average un-premultiplied colour of the pixels of `texture` covered
-/// at least [`INKED_ALPHA`].
-fn most_opaque_colour(texture: &gdk::Texture) -> gdk::RGBA {
+/// The pixels of `texture`, row by row from the top.
+fn pixel_rows(texture: &gdk::Texture) -> Vec<Vec<Pixel>> {
     let downloader = gdk::TextureDownloader::new(texture);
-    let (bytes, _stride) = downloader.download_bytes();
-    let (pixels, _) = bytes.as_chunks::<4>();
+    let (bytes, stride) = downloader.download_bytes();
+    let width = usize::try_from(texture.width()).expect("a texture's width is positive");
+    let rows = bytes.chunks(stride).map(|row| &row[..width * 4]);
+    rows.map(|row| row.as_chunks::<4>().0.to_vec()).collect()
+}
+
+/// The colour `image` paints its icon in: the average of its inked
+/// pixels.
+fn painted_ink(image: &gtk::Image) -> gdk::RGBA {
+    let pixels = pixel_rows(&painted(image)).concat();
+    average_inked_colour(&pixels)
+}
+
+/// The average un-premultiplied colour of the `pixels` covered at least
+/// [`INKED_ALPHA`].
+fn average_inked_colour(pixels: &[Pixel]) -> gdk::RGBA {
     let inked: Vec<[f32; 3]> = pixels
         .iter()
         .filter(|pixel| pixel[3] >= INKED_ALPHA)
@@ -95,25 +123,44 @@ fn most_opaque_colour(texture: &gdk::Texture) -> gdk::RGBA {
     gdk::RGBA::new(channel(0), channel(1), channel(2), 1.0)
 }
 
-/// The red, green and blue of a pixel in GDK's default memory format
-/// (blue, green, red and alpha, premultiplied), with the alpha divided
-/// back out.
-fn unpremultiplied_rgb(pixel: [u8; 4]) -> [f32; 3] {
+/// The red, green and blue of `pixel`, with the alpha divided back out.
+fn unpremultiplied_rgb(pixel: Pixel) -> [f32; 3] {
     let [blue, green, red, alpha] = pixel.map(f32::from);
     [red / alpha, green / alpha, blue / alpha]
 }
 
-/// Asserts that `painted` is `expected`, channel by channel.
-fn assert_same_colour(painted: gdk::RGBA, expected: gdk::RGBA, what: &str) {
+/// Whether `painted` is `expected`, channel by channel, within
+/// [`CHANNEL_TOLERANCE`].
+fn is_same_colour(painted: gdk::RGBA, expected: gdk::RGBA) -> bool {
     let channels = [
         (painted.red(), expected.red()),
         (painted.green(), expected.green()),
         (painted.blue(), expected.blue()),
     ];
-    let is_same = channels
+    channels
         .iter()
-        .all(|(painted, expected)| (painted - expected).abs() <= CHANNEL_TOLERANCE);
+        .all(|(painted, expected)| (painted - expected).abs() <= CHANNEL_TOLERANCE)
+}
+
+/// Asserts that `painted` is `expected`, channel by channel.
+fn assert_same_colour(painted: gdk::RGBA, expected: gdk::RGBA, what: &str) {
+    let is_same = is_same_colour(painted, expected);
     assert!(is_same, "{what}: painted {painted}, expected {expected}");
+}
+
+/// Whether some fully covered pixel of `pixels` is `colour`.
+fn shows_colour(pixels: &[Pixel], colour: gdk::RGBA) -> bool {
+    let opaque = pixels.iter().filter(|pixel| pixel[3] == u8::MAX);
+    let colours = opaque.map(|pixel| {
+        let [red, green, blue] = unpremultiplied_rgb(*pixel);
+        gdk::RGBA::new(red, green, blue, 1.0)
+    });
+    colours.into_iter().any(|painted| is_same_colour(painted, colour))
+}
+
+/// A colour of the skin, in CSS notation.
+fn css_colour(css: &str) -> gdk::RGBA {
+    gdk::RGBA::parse(css).expect("a CSS colour")
 }
 
 /// The relative lightness of `colour`, from 0 (black) to 1 (white).
@@ -151,7 +198,7 @@ fn the_sidebar_glyphs_keep_their_places_colours_in_both_appearances() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let home_blue = gdk::RGBA::parse("#0078d4").expect("a CSS colour");
+    let home_blue = css_colour("#0078d4");
     for theme in ["light", "dark"] {
         test.activate("theme", Some(theme));
         wait_for(TRANSITION_TIME);
@@ -178,4 +225,37 @@ fn high_contrast_paints_the_place_glyphs_in_the_text_colour() {
         .expect("the Home row has a name");
     assert_same_colour(home.color(), row_text.color(), "high contrast");
     assert_ne!(home.color(), tinted, "the tint gives way");
+}
+
+/// The network bar and the red cross are boxes and a glyph the skin
+/// colours: painted, the bottom of a disconnected mapped drive's icon is
+/// the current app's pipe green, and its cross shows the critical red.
+///
+/// parity: LOOK-016
+#[gtk::test]
+fn the_network_bar_and_the_red_cross_are_painted_in_their_colours() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.save_share("smb://nas/media", "Media (M:)");
+    let crossed_out_drive =
+        Art::for_network_location(NetworkKind::Share, "Media (M:)", Connection::Disconnected);
+    let sidebar = test.window.sidebar();
+    wait_until("the saved share's row", || {
+        art_image_showing(sidebar, crossed_out_drive).is_some()
+    });
+    wait_for_frames(&test.window, 2);
+    let icon = art_image_showing(sidebar, crossed_out_drive).expect("the row shows its icon");
+    let rows = pixel_rows(&painted(&icon));
+    // At the sidebar's 19 pixels the bar is the bottom 2 rows
+    // (icons::composition).
+    let bar = rows[rows.len() - 2..].concat();
+    assert_same_colour(
+        average_inked_colour(&bar),
+        css_colour(NETWORK_BAR_GREEN),
+        "the bar",
+    );
+    assert!(
+        shows_colour(&rows.concat(), css_colour(CROSS_RED)),
+        "the red cross"
+    );
 }

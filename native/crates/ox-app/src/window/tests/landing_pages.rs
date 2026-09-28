@@ -6,12 +6,12 @@
 
 use gtk::prelude::*;
 use ox_core::places::NetworkKind;
-use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
 
 use super::geometry::{bounds, laid_out, Bounds};
-use crate::icons::{Art, ArtImage, Connection, Icon};
+use super::support::{art_image_showing, arts_in};
+use crate::icons::{Art, Connection, Icon};
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture};
 
 /// The labels `widget` shows, in order.
 fn texts_in(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
@@ -105,28 +105,6 @@ fn open_address_refuses_anything_but_an_smb_server() {
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
 }
 
-/// What every [`ArtImage`] in `widget` shows.
-fn arts_in(widget: &impl IsA<gtk::Widget>) -> Vec<Art> {
-    descendants::<ArtImage>(widget)
-        .iter()
-        .filter_map(ArtImage::art)
-        .collect()
-}
-
-/// Saves `uri` as a network location called `label`, as the Python app
-/// would, and has the window read the settings again.
-fn save_share(test: &TestWindow, uri: &str, label: &str) {
-    let mut python_app = Settings::open(test.settings_directory());
-    python_app
-        .bookmark(
-            BookmarkAction::Add,
-            BookmarkKind::Share,
-            &BookmarkRequest::new(uri, label),
-        )
-        .expect("the settings file takes a share");
-    test.activate("refresh", None);
-}
-
 /// app.js drew a blue server on every saved share's card; the owner's icon
 /// mapping (2026-09-28) shows a network location the same way everywhere,
 /// so a mapped drive that is not mounted is the crossed-out drive on the
@@ -136,7 +114,7 @@ fn save_share(test: &TestWindow, uri: &str, label: &str) {
 #[gtk::test]
 fn a_saved_share_card_shows_the_art_of_its_sidebar_row() {
     let test = laid_out(Page::ThisPc.uri());
-    save_share(&test, "smb://nas/media", "Media (M:)");
+    test.save_share("smb://nas/media", "Media (M:)");
     let crossed_out_drive =
         Art::for_network_location(NetworkKind::Share, "Media (M:)", Connection::Disconnected);
     let landing = test.window.folder_pane().landing();
@@ -162,10 +140,7 @@ fn a_server_card_shows_the_server_in_the_share_blue_on_the_network_bar() {
     let landing = test.window.folder_pane().landing();
     wait_until("the server's card", || arts_in(landing).contains(&server));
     wait_for_frames(&test.window, 2);
-    let card_art = descendants::<ArtImage>(landing)
-        .into_iter()
-        .find(|image| image.art() == Some(server))
-        .expect("the card is drawn");
+    let card_art = art_image_showing(landing, server).expect("the card is drawn");
     let glyph = descendants::<gtk::Image>(&card_art)
         .into_iter()
         .find(|image| image.has_css_class("server"))
