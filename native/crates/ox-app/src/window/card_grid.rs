@@ -65,6 +65,7 @@ mod imp {
     /// Private state of [`super::CardGridLayout`].
     #[derive(Debug)]
     pub struct CardGridLayout {
+        /// The grid's narrowest column and gaps.
         pub(super) spacing: Cell<GridSpacing>,
     }
 

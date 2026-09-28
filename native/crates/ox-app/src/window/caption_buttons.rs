@@ -134,8 +134,11 @@ mod imp {
     /// Private state of [`super::CaptionButtons`].
     #[derive(Debug, Default)]
     pub struct CaptionButtons {
+        /// The end of the title bar the buttons sit at.
         pub(super) side: OnceCell<gtk::PackType>,
+        /// Whether the window is maximised, which the middle caption shows.
         pub(super) window_state: Cell<WindowState>,
+        /// The desktop setting that decides which captions exist.
         pub(super) layout_watch: RefCell<Option<LayoutWatch>>,
     }
 

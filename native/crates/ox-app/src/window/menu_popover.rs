@@ -150,7 +150,9 @@ mod imp {
     /// Private state of [`super::MenuPopover`].
     #[derive(Debug, Default)]
     pub struct MenuPopover {
+        /// The rows, built by `constructed`.
         pub(super) list: OnceCell<gtk::ListBox>,
+        /// What the rows show, dividers included.
         pub(super) entries: RefCell<Vec<MenuEntry>>,
     }
 

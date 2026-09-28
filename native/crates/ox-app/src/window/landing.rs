@@ -156,19 +156,19 @@ fn quick_access(body: &gtk::Box, places: &Places, style: ArtStyle) {
 
 /// Adds "N free of M" and a bar under a drive card's texts once GIO has
 /// measured the file system. Never blocks: the card is drawn first.
-fn show_capacity(info: &gtk::Box, uri: &str) {
+fn show_capacity(card_texts: &gtk::Box, uri: &str) {
     let file = gio::File::for_uri(uri);
-    let info = info.downgrade();
+    let card_texts = card_texts.downgrade();
     glib::spawn_future_local(async move {
         let Some(capacity) = measure_capacity(&file).await else {
             return;
         };
         // A card replaced while GIO measured shows nothing.
-        let Some(info) = info.upgrade() else {
+        let Some(card_texts) = card_texts.upgrade() else {
             return;
         };
-        info.append(&capacity_bar(capacity));
-        info.append(&label(&capacity.text(), "card-sub"));
+        card_texts.append(&capacity_bar(capacity));
+        card_texts.append(&label(&capacity.text(), "card-sub"));
     });
 }
 
@@ -207,13 +207,13 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
         (VolumeState::Mounted { uri, .. }, VolumeKind::Drive) => locations.display_location(uri),
         (VolumeState::Mountable { .. }, _) => "Click to connect".to_owned(),
     };
-    let info = texts(&row.label, &subtitle);
+    let card_texts = texts(&row.label, &subtitle);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
     content.append(&icons::glyph(glyph, DRIVE_CARD_GLYPH));
-    content.append(&info);
+    content.append(&card_texts);
     match &row.state {
         VolumeState::Mounted { uri, .. } => {
-            show_capacity(&info, uri);
+            show_capacity(&card_texts, uri);
             location_card("drive-card", uri, &content)
         }
         VolumeState::Mountable { id } => gtk::Button::builder()
@@ -249,15 +249,15 @@ fn devices_and_drives(body: &gtk::Box, places: &Places, locations: &LocationCont
 fn saved_share_card(share: &SavedShare, locations: &LocationContext) -> gtk::Button {
     let bookmark = &share.bookmark;
     let glyph_color = gtk::gdk::RGBA::parse(SHARE_GLYPH_COLOR).expect("a valid CSS colour literal");
-    let info = texts(&bookmark.label, &locations.display_location(&bookmark.uri));
-    info.append(&share_state(share));
+    let card_texts = texts(&bookmark.label, &locations.display_location(&bookmark.uri));
+    card_texts.append(&share_state(share));
     let content = gtk::Box::new(gtk::Orientation::Horizontal, CARD_ICON_GAP);
     content.append(&icons::colored_glyph(
         Glyph::Server,
         DRIVE_CARD_GLYPH,
         glyph_color,
     ));
-    content.append(&info);
+    content.append(&card_texts);
     location_card("drive-card", &bookmark.uri, &content)
 }
 

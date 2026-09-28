@@ -18,7 +18,7 @@ use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
 
 /// A group of rows; a separator is drawn where the group changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Section {
+pub(in crate::window) enum Section {
     /// The home folder.
     Home,
     /// Known folders and pins.
@@ -31,7 +31,7 @@ pub(crate) enum Section {
 
 /// How a row sits in the tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RowLevel {
+pub(in crate::window) enum RowLevel {
     /// A top-level place (Home, a Quick access folder).
     Place,
     /// A group head with an expander (This PC, Network).
@@ -42,7 +42,7 @@ pub(crate) enum RowLevel {
 
 /// How a row's icon is drawn.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum RowIcon {
+pub(in crate::window) enum RowIcon {
     /// A line glyph, in a fixed colour or the text colour.
     Glyph(Glyph, Option<gdk::RGBA>),
     /// Colour art (folders and network locations).
@@ -51,7 +51,7 @@ pub(crate) enum RowIcon {
 
 /// What activating a row does.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum RowTarget {
+pub(in crate::window) enum RowTarget {
     /// Opens a location.
     Location(String),
     /// Mounts the volume with this identifier, then opens it.
@@ -60,7 +60,7 @@ pub(crate) enum RowTarget {
 
 /// One sidebar row.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct SidebarEntry {
+pub(in crate::window) struct SidebarEntry {
     /// The group the row belongs to.
     pub section: Section,
     /// A place, a group head or an indented row.
@@ -187,7 +187,7 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
 }
 
 /// The sidebar rows, in the Python app's order.
-pub(crate) fn sidebar_entries(places: &Places, locations: &LocationContext) -> Vec<SidebarEntry> {
+pub(in crate::window) fn sidebar_entries(places: &Places, locations: &LocationContext) -> Vec<SidebarEntry> {
     let home_uri = locations.home_uri();
     let mut home = fixed_entry(Section::Home, "Home", Glyph::Home, HOME_COLOR, &home_uri);
     home.tooltip = locations.display_location(&home_uri);
@@ -218,7 +218,7 @@ pub(crate) fn sidebar_entries(places: &Places, locations: &LocationContext) -> V
 /// Where a row sits in its section, which decides its spacing: the
 /// Quick access rows sit in a box of their own in app.js.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SectionEdges {
+pub(in crate::window) struct SectionEdges {
     /// The row is the first of its section.
     pub first: bool,
     /// The row is the last of its section.
@@ -226,7 +226,7 @@ pub(crate) struct SectionEdges {
 }
 
 /// The section edges of row `index` of `entries`.
-pub(crate) fn section_edges(entries: &[SidebarEntry], index: usize) -> SectionEdges {
+pub(in crate::window) fn section_edges(entries: &[SidebarEntry], index: usize) -> SectionEdges {
     let section = entries.get(index).map(|entry| entry.section);
     let before = index.checked_sub(1).and_then(|before| entries.get(before));
     let after = entries.get(index + 1);

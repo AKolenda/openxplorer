@@ -58,7 +58,7 @@ impl BrowserWindow {
     /// # Errors
     ///
     /// The address is not a location the app can open; nothing changes.
-    pub fn open_tab(&self, address: &str, placement: TabPlacement) -> Result<(), LocationError> {
+    pub(super) fn open_tab(&self, address: &str, placement: TabPlacement) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
         self.save_tab_view();
         let id = self.imp().session.borrow_mut().add(&uri, placement);
@@ -86,7 +86,7 @@ impl BrowserWindow {
     ///
     /// The address is not a location the app can open; the current
     /// folder stays.
-    pub fn navigate(&self, address: &str) -> Result<(), LocationError> {
+    pub(super) fn navigate(&self, address: &str) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
         let Some(id) = self.push_location(&uri) else {
             return self.add_tab(&uri);
@@ -221,7 +221,7 @@ impl BrowserWindow {
 
     /// Lists the active folder again, keeping its rows, selection and
     /// scroll position, and re-reads the shared settings.
-    pub fn refresh(&self) {
+    pub(super) fn refresh(&self) {
         self.context().reload_settings();
         self.save_selection();
         let active = self.imp().session.borrow().active;

@@ -96,7 +96,7 @@ pub(super) fn connect_history_buttons(
 pub(super) fn scroll_sideways_with_wheel(scroller: &gtk::ScrolledWindow) {
     let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
     let target = scroller.downgrade();
-    wheel.connect_scroll(move |_, _, dy| {
+    wheel.connect_scroll(move |_, _, delta_y| {
         let Some(scroller) = target.upgrade() else {
             return glib::Propagation::Proceed;
         };
@@ -105,7 +105,7 @@ pub(super) fn scroll_sideways_with_wheel(scroller: &gtk::ScrolledWindow) {
             return glib::Propagation::Proceed;
         }
         let step = adjustment.step_increment().max(MIN_WHEEL_STEP);
-        adjustment.set_value(adjustment.value() + dy * step);
+        adjustment.set_value(adjustment.value() + delta_y * step);
         glib::Propagation::Stop
     });
     scroller.add_controller(wheel);

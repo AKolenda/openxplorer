@@ -14,9 +14,13 @@ use crate::test_support::harness::{descendants, wait_for_frames, TestWindow};
 /// A widget's place, in whole pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Bounds {
+    /// The left edge.
     pub x: i32,
+    /// The top edge.
     pub y: i32,
+    /// The width.
     pub width: i32,
+    /// The height.
     pub height: i32,
 }
 

@@ -57,7 +57,6 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
-use crate::folder_view::model::FolderModel;
 use crate::shared::AppContext;
 use crate::theme::{ListenerId, Skin};
 use crate::typeahead;
@@ -255,7 +254,7 @@ impl BrowserWindow {
     }
 
     /// The state shared by every window of the application.
-    pub(crate) fn context(&self) -> &AppContext {
+    fn context(&self) -> &AppContext {
         self.imp()
             .context
             .get()
@@ -301,8 +300,10 @@ impl BrowserWindow {
             .expect("BrowserWindow::new gets the volume monitor")
     }
 
-    /// The active folder's sorted, filtered native selection model.
-    pub fn folder_model(&self) -> &FolderModel {
+    /// The active folder's sorted, filtered native selection model, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn folder_model(&self) -> &crate::folder_view::model::FolderModel {
         &self.content().model
     }
 
@@ -339,8 +340,9 @@ impl BrowserWindow {
             .is_some_and(|tab| tab.loading)
     }
 
-    /// The active listing's failure, if one occurred.
-    pub fn load_error(&self) -> Option<String> {
+    /// The active listing's failure, if one occurred, for tests.
+    #[cfg(test)]
+    fn load_error(&self) -> Option<String> {
         let session = self.imp().session.borrow();
         let error = session.active()?.error.as_ref()?;
         Some(error.to_string())

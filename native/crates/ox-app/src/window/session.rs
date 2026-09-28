@@ -32,7 +32,7 @@ impl TabId {
 
 /// Whether a new tab becomes the active one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TabPlacement {
+pub(super) enum TabPlacement {
     /// Show the new tab now.
     Foreground,
     /// Keep the current tab in front. The new tab is listed only when it is
