@@ -15,6 +15,7 @@
 //! | `extra` | ZIP64 sizes and Info-ZIP Unicode names (`_decodeExtra`) |
 //! | `member` | One member's metadata (`ZipInfo`) |
 //! | `names` | Name decoding: UTF-8 or code page 437, cut at NUL |
+//! | `python_repr` | Names in messages, quoted as Python's `repr` quotes them |
 //! | `reader` | Local header checks, decompression and CRC (`ZipExtFile`) |
 //! | `records` | The fixed-size ZIP records and their fields |
 //! | `error` | [`ZipFormatError`]: damaged or unsupported archives |
@@ -24,6 +25,7 @@ mod error;
 mod extra;
 mod member;
 mod names;
+mod python_repr;
 mod reader;
 mod records;
 

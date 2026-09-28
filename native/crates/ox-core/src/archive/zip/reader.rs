@@ -185,7 +185,7 @@ fn check_local_name(member: &ZipMember, raw_name: &[u8], flags: u16) -> Result<(
     }
     Err(ZipFormatError::NameMismatch {
         directory: member.original_name.clone(),
-        header: String::from_utf8_lossy(raw_name).into_owned(),
+        header: raw_name.to_vec(),
     })
 }
 

@@ -157,9 +157,13 @@ fn a_local_header_naming_another_file_is_refused() {
 
     let expected = ZipFormatError::NameMismatch {
         directory: "report.txt".to_owned(),
-        header: "report.exe".to_owned(),
+        header: b"report.exe".to_vec(),
     };
     assert_eq!(error, ArchiveError::Format(expected));
+    assert_eq!(
+        error.to_string(),
+        "File name in directory 'report.txt' and header b'report.exe' differ."
+    );
 }
 
 /// Member data that runs into the next member is the overlapping-members

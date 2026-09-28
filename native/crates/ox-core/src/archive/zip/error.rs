@@ -4,11 +4,14 @@
 //! These are the refusals of Python's `zipfile` (`BadZipFile`,
 //! `NotImplementedError`) that `desktop/archives.py` and
 //! `desktop/zip_extraction.py` pass on to the user. Where `zipfile` has a
-//! message it is kept word for word; where Python only raised a generic
-//! error (a `UnicodeDecodeError`, a `zlib.error`), the message says what
-//! is wrong with the archive instead.
+//! message it is kept word for word, with names quoted as its `%r` quotes
+//! them (see `python_repr`); where Python only raised a generic error (a
+//! `UnicodeDecodeError`, a `zlib.error`), the message says what is wrong
+//! with the archive instead.
 
 use std::fmt;
+
+use super::python_repr::{PythonBytesRepr, PythonRepr};
 
 /// A ZIP archive that is damaged, or uses a feature the built-in reader
 /// does not support. `Display` is the user-facing message.
@@ -68,15 +71,19 @@ pub enum ZipFormatError {
     #[error("Bad magic number for file header")]
     BadHeaderSignature,
     /// The local header names another file than the central directory.
-    #[error("File name in directory {directory:?} and header {header:?} differ.")]
+    #[error(
+        "File name in directory {} and header {} differ.",
+        PythonRepr(.directory),
+        PythonBytesRepr(.header)
+    )]
     NameMismatch {
         /// The name in the central directory.
         directory: String,
-        /// The name in the member's local header.
-        header: String,
+        /// The name in the member's local header, as it is stored.
+        header: Vec<u8>,
     },
     /// A member's data runs into the next member: a ZIP bomb technique.
-    #[error("Overlapped entries: {0:?} (possible zip bomb)")]
+    #[error("Overlapped entries: {} (possible zip bomb)", PythonRepr(.0))]
     OverlappedEntries(String),
     /// Compressed patched data (general purpose flag bit 5).
     #[error("compressed patched data (flag bit 5)")]
@@ -84,17 +91,20 @@ pub enum ZipFormatError {
     /// Strong encryption (general purpose flag bit 6).
     #[error("strong encryption (flag bit 6)")]
     StrongEncryption,
-    /// The member is encrypted and no password is ever supplied.
-    #[error("File {0:?} is encrypted, password required for extraction")]
+    /// The member is encrypted and no password is ever supplied. The
+    /// archive services refuse encrypted members before they open one, so
+    /// this only guards the reader itself.
+    #[error("File {} is encrypted, password required for extraction", PythonRepr(.0))]
     PasswordRequired(String),
     /// The compression method is not stored, deflate, bzip2 or LZMA.
     #[error("That compression method is not supported")]
     UnsupportedMethod,
     /// The decompressed data does not match the member's CRC-32.
-    #[error("Bad CRC-32 for file {0:?}")]
+    #[error("Bad CRC-32 for file {}", PythonRepr(.0))]
     BadCrc(String),
-    /// The compressed data cannot be decompressed.
-    #[error("Error while decompressing {name:?}: {detail}")]
+    /// The compressed data cannot be decompressed. The member's name is
+    /// quoted like the names in `zipfile`'s messages.
+    #[error("Error while decompressing {}: {detail}", PythonRepr(.name))]
     CorruptData {
         /// The member's name.
         name: String,
@@ -150,7 +160,19 @@ mod tests {
         );
         assert_eq!(
             ZipFormatError::BadCrc("doc.txt".into()).to_string(),
-            "Bad CRC-32 for file \"doc.txt\""
+            "Bad CRC-32 for file 'doc.txt'"
+        );
+        assert_eq!(
+            ZipFormatError::OverlappedEntries("a.txt".into()).to_string(),
+            "Overlapped entries: 'a.txt' (possible zip bomb)"
+        );
+        assert_eq!(
+            ZipFormatError::NameMismatch {
+                directory: "report.txt".into(),
+                header: b"report.exe".to_vec()
+            }
+            .to_string(),
+            "File name in directory 'report.txt' and header b'report.exe' differ."
         );
     }
 }
