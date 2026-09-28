@@ -31,6 +31,10 @@ rustix = { version = "1", features = ["fs"] }
 # development files (libsqlite3-dev on Ubuntu). "hooks" provides the progress
 # handler that cancels a running search.
 rusqlite = { version = "0.38", default-features = false, features = ["hooks"] }
+# The Secret Service client for SMB credentials (session_credentials.py used
+# libsecret). Pure Rust with an encrypted session, so no C library or -dev
+# package is needed; async-io keeps it independent of Tokio.
+oo7 = { version = "0.6", default-features = false, features = ["async-std", "native_crypto"] }
 tempfile = "3"
 ox-core = { path = "crates/ox-core" }
 

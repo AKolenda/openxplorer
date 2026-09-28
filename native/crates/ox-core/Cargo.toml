@@ -21,6 +21,7 @@ rustix = { workspace = true, features = ["event"] }
 # The search cache; [workspace.dependencies] says why it links the system
 # SQLite.
 rusqlite.workspace = true
+oo7.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -15,7 +15,7 @@ and interaction performance must be measured before claiming an improvement.
 
 | Path | Responsibility |
 |---|---|
-| `crates/ox-core` | Toolkit-independent core: locations, settings, entries, places, clipboard formats and the transfer engine, all on GIO. No GTK. |
+| `crates/ox-core` | Toolkit-independent core: locations, settings, entries, places, clipboard formats, the transfer engine, and network sign-in and mounts, all on GIO. No GTK. |
 | `crates/ox-app` | The GTK4 application (`openxplorer-native`). |
 | `parity/` | What the native app must do: every behaviour (`features.toml`) and every Python bridge operation (`bridge.json`), with their checker. |
 | `docs/ui-spec.md` | The visual specification: the current skin, refined toward Windows 11 File Explorer. |
@@ -45,9 +45,15 @@ never talks to a running Python OpenXplorer. It shares
 Run the check driver from the repository root:
 
 ```sh
-sudo apt install libgtk-4-dev libsqlite3-dev xvfb xauth dbus-x11
+sudo apt install libgtk-4-dev libsqlite3-dev xvfb xauth dbus-x11 python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1
 python3 native/tools/check.py
 ```
+
+`python3-gi` lets the interoperability tests import the Python app's GIO
+modules. With `gnome-keyring` and `gir1.2-secret-1`, the keyring tests use a
+disposable GNOME Keyring on the private bus and the Python app's libsecret
+calls; without them they only check that the keyring is reported unavailable.
+CI sets `OX_REQUIRE_KEYRING=1`, which makes a missing keyring fail them instead.
 
 The driver runs the parity inventory checks, its own tests, rustfmt and Clippy
 with the workspace lints, and compiles every test target. It then runs each
