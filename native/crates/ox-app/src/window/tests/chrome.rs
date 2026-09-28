@@ -143,17 +143,17 @@ fn a_disabled_menu_item_names_the_milestone_that_brings_it() {
     let more_button = menu_button_with_class(&test, "more-command");
     let more = app_menu(&more_button);
     more_button.popup();
-    let cache = more.row("Cache this folder for search");
+    let license = more.row("License & source");
     let new_menu = app_menu(&menu_button_with_class(&test, "new-command"));
     let folder = new_menu
         .rows()
         .into_iter()
         .next()
         .expect("New lists Folder first");
-    assert!(!cache.is_sensitive());
+    assert!(!license.is_sensitive());
     assert_eq!(
-        cache.tooltip_text().unwrap_or_default().as_str(),
-        "Cache this folder for search\nNot in the native preview yet: arrives with cached search."
+        license.tooltip_text().unwrap_or_default().as_str(),
+        "License & source\nNot in the native preview yet: arrives with packaging and updates."
     );
     assert_eq!(
         folder.tooltip_text().unwrap_or_default().as_str(),

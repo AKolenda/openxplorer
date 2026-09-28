@@ -30,7 +30,7 @@ use crate::properties::{
     SnapshotTarget,
 };
 
-use super::actions::plain_action;
+use super::actions::{plain_action, text_action};
 use super::session::TabId;
 use super::window_action::WindowAction;
 use super::{BrowserWindow, ButtonStyle};
@@ -96,14 +96,12 @@ impl BrowserWindow {
             plain_action(WindowAction::PreviousVersions, |window| {
                 window.open_properties(PropertiesTab::PreviousVersions);
             }),
-            gio::ActionEntry::builder(WindowAction::PropertiesOf.name())
-                .parameter_type(Some(glib::VariantTy::STRING))
-                .activate(|window: &BrowserWindow, _, target| {
-                    if let Some(uri) = target.and_then(glib::Variant::str) {
-                        window.open_properties_of(uri);
-                    }
-                })
-                .build(),
+            text_action(WindowAction::PropertiesOf, |window, uri| {
+                window.open_properties_of(uri, PropertiesTab::General);
+            }),
+            text_action(WindowAction::PreviousVersionsOf, |window, uri| {
+                window.open_properties_of(uri, PropertiesTab::PreviousVersions);
+            }),
             tuple_action(WindowAction::BrowseSnapshot, |window, target| {
                 if let Some(target) = SnapshotTarget::from_variant(target) {
                     window.browse_snapshot(target);
@@ -174,10 +172,10 @@ impl BrowserWindow {
         }
     }
 
-    /// Opens Properties of the location `uri`, which need not be listed:
-    /// the item is queried first, off the main thread, to learn whether it
-    /// is a folder.
-    fn open_properties_of(&self, uri: &str) {
+    /// Opens Properties of the location `uri` on `tab`; the location need
+    /// not be listed: it is queried first, off the main thread, to learn
+    /// whether it is a folder.
+    fn open_properties_of(&self, uri: &str, tab: PropertiesTab) {
         let file = gio::File::for_uri(uri);
         let uri = uri.to_owned();
         glib::spawn_future_local(glib::clone!(
@@ -197,7 +195,7 @@ impl BrowserWindow {
                     Err(_) => (window.imp().locations.borrow().base_name(&uri), ItemKind::File),
                 };
                 let target = window.named_target(uri, name, kind);
-                window.show_properties(target, PropertiesTab::General);
+                window.show_properties(target, tab);
             }
         ));
     }

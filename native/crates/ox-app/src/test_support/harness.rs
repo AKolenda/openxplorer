@@ -259,6 +259,9 @@ impl TestWindow {
         let context = AppContext::new(skin.clone(), Settings::open(settings.path()));
         context.record_launches();
         prepare(&context);
+        // The context menus list no "Open in <editor>", whatever editors
+        // the machine running the tests has.
+        context.desktop_integration().use_editor_shortcuts(Vec::new());
         Self {
             window: BrowserWindow::new(&application(), &context),
             context,

@@ -6,9 +6,11 @@
 //! `entryMenu` in `desktop/ui/app.js` (SRCH-015, SRCH-020). "Cache this
 //! folder for search" is a check item: checked while the folder is an
 //! indexed folder, and unchecking it stops caching it, as "Stop caching
-//! this folder" did. The search strip's "Cache this folder" runs the same
-//! action. Neither is offered for pages, phones, cameras or a server's
-//! share list, which cannot be indexed.
+//! this folder" did. The More menu, the folder's menu and the search
+//! strip's "Cache this folder" act on the folder shown; the menus of a
+//! Quick access pin and of a folder item on theirs ([`cache_item`]). None
+//! is offered for pages, phones, cameras or a server's share list, which
+//! cannot be indexed.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -16,9 +18,11 @@ use gtk::{gio, glib};
 use ox_core::location::{is_device_location, is_smb_server, same_location};
 use ox_core::search::Caching;
 
+use crate::icons::Icon;
 use crate::locations::Page;
 
-use super::actions::plain_action;
+use super::actions::{plain_action, text_action};
+use super::menu_popover::{ItemCheck, MenuItem};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -29,34 +33,50 @@ const CACHING_STARTED: &str =
 const CACHING_STOPPED: &str = "Cache disabled; this root’s indexed names were removed.";
 
 impl BrowserWindow {
-    /// Adds "Cache this folder for search" and "Open file location".
+    /// Adds "Cache this folder for search", for the folder shown and for
+    /// a given folder, and "Open file location".
     pub(super) fn install_search_actions(&self) {
         let cache_folder = gio::ActionEntry::builder(WindowAction::CacheFolder.name())
             .state(false.to_variant())
-            .activate(|window: &BrowserWindow, action, _| {
-                let is_cached = action.state().and_then(|state| state.get::<bool>());
-                window.set_folder_caching(!is_cached.unwrap_or(false));
+            .activate(|window: &BrowserWindow, _, _| {
+                if let Some(folder) = window.current_uri() {
+                    window.toggle_caching_of(&folder);
+                }
             })
             .build();
+        let cache_folder_of = text_action(WindowAction::CacheFolderOf, BrowserWindow::toggle_caching_of);
         let open_location = plain_action(
             WindowAction::OpenFileLocation,
             BrowserWindow::open_result_location,
         );
-        self.add_action_entries([cache_folder, open_location]);
+        self.add_action_entries([cache_folder, cache_folder_of, open_location]);
         self.set_action_enabled(WindowAction::OpenFileLocation, false);
+    }
+
+    /// Whether the folder at `uri` is an indexed folder, or `None` where
+    /// no folder can be indexed (`cacheMenuItems`).
+    pub(super) fn caching_of(&self, uri: &str) -> Option<Caching> {
+        if !can_be_indexed(uri) {
+            return None;
+        }
+        let roots = self.context().search_cache().roots();
+        let is_cached = roots
+            .iter()
+            .any(|root| root.is_enabled() && same_location(&root.uri, uri));
+        let caching = if is_cached {
+            Caching::Enabled
+        } else {
+            Caching::Disabled
+        };
+        Some(caching)
     }
 
     /// Checks "Cache this folder for search" while the folder is an
     /// indexed folder, and offers it only where a folder can be indexed.
     pub(super) fn update_cache_folder_action(&self) {
-        let folder = self.current_uri().filter(|uri| can_be_indexed(uri));
-        let roots = self.context().search_cache().roots();
-        let is_cached = folder.as_deref().is_some_and(|folder| {
-            roots
-                .iter()
-                .any(|root| root.is_enabled() && same_location(&root.uri, folder))
-        });
-        self.set_action_enabled(WindowAction::CacheFolder, folder.is_some());
+        let caching = self.current_uri().and_then(|folder| self.caching_of(&folder));
+        let is_cached = caching == Some(Caching::Enabled);
+        self.set_action_enabled(WindowAction::CacheFolder, caching.is_some());
         self.set_action_state(WindowAction::CacheFolder, &is_cached.to_variant());
     }
 
@@ -66,16 +86,15 @@ impl BrowserWindow {
         self.set_action_enabled(WindowAction::OpenFileLocation, offers);
     }
 
-    /// Starts or stops caching the current folder, and says so.
-    fn set_folder_caching(&self, is_wanted: bool) {
-        let Some(folder) = self.current_uri().filter(|uri| can_be_indexed(uri)) else {
-            return;
+    /// Starts caching the folder at `uri`, or stops while it is cached,
+    /// and says so.
+    fn toggle_caching_of(&self, uri: &str) {
+        let caching = match self.caching_of(uri) {
+            Some(Caching::Enabled) => Caching::Disabled,
+            Some(Caching::Disabled) => Caching::Enabled,
+            None => return,
         };
-        let caching = if is_wanted {
-            Caching::Enabled
-        } else {
-            Caching::Disabled
-        };
+        let folder = uri.to_owned();
         let label = self.imp().locations.borrow().title_for(&folder);
         let cache = self.context().search_cache().clone();
         let window = self.downgrade();
@@ -91,6 +110,22 @@ impl BrowserWindow {
             };
             window.show_message(&message);
         });
+    }
+}
+
+/// "Cache this folder for search" in the menu of the folder at `uri`,
+/// checked while `caching` says it is cached, where the Python menu said
+/// "Stop caching this folder".
+pub(super) fn cache_item(uri: &str, caching: Caching) -> MenuItem {
+    let item = MenuItem::with_text_target(
+        "Cache this folder for search",
+        Icon::Search,
+        WindowAction::CacheFolderOf,
+        uri,
+    );
+    MenuItem {
+        check: ItemCheck::Fixed(caching == Caching::Enabled),
+        ..item
     }
 }
 

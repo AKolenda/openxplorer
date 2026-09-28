@@ -31,7 +31,7 @@ use crate::icons::{self, Icon};
 
 use super::menu_popover::{MenuEntry, MenuPopover};
 use super::window_action::WindowAction;
-use super::{gestures, preferences};
+use super::{gestures, preferences, BrowserWindow};
 
 pub(super) use drop_spots::SidebarDropSpot;
 pub(super) use entries::sidebar_entries;
@@ -222,7 +222,9 @@ impl Sidebar {
             let RowTarget::Location(uri) = &entry.target else {
                 return None;
             };
-            return Some(menu::pin_menu(uri));
+            let window = self.root().and_downcast::<BrowserWindow>();
+            let caching = window.and_then(|window| window.caching_of(uri));
+            return Some(menu::pin_menu(uri, caching));
         }
         let place_menu = entry.menu.as_ref()?.entries();
         // A drive the system keeps mounted may have nothing to offer.

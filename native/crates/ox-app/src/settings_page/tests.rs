@@ -529,9 +529,12 @@ fn rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone() {
             assert_row_follows_its_availability(&row, &group);
         }
     }
-    let move_tabs = settings.row("Move tabs between windows");
-    let tooltip = move_tabs.tooltip_text().unwrap_or_default();
-    assert!(tooltip.ends_with("arrives with file operations."), "{tooltip}");
+    let license = settings.row("OpenXplorer · License & source");
+    let tooltip = license.tooltip_text().unwrap_or_default();
+    assert!(
+        tooltip.ends_with("arrives with packaging and updates."),
+        "{tooltip}"
+    );
 }
 
 /// Choosing a theme card runs `win.theme`, which the Appearance menu runs

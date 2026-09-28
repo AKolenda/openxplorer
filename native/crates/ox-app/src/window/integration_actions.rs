@@ -50,6 +50,10 @@ impl BrowserWindow {
             plain_action(WindowAction::OpenWith, BrowserWindow::open_with),
             text_action(WindowAction::ChangeApp, BrowserWindow::change_app),
             plain_action(WindowAction::OpenInTerminal, BrowserWindow::open_in_terminal),
+            text_action(WindowAction::OpenInTerminalOf, |window, uri| {
+                window.open_terminal_at(uri.to_owned());
+            }),
+            text_action(WindowAction::OpenWithOf, BrowserWindow::open_folder_with),
             text_action(WindowAction::OpenInEditor, BrowserWindow::open_in_editor),
             plain_action(WindowAction::CheckUpdates, BrowserWindow::check_for_updates),
         ]);
@@ -112,6 +116,18 @@ impl BrowserWindow {
         OpenWithDialog::present_for(self, subject, self.application_launcher(), self.reporter());
     }
 
+    /// Open folder with…: the Open with dialog for the folder at `uri`,
+    /// such as a Quick access pin (`sidebarMenu`).
+    fn open_folder_with(&self, uri: &str) {
+        let name = self.imp().locations.borrow().title_for(uri);
+        let subject = OpenWithSubject {
+            uri: uri.to_owned(),
+            name,
+            is_folder: true,
+        };
+        OpenWithDialog::present_for(self, subject, self.application_launcher(), self.reporter());
+    }
+
     /// Change app… in Properties: closes Properties and opens the Open
     /// with dialog for the file at `uri` (`propertiesDialog` in app.js).
     fn change_app(&self, uri: &str) {
@@ -148,9 +164,14 @@ impl BrowserWindow {
     /// Open in Terminal: the terminal in the folder, or in the folder of
     /// the selected file; says in the message line what opened or why not.
     fn open_in_terminal(&self) {
-        let Some(subject) = self.command_subject() else {
-            return;
-        };
+        if let Some(subject) = self.command_subject() {
+            self.open_terminal_at(subject.uri);
+        }
+    }
+
+    /// Opens the terminal in the folder at `uri`, or in the folder of the
+    /// file there; says in the message line what opened or why not.
+    fn open_terminal_at(&self, uri: String) {
         let integration = self.context().desktop_integration();
         let settings_directory = integration.settings_directory().to_owned();
         let sandbox = integration.sandbox();
@@ -158,7 +179,7 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                let opened = integration::open_terminal(subject.uri, &settings_directory, sandbox).await;
+                let opened = integration::open_terminal(uri, &settings_directory, sandbox).await;
                 let message = opened.unwrap_or_else(|error| error.to_string());
                 window.show_message(&message);
             }

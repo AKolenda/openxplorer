@@ -262,6 +262,20 @@ impl DesktopIntegration {
         self.imp().editors.get_or_init(|| editors).clone()
     }
 
+    /// Offers `editors` as the installed code editors, for tests whose
+    /// menus must not depend on the editors of the machine they run on.
+    ///
+    /// # Panics
+    ///
+    /// When the editors were read already.
+    #[cfg(test)]
+    pub(crate) fn use_editor_shortcuts(&self, editors: Vec<EditorShortcut>) {
+        self.imp()
+            .editors
+            .set(editors)
+            .expect("a test chooses the editors before they are read");
+    }
+
     /// The code editors [`Self::editor_shortcuts`] has read, for menus
     /// built at once; empty until it finished the first time.
     pub(crate) fn known_editor_shortcuts(&self) -> Vec<EditorShortcut> {

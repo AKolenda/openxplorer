@@ -178,6 +178,9 @@ pub(crate) enum WindowAction {
     /// Caches the current folder for search, or stops caching it (a
     /// check item).
     CacheFolder,
+    /// Caches the folder whose URI is the string target for search, or
+    /// stops caching it (the menus of a pin and of a folder).
+    CacheFolderOf,
     /// Opens the folder of the one selected search result, with the
     /// result selected.
     OpenFileLocation,
@@ -198,6 +201,9 @@ pub(crate) enum WindowAction {
     /// Properties of the location in the string target, for the menus of
     /// the sidebar, drives and network places, and `ShowItemProperties`.
     PropertiesOf,
+    /// Properties of the location in the string target, on its Previous
+    /// versions tab (a Quick access pin's menu).
+    PreviousVersionsOf,
     /// Measures the selected folders.
     CalculateFolderSize,
     /// Measures every folder shown.
@@ -225,9 +231,15 @@ pub(crate) enum WindowAction {
     /// Change app… in Properties: the Open with dialog for the file whose
     /// URI is the string target.
     ChangeApp,
+    /// Open folder with…: the Open with dialog for the folder whose URI is
+    /// the string target (a Quick access pin's menu).
+    OpenWithOf,
     /// Open in Terminal: the terminal in the selected folder, the folder
     /// of the selected file, or the folder shown.
     OpenInTerminal,
+    /// Open in Terminal in the folder whose URI is the string target (a
+    /// Quick access pin's menu).
+    OpenInTerminalOf,
     /// Opens the selected item in the code editor whose desktop ID is the
     /// string target.
     OpenInEditor,
@@ -313,6 +325,7 @@ impl WindowAction {
             WindowAction::Eject => "eject",
             WindowAction::SafelyRemove => "safely-remove",
             WindowAction::CacheFolder => "cache-folder",
+            WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",
             WindowAction::Settings => "settings",
             WindowAction::License => "license",
@@ -321,6 +334,7 @@ impl WindowAction {
             WindowAction::Properties => "properties",
             WindowAction::PreviousVersions => "previous-versions",
             WindowAction::PropertiesOf => "properties-of",
+            WindowAction::PreviousVersionsOf => "previous-versions-of",
             WindowAction::CalculateFolderSize => "calculate-folder-size",
             WindowAction::CalculateFolderSizes => "calculate-folder-sizes",
             WindowAction::CalculateFolderSizeOf => "calculate-folder-size-of",
@@ -332,7 +346,9 @@ impl WindowAction {
             WindowAction::CompressToZip => "compress-to-zip",
             WindowAction::OpenWith => "open-with",
             WindowAction::ChangeApp => "change-app",
+            WindowAction::OpenWithOf => "open-with-of",
             WindowAction::OpenInTerminal => "open-in-terminal",
+            WindowAction::OpenInTerminalOf => "open-in-terminal-of",
             WindowAction::OpenInEditor => "open-in-editor",
         }
     }

@@ -14,8 +14,11 @@
 //! Terminal, Properties, ...) are listed and disabled with a tooltip that
 //! names it ([`crate::window::unported`]).
 
+use ox_core::search::Caching;
+
 use crate::icons::Icon;
 use crate::integration::EditorShortcut;
+use crate::window::cache_folder::cache_item;
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
 use crate::window::window_action::WindowAction;
 
@@ -60,6 +63,9 @@ pub(crate) struct ItemFacts {
     pub(crate) is_search_result: bool,
     /// The installed code editors, each offered as "Open in <editor>".
     pub(crate) editors: Vec<EditorShortcut>,
+    /// Whether a folder is cached for search; `None` for a file or a
+    /// folder the search cache cannot take.
+    pub(crate) caching: Option<Caching>,
     /// Delete's label: "Move to Trash" or "Delete permanently".
     pub(crate) delete_label: &'static str,
 }
@@ -252,13 +258,8 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
         copy_path_item(facts),
         compress_item(),
     ]);
-    if facts.shape == ItemShape::Folder {
-        let cache = item(
-            "Cache this folder for search",
-            Icon::Search,
-            WindowAction::CacheFolder,
-        );
-        entries.push(cache.into());
+    if let Some(caching) = facts.caching {
+        entries.push(cache_item(&facts.navigation_uri, caching).into());
     }
     if facts.location != ItemLocation::Local {
         let sign_out = MenuItem::with_text_target(
@@ -370,15 +371,17 @@ mod tests {
             is_single: true,
             is_search_result: false,
             editors: Vec::new(),
+            caching: None,
             delete_label: "Move to Trash",
         }
     }
 
-    /// A single local folder.
+    /// A single local folder, not cached for search.
     fn folder() -> ItemFacts {
         ItemFacts {
             navigation_uri: "file:///home/user/Projects".to_owned(),
             shape: ItemShape::Folder,
+            caching: Some(Caching::Disabled),
             ..file()
         }
     }

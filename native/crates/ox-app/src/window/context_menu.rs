@@ -162,6 +162,11 @@ impl BrowserWindow {
     /// The facts the menu of `entry` reads; `is_single` when it is the
     /// only item selected.
     fn item_facts(&self, entry: &Entry, is_single: bool) -> ItemFacts {
+        let caching = if entry.is_dir {
+            self.caching_of(entry.navigation_uri())
+        } else {
+            None
+        };
         ItemFacts {
             navigation_uri: entry.navigation_uri().to_owned(),
             shape: item_shape(entry),
@@ -170,6 +175,7 @@ impl BrowserWindow {
             is_single,
             is_search_result: self.is_searching(),
             editors: self.context().desktop_integration().known_editor_shortcuts(),
+            caching,
             delete_label: self.delete_label(),
         }
     }

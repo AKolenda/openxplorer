@@ -66,6 +66,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Move to Trash",
             "Duplicate",
             "Copy path",
+            "Compress to ZIP file",
             "-",
             "Previous versions",
             "Properties",
@@ -73,8 +74,8 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
     assert!(menu.row("Rename").is_sensitive());
     assert!(
-        !menu.row("Open with…").is_sensitive(),
-        "Open with arrives with its milestone"
+        menu.row("Open with…").is_sensitive(),
+        "Open with works for one item"
     );
 }
 
@@ -223,8 +224,8 @@ fn right_clicking_a_pin_opens_its_menu() {
     assert_eq!(menu.row_labels()[0], "Open");
     assert!(menu.row("Unpin from Quick access").is_sensitive());
     assert!(
-        !menu.row("Properties").is_sensitive(),
-        "Properties arrives with its milestone"
+        menu.row("Properties").is_sensitive(),
+        "Properties of the pin works"
     );
 }
 
