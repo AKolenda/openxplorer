@@ -6,15 +6,17 @@
 //! before removing them. The native app has no separate interface process;
 //! what can still happen is that the app itself stops mid-copy (a crash, a
 //! kill, a power cut). While a copy or move runs, a mark in the cache
-//! directory names its destination folders. A mark still there on the
-//! next start belongs to a run that never finished: its folders are
+//! directory names its destination folders, and the run holds a lock on
+//! it. A mark that can be locked on the next start belongs to a run that
+//! never finished; locks, unlike process ids, also tell that inside the
+//! Flatpak's own process namespace and after a reboot. Its folders are
 //! searched for the engine's private staging and backup items, and the
 //! user is told where they are. Nothing is deleted, because the staging
 //! item of an interrupted move may hold the only copy.
 
 use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
+use std::io::{self, Read, Write};
+use std::path::PathBuf;
 
 use gio::prelude::*;
 
@@ -23,8 +25,8 @@ use super::error::OpsError;
 use crate::random::random_hex;
 use crate::transfer::{is_own_backup_name, is_own_staging_name};
 
-/// The random bytes that keep two marks of one process apart.
-const MARK_BYTES: usize = 8;
+/// The random bytes that keep two marks apart.
+const MARK_BYTES: usize = 16;
 
 /// The marks of running copies and moves, in one folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,11 +34,13 @@ pub struct UnfinishedMarks {
     folder: PathBuf,
 }
 
-/// The mark of one running copy or move; dropping it, when the run ends
-/// in any way but a crash, removes the mark.
+/// The mark of one running copy or move, locked while it lives; dropping
+/// it, when the run ends in any way but a crash, removes the mark.
 #[derive(Debug)]
 pub struct UnfinishedMark {
     path: PathBuf,
+    /// The open mark, whose lock says that its run is still going.
+    _lock: fs::File,
 }
 
 impl Drop for UnfinishedMark {
@@ -73,10 +77,11 @@ impl UnfinishedMarks {
     /// only cannot be reported after a crash.
     pub fn mark(&self, destinations: &[String]) -> io::Result<UnfinishedMark> {
         fs::create_dir_all(&self.folder)?;
-        let name = format!("{}-{}", std::process::id(), random_hex(MARK_BYTES)?);
-        let path = self.folder.join(name);
-        fs::write(&path, destinations.join("\n"))?;
-        Ok(UnfinishedMark { path })
+        let path = self.folder.join(random_hex(MARK_BYTES)?);
+        let mut file = fs::File::create_new(&path)?;
+        file.lock()?;
+        file.write_all(destinations.join("\n").as_bytes())?;
+        Ok(UnfinishedMark { path, _lock: file })
     }
 
     /// The staging and backup items that runs which never finished left in
@@ -88,23 +93,27 @@ impl UnfinishedMarks {
     /// skipped.
     pub async fn collect_leftovers(&self) -> Result<Vec<String>, OpsError> {
         let marks = self.clone();
-        on_worker(move || Ok(marks.collect_leftovers_blocking(is_running))).await
+        on_worker(move || Ok(marks.collect_leftovers_blocking())).await
     }
 
-    /// [`Self::collect_leftovers`] on the calling thread; `is_running`
-    /// says whether a process id belongs to a process that still runs.
-    fn collect_leftovers_blocking(&self, is_running: impl Fn(u32) -> bool) -> Vec<String> {
+    /// [`Self::collect_leftovers`] on the calling thread.
+    fn collect_leftovers_blocking(&self) -> Vec<String> {
         let Ok(entries) = fs::read_dir(&self.folder) else {
             return Vec::new();
         };
         let mut leftovers: Vec<String> = Vec::new();
         for entry in entries.flatten() {
             let path = entry.path();
-            let pid = mark_process(&path);
-            if pid.is_none_or(|pid| pid == std::process::id() || is_running(pid)) {
+            // A mark whose lock is held belongs to a run still going, in
+            // this or another window's process.
+            let Ok(mut mark) = fs::File::open(&path) else {
+                continue;
+            };
+            if mark.try_lock().is_err() {
                 continue;
             }
-            let destinations = fs::read_to_string(&path).unwrap_or_default();
+            let mut destinations = String::new();
+            let _ = mark.read_to_string(&mut destinations);
             for folder in destinations.lines() {
                 for item in own_leftovers_in(folder) {
                     if !leftovers.contains(&item) {
@@ -145,17 +154,6 @@ pub fn leftovers_message(leftovers: &[String]) -> String {
          item there.",
         lines.join("\n")
     )
-}
-
-/// The process id a mark's name starts with.
-fn mark_process(path: &Path) -> Option<u32> {
-    let name = path.file_name()?.to_str()?;
-    name.split('-').next()?.parse().ok()
-}
-
-/// True while the process `pid` runs.
-fn is_running(pid: u32) -> bool {
-    Path::new("/proc").join(pid.to_string()).exists()
 }
 
 /// The staging and backup items directly in `folder`, without following
@@ -200,16 +198,20 @@ mod tests {
         let target_uri = gio::File::for_path(&target).uri().to_string();
 
         drop(marks.mark(std::slice::from_ref(&target_uri)).expect("a mark"));
-        let after_finished_run = marks.collect_leftovers_blocking(|_| false);
-        // A crash: the mark stays, written by a process that is gone.
-        let crashed = marks.folder.join("4000000-0123456789abcdef");
+        let after_finished_run = marks.collect_leftovers_blocking();
+        let running = marks.mark(std::slice::from_ref(&target_uri)).expect("a mark");
+        let while_it_runs = marks.collect_leftovers_blocking();
+        // A crash: the mark stays, and nothing holds its lock any more.
+        let crashed = marks.folder.join("0123456789abcdef");
         fs::write(&crashed, &target_uri).expect("a crashed run's mark");
-        let while_it_runs = marks.collect_leftovers_blocking(|_| true);
-        let after_crash = marks.collect_leftovers_blocking(|_| false);
-        let once_reported = marks.collect_leftovers_blocking(|_| false);
+        let after_crash = marks.collect_leftovers_blocking();
+        let once_reported = marks.collect_leftovers_blocking();
 
         assert!(after_finished_run.is_empty());
-        assert!(while_it_runs.is_empty(), "a running process keeps its mark");
+        assert!(while_it_runs.is_empty(), "a running copy keeps its mark");
+        assert!(running.path.is_file(), "and it is not removed");
+        assert!(!crashed.exists(), "a reported mark is removed");
+        drop(running);
         assert_eq!(after_crash, [format!("{target_uri}/{staging}")]);
         assert!(once_reported.is_empty(), "the mark is removed once reported");
         assert!(target.join(&staging).is_dir(), "nothing is deleted");
