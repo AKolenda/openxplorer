@@ -11,6 +11,7 @@ use gio::prelude::*;
 use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry, EntryError, ATTRIBUTES};
 use ox_core::location::{normalise, parent_location};
+use ox_core::network::read_mount_table;
 
 /// The attributes Properties asks for beyond a listing's
 /// (`PROPERTY_ATTRS` in `file_services.py`).
@@ -47,6 +48,21 @@ pub(crate) struct ItemProperties {
     pub link_target: Option<String>,
     /// The name of the application a file opens with.
     pub default_app: Option<String>,
+    /// What is mounted at the item, when a folder is a mount point.
+    pub mount: Option<MountFacts>,
+}
+
+/// A mount point's details for the General tab (PROP-004).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MountFacts {
+    /// Where it is mounted.
+    pub mounted_on: String,
+    /// What is mounted, for example `/dev/sdb1` or `//nas/share`.
+    pub mounted_from: String,
+    /// The file system type, for example `ext4`.
+    pub filesystem: String,
+    /// Free and total bytes, where the file system reports them.
+    pub space: Option<(u64, u64)>,
 }
 
 /// The user's access to an item, where the backend reports it.
@@ -94,6 +110,7 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
     )?;
     let entry = entry_from_info(&file, &info);
     let default_app = default_app_for(&entry);
+    let mount = if entry.is_dir { mount_at(&file) } else { None };
     Ok(ItemProperties {
         parent_uri: parent_location(&entry.uri),
         created: optional_u64(&info, "time::created"),
@@ -110,7 +127,30 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
         },
         link_target: link_target(&info),
         default_app,
+        mount,
         entry,
+    })
+}
+
+/// What is mounted at the folder `file`, if it is a mount point of the
+/// kernel's mount table. Reading the table never mounts anything.
+fn mount_at(file: &gio::File) -> Option<MountFacts> {
+    let path = file.path()?;
+    let path = path.to_str()?;
+    let mounts = read_mount_table().ok()?;
+    let mount = mounts.into_iter().rev().find(|mount| mount.path == path)?;
+    let space = file
+        .query_filesystem_info("filesystem::free,filesystem::size", gio::Cancellable::NONE)
+        .ok()
+        .and_then(|info| {
+            let known = info.has_attribute("filesystem::free") && info.has_attribute("filesystem::size");
+            known.then(|| (info.attribute_uint64("filesystem::free"), info.attribute_uint64("filesystem::size")))
+        });
+    Some(MountFacts {
+        mounted_on: mount.path,
+        mounted_from: mount.source,
+        filesystem: mount.filesystem,
+        space,
     })
 }
 
@@ -167,6 +207,7 @@ mod tests {
             access: Access::default(),
             link_target: None,
             default_app: None,
+            mount: None,
         };
 
         assert_eq!(properties.mode_text().as_deref(), Some("0o644"));

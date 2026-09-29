@@ -16,7 +16,7 @@ use ox_core::location::{is_smb_server, LocationContext};
 use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
-use super::metadata::ItemProperties;
+use super::metadata::{ItemProperties, MountFacts};
 use crate::dialog_layer::{note, quiet_text, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};
@@ -59,9 +59,27 @@ pub(super) struct GeneralFacts<'a> {
     pub snapshot_roots: &'a [String],
 }
 
+/// The values of a folder's General tab that a folder-size scan updates.
+#[derive(Debug, Clone)]
+pub(super) struct FolderRows {
+    /// The Size value.
+    pub size: gtk::Label,
+    /// The Contains value: how many files and folders it holds.
+    pub contains: gtk::Label,
+}
+
+impl FolderRows {
+    /// Shows the folder's measured size and counts.
+    pub(super) fn show(&self, state: &FolderSizeState) {
+        self.size.set_text(&state.size_text());
+        self.size.set_tooltip_text(Some(&state.summary_tooltip()));
+        self.contains.set_text(&state.contains_text());
+    }
+}
+
 /// Fills the General tab, replacing "Reading file properties…". Returns
-/// the Size value of a folder, which a folder-size scan updates.
-pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option<gtk::Label> {
+/// a folder's Size and Contains values, which a folder-size scan updates.
+pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option<FolderRows> {
     clear(panel);
     let properties = facts.properties;
     let entry = &properties.entry;
@@ -75,6 +93,15 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     if let Some(state) = facts.folder_size.filter(|_| entry.is_dir) {
         size_value.set_tooltip_text(Some(&state.summary_tooltip()));
     }
+    let contains = entry.is_dir.then(|| {
+        let text = facts
+            .folder_size
+            .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::contains_text);
+        grid.add_row("Contains", &text)
+    });
+    if let Some(target) = &properties.link_target {
+        grid.add_row("Points to", target);
+    }
     if !entry.is_dir {
         let app = properties.default_app.as_deref().unwrap_or(NO_DEFAULT_APP);
         grid.add_row("Opens with", app);
@@ -82,12 +109,47 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     grid.add_row("Created", &format::date_time_text(properties.created));
     grid.add_row("Modified", &format::date_time_text(entry.modified));
     grid.add_row("Accessed", &format::date_time_text(properties.accessed));
+    if let Some(mount) = &properties.mount {
+        add_mount_rows(&grid, mount);
+    }
     panel.append(grid.widget());
     panel.append(&buttons(facts));
     if entry.is_dir && !is_smb_server(&entry.uri) {
         panel.append(&quiet_text(SIZE_EXPLANATION));
     }
-    entry.is_dir.then_some(size_value)
+    contains.map(|contains| FolderRows {
+        size: size_value,
+        contains,
+    })
+}
+
+/// Mounted on, Mounted from, File system and the free space with its bar,
+/// for a mount point (PROP-004, as Dolphin's General tab). They come last,
+/// so the bar under the free space ends the grid.
+fn add_mount_rows(grid: &PropertyGrid, mount: &MountFacts) {
+    grid.add_row("Mounted on", &mount.mounted_on);
+    grid.add_row("Mounted from", &mount.mounted_from);
+    grid.add_row("File system", &mount.filesystem);
+    let Some((free, total)) = mount.space.filter(|(_, total)| *total > 0) else {
+        return;
+    };
+    let text = format!(
+        "{} free of {}",
+        format::pretty_bytes(free),
+        format::pretty_bytes(total)
+    );
+    let value = grid.add_row("Free space", &text);
+    let bar = gtk::LevelBar::builder()
+        .min_value(0.0)
+        .max_value(1.0)
+        .hexpand(true)
+        .build();
+    #[expect(clippy::cast_precision_loss, reason = "a bar's fraction needs no exact bytes")]
+    bar.set_value(1.0 - free as f64 / total as f64);
+    bar.update_property(&[gtk::accessible::Property::Label(&text)]);
+    // The bar goes under the text; it is the grid's last line.
+    let (column, line, _, _) = grid.widget().query_child(&value);
+    grid.widget().attach(&bar, column, line + 1, 1, 1);
 }
 
 /// The item's picture and name (`.property-file`).

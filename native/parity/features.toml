@@ -12855,8 +12855,8 @@ python_tests = [
 ]
 bridge = ["properties", "folderSize", "applications"]
 dolphin = "KFilePropsPlugin"
-native = "todo"
-native_note = "Porting notes: OpenXplorer shows type, location, full path, size (or a folder-size scan), opens-with, created, modified and accessed. It has no content counts, symlink target, mount information or free-space bar."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (properties_show_a_links_target_and_a_mount_points_details, properties_without_a_selection_describe_the_folder). The General tab of a folder has a Contains row ('12 files, 3 folders', '≥ …' for a partial scan, 'Not scanned' until measured) that Calculate folder size updates with the Size row, as Explorer's Contains; a symbolic link has 'Points to' with its target; a mount point of the kernel mount table adds 'Mounted on', 'Mounted from', 'File system' and 'Free space' ('X free of Y') with a level bar. Counts come from the on-demand folder-size scan, not an automatic one, as opening a folder never measures it (PROP-027)."
 
 [[feature]]
 id = "PROP-005"

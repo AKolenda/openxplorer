@@ -59,6 +59,7 @@ mod imp {
     use gtk::subclass::prelude::*;
 
     use super::super::checksums_panel::ChecksumsPanel;
+    use super::super::general_panel::FolderRows;
     use super::super::versions_panel::VersionsPanel;
     use super::super::PropertiesTarget;
 
@@ -81,9 +82,9 @@ mod imp {
         pub(super) versions: OnceCell<VersionsPanel>,
         /// The Checksums tab of a file.
         pub(super) checksums: OnceCell<ChecksumsPanel>,
-        /// The Size value of a folder, once the properties are read, so a
-        /// scan's progress can update it.
-        pub(super) size_value: RefCell<Option<gtk::Label>>,
+        /// The Size and Contains values of a folder, once the properties
+        /// are read, so a scan's progress can update them.
+        pub(super) folder_rows: RefCell<Option<FolderRows>>,
     }
 
     #[glib::object_subclass]
@@ -279,8 +280,8 @@ impl PropertiesView {
             folder_size: context.folder_size.as_ref(),
             snapshot_roots: &context.locations.snapshot_roots,
         };
-        let size_value = general_panel::fill_general(&imp.general, &facts);
-        imp.size_value.replace(size_value);
+        let folder_rows = general_panel::fill_general(&imp.general, &facts);
+        imp.folder_rows.replace(folder_rows);
         general_panel::fill_permissions(&imp.permissions, &properties);
     }
 
@@ -290,9 +291,8 @@ impl PropertiesView {
         if super::size_key(uri) != super::size_key(&self.target().uri) {
             return;
         }
-        if let Some(label) = self.imp().size_value.borrow().as_ref() {
-            label.set_text(&state.size_text());
-            label.set_tooltip_text(Some(&state.summary_tooltip()));
+        if let Some(rows) = self.imp().folder_rows.borrow().as_ref() {
+            rows.show(state);
         }
     }
 
@@ -314,8 +314,8 @@ impl PropertiesView {
     /// The Size value shown, for tests.
     #[cfg(test)]
     pub(crate) fn size_text(&self) -> Option<String> {
-        let label = self.imp().size_value.borrow().clone()?;
-        Some(label.text().to_string())
+        let rows = self.imp().folder_rows.borrow().clone()?;
+        Some(rows.size.text().to_string())
     }
 
     /// The General tab, for tests.

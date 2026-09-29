@@ -187,6 +187,33 @@ fn properties_without_a_selection_describe_the_folder() {
     assert_eq!(value_after(&general, "Size").as_deref(), Some("Not scanned"));
     assert!(texts(&general).iter().any(|text| text == "Calculate folder size"));
     assert!(properties_view(&frame).checksums().is_none());
+    assert_eq!(value_after(&general, "Contains").as_deref(), Some("Not scanned"));
+}
+
+/// A link says where it points, and a mount point what is mounted there
+/// and how much space is free.
+///
+/// parity: PROP-004
+#[gtk::test]
+fn properties_show_a_links_target_and_a_mount_points_details() {
+    let fixture = Fixture::standard();
+    std::os::unix::fs::symlink("Documents", fixture.path("Shortcut")).expect("a link");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.activate("properties-of", Some(&fixture.uri_of("Shortcut")));
+    let frame = test.wait_for_dialog("the link's Properties");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the link's target", || value_after(&general, "Points to").is_some());
+    assert_eq!(value_after(&general, "Points to").as_deref(), Some("Documents"));
+    frame.close();
+
+    test.activate("properties-of", Some("file:///"));
+    let frame = test.wait_for_dialog("the root's Properties");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the mount's details", || value_after(&general, "Mounted on").is_some());
+    assert_eq!(value_after(&general, "Mounted on").as_deref(), Some("/"));
+    assert!(value_after(&general, "File system").is_some());
+    assert!(value_after(&general, "Free space").is_some_and(|text| text.contains(" free of ")));
 }
 
 /// parity: PROP-008
