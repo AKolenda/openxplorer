@@ -189,6 +189,17 @@ jobs:
           merge-multiple: true
       - name: Stage the verified native packages and corresponding source
         run: /usr/bin/python3 tools/release.py --packages "$RUNNER_TEMP/packages"
+      - name: Point out optional packages missing from the release
+        # A failed optional leg reports success to needs, so name each
+        # package that is not staged in the run summary.
+        run: |
+          check() {
+            grep -Eq "$2" dist/SHA256SUMS \
+              || echo "::warning::The $1 is not in this release: its build job failed."
+          }
+          check "Fedora RPM" '\.fc[0-9]+\.[^ ]+\.rpm$'
+          check "openSUSE RPM" '\.opensuse_[^ ]+\.rpm$'
+          check "Arch package" '\.pkg\.tar\.zst$'
       - name: Audit complete release
         run: /usr/bin/python3 tools/audit-public-data.py
       - name: Publish a new desktop version
