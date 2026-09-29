@@ -9,10 +9,12 @@ use std::path::Path;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::TRASH_URI;
-use ox_core::ops::list_recycle_bin;
+use ox_core::ops::{list_recycle_bin, JournalDirection};
 use ox_core::transfer::Cancellation;
 
-use super::file_ops_support::{open_dialog, require_private_trash, select_names};
+use super::file_ops_support::{
+    is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
+};
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
 use crate::window::file_drop::DropAction;
 
@@ -187,4 +189,42 @@ fn items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder() {
         !fixture.path("Bring me back here.txt").exists(),
         "moved, not restored"
     );
+}
+
+/// Undo asks before it moves a copy that changed after the copy to the
+/// Recycle Bin; Cancel keeps the copy and the Undo step.
+///
+/// parity: OPS-030
+#[gtk::test]
+fn undoing_a_copy_that_changed_since_asks_and_cancel_keeps_it() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri_of("Documents")));
+    test.wait_for_listing("the Documents folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    let copy = fixture.path("Documents/Notes 2.txt");
+    wait_until("the copy", || test.window.shown_message() == "1 item(s) copied.");
+    let edited = std::fs::File::options()
+        .write(true)
+        .open(&copy)
+        .expect("the copy exists");
+    let a_minute_ahead = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+    edited.set_modified(a_minute_ahead).expect("the copy is ours");
+
+    test.activate("undo", None);
+    let question = open_dialog(&test);
+    assert_eq!(question.title_text(), "Undo copy?");
+    assert_eq!(
+        question.message_text(),
+        "“Notes 2.txt” was changed after it was copied. Undo moves it to the Recycle Bin anyway?"
+    );
+    question.press("Cancel");
+    wait_for_no_dialog(&test);
+
+    assert!(copy.is_file(), "the copy stays");
+    assert_eq!(test.window.journal_label(JournalDirection::Undo), "Undo: Copy");
 }

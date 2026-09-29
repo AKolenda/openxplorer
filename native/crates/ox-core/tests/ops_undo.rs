@@ -89,6 +89,38 @@ fn undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources() {
     assert!(is_in_recycle_bin(&destination.join("a.txt")));
 }
 
+/// A file edited inside a copied folder leaves the folder's own time
+/// alone, but still counts as a change to the copy.
+///
+/// parity: OPS-030
+#[test]
+fn an_edit_inside_a_copied_folder_counts_as_a_change() {
+    let temp = tempfile::tempdir().unwrap();
+    let (source, destination) = (temp.path().join("src"), temp.path().join("dst"));
+    fs::create_dir_all(source.join("project/notes")).unwrap();
+    fs::create_dir(&destination).unwrap();
+    fs::write(source.join("project/notes/work.txt"), b"draft").unwrap();
+    let record = undo_record_of(&request(
+        TransferMode::Copy,
+        &[&source.join("project")],
+        Some(&destination),
+    ));
+    let now = std::time::SystemTime::now();
+    let since = now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let untouched = block_on(changed_copies(&record, since));
+
+    let edited = fs::File::options()
+        .write(true)
+        .open(destination.join("project/notes/work.txt"))
+        .unwrap();
+    edited
+        .set_modified(now + std::time::Duration::from_secs(60))
+        .unwrap();
+
+    assert!(untouched.is_empty(), "{untouched:?}");
+    assert_eq!(block_on(changed_copies(&record, since)), ["project"]);
+}
+
 #[test]
 fn undoing_a_move_puts_items_back_but_never_over_a_new_item() {
     let temp = tempfile::tempdir().unwrap();
