@@ -5,9 +5,13 @@
 //! only with "Show hidden files", and every whitespace-separated search term
 //! must occur somewhere in the name, ignoring case. A term with the
 //! wildcards `*`, `?` or `[ ]` must match the whole name instead, as in
-//! Dolphin's filter bar (SRCH-004, [`NamePattern`]).
+//! Dolphin's filter bar (SRCH-004, [`NamePattern`]). While searching,
+//! the search options narrow the items by kind and date too (SRCH-037,
+//! [`SearchFacets`]).
 
-use ox_core::search::NamePattern;
+use gtk::glib;
+use ox_core::entry::Entry;
+use ox_core::search::{FacetMatcher, NamePattern, SearchFacets};
 
 /// Whether GIO marks an item hidden (a dot file, or one named in its
 /// folder's `.hidden` file).
@@ -19,12 +23,16 @@ pub(crate) enum Visibility {
     Hidden,
 }
 
-/// The current search text and hidden-file preference.
+/// The current search text, search options and hidden-file preference.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct FilterState {
     /// The search terms; empty while nothing is searched.
     pattern: NamePattern,
     show_hidden: bool,
+    /// The search options as chosen.
+    facets: SearchFacets,
+    /// `facets` with their date range worked out when they were chosen.
+    facet_matcher: FacetMatcher,
 }
 
 impl FilterState {
@@ -41,6 +49,20 @@ impl FilterState {
         let changed = show_hidden != self.show_hidden;
         self.show_hidden = show_hidden;
         changed
+    }
+
+    /// Sets the search options; returns true when they changed. Date
+    /// ranges are counted from the local time now.
+    pub(crate) fn set_facets(&mut self, facets: SearchFacets) -> bool {
+        let changed = facets != self.facets;
+        self.facets = facets;
+        self.facet_matcher = facets.matcher(&now());
+        changed
+    }
+
+    /// Whether `entry` passes the search options.
+    pub(crate) fn passes_facets(&self, entry: &Entry) -> bool {
+        self.facet_matcher.matches(entry)
     }
 
     /// True when a search is active.
@@ -60,6 +82,13 @@ impl FilterState {
     pub(crate) fn accepts(&self, lowercase_name: &str, visibility: Visibility) -> bool {
         self.lists(visibility) && self.pattern.matches_lowercase(lowercase_name, "")
     }
+}
+
+/// The local time now; the epoch should the clock be unreadable.
+fn now() -> glib::DateTime {
+    glib::DateTime::now_local()
+        .or_else(|_| glib::DateTime::from_unix_utc(0))
+        .expect("the Unix epoch is a valid time")
 }
 
 #[cfg(test)]

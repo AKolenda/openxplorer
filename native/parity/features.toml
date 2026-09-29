@@ -10145,8 +10145,8 @@ python_tests = [
 bridge = ["search", "cacheStatus"]
 dolphin = "SearchSettings::What (FileName/Content); Baloo content search (Search → Content)"
 gnome = "LocalSearch/Tracker full-text index (tracker3 SPARQL fts:match), with a fallback grep for unindexed folders; Tracker 3 SPARQL endpoint org.freedesktop.Tracker3.Miner.Files (fts:match) via libtracker-sparql-3.0; renamed LocalSearch3 / TinySPARQL on GNOME 47+"
-native = "todo"
-native_note = "Porting notes: Explorer's search also covers contents through its index. Zorin 18 ships tracker 3.7.1 (tracker-miner-fs-3), not localsearch."
+native = "done"
+native_note = "native/crates/ox-core/src/search/contents.rs (text_files_are_read_and_binary_files_are_not); native/crates/ox-core/src/search/live.rs (a_search_of_contents_finds_files_by_their_text_too); native/crates/ox-app/src/search/folder_search.rs (a_search_of_contents_walks_the_folder_even_where_it_is_cached); native/crates/ox-app/src/window/tests/search_options.rs (names_and_contents_finds_files_by_their_text). The search strip's 'Search in' list offers File names or Names and contents, as Dolphin's search box does; the choice is kept after the search ends. A search of contents walks the folder and its subfolders live (the cache holds names only, so the list is disabled for All cached folders) and reads local regular files of at most 16 MiB that look like text (no NUL byte in the first 8 KiB); every word must occur in the name or the text, and a wildcard word must still match the name. No full-text index: Tracker/LocalSearch is not queried."
 
 [[feature]]
 id = "SRCH-037"

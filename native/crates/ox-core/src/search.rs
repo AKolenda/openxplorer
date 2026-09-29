@@ -43,6 +43,8 @@
 //! | `crawl` | A full scan | `index_service.py` |
 //! | `update` | A live update of changed folders | `index_service.py` |
 //! | `live` | Searching a folder's tree without the cache (SRCH-035) | Dolphin |
+//! | `facets` | Narrowing a search by kind and date (SRCH-037) | Dolphin |
+//! | `contents` | Reading file text for a search of contents, never cached (SRCH-036) | Dolphin |
 //! | `limits` | The entry, folder and watch limits | `index_service.py`, `local_watch.py` |
 //! | `policy` | What may be indexed, and network roots | `index_service.py` |
 //! | `mounts` | The kernel's mount table | `mount_support.py` |
@@ -54,8 +56,10 @@
 //! | `error` | The error of every operation | both |
 
 mod commands;
+mod contents;
 mod crawl;
 mod error;
+mod facets;
 mod hit;
 mod index;
 mod limits;
@@ -85,7 +89,9 @@ mod fixtures;
 #[cfg(test)]
 mod service_tests;
 
+pub use contents::SearchIn;
 pub use error::SearchError;
+pub use facets::{DateFacet, FacetMatcher, KindFacet, SearchFacets};
 pub use index::SearchIndex;
 pub use live::{walk_search, LiveSearch, LiveSearchEnd};
 pub use pattern::{is_wildcard, NamePattern};

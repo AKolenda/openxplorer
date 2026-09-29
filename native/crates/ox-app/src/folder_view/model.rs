@@ -14,6 +14,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use ox_core::search::SearchFacets;
 
 use crate::folder_view::filter::FilterState;
 use crate::folder_view::item::FileItem;
@@ -96,7 +97,8 @@ impl FolderModel {
         let state = Rc::clone(&filter_state);
         let filter = gtk::CustomFilter::new(move |object| {
             let item = as_item(object);
-            state.borrow().accepts(item.lowercase_name(), item.visibility())
+            let state = state.borrow();
+            state.accepts(item.lowercase_name(), item.visibility()) && state.passes_facets(item.entry())
         });
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
@@ -168,6 +170,11 @@ impl FolderModel {
     /// Sets the search text; returns true when the shown items changed.
     pub(crate) fn set_query(&self, query: &str) -> bool {
         self.update_filter(|state| state.set_query(query))
+    }
+
+    /// Sets the search options (SRCH-037); returns true when they changed.
+    pub(crate) fn set_facets(&self, facets: SearchFacets) -> bool {
+        self.update_filter(|state| state.set_facets(facets))
     }
 
     /// Shows or hides hidden items; returns true when that changed.

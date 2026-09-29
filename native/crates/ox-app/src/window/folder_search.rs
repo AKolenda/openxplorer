@@ -22,7 +22,8 @@ use std::collections::HashSet;
 use ox_core::entry::Entry;
 use ox_core::location::{parent_location, LocationError};
 use ox_core::search::{
-    walk_search, HiddenItems, LiveSearch, NamePattern, SearchError, SearchQuery, SearchResults,
+    walk_search, HiddenItems, LiveSearch, NamePattern, SearchError, SearchFacets, SearchIn, SearchQuery,
+    SearchResults,
 };
 
 use crate::folder_view::details::DetailsListing;
@@ -30,7 +31,7 @@ use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::search::{
     listed_name_matches, merge_results, related_roots, CacheError, Listing, SearchCount, SearchInfoStrip,
-    SearchRun, SearchScope, RESULT_LIMIT,
+    SearchRun, SearchScope, ShownOptions, RESULT_LIMIT,
 };
 
 use super::empty_page::EmptyState;
@@ -79,6 +80,11 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             move |scope| window.change_search_scope(scope)
+        ));
+        strip.connect_options_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |search_in, facets| window.change_search_options(search_in, facets)
         ));
         strip.connect_clear_requested(glib::clone!(
             #[weak(rename_to = window)]
@@ -239,6 +245,7 @@ impl BrowserWindow {
             pattern: NamePattern::new(&run.text),
             hidden_items: self.hidden_items(),
             limit: RESULT_LIMIT,
+            search_in: run.search_in,
         };
         let (sender, batches) = async_channel::unbounded::<Vec<Entry>>();
         let cancellable = run.cancellable.clone();
@@ -348,12 +355,18 @@ impl BrowserWindow {
         } else {
             search.query().to_owned()
         };
+        let facets = if search.is_active() {
+            search.facets()
+        } else {
+            SearchFacets::default()
+        };
         drop(search);
         let active = self.imp().session.borrow().active_id();
         let rows = results.or_else(|| active.and_then(|id| self.tab_store(id)));
         let model = self.folder_pane().model();
         self.change_model(|| {
             model.set_query(&words);
+            model.set_facets(facets);
             model.set_store(rows.as_ref());
         });
     }
@@ -362,7 +375,12 @@ impl BrowserWindow {
     /// bar and the empty page.
     fn show_search_state(&self) {
         let search = self.imp().search.borrow();
-        self.search_strip().show_report(search.report(), search.scope());
+        let options = ShownOptions {
+            scope: search.scope(),
+            search_in: search.search_in(),
+            facets: search.facets(),
+        };
+        self.search_strip().show_report(search.report(), options);
         let listing = if search.is_active() {
             DetailsListing::SearchResults
         } else {
@@ -380,6 +398,24 @@ impl BrowserWindow {
         if changed {
             self.imp().search.borrow_mut().set_scope(scope);
             self.run_search();
+        }
+    }
+
+    /// The user chose other search options: a change between names and
+    /// contents runs the search again, and the kind and date options
+    /// filter the rows shown (SRCH-036, SRCH-037).
+    fn change_search_options(&self, search_in: SearchIn, facets: SearchFacets) {
+        let mut search = self.imp().search.borrow_mut();
+        let search_in_changed = search.search_in() != search_in;
+        let facets_changed = search.facets() != facets;
+        search.set_search_in(search_in);
+        search.set_facets(facets);
+        drop(search);
+        if search_in_changed {
+            self.run_search();
+        } else if facets_changed {
+            self.show_searched_items();
+            self.show_search_state();
         }
     }
 

@@ -41,7 +41,7 @@ pub(crate) use cache::SearchCache;
 pub(crate) use error::CacheError;
 pub(crate) use folder_search::{FolderSearch, SearchRun};
 pub(crate) use indexer::{CacheLocation, IndexerStart};
-pub(crate) use info_strip::SearchInfoStrip;
+pub(crate) use info_strip::{SearchInfoStrip, ShownOptions};
 pub(crate) use pin_sync::SettingsReading;
 pub(crate) use report::{SearchCount, RESULT_LIMIT};
 pub(crate) use results::{listed_name_matches, merge_results, Listing};

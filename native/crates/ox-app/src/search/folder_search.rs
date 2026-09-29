@@ -12,7 +12,7 @@
 
 use gtk::gio;
 use gtk::prelude::*;
-use ox_core::search::IndexRoot;
+use ox_core::search::{IndexRoot, SearchFacets, SearchIn};
 
 use super::report::{SearchProgress, SearchReport};
 use super::source::{SearchScope, SearchSource};
@@ -30,6 +30,8 @@ pub(crate) struct SearchRun {
     pub scope: SearchScope,
     /// Where it looks.
     pub source: SearchSource,
+    /// Whether the text of files is searched too (SRCH-036).
+    pub search_in: SearchIn,
     /// Cancelled when a newer edit replaces the run.
     pub cancellable: gio::Cancellable,
 }
@@ -41,6 +43,11 @@ pub(crate) struct FolderSearch {
     query: String,
     /// The scope the strip shows.
     scope: SearchScope,
+    /// Whether names or names and contents are searched (SRCH-036); kept
+    /// when the search ends, as Dolphin remembers it.
+    search_in: SearchIn,
+    /// The search options that narrow what is shown (SRCH-037).
+    facets: SearchFacets,
     /// Counts edits and runs; see [`SearchRun`].
     generation: u64,
     /// The run asking the cache now.
@@ -60,7 +67,7 @@ impl FolderSearch {
         self.cancel();
         self.results = None;
         text.clone_into(&mut self.query);
-        let source = SearchSource::choose(roots, folder, self.scope);
+        let source = self.source(roots, folder);
         self.report = self.is_active().then_some(SearchReport {
             source,
             progress: SearchProgress::Searching,
@@ -74,7 +81,19 @@ impl FolderSearch {
         self.results = None;
         self.query.clear();
         self.scope = SearchScope::default();
+        self.facets = SearchFacets::default();
         self.report = None;
+    }
+
+    /// Where a search of `folder` looks: a search of contents walks the
+    /// folder, because the cache holds names only.
+    fn source(&self, roots: &[IndexRoot], folder: &str) -> SearchSource {
+        let reads_contents = self.search_in == SearchIn::NamesAndContents;
+        if reads_contents && self.scope == SearchScope::ThisFolder {
+            SearchSource::CurrentFolder
+        } else {
+            SearchSource::choose(roots, folder, self.scope)
+        }
     }
 
     /// Whether something is searched: the box holds more than blanks.
@@ -103,6 +122,26 @@ impl FolderSearch {
         self.scope = scope;
     }
 
+    /// Whether names or names and contents are searched.
+    pub(crate) fn search_in(&self) -> SearchIn {
+        self.search_in
+    }
+
+    /// Chooses what is searched; the caller runs the search again.
+    pub(crate) fn set_search_in(&mut self, search_in: SearchIn) {
+        self.search_in = search_in;
+    }
+
+    /// The search options that narrow what is shown.
+    pub(crate) fn facets(&self) -> SearchFacets {
+        self.facets
+    }
+
+    /// Chooses the search options; the caller filters the rows again.
+    pub(crate) fn set_facets(&mut self, facets: SearchFacets) {
+        self.facets = facets;
+    }
+
     /// Starts the search of `folder`, with the indexed folders `roots`.
     /// Returns the run that asks the cache, or walks the folder's tree
     /// when no indexed folder is related ([`SearchSource::CurrentFolder`]);
@@ -116,7 +155,7 @@ impl FolderSearch {
             self.report = None;
             return None;
         }
-        let source = SearchSource::choose(roots, folder, self.scope);
+        let source = self.source(roots, folder);
         if !source.uses_cache() {
             self.results = None;
         }
@@ -132,6 +171,7 @@ impl FolderSearch {
             text: self.query.trim().to_owned(),
             scope: self.scope,
             source,
+            search_in: self.search_in,
             cancellable,
         })
     }
@@ -266,6 +306,24 @@ mod tests {
         assert!(!search.is_active());
         assert!(search.report().is_none());
         assert!(search.begin(FOLDER, &[enabled_root(FOLDER)]).is_none());
+    }
+
+    /// parity: SRCH-036
+    #[test]
+    fn a_search_of_contents_walks_the_folder_even_where_it_is_cached() {
+        let mut search = searching("budget");
+        search.set_search_in(SearchIn::NamesAndContents);
+
+        let run = search.begin(FOLDER, &[enabled_root(FOLDER)]).expect("a search");
+
+        assert_eq!(run.source, SearchSource::CurrentFolder);
+        assert_eq!(run.search_in, SearchIn::NamesAndContents);
+        search.end();
+        assert_eq!(
+            search.search_in(),
+            SearchIn::NamesAndContents,
+            "the choice is kept"
+        );
     }
 
     #[test]

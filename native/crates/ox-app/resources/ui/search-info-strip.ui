@@ -2,7 +2,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- The search information strip above the columns while searching
      (src/search/info_strip.rs; renderSearchInfo in app.js): the glyph,
-     what was searched, the scope, "Cache this folder", the note on cached
+     what was searched, the scope, the search options (names or contents,
+     kind and date), "Cache this folder", the note on cached
      results, the button that keeps the search when changing folders and
      the clear button. -->
 <interface>
@@ -39,6 +40,14 @@
       <!-- The scope list is a ChoiceButton, added in code. -->
       <object class="GtkBox" id="scope_slot">
         <property name="valign">center</property>
+      </object>
+    </child>
+    <child>
+      <!-- The search options (SRCH-036, SRCH-037) are ChoiceButtons, added
+           in code. -->
+      <object class="GtkBox" id="options_slot">
+        <property name="valign">center</property>
+        <property name="spacing">6</property>
       </object>
     </child>
     <child>

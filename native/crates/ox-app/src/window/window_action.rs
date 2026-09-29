@@ -256,6 +256,7 @@ impl WindowAction {
     ///
     /// This is the one table of every action's name, so it is longer than
     /// a function should be.
+    #[allow(clippy::too_many_lines)]
     pub(crate) const fn name(self) -> &'static str {
         match self {
             WindowAction::NewTab => "new-tab",

@@ -213,7 +213,10 @@ mod tests {
         };
         let began = Instant::now();
         let indexer = Indexer::start(start, || {}).expect("the thread starts");
-        assert!(began.elapsed() < TICK_INTERVAL, "starting does not wait for the cache");
+        assert!(
+            began.elapsed() < TICK_INTERVAL,
+            "starting does not wait for the cache"
+        );
 
         let service = indexer.service();
         let service = started(&service).expect("the thread opened the cache");
