@@ -158,12 +158,17 @@ mod tests {
 
         assert_eq!(test.window.title().as_deref(), Some("Documents — OpenXplorer"));
         let listed = items(&entries);
-        assert_eq!(listed.len(), 5);
-        let windows: Vec<_> = listed[..2].iter().flatten().cloned().collect();
+        let (windows, rest) = listed.split_at(listed.len() - 3);
+        let windows: Vec<_> = windows.iter().flatten().cloned().collect();
         assert!(windows.contains(&("Documents — OpenXplorer".to_owned(), true)));
         assert!(windows.contains(&(format!("{root_name} — OpenXplorer"), false)));
         assert_eq!(
-            listed[2..],
+            windows.iter().filter(|(_, checked)| *checked).count(),
+            1,
+            "only this window is checked"
+        );
+        assert_eq!(
+            rest,
             [
                 None,
                 Some(("New window".to_owned(), false)),
