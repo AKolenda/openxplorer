@@ -20,6 +20,7 @@
 //! | `gio_integration` | The engine over the production GIO adapter |
 //! | `gio_engine` | File names that are not valid UTF-8 through GIO |
 //! | `staging_cleanup` | Local staging cleanup through GIO |
+//! | `limits` | Free space, file size, names and links the destination cannot hold |
 
 mod transfer_support;
 
@@ -39,6 +40,8 @@ mod failures;
 mod gio_engine;
 #[path = "transfer_cases/gio_integration.rs"]
 mod gio_integration;
+#[path = "transfer_cases/limits.rs"]
+mod limits;
 #[path = "transfer_cases/modes.rs"]
 mod modes;
 #[path = "transfer_cases/mtp_adapter.rs"]

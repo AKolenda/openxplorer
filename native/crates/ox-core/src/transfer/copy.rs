@@ -13,6 +13,9 @@
 //!   instead of copying itself forever.
 //! - XFER-004 and XFER-005: staged local folders are owner-only while being
 //!   built; the source's mode is recorded and applied only when publishing.
+//! - XFER-028: a file larger than the destination file system stores is
+//!   refused with a message that says so, and names and links it cannot
+//!   store are renamed or left out as the user answers.
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
@@ -22,6 +25,7 @@ use super::modes::{path_for_unix_modes, secure_local_staging, DirectoryModes, PR
 use super::names::child_node;
 use super::node::{Node, NodeInfo, NodeKind};
 use super::types::{progress_fraction, Progress};
+use super::unstorable::{Fix, Unstorable};
 
 /// Copies one source tree into staging, reporting byte progress.
 pub(crate) struct Copier<'a> {
@@ -30,6 +34,8 @@ pub(crate) struct Copier<'a> {
     own_stage_name: &'a str,
     /// Final modes of the staged local folders, applied when publishing.
     modes: &'a mut DirectoryModes,
+    /// What the destination cannot store, and the user's answers about it.
+    unstorable: &'a mut Unstorable,
     emit: &'a mut dyn FnMut(Progress),
 }
 
@@ -39,12 +45,14 @@ impl<'a> Copier<'a> {
         cancel: &'a Cancellation,
         own_stage_name: &'a str,
         modes: &'a mut DirectoryModes,
+        unstorable: &'a mut Unstorable,
         emit: &'a mut dyn FnMut(Progress),
     ) -> Self {
         Self {
             cancel,
             own_stage_name,
             modes,
+            unstorable,
             emit,
         }
     }
@@ -78,7 +86,13 @@ impl<'a> Copier<'a> {
         let info = source.info(Some(self.cancel))?;
         match info.kind {
             NodeKind::Directory => self.copy_directory(source, target, &info, depth),
-            NodeKind::File | NodeKind::Symlink => self.copy_file(source, target),
+            NodeKind::File => {
+                // XFER-028: FAT stores files up to 4 GiB only.
+                let rules = self.unstorable.rules;
+                rules.check_file_size(&source.display_name(), info.size)?;
+                self.copy_file(source, target)
+            }
+            NodeKind::Symlink => self.copy_file(source, target),
             NodeKind::Special => Err(TransferError::failed(
                 "Sockets, devices and other special files are not copied.",
             )),
@@ -127,7 +141,11 @@ impl<'a> Copier<'a> {
         depth: usize,
     ) -> Result<(), TransferError> {
         for child in source.children(Some(self.cancel))? {
-            let child_target = child_node(target, child.name())?;
+            // XFER-028: a name or link the destination cannot store.
+            let Fix::Name(name) = self.unstorable.fix(child.as_ref(), None, self.cancel)? else {
+                continue;
+            };
+            let child_target = child_node(target, name)?;
             self.copy(child.as_ref(), child_target.as_ref(), depth)?;
         }
         Ok(())

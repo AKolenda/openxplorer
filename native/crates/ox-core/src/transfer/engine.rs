@@ -17,12 +17,14 @@ use super::containment::guard_destination;
 use super::error::TransferError;
 use super::guard::{check_write_tree, SourceChange};
 use super::labels::{completed_label, item_label};
+use super::limits::{Incoming, StorageRules};
 use super::node::{Node, NodeFactory, NodeKind, WriteGuard};
 use super::relisting::SourceFolders;
 use super::request::{destination_folder, distinct_items};
 use super::staged_copy::{ItemStaging, StagedCopy};
 use super::staging::{discard_stage, leftover_report};
 use super::types::{ConflictPolicy, Operation, Progress, TransferMode, TransferResult};
+use super::unstorable::{Fix, Unstorable, UnstorableAnswer, UnstorableItem};
 
 /// Receives the progress of a run for the transfer panel.
 type ProgressCallback = Box<dyn FnMut(Progress) + Send>;
@@ -37,6 +39,8 @@ pub struct TransferEngine {
     emit: ProgressCallback,
     write_guard: Option<Box<WriteGuard>>,
     sleep: SleepCallback,
+    /// What the run's destination cannot store (XFER-028).
+    unstorable: Unstorable,
 }
 
 impl fmt::Debug for TransferEngine {
@@ -81,6 +85,7 @@ impl TransferEngine {
             emit: Box::new(|_| {}),
             write_guard: None,
             sleep: Box::new(std::thread::sleep),
+            unstorable: Unstorable::default(),
         }
     }
 
@@ -98,6 +103,18 @@ impl TransferEngine {
         guard: impl Fn(&str) -> Result<(), TransferError> + Send + Sync + 'static,
     ) -> Self {
         self.write_guard = Some(Box::new(guard));
+        self
+    }
+
+    /// XFER-028: asks about each name or link the destination's file system
+    /// cannot store. It runs on the engine's thread and blocks the run until
+    /// it answers. Without it such items are attempted as they are.
+    #[must_use]
+    pub fn with_unstorable_question(
+        mut self,
+        question: impl FnMut(&UnstorableItem) -> UnstorableAnswer + Send + 'static,
+    ) -> Self {
+        self.unstorable = Unstorable::with_question(Box::new(question));
         self
     }
 
@@ -136,6 +153,16 @@ impl TransferEngine {
                 policy,
             } => {
                 let folder = destination_folder(&self.factory, folder_uri, cancel)?;
+                // XFER-028: what the destination's file system can hold.
+                let filesystem = folder.filesystem(Some(cancel)).unwrap_or_default();
+                self.unstorable.start_run(StorageRules::of(filesystem.kind.as_deref()));
+                let incoming = Incoming {
+                    mode: operation.mode(),
+                    policy,
+                    folder: folder.as_ref(),
+                    filesystem: &filesystem,
+                };
+                incoming.check_free_space(&self.factory, &uris, cancel)?;
                 let placement = Placement {
                     mode: operation.mode(),
                     policy,
@@ -144,10 +171,12 @@ impl TransferEngine {
                 self.run_items(ItemAction::Transfer(placement), &uris, cancel)
             }
             Operation::Trash => {
+                self.unstorable.start_run(StorageRules::default());
                 let trash = ItemAction::Remove(Removal::Trash);
                 self.run_items(trash, &uris, cancel)
             }
             Operation::Delete => {
+                self.unstorable.start_run(StorageRules::default());
                 let permanent_delete = ItemAction::Remove(Removal::PermanentDelete);
                 self.run_items(permanent_delete, &uris, cancel)
             }
@@ -275,7 +304,12 @@ impl TransferEngine {
         if selected.kind == NodeKind::Directory {
             guard_destination(source, placement.destination_folder)?;
         }
-        let Some(destination) = placement.destination_for(source, selected.kind, batch.cancel)? else {
+        self.unstorable.take_skipped();
+        // XFER-028: a name or link the destination cannot store.
+        let Fix::Name(name) = self.unstorable.fix(source, Some(selected.kind), batch.cancel)? else {
+            return Ok(ItemOutcome::Skipped);
+        };
+        let Some(destination) = placement.destination_for(source, &name, selected.kind, batch.cancel)? else {
             return Ok(ItemOutcome::Skipped);
         };
         let destination = destination.as_ref();
@@ -339,6 +373,13 @@ impl TransferEngine {
         staging: &mut ItemStaging,
     ) -> Result<(), TransferError> {
         self.copy_item(placement, selected, destination, cancel, staging)?;
+        if self.unstorable.take_skipped() > 0 {
+            return Err(TransferError::RecoveryRequired(format!(
+                "The copy at {} leaves out items the destination cannot store, so the original \
+                 was kept.",
+                destination.uri()
+            )));
+        }
         let source = selected.node.as_ref();
         source
             .delete_tree(&Cancellation::new(), self.guard())
@@ -370,6 +411,7 @@ impl TransferEngine {
             policy: placement.policy,
             cancel,
             guard: self.write_guard.as_deref(),
+            unstorable: &mut self.unstorable,
             emit: &mut *self.emit,
         };
         copy.run(staging)

@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
+use super::limits::FilesystemInfo;
 use super::staging::clean_staging;
 
 /// What an item is, queried without following symbolic links.
@@ -259,6 +260,13 @@ pub trait Node: Send + Sync {
     /// The backend's error when the folder cannot be listed.
     fn refresh_listing(&self, _cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         Ok(())
+    }
+
+    /// The file system this item is on (XFER-028): its type, free space
+    /// and id, as far as the backend reports them; `None` when it reports
+    /// nothing.
+    fn filesystem(&self, _cancel: Option<&Cancellation>) -> Option<FilesystemInfo> {
+        None
     }
 }
 

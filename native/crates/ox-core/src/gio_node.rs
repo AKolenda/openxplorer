@@ -33,7 +33,8 @@ use gio::prelude::*;
 
 use crate::location::split_location;
 use crate::transfer::{
-    check_cancelled, clean_staging, Cancellation, ItemIdentity, Node, NodeInfo, TransferError, WriteGuard,
+    check_cancelled, clean_staging, Cancellation, FilesystemInfo, ItemIdentity, Node, NodeInfo, TransferError,
+    WriteGuard,
 };
 
 /// A file or folder addressed through GIO, including `GVfs` remote backends.
@@ -227,6 +228,32 @@ impl Node for GioNode {
             self.list_children(cancel)?;
         }
         Ok(())
+    }
+
+    fn filesystem(&self, cancel: Option<&Cancellation>) -> Option<FilesystemInfo> {
+        let filesystem = self
+            .file
+            .query_filesystem_info("filesystem::type,filesystem::free", gio_cancellable(cancel))
+            .ok();
+        let id = self
+            .file
+            .query_info(
+                "id::filesystem",
+                gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+                gio_cancellable(cancel),
+            )
+            .ok()
+            .and_then(|info| info.attribute_string("id::filesystem"))
+            .map(String::from);
+        let kind = filesystem
+            .as_ref()
+            .and_then(|info| info.attribute_string("filesystem::type"))
+            .map(String::from);
+        let free = filesystem
+            .as_ref()
+            .filter(|info| info.has_attribute("filesystem::free"))
+            .map(|info| info.attribute_uint64("filesystem::free"));
+        Some(FilesystemInfo { kind, free, id })
     }
 }
 

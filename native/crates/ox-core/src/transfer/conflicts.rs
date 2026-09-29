@@ -28,9 +28,9 @@ pub(crate) struct Placement<'a> {
 }
 
 impl Placement<'_> {
-    /// The destination `source` (of `kind`) gets in the destination folder,
-    /// or `None` when it is skipped: a move into the folder it is already
-    /// in, or a taken name with Skip.
+    /// The destination `source` (of `kind`) gets in the destination folder
+    /// when it arrives as `name`, or `None` when it is skipped: a move into
+    /// the folder it is already in, or a taken name with Skip.
     ///
     /// The existence checks and the Keep-both search stop when the user
     /// cancels through `cancel`, the run's [`Batch`](super::batch::Batch)
@@ -43,11 +43,11 @@ impl Placement<'_> {
     pub(crate) fn destination_for(
         &self,
         source: &dyn Node,
+        name: &OsStr,
         kind: NodeKind,
         cancel: &Cancellation,
     ) -> Result<Option<Box<dyn Node>>, TransferError> {
-        let source_name = source.name();
-        let destination = child_node(self.destination_folder, &source_name)?;
+        let destination = child_node(self.destination_folder, name)?;
         // XFER-012: moving an item into its own folder would change nothing,
         // and with Keep both it would even rename the user's item, so it is
         // skipped.
@@ -60,7 +60,7 @@ impl Placement<'_> {
         match self.policy {
             // XFER-006: Skip never touches the existing item.
             ConflictPolicy::Skip => Ok(None),
-            ConflictPolicy::KeepBoth => self.free_copy_name(&source_name, kind, cancel).map(Some),
+            ConflictPolicy::KeepBoth => self.free_copy_name(name, kind, cancel).map(Some),
             ConflictPolicy::Replace => Ok(Some(destination)),
         }
     }

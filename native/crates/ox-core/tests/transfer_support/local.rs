@@ -21,7 +21,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gio::prelude::*;
-use ox_core::transfer::{Cancellation, Node, NodeFactory, NodeInfo, NodeKind, TransferError, WriteGuard};
+use ox_core::transfer::{
+    Cancellation, FilesystemInfo, Node, NodeFactory, NodeInfo, NodeKind, TransferError, WriteGuard,
+};
 use rustix::fs::{renameat_with, RenameFlags, CWD};
 
 pub use provider::{local, Provider};
@@ -311,5 +313,9 @@ impl Node for LocalNode {
 
     fn refresh_listing(&self, cancel: Option<&Cancellation>) -> Result<(), TransferError> {
         self.provider.refresh_listing(self, cancel)
+    }
+
+    fn filesystem(&self, _cancel: Option<&Cancellation>) -> Option<FilesystemInfo> {
+        self.provider.filesystem(self)
     }
 }
