@@ -3,7 +3,7 @@
 //!
 //! Ports `propertiesDialog` in `desktop/ui/app.js` (PROP-001, PROP-003,
 //! PROP-006): the tabs General, Location (standard folders only),
-//! Permissions and Previous versions, the item's properties read once
+//! Permissions, Checksums (files only, PROP-014) and Previous versions, the item's properties read once
 //! when the dialog opens, and the versions looked up the first time their
 //! tab is shown. [`PropertiesView`] is a widget subclass the dialog frame
 //! holds; the window keeps the frame, and so the view with everything it
@@ -16,9 +16,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::EntryError;
 use ox_core::folder_locations::FolderRelocation;
-use ox_core::location::LocationContext;
+use ox_core::location::{ItemKind, LocationContext};
 use ox_core::versions::PreviousVersions;
 
+use super::checksums_panel::ChecksumsPanel;
 use super::folder_sizes::FolderSizeState;
 use super::general_panel::{self, GeneralFacts};
 use super::location_panel::LocationPanel;
@@ -57,6 +58,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
+    use super::super::checksums_panel::ChecksumsPanel;
     use super::super::versions_panel::VersionsPanel;
     use super::super::PropertiesTarget;
 
@@ -77,6 +79,8 @@ mod imp {
         pub(super) permissions: gtk::Box,
         /// The Previous versions tab; set by `new`.
         pub(super) versions: OnceCell<VersionsPanel>,
+        /// The Checksums tab of a file.
+        pub(super) checksums: OnceCell<ChecksumsPanel>,
         /// The Size value of a folder, once the properties are read, so a
         /// scan's progress can update it.
         pub(super) size_value: RefCell<Option<gtk::Label>>,
@@ -170,6 +174,11 @@ impl PropertiesView {
             self.add_page(PropertiesTab::Location, location.upcast_ref());
         }
         self.add_page(PropertiesTab::Permissions, imp.permissions.upcast_ref());
+        if self.target().kind == ItemKind::File {
+            let checksums = ChecksumsPanel::new(&self.target().uri);
+            self.add_page(PropertiesTab::Checksums, checksums.widget().upcast_ref());
+            imp.checksums.set(checksums).expect("added once");
+        }
         self.add_page(
             PropertiesTab::PreviousVersions,
             self.versions_panel().upcast_ref(),
@@ -291,6 +300,15 @@ impl PropertiesView {
     /// (`finish` in `propertiesDialog`).
     pub(crate) fn cancel_work(&self) {
         self.versions_panel().cancel();
+        if let Some(checksums) = self.imp().checksums.get() {
+            checksums.cancel();
+        }
+    }
+
+    /// The Checksums tab of a file, for tests.
+    #[cfg(test)]
+    pub(crate) fn checksums(&self) -> Option<&ChecksumsPanel> {
+        self.imp().checksums.get()
     }
 
     /// The Size value shown, for tests.

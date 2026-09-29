@@ -116,7 +116,10 @@ fn alt_enter_opens_the_properties_of_the_selected_file() {
     let frame = test.wait_for_dialog("the Properties dialog");
     assert_eq!(frame.title(), "Notes 2.txt Properties");
     let view = properties_view(&frame);
-    assert_eq!(view.tab_labels(), ["General", "Permissions", "Previous versions"]);
+    assert_eq!(
+        view.tab_labels(),
+        ["General", "Permissions", "Checksums", "Previous versions"]
+    );
     let general = view.general_panel();
     wait_until("the properties to be read", || {
         value_after(&general, "Type").is_some()
@@ -140,6 +143,33 @@ fn alt_enter_opens_the_properties_of_the_selected_file() {
     capture(&test.window, "native-properties-general.png");
 }
 
+/// A file's Checksums tab checks a pasted checksum, computing its
+/// algorithm first, and a folder has no such tab.
+///
+/// parity: PROP-014
+#[gtk::test]
+fn a_pasted_checksum_is_checked_against_the_file() {
+    use ox_core::checksums::ChecksumKind;
+
+    let fixture = Fixture::standard();
+    let data = fs::read(fixture.path("Notes 2.txt")).expect("the fixture file");
+    let sha256 = glib::compute_checksum_for_data(glib::ChecksumType::Sha256, &data).expect("a digest");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let view = properties_view(&test.wait_for_dialog("the Properties dialog"));
+    let checksums = view.checksums().expect("a file has checksums");
+
+    checksums.paste_expected(&sha256.to_uppercase());
+    wait_until("the check", || checksums.verdict_text() == "Checksums match.");
+    assert_eq!(checksums.value_text(ChecksumKind::Sha256), sha256.as_str());
+    assert_eq!(checksums.value_text(ChecksumKind::Md5), "Not calculated");
+    checksums.paste_expected(&"0".repeat(32));
+    wait_until("the MD5 check", || {
+        checksums.verdict_text() == "Checksums do not match."
+    });
+}
+
 /// parity: PROP-001
 #[gtk::test]
 fn properties_without_a_selection_describe_the_folder() {
@@ -156,6 +186,7 @@ fn properties_without_a_selection_describe_the_folder() {
     });
     assert_eq!(value_after(&general, "Size").as_deref(), Some("Not scanned"));
     assert!(texts(&general).iter().any(|text| text == "Calculate folder size"));
+    assert!(properties_view(&frame).checksums().is_none());
 }
 
 /// parity: PROP-008

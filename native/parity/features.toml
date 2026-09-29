@@ -13061,7 +13061,8 @@ sources = [
 python_tests = []
 bridge = ["properties"]
 dolphin = "KChecksumsPlugin"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/checksums.rs (each_algorithm_gives_the_known_digest_and_a_pasted_one_is_recognised, a_cancelled_read_stops); native/crates/ox-app/src/window/tests/item_dialogs.rs (a_pasted_checksum_is_checked_against_the_file, alt_enter_opens_the_properties_of_the_selected_file). A file's Properties has a Checksums tab after Permissions: MD5, SHA1, SHA256 and SHA512 rows, each with Calculate (computed through GIO on a worker thread in 64 KiB blocks, cancelled when the dialog closes) that turns into Copy ('Checksum copied.'), and an 'Expected checksum' field whose algorithm is told by its length: 'Checksums match.', 'Checksums do not match.' or 'Enter an MD5, SHA1, SHA256 or SHA512 checksum.'. Folders have no Checksums tab."
 
 [[feature]]
 id = "PROP-015"

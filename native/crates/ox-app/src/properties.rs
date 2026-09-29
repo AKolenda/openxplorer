@@ -20,6 +20,7 @@
 //! | `view` | [`PropertiesView`]: the tabs and their panels |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_panel` | The General and Permissions tabs |
+//! | `checksums_panel` | The Checksums tab of a file |
 //! | `location_panel` | [`LocationPanel`](location_panel::LocationPanel): the Location tab of a standard folder |
 //! | `mount_assistant` | The network mount assistant of the Location tab |
 //! | `versions_panel` | [`VersionsPanel`]: the Previous versions tab |
@@ -30,6 +31,7 @@
 //! | `folder_sizes` | [`FolderSizeState`] and [`FolderSizes`]: measured sizes and their text |
 //! | `size_scan_strip` | [`SizeScanStrip`]: the bar of a running folder-size scan |
 
+mod checksums_panel;
 mod folder_sizes;
 mod general_panel;
 mod location_panel;
@@ -87,6 +89,8 @@ pub(crate) enum PropertiesTab {
     Location,
     /// Owner, group, mode and access.
     Permissions,
+    /// MD5, SHA1, SHA256 and SHA512 of a file (files only).
+    Checksums,
     /// Snapshots and backups of the item.
     PreviousVersions,
 }
@@ -98,6 +102,7 @@ impl PropertiesTab {
             PropertiesTab::General => "General",
             PropertiesTab::Location => "Location",
             PropertiesTab::Permissions => "Permissions",
+            PropertiesTab::Checksums => "Checksums",
             PropertiesTab::PreviousVersions => "Previous versions",
         }
     }
@@ -108,6 +113,7 @@ impl PropertiesTab {
             PropertiesTab::General => "general",
             PropertiesTab::Location => "location",
             PropertiesTab::Permissions => "permissions",
+            PropertiesTab::Checksums => "checksums",
             PropertiesTab::PreviousVersions => "versions",
         }
     }
@@ -118,6 +124,7 @@ impl PropertiesTab {
             PropertiesTab::General,
             PropertiesTab::Location,
             PropertiesTab::Permissions,
+            PropertiesTab::Checksums,
             PropertiesTab::PreviousVersions,
         ]
         .into_iter()
