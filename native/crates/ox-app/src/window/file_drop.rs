@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Dropping files and folders onto the window (DND-009 to DND-014,
-//! DND-017 to DND-020, DND-026, TAB-018).
+//! DND-017 to DND-021, DND-025, DND-026, TAB-018).
 //!
 //! Ports `decode_uris` and `NativeFileDrop` of
 //! `desktop/native_file_drop.py` and `receiveFileDrop` and
@@ -43,7 +43,7 @@ use super::BrowserWindow;
 
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{ProgramChecks, ProgramTarget};
-pub(super) use targets::DropZone;
+pub(super) use targets::{DragScroll, DropZone};
 
 /// The most items one drop brings.
 const MAX_DROPPED_ITEMS: usize = 200;

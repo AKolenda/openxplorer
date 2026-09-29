@@ -159,6 +159,8 @@ pub(crate) struct BrowserWindow {
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
     /// The folder a file drag hovers over, and the timer that opens it.
     pub(super) folder_hover: RefCell<Option<(String, glib::SourceId)>>,
+    /// The scroll of a zone a file drag hovers near the edge of.
+    pub(super) drag_scroll: RefCell<Option<super::file_drop::DragScroll>>,
     /// The tab drag this window started, while it lasts.
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
     /// The in-window dialogs, Properties by tab, and the tabs that

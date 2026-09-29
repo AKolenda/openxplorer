@@ -9335,8 +9335,8 @@ python_tests = []
 bridge = []
 dolphin = "KItemListView::dragEnterEvent enables autoscroll, dragMoveEvent restarts its timer, triggerAutoScrolling"
 gnome = "GtkDropControllerMotion plus stepping the GtkScrolledWindow vadjustment on a timer"
-native = "todo"
-native_note = "Porting notes: Native file drops stop WebKit's drag-motion handling (native_file_drop.py), so the file list does not scroll during a drop today. DND-015 covers only sidebar autoscroll during the pointer pin drag, and SEL-012 covers rubber-band autoscroll."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop/targets/autoscroll.rs (a_drag_scrolls_near_the_edges_faster_closer_to_them). A file drag, from this window or another application, hovering within 40 px of the top or bottom edge of the file list or the sidebar scrolls it every 30 ms, up to 24 px a tick on the edge itself; leaving the edge zone or the view, or dropping, stops it."
 
 [[feature]]
 id = "DND-026"

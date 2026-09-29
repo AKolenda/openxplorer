@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The parts of the window that take dropped files (DND-011, DND-014,
-//! DND-016, DND-021, TAB-018): each zone's drop target, which asks
-//! [`spot`] where a drop at a point goes, [`highlight`] to show it and
-//! [`spring`] to open a folder the drag stays over.
+//! DND-016, DND-021, DND-025, TAB-018): each zone's drop target, which
+//! asks [`spot`] where a drop at a point goes, [`highlight`] to show it,
+//! [`spring`] to open a folder the drag stays over and [`autoscroll`] to
+//! scroll a zone the drag hovers near the edge of.
 //!
 //! Ports `publishFileDragLayout` and `showFileDropHint` of
 //! `desktop/ui/app.js`. The web app published rectangles for the native
@@ -10,6 +11,7 @@
 //! own coordinates at its real size, so scaling and clipping need no
 //! arithmetic.
 
+mod autoscroll;
 mod highlight;
 mod spot;
 mod spring;
@@ -19,6 +21,8 @@ mod tests;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
+
+pub(in crate::window) use autoscroll::DragScroll;
 
 use crate::window::file_drag::DraggedItems;
 use crate::window::BrowserWindow;
@@ -91,9 +95,11 @@ impl BrowserWindow {
         x: f64,
         y: f64,
     ) -> gdk::DragAction {
-        let spot = target
-            .widget()
-            .and_then(|widget| self.drop_spot(zone, &widget, x, y));
+        let widget = target.widget();
+        if let (Some(widget), DropZone::FolderView | DropZone::Sidebar) = (&widget, zone) {
+            self.scroll_drag_near_edge(widget, y);
+        }
+        let spot = widget.and_then(|widget| self.drop_spot(zone, &widget, x, y));
         self.show_drop_spot(zone, spot.as_ref());
         let action = self.drop_action(drop);
         match (spot, action) {
@@ -102,11 +108,12 @@ impl BrowserWindow {
         }
     }
 
-    /// The drag left `zone`, or dropped there: its highlight goes, and
-    /// what was learnt about programs under it is forgotten, as they may
-    /// change before the next drag.
+    /// The drag left `zone`, or dropped there: its highlight and any
+    /// scrolling stop, and what was learnt about programs under it is
+    /// forgotten, as they may change before the next drag.
     fn leave_drop_zone(&self, zone: DropZone) {
         self.show_drop_spot(zone, None);
+        self.stop_drag_scroll();
         if zone == DropZone::FolderView {
             self.forget_program_checks();
         }
