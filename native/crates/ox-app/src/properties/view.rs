@@ -23,6 +23,7 @@ use ox_core::versions::PreviousVersions;
 use super::checksums_panel::ChecksumsPanel;
 use super::folder_sizes::FolderSizeState;
 use super::general_panel::{self, GeneralFacts};
+use super::permissions_editor::permissions_editor;
 use super::location_panel::LocationPanel;
 use super::metadata::{read_properties, ItemProperties};
 use super::versions_panel::VersionsPanel;
@@ -284,7 +285,12 @@ impl PropertiesView {
         };
         let folder_rows = general_panel::fill_general(&imp.general, &facts);
         imp.folder_rows.replace(folder_rows);
-        general_panel::fill_permissions(&imp.permissions, &properties);
+        let editor = self.can_edit_permissions(&properties, context).then(|| {
+            let mode = properties.mode.unwrap_or_default();
+            let versions = Arc::clone(&context.versions);
+            permissions_editor(&properties.entry.uri, mode, properties.entry.is_dir, versions)
+        });
+        general_panel::fill_permissions(&imp.permissions, &properties, editor);
     }
 
     /// Whether the name can be edited: an item in a local or shared folder,
@@ -299,6 +305,18 @@ impl PropertiesView {
             && !is_share
             && !is_read_only
             && is_renamable_place
+    }
+
+    /// Whether the permissions can be changed here: the user owns the
+    /// item, which has permission bits and is not a link, a share root or
+    /// inside a previous version (PROP-007).
+    fn can_edit_permissions(&self, properties: &ItemProperties, context: &PropertiesContext) -> bool {
+        let uri = &properties.entry.uri;
+        let is_owner = properties.owner.as_deref() == glib::user_name().to_str();
+        let is_link = properties.link_target.is_some();
+        let is_read_only = context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
+        let is_place = uri.starts_with("file:") || (is_smb_location(uri) && !is_smb_share_root(uri));
+        is_owner && properties.mode.is_some() && !is_link && !is_read_only && is_place && !is_smb_server(uri)
     }
 
     /// Shows the folder's new measured size, if this dialog describes the

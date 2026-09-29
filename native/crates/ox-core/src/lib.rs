@@ -24,6 +24,7 @@
 //! | [`versions`] | Previous versions and the read-only rule for snapshots | `previous_versions.py`, `file_services.py`, `ui/snapshot-meta.js` |
 //! | [`sizes`] | On-demand folder sizes | `folder_sizes.py`, `mount_support.py` |
 //! | [`checksums`] | File checksums for Properties | (new, after Dolphin) |
+//! | [`permissions`] | Editing POSIX permissions from Properties | (new, after Dolphin) |
 //! | [`integration`] | Default apps, Show in folder, Brave's download folder, opening files, Open in Terminal | `desktop_integration.py`, `reveal_integration.py`, `filemanager_bus.py`, `brave_integration.py`, `activation.py`, `native_opening.py`, `terminal_integration.py`, `app_catalog.py` |
 //! | [`update`] | Update checks, installation, restart and the running-instance guard | `updater.py`, `runtime_guard.py`, `winspace.py` |
 //! | [`session`] | Tab handoff state and `FileManager1` request validation | `window_state.py` |
@@ -40,6 +41,7 @@ pub mod integration;
 pub mod location;
 pub mod network;
 pub mod ops;
+pub mod permissions;
 pub mod places;
 pub mod search;
 pub mod session;

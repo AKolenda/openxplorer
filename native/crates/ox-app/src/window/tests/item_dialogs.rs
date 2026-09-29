@@ -219,6 +219,36 @@ fn the_name_in_properties_renames_the_item() {
     wait_until("the dialog to close", || frame.is_closed());
 }
 
+/// The owner changes who may view or modify a file on the Permissions
+/// tab.
+///
+/// parity: PROP-007
+#[gtk::test]
+fn the_owner_changes_a_files_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = Fixture::standard();
+    let path = fixture.path("Notes 2.txt");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("a known mode");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let permissions = properties_view(&frame).permissions_panel();
+    wait_until("the editor", || !descendants::<gtk::DropDown>(&permissions).is_empty());
+    let choices = descendants::<gtk::DropDown>(&permissions);
+    assert_eq!(choices.len(), 3, "owner, group and others");
+    assert_eq!(choices[1].selected(), 1, "the group can only view");
+
+    choices[1].set_selected(0);
+    choices[2].set_selected(0);
+    press(&permissions, "Apply permissions");
+
+    let mode = || fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+    wait_until("the new mode", || mode() == 0o600);
+    assert_eq!(test.window.shown_message(), "Permissions changed.");
+}
+
 /// A link says where it points, and a mount point what is mounted there
 /// and how much space is free.
 ///

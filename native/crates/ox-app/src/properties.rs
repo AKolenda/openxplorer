@@ -20,6 +20,7 @@
 //! | `view` | [`PropertiesView`]: the tabs and their panels |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_panel` | The General and Permissions tabs |
+//! | `permissions_editor` | Changing permissions on the Permissions tab |
 //! | `checksums_panel` | The Checksums tab of a file |
 //! | `location_panel` | [`LocationPanel`](location_panel::LocationPanel): the Location tab of a standard folder |
 //! | `mount_assistant` | The network mount assistant of the Location tab |
@@ -37,6 +38,7 @@ mod general_panel;
 mod location_panel;
 mod metadata;
 mod mount_assistant;
+mod permissions_editor;
 mod restore;
 mod size_scan_strip;
 mod snapshot_banner;

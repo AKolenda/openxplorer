@@ -296,8 +296,8 @@ fn calculate_size_button(uri: &str) -> gtk::Button {
     button
 }
 
-/// Fills the Permissions tab.
-pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties) {
+/// Fills the Permissions tab; `editor` changes them, where the user may.
+pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties, editor: Option<gtk::Box>) {
     clear(panel);
     let grid = PropertyGrid::new();
     grid.add_row("Owner", properties.owner.as_deref().unwrap_or_default());
@@ -308,6 +308,9 @@ pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties) {
     grid.add_row("Writable", access_text(access.writable));
     grid.add_row("Executable", access_text(access.executable));
     panel.append(grid.widget());
+    if let Some(editor) = editor {
+        panel.append(&editor);
+    }
     panel.append(&note(PERMISSIONS_NOTE));
 }
 
