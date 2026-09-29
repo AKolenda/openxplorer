@@ -10164,8 +10164,8 @@ sources = [
 python_tests = []
 bridge = ["search"]
 dolphin = "DolphinFacetsWidget"
-native = "todo"
-native_note = "Porting notes: Explorer's equivalent is its search-options filters (Date modified, Kind, Size)."
+native = "partial"
+native_note = "native/crates/ox-core/src/search/facets.rs (kinds_and_dates_narrow_what_is_shown); native/crates/ox-app/src/window/tests/search_options.rs (the_kind_option_narrows_the_results_until_the_search_ends). The search strip's Kind list (Any kind, Folders, Documents, Images, Audio files, Videos, decided from the MIME type) and Date modified list (Any date, Today, Yesterday, This week from Monday, This month, This year, in local time) narrow the rows shown at once, for the filtered listing, the cache's results and the live walk alike; ending the search resets them. Missing: the rating and tag filters, which need SRCH-039 (tags and ratings) first."
 
 [[feature]]
 id = "SRCH-038"
