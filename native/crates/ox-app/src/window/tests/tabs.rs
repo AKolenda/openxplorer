@@ -306,3 +306,26 @@ fn tab_keys_stay_out_of_text_fields_but_switch_away_from_properties() {
         "other keys wait for the dialog"
     );
 }
+
+/// Many tabs keep the strip within 70% of the window; they shrink and the
+/// strip scrolls without a scrollbar.
+///
+/// parity: TAB-019
+#[gtk::test]
+fn many_tabs_keep_the_strip_within_seventy_percent_of_the_window() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    for _ in 0..12 {
+        test.window.add_tab(&fixture.uri()).expect("valid folder");
+    }
+    let strip = test.window.tab_strip();
+    let limit = test.window.width() * 7 / 10;
+    wait_until("the strip to fit its share", || {
+        strip.width() > 0 && strip.width() <= limit
+    });
+    // The border box: the content width leaves out the tab's padding.
+    let tab = tab_widget(&test, 0);
+    let width = tab.compute_bounds(&tab).expect("a shown tab").width();
+    assert!(width < 215.0, "the tabs shrank");
+    assert!(width >= 100.0, "down to the narrowest tab");
+}

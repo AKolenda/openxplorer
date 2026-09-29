@@ -42,6 +42,9 @@ const CLOSE_GLYPH: i32 = 12;
 /// The clock in a snapshot tab's badge (`icon('clock', 12)`).
 const SNAPSHOT_BADGE_GLYPH: i32 = 12;
 
+/// The share of the window's width the strip takes at most, in percent.
+const MAX_STRIP_PERCENT: i32 = 70;
+
 /// The CSS class of a tab's icon.
 const TAB_ICON_CLASS: &str = "tab-icon";
 
@@ -152,6 +155,24 @@ impl TabStrip {
     /// a narrow window.
     pub(super) fn set_tab_width(&self, width: i32) {
         self.imp().layout.set_tab_width(width);
+    }
+
+    /// Keeps the strip within 70% of a window `window_width` pixels wide
+    /// (`.tabs{max-width:70%}`), so the drag area beside it stays wide
+    /// enough to grab; tabs that do not fit shrink and then scroll. The
+    /// cap changes after the allocation that reports the width, because
+    /// changing it during one would start it again.
+    pub(super) fn cap_width(&self, window_width: i32) {
+        let cap = window_width * MAX_STRIP_PERCENT / 100;
+        let scroller = self.imp().scroller.get();
+        if scroller.max_content_width() == cap {
+            return;
+        }
+        glib::idle_add_local_once(glib::clone!(
+            #[weak]
+            scroller,
+            move || scroller.set_max_content_width(cap)
+        ));
     }
 
     /// Replaces the tabs with `tabs` and scrolls the active one into view.
