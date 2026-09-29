@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The parts of the window that take dropped files (DND-011, DND-014,
-//! DND-016, TAB-018): each zone's drop target, which asks [`spot`] where a
-//! drop at a point goes and [`highlight`] to show it.
+//! DND-016, DND-021, TAB-018): each zone's drop target, which asks
+//! [`spot`] where a drop at a point goes, [`highlight`] to show it and
+//! [`spring`] to open a folder the drag stays over.
 //!
 //! Ports `publishFileDragLayout` and `showFileDropHint` of
 //! `desktop/ui/app.js`. The web app published rectangles for the native
@@ -11,6 +12,7 @@
 
 mod highlight;
 mod spot;
+mod spring;
 #[cfg(test)]
 mod tests;
 

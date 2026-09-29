@@ -9256,7 +9256,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "AutoExpandFolders (default false)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop/targets/spring.rs; native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drag_that_stays_over_a_folder_opens_it). A file drag that stays for 750 ms over a folder item that takes drops, or over a sidebar place, opens that folder in the tab; moving to another spot restarts the wait and leaving or dropping stops it. Differs: always on, as in Windows Explorer; Dolphin's setting to turn it off is not offered."
 
 [[feature]]
 id = "DND-022"

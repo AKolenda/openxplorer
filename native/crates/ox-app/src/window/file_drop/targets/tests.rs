@@ -351,3 +351,26 @@ fn the_drop_highlights_the_program_hint_and_the_drop_menu_are_captured() {
         wait_until("the menu to close", || !menu.is_mapped());
     }
 }
+
+/// parity: DND-021
+#[gtk::test]
+fn a_drag_that_stays_over_a_folder_opens_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let documents = test
+        .window
+        .folder_view_spot(Some(test.position_of("Documents")))
+        .expect("a folder takes drops");
+    let blank = test.window.folder_view_spot(None).expect("the folder shown takes drops");
+    assert_eq!(super::spring::folder_to_open(&blank), None, "the folder shown is open already");
+
+    test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
+    test.window.show_drop_spot(DropZone::FolderView, None);
+    wait_for(Duration::from_millis(900));
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()), "leaving stops the wait");
+
+    test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
+    wait_until("the hovered folder to open", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents"))
+    });
+}

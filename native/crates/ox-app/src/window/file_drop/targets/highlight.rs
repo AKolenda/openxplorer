@@ -11,6 +11,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::spot::DropSpot;
+use super::spring::folder_to_open;
 use super::DropZone;
 use crate::window::file_drop::DropDestination;
 use crate::window::session::TabId;
@@ -24,8 +25,10 @@ const TAB_HOVER_DELAY: Duration = Duration::from_millis(800);
 pub(super) const VIEW_DROP_CLASS: &str = "file-drop-active";
 
 impl BrowserWindow {
-    /// Highlights `spot` in `zone`, or nothing there.
+    /// Highlights `spot` in `zone`, or nothing there, and opens the
+    /// folder under it when the drag stays there.
     pub(super) fn show_drop_spot(&self, zone: DropZone, spot: Option<&DropSpot>) {
+        self.open_folder_after_hover(spot.and_then(folder_to_open));
         match zone {
             DropZone::FolderView => self.show_folder_view_spot(spot),
             DropZone::Sidebar => {
