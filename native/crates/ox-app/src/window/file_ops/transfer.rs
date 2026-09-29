@@ -24,6 +24,7 @@ use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
 use super::conflict_dialog::ConflictAnswer;
 use super::running::FinishedOperation;
+use super::unfinished::mark_unfinished;
 use crate::window::dialog;
 use crate::window::BrowserWindow;
 
@@ -190,7 +191,9 @@ impl BrowserWindow {
             TransferPlan::PerItem(chosen) => {
                 let context = self.begin_operation(starting_label(chosen.mode))?;
                 let progress = self.progress_reporter(&context.cancel);
+                let mark = mark_unfinished(Some(&chosen.destination_folder));
                 let outcome = run_chosen_transfer(chosen, &context, progress).await;
+                drop(mark);
                 self.end_operation();
                 Some(outcome)
             }

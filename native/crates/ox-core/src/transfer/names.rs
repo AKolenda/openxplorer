@@ -78,6 +78,24 @@ pub fn is_own_staging_name(name: &str) -> bool {
     let Some(digits) = rest.strip_suffix(STAGING_SUFFIX) else {
         return false;
     };
+    is_generated_digits(digits)
+}
+
+/// True only for names exactly of the form this engine generates for the
+/// backup of a replaced file: `.winspace-replaced-` followed by 32
+/// lowercase hex digits and `.backup`.
+pub fn is_own_backup_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix(BACKUP_PREFIX) else {
+        return false;
+    };
+    let Some(digits) = rest.strip_suffix(BACKUP_SUFFIX) else {
+        return false;
+    };
+    is_generated_digits(digits)
+}
+
+/// True for the 32 lowercase hex digits of a generated name.
+fn is_generated_digits(digits: &str) -> bool {
     let is_lower_hex = |digit: u8| matches!(digit, b'0'..=b'9' | b'a'..=b'f');
     digits.len() == NAME_DIGITS && digits.bytes().all(is_lower_hex)
 }
@@ -131,6 +149,8 @@ mod tests {
         assert!(backup.starts_with(".winspace-replaced-") && backup.ends_with(".backup"));
         assert_eq!(backup.len(), ".winspace-replaced-".len() + 32 + ".backup".len());
         assert!(!is_own_staging_name(&backup));
+        assert!(is_own_backup_name(&backup));
+        assert!(!is_own_backup_name(".winspace-replaced-x.backup"));
     }
 
     /// Ported from `desktop/tests/test_device_staging.py::StagingNameTests::test_only_exact_generated_names_match`

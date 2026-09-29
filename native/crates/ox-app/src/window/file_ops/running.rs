@@ -20,6 +20,7 @@ use ox_core::ops::{
 };
 use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
+use super::unfinished::mark_unfinished;
 use crate::window::dialog;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::TransferPanel;
@@ -140,7 +141,9 @@ impl BrowserWindow {
     ) -> Option<Result<TransferOutcome, OpsError>> {
         let context = self.begin_operation(starting_label(request.mode))?;
         let progress = self.progress_reporter(&context.cancel);
+        let mark = mark_unfinished(request.destination_folder.as_deref());
         let outcome = run_transfer(request, &context, progress).await;
+        drop(mark);
         self.end_operation();
         Some(outcome)
     }

@@ -22,6 +22,7 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `running` | One operation at a time: the transfer panel, Cancel and the report at the end |
+//! | `unfinished` | Marks of running copies, and what a crashed run left behind |
 //! | `availability` | When each file command is enabled (`updateToolbar`) |
 //! | `trash_support` | Whether each folder has a Trash, which labels Delete |
 //! | `names` | The name check of the name dialogs (`validateName`) |
@@ -62,6 +63,7 @@ mod shortcuts;
 mod template_dialog;
 mod transfer;
 mod trash_support;
+mod unfinished;
 
 use ox_core::clipboard::ClipboardFiles;
 use ox_core::transfer::Cancellation;

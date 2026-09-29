@@ -58,6 +58,7 @@
 //! | `undo` | What reverses each operation, and what reverses a reversal |
 //! | `journal` | The Undo and Redo stacks |
 //! | `undo_apply` | Carrying out an Undo or a Redo |
+//! | `unfinished` | Marks of running copies, and what a crashed run left |
 //! | `tab_transfer` | Moving a tab to another window |
 //!
 //! The tests of this service in `desktop/tests` are ported to
@@ -91,6 +92,7 @@ mod tab_transfer;
 mod templates;
 mod undo;
 mod undo_apply;
+mod unfinished;
 
 pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
 pub use chosen_transfer::{run_chosen_transfer, ChosenTransfer, ItemChoice};
@@ -127,3 +129,4 @@ pub use templates::{
 };
 pub use undo::{MovedItem, RenamedPair, UndoRecord};
 pub use undo_apply::{reverse, undo, Reversal};
+pub use unfinished::{leftovers_message, UnfinishedMark, UnfinishedMarks, UNFINISHED_TITLE};

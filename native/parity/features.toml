@@ -7283,8 +7283,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:538", "desktop/winspace.py:538-548"]
 python_tests = []
 bridge = ["cancel"]
-native = "todo"
-native_note = "The WebKit crash case disappears natively; the equivalent is reporting leftover .winspace-transfer-*.part folders after an unexpected exit. Porting notes: The native equivalent is recovery after a crash: report leftover staging on the next start."
+native = "done"
+native_note = "The WebKit crash case does not exist natively (no separate interface process); the native equivalent is recovery after the app itself stops mid-copy. native/crates/ox-core/src/ops/unfinished.rs: while a copy or move into a folder runs (native/crates/ox-app/src/window/file_ops/running.rs run_request, transfer.rs run_plan), a mark in ~/.cache/winspace/unfinished-operations names its destination and is removed when the run ends. On the next interactive start (native/crates/ox-app/src/application.rs), marks of processes that no longer run are read, their folders are searched for .winspace-transfer-*.part staging and .winspace-replaced-*.backup items, and the first window shows 'File operations did not finish' listing them and asking the user to inspect them before removing them. Nothing is deleted. Test: native/crates/ox-core/src/ops/unfinished.rs (a_run_that_never_finished_reports_its_staging_and_a_finished_one_nothing)."
 
 [[feature]]
 id = "OPS-039"
