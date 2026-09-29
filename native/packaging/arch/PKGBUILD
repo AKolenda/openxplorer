@@ -5,7 +5,7 @@
 # source is openxplorer-<version>.tar.gz from native/tools/source_archive.py,
 # placed beside this file; native/packaging/README.md explains the
 # dependency grouping.
-# Maintainer: OpenXplorer contributors <maintainer@example.invalid>
+# Maintainer: OpenXplorer contributors <openxplorer@users.noreply.github.com>
 
 _app_id=${_app_id:-io.winspace.Development.Native}
 if [[ $_app_id == io.winspace.Development ]]; then
