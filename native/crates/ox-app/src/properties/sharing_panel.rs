@@ -4,17 +4,19 @@
 //!
 //! Dolphin's Properties → Share tab, refined to the dialog's fields: share
 //! this folder, its share name and comment, guest access and read-only
-//! access, and Apply. The tab reads the folder's share when it opens and
-//! again after each change, always off the main thread
+//! access, and Apply. The tab reads the folder's share when it is first
+//! shown and again after each change, always off the main thread
 //! ([`ox_core::network::Usershares`]). Where Samba or user shares are
-//! missing, it says why and every control is off. `OpenXplorer` never
-//! changes permissions on another server.
+//! missing, it says why and every control is off. The Flatpak has no tab:
+//! Samba's `net` on the host cannot be run from the sandbox.
+//! `OpenXplorer` never changes permissions on another server.
 
 use std::path::PathBuf;
 use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use ox_core::integration::Sandbox;
 use ox_core::network::{Usershare, UsershareError, Usershares};
 
 use crate::dialog_layer::{check_row, labelled_entry, note, quiet_text};
@@ -24,14 +26,17 @@ use crate::window::ButtonStyle;
 const SHARING_NOTE: &str = "Sharing uses Samba user shares on this computer. OpenXplorer never changes \
                             permissions on other servers.";
 
-/// Samba's `net`, which the Sharing tab runs. The app's own tests never
-/// read the computer's shares: they get a command that does not exist,
-/// so the tab says sharing is unavailable.
-pub(crate) fn system_usershares() -> Usershares {
-    if cfg!(test) {
-        Usershares::with_program("/nonexistent/openxplorer-test-net")
+/// Samba's `net`, which the Sharing tab runs; `None` in the Flatpak,
+/// which cannot run the host's. The app's own tests never read the
+/// computer's shares: they get a command that does not exist, so the tab
+/// says sharing is unavailable.
+pub(crate) fn system_usershares(sandbox: Sandbox) -> Option<Usershares> {
+    if sandbox == Sandbox::Flatpak {
+        None
+    } else if cfg!(test) {
+        Some(Usershares::with_program("/nonexistent/openxplorer-test-net"))
     } else {
-        Usershares::default()
+        Some(Usershares::default())
     }
 }
 
@@ -90,7 +95,14 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> gtk::Box
     controls.set_sensitive(false);
     let pressed = Rc::clone(&controls);
     controls.apply.connect_clicked(move |_| pressed.apply());
-    controls.reload();
+    // Read when first shown, so Properties of any folder runs no `net`
+    // until the tab is opened.
+    let first_shown = std::cell::Cell::new(false);
+    panel.connect_map(move |_| {
+        if !first_shown.replace(true) {
+            controls.reload();
+        }
+    });
     panel
 }
 
@@ -221,6 +233,8 @@ mod tests {
         let temporary = tempfile::tempdir().expect("a temporary folder");
         let listing = "[Projects]\npath=/srv/Projects\ncomment=Team\nusershare_acl=Everyone:R,\nguest_ok=n";
         let panel = sharing_panel("/srv/Projects".into(), fake_net(temporary.path(), listing));
+        let window = gtk::Window::builder().child(&panel).build();
+        window.present();
         let checks = descendants::<gtk::CheckButton>(&panel);
         wait_until("the share is read", || checks[0].is_active());
         let entries = descendants::<gtk::Entry>(&panel);
@@ -237,5 +251,6 @@ mod tests {
         let calls = || fs::read_to_string(temporary.path().join("calls")).unwrap_or_default();
         wait_until("the share is changed", || calls().contains("usershare add"));
         assert!(calls().contains("usershare add Projects /srv/Projects Team Everyone:F guest_ok=n"));
+        window.destroy();
     }
 }

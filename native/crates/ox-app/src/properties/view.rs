@@ -43,8 +43,8 @@ pub(crate) struct PropertiesContext {
     pub locations: LocationContext,
     /// The folder's measured size, if it was measured this session.
     pub folder_size: Option<FolderSizeState>,
-    /// Samba's user shares, for the Sharing tab.
-    pub usershares: Usershares,
+    /// Samba's user shares, for the Sharing tab; `None` for no tab.
+    pub usershares: Option<Usershares>,
 }
 
 mod imp {
@@ -136,7 +136,7 @@ impl PropertiesView {
             .set(versions)
             .expect("a new view has no versions panel yet");
         imp.target.set(target).expect("a new view has no target yet");
-        view.add_pages(&context.usershares);
+        view.add_pages(context.usershares.as_ref());
         view.select_tab(initial);
         view.follow_selected_tab();
         view.read_properties(context);
@@ -153,7 +153,7 @@ impl PropertiesView {
     }
 
     /// Adds one page per tab the item has.
-    fn add_pages(&self, usershares: &Usershares) {
+    fn add_pages(&self, usershares: Option<&Usershares>) {
         let imp = self.imp();
         let pages = &imp.pages;
         pages.set_vhomogeneous(false);
@@ -161,7 +161,7 @@ impl PropertiesView {
         imp.general.append(&quiet_text(READING));
         imp.permissions.set_orientation(gtk::Orientation::Vertical);
         self.add_page(PropertiesTab::General, imp.general.upcast_ref());
-        if let Some(folder) = self.shareable_folder() {
+        if let Some((folder, usershares)) = self.shareable_folder().zip(usershares) {
             let sharing = sharing_panel(folder, usershares.clone());
             self.add_page(PropertiesTab::Sharing, sharing.upcast_ref());
         }

@@ -46,12 +46,37 @@ pub enum UsershareError {
          group. {0}"
     )]
     Unavailable(String),
+    /// Samba's `net` command is not installed.
+    #[error("Folder sharing needs Samba, and its net command is not installed.")]
+    NotInstalled,
     /// The share name is empty, too long or has a character Samba refuses.
     #[error("Use a share name of up to 80 characters without % < > * ? | / \\ + = ; : \" or ,.")]
     InvalidName,
     /// Samba refused the request; the text is Samba's.
     #[error("Samba could not change the share: {0}")]
     Refused(String),
+    /// Another folder is already shared under the name; Samba would move
+    /// that share to this folder.
+    #[error("This share name is already used for another folder.")]
+    NameInUse,
+}
+
+/// Why running `net` failed.
+enum RunError {
+    /// The program is not installed.
+    Missing,
+    /// It failed; the text is what it said.
+    Said(String),
+}
+
+impl RunError {
+    /// The error of a failed request, `said` for what `net` said.
+    fn into_error(self, said: fn(String) -> UsershareError) -> UsershareError {
+        match self {
+            Self::Missing => UsershareError::NotInstalled,
+            Self::Said(text) => said(text),
+        }
+    }
 }
 
 /// Samba's `net` command.
@@ -83,7 +108,7 @@ impl Usershares {
     pub fn list(&self) -> Result<Vec<Usershare>, UsershareError> {
         let listed = self
             .run(["usershare", "info", "-l"])
-            .map_err(UsershareError::Unavailable)?;
+            .map_err(|error| error.into_error(UsershareError::Unavailable))?;
         Ok(parse_info(&listed))
     }
 
@@ -96,15 +121,27 @@ impl Usershares {
         Ok(self.list()?.into_iter().find(|share| share.path == folder))
     }
 
-    /// Shares `share.path` as `share` says, replacing a share of the same
-    /// name.
+    /// Shares `share.path` as `share` says, changing its share of the same
+    /// name. A name another folder is shared under is refused, as
+    /// Dolphin's Share tab does, since Samba would silently move that
+    /// share here.
     ///
     /// # Errors
     ///
-    /// [`UsershareError::InvalidName`] for a name Samba refuses, and
-    /// [`UsershareError::Refused`] with Samba's reason.
+    /// [`UsershareError::InvalidName`] for a name Samba refuses,
+    /// [`UsershareError::NameInUse`] for another folder's name, the errors
+    /// of [`Self::list`], and [`UsershareError::Refused`] with Samba's
+    /// reason.
     pub fn share(&self, share: &Usershare) -> Result<(), UsershareError> {
         validate_share_name(&share.name)?;
+        // Samba compares share names without case.
+        let is_taken = self
+            .list()?
+            .into_iter()
+            .any(|known| known.name.to_lowercase() == share.name.to_lowercase() && known.path != share.path);
+        if is_taken {
+            return Err(UsershareError::NameInUse);
+        }
         let access = if share.is_read_only {
             "Everyone:R"
         } else {
@@ -124,7 +161,9 @@ impl Usershares {
             access.as_ref(),
             guests.as_ref(),
         ];
-        self.run(args).map(drop).map_err(UsershareError::Refused)
+        self.run(args)
+            .map(drop)
+            .map_err(|error| error.into_error(UsershareError::Refused))
     }
 
     /// Stops sharing the share called `name`.
@@ -135,11 +174,11 @@ impl Usershares {
     pub fn unshare(&self, name: &str) -> Result<(), UsershareError> {
         self.run(["usershare", "delete", name])
             .map(drop)
-            .map_err(UsershareError::Refused)
+            .map_err(|error| error.into_error(UsershareError::Refused))
     }
 
     /// Runs the command with `args`; its output, or its error text.
-    fn run<I, S>(&self, args: I) -> Result<String, String>
+    fn run<I, S>(&self, args: I) -> Result<String, RunError>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
@@ -148,7 +187,13 @@ impl Usershares {
             .args(args)
             .env("LC_ALL", "C")
             .output()
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    RunError::Missing
+                } else {
+                    RunError::Said(error.to_string())
+                }
+            })?;
         if output.status.success() {
             return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
         }
@@ -158,7 +203,7 @@ impl Usershares {
         } else {
             said
         };
-        Err(said)
+        Err(RunError::Said(said))
     }
 }
 
@@ -261,7 +306,7 @@ mod tests {
         net.unshare("Projects").expect("unshared");
         let recorded = calls(folder.path());
         assert_eq!(
-            recorded[2..],
+            recorded[3..],
             [
                 "usershare add Projects /home/anna/Projects Team files Everyone:R guest_ok=y",
                 "usershare delete Projects",
@@ -287,6 +332,30 @@ mod tests {
 
         assert_eq!(listed, Err(UsershareError::Unavailable(refusal.to_owned())));
         let missing = Usershares::with_program(folder.path().join("no-such-net"));
-        assert!(matches!(missing.list(), Err(UsershareError::Unavailable(_))));
+        assert_eq!(missing.list(), Err(UsershareError::NotInstalled));
+    }
+
+    /// Samba's `net usershare add` moves a share of the same name to the
+    /// new folder; the name of another folder's share is refused first.
+    ///
+    /// parity: NET-035
+    #[test]
+    fn another_folders_share_name_is_refused() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let listing = "[Projects]\npath=/home/anna/Projects\ncomment=\nusershare_acl=Everyone:R,\nguest_ok=n";
+        let net = fake_net(folder.path(), listing, "");
+        let other = Usershare {
+            name: "projects".into(),
+            path: "/mnt/data/Projects".into(),
+            comment: String::new(),
+            allows_guests: false,
+            is_read_only: true,
+        };
+
+        assert_eq!(net.share(&other), Err(UsershareError::NameInUse));
+
+        assert!(calls(folder.path())
+            .iter()
+            .all(|call| !call.contains("usershare add")));
     }
 }
