@@ -90,12 +90,15 @@ mod tests {
 
         let read = Rc::clone(&reads);
         test.window
-            .after_mounting("smb://example.invalid/share/plan.odt", move |_| read.set(read.get() + 1));
+            .after_mounting("smb://example.invalid/share/plan.odt", move |_| {
+                read.set(read.get() + 1);
+            });
         wait_until("the read after the mount", || reads.get() == 1);
         assert_eq!(mounts.get(), 1);
 
         let read = Rc::clone(&reads);
-        test.window.after_mounting(&fixture.uri(), move |_| read.set(read.get() + 1));
+        test.window
+            .after_mounting(&fixture.uri(), move |_| read.set(read.get() + 1));
         assert_eq!(reads.get(), 2, "a local read runs at once");
         assert_eq!(mounts.get(), 1, "and mounts nothing");
 
@@ -104,7 +107,9 @@ mod tests {
             .answer_mounts_with(|| Err(NetworkError::NotAFolder));
         let read = Rc::clone(&reads);
         test.window
-            .after_mounting("smb://example.invalid/other/a.txt", move |_| read.set(read.get() + 1));
+            .after_mounting("smb://example.invalid/other/a.txt", move |_| {
+                read.set(read.get() + 1);
+            });
         wait_until("the failed mount", || {
             test.window.shown_message().as_str() == "This location is not a folder."
         });

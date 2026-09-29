@@ -194,7 +194,9 @@ impl NetworkFormDialog {
 
     /// Shows or hides the field `field` with its caption.
     pub(crate) fn set_field_visible(field: &impl IsA<gtk::Widget>, visible: bool) {
-        let caption = field.prev_sibling().filter(|widget| widget.is::<gtk::Label>());
+        let caption = field
+            .prev_sibling()
+            .filter(glib::object::ObjectExt::is::<gtk::Label>);
         if let Some(caption) = caption {
             caption.set_visible(visible);
         }

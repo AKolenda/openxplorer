@@ -81,7 +81,9 @@ impl Usershares {
     /// [`UsershareError::Unavailable`] when Samba is missing or user shares
     /// are not permitted.
     pub fn list(&self) -> Result<Vec<Usershare>, UsershareError> {
-        let listed = self.run(["usershare", "info", "-l"]).map_err(UsershareError::Unavailable)?;
+        let listed = self
+            .run(["usershare", "info", "-l"])
+            .map_err(UsershareError::Unavailable)?;
         Ok(parse_info(&listed))
     }
 
@@ -103,8 +105,16 @@ impl Usershares {
     /// [`UsershareError::Refused`] with Samba's reason.
     pub fn share(&self, share: &Usershare) -> Result<(), UsershareError> {
         validate_share_name(&share.name)?;
-        let access = if share.is_read_only { "Everyone:R" } else { "Everyone:F" };
-        let guests = if share.allows_guests { "guest_ok=y" } else { "guest_ok=n" };
+        let access = if share.is_read_only {
+            "Everyone:R"
+        } else {
+            "Everyone:F"
+        };
+        let guests = if share.allows_guests {
+            "guest_ok=y"
+        } else {
+            "guest_ok=n"
+        };
         let args: [&OsStr; 7] = [
             "usershare".as_ref(),
             "add".as_ref(),

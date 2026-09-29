@@ -76,7 +76,11 @@ fn same_root(known: &str, root: &str) -> bool {
     if !is_remote_location(root) {
         return known == root;
     }
-    let server = |uri: &str| split_location(uri).ok().map(|parts| (parts.scheme, parts.authority));
+    let server = |uri: &str| {
+        split_location(uri)
+            .ok()
+            .map(|parts| (parts.scheme, parts.authority))
+    };
     server(known).is_some_and(|known| Some(known) == server(root))
 }
 
@@ -91,7 +95,10 @@ mod tests {
 
         assert!(visited.remember("sftp://anna@build/home/anna"));
         assert!(!visited.remember("sftp://anna@build/srv"));
-        assert!(visited.remember("sftp://build/"), "another account is another row");
+        assert!(
+            visited.remember("sftp://build/"),
+            "another account is another row"
+        );
         assert!(visited.remember("davs://cloud.example/remote.php/dav"));
 
         let roots: Vec<&str> = visited.iter().collect();

@@ -12,7 +12,9 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::location::{file_uri, is_server_location, normalise, split_location, unquote_lossy, LocationError};
+use crate::location::{
+    file_uri, is_server_location, normalise, split_location, unquote_lossy, LocationError,
+};
 use crate::settings::Bookmark;
 
 /// SMB's port, which Python fills in when a URI has none or port 0.

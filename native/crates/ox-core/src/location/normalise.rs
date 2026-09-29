@@ -550,10 +550,16 @@ mod tests {
             ("SFTP://Build-Host/home/anna/", "sftp://build-host/home/anna"),
             ("ssh://anna@build:2222/srv/../etc", "sftp://anna@build:2222/etc"),
             ("ftp://mirror.example", "ftp://mirror.example/"),
-            ("ftps://files.example/pub/Q3 %231", "ftps://files.example/pub/Q3%20%231"),
+            (
+                "ftps://files.example/pub/Q3 %231",
+                "ftps://files.example/pub/Q3%20%231",
+            ),
             ("webdav://cloud/remote.php/dav", "dav://cloud/remote.php/dav"),
             ("davs://anna@cloud.example/", "davs://anna@cloud.example/"),
-            ("webdavs://cloud.example:8443/files", "davs://cloud.example:8443/files"),
+            (
+                "webdavs://cloud.example:8443/files",
+                "davs://cloud.example:8443/files",
+            ),
             ("nfs://NAS/export/media", "nfs://nas/export/media"),
         ];
         for (typed, expected) in cases {

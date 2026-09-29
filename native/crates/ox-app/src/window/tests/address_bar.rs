@@ -163,7 +163,11 @@ fn an_empty_address_offers_the_network_protocols() {
     address.entry().set_text("");
     wait_until("the chooser opens", || chooser.is_visible());
     let buttons = crate::test_support::harness::descendants::<gtk::Button>(&chooser);
-    assert_eq!(buttons.len(), 7, "SMB, SFTP, FTP, FTPS, WebDAV, secure WebDAV and NFS");
+    assert_eq!(
+        buttons.len(),
+        7,
+        "SMB, SFTP, FTP, FTPS, WebDAV, secure WebDAV and NFS"
+    );
     buttons[1].emit_clicked();
 
     assert_eq!(address.entry().text().as_str(), "sftp://");

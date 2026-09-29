@@ -157,7 +157,9 @@ impl AddressBar {
         self.edit_on_blank_click();
         self.show_crumbs_when_focus_leaves();
         let protocols = super::address_protocols::protocol_chooser(&imp.entry);
-        imp.protocols.set(protocols).expect("the template is finished once");
+        imp.protocols
+            .set(protocols)
+            .expect("the template is finished once");
     }
 
     /// Scrolls to the last crumb whenever the crumbs or the width change,

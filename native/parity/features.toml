@@ -10265,8 +10265,8 @@ python_tests = [
 ]
 bridge = ["connect", "bookmark"]
 dolphin = "remote:/ 'Add Network Folder'"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's 'Map network location' supports SMB only."
+native = "done"
+native_note = "native/crates/ox-app/src/dialogs/network_protocol.rs builds the address from the Type list (SMB, SSH/SFTP, FTP, FTPS, WebDAV, secure WebDAV, NFS), folder, port and user; native/crates/ox-app/src/dialogs/network_map.rs shows the port and user fields for the other protocols. Tests: the_fields_build_the_address_of_each_protocol, choosing_sftp_asks_for_a_port_and_user_and_maps_an_sftp_folder. require_share accepts SFTP, FTP and WebDAV folders (a server root included) and NFS exports, so they are saved as Network entries like SMB shares."
 
 [[feature]]
 id = "NET-003"
@@ -10335,8 +10335,8 @@ bridge = [
   "trashSupport",
 ]
 gnome = "G_IO_ERROR_NOT_MOUNTED + mount_enclosing_volume"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/mounting/tests.rs (a_read_of_an_unmounted_share_mounts_it_and_reads_again, a_share_is_mounted_at_most_once_per_read, other_read_failures_mount_nothing, a_failed_mount_is_reported_without_reading_again); native/crates/ox-core/src/entry/error.rs (only_not_mounted_asks_for_a_mount); native/crates/ox-app/src/window/tests/network.rs (an_unmounted_share_is_mounted_once_then_listed_again). Folder listings mount once, clear the partial rows and list again. Missing: the other reads (properties, Open with, folder size, terminal, opening files, archives, previous versions, trash support) do not mount through the service yet; they arrive with their own milestones."
+native = "done"
+native_note = "Listings: native/crates/ox-app/src/window/loading/mount_retry.rs (an_unmounted_share_is_mounted_once_then_listed_again). Other reads: native/crates/ox-app/src/window/mount_first.rs mounts the share once when GVfs says it is not mounted, then opens the file or archive, Open with, Properties (with Previous versions and folder size), Open in Terminal or Calculate folder size of a pinned share (a_read_on_an_unmounted_share_mounts_it_once_first); a failed mount is reported and the read does not run. Writes never go through it. The core retry rules are in native/crates/ox-core/src/network/mounting/tests.rs."
 
 [[feature]]
 id = "NET-005"
@@ -10589,8 +10589,8 @@ python_tests = [
 ]
 bridge = ["connect", "authReply"]
 gnome = "libsecret schema io.winspace.SmbCredentials (server, port, scope)"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/server.rs, native/crates/ox-core/src/network/prompts/tests.rs, native/crates/ox-core/src/network/session_credentials/tests.rs, native/crates/ox-core/tests/network_keyring_python.rs, native/crates/ox-core/tests/network_python.rs and native/crates/ox-core/tests/network_secret_service.rs (reuse per server, the keyring order, the rejected-credential rule and host aliases). Each window now mounts through prompts over the one keyring store every window shares. Missing: a native test of reuse across two windows; the app tests keep credentials in memory, without a keyring."
+native = "done"
+native_note = "native/crates/ox-core/src/network/server.rs, native/crates/ox-core/src/network/prompts/tests.rs (another_window_signs_in_with_the_account_without_a_dialog: a second window's prompts reuse the account the first saved, from the shared keyring, without a dialog), native/crates/ox-core/src/network/session_credentials/tests.rs, native/crates/ox-core/tests/network_keyring_python.rs, native/crates/ox-core/tests/network_python.rs and native/crates/ox-core/tests/network_secret_service.rs (reuse per server, the keyring order, the rejected-credential rule and host aliases). Credentials are reused for SMB only; SFTP, FTP and WebDAV passwords are remembered by GVfs's own keyring entries."
 
 [[feature]]
 id = "NET-015"
@@ -10707,7 +10707,8 @@ python_tests = []
 bridge = ["connect"]
 dolphin = "Location-bar URL history / completion"
 gnome = "GtkPlacesView servers GBookmarkFile ($XDG_DATA_HOME/gtk-3.0/servers)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/network/recent_servers.rs adds each folder connected with Map network location to GTK 4's $XDG_DATA_HOME/gtk-4.0/servers (GBookmarkFile, as GtkPlacesView writes it) and reads it with GTK 3's $XDG_CONFIG_HOME/gtk-3.0/servers; the address bar's chooser (native/crates/ox-app/src/window/address_protocols.rs) lists them under Recent servers. Test: mapped_servers_join_gtks_list_and_are_suggested_newest_first. In the Flatpak the list is the sandbox's own."
 
 [[feature]]
 id = "NET-020"
@@ -10859,8 +10860,8 @@ python_tests = [
 bridge = ["discover", "cancel"]
 dolphin = "Places → Network (remote:/ with zeroconf:/ and smb:/ browsing)"
 gnome = "GVfs network:/// (dns-sd, wsdd and smb-network backends)"
-native = "todo"
-native_note = "Porting notes: The existing SMB discovery must not regress; non-SMB services are a gain."
+native = "done"
+native_note = "native/crates/ox-core/src/network/discovery.rs keeps the SFTP, FTP, WebDAV and NFS servers of GVfs's network:/// browser besides SMB, with the same no-password, no-port-scan rules; an advertised account is ignored. The Network page card names the protocol. Test: file_servers_are_listed_once_and_sorted_by_label."
 
 [[feature]]
 id = "NET-026"
@@ -10883,8 +10884,8 @@ python_tests = [
 ]
 bridge = ["open", "openWith", "openTerminal", "beginFileDrag", "locationCheck"]
 gnome = "gvfsd-fuse (/run/user/UID/gvfs)"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/local_path.rs (a_share_resolves_inside_its_fuse_export, exports_of_other_servers_shares_and_ports_are_ignored, a_server_without_a_share_has_no_export); native/crates/ox-core/src/network/mount_table/tests.rs (mount_lines_are_parsed_and_unescaped, smb_mounts_name_their_share_or_bound_subfolder, a_share_path_resolves_inside_its_cifs_mount, the_most_specific_mount_wins_and_host_and_share_ignore_case); native/crates/ox-core/tests/network_python.rs (mount_table_and_smb_paths_match_mount_support_py, fuse_export_paths_match_native_opening_py). The native UI does not use this service yet to launch applications, terminals or drags."
+native = "done"
+native_note = "native/crates/ox-core/src/network/local_path.rs and mount_table (CIFS mounts first, then the GVfs FUSE export) with the tests listed there and in native/crates/ox-core/tests/network_python.rs. The app uses it to open files and list Open with applications (native/crates/ox-app/src/integration/applications.rs, native/crates/ox-core/src/integration/opening.rs), for terminals (native/crates/ox-app/src/integration/terminal.rs) and drags (native/crates/ox-app/src/window/file_drag.rs; a_mounted_share_exports_its_local_path_and_keeps_its_own_address)."
 
 [[feature]]
 id = "NET-027"
@@ -10954,8 +10955,8 @@ python_tests = ["desktop/tests/test_core.py::CoreTests::test_reject_unsafe_addre
 bridge = ["normalise", "connect", "list"]
 dolphin = "KIO workers via location bar"
 gnome = "GVfs backends (sftp, ftp, dav, nfs, afp) mounted with Gio.File.mount_enclosing_volume + Gtk.MountOperation"
-native = "todo"
-native_note = "Porting notes: OpenXplorer accepts only file, smb, mtp, gphoto2 and afc."
+native = "done"
+native_note = "native/crates/ox-core/src/location/normalise.rs accepts sftp (and ssh), ftp, ftps, dav (webdav), davs (webdavs) and nfs locations, canonical like SMB (sftp_ftp_webdav_and_nfs_urls_are_canonical); LocationKind::Remote marks them as network locations. Emptying the address bar shows a protocol chooser (native/crates/ox-app/src/window/address_protocols.rs; an_empty_address_offers_the_network_protocols). fish:// is a KIO-only protocol GVfs does not provide, so it is not offered."
 
 [[feature]]
 id = "NET-030"
@@ -10979,8 +10980,8 @@ python_tests = [
 bridge = ["normalise", "connect", "list", "authReply", "environment"]
 dolphin = "kio sftp:/ and fish:/ workers; Network → Add Network Folder (SSH)"
 gnome = "GVfs sftp backend (sftp.mount), GMountOperation ask-question (host key) / ask-password, ssh-agent"
-native = "todo"
-native_note = "Porting notes: Credentials must be scoped per host+port+protocol like SMB and never shared across aliases."
+native = "done"
+native_note = "sftp:// and ssh:// are browsed through GVfs (native/crates/ox-core/src/location/normalise.rs; sftp_ftp_webdav_and_nfs_urls_are_canonical). A user name may name the account (sftp://anna@host/); a password is refused. GVfs's host-key questions and password prompts use OpenXplorer's own sign-in dialog (native/crates/ox-core/src/network/prompts). Connected SFTP mounts, also those other apps made, and browsed SFTP servers are listed under Network (native/crates/ox-core/src/places/network.rs, native/crates/ox-core/src/network/visited.rs; a_remote_server_is_remembered_once_at_the_first_folder_opened) and can be kept, removed or disconnected (a_connected_sftp_folder_can_be_kept_and_disconnected). Without a Trash, Delete asks for a permanent delete (native/crates/ox-core/src/ops/delete_plan.rs). Credentials are not reused across servers, protocols or aliases: only GVfs remembers them per server."
 
 [[feature]]
 id = "NET-031"
@@ -10995,7 +10996,8 @@ python_tests = []
 bridge = ["normalise", "connect", "list", "authReply"]
 dolphin = "kio_ftp (ftp:/)"
 gnome = "GVfs ftp / ftps / ftpis backends"
-native = "todo"
+native = "done"
+native_note = "ftp:// and ftps:// are browsed through GVfs (sftp_ftp_webdav_and_nfs_urls_are_canonical). GVfs's FTP backend offers anonymous login, which the sign-in dialog shows as Connect as guest (native/crates/ox-core/src/network/prompts; a_guest_sign_in_saves_nothing); without a Trash, Delete asks for a permanent delete (native/crates/ox-core/src/ops/delete_plan.rs)."
 
 [[feature]]
 id = "NET-032"
@@ -11010,7 +11012,8 @@ python_tests = []
 bridge = ["normalise", "connect", "list", "authReply"]
 dolphin = "webdav:/ and webdavs:/ (kio_http)"
 gnome = "GVfs dav / davs backends (plus dav+sd discovery)"
-native = "todo"
+native = "done"
+native_note = "dav:// and davs:// (and webdav://, webdavs://) are browsed through GVfs (sftp_ftp_webdav_and_nfs_urls_are_canonical), with the same sign-in dialog, Map network location saving (the_fields_build_the_address_of_each_protocol) and delete safety as SMB."
 
 [[feature]]
 id = "NET-033"
@@ -11025,7 +11028,8 @@ python_tests = []
 bridge = ["normalise", "list"]
 dolphin = "kio nfs:/ worker"
 gnome = "GVfs nfs backend (nfs.mount)"
-native = "todo"
+native = "done"
+native_note = "nfs://host/export is browsed through GVfs (sftp_ftp_webdav_and_nfs_urls_are_canonical); Map network location asks for an export, not a bare server, and takes no user name (choosing_sftp_asks_for_a_port_and_user_and_maps_an_sftp_folder)."
 
 [[feature]]
 id = "NET-034"
@@ -11044,6 +11048,7 @@ python_tests = []
 bridge = []
 dolphin = "change_remote_encoding"
 native = "todo"
+native_note = "Not possible through GVfs: its FTP, SFTP and WebDAV backends have no per-location file-name encoding setting (Dolphin's Select Remote Charset is a KIO feature). It would need GVfs support or OpenXplorer re-encoding every name itself."
 
 [[feature]]
 id = "NET-035"
@@ -11058,8 +11063,8 @@ python_tests = []
 bridge = ["properties"]
 dolphin = "Properties → Share tab (kdenetwork-filesharing); Samba share properties page (kdenetwork-filesharing)"
 gnome = "`net usershare add/delete/info` (samba-common-bin installed), as the nautilus-share extension does; gnome-user-share for the Public folder; nautilus-share (usershares via 'net usershare')"
-native = "todo"
-native_note = "Porting notes: The Permissions note currently states that OpenXplorer does not change server permissions."
+native = "done"
+native_note = "native/crates/ox-core/src/network/usershare.rs runs net usershare info/add/delete with an argument list (a_folder_is_shared_read_only_by_default_and_its_state_is_read_back, sharing_is_unavailable_without_permitted_user_shares); native/crates/ox-app/src/properties/sharing_panel.rs is the Sharing tab of a local folder's Properties: share this folder, share name, comment, guests, read only and Apply, with the current state (the_tab_shows_the_share_and_applies_a_change). Without Samba or permitted user shares the tab says so and its controls are off. Tested with a fake net command only."
 
 [[feature]]
 id = "DEV-001"

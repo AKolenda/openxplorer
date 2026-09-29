@@ -84,7 +84,7 @@ impl RecentServers {
         for list in [&self.list, &self.legacy_list] {
             visited.extend(read_list(list));
         }
-        visited.sort_by(|a, b| b.0.cmp(&a.0));
+        visited.sort_by_key(|(time, _)| std::cmp::Reverse(*time));
         let mut servers: Vec<String> = Vec::new();
         for (_, uri) in visited {
             if !servers.contains(&uri) {
@@ -96,7 +96,7 @@ impl RecentServers {
     }
 }
 
-/// A GLib file error saying `message`.
+/// A `GLib` file error saying `message`.
 fn failed(message: &str) -> glib::Error {
     glib::Error::new(glib::FileError::Failed, message)
 }
@@ -139,7 +139,9 @@ mod tests {
         old.set_visited_date_time("ftp://mirror.example/", &long_ago);
         old.to_file(legacy.join("servers")).expect("the GTK 3 list");
 
-        servers.add("sftp://Build/home/anna", "anna on build").expect("added");
+        servers
+            .add("sftp://Build/home/anna", "anna on build")
+            .expect("added");
         servers.add("file:///home/anna", "").expect("ignored");
         servers.add("smb://nas/Projects", "").expect("added");
 
@@ -148,12 +150,18 @@ mod tests {
             .load_from_file(home.path().join("data/gtk-4.0/servers"))
             .expect("GTK 4's list");
         assert_eq!(
-            written.title(Some("sftp://build/home/anna")).expect("titled").as_str(),
+            written
+                .title(Some("sftp://build/home/anna"))
+                .expect("titled")
+                .as_str(),
             "anna on build"
         );
         let suggested = servers.suggestions();
         assert_eq!(suggested.len(), 3, "{suggested:?}");
-        assert_eq!(suggested.last().map(String::as_str), Some("ftp://mirror.example/"));
+        assert_eq!(
+            suggested.last().map(String::as_str),
+            Some("ftp://mirror.example/")
+        );
         assert!(suggested.contains(&"smb://nas/Projects".to_owned()));
     }
 }

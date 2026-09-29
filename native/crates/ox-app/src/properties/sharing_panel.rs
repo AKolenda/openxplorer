@@ -7,7 +7,7 @@
 //! access, and Apply. The tab reads the folder's share when it opens and
 //! again after each change, always off the main thread
 //! ([`ox_core::network::Usershares`]). Where Samba or user shares are
-//! missing, it says why and every control is off. OpenXplorer never
+//! missing, it says why and every control is off. `OpenXplorer` never
 //! changes permissions on another server.
 
 use std::path::PathBuf;
@@ -57,7 +57,11 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> gtk::Box
     panel.append(&state);
     let share = check_row("Share this folder", false);
     panel.append(&share);
-    let folder_name = folder.file_name().unwrap_or_default().to_string_lossy().into_owned();
+    let folder_name = folder
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
     let name = labelled_entry(&panel, "Share name", &folder_name);
     let comment = labelled_entry(&panel, "Comment", "");
     let guests = check_row("Allow guests (no account needed)", false);
@@ -106,11 +110,8 @@ impl SharingControls {
     fn show(&self, read: Result<Option<Usershare>, UsershareError>) {
         match read {
             Ok(Some(share)) => {
-                self.state.set_text(&format!(
-                    "Shared as \\\\{}\\{}",
-                    glib::host_name(),
-                    share.name
-                ));
+                self.state
+                    .set_text(&format!("Shared as \\\\{}\\{}", glib::host_name(), share.name));
                 self.share.set_active(true);
                 self.name.set_text(&share.name);
                 self.comment.set_text(&share.comment);
@@ -146,7 +147,8 @@ impl SharingControls {
         self.set_sensitive(false);
         let controls = Rc::clone(self);
         glib::spawn_future_local(async move {
-            let changed = gio::spawn_blocking(move || change_share(&usershares, wanted, shared_as)).await;
+            let changed =
+                gio::spawn_blocking(move || change_share(&usershares, wanted.as_ref(), shared_as)).await;
             match changed.unwrap_or_else(|_| Err(UsershareError::Refused("The change stopped.".into()))) {
                 Ok(()) => controls.reload(),
                 Err(error) => {
@@ -175,15 +177,15 @@ impl SharingControls {
 /// the old share), or stops sharing it for `None`.
 fn change_share(
     usershares: &Usershares,
-    wanted: Option<Usershare>,
+    wanted: Option<&Usershare>,
     shared_as: Option<String>,
 ) -> Result<(), UsershareError> {
-    let renamed = match (&wanted, &shared_as) {
+    let renamed = match (wanted, &shared_as) {
         (Some(share), Some(old)) => &share.name != old,
         (None, Some(_)) => true,
         _ => false,
     };
-    if let Some(share) = &wanted {
+    if let Some(share) = wanted {
         usershares.share(share)?;
     }
     if let (true, Some(old)) = (renamed, shared_as) {

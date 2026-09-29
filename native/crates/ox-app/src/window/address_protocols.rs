@@ -5,7 +5,7 @@
 //! Dolphin's editable location bar offers the protocols it can browse
 //! when the address is empty. Here, emptying the address shows a list
 //! under the entry: SMB, SFTP, FTP, FTPS, WebDAV, secure WebDAV and NFS,
-//! then the servers recently connected in OpenXplorer, Files or the GTK
+//! then the servers recently connected in `OpenXplorer`, Files or the GTK
 //! file chooser ([`RecentServers`]). Picking a protocol types `scheme://`
 //! and the user goes on typing the server; picking a server types its
 //! address. The list never takes the keyboard focus, so typing continues
@@ -101,10 +101,19 @@ fn fill_recent_servers(recent: &gtk::Box, entry: &gtk::Entry, popover: &gtk::Pop
 /// A line of the chooser reading `label`, which types `text`.
 fn choice_button(label: &str, text: &str, entry: &gtk::Entry, popover: &gtk::Popover) -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    let name = gtk::Label::builder().label(label).hexpand(true).xalign(0.0).build();
+    let name = gtk::Label::builder()
+        .label(label)
+        .hexpand(true)
+        .xalign(0.0)
+        .build();
     content.append(&name);
     if label != text {
-        content.append(&gtk::Label::builder().label(text).css_classes(["dim-label"]).build());
+        content.append(
+            &gtk::Label::builder()
+                .label(text)
+                .css_classes(["dim-label"])
+                .build(),
+        );
     }
     let button = gtk::Button::builder()
         .child(&content)

@@ -154,7 +154,11 @@ fn typed_addresses_are_normalised_like_core_py() {
 fn relative_names_resolve_against_their_folder_like_core_py() {
     let fixture = fixture();
     let mut mismatches = Mismatches::new("normalise_location with a base");
-    for case in fixture.relative.iter().filter(|case| !is_native_gain(&case.input)) {
+    for case in fixture
+        .relative
+        .iter()
+        .filter(|case| !is_native_gain(&case.input))
+    {
         let actual = location::normalise_location(&case.input, Some(&case.base), &fixture.home);
         mismatches.expect_outcome((&case.input, &case.base), &case.outcome, &actual);
     }

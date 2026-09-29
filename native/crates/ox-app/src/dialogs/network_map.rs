@@ -155,8 +155,12 @@ mod tests {
             .filter_map(|entry| entry.placeholder_text().map(|text| text.to_string()))
             .collect();
         assert_eq!(placeholders, ["\\\\nas\\Projects", "", "", "Projects (Z:)"]);
-        let visible: Vec<bool> = entries.iter().map(|entry| WidgetExt::is_visible(entry)).collect();
-        assert_eq!(visible, [true, false, false, true], "SMB asks for no port or user");
+        let visible: Vec<bool> = entries.iter().map(WidgetExt::is_visible).collect();
+        assert_eq!(
+            visible,
+            [true, false, false, true],
+            "SMB asks for no port or user"
+        );
         let focus = GtkWindowExt::focus(&dialog);
         assert!(
             focus.is_some_and(|focus| focus.is_ancestor(&entries[0])),
@@ -206,7 +210,10 @@ mod tests {
         settle();
         protocol[0].set_selected(1);
         let entries = descendants::<gtk::Entry>(&dialog);
-        assert!(WidgetExt::is_visible(&entries[1]) && WidgetExt::is_visible(&entries[2]), "port and user");
+        assert!(
+            WidgetExt::is_visible(&entries[1]) && WidgetExt::is_visible(&entries[2]),
+            "port and user"
+        );
         assert_eq!(entries[0].placeholder_text().as_deref(), Some("server/home/anna"));
 
         entries[0].set_text("build/home/anna");
@@ -214,7 +221,11 @@ mod tests {
         entries[2].set_text("anna");
         dialog.press_confirm();
 
-        let addresses: Vec<String> = requests.borrow().iter().map(|request| request.address.clone()).collect();
+        let addresses: Vec<String> = requests
+            .borrow()
+            .iter()
+            .map(|request| request.address.clone())
+            .collect();
         assert_eq!(addresses, ["sftp://anna@build:2222/home/anna"]);
         protocol[0].set_selected(6);
         assert!(!WidgetExt::is_visible(&entries[2]), "NFS asks for no user name");

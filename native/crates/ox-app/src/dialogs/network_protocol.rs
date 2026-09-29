@@ -125,12 +125,36 @@ mod tests {
     fn the_fields_build_the_address_of_each_protocol() {
         let cases = [
             (Protocol::Smb, "\\\\nas\\Projects", "", "", "\\\\nas\\Projects"),
-            (Protocol::Sftp, "build/home/anna", "2222", "anna", "sftp://anna@build:2222/home/anna"),
-            (Protocol::Ftp, " ftp.example.com ", "", "", "ftp://ftp.example.com/"),
+            (
+                Protocol::Sftp,
+                "build/home/anna",
+                "2222",
+                "anna",
+                "sftp://anna@build:2222/home/anna",
+            ),
+            (
+                Protocol::Ftp,
+                " ftp.example.com ",
+                "",
+                "",
+                "ftp://ftp.example.com/",
+            ),
             (Protocol::Ftps, "files/pub", "990", "", "ftps://files:990/pub"),
-            (Protocol::WebDavs, "cloud/remote.php/dav", "", "anna", "davs://anna@cloud/remote.php/dav"),
+            (
+                Protocol::WebDavs,
+                "cloud/remote.php/dav",
+                "",
+                "anna",
+                "davs://anna@cloud/remote.php/dav",
+            ),
             (Protocol::Nfs, "nas/export", "", "anna", "nfs://nas/export"),
-            (Protocol::Sftp, "sftp://other/typed", "22", "ignored", "sftp://other/typed"),
+            (
+                Protocol::Sftp,
+                "sftp://other/typed",
+                "22",
+                "ignored",
+                "sftp://other/typed",
+            ),
         ];
         for (protocol, folder, port, user, expected) in cases {
             assert_eq!(protocol.address(folder, port, user), expected, "{protocol:?}");

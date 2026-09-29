@@ -9,8 +9,8 @@
 //! [`super::network_sign_out`], the device commands in
 //! [`super::mounting`].
 
-use gtk::{gio, glib};
 use gtk::prelude::*;
+use gtk::{gio, glib};
 use ox_core::network::{connect_share, ConnectedShare, RecentServers};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
@@ -42,7 +42,10 @@ fn add_recent_server(share: &ConnectedShare) {
     glib::spawn_future_local(async move {
         let added = gio::spawn_blocking(move || RecentServers::for_user().add(&uri, &label)).await;
         if let Ok(Err(error)) = added {
-            glib::g_warning!(ox_core::LOG_DOMAIN, "Could not update the recent servers: {error}");
+            glib::g_warning!(
+                ox_core::LOG_DOMAIN,
+                "Could not update the recent servers: {error}"
+            );
         }
     });
 }
