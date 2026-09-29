@@ -216,7 +216,8 @@ mod tests {
         assert!(is_supported_archive("x.tar.xz", None));
         assert!(is_supported_archive("x", Some("application/x-compressed-tar")));
         assert!(!is_supported_archive("x.gz", Some("application/gzip")));
-        assert_eq!(suggested_folder_name("archive.tar"), Ok("archive.tar".to_owned()));
+        // The Python app kept ".tar", which it did not extract itself.
+        assert_eq!(suggested_folder_name("archive.tar"), Ok("archive".to_owned()));
         assert!(suggested_folder_name("a\u{1}b.zip").is_err());
     }
 }
