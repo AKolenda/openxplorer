@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 import shutil
 import tempfile
 import unittest
+from xml.etree import ElementTree
 
 import package_data
 from package_data import Channel, Crate, InstallRequest, Layout
@@ -201,6 +202,23 @@ class VerifierTests(StagingTestCase):
                 verify_layout.check_with_desktop_validators(report, tree)
 
                 self.assertEqual(len(report.passed), 1)
+
+
+class ContentRatingTests(unittest.TestCase):
+    """Software centres show what the app shares, from the metainfo's OARS rating."""
+
+    def test_each_channel_rates_the_update_check_as_mild_social_info(self) -> None:
+        # The update check asks GitHub's API for the latest release; OARS
+        # names "checking for the latest application version" social-info mild.
+        for channel in Channel:
+            with self.subTest(channel=channel.name):
+                metainfo = package_data.PACKAGING_DATA / f'{channel.app_id}.metainfo.xml'
+                rating = ElementTree.parse(metainfo).getroot().find('content_rating')
+
+                self.assertIsNotNone(rating)
+                self.assertEqual(rating.get('type'), 'oars-1.1')
+                attributes = {item.get('id'): item.text for item in rating.iter('content_attribute')}
+                self.assertEqual(attributes, {'social-info': 'mild'})
 
 
 class CrateSelectionTests(unittest.TestCase):

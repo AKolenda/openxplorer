@@ -312,8 +312,9 @@ Already in place:
   passes `appstreamcli validate`: licences, developer, launchable, stock icon,
   categories, keywords, homepage, help, source and bug tracker links, branding
   colours, a release entry with notes for every version, and an OARS 1.1
-  content rating with no attributes (no violence, drugs, sex, language, social
-  chat, purchases or ads; nothing about the user is shared).
+  content rating of social-info mild (the update check contacts GitHub's API
+  for the latest release); no other attribute applies (no violence, drugs,
+  sex, language, social chat, purchases or ads).
 - The icon is scalable SVG, and the build is offline: every crate comes from
   [`flatpak/cargo-sources.json`](flatpak/cargo-sources.json).
 - Every permission is explained above ("Flatpak permissions") and below.

@@ -36,11 +36,14 @@
     <color type="primary" scheme_preference="dark">#7a5c00</color>
   </branding>
   <!--
-    No OARS attribute applies: no violence, drugs, sex, language, social
-    chat, in-app purchases or advertising, and nothing about the user is
-    shared (the update check only reads GitHub's public release list).
+    OARS social-info is mild: the update check contacts GitHub's API for
+    the latest release, which OARS defines as "checking for the latest
+    application version". No other attribute applies: no violence, drugs,
+    sex, language, social chat, in-app purchases or advertising.
   -->
-  <content_rating type="oars-1.1"/>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-info">mild</content_attribute>
+  </content_rating>
   <!--
     TODO(Flathub): add <screenshots> of the native app. Flathub requires at
     least one, served over HTTPS from a stable URL such as
