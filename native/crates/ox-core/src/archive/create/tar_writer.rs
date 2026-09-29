@@ -37,16 +37,18 @@ impl<W: Write> TarXzWriter<W> {
         Ok(Self { output })
     }
 
-    /// Adds the folder `name` (ending with `/`).
+    /// Adds the folder `name` (ending with `/`) with the `rwx` bits
+    /// `mode`.
     ///
     /// # Errors
     ///
     /// The output's error.
-    pub(super) fn add_folder(&mut self, name: &str, modified: u64) -> Result<(), ArchiveError> {
-        self.write_header(name, b'5', 0o755, 0, modified)
+    pub(super) fn add_folder(&mut self, name: &str, modified: u64, mode: u32) -> Result<(), ArchiveError> {
+        self.write_header(name, b'5', mode & 0o777, 0, modified)
     }
 
-    /// Adds the file `name` with the `size` bytes `content` holds.
+    /// Adds the file `name`, modified and with the `rwx` bits as
+    /// `(modified, mode)` say, with the `size` bytes `content` holds.
     ///
     /// # Errors
     ///
@@ -56,12 +58,12 @@ impl<W: Write> TarXzWriter<W> {
     pub(super) fn add_file(
         &mut self,
         name: &str,
-        modified: u64,
+        (modified, mode): (u64, u32),
         size: u64,
         content: &mut dyn Read,
         cancel: &Cancellation,
     ) -> Result<(), ArchiveError> {
-        self.write_header(name, b'0', 0o644, size, modified)?;
+        self.write_header(name, b'0', mode & 0o777, size, modified)?;
         let mut left = size;
         let mut block = vec![0u8; COPY_BYTES];
         while left > 0 {

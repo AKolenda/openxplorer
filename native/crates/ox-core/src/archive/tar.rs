@@ -70,6 +70,52 @@ impl Read for SharedStream {
     }
 }
 
+impl SharedStream {
+    /// Whether every byte has been read.
+    fn is_at_end(&self) -> io::Result<bool> {
+        let mut stream = self.0.borrow_mut();
+        let position = stream.stream_position()?;
+        let end = stream.seek(SeekFrom::End(0))?;
+        stream.seek(SeekFrom::Start(position))?;
+        Ok(position >= end)
+    }
+}
+
+/// A Zstandard stream of one frame or more, as `pzstd` writes it or as
+/// `.zst` files joined together make it; skippable frames are passed over.
+struct ZstdFrames {
+    source: SharedStream,
+    frame: Option<ruzstd::decoding::StreamingDecoder<SharedStream, ruzstd::decoding::FrameDecoder>>,
+}
+
+impl Read for ZstdFrames {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        use ruzstd::decoding::errors::{FrameDecoderError, ReadFrameHeaderError};
+
+        loop {
+            if let Some(frame) = &mut self.frame {
+                let count = frame.read(buffer)?;
+                if count > 0 || buffer.is_empty() {
+                    return Ok(count);
+                }
+                self.frame = None;
+            }
+            if self.source.is_at_end()? {
+                return Ok(0);
+            }
+            match ruzstd::decoding::StreamingDecoder::new(self.source.clone()) {
+                Ok(frame) => self.frame = Some(frame),
+                Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
+                    length, ..
+                })) => {
+                    self.source.0.borrow_mut().seek(SeekFrom::Current(i64::from(length)))?;
+                }
+                Err(error) => return Err(io::Error::new(io::ErrorKind::InvalidData, error.to_string())),
+            }
+        }
+    }
+}
+
 /// An open TAR archive.
 pub(crate) struct TarArchive {
     source: SharedStream,
@@ -108,7 +154,7 @@ impl TarArchive {
         cancel: &Cancellation,
     ) -> Result<Self, ArchiveError> {
         let source = SharedStream(Rc::new(RefCell::new(source)));
-        let reader = decoder(&source, compression)?;
+        let reader = decoder(&source, compression);
         let mut archive = Self {
             source,
             compression,
@@ -150,7 +196,7 @@ impl TarArchive {
     /// Reads the stream again from its first byte.
     fn restart(&mut self) -> Result<(), ArchiveError> {
         self.source.0.borrow_mut().seek(SeekFrom::Start(0))?;
-        self.reader = decoder(&self.source, self.compression)?;
+        self.reader = decoder(&self.source, self.compression);
         self.position = 0;
         Ok(())
     }
@@ -162,7 +208,12 @@ impl TarArchive {
         loop {
             self.cancel.check()?;
             let mut block = [0u8; BLOCK];
-            if !self.read_block(&mut block)? || is_end(&block) {
+            // A stream that ends before the end block was cut short, and
+            // members after the cut would be silently missing.
+            if !self.read_block(&mut block)? {
+                return Err(ArchiveError::DamagedArchive);
+            }
+            if is_end(&block) {
                 break;
             }
             let header = parse(&block).map_err(|_| ArchiveError::DamagedArchive)?;
@@ -276,17 +327,15 @@ impl TarMemberReader<'_> {
 }
 
 /// A decoder over the archive from its current position.
-fn decoder(source: &SharedStream, compression: TarCompression) -> Result<Box<dyn Read>, ArchiveError> {
+fn decoder(source: &SharedStream, compression: TarCompression) -> Box<dyn Read> {
     let source = source.clone();
-    Ok(match compression {
+    match compression {
         TarCompression::None => Box::new(source),
         TarCompression::Gzip => Box::new(flate2::read::MultiGzDecoder::new(source)),
         TarCompression::Bzip2 => Box::new(bzip2::read::MultiBzDecoder::new(source)),
         TarCompression::Xz => Box::new(lzma_rust2::XzReader::new(source, true)),
-        TarCompression::Zstd => Box::new(
-            ruzstd::decoding::StreamingDecoder::new(source).map_err(|_| ArchiveError::DamagedArchive)?,
-        ),
-    })
+        TarCompression::Zstd => Box::new(ZstdFrames { source, frame: None }),
+    }
 }
 
 /// The member record of a TAR entry, or `None` for the archive's root
@@ -416,5 +465,38 @@ pub(super) mod tests {
         );
         assert_eq!(read_all(&mut archive, 3), b"notes");
         assert_eq!(read_all(&mut archive, 1), b"the plan", "going back starts again");
+    }
+
+    /// A Zstandard TAR of several frames lists every member, and a TAR
+    /// cut short between members is damaged rather than shorter.
+    ///
+    /// parity: ARC-024
+    #[test]
+    fn every_zstandard_frame_is_read_and_a_cut_tar_is_damaged() {
+        let tar = tar_of(&[("a.txt", b'0', b"first"), ("b.txt", b'0', b"second")]);
+        let (head, tail) = tar.split_at(2 * BLOCK);
+        let compress = |part: &[u8]| {
+            ruzstd::encoding::compress_to_vec(part, ruzstd::encoding::CompressionLevel::Fastest)
+        };
+        // A skippable frame between the two, as some writers add.
+        let skippable = [0x50, 0x2a, 0x4d, 0x18, 3, 0, 0, 0, 1, 2, 3];
+        let frames = [compress(head), skippable.to_vec(), compress(tail)].concat();
+        let mut archive = open(frames);
+        let names: Vec<&str> = archive
+            .members()
+            .iter()
+            .map(|member| member.name.as_str())
+            .collect();
+        assert_eq!(names, ["a.txt", "b.txt"]);
+        assert_eq!(read_all(&mut archive, 1), b"second");
+
+        let cut = tar[..2 * BLOCK].to_vec();
+        let opened = TarArchive::open(
+            Box::new(Cursor::new(cut)),
+            TarCompression::None,
+            100,
+            &Cancellation::new(),
+        );
+        assert!(matches!(opened, Err(ArchiveError::DamagedArchive)), "{opened:?}");
     }
 }

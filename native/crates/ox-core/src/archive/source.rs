@@ -12,6 +12,7 @@ use std::io::{Read, Seek, SeekFrom};
 use rustix::fs::OFlags;
 
 use super::gio_reader::GioArchiveReader;
+use super::member_names::has_tar_name;
 use super::tar::{TarArchive, TarCompression, TarMemberReader};
 use super::zip::{MemberReader, ZipArchive, ZipMember};
 use super::ArchiveError;
@@ -149,6 +150,11 @@ pub(super) fn open_archive(
         let archive = TarArchive::open(stream, compression, MAX_MEMBERS, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
         return Ok(OpenedArchive::Tar(archive));
+    }
+    // A TAR this reader does not know (old V7, compress(1)) is not read
+    // as a ZIP, whose error would not say what is wrong.
+    if has_tar_name(uri.rsplit('/').next().unwrap_or_default()) {
+        return Err(ArchiveError::DamagedArchive);
     }
     let archive = ZipArchive::open(stream, cancel)?;
     // ARC-005: an archive with more members is left to an archive manager.

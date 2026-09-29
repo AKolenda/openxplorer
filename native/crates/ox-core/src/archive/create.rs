@@ -50,7 +50,7 @@ const STAGING_PREFIX: &str = ".openxplorer-compress-";
 const STAGING_SUFFIX: &str = ".part";
 
 /// What a walk reads about each item.
-const WALK_ATTRIBUTES: &str = "standard::name,standard::type,standard::size,time::modified";
+const WALK_ATTRIBUTES: &str = "standard::name,standard::type,standard::size,time::modified,unix::mode";
 
 /// What to compress, and where.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,6 +87,8 @@ struct PlannedEntry {
     modified: Option<u64>,
     /// The file's size, for progress.
     size: u64,
+    /// The item's `rwx` bits, which a TAR keeps; a ZIP gets fixed ones.
+    mode: Option<u32>,
 }
 
 /// Everything a compression will write.
@@ -337,14 +339,17 @@ fn add_item(
         Some(cancel.cancellable()),
     )?;
     let modified = modified_seconds(&info);
+    let mode = info
+        .has_attribute("unix::mode")
+        .then(|| info.attribute_uint32("unix::mode") & 0o777);
     match info.file_type() {
         gio::FileType::Regular => {
             let size = u64::try_from(info.size()).unwrap_or(0);
             plan.total_bytes += size;
-            push_entry(plan, Some(file.clone()), name, modified, size)
+            push_entry(plan, Some(file.clone()), name, (modified, mode), size)
         }
         gio::FileType::Directory => {
-            push_entry(plan, None, format!("{name}/"), modified, 0)?;
+            push_entry(plan, None, format!("{name}/"), (modified, mode), 0)?;
             add_folder_contents(plan, file, &name, cancel)
         }
         // Links are never followed and special files never opened.
@@ -384,7 +389,7 @@ fn push_entry(
     plan: &mut CompressionPlan,
     source: Option<gio::File>,
     name: String,
-    modified: Option<u64>,
+    (modified, mode): (Option<u64>, Option<u32>),
     size: u64,
 ) -> Result<(), ArchiveError> {
     if plan.entries.len() >= MAX_ENTRIES {
@@ -395,6 +400,7 @@ fn push_entry(
         name,
         modified,
         size,
+        mode,
     });
     Ok(())
 }
@@ -409,7 +415,11 @@ impl<W: std::io::Write> EntryWriter<W> {
     fn add_folder(&mut self, entry: &PlannedEntry) -> Result<(), ArchiveError> {
         match self {
             Self::Zip(writer) => writer.add_folder(&entry.name, DosTime::from_unix_seconds(entry.modified)),
-            Self::TarXz(writer) => writer.add_folder(&entry.name, entry.modified.unwrap_or(0)),
+            Self::TarXz(writer) => writer.add_folder(
+                &entry.name,
+                entry.modified.unwrap_or(0),
+                entry.mode.unwrap_or(0o755),
+            ),
         }
     }
 
@@ -426,7 +436,7 @@ impl<W: std::io::Write> EntryWriter<W> {
             }
             Self::TarXz(writer) => writer.add_file(
                 &entry.name,
-                entry.modified.unwrap_or(0),
+                (entry.modified.unwrap_or(0), entry.mode.unwrap_or(0o644)),
                 entry.size,
                 content,
                 cancel,
@@ -536,6 +546,10 @@ mod tests {
         // A `.tar.xz` name writes an XZ-compressed TAR with the same items.
         let long_name = format!("{}.jpg", "n".repeat(120));
         fs::write(root.path().join("Photos").join(&long_name), b"long").unwrap();
+        for (name, mode) in [("a.jpg", 0o750), ("b.jpg", 0o640)] {
+            let permissions = std::os::unix::fs::PermissionsExt::from_mode(mode);
+            fs::set_permissions(root.path().join("Photos").join(name), permissions).unwrap();
+        }
         let uris = vec![file_uri(&root.path().join("Photos"))];
         let tar = ZipCompressor::new()
             .compress(&request(root.path(), uris, "Photos.tar.xz"), &cancel)
@@ -545,6 +559,20 @@ mod tests {
         assert_eq!(inside_names, ["a.jpg", "b.jpg", long_name.as_str()]);
         let copy = browser.preview_member(&tar.uri, "Photos/b.jpg", &cancel).unwrap();
         assert_eq!(fs::read(copy.path).unwrap(), b"second picture");
+        // A TAR keeps each item's permissions, so a program stays runnable.
+        let archive = super::super::tar::TarArchive::open(
+            Box::new(fs::File::open(root.path().join("Photos.tar.xz")).unwrap()),
+            super::super::tar::TarCompression::Xz,
+            100,
+            &cancel,
+        )
+        .unwrap();
+        let mode_of = |name: &str| {
+            let member = archive.members().iter().find(|member| member.name == name).unwrap();
+            (member.external_attributes >> 16) & 0o777
+        };
+        assert_eq!(mode_of("Photos/a.jpg"), 0o750);
+        assert_eq!(mode_of("Photos/b.jpg"), 0o640);
     }
 
     /// parity: ARC-023

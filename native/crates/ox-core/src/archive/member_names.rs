@@ -80,9 +80,8 @@ pub fn suggested_folder_name(archive_name: &str) -> Result<String, LocationError
 /// The endings of the archives the app browses and extracts itself:
 /// ZIP, and TAR plain or compressed (ARC-022, ARC-024). Longer endings
 /// come first, so `.tar.gz` is removed whole.
-const ARCHIVE_EXTENSIONS: [&str; 12] = [
+const ARCHIVE_EXTENSIONS: [&str; 11] = [
     ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tgz", ".tbz2", ".tbz", ".txz", ".tzst", ".tar", ".zip",
-    ".taz",
 ];
 
 /// The content types of those archives.
@@ -105,6 +104,11 @@ const ARCHIVE_TYPES: [&str; 10] = [
 pub fn is_supported_archive(name: &str, content_type: Option<&str>) -> bool {
     let by_type = content_type.is_some_and(|content_type| ARCHIVE_TYPES.contains(&content_type));
     by_type || archive_extension(name).is_some()
+}
+
+/// Whether `name` ends as a TAR does, plain or compressed.
+pub(crate) fn has_tar_name(name: &str) -> bool {
+    archive_extension(name).is_some_and(|start| !name[start..].eq_ignore_ascii_case(".zip"))
 }
 
 /// The archive ending of `name`, in any case.
@@ -216,6 +220,10 @@ mod tests {
         assert!(is_supported_archive("x.tar.xz", None));
         assert!(is_supported_archive("x", Some("application/x-compressed-tar")));
         assert!(!is_supported_archive("x.gz", Some("application/gzip")));
+        // `.taz` is compressed with compress(1), which the reader cannot
+        // read; it opens in its own application.
+        assert!(!is_supported_archive("old.taz", None));
+        assert!(has_tar_name("site.TGZ") && !has_tar_name("site.zip"));
         // The Python app kept ".tar", which it did not extract itself.
         assert_eq!(suggested_folder_name("archive.tar"), Ok("archive".to_owned()));
         assert!(suggested_folder_name("a\u{1}b.zip").is_err());
