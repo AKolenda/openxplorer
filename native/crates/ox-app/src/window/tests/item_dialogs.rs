@@ -9,6 +9,7 @@ use std::fs;
 
 use gtk::glib;
 use gtk::prelude::*;
+use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 
 use crate::dialog_layer::DialogFrame;
 use crate::properties::{FolderSizeState, PropertiesView, RestoreRequest, SnapshotTarget};
@@ -394,6 +395,25 @@ fn restore_a_copy_copies_the_version_into_a_live_folder_only() {
         fs::read(fixture.path("Documents/plan.txt")).expect("the live file"),
         b"live plan"
     );
+}
+
+/// `ShowItemProperties` opens the item's folder in a new tab with the
+/// item selected, and the item's Properties over it.
+///
+/// parity: PROP-001, INT-014
+#[gtk::test]
+fn show_item_properties_opens_the_properties_of_the_item() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let item = [fixture.uri_of("Documents")];
+    let request =
+        FileManagerRequest::new(FileManagerMethod::ShowItemProperties, &item).expect("a valid location");
+
+    test.window.show_file_manager_request(&request);
+
+    let frame = test.wait_for_dialog("the Properties dialog");
+    assert_eq!(frame.title(), "Documents Properties");
+    assert_eq!(test.window.tab_count(), 2);
 }
 
 /// parity: PROP-001

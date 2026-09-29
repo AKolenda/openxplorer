@@ -9,11 +9,14 @@
 //! tab; `ShowItems` opens each item's folder, reusing a tab that already
 //! shows it, lists it again, selects exactly the requested items and
 //! scrolls to the first; a file is never opened as a folder.
-//! `ShowItemProperties` opens the item's folder with the item selected.
+//! `ShowItemProperties` opens the item's folder in a new tab with the
+//! item selected, and the item's Properties over it.
 
 use gtk::subclass::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 use ox_core::location::{parent_location, same_location};
+
+use crate::properties::PropertiesTab;
 
 use super::activation::IncomingTab;
 use super::loading::LoadMode;
@@ -55,6 +58,7 @@ impl BrowserWindow {
                 for (folder, items) in items_by_folder(first, &home) {
                     self.select_in_new_tab(&folder, items);
                 }
+                self.open_properties_of(&first[0], PropertiesTab::General);
             }
         }
     }

@@ -12783,8 +12783,8 @@ python_tests = [
 ]
 bridge = ["properties"]
 dolphin = "Properties dialog (Alt+Return); Properties (Alt+Return); properties: Alt+Return, Alt+Enter; Dolphin: Alt+Return opens Properties."
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, properties_of_a_location_open_for_menus_outside_the_folder_view). Alt+Enter, the context menu's Properties and Previous versions, `win.properties-of` for any location, the standard-folder title, opening on a given tab and the lone Close button work. Missing: the sidebar, drive and network menus and FileManager1 ShowItemProperties do not call `win.properties-of` yet (their menus and the bus handler belong to other tracks), and the Location tab is a placeholder (PROP-017)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, properties_of_a_location_open_for_menus_outside_the_folder_view, show_item_properties_opens_the_properties_of_the_item); native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts, network_places_open_a_terminal_and_properties_where_they_can); native/crates/ox-app/src/window/sidebar/menu.rs (a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb); native/crates/ox-app/src/window/tests/folder_location.rs (the_location_tab_moves_documents_and_offers_to_move_its_files). Alt+Enter, the file and background menus, the Quick access pin menu, the drive menu (with Open in Terminal and the cache item), the network menu (Properties of a stable mount, as app.js, and of a connected share) and FileManager1 ShowItemProperties (a new tab at the parent with the item selected, then its Properties) open Properties; the title uses the standard-folder label, the tabs are General, Location (standard folders, a working tab), Permissions and Previous versions, it opens on a given tab and its only button is Close."
 
 [[feature]]
 id = "PROP-002"

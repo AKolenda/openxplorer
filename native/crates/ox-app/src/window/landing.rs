@@ -224,7 +224,7 @@ fn drive_card(row: &VolumeRow, locations: &LocationContext) -> gtk::Button {
                 controls: *controls,
             };
             // Local Disk and mounts the system keeps have no menu.
-            if !menu.entries().is_empty() {
+            if !menu.entries(None).is_empty() {
                 attach_place_menu(&card, menu);
             }
             card
