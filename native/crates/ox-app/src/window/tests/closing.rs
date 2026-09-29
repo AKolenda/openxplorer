@@ -117,7 +117,9 @@ fn folder_watch_threads() -> usize {
 fn closing_a_window_stops_its_listings_and_folder_watches() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    test.window.add_tab(&fixture.uri_of("Documents")).expect("valid folder");
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("valid folder");
     test.wait_for_listing("the second tab");
     wait_until("both folder watches", || folder_watch_threads() >= 2);
     let watching = folder_watch_threads();

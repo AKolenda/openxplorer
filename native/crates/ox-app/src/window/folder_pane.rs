@@ -282,14 +282,18 @@ impl FolderPane {
         self.owners().position_holding(&view, focused)
     }
 
-    /// Gives `position` keyboard focus once the view has laid out its
-    /// items and scrolled to where [`Self::restore_scroll_position`] put
-    /// it.
-    pub(super) fn focus_item_later(&self, position: u32) {
+    /// Gives the item at `uri` keyboard focus once the view has laid out
+    /// its items and scrolled to where [`Self::restore_scroll_position`]
+    /// put it, if the item is still shown then.
+    pub(super) fn focus_item_later(&self, uri: String) {
         glib::idle_add_local_once(glib::clone!(
             #[weak(rename_to = pane)]
             self,
-            move || pane.reveal(position)
+            move || {
+                if let Some(position) = pane.model().position_of_uri(&uri) {
+                    pane.reveal(position);
+                }
+            }
         ));
     }
 

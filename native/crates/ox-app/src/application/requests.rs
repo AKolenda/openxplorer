@@ -12,10 +12,10 @@ use gtk::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 
 use super::command_line::CommandRequest;
-use super::state::{active_window, open_window, AppState};
+use super::state::{active_window, browser_windows_of, open_window, AppState};
 use crate::app_context::AppContext;
 use crate::settings_page::SettingsView;
-use crate::window::{BrowserWindow, QUIT_WHILE_WRITING};
+use crate::window::QUIT_WHILE_WRITING;
 
 impl AppState {
     /// Does what `request` asks.
@@ -105,7 +105,7 @@ impl AppState {
             return false;
         }
         // Data safety: Quit never cuts off a write, in any window.
-        if browser_windows(app).any(|window| window.has_running_write()) {
+        if browser_windows_of(app).any(|window| window.has_running_write()) {
             report_in_every_window(app, QUIT_WHILE_WRITING);
             return false;
         }
@@ -147,15 +147,7 @@ fn report_in_active_window(app: &gtk::Application, message: &str) {
 
 /// Shows `message` in every browser window (`broadcast('notice')`).
 fn report_in_every_window(app: &gtk::Application, message: &str) {
-    for window in browser_windows(app) {
+    for window in browser_windows_of(app) {
         window.show_message(message);
     }
-}
-
-/// The browser windows of `app`.
-fn browser_windows(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
-    let windows = app.windows();
-    windows
-        .into_iter()
-        .filter_map(|window| window.downcast::<BrowserWindow>().ok())
 }

@@ -78,6 +78,13 @@ impl BrowserWindow {
                 window.reopen_closed_tab(0);
             }),
         ]);
+        self.update_reopen_action();
+    }
+
+    /// Enables Ctrl+Shift+T only while a closed tab can be reopened.
+    fn update_reopen_action(&self) {
+        let can_reopen = !self.imp().closed_tabs.borrow().is_empty();
+        self.set_action_enabled(WindowAction::ReopenClosedTab, can_reopen);
     }
 
     /// Shows tab `number`, counted from 1; 0 shows the last tab
@@ -152,9 +159,12 @@ impl BrowserWindow {
                 index,
             }
         };
-        let mut closed_tabs = self.imp().closed_tabs.borrow_mut();
-        closed_tabs.insert(0, closed);
-        closed_tabs.truncate(MAX_CLOSED_TABS);
+        {
+            let mut closed_tabs = self.imp().closed_tabs.borrow_mut();
+            closed_tabs.insert(0, closed);
+            closed_tabs.truncate(MAX_CLOSED_TABS);
+        }
+        self.update_reopen_action();
     }
 
     /// The closed tabs, most recent first.
@@ -172,6 +182,7 @@ impl BrowserWindow {
             }
             closed_tabs.remove(index)
         };
+        self.update_reopen_action();
         self.save_tab_view();
         let before = self
             .imp()

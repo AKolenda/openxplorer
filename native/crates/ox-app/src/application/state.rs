@@ -174,7 +174,7 @@ pub(super) fn active_window(app: &gtk::Application) -> Option<BrowserWindow> {
 }
 
 /// The browser windows of `app`, most recent first.
-fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
+pub(super) fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
     let windows = app.windows();
     windows
         .into_iter()

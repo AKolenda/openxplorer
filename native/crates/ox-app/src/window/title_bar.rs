@@ -57,7 +57,7 @@ pub(crate) fn list_open_windows_on_click(button: &gtk::MenuButton) {
 /// Every browser window by title, this one checked, then New window and
 /// Quit (`windowsMenu`). The tabs closed in this window come before New
 /// window, most recent first, as Dolphin's "Recently Closed Tabs" (TAB-016).
-fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
+pub(super) fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
     let Some(this_window) = anchor.root().and_downcast::<BrowserWindow>() else {
         return Vec::new();
     };
@@ -179,7 +179,8 @@ mod tests {
 
     /// The blank part of the title bar is inside the window handle, so
     /// dragging it moves the window and a double-click maximises it; the
-    /// tabs and buttons claim their own clicks.
+    /// buttons claim their own clicks, and the tab strip a double-click on
+    /// a tab (TAB-014).
     ///
     /// parity: TAB-048
     #[gtk::test]

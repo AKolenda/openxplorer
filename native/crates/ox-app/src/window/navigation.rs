@@ -169,7 +169,9 @@ impl BrowserWindow {
         self.save_selection();
         let pane = self.folder_pane();
         let scroll = pane.scroll_position();
-        let focused = pane.focused_position().and_then(|position| pane.model().item(position));
+        let focused = pane
+            .focused_position()
+            .and_then(|position| pane.model().item(position));
         if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
             tab.scroll = scroll;
             tab.focused = focused.map(|item| item.entry().uri.clone());
@@ -212,9 +214,8 @@ impl BrowserWindow {
         pane.restore_scroll_position(view.scroll);
         if had_focus {
             pane.focus_view();
-            let focused = view.focused.as_deref().and_then(|uri| pane.model().position_of_uri(uri));
-            if let Some(position) = focused {
-                pane.focus_item_later(position);
+            if let Some(uri) = view.focused {
+                pane.focus_item_later(uri);
             }
         }
         if view.needs_listing {

@@ -1576,7 +1576,7 @@ python_tests = []
 bridge = []
 dolphin = "undo_close_tab: Ctrl+Shift+T; closed_tabs menu (Go menu)"
 native = "done"
-native_note = "Each window remembers its last 10 closed tabs (history, selection, scroll and place in the strip; a tab moved to another window is not remembered). Ctrl+Shift+T reopens the most recent one where it was; the title bar's Open windows menu lists them as 'Reopen <title>' items, the first showing Ctrl+Shift+T, and they do nothing when no tab has closed (native/crates/ox-app/src/window/tab_commands.rs, title_bar.rs). Split state and per-tab view do not exist natively (the view is per window). Test: native/crates/ox-app/src/window/tests/tab_commands.rs (a_closed_tab_reopens_where_it_was_with_its_history)."
+native_note = "Each window remembers its last 10 closed tabs (history, selection, scroll and place in the strip; a tab moved to another window is not remembered). Ctrl+Shift+T reopens the most recent one where it was; the title bar's Open windows menu lists them as 'Reopen <title>' items, the first showing Ctrl+Shift+T; while no tab has closed there are no such items and Ctrl+Shift+T (win.reopen-closed-tab) is disabled (native/crates/ox-app/src/window/tab_commands.rs, title_bar.rs). Split state and per-tab view do not exist natively (the view is per window). Tests: native/crates/ox-app/src/window/tests/tab_commands.rs (a_closed_tab_reopens_where_it_was_with_its_history, the_tab_keys_reach_the_window_through_its_shortcuts)."
 
 [[feature]]
 id = "TAB-017"

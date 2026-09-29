@@ -7,9 +7,9 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::support::click_at;
+use crate::folder_view::item::FileItem;
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::window::address_bar::AddressMode;
-use crate::folder_view::item::FileItem;
 use crate::window::session::{TabId, TabPlacement};
 use ox_core::network::NetworkError;
 
@@ -125,12 +125,16 @@ fn switching_back_to_a_tab_restores_its_scroll_position() {
     test.window.folder_model().select_only(0);
     let second_selection = test.selected_names();
     pane.reveal(1);
-    wait_until("the second tab's focused item", || pane.focused_position() == Some(1));
+    wait_until("the second tab's focused item", || {
+        pane.focused_position() == Some(1)
+    });
     test.activate_tab(first);
     wait_until("the first tab's scroll position", || {
         (pane.scroll_position() - scrolled).abs() < 1.0
     });
-    wait_until("the first tab's focused item", || pane.focused_position() == Some(last));
+    wait_until("the first tab's focused item", || {
+        pane.focused_position() == Some(last)
+    });
     assert_eq!(test.window.search_box().entry().text().as_str(), "");
     assert!(
         test.selected_names().is_empty(),
@@ -142,7 +146,9 @@ fn switching_back_to_a_tab_restores_its_scroll_position() {
         second_selection,
         "each tab keeps its selection"
     );
-    wait_until("the second tab's focused item again", || pane.focused_position() == Some(1));
+    wait_until("the second tab's focused item again", || {
+        pane.focused_position() == Some(1)
+    });
 }
 
 /// The tab widget at `index` of the strip.
@@ -165,11 +171,7 @@ fn a_click_or_enter_on_a_tab_shows_it() {
     test.activate("location", None);
     assert_eq!(test.window.address_bar().mode(), AddressMode::Entry);
 
-    click_at(
-        &tab_widget(&test, 0),
-        gtk::gdk::BUTTON_PRIMARY,
-        (4.0, 4.0),
-    );
+    click_at(&tab_widget(&test, 0), gtk::gdk::BUTTON_PRIMARY, (4.0, 4.0));
     let after_click = test.active_tab();
     let address_mode = test.window.address_bar().mode();
     let middle_tab = tab_widget(&test, 1);
