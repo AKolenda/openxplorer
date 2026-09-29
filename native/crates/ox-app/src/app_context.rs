@@ -404,7 +404,10 @@ impl AppContext {
             match other_application(entry) {
                 Ok(application) => Some(application),
                 Err(refusal) => {
-                    on_error(glib::Error::new(gio::IOErrorEnum::NotSupported, &refusal.to_string()));
+                    on_error(glib::Error::new(
+                        gio::IOErrorEnum::NotSupported,
+                        &refusal.to_string(),
+                    ));
                     return;
                 }
             }
@@ -415,7 +418,11 @@ impl AppContext {
         let context = self.downgrade();
         glib::spawn_future_local(async move {
             let launched = match application {
-                Some(application) => application.launch_uris_future(&[&uri], Some(&launch_context)).await,
+                Some(application) => {
+                    application
+                        .launch_uris_future(&[&uri], Some(&launch_context))
+                        .await
+                }
                 None => gio::AppInfo::launch_default_for_uri_future(&uri, Some(&launch_context)).await,
             };
             match (launched, context.upgrade()) {
@@ -451,7 +458,10 @@ impl AppContext {
 /// The application that opens `entry` by its content type: the default
 /// one unless it is this app, else the first other one that can.
 fn other_application(entry: &Entry) -> Result<gio::AppInfo, OpenError> {
-    let content_type = entry.content_type.as_deref().unwrap_or("application/octet-stream");
+    let content_type = entry
+        .content_type
+        .as_deref()
+        .unwrap_or("application/octet-stream");
     choose_application(
         gio::AppInfo::all_for_type(content_type),
         gio::AppInfo::default_for_type(content_type, false),

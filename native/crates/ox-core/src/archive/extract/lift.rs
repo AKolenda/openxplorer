@@ -89,8 +89,20 @@ pub fn lift_single_folder(extracted: ExtractedFolder) -> ExtractedFolder {
             Err(_) => break,
         }
     }
-    // Put the output back where the extraction published it.
-    let _ = rename(&aside, &outer);
+    // Put the output back where the extraction published it; if even
+    // that fails, the output is reported where it is, under the private
+    // name, rather than where it is not.
+    if rename(&aside, &outer).is_err() {
+        let name = aside
+            .basename()
+            .and_then(|name| name.to_str().map(str::to_owned))
+            .unwrap_or_default();
+        return ExtractedFolder {
+            uri: aside.uri().to_string(),
+            name,
+            ..extracted
+        };
+    }
     extracted
 }
 

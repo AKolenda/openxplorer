@@ -568,7 +568,11 @@ mod tests {
         )
         .unwrap();
         let mode_of = |name: &str| {
-            let member = archive.members().iter().find(|member| member.name == name).unwrap();
+            let member = archive
+                .members()
+                .iter()
+                .find(|member| member.name == name)
+                .unwrap();
             (member.external_attributes >> 16) & 0o777
         };
         assert_eq!(mode_of("Photos/a.jpg"), 0o750);

@@ -106,9 +106,13 @@ impl Read for ZstdFrames {
             match ruzstd::decoding::StreamingDecoder::new(self.source.clone()) {
                 Ok(frame) => self.frame = Some(frame),
                 Err(FrameDecoderError::ReadFrameHeaderError(ReadFrameHeaderError::SkipFrame {
-                    length, ..
+                    length,
+                    ..
                 })) => {
-                    self.source.0.borrow_mut().seek(SeekFrom::Current(i64::from(length)))?;
+                    self.source
+                        .0
+                        .borrow_mut()
+                        .seek(SeekFrom::Current(i64::from(length)))?;
                 }
                 Err(error) => return Err(io::Error::new(io::ErrorKind::InvalidData, error.to_string())),
             }
