@@ -3,7 +3,8 @@
 //! for search, and opening a search result's folder.
 //!
 //! Ports `cacheMenuItems`, `setCache` and the "Open file location" item of
-//! `entryMenu` in `desktop/ui/app.js` (SRCH-015, SRCH-020). "Cache this
+//! `entryMenu` in `desktop/ui/app.js` (SRCH-015, SRCH-020), with Dolphin's
+//! "in new tab" and "in new window" forms (SRCH-016). "Cache this
 //! folder for search" is a check item: checked while the folder is an
 //! indexed folder, and unchecking it stops caching it, as "Stop caching
 //! this folder" did. The More menu, the folder's menu and the search
@@ -22,9 +23,17 @@ use crate::icons::Icon;
 use crate::locations::Page;
 
 use super::actions::{plain_action, text_action};
+use super::folder_search::LocationTarget;
 use super::menu_popover::{ItemCheck, MenuItem};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+
+/// The actions that open a search result's folder.
+const LOCATION_ACTIONS: [WindowAction; 3] = [
+    WindowAction::OpenFileLocation,
+    WindowAction::OpenFileLocationInTab,
+    WindowAction::OpenFileLocationInWindow,
+];
 
 /// What the window says after caching was switched on (`setCache`).
 const CACHING_STARTED: &str =
@@ -45,12 +54,23 @@ impl BrowserWindow {
             })
             .build();
         let cache_folder_of = text_action(WindowAction::CacheFolderOf, BrowserWindow::toggle_caching_of);
-        let open_location = plain_action(
-            WindowAction::OpenFileLocation,
-            BrowserWindow::open_result_location,
-        );
-        self.add_action_entries([cache_folder, cache_folder_of, open_location]);
-        self.set_action_enabled(WindowAction::OpenFileLocation, false);
+        let open_location = plain_action(WindowAction::OpenFileLocation, |window| {
+            window.open_result_location(LocationTarget::ThisTab);
+        });
+        let open_location_in_tab = plain_action(WindowAction::OpenFileLocationInTab, |window| {
+            window.open_result_location(LocationTarget::NewTab);
+        });
+        let open_location_in_window = plain_action(WindowAction::OpenFileLocationInWindow, |window| {
+            window.open_result_location(LocationTarget::NewWindow);
+        });
+        self.add_action_entries([
+            cache_folder,
+            cache_folder_of,
+            open_location,
+            open_location_in_tab,
+            open_location_in_window,
+        ]);
+        self.update_open_location_action(0);
     }
 
     /// Whether the folder at `uri` is an indexed folder, or `None` where
@@ -80,10 +100,13 @@ impl BrowserWindow {
         self.set_action_state(WindowAction::CacheFolder, &is_cached.to_variant());
     }
 
-    /// Offers "Open file location" for one selected search result.
+    /// Offers "Open file location" and its new tab and new window forms
+    /// for one selected search result.
     pub(super) fn update_open_location_action(&self, selected: u32) {
         let offers = self.is_searching() && selected == 1;
-        self.set_action_enabled(WindowAction::OpenFileLocation, offers);
+        for action in LOCATION_ACTIONS {
+            self.set_action_enabled(action, offers);
+        }
     }
 
     /// Starts caching the folder at `uri`, or stops while it is cached,

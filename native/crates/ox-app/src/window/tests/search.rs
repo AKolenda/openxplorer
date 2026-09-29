@@ -13,7 +13,7 @@ use ox_core::search::{
 
 use crate::folder_view::sorting::SortColumn;
 use crate::search::SearchScope;
-use crate::test_support::harness::{capture, wait_until, Fixture, TestWindow, STANDARD_NAMES};
+use crate::test_support::harness::{capture, wait_until, Fixture, OpenedWindows, TestWindow, STANDARD_NAMES};
 use crate::window::activation::{activation_for, Activation};
 use crate::window::folder_pane::PanePage;
 
@@ -301,6 +301,59 @@ fn a_middle_clicked_folder_result_opens_a_tab_and_keeps_the_search() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
     assert_eq!(test.window.search_box().entry().text().as_str(), "reports");
     assert_eq!(test.names(), ["Reports", "reports 2026.zip"]);
+}
+
+/// "Open file location in new tab" opens the result's folder behind, with
+/// the result selected there, and the search stays; "in new window" opens
+/// it in a window of its own.
+///
+/// parity: SRCH-016
+#[gtk::test]
+fn a_results_folder_opens_in_a_new_tab_or_window_with_it_selected() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/deep notes.txt"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.index_folder(&fixture.uri());
+    test.search_for("deep");
+    test.window.folder_model().select_only(0);
+    let search_tab = test.active_tab().expect("a tab in front");
+
+    test.activate("open-file-location-in-tab", None);
+
+    assert_eq!(test.active_tab(), Some(search_tab), "the new tab opens behind");
+    assert_eq!(test.window.search_box().entry().text().as_str(), "deep");
+    let tabs: Vec<_> = test
+        .window
+        .imp()
+        .session
+        .borrow()
+        .tabs()
+        .iter()
+        .map(|tab| tab.id)
+        .collect();
+    let [_, located] = tabs[..] else {
+        panic!("a second tab: {tabs:?}");
+    };
+    test.activate_tab(located);
+    test.wait_for_listing("the result's folder");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    assert_eq!(test.selected_names(), ["deep notes.txt"]);
+
+    test.activate_tab(search_tab);
+    test.search_for("deep");
+    test.window.folder_model().select_only(0);
+    test.activate("open-file-location-in-window", None);
+
+    let opened = OpenedWindows::only(&[&test.window]);
+    let window = opened.window();
+    wait_until("the new window to list the folder", || {
+        let listed = window.folder_model().n_items() > 0;
+        listed && window.current_uri() == Some(fixture.uri_of("Documents"))
+    });
+    let selected = window.folder_model().selected_items();
+    let names: Vec<&str> = selected.iter().map(|item| item.entry().name.as_str()).collect();
+    assert_eq!(names, ["deep notes.txt"]);
 }
 
 /// parity: SRCH-020

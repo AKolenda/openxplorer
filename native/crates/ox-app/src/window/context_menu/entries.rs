@@ -87,7 +87,8 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
 
 /// The Open group: Open, the extraction commands, the applications, for
 /// folders Open in new tab and Pin to Quick access, and for a search
-/// result Open file location (SRCH-015).
+/// result Open file location (SRCH-015), also in a new tab or window
+/// (SRCH-016).
 fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let several = !facts.is_single;
     let is_folder = facts.shape == ItemShape::Folder;
@@ -111,8 +112,22 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         entries.push(pin.disabled_when(several).into());
     }
     if facts.is_search_result {
-        let open_location = item("Open file location", Icon::Folder, WindowAction::OpenFileLocation);
-        entries.push(open_location.disabled_when(several).into());
+        let locations = [
+            ("Open file location", Icon::Folder, WindowAction::OpenFileLocation),
+            (
+                "Open file location in new tab",
+                Icon::Add,
+                WindowAction::OpenFileLocationInTab,
+            ),
+            (
+                "Open file location in new window",
+                Icon::WindowNew,
+                WindowAction::OpenFileLocationInWindow,
+            ),
+        ];
+        for (label, glyph, action) in locations {
+            entries.push(item(label, glyph, action).disabled_when(several).into());
+        }
     }
     entries
 }
@@ -552,12 +567,14 @@ mod tests {
         let entries = labels(&item_menu(&facts, MenuStyle::Classic).entries);
 
         assert_eq!(
-            entries[..4],
+            entries[..6],
             [
                 "Open",
                 "Open containing folder in Terminal",
                 "Open with…",
-                "Open file location"
+                "Open file location",
+                "Open file location in new tab",
+                "Open file location in new window"
             ]
         );
         assert!(!labels(&item_menu(&file(), MenuStyle::Classic).entries)

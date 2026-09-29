@@ -20,7 +20,7 @@ use gtk::{gio, glib};
 use std::collections::HashSet;
 
 use ox_core::entry::Entry;
-use ox_core::location::parent_location;
+use ox_core::location::{parent_location, LocationError};
 use ox_core::search::{
     walk_search, HiddenItems, LiveSearch, NamePattern, SearchError, SearchQuery, SearchResults,
 };
@@ -35,8 +35,20 @@ use crate::search::{
 
 use super::empty_page::EmptyState;
 use super::search_box::ViewKey;
+use super::session::TabPlacement;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+
+/// Where "Open file location" opens a search result's folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LocationTarget {
+    /// In the tab that shows the search, which leaves the search.
+    ThisTab,
+    /// In a new tab behind it (SRCH-016).
+    NewTab,
+    /// In a new window (SRCH-016).
+    NewWindow,
+}
 
 impl BrowserWindow {
     /// The strip above the columns while searching.
@@ -414,9 +426,11 @@ impl BrowserWindow {
         true
     }
 
-    /// "Open file location" on a search result: opens the folder it is in,
-    /// with the result selected and scrolled into view (SRCH-015).
-    pub(super) fn open_result_location(&self) {
+    /// "Open file location" on a search result: opens the folder it is in
+    /// where `target` says, with the result selected and scrolled into
+    /// view (SRCH-015, SRCH-016). A new tab opens behind, so the search
+    /// stays in front, as Dolphin opens it.
+    pub(super) fn open_result_location(&self, target: LocationTarget) {
         let items = self.folder_pane().model().selected_items();
         let [item] = items.as_slice() else {
             return;
@@ -425,14 +439,53 @@ impl BrowserWindow {
         let Some(folder) = parent_location(&uri) else {
             return;
         };
-        if let Err(error) = self.navigate(&folder) {
+        let opened = match target {
+            LocationTarget::ThisTab => self.navigate(&folder).map(|()| self.locate_in_active_tab(uri)),
+            LocationTarget::NewTab => self.open_located_tab(&folder, uri),
+            LocationTarget::NewWindow => self.open_located_window(&folder, uri),
+        };
+        if let Err(error) = opened {
             self.show_message(&error.to_string());
-            return;
         }
+    }
+
+    /// Selects `uri` in the active tab once it has listed its folder.
+    fn locate_in_active_tab(&self, uri: String) {
         if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
             tab.selected = vec![uri.clone()];
             tab.revealed_item = Some(uri);
         }
+    }
+
+    /// Opens `folder` in a tab behind the current one, where `uri` is
+    /// selected when the tab is first shown.
+    fn open_located_tab(&self, folder: &str, uri: String) -> Result<(), LocationError> {
+        let folder = self.resolve_address(folder)?;
+        self.save_tab_view();
+        let mut session = self.imp().session.borrow_mut();
+        let id = session.add(&folder, TabPlacement::Background);
+        if let Some(tab) = session.tab_mut(id) {
+            tab.selected = vec![uri.clone()];
+            tab.revealed_item = Some(uri);
+        }
+        drop(session);
+        self.render_tabs();
+        Ok(())
+    }
+
+    /// Opens `folder` in a new window, with `uri` selected there.
+    fn open_located_window(&self, folder: &str, uri: String) -> Result<(), LocationError> {
+        let Some(app) = self.application() else {
+            return Ok(());
+        };
+        let window = BrowserWindow::new(&app, self.context());
+        if let Err(error) = window.add_tab(folder) {
+            window.destroy();
+            return Err(error);
+        }
+        window.locate_in_active_tab(uri);
+        window.present();
+        Ok(())
     }
 
     /// Scrolls tab `id`'s item that "Open file location" asked for into

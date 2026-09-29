@@ -250,7 +250,12 @@ mod tests {
     #[test]
     fn the_arrow_and_page_keys_move_into_the_results() {
         let plain = gdk::ModifierType::empty();
-        for key in [gdk::Key::Down, gdk::Key::Up, gdk::Key::Page_Down, gdk::Key::KP_Page_Up] {
+        for key in [
+            gdk::Key::Down,
+            gdk::Key::Up,
+            gdk::Key::Page_Down,
+            gdk::Key::KP_Page_Up,
+        ] {
             assert_eq!(ViewKey::of(key, plain), Some(ViewKey::Move), "{key:?}");
         }
         assert_eq!(ViewKey::of(gdk::Key::Left, plain), None);

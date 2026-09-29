@@ -155,8 +155,14 @@ fn is_open_item(entry: &MenuEntry) -> bool {
     let MenuEntry::Item(item) = entry else {
         return false;
     };
-    let opens = [WindowAction::GoTo, WindowAction::OpenTab, WindowAction::OpenWindow];
-    opens.iter().any(|action| item.action == MenuAction::Window(*action))
+    let opens = [
+        WindowAction::GoTo,
+        WindowAction::OpenTab,
+        WindowAction::OpenWindow,
+    ];
+    opens
+        .iter()
+        .any(|action| item.action == MenuAction::Window(*action))
 }
 
 impl PlaceMenu {
@@ -186,7 +192,9 @@ impl PlaceMenu {
     /// where the place can be indexed.
     pub(super) fn entries_in(&self, window: Option<&BrowserWindow>) -> Vec<MenuEntry> {
         let folder = self.cacheable_folder();
-        let caching = folder.zip(window).and_then(|(uri, window)| window.caching_of(uri));
+        let caching = folder
+            .zip(window)
+            .and_then(|(uri, window)| window.caching_of(uri));
         self.entries(caching)
     }
 
@@ -398,10 +406,14 @@ mod tests {
 
         let cache = "Cache this folder for search";
         assert_eq!(drive_menu, ["Open", "Open in new window", cache]);
-        assert_eq!(share_menu[..4], ["Open", "Open in new tab", "Open in new window", cache]);
-        let checked = share.entries(Some(Caching::Enabled)).into_iter().any(|entry| {
-            matches!(entry, MenuEntry::Item(item) if item.check == ItemCheck::Fixed(true))
-        });
+        assert_eq!(
+            share_menu[..4],
+            ["Open", "Open in new tab", "Open in new window", cache]
+        );
+        let checked = share
+            .entries(Some(Caching::Enabled))
+            .into_iter()
+            .any(|entry| matches!(entry, MenuEntry::Item(item) if item.check == ItemCheck::Fixed(true)));
         assert!(checked, "a cached share's item is checked");
         assert_eq!(drive.cacheable_folder(), Some("file:///media/demo/USB"));
         assert_eq!(PlaceMenu::Volume { id: "1".into() }.cacheable_folder(), None);
