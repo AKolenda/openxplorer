@@ -260,6 +260,36 @@ fn compress_to_zip_puts_the_selection_into_a_new_zip_beside_it() {
     });
 }
 
+/// Compress to… asks for the name and format, writes a .tar.xz, and
+/// keeps the dialog open with the reason when the name is taken.
+///
+/// parity: ARC-023
+#[gtk::test]
+fn compress_to_asks_for_a_name_and_a_format() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let compress = |name: &str| {
+        test.select_named("Notes 2.txt");
+        test.activate("compress-to", None);
+        let frame = test.wait_for_dialog("the Compress dialog");
+        assert_eq!(descendants::<gtk::Entry>(&frame)[0].text(), "Notes 2");
+        descendants::<gtk::Entry>(&frame)[0].set_text(name);
+        descendants::<gtk::DropDown>(&frame)[0].set_selected(1);
+        press(&frame, "Compress");
+        frame
+    };
+
+    compress("Backup");
+    let archive = fixture.path("Backup.tar.xz");
+    wait_until("the new archive", || archive.exists());
+    wait_until("the toast", || {
+        test.window.shown_message() == "Compressed 1 items into Backup.tar.xz."
+    });
+    let frame = compress("Backup");
+    wait_until("the refusal", || !frame.error_text().is_empty());
+    assert_eq!(test.shown_dialog(), Some(frame));
+}
+
 /// parity: ARC-009, ARC-023, ARC-025
 #[gtk::test]
 fn the_archive_commands_follow_the_selection() {

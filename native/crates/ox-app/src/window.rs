@@ -52,6 +52,7 @@ mod cache_folder;
 mod caption_buttons;
 mod card_grid;
 mod command_bar;
+mod compress_dialog;
 mod connections;
 mod context_menu;
 mod copy_path;

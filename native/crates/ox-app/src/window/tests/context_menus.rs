@@ -67,6 +67,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Duplicate",
             "Copy path",
             "Compress to ZIP file",
+            "Compress to…",
             "-",
             "Previous versions",
             "Properties",

@@ -86,6 +86,7 @@ impl BrowserWindow {
             }),
             plain_action(WindowAction::ExtractHere, BrowserWindow::extract_here),
             plain_action(WindowAction::CompressToZip, BrowserWindow::compress_selection),
+            plain_action(WindowAction::CompressTo, BrowserWindow::ask_compress_to),
         ]);
     }
 
@@ -104,6 +105,7 @@ impl BrowserWindow {
         );
         let can_compress = is_idle && selected > 0 && folder_is_writable;
         self.set_action_enabled(WindowAction::CompressToZip, can_compress);
+        self.set_action_enabled(WindowAction::CompressTo, can_compress);
     }
 
     /// The one selected item, when it is a ZIP archive.
@@ -166,7 +168,7 @@ impl BrowserWindow {
 
     /// True when no write runs in this window; otherwise says so, as one
     /// operation runs at a time (OPS-024).
-    fn may_start_archive_operation(&self) -> bool {
+    pub(super) fn may_start_archive_operation(&self) -> bool {
         if self.is_writing_files() {
             self.show_message(OPERATION_RUNNING);
             return false;
@@ -423,7 +425,12 @@ impl BrowserWindow {
     /// Lists `folder` again, then says how an operation ended: `outcome`'s
     /// message as a toast, or its failure in the dialog titled
     /// `stopped_title`. Listing a folder hides the toast, so it comes last.
-    fn report_in_folder(&self, folder: &str, outcome: Result<String, String>, stopped_title: &str) {
+    pub(super) fn report_in_folder(
+        &self,
+        folder: &str,
+        outcome: Result<String, String>,
+        stopped_title: &str,
+    ) {
         self.reload_tabs_showing(folder);
         match outcome {
             Ok(message) => self.show_message(&message),

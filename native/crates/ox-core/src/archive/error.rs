@@ -167,6 +167,10 @@ pub enum ArchiveError {
     /// replaced.
     #[error("An item with this name already exists. Nothing was replaced.")]
     ArchiveExists,
+    /// ARC-023: a file held more or fewer bytes when it was written into
+    /// a `.tar.xz` than when it was measured.
+    #[error("An item changed while it was compressed. Nothing was created.")]
+    SourceChanged,
 
     /// ARC-013: the extraction failed and its staging folder could not be
     /// removed either.

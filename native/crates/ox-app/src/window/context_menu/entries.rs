@@ -281,6 +281,7 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
         duplicate_item(),
         copy_path_item(facts),
         compress_item(),
+        item("Compress to…", Icon::FolderZip, WindowAction::CompressTo).into(),
     ]);
     if let Some(caching) = facts.caching {
         entries.push(cache_item(&facts.navigation_uri, caching).into());
@@ -458,6 +459,7 @@ mod tests {
                 "Duplicate",
                 "Copy path",
                 "Compress to ZIP file",
+                "Compress to…",
                 "Cache this folder for search",
                 "-",
                 "Calculate folder size",
