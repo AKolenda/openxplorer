@@ -8,12 +8,11 @@
 //! aliases are never guessed, so a row never implies shared credentials.
 
 use std::borrow::Cow;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::location::{
-    file_uri, is_server_location, normalise, split_location, unquote_lossy, LocationError,
+    file_uri, is_remote_location, is_server_location, normalise, split_location, unquote_lossy, LocationError,
 };
 use crate::settings::Bookmark;
 
@@ -284,6 +283,9 @@ fn fallback_label(uri: &str) -> String {
 struct NetworkRows {
     rows: Vec<NetworkLocation>,
     indexes: HashMap<NetworkKey, usize>,
+    /// The first row on each SFTP, FTP, WebDAV or NFS server, by scheme
+    /// and authority (user, host and port).
+    remote_servers: HashMap<(String, String), usize>,
 }
 
 impl NetworkRows {
@@ -297,14 +299,38 @@ impl NetworkRows {
         let Ok(key) = network_key(&location.uri) else {
             return;
         };
-        match self.indexes.entry(key) {
-            Entry::Occupied(existing) => self.rows[*existing.get()].merge(location),
-            Entry::Vacant(vacant) => {
-                vacant.insert(self.rows.len());
-                self.rows.push(location);
-            }
+        if let Some(&index) = self.indexes.get(&key) {
+            self.rows[index].merge(location);
+            return;
         }
+        let server = remote_server(&location.uri);
+        // A browsed folder or a mount on an SFTP, FTP, WebDAV or NFS
+        // server joins the server's row, as GIO reports the mount root and
+        // not the folder browsed (NET-030). Saved folders keep their rows.
+        let server_row = server
+            .as_ref()
+            .filter(|_| !location.is_saved)
+            .and_then(|server| self.remote_servers.get(server));
+        if let Some(&index) = server_row {
+            self.rows[index].merge(location);
+            return;
+        }
+        if let Some(server) = server {
+            self.remote_servers.entry(server).or_insert(self.rows.len());
+        }
+        self.indexes.insert(key, self.rows.len());
+        self.rows.push(location);
     }
+}
+
+/// The scheme and authority of an SFTP, FTP, WebDAV or NFS location;
+/// `None` for SMB and local locations, whose rows are told apart by path.
+fn remote_server(uri: &str) -> Option<(String, String)> {
+    if !is_remote_location(uri) {
+        return None;
+    }
+    let parts = split_location(uri).ok()?;
+    Some((parts.scheme, parts.authority))
 }
 
 impl NetworkLocation {

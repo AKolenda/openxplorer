@@ -269,13 +269,17 @@ mod tests {
     /// parity: NET-030
     #[test]
     fn a_connected_sftp_folder_can_be_kept_and_disconnected() {
-        let browsed = NetworkLocation {
-            uri: "sftp://anna@build/home/anna".into(),
-            label: "anna".into(),
-            is_saved: false,
-            is_connected: true,
-            kind: NetworkKind::Share,
+        let mount = ox_core::places::NetworkMount {
+            uri: "sftp://anna@build/".into(),
+            label: "build".into(),
+            is_mounted: true,
         };
+        let visited = ox_core::settings::Bookmark {
+            uri: "sftp://anna@build/home/anna".into(),
+            label: String::new(),
+        };
+        let rows = ox_core::places::merge_network_locations(&[], &[mount], &[], &[visited]);
+        let [browsed] = <[NetworkLocation; 1]>::try_from(rows).expect("one row for the server");
         let menu = labels(&PlaceMenu::Network(browsed));
         assert_eq!(menu[3..], ["Keep in Network", "Disconnect"]);
     }

@@ -404,9 +404,10 @@ fn a_guest_sign_in_after_a_rejected_credential_saves_nothing() {
     });
 }
 
-/// A server question is answered with the index of the chosen button.
+/// A server question is answered with the index of the chosen button;
+/// an SFTP server's host-key question is asked the same way.
 ///
-/// parity: NET-013
+/// parity: NET-013, NET-030
 #[test]
 fn a_question_is_answered_with_the_chosen_button() {
     with_prompts(|fixture| {
@@ -429,6 +430,19 @@ fn a_question_is_answered_with_the_chosen_button() {
             .answer(challenge.id, Answer::Choice(0))
             .expect("a valid choice");
         assert_eq!(operation.choice(), 0);
+        assert_eq!(*replies.borrow(), [gio::MountOperationResult::Handled]);
+
+        let (host_key, replies) = self::operation(fixture, "sftp://anna@build/home/anna");
+        let choices = glib::StrV::from(vec!["Log In Anyway", "Cancel"]);
+        host_key.emit_by_name::<()>("ask-question", &[&"The identity of build is unknown.", &choices]);
+        let challenge = fixture.prompter.last_shown();
+        assert_eq!(challenge.host, "build");
+        assert!(matches!(challenge.kind, ChallengeKind::Question(_)));
+        fixture
+            .prompts
+            .answer(challenge.id, Answer::Choice(1))
+            .expect("a valid choice");
+        assert_eq!(host_key.choice(), 1);
         assert_eq!(*replies.borrow(), [gio::MountOperationResult::Handled]);
     });
 }
