@@ -361,13 +361,24 @@ fn a_drag_that_stays_over_a_folder_opens_it() {
         .window
         .folder_view_spot(Some(test.position_of("Documents")))
         .expect("a folder takes drops");
-    let blank = test.window.folder_view_spot(None).expect("the folder shown takes drops");
-    assert_eq!(super::spring::folder_to_open(&blank), None, "the folder shown is open already");
+    let blank = test
+        .window
+        .folder_view_spot(None)
+        .expect("the folder shown takes drops");
+    assert_eq!(
+        super::spring::folder_to_open(&blank),
+        None,
+        "the folder shown is open already"
+    );
 
     test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
     test.window.show_drop_spot(DropZone::FolderView, None);
     wait_for(Duration::from_millis(900));
-    assert_eq!(test.window.current_uri(), Some(fixture.uri()), "leaving stops the wait");
+    assert_eq!(
+        test.window.current_uri(),
+        Some(fixture.uri()),
+        "leaving stops the wait"
+    );
 
     test.window.show_drop_spot(DropZone::FolderView, Some(&documents));
     wait_until("the hovered folder to open", || {

@@ -69,8 +69,7 @@ impl BrowserWindow {
             .map(|uri| {
                 let name = gio::File::for_uri(&uri)
                     .basename()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| uri.clone());
+                    .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
                 DeleteItem { uri, name }
             })
             .collect();

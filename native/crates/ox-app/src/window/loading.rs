@@ -397,7 +397,9 @@ impl BrowserWindow {
             let state = match error {
                 Some(error) => EmptyState::Unavailable(error),
                 None if loading => EmptyState::Loading,
-                None => self.search_empty_state().unwrap_or_else(|| self.empty_folder_state()),
+                None => self
+                    .search_empty_state()
+                    .unwrap_or_else(|| self.empty_folder_state()),
             };
             pane.show_empty(&state);
         }

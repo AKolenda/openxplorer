@@ -115,7 +115,12 @@ impl BrowserWindow {
     /// Escape in the field ends the rename and leaves the name as it was;
     /// Tab and Shift+Tab, and Down and Up in the details view, commit and
     /// go on to rename the next or previous item (OPS-012).
-    fn rename_keys(&self, cell: &FileCell, editor: &gtk::Entry, target: &RenameTarget) -> gtk::EventControllerKey {
+    fn rename_keys(
+        &self,
+        cell: &FileCell,
+        editor: &gtk::Entry,
+        target: &RenameTarget,
+    ) -> gtk::EventControllerKey {
         let keys = gtk::EventControllerKey::new();
         keys.connect_key_pressed(glib::clone!(
             #[weak(rename_to = window)]
@@ -150,11 +155,8 @@ impl BrowserWindow {
     /// order shown, or `None` at either end.
     fn neighbour_uri(&self, uri: &str, step: i32) -> Option<String> {
         let model = self.folder_pane().model();
-        let position = (0..model.n_items()).find(|&position| {
-            model
-                .item(position)
-                .is_some_and(|item| item.entry().uri == uri)
-        })?;
+        let position = (0..model.n_items())
+            .find(|&position| model.item(position).is_some_and(|item| item.entry().uri == uri))?;
         let next = position.checked_add_signed(step)?;
         model.item(next).map(|item| item.entry().uri.clone())
     }
@@ -237,7 +239,7 @@ impl BrowserWindow {
                 // Before the folder is listed again, which rebinds the cell.
                 self.close_name_editor(cell);
                 match self.take_rename_next() {
-                    Some(next) => self.finish_rename_and_continue(renamed, next),
+                    Some(next) => self.finish_rename_and_continue(&renamed, next),
                     None => self.finish_rename(renamed),
                 }
             }
@@ -283,7 +285,11 @@ mod tests {
         assert_eq!(rename_step(gdk::Key::ISO_Left_Tab, shift, false), Some(-1));
         assert_eq!(rename_step(gdk::Key::Down, none, true), Some(1));
         assert_eq!(rename_step(gdk::Key::Up, none, true), Some(-1));
-        assert_eq!(rename_step(gdk::Key::Down, none, false), None, "icons move the text cursor");
+        assert_eq!(
+            rename_step(gdk::Key::Down, none, false),
+            None,
+            "icons move the text cursor"
+        );
         assert_eq!(rename_step(gdk::Key::Return, none, true), None);
     }
 }

@@ -127,7 +127,13 @@ mod tests {
         assert!(scroll_step(30.0, 400.0) < 0.0, "near the top scrolls up");
         assert!(scroll_step(399.0, 400.0) > scroll_step(370.0, 400.0));
         assert!(scroll_step(370.0, 400.0) > 0.0, "near the bottom scrolls down");
-        assert!(scroll_step(200.0, 400.0).abs() < f64::EPSILON, "the middle does not scroll");
-        assert!(scroll_step(10.0, 60.0).abs() < f64::EPSILON, "a tiny zone does not scroll");
+        assert!(
+            scroll_step(200.0, 400.0).abs() < f64::EPSILON,
+            "the middle does not scroll"
+        );
+        assert!(
+            scroll_step(10.0, 60.0).abs() < f64::EPSILON,
+            "a tiny zone does not scroll"
+        );
     }
 }

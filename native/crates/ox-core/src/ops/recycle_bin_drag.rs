@@ -82,7 +82,11 @@ fn move_item(uri: &str, folder: &gio::File, context: &OperationContext) -> Resul
     )?;
     let name = entry_from_info(&item, &info).name;
     let target = folder.child(&name);
-    let taken = || OpsError::Exists(format!("An item named “{name}” already exists here. It was left in the Recycle Bin."));
+    let taken = || {
+        OpsError::Exists(format!(
+            "An item named “{name}” already exists here. It was left in the Recycle Bin."
+        ))
+    };
     move_out(&item, &target, context, taken, |_| Ok(()))
 }
 
@@ -95,7 +99,10 @@ mod tests {
     fn only_whole_items_in_the_recycle_bin_are_dragged_out() {
         assert!(is_recycle_bin_item("trash:///report.txt"));
         assert!(!is_recycle_bin_item("trash:///"), "the Recycle Bin itself");
-        assert!(!is_recycle_bin_item("trash:///folder/inside.txt"), "part of a trashed folder");
+        assert!(
+            !is_recycle_bin_item("trash:///folder/inside.txt"),
+            "part of a trashed folder"
+        );
         assert!(!is_recycle_bin_item("file:///tmp/report.txt"));
     }
 }

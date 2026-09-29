@@ -220,7 +220,9 @@ fn restore_item(uri: &str, context: &OperationContext) -> Result<String, OpsErro
 fn put_back(item: &gio::File, original_path: &Path, context: &OperationContext) -> Result<String, OpsError> {
     let target = gio::File::for_path(original_path);
     let taken = || name_taken_in_original_folder(original_path);
-    move_out(item, &target, context, taken, |target| recreate_original_folder(target, context))
+    move_out(item, &target, context, taken, |target| {
+        recreate_original_folder(target, context)
+    })
 }
 
 /// Moves the Recycle Bin item `item` to `target`, never overwriting, and

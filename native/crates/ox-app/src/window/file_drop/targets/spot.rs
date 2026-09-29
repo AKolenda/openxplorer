@@ -40,7 +40,9 @@ impl DropSpot {
     pub(super) fn destination(&self) -> DropDestination {
         match self {
             DropSpot::FolderView { destination, .. } => destination.clone(),
-            DropSpot::Sidebar(SidebarDropSpot::Folder { uri, .. }) => DropDestination::for_folder(uri.clone()),
+            DropSpot::Sidebar(SidebarDropSpot::Folder { uri, .. }) => {
+                DropDestination::for_folder(uri.clone())
+            }
             DropSpot::Sidebar(SidebarDropSpot::Pin { before, .. }) => DropDestination::QuickAccess {
                 before: before.clone(),
             },

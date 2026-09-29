@@ -85,7 +85,8 @@ pub(super) fn is_draggable(entry: &Entry) -> bool {
         EntryKind::File | EntryKind::Directory | EntryKind::Symlink
     );
     let is_valid_address = normalise(&entry.uri).is_ok();
-    let may_leave = (is_valid_address && is_draggable_location(&entry.uri)) || is_recycle_bin_item(&entry.uri);
+    let may_leave =
+        (is_valid_address && is_draggable_location(&entry.uri)) || is_recycle_bin_item(&entry.uri);
     is_plain_item && !entry.is_virtual && may_leave
 }
 

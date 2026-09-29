@@ -57,8 +57,14 @@ mod tests {
     #[test]
     fn only_a_new_leading_dot_with_hidden_files_off_asks() {
         assert!(would_hide("notes.txt", ".notes.txt", false));
-        assert!(!would_hide("notes.txt", ".notes.txt", true), "hidden files are shown");
-        assert!(!would_hide(".notes", ".old-notes", false), "it was hidden already");
+        assert!(
+            !would_hide("notes.txt", ".notes.txt", true),
+            "hidden files are shown"
+        );
+        assert!(
+            !would_hide(".notes", ".old-notes", false),
+            "it was hidden already"
+        );
         assert!(!would_hide("notes.txt", "notes.md", false));
     }
 }
