@@ -120,7 +120,7 @@ fn a_move_to_another_folder_keeps_the_name_and_never_falls_back_to_copying() {
 /// Ported from `desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_replace_never_uses_device_overwrite` (XFER-026): `GVfs`
 /// deletes the existing item before it moves and cannot restore it.
 ///
-/// parity: XFER-010
+/// parity: XFER-010, XFER-026
 #[test]
 fn replace_on_a_device_is_never_attempted_in_one_step() {
     let device = FakeDevice::new();
