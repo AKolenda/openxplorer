@@ -28,9 +28,45 @@ pub(super) fn check_typed_name(name: &str) -> Result<&str, InvalidName> {
     Ok(name)
 }
 
+/// What the name dialogs say, while the user types, about a valid `name`
+/// that may surprise: that it is `taken` in the folder, that a leading
+/// dot hides the item, or that a leading space or tilde is unusual
+/// (OPS-007, Dolphin's New folder dialog).
+pub(super) fn name_warning(name: &str, taken: bool) -> Option<String> {
+    if taken {
+        return Some(format!("An item named “{name}” already exists here."));
+    }
+    let warning = if name.starts_with('.') {
+        "A name starting with a dot hides the item."
+    } else if name.starts_with(char::is_whitespace) {
+        "A name starting with a space is unusual."
+    } else if name.starts_with('~') {
+        "A name starting with a tilde is unusual."
+    } else {
+        return None;
+    };
+    Some(warning.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// parity: OPS-007
+    #[test]
+    fn surprising_names_are_warned_about_while_typing() {
+        assert_eq!(
+            name_warning("Notes", true).as_deref(),
+            Some("An item named “Notes” already exists here.")
+        );
+        assert_eq!(
+            name_warning(".config", false).as_deref(),
+            Some("A name starting with a dot hides the item.")
+        );
+        assert!(name_warning(" Notes", false).is_some_and(|warning| warning.contains("space")));
+        assert!(name_warning("~Notes", false).is_some_and(|warning| warning.contains("tilde")));
+        assert_eq!(name_warning("Notes", false), None);
+    }
 
     /// Ported from the name rules of `desktop/tests/test_core.py::CoreTests::test_names`,
     /// as `validateName` applies them before the backend.

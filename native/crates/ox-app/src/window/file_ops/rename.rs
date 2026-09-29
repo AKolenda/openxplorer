@@ -18,6 +18,7 @@
 use gtk::glib::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
+use ox_core::location::parent_location;
 use ox_core::ops::{rename_item, OperationContext, RenamedItem};
 
 use super::name_dialog::{ask_for_name, stem_length, NameRequest, NameSelection};
@@ -73,10 +74,12 @@ impl BrowserWindow {
         } else {
             NameSelection::Stem
         };
+        let folder = parent_location(&entry.uri).unwrap_or_default();
         let request = NameRequest {
             title: "Rename",
             initial_name: &entry.name,
             selection,
+            folder: &folder,
         };
         let protection = self.context().write_protection();
         let renamed = ask_for_name(self, request, |name| {

@@ -205,12 +205,13 @@ impl Dialog {
     }
 
     /// Adds a line of small muted text that can be selected, such as a
-    /// folder's path (`.template-path`).
-    pub(super) fn add_hint(&self, text: &str) {
-        self.add_text_line(text, "dialog-hint");
+    /// folder's path (`.template-path`), and returns it, so a caller can
+    /// change it while the dialog is open.
+    pub(super) fn add_hint(&self, text: &str) -> gtk::Label {
+        self.add_text_line(text, "dialog-hint")
     }
 
-    fn add_text_line(&self, text: &str, css_class: &str) {
+    fn add_text_line(&self, text: &str, css_class: &str) -> gtk::Label {
         let line = gtk::Label::builder()
             .label(text)
             .xalign(0.0)
@@ -223,6 +224,7 @@ impl Dialog {
         // Selectable with the pointer, but no stop for the keyboard.
         line.set_focusable(false);
         self.imp().fields.append(&line);
+        line
     }
 
     /// Adds a check box (`.checkbox-row`).

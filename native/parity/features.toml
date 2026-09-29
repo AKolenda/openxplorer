@@ -6596,8 +6596,8 @@ sources = [
 python_tests = ["desktop/tests/test_core.py::CoreTests::test_names"]
 bridge = ["create"]
 dolphin = "KNewFileMenu name validation"
-native = "todo"
-native_note = "Porting notes: OpenXplorer rejects slashes, control characters, '.' and '..' with one message. It gives no hidden, space or tilde warnings, no live exists check and no nested creation."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-app/src/window/file_ops/name_dialog.rs checks each typed name against the folder. While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. Differs: a slash is still refused (\"Names must not contain slashes.\", the current app's rule) instead of creating nested folders."
 
 [[feature]]
 id = "OPS-008"
