@@ -169,7 +169,6 @@ impl BrowserWindow {
         } else {
             None
         };
-        let is_local = entry.navigation_uri().starts_with("file:");
         ItemFacts {
             navigation_uri: entry.navigation_uri().to_owned(),
             shape: item_shape(entry),
@@ -180,9 +179,7 @@ impl BrowserWindow {
             editors: self.context().desktop_integration().known_editor_shortcuts(),
             caching,
             delete_label: self.delete_label(),
-            can_mount_image: is_local && is_disk_image(&entry.name) && !entry.is_dir
-                && is_installed(DiskTool::MountImage),
-            can_analyse_usage: is_local && entry.is_dir && is_installed(DiskTool::AnalyseUsage),
+            disk_tool: disk_tool_of(entry),
         }
     }
 
@@ -285,6 +282,22 @@ fn context_menu_shortcut() -> gtk::ShortcutController {
     let shortcuts = gtk::ShortcutController::new();
     shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
     shortcuts
+}
+
+/// The installed disk tool the menu of `entry` offers: Mount disk image
+/// for a local disk image, Analyse disk usage for a local folder.
+fn disk_tool_of(entry: &Entry) -> Option<DiskTool> {
+    if !entry.navigation_uri().starts_with("file:") {
+        return None;
+    }
+    let tool = if entry.is_dir {
+        DiskTool::AnalyseUsage
+    } else if is_disk_image(&entry.name) {
+        DiskTool::MountImage
+    } else {
+        return None;
+    };
+    is_installed(tool).then_some(tool)
 }
 
 #[cfg(test)]

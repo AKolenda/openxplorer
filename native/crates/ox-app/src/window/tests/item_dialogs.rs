@@ -203,7 +203,9 @@ fn the_name_in_properties_renames_the_item() {
     test.activate("properties", None);
     let frame = test.wait_for_dialog("the Properties dialog");
     let general = properties_view(&frame).general_panel();
-    wait_until("the name field", || !descendants::<gtk::Entry>(&general).is_empty());
+    wait_until("the name field", || {
+        !descendants::<gtk::Entry>(&general).is_empty()
+    });
     let name = descendants::<gtk::Entry>(&general).remove(0);
     assert_eq!(name.text(), "Notes 2.txt");
 
@@ -235,7 +237,9 @@ fn the_owner_changes_a_files_permissions() {
     test.activate("properties", None);
     let frame = test.wait_for_dialog("the Properties dialog");
     let permissions = properties_view(&frame).permissions_panel();
-    wait_until("the editor", || !descendants::<gtk::DropDown>(&permissions).is_empty());
+    wait_until("the editor", || {
+        !descendants::<gtk::DropDown>(&permissions).is_empty()
+    });
     let choices = descendants::<gtk::DropDown>(&permissions);
     assert_eq!(choices.len(), 3, "owner, group and others");
     assert_eq!(choices[1].selected(), 1, "the group can only view");
@@ -262,14 +266,18 @@ fn properties_show_a_links_target_and_a_mount_points_details() {
     test.activate("properties-of", Some(&fixture.uri_of("Shortcut")));
     let frame = test.wait_for_dialog("the link's Properties");
     let general = properties_view(&frame).general_panel();
-    wait_until("the link's target", || value_after(&general, "Points to").is_some());
+    wait_until("the link's target", || {
+        value_after(&general, "Points to").is_some()
+    });
     assert_eq!(value_after(&general, "Points to").as_deref(), Some("Documents"));
     frame.close();
 
     test.activate("properties-of", Some("file:///"));
     let frame = test.wait_for_dialog("the root's Properties");
     let general = properties_view(&frame).general_panel();
-    wait_until("the mount's details", || value_after(&general, "Mounted on").is_some());
+    wait_until("the mount's details", || {
+        value_after(&general, "Mounted on").is_some()
+    });
     assert_eq!(value_after(&general, "Mounted on").as_deref(), Some("/"));
     assert!(value_after(&general, "File system").is_some());
     assert!(value_after(&general, "Free space").is_some_and(|text| text.contains(" free of ")));

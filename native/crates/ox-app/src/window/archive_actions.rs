@@ -15,13 +15,12 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gtk::{gio, glib};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::archive::{
-    lift_single_folder,
-    default_preview_root, ArchiveBrowser, ArchiveError, CompressionRequest, ExtractionRequest,
-    GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
+    default_preview_root, lift_single_folder, ArchiveBrowser, ArchiveError, CompressionRequest,
+    ExtractionRequest, GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
 };
 use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;

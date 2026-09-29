@@ -87,7 +87,9 @@ pub fn matches(expected: &str, computed: &str) -> bool {
 pub fn compute(uri: &str, kind: ChecksumKind, cancel: &Cancellation) -> Result<String, EntryError> {
     let file = gio::File::for_uri(&normalise(uri)?);
     let stream = file.read(Some(cancel.cancellable()))?;
-    let mut checksum = glib::Checksum::new(kind.glib_type()).expect("GLib offers every listed algorithm");
+    let Some(mut checksum) = glib::Checksum::new(kind.glib_type()) else {
+        return Err(EntryError::Failed(format!("{} is not available.", kind.label())));
+    };
     let mut block = vec![0; BLOCK_BYTES];
     loop {
         if cancel.is_cancelled() {
@@ -99,7 +101,7 @@ pub fn compute(uri: &str, kind: ChecksumKind, cancel: &Cancellation) -> Result<S
         }
         checksum.update(&block[..read]);
     }
-    Ok(checksum.string().unwrap_or_default().to_string())
+    Ok(checksum.string().unwrap_or_default())
 }
 
 /// [`compute`] on a GIO worker thread, for the main loop to await.
@@ -134,7 +136,10 @@ mod tests {
         let digest = |kind| compute(&uri, kind, &Cancellation::new()).expect("reads");
 
         assert_eq!(digest(ChecksumKind::Md5), "900150983cd24fb0d6963f7d28e17f72");
-        assert_eq!(digest(ChecksumKind::Sha1), "a9993e364706816aba3e25717850c26c9cd0d89d");
+        assert_eq!(
+            digest(ChecksumKind::Sha1),
+            "a9993e364706816aba3e25717850c26c9cd0d89d"
+        );
         let sha256 = digest(ChecksumKind::Sha256);
         assert_eq!(
             sha256,

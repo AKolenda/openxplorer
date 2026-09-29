@@ -57,8 +57,8 @@ pub use browse::{
 pub use create::{CompressionRequest, CreatedArchive, ZipCompressor};
 pub use error::ArchiveError;
 pub use extract::{
-    lift_single_folder, ExtractedFolder, ExtractionLimits, ExtractionOutput, ExtractionRequest, ExtractionSummary,
-    GioExtractionOutput, OutputFile, ZipExtractor,
+    lift_single_folder, ExtractedFolder, ExtractionLimits, ExtractionOutput, ExtractionRequest,
+    ExtractionSummary, GioExtractionOutput, OutputFile, ZipExtractor,
 };
 pub use gio_reader::GioArchiveReader;
 pub use member_names::suggested_folder_name;

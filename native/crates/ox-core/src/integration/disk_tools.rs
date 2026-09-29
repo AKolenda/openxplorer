@@ -95,9 +95,10 @@ impl DiskTool {
     ///
     /// As [`DiskTool::arguments`], and the error of starting the program.
     pub fn launch(self, executable: &Path, target: &Path, sandbox: Sandbox) -> io::Result<()> {
-        let mut arguments = self.arguments(executable, target)?.into_iter();
-        let program = arguments.next().expect("the arguments start with the program");
-        let command = arguments.fold(HostCommand::new(program), HostCommand::arg);
+        let arguments = self.arguments(executable, target)?;
+        let command = arguments[1..]
+            .iter()
+            .fold(HostCommand::new(executable), HostCommand::arg);
         let mut child = command
             .to_command(sandbox)
             .stdin(Stdio::null())
@@ -153,9 +154,16 @@ mod tests {
         assert_eq!(open, ["/usr/bin/gnome-disks", "--block-device", "/dev/sdb1"]);
         assert_eq!(
             format,
-            ["/usr/bin/gnome-disks", "--block-device", "/dev/sdb1", "--format-device"]
+            [
+                "/usr/bin/gnome-disks",
+                "--block-device",
+                "/dev/sdb1",
+                "--format-device"
+            ]
         );
-        assert!(DiskTool::OpenInDisks.arguments(disks, Path::new("--help")).is_err());
+        assert!(DiskTool::OpenInDisks
+            .arguments(disks, Path::new("--help"))
+            .is_err());
     }
 
     /// parity: DEV-011
@@ -169,7 +177,10 @@ mod tests {
 
         let arguments = DiskTool::MountImage.arguments(mounter, image).expect("arguments");
 
-        assert_eq!(arguments, ["/usr/bin/gnome-disk-image-mounter", "/home/demo/-rf.iso"]);
+        assert_eq!(
+            arguments,
+            ["/usr/bin/gnome-disk-image-mounter", "/home/demo/-rf.iso"]
+        );
     }
 
     /// parity: PROP-015, DEV-012
@@ -178,7 +189,8 @@ mod tests {
         let bare = system_with(&[]);
         let kde = system_with(&["filelight"]);
         let both = system_with(&["filelight", "baobab", "gnome-disks"]);
-        let found = |tool: DiskTool, root: &tempfile::TempDir| tool.find(&ExecutableSearch::under(root.path()));
+        let found =
+            |tool: DiskTool, root: &tempfile::TempDir| tool.find(&ExecutableSearch::under(root.path()));
 
         assert_eq!(found(DiskTool::AnalyseUsage, &bare), None);
         assert_eq!(found(DiskTool::OpenInDisks, &bare), None);

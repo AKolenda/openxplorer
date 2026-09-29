@@ -49,6 +49,10 @@ impl VolumeKind {
 /// What the desktop lets the user do with a mount: the commands of its
 /// sidebar row and its This PC card.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is one independent command the desktop allows, not a state"
+)]
 pub(crate) struct MountControls {
     /// The mount can be unmounted: Disconnect (`canUnmount` in
     /// `desktop/volume_locations.py`).

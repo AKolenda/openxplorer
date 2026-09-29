@@ -14,6 +14,7 @@
 //! Terminal, Properties, ...) are listed and disabled with a tooltip that
 //! names it ([`crate::window::unported`]).
 
+use ox_core::integration::DiskTool;
 use ox_core::search::Caching;
 
 use crate::icons::Icon;
@@ -68,12 +69,10 @@ pub(crate) struct ItemFacts {
     pub(crate) caching: Option<Caching>,
     /// Delete's label: "Move to Trash" or "Delete permanently".
     pub(crate) delete_label: &'static str,
-    /// A local `.iso` or `.img` file, and the Disk Image Mounter is
-    /// installed: Mount disk image (DEV-011).
-    pub(crate) can_mount_image: bool,
-    /// A local folder, and a disk-usage analyser is installed: Analyse
-    /// disk usage (PROP-015).
-    pub(crate) can_analyse_usage: bool,
+    /// The installed disk tool the item offers: Mount disk image for a
+    /// local `.iso` or `.img` file (DEV-011), Analyse disk usage for a
+    /// local folder (PROP-015).
+    pub(crate) disk_tool: Option<DiskTool>,
 }
 
 /// A context menu: its rows, and the icon strip of the compact style.
@@ -105,7 +104,7 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         entries.extend(extraction_items(several));
     }
     entries.extend(application_items(facts));
-    if facts.can_mount_image {
+    if facts.disk_tool == Some(DiskTool::MountImage) {
         let mount = MenuItem::with_text_target(
             "Mount disk image",
             Icon::HardDrive,
@@ -222,7 +221,7 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         );
         entries.push(size.into());
     }
-    if facts.can_analyse_usage {
+    if facts.disk_tool == Some(DiskTool::AnalyseUsage) {
         let analyse = MenuItem::with_text_target(
             "Analyse disk usage",
             Icon::HardDrive,
@@ -397,8 +396,7 @@ mod tests {
             editors: Vec::new(),
             caching: None,
             delete_label: "Move to Trash",
-            can_mount_image: false,
-            can_analyse_usage: false,
+            disk_tool: None,
         }
     }
 
@@ -523,11 +521,11 @@ mod tests {
     fn disk_images_mount_and_folders_analyse_their_usage_where_the_tools_exist() {
         let image = ItemFacts {
             navigation_uri: "file:///home/user/distro.iso".to_owned(),
-            can_mount_image: true,
+            disk_tool: Some(DiskTool::MountImage),
             ..file()
         };
         let folder = ItemFacts {
-            can_analyse_usage: true,
+            disk_tool: Some(DiskTool::AnalyseUsage),
             ..folder()
         };
 
@@ -535,10 +533,14 @@ mod tests {
         let folder_menu = labels(&item_menu(&folder, MenuStyle::Classic).entries);
 
         assert_eq!(image_menu[3], "Mount disk image");
-        let size = folder_menu.iter().position(|label| label == "Calculate folder size");
+        let size = folder_menu
+            .iter()
+            .position(|label| label == "Calculate folder size");
         let analyse = folder_menu.iter().position(|label| label == "Analyse disk usage");
         assert_eq!(analyse, size.map(|size| size + 1));
-        assert!(!labels(&item_menu(&file(), MenuStyle::Classic).entries).contains(&"Mount disk image".to_owned()));
+        assert!(
+            !labels(&item_menu(&file(), MenuStyle::Classic).entries).contains(&"Mount disk image".to_owned())
+        );
     }
 
     /// parity: CMD-009

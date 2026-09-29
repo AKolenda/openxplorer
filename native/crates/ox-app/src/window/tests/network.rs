@@ -287,7 +287,9 @@ fn an_unmounted_share_is_mounted_once_before_its_size_is_measured() {
     assert_eq!(mounts.get(), 1, "mounted once");
     assert_eq!(
         test.window.measured_folder_size(share),
-        Some(FolderSizeState::Unavailable("This location is not a folder.".to_owned()))
+        Some(FolderSizeState::Unavailable(
+            "This location is not a folder.".to_owned()
+        ))
     );
 }
 

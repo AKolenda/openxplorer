@@ -392,8 +392,11 @@ fn the_production_opener_reads_local_archives() {
 fn a_share_archive_with_a_local_path_is_read_from_it() {
     let export = glib::user_runtime_dir().join("gvfs/smb-share:server=archive-nas,share=projects");
     fs::create_dir_all(&export).expect("create the export");
-    fs::write(export.join("Bundle.zip"), zip_bytes(&[TestMember::file("a.txt", b"data")]))
-        .expect("write the archive");
+    fs::write(
+        export.join("Bundle.zip"),
+        zip_bytes(&[TestMember::file("a.txt", b"data")]),
+    )
+    .expect("write the archive");
 
     let listed = opener().open("smb://archive-nas/projects/Bundle.zip", &Cancellation::new());
     fs::remove_dir_all(&export).expect("remove the export");

@@ -19,8 +19,8 @@ use crate::random::{random_hex, NAME_BYTES};
 const MAX_NAME_TRIES: u32 = 100;
 
 /// A rename in place: never replaces, never copies, never follows a link.
-const RENAME: gio::FileCopyFlags = gio::FileCopyFlags::NOFOLLOW_SYMLINKS
-    .union(gio::FileCopyFlags::NO_FALLBACK_FOR_MOVE);
+const RENAME: gio::FileCopyFlags =
+    gio::FileCopyFlags::NOFOLLOW_SYMLINKS.union(gio::FileCopyFlags::NO_FALLBACK_FOR_MOVE);
 
 /// The names tried for the lifted folder `name`, in order.
 fn free_names(name: &str) -> impl Iterator<Item = String> + '_ {
@@ -124,7 +124,10 @@ mod tests {
         let lifted = lift_single_folder(extracted(root.path(), "Bundle"));
 
         assert_eq!(lifted.name, "Project (2)");
-        assert_eq!(fs::read(root.path().join("Project (2)/src/a.txt")).expect("moved"), b"a");
+        assert_eq!(
+            fs::read(root.path().join("Project (2)/src/a.txt")).expect("moved"),
+            b"a"
+        );
         assert!(!root.path().join("Bundle").exists());
         let mut names: Vec<_> = fs::read_dir(root.path())
             .expect("list")

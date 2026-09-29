@@ -56,7 +56,10 @@ impl Controls {
 fn access_choice(label: &str, current: Access) -> gtk::DropDown {
     let labels: Vec<&str> = Access::ALL.iter().map(|access| access.label()).collect();
     let choice = gtk::DropDown::from_strings(&labels);
-    let index = Access::ALL.iter().position(|access| *access == current).unwrap_or_default();
+    let index = Access::ALL
+        .iter()
+        .position(|access| *access == current)
+        .unwrap_or_default();
     choice.set_selected(u32::try_from(index).unwrap_or_default());
     choice.set_halign(gtk::Align::Start);
     choice.update_property(&[gtk::accessible::Property::Label(label)]);
@@ -86,7 +89,10 @@ pub(super) fn permissions_editor(
     }
     editor.append(grid.widget());
     let special = if is_folder {
-        check_row("Only owner can rename and delete folder content", current.owners_only_delete)
+        check_row(
+            "Only owner can rename and delete folder content",
+            current.owners_only_delete,
+        )
     } else {
         check_row("Is executable", current.executable)
     };
@@ -107,7 +113,10 @@ pub(super) fn permissions_editor(
     let uri = uri.to_owned();
     apply.connect_clicked(move |button| {
         let change = controls.change(is_folder);
-        let recursive = controls.recursive.as_ref().is_some_and(gtk::CheckButton::is_active);
+        let recursive = controls
+            .recursive
+            .as_ref()
+            .is_some_and(gtk::CheckButton::is_active);
         start_change(button, &uri, change, recursive, &versions);
     });
     editor.append(&apply);

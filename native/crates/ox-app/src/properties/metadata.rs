@@ -144,7 +144,12 @@ fn mount_at(file: &gio::File) -> Option<MountFacts> {
         .ok()
         .and_then(|info| {
             let known = info.has_attribute("filesystem::free") && info.has_attribute("filesystem::size");
-            known.then(|| (info.attribute_uint64("filesystem::free"), info.attribute_uint64("filesystem::size")))
+            known.then(|| {
+                (
+                    info.attribute_uint64("filesystem::free"),
+                    info.attribute_uint64("filesystem::size"),
+                )
+            })
         });
     Some(MountFacts {
         mounted_on: mount.path,

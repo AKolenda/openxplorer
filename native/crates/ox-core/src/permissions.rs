@@ -289,6 +289,10 @@ mod tests {
         assert_eq!(mode_of(&folder), 0o750);
         assert_eq!(mode_of(&folder.join("Sub")), 0o750);
         assert_eq!(mode_of(&folder.join("plan.txt")), 0o640);
-        assert_eq!(mode_of(&root.path().join("outside.txt")), 0o600, "links are not followed");
+        assert_eq!(
+            mode_of(&root.path().join("outside.txt")),
+            0o600,
+            "links are not followed"
+        );
     }
 }
