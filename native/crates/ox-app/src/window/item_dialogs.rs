@@ -406,6 +406,12 @@ impl BrowserWindow {
         self.present_window_dialog(&frame);
     }
 
+    /// Shows the new icon of the item at `uri` in the folder view
+    /// (PROP-016).
+    pub(crate) fn refresh_item_icon(&self, uri: &str) {
+        self.folder_pane().owners().refresh_custom_icon(uri);
+    }
+
     /// Lists again every tab showing `folder`, keeping their selection.
     pub(super) fn reload_tabs_showing(&self, folder: &str) {
         let tabs: Vec<TabId> = {

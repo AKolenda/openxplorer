@@ -23,6 +23,7 @@
 //! | `general_panel` | The General and Permissions tabs |
 //! | `permissions_editor` | Changing permissions on the Permissions tab |
 //! | `checksums_panel` | The Checksums tab of a file |
+//! | `custom_icon` | Change icon… and Restore default icon |
 //! | `location_panel` | [`LocationPanel`](location_panel::LocationPanel): the Location tab of a standard folder |
 //! | `mount_assistant` | The network mount assistant of the Location tab |
 //! | `versions_panel` | [`VersionsPanel`]: the Previous versions tab |
@@ -34,6 +35,7 @@
 //! | `size_scan_strip` | [`SizeScanStrip`]: the bar of a running folder-size scan |
 
 mod checksums_panel;
+mod custom_icon;
 mod folder_sizes;
 mod general_panel;
 mod location_panel;
@@ -52,6 +54,8 @@ mod view;
 use ox_core::location::ItemKind;
 use ox_core::places::KnownFolder;
 
+#[cfg(test)]
+pub(crate) use custom_icon::set_custom_icon;
 pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes, NOT_SCANNED};
 #[cfg(test)]
 pub(crate) use location_panel::LocationPanel;

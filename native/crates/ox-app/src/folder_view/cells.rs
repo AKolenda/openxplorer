@@ -11,6 +11,7 @@
 //! screen scale changes.
 
 mod cell_owners;
+mod custom_icon;
 
 use std::rc::Rc;
 
@@ -19,6 +20,7 @@ use gtk::subclass::prelude::*;
 use gtk::{glib, pango};
 
 pub(crate) use cell_owners::CellOwners;
+pub(crate) use custom_icon::CUSTOM_ICON;
 
 use crate::folder_view::item::FileItem;
 use crate::icons::Art;
@@ -103,6 +105,10 @@ mod imp {
         pub(super) icon_size: Cell<i32>,
         /// The text field in the name's place while the item is renamed.
         pub(super) name_editor: RefCell<Option<gtk::Entry>>,
+        /// The item's custom icon, shown in place of the art (PROP-016).
+        pub(super) custom_icon: gtk::Picture,
+        /// Counts the lookups, so a late custom icon is dropped.
+        pub(super) icon_lookup: Cell<u64>,
     }
 
     #[glib::object_subclass]
@@ -117,6 +123,9 @@ mod imp {
             self.parent_constructed();
             let cell = self.obj();
             cell.append(&self.image);
+            self.custom_icon.set_content_fit(gtk::ContentFit::Contain);
+            self.custom_icon.set_visible(false);
+            cell.append(&self.custom_icon);
             cell.append(&self.label);
             show_tooltip_when_ellipsized(&self.label);
         }
@@ -141,6 +150,7 @@ impl FileCell {
         let cell: Self = glib::Object::new();
         let imp = cell.imp();
         imp.icon_size.set(icon_size);
+        imp.custom_icon.set_size_request(icon_size, icon_size);
         // A folder until bound, so the cell has its full size from the start.
         imp.image.set_art(Art::Folder, icon_size);
         match layout {
@@ -238,6 +248,7 @@ pub(crate) fn connect_file_cells(
         let cell = list_item.child().and_downcast::<FileCell>();
         if let (Some(item), Some(cell)) = (bound_item(list_item), cell) {
             cell.bind(&item);
+            cell.look_up_custom_icon(&item);
             bind_owners.style_cell(&cell, &item);
         }
     });

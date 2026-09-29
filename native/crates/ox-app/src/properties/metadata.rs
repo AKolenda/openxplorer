@@ -19,7 +19,7 @@ use ox_core::permissions::Account;
 const PROPERTY_ATTRIBUTES: &str = concat!(
     "time::created,time::access,access::can-read,access::can-write,",
     "access::can-execute,owner::user,owner::group,unix::mode,unix::uid,unix::gid,",
-    "standard::symlink-target",
+    "standard::symlink-target,metadata::custom-icon",
 );
 
 /// The permission bits Properties shows (`& 0o7777`).
@@ -58,6 +58,8 @@ pub(crate) struct ItemProperties {
     /// The width and height of a local image, read from its header
     /// (PROP-013).
     pub dimensions: Option<(i32, i32)>,
+    /// Whether the item has a custom icon (PROP-016).
+    pub has_custom_icon: bool,
 }
 
 /// A mount point's details for the General tab (PROP-004).
@@ -157,6 +159,7 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
         default_app,
         mount,
         dimensions,
+        has_custom_icon: optional_string(&info, "metadata::custom-icon").is_some_and(|icon| !icon.is_empty()),
         entry,
     })
 }
@@ -263,6 +266,7 @@ mod tests {
             default_app: None,
             mount: None,
             dimensions: None,
+            has_custom_icon: false,
         };
 
         assert_eq!(properties.mode_text().as_deref(), Some("0o644"));

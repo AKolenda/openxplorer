@@ -246,6 +246,9 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
     if entry.is_dir && !is_smb_server(&entry.uri) {
         row.append(&calculate_size_button(&entry.uri));
     }
+    if entry.uri.starts_with("file:") && !is_read_only {
+        super::custom_icon::icon_buttons(&row, &entry.uri, facts.properties.has_custom_icon);
+    }
     let is_local_folder = entry.is_dir && entry.uri.starts_with("file:");
     if is_local_folder && is_disk_tool_installed(DiskTool::AnalyseUsage) {
         row.append(&analyse_usage_button(&entry.uri));

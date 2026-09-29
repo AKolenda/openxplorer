@@ -25,3 +25,5 @@ pub(crate) mod model;
 pub(crate) mod reconcile;
 pub(crate) mod sorting;
 pub(crate) mod watch;
+
+pub(crate) use cells::CUSTOM_ICON;

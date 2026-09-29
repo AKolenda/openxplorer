@@ -158,6 +158,23 @@ impl CellOwners {
         }
     }
 
+    /// Looks up the custom icon of the item at `uri` again in every cell
+    /// that shows it (PROP-016).
+    pub(crate) fn refresh_custom_icon(&self, uri: &str) {
+        let showing: Vec<(gtk::Widget, FileItem)> = self
+            .owners
+            .borrow()
+            .iter()
+            .filter_map(CellOwner::bound_cell)
+            .filter(|(_, item)| item.entry().uri == uri)
+            .collect();
+        for (cell, item) in showing {
+            if let Some(cell) = cell.downcast_ref::<FileCell>() {
+                cell.look_up_custom_icon(&item);
+            }
+        }
+    }
+
     /// Dims the cells of the items at `uris` and no others: the items a cut
     /// put on the clipboard, until they are pasted or the clipboard changes
     /// (CLIP-002, CLIP-009).

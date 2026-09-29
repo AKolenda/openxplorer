@@ -13098,8 +13098,8 @@ python_tests = []
 bridge = ["properties"]
 dolphin = "Properties icon button → .directory Icon= key"
 gnome = "GVfs metadata metadata::custom-icon / metadata::custom-icon-name / metadata::emblems (Nautilus 46 supports custom icons)"
-native = "todo"
-native_note = "Porting notes: The default Windows-style artwork stays."
+native = "done"
+native_note = "native/crates/ox-app/src/properties/custom_icon.rs, native/crates/ox-app/src/folder_view/cells/custom_icon.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (a_custom_icon_shows_in_the_view_until_the_default_is_restored). The General tab of a local item outside previous versions has 'Change icon…' (a GTK file dialog filtered to images) and, once one is set, 'Restore default icon'. The choice is stored as the GVfs metadata key metadata::custom-icon, the key Files reads and writes, so both file managers show it; restoring unsets the key with `gio set -t unset` because GIO's Rust binding cannot unset an attribute. The details and icon views look the key up at low priority whenever a cell is bound and show the picture (local images up to 16 MiB) in place of the Windows-style art, which every other item keeps. Porting notes: The default Windows-style artwork stays."
 
 [[feature]]
 id = "PROP-017"

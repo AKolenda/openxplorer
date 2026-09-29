@@ -756,3 +756,61 @@ fn the_snapshot_source_form_saves_a_mapping_and_lists_again() {
     assert_eq!(sources[0].live(), fixture.uri_of("Documents"));
     assert_eq!(sources[0].collection(), ox_core::location::file_uri(&backups));
 }
+
+/// A custom icon is stored as the GVfs metadata Files reads, shows in the
+/// folder view, and can be restored to the default art.
+///
+/// parity: PROP-016
+#[gtk::test]
+fn a_custom_icon_shows_in_the_view_until_the_default_is_restored() {
+    use crate::folder_view::cells::FileCell;
+    use crate::properties::set_custom_icon;
+
+    let fixture = Fixture::standard();
+    let pixels = glib::Bytes::from_owned(vec![0x80_u8; 2 * 2 * 4]);
+    let picture = gtk::gdk::MemoryTexture::new(2, 2, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 8);
+    picture
+        .save_to_png(fixture.path("Star.png"))
+        .expect("an icon picture");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the icon button", || {
+        texts(&general).contains(&"Change icon…".to_owned())
+    });
+    frame.close();
+    let item = fixture.uri_of("Notes 2.txt");
+    let shows_custom = |wanted: bool| {
+        descendants::<FileCell>(&test.window)
+            .iter()
+            .any(|cell| cell.name() == "Notes 2.txt" && cell.shows_custom_icon() == wanted)
+    };
+    let change = |icon: Option<String>| {
+        let (target, done) = (item.clone(), std::rc::Rc::new(std::cell::Cell::new(false)));
+        let finished = std::rc::Rc::clone(&done);
+        glib::spawn_future_local(async move {
+            set_custom_icon(&target, icon)
+                .await
+                .expect("the metadata is stored");
+            finished.set(true);
+        });
+        wait_until("the change", || done.get());
+        test.window.refresh_item_icon(&item);
+    };
+
+    change(Some(fixture.uri_of("Star.png")));
+    wait_until("the custom icon", || shows_custom(true));
+    let stored = gtk::gio::File::for_uri(&item)
+        .query_info(
+            "metadata::custom-icon",
+            gtk::gio::FileQueryInfoFlags::NONE,
+            gtk::gio::Cancellable::NONE,
+        )
+        .expect("metadata")
+        .attribute_string("metadata::custom-icon");
+    assert_eq!(stored.as_deref(), Some(fixture.uri_of("Star.png").as_str()));
+    change(None);
+    wait_until("the default art", || shows_custom(false));
+}
