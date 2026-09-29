@@ -23,7 +23,11 @@ use ox_core::transfer::{Cancellation, Progress, TransferMode};
 use crate::window::dialog;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::TransferPanel;
+use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
+
+/// The label of the toast's button that reverses the operation it reports.
+const UNDO_BUTTON: &str = "Undo";
 
 /// What a finished operation leaves behind.
 #[derive(Debug)]
@@ -57,7 +61,7 @@ impl BrowserWindow {
     /// being planned, or an extraction, compression or restored copy
     /// runs. Data safety (OPS-024): no other write starts meanwhile, and
     /// Sign out, Disconnect, moving a tab and an update's restart wait.
-    pub(in crate::window) fn is_writing_files(&self) -> bool {
+    pub(crate) fn is_writing_files(&self) -> bool {
         let is_operating = !self.imp().file_operations.borrow().is_idle();
         is_operating || self.operation_panel().is_busy()
     }
@@ -117,7 +121,7 @@ impl BrowserWindow {
 
     /// Cancel on the transfer panel: stops the running operation between
     /// steps; what is finished stays finished (OPS-022).
-    pub(super) fn cancel_operation(&self) {
+    pub(in crate::window) fn cancel_operation(&self) {
         let running = self.imp().file_operations.borrow().running.clone();
         let Some(cancel) = running else {
             return;
@@ -154,21 +158,41 @@ impl BrowserWindow {
     /// Concludes an ended operation: Undo remembers it, the folder is
     /// listed again with its items selected, and the user is told what
     /// happened ("Operation stopped" for a request refused before it
-    /// started).
+    /// started). The toast of an operation Undo can reverse has an Undo
+    /// button (OPS-032).
     pub(super) async fn conclude_operation(&self, outcome: Result<FinishedOperation, OpsError>) {
         match outcome {
             Ok(finished) => {
+                let is_undoable = finished.undo.is_some();
                 if let Some(record) = finished.undo {
                     self.context().record_operation(record);
                 }
                 self.reload_selecting(finished.created);
-                self.report(finished.summary).await;
+                match finished.summary {
+                    OperationSummary::Toast(text) if is_undoable => self.show_message_with_undo(&text),
+                    summary => self.report(summary).await,
+                }
             }
             Err(error) => {
                 self.reload_selecting(Vec::new());
                 dialog::show_message(self, STOPPED_TITLE, &error.to_string()).await;
             }
         }
+    }
+
+    /// Shows `text` in the toast with an Undo button, which reverses the
+    /// newest operation while it still is the one the toast is about: a
+    /// later change to the undo journal takes the button away (OPS-032).
+    pub(in crate::window) fn show_message_with_undo(&self, text: &str) {
+        self.imp()
+            .toast
+            .show_with_action(text, UNDO_BUTTON, WindowAction::Undo);
+    }
+
+    /// Takes the toast's Undo button away once the operation it would
+    /// reverse is no longer the newest.
+    pub(super) fn withdraw_toast_undo(&self) {
+        self.imp().toast.withdraw_action();
     }
 
     /// Shows `summary`: a toast for complete success, otherwise the

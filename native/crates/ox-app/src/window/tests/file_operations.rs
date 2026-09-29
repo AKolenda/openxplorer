@@ -251,9 +251,9 @@ fn rename_does_nothing_with_several_items_selected() {
     assert!(!is_enabled(&test, "rename"));
 }
 
-/// parity: OPS-015, OPS-018, OPS-023, OPS-029
+/// parity: OPS-015, OPS-018, OPS-023, OPS-029, OPS-032
 #[gtk::test]
-fn delete_asks_then_moves_to_the_trash_and_undo_restores() {
+fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
     require_private_trash();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
@@ -273,9 +273,12 @@ fn delete_asks_then_moves_to_the_trash_and_undo_restores() {
         !fixture.path("Résumé.txt").exists() && !test.names().contains(&"Résumé.txt".to_owned())
     });
     assert_eq!(test.window.shown_message(), "1 item(s) sent to Trash.");
+    let toast = test.window.imp().toast.get();
+    assert_eq!(toast.action_label().as_deref(), Some("Undo"));
 
-    test.activate("undo", None);
+    toast.press_action();
     wait_until("the file to come back", || fixture.path("Résumé.txt").is_file());
+    assert_eq!(toast.action_label(), None, "the step is undone");
 }
 
 /// parity: OPS-015
@@ -366,4 +369,34 @@ fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
     test.window.end_operation();
     assert!(!panel.is_visible());
     assert!(!is_enabled(&test, "cancel-operation"));
+}
+
+/// parity: TAB-049
+#[gtk::test]
+fn closing_during_an_operation_asks_and_closes_only_once_it_stopped() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let context = test
+        .window
+        .begin_operation("Preparing copy…")
+        .expect("the operation starts");
+
+    test.window.close();
+    let question = open_dialog(&test);
+    let title = question.title_text();
+    let buttons = question.button_labels();
+    question.press("Keep open");
+    wait_for_no_dialog(&test);
+    let kept = test.window.is_visible() && !context.cancel.is_cancelled();
+    test.window.close();
+    open_dialog(&test).press("Cancel and close");
+    wait_until("the operation to be cancelled", || context.cancel.is_cancelled());
+    let open_while_running = test.window.is_visible();
+    test.window.end_operation();
+
+    assert_eq!(title, "A file operation is running");
+    assert_eq!(buttons, ["Keep open", "Cancel and close"]);
+    assert!(kept, "Keep open changes nothing");
+    assert!(open_while_running, "the window waits for the operation to stop");
+    wait_until("the window to close", || !test.window.is_visible());
 }

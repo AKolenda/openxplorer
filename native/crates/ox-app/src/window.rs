@@ -30,8 +30,9 @@
 //! [`snapshot_tabs`], [`version_restore`]), folder sizes
 //! ([`folder_size_scan`]), ZIP archives ([`archive_actions`]), requests
 //! from other applications and the command line ([`external_requests`]),
-//! Open with, Open in Terminal and updates ([`integration_actions`]), and
-//! what the window connects and lets go of ([`connections`]).
+//! Open with, Open in Terminal and updates ([`integration_actions`]),
+//! closing while files are written ([`closing`]), and what the window
+//! connects and lets go of ([`connections`]).
 //! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
 //! [`search_box::SearchBox::connect_query_changed`]), so the controller
@@ -50,6 +51,7 @@ mod button_style;
 mod cache_folder;
 mod caption_buttons;
 mod card_grid;
+mod closing;
 mod command_bar;
 mod connections;
 mod context_menu;

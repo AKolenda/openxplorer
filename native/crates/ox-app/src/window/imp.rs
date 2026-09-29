@@ -14,6 +14,7 @@ use ox_core::location::LocationContext;
 use super::address_bar::AddressBar;
 use super::breakpoints::WindowWidth;
 use super::caption_buttons::CaptionButtons;
+use super::closing::ClosingState;
 use super::command_bar::CommandBar;
 use super::connections::ExternalHandlers;
 use super::details_pane::DetailsPane;
@@ -137,6 +138,8 @@ pub(crate) struct BrowserWindow {
     /// The running file operation, Trash support and the file
     /// clipboard.
     pub(super) file_operations: RefCell<FileOperations>,
+    /// Whether a close waits for a running write (TAB-049).
+    pub(super) closing: Cell<ClosingState>,
     /// The file drag this window started, while it lasts.
     pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
     /// Until when clicks that open items are ignored, around a drag.
@@ -227,6 +230,11 @@ impl WindowImpl for BrowserWindow {
         // window closes while an update installs.
         if let Some(refusal) = self.obj().close_refusal() {
             self.obj().show_message(&refusal);
+            return glib::Propagation::Stop;
+        }
+        // Nor while it writes files: it asks whether to cancel first
+        // (TAB-049).
+        if !self.obj().may_close_now() {
             return glib::Propagation::Stop;
         }
         // Let go of keyboard focus first. On Wayland, GTK's input method

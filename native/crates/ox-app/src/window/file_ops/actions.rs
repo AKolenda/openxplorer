@@ -52,7 +52,10 @@ impl BrowserWindow {
         let journal = self.context().connect_journal_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || window.update_file_commands()
+            move || {
+                window.withdraw_toast_undo();
+                window.update_file_commands();
+            }
         ));
         let clipboard = self.follow_file_clipboard();
         self.update_file_commands();

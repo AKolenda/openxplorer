@@ -2534,8 +2534,8 @@ python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_quit_refuses_active_writes",
 ]
 bridge = ["window"]
-native = "todo"
-native_note = "Porting notes: app.js listens for a 'close-request' event, but no backend code emits it; window-manager closes reach only the native refusal."
+native = "done"
+native_note = "native/crates/ox-app/src/window/closing.rs; native/crates/ox-app/src/window/tests/file_operations.rs (closing_during_an_operation_asks_and_closes_only_once_it_stopped). Every close (caption button, Alt+F4, the dock) while the window writes files asks “A file operation is running” with Keep open and Cancel and close; the latter cancels the operation and closes the window once it stopped and its result dialog was read, so a window never goes away mid-write. An installing update still refuses with its toast (UPD-005). Quit is refused while any window writes (“Finish or cancel active file operations before quitting OpenXplorer.”). Tab moves finish at once, so no pending tab transfer can hold a close."
 
 [[feature]]
 id = "TAB-050"
@@ -7178,7 +7178,8 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "Edit → Undo (Dolphin shows no toast)"
 gnome = "Nautilus 46 AdwToast with “Undo” button"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/toast.rs (an_action_shows_with_its_message_and_a_plain_message_drops_it); native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores). The completion toast of every operation Undo can reverse (Move to Trash, copy, move, Duplicate, links, rename and batch rename) has an Undo button bound to win.undo; a rename now toasts “Renamed to “<name>”.”. The toast stays while the pointer rests on it or its button has focus, and the button goes when another operation becomes the newest Undo step."
 
 [[feature]]
 id = "OPS-033"

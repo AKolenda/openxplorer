@@ -26,6 +26,8 @@ pub struct RenamedItem {
     pub original_uri: String,
     /// The item's URI now, to select it.
     pub uri: String,
+    /// The item's name now.
+    pub name: String,
 }
 
 impl RenamedItem {
@@ -83,6 +85,7 @@ fn rename_item_blocking(
     let renamed = RenamedItem {
         original_uri: source.uri(),
         uri: destination.uri(),
+        name: new_name.to_owned(),
     };
     if renamed.is_unchanged() {
         return Ok(renamed);

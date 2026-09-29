@@ -17,6 +17,9 @@ use crate::app_context::AppContext;
 use crate::settings_page::SettingsView;
 use crate::window::BrowserWindow;
 
+/// Why Quit waits while a window writes files (`quit_safely`).
+const QUIT_WHILE_WRITING: &str = "Finish or cancel active file operations before quitting OpenXplorer.";
+
 impl AppState {
     /// Does what `request` asks.
     pub(super) fn run_command(&self, app: &gtk::Application, request: CommandRequest) -> glib::ExitCode {
@@ -96,11 +99,21 @@ impl AppState {
     }
 
     /// Quit `OpenXplorer`: every window closes and the Show in folder
-    /// service stops, unless an update is installing (`quit_safely`,
-    /// TAB-052). Returns whether the application quits.
+    /// service stops, unless an update is installing or a window writes
+    /// files (`quit_safely`, TAB-052). Returns whether the application
+    /// quits.
     pub(super) fn quit_safely(&self, app: &gtk::Application) -> bool {
         if let Some(refusal) = self.context().updates().quit_refusal() {
             report_in_every_window(app, &refusal);
+            return false;
+        }
+        let is_writing = app
+            .windows()
+            .into_iter()
+            .filter_map(|window| window.downcast::<BrowserWindow>().ok())
+            .any(|window| window.is_writing_files());
+        if is_writing {
+            report_in_every_window(app, QUIT_WHILE_WRITING);
             return false;
         }
         for window in app.windows() {
