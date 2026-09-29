@@ -3,9 +3,10 @@
 //!
 //! The Python app refused every close while a file operation ran (the
 //! "A file operation is running" dialog and a toast for window-manager
-//! closes), so the user had to find Cancel and try again. Here every
-//! close, from the caption button, Alt+F4, the dock or Quit, asks
-//! instead: "Keep open" leaves everything running, and "Cancel and close"
+//! closes), so the user had to find Cancel and try again. Here closing a
+//! window, from the caption button, Alt+F4 or the dock, asks instead
+//! (Quit is still refused with its toast while any window writes):
+//! "Keep open" leaves everything running, and "Cancel and close"
 //! cancels the operation, as its Cancel button does, and closes the
 //! window once it has stopped and its result has been read. Data safety
 //! is unchanged: the window never goes away while a write runs, and what

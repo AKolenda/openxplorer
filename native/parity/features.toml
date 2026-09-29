@@ -6596,8 +6596,8 @@ sources = [
 python_tests = ["desktop/tests/test_core.py::CoreTests::test_names"]
 bridge = ["create"]
 dolphin = "KNewFileMenu name validation"
-native = "done"
-native_note = "native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-app/src/window/file_ops/name_dialog.rs checks each typed name against the folder. While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. Differs: a slash is still refused (\"Names must not contain slashes.\", the current app's rule) instead of creating nested folders."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (the_new_folder_dialog_warns_about_a_taken_or_hiding_name_while_typing); native/crates/ox-app/src/window/file_ops/names.rs (surprising_names_are_warned_about_while_typing); native/crates/ox-app/src/window/file_ops/name_dialog.rs checks each typed name against the folder. While the user types in the New folder or Rename dialog, a line under the field says that an item of that name already exists, that a leading dot hides the item, or that a leading space or tilde is unusual. Missing: a slash is still refused (\"Names must not contain slashes.\", the current app's rule) instead of creating nested folders with a preview."
 
 [[feature]]
 id = "OPS-008"
@@ -6717,7 +6717,7 @@ python_tests = []
 bridge = ["rename"]
 dolphin = "EditNext/EditPrevious"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_ops/inline_rename.rs (tab_and_the_arrows_in_details_move_the_rename_on). During an in-place rename Tab commits the name and starts renaming the next item in the order shown, Shift+Tab the previous one, and in the details view Down and Up do the same; an unchanged name moves on at once, a changed one once the rename has finished and the folder is listed again; a refused name stays in the field."
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (tab_commits_the_name_and_goes_on_to_rename_the_next_item); native/crates/ox-app/src/window/file_ops/inline_rename.rs (tab_and_the_arrows_in_details_move_the_rename_on). During an in-place rename Tab commits the name and starts renaming the next item in the order shown, Shift+Tab the previous one, and in the details view Down and Up do the same (the field handles these keys before its text does); a changed name moves on once the rename has finished and the folder is listed again, an unchanged one at once; either way the next item is scrolled into view first; a refused name stays in the field. Ctrl+Tab and Alt keys are left alone."
 
 [[feature]]
 id = "OPS-013"
@@ -6732,7 +6732,7 @@ python_tests = []
 bridge = ["rename"]
 dolphin = "ConfirmHide"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_ops/hide_confirm.rs (only_a_new_leading_dot_with_hidden_files_off_asks). Renaming a visible item, in place or with the Rename dialog, to a name starting with a dot while hidden files are not shown asks \"Adding a dot to the beginning of this file's name will hide it from view.\" with Cancel and \"Rename and Hide\". Differs: \"Don't ask again\" lasts for the window's session and is not saved."
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (cancelling_the_hide_question_keeps_the_name_and_the_field); native/crates/ox-app/src/window/file_ops/hide_confirm.rs (only_a_new_leading_dot_with_hidden_files_off_asks). Renaming a visible item, in place or with the Rename dialog, to a name starting with a dot while hidden files are not shown asks \"Adding a dot to the beginning of this file's name will hide it from view.\" with Cancel and \"Rename and Hide\"; Cancel keeps the typed name in the field for another try. Differs: \"Don't ask again\" lasts for the window's session and is not saved."
 
 [[feature]]
 id = "OPS-014"
@@ -6903,7 +6903,7 @@ sources = [
 python_tests = []
 bridge = ["operate"]
 native = "done"
-native_note = "native/crates/ox-core/src/transfer/types.rs gives every progress report a scope: the batch (items started, then all done) or the current file's bytes. native/crates/ox-app/src/window/transfer_panel.rs shows the batch on the 'Operation progress' bar and a copied file's bytes on a second, thinner 'Current file progress' bar, hidden between files, so a full file bar is never presented as the batch finishing. Both bars are named for assistive technologies and carry the label (which says preparing, one file, or the batch) as their value text. Tests: native/crates/ox-core/tests/ops_transfer.rs (progress_is_reported_and_the_last_report_says_the_run_is_complete), native/crates/ox-app/src/window/tests/file_operations.rs (a_full_file_bar_is_never_shown_as_the_batch_finishing)."
+native_note = "native/crates/ox-core/src/transfer/types.rs gives every progress report a scope: the batch (items started, then all done) or the current file's bytes. native/crates/ox-core/src/ops/progress.rs lets every batch report through and spaces only file reports, so each item's '(i/N)' step reaches the panel. native/crates/ox-app/src/window/transfer_panel.rs shows the batch on the 'Operation progress' bar and a copied file's bytes on a second, thinner 'Current file progress' bar, hidden between files, so a full file bar is never presented as the batch finishing. Both bars are named for assistive technologies and carry the label as their value text. Tests: native/crates/ox-core/tests/ops_transfer.rs (every_items_batch_report_arrives_in_a_quick_copy, progress_is_reported_and_the_last_report_says_the_run_is_complete), native/crates/ox-core/src/ops/progress.rs (a_full_file_bar_does_not_crowd_out_the_next_items_batch_report), native/crates/ox-app/src/window/tests/file_operations.rs (a_full_file_bar_is_never_shown_as_the_batch_finishing)."
 
 [[feature]]
 id = "OPS-021"
@@ -7105,7 +7105,7 @@ python_tests = [
 bridge = ["transferConflicts", "operate"]
 dolphin = "KIO::RenameDialog; KIO rename/overwrite dialog"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (clearing_apply_to_all_asks_about_each_conflict_in_turn, rename_in_the_conflict_dialog_copies_under_the_typed_name, pasting_onto_a_taken_name_asks_and_keep_both_keeps_both); native/crates/ox-app/src/window/file_ops/conflict_compare.rs (the_comparison_says_which_side_is_older_or_that_they_are_identical); native/crates/ox-core/tests/transfer_cases/conflicts.rs (rename_uses_the_typed_name_and_nothing_replaces_itself). The dialog shows the first conflicting item beside the existing one (size, date, identical bytes, older or newer) and offers Skip duplicates, Keep both, Rename with an editable New name pre-filled with a free suggestion, Replace older (files only) and Replace existing (which merges folders, Write Into), with Apply to all or item by item. An item copied into its own folder is not offered Replace and the engine refuses to replace an item with itself. Differs: no thumbnail preview; no Resume, because copies are staged and published atomically, so a cancelled copy never leaves a partial file to resume."
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (replace_older_replaces_only_the_older_existing_files, clearing_apply_to_all_asks_about_each_conflict_in_turn, rename_in_the_conflict_dialog_copies_under_the_typed_name, pasting_onto_a_taken_name_asks_and_keep_both_keeps_both); native/crates/ox-app/src/window/file_ops/conflict_compare.rs (the_comparison_says_which_side_is_older_or_that_they_are_identical); native/crates/ox-core/tests/transfer_cases/conflicts.rs (rename_uses_the_typed_name_and_nothing_replaces_itself). The dialog shows the first conflicting item beside the existing one (size, date, older or newer, and for two same-size files up to 16 MiB on a local disk, not a GVfs share, whether they are identical) and offers Skip duplicates, Keep both, Rename with an editable New name pre-filled with a free suggestion (always for the first item only), Replace older (files only, decided by dates alone) and Replace existing (which merges folders, Write Into), with Apply to all or item by item. Cancel has the initial focus. An item copied into its own folder is not offered Replace and the engine refuses to replace an item with itself. Differs: no thumbnail preview; no Resume, because copies are staged and published atomically, so a cancelled copy never leaves a partial file to resume."
 
 [[feature]]
 id = "OPS-029"
@@ -7150,7 +7150,7 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "FileUndoManager::UiInterface::copiedFileWasModified"
 native = "done"
-native_note = "native/crates/ox-core/src/ops/changed_copies.rs; native/crates/ox-core/tests/ops_undo.rs (undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources); native/crates/ox-app/src/window/file_ops/journal.rs. Each journal step keeps when it was recorded; before Undo moves the copies of a Copy or Duplicate to the Recycle Bin, copies modified after that time are named in an \"Undo copy?\" question with Cancel and \"Undo copy\". Undo moves copies to the Recycle Bin rather than deleting them, and no native operation runs with root privileges, so no step needs the privilege question."
+native_note = "native/crates/ox-core/src/ops/changed_copies.rs; native/crates/ox-core/tests/ops_undo.rs (an_edit_inside_a_copied_folder_counts_as_a_change, undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources); native/crates/ox-app/src/window/tests/recycle_bin.rs (undoing_a_copy_that_changed_since_asks_and_cancel_keeps_it); native/crates/ox-app/src/window/file_ops/journal.rs. Each journal step keeps when it was recorded; before Undo moves the copies of a Copy or Duplicate to the Recycle Bin, every copied item, inside copied folders too (links not followed, at most 20,000 items, on a worker), is checked, and copies with anything modified after that time are named in an \"Undo copy?\" question with Cancel and \"Undo copy\"; Cancel keeps the copies and the Undo step. Undo moves copies to the Recycle Bin rather than deleting them, and no native operation runs with root privileges, so no step needs the privilege question."
 
 [[feature]]
 id = "OPS-031"
@@ -7217,8 +7217,8 @@ python_tests = [
 ]
 bridge = ["operate"]
 dolphin = "duplicate: Ctrl+D"
-native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy): Duplicate copies each selected item next to itself, selects the copies, and Undo reverses it; native/crates/ox-core/src/ops/duplicate.rs. Differs: copies are named \"(copy N)\", as the app's Keep both names them, not Dolphin's \"<name> copy\", so both ways of copying an item beside itself name it alike."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy): Duplicate copies each selected item next to itself, selects the copies, and Undo reverses it; native/crates/ox-core/src/ops/duplicate.rs. Differs, for the owner to decide: copies are named \"(copy N)\", as the app's Keep both names them, not Dolphin's \"<name> copy.<ext>\"."
 
 [[feature]]
 id = "OPS-035"
@@ -7286,7 +7286,7 @@ sources = ["desktop/winspace.py:538", "desktop/winspace.py:538-548"]
 python_tests = []
 bridge = ["cancel"]
 native = "done"
-native_note = "The WebKit crash case does not exist natively (no separate interface process); the native equivalent is recovery after the app itself stops mid-copy. native/crates/ox-core/src/ops/unfinished.rs: while a copy or move into a folder runs (native/crates/ox-app/src/window/file_ops/running.rs run_request, transfer.rs run_plan), a mark in ~/.cache/winspace/unfinished-operations names its destination and is removed when the run ends. On the next interactive start (native/crates/ox-app/src/application.rs), marks of processes that no longer run are read, their folders are searched for .winspace-transfer-*.part staging and .winspace-replaced-*.backup items, and the first window shows 'File operations did not finish' listing them and asking the user to inspect them before removing them. Nothing is deleted. Test: native/crates/ox-core/src/ops/unfinished.rs (a_run_that_never_finished_reports_its_staging_and_a_finished_one_nothing)."
+native_note = "The WebKit crash case does not exist natively (no separate interface process); the native equivalent is recovery after the app itself stops mid-copy. native/crates/ox-core/src/ops/unfinished.rs: while a copy or move into a folder runs (native/crates/ox-app/src/window/file_ops/running.rs run_request, transfer.rs run_plan), a mark in ~/.cache/winspace/unfinished-operations names its destination; the run holds a lock on it and removes it when it ends. On the next interactive start (native/crates/ox-app/src/application.rs), marks nobody holds a lock on, which works inside the Flatpak's process namespace and after a reboot, are read, their folders are searched for .winspace-transfer-*.part staging and .winspace-replaced-*.backup items, and the first window shows 'File operations did not finish' listing them and asking the user to inspect them before removing them. Nothing is deleted. Test: native/crates/ox-core/src/ops/unfinished.rs (a_run_that_never_finished_reports_its_staging_and_a_finished_one_nothing)."
 
 [[feature]]
 id = "OPS-039"
@@ -9052,7 +9052,7 @@ python_tests = [
 ]
 bridge = ["fileDragLayout"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop.rs: a drop during an operation is refused with 'Finish the current operation before dropping files.'; a drop whose tab moved to another folder while its items were read is refused with 'The destination changed. Drop the files again.'; reading waits at most 10 s and late data is dropped; a drop is finished once, before anything runs. Modal dialogs and menus hold the pointer, so no drop reaches the window under them. Tests: native/crates/ox-app/src/window/tests/drag_and_drop.rs (links_and_drops_during_a_search_or_an_operation_are_refused); native/crates/ox-app/src/window/file_drop.rs (a_drop_read_after_the_tab_moved_or_too_late_is_refused)."
+native_note = "native/crates/ox-app/src/window/file_drop.rs: a drop during an operation is refused with 'Finish the current operation before dropping files.'; a drop while a dialog (in-window or separate), sign-in prompt or menu is open, for example on a tab while Properties shows, is refused with 'Close the dialog and finish the current operation before dropping files.'; a drop whose tab moved to another folder while its items were read is refused with 'The destination changed. Drop the files again.'; reading waits at most 10 s and late data is dropped; a drop is finished once, before anything runs. Tests: native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_drop_while_a_dialog_shows_is_refused, links_and_drops_during_a_search_or_an_operation_are_refused); native/crates/ox-app/src/window/file_drop.rs (a_drop_read_after_the_tab_moved_or_too_late_is_refused)."
 
 [[feature]]
 id = "DND-014"
@@ -9098,7 +9098,7 @@ python_tests = [
 bridge = ["pin", "fileDragLayout"]
 dolphin = "Dolphin: drop folders on the Places panel to add them.; KFilePlacesView drop of folders"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, folders_dropped_on_quick_access_are_pinned_and_files_are_not). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a folder dropped between two Quick access rows was pinned there with the Python toast. An empty Quick access keeps a dashed 'Pin to Quick access' row (native/crates/ox-app/src/window/sidebar/entries.rs pin_drop_tail) that takes pin drops at the end (native/crates/ox-app/src/window/sidebar/entries.rs an_empty_quick_access_keeps_a_drop_tail_to_pin_into)."
+native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, folders_dropped_on_quick_access_are_pinned_and_files_are_not, a_folder_dropped_on_the_pin_row_of_an_empty_quick_access_is_pinned). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a folder dropped between two Quick access rows was pinned there with the Python toast. An empty Quick access keeps a dashed 'Pin to Quick access' row (native/crates/ox-app/src/window/sidebar/entries.rs pin_drop_tail) that pins a folder dropped on it at the end."
 
 [[feature]]
 id = "DND-015"
@@ -9260,7 +9260,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "AutoExpandFolders (default false)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/targets/spring.rs; native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drag_that_stays_over_a_folder_opens_it). A file drag that stays for 750 ms over a folder item that takes drops, or over a sidebar place, opens that folder in the tab; moving to another spot restarts the wait and leaving or dropping stops it. Differs: always on, as in Windows Explorer; Dolphin's setting to turn it off is not offered."
+native_note = "native/crates/ox-app/src/window/file_drop/targets/spring.rs; native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drag_that_stays_over_a_folder_opens_it, a_drag_near_the_bottom_edge_scrolls_without_opening_the_folder_under_it). A file drag that stays for 750 ms over a folder item that takes drops, or over a sidebar place, opens that folder in the tab; moving to another spot restarts the wait and leaving or dropping stops it. While the drag scrolls the view near its edge (DND-025) nothing opens, since the folder under a still pointer keeps changing. Differs: always on, as in Windows Explorer; Dolphin's setting to turn it off is not offered."
 
 [[feature]]
 id = "DND-022"
@@ -9339,7 +9339,7 @@ bridge = []
 dolphin = "KItemListView::dragEnterEvent enables autoscroll, dragMoveEvent restarts its timer, triggerAutoScrolling"
 gnome = "GtkDropControllerMotion plus stepping the GtkScrolledWindow vadjustment on a timer"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/targets/autoscroll.rs (a_drag_scrolls_near_the_edges_faster_closer_to_them). A file drag, from this window or another application, hovering within 40 px of the top or bottom edge of the file list or the sidebar scrolls it every 30 ms, up to 24 px a tick on the edge itself; leaving the edge zone or the view, or dropping, stops it."
+native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drag_near_the_bottom_edge_scrolls_without_opening_the_folder_under_it); native/crates/ox-app/src/window/file_drop/targets/autoscroll.rs (a_drag_scrolls_near_the_edges_faster_closer_to_them). A file drag, from this window or another application, hovering within 40 px of the top or bottom edge of the file list or the sidebar scrolls it every 30 ms, up to 24 px a tick on the edge itself; leaving the edge zone or the view, or dropping, stops it; no folder opens by hovering while it scrolls."
 
 [[feature]]
 id = "DND-026"
