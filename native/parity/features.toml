@@ -1540,7 +1540,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "DolphinTabBar::mouseDoubleClickEvent"
 native = "done"
-native_note = "A primary double-click on a tab opens a new tab at its location in front (copy_on_double_click in native/crates/ox-app/src/window/tab_strip.rs): the strip counts the clicks, so the tabs being built anew after the first click do not reset the count, and it claims the second press, so the title bar does not maximize the window. A double-click on the empty title bar still maximizes (Explorer wins there). Test: native/crates/ox-app/src/window/tests/tab_commands.rs (double_clicking_a_tab_opens_a_copy_in_front)."
+native_note = "A primary double-click on a tab opens a new tab at its location in front (copy_on_double_click in native/crates/ox-app/src/window/tab_strip.rs): the strip counts the clicks itself by the desktop's double-click time and distance, because the first click on a tab behind builds the tabs anew and GTK then counts the second press as a first one, and it claims the second press, so the title bar does not maximize or restore the window. Checked with a real pointer (Mutter RemoteDesktop in the isolated headless GNOME Shell) on the tab in front and on a tab behind. A double-click on the empty title bar still maximizes (Explorer wins there). Test: native/crates/ox-app/src/window/tests/tab_commands.rs (double_clicking_a_tab_opens_a_copy_in_front)."
 
 [[feature]]
 id = "TAB-015"

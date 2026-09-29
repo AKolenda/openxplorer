@@ -18,6 +18,8 @@
 
 mod drag_marks;
 
+use std::cell::Cell;
+
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
@@ -347,19 +349,28 @@ fn select_on_click(id: glib::Variant) -> gtk::GestureClick {
 }
 
 /// A double-click on a tab opens a copy of it in front, as in Dolphin
-/// (TAB-014). The strip counts the clicks, not the tab: the first click
-/// shows the tab, which builds the tabs anew, so the second press lands on
-/// a new tab widget. Claiming the second press keeps it from the title
-/// bar, whose double-click maximizes the window, and from the tab's own
-/// click. The close button claims its own presses, so a double-click on it
-/// never reaches the strip.
+/// (TAB-014). The strip counts the clicks itself: the first click shows
+/// the tab, which builds the tabs anew under the pointer, and GTK then
+/// counts the second press as a first one. Claiming the second press keeps
+/// it from the title bar, whose double-click maximizes the window, and
+/// from the tab's own click. The close button claims its own presses, so
+/// a double-click on it never reaches the strip.
 fn copy_on_double_click() -> gtk::GestureClick {
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_PRIMARY);
-    click.connect_pressed(|gesture, presses, x, y| {
-        if presses != 2 {
+    let last_press = Cell::new(None);
+    click.connect_pressed(move |gesture, presses, x, y| {
+        let press = Press {
+            time: gesture.current_event_time(),
+            x,
+            y,
+        };
+        let previous = last_press.replace(Some(press));
+        let is_second = presses == 2 || previous.is_some_and(|first| press.follows(first));
+        if !is_second {
             return;
         }
+        last_press.set(None);
         let Some(strip) = gesture.widget().and_downcast::<TabStrip>() else {
             return;
         };
@@ -370,6 +381,32 @@ fn copy_on_double_click() -> gtk::GestureClick {
         WindowAction::OpenTab.activate_from(&strip, Some(&tab.uri.to_variant()));
     });
     click
+}
+
+/// A primary press on the strip: when, in milliseconds, and where.
+#[derive(Debug, Clone, Copy)]
+struct Press {
+    time: u32,
+    x: f64,
+    y: f64,
+}
+
+impl Press {
+    /// Whether this press and `first` make a double-click, by the
+    /// desktop's double-click time and distance.
+    fn follows(self, first: Press) -> bool {
+        let settings = gtk::Settings::default();
+        let time = settings
+            .as_ref()
+            .map_or(400, gtk::Settings::gtk_double_click_time);
+        let distance = settings
+            .as_ref()
+            .map_or(5, gtk::Settings::gtk_double_click_distance);
+        let soon = i64::from(self.time.wrapping_sub(first.time)) <= i64::from(time);
+        let near = (self.x - first.x).abs() <= f64::from(distance)
+            && (self.y - first.y).abs() <= f64::from(distance);
+        soon && near
+    }
 }
 
 /// Enter or Space on a focused tab shows it.
