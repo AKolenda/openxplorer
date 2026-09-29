@@ -155,7 +155,7 @@ fn a_folder_is_found_in_snapper_snapshots_next_to_it() {
     );
 }
 
-/// parity: PROP-032
+/// parity: PROP-032, PERF-005
 #[test]
 fn at_most_one_hundred_versions_are_returned_and_marked_truncated() {
     let snapshots: Vec<Value> = (0..=100)

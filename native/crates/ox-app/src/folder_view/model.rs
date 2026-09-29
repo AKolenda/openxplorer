@@ -346,6 +346,32 @@ mod tests {
         assert_eq!(model.listed_count(&store), 3);
     }
 
+    /// GTK's filter and sort models keep their result: setting the same
+    /// words or hidden flag again recomputes nothing, as app.js memoised
+    /// `filtered()`, and only a real change filters again.
+    ///
+    /// parity: PERF-004
+    #[gtk::test]
+    fn the_shown_items_are_recomputed_only_when_their_inputs_change() {
+        let (model, _store) = model_with(&["a.txt", "b.txt", "report.txt"]);
+        model.set_query("report");
+        let changes = Rc::new(std::cell::Cell::new(0));
+        let counter = Rc::clone(&changes);
+        model
+            .sorted()
+            .connect_items_changed(move |_, _, _, _| counter.set(counter.get() + 1));
+        let first = model.item(0);
+
+        assert!(!model.set_query("  Report "), "the same words");
+        assert!(!model.set_show_hidden(false), "the same hidden flag");
+        assert_eq!(changes.get(), 0);
+        assert_eq!(model.item(0), first, "the kept rows are reused");
+
+        assert!(model.set_query("a"));
+        assert!(changes.get() > 0);
+        assert_eq!(model.n_items(), 1);
+    }
+
     #[gtk::test]
     fn a_position_past_the_end_has_no_name() {
         let (model, _store) = model_with(&["a.txt", "b.txt"]);

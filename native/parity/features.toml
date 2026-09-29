@@ -16261,7 +16261,8 @@ python_tests = [
 bridge = ["list"]
 dolphin = "KFileItemModel incremental insertion + KItemListView virtualisation"
 gnome = "GtkListView/GtkColumnView recycling"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/listing.rs (a_huge_folder_builds_rows_only_for_the_visible_part). The details and icon views are GtkColumnView and GtkGridView, which build and recycle widgets only around the visible rows; a 10,001-file folder builds fewer than 300 rows at the top and at the end. GTK re-lays out rows on resize itself."
 
 [[feature]]
 id = "PERF-002"
@@ -16282,8 +16283,8 @@ python_tests = [
   "desktop/tests/test_gio_serialization.py::GioSerializationTests::test_serialization_requests_no_extra_filesystem_queries",
 ]
 bridge = ["list"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/entry_enumeration.rs (listing_batches_entries_and_preserves_metadata); a selection made during loading is kept in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes)."
+native = "done"
+native_note = "native/crates/ox-core/src/entry/enumerate.rs (the_top_of_a_large_folder_arrives_first, later_batches_are_merged_until_the_window_has_passed); native/crates/ox-app/src/window/tests/listing.rs (a_selection_made_while_listing_survives_the_end_of_the_listing). GIO's asynchronous enumerator reads the folder; the first 64 rows are shown at once and later reads are merged for 250 ms (Python repainted at most every 90 ms), so large or slow folders fill in progressively without re-sorting per read."
 
 [[feature]]
 id = "PERF-003"
@@ -16306,8 +16307,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/tests/entry_enumeration.rs (worker_listing_completes_without_a_gtk_main_loop); native/crates/ox-core/src/entry/enumerate/task.rs (a_dropped_worker_still_completes_the_task)."
+native = "done"
+native_note = "native/crates/ox-core/tests/entry_enumeration.rs (worker_listing_completes_without_a_gtk_main_loop); native/crates/ox-core/src/entry/enumerate/task.rs (a_dropped_worker_still_completes_the_task); native/crates/ox-app/src/folder_view/watch.rs (a_watch_monitors_on_a_thread_of_its_own_until_dropped); native/crates/ox-core/src/network/prompts/tests.rs (the_keyring_is_read_off_the_main_thread); native/crates/ox-app/src/search/indexer.rs (the_index_starts_and_ticks_off_the_callers_thread). Instead of Python's fixed worker pools, listings use GIO's asynchronous I/O (GIO worker threads), folder monitors run on their own thread, keyring lookups on a worker thread, and the search cache opens, elects and ticks on its own thread; search cache operations run on GIO worker threads."
 
 [[feature]]
 id = "PERF-004"
@@ -16320,7 +16321,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:332", "desktop/winspace.py:928"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/model.rs (the_shown_items_are_recomputed_only_when_their_inputs_change). The folder view shows a GtkFilterListModel under a GtkSortListModel, which keep their result; the filter is invalidated only when the search words or the hidden flag really change, and the sorter only when the sort column or direction changes."
 
 [[feature]]
 id = "PERF-005"
@@ -16341,7 +16343,7 @@ sources = [
 python_tests = []
 bridge = ["search", "previousVersions", "archiveList"]
 native = "partial"
-native_note = "native/crates/ox-app/src/search/results.rs (at_most_500_rows_are_shown): a search shows at most 500 results; cache status polling pauses while every window is hidden or minimised (native/crates/ox-app/src/search/cache.rs). Missing: the column auto-fit, drag, previous-versions and archive-listing bounds, which belong to features not ported yet."
+native_note = "native/crates/ox-app/src/search/results.rs (at_most_500_rows_are_shown: a search shows at most 500 results); native/crates/ox-app/src/window/file_drag/payload.rs (one_item_that_may_not_leave_refuses_the_whole_drag: a drag carries at most 200 items); native/crates/ox-core/tests/versions_lookup.rs (at_most_one_hundred_versions_are_returned_and_marked_truncated); native/crates/ox-core/tests/archive_browse.rs (a_listing_stops_at_5000_rows); cache status polling pauses while every window is hidden or minimised (native/crates/ox-app/src/search/cache.rs). Missing: the 2,000-row bound of column auto-fit, which waits for VIEW-029 (double-click a column edge to auto-fit), not ported yet."
 
 [[feature]]
 id = "PERF-006"
@@ -16359,8 +16361,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/src/sizes/scan.rs (progress_between_start_and_end_waits_for_the_interval). Only the folder-size progress interval has a marked test. Operation progress, folder-change debouncing, index status and the index coordinator's one-second tick are not proven by a marked test, and the native UI does not use these services yet."
+native = "done"
+native_note = "native/crates/ox-core/src/ops/progress.rs (reports_are_spaced_by_the_interval_but_completion_always_arrives: operation progress at most every 80 ms); native/crates/ox-core/src/sizes/scan.rs (progress_between_start_and_end_waits_for_the_interval: folder size progress every 200 ms); native/crates/ox-app/src/folder_view/watch.rs (a_burst_of_changes_is_reported_once_it_settles: folder changes after 350 ms of quiet); native/crates/ox-app/src/search/indexer.rs (the_index_starts_and_ticks_off_the_callers_thread). The index coordinator ticks on its own thread, waiting a second after each tick so ticks never overlap; a scan reports index status at most every 0.8 s (crawl.rs)."
 
 [[feature]]
 id = "PERF-007"

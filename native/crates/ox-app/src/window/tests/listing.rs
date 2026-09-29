@@ -11,7 +11,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::test_support::harness::{
-    settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, STANDARD_NAMES,
+    descendants, settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, STANDARD_NAMES,
 };
 use crate::window::folder_pane::{FolderView, PanePage};
 use crate::window::session::Direction;
@@ -289,6 +289,39 @@ fn the_filter_and_hidden_files_change_what_is_listed_until_the_folder_changes() 
         "",
         "moving to another folder clears the filter"
     );
+}
+
+/// The rows the details view has built for its items.
+fn built_rows(test: &TestWindow) -> usize {
+    let view = test.window.folder_pane().details().column_view().clone();
+    let widgets = descendants::<gtk::Widget>(&view);
+    widgets.iter().filter(|widget| widget.css_name() == "row").count()
+}
+
+/// Most rows the details view may build for any folder: GTK keeps about
+/// 200 recycled rows around the visible part of a list.
+const MOST_BUILT_ROWS: usize = 300;
+
+/// A folder of 10,001 files builds rows only around what is on screen, at
+/// the top and after scrolling to the end, as the web list kept a bounded
+/// number of DOM rows.
+///
+/// parity: PERF-001
+#[gtk::test]
+fn a_huge_folder_builds_rows_only_for_the_visible_part() {
+    let fixture = Fixture::with_files(10_001);
+    let test = TestWindow::open(&fixture.uri());
+    assert_eq!(test.window.folder_model().n_items(), 10_001);
+    wait_for_frames(&test.window, 2);
+    let at_top = built_rows(&test);
+    scroll_to_the_end(&test);
+    wait_for_frames(&test.window, 2);
+    let at_end = built_rows(&test);
+    assert!(
+        at_top > 0 && at_top < MOST_BUILT_ROWS,
+        "{at_top} rows built at the top"
+    );
+    assert!(at_end < MOST_BUILT_ROWS, "{at_end} rows built at the end");
 }
 
 #[gtk::test]

@@ -191,3 +191,32 @@ fn tick_until_stopped(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Instant;
+
+    use super::*;
+
+    /// Opening the cache and starting the service happen on the indexer's
+    /// thread, which then ticks one tick after the other, so the caller
+    /// never waits for SQLite.
+    ///
+    /// parity: PERF-006, PERF-003
+    #[test]
+    fn the_index_starts_and_ticks_off_the_callers_thread() {
+        let directory = tempfile::tempdir().expect("the test home has room for a cache");
+        let start = IndexerStart {
+            location: CacheLocation::Directory(directory.path().join("cache")),
+            settings: IndexSettings::default(),
+            pins: Vec::new(),
+        };
+        let began = Instant::now();
+        let indexer = Indexer::start(start, || {}).expect("the thread starts");
+        assert!(began.elapsed() < TICK_INTERVAL, "starting does not wait for the cache");
+
+        let service = indexer.service();
+        let service = started(&service).expect("the thread opened the cache");
+        assert!(service.is_owner(), "the thread elected this process the owner");
+    }
+}

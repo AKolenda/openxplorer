@@ -70,6 +70,7 @@ mod tests {
         }
     }
 
+    /// parity: PERF-006
     #[test]
     fn reports_are_spaced_by_the_interval_but_completion_always_arrives() {
         let start = Instant::now();

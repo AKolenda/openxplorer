@@ -208,7 +208,7 @@ mod tests {
         assert_eq!(uris, Ok(vec![folder.uri.clone(), file.uri.clone()]));
     }
 
-    /// parity: DND-003
+    /// parity: DND-003, PERF-005
     #[test]
     fn one_item_that_may_not_leave_refuses_the_whole_drag() {
         let file = file_entry("notes.txt");
