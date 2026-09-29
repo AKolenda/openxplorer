@@ -100,12 +100,12 @@ fn the_network_page_has_the_banner_address_field_and_notes() {
 
 /// parity: HOME-009
 #[gtk::test]
-fn open_address_refuses_anything_but_an_smb_server() {
+fn open_address_refuses_anything_but_a_network_server() {
     let fixture = Fixture::standard();
     let test = laid_out(Page::Network.uri());
     test.activate("open-server-address", Some(&fixture.uri()));
     let message = test.window.shown_message();
-    assert_eq!(message.as_str(), "Enter an SMB server or share.");
+    assert_eq!(message.as_str(), "Enter a network server or shared folder.");
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
 }
 

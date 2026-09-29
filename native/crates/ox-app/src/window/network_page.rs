@@ -14,7 +14,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::location::{self, is_smb_location, LocationContext};
+use ox_core::location::{self, is_server_location, LocationContext};
 use ox_core::network::DiscoveredServer;
 use ox_core::places::{NetworkKind, NetworkLocation};
 
@@ -235,12 +235,12 @@ pub(super) fn render(
 }
 
 impl BrowserWindow {
-    /// Open address: opens the SMB server or share `typed` names, and
-    /// refuses anything else as the Network page's field does.
+    /// Open address: opens the SMB, SFTP, FTP, WebDAV or NFS location
+    /// `typed` names, and refuses anything else as the Network page does.
     pub(super) fn open_server_address(&self, typed: &str) {
         match location::normalise_location(typed, None, &glib::home_dir()) {
-            Ok(uri) if is_smb_location(&uri) => self.navigate_or_report(&uri),
-            Ok(_) => self.show_message("Enter an SMB server or share."),
+            Ok(uri) if is_server_location(&uri) => self.navigate_or_report(&uri),
+            Ok(_) => self.show_message("Enter a network server or shared folder."),
             Err(error) => self.show_message(&error.to_string()),
         }
     }

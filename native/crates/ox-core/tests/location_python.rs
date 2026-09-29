@@ -10,7 +10,7 @@ mod support;
 use std::fmt::Debug;
 use std::path::PathBuf;
 
-use ox_core::location::{self, ItemKind, LocationError, LocationParts};
+use ox_core::location::{self, ItemKind, LocationError, LocationKind, LocationParts};
 use serde::Deserialize;
 use support::{parse_fixture, Case, Mismatches, Outcome};
 
@@ -119,15 +119,22 @@ fn fixture() -> PythonFixture {
     parse_fixture(include_str!("location_fixtures/python.json"))
 }
 
+/// True for SFTP, FTP, WebDAV and NFS addresses, which `core.py` refuses
+/// and the native app browses (NET-029): a deliberate gain, checked by the
+/// unit tests of `location::normalise` instead.
+fn is_native_gain(input: &str) -> bool {
+    location::location_kind(input) == LocationKind::Remote
+}
+
 /// Checks the Rust `ported` function against every case of a one-argument
-/// table of `function`.
+/// table of `function`, except the addresses of [`is_native_gain`].
 fn assert_cases_match<T: PartialEq + Debug>(
     function: &'static str,
     cases: &[Case<T>],
     ported: impl Fn(&str) -> Result<T, LocationError>,
 ) {
     let mut mismatches = Mismatches::new(function);
-    for case in cases {
+    for case in cases.iter().filter(|case| !is_native_gain(&case.input)) {
         mismatches.expect_outcome(&case.input, &case.outcome, &ported(&case.input));
     }
     mismatches.assert_none();
@@ -147,7 +154,7 @@ fn typed_addresses_are_normalised_like_core_py() {
 fn relative_names_resolve_against_their_folder_like_core_py() {
     let fixture = fixture();
     let mut mismatches = Mismatches::new("normalise_location with a base");
-    for case in &fixture.relative {
+    for case in fixture.relative.iter().filter(|case| !is_native_gain(&case.input)) {
         let actual = location::normalise_location(&case.input, Some(&case.base), &fixture.home);
         mismatches.expect_outcome((&case.input, &case.base), &case.outcome, &actual);
     }

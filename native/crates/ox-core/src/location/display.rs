@@ -135,7 +135,7 @@ impl LocationContext {
             LocationKind::Local => path,
             LocationKind::Smb => format!("\\\\{}{}", parts.authority, path.replace('/', "\\")),
             LocationKind::Device => with_subpath(self.device_name(uri), path.trim_matches('/')),
-            LocationKind::Other => uri.to_string(),
+            LocationKind::Remote | LocationKind::Other => uri.to_string(),
         }
     }
 
@@ -187,7 +187,7 @@ impl LocationContext {
     fn root_crumb(&self, uri: &str, parts: &LocationParts) -> Option<Crumb> {
         match parts.kind() {
             LocationKind::Local => Some(Crumb::new("/", "file:///")),
-            LocationKind::Smb => Some(Crumb::new(&parts.authority, root_uri(parts))),
+            LocationKind::Smb | LocationKind::Remote => Some(Crumb::new(&parts.authority, root_uri(parts))),
             LocationKind::Device => Some(Crumb::new(self.device_name(uri), root_uri(parts))),
             LocationKind::Other => None,
         }

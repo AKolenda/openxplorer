@@ -20,7 +20,7 @@ use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
-use ox_core::location::{is_smb_location, LocationContext};
+use ox_core::location::{is_server_location, LocationContext};
 use ox_core::places::{NetworkKind, Place, SavedShare};
 
 use crate::icons::{self, Art, ArtImage, Connection, Icon};
@@ -127,7 +127,7 @@ pub(super) fn card_texts(name: &str, subtitle: &str) -> gtk::Box {
 }
 
 fn quick_card(place: &Place) -> gtk::Button {
-    let network = is_smb_location(&place.uri);
+    let network = is_server_location(&place.uri);
     let (art, subtitle) = if network {
         (Art::SHARE, "Network folder")
     } else {

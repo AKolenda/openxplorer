@@ -14,7 +14,9 @@ use std::path::Path;
 use percent_encoding::percent_encode;
 
 use super::device_uri::DeviceUriMatch;
-use super::parts::{split_location, split_scheme, split_url, LocationKind, LocationParts};
+use super::parts::{
+    canonical_remote_scheme, split_location, split_scheme, split_url, LocationKind, LocationParts,
+};
 use super::text::{
     contains_python_space, has_control_character, normalise_posix_path, python_strip, quote_component,
     quote_path, unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,
@@ -25,7 +27,8 @@ use super::LocationError;
 const MAX_DEVICE_AUTHORITY_CHARS: usize = 512;
 
 /// Accepts Linux paths (`/x`, `~`, `~/x`, or relative to `base`), `file://`
-/// and `smb://` URIs, UNC paths (`\\server\share` or `//server/share`) and
+/// and `smb://` URIs, UNC paths (`\\server\share` or `//server/share`), the
+/// other network protocols of [`REMOTE_SCHEMES`](super::REMOTE_SCHEMES) and
 /// connected-device URIs (`mtp://`, `gphoto2://`, `afc://`), and returns one
 /// canonical URI.
 ///
@@ -75,6 +78,7 @@ pub fn normalise_location(address: &str, base: Option<&str>, home: &Path) -> Res
     };
     match LocationKind::from_scheme(&scheme) {
         LocationKind::Device => normalise_device_location(&address, &scheme),
+        LocationKind::Remote => normalise_remote_url(&address),
         LocationKind::Local | LocationKind::Smb | LocationKind::Other => normalise_url(&address),
     }
 }
@@ -98,17 +102,23 @@ pub fn file_uri(path: &Path) -> String {
     format!("file://{escaped}")
 }
 
-/// Normalises a shared folder, rejecting a bare server (`smb://nas/`) and
-/// anything that is not SMB.
+/// Normalises a network folder for Map network location: an SMB shared
+/// folder (not a bare server such as `smb://nas/`), a folder on an SFTP,
+/// FTP or WebDAV server (its root included) or an NFS export.
 ///
 /// # Errors
 ///
 /// As [`normalise`], and a message asking for a shared folder such as
-/// `\\nas\Projects` for anything but an SMB shared folder.
+/// `\\nas\Projects` for anything else.
 pub fn require_share(address: &str) -> Result<String, LocationError> {
     let uri = normalise(address)?;
     let parts = split_location(&uri)?;
-    if !parts.is_smb() || parts.path_depth() == 0 {
+    let is_folder = match parts.kind() {
+        LocationKind::Smb => parts.path_depth() > 0,
+        LocationKind::Remote => parts.scheme != "nfs" || parts.path_depth() > 0,
+        LocationKind::Local | LocationKind::Device | LocationKind::Other => false,
+    };
+    if !is_folder {
         return Err(LocationError::new(
             "Enter a shared folder such as \\\\nas\\Projects, not only the server name.",
         ));
@@ -134,6 +144,12 @@ pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
     if parts.is_smb() && parts.path_depth() <= 1 {
         return Err(LocationError::new(
             "Open the network share first, then select files or folders inside it. The share itself \
+             cannot be renamed, moved, copied or trashed here.",
+        ));
+    }
+    if parts.is_remote() && parts.path_depth() == 0 {
+        return Err(LocationError::new(
+            "Open a folder on the server first, then select files or folders inside it. The server itself \
              cannot be renamed, moved, copied or trashed here.",
         ));
     }
@@ -221,7 +237,7 @@ fn expand_home(address: &str, home: &Path) -> String {
 /// True when relative paths should be appended to `base` as a URL: SMB
 /// and connected-device folders.
 fn is_remote_base(base: &str) -> bool {
-    split_location(base).is_ok_and(|parts| parts.is_smb() || parts.is_device())
+    split_location(base).is_ok_and(|parts| parts.is_smb() || parts.is_remote() || parts.is_device())
 }
 
 /// `os.path.join(base, path)`: an absolute `path` replaces `base`.
@@ -327,6 +343,60 @@ fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
         None => host,
     };
     Ok(authority)
+}
+
+/// An SFTP, FTP, WebDAV or NFS URL (NET-029): the scheme canonical (`ssh`
+/// is `sftp`, `webdav` is `dav`), the host lower-cased, the port kept, and
+/// the path canonical as for SMB.
+///
+/// Unlike SMB, a user name may name the account (`sftp://anna@build/`), as
+/// Dolphin, Files and `GVfs` expect for SSH: it is not a secret. A password
+/// never enters the address (SAFE-010), and NFS takes no user at all.
+fn normalise_remote_url(address: &str) -> Result<String, LocationError> {
+    let parts = split_url(address)?;
+    let scheme = canonical_remote_scheme(&parts.scheme);
+    if !parts.query.is_empty() || !parts.fragment.is_empty() {
+        return Err(LocationError::query_or_fragment());
+    }
+    let user = remote_user(&parts, scheme)?;
+    let decoded = unquote_without_controls(&parts.path)?;
+    let server = LocationParts {
+        authority: after_user(&parts.authority).to_owned(),
+        ..parts.clone()
+    };
+    let authority = smb_authority(&server)?;
+    let path = absolute_normal_path(&decoded);
+    let user = user.map(|user| format!("{user}@")).unwrap_or_default();
+    Ok(format!("{scheme}://{user}{authority}{}", quote_path(&path)))
+}
+
+/// The user name of a remote URL, if any.
+///
+/// # Errors
+///
+/// The sign-in message for a password, an escaped or empty user name, or
+/// any user name on NFS.
+fn remote_user<'a>(parts: &'a LocationParts, scheme: &str) -> Result<Option<&'a str>, LocationError> {
+    let Some((user, _)) = parts.authority.rsplit_once('@') else {
+        return Ok(None);
+    };
+    let is_plain_name = !user.is_empty()
+        && !user.contains([':', '%', '@'])
+        && !has_control_character(user)
+        && !contains_python_space(user);
+    // Safety rule (SAFE-010): a password never reaches settings.json, a
+    // tab title or the clipboard.
+    if !is_plain_name || scheme == "nfs" {
+        return Err(LocationError::new(
+            "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.",
+        ));
+    }
+    Ok(Some(user))
+}
+
+/// The authority without its `user@`.
+fn after_user(authority: &str) -> &str {
+    authority.rsplit_once('@').map_or(authority, |(_, host)| host)
 }
 
 /// Ports `_normalise_device_location`: keeps the device authority as
@@ -469,6 +539,49 @@ mod tests {
         assert_eq!(canonical("smb://nas/a?").as_deref(), Ok("smb://nas/a"));
         assert!(canonical("smb://nas:x/a").is_err());
         assert!(canonical("smb://my nas/a").is_err());
+    }
+
+    /// Dolphin's other network protocols are typed and browsed like SMB.
+    ///
+    /// parity: NET-029, NET-030, NET-031, NET-032, NET-033
+    #[test]
+    fn sftp_ftp_webdav_and_nfs_urls_are_canonical() {
+        let cases = [
+            ("SFTP://Build-Host/home/anna/", "sftp://build-host/home/anna"),
+            ("ssh://anna@build:2222/srv/../etc", "sftp://anna@build:2222/etc"),
+            ("ftp://mirror.example", "ftp://mirror.example/"),
+            ("ftps://files.example/pub/Q3 %231", "ftps://files.example/pub/Q3%20%231"),
+            ("webdav://cloud/remote.php/dav", "dav://cloud/remote.php/dav"),
+            ("davs://anna@cloud.example/", "davs://anna@cloud.example/"),
+            ("webdavs://cloud.example:8443/files", "davs://cloud.example:8443/files"),
+            ("nfs://NAS/export/media", "nfs://nas/export/media"),
+        ];
+        for (typed, expected) in cases {
+            assert_eq!(canonical(typed).as_deref(), Ok(expected), "{typed}");
+        }
+        assert_eq!(
+            resolve("Q3 plans", "sftp://build/srv").as_deref(),
+            Ok("sftp://build/srv/Q3%20plans")
+        );
+        // Safety rule (SAFE-010): a password never enters an address.
+        for bad in [
+            "sftp://anna:secret@build/",
+            "ftp://@host/",
+            "dav://a%40b@cloud/",
+            "nfs://anna@nas/export",
+            "sftp:///home",
+            "ftp://host/?x",
+        ] {
+            assert!(canonical(bad).is_err(), "{bad} should be rejected");
+        }
+        assert_eq!(
+            require_share("sftp://build").as_deref(),
+            Ok("sftp://build/"),
+            "a server's root is a folder"
+        );
+        assert!(require_share("nfs://nas/").is_err(), "NFS needs an export");
+        assert!(require_item_uri("sftp://build/").is_err());
+        assert!(require_item_uri("sftp://build/a.txt").is_ok());
     }
 
     /// parity: NAV-034

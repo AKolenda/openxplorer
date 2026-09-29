@@ -98,7 +98,7 @@ fn locations_are_normalised_first() {
         ox_core::location::file_uri(&fixture.destination)
     );
     let unsupported = ExtractionRequest {
-        destination_uri: "ftp://example.com/".to_owned(),
+        destination_uri: "http://example.com/".to_owned(),
         ..request
     };
     let error = fixture

@@ -12,7 +12,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::location::{file_uri, is_smb_location, normalise, split_location, unquote_lossy, LocationError};
+use crate::location::{file_uri, is_server_location, normalise, split_location, unquote_lossy, LocationError};
 use crate::settings::Bookmark;
 
 /// SMB's port, which Python fills in when a URI has none or port 0.
@@ -133,7 +133,7 @@ pub fn merge_network_locations(
     let saved = saved.iter().map(Contribution::from_saved_share);
     let gio_mounts = mounts
         .iter()
-        .filter(|mount| mount.is_active_smb_mount())
+        .filter(|mount| mount.is_active_server_mount())
         .map(Contribution::from_gio_mount);
     let stable_mounts = stable_mounts
         .iter()
@@ -148,9 +148,10 @@ pub fn merge_network_locations(
 }
 
 impl NetworkMount {
-    /// Only active SMB mounts contribute a Network row.
-    fn is_active_smb_mount(&self) -> bool {
-        self.is_mounted && is_smb_location(&self.uri)
+    /// Only active SMB, SFTP, FTP, WebDAV and NFS mounts contribute a
+    /// Network row; an SFTP mount another app made is shown too (NET-030).
+    fn is_active_server_mount(&self) -> bool {
+        self.is_mounted && is_server_location(&self.uri)
     }
 }
 
@@ -232,7 +233,7 @@ impl<'a> Contribution<'a> {
     /// invalid location, or one that is neither SMB nor a stable mount.
     fn to_location(&self) -> Option<NetworkLocation> {
         let uri = normalise(&self.uri).ok()?;
-        let is_network = is_smb_location(&uri) || self.kind == NetworkKind::Mount;
+        let is_network = is_server_location(&uri) || self.kind == NetworkKind::Mount;
         if !is_network {
             return None;
         }
@@ -251,10 +252,11 @@ impl<'a> Contribution<'a> {
     }
 }
 
-/// `Server` for `smb://host/`, `Share` for everything below it.
+/// `Server` for `smb://host/`, `Share` for everything below it and for
+/// the folders of other protocols, whose server roots hold files.
 fn smb_location_kind(uri: &str) -> NetworkKind {
     match split_location(uri) {
-        Ok(parts) if parts.path.is_empty() || parts.path == "/" => NetworkKind::Server,
+        Ok(parts) if parts.is_smb() && parts.path_depth() == 0 => NetworkKind::Server,
         _ => NetworkKind::Share,
     }
 }

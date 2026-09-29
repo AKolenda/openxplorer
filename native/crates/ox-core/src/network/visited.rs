@@ -7,10 +7,10 @@
 //! keeps a share in settings. Sign out removes the server's entries.
 
 use super::server::host_name;
-use crate::location::{is_smb_location, split_location};
+use crate::location::{is_remote_location, is_smb_location, split_location};
 use crate::settings::Bookmark;
 
-/// The SMB roots browsed this session, in the order first browsed. One
+/// The SMB roots and other servers browsed this session, in the order first browsed. One
 /// list serves every window.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct VisitedNetwork {
@@ -24,7 +24,7 @@ impl VisitedNetwork {
         let Some(root) = session_network_root(uri) else {
             return false;
         };
-        if self.roots.contains(&root) {
+        if self.roots.iter().any(|known| same_root(known, &root)) {
             return false;
         }
         self.roots.push(root);
@@ -53,9 +53,14 @@ impl VisitedNetwork {
 }
 
 /// The root the Network list shows for SMB location `uri`:
-/// `smb://host/share`, or `smb://host/` for a server listing. `None` for
-/// other locations.
+/// `smb://host/share`, or `smb://host/` for a server listing. On SFTP,
+/// FTP, WebDAV and NFS servers, whose folders are not shares, it is the
+/// folder itself; [`VisitedNetwork::remember`] keeps the first one browsed
+/// on each server. `None` for other locations.
 pub fn session_network_root(uri: &str) -> Option<String> {
+    if is_remote_location(uri) {
+        return Some(uri.to_owned());
+    }
     if !is_smb_location(uri) {
         return None;
     }
@@ -64,9 +69,41 @@ pub fn session_network_root(uri: &str) -> Option<String> {
     Some(format!("smb://{}/{share}", parts.authority))
 }
 
+/// True when `known` already stands for `root`: the same SMB root, or any
+/// folder of the same remote server (scheme, user, host and port), so an
+/// SFTP server is listed once, at the first folder opened on it.
+fn same_root(known: &str, root: &str) -> bool {
+    if !is_remote_location(root) {
+        return known == root;
+    }
+    let server = |uri: &str| split_location(uri).ok().map(|parts| (parts.scheme, parts.authority));
+    server(known).is_some_and(|known| Some(known) == server(root))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// parity: NET-030
+    #[test]
+    fn a_remote_server_is_remembered_once_at_the_first_folder_opened() {
+        let mut visited = VisitedNetwork::default();
+
+        assert!(visited.remember("sftp://anna@build/home/anna"));
+        assert!(!visited.remember("sftp://anna@build/srv"));
+        assert!(visited.remember("sftp://build/"), "another account is another row");
+        assert!(visited.remember("davs://cloud.example/remote.php/dav"));
+
+        let roots: Vec<&str> = visited.iter().collect();
+        let expected = [
+            "sftp://anna@build/home/anna",
+            "sftp://build/",
+            "davs://cloud.example/remote.php/dav",
+        ];
+        assert_eq!(roots, expected);
+        visited.forget_host("build");
+        assert_eq!(visited.iter().count(), 1);
+    }
 
     /// Ported from `desktop/tests/test_v07.py::AppManagerTests::test_session_network_root_not_every_child`
     ///

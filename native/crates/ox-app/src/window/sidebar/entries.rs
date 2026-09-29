@@ -10,7 +10,7 @@
 //! their context menu ([`PlaceMenu`]), and a drive that can be removed its
 //! eject button (DEV-007).
 
-use ox_core::location::{is_smb_location, LocationContext, NETWORK_URI, PC_URI};
+use ox_core::location::{is_server_location, LocationContext, NETWORK_URI, PC_URI};
 use ox_core::places::{NetworkLocation, Place};
 
 use crate::devices::Removal;
@@ -103,7 +103,7 @@ impl EjectButton {
 }
 
 fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
-    let storage = if place.is_shared || is_smb_location(&place.uri) {
+    let storage = if place.is_shared || is_server_location(&place.uri) {
         Storage::Network
     } else {
         Storage::Local
