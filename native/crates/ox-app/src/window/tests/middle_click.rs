@@ -12,7 +12,8 @@ use std::time::Duration;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::support::{click_at, middle_click_at, middle_of, Release};
+use super::input::hint;
+use super::support::{click_gesture, middle_click_at, middle_of};
 use crate::folder_view::grid::IconSize;
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for, wait_for_frames, Fixture, TestWindow};
@@ -87,11 +88,14 @@ fn middle_clicking_a_file_opens_nothing() {
     assert!(test.context.recorded_launches().is_empty(), "no app starts");
 }
 
-/// A press alone does nothing: the gesture acts on the release.
+/// A middle-click opens only on a release that follows its press: a press
+/// alone, a release alone, or a release after the pointer moved away or
+/// the gesture was cancelled opens nothing, and a dialog in front takes
+/// the click. A middle-open resets type-to-select.
 ///
 /// parity: TAB-025
 #[gtk::test]
-fn a_middle_press_without_its_release_opens_nothing() {
+fn a_middle_click_opens_only_for_its_own_press_and_release() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     wait_for_frames(&test.window, 2);
@@ -101,15 +105,36 @@ fn a_middle_press_without_its_release_opens_nothing() {
         .owners()
         .widget_at(test.position_of("Documents"))
         .expect("Documents is on screen");
+    let (x, y) = middle_of(&cell, &view);
+    let gesture = click_gesture(&view, gtk::gdk::BUTTON_MIDDLE);
+    let emit = |signal: &str| gesture.emit_by_name::<()>(signal, &[&1_i32, &x, &y]);
 
-    click_at(
-        &view,
-        gtk::gdk::BUTTON_MIDDLE,
-        middle_of(&cell, &view),
-        Release::Held,
-    );
+    emit("pressed");
+    let after_press = test.window.tab_count();
+    gesture.emit_by_name::<()>("stopped", &[]);
+    emit("released");
+    emit("released");
+    emit("pressed");
+    gesture.emit_by_name::<()>("cancel", &[&None::<gtk::gdk::EventSequence>]);
+    emit("released");
+    let after_strays = test.window.tab_count();
+    pane.focus_view();
+    test.window.type_text("n");
+    let typed = hint(&test);
+    emit("pressed");
+    emit("released");
+    let opened = test.window.tab_count();
+    let hint_after_open = hint(&test);
+    test.activate("properties", None);
+    test.wait_for_dialog("the Properties dialog");
+    emit("pressed");
+    emit("released");
 
-    assert_eq!(test.window.tab_count(), 1);
+    assert_eq!((after_press, after_strays), (1, 1), "nothing opened");
+    assert_eq!(opened, 2, "a press and its release open the folder");
+    assert!(!typed.is_empty(), "a prefix was typed");
+    assert_eq!(hint_after_open, "", "type-to-select was reset");
+    assert_eq!(test.window.tab_count(), 2, "the dialog took the click");
 }
 
 /// parity: TAB-023

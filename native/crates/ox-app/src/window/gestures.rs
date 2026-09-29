@@ -9,6 +9,9 @@
 //! selection and never launches a file. It opens a folder in a background
 //! tab; with Shift held, the new tab comes to the front.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gtk::gdk;
 use gtk::glib;
 use gtk::prelude::*;
@@ -48,14 +51,36 @@ pub(super) fn open_action(modifiers: gdk::ModifierType) -> WindowAction {
 /// A middle-button gesture that claims its press, so neither primary-paste
 /// nor the title bar's middle-click action sees it, and calls `on_click`
 /// with the gesture and the release position. The modifiers held are
-/// `gesture.current_event_state()`.
+/// `gesture.current_event_state()`. Only a release that follows its press
+/// counts: one after the gesture stopped (the pointer moved away) or was
+/// cancelled, or with no press, does nothing, and a press acts once.
 pub(super) fn middle_click(on_click: impl Fn(&gtk::GestureClick, f64, f64) + 'static) -> gtk::GestureClick {
     let gesture = gtk::GestureClick::new();
     gesture.set_button(gdk::BUTTON_MIDDLE);
-    gesture.connect_pressed(|gesture, _, _, _| {
-        gesture.set_state(gtk::EventSequenceState::Claimed);
+    let pressed = Rc::new(Cell::new(false));
+    gesture.connect_pressed(glib::clone!(
+        #[strong]
+        pressed,
+        move |gesture, _, _, _| {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            pressed.set(true);
+        }
+    ));
+    gesture.connect_stopped(glib::clone!(
+        #[strong]
+        pressed,
+        move |_| pressed.set(false)
+    ));
+    gesture.connect_cancel(glib::clone!(
+        #[strong]
+        pressed,
+        move |_, _| pressed.set(false)
+    ));
+    gesture.connect_released(move |gesture, _, x, y| {
+        if pressed.replace(false) {
+            on_click(gesture, x, y);
+        }
     });
-    gesture.connect_released(move |gesture, _, x, y| on_click(gesture, x, y));
     gesture
 }
 

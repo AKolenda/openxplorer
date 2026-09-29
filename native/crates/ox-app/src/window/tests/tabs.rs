@@ -6,7 +6,7 @@ use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::support::{click_at, Release};
+use super::support::click_at;
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::window::address_bar::AddressMode;
 use crate::folder_view::item::FileItem;
@@ -169,7 +169,6 @@ fn a_click_or_enter_on_a_tab_shows_it() {
         &tab_widget(&test, 0),
         gtk::gdk::BUTTON_PRIMARY,
         (4.0, 4.0),
-        Release::Released,
     );
     let after_click = test.active_tab();
     let address_mode = test.window.address_bar().mode();

@@ -1775,7 +1775,7 @@ python_tests = [
 bridge = []
 gnome = "Gtk.GestureClick(button=2) 'released' with pointer still inside."
 native = "done"
-native_note = "gestures::middle_click claims the press (so neither primary-selection paste nor the title bar's middle-click action sees it) and acts on the release; GTK cancels the gesture when the pointer drags away or the sequence is cancelled, a release without a press never reaches it, and GTK has no separate auxclick. Middle-opens reset type-to-select. Dialogs are modal windows or cover the pane, popover menus are modal, and no click reaches a window during a drag, so none of those can start a middle-open. Test: native/crates/ox-app/src/window/tests/middle_click.rs (a_middle_press_without_its_release_opens_nothing)."
+native_note = "gestures::middle_click claims the press (so neither primary-selection paste nor the title bar's middle-click action sees it) and acts only on a release that follows its own press: a release with no press, after the gesture stopped because the pointer moved away, or after a cancel does nothing, and a press acts once (GTK has no separate auxclick). A middle-open in the folder view is ignored while a dialog of the window (a sign-in, a message) or the in-window dialog layer is shown, and resets type-to-select. Popover menus are modal and no click reaches a window during a drag. Test: native/crates/ox-app/src/window/tests/middle_click.rs (a_middle_click_opens_only_for_its_own_press_and_release)."
 
 [[feature]]
 id = "TAB-026"

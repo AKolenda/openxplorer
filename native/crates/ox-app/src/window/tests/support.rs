@@ -74,31 +74,19 @@ pub(super) fn click_gesture(widget: &impl IsA<gtk::Widget>, button: u32) -> gtk:
     gesture.unwrap_or_else(|| panic!("the widget has a gesture for button {button}"))
 }
 
-/// What `widget`'s gesture for `button` does for a press and, when
-/// `release` says so, a release at (`x`, `y`). GTK has no public way to
-/// synthesise pointer events, so this emits the gesture's signals, with
-/// no modifier held.
-pub(super) fn click_at(widget: &impl IsA<gtk::Widget>, button: u32, point: (f64, f64), release: Release) {
+/// What `widget`'s gesture for `button` does for a press and a release at
+/// (`x`, `y`). GTK has no public way to synthesise pointer events, so this
+/// emits the gesture's signals, with no modifier held.
+pub(super) fn click_at(widget: &impl IsA<gtk::Widget>, button: u32, point: (f64, f64)) {
     let gesture = click_gesture(widget, button);
     let (x, y) = point;
     gesture.emit_by_name::<()>("pressed", &[&1_i32, &x, &y]);
-    if release == Release::Released {
-        gesture.emit_by_name::<()>("released", &[&1_i32, &x, &y]);
-    }
-}
-
-/// Whether a click in [`click_at`] lets go of the button.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Release {
-    /// The button goes down and up: a click.
-    Released,
-    /// The button stays down.
-    Held,
+    gesture.emit_by_name::<()>("released", &[&1_i32, &x, &y]);
 }
 
 /// Middle-clicks `widget` at `point`, in its own coordinates.
 pub(super) fn middle_click_at(widget: &impl IsA<gtk::Widget>, point: (f64, f64)) {
-    click_at(widget, gdk::BUTTON_MIDDLE, point, Release::Released);
+    click_at(widget, gdk::BUTTON_MIDDLE, point);
 }
 
 /// The middle of `widget` in the coordinates of `ancestor`.

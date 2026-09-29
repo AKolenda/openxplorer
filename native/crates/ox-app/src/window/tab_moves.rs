@@ -136,7 +136,7 @@ impl BrowserWindow {
     }
 
     /// True while a dialog of this window is open.
-    fn shows_dialog(&self) -> bool {
+    pub(super) fn shows_dialog(&self) -> bool {
         let this = self.upcast_ref::<gtk::Window>();
         let toplevels = gtk::Window::list_toplevels();
         toplevels
