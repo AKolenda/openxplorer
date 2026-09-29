@@ -6,6 +6,7 @@
 use std::fs;
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::search::{
     Caching, GioFolderReader, HiddenItems, IndexService, RootOrigin, RootStatus, SearchIndex,
 };
@@ -13,6 +14,7 @@ use ox_core::search::{
 use crate::folder_view::sorting::SortColumn;
 use crate::search::SearchScope;
 use crate::test_support::harness::{capture, wait_until, Fixture, TestWindow, STANDARD_NAMES};
+use crate::window::activation::{activation_for, Activation};
 use crate::window::folder_pane::PanePage;
 
 impl TestWindow {
@@ -217,6 +219,37 @@ fn open_file_location_selects_the_result_in_its_folder() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     assert_eq!(test.selected_names(), ["deep notes.txt"]);
     assert_eq!(test.window.search_box().entry().text().as_str(), "");
+}
+
+/// A folder result middle-clicked opens behind in a new tab and the
+/// search stays; a ZIP result opens in the archive browser.
+///
+/// parity: SRCH-014
+#[gtk::test]
+fn a_middle_clicked_folder_result_opens_a_tab_and_keeps_the_search() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Documents/Reports")).expect("fixture subfolder");
+    fs::write(fixture.path("Documents/reports 2026.zip"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.index_folder(&fixture.uri());
+    test.search_for("reports");
+    assert_eq!(test.names(), ["Reports", "reports 2026.zip"]);
+    let result = |position| test.window.folder_model().item(position).expect("a result");
+    let zip = result(1);
+    assert_eq!(activation_for(zip.entry()), Activation::Archive);
+    let Activation::Folder(folder) = activation_for(result(0).entry()) else {
+        panic!("a folder result opens as a folder");
+    };
+
+    test.activate("open-tab-background", Some(&folder));
+
+    wait_until("the folder to open in a second tab", || {
+        test.window.imp().session.borrow().tabs().len() == 2
+    });
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    assert_eq!(test.window.search_box().entry().text().as_str(), "reports");
+    assert_eq!(test.names(), ["Reports", "reports 2026.zip"]);
 }
 
 /// parity: SRCH-020

@@ -9650,8 +9650,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Middle-opening a search result does not erase the search",
 ]
 bridge = ["activateItem", "search"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/search.rs (open_file_location_selects_the_result_in_its_folder: opening a folder from a search leaves the search). Folder results navigate and leave the search and file results open in their app (window/activation.rs). Missing: ZIP results open the archive browser only once the archive dialog is ported (they open in the default app now); middle-click on a folder result keeping the search has no test."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (a_middle_clicked_folder_result_opens_a_tab_and_keeps_the_search, open_file_location_selects_the_result_in_its_folder); native/crates/ox-app/src/window/activation.rs (folders_open_in_the_tab_files_in_an_application_and_zips_in_the_browser). Activating a folder result navigates to its real target (Entry::navigation_uri) and leaves the search; a file result opens in its application without navigating; a ZIP result, recognised by its name since the cache stores no content type, opens in the archive browser (window/activation.rs). Middle-click on a folder result opens it in a background tab (Shift: in front) through open-tab-background, and the search, its text and its results stay in the tab."
 
 [[feature]]
 id = "SRCH-015"
