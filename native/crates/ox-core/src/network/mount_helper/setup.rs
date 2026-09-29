@@ -202,9 +202,14 @@ fn set_up(
         return Ok(Outcome::Cancelled);
     }
     let username = ask(terminal, "SMB username (DOMAIN\\username is optional): ")?;
-    let password = terminal
-        .ask_secret("SMB password: ")
-        .map_err(MountHelperError::Terminal)?;
+    let password = match terminal.ask_secret("SMB password: ") {
+        Ok(password) => password,
+        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+            terminal.say("Cancelled.");
+            return Ok(Outcome::Cancelled);
+        }
+        Err(error) => return Err(MountHelperError::Terminal(error)),
+    };
     let credential = credential_file_text(&username, &password)?;
     drop(password);
     let mut created = Vec::new();
