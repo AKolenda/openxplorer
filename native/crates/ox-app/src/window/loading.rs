@@ -27,7 +27,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::{Entry, EntryError};
-use ox_core::location::parent_location;
+use ox_core::location::{parent_location, same_location, TRASH_URI};
 
 use crate::folder_view::item::FileItem;
 use crate::folder_view::{loader, reconcile, watch};
@@ -300,6 +300,19 @@ impl BrowserWindow {
         }
     }
 
+    /// What an empty folder says: "Recycle Bin is empty" there, as
+    /// Dolphin's "Trash is empty" (OPS-040), else "This folder is empty".
+    fn empty_folder_state(&self) -> EmptyState {
+        let shows_recycle_bin = self
+            .current_uri()
+            .is_some_and(|uri| same_location(&uri, TRASH_URI));
+        if shows_recycle_bin {
+            EmptyState::EmptyRecycleBin
+        } else {
+            EmptyState::EmptyFolder
+        }
+    }
+
     /// Selects the tab's saved selection again, and scrolls to its first
     /// item when a Show in folder request asked for that, or starts
     /// renaming it when Tab moved a rename on to it (OPS-012).
@@ -384,7 +397,7 @@ impl BrowserWindow {
             let state = match error {
                 Some(error) => EmptyState::Unavailable(error),
                 None if loading => EmptyState::Loading,
-                None => self.search_empty_state().unwrap_or(EmptyState::EmptyFolder),
+                None => self.search_empty_state().unwrap_or_else(|| self.empty_folder_state()),
             };
             pane.show_empty(&state);
         }

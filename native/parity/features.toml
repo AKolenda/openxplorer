@@ -7329,7 +7329,7 @@ bridge = ["list"]
 dolphin = "trash:/ context menus; Trash place, Restore"
 gnome = "GVfs trash:/// with the 'trash::orig-path' and 'trash::deletion-date' attributes; trash:/// GVfs backend"
 native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs: the Recycle Bin opens as a folder (address \"trash:///\" or \"Recycle Bin\") with its own item and background menus. Missing: the Original location and Date deleted columns, the \"Recycle Bin is empty\" text and a sidebar entry."
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs: the Recycle Bin opens as a folder (address \"trash:///\" or \"Recycle Bin\") with its own item and background menus (Restore, Delete permanently, Properties; Empty Recycle Bin), and an empty Recycle Bin says \"Recycle Bin is empty\" (empty_recycle_bin_asks_then_deletes_everything_in_it). Missing: the Original location and Date deleted columns of the details view, and a sidebar entry."
 
 [[feature]]
 id = "OPS-041"

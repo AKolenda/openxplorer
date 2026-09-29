@@ -123,6 +123,9 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
     assert_eq!(dialog.button_labels(), ["Cancel", "Empty Recycle Bin"]);
     dialog.press("Empty Recycle Bin");
     wait_until("the Recycle Bin to be empty", || test.names().is_empty());
+    wait_until("the empty Recycle Bin text", || {
+        test.window.folder_pane().empty_page().title() == "Recycle Bin is empty"
+    });
     let left = glib::MainContext::default()
         .block_on(list_recycle_bin(&Cancellation::new()))
         .expect("a readable Recycle Bin");
