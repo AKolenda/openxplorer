@@ -12960,8 +12960,8 @@ sources = ["desktop/ui/app.js:421-425", "desktop/ui/app.js:421"]
 python_tests = []
 bridge = ["activateItem", "pin"]
 dolphin = "Information panel"
-native = "todo"
-native_note = "ROADMAP.md mentions a native selection metadata pane; it has no test yet. Porting notes: No file content preview/thumbnails in 1.1.4 (About says thumbnails not implemented). Dolphin's Information panel shows previews; native should add."
+native = "done"
+native_note = "native/crates/ox-app/src/window/details_pane/content.rs (a_file_shows_its_type_size_date_and_containing_folder, a_folder_can_be_pinned_and_is_not_scanned, no_selection_describes_the_folder, several_items_are_counted_and_shown_as_multiple, landing_pages_offer_no_pin); native/crates/ox-app/src/window/tests/environment.rs (the_details_pane_keeps_its_width_for_long_names). The pane (template resources/ui/details-pane.ui) has the 'Details' header with its close button, the item's art, the copy glyph for several items or the folder's art, the name or 'N items selected' and the type or 'Multiple items'/'Folder', Open plus Pin to Quick access for a folder, Pin to Quick access for the folder shown, the Properties rows (Type, Size with the measured size or 'Not scanned', Modified, Location; or Items, Location, Storage) and the SMB or local note, as renderDetails. Porting notes: previews and thumbnails are PROP-011."
 
 [[feature]]
 id = "PROP-010"

@@ -249,6 +249,7 @@ mod tests {
             .map(|property| property.value.as_str())
     }
 
+    /// parity: PROP-009
     #[test]
     fn a_file_shows_its_type_size_date_and_containing_folder() {
         let mut entry = file_entry("Notes.txt");
@@ -268,6 +269,7 @@ mod tests {
         assert_eq!(content.action, PaneAction::Open { can_pin: false });
     }
 
+    /// parity: PROP-009
     #[test]
     fn a_folder_can_be_pinned_and_is_not_scanned() {
         let item = FileItem::new(folder_entry("Projects"));
@@ -276,6 +278,7 @@ mod tests {
         assert_eq!(property(&content, "Size"), Some("Not scanned"));
     }
 
+    /// parity: PROP-009
     #[test]
     fn no_selection_describes_the_folder() {
         let content = content_for(&[], "file:///home/demo");
@@ -287,6 +290,7 @@ mod tests {
         assert_eq!(content.note, LOCAL_NOTE);
     }
 
+    /// parity: PROP-009
     #[test]
     fn several_items_are_counted_and_shown_as_multiple() {
         let selection = [FileItem::new(file_entry("a")), FileItem::new(file_entry("b"))];
@@ -312,6 +316,7 @@ mod tests {
         assert_eq!(local.preview, Preview::Art(Art::Folder));
     }
 
+    /// parity: PROP-009
     #[test]
     fn landing_pages_offer_no_pin() {
         let content = content_for(&[], Page::ThisPc.uri());
