@@ -10248,8 +10248,8 @@ python_tests = [
 bridge = ["connect", "cancel", "environment", "list", "bookmark"]
 dolphin = "Add Network Folder; Network > Add Network Folder"
 gnome = "GMountOperation + g_file_mount_enclosing_volume; g_file_mount_enclosing_volume (GVfs)"
-native = "partial"
-native_note = "native/crates/ox-app/src/dialogs/network_map.rs (the_dialog_asks_for_a_folder_a_label_and_whether_to_save_it, an_unchecked_box_maps_the_share_for_this_session_only); native/crates/ox-app/src/window/tests/network.rs (map_network_location_keeps_its_errors_inside_the_dialog, a_server_being_signed_out_is_neither_listed_nor_mapped); native/crates/ox-app/src/window/tests/sidebar_layout.rs (map_network_location_sits_below_the_list); native/crates/ox-core/src/network/mounting/tests.rs (a_mapped_share_is_named_after_its_folder, map_network_location_refuses_bad_input_before_mounting). The dialog opens from the sidebar button, More, This PC and the Network page; Connect shows Connecting… while it runs, errors stay in the dialog, and closing it drops the connection so a late success is ignored. Missing: a test of the success path (saving the share, refreshing the sidebar and opening it), which needs a real share. Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md."
+native = "done"
+native_note = "native/crates/ox-app/src/dialogs/network_map.rs (the_dialog_asks_for_a_folder_a_label_and_whether_to_save_it, an_unchecked_box_maps_the_share_for_this_session_only); native/crates/ox-app/src/window/tests/network.rs (map_network_location_keeps_its_errors_inside_the_dialog, a_server_being_signed_out_is_neither_listed_nor_mapped); native/crates/ox-app/src/window/tests/network_shares.rs (a_connected_share_is_saved_listed_and_opened); native/crates/ox-app/src/window/tests/sidebar_layout.rs (map_network_location_sits_below_the_list); native/crates/ox-core/src/network/mounting/tests.rs (a_mapped_share_is_named_after_its_folder, map_network_location_refuses_bad_input_before_mounting). The dialog opens from the sidebar button, More, This PC and the Network page; Connect shows Connecting… while it runs, errors stay in the dialog, and closing it drops the connection so a late success is ignored. After a successful mount the share is saved with its label, the dialog closes, the sidebar lists it and the window opens it. Mounting a real SMB server is covered by the manual acceptance of ROADMAP.md."
 
 [[feature]]
 id = "NET-002"
@@ -10299,8 +10299,8 @@ python_tests = [
 ]
 bridge = ["list", "activateItem"]
 gnome = "GVfs smb-browse / smb-share"
-native = "partial"
-native_note = "native/crates/ox-core/src/entry/classify.rs (smb_share_is_navigable_not_a_mutable_regular_directory, shortcut_server_uses_real_target); native/crates/ox-core/src/entry/info.rs (gvfs_mountable_browse_uri_and_target_remain_distinct); native/crates/ox-app/src/window/tests/network.rs (an_unmounted_share_is_mounted_once_then_listed_again). Opening a share mounts it once before it is listed. No SMB server is exercised; the network overlay badge of a listed share has no native test."
+native = "done"
+native_note = "native/crates/ox-core/src/entry/classify.rs (smb_share_is_navigable_not_a_mutable_regular_directory, shortcut_server_uses_real_target); native/crates/ox-core/src/entry/info.rs (gvfs_mountable_browse_uri_and_target_remain_distinct); native/crates/ox-app/src/window/tests/network_shares.rs (a_share_in_a_server_listing_is_a_network_folder_that_opens_its_target); native/crates/ox-app/src/window/tests/network.rs (an_unmounted_share_is_mounted_once_then_listed_again). A share in a server listing shows the share art on the network bar, opens its target URI on activation and middle-click, and as a share root is never cut, copied, renamed or deleted; opening it mounts it once before it is listed."
 
 [[feature]]
 id = "NET-004"
@@ -10349,7 +10349,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:1343-1344"]
 python_tests = []
 bridge = ["list"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/network_shares.rs (a_folder_without_change_notifications_refreshes_on_request). A folder whose watch ends at once (as on an SMB server without change notifications) still lists without an error, and Refresh (F5) lists it again."
 
 [[feature]]
 id = "NET-006"
@@ -10365,8 +10366,8 @@ python_tests = [
   "desktop/tests/test_v07.py::NetworkTests::test_stable_cifs_mount",
 ]
 bridge = ["environment"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/places_composition.rs (mount_badges_respect_path_boundaries_and_escaping); native/crates/ox-core/src/network/mount_table/tests.rs (only_smb_mounts_become_stable_network_mounts); native/crates/ox-app/src/places.rs (a_pin_inside_a_cifs_mount_is_marked_shared). The app reads the kernel CIFS/SMB3 mounts off the main thread on every volume change, so pins and the Network list see them. Missing: tabs on a CIFS path do not show the green bar yet (only smb:// tabs do)."
+native = "done"
+native_note = "native/crates/ox-core/tests/places_composition.rs (mount_badges_respect_path_boundaries_and_escaping); native/crates/ox-core/src/network/mount_table/tests.rs (only_smb_mounts_become_stable_network_mounts); native/crates/ox-app/src/places.rs (a_pin_inside_a_cifs_mount_is_marked_shared); native/crates/ox-app/src/window/location_view.rs (a_tab_under_a_cifs_mount_is_a_network_location); native/crates/ox-app/src/window/tests/network_shares.rs (a_tab_inside_a_cifs_mount_is_marked_as_a_network_location). The app reads the kernel CIFS/SMB3 mounts off the main thread on every volume change, so pins, the Network list and tabs at or below a mount (not a similarly prefixed folder) are network locations."
 
 [[feature]]
 id = "NET-007"
@@ -10447,8 +10448,8 @@ python_tests = [
 ]
 bridge = ["authReply"]
 gnome = "Gtk.MountOperation / GVfs ask-password dialog semantics."
-native = "partial"
-native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (the_dialog_opens_over_the_windows_own_dialog, closing_the_dialog_aborts_its_mount, enter_connects_and_the_eye_reveals_the_password). The dialog is modal over the window, or over its own dialog such as Map network location, which stays open; Escape, × and closing cancel only its challenge; Enter presses Connect; the user name has focus and is selected. Missing: the text-size shortcuts do not reach the modal dialog, and Escape itself has no test (closing the window does)."
+native = "done"
+native_note = "native/crates/ox-app/src/network/sign_in_queue/tests.rs (the_dialog_opens_over_the_windows_own_dialog, closing_the_dialog_aborts_its_mount, enter_connects_and_the_eye_reveals_the_password, escape_cancels_the_shown_challenge, text_size_keys_reach_the_window_under_the_dialog). The dialog is modal over the window, or over its own dialog such as Map network location, which stays open; Escape, × and closing cancel only its challenge; Enter presses Connect; the user name has focus and is selected; Ctrl+plus, Ctrl+minus and Ctrl+0 still resize the window's text (native/crates/ox-app/src/dialogs/network_sign_in/text_size_keys.rs)."
 
 [[feature]]
 id = "NET-010"
@@ -10625,8 +10626,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::Browsing alone does not create a durable bookmark",
 ]
 bridge = ["list", "environment"]
-native = "partial"
-native_note = "native/crates/ox-core/src/network/visited.rs (browsing_remembers_the_share_root_not_every_subfolder, a_server_listing_is_remembered_as_the_server); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it). A successful SMB listing records its share or server for the session and never saves it. Missing: a native test of that listing, which needs a share."
+native = "done"
+native_note = "native/crates/ox-core/src/network/visited.rs (browsing_remembers_the_share_root_not_every_subfolder, a_server_listing_is_remembered_as_the_server); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it); native/crates/ox-app/src/window/tests/network_shares.rs (a_share_that_could_not_be_listed_is_not_remembered). Only a successful listing records its share or server for the session (window/loading.rs), a failed one records nothing, and nothing is saved until Keep in Network. A listing of a real share is covered by the manual acceptance of ROADMAP.md."
 
 [[feature]]
 id = "NET-017"
@@ -10907,8 +10908,8 @@ python_tests = [
   "desktop/tests/test_v05.py::SettingsWindowsTests::test_mapped_path_plan_requires_admin_not_automatic",
 ]
 bridge = ["mountPlan", "clipboardText"]
-native = "partial"
-native_note = "native/crates/ox-core/src/network/mount_plan/tests.rs (the_plan_needs_an_administrator_and_holds_no_password, the_plan_matches_the_python_assistant, a_share_with_spaces_is_quoted_and_its_subfolder_kept, unsupported_shares_are_refused_in_the_assistant_wording); native/crates/ox-core/tests/network_python.rs (mount_plans_match_mount_support_py). The Location tab section, its fields and buttons are not in the native UI yet. Porting notes: No UI test covers the assistant."
+native = "done"
+native_note = "native/crates/ox-core/src/network/mount_plan/tests.rs (the_plan_needs_an_administrator_and_holds_no_password, the_plan_matches_the_python_assistant, a_share_with_spaces_is_quoted_and_its_subfolder_kept, unsupported_shares_are_refused_in_the_assistant_wording); native/crates/ox-core/tests/network_python.rs (mount_plans_match_mount_support_py); native/crates/ox-app/src/properties/mount_assistant/tests.rs (the_assistant_prepares_a_command_and_hands_over_the_linux_folder). The collapsed 'Set up network mount (SMB)' section (properties/mount_assistant.rs) sits at the end of a standard folder's Location tab: Network folder, Prepare setup command, the steps, the command in a read-only text area named 'Mount setup command', Copy command with its toast, 'Linux folder: <path>', Use this path, the helper note and the collapsed removal command; a plan error replaces the result. Use this path hands the folder to the Location tab's callback: the Location tab of PROP-017 fills Folder location with it and says 'After mounting, click Check location.'; until that tab lands, the placeholder tab copies the path and says so."
 
 [[feature]]
 id = "NET-028"
@@ -10932,8 +10933,8 @@ python_tests = [
   "desktop/tests/test_v05.py::SettingsWindowsTests::test_mapped_path_plan_requires_admin_not_automatic",
 ]
 bridge = ["mountPlan"]
-native = "partial"
-native_note = "native/crates/ox-core/src/network/mount_helper.rs (an_unsafe_parent_chain_is_refused, a_new_file_gets_its_mode_and_never_replaces_anything, the_credential_file_names_user_password_and_optional_domain, credentials_that_would_break_the_file_are_refused); native/crates/ox-core/src/network/mount_plan/tests.rs (the_plan_matches_the_python_assistant). Only the helper's file rules and the plan are ported. Its interactive command line (review, SETUP and REMOVE confirmation, systemctl and rollback) is not, so the packaged openxplorer-mount-share still runs desktop/mount_share.py (ROADMAP.md, \"Network and devices\")."
+native = "done"
+native_note = "native/crates/ox-core/src/network/mount_helper/tests.rs (an_unsafe_parent_chain_is_refused, a_new_file_gets_its_mode_and_never_replaces_anything, the_credential_file_names_user_password_and_optional_domain, credentials_that_would_break_the_file_are_refused, the_command_line_matches_the_python_helper, the_plan_is_printed_without_any_change, a_change_needs_an_administrator_and_a_terminal, setup_writes_the_credential_and_units_then_starts_the_mount, setup_is_cancelled_or_refused_without_touching_existing_files, a_failed_mount_rolls_the_setup_back, removal_needs_unchanged_units_and_deletes_only_the_configuration); native/crates/ox-core/src/network/mount_plan/tests.rs (the_plan_matches_the_python_assistant). openxplorer-mount-share is a Rust program (crates/ox-core/src/bin/openxplorer-mount-share.rs, network/mount_helper/) with mount_share.py's command line and behaviour: it prints the plan, needs sudo and a terminal, SETUP and the account (password without echo), writes the 0600 credential file and both units exclusively, creates the 0555 mount point, enables and tests the mount, and rolls back on failure; --plan only prints; --remove needs REMOVE and unedited units and deletes no shared or local file. The tests run it in a temporary root with systemd and the terminal recorded. The stable .deb, RPM and Arch packages install it (native/tools/package_data.py, verify_layout.py) and no package ships or depends on Python; cifs-utils stays recommended. The only difference from Python: a missing mount.cifs says 'Install the cifs-utils package first, then run this command again.' rather than naming apt."
 
 [[feature]]
 id = "NET-029"
@@ -11117,8 +11118,8 @@ sources = [
 python_tests = []
 bridge = ["environment"]
 gnome = "GVolumeMonitor signals"
-native = "todo"
-native_note = "The window listens to the volume monitor's mount, volume and drive signals (window/environment.rs) and redraws every window, but no native test emits them: a test cannot create a GIO mount or drive."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/devices.rs (every_volume_monitor_signal_refreshes_every_window). The window connects one list of volume-monitor signals (mount, volume and drive added, removed and changed; window/environment.rs); the test emits each of them and proves every window reads the environment again. Real drives and phones are covered by the manual acceptance of ROADMAP.md."
 
 [[feature]]
 id = "DEV-003"
