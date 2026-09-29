@@ -94,10 +94,10 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    for disabled in ["Open", "Rename", "Copy path", "Properties"] {
+    for disabled in ["Open", "Rename", "Copy path"] {
         assert!(!menu.row(disabled).is_sensitive(), "{disabled}");
     }
-    for enabled in ["Cut", "Copy", "Move to Trash", "Duplicate"] {
+    for enabled in ["Cut", "Copy", "Move to Trash", "Duplicate", "Properties"] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
     }
 }

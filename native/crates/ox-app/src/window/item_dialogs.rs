@@ -26,8 +26,8 @@ use crate::dialog_layer::{quiet_text, DialogFrame, DialogLayer, DialogWidth};
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::properties::{
-    PropertiesContext, PropertiesTab, PropertiesTarget, PropertiesView, RestoreRequest, SnapshotBanner,
-    SnapshotTarget,
+    PropertiesContext, PropertiesTab, PropertiesTarget, PropertiesView, RestoreRequest, SelectionProperties,
+    SnapshotBanner, SnapshotTarget,
 };
 
 use super::actions::{plain_action, text_action};
@@ -35,12 +35,19 @@ use super::session::TabId;
 use super::window_action::WindowAction;
 use super::{BrowserWindow, ButtonStyle};
 
+/// What a Properties dialog describes: one item, or several (PROP-002).
+#[derive(Debug)]
+enum PropertiesBody {
+    Item(PropertiesView),
+    Selection(SelectionProperties),
+}
+
 /// A Properties dialog and the tab it belongs to.
 #[derive(Debug)]
 struct TabProperties {
     tab: TabId,
     frame: DialogFrame,
-    view: PropertiesView,
+    body: PropertiesBody,
 }
 
 /// The window's dialogs and the tabs browsing snapshots.
@@ -115,14 +122,14 @@ impl BrowserWindow {
         ]);
     }
 
-    /// Enables Properties and Previous versions for one selected item, or
-    /// for a real folder with nothing selected.
+    /// Enables Properties for a selection (PROP-002) or a real folder
+    /// with nothing selected, and Previous versions for one item.
     pub(super) fn update_properties_actions(&self) {
         let selected = self.folder_pane().model().summary().count;
         let on_page = self.current_uri().as_deref().and_then(Page::from_uri).is_some();
-        let enabled = selected == 1 || (selected == 0 && !on_page);
-        self.set_action_enabled(WindowAction::Properties, enabled);
-        self.set_action_enabled(WindowAction::PreviousVersions, enabled);
+        let one_item = selected == 1 || (selected == 0 && !on_page);
+        self.set_action_enabled(WindowAction::Properties, one_item || selected > 1);
+        self.set_action_enabled(WindowAction::PreviousVersions, one_item);
     }
 
     /// What Properties describes: the first selected item, or the folder
@@ -167,6 +174,12 @@ impl BrowserWindow {
 
     /// Opens Properties of the selection or the folder on `tab`.
     pub(super) fn open_properties(&self, tab: PropertiesTab) {
+        let selected = self.folder_pane().model().selected_items();
+        if selected.len() > 1 && tab != PropertiesTab::PreviousVersions {
+            let entries = selected.iter().map(|item| item.entry().clone()).collect();
+            self.show_selection_properties(entries, tab);
+            return;
+        }
         if let Some(target) = self.properties_target() {
             self.show_properties(target, tab);
         }
@@ -200,25 +213,47 @@ impl BrowserWindow {
         ));
     }
 
+    /// What a Properties dialog needs from the window; `uri` is the item
+    /// whose measured size it shows.
+    fn properties_context(&self, uri: &str) -> PropertiesContext {
+        PropertiesContext {
+            versions: self.context().previous_versions().clone(),
+            locations: self.imp().locations.borrow().clone(),
+            folder_size: self.measured_folder_size(uri),
+            relocation: self.context().folder_relocation(),
+            brave: self.context().desktop_integration().brave(),
+        }
+    }
+
     /// Shows Properties of `target` on `tab`, owned by the active tab; a
     /// dialog the tab had is replaced.
     fn show_properties(&self, target: PropertiesTarget, tab: PropertiesTab) {
+        let context = self.properties_context(&target.uri);
+        let title = target.dialog_title();
+        let view = PropertiesView::new(target, context, tab);
+        let frame = DialogFrame::new(&title, view.dialog_width());
+        frame.body().append(&view);
+        self.present_properties(frame, PropertiesBody::Item(view));
+    }
+
+    /// Shows Properties of several selected items (PROP-002).
+    fn show_selection_properties(&self, entries: Vec<ox_core::entry::Entry>, tab: PropertiesTab) {
+        let title = SelectionProperties::dialog_title(entries.len());
+        let context = self.properties_context("");
+        let selection = SelectionProperties::new(entries, &context, tab);
+        let frame = DialogFrame::new(&title, DialogWidth::Properties);
+        frame.body().append(selection.widget());
+        self.present_properties(frame, PropertiesBody::Selection(selection));
+    }
+
+    /// Shows the Properties dialog `frame`, owned by the active tab; a
+    /// dialog the tab had is replaced.
+    fn present_properties(&self, frame: DialogFrame, body: PropertiesBody) {
         let Some(owner) = self.imp().session.borrow().active_id() else {
             return;
         };
         self.discard_dialog_of_tab(owner);
-        let context = PropertiesContext {
-            versions: self.context().previous_versions().clone(),
-            locations: self.imp().locations.borrow().clone(),
-            folder_size: self.measured_folder_size(&target.uri),
-            relocation: self.context().folder_relocation(),
-            brave: self.context().desktop_integration().brave(),
-        };
-        let title = target.dialog_title();
-        let view = PropertiesView::new(target, context, tab);
-        let frame = DialogFrame::new(&title, view.dialog_width());
         frame.add_css_class("properties-dialog");
-        frame.body().append(&view);
         frame.add_closing_button("Close", ButtonStyle::Accent, || {});
         frame.connect_closed(glib::clone!(
             #[weak(rename_to = window)]
@@ -228,7 +263,7 @@ impl BrowserWindow {
         let entry = TabProperties {
             tab: owner,
             frame: frame.clone(),
-            view,
+            body,
         };
         self.item_dialogs().properties.borrow_mut().push(entry);
         self.dialog_layer().present(&frame);
@@ -244,7 +279,10 @@ impl BrowserWindow {
             position.map(|position| properties.remove(position))
         };
         if let Some(closed) = closed {
-            closed.view.cancel_work();
+            match &closed.body {
+                PropertiesBody::Item(view) => view.cancel_work(),
+                PropertiesBody::Selection(selection) => selection.cancel_work(),
+            }
         }
         // A lookup may have found snapshot collections, which are
         // read-only from now on and mark the tabs inside them.
@@ -351,7 +389,13 @@ impl BrowserWindow {
     /// Every open Properties view, for updates such as a measured size.
     pub(super) fn properties_views(&self) -> Vec<PropertiesView> {
         let properties = self.item_dialogs().properties.borrow();
-        properties.iter().map(|entry| entry.view.clone()).collect()
+        properties
+            .iter()
+            .filter_map(|entry| match &entry.body {
+                PropertiesBody::Item(view) => Some(view.clone()),
+                PropertiesBody::Selection(_) => None,
+            })
+            .collect()
     }
 
     /// A dialog titled `title` showing `text`, with OK (`showMessage`).

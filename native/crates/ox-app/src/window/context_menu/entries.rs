@@ -233,7 +233,8 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let versions = item("Previous versions", Icon::History, WindowAction::PreviousVersions);
     let properties = item("Properties", Icon::Info, WindowAction::Properties).with_shortcut("Alt+Enter");
     entries.push(versions.disabled_when(several).into());
-    entries.push(properties.disabled_when(several).into());
+    // Properties describe several items together (PROP-002).
+    entries.push(properties.into());
     entries
 }
 
@@ -563,7 +564,6 @@ mod tests {
                 "Pin to Quick access",
                 "Copy path",
                 "Previous versions",
-                "Properties",
             ]
         );
     }

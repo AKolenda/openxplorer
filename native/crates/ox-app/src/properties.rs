@@ -18,6 +18,7 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `view` | [`PropertiesView`]: the tabs and their panels |
+//! | `selection_view` | [`SelectionProperties`]: Properties of several items |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_panel` | The General and Permissions tabs |
 //! | `permissions_editor` | Changing permissions on the Permissions tab |
@@ -40,6 +41,7 @@ mod metadata;
 mod mount_assistant;
 mod permissions_editor;
 mod restore;
+mod selection_view;
 mod size_scan_strip;
 mod snapshot_banner;
 mod snapshot_source;
@@ -54,6 +56,7 @@ pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes, NOT_SCANNE
 #[cfg(test)]
 pub(crate) use location_panel::LocationPanel;
 pub(crate) use restore::RestoreRequest;
+pub(crate) use selection_view::SelectionProperties;
 pub(crate) use size_scan_strip::{progress_text, RunEnd, RunPosition, SizeScanStrip};
 pub(crate) use snapshot_banner::SnapshotBanner;
 pub(crate) use version_row::SnapshotTarget;

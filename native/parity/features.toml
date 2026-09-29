@@ -5945,7 +5945,7 @@ bridge = [
 ]
 dolphin = "Item context menu; DolphinContextMenu::addItemContextMenu"
 native = "partial"
-native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts, a_zip_file_on_a_share_offers_extraction_and_sign_out, several_selected_items_disable_what_acts_on_one); native/crates/ox-app/src/window/tests/context_menus.rs. Adds Duplicate. Missing: the \"Open in <editor>\" items, the \"Stop caching this folder\" label, and the commands of other milestones (Terminal, Open with, sizes, versions, Properties), which show disabled."
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts, a_zip_file_on_a_share_offers_extraction_and_sign_out, several_selected_items_disable_what_acts_on_one); native/crates/ox-app/src/window/tests/context_menus.rs. Adds Duplicate. Missing: the \"Open in <editor>\" items, the \"Stop caching this folder\" label, and the commands of other milestones (Terminal, Open with, sizes, versions, Properties), which show disabled. Properties stays enabled with several items selected and describes them together (PROP-002), as in Dolphin and Explorer."
 
 [[feature]]
 id = "CMD-010"
@@ -12803,8 +12803,8 @@ sources = [
 python_tests = []
 bridge = ["properties", "folderSize"]
 dolphin = "KPropertiesDialog(KFileItemList)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer disables Properties when more than one item is selected."
+native = "done"
+native_note = "native/crates/ox-app/src/properties/selection_view.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (properties_of_several_items_total_them_and_change_them_together). With several items selected, Properties (Alt+Enter, the context menu and the command bar) opens '<n> items Properties' with a General tab (a '<n> files, <m> folders' heading, 'All of type …' or 'Multiple types', 'All in <folder>' or 'Multiple locations', and Size and Contains, which show 'Calculating…' while every selected folder is measured with the folder-size scan and then the combined bytes and files/folders, prefixed '≥' when a scan was partial) and a Permissions tab (Owner and Group, or 'Multiple'), whose editor, shown when the user owns every item, applies one change to all of them. Previous versions stays a one-item command. Closing the dialog cancels the measuring. Porting notes: OpenXplorer disables Properties when more than one item is selected."
 
 [[feature]]
 id = "PROP-003"

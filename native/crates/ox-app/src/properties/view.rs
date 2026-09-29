@@ -285,7 +285,7 @@ impl PropertiesView {
         };
         let folder_rows = general_panel::fill_general(&imp.general, &facts);
         imp.folder_rows.replace(folder_rows);
-        let editor = Self::can_edit_permissions(&properties, context).then(|| {
+        let editor = can_edit_permissions(&properties, context).then(|| {
             let items = EditedItems {
                 uris: vec![properties.entry.uri.clone()],
                 mode: properties.mode.unwrap_or_default(),
@@ -311,18 +311,6 @@ impl PropertiesView {
             && !is_share
             && !is_read_only
             && is_renamable_place
-    }
-
-    /// Whether the permissions can be changed here: the user owns the
-    /// item, which has permission bits and is not a link, a share root or
-    /// inside a previous version (PROP-007).
-    fn can_edit_permissions(properties: &ItemProperties, context: &PropertiesContext) -> bool {
-        let uri = &properties.entry.uri;
-        let is_owner = properties.owner.as_deref() == glib::user_name().to_str();
-        let is_link = properties.link_target.is_some();
-        let is_read_only = context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
-        let is_place = uri.starts_with("file:") || (is_smb_location(uri) && !is_smb_share_root(uri));
-        is_owner && properties.mode.is_some() && !is_link && !is_read_only && is_place && !is_smb_server(uri)
     }
 
     /// Shows the folder's new measured size, if this dialog describes the
@@ -386,4 +374,16 @@ impl PropertiesView {
             .map(String::from)
             .collect()
     }
+}
+
+/// Whether the permissions can be changed here: the user owns the
+/// item, which has permission bits and is not a link, a share root or
+/// inside a previous version (PROP-007).
+pub(super) fn can_edit_permissions(properties: &ItemProperties, context: &PropertiesContext) -> bool {
+    let uri = &properties.entry.uri;
+    let is_owner = properties.owner.as_deref() == glib::user_name().to_str();
+    let is_link = properties.link_target.is_some();
+    let is_read_only = context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
+    let is_place = uri.starts_with("file:") || (is_smb_location(uri) && !is_smb_share_root(uri));
+    is_owner && properties.mode.is_some() && !is_link && !is_read_only && is_place && !is_smb_server(uri)
 }

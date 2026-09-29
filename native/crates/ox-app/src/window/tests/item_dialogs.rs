@@ -269,6 +269,46 @@ fn the_owner_changes_a_files_permissions() {
     wait_until("the advanced mode", || mode() == 0o2600);
 }
 
+/// Properties of several items total them, folders' content included,
+/// and a permission change reaches every one.
+///
+/// parity: PROP-002
+#[gtk::test]
+fn properties_of_several_items_total_them_and_change_them_together() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = Fixture::standard();
+    fixture.write("Documents/inside.txt");
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Documents", "Notes 2.txt", "Notes 10.txt"]);
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+
+    assert_eq!(frame.title(), "3 items Properties");
+    wait_until("the folders measured", || {
+        value_after(&frame, "Contains").as_deref() == Some("3 files, 1 folder")
+    });
+    assert_eq!(value_after(&frame, "Size").as_deref(), Some("60 bytes"));
+    assert_eq!(
+        value_after(&frame, "Location").as_deref(),
+        Some(format!("All in {}", fixture.path("").display()).trim_end_matches('/'))
+    );
+    wait_until("the editor", || !descendants::<gtk::DropDown>(&frame).is_empty());
+    descendants::<gtk::DropDown>(&frame)[2].set_selected(0);
+    press(&frame, "Apply permissions");
+
+    let others = |name: &str| {
+        fs::metadata(fixture.path(name))
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o7
+    };
+    wait_until("every item changed", || {
+        others("Documents") == 0 && others("Notes 2.txt") == 0 && others("Notes 10.txt") == 0
+    });
+}
+
 /// A link says where it points, and a mount point what is mounted there
 /// and how much space is free.
 ///
