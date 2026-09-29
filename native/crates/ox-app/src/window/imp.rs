@@ -121,6 +121,8 @@ pub(crate) struct BrowserWindow {
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
     pub(super) typeahead: RefCell<Typeahead>,
+    /// GNOME's previewer shows a file this window asked it to (PROP-012).
+    pub(super) quick_look_open: Cell<bool>,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
     /// Set while the window swaps or reloads the model, so the

@@ -256,9 +256,13 @@ impl BrowserWindow {
                 input.reset();
                 self.reset_typeahead();
             }
+            gdk::Key::Escape if self.close_quick_look() => {}
             gdk::Key::Escape => self.folder_pane().model().select_none(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
-            // Space toggles the native selection unless a prefix is typed.
+            // Space previews the selected file in GNOME's previewer
+            // (PROP-012), else toggles the native selection, unless a
+            // prefix is typed.
+            gdk::Key::space if !prefix_active && self.toggle_quick_look() => {}
             gdk::Key::space if !prefix_active => return Some(glib::Propagation::Proceed),
             _ => return None,
         }

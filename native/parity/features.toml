@@ -13023,8 +13023,8 @@ python_tests = []
 bridge = []
 dolphin = "n/a (Information panel)"
 gnome = "org.gnome.NautilusPreviewer2 ShowFile (gnome-sushi 46 installed, org.gnome.NautilusPreviewer.service)"
-native = "todo"
-native_note = "Porting notes: Must not break type-ahead, where Space can be part of a name prefix."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/quick_look.rs; native/crates/ox-app/src/window/tests/input.rs (space_previews_the_selected_file_with_the_gnome_previewer). When GNOME Sushi (org.gnome.NautilusPreviewer) runs or is D-Bus activatable, Space on one selected file (no typed prefix) calls org.gnome.NautilusPreviewer2.ShowFile, moving the selection while the preview is open shows the newly selected file, and Space or Escape calls Close. Without Sushi, or with a folder or several items selected, Space toggles the selection as before, and a typed prefix keeps its space. Missing: the preview is not transient for the OpenXplorer window, because the window handle needs the GDK X11/Wayland bindings (gdk4-x11, gdk4-wayland), which the app does not link. Porting notes: Must not break type-ahead, where Space can be part of a name prefix."
 
 [[feature]]
 id = "PROP-013"

@@ -9,12 +9,16 @@
 //!
 //! [`BrowserWindow::type_text`]: crate::window::BrowserWindow
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
-use gtk::{gdk, glib};
+use gtk::{gdk, gio, glib};
 
-use crate::test_support::harness::{descendants, Fixture, TestWindow, ThemeGuard};
+use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::window::menu_popover::MenuPopover;
+use crate::window::quick_look::{PREVIEWER_INTERFACE, PREVIEWER_NAME, PREVIEWER_PATH};
 
 /// Presses `key` in the details view, as far as the window's own key
 /// handling goes. Returns true when the window handled the key itself.
@@ -205,4 +209,112 @@ fn the_menu_key_opens_the_context_menu_with_or_without_a_selection() {
         assert!(menu.is_visible(), "the menu opens for the selection {selected:?}");
         menu.popdown();
     }
+}
+
+/// A stand-in for GNOME Sushi on the private session bus, recording the
+/// calls it receives until it is dropped.
+struct FakePreviewer {
+    bus: gio::DBusConnection,
+    calls: Rc<RefCell<Vec<String>>>,
+    owner: Option<gio::OwnerId>,
+    registration: Option<gio::RegistrationId>,
+}
+
+impl FakePreviewer {
+    fn start() -> Self {
+        let xml = format!(
+            "<node><interface name='{PREVIEWER_INTERFACE}'><method name='ShowFile'><arg type='s'/>\
+             <arg type='s'/><arg type='b'/></method><method name='Close'/></interface></node>"
+        );
+        let node = gio::DBusNodeInfo::for_xml(&xml).expect("valid introspection");
+        let interface = node.lookup_interface(PREVIEWER_INTERFACE).expect("the interface");
+        let bus = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).expect("the private bus");
+        let calls = Rc::new(RefCell::new(Vec::new()));
+        let recorded = Rc::clone(&calls);
+        let registration = bus
+            .register_object(PREVIEWER_PATH, &interface)
+            .method_call(move |_, _, _, _, method, parameters, invocation| {
+                let uri = parameters
+                    .try_child_value(0)
+                    .and_then(|uri| uri.str().map(str::to_owned));
+                let call = uri.map_or_else(|| method.to_owned(), |uri| format!("{method} {uri}"));
+                recorded.borrow_mut().push(call);
+                invocation.return_value(None);
+            })
+            .build()
+            .expect("the object registers");
+        let owner = gio::bus_own_name_on_connection(
+            &bus,
+            PREVIEWER_NAME,
+            gio::BusNameOwnerFlags::NONE,
+            |_, _| {},
+            |_, _| {},
+        );
+        wait_until("the previewer's name", || name_has_owner(&bus));
+        Self {
+            bus,
+            calls,
+            owner: Some(owner),
+            registration: Some(registration),
+        }
+    }
+
+    fn calls(&self) -> Vec<String> {
+        self.calls.borrow().clone()
+    }
+}
+
+impl Drop for FakePreviewer {
+    fn drop(&mut self) {
+        if let Some(owner) = self.owner.take() {
+            gio::bus_unown_name(owner);
+        }
+        if let Some(registration) = self.registration.take() {
+            // Dropping the test's bus connection unregisters it anyway.
+            let _ = self.bus.unregister_object(registration);
+        }
+    }
+}
+
+/// Whether Sushi's name has an owner on `bus`.
+fn name_has_owner(bus: &gio::DBusConnection) -> bool {
+    let reply = bus.call_sync(
+        Some("org.freedesktop.DBus"),
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "NameHasOwner",
+        Some(&(PREVIEWER_NAME,).to_variant()),
+        None,
+        gio::DBusCallFlags::NONE,
+        1000,
+        gio::Cancellable::NONE,
+    );
+    reply
+        .ok()
+        .and_then(|reply| reply.get::<(bool,)>())
+        .is_some_and(|(owned,)| owned)
+}
+
+/// Space previews the selected file in GNOME's previewer, moving the
+/// selection shows the next file, and Space closes it.
+///
+/// parity: PROP-012
+#[gtk::test]
+fn space_previews_the_selected_file_with_the_gnome_previewer() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let previewer = FakePreviewer::start();
+    test.select_named("Notes 10.txt");
+
+    assert!(press(&test, gdk::Key::space), "Space opens the preview");
+    wait_until("ShowFile", || !previewer.calls().is_empty());
+    test.select_named("Notes 2.txt");
+    assert!(press(&test, gdk::Key::space), "Space closes the preview");
+    wait_until("Close", || previewer.calls().len() == 3);
+
+    let shown = |name: &str| format!("ShowFile {}", fixture.uri_of(name));
+    assert_eq!(
+        previewer.calls(),
+        [shown("Notes 10.txt"), shown("Notes 2.txt"), "Close".to_owned()]
+    );
 }
