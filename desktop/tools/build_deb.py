@@ -192,7 +192,7 @@ Section: utils
 Homepage: https://openxplorer.app
 Priority: optional
 Architecture: all
-Maintainer: OpenXplorer contributors <maintainer@example.invalid>
+Maintainer: OpenXplorer contributors <openxplorer@users.noreply.github.com>
 Installed-Size: {installed}
 Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-3.0, gir1.2-webkit2-4.1 (>= 2.40), gir1.2-secret-1, gvfs-backends, gvfs-fuse, xdg-utils, xdg-user-dirs, desktop-file-utils, hicolor-icon-theme
 Recommends: pkexec, cifs-utils, file-roller, gnome-terminal | x-terminal-emulator

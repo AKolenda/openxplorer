@@ -93,8 +93,9 @@ Python process cannot guarantee zeroization of every memory copy.
 
 ## Publication blockers not silently invented
 
-The package maintainer address remains a marked `example.invalid` placeholder;
-the owner must supply a real address/private report channel. The owner supplied openxplorer.app and it is now configured. No repository,
+The packages name the project's commit identity,
+`openxplorer@users.noreply.github.com`, as maintainer; that address receives no
+mail, so reports go through GitHub's private vulnerability reporting. The owner supplied openxplorer.app and it is now configured. No repository,
 support SLA, code-signing key, successful deployment or production safety claim
 is invented. Checksums establish artifact correspondence, not publisher
 identity. All project and upstream license notices remain in the combined source.

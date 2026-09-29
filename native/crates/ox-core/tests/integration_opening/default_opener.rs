@@ -153,8 +153,8 @@ fn an_executable_script_opens_in_its_editor_and_is_never_run() {
     assert_eq!(prepared.target, OpenTarget::LocalPath(script));
     let content_type = prepared.entry.content_type.clone().unwrap_or_default();
     // shared-mime-info 2.5.1 and later name shell scripts text/x-shellscript
-    // and keep application/x-shellscript as its alias; older releases, as on
-    // Ubuntu 24.04, have it the other way round.
+    // with application/x-shellscript as its alias; older releases name them
+    // application/x-shellscript (alias text/x-sh).
     assert!(
         matches!(
             content_type.as_str(),
