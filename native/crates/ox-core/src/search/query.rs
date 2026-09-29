@@ -12,6 +12,7 @@ use rusqlite::{Connection, Row};
 
 use super::error::{check_cancelled, SearchError};
 use super::index::SearchIndex;
+use super::pattern::is_wildcard;
 use super::root::{HiddenItems, RootStatus, SearchEngine};
 use super::text::{display_path, fold, folder_prefix, whole_seconds};
 use crate::entry::EntryKind;
@@ -206,8 +207,15 @@ impl QueryPlan {
             conditions.extend(plan.trigram_condition(words));
         }
         for word in words {
-            conditions.push("instr(e.search_text, ?)>0".to_owned());
-            plan.values.push(Value::Text(word.clone()));
+            // A wildcard word matches the whole name (SRCH-004); SQLite's
+            // GLOB has the same wildcards, with `^` for a negated set.
+            if is_wildcard(word) {
+                conditions.push("lower(e.name) GLOB ?".to_owned());
+                plan.values.push(Value::Text(word.replace("[!", "[^")));
+            } else {
+                conditions.push("instr(e.search_text, ?)>0".to_owned());
+                plan.values.push(Value::Text(word.clone()));
+            }
         }
         if let Some(scope) = scope {
             conditions.push(plan.scope_condition(scope));
@@ -239,7 +247,7 @@ impl QueryPlan {
     fn trigram_condition(&mut self, words: &[String]) -> Option<String> {
         let quoted: Vec<String> = words
             .iter()
-            .filter(|word| word.chars().count() >= MIN_TRIGRAM_WORD_CHARS)
+            .filter(|word| !is_wildcard(word) && word.chars().count() >= MIN_TRIGRAM_WORD_CHARS)
             .map(|word| format!("\"{}\"", word.replace('"', "\"\"")))
             .collect();
         if quoted.is_empty() {
@@ -391,6 +399,21 @@ mod tests {
 
         assert_eq!(in_reports, ["q3-bank.pdf"]);
         assert_eq!(everywhere, ["bank.pdf", "q3-bank.pdf"]);
+    }
+
+    /// parity: SRCH-004
+    #[test]
+    fn a_wildcard_word_matches_the_whole_cached_name() {
+        let share = ScannedShare::new();
+        let reports = format!("{SHARE}/Reports");
+        share.store(&[
+            listed_file(&reports, "Q3-bank.PDF"),
+            listed_file(SHARE, "bank.pdf.txt"),
+            listed_file(SHARE, "draft.pdf"),
+        ]);
+
+        assert_eq!(share.found_names("*.pdf"), ["draft.pdf", "Q3-bank.PDF"]);
+        assert_eq!(share.found_names("reports [!d]*.pdf"), ["Q3-bank.PDF"]);
     }
 
     /// parity: SRCH-008

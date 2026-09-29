@@ -48,6 +48,7 @@
 //! | `watch` | inotify watches | `local_watch.py` |
 //! | `reader` | Reading one folder through GIO | `gio_backend.py` |
 //! | `pins` | Indexing pinned folders (SRCH-040) | new |
+//! | `pattern` | The words and wildcards a name must match | `app.js`, Dolphin |
 //! | `text` | Folding, display paths and URI containment | `search_index.py` |
 //! | `error` | The error of every operation | both |
 
@@ -59,6 +60,7 @@ mod index;
 mod limits;
 mod mounts;
 mod ownership;
+mod pattern;
 mod pins;
 mod policy;
 mod query;
@@ -83,6 +85,7 @@ mod service_tests;
 
 pub use error::SearchError;
 pub use index::SearchIndex;
+pub use pattern::{is_wildcard, NamePattern};
 pub use pins::PinIndexing;
 pub use query::{
     SearchHit, SearchQuery, SearchResults, DEFAULT_RESULT_LIMIT, MAX_QUERY_CHARS, MAX_RESULT_LIMIT,

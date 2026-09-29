@@ -9447,8 +9447,8 @@ python_tests = [
 ]
 bridge = ["search"]
 dolphin = "show_filter_bar: Ctrl+I, /"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's search box filters folders that are not indexed by whitespace-separated substrings, with no wildcard support. Ctrl+F focuses it; Explorer also focuses search with Ctrl+E and F3."
+native = "done"
+native_note = "native/crates/ox-core/src/search/pattern.rs (wildcard_words_match_the_whole_name_and_other_words_anywhere); native/crates/ox-app/src/folder_view/filter.rs (a_wildcard_term_filters_by_the_whole_name); native/crates/ox-core/src/search/query.rs (a_wildcard_word_matches_the_whole_cached_name). A search word holding *, ? or [ ] is a wildcard pattern that must match the whole name, ignoring case, as in Dolphin's filter bar ([!a-c] and [^a-c] negate a set; a [ without ] is a plain character); other words keep matching anywhere in the name, as in Python. The same rule filters the folder (ox_core::search::NamePattern), the listing's matches merged into cached results, and the cache itself (SQLite GLOB on the lower-cased name). When nothing matches, the empty page keeps the Python heading \"No matching items\" with its explanation, in place of Dolphin's \"No items matching the filter\"."
 
 [[feature]]
 id = "SRCH-005"

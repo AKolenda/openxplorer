@@ -3,7 +3,11 @@
 //!
 //! Matches the filter in `filtered()` in `desktop/ui/app.js`: hidden items
 //! only with "Show hidden files", and every whitespace-separated search term
-//! must occur somewhere in the name, ignoring case.
+//! must occur somewhere in the name, ignoring case. A term with the
+//! wildcards `*`, `?` or `[ ]` must match the whole name instead, as in
+//! Dolphin's filter bar (SRCH-004, [`NamePattern`]).
+
+use ox_core::search::NamePattern;
 
 /// Whether GIO marks an item hidden (a dot file, or one named in its
 /// folder's `.hidden` file).
@@ -18,17 +22,17 @@ pub(crate) enum Visibility {
 /// The current search text and hidden-file preference.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct FilterState {
-    /// The lower-cased search terms; empty while nothing is searched.
-    terms: Vec<String>,
+    /// The search terms; empty while nothing is searched.
+    pattern: NamePattern,
     show_hidden: bool,
 }
 
 impl FilterState {
     /// Sets the search text; returns true when the terms changed.
     pub(crate) fn set_query(&mut self, query: &str) -> bool {
-        let terms = query_terms(query);
-        let changed = terms != self.terms;
-        self.terms = terms;
+        let pattern = NamePattern::new(query);
+        let changed = pattern != self.pattern;
+        self.pattern = pattern;
         changed
     }
 
@@ -42,7 +46,7 @@ impl FilterState {
     /// True when a search is active.
     #[cfg(test)]
     pub(crate) fn is_searching(&self) -> bool {
-        !self.terms.is_empty()
+        !self.pattern.is_empty()
     }
 
     /// True when an item of `visibility` is listed at all, searched or
@@ -52,26 +56,10 @@ impl FilterState {
     }
 
     /// Whether an item is shown: it is listed, and `lowercase_name`, its
-    /// lower-cased display name, holds every search term.
+    /// lower-cased display name, matches every search term.
     pub(crate) fn accepts(&self, lowercase_name: &str, visibility: Visibility) -> bool {
-        self.lists(visibility) && self.matches_every_term(lowercase_name)
+        self.lists(visibility) && self.pattern.matches_lowercase(lowercase_name, "")
     }
-
-    /// True when every search term occurs in `lowercase_name`.
-    fn matches_every_term(&self, lowercase_name: &str) -> bool {
-        self.terms
-            .iter()
-            .all(|term| lowercase_name.contains(term.as_str()))
-    }
-}
-
-/// Splits search text into lower-cased terms.
-fn query_terms(query: &str) -> Vec<String> {
-    query
-        .to_lowercase()
-        .split_whitespace()
-        .map(str::to_string)
-        .collect()
 }
 
 #[cfg(test)]
@@ -91,6 +79,15 @@ mod tests {
         let filter = searching("  Report  2026 ");
         assert!(filter.accepts("quarterly report 2026.docx", Visibility::Visible));
         assert!(!filter.accepts("quarterly report 2025.docx", Visibility::Visible));
+    }
+
+    /// parity: SRCH-004
+    #[test]
+    fn a_wildcard_term_filters_by_the_whole_name() {
+        let filter = searching("*.TXT notes");
+        assert!(filter.accepts("notes 10.txt", Visibility::Visible));
+        assert!(!filter.accepts("notes 10.txt.bak", Visibility::Visible));
+        assert!(!filter.accepts("résumé.txt", Visibility::Visible));
     }
 
     /// parity: SRCH-003, VIEW-023
