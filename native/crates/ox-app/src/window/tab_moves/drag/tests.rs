@@ -250,6 +250,30 @@ fn a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays() {
     }
 }
 
+/// parity: TAB-003
+#[gtk::test]
+fn a_dragged_tab_neither_closes_nor_navigates() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the second tab");
+    start_dragging(&test.window, 1);
+
+    test.activate("close-tab", None);
+    test.window.navigate(&fixture.uri()).expect("a folder");
+    let message = test.window.shown_message();
+    test.window.cancel_tab_drag(gdk::DragCancelReason::UserCancelled);
+    test.window.end_tab_drag();
+
+    assert_eq!(message, "Wait for this tab to finish moving.");
+    assert_eq!(test.window.tab_count(), 2);
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    test.activate("close-tab", None);
+    assert_eq!(test.window.tab_count(), 1, "the tab closes once the drag ended");
+}
+
 /// parity: TAB-031
 #[gtk::test]
 fn no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy() {

@@ -111,7 +111,8 @@ impl BrowserWindow {
         self.open_tab(address, TabPlacement::Foreground)
     }
 
-    /// Navigates the active tab, or opens a first tab.
+    /// Navigates the active tab, or opens a first tab. A tab that is
+    /// being dragged stays where it is (TAB-003).
     ///
     /// # Errors
     ///
@@ -119,6 +120,9 @@ impl BrowserWindow {
     /// folder stays.
     pub(super) fn navigate(&self, address: &str) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
+        if self.refuse_while_active_tab_moves() {
+            return Ok(());
+        }
         let Some(id) = self.push_location(&uri) else {
             return self.add_tab(&uri);
         };
@@ -219,8 +223,12 @@ impl BrowserWindow {
     }
 
     /// Closes a tab; closing the last one closes the window, after asking
-    /// as its Close button does (`closeTab` calls `askClose`).
+    /// as its Close button does (`closeTab` calls `askClose`). A tab that
+    /// is being dragged stays (TAB-003).
     pub(super) fn close_tab(&self, id: TabId) {
+        if self.refuse_while_moving(id) {
+            return;
+        }
         if self.tab_count() <= 1 {
             self.request_close();
             return;
@@ -267,6 +275,9 @@ impl BrowserWindow {
     /// Moves one step through the active tab's history; at either end of
     /// it nothing happens.
     pub(super) fn go_history(&self, direction: Direction) {
+        if self.refuse_while_active_tab_moves() {
+            return;
+        }
         let Some(id) = self.step_history(direction) else {
             return;
         };

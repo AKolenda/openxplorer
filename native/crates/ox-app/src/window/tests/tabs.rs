@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Tabs: opening in front or behind, closing, switching and their history.
 
+use gtk::glib;
+use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use super::support::{click_at, Release};
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
+use crate::window::address_bar::AddressMode;
 use crate::window::session::TabId;
 
 fn tab_ids(test: &TestWindow) -> Vec<TabId> {
@@ -95,6 +99,10 @@ fn shift_middle_click_opens_the_tab_in_front() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
 }
 
+/// A tab keeps its own scroll position and selection; showing it resets
+/// type-to-select and the search box.
+///
+/// parity: TAB-008, TAB-057
 #[gtk::test]
 fn switching_back_to_a_tab_restores_its_scroll_position() {
     let fixture = Fixture::with_files(300);
@@ -109,10 +117,78 @@ fn switching_back_to_a_tab_restores_its_scroll_position() {
     test.window.add_tab(&fixture.uri()).expect("valid folder");
     test.wait_for_listing("the second tab");
     assert!(pane.scroll_position() < 1.0, "a new tab starts at the top");
+    test.window.search_box().entry().set_text("file");
+    test.window.folder_model().select_only(0);
+    let second_selection = test.selected_names();
     test.activate_tab(first);
     wait_until("the first tab's scroll position", || {
         (pane.scroll_position() - scrolled).abs() < 1.0
     });
+    assert_eq!(test.window.search_box().entry().text().as_str(), "");
+    assert!(
+        test.selected_names().is_empty(),
+        "the first tab had nothing selected"
+    );
+    test.activate("next-tab", None);
+    assert_eq!(
+        test.selected_names(),
+        second_selection,
+        "each tab keeps its selection"
+    );
+}
+
+/// The tab widget at `index` of the strip.
+fn tab_widget(test: &TestWindow, index: usize) -> gtk::Widget {
+    crate::window::widget_tree::children(&test.window.tab_strip().tab_list())
+        .nth(index)
+        .expect("the window shows the tab")
+}
+
+/// A click or Enter on a tab shows it, and ends editing the address.
+///
+/// parity: TAB-004
+#[gtk::test]
+fn a_click_or_enter_on_a_tab_shows_it() {
+    let fixture = Fixture::standard();
+    let test = open_three_tabs(&fixture);
+    let [left, middle, _] = tab_ids(&test)[..] else {
+        panic!("three tabs are open");
+    };
+    test.activate("location", None);
+    assert_eq!(test.window.address_bar().mode(), AddressMode::Entry);
+
+    click_at(
+        &tab_widget(&test, 0),
+        gtk::gdk::BUTTON_PRIMARY,
+        (4.0, 4.0),
+        Release::Released,
+    );
+    let after_click = test.active_tab();
+    let address_mode = test.window.address_bar().mode();
+    let middle_tab = tab_widget(&test, 1);
+    let keys = middle_tab
+        .observe_controllers()
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+        .expect("a tab takes keys");
+    let handled = keys.emit_by_name::<bool>(
+        "key-pressed",
+        &[
+            &gtk::gdk::Key::Return.into_glib(),
+            &0_u32,
+            &gtk::gdk::ModifierType::empty(),
+        ],
+    );
+
+    assert_eq!(after_click, Some(left));
+    assert_eq!(
+        address_mode,
+        AddressMode::Crumbs,
+        "switching ends address editing"
+    );
+    assert!(handled);
+    assert_eq!(test.active_tab(), Some(middle));
 }
 
 /// parity: NAV-001, NAV-005, NAV-010

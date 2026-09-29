@@ -32,6 +32,7 @@ mod target;
 mod tests;
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use crate::window::session::TabId;
@@ -46,6 +47,9 @@ const TEAR_OUT_GAP: f64 = 40.0;
 
 /// The note over the folder pane while a release would tear the tab out.
 const TEAR_OUT_HINT: &str = "Release to open this tab in a new window";
+
+/// Why a tab that is being dragged does not close or navigate.
+const TAB_IS_MOVING: &str = "Wait for this tab to finish moving.";
 
 /// The tab a drag carries: the window it comes from and its id there.
 #[derive(Debug, Clone, glib::Boxed)]
@@ -115,5 +119,27 @@ impl BrowserWindow {
     pub(in crate::window) fn connect_tab_drag_and_drop(&self) {
         self.attach_tab_drag_source();
         self.attach_tab_drop_target();
+    }
+
+    /// True, after saying so, while tab `id` is being dragged: it cannot
+    /// close or change location until the drag has settled where it goes
+    /// (TAB-003).
+    pub(in crate::window) fn refuse_while_moving(&self, id: TabId) -> bool {
+        let is_moving = self
+            .imp()
+            .outgoing_tab
+            .borrow()
+            .as_ref()
+            .is_some_and(|outgoing| outgoing.tab == id);
+        if is_moving {
+            self.show_message(TAB_IS_MOVING);
+        }
+        is_moving
+    }
+
+    /// [`Self::refuse_while_moving`] for the tab in front.
+    pub(in crate::window) fn refuse_while_active_tab_moves(&self) -> bool {
+        let active = self.imp().session.borrow().active_id();
+        active.is_some_and(|id| self.refuse_while_moving(id))
     }
 }
