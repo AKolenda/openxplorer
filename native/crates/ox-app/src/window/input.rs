@@ -2,8 +2,8 @@
 //! Keyboard and pointer input of the folder views and the address entry:
 //! a new window's first keyboard focus, the keys and clicks that feed or
 //! end type-to-select, a click on blank space, middle-click to open a
-//! folder in a tab, and activation. The typed prefix itself lives in [`super::type_to_select`],
-//! the context menu in [`super::context_menu`].
+//! folder in a tab, and activation. The typed prefix itself lives in
+//! [`super::type_to_select`], the context menu in [`super::context_menu`].
 //!
 //! Ports `onKey` and the type-select glue in `desktop/ui/app.js`
 //! (`desktop/tests/ui_type_select.py` is its specification): Escape first

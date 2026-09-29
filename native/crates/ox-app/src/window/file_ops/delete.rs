@@ -12,8 +12,8 @@
 //! confirmation. Both confirm with a red button and Cancel has focus, so
 //! Enter never deletes by accident. Afterwards the item that followed the
 //! removed ones is selected, as in Dolphin, so Delete can be pressed again
-//! (SEL-017). In the Recycle Bin, both delete the
-//! selected items for good ([`super::recycle_bin`]).
+//! (SEL-017). In the Recycle Bin, both delete the selected items for good
+//! ([`super::recycle_bin`]).
 
 use ox_core::ops::{
     permanent_delete_confirmation, plan_delete, DeleteConfirmation, DeleteItem, TransferRequest,
