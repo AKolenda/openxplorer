@@ -11353,7 +11353,7 @@ bridge = ["environment", "list"]
 dolphin = "kio-gdrive gdrive:/ (KAccounts), a separate add-on outside Dolphin"
 gnome = "GOA + GVfs google-drive / onedrive / davs backends (google.mount and onedrive.mount present) via the goa volume monitor"
 native = "todo"
-native_note = "Dolphin 23.08.5 has no online-account drives of its own, so the origin is GNOME Online Accounts."
+native_note = "Dolphin 23.08.5 has no online-account drives of its own, so the origin is GNOME Online Accounts. Not ported yet: GOA mounts use account-bound addresses (google-drive://user@gmail.com/…, onedrive://…, davs://user@host/… for Nextcloud), which the shared location rules refuse on purpose (only file:, smb: and the device schemes are accepted, and a user name in an address is refused). Admitting them changes those rules, which native/crates/ox-core/tests/location_python.rs holds equal to the Python app's normaliser, and needs an owner decision on the user-name rule."
 
 [[feature]]
 id = "OPEN-001"
