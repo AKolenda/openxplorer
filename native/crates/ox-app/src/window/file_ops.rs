@@ -98,6 +98,9 @@ pub(crate) struct FileOperations {
     clipboard_generation: u64,
     /// "Don't ask again" was checked when a rename hid an item (OPS-013).
     hiding_confirmed: bool,
+    /// The item to rename in place next, once the rename Tab committed
+    /// has finished (OPS-012).
+    rename_next: Option<String>,
 }
 
 impl FileOperations {

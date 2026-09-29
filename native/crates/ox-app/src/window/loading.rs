@@ -301,17 +301,25 @@ impl BrowserWindow {
     }
 
     /// Selects the tab's saved selection again, and scrolls to its first
-    /// item when a Show in folder request asked for that.
+    /// item when a Show in folder request asked for that, or starts
+    /// renaming it when Tab moved a rename on to it (OPS-012).
     fn restore_selection(&self, id: TabId) {
-        let (selected, reveals) = {
+        let (selected, reveals, renames) = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.tab_mut(id) else { return };
-            (tab.selected.clone(), std::mem::take(&mut tab.reveals_selection))
+            (
+                tab.selected.clone(),
+                std::mem::take(&mut tab.reveals_selection),
+                std::mem::take(&mut tab.renames_selection),
+            )
         };
         self.change_model(|| self.folder_pane().model().select_uris(&selected));
         let first = self.folder_pane().model().first_selected();
-        if let (true, Some(position)) = (reveals, first) {
+        if let (true, Some(position)) = (reveals || renames, first) {
             self.folder_pane().reveal(position);
+        }
+        if renames && first.is_some() {
+            self.continue_renaming();
         }
     }
 

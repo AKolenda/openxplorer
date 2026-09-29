@@ -6716,8 +6716,8 @@ sources = [
 python_tests = []
 bridge = ["rename"]
 dolphin = "EditNext/EditPrevious"
-native = "todo"
-native_note = "Porting notes: Explorer also moves to the next item's rename on Tab."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_ops/inline_rename.rs (tab_and_the_arrows_in_details_move_the_rename_on). During an in-place rename Tab commits the name and starts renaming the next item in the order shown, Shift+Tab the previous one, and in the details view Down and Up do the same; an unchanged name moves on at once, a changed one once the rename has finished and the folder is listed again; a refused name stays in the field."
 
 [[feature]]
 id = "OPS-013"
@@ -7216,8 +7216,8 @@ python_tests = [
 ]
 bridge = ["operate"]
 dolphin = "duplicate: Ctrl+D"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy): Duplicate copies next to the item, selects the copy, and Undo reverses it. Differs: copies are named \"(copy N)\" as Keep both names them, not Dolphin's \"<name> copy\"."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy): Duplicate copies each selected item next to itself, selects the copies, and Undo reverses it; native/crates/ox-core/src/ops/duplicate.rs. Differs: copies are named \"(copy N)\", as the app's Keep both names them, not Dolphin's \"<name> copy\", so both ways of copying an item beside itself name it alike."
 
 [[feature]]
 id = "OPS-035"

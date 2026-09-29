@@ -16,6 +16,7 @@
 //! (OPS-029).
 
 use gtk::glib::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::ops::{rename_item, OperationContext, RenamedItem};
 
@@ -102,10 +103,26 @@ impl BrowserWindow {
     /// Remembers the rename for Undo, selects the item under its new
     /// name, and says so in a toast with Undo (OPS-032).
     pub(super) fn finish_rename(&self, renamed: RenamedItem) {
+        let uri = renamed.uri.clone();
+        self.remember_rename(&renamed);
+        self.reload_selecting(vec![uri]);
+    }
+
+    /// Like [`Self::finish_rename`], but selects `next` and starts
+    /// renaming it once the folder is listed again: Tab moved on (OPS-012).
+    pub(super) fn finish_rename_and_continue(&self, renamed: RenamedItem, next: String) {
+        self.remember_rename(&renamed);
+        if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
+            tab.renames_selection = true;
+        }
+        self.reload_selecting(vec![next]);
+    }
+
+    /// Records the rename for Undo and says so in a toast with Undo.
+    fn remember_rename(&self, renamed: &RenamedItem) {
         if let Some(record) = renamed.undo_record() {
             self.context().record_operation(record);
             self.show_message_with_undo(&format!("Renamed to “{}”.", renamed.name));
         }
-        self.reload_selecting(vec![renamed.uri]);
     }
 }

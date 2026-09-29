@@ -9,9 +9,12 @@
 //! refusal, such as a taken name, shows in the toast and editing goes on,
 //! so the typed name is not lost. While the rename runs the field is
 //! disabled, so a second commit cannot start it again. A name that would
-//! hide the item asks first ([`super::hide_confirm`]).
+//! hide the item asks first ([`super::hide_confirm`]). As in Dolphin, Tab
+//! and Shift+Tab, and Down and Up in the details view, commit and go on
+//! to rename the next or previous item (OPS-012).
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::entry::Entry;
 use ox_core::ops::{rename_item, OperationContext};
@@ -19,6 +22,7 @@ use ox_core::ops::{rename_item, OperationContext};
 use super::names::check_typed_name;
 use super::rename::selected_name_length;
 use crate::folder_view::cells::FileCell;
+use crate::window::folder_pane::FolderView;
 use crate::window::BrowserWindow;
 
 /// The CSS class of the text field that edits a name in place.
@@ -31,6 +35,20 @@ struct RenameTarget {
     uri: String,
     /// Its name before the rename.
     name: String,
+}
+
+/// How many places Tab, Shift+Tab, Down or Up move the rename on from
+/// the item being renamed; Down and Up only `in_details`, where they
+/// move between rows. `None` for any other key.
+fn rename_step(key: gdk::Key, modifiers: gdk::ModifierType, in_details: bool) -> Option<i32> {
+    let shift = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+    match key {
+        gdk::Key::Tab | gdk::Key::KP_Tab if !shift => Some(1),
+        gdk::Key::ISO_Left_Tab | gdk::Key::Tab | gdk::Key::KP_Tab => Some(-1),
+        gdk::Key::Down if in_details => Some(1),
+        gdk::Key::Up if in_details => Some(-1),
+        _ => None,
+    }
 }
 
 impl BrowserWindow {
@@ -91,28 +109,71 @@ impl BrowserWindow {
             }
         ));
         editor.add_controller(focus);
-        editor.add_controller(self.escape_cancels_rename(cell));
+        editor.add_controller(self.rename_keys(cell, editor, target));
     }
 
-    /// Escape in the field ends the rename and leaves the name as it was.
-    fn escape_cancels_rename(&self, cell: &FileCell) -> gtk::EventControllerKey {
+    /// Escape in the field ends the rename and leaves the name as it was;
+    /// Tab and Shift+Tab, and Down and Up in the details view, commit and
+    /// go on to rename the next or previous item (OPS-012).
+    fn rename_keys(&self, cell: &FileCell, editor: &gtk::Entry, target: &RenameTarget) -> gtk::EventControllerKey {
         let keys = gtk::EventControllerKey::new();
         keys.connect_key_pressed(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[weak]
             cell,
+            #[weak]
+            editor,
+            #[strong(rename_to = uri)]
+            target.uri,
             #[upgrade_or]
             glib::Propagation::Proceed,
-            move |_, key, _, _| {
-                if key != gdk::Key::Escape {
-                    return glib::Propagation::Proceed;
+            move |_, key, _, modifiers| {
+                if key == gdk::Key::Escape {
+                    window.end_rename_in_place(&cell);
+                    return glib::Propagation::Stop;
                 }
-                window.end_rename_in_place(&cell);
+                let in_details = window.folder_pane().view() == FolderView::Details;
+                let Some(step) = rename_step(key, modifiers, in_details) else {
+                    return glib::Propagation::Proceed;
+                };
+                let next = window.neighbour_uri(&uri, step);
+                window.imp().file_operations.borrow_mut().rename_next = next;
+                editor.emit_activate();
                 glib::Propagation::Stop
             }
         ));
         keys
+    }
+
+    /// The URI of the item `step` places after the one at `uri` in the
+    /// order shown, or `None` at either end.
+    fn neighbour_uri(&self, uri: &str, step: i32) -> Option<String> {
+        let model = self.folder_pane().model();
+        let position = (0..model.n_items()).find(|&position| {
+            model
+                .item(position)
+                .is_some_and(|item| item.entry().uri == uri)
+        })?;
+        let next = position.checked_add_signed(step)?;
+        model.item(next).map(|item| item.entry().uri.clone())
+    }
+
+    /// Takes the item to rename next, which Tab chose.
+    fn take_rename_next(&self) -> Option<String> {
+        self.imp().file_operations.borrow_mut().rename_next.take()
+    }
+
+    /// Starts renaming the selected item in place once the view has laid
+    /// out its rows: the item Tab moved on to.
+    pub(in crate::window) fn continue_renaming(&self) {
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || {
+                glib::spawn_future_local(async move { window.rename_selection().await });
+            }
+        ));
     }
 
     /// Renames the item to the name typed in `editor`: nothing for the
@@ -125,11 +186,16 @@ impl BrowserWindow {
         let typed = editor.text();
         if typed == target.name {
             self.end_rename_in_place(cell);
+            if let Some(next) = self.take_rename_next() {
+                self.folder_pane().model().select_uris(&[next]);
+                self.continue_renaming();
+            }
             return;
         }
         let name = match check_typed_name(&typed) {
             Ok(name) => name.to_owned(),
             Err(invalid) => {
+                self.take_rename_next();
                 self.show_message(&invalid.to_string());
                 return;
             }
@@ -160,6 +226,7 @@ impl BrowserWindow {
         name: &str,
     ) {
         if !self.confirm_hiding_rename(&target.name, name).await {
+            self.take_rename_next();
             editor.set_sensitive(true);
             editor.grab_focus();
             return;
@@ -169,9 +236,13 @@ impl BrowserWindow {
             Ok(renamed) => {
                 // Before the folder is listed again, which rebinds the cell.
                 self.close_name_editor(cell);
-                self.finish_rename(renamed);
+                match self.take_rename_next() {
+                    Some(next) => self.finish_rename_and_continue(renamed, next),
+                    None => self.finish_rename(renamed),
+                }
             }
             Err(error) => {
+                self.take_rename_next();
                 editor.set_sensitive(true);
                 editor.grab_focus();
                 self.show_message(&error.to_string());
@@ -196,5 +267,23 @@ impl BrowserWindow {
     fn close_name_editor(&self, cell: &FileCell) {
         self.folder_pane().focus_view();
         cell.hide_name_editor();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// parity: OPS-012
+    #[test]
+    fn tab_and_the_arrows_in_details_move_the_rename_on() {
+        let none = gdk::ModifierType::empty();
+        let shift = gdk::ModifierType::SHIFT_MASK;
+        assert_eq!(rename_step(gdk::Key::Tab, none, false), Some(1));
+        assert_eq!(rename_step(gdk::Key::ISO_Left_Tab, shift, false), Some(-1));
+        assert_eq!(rename_step(gdk::Key::Down, none, true), Some(1));
+        assert_eq!(rename_step(gdk::Key::Up, none, true), Some(-1));
+        assert_eq!(rename_step(gdk::Key::Down, none, false), None, "icons move the text cursor");
+        assert_eq!(rename_step(gdk::Key::Return, none, true), None);
     }
 }
