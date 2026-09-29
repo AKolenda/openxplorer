@@ -86,6 +86,7 @@ mod network_sign_out;
 mod place_menus;
 mod preferences;
 mod quick_access;
+mod saved_search;
 mod search_box;
 mod selection;
 mod session;

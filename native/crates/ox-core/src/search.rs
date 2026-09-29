@@ -44,6 +44,7 @@
 //! | `update` | A live update of changed folders | `index_service.py` |
 //! | `live` | Searching a folder's tree without the cache (SRCH-035) | Dolphin |
 //! | `facets` | Narrowing a search by kind and date (SRCH-037) | Dolphin |
+//! | `saved` | Searches saved to the sidebar (SRCH-038) | Dolphin |
 //! | `contents` | Reading file text for a search of contents, never cached (SRCH-036) | Dolphin |
 //! | `limits` | The entry, folder and watch limits | `index_service.py`, `local_watch.py` |
 //! | `policy` | What may be indexed, and network roots | `index_service.py` |
@@ -73,6 +74,7 @@ mod query;
 mod reader;
 mod requests;
 mod root;
+mod saved;
 mod scan;
 mod schema;
 mod service;
@@ -104,6 +106,7 @@ pub use root::{
     CacheStatus, Caching, HiddenItems, IndexRoot, RootOrigin, RootStatus, ScanGeneration, SearchEngine,
     UpdateMode,
 };
+pub use saved::{SavedSearch, SavedSearches, MAX_SAVED_SEARCHES};
 pub use scan::ListedItem;
 pub use service::{AutoIndex, IndexService, IndexSettings};
 pub use text::display_path;

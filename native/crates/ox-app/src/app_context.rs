@@ -23,6 +23,7 @@ mod file_operations;
 mod known_folders;
 mod network_places;
 mod previous_versions;
+mod saved_searches;
 mod search_cache;
 
 use std::path::PathBuf;
@@ -105,6 +106,8 @@ mod imp {
         pub(super) previous_versions: OnceCell<Arc<PreviousVersions>>,
         /// The search cache and its index service.
         pub(super) search_cache: SearchCache,
+        /// The searches saved to the sidebar, as last read (SRCH-038).
+        pub(super) saved_searches: RefCell<Vec<ox_core::search::SavedSearch>>,
         /// The application's updates, made on first use.
         pub(super) updates: OnceCell<Updates>,
         /// The desktop integration, made on first use.
@@ -168,6 +171,7 @@ impl AppContext {
             .set(SettingsStore::new(settings))
             .expect("a new AppContext has no settings yet");
         context.watch_known_folders(folder_locations);
+        context.read_saved_searches();
         context
     }
 

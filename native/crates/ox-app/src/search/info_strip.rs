@@ -8,8 +8,8 @@
 //! names and contents (SRCH-036), kind and date modified (SRCH-037);
 //! "Cache this folder" while the folder is not, or only partly,
 //! indexed; for cached results a note on how fresh they are; Dolphin's
-//! "Keep Filter When Changing Folders" as a pin toggle (SRCH-005); and a
-//! clear button. [`SearchInfoStrip`] is a `GtkBox` subclass laid out by the
+//! "Save search" (SRCH-038); Dolphin's "Keep Filter When Changing
+//! Folders" as a pin toggle (SRCH-005); and a clear button. [`SearchInfoStrip`] is a `GtkBox` subclass laid out by the
 //! template `resources/ui/search-info-strip.ui`; the scope list is the
 //! app's compact drop-down ([`ChoiceButton`]), whose chevron and check
 //! mark are bundled icons.
@@ -82,6 +82,9 @@ mod imp {
         /// How fresh cached results are.
         #[template_child]
         pub(super) freshness: TemplateChild<gtk::Label>,
+        /// "Save search".
+        #[template_child]
+        pub(super) save_button: TemplateChild<gtk::Button>,
         /// "Keep search when changing folders".
         #[template_child]
         pub(super) keep_button: TemplateChild<gtk::ToggleButton>,
@@ -170,6 +173,7 @@ impl SearchInfoStrip {
         icons::set_icon(&imp.clear_glyph, Icon::Dismiss16, BUTTON_GLYPH);
         imp.freshness.set_tooltip_text(Some(FRESHNESS_TOOLTIP));
         WindowAction::CacheFolder.assign_to(&*imp.cache_button);
+        WindowAction::SaveSearch.assign_to(&*imp.save_button);
         imp.clear_button.connect_clicked(glib::clone!(
             #[weak(rename_to = strip)]
             self,
@@ -419,6 +423,12 @@ impl SearchInfoStrip {
         Self::option_list(&self.imp().kind)
             .choices
             .choose_labelled(kind.label());
+    }
+
+    /// Clicks "Save search", for tests.
+    #[cfg(test)]
+    pub(crate) fn click_save(&self) {
+        self.imp().save_button.emit_clicked();
     }
 
     /// Clicks "Clear search", for tests.

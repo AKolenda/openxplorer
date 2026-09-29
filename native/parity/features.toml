@@ -10183,7 +10183,8 @@ sources = [
 python_tests = []
 bridge = ["pin", "search"]
 dolphin = "DolphinSearchBox save search"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/search/saved.rs (a_saved_search_is_kept_once_and_can_be_removed); native/crates/ox-app/src/window/tests/search_options.rs (a_saved_search_opens_its_folder_and_searches_again). The search strip's 'Save search' adds the search as a navigation-pane row 'Search for <text> in <folder>' below Quick access, with a search glyph; activating it opens the folder and runs the search again, and its menu offers Open and Remove from navigation pane. Saved searches live in saved-searches.json in the settings directory (private 0600 file, atomic replace, at most 64), not in settings.json, which the Python app rewrites with the keys it knows only; the same search saved again replaces the earlier row."
 
 [[feature]]
 id = "SRCH-039"

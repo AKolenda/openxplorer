@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The search strip's options: searching names and contents, and narrowing
-//! the results by kind.
+//! The search strip's options: searching names and contents, narrowing
+//! the results by kind, and saving a search to the navigation pane.
 
 use std::fs;
 
+use gtk::prelude::*;
 use ox_core::search::{KindFacet, SearchIn};
 
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
@@ -53,4 +54,30 @@ fn the_kind_option_narrows_the_results_until_the_search_ends() {
     test.window.search_box().clear();
     wait_until("the listing", || test.names().len() > 3);
     assert!(test.names().contains(&"notes.png".to_owned()));
+}
+
+/// "Save search" adds the search to the navigation pane; opening it from
+/// another folder opens its folder and searches it again.
+///
+/// parity: SRCH-038
+#[gtk::test]
+fn a_saved_search_opens_its_folder_and_searches_again() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.search_for("notes");
+    let label = "Search for notes in Example projects";
+
+    test.window.search_strip().click_save();
+
+    wait_until("the saved search row", || {
+        test.window.sidebar().labels().contains(&label.to_owned())
+    });
+    test.show(&fixture.uri_of("Documents"));
+    let target = (fixture.uri(), "notes".to_owned()).to_variant();
+    WidgetExt::activate_action(&test.window, "win.open-saved-search", Some(&target))
+        .expect("the window has the action");
+    wait_until("the saved search to run", || {
+        test.names() == ["Notes 2.txt", "Notes 10.txt"]
+    });
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }

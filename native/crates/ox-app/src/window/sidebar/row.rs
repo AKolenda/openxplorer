@@ -13,6 +13,7 @@ use crate::icons::{self, Art, ArtImage, Icon};
 use crate::window::place_menus::removal_action;
 use crate::window::window_action::WindowAction;
 
+use super::super::saved_search::saved_search_target;
 use super::entries::{EjectButton, RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
 
 /// Glyph icons are 18 pixels (`.side-icon svg`), art 19 (`folderIcon(19)`).
@@ -105,7 +106,7 @@ fn placement_classes(entry: &SidebarEntry, edges: SectionEdges) -> Vec<&'static 
         RowLevel::Group => classes.push("group"),
         RowLevel::Child => classes.push("indent"),
     }
-    if entry.section == Section::QuickAccess {
+    if matches!(entry.section, Section::QuickAccess | Section::SavedSearches) {
         classes.push("quick-access");
         if edges.first {
             classes.push("section-start");
@@ -132,10 +133,11 @@ pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges) -> gtk::Lis
         gtk::accessible::Property::Description(&entry.tooltip),
     ]);
     let (action, target) = match &entry.target {
-        RowTarget::Location(uri) => (WindowAction::GoTo, uri),
-        RowTarget::MountVolume(id) => (WindowAction::MountVolume, id),
+        RowTarget::Location(uri) => (WindowAction::GoTo, uri.to_variant()),
+        RowTarget::MountVolume(id) => (WindowAction::MountVolume, id.to_variant()),
+        RowTarget::SavedSearch(search) => (WindowAction::OpenSavedSearch, saved_search_target(search)),
     };
     row.set_action_name(Some(&action.detailed_name()));
-    row.set_action_target_value(Some(&target.to_variant()));
+    row.set_action_target_value(Some(&target));
     row
 }

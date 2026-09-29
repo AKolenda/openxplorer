@@ -190,6 +190,13 @@ pub(crate) enum WindowAction {
     /// Opens the folder of the one selected search result in a new
     /// window, with the result selected there.
     OpenFileLocationInWindow,
+    /// Save search: adds the search shown to the sidebar (SRCH-038).
+    SaveSearch,
+    /// Opens the saved search whose `(folder, text)` is the target.
+    OpenSavedSearch,
+    /// Removes the saved search whose `(folder, text)` is the target from
+    /// the sidebar.
+    ForgetSavedSearch,
     /// Opens the Settings page (Ctrl+,), as a tab of its own.
     Settings,
     /// Shows the licence and where the source is.
@@ -336,6 +343,9 @@ impl WindowAction {
             WindowAction::OpenFileLocation => "open-file-location",
             WindowAction::OpenFileLocationInTab => "open-file-location-in-tab",
             WindowAction::OpenFileLocationInWindow => "open-file-location-in-window",
+            WindowAction::SaveSearch => "save-search",
+            WindowAction::OpenSavedSearch => "open-saved-search",
+            WindowAction::ForgetSavedSearch => "forget-saved-search",
             WindowAction::Settings => "settings",
             WindowAction::License => "license",
             WindowAction::DefaultFileExplorer => "default-file-explorer",
