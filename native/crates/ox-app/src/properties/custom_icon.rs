@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Change icon… and Restore default icon on the General tab (PROP-016),
 //! as Files' Properties and Dolphin's icon button offer them. The choice
-//! is stored as GVfs metadata (`metadata::custom-icon`, the key Files
+//! is stored as `GVfs` metadata (`metadata::custom-icon`, the key Files
 //! uses), so both file managers show it; the default Windows-style art
 //! stays for every other item.
 

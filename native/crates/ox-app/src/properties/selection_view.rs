@@ -244,13 +244,11 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
     glib::spawn_future_local(async move {
         let mut items: Vec<ItemProperties> = Vec::new();
         for entry in entries {
-            match read_properties(entry.navigation_uri().to_owned()).await {
-                Ok(properties) => items.push(properties),
-                Err(_) => {
-                    items.clear();
-                    break;
-                }
-            }
+            let Ok(properties) = read_properties(entry.navigation_uri().to_owned()).await else {
+                items.clear();
+                break;
+            };
+            items.push(properties);
         }
         let Some(panel) = panel.upgrade() else {
             return;

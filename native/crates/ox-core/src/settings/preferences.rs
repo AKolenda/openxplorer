@@ -151,6 +151,10 @@ impl ColumnWidths {
 /// User preferences shared by every window and by the Python app.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is an independent preference that the settings file stores as a boolean"
+)]
 pub struct Preferences {
     /// The colour theme.
     pub theme: Theme,

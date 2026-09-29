@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Custom icons (PROP-016): an item whose GVfs metadata names a picture
+//! Custom icons (PROP-016): an item whose `GVfs` metadata names a picture
 //! (`metadata::custom-icon`, which Files reads and writes too) shows that
 //! picture in place of its art in the details and icon views. The lookup
 //! runs when a cell is bound, at low priority, like a thumbnail lookup,

@@ -233,7 +233,7 @@ impl BrowserWindow {
         let view = PropertiesView::new(target, context, tab);
         let frame = DialogFrame::new(&title, view.dialog_width());
         frame.body().append(&view);
-        self.present_properties(frame, PropertiesBody::Item(view));
+        self.present_properties(&frame, PropertiesBody::Item(view));
     }
 
     /// Shows Properties of several selected items (PROP-002).
@@ -243,12 +243,12 @@ impl BrowserWindow {
         let selection = SelectionProperties::new(entries, &context, tab);
         let frame = DialogFrame::new(&title, DialogWidth::Properties);
         frame.body().append(selection.widget());
-        self.present_properties(frame, PropertiesBody::Selection(selection));
+        self.present_properties(&frame, PropertiesBody::Selection(selection));
     }
 
     /// Shows the Properties dialog `frame`, owned by the active tab; a
     /// dialog the tab had is replaced.
-    fn present_properties(&self, frame: DialogFrame, body: PropertiesBody) {
+    fn present_properties(&self, frame: &DialogFrame, body: PropertiesBody) {
         let Some(owner) = self.imp().session.borrow().active_id() else {
             return;
         };
@@ -266,7 +266,7 @@ impl BrowserWindow {
             body,
         };
         self.item_dialogs().properties.borrow_mut().push(entry);
-        self.dialog_layer().present(&frame);
+        self.dialog_layer().present(frame);
         self.render_tabs();
     }
 

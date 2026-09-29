@@ -250,7 +250,7 @@ impl ZipCompressor {
             .create(gio::FileCreateFlags::NONE, Some(cancel.cancellable()))?;
         let stream = output.clone().upcast::<gio::OutputStream>().into_write();
         let mut writer = if tar_xz {
-            EntryWriter::TarXz(TarXzWriter::new(stream)?)
+            EntryWriter::TarXz(Box::new(TarXzWriter::new(stream)?))
         } else {
             EntryWriter::Zip(ZipWriter::new(stream))
         };
@@ -402,7 +402,7 @@ fn push_entry(
 /// The format a compression writes.
 enum EntryWriter<W: std::io::Write> {
     Zip(ZipWriter<W>),
-    TarXz(TarXzWriter<W>),
+    TarXz(Box<TarXzWriter<W>>),
 }
 
 impl<W: std::io::Write> EntryWriter<W> {

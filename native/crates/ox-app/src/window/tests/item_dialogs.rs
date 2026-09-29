@@ -757,7 +757,7 @@ fn the_snapshot_source_form_saves_a_mapping_and_lists_again() {
     assert_eq!(sources[0].collection(), ox_core::location::file_uri(&backups));
 }
 
-/// A custom icon is stored as the GVfs metadata Files reads, shows in the
+/// A custom icon is stored as the `GVfs` metadata Files reads, shows in the
 /// folder view, and can be restored to the default art.
 ///
 /// parity: PROP-016
