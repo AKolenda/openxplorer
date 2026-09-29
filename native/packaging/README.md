@@ -286,12 +286,13 @@ style, so none of them needs a permission. A test
   the app runs, which the permission above allows, is app work still to do.
 - Updates come from Flatpak (GNOME Software or `flatpak update`); the app
   never installs one itself.
-- Known issue: with the System theme the Flatpak stays light on a dark
-  desktop. `crates/ox-app/src/theme/system.rs` prefers GNOME's
-  `org.gnome.desktop.interface` settings when the schema is installed, and
-  inside the sandbox the runtime's schema holds only defaults; inside Flatpak
-  it has to read the Settings portal instead, which it already does on
-  desktops without the schema.
+- The System theme follows the desktop's light or dark style through the
+  Settings portal (`org.freedesktop.appearance` `color-scheme`), not GNOME's
+  `org.gnome.desktop.interface` keys: the runtime ships that schema too, but
+  the sandbox cannot read the host's values, so it holds only defaults
+  (`crates/ox-app/src/theme/system.rs`). With `color-scheme` at "default",
+  the host package also looks for "dark" in the GTK theme's name, which the
+  portal does not report; the Flatpak then keeps GTK's own preference.
 
 **Flathub** publication is not possible yet: Flathub requires the owner of the
 application ID's domain (`winspace.io`, which does not resolve), screenshots in

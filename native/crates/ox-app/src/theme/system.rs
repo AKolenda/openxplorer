@@ -9,12 +9,18 @@
 //! `org.freedesktop.appearance color-scheme` setting is read instead, and
 //! while the portal has no preference, GTK's own dark preference as it was
 //! when the app started (`gtk_system_dark`).
+//!
+//! Inside Flatpak the runtime ships GNOME's schema too, but the sandbox
+//! cannot read the host's settings, so the schema holds only its defaults
+//! and would always ask for light. There the portal, which answers with the
+//! host's colour scheme, decides as on a desktop without the schema.
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
+use ox_core::integration::Sandbox;
 
 use super::Appearance;
 
@@ -74,6 +80,16 @@ pub(crate) fn gtk_preference(display: &gdk::Display) -> Appearance {
     }
 }
 
+/// GNOME's interface settings, when they are the desktop's: on the host
+/// with the schema installed. Inside Flatpak they are the runtime's
+/// defaults, not the desktop's, so the portal decides there.
+fn gnome_interface_settings(sandbox: Sandbox) -> Option<gio::Settings> {
+    if sandbox.is_flatpak() {
+        return None;
+    }
+    super::desktop_settings(INTERFACE_SCHEMA)
+}
+
 /// The string value of `key`, when the installed `schema` has it.
 fn string_key(settings: &gio::Settings, schema: &gio::SettingsSchema, key: &str) -> Option<String> {
     if !schema.has_key(key) {
@@ -123,12 +139,12 @@ impl SystemScheme {
     /// `gtk_fallback` is GTK's dark preference from [`gtk_preference`],
     /// read before the skin was installed.
     pub(crate) fn new(gtk_fallback: Appearance, on_change: impl Fn(Appearance) + 'static) -> Rc<Self> {
-        let gnome_settings = super::desktop_settings(INTERFACE_SCHEMA);
+        let gnome_settings = gnome_interface_settings(Sandbox::detect());
         let scheme = Rc::new(Self::unwatched(gnome_settings, gtk_fallback, Box::new(on_change)));
         match &scheme.gnome_settings {
             Some(settings) => scheme.watch_gnome_keys(settings),
             None => {
-                glib::spawn_future_local(follow_portal(Rc::downgrade(&scheme)));
+                glib::spawn_future_local(follow_session_portal(Rc::downgrade(&scheme)));
             }
         }
         scheme
@@ -205,13 +221,19 @@ impl SystemScheme {
     }
 }
 
-/// Follows the XDG desktop portal's colour scheme: every change, and the
-/// current value unless a change arrived first.
-async fn follow_portal(scheme: Weak<SystemScheme>) {
+/// Follows the XDG desktop portal on the session bus.
+async fn follow_session_portal(scheme: Weak<SystemScheme>) {
     let Ok(connection) = gio::bus_get_future(gio::BusType::Session).await else {
         return;
     };
-    let subscription = subscribe_to_portal_changes(&connection, scheme.clone());
+    follow_portal(scheme, &connection, PORTAL_NAME).await;
+}
+
+/// Follows the colour scheme of the portal that `portal` names on
+/// `connection`: every change, and the current value unless a change
+/// arrived first.
+async fn follow_portal(scheme: Weak<SystemScheme>, connection: &gio::DBusConnection, portal: &str) {
+    let subscription = subscribe_to_portal_changes(connection, portal, scheme.clone());
     let Some(watching) = scheme.upgrade() else {
         return;
     };
@@ -219,7 +241,7 @@ async fn follow_portal(scheme: Weak<SystemScheme>) {
     // Hold no strong reference across the read, so the application can
     // drop the scheme while the portal is slow to answer.
     drop(watching);
-    let Some(value) = read_portal(&connection).await else {
+    let Some(value) = read_portal(connection, portal).await else {
         return;
     };
     let Some(scheme) = scheme.upgrade() else {
@@ -231,14 +253,15 @@ async fn follow_portal(scheme: Weak<SystemScheme>) {
     }
 }
 
-/// Subscribes `scheme` to the portal's `SettingChanged` signals for the
-/// appearance namespace.
+/// Subscribes `scheme` to the `SettingChanged` signals of `portal` for
+/// the appearance namespace.
 fn subscribe_to_portal_changes(
     connection: &gio::DBusConnection,
+    portal: &str,
     scheme: Weak<SystemScheme>,
 ) -> gio::SignalSubscription {
     connection.subscribe_to_signal(
-        Some(PORTAL_NAME),
+        Some(portal),
         Some(PORTAL_SETTINGS),
         Some("SettingChanged"),
         Some(PORTAL_PATH),
@@ -257,12 +280,12 @@ fn subscribe_to_portal_changes(
     )
 }
 
-/// Reads the portal's colour scheme, or `None` without a portal.
-async fn read_portal(connection: &gio::DBusConnection) -> Option<u32> {
+/// Reads the colour scheme of `portal`, or `None` without a portal.
+async fn read_portal(connection: &gio::DBusConnection, portal: &str) -> Option<u32> {
     let arguments = (APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY).to_variant();
     let reply = connection
         .call_future(
-            Some(PORTAL_NAME),
+            Some(portal),
             PORTAL_PATH,
             PORTAL_SETTINGS,
             "ReadOne",
@@ -288,6 +311,9 @@ fn portal_change(parameters: &glib::Variant) -> Option<u32> {
     }
     value.get::<u32>()
 }
+
+#[cfg(test)]
+mod portal_tests;
 
 #[cfg(test)]
 mod tests {
