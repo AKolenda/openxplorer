@@ -60,13 +60,13 @@ impl BrowserWindow {
             gio::Cancellable::NONE,
             move |proxy| {
                 if let (Some(window), Ok(proxy)) = (window.upgrade(), proxy) {
-                    window.follow_previewer(proxy);
+                    window.follow_previewer(&proxy);
                 }
             },
         );
     }
 
-    fn follow_previewer(&self, proxy: gio::DBusProxy) {
+    fn follow_previewer(&self, proxy: &gio::DBusProxy) {
         let quick_look = &self.imp().quick_look;
         quick_look.is_available.set(proxy.name_owner().is_some());
         let window = self.downgrade();
@@ -102,7 +102,7 @@ impl BrowserWindow {
         });
         quick_look.proxy.replace(Some(proxy.clone()));
         if !quick_look.is_available.get() {
-            self.find_activatable_previewer(&proxy);
+            self.find_activatable_previewer(proxy);
         }
     }
 

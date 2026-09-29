@@ -10,9 +10,9 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::gdk_pixbuf::Pixbuf;
 use gtk::{gdk, gio, glib};
 
 use super::FileCell;

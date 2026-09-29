@@ -94,15 +94,14 @@ impl AccountChoice {
             accounts.insert(0, current.clone());
         }
         let mut names: Vec<&str> = accounts.iter().map(|account| account.name.as_str()).collect();
-        let index = match current {
-            Some(current) => accounts
+        let index = if let Some(current) = current {
+            accounts
                 .iter()
                 .position(|account| account.id == current.id)
-                .unwrap_or_default(),
-            None => {
-                names.push(VARYING);
-                accounts.len()
-            }
+                .unwrap_or_default()
+        } else {
+            names.push(VARYING);
+            accounts.len()
         };
         let choice = gtk::DropDown::from_strings(&names);
         choice.set_selected(u32::try_from(index).unwrap_or_default());
