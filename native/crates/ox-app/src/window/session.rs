@@ -110,6 +110,9 @@ pub(super) struct Tab {
     /// An item to scroll into view once the folder is listed, as "Open
     /// file location" asks.
     pub revealed_item: Option<String>,
+    /// Its network folder changed while it was in the background: it is
+    /// listed again when next shown (TAB-056).
+    pub changed_while_hidden: bool,
 }
 
 impl Tab {
@@ -128,6 +131,7 @@ impl Tab {
             listing: None,
             watch: None,
             revealed_item: None,
+            changed_while_hidden: false,
         }
     }
 

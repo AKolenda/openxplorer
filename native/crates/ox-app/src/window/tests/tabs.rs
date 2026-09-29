@@ -331,3 +331,27 @@ fn many_tabs_keep_the_strip_within_seventy_percent_of_the_window() {
     assert!(width < 215.0, "the tabs shrank");
     assert!(width >= 100.0, "down to the narrowest tab");
 }
+
+/// A change to a background tab's folder shows when the tab comes back,
+/// with its selection kept.
+///
+/// parity: TAB-056
+#[gtk::test]
+fn a_background_tab_shows_changes_to_its_folder_and_keeps_its_selection() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    let first = tab_ids(&test)[0];
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("valid folder");
+    test.wait_for_listing("the second tab");
+
+    std::fs::write(fixture.root().join("Added later.txt"), b"new").expect("a new file");
+    test.activate_tab(first);
+
+    wait_until("the new file", || {
+        test.names().iter().any(|name| name == "Added later.txt")
+    });
+    assert_eq!(test.selected_names(), ["Notes 2.txt"]);
+}

@@ -29,6 +29,8 @@ struct SavedTabView {
     scroll: f64,
     /// It was opened in the background and has not been listed yet.
     needs_listing: bool,
+    /// Its network folder changed while it was in the background.
+    changed_while_hidden: bool,
 }
 
 impl BrowserWindow {
@@ -207,14 +209,18 @@ impl BrowserWindow {
         }
         if view.needs_listing {
             self.load_tab(id, LoadMode::Navigate);
+        } else if view.changed_while_hidden {
+            self.folder_changed(id);
         }
     }
 
     /// What tab `id` needs to be shown again, while it is open.
     fn saved_tab_view(&self, id: TabId) -> Option<SavedTabView> {
-        let session = self.imp().session.borrow();
-        let tab = session.tab(id)?;
+        let mut session = self.imp().session.borrow_mut();
+        let tab = session.tab_mut(id)?;
+        let changed_while_hidden = std::mem::take(&mut tab.changed_while_hidden);
         Some(SavedTabView {
+            changed_while_hidden,
             store: tab.store.clone(),
             selected: tab.selected.clone(),
             scroll: tab.scroll,

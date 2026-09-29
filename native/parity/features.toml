@@ -2691,7 +2691,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["list"]
-native = "todo"
+native = "done"
+native_note = "Every tab keeps a folder watch while it shows a folder. A change to a local folder in a background tab lists it again in the background in Reload mode, which merges the rows and keeps the tab's selection (by URI) and scroll, so the tab is current when revisited. A change to a network (SMB) folder in a background tab only marks it (changed_while_hidden) and it is listed when next shown, so no background listing or sign-in happens because an event arrived (waits_until_shown in native/crates/ox-app/src/window/loading.rs, show_tab in navigation.rs). Tests: loading.rs (only_a_background_network_tab_waits_to_be_shown), native/crates/ox-app/src/window/tests/tabs.rs (a_background_tab_shows_changes_to_its_folder_and_keeps_its_selection)."
 
 [[feature]]
 id = "TAB-057"
