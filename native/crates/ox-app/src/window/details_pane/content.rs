@@ -333,6 +333,17 @@ mod tests {
         assert_eq!(content.action, PaneAction::Open { can_pin: false });
     }
 
+    /// Condensed dates give the day only; otherwise the time follows.
+    ///
+    /// parity: PROP-010
+    #[test]
+    fn condensed_dates_drop_the_time() {
+        let modified = Some(1_790_000_000);
+        assert_eq!(modified_text(modified, true), format::date_text(modified));
+        assert_eq!(modified_text(modified, false), format::date_time_text(modified));
+        assert!(modified_text(modified, false).starts_with(&modified_text(modified, true)));
+    }
+
     /// Only a local file has a content preview, chosen by its type.
     ///
     /// parity: PROP-011

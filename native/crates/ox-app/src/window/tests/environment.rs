@@ -202,6 +202,15 @@ fn the_details_pane_previews_an_image_and_names_its_dimensions() {
     wait_until("the dimensions", || {
         property(&pane.shown_properties(), "Dimensions") == Some("4 × 3 pixels")
     });
+    // A redraw for another reason, such as a size scan's progress, keeps
+    // the picture and its dimensions instead of reading them again.
+    let picture = descendants::<gtk::Picture>(pane).remove(0);
+    test.window.update_details_pane();
+    assert_eq!(descendants::<gtk::Picture>(pane), [picture]);
+    assert_eq!(
+        property(&pane.shown_properties(), "Dimensions"),
+        Some("4 × 3 pixels")
+    );
     test.activate("properties", None);
     let frame = test.wait_for_dialog("the Properties dialog");
     wait_until("the dimensions in Properties", || {

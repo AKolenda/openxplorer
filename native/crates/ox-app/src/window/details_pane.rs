@@ -121,6 +121,11 @@ mod imp {
         /// Counts the content shown, so a preview read for an earlier
         /// selection is dropped.
         pub(super) media_generation: Cell<u64>,
+        /// The content preview shown, which a redraw for the same item
+        /// keeps (PROP-011).
+        pub(super) shown_media: RefCell<Option<super::content::MediaPreview>>,
+        /// The Properties rows the preview added: Dimensions, Length.
+        pub(super) media_rows: RefCell<Vec<(&'static str, String)>>,
         /// The pane's options, as saved (PROP-010).
         pub(super) options: RefCell<DetailsPaneOptions>,
         /// The item under the pointer, which the pane describes while it
@@ -154,6 +159,22 @@ mod imp {
             pane.bind_actions();
             pane.show_placeholder();
             pane.attach_options_menu();
+            // A pane shown again catches up with the selection, whose
+            // preview was not read while it was hidden.
+            // It waits for the main loop: the pane is shown while the
+            // window is laid out for a new width.
+            pane.connect_visible_notify(|pane| {
+                if !pane.is_visible() {
+                    return;
+                }
+                let pane = pane.downgrade();
+                glib::idle_add_local_once(move || {
+                    let window = pane.upgrade().and_then(|pane| pane.root());
+                    if let Some(window) = window.and_downcast::<super::super::BrowserWindow>() {
+                        window.update_details_pane();
+                    }
+                });
+            });
         }
 
         fn dispose(&self) {

@@ -11,6 +11,7 @@
 
 use std::path::PathBuf;
 
+use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
@@ -30,8 +31,21 @@ const PREVIEW_HEIGHT: i32 = 146;
 
 impl DetailsPane {
     /// Shows `media` in the preview area, or the item's art without one.
+    /// The same media as before stays as it is, so a player keeps playing
+    /// and a picture is not decoded again when the pane is redrawn for
+    /// another reason; nothing is read while the pane is hidden.
     pub(super) fn show_media(&self, media: Option<&MediaPreview>) {
         let imp = self.imp();
+        let media = media.filter(|_| self.is_visible());
+        if imp.shown_media.borrow().as_ref() == media {
+            // The Properties rows were drawn again without the media's.
+            for (name, value) in imp.media_rows.borrow().iter() {
+                self.add_property(name, value);
+            }
+            return;
+        }
+        imp.shown_media.replace(media.cloned());
+        imp.media_rows.borrow_mut().clear();
         let generation = imp.media_generation.get().wrapping_add(1);
         imp.media_generation.set(generation);
         self.set_preview_widget(None);
@@ -60,17 +74,23 @@ impl DetailsPane {
     }
 
     /// Decodes the image at `path`, or the cached thumbnail of the item at
-    /// `uri`, and shows it if the selection is still `generation`'s.
+    /// `uri`, scaled to the preview area, and shows it if the selection is
+    /// still `generation`'s. An image's own size comes from its header.
     fn load_picture(&self, generation: u64, path: Option<PathBuf>, uri: Option<String>) {
         let pane = self.downgrade();
         let is_image = path.is_some();
+        let scale = self.scale_factor().max(1);
         glib::spawn_future_local(async move {
             let decoded = gio::spawn_blocking(move || {
                 let path = path.or_else(|| cached_thumbnail(uri.as_deref()?))?;
-                gdk::Texture::from_filename(path).ok()
+                let (width, height) = (PREVIEW_WIDTH * scale, PREVIEW_HEIGHT * scale);
+                let pixbuf = Pixbuf::from_file_at_scale(&path, width, height, true).ok()?;
+                let pixbuf = pixbuf.apply_embedded_orientation().unwrap_or(pixbuf);
+                let size = Pixbuf::file_info(&path).map(|(_, width, height)| (width, height));
+                Some((gdk::Texture::for_pixbuf(&pixbuf), size))
             })
             .await;
-            let (Some(pane), Ok(Some(texture))) = (pane.upgrade(), decoded) else {
+            let (Some(pane), Ok(Some((texture, size)))) = (pane.upgrade(), decoded) else {
                 return;
             };
             if pane.imp().media_generation.get() != generation {
@@ -82,9 +102,8 @@ impl DetailsPane {
             picture.add_css_class("detail-picture");
             picture.update_property(&[gtk::accessible::Property::Label("Preview")]);
             pane.set_preview_widget(Some(picture.upcast_ref()));
-            if is_image {
-                let dimensions = format!("{} × {} pixels", texture.width(), texture.height());
-                pane.add_property("Dimensions", &dimensions);
+            if let Some((width, height)) = size.filter(|_| is_image) {
+                pane.add_media_property("Dimensions", format!("{width} × {height} pixels"));
             }
         });
     }
@@ -117,9 +136,18 @@ impl DetailsPane {
             };
             let micros = stream.duration();
             if pane.imp().media_generation.get() == generation && stream.is_prepared() && micros > 0 {
-                pane.add_property("Length", &length_text(micros));
+                pane.add_media_property("Length", length_text(micros));
             }
         });
+    }
+}
+
+impl DetailsPane {
+    /// Adds the row `name` that the media shown says, and keeps it for
+    /// when the rows are drawn again.
+    fn add_media_property(&self, name: &'static str, value: String) {
+        self.add_property(name, &value);
+        self.imp().media_rows.borrow_mut().push((name, value));
     }
 }
 

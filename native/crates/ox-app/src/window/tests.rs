@@ -15,6 +15,7 @@ mod clipboard;
 mod clipboard_interop;
 mod command_bar;
 mod context_menus;
+mod details_preview;
 mod drag_and_drop;
 mod environment;
 mod file_operations;
