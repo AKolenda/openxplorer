@@ -218,6 +218,7 @@ impl BrowserWindow {
             versions: self.context().previous_versions().clone(),
             locations: self.imp().locations.borrow().clone(),
             folder_size: self.measured_folder_size(&target.uri),
+            usershares: crate::properties::system_usershares(),
         };
         let title = target.dialog_title();
         let view = PropertiesView::new(target, context, tab);

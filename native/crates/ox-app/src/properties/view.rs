@@ -2,7 +2,8 @@
 //! The body of the Properties dialog: its tabs and their panels.
 //!
 //! Ports `propertiesDialog` in `desktop/ui/app.js` (PROP-001, PROP-003,
-//! PROP-006): the tabs General, Location (standard folders only),
+//! PROP-006): the tabs General, Sharing (local folders only), Location
+//! (standard folders only),
 //! Permissions and Previous versions, the item's properties read once
 //! when the dialog opens, and the versions looked up the first time their
 //! tab is shown. [`PropertiesView`] is a widget subclass the dialog frame
@@ -15,12 +16,14 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::EntryError;
-use ox_core::location::LocationContext;
+use ox_core::location::{ItemKind, LocationContext};
+use ox_core::network::Usershares;
 use ox_core::versions::PreviousVersions;
 
 use super::folder_sizes::FolderSizeState;
 use super::general_panel::{self, GeneralFacts};
 use super::metadata::{read_properties, ItemProperties};
+use super::sharing_panel::sharing_panel;
 use super::versions_panel::VersionsPanel;
 use super::{PropertiesTab, PropertiesTarget};
 use crate::dialog_layer::{quiet_text, DialogFrame, DialogWidth};
@@ -40,6 +43,8 @@ pub(crate) struct PropertiesContext {
     pub locations: LocationContext,
     /// The folder's measured size, if it was measured this session.
     pub folder_size: Option<FolderSizeState>,
+    /// Samba's user shares, for the Sharing tab.
+    pub usershares: Usershares,
 }
 
 mod imp {
@@ -131,7 +136,7 @@ impl PropertiesView {
             .set(versions)
             .expect("a new view has no versions panel yet");
         imp.target.set(target).expect("a new view has no target yet");
-        view.add_pages();
+        view.add_pages(&context.usershares);
         view.select_tab(initial);
         view.follow_selected_tab();
         view.read_properties(context);
@@ -148,7 +153,7 @@ impl PropertiesView {
     }
 
     /// Adds one page per tab the item has.
-    fn add_pages(&self) {
+    fn add_pages(&self, usershares: &Usershares) {
         let imp = self.imp();
         let pages = &imp.pages;
         pages.set_vhomogeneous(false);
@@ -156,6 +161,10 @@ impl PropertiesView {
         imp.general.append(&quiet_text(READING));
         imp.permissions.set_orientation(gtk::Orientation::Vertical);
         self.add_page(PropertiesTab::General, imp.general.upcast_ref());
+        if let Some(folder) = self.shareable_folder() {
+            let sharing = sharing_panel(folder, usershares.clone());
+            self.add_page(PropertiesTab::Sharing, sharing.upcast_ref());
+        }
         if let Some(folder) = self.target().known_folder {
             let location = general_panel::location_panel(folder);
             self.add_page(PropertiesTab::Location, location.upcast_ref());
@@ -165,6 +174,16 @@ impl PropertiesView {
             PropertiesTab::PreviousVersions,
             self.versions_panel().upcast_ref(),
         );
+    }
+
+    /// The path of a folder on this computer, which the Sharing tab can
+    /// share; `None` for files and for folders elsewhere (NET-035).
+    fn shareable_folder(&self) -> Option<std::path::PathBuf> {
+        let target = self.target();
+        if target.kind != ItemKind::Folder || !target.uri.starts_with("file:") {
+            return None;
+        }
+        gtk::gio::File::for_uri(&target.uri).path()
     }
 
     fn add_page(&self, tab: PropertiesTab, panel: &gtk::Widget) {

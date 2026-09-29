@@ -33,6 +33,7 @@
 //! | `sign_out` | Sign out of a server | `winspace.py` |
 //! | `discovery` | Servers advertising on the local network | `winspace.py`, `gio_backend.py` |
 //! | `visited` | Servers and shares browsed this session | `winspace.py` |
+//! | `usershare` | Sharing a local folder with Samba user shares | Dolphin's Share tab |
 //! | `recent_servers` | The recent-servers list GTK's Other Locations shares | GTK's places view |
 //! | `mount_table`, `local_path` | Local paths of SMB locations | `mount_support.py`, `native_opening.py` |
 //! | `mount_plan` | The persistent mount assistant's plan | `mount_support.py` |
@@ -70,6 +71,7 @@ mod session_credentials;
 mod sign_out;
 #[cfg(test)]
 mod test_support;
+mod usershare;
 mod visited;
 mod volumes;
 
@@ -99,6 +101,7 @@ pub use session_credentials::SessionCredentials;
 pub use sign_out::{
     begin_sign_out, finish_sign_out, SignOutRegistry, SignOutReport, SignOutRequest, SigningOut,
 };
+pub use usershare::{validate_share_name, Usershare, UsershareError, Usershares};
 pub use visited::{session_network_root, VisitedNetwork};
 pub use volumes::{
     eject_location, mount_volume, safely_remove_location, unmount_location, volume_id, volume_id_from,
