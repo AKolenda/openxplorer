@@ -12829,8 +12829,8 @@ python_tests = [
 ]
 bridge = ["properties", "clipboardText", "folderSize"]
 dolphin = "Properties (Alt+Return) General/Permissions"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, calculate_folder_size_shows_the_size_everywhere_the_folder_is). Every row, Copy full path with its toast, Calculate folder size with its explanation, and the read-failure texts are ported (native/crates/ox-app/src/properties/general_panel.rs). Change app… closes Properties and opens the Open with dialog for the file (the ChangeApp window action). Missing: a window test of Change app…. Porting notes: Dolphin can edit permissions and ownership; the Python app shows them read-only."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, calculate_folder_size_shows_the_size_everywhere_the_folder_is, change_app_closes_properties_and_opens_open_with). Every row, Copy full path with its toast, Calculate folder size with its explanation, and the read-failure texts are ported (native/crates/ox-app/src/properties/general_panel.rs). Change app… (files outside snapshots) closes Properties and opens the Open with dialog for the file. Porting notes: Dolphin can edit permissions and ownership (PROP-007); the Python app shows them read-only."
 
 [[feature]]
 id = "PROP-004"
@@ -12945,8 +12945,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Browse opens a new snapshot tab",
 ]
 bridge = ["properties", "previousVersions", "cancel"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (properties_belong_to_the_tab_that_opened_them, closing_a_tab_discards_its_properties). The dialog lies on an in-window layer under the title bar, is withdrawn when another tab (Ctrl+Tab, a new tab, Settings) comes to the front and comes back unchanged with its tab, is discarded with its tab, Close or Escape, and its tab's tooltip adds ' · Properties open'. Missing: a GTK test of Escape, and the rule that a tab with open Properties cannot move to another window, which applies once tab moves between windows exist."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (properties_belong_to_the_tab_that_opened_them, closing_a_tab_discards_its_properties, escape_closes_properties_and_a_tab_with_properties_stays_in_its_window). The dialog lies on an in-window layer under the title bar, is withdrawn when another tab (Ctrl+Tab, a new tab, Settings) comes to the front and comes back unchanged with its tab, is discarded with its tab, Close or Escape, and its tab's tooltip adds ' · Properties open'. A tab with Properties, open or withdrawn, cannot move to another window, by the tab menu or a drag ('Close this tab’s dialog and finish file operations before moving it.', tabCanMove)."
 
 [[feature]]
 id = "PROP-009"

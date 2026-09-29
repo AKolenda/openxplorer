@@ -12,9 +12,11 @@ use gtk::prelude::*;
 use ox_core::integration::{FileManagerMethod, FileManagerRequest};
 
 use crate::dialog_layer::DialogFrame;
+use crate::integration::OpenWithDialog;
 use crate::properties::{FolderSizeState, PropertiesView, RestoreRequest, SnapshotTarget};
 use crate::test_support::harness::{capture, descendants, wait_until, Fixture, TestWindow};
 use crate::window::widget_tree::children;
+use crate::window::WindowAction;
 
 /// The name of the snapshot the fixtures create.
 const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
@@ -178,6 +180,81 @@ fn properties_belong_to_the_tab_that_opened_them() {
     press(&frame, "Close");
     assert!(test.shown_dialog().is_none());
     assert!(!tab_tooltips(&test)[0].contains("Properties open"));
+}
+
+/// Escape dismisses Properties as Close does, and a tab with Properties
+/// stays in its window until they close (`tabCanMove`).
+///
+/// parity: PROP-008
+#[gtk::test]
+fn escape_closes_properties_and_a_tab_with_properties_stays_in_its_window() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let owner = test.active_tab().expect("a tab");
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let move_to_new_window = |test: &TestWindow| {
+        let action = format!("win.{}", WindowAction::MoveTabToNewWindow.name());
+        let target = owner.to_raw().to_variant();
+        WidgetExt::activate_action(&test.window, &action, Some(&target)).expect("the action exists");
+    };
+
+    move_to_new_window(&test);
+
+    assert_eq!(test.window.tab_count(), 1, "the tab stayed");
+    assert_eq!(
+        test.window.shown_message_text(),
+        "Close this tab’s dialog and finish file operations before moving it."
+    );
+    press_escape(&test);
+    assert!(frame.is_closed(), "Escape dismissed the dialog");
+    assert!(!test.window.has_properties(owner));
+}
+
+/// Presses Escape on the window's dialog layer.
+fn press_escape(test: &TestWindow) {
+    let layer = test.window.dialog_layer();
+    let controllers = layer.observe_controllers();
+    let shortcut = controllers
+        .iter::<glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            controller
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .collect::<Vec<_>>()
+        })
+        .find_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+        .expect("the layer has the Escape shortcut");
+    let action = shortcut.action().expect("the shortcut has an action");
+    action.activate(gtk::ShortcutActionFlags::empty(), layer, None);
+}
+
+/// Change app… closes Properties and opens Open with for the file.
+///
+/// parity: PROP-003
+#[gtk::test]
+fn change_app_closes_properties_and_opens_open_with() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the properties to be read", || {
+        value_after(&general, "Type").is_some()
+    });
+
+    press(&general, "Change app…");
+
+    assert!(frame.is_closed(), "Properties closed");
+    let open_with = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|window| window.downcast::<OpenWithDialog>().ok())
+        .find(|dialog| dialog.transient_for().as_ref() == Some(test.window.upcast_ref()))
+        .expect("Open with opened for the file");
+    open_with.close();
 }
 
 /// parity: PROP-008

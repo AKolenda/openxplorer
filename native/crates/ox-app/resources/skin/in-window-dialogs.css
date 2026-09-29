@@ -89,7 +89,7 @@ window.ox .properties-tabs button:checked {
   border-radius: 5px;
   padding: 12px;
 }
-.location-warning image { color: @ox_accent; margin-top: 3px; }
+.location-warning image { color: @ox_accent; }
 .mount-picker { margin-top: 10px; }
 .network-mount-assistant { margin-top: 20px; border-top: 1px solid @ox_border; padding-top: 15px; }
 .network-mount-assistant title { color: @ox_accent; padding: 3px 0 8px 0; }
