@@ -18,11 +18,15 @@ jobs:
     name: Release package (${{ matrix.name }})
     runs-on: ubuntu-24.04
     timeout-minutes: 75
+    # The release needs the Debian package, which the 1.1.x updater
+    # installs, and the Flatpak. An RPM or Arch package that fails to build
+    # is left out of the release instead of holding it back; tools/release.py
+    # publishes the packages that were built.
+    continue-on-error: ${{ matrix.optional }}
     container:
       image: ${{ matrix.image }}
     strategy:
-      # The release ships the Debian package and the Flatpak. RPM and Arch
-      # packages are built by native-distros.yml until their jobs are fixed.
+      # One package's failure must not cancel the others' builds.
       fail-fast: false
       matrix:
         include:
@@ -33,6 +37,24 @@ jobs:
             image: ubuntu:24.04
             family: debian
             format: deb
+            optional: false
+          # The rolling and newest releases, as in native-distros.yml; each
+          # RPM is built against its own distribution's libraries.
+          - name: Fedora RPM
+            image: fedora:latest
+            family: fedora
+            format: rpm
+            optional: true
+          - name: openSUSE RPM
+            image: opensuse/tumbleweed:latest
+            family: opensuse
+            format: rpm
+            optional: true
+          - name: Arch package
+            image: archlinux:latest
+            family: arch
+            format: arch
+            optional: true
     env:
       CARGO_TERM_COLOR: always
       # Skips the few tests whose results depend on the distribution's

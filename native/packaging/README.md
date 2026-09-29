@@ -311,6 +311,9 @@ The spec builds offline from `openxplorer-<version>.tar.gz` (the committed
 sources) and `openxplorer-<version>-vendor.tar.gz` (every crate, from
 `cargo vendor`), with the distribution's own Rust. It works on Fedora and
 openSUSE; the GVfs backend names differ and are chosen with `%{suse_version}`.
+Fedora tags the release with its version (`.fc44`); openSUSE sets no tag, so
+`ci/build-package.sh` passes the distribution's ID (`.opensuse_tumbleweed`)
+and the two RPMs of a release have different names.
 
 ## Arch package
 
@@ -335,3 +338,13 @@ the Flatpak bundle. The scripts in [`ci/`](ci/) are its steps:
 unprivileged user the checks run as, `install-rust.sh` installs Rust 1.92.0
 (the minimum supported version) and stable, `run-checks.sh` runs the driver
 and `build-package.sh` builds and verifies the package.
+
+The `native-package` job of
+[`.github/workflows/checks.yml`](../../.github/workflows/checks.yml) runs the
+same steps for the release on every push to `main`, building the stable app:
+the `.deb` on Ubuntu 24.04, an RPM on Fedora and on openSUSE Tumbleweed, and
+the Arch package; `native-flatpak` builds the stable Flatpak bundle. The
+release needs the `.deb` (the 1.1.x updater installs it) and the Flatpak. An
+RPM or Arch build that fails is marked as allowed to fail, so the release
+goes ahead without that package, and `tools/release.py --packages` stages and
+checksums the packages that were built.
