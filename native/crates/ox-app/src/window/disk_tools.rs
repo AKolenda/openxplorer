@@ -7,17 +7,23 @@
 //! Filelight; here GNOME Disks, GNOME's Disk Image Mounter and Disk Usage
 //! Analyzer (or Filelight) do the work, and an item is only offered where
 //! its tool is installed ([`is_installed`]).
+//!
+//! Dolphin's status bar also offers its disk-usage analyser from the menu
+//! of its space indicator; here a secondary click on the status bar
+//! offers Analyse disk usage for the folder shown.
 
 use std::path::{Path, PathBuf};
 
-use gio::prelude::*;
-use gtk::{gio, glib};
+use gtk::prelude::*;
+use gtk::{gdk, gio, glib};
 use ox_core::integration::{DiskTool, ExecutableSearch, Sandbox};
 use ox_core::location::normalise;
 
 use super::actions::text_action;
+use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use crate::icons::Icon;
 
 /// Shown when a drive has no block device for Disks.
 const NO_BLOCK_DEVICE: &str = "Disks cannot open this drive.";
@@ -63,6 +69,36 @@ impl BrowserWindow {
                 window.run_disk_tool_at(DiskTool::AnalyseUsage, uri);
             }),
         ]);
+        let click = gtk::GestureClick::new();
+        click.set_button(gdk::BUTTON_SECONDARY);
+        click.connect_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_, _, x, y| {
+                window.show_status_bar_menu(x, y);
+            }
+        ));
+        self.status_bar().add_controller(click);
+    }
+
+    /// The status bar's menu at (`x`, `y`), when it has something to
+    /// offer for the folder shown.
+    pub(super) fn show_status_bar_menu(&self, x: f64, y: f64) -> Option<MenuPopover> {
+        let folder = self.current_uri()?;
+        let entries = status_bar_entries(&folder, is_installed(DiskTool::AnalyseUsage));
+        if entries.is_empty() {
+            return None;
+        }
+        let popover = MenuPopover::new(entries);
+        popover.set_parent(self.status_bar());
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+        popover.connect_closed(|popover| {
+            let closed = popover.clone();
+            glib::idle_add_local_once(move || closed.unparent());
+        });
+        popover.popup();
+        Some(popover)
     }
 
     /// Opens Disks, or its Format dialog, for the drive mounted at `uri`.
@@ -104,6 +140,22 @@ impl BrowserWindow {
     }
 }
 
+/// The status bar's menu for the folder at `folder`: Analyse disk usage
+/// when an analyser is installed and the folder is on this computer.
+fn status_bar_entries(folder: &str, has_analyser: bool) -> Vec<MenuEntry> {
+    let is_local = folder.starts_with("file:") && gio::File::for_uri(folder).path().is_some();
+    if !(has_analyser && is_local) {
+        return Vec::new();
+    }
+    let analyse = MenuItem::with_text_target(
+        "Analyse disk usage",
+        Icon::HardDrive,
+        WindowAction::AnalyseDiskUsage,
+        folder,
+    );
+    vec![analyse.into()]
+}
+
 /// Finds and starts `tool` on `target`; the message to show when it
 /// cannot.
 fn start(tool: DiskTool, target: &Path) -> Result<(), String> {
@@ -111,4 +163,27 @@ fn start(tool: DiskTool, target: &Path) -> Result<(), String> {
     let program = installed_program(tool).ok_or_else(|| "The tool is not installed.".to_owned())?;
     tool.launch(&program, target, sandbox)
         .map_err(|error| format!("Could not start {}: {error}", program.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The status bar offers the analyser for a folder on this computer,
+    /// and only where one is installed.
+    ///
+    /// parity: PROP-015
+    #[test]
+    fn the_status_bar_offers_the_analyser_for_a_local_folder() {
+        let entries = status_bar_entries("file:///srv/media", true);
+        let [MenuEntry::Item(item)] = entries.as_slice() else {
+            panic!("one item: {entries:?}");
+        };
+        assert_eq!(item.label, "Analyse disk usage");
+        assert_eq!(item.action, WindowAction::AnalyseDiskUsage.into());
+        assert_eq!(item.target, Some("file:///srv/media".to_variant()));
+        assert!(status_bar_entries("file:///srv/media", false).is_empty());
+        assert!(status_bar_entries("smb://nas/share", true).is_empty());
+        assert!(status_bar_entries("ox:this-pc", true).is_empty());
+    }
 }

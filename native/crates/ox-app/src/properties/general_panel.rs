@@ -344,3 +344,21 @@ fn clear(panel: &gtk::Box) {
         panel.remove(&child);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Properties button runs the analyser on the folder.
+    ///
+    /// parity: PROP-015
+    #[gtk::test]
+    fn the_analyse_button_runs_the_analyser_on_the_folder() {
+        let button = analyse_usage_button("file:///srv/media");
+        assert_eq!(button.action_name().as_deref(), Some("win.analyse-disk-usage"));
+        assert_eq!(
+            button.action_target_value(),
+            Some("file:///srv/media".to_variant())
+        );
+    }
+}
