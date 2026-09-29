@@ -118,7 +118,9 @@ impl BrowserWindow {
                 .parameter_type(Some(glib::VariantTy::STRING))
                 .activate(|window: &BrowserWindow, _, target| {
                     if let Some(uri) = target.and_then(glib::Variant::str) {
-                        window.start_size_run(vec![uri.to_owned()]);
+                        let folders = vec![uri.to_owned()];
+                        // A pinned share may be unmounted (NET-004).
+                        window.after_mounting(uri, move |window| window.start_size_run(folders));
                     }
                 })
                 .build(),

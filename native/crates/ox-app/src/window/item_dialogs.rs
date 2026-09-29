@@ -200,9 +200,16 @@ impl BrowserWindow {
         ));
     }
 
+    /// Shows Properties of `target` on `tab`, once its share is mounted
+    /// (NET-004).
+    fn show_properties(&self, target: PropertiesTarget, tab: PropertiesTab) {
+        let uri = target.uri.clone();
+        self.after_mounting(&uri, move |window| window.show_mounted_properties(target, tab));
+    }
+
     /// Shows Properties of `target` on `tab`, owned by the active tab; a
     /// dialog the tab had is replaced.
-    fn show_properties(&self, target: PropertiesTarget, tab: PropertiesTab) {
+    fn show_mounted_properties(&self, target: PropertiesTarget, tab: PropertiesTab) {
         let Some(owner) = self.imp().session.borrow().active_id() else {
             return;
         };
