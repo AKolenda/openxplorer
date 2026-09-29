@@ -609,7 +609,7 @@ fn capture_sign_in(test: &TestWindow, theme: &str) {
 /// Sign out and Disconnect wait for the window's file operation, so a
 /// mount never goes away under a write.
 ///
-/// parity: OPS-024
+/// parity: OPS-024, DEV-006
 #[gtk::test]
 fn sign_out_and_disconnect_wait_for_a_running_file_operation() {
     let fixture = Fixture::standard();

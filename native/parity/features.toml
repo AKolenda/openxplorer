@@ -11096,8 +11096,8 @@ python_tests = [
 bridge = ["environment", "mountVolume", "list"]
 dolphin = "Solid → Places panel Devices and Removable Devices; Dolphin Places 'Devices' section; KFilePlacesModel devices (Solid)"
 gnome = "GVolumeMonitor (udisks2, mtp, gphoto2, afc and goa remote monitors) with mount-/volume-/drive- signals; GVolumeMonitor mounts/volumes; Gio.VolumeMonitor + Gio.Volume.mount; GVolumeMonitor with GVfs mtp/gphoto2/afc"
-native = "partial"
-native_note = "native/crates/ox-app/src/volumes.rs (mounted_mtp_phone_and_afc_device_are_visible, unmounted_phone_is_click_to_connect_device, unsupported_and_shadowed_mounts_stay_hidden). Porting notes: GIO already filters system-internal mounts."
+native = "done"
+native_note = "native/crates/ox-app/src/volumes.rs (mounted_mtp_phone_and_afc_device_are_visible, unmounted_phone_is_click_to_connect_device, unsupported_and_shadowed_mounts_stay_hidden, a_volume_with_an_unsupported_activation_root_is_skipped, mount_roots_with_a_user_name_are_hidden); native/crates/ox-app/src/window/environment.rs (a_volume_monitor_change_redraws_the_sidebar). Mounted drives, unmounted mountable volumes ('Click to connect') and phones/cameras are listed from the volume monitor without mounting or probing; shadowed mounts, unmountable volumes and roots outside file/smb/mtp/gphoto2/afc are hidden; every monitor signal redraws the sidebar and This PC (DEV-002). Porting notes: GIO already filters system-internal mounts."
 
 [[feature]]
 id = "DEV-002"
@@ -11117,8 +11117,8 @@ sources = [
 python_tests = []
 bridge = ["environment"]
 gnome = "GVolumeMonitor signals"
-native = "todo"
-native_note = "The window listens to the volume monitor's mount, volume and drive signals (window/environment.rs) and redraws every window, but no native test emits them: a test cannot create a GIO mount or drive."
+native = "done"
+native_note = "native/crates/ox-app/src/window/environment.rs (a_volume_monitor_change_redraws_the_sidebar). Every window connects the volume monitor's mount-added/removed/changed, volume-added/removed/changed and drive-connected/disconnected/changed signals to one handler that reads the volumes and the settings again and redraws the sidebar, the landing page (This PC), the tabs and the details pane. A test cannot plug in a drive, so it calls that handler as the monitor does."
 
 [[feature]]
 id = "DEV-003"
@@ -11198,8 +11198,8 @@ python_tests = [
 bridge = ["normalise", "list", "operate", "mountVolume", "environment", "cacheSet"]
 dolphin = "kio-extras mtp:/, afc:/ and camera:/ workers in Places Devices"
 gnome = "GVfs mtp/gphoto2/afc backends; GVfs mtp / gphoto2 / afc backends and their remote volume monitors"
-native = "partial"
-native_note = "native/crates/ox-core/src/location/normalise.rs (device_uris_keep_their_authority); native/crates/ox-core/src/entry/classify.rs (mtp_directory_with_bracketed_usb_identifier). Porting notes: Transfer staging for MTP is tracked under XFER."
+native = "done"
+native_note = "native/crates/ox-core/src/location/normalise.rs (device_uris_keep_their_authority, invalid_addresses_are_refused_with_specific_guidance); native/crates/ox-core/src/entry/classify.rs (mtp_directory_with_bracketed_usb_identifier); native/crates/ox-core/tests/location_python.rs (the Python fixtures). mtp://, gphoto2:// and afc:// addresses keep their bracketed USB authority and get a normalised, percent-encoded path; credentials, stray brackets, a query or fragment, a missing identifier and encoded control characters are refused with the Python messages. Porting notes: Transfer staging for MTP is tracked under XFER."
 
 [[feature]]
 id = "DEV-006"
@@ -11224,8 +11224,8 @@ python_tests = []
 bridge = ["unmount", "environment"]
 dolphin = "Places 'Unmount'/'Safely Remove'; Eject / Safely Remove in Places; Places panel “Unmount” / “Release”"
 gnome = "g_mount_unmount_with_operation; g_mount_unmount_with_operation + GMountOperation::show-processes"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/volumes.rs (disconnect_waits_for_this_windows_writes, a_location_outside_every_user_mount_cannot_be_disconnected); native/crates/ox-app/src/devices.rs (disconnect_names_a_device_or_a_mount_as_app_js_does); native/crates/ox-app/src/window/place_menus.rs (a_drive_card_offers_disconnect_only_where_the_mount_allows_it); native/crates/ox-app/src/window/tests/network.rs (disconnect_asks_first_and_reports_a_location_without_a_mount). The card's menu, 'Disconnect this mount?', the unmount with GTK's mount operation, 'Could not disconnect' and the move to Network work. Missing: the toast while this window writes waits for the window to report its writes (the file-operations milestone). Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md. Porting notes: GNOME and Dolphin also offer Eject / Safely remove (DEV-007, DEV-008), now in the menus too."
+native = "done"
+native_note = "native/crates/ox-core/src/network/volumes.rs (disconnect_waits_for_this_windows_writes, a_location_outside_every_user_mount_cannot_be_disconnected); native/crates/ox-app/src/devices.rs (disconnect_names_a_device_or_a_mount_as_app_js_does); native/crates/ox-app/src/window/place_menus.rs (a_drive_card_offers_disconnect_only_where_the_mount_allows_it); native/crates/ox-app/src/window/tests/network.rs (disconnect_asks_first_and_reports_a_location_without_a_mount, sign_out_and_disconnect_wait_for_a_running_file_operation). The card's 'Disconnect device'/'Disconnect mount' menu, the toast 'Finish the current operation before disconnecting.' while this window writes, 'Disconnect this mount?', the unmount with GTK's mount operation, 'Could not disconnect' and the move to Network work. Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md. Porting notes: GNOME and Dolphin also offer Eject / Safely remove (DEV-007, DEV-008), now in the menus too."
 
 [[feature]]
 id = "DEV-007"
