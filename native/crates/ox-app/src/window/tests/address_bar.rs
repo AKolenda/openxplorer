@@ -5,6 +5,8 @@
 use std::fs;
 use std::path::PathBuf;
 
+use gtk::glib;
+use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
@@ -168,6 +170,16 @@ fn an_empty_address_offers_the_network_protocols() {
         7,
         "SMB, SFTP, FTP, FTPS, WebDAV, secure WebDAV and NFS"
     );
+    let keys = address.entry().observe_controllers();
+    let down = gtk::gdk::Key::Down.into_glib();
+    for key in keys.iter::<glib::Object>().flatten() {
+        if let Ok(key) = key.downcast::<gtk::EventControllerKey>() {
+            key.emit_by_name::<bool>("key-pressed", &[&down, &0u32, &gtk::gdk::ModifierType::empty()]);
+        }
+    }
+    assert!(buttons[0].is_focus(), "Down moves into the list");
+    assert!(chooser.is_visible(), "and the list stays open");
+    assert_eq!(address.mode(), AddressMode::Entry);
     buttons[1].emit_clicked();
 
     assert_eq!(address.entry().text().as_str(), "sftp://");

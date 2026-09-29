@@ -11,11 +11,12 @@
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::network::{connect_share, ConnectedShare, RecentServers};
+use ox_core::network::{connect_share, ConnectedShare};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
 use crate::devices::Removal;
 use crate::dialogs::{map_network_dialog, MapRequest, NetworkFormDialog, ShareKeeping};
+use crate::network::user_recent_servers;
 use crate::places::network_row;
 use crate::settings_store::Change;
 
@@ -38,9 +39,12 @@ fn share_change(action: BookmarkAction, uri: String, label: String) -> Change {
 /// Files suggest (NET-019), off the main thread. A failure only costs the
 /// suggestion.
 fn add_recent_server(share: &ConnectedShare) {
+    let Some(servers) = user_recent_servers() else {
+        return;
+    };
     let (uri, label) = (share.uri.clone(), share.label.clone());
     glib::spawn_future_local(async move {
-        let added = gio::spawn_blocking(move || RecentServers::for_user().add(&uri, &label)).await;
+        let added = gio::spawn_blocking(move || servers.add(&uri, &label)).await;
         if let Ok(Err(error)) = added {
             glib::g_warning!(
                 ox_core::LOG_DOMAIN,
@@ -112,8 +116,8 @@ impl BrowserWindow {
         });
     }
 
-    /// The share is connected: resumes indexing its server, lists it under
-    /// Network, saves it when the user asked, then opens it
+    /// The share is connected, and its mount resumed indexing its server:
+    /// lists it under Network, saves it when the user asked, then opens it
     /// (`after_connect`). A save that fails keeps the dialog open with the
     /// reason.
     pub(super) fn keep_mapped_share(
@@ -122,14 +126,15 @@ impl BrowserWindow {
         share: ConnectedShare,
         keeping: ShareKeeping,
     ) {
-        self.context().signed_in_to(&share.uri);
         self.context().remember_network(&share.uri);
-        add_recent_server(&share);
         if keeping == ShareKeeping::ThisSessionOnly {
             dialog.finish();
             self.navigate_or_report(&share.uri);
             return;
         }
+        // A share kept in the sidebar is offered to Files and the GTK file
+        // chooser too; one for this session only leaves no record.
+        add_recent_server(&share);
         let uri = share.uri.clone();
         let change = share_change(BookmarkAction::Add, share.uri, share.label);
         self.context().change_settings(
