@@ -33,6 +33,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
+use ox_core::folder_locations::FolderRelocation;
 use ox_core::places::FolderLocations;
 use ox_core::settings::{PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
 use ox_core::versions::PreviousVersions;
@@ -66,6 +67,7 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
     use gtk::{gio, glib};
+    use ox_core::folder_locations::FolderRelocation;
     use ox_core::ops::UndoJournal;
     use ox_core::places::Place;
     use ox_core::versions::PreviousVersions;
@@ -105,6 +107,9 @@ mod imp {
         pub(super) previous_versions: OnceCell<Arc<PreviousVersions>>,
         /// The search cache and its index service.
         pub(super) search_cache: SearchCache,
+        /// Moves the standard folders (the Properties Location tab); a
+        /// test replaces it with one over its own folders.
+        pub(super) folder_relocation: RefCell<Option<Arc<FolderRelocation>>>,
         /// The application's updates, made on first use.
         pub(super) updates: OnceCell<Updates>,
         /// The desktop integration, made on first use.
@@ -156,7 +161,11 @@ impl AppContext {
     /// # Panics
     ///
     /// Never: a new object has no skin or settings yet.
-    fn with_folder_locations(skin: Skin, settings: Settings, folder_locations: FolderLocations) -> Self {
+    pub(crate) fn with_folder_locations(
+        skin: Skin,
+        settings: Settings,
+        folder_locations: FolderLocations,
+    ) -> Self {
         let context: Self = glib::Object::new();
         let imp = context.imp();
         imp.skin.set(skin).expect("a new AppContext has no skin yet");
@@ -164,6 +173,8 @@ impl AppContext {
         imp.previous_versions
             .set(Arc::new(versions))
             .expect("a new AppContext has no previous-versions service yet");
+        let relocation = FolderRelocation::new(folder_locations.clone(), settings.directory().to_owned());
+        imp.folder_relocation.replace(Some(Arc::new(relocation)));
         imp.settings
             .set(SettingsStore::new(settings))
             .expect("a new AppContext has no settings yet");
@@ -194,6 +205,26 @@ impl AppContext {
     /// The settings folder (`~/.config/winspace`).
     pub(crate) fn settings_directory(&self) -> PathBuf {
         self.settings().directory()
+    }
+
+    /// Moves the standard folders, for the Properties Location tab.
+    ///
+    /// # Panics
+    ///
+    /// Never: the constructor sets it.
+    pub(crate) fn folder_relocation(&self) -> Arc<FolderRelocation> {
+        let relocation = self.imp().folder_relocation.borrow();
+        Arc::clone(
+            relocation
+                .as_ref()
+                .expect("the constructor sets the folder relocation"),
+        )
+    }
+
+    /// Moves the standard folders with `relocation` from now on.
+    #[cfg(test)]
+    pub(crate) fn use_folder_relocation(&self, relocation: FolderRelocation) {
+        self.imp().folder_relocation.replace(Some(Arc::new(relocation)));
     }
 
     /// The application's updates, shared by every window.

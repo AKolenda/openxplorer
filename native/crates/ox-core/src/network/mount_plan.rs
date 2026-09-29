@@ -74,6 +74,16 @@ pub struct DesktopUser {
     pub gid: u32,
 }
 
+impl DesktopUser {
+    /// The user running the app.
+    pub fn current() -> Self {
+        Self {
+            uid: rustix::process::getuid().as_raw(),
+            gid: rustix::process::getgid().as_raw(),
+        }
+    }
+}
+
 /// Plans an on-demand mount of `address` for `user`.
 ///
 /// Safety rule (SAFE-021): deliberately narrower than SMB addressing in

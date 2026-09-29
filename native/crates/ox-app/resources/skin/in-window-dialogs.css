@@ -76,6 +76,32 @@ window.ox .properties-tabs button:checked {
 .property-grid .property-name { color: @ox_muted; min-width: 110px; }
 .property-buttons { border-spacing: 7px; margin-bottom: 12px; }
 
+/* The Location tab of a standard folder (.location-*, .mount-*,
+   .network-mount-assistant and .setup-command in style.css). */
+.location-controls { border-spacing: 7px; margin-top: 12px; }
+.location-status { color: @ox_muted; margin: 12px 0; min-height: 18px; }
+.location-status.valid { color: @ox_accent; }
+.location-status.error { color: @ox_error; }
+.location-warning {
+  color: @ox_muted;
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 5px;
+  padding: 12px;
+}
+.location-warning image { color: @ox_accent; margin-top: 3px; }
+.mount-picker { margin-top: 10px; }
+.network-mount-assistant { margin-top: 20px; border-top: 1px solid @ox_border; padding-top: 15px; }
+.network-mount-assistant title { color: @ox_accent; padding: 3px 0 8px 0; }
+.setup-command {
+  background-color: @ox_chrome;
+  border: 1px solid @ox_border;
+  border-radius: 3px;
+  padding: 10px;
+  margin: 8px 0;
+}
+.mount-plan > button { margin-top: 8px; }
+
 /* Previous versions. */
 .versions-toolbar { border-spacing: 8px; margin-bottom: 12px; }
 .versions-list {

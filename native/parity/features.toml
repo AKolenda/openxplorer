@@ -13122,7 +13122,8 @@ python_tests = [
 ]
 bridge = ["locationCheck", "locationApply", "environment"]
 gnome = "xdg-user-dirs (user-dirs.dirs); xdg-user-dirs-update --set"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/folder_location.rs (the_location_tab_moves_documents_and_offers_to_move_its_files); native/crates/ox-core/src/folder_locations/contents.rs (the_old_folders_items_may_follow_it_but_never_the_new_folder_or_another_standard_folder, nothing_follows_from_home_a_shared_folder_or_the_same_folder_through_a_link). The Location tab (native/crates/ox-app/src/properties/location_panel.rs) ports renderLocationPanel: the intro, Folder location, the mounted network drive picker, Check location, Restore default, Use previous, the status line with its Python wording, the warning, the consent box, Apply location enabled only for a consented, checked and unchanged path, 'Location updated. Configuration backed up. No files moved.' and the collapsed network mount assistant. Every window follows the change through the user-dirs.dirs monitor. Gain from Windows 11: after a change the window asks 'Do you want to move all of the files from the old location to the new location?' (Don't move / Move files, window/relocated_files.rs) and moves the old folder's items through the transfer engine with the name-conflict dialog; nothing is overwritten without a choice and skipped items stay in the old folder. Nothing is offered from the home folder, / or a folder another standard folder shares, and the new folder and other standard folders inside the old one never move. The warning now reads 'Apply changes only the setting: existing files are NOT moved unless you choose to move them afterwards. …'."
 
 [[feature]]
 id = "PROP-018"
@@ -13144,7 +13145,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::Applying opted-in Downloads location opens profile sync",
 ]
 bridge = ["braveStatus", "braveSync", "locationApply"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/folder_location.rs (a_ticked_brave_follow_up_opens_brave_s_dialog_after_moving_downloads, the_location_tab_moves_documents_and_offers_to_move_its_files). Only Downloads shows the unticked 'Also update Brave’s download directory (choose profiles after Apply).'; after a successful Apply (and the offer to move the files) it opens Brave's download-folder dialog for the new path, which asks its own consent."
 
 [[feature]]
 id = "PROP-019"
@@ -13537,8 +13539,8 @@ sources = [
 python_tests = ["desktop/tests/test_v05.py::SettingsWindowsTests::test_mount_resolution"]
 bridge = ["locationCheck", "locationApply", "environment"]
 gnome = "xdg-user-dirs-update --set run without a shell; re-read user-dirs.dirs; detect CIFS and GVfs mounts from /proc/self/mountinfo"
-native = "todo"
-native_note = "Porting notes: PROP-017 describes the dialog, SET-018 the parsing and SAFE-020 the 15 s timeout. No test covers these backend rules; the PROP-017 tests run against the preview. The backend also accepts the TEMPLATES and PUBLICSHARE keys, although the UI offers six folders; decide whether to keep that."
+native = "done"
+native_note = "native/crates/ox-core/src/folder_locations/tests.rs (a_local_folder_is_checked_through_its_symlinks, unsafe_destinations_are_refused_in_the_python_wording, the_system_temporary_folders_are_refused_by_default, a_folder_without_write_access_is_refused, an_smb_folder_resolves_through_the_kernel_mount_of_its_share, nothing_changes_without_consent, applying_backs_up_changes_verifies_and_remembers_the_previous_folder, applying_the_current_folder_changes_nothing, a_change_the_configuration_does_not_keep_is_reported_with_the_backup_kept, a_missing_xdg_user_dirs_asks_for_it_to_be_installed); native/crates/ox-app/src/window/tests/folder_location.rs (the_location_tab_moves_documents_and_offers_to_move_its_files). FolderRelocation ports validate, apply and snapshot of folder_locations.py with the Python checks, order and wording, explicit consent, the private 0600 backup in a 0700 folder, xdg-user-dirs-update run without a shell with the 15 s limit, the read-back and the shared history file for Use previous. Every window refreshes through the user-dirs.dirs monitor (SIDE-006). As in Python the backend accepts every standard folder key, TEMPLATES and PUBLICSHARE included; the Location tab shows for the six Quick access folders."
 
 [[feature]]
 id = "PROP-032"

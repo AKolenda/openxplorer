@@ -28,7 +28,8 @@
 //! ([`context_menu`], [`tab_menu`]), searching ([`folder_search`],
 //! [`cache_folder`]), Properties and previous versions ([`item_dialogs`],
 //! [`snapshot_tabs`], [`version_restore`]), folder sizes
-//! ([`folder_size_scan`]), ZIP archives ([`archive_actions`]), requests
+//! ([`folder_size_scan`]), moving a relocated standard folder's files
+//! ([`relocated_files`]), ZIP archives ([`archive_actions`]), requests
 //! from other applications and the command line ([`external_requests`]),
 //! Open with, Open in Terminal and updates ([`integration_actions`]), and
 //! what the window connects and lets go of ([`connections`]).
@@ -86,6 +87,7 @@ mod network_sign_out;
 mod place_menus;
 mod preferences;
 mod quick_access;
+mod relocated_files;
 mod search_box;
 mod selection;
 mod session;

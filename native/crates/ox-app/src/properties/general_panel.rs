@@ -10,7 +10,6 @@
 use gtk::prelude::*;
 use ox_core::format;
 use ox_core::location::{is_smb_server, LocationContext};
-use ox_core::places::KnownFolder;
 use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
@@ -140,7 +139,7 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
 }
 
 /// A bordered button with `glyph` and `label`.
-fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
+pub(super) fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     content.append(&icons::image(glyph, BUTTON_GLYPH));
     content.append(&gtk::Label::new(Some(label)));
@@ -208,24 +207,6 @@ pub(super) fn show_read_failure(general: &gtk::Box, permissions: &gtk::Box, mess
     general.append(&note(message));
     clear(permissions);
     permissions.append(&quiet_text(METADATA_UNREADABLE));
-}
-
-/// The Location tab of a standard folder (PROP-017). Relocating a
-/// standard folder needs the folder-location service of
-/// `desktop/folder_locations.py`, which is not ported yet, so the tab
-/// says where the folder is and that moving it comes later.
-pub(super) fn location_panel(folder: KnownFolder) -> gtk::Box {
-    let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let label = folder.label();
-    let intro = format!(
-        "Choose where {label} is stored. Applications that honor Linux’s standard-folder settings will use \
-         this location."
-    );
-    panel.append(&quiet_text(&intro));
-    let notice = "Changing a standard folder's location is not in the native preview yet. Use the \
-                  current OpenXplorer or xdg-user-dirs-update until it arrives.";
-    panel.append(&note(notice));
-    panel
 }
 
 /// Removes every child of `panel`.

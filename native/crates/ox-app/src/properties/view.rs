@@ -15,15 +15,18 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::EntryError;
+use ox_core::folder_locations::FolderRelocation;
 use ox_core::location::LocationContext;
 use ox_core::versions::PreviousVersions;
 
 use super::folder_sizes::FolderSizeState;
 use super::general_panel::{self, GeneralFacts};
+use super::location_panel::LocationPanel;
 use super::metadata::{read_properties, ItemProperties};
 use super::versions_panel::VersionsPanel;
 use super::{PropertiesTab, PropertiesTarget};
 use crate::dialog_layer::{quiet_text, DialogFrame, DialogWidth};
+use ox_core::integration::BraveIntegration;
 
 /// Shown on the General tab while the properties are read.
 const READING: &str = "Reading file properties…";
@@ -40,6 +43,11 @@ pub(crate) struct PropertiesContext {
     pub locations: LocationContext,
     /// The folder's measured size, if it was measured this session.
     pub folder_size: Option<FolderSizeState>,
+    /// Moves a standard folder, for the Location tab.
+    pub relocation: Arc<FolderRelocation>,
+    /// Brave's download-folder integration, for the Location tab's
+    /// follow-up.
+    pub brave: BraveIntegration,
 }
 
 mod imp {
@@ -131,7 +139,7 @@ impl PropertiesView {
             .set(versions)
             .expect("a new view has no versions panel yet");
         imp.target.set(target).expect("a new view has no target yet");
-        view.add_pages();
+        view.add_pages(&context);
         view.select_tab(initial);
         view.follow_selected_tab();
         view.read_properties(context);
@@ -148,7 +156,7 @@ impl PropertiesView {
     }
 
     /// Adds one page per tab the item has.
-    fn add_pages(&self) {
+    fn add_pages(&self, context: &PropertiesContext) {
         let imp = self.imp();
         let pages = &imp.pages;
         pages.set_vhomogeneous(false);
@@ -157,7 +165,8 @@ impl PropertiesView {
         imp.permissions.set_orientation(gtk::Orientation::Vertical);
         self.add_page(PropertiesTab::General, imp.general.upcast_ref());
         if let Some(folder) = self.target().known_folder {
-            let location = general_panel::location_panel(folder);
+            let relocation = Arc::clone(&context.relocation);
+            let location = LocationPanel::new(folder, relocation, context.brave.clone());
             self.add_page(PropertiesTab::Location, location.upcast_ref());
         }
         self.add_page(PropertiesTab::Permissions, imp.permissions.upcast_ref());

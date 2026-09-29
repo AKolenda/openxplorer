@@ -211,6 +211,8 @@ impl BrowserWindow {
             versions: self.context().previous_versions().clone(),
             locations: self.imp().locations.borrow().clone(),
             folder_size: self.measured_folder_size(&target.uri),
+            relocation: self.context().folder_relocation(),
+            brave: self.context().desktop_integration().brave(),
         };
         let title = target.dialog_title();
         let view = PropertiesView::new(target, context, tab);

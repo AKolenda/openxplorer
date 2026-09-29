@@ -20,6 +20,7 @@ mod environment;
 mod file_operations;
 mod file_ops_captures;
 mod file_ops_support;
+mod folder_location;
 mod geometry;
 mod icons;
 mod input;

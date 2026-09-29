@@ -9,8 +9,10 @@
 //!
 //! The safety rules, each enforced and documented where it applies:
 //!
-//! - **No files move.** Only the configuration changes; the old folder and
-//!   everything in it stay where they are.
+//! - **No files move here.** Only the configuration changes; the old folder
+//!   and everything in it stay where they are. The Location tab may then
+//!   offer to move the old folder's items through the transfer engine;
+//!   [`FolderRelocation::contents_to_move`] only lists which may go.
 //! - **Only persistent destinations** ([`check`]): an existing folder the
 //!   user can write to, never a temporary or per-login `GVfs` path, the
 //!   home folder or `/`; an `smb://` address only through a stable kernel
@@ -24,10 +26,12 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `check` | Validating a destination |
+//! | `contents` | Which items of the old folder may follow it |
 //! | `history` | The backup and the "Use previous" history |
 //! | `updater` | Running `xdg-user-dirs-update` |
 
 mod check;
+mod contents;
 mod history;
 mod updater;
 
@@ -201,9 +205,9 @@ impl FolderRelocation {
     }
 
     /// The same, refusing destinations under `roots` instead of `/run`,
-    /// `/tmp` and `/var/tmp`, for tests whose folders are all temporary.
-    #[cfg(test)]
-    fn with_temporary_roots(self, roots: Vec<PathBuf>) -> Self {
+    /// `/tmp` and `/var/tmp`: for tests, whose folders are all temporary.
+    #[must_use]
+    pub fn with_temporary_roots(self, roots: Vec<PathBuf>) -> Self {
         Self {
             temporary_roots: roots,
             ..self
@@ -280,6 +284,25 @@ impl FolderRelocation {
             location,
             change: LocationChange::Changed { backup },
         })
+    }
+
+    /// The items of `applied`'s previous folder that may move into its
+    /// new one once [`Self::apply`] changed it, sorted; empty when none
+    /// may. Never the new folder, an item holding it or another standard
+    /// folder, and nothing from the home folder or a folder another
+    /// standard folder shares (the rules of `contents`).
+    pub fn contents_to_move(&self, applied: &CheckedLocation) -> Vec<PathBuf> {
+        let paths = self.locations.read_paths();
+        let others: Vec<PathBuf> = KnownFolder::ALL
+            .into_iter()
+            .filter(|folder| *folder != applied.folder)
+            .map(|folder| paths.path(folder).to_owned())
+            .collect();
+        let kept = contents::KeptFolders {
+            home: self.locations.home(),
+            others: &others,
+        };
+        contents::movable_contents(&applied.previous, &applied.path, kept)
     }
 
     /// Safety rule "verified, not assumed" (the re-read of `self.paths()`
