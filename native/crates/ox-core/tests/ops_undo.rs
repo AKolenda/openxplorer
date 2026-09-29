@@ -13,7 +13,7 @@ use std::path::Path;
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
-    create_item, create_links, duplicate_items, list_recycle_bin, rename_batch, reverse, run_transfer, undo,
+    changed_copies, create_item, create_links, duplicate_items, list_recycle_bin, rename_batch, reverse, run_transfer, undo,
     BatchItem, BatchRename, LinkRequest, OperationContext, TransferRequest, UndoJournal, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
@@ -54,6 +54,7 @@ fn undo_fully(record: &UndoRecord) {
     assert!(result.skipped.is_empty(), "{:?}", result.skipped);
 }
 
+/// parity: OPS-030
 #[test]
 fn undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources() {
     require_private_trash();
@@ -68,6 +69,13 @@ fn undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources() {
         &[&source.join("a.txt")],
         Some(&destination),
     ));
+    let an_hour_ahead = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 3600;
+    assert!(block_on(changed_copies(&record, an_hour_ahead)).is_empty());
+    assert_eq!(block_on(changed_copies(&record, 0)), ["a.txt"], "changed since 1970");
     undo_fully(&record);
 
     assert_eq!(record.undo_label(), "Undo: Copy");

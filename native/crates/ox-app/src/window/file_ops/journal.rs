@@ -10,13 +10,20 @@
 //! window's one operation, with the transfer panel and Cancel, and reuses
 //! the safety rules of the operation that reverses it (see
 //! [`ox_core::ops::undo`]). The commands are labelled with the operation
-//! they reverse ("Undo: Rename").
+//! they reverse ("Undo: Rename"). Before Undo moves copies to the Trash
+//! that were changed after the copy, it asks, as Dolphin does (OPS-030).
 
-use ox_core::ops::{reverse, summarize_journal_step, JournalDirection, STOPPED_TITLE};
+use ox_core::ops::{
+    changed_copies, reverse, summarize_journal_step, JournalDirection, JournalEntry, STOPPED_TITLE,
+};
 
 use super::FileCommand;
-use crate::window::dialog;
+use crate::window::dialog::{self, ButtonStyle, Dialog};
 use crate::window::BrowserWindow;
+
+/// The title of the question before Undo moves changed copies to the
+/// Trash (Dolphin's "Undo File Copy Confirmation").
+const UNDO_COPY_TITLE: &str = "Undo copy?";
 
 /// The command that walks the journal in `direction`.
 const fn command_for(direction: JournalDirection) -> FileCommand {
@@ -35,6 +42,10 @@ impl BrowserWindow {
         let Some(step) = self.context().take_journal_step(direction) else {
             return;
         };
+        if direction == JournalDirection::Undo && !self.confirm_undoing_changed_copies(&step).await {
+            self.context().put_back_journal_step(direction, step);
+            return;
+        }
         let label = format!("{}…", step.label(direction));
         let Some(context) = self.begin_operation(&label) else {
             self.context().put_back_journal_step(direction, step);
@@ -57,6 +68,33 @@ impl BrowserWindow {
                 dialog::show_message(self, STOPPED_TITLE, &error.to_string()).await;
             }
         }
+    }
+
+    /// True when Undo may move the copies of `step` to the Trash: none
+    /// was modified after the copy, or the user confirmed (OPS-030).
+    async fn confirm_undoing_changed_copies(&self, step: &JournalEntry) -> bool {
+        let changed = changed_copies(&step.record, step.recorded_at).await;
+        let Some(first) = changed.first() else {
+            return true;
+        };
+        let message = if changed.len() == 1 {
+            format!("“{first}” was changed after it was copied. Undo moves it to the Recycle Bin anyway?")
+        } else {
+            format!(
+                "{} copies, such as “{first}”, were changed after they were copied. Undo moves them to \
+                 the Recycle Bin anyway?",
+                changed.len()
+            )
+        };
+        let dialog = Dialog::new(self, UNDO_COPY_TITLE, &message);
+        dialog.add_cancel_button();
+        dialog.add_button("Undo copy", ButtonStyle::Primary);
+        dialog.open();
+        let confirmed = dialog.next_response().await.is_some();
+        if confirmed {
+            dialog.finish();
+        }
+        confirmed
     }
 
     /// The label of the Undo or Redo command now, such as "Undo: Rename",

@@ -7149,7 +7149,8 @@ sources = [
 python_tests = []
 bridge = ["operate"]
 dolphin = "FileUndoManager::UiInterface::copiedFileWasModified"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/ops/changed_copies.rs; native/crates/ox-core/tests/ops_undo.rs (undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources); native/crates/ox-app/src/window/file_ops/journal.rs. Each journal step keeps when it was recorded; before Undo moves the copies of a Copy or Duplicate to the Recycle Bin, copies modified after that time are named in an \"Undo copy?\" question with Cancel and \"Undo copy\". Undo moves copies to the Recycle Bin rather than deleting them, and no native operation runs with root privileges, so no step needs the privilege question."
 
 [[feature]]
 id = "OPS-031"

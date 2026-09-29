@@ -46,6 +46,7 @@
 //! | `conflicts` | The name-conflict check before a paste or drop |
 //! | `delete_plan` | Trash support, and the Delete and Shift+Delete confirmations |
 //! | `run_transfer` | Copy, move, Trash and permanent delete through the engine |
+//! | `changed_copies` | Copies changed since their copy, before Undo trashes them |
 //! | `chosen_transfer` | A copy or move with an answer per name conflict |
 //! | `destinations` | Where a copy's or move's items are now |
 //! | `duplicate` | Duplicate in place |
@@ -70,6 +71,7 @@
 //! Properties and Open with services.
 
 mod batch_rename;
+mod changed_copies;
 mod chosen_transfer;
 mod conflicts;
 mod context;
@@ -95,6 +97,7 @@ mod undo_apply;
 mod unfinished;
 
 pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
+pub use changed_copies::changed_copies;
 pub use chosen_transfer::{run_chosen_transfer, ChosenTransfer, ItemChoice};
 pub use conflicts::find_conflicts;
 pub use context::{OperationContext, WriteProtection};

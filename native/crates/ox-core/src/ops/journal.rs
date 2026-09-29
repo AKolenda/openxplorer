@@ -13,6 +13,7 @@
 
 use std::collections::VecDeque;
 
+use super::run_transfer::unix_seconds_now;
 use super::undo::UndoRecord;
 
 /// How many operations the journal remembers; older ones are dropped.
@@ -54,6 +55,9 @@ pub struct JournalEntry {
     pub title: &'static str,
     /// What reverses the operation's current effect.
     pub record: UndoRecord,
+    /// When the step was recorded, in seconds since the Unix epoch, so
+    /// Undo can tell which copies changed since (OPS-030).
+    pub recorded_at: u64,
 }
 
 impl JournalEntry {
@@ -62,6 +66,7 @@ impl JournalEntry {
         Self {
             title: record.title(),
             record,
+            recorded_at: unix_seconds_now(),
         }
     }
 
@@ -146,7 +151,11 @@ impl UndoJournal {
         let Some(record) = inverse else {
             return;
         };
-        let entry = JournalEntry { title, record };
+        let entry = JournalEntry {
+            title,
+            record,
+            recorded_at: unix_seconds_now(),
+        };
         push_bounded(self.stack_mut(direction.opposite()), entry);
     }
 
