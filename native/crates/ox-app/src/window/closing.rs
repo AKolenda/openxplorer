@@ -109,6 +109,22 @@ impl BrowserWindow {
         glib::ControlFlow::Break
     }
 
+    /// Cancels every write and closes the dialogs over the window, which
+    /// cancels a question such as the conflict dialog: a test that ends
+    /// while its window writes lets it stop before the window closes.
+    #[cfg(test)]
+    pub(crate) fn stop_writing_for_test(&self) {
+        self.cancel_every_write();
+        for window in gtk::Window::list_toplevels() {
+            let Ok(window) = window.downcast::<gtk::Window>() else {
+                continue;
+            };
+            if window.transient_for().as_ref() == Some(self.upcast_ref::<gtk::Window>()) {
+                window.close();
+            }
+        }
+    }
+
     /// Cancels the running file operation and archive operation.
     fn cancel_every_write(&self) {
         self.cancel_operation();
