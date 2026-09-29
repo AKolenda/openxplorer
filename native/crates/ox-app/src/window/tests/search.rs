@@ -11,6 +11,7 @@ use ox_core::search::{
     Caching, GioFolderReader, HiddenItems, IndexService, RootOrigin, RootStatus, SearchIndex,
 };
 
+use super::file_ops_support::{is_enabled, select_names};
 use crate::folder_view::sorting::SortColumn;
 use crate::search::SearchScope;
 use crate::test_support::harness::{capture, wait_until, Fixture, OpenedWindows, TestWindow, STANDARD_NAMES};
@@ -277,6 +278,36 @@ fn a_new_file_in_an_indexed_folder_appears_in_the_shown_search() {
     wait_until("the live update to reach the search", || {
         test.names() == ["invoice.pdf"]
     });
+}
+
+/// A move made in the window tells the search cache that both folders
+/// changed, so a share without a live watch shows it at once.
+///
+/// parity: SRCH-033
+#[gtk::test]
+fn file_operations_tell_the_search_cache_which_folders_changed() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.index_folder(&fixture.uri());
+    let written = |folder: String| {
+        let cache = test.context.search_cache().clone();
+        wait_until("the cache to read the folder again", move || {
+            cache.written_folders().contains(&folder)
+        });
+    };
+    select_names(&test, &["Notes 2.txt"]);
+
+    test.activate("cut", None);
+    test.activate("go-to", Some(&fixture.uri_of("Documents")));
+    test.wait_for_listing("the Documents folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+
+    written(fixture.uri_of("Documents"));
+    written(fixture.uri());
+    test.search_for("notes 2");
+    assert_eq!(test.names(), ["Notes 2.txt"]);
 }
 
 /// parity: SRCH-014, SRCH-015

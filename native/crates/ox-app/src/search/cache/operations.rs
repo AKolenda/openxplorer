@@ -125,17 +125,30 @@ impl SearchCache {
             #[weak(rename_to = cache)]
             self,
             async move {
+                #[cfg(test)]
+                let reported = folders.clone();
                 let outcome = cache
                     .run(move |service| {
                         let mut changed = folders.iter();
                         changed.try_for_each(|folder| service.folder_changed(folder))
                     })
                     .await;
-                if let Err(error) = outcome {
+                if let Err(error) = &outcome {
                     glib::g_warning!(LOG_DOMAIN, "Could not update the search cache: {error}");
+                }
+                #[cfg(test)]
+                if outcome.is_ok() {
+                    cache.imp().written.borrow_mut().extend(reported);
                 }
             }
         ));
+    }
+
+    /// The folders the service read again after the app wrote into them,
+    /// for tests.
+    #[cfg(test)]
+    pub(crate) fn written_folders(&self) -> Vec<String> {
+        self.imp().written.borrow().clone()
     }
 
     /// Runs `change` like [`Self::run`] and reads the status again after it
