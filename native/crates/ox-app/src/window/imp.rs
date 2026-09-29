@@ -121,8 +121,8 @@ pub(crate) struct BrowserWindow {
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
     pub(super) typeahead: RefCell<Typeahead>,
-    /// GNOME's previewer shows a file this window asked it to (PROP-012).
-    pub(super) quick_look_open: Cell<bool>,
+    /// The link to GNOME's previewer (PROP-012).
+    pub(super) quick_look: super::quick_look::QuickLook,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
     /// Set while the window swaps or reloads the model, so the
@@ -203,6 +203,7 @@ impl ObjectImpl for BrowserWindow {
         let window = self.obj();
         window.finish_title_bar();
         window.add_navigation_buttons();
+        window.watch_quick_look();
         self.volume_monitor
             .set(gio::VolumeMonitor::get())
             .expect("constructed runs once per object");

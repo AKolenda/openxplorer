@@ -9,7 +9,7 @@
 //!
 //! [`BrowserWindow::type_text`]: crate::window::BrowserWindow
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::glib::translate::IntoGlib;
@@ -212,10 +212,12 @@ fn the_menu_key_opens_the_context_menu_with_or_without_a_selection() {
 }
 
 /// A stand-in for GNOME Sushi on the private session bus, recording the
-/// calls it receives until it is dropped.
+/// calls it receives until it is dropped. It has Sushi's `Visible`
+/// property and `SelectionEvent` signal.
 struct FakePreviewer {
     bus: gio::DBusConnection,
     calls: Rc<RefCell<Vec<String>>>,
+    visible: Rc<Cell<bool>>,
     owner: Option<gio::OwnerId>,
     registration: Option<gio::RegistrationId>,
 }
@@ -224,13 +226,16 @@ impl FakePreviewer {
     fn start() -> Self {
         let xml = format!(
             "<node><interface name='{PREVIEWER_INTERFACE}'><method name='ShowFile'><arg type='s'/>\
-             <arg type='s'/><arg type='b'/></method><method name='Close'/></interface></node>"
+             <arg type='s'/><arg type='b'/></method><method name='Close'/><signal name='SelectionEvent'>\
+             <arg type='u'/></signal><property name='Visible' type='b' access='read'/></interface></node>"
         );
         let node = gio::DBusNodeInfo::for_xml(&xml).expect("valid introspection");
         let interface = node.lookup_interface(PREVIEWER_INTERFACE).expect("the interface");
         let bus = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).expect("the private bus");
         let calls = Rc::new(RefCell::new(Vec::new()));
         let recorded = Rc::clone(&calls);
+        let visible = Rc::new(Cell::new(false));
+        let shown = Rc::clone(&visible);
         let registration = bus
             .register_object(PREVIEWER_PATH, &interface)
             .method_call(move |_, _, _, _, method, parameters, invocation| {
@@ -241,6 +246,7 @@ impl FakePreviewer {
                 recorded.borrow_mut().push(call);
                 invocation.return_value(None);
             })
+            .property(move |_, _, _, _, _| shown.get().to_variant())
             .build()
             .expect("the object registers");
         let owner = gio::bus_own_name_on_connection(
@@ -254,6 +260,7 @@ impl FakePreviewer {
         Self {
             bus,
             calls,
+            visible,
             owner: Some(owner),
             registration: Some(registration),
         }
@@ -261,6 +268,40 @@ impl FakePreviewer {
 
     fn calls(&self) -> Vec<String> {
         self.calls.borrow().clone()
+    }
+
+    /// Sends `SelectionEvent`, as an arrow key pressed in Sushi's window
+    /// does; `direction` is a `GtkDirectionType`.
+    fn press_arrow(&self, direction: u32) {
+        self.bus
+            .emit_signal(
+                None,
+                PREVIEWER_PATH,
+                PREVIEWER_INTERFACE,
+                "SelectionEvent",
+                Some(&(direction,).to_variant()),
+            )
+            .expect("the signal is sent");
+    }
+
+    /// Changes `Visible` and says so, as Sushi does when its window opens
+    /// or closes.
+    fn set_visible(&self, visible: bool) {
+        self.visible.set(visible);
+        let changed = glib::VariantDict::new(None);
+        changed.insert_value("Visible", &visible.to_variant());
+        let invalidated = Vec::<String>::new().to_variant();
+        let arguments =
+            glib::Variant::tuple_from_iter([PREVIEWER_INTERFACE.to_variant(), changed.end(), invalidated]);
+        self.bus
+            .emit_signal(
+                None,
+                PREVIEWER_PATH,
+                "org.freedesktop.DBus.Properties",
+                "PropertiesChanged",
+                Some(&arguments),
+            )
+            .expect("the signal is sent");
     }
 }
 
@@ -296,7 +337,9 @@ fn name_has_owner(bus: &gio::DBusConnection) -> bool {
 }
 
 /// Space previews the selected file in GNOME's previewer, moving the
-/// selection shows the next file, and Space closes it.
+/// selection shows the next file, and Space closes it. The arrow keys in
+/// the previewer move the selection, and once it closes itself the window
+/// stops following the selection.
 ///
 /// parity: PROP-012
 #[gtk::test]
@@ -304,6 +347,9 @@ fn space_previews_the_selected_file_with_the_gnome_previewer() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let previewer = FakePreviewer::start();
+    wait_until("the window sees the previewer", || {
+        test.window.quick_look_is_available()
+    });
     test.select_named("Notes 10.txt");
 
     assert!(press(&test, gdk::Key::space), "Space opens the preview");
@@ -317,4 +363,21 @@ fn space_previews_the_selected_file_with_the_gnome_previewer() {
         previewer.calls(),
         [shown("Notes 10.txt"), shown("Notes 2.txt"), "Close".to_owned()]
     );
+
+    assert!(press(&test, gdk::Key::space), "Space opens it again");
+    previewer.set_visible(true);
+    let model = test.window.folder_model();
+    let next = model.selected_positions()[0] + 1;
+    let next_name = model.name_at(next).expect("a next item");
+    previewer.press_arrow(3);
+    wait_until("the next file shown", || previewer.calls().len() == 5);
+    assert_eq!(model.selected_positions(), [next]);
+    assert_eq!(previewer.calls()[4], shown(&next_name));
+
+    previewer.set_visible(false);
+    wait_until("the window lets go", || !test.window.quick_look_is_open());
+    test.select_named("Notes 10.txt");
+    assert!(press(&test, gdk::Key::space), "Space opens a new preview");
+    wait_until("ShowFile", || previewer.calls().len() == 6);
+    assert_eq!(previewer.calls()[5], shown("Notes 10.txt"));
 }
