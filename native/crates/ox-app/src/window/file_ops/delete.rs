@@ -11,8 +11,11 @@
 //! app did not have, deletes the selection permanently after its own
 //! confirmation. Both confirm with a red button and Cancel has focus, so
 //! Enter never deletes by accident. In the Recycle Bin, both delete the
-//! selected items for good ([`super::recycle_bin`]).
+//! selected items for good ([`super::recycle_bin`]). Items dropped on the
+//! Recycle Bin go the way of Delete (OPS-045).
 
+use gtk::gio;
+use gtk::gio::prelude::*;
 use ox_core::ops::{
     permanent_delete_confirmation, plan_delete, DeleteConfirmation, DeleteItem, TransferRequest,
 };
@@ -55,9 +58,30 @@ impl BrowserWindow {
             self.delete_from_recycle_bin().await;
             return;
         }
-        let items = self.items_to_delete();
+        self.trash_items(&self.items_to_delete()).await;
+    }
+
+    /// Items dropped on the Recycle Bin: moved to the Trash with Delete's
+    /// confirmation (OPS-045).
+    pub(crate) async fn trash_dropped(&self, uris: Vec<String>) {
+        let items: Vec<DeleteItem> = uris
+            .into_iter()
+            .map(|uri| {
+                let name = gio::File::for_uri(&uri)
+                    .basename()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| uri.clone());
+                DeleteItem { uri, name }
+            })
+            .collect();
+        self.trash_items(&items).await;
+    }
+
+    /// Asks, then moves each of `items` to its folder's Trash, or deletes
+    /// it where the folder has none.
+    async fn trash_items(&self, items: &[DeleteItem]) {
         // Only a cancellation fails the plan, and nothing cancels it here.
-        let Ok(plan) = plan_delete(&items, &Cancellation::new()).await else {
+        let Ok(plan) = plan_delete(items, &Cancellation::new()).await else {
             return;
         };
         if !self.confirm_deletion(&plan.confirmation()).await {

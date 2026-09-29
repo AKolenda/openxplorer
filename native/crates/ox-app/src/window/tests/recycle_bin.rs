@@ -14,6 +14,7 @@ use ox_core::transfer::Cancellation;
 
 use super::file_ops_support::{open_dialog, require_private_trash, select_names};
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use crate::window::file_drop::DropAction;
 
 /// Moves `path` to the Trash, as another file manager would.
 fn trash(path: &Path) {
@@ -126,4 +127,27 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
         .block_on(list_recycle_bin(&Cancellation::new()))
         .expect("a readable Recycle Bin");
     assert!(left.is_empty(), "{left:?}");
+}
+
+/// parity: OPS-045
+#[gtk::test]
+fn items_dropped_on_the_recycle_bin_go_to_the_trash() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Drop me in the bin.txt");
+    let test = TestWindow::open(TRASH_URI);
+    test.wait_for_listing("the Recycle Bin");
+
+    let taken = test.window.drop_files(
+        &[fixture.uri_of("Drop me in the bin.txt")],
+        None,
+        DropAction::Copy,
+    );
+    assert!(taken, "{}", test.window.shown_message());
+    open_dialog(&test).press("Move to Trash");
+
+    wait_until("the dropped file to be listed", || {
+        test.names().contains(&"Drop me in the bin.txt".to_owned())
+    });
+    assert!(!fixture.path("Drop me in the bin.txt").exists());
 }

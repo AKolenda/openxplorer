@@ -7,8 +7,9 @@
 //! `showFileDropHint` of `desktop/ui/app.js` on GTK's asynchronous drop
 //! target. The folder views, the sidebar, the breadcrumbs and the tabs
 //! take drops ([`targets`]). Where the items go is a [`DropDestination`]:
-//! a folder, Quick access, or a program or launcher ([`program`],
-//! [`launcher`]). What happens to them in a folder is a [`DropAction`]
+//! a folder, Quick access, a program or launcher ([`program`],
+//! [`launcher`]), or the Recycle Bin, which moves them to the Trash as
+//! Delete does (OPS-045). What happens to them in a folder is a [`DropAction`]
 //! ([`action`]): copy, move, link, or the drop menu that asks.
 //!
 //! Safety rules:
@@ -33,7 +34,7 @@ use std::time::Duration;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{parent_location, require_item_uri, same_location, LocationError};
+use ox_core::location::{parent_location, require_item_uri, same_location, LocationError, TRASH_URI};
 use ox_core::ops::LinkRequest;
 use ox_core::transfer::TransferMode;
 
@@ -72,6 +73,19 @@ pub(crate) enum DropDestination {
     },
     /// Given to this program to open (DND-026).
     Program(ProgramTarget),
+    /// Moved to the Trash: a drop on the Recycle Bin (OPS-045).
+    RecycleBin,
+}
+
+impl DropDestination {
+    /// A drop into `folder`: the Recycle Bin for its root, else the folder.
+    pub(crate) fn for_folder(folder: String) -> Self {
+        if same_location(&folder, TRASH_URI) {
+            DropDestination::RecycleBin
+        } else {
+            DropDestination::Folder(folder)
+        }
+    }
 }
 
 /// Why a drop is refused, in the Python app's words.
@@ -300,6 +314,15 @@ impl BrowserWindow {
             DropDestination::Program(program) => {
                 let items = dropped_uris(uris)?;
                 self.open_with_program(program, items);
+                Ok(())
+            }
+            DropDestination::RecycleBin => {
+                let items = dropped_uris(uris)?;
+                glib::spawn_future_local(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    async move { window.trash_dropped(items).await }
+                ));
                 Ok(())
             }
         }

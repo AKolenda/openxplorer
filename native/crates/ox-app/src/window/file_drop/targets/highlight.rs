@@ -64,7 +64,9 @@ impl BrowserWindow {
             Some(DropSpot::FolderView { destination, row }) => {
                 let program = match destination {
                     DropDestination::Program(program) => Some(program.name.clone()),
-                    DropDestination::Folder(_) | DropDestination::QuickAccess { .. } => None,
+                    DropDestination::Folder(_)
+                    | DropDestination::QuickAccess { .. }
+                    | DropDestination::RecycleBin => None,
                 };
                 (*row, row.is_none(), program)
             }

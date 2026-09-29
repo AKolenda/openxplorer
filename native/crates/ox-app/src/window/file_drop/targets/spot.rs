@@ -5,9 +5,11 @@
 //! A folder view takes drops on a writable folder, on a program, or on
 //! blank space for the folder shown; the sidebar on a place's folder, and
 //! in Quick access to pin; the breadcrumbs and the tabs on their folders.
+//! The Recycle Bin takes drops too, to move them to the Trash.
 //! Nothing takes drops while a file operation runs.
 
 use gtk::subclass::prelude::*;
+use ox_core::location::{same_location, TRASH_URI};
 
 use super::DropZone;
 use crate::window::file_drag::is_draggable_location;
@@ -38,11 +40,13 @@ impl DropSpot {
     pub(super) fn destination(&self) -> DropDestination {
         match self {
             DropSpot::FolderView { destination, .. } => destination.clone(),
-            DropSpot::Sidebar(SidebarDropSpot::Folder { uri, .. }) => DropDestination::Folder(uri.clone()),
+            DropSpot::Sidebar(SidebarDropSpot::Folder { uri, .. }) => DropDestination::for_folder(uri.clone()),
             DropSpot::Sidebar(SidebarDropSpot::Pin { before, .. }) => DropDestination::QuickAccess {
                 before: before.clone(),
             },
-            DropSpot::Crumb(folder) | DropSpot::Tab { folder, .. } => DropDestination::Folder(folder.clone()),
+            DropSpot::Crumb(folder) | DropSpot::Tab { folder, .. } => {
+                DropDestination::for_folder(folder.clone())
+            }
         }
     }
 }
@@ -88,7 +92,7 @@ impl BrowserWindow {
         }
         let shown = self.shown_folder_for_drops()?;
         Some(DropSpot::FolderView {
-            destination: DropDestination::Folder(shown),
+            destination: DropDestination::for_folder(shown),
             row: None,
         })
     }
@@ -145,8 +149,11 @@ impl BrowserWindow {
     }
 
     /// True for a folder dropped items may go into: a writable local or
-    /// SMB folder, not a page, a server or a previous version.
+    /// SMB folder, not a page, a server or a previous version; or the
+    /// Recycle Bin, which moves them to the Trash (OPS-045).
     pub(super) fn takes_drops(&self, folder: &str) -> bool {
-        is_draggable_location(folder) && self.imp().locations.borrow().is_writable_location(folder)
+        let is_writable_folder =
+            is_draggable_location(folder) && self.imp().locations.borrow().is_writable_location(folder);
+        is_writable_folder || same_location(folder, TRASH_URI)
     }
 }

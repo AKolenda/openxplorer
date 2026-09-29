@@ -7421,7 +7421,8 @@ sources = ["kio:src/widgets/dropjob.cpp:445-475"]
 python_tests = []
 bridge = ["operate"]
 dolphin = "DropJob trashing branch"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dropped_on_the_recycle_bin_go_to_the_trash); native/crates/ox-app/src/window/file_drop.rs (DropDestination::RecycleBin). Files dropped on the Recycle Bin, shown in the folder view, in a tab or as a crumb, go to the Trash through Delete's plan and confirmation (Move to Trash, or the permanent-delete question where a folder has no Trash), whatever the drop's modifiers. No sidebar entry for the Recycle Bin exists yet (OPS-040)."
 
 [[feature]]
 id = "OPS-046"
