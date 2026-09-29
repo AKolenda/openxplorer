@@ -43,6 +43,7 @@ mod actions;
 mod activation;
 mod active_tab;
 mod address_bar;
+mod address_protocols;
 mod appearance;
 mod archive_actions;
 mod breakpoints;

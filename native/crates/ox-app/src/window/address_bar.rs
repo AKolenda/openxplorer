@@ -99,6 +99,8 @@ mod imp {
         /// The chevron that edits the address.
         #[template_child]
         pub(super) edit_button: TemplateChild<gtk::Button>,
+        /// The protocols offered under the empty entry (NET-029).
+        pub(super) protocols: std::cell::OnceCell<gtk::Popover>,
     }
 
     #[glib::object_subclass]
@@ -120,6 +122,13 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.obj().finish_template();
+        }
+
+        fn dispose(&self) {
+            // The chooser is parented to the entry, which does not know it.
+            if let Some(protocols) = self.protocols.get() {
+                gtk::prelude::WidgetExt::unparent(protocols);
+            }
         }
     }
 
@@ -147,6 +156,8 @@ impl AddressBar {
         gestures::scroll_sideways_with_wheel(&imp.crumb_scroll);
         self.edit_on_blank_click();
         self.show_crumbs_when_focus_leaves();
+        let protocols = super::address_protocols::protocol_chooser(&imp.entry);
+        imp.protocols.set(protocols).expect("the template is finished once");
     }
 
     /// Scrolls to the last crumb whenever the crumbs or the width change,
@@ -282,6 +293,12 @@ impl AddressBar {
     #[cfg(test)]
     pub(super) fn entry(&self) -> gtk::Entry {
         self.imp().entry.get()
+    }
+
+    /// The protocol chooser, for tests.
+    #[cfg(test)]
+    pub(super) fn protocol_chooser(&self) -> gtk::Popover {
+        self.imp().protocols.get().expect("built with the bar").clone()
     }
 
     /// The folder of the crumb at (`x`, `y`) in the bar, where a drop

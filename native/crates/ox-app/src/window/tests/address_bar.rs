@@ -147,6 +147,30 @@ fn escape_discards_the_typed_address() {
     );
 }
 
+/// Emptying the address offers the protocols, as Dolphin's location bar
+/// does; picking one types its `scheme://`.
+///
+/// parity: NET-029
+#[gtk::test]
+fn an_empty_address_offers_the_network_protocols() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let address = test.window.address_bar();
+    let chooser = address.protocol_chooser();
+    test.activate("location", None);
+    assert!(!chooser.is_visible(), "a typed address hides the chooser");
+
+    address.entry().set_text("");
+    wait_until("the chooser opens", || chooser.is_visible());
+    let buttons = crate::test_support::harness::descendants::<gtk::Button>(&chooser);
+    assert_eq!(buttons.len(), 7, "SMB, SFTP, FTP, FTPS, WebDAV, secure WebDAV and NFS");
+    buttons[1].emit_clicked();
+
+    assert_eq!(address.entry().text().as_str(), "sftp://");
+    assert!(!chooser.is_visible());
+    assert_eq!(address.mode(), AddressMode::Entry, "the user goes on typing");
+}
+
 /// parity: TAB-010, NAV-017
 #[gtk::test]
 fn the_title_crumbs_and_address_call_a_phone_by_its_mount_name() {

@@ -14,7 +14,7 @@
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{is_smb_location, is_smb_server};
+use ox_core::location::{is_remote_location, is_smb_location, is_smb_server};
 use ox_core::places::{NetworkKind, NetworkLocation};
 
 use crate::devices::Removal;
@@ -117,7 +117,8 @@ fn network_entries(location: &NetworkLocation) -> Vec<MenuEntry> {
         item("Open in new window", Icon::Share, WindowAction::OpenWindow, uri),
     ];
     let is_smb = is_smb_location(uri);
-    let is_share = is_smb && !is_smb_server(uri) && location.kind != NetworkKind::Server;
+    let is_remote = is_remote_location(uri);
+    let is_share = (is_smb || is_remote) && !is_smb_server(uri) && location.kind != NetworkKind::Server;
     if is_share && location.is_saved {
         entries.push(item(
             "Remove saved location",
@@ -138,6 +139,16 @@ fn network_entries(location: &NetworkLocation) -> Vec<MenuEntry> {
             "Sign out of server…",
             Icon::ArrowEject,
             WindowAction::SignOut,
+            uri,
+        ));
+    }
+    // SFTP, FTP, WebDAV and NFS keep no OpenXplorer credentials to forget:
+    // their connection is ended as a mount, as Dolphin and Files do.
+    if is_remote && location.is_connected {
+        entries.push(item(
+            "Disconnect",
+            Icon::ArrowEject,
+            WindowAction::Disconnect,
             uri,
         ));
     }
@@ -253,6 +264,20 @@ mod tests {
             ["Sign out of server…"],
             "a server is never saved"
         );
+    }
+
+    /// parity: NET-030
+    #[test]
+    fn a_connected_sftp_folder_can_be_kept_and_disconnected() {
+        let browsed = NetworkLocation {
+            uri: "sftp://anna@build/home/anna".into(),
+            label: "anna".into(),
+            is_saved: false,
+            is_connected: true,
+            kind: NetworkKind::Share,
+        };
+        let menu = labels(&PlaceMenu::Network(browsed));
+        assert_eq!(menu[3..], ["Keep in Network", "Disconnect"]);
     }
 
     /// parity: HOME-005
