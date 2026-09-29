@@ -12,7 +12,8 @@ use gtk::subclass::prelude::*;
 use ox_core::transfer::{Progress, ProgressScope};
 
 use super::file_ops_support::{
-    is_enabled, open_dialog, require_private_trash, select_names, text_field, wait_for_no_dialog,
+    is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash, select_names,
+    text_field, wait_for_no_dialog,
 };
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
@@ -143,24 +144,6 @@ fn new_is_disabled_where_nothing_can_be_created() {
     assert!(!is_enabled(&test, "new-folder"));
     assert!(!is_enabled(&test, "new-file"));
     assert!(!is_enabled(&test, "paste"));
-}
-
-/// The field that edits a name in place in `test`'s view, once it shows.
-fn name_editor(test: &TestWindow) -> gtk::Entry {
-    let find = || {
-        descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
-            .into_iter()
-            .find(|field| field.has_css_class("rename-field"))
-    };
-    wait_until("the name to become editable", || find().is_some());
-    find().expect("wait_until returned only once the field showed")
-}
-
-/// Whether `test`'s view edits a name in place.
-fn is_renaming_in_place(test: &TestWindow) -> bool {
-    descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
-        .iter()
-        .any(|field| field.has_css_class("rename-field"))
 }
 
 /// parity: OPS-009, OPS-010, OPS-029, OPS-031

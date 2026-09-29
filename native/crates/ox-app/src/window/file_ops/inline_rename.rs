@@ -39,8 +39,12 @@ struct RenameTarget {
 
 /// How many places Tab, Shift+Tab, Down or Up move the rename on from
 /// the item being renamed; Down and Up only `in_details`, where they
-/// move between rows. `None` for any other key.
+/// move between rows. `None` for any other key, and with Ctrl or Alt,
+/// which keep Ctrl+Tab and Ctrl+Shift+Tab for switching tabs.
 fn rename_step(key: gdk::Key, modifiers: gdk::ModifierType, in_details: bool) -> Option<i32> {
+    if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
+        return None;
+    }
     let shift = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
     match key {
         gdk::Key::Tab | gdk::Key::KP_Tab if !shift => Some(1),
@@ -122,6 +126,8 @@ impl BrowserWindow {
         target: &RenameTarget,
     ) -> gtk::EventControllerKey {
         let keys = gtk::EventControllerKey::new();
+        // Before the field's own text keys, which take Up and Down.
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
         keys.connect_key_pressed(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -189,7 +195,13 @@ impl BrowserWindow {
         if typed == target.name {
             self.end_rename_in_place(cell);
             if let Some(next) = self.take_rename_next() {
-                self.folder_pane().model().select_uris(&[next]);
+                let model = self.folder_pane().model();
+                model.select_uris(&[next]);
+                // As after a changed name, the item comes into view first,
+                // so it is renamed in place too.
+                if let Some(position) = model.first_selected() {
+                    self.folder_pane().reveal(position);
+                }
                 self.continue_renaming();
             }
             return;
@@ -291,5 +303,11 @@ mod tests {
             "icons move the text cursor"
         );
         assert_eq!(rename_step(gdk::Key::Return, none, true), None);
+        let control = gdk::ModifierType::CONTROL_MASK;
+        assert_eq!(
+            rename_step(gdk::Key::Tab, control, false),
+            None,
+            "Ctrl+Tab switches tabs"
+        );
     }
 }

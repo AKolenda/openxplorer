@@ -44,6 +44,24 @@ pub(super) fn text_field(dialog: &Dialog) -> gtk::Entry {
         .expect("the dialog has a text field")
 }
 
+/// The field that edits a name in place in `test`'s view, once it shows.
+pub(super) fn name_editor(test: &TestWindow) -> gtk::Entry {
+    let find = || {
+        descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
+            .into_iter()
+            .find(|field| field.has_css_class("rename-field"))
+    };
+    wait_until("the name to become editable", || find().is_some());
+    find().expect("wait_until returned only once the field showed")
+}
+
+/// Whether `test`'s view edits a name in place.
+pub(super) fn is_renaming_in_place(test: &TestWindow) -> bool {
+    descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
+        .iter()
+        .any(|field| field.has_css_class("rename-field"))
+}
+
 /// Selects the items called `names` in `test`'s folder view.
 pub(super) fn select_names(test: &TestWindow, names: &[&str]) {
     let model = test.window.folder_model();
