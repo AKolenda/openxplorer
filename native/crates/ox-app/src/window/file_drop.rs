@@ -176,14 +176,24 @@ async fn read_dropped_uris(drop: &gdk::Drop) -> Result<Vec<String>, DropRefusal>
         return Ok(own);
     }
     let reading = drop.read_value_future(gdk::FileList::static_type(), glib::Priority::DEFAULT);
-    let value = glib::future_with_timeout(READ_TIMEOUT, reading)
-        .await
-        .map_err(|_| DropRefusal::Unreadable)?
-        .map_err(|_| DropRefusal::Unreadable)?;
+    let value = within(READ_TIMEOUT, reading).await?;
     let files = value
         .get::<gdk::FileList>()
         .map_err(|_| DropRefusal::Unreadable)?;
     Ok(files.files().iter().map(|file| file.uri().to_string()).collect())
+}
+
+/// The value `reading` gives within `timeout`: a drop whose data is late
+/// or fails is [`DropRefusal::Unreadable`], and data arriving after the
+/// timeout is never used.
+async fn within<T>(
+    timeout: Duration,
+    reading: impl std::future::Future<Output = Result<T, glib::Error>>,
+) -> Result<T, DropRefusal> {
+    glib::future_with_timeout(timeout, reading)
+        .await
+        .map_err(|_| DropRefusal::Unreadable)?
+        .map_err(|_| DropRefusal::Unreadable)
 }
 
 impl BrowserWindow {
@@ -220,18 +230,31 @@ impl BrowserWindow {
             gdk::DragAction::empty()
         };
         drop.finish(finished_as);
+        self.take_read_drop(shown.as_deref(), read, destination, action);
+    }
+
+    /// Runs `action` on the items a drop read, unless reading failed or
+    /// the tab left `shown`, the folder it showed when the drop began;
+    /// true when the drop is taken.
+    fn take_read_drop(
+        &self,
+        shown: Option<&str>,
+        read: Result<Vec<String>, DropRefusal>,
+        destination: DropDestination,
+        action: DropAction,
+    ) -> bool {
         let uris = match read {
             Ok(uris) => uris,
             Err(refusal) => {
                 self.show_message(&refusal.to_string());
-                return;
+                return false;
             }
         };
-        if self.current_uri() != shown {
+        if self.current_uri().as_deref() != shown {
             self.show_message(&DropRefusal::DestinationChanged.to_string());
-            return;
+            return false;
         }
-        self.complete_drop(&uris, Some(destination), action);
+        self.complete_drop(&uris, Some(destination), action)
     }
 
     /// Sends the dropped `uris` to `destination` with `action`; true when
@@ -341,6 +364,7 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::harness::{Fixture, TestWindow};
 
     fn uris(items: &[&str]) -> Vec<String> {
         items.iter().map(ToString::to_string).collect()
@@ -388,5 +412,33 @@ mod tests {
         let moved = outside_folder(dropped, "file:///tmp/a");
 
         assert_eq!(moved, uris(&["file:///tmp/b/two.txt"]));
+    }
+
+    /// parity: DND-013
+    #[gtk::test]
+    fn a_drop_read_after_the_tab_moved_or_too_late_is_refused() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let destination = DropDestination::Folder(fixture.uri());
+        let items = vec![fixture.uri_of("Notes 2.txt")];
+
+        let moved = test.window.take_read_drop(
+            Some(&fixture.uri_of("Documents")),
+            Ok(items),
+            destination,
+            DropAction::Copy,
+        );
+        let late = glib::MainContext::default().block_on(within(
+            Duration::from_millis(50),
+            std::future::pending::<Result<(), glib::Error>>(),
+        ));
+
+        assert!(!moved);
+        assert_eq!(
+            test.window.shown_message(),
+            "The destination changed. Drop the files again."
+        );
+        assert_eq!(late, Err(DropRefusal::Unreadable));
+        assert_eq!(READ_TIMEOUT, Duration::from_secs(10));
     }
 }

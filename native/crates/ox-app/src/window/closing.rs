@@ -116,7 +116,7 @@ impl BrowserWindow {
     }
 
     /// Whether a dialog shows over this window.
-    fn has_open_dialog(&self) -> bool {
+    pub(super) fn has_open_dialog(&self) -> bool {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<gtk::Window>().ok())

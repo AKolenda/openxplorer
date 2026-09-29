@@ -8802,8 +8802,8 @@ python_tests = [
   "desktop/tests/ui_file_drag.py::Large-icon view publishes file source rectangles",
 ]
 bridge = ["fileDragLayout", "beginFileDrag"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (no_drag_starts_while_a_file_operation_runs). GTK drag sources answer the primary button only, a press on blank space prepares no content, and modal dialogs and open menus hold the pointer. Missing: tests for an open menu and the sign-in prompt, which the network track owns."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drag.rs (may_start_drag): no drag starts while a file operation runs or is planned, or while an in-window dialog, a dialog window (sign-in prompts included, which are transient for the window) or a menu popover is open. GTK drag sources answer the primary button only and a press on blank space prepares no content. Tests: native/crates/ox-app/src/window/tests/drag_and_drop.rs (no_drag_starts_while_a_file_operation_runs, no_drag_starts_while_a_menu_or_a_dialog_is_open)."
 
 [[feature]]
 id = "DND-007"
@@ -9047,8 +9047,8 @@ python_tests = [
   "desktop/tests/test_native_file_drop.py::PayloadTests::test_rejects_invalid_layout",
 ]
 bridge = ["fileDragLayout"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (links_and_drops_during_a_search_or_an_operation_are_refused): a drop during an operation is refused with Finish the current operation before dropping files. A drop whose tab moved to another folder while its items were read is refused with The destination changed. Drop the files again., and reading waits at most 10 s. Missing: tests for those two."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop.rs: a drop during an operation is refused with 'Finish the current operation before dropping files.'; a drop whose tab moved to another folder while its items were read is refused with 'The destination changed. Drop the files again.'; reading waits at most 10 s and late data is dropped; a drop is finished once, before anything runs. Modal dialogs and menus hold the pointer, so no drop reaches the window under them. Tests: native/crates/ox-app/src/window/tests/drag_and_drop.rs (links_and_drops_during_a_search_or_an_operation_are_refused); native/crates/ox-app/src/window/file_drop.rs (a_drop_read_after_the_tab_moved_or_too_late_is_refused)."
 
 [[feature]]
 id = "DND-014"

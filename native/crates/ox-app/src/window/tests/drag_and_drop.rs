@@ -180,6 +180,28 @@ fn no_drag_starts_while_a_file_operation_runs() {
     assert!(after.is_some(), "a drag starts again once the operation ended");
 }
 
+/// parity: DND-006
+#[gtk::test]
+fn no_drag_starts_while_a_menu_or_a_dialog_is_open() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let notes = test.position_of("Notes 2.txt");
+
+    test.window.right_click(Some(notes));
+    let with_menu = test.window.drag_content_for(notes);
+    test.window.context_menu().popdown();
+    test.activate("new-folder", None);
+    let dialog = open_dialog(&test);
+    let with_dialog = test.window.drag_content_for(notes);
+    dialog.press("Cancel");
+
+    assert!(with_menu.is_none());
+    assert!(with_dialog.is_none());
+    wait_until("drags to start again", || {
+        test.window.drag_content_for(notes).is_some()
+    });
+}
+
 /// parity: DND-007
 #[gtk::test]
 fn a_drag_fades_its_items_and_pauses_clicks_until_shortly_after_it_ends() {
