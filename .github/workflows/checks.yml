@@ -21,6 +21,9 @@ jobs:
     container:
       image: ${{ matrix.image }}
     strategy:
+      # The release ships the Debian package and the Flatpak. RPM and Arch
+      # packages are built by native-distros.yml until their jobs are fixed.
+      fail-fast: false
       matrix:
         include:
           # Ubuntu 24.04 is the oldest supported base, so the .deb built on it
@@ -30,18 +33,6 @@ jobs:
             image: ubuntu:24.04
             family: debian
             format: deb
-          - name: Fedora RPM
-            image: fedora:latest
-            family: fedora
-            format: rpm
-          - name: openSUSE RPM
-            image: opensuse/tumbleweed:latest
-            family: opensuse
-            format: rpm
-          - name: Arch package
-            image: archlinux:latest
-            family: arch
-            format: arch
     env:
       CARGO_TERM_COLOR: always
       # Skips the few tests whose results depend on the distribution's
