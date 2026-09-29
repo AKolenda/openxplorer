@@ -318,10 +318,10 @@
       "status": "native-tested",
       "note": "No layout is published: each drop target hit-tests a point in its own coordinates at its real size (folder rows and tiles, sidebar places, Quick access, crumbs and tabs).",
       "evidence": [
-        "native/crates/ox-app/src/window/file_drop/targets.rs::a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown",
-        "native/crates/ox-app/src/window/file_drop/targets.rs::only_the_folder_under_a_drag_is_highlighted",
-        "native/crates/ox-app/src/window/file_drop/targets.rs::sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows",
-        "native/crates/ox-app/src/window/file_drop/targets.rs::a_crumb_takes_drops_for_its_folder"
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown",
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::only_the_folder_under_a_drag_is_highlighted",
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows",
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::a_crumb_takes_drops_for_its_folder"
       ]
     },
     "focusWindow": {

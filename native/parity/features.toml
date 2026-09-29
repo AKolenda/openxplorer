@@ -1609,7 +1609,7 @@ python_tests = []
 bridge = ["operate", "transferConflicts", "fileDragLayout"]
 dolphin = "DolphinTabBar drag/drop + auto-activation timer (800 ms)"
 native = "partial"
-native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab): items dropped on a tab go into its folder and an 800 ms hover shows the tab. Missing: folders dropped on the empty tab-bar area opening as new tabs."
+native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab): items dropped on a tab go into its folder and an 800 ms hover shows the tab. Missing: folders dropped on the empty tab-bar area opening as new tabs."
 
 [[feature]]
 id = "TAB-019"
@@ -8929,7 +8929,7 @@ bridge = ["fileDragLayout", "transferConflicts", "operate", "pin"]
 dolphin = "Dolphin drop: menu Move Here / Copy Here / Link Here; Shift=move, Ctrl=copy, Ctrl+Shift=link; spring-loaded folders.; Dolphin drop menu (Move/Copy/Link); DolphinView::slotItemDropEvent / dropUrls; Dolphin accepts any KIO URL drop and shows a drop menu"
 gnome = "GTK4 Gtk.DropTarget(Gdk.FileList, COPY).; GtkDropTarget (GdkFileList); GtkDropTarget (GdkFileList, text/uri-list; portal FileTransfer for sandboxed sources)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (files_dropped_on_blank_space_are_copied_into_the_folder_shown, files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check); native/crates/ox-app/src/window/file_drop/targets.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows); native/crates/ox-app/src/window/file_drop/action.rs (another_apps_drag_that_offered_no_copy_is_refused). A drop is finished before any dialog, as a copy whenever the source allows one. Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a file dragged from GNOME Files onto a folder row was copied and the source kept."
+native_note = "native/crates/ox-app/src/window/tests/drag_and_drop.rs (files_dropped_on_blank_space_are_copied_into_the_folder_shown, files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check); native/crates/ox-app/src/window/file_drop/targets/tests.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows); native/crates/ox-app/src/window/file_drop/action.rs (another_apps_drag_that_offered_no_copy_is_refused). A drop is finished before any dialog, as a copy whenever the source allows one. Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a file dragged from GNOME Files onto a folder row was copied and the source kept."
 
 [[feature]]
 id = "DND-010"
@@ -8991,7 +8991,7 @@ python_tests = [
 bridge = ["fileDragLayout"]
 dolphin = "urlListMatchesUrl"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown, only_the_folder_under_a_drag_is_highlighted, sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, a_crumb_takes_drops_for_its_folder); native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_folder_dropped_onto_itself_is_refused, links_and_drops_during_a_search_or_an_operation_are_refused). The row or tile under the pointer, a sidebar place, a crumb, a tab or the whole view gets the accent outline."
+native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown, only_the_folder_under_a_drag_is_highlighted, sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, a_crumb_takes_drops_for_its_folder); native/crates/ox-app/src/window/tests/drag_and_drop.rs (a_folder_dropped_onto_itself_is_refused, links_and_drops_during_a_search_or_an_operation_are_refused). The row or tile under the pointer, a sidebar place, a crumb, a tab or the whole view gets the accent outline."
 
 [[feature]]
 id = "DND-012"
@@ -9092,7 +9092,7 @@ python_tests = [
 bridge = ["pin", "fileDragLayout"]
 dolphin = "Dolphin: drop folders on the Places panel to add them.; KFilePlacesView drop of folders"
 native = "partial"
-native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, folders_dropped_on_quick_access_are_pinned_and_files_are_not). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a folder dropped between two Quick access rows was pinned there with the Python toast. Missing: the dashed drop tail of an empty Quick access."
+native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, folders_dropped_on_quick_access_are_pinned_and_files_are_not). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a folder dropped between two Quick access rows was pinned there with the Python toast. Missing: the dashed drop tail of an empty Quick access."
 
 [[feature]]
 id = "DND-015"
@@ -9148,7 +9148,7 @@ python_tests = [
 ]
 bridge = ["fileDragLayout"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (a_crumb_takes_drops_for_its_folder, a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab): each part hit-tests a point in its own coordinates at its real size, so scaling and clipping need no published geometry."
+native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_crumb_takes_drops_for_its_folder, a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab): each part hit-tests a point in its own coordinates at its real size, so scaling and clipping need no published geometry."
 
 [[feature]]
 id = "DND-017"
@@ -9233,7 +9233,7 @@ python_tests = []
 bridge = ["openWith"]
 dolphin = "DropJob local executable / desktop file"
 native = "partial"
-native_note = "native/crates/ox-app/src/window/file_drop/targets.rs (items_dropped_on_a_program_are_given_to_it_as_arguments): programs and scripts, see DND-026. Missing: .desktop launchers."
+native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (items_dropped_on_a_program_are_given_to_it_as_arguments): programs and scripts, see DND-026. Missing: .desktop launchers."
 
 [[feature]]
 id = "DND-021"
@@ -9349,7 +9349,7 @@ python_tests = []
 bridge = []
 gnome = "GtkDropTarget on file rows; g_file_query_info access::can-execute; GAppInfo from the executable (g_app_info_create_from_commandline) or the terminal via xdg-terminal-exec / the configured terminal"
 native = "done"
-native_note = "native/crates/ox-app/src/window/file_drop/program.rs (only_executable_regular_files_are_programs_and_scripts_are_text, a_binary_gets_each_path_as_one_argument_whatever_its_name, a_script_runs_in_the_terminal_through_the_fixed_hold_script, the_hold_script_passes_names_through_as_arguments, only_programs_on_this_computers_own_disks_run_without_asking); native/crates/ox-app/src/window/file_drop/targets.rs (items_dropped_on_a_program_are_given_to_it_as_arguments, a_file_that_is_not_executable_is_no_program)."
+native_note = "native/crates/ox-app/src/window/file_drop/program.rs (only_executable_regular_files_are_programs_and_scripts_are_text, a_binary_gets_each_path_as_one_argument_whatever_its_name, a_script_runs_in_the_terminal_through_the_fixed_hold_script, the_hold_script_passes_names_through_as_arguments, only_programs_on_this_computers_own_disks_run_without_asking); native/crates/ox-app/src/window/file_drop/targets/tests.rs (items_dropped_on_a_program_are_given_to_it_as_arguments, a_file_that_is_not_executable_is_no_program)."
 
 [[feature]]
 id = "SRCH-001"
