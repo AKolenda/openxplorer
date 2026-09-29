@@ -97,6 +97,15 @@ impl ItemProperties {
         account(self.gid, self.group.as_deref())
     }
 
+    /// The item as the Permissions tab changes it.
+    pub(crate) fn edited_item(&self) -> super::permissions_editor::EditedItem {
+        super::permissions_editor::EditedItem {
+            uri: self.entry.uri.clone(),
+            mode: self.mode.unwrap_or_default() & PERMISSION_BITS,
+            is_folder: self.entry.is_dir,
+        }
+    }
+
     /// The permission bits as Python's `oct()` writes them (`0o644`).
     pub(crate) fn mode_text(&self) -> Option<String> {
         self.mode.map(|mode| format!("0o{:o}", mode & PERMISSION_BITS))

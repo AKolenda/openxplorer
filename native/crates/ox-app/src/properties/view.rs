@@ -287,10 +287,7 @@ impl PropertiesView {
         imp.folder_rows.replace(folder_rows);
         let editor = can_edit_permissions(&properties, context).then(|| {
             let items = EditedItems {
-                uris: vec![properties.entry.uri.clone()],
-                mode: properties.mode.unwrap_or_default(),
-                has_files: !properties.entry.is_dir,
-                has_folders: properties.entry.is_dir,
+                items: vec![properties.edited_item()],
                 owner: properties.owner_account(),
                 group: properties.group_account(),
             };

@@ -5,13 +5,14 @@
 //! folders are selected, their common type and folder, and their combined
 //! size and content, which the folders' sizes are measured for; and a
 //! Permissions tab whose change applies to all of them, when the user owns
-//! every one.
+//! every one, and keeps every bit the user did not change.
 
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::format;
 use ox_core::location::parent_location;
+use ox_core::permissions::Account;
 use ox_core::sizes::{scan_folder_size_in_background, ScanStatus};
 use ox_core::transfer::Cancellation;
 
@@ -237,7 +238,7 @@ fn measure(entries: &[Entry], rows: &SizeRows, cancel: &Cancellation) {
 }
 
 /// Reads every item's permissions, then fills the Permissions tab: the
-/// first item's owner and group, and the editor when every item can be
+/// items' owner and group, and the editor when every item can be
 /// changed here.
 fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesContext) {
     let panel = panel.downgrade();
@@ -276,13 +277,18 @@ fn read_permissions(panel: &gtk::Box, entries: Vec<Entry>, context: PropertiesCo
             panel.append(&note(NOT_EDITABLE));
             return;
         }
+        let shared = |account: fn(&ItemProperties) -> Option<Account>| {
+            let first = account(first);
+            items
+                .iter()
+                .all(|item| account(item) == first)
+                .then_some(first)
+                .flatten()
+        };
         let edited = EditedItems {
-            uris: items.iter().map(|item| item.entry.uri.clone()).collect(),
-            mode: first.mode.unwrap_or_default(),
-            has_files: items.iter().any(|item| !item.entry.is_dir),
-            has_folders: items.iter().any(|item| item.entry.is_dir),
-            owner: first.owner_account(),
-            group: first.group_account(),
+            items: items.iter().map(ItemProperties::edited_item).collect(),
+            owner: shared(ItemProperties::owner_account),
+            group: shared(ItemProperties::group_account),
         };
         panel.append(&permissions_editor(
             edited,

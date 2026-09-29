@@ -90,48 +90,37 @@ impl Access {
         }
     }
 
-    /// The `rwx` bits this access gives: a folder also gets `x` to be
-    /// entered; a file keeps `x` as `executable` says.
-    const fn bits(self, is_folder: bool, executable: bool) -> u32 {
-        let run = if is_folder || executable { 0o1 } else { 0 };
+    /// The `rw` bits this access gives.
+    const fn read_write(self) -> u32 {
         match self {
             Self::None => 0,
-            Self::View => 0o4 | run,
-            Self::ViewAndModify => 0o6 | run,
+            Self::View => 0o4,
+            Self::ViewAndModify => 0o6,
         }
     }
 }
 
-/// The permissions the tab applies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The permissions the tab applies. Every part left `None` keeps what
+/// each item has, as Dolphin's "Varying (No Change)" does for several
+/// items, so a change reaches only the bits the user chose.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PermissionChange {
     /// The owner's access.
-    pub owner: Access,
+    pub owner: Option<Access>,
     /// The group's access.
-    pub group: Access,
+    pub group: Option<Access>,
     /// Everyone else's access.
-    pub others: Access,
-    /// A file may be run by those who may view it; ignored for folders.
-    pub executable: bool,
-    /// Only owners rename and delete a folder's content; ignored for
-    /// files.
-    pub owners_only_delete: bool,
+    pub others: Option<Access>,
+    /// Whether a file may be run by those who may view it; ignored for
+    /// folders.
+    pub executable: Option<bool>,
+    /// Whether only owners rename and delete a folder's content; ignored
+    /// for files.
+    pub owners_only_delete: Option<bool>,
 }
 
 impl PermissionChange {
-    /// The change that keeps `mode` of a file or folder as it is, as the
-    /// tab first shows it.
-    pub fn of_mode(mode: u32, is_folder: bool) -> Self {
-        Self {
-            owner: Access::of(mode, PermissionClass::Owner),
-            group: Access::of(mode, PermissionClass::Group),
-            others: Access::of(mode, PermissionClass::Others),
-            executable: !is_folder && mode & 0o100 != 0,
-            owners_only_delete: is_folder && mode & STICKY != 0,
-        }
-    }
-
-    fn access(self, class: PermissionClass) -> Access {
+    fn access(self, class: PermissionClass) -> Option<Access> {
         match class {
             PermissionClass::Owner => self.owner,
             PermissionClass::Group => self.group,
@@ -139,15 +128,35 @@ impl PermissionChange {
         }
     }
 
-    /// `mode` with this change applied to a file or folder: the `rwx`
-    /// and sticky bits are replaced; setuid and setgid stay.
+    /// Whether the change keeps every bit as it is.
+    pub fn is_empty(self) -> bool {
+        self == Self::default()
+    }
+
+    /// `mode` with this change applied to a file or folder. A class given
+    /// an access gets its `rw` bits, and on a folder `x` to be entered. A
+    /// file's `x` follows `executable` for those who may view it, else
+    /// stays as it was, cleared only for a class given no access. Setuid
+    /// and setgid always stay.
     pub fn apply_to(self, mode: u32, is_folder: bool) -> u32 {
         let mut result = mode & 0o6000;
         for class in PermissionClass::ALL {
-            let bits = self.access(class).bits(is_folder, self.executable);
-            result |= bits << class.shift();
+            let old = (mode >> class.shift()) & 0o7;
+            let access = self.access(class);
+            let read_write = access.map_or(old & 0o6, Access::read_write);
+            let run = match (access, self.executable) {
+                (Some(Access::None), _) => 0,
+                (Some(_), _) if is_folder => 0o1,
+                (_, Some(executable)) if !is_folder => u32::from(executable && read_write & 0o4 != 0),
+                _ => old & 0o1,
+            };
+            result |= (read_write | run) << class.shift();
         }
-        if is_folder && self.owners_only_delete {
+        let sticky = match self.owners_only_delete {
+            Some(sticky) if is_folder => sticky,
+            _ => mode & STICKY != 0,
+        };
+        if sticky {
             result |= STICKY;
         }
         result
@@ -178,7 +187,13 @@ impl ModeChange {
     /// The bits for an item inside the folder the change was asked for.
     fn for_content(self, mode: u32, is_folder: bool) -> u32 {
         match self {
-            Self::Simple(change) => change.apply_to(mode, is_folder),
+            // A file inside keeps its own `x` bits, as `chmod -R u=rwX`
+            // does, unless its class loses every access.
+            Self::Simple(change) => PermissionChange {
+                executable: None,
+                ..change
+            }
+            .apply_to(mode, is_folder),
             Self::Advanced(bits) => {
                 let special = mode & 0o7000;
                 let access = bits & 0o777;
@@ -341,23 +356,40 @@ mod tests {
 
     /// parity: PROP-007
     #[test]
-    fn a_mode_reads_as_three_accesses_and_those_who_may_view_may_run() {
-        let change = PermissionChange::of_mode(0o754, false);
+    fn a_change_sets_only_the_chosen_bits_and_those_who_may_view_may_run() {
+        assert_eq!(Access::of(0o754, PermissionClass::Group), Access::View);
         assert_eq!(
-            (change.owner, change.group, change.others, change.executable),
-            (Access::ViewAndModify, Access::View, Access::View, true)
+            PermissionChange::default().apply_to(0o4754, false),
+            0o4754,
+            "no change"
         );
-        assert_eq!(change.apply_to(0o754, false), 0o755, "viewers may run it too");
-        let folder = PermissionChange::of_mode(0o1750, true);
-        assert!(folder.owners_only_delete);
-        assert_eq!(folder.others, Access::None);
-        assert_eq!(folder.apply_to(0o1750, true), 0o1750);
-        let private = PermissionChange {
-            group: Access::None,
-            others: Access::None,
-            ..PermissionChange::of_mode(0o4644, false)
+        let run = PermissionChange {
+            executable: Some(true),
+            ..PermissionChange::default()
         };
-        assert_eq!(private.apply_to(0o4644, false), 0o4600, "setuid stays");
+        assert_eq!(run.apply_to(0o754, false), 0o755, "viewers may run it too");
+        let private = PermissionChange {
+            group: Some(Access::None),
+            others: Some(Access::None),
+            ..PermissionChange::default()
+        };
+        assert_eq!(
+            private.apply_to(0o4755, false),
+            0o4700,
+            "setuid and the owner's x stay"
+        );
+        assert_eq!(private.apply_to(0o644, false), 0o600);
+        assert_eq!(
+            private.apply_to(0o600, false),
+            0o600,
+            "a private file stays private"
+        );
+        let shared = PermissionChange {
+            others: Some(Access::View),
+            owners_only_delete: Some(true),
+            ..PermissionChange::default()
+        };
+        assert_eq!(shared.apply_to(0o750, true), 0o1755, "a folder can be entered");
     }
 
     /// parity: PROP-007
@@ -372,12 +404,13 @@ mod tests {
         fs::set_permissions(root.path().join("outside.txt"), fs::Permissions::from_mode(0o600))
             .expect("mode");
         std::os::unix::fs::symlink(root.path().join("outside.txt"), folder.join("link")).expect("link");
+        fs::write(folder.join("run.sh"), b"run").expect("file");
+        fs::set_permissions(folder.join("run.sh"), fs::Permissions::from_mode(0o755)).expect("mode");
         let change = PermissionChange {
-            owner: Access::ViewAndModify,
-            group: Access::View,
-            others: Access::None,
-            executable: false,
-            owners_only_delete: false,
+            owner: Some(Access::ViewAndModify),
+            group: Some(Access::View),
+            others: Some(Access::None),
+            ..PermissionChange::default()
         };
 
         let request = PermissionRequest::simple(change, true);
@@ -386,6 +419,7 @@ mod tests {
         assert_eq!(mode_of(&folder), 0o750);
         assert_eq!(mode_of(&folder.join("Sub")), 0o750);
         assert_eq!(mode_of(&folder.join("plan.txt")), 0o640);
+        assert_eq!(mode_of(&folder.join("run.sh")), 0o750, "a program stays runnable");
         assert_eq!(
             mode_of(&root.path().join("outside.txt")),
             0o600,
@@ -421,5 +455,22 @@ mod tests {
         assert_eq!(mode_of(&folder.join("notes.txt")), 0o660, "no x for a plain file");
         assert_eq!(mode_of(&folder.join("run.sh")), 0o771);
         assert_eq!(fs::metadata(&folder).expect("metadata").gid(), group);
+
+        // Only the superuser may give an item away; for anyone else the
+        // system's refusal is what the tab shows.
+        if rustix::process::geteuid().is_root() {
+            return;
+        }
+        let give_away = PermissionRequest {
+            mode: ModeChange::Simple(PermissionChange::default()),
+            owner: Some(0),
+            group: None,
+            recursive: false,
+        };
+        let refusal = apply(&file_uri(&folder), &give_away, &Cancellation::new());
+        assert!(
+            matches!(refusal, Err(EntryError::PermissionDenied(_))),
+            "{refusal:?}"
+        );
     }
 }

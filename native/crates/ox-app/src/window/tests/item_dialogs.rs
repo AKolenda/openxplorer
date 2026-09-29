@@ -270,7 +270,8 @@ fn the_owner_changes_a_files_permissions() {
 }
 
 /// Properties of several items total them, folders' content included,
-/// and a permission change reaches every one.
+/// and a permission change reaches every one while every bit the user did
+/// not change stays as each item has it.
 ///
 /// parity: PROP-002
 #[gtk::test]
@@ -279,6 +280,13 @@ fn properties_of_several_items_total_them_and_change_them_together() {
 
     let fixture = Fixture::standard();
     fixture.write("Documents/inside.txt");
+    for (name, mode) in [
+        ("Documents", 0o755),
+        ("Notes 2.txt", 0o644),
+        ("Notes 10.txt", 0o700),
+    ] {
+        fs::set_permissions(fixture.path(name), fs::Permissions::from_mode(mode)).expect("a known mode");
+    }
     let test = TestWindow::open(&fixture.uri());
     super::file_ops_support::select_names(&test, &["Documents", "Notes 2.txt", "Notes 10.txt"]);
     test.activate("properties", None);
@@ -294,19 +302,40 @@ fn properties_of_several_items_total_them_and_change_them_together() {
         Some(format!("All in {}", fixture.path("").display()).trim_end_matches('/'))
     );
     wait_until("the editor", || !descendants::<gtk::DropDown>(&frame).is_empty());
-    descendants::<gtk::DropDown>(&frame)[2].set_selected(0);
-    press(&frame, "Apply permissions");
+    let choices = descendants::<gtk::DropDown>(&frame);
+    assert_eq!(choices[0].selected(), 2, "every owner may view and modify");
+    assert_eq!(choices[2].selected(), 3, "Varying (No Change)");
+    let executable = descendants::<gtk::CheckButton>(&frame)
+        .into_iter()
+        .find(|check| check.label().as_deref() == Some("Is executable"))
+        .expect("the executable check box");
+    assert!(executable.is_inconsistent(), "one file is executable, one is not");
+    let apply = descendants::<gtk::Button>(&frame)
+        .into_iter()
+        .find(|button| button_label(button).as_deref() == Some("Apply permissions"))
+        .expect("the Apply button");
+    assert!(!apply.is_sensitive(), "nothing to apply before a change");
 
-    let others = |name: &str| {
+    choices[2].set_selected(0);
+    assert!(apply.is_sensitive());
+    apply.emit_clicked();
+
+    // Only the others lose their access; every other bit stays as each
+    // item had it.
+    let mode = |name: &str| {
         fs::metadata(fixture.path(name))
             .expect("metadata")
             .permissions()
             .mode()
-            & 0o7
+            & 0o7777
     };
-    wait_until("every item changed", || {
-        others("Documents") == 0 && others("Notes 2.txt") == 0 && others("Notes 10.txt") == 0
-    });
+    wait_until("every item changed", || mode("Notes 2.txt") == 0o640);
+    assert_eq!(
+        mode("Notes 10.txt"),
+        0o700,
+        "the private program stays private and runnable"
+    );
+    assert_eq!(mode("Documents"), 0o750);
 }
 
 /// A link says where it points, and a mount point what is mounted there

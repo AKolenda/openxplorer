@@ -73,6 +73,17 @@ impl AdvancedBits {
             .connect_expanded_notify(move |expander| changed(expander.is_expanded()));
     }
 
+    /// Runs `changed` whenever the expander opens or closes or a bit is
+    /// ticked or cleared.
+    pub(super) fn connect_changed(&self, changed: impl Fn() + Clone + 'static) {
+        let on_expanded = changed.clone();
+        self.expander.connect_expanded_notify(move |_| on_expanded());
+        for (check, _) in &self.checks {
+            let changed = changed.clone();
+            check.connect_toggled(move |_| changed());
+        }
+    }
+
     /// Ticks the check boxes of the bits of `mode`.
     pub(super) fn show(&self, mode: u32) {
         for (check, bit) in &self.checks {
