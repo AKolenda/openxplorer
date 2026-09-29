@@ -204,7 +204,8 @@ fn write_tar_gz(fixture: &Fixture) {
 }
 
 /// A .tar.gz opens in the archive browser and extracts like a ZIP; with
-/// "Open archives as folders" off it opens in its default application.
+/// "Open archives as folders" off it opens in its default application,
+/// unless it was handed to the app.
 ///
 /// parity: ARC-022, ARC-024
 #[gtk::test]
@@ -238,6 +239,13 @@ fn a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere() {
         !test.context.recorded_launches().is_empty()
     });
     assert!(test.context.recorded_launches()[0].contains("Site.tar.gz"));
+
+    // An archive handed to the app, which may be its default application,
+    // is browsed whatever the setting, so it never launches itself again.
+    test.window.open_locations(vec![fixture.uri_of("Site.tar.gz")]);
+    let browser = archive_browser(&test);
+    wait_until("the listing", || browser.row_names() == ["Docs"]);
+    assert_eq!(test.context.recorded_launches().len(), 1);
 }
 
 /// parity: ARC-023
