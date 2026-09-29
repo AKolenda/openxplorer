@@ -127,7 +127,7 @@ fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
     assert_eq!(test.window.shown_message(), "Extracted 2 files into Bundle.");
 }
 
-/// parity: ARC-010
+/// parity: ARC-010, OPS-006
 #[gtk::test]
 fn extract_refuses_a_bad_name_and_keeps_the_dialog_open() {
     let fixture = fixture_with_zip();

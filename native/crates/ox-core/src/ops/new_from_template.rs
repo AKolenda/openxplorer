@@ -250,6 +250,7 @@ mod tests {
     use super::*;
     use crate::test_support::make_fifo;
 
+    /// parity: OPS-048
     #[test]
     fn a_template_swapped_for_a_link_or_a_fifo_is_refused_without_blocking() {
         let temp = tempfile::tempdir().expect("a temporary folder");

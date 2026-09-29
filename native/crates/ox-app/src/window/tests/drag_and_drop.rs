@@ -63,7 +63,7 @@ fn dragging_an_unselected_item_selects_and_carries_only_it() {
     assert_eq!(test.selected_names(), ["Résumé.txt"]);
 }
 
-/// parity: DND-009, DND-011
+/// parity: DND-009, DND-011, OPS-027
 #[gtk::test]
 fn files_dropped_on_blank_space_are_copied_into_the_folder_shown() {
     let source = Fixture::standard();
@@ -80,7 +80,7 @@ fn files_dropped_on_blank_space_are_copied_into_the_folder_shown() {
     assert!(source.path("Notes 2.txt").is_file(), "a drop is a copy");
 }
 
-/// parity: DND-009, DND-011
+/// parity: DND-009, DND-011, OPS-026
 #[gtk::test]
 fn files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check() {
     let source = Fixture::standard();
@@ -104,6 +104,29 @@ fn files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check() {
             .count()
             == 2
     });
+}
+
+/// A drop onto a folder that went away since it was listed cannot be
+/// checked for conflicts: "Could not check destination" says so and
+/// nothing is copied.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn a_drop_whose_folder_went_away_reports_the_failed_check() {
+    let source = Fixture::standard();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let documents = test.position_of("Documents");
+    std::fs::remove_dir_all(fixture.path("Documents")).expect("the fixture is ours");
+
+    let taken = test
+        .window
+        .drop_files(&[source.uri_of("Notes 2.txt")], Some(documents), DropAction::Copy);
+    let dialog = open_dialog(&test);
+
+    assert!(taken);
+    assert_eq!(dialog.title_text(), "Could not check destination");
+    assert!(!fixture.path("Documents").exists(), "nothing was copied");
 }
 
 /// parity: DND-012, DND-013

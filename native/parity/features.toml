@@ -6577,8 +6577,8 @@ python_tests = [
   "desktop/tests/ui_v093.py::Invalid destination name stays in dialog",
 ]
 bridge = ["create", "rename", "createTemplate", "archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs. Missing: the Extract dialog, which comes with the archives UI."
+native = "done"
+native_note = "native/crates/ox-core/src/location/names.rs (names_are_validated_like_python); native/crates/ox-app/src/window/file_ops/names.rs (names_with_slashes_control_characters_or_dots_only_are_refused); native/crates/ox-app/src/window/tests/file_operations.rs (a_refused_name_stays_in_the_dialog_and_nothing_is_overwritten) shows both kinds of message inside the New folder and Rename dialogs; native/crates/ox-app/src/window/tests/archives.rs (extract_refuses_a_bad_name_and_keeps_the_dialog_open) does the same for the Extract dialog's folder name."
 
 [[feature]]
 id = "OPS-007"
@@ -7050,8 +7050,8 @@ python_tests = [
 ]
 bridge = ["transferConflicts", "operate"]
 dolphin = "KIO rename/overwrite/skip dialog"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (pasting_onto_a_taken_name_asks_and_keep_both_keeps_both, cancelling_the_conflict_dialog_changes_nothing); native/crates/ox-app/src/window/file_ops/conflict_dialog.rs (the_conflict_message_keeps_the_python_wording). The dialog adds Keep both. Missing: drops (DND), and a test of \"Could not check destination\"."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_ops/transfer.rs runs every paste and every drop into a folder through the conflict check (transfer_with_conflicts). Tests: native/crates/ox-app/src/window/tests/clipboard.rs (pasting_onto_a_taken_name_asks_and_keep_both_keeps_both, cancelling_the_conflict_dialog_changes_nothing); native/crates/ox-app/src/window/file_ops/conflict_dialog.rs (the_conflict_message_keeps_the_python_wording); native/crates/ox-app/src/window/tests/drag_and_drop.rs (files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check, a_drop_whose_folder_went_away_reports_the_failed_check shows 'Could not check destination'). Gain: the dialog adds Keep both."
 
 [[feature]]
 id = "OPS-027"
@@ -7076,8 +7076,8 @@ python_tests = [
   "desktop/tests/test_operations.py::TransferTests::test_skip_never_overwrites",
 ]
 bridge = ["transferConflicts", "operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (conflict_policies_never_overwrite_without_replace); native/crates/ox-app/src/window/file_ops/transfer.rs (without_conflicts_everything_copies_with_skip, items_without_a_conflict_keep_skip_beside_answered_ones); native/crates/ox-app/src/window/tests/clipboard.rs (copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy). Missing: drops."
+native = "done"
+native_note = "native/crates/ox-core/src/ops/conflicts.rs checks every incoming name, hidden entries included; without a conflict the copy starts at once with the Skip policy. Tests: native/crates/ox-core/tests/transfer_cases/operations.rs (conflict_policies_never_overwrite_without_replace); native/crates/ox-app/src/window/file_ops/transfer.rs (without_conflicts_everything_copies_with_skip, items_without_a_conflict_keep_skip_beside_answered_ones); native/crates/ox-app/src/window/tests/clipboard.rs (copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy); native/crates/ox-app/src/window/tests/drag_and_drop.rs (files_dropped_on_blank_space_are_copied_into_the_folder_shown) for drops."
 
 [[feature]]
 id = "OPS-028"
@@ -7255,8 +7255,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:936-937", "desktop/winspace.py:856-857", "desktop/core.py:412-415"]
 python_tests = ["desktop/tests/test_pins.py::PinTests::test_server_detection"]
 bridge = ["operate", "archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/ops_transfer.rs (requests_with_a_whole_share_or_a_server_listing_are_refused_before_anything_changes); Paste is disabled in a server listing (writableLocation). Missing: drops and extraction."
+native = "done"
+native_note = "native/crates/ox-core/tests/ops_transfer.rs (requests_with_a_whole_share_or_a_server_listing_are_refused_before_anything_changes) refuses a paste into a server listing with 'Open a network share before pasting files.', and Paste is disabled there. native/crates/ox-core/tests/archive_extract_dispatch.rs (a_server_listing_is_not_a_destination) refuses extraction with 'Open a network share before choosing it as an extraction destination.'. Drops: a server listing is no drop target (native/crates/ox-app/src/window/file_drop/targets/tests.rs a_server_listing_takes_no_drops), and a drop there is refused with the Python drop wording 'Open a writable destination folder before dropping files.'."
 
 [[feature]]
 id = "OPS-037"
@@ -7269,8 +7269,8 @@ openxplorer = "has"
 sources = ["desktop/gio_backend.py:49-60", "desktop/winspace.py:572-576"]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/src/entry/error.rs (gio_errors_are_sorted_by_kind, only_not_mounted_asks_for_a_mount)."
+native = "done"
+native_note = "native/crates/ox-core/src/ops/error.rs (gio_errors_keep_the_bridge_codes, local_io_errors_keep_their_meaning, only_not_mounted_asks_for_a_mount) and native/crates/ox-core/src/entry/error.rs (gio_errors_are_sorted_by_kind) give every error one of the bridge codes: not-mounted, cancelled, not-found, permission-denied, exists, not-supported, not-directory or error. The UI decides from the kind, not the text: needs_mount() mounts and retries once (native/crates/ox-app/src/window/tests/network.rs an_unmounted_share_is_mounted_once_then_listed_again), is_cancelled() is never shown as an error, and Exists feeds the name-conflict handling."
 
 [[feature]]
 id = "OPS-038"
@@ -7473,8 +7473,8 @@ sources = [
 python_tests = []
 bridge = ["templates", "createTemplate"]
 gnome = "G_USER_DIRECTORY_TEMPLATES; g_file_create with G_FILE_CREATE_PRIVATE and a non-overwriting same-folder rename; open templates with O_NOFOLLOW and check them with fstat"
-native = "todo"
-native_note = "Porting notes: No desktop test covers these rules; the only template test checks the New menu labels. Add backend tests before porting. OPS-002 describes the dialog, and OPS-003 relies on these rules."
+native = "done"
+native_note = "native/crates/ox-core/src/ops/templates.rs lists at most 100 user templates without following links; native/crates/ox-core/src/ops/new_from_template.rs opens with O_NOFOLLOW|O_NONBLOCK, checks fstat, reads in 64 KiB blocks up to 16 MiB with cancellation, stages to .winspace-new-<hex> and publishes without overwriting. Tests: native/crates/ox-core/tests/ops_create.rs (the_six_starters_come_first_with_their_fixed_names, only_visible_regular_files_up_to_sixteen_mebibytes_are_user_templates, at_most_one_hundred_user_templates_are_listed, a_user_template_is_copied_without_its_permissions, a_template_the_list_does_not_offer_is_refused, a_template_never_overwrites_and_never_goes_to_a_server_listing); new_from_template.rs (a_template_swapped_for_a_link_or_a_fifo_is_refused_without_blocking, a_template_that_grew_past_the_limit_is_refused_and_cancellation_stops_reading, a_name_taken_while_publishing_is_kept_and_the_stage_file_is_deleted)."
 
 [[feature]]
 id = "XFER-001"

@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use super::highlight::VIEW_DROP_CLASS;
 use super::*;
+use crate::locations::Page;
 use crate::test_support::harness::{
     capture, capture_popover, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
@@ -60,6 +61,21 @@ fn a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown() {
     assert_eq!(on_file, shown, "a plain file takes no drop; its folder does");
     assert_eq!(on_blank, shown);
     assert_eq!(while_searching, None, "search results take no drop");
+}
+
+/// A server's share list and a page take no drop; a share and a local
+/// folder do.
+///
+/// parity: OPS-036
+#[gtk::test]
+fn a_server_listing_takes_no_drops() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    assert!(!test.window.takes_drops("smb://nas/"));
+    assert!(!test.window.takes_drops(&Page::Network.uri()));
+    assert!(test.window.takes_drops("smb://nas/share/"));
+    assert!(test.window.takes_drops(&fixture.uri()));
 }
 
 /// parity: DND-011

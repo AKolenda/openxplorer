@@ -146,7 +146,7 @@ impl BrowserWindow {
 
     /// True for a folder dropped items may go into: a writable local or
     /// SMB folder, not a page, a server or a previous version.
-    fn takes_drops(&self, folder: &str) -> bool {
+    pub(super) fn takes_drops(&self, folder: &str) -> bool {
         is_draggable_location(folder) && self.imp().locations.borrow().is_writable_location(folder)
     }
 }
