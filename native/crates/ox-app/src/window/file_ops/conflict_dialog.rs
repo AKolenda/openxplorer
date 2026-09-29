@@ -7,11 +7,21 @@
 //! "Keep both" (the engine's `(copy N)` names) and, with several
 //! conflicts, "Apply to all": cleared, the answer is for the first
 //! conflicting item only, and the dialog asks again about the next one,
-//! as Windows' "Let me decide for each file" does.
+//! as Windows' "Let me decide for each file" does. As in Dolphin and
+//! Windows, the dialog shows the first conflicting item beside the one it
+//! would replace, with sizes and dates and whether the files are
+//! identical ([`super::conflict_compare`]), and when it is a file it
+//! offers "Replace older", which replaces only files whose existing copy
+//! is older and skips the rest. "Rename" puts the first item in under the
+//! name typed in "New name", which starts as a free suggestion
+//! ([`super::conflict_rename`]). An item copied into its own folder is
+//! not offered Replace, since it cannot replace itself.
 
 use gtk::prelude::*;
 use ox_core::transfer::ConflictPolicy;
 
+use super::conflict_compare::{compare, Comparison};
+use super::conflict_rename::{checked_new_name, suggested_name};
 use crate::window::dialog::{ButtonStyle, Dialog, DialogButton};
 use crate::window::BrowserWindow;
 
@@ -25,6 +35,8 @@ pub(super) struct ConflictAnswer {
     pub(super) uri: String,
     /// What happens to it.
     pub(super) policy: ConflictPolicy,
+    /// The name it goes in under instead, when the answer was Rename.
+    pub(super) rename_to: Option<String>,
 }
 
 /// The dialog's message for `count` conflicts in `destination`, word for
@@ -48,81 +60,198 @@ fn item_name(uri: &str) -> String {
         .map_or_else(|| uri.to_owned(), |name| name.to_string_lossy().into_owned())
 }
 
+/// What the user answered in one dialog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Choice {
+    /// One policy.
+    Policy(ConflictPolicy),
+    /// Replace files whose existing copy is older, skip the others.
+    ReplaceOlder,
+    /// The first item goes in under this name.
+    Rename(String),
+}
+
 /// The buttons of one dialog and the answer each gives.
 #[derive(Debug)]
 struct PolicyButtons {
     skip: DialogButton,
     keep_both: DialogButton,
-    replace: DialogButton,
+    rename: DialogButton,
+    replace_older: Option<DialogButton>,
+    replace: Option<DialogButton>,
 }
 
 impl PolicyButtons {
-    /// Adds Cancel, "Skip duplicates", "Keep both" and the primary
-    /// "Replace existing".
-    fn add_to(dialog: &Dialog) -> Self {
+    /// Adds Cancel, "Skip duplicates", "Keep both", "Rename", "Replace
+    /// older" when `offers.replace_older`, and "Replace existing" when
+    /// `offers.replace`, the primary button. Without it, "Keep both" is.
+    fn add_to(dialog: &Dialog, offers: Offers) -> Self {
         dialog.add_cancel_button();
+        let skip = dialog.add_button("Skip duplicates", ButtonStyle::Standard);
+        let keep_both_style = if offers.replace {
+            ButtonStyle::Standard
+        } else {
+            ButtonStyle::Primary
+        };
+        let keep_both = dialog.add_button("Keep both", keep_both_style);
+        let rename = dialog.add_button("Rename", ButtonStyle::Standard);
+        let replace_older = offers
+            .replace_older
+            .then(|| dialog.add_button("Replace older", ButtonStyle::Standard));
+        let replace = offers
+            .replace
+            .then(|| dialog.add_button("Replace existing", ButtonStyle::Primary));
         Self {
-            skip: dialog.add_button("Skip duplicates", ButtonStyle::Standard),
-            keep_both: dialog.add_button("Keep both", ButtonStyle::Standard),
-            replace: dialog.add_button("Replace existing", ButtonStyle::Primary),
+            skip,
+            keep_both,
+            rename,
+            replace_older,
+            replace,
         }
     }
 
-    /// The policy `button` stands for.
-    fn policy(&self, button: DialogButton) -> ConflictPolicy {
-        if button == self.replace {
-            ConflictPolicy::Replace
+    /// The answer `button` stands for; `None` for Rename, whose answer is
+    /// the typed name.
+    fn policy_choice(&self, button: DialogButton) -> Option<Choice> {
+        if Some(button) == self.replace {
+            Some(Choice::Policy(ConflictPolicy::Replace))
         } else if button == self.keep_both {
-            ConflictPolicy::KeepBoth
+            Some(Choice::Policy(ConflictPolicy::KeepBoth))
+        } else if Some(button) == self.replace_older {
+            Some(Choice::ReplaceOlder)
+        } else if button == self.rename {
+            None
         } else {
-            debug_assert_eq!(button, self.skip, "the dialog has four buttons");
-            ConflictPolicy::Skip
+            debug_assert_eq!(button, self.skip, "no other button answers");
+            Some(Choice::Policy(ConflictPolicy::Skip))
         }
+    }
+}
+
+/// Which of the replacing answers one dialog offers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Offers {
+    /// "Replace existing": not when the first item is the existing item
+    /// itself, which may not replace itself.
+    replace: bool,
+    /// "Replace older": when both sides of the first item are files.
+    replace_older: bool,
+}
+
+impl Offers {
+    /// The answers offered for a first item compared as `first`.
+    fn for_first(first: Option<&Comparison>) -> Self {
+        let same_item = first.is_some_and(|comparison| comparison.same_item);
+        let both_files =
+            first.is_some_and(|comparison| !comparison.incoming.is_folder && !comparison.existing.is_folder);
+        Self {
+            replace: !same_item,
+            replace_older: both_files && !same_item,
+        }
+    }
+}
+
+/// The policy `choice` gives the item compared in `comparison`.
+fn policy_for(choice: &Choice, comparison: Option<&Comparison>) -> ConflictPolicy {
+    match choice {
+        Choice::Policy(policy) => *policy,
+        Choice::ReplaceOlder if comparison.is_some_and(Comparison::existing_is_older) => {
+            ConflictPolicy::Replace
+        }
+        Choice::ReplaceOlder | Choice::Rename(_) => ConflictPolicy::Skip,
     }
 }
 
 impl BrowserWindow {
     /// Asks what happens to each of `conflicts`, items whose names are
-    /// taken in the folder shown as `destination`. `None` when the user
-    /// cancels: nothing may change then.
+    /// taken in `destination_folder`, shown as `destination`. `None` when
+    /// the user cancels: nothing may change then.
     pub(super) async fn ask_about_conflicts(
         &self,
         conflicts: &[String],
+        destination_folder: &str,
         destination: &str,
     ) -> Option<Vec<ConflictAnswer>> {
         let mut answers = Vec::with_capacity(conflicts.len());
         while answers.len() < conflicts.len() {
             let remaining = &conflicts[answers.len()..];
-            let (policy, applies_to_all) = self.ask_once(remaining, destination).await?;
+            let first = compare(&remaining[0], destination_folder).await;
+            let (choice, applies_to_all) = self
+                .ask_once(remaining, destination_folder, destination, first.as_ref())
+                .await?;
+            if let Choice::Rename(name) = choice {
+                // A typed name is for one item only.
+                answers.push(ConflictAnswer {
+                    uri: remaining[0].clone(),
+                    policy: ConflictPolicy::Skip,
+                    rename_to: Some(name),
+                });
+                continue;
+            }
             let answered = if applies_to_all {
                 remaining
             } else {
                 &remaining[..1]
             };
-            answers.extend(answered.iter().map(|uri| ConflictAnswer {
-                uri: uri.clone(),
-                policy,
-            }));
+            for (index, uri) in answered.iter().enumerate() {
+                let comparison = match (&choice, index) {
+                    (Choice::ReplaceOlder, 0) => first,
+                    (Choice::ReplaceOlder, _) => compare(uri, destination_folder).await,
+                    _ => None,
+                };
+                answers.push(ConflictAnswer {
+                    uri: uri.clone(),
+                    policy: policy_for(&choice, comparison.as_ref()),
+                    rename_to: None,
+                });
+            }
         }
         Some(answers)
     }
 
-    /// One dialog about `remaining`: the chosen policy, and whether it
-    /// applies to all of them; `None` for Cancel.
-    async fn ask_once(&self, remaining: &[String], destination: &str) -> Option<(ConflictPolicy, bool)> {
+    /// One dialog about `remaining`, showing `first`, the comparison of
+    /// the first of them: the answer, and whether it applies to all of
+    /// them; `None` for Cancel.
+    async fn ask_once(
+        &self,
+        remaining: &[String],
+        destination_folder: &str,
+        destination: &str,
+        first: Option<&Comparison>,
+    ) -> Option<(Choice, bool)> {
+        let first_uri = &remaining[0];
+        let suggestion = suggested_name(first_uri, destination_folder).await;
         let dialog = Dialog::new(self, TITLE, &conflict_message(remaining.len(), destination));
+        if let Some(comparison) = first {
+            dialog.add_note(&format!(
+                "“{}”\n{}",
+                item_name(first_uri),
+                comparison.lines().join("\n")
+            ));
+        }
+        let new_name = dialog.add_text_field("New name", &suggestion);
         let apply_to_all = (remaining.len() > 1).then(|| {
             let check = dialog.add_check_button(&apply_to_all_label(remaining.len()), true);
-            let first = item_name(&remaining[0]);
+            let first = item_name(first_uri);
             dialog.add_hint(&format!("Otherwise the choice is for “{first}” only."));
             check
         });
-        let buttons = PolicyButtons::add_to(&dialog);
+        let buttons = PolicyButtons::add_to(&dialog, Offers::for_first(first));
+        dialog.submit_with(&new_name, buttons.rename);
         dialog.open();
-        let pressed = dialog.next_response().await;
+        let choice = loop {
+            let pressed = dialog.next_response().await?;
+            if let Some(choice) = buttons.policy_choice(pressed) {
+                break choice;
+            }
+            match checked_new_name(&new_name.text(), first_uri, destination_folder).await {
+                Ok(name) => break Choice::Rename(name),
+                Err(message) => dialog.show_error(&message),
+            }
+        };
         let applies_to_all = apply_to_all.as_ref().is_none_or(gtk::CheckButton::is_active);
         dialog.finish();
-        Some((buttons.policy(pressed?), applies_to_all))
+        Some((choice, applies_to_all))
     }
 }
 

@@ -8,7 +8,8 @@
 //! dialog also offers Keep both and, when "Apply to all" is cleared, an
 //! answer per item. The engine takes one policy per run, so the items are
 //! grouped by their answer and each group runs on one engine, Skip first,
-//! then Keep both, then Replace. Items without a conflict run with Skip,
+//! then Keep both, then Replace; each item answered with Rename runs last,
+//! on its own, under its new name. Items without a conflict run with Skip,
 //! so a name that appears after the check is never overwritten (OPS-027).
 //! Every group keeps every safety rule of the engine; a cancellation stops
 //! the groups that have not started.
@@ -16,7 +17,9 @@
 use super::context::{on_worker, OperationContext};
 use super::error::OpsError;
 use super::results::merge_results;
-use super::run_transfer::{gio_transfer_engine, run_on_engine, TransferOutcome, TransferRequest};
+use super::run_transfer::{
+    gio_transfer_engine, run_on_engine, run_renamed_on_engine, TransferOutcome, TransferRequest,
+};
 use super::undo::UndoRecord;
 use crate::transfer::{ConflictPolicy, Progress, TransferMode};
 
@@ -28,6 +31,10 @@ pub struct ItemChoice {
     /// The user's answer for this item; Skip for an item without a
     /// conflict.
     pub policy: ConflictPolicy,
+    /// The name the user typed for this item when they answered with
+    /// Rename; the item then goes in under that name and `policy` is not
+    /// used.
+    pub rename_to: Option<String>,
 }
 
 /// A copy or move with an answer per item.
@@ -78,8 +85,22 @@ fn run_chosen_transfer_blocking(
     let mut engine = gio_transfer_engine(&context.protection, progress);
     let mut total = TransferOutcome::default();
     let mut undo = CombinedUndo::Nothing;
-    for group in groups_by_policy(request) {
-        let part = run_on_engine(&mut engine, &group, context)?;
+    let renamed = request
+        .items
+        .iter()
+        .filter_map(|item| Some((item.uri.as_str(), item.rename_to.as_deref()?)));
+    for step in groups_by_policy(request)
+        .into_iter()
+        .map(Step::Group)
+        .chain(renamed.map(|(uri, name)| Step::Renamed { uri, name }))
+    {
+        let part = match step {
+            Step::Group(group) => run_on_engine(&mut engine, &group, context)?,
+            Step::Renamed { uri, name } => {
+                let folder = &request.destination_folder;
+                run_renamed_on_engine(&mut engine, request.mode, folder, uri, name, context)?
+            }
+        };
         undo = undo.with(&part);
         merge_results(&mut total.result, part.result);
         total.created.extend(part.created);
@@ -91,7 +112,16 @@ fn run_chosen_transfer_blocking(
     Ok(total)
 }
 
-/// One request per answer that some item has, in [`POLICY_ORDER`].
+/// One engine run of a [`ChosenTransfer`].
+enum Step<'a> {
+    /// The items answered with one policy.
+    Group(TransferRequest),
+    /// One item answered with Rename, and its new name.
+    Renamed { uri: &'a str, name: &'a str },
+}
+
+/// One request per answer that some item has, in [`POLICY_ORDER`]; items
+/// answered with Rename run on their own.
 fn groups_by_policy(request: &ChosenTransfer) -> Vec<TransferRequest> {
     POLICY_ORDER
         .into_iter()
@@ -105,7 +135,7 @@ fn group_with_policy(request: &ChosenTransfer, policy: ConflictPolicy) -> Transf
     let uris = request
         .items
         .iter()
-        .filter(|item| item.policy == policy)
+        .filter(|item| item.policy == policy && item.rename_to.is_none())
         .map(|item| item.uri.clone())
         .collect();
     TransferRequest {
@@ -178,6 +208,7 @@ mod tests {
         ItemChoice {
             uri: uri.to_owned(),
             policy,
+            rename_to: None,
         }
     }
 

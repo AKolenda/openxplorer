@@ -119,9 +119,11 @@ fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {
         "{}",
         dialog.message_text()
     );
+    // The copy is of the existing item itself, which may not replace
+    // itself.
     assert_eq!(
         dialog.button_labels(),
-        ["Cancel", "Skip duplicates", "Keep both", "Replace existing"]
+        ["Cancel", "Skip duplicates", "Keep both", "Rename"]
     );
     assert!(
         descendants::<gtk::CheckButton>(&dialog).is_empty(),
@@ -191,6 +193,41 @@ fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
         .filter(|name| name.contains("(copy"))
         .collect();
     assert_eq!(copies.len(), 1, "Notes 2.txt was skipped: {copies:?}");
+}
+
+/// parity: OPS-028
+#[gtk::test]
+fn rename_in_the_conflict_dialog_copies_under_the_typed_name() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+
+    test.activate("paste", None);
+    let dialog = open_dialog(&test);
+    let new_name = descendants::<gtk::Entry>(&dialog)
+        .into_iter()
+        .next()
+        .expect("the dialog has a New name field");
+    assert_eq!(
+        new_name.text(),
+        "Notes 2 (copy 2).txt",
+        "a free name is suggested"
+    );
+    new_name.set_text("Notes 10.txt");
+    dialog.press("Rename");
+    wait_until("the taken name to be refused", || dialog.error_text().is_some());
+    new_name.set_text("Renamed notes.txt");
+    dialog.press("Rename");
+
+    wait_until("the renamed copy to be selected", || {
+        test.selected_names() == ["Renamed notes.txt"]
+    });
+    assert_eq!(
+        fs::read(fixture.path("Renamed notes.txt")).expect("the copy exists"),
+        fs::read(fixture.path("Notes 2.txt")).expect("the original stays")
+    );
 }
 
 /// The bytes the clipboard of `test`'s window offers as `mime_type`.

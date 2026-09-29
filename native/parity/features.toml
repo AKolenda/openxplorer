@@ -7103,8 +7103,8 @@ python_tests = [
 ]
 bridge = ["transferConflicts", "operate"]
 dolphin = "KIO::RenameDialog; KIO rename/overwrite dialog"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (clearing_apply_to_all_asks_about_each_conflict_in_turn); native/crates/ox-app/src/window/file_ops/transfer.rs. The dialog offers Skip, Keep both and Replace with Apply to all, and asks item by item when it is cleared. Missing: the side-by-side comparison, rename with an editable name, Overwrite older and Resume."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/clipboard.rs (clearing_apply_to_all_asks_about_each_conflict_in_turn, rename_in_the_conflict_dialog_copies_under_the_typed_name, pasting_onto_a_taken_name_asks_and_keep_both_keeps_both); native/crates/ox-app/src/window/file_ops/conflict_compare.rs (the_comparison_says_which_side_is_older_or_that_they_are_identical); native/crates/ox-core/tests/transfer_cases/conflicts.rs (rename_uses_the_typed_name_and_nothing_replaces_itself). The dialog shows the first conflicting item beside the existing one (size, date, identical bytes, older or newer) and offers Skip duplicates, Keep both, Rename with an editable New name pre-filled with a free suggestion, Replace older (files only) and Replace existing (which merges folders, Write Into), with Apply to all or item by item. An item copied into its own folder is not offered Replace and the engine refuses to replace an item with itself. Differs: no thumbnail preview; no Resume, because copies are staged and published atomically, so a cancelled copy never leaves a partial file to resume."
 
 [[feature]]
 id = "OPS-029"

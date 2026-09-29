@@ -6,6 +6,7 @@
 //! and the copy of one item (staging, publishing, device checks) is in
 //! `staged_copy.rs`.
 
+use std::ffi::OsStr;
 use std::fmt;
 use std::time::Duration;
 
@@ -134,15 +135,7 @@ impl TransferEngine {
             | Operation::Move {
                 destination_folder: folder_uri,
                 policy,
-            } => {
-                let folder = destination_folder(&self.factory, folder_uri, cancel)?;
-                let placement = Placement {
-                    mode: operation.mode(),
-                    policy,
-                    destination_folder: folder.as_ref(),
-                };
-                self.run_items(ItemAction::Transfer(placement), &uris, cancel)
-            }
+            } => self.run_transfer(operation.mode(), folder_uri, policy, None, &uris, cancel)?,
             Operation::Trash => {
                 let trash = ItemAction::Remove(Removal::Trash);
                 self.run_items(trash, &uris, cancel)
@@ -153,6 +146,58 @@ impl TransferEngine {
             }
         };
         Ok(result)
+    }
+
+    /// Copies or moves the item at `uri` into `destination_folder` under
+    /// `name` instead of its own name: the user's Rename answer to a name
+    /// conflict (OPS-028). Every rule of [`run`](Self::run) applies; a
+    /// `name` that is taken by now fails the item rather than replacing
+    /// anything.
+    ///
+    /// # Errors
+    ///
+    /// As [`run`](Self::run), and for a mode other than copy or move.
+    pub fn run_renamed(
+        &mut self,
+        mode: TransferMode,
+        destination_folder: &str,
+        uri: &str,
+        name: &OsStr,
+        cancel: &Cancellation,
+    ) -> Result<TransferResult, TransferError> {
+        if !matches!(mode, TransferMode::Copy | TransferMode::Move) {
+            return Err(TransferError::failed("Only copies and moves can rename an item."));
+        }
+        let uris = [uri.to_owned()];
+        let uris = distinct_items(&uris)?;
+        self.run_transfer(
+            mode,
+            destination_folder,
+            ConflictPolicy::Skip,
+            Some(name),
+            &uris,
+            cancel,
+        )
+    }
+
+    /// Copies or moves `uris` into the folder at `folder_uri`.
+    fn run_transfer(
+        &mut self,
+        mode: TransferMode,
+        folder_uri: &str,
+        policy: ConflictPolicy,
+        name: Option<&OsStr>,
+        uris: &[&str],
+        cancel: &Cancellation,
+    ) -> Result<TransferResult, TransferError> {
+        let folder = destination_folder(&self.factory, folder_uri, cancel)?;
+        let placement = Placement {
+            mode,
+            policy,
+            destination_folder: folder.as_ref(),
+            name,
+        };
+        Ok(self.run_items(ItemAction::Transfer(placement), uris, cancel))
     }
 
     /// Runs `action` over the distinct `uris` of an accepted request, then

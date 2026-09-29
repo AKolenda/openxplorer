@@ -10,6 +10,7 @@
 //! where the items are now (SEL-016) and how Undo reverses the run
 //! (OPS-029).
 
+use std::ffi::OsStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -107,6 +108,49 @@ pub(super) fn run_on_engine(
     let tracking = RunTracking::before_run(operation, &context.cancel);
     let result = engine.run(operation, &items, &context.cancel)?;
     Ok(tracking.finish(result))
+}
+
+/// Checks and runs, on `engine`, the copy or move of the item at `uri`
+/// into `destination_folder` under `name`: a name conflict the user
+/// answered with Rename (OPS-028). The checks are those of
+/// [`run_on_engine`], and Undo reverses it like any copy or move.
+pub(super) fn run_renamed_on_engine(
+    engine: &mut TransferEngine,
+    mode: TransferMode,
+    destination_folder: &str,
+    uri: &str,
+    name: &str,
+    context: &OperationContext,
+) -> Result<TransferOutcome, OpsError> {
+    let item = require_item_uri(uri)?;
+    let request = TransferRequest {
+        mode,
+        uris: vec![item.clone()],
+        destination_folder: Some(destination_folder.to_owned()),
+        policy: ConflictPolicy::Skip,
+    };
+    let Some(folder) = checked_destination(&request, &context.protection)? else {
+        return Err(OpsError::failed("Choose a destination folder."));
+    };
+    if changes_sources(mode) {
+        context.protection.check(&item)?;
+    }
+    let result = engine.run_renamed(mode, &folder, &item, OsStr::new(name), &context.cancel)?;
+    let landed: Vec<Landed> = result
+        .done
+        .iter()
+        .map(|source| Landed {
+            source: source.clone(),
+            destination: GioNode::new(&folder).child(OsStr::new(name)).uri(),
+        })
+        .collect();
+    let created = landed.iter().map(|item| item.destination.clone()).collect();
+    let undo = transfer_undo(mode, ConflictPolicy::Skip, landed);
+    Ok(TransferOutcome {
+        result,
+        created,
+        undo,
+    })
 }
 
 /// The canonical destination folder of a copy or move, checked against

@@ -50,13 +50,19 @@ impl Drop for UnfinishedMark {
 impl UnfinishedMarks {
     /// Marks kept in `folder`.
     pub fn new(folder: impl Into<PathBuf>) -> Self {
-        Self { folder: folder.into() }
+        Self {
+            folder: folder.into(),
+        }
     }
 
     /// Marks kept in the user's cache directory, beside the app's other
     /// `winspace` data. A cleared cache only loses a report.
     pub fn in_cache_directory() -> Self {
-        Self::new(glib::user_cache_dir().join("winspace").join("unfinished-operations"))
+        Self::new(
+            glib::user_cache_dir()
+                .join("winspace")
+                .join("unfinished-operations"),
+        )
     }
 
     /// Marks a copy or move into `destinations` as running.

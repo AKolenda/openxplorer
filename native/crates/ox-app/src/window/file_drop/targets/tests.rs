@@ -73,7 +73,7 @@ fn a_server_listing_takes_no_drops() {
     let test = TestWindow::open(&fixture.uri());
 
     assert!(!test.window.takes_drops("smb://nas/"));
-    assert!(!test.window.takes_drops(&Page::Network.uri()));
+    assert!(!test.window.takes_drops(Page::Network.uri()));
     assert!(test.window.takes_drops("smb://nas/share/"));
     assert!(test.window.takes_drops(&fixture.uri()));
 }

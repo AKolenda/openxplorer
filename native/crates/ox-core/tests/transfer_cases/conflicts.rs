@@ -3,7 +3,7 @@
 //! side, and moves into the item's own folder. Ports the conflict cases of
 //! `TransferTests` in `desktop/tests/test_operations.py`.
 
-use ox_core::transfer::ConflictPolicy;
+use ox_core::transfer::{ConflictPolicy, TransferMode};
 
 use crate::transfer_support::{local, *};
 
@@ -60,6 +60,59 @@ fn moving_an_item_into_its_own_folder_changes_nothing() {
         assert_eq!(list(&fixture.source_folder), ["a"], "{policy:?}");
         assert_eq!(read(&source), "a");
     }
+}
+
+/// The conflict dialog's Rename copies an item under the typed name and
+/// refuses a name taken meanwhile; Replace never overwrites an item with
+/// itself (Dolphin's "cannot copy file onto itself").
+///
+/// parity: OPS-028
+#[test]
+fn rename_uses_the_typed_name_and_nothing_replaces_itself() {
+    let fixture = Fixture::new();
+    let source = fixture.source_folder.join("a.txt");
+    write(&source, "new");
+    write(&fixture.destination_folder.join("a.txt"), "old");
+    write(&fixture.destination_folder.join("taken.txt"), "taken");
+    let destination = file_uri(&fixture.destination_folder);
+    let cancel = ox_core::transfer::Cancellation::new();
+    let mut engine = fixture.engine(local::local());
+
+    let renamed = engine
+        .run_renamed(
+            TransferMode::Copy,
+            &destination,
+            &file_uri(&source),
+            "b.txt".as_ref(),
+            &cancel,
+        )
+        .expect("the run is accepted");
+    let taken = engine
+        .run_renamed(
+            TransferMode::Copy,
+            &destination,
+            &file_uri(&source),
+            "taken.txt".as_ref(),
+            &cancel,
+        )
+        .expect("the run is accepted");
+    let itself = fixture.run(
+        &mut engine,
+        &[&source],
+        Request::CopyInto(&fixture.source_folder, ConflictPolicy::Replace),
+    );
+
+    assert_eq!(renamed.done, [file_uri(&source)], "{renamed:?}");
+    assert_eq!(read(&fixture.destination_folder.join("b.txt")), "new");
+    assert_eq!(read(&fixture.destination_folder.join("a.txt")), "old");
+    assert_eq!(taken.errors.len(), 1, "{taken:?}");
+    assert_eq!(read(&fixture.destination_folder.join("taken.txt")), "taken");
+    assert!(
+        itself.errors[0].ends_with("An item cannot replace itself."),
+        "{itself:?}"
+    );
+    assert_eq!(read(&source), "new");
+    fixture.assert_no_staging();
 }
 
 /// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_collision_keeps_source`: Skip leaves both the source

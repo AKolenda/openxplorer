@@ -222,7 +222,9 @@ fn progress_is_reported_and_the_last_report_says_the_run_is_complete() {
         .filter(|report| report.label.starts_with("Copying a.txt"))
         .collect();
     assert!(!file_reports.is_empty(), "the file's bytes are reported");
-    assert!(file_reports.iter().all(|report| report.scope == ProgressScope::File));
+    assert!(file_reports
+        .iter()
+        .all(|report| report.scope == ProgressScope::File));
 }
 
 /// parity: OPS-022

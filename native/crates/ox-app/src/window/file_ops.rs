@@ -40,6 +40,8 @@
 //! | `clipboard` | Cut, Copy and the desktop's file clipboard |
 //! | `transfer` | Pasting into a folder, with the name-conflict check |
 //! | `conflict_dialog` | The name-conflict dialog |
+//! | `conflict_compare` | The two items side by side in that dialog |
+//! | `conflict_rename` | The new name typed in that dialog |
 //! | `shortcuts` | The file commands' keys, which text fields keep |
 //! | `actions` | The window actions of these commands |
 
@@ -47,7 +49,9 @@ mod actions;
 mod availability;
 mod batch_rename;
 mod clipboard;
+mod conflict_compare;
 mod conflict_dialog;
+mod conflict_rename;
 mod delete;
 mod duplicate;
 mod inline_rename;

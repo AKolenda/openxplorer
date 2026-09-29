@@ -258,6 +258,16 @@ impl Dialog {
         answer
     }
 
+    /// Makes Enter in `entry` press `button` instead of the primary
+    /// button, for a field that belongs to one of several answers.
+    pub(super) fn submit_with(&self, entry: &gtk::Entry, button: DialogButton) {
+        entry.set_activates_default(false);
+        let answers = self.imp().answers.clone();
+        entry.connect_activate(move |_| {
+            let _ = answers.try_send(Some(button));
+        });
+    }
+
     /// A button appended to the actions and remembered.
     fn new_button(&self, label: &str, style: ButtonStyle) -> gtk::Button {
         let button = gtk::Button::builder()
