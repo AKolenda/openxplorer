@@ -9,6 +9,7 @@ use std::fs;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::transfer::{Progress, ProgressScope};
 
 use super::file_ops_support::{
     is_enabled, open_dialog, require_private_trash, select_names, text_field, wait_for_no_dialog,
@@ -424,6 +425,33 @@ fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
     test.window.end_operation();
     assert!(!panel.is_visible());
     assert!(!is_enabled(&test, "cancel-operation"));
+}
+
+/// A copied file's bytes fill a bar of their own: a full file bar leaves
+/// the batch bar where the batch is.
+///
+/// parity: OPS-020
+#[gtk::test]
+fn a_full_file_bar_is_never_shown_as_the_batch_finishing() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.imp().transfer_panel.get();
+    let report = |label: &str, fraction: f64, scope: ProgressScope| Progress {
+        label: label.to_owned(),
+        fraction,
+        scope,
+    };
+    let _context = test.window.begin_operation("Preparing copy…");
+
+    panel.show_progress(&report("Copy: a.txt (1/2)", 0.0, ProgressScope::Batch));
+    panel.show_progress(&report("Copying a.txt · 10 / 10 bytes", 1.0, ProgressScope::File));
+    let file_done = panel.fractions();
+    panel.show_progress(&report("Copy: b.txt (2/2)", 0.5, ProgressScope::Batch));
+    let next_item = panel.fractions();
+    test.window.end_operation();
+
+    assert_eq!(file_done, (0.0, Some(1.0)));
+    assert_eq!(next_item, (0.5, None));
 }
 
 /// parity: TAB-049

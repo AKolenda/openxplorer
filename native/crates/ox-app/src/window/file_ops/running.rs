@@ -108,7 +108,7 @@ impl BrowserWindow {
                 // The loop ends when the worker drops its sender.
                 while let Ok(progress) = report_queue.recv().await {
                     if !cancel.is_cancelled() {
-                        panel.show_progress(&progress.label, progress.fraction);
+                        panel.show_progress(&progress);
                     }
                 }
             }

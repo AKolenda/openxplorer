@@ -6901,8 +6901,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/transfer_panel.rs names the bar \"Operation progress\" and gives it the label as its value text; the engine's labels say whether they report one file or the batch. Missing: a test of the accessible state, and a batch bar separate from the file bar."
+native = "done"
+native_note = "native/crates/ox-core/src/transfer/types.rs gives every progress report a scope: the batch (items started, then all done) or the current file's bytes. native/crates/ox-app/src/window/transfer_panel.rs shows the batch on the 'Operation progress' bar and a copied file's bytes on a second, thinner 'Current file progress' bar, hidden between files, so a full file bar is never presented as the batch finishing. Both bars are named for assistive technologies and carry the label (which says preparing, one file, or the batch) as their value text. Tests: native/crates/ox-core/tests/ops_transfer.rs (progress_is_reported_and_the_last_report_says_the_run_is_complete), native/crates/ox-app/src/window/tests/file_operations.rs (a_full_file_bar_is_never_shown_as_the_batch_finishing)."
 
 [[feature]]
 id = "OPS-021"

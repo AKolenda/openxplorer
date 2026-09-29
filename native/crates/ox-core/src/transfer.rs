@@ -85,4 +85,4 @@ pub use names::is_own_staging_name;
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;
 pub(crate) use staging::{clean_staging, STAGING_LEVELS};
-pub use types::{ConflictPolicy, Operation, Progress, TransferMode, TransferResult};
+pub use types::{ConflictPolicy, Operation, Progress, ProgressScope, TransferMode, TransferResult};

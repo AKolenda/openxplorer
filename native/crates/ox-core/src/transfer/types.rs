@@ -137,8 +137,18 @@ impl Operation<'_> {
     }
 }
 
-/// Progress for the transfer panel. `fraction` is per file for copies and
-/// the batch position for Trash and delete.
+/// What a [`Progress::fraction`] measures (OPS-020).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ProgressScope {
+    /// How far the whole batch is: the items started, or all done.
+    #[default]
+    Batch,
+    /// How many bytes of the file being copied are written. A full file
+    /// bar never means that the batch has finished.
+    File,
+}
+
+/// Progress for the transfer panel.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Progress {
     /// Text exactly as the Python app shows it, for example
@@ -146,6 +156,8 @@ pub struct Progress {
     pub label: String,
     /// Between 0 and 1.
     pub fraction: f64,
+    /// Whether `fraction` is the batch's or the current file's.
+    pub scope: ProgressScope,
 }
 
 /// `part / whole` as a [`Progress::fraction`], at most 1; 0 when `whole` is

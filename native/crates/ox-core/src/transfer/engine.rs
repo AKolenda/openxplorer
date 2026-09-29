@@ -22,7 +22,7 @@ use super::relisting::SourceFolders;
 use super::request::{destination_folder, distinct_items};
 use super::staged_copy::{ItemStaging, StagedCopy};
 use super::staging::{discard_stage, leftover_report};
-use super::types::{ConflictPolicy, Operation, Progress, TransferMode, TransferResult};
+use super::types::{ConflictPolicy, Operation, Progress, ProgressScope, TransferMode, TransferResult};
 
 /// Receives the progress of a run for the transfer panel.
 type ProgressCallback = Box<dyn FnMut(Progress) + Send>;
@@ -176,6 +176,7 @@ impl TransferEngine {
         (self.emit)(Progress {
             label: completed_label(state.result.done.len()),
             fraction: 1.0,
+            scope: ProgressScope::Batch,
         });
         state.result
     }
@@ -237,6 +238,7 @@ impl TransferEngine {
         (self.emit)(Progress {
             label: item_label(batch.mode(), &node.display_name(), index + 1, batch.total),
             fraction: batch.start_fraction(index),
+            scope: ProgressScope::Batch,
         });
         Ok(SelectedItem { node, kind })
     }

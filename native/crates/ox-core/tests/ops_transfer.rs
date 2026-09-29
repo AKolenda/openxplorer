@@ -18,7 +18,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use ox_core::ops::{find_conflicts, run_transfer, OperationContext, OpsError, TransferRequest, UndoRecord};
-use ox_core::transfer::{Cancellation, ConflictPolicy, Progress, TransferMode, MAX_ITEMS};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Progress, ProgressScope, TransferMode, MAX_ITEMS};
 
 use folders::Folders;
 use ops_support::{block_on, file_uri};
@@ -187,6 +187,7 @@ fn replace_reports_its_items_but_cannot_be_undone() {
     assert_eq!(fs::read(dst.join("a.txt")).unwrap(), b"new");
 }
 
+/// parity: OPS-020
 #[test]
 fn progress_is_reported_and_the_last_report_says_the_run_is_complete() {
     let folders = Folders::new();
@@ -213,7 +214,15 @@ fn progress_is_reported_and_the_last_report_says_the_run_is_complete() {
     let last = reports.last().expect("at least the final report");
     assert_eq!(last.label, "1 item(s) completed");
     assert!((last.fraction - 1.0).abs() < f64::EPSILON);
+    assert_eq!(last.scope, ProgressScope::Batch);
     assert_eq!(reports[0].label, "Copy: a.txt (1/1)");
+    assert_eq!(reports[0].scope, ProgressScope::Batch);
+    let file_reports: Vec<&Progress> = reports
+        .iter()
+        .filter(|report| report.label.starts_with("Copying a.txt"))
+        .collect();
+    assert!(!file_reports.is_empty(), "the file's bytes are reported");
+    assert!(file_reports.iter().all(|report| report.scope == ProgressScope::File));
 }
 
 /// parity: OPS-022

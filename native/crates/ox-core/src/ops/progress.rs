@@ -67,6 +67,7 @@ mod tests {
         Progress {
             label: String::from("Copying a"),
             fraction,
+            scope: crate::transfer::ProgressScope::File,
         }
     }
 
