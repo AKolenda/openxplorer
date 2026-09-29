@@ -100,6 +100,9 @@ pub(super) struct Tab {
     pub reveals_selection: bool,
     /// The vertical scroll position, restored when the tab is shown again.
     pub scroll: f64,
+    /// The URI of the item with keyboard focus, which gets it back when
+    /// the tab is shown again (TAB-057).
+    pub focused: Option<String>,
     /// A scroll position to restore once the listing finishes: a tab moved
     /// from another window keeps its place in its folder (TAB-039).
     pub scroll_after_listing: Option<f64>,
@@ -127,6 +130,7 @@ impl Tab {
             selected: Vec::new(),
             reveals_selection: false,
             scroll: 0.0,
+            focused: None,
             scroll_after_listing: None,
             listing: None,
             watch: None,
@@ -155,6 +159,7 @@ impl Tab {
     pub(super) fn forget_location_state(&mut self) {
         self.selected.clear();
         self.scroll = 0.0;
+        self.focused = None;
     }
 
     /// Stops the tab's listing and folder watch, as Sign out cancels the

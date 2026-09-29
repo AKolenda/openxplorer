@@ -25,6 +25,8 @@ struct SavedTabView {
     store: gio::ListStore,
     /// The URIs of the items it had selected.
     selected: Vec<String>,
+    /// The URI of the item that had keyboard focus.
+    focused: Option<String>,
     /// Its vertical scroll position.
     scroll: f64,
     /// It was opened in the background and has not been listed yet.
@@ -161,13 +163,16 @@ impl BrowserWindow {
         self.reset_typeahead();
     }
 
-    /// Remembers the active tab's selection and scroll position before
-    /// another tab is shown.
+    /// Remembers the active tab's selection, focused item and scroll
+    /// position before another tab is shown.
     pub(super) fn save_tab_view(&self) {
         self.save_selection();
-        let scroll = self.folder_pane().scroll_position();
+        let pane = self.folder_pane();
+        let scroll = pane.scroll_position();
+        let focused = pane.focused_position().and_then(|position| pane.model().item(position));
         if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
             tab.scroll = scroll;
+            tab.focused = focused.map(|item| item.entry().uri.clone());
         }
     }
 
@@ -203,9 +208,14 @@ impl BrowserWindow {
         self.render_navigation();
         self.update_content();
         self.update_details_pane();
-        self.folder_pane().restore_scroll_position(view.scroll);
+        let pane = self.folder_pane();
+        pane.restore_scroll_position(view.scroll);
         if had_focus {
-            self.folder_pane().focus_view();
+            pane.focus_view();
+            let focused = view.focused.as_deref().and_then(|uri| pane.model().position_of_uri(uri));
+            if let Some(position) = focused {
+                pane.focus_item_later(position);
+            }
         }
         if view.needs_listing {
             self.load_tab(id, LoadMode::Navigate);
@@ -223,6 +233,7 @@ impl BrowserWindow {
             changed_while_hidden,
             store: tab.store.clone(),
             selected: tab.selected.clone(),
+            focused: tab.focused.clone(),
             scroll: tab.scroll,
             needs_listing: tab.listing_state.needs_listing(),
         })

@@ -9,7 +9,9 @@ use gtk::subclass::prelude::*;
 use super::support::{click_at, Release};
 use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::window::address_bar::AddressMode;
-use crate::window::session::TabId;
+use crate::folder_view::item::FileItem;
+use crate::window::session::{TabId, TabPlacement};
+use ox_core::network::NetworkError;
 
 fn tab_ids(test: &TestWindow) -> Vec<TabId> {
     let session = test.window.imp().session.borrow();
@@ -122,10 +124,13 @@ fn switching_back_to_a_tab_restores_its_scroll_position() {
     test.window.search_box().entry().set_text("file");
     test.window.folder_model().select_only(0);
     let second_selection = test.selected_names();
+    pane.reveal(1);
+    wait_until("the second tab's focused item", || pane.focused_position() == Some(1));
     test.activate_tab(first);
     wait_until("the first tab's scroll position", || {
         (pane.scroll_position() - scrolled).abs() < 1.0
     });
+    wait_until("the first tab's focused item", || pane.focused_position() == Some(last));
     assert_eq!(test.window.search_box().entry().text().as_str(), "");
     assert!(
         test.selected_names().is_empty(),
@@ -137,6 +142,7 @@ fn switching_back_to_a_tab_restores_its_scroll_position() {
         second_selection,
         "each tab keeps its selection"
     );
+    wait_until("the second tab's focused item again", || pane.focused_position() == Some(1));
 }
 
 /// The tab widget at `index` of the strip.
@@ -332,8 +338,8 @@ fn many_tabs_keep_the_strip_within_seventy_percent_of_the_window() {
     assert!(width >= 100.0, "down to the narrowest tab");
 }
 
-/// A change to a background tab's folder shows when the tab comes back,
-/// with its selection kept.
+/// A change to a background tab's folder lists it again behind, so it is
+/// current when it comes back, with its selection kept.
 ///
 /// parity: TAB-056
 #[gtk::test]
@@ -348,10 +354,51 @@ fn a_background_tab_shows_changes_to_its_folder_and_keeps_its_selection() {
     test.wait_for_listing("the second tab");
 
     std::fs::write(fixture.root().join("Added later.txt"), b"new").expect("a new file");
+    wait_until("the background tab to list the new file", || {
+        let session = test.window.imp().session.borrow();
+        let tab = session.tab(first).expect("the first tab is open");
+        let mut items = tab.store.iter::<FileItem>().filter_map(Result::ok);
+        items.any(|item| item.entry().name == "Added later.txt")
+    });
+    assert_ne!(test.active_tab(), Some(first), "it changed behind");
     test.activate_tab(first);
 
-    wait_until("the new file", || {
-        test.names().iter().any(|name| name == "Added later.txt")
-    });
+    assert!(test.names().iter().any(|name| name == "Added later.txt"));
     assert_eq!(test.selected_names(), ["Notes 2.txt"]);
+}
+
+/// A change to a network folder in a background tab only marks the tab;
+/// it is listed again when shown, so no sign-in appears behind.
+///
+/// parity: TAB-056
+#[gtk::test]
+fn a_background_network_tab_is_listed_again_only_when_shown() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .network()
+        .answer_mounts_with(|| Err(NetworkError::NotAFolder));
+    test.window
+        .open_tab("smb://example.invalid/share", TabPlacement::Background)
+        .expect("an SMB share");
+    let share = tab_ids(&test)[1];
+    let tab_state = |test: &TestWindow| {
+        let session = test.window.imp().session.borrow();
+        let tab = session.tab(share).expect("the share's tab is open");
+        (tab.changed_while_hidden, tab.listing_state.is_listing())
+    };
+    {
+        // As if the share had been listed when it was last shown.
+        let mut session = test.window.imp().session.borrow_mut();
+        let tab = session.tab_mut(share).expect("the share's tab is open");
+        tab.listing_state.begin();
+        tab.listing_state.finish();
+    }
+
+    test.window.folder_changed(share);
+    let behind = tab_state(&test);
+    test.activate_tab(share);
+
+    assert_eq!(behind, (true, false), "marked, not listed");
+    assert_eq!(tab_state(&test), (false, true), "listed once shown");
 }
