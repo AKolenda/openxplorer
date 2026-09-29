@@ -59,7 +59,7 @@ pub use names::{new_copy_name, safe_label, validate_name, ItemKind, MAX_LABEL_CH
 pub use normalise::{
     file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
 };
-pub use parts::{split_location, LocationKind, LocationParts, REMOTE_SCHEMES};
+pub use parts::{canonical_remote_scheme, split_location, LocationKind, LocationParts, REMOTE_SCHEMES};
 pub use virtual_place::{
     is_virtual_location, normalise_navigation, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI, RECENT_URI,
     SETTINGS_URI, TRASH_URI,

@@ -18,6 +18,7 @@ use ox_core::location::{self, is_server_location, LocationContext};
 use ox_core::network::DiscoveredServer;
 use ox_core::places::{NetworkKind, NetworkLocation};
 
+use crate::dialogs::Protocol;
 use crate::icons::{self, Art, ArtImage, Connection, Icon};
 use crate::network::DiscoveryState;
 use crate::places::Places;
@@ -168,14 +169,8 @@ fn server_card(server: &DiscoveredServer, locations: &LocationContext) -> gtk::B
 
 /// The protocol a discovered server is reached with, as its card names it.
 fn protocol_name(uri: &str) -> &'static str {
-    match location::scheme(uri).as_deref() {
-        Some("sftp") => "SFTP",
-        Some("ftp") => "FTP",
-        Some("ftps") => "FTPS",
-        Some("dav" | "davs") => "WebDAV",
-        Some("nfs") => "NFS",
-        _ => "SMB",
-    }
+    let protocol = location::scheme(uri).and_then(|scheme| Protocol::from_scheme(&scheme));
+    protocol.unwrap_or(Protocol::Smb).short_name()
 }
 
 /// "Discovered servers" with their count, their cards, the notice while

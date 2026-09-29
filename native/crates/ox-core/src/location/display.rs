@@ -117,7 +117,8 @@ impl LocationContext {
 
     /// Text for the editable address bar and tooltips: a plain path for
     /// local folders, `\\server\share\...` for SMB, `Device / path` for
-    /// devices, `Recycle Bin / path` inside virtual folders, else the URI.
+    /// devices, `Recycle Bin / path` inside virtual folders, the URL with
+    /// its path readable for SFTP, FTP, WebDAV and NFS, else the URI.
     pub fn display_location(&self, uri: &str) -> String {
         if let Some(place) = VirtualPlace::from_uri(uri) {
             return place.title().to_string();
@@ -135,7 +136,13 @@ impl LocationContext {
             LocationKind::Local => path,
             LocationKind::Smb => format!("\\\\{}{}", parts.authority, path.replace('/', "\\")),
             LocationKind::Device => with_subpath(self.device_name(uri), path.trim_matches('/')),
-            LocationKind::Remote | LocationKind::Other => uri.to_string(),
+            LocationKind::Remote => format!(
+                "{}://{}{}",
+                parts.scheme,
+                parts.authority,
+                readable_url_path(&path)
+            ),
+            LocationKind::Other => uri.to_string(),
         }
     }
 
@@ -284,6 +291,21 @@ fn virtual_crumbs(folder: &VirtualFolder) -> Vec<Crumb> {
     crumbs
 }
 
+/// A decoded URL path that reads back as the same path when typed: only
+/// `%`, `#` and `?` stay escaped, as a URL would read them otherwise.
+fn readable_url_path(path: &str) -> String {
+    let mut readable = String::with_capacity(path.len());
+    for character in path.chars() {
+        match character {
+            '%' => readable.push_str("%25"),
+            '#' => readable.push_str("%23"),
+            '?' => readable.push_str("%3F"),
+            _ => readable.push(character),
+        }
+    }
+    readable
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,6 +339,19 @@ mod tests {
         assert_eq!(context.title_for("file:///"), "Local Disk");
         assert_eq!(context.title_for(PHONE_ROOT), "Pixel 7");
         assert_eq!(context.title_for("file:///tmp/a%20b"), "a b");
+    }
+
+    /// A remote folder's address shows its path decoded, as Dolphin shows
+    /// it, and reads back as the same folder.
+    ///
+    /// parity: NET-029
+    #[test]
+    fn remote_addresses_show_their_path_decoded() {
+        let context = context();
+        let uri = "sftp://anna@build/Q3%20plans/%C3%A9t%C3%A9%20%231";
+        let shown = context.display_location(uri);
+        assert_eq!(shown, "sftp://anna@build/Q3 plans/été %231");
+        assert_eq!(crate::location::normalise(&shown).as_deref(), Ok(uri));
     }
 
     #[test]

@@ -10,7 +10,7 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::{self, is_device_location, is_smb_location, parent_location, LocationContext};
+use ox_core::location::{self, is_device_location, is_server_location, parent_location, LocationContext};
 use ox_core::places::NetworkLocation;
 
 use crate::icons::{Art, Icon};
@@ -31,13 +31,14 @@ struct ActiveLocation {
 }
 
 /// The address-bar icon for a location (`address-icon` in
-/// `renderNavigation`): the page's glyph, the network glyph for SMB, a
-/// phone for devices, else the colour folder.
+/// `renderNavigation`): the page's glyph, the network glyph for SMB and
+/// the other network protocols, as their tabs show, a phone for devices,
+/// else the colour folder.
 fn address_icon(uri: &str) -> Icon {
     if let Some(page) = Page::from_uri(uri) {
         return page.icon();
     }
-    if is_smb_location(uri) {
+    if is_server_location(uri) {
         Icon::Organization
     } else if is_device_location(uri) {
         Icon::Phone

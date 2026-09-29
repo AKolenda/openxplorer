@@ -58,6 +58,25 @@ impl Protocol {
         }
     }
 
+    /// The protocol of URI scheme `scheme`, aliases such as `ssh`
+    /// included; `None` for a scheme that is not a network protocol.
+    pub(crate) fn from_scheme(scheme: &str) -> Option<Self> {
+        let scheme = ox_core::location::canonical_remote_scheme(scheme);
+        Self::ALL.into_iter().find(|protocol| protocol.scheme() == scheme)
+    }
+
+    /// The short name a server card shows, such as "SFTP".
+    pub(crate) fn short_name(self) -> &'static str {
+        match self {
+            Self::Smb => "SMB",
+            Self::Sftp => "SFTP",
+            Self::Ftp => "FTP",
+            Self::Ftps => "FTPS",
+            Self::WebDav | Self::WebDavs => "WebDAV",
+            Self::Nfs => "NFS",
+        }
+    }
+
     /// The URI scheme `GVfs` mounts.
     pub(crate) fn scheme(self) -> &'static str {
         match self {

@@ -13,10 +13,12 @@ use std::path::Path;
 
 use percent_encoding::percent_encode;
 
+mod remote;
+
+use remote::normalise_remote_url;
+
 use super::device_uri::DeviceUriMatch;
-use super::parts::{
-    canonical_remote_scheme, split_location, split_scheme, split_url, LocationKind, LocationParts,
-};
+use super::parts::{split_location, split_scheme, split_url, LocationKind, LocationParts};
 use super::text::{
     contains_python_space, has_control_character, normalise_posix_path, python_strip, quote_component,
     quote_path, unquote_lossy, unquote_without_controls, PYTHON_PATH_SAFE,
@@ -319,6 +321,17 @@ fn normalise_smb_url(parts: &LocationParts, decoded_path: &str) -> Result<String
 /// The canonical `host[:port]` of an SMB URL: the host lower-cased, an
 /// IPv6 host in brackets and an explicit port kept without leading zeros.
 fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
+    server_authority(
+        parts,
+        "Enter an SMB server name, for example smb://nas/Projects.",
+        "Invalid SMB port.",
+    )
+}
+
+/// The canonical `host[:port]` of a server URL, as [`smb_authority`];
+/// `no_host` and `bad_port` are the messages for a missing host and for
+/// a port that is not a number.
+fn server_authority(parts: &LocationParts, no_host: &str, bad_port: &str) -> Result<String, LocationError> {
     // Safety rule (`core.py`: `'%' in u.netloc or CONTROL.search(u.netloc)`):
     // an escaped server name could hide credentials (`u%40nas` is `u@nas`)
     // or a control character from the checks on the decoded address.
@@ -328,11 +341,9 @@ fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
         ));
     }
     let Some(hostname) = parts.hostname().filter(|host| !contains_python_space(host)) else {
-        return Err(LocationError::new(
-            "Enter an SMB server name, for example smb://nas/Projects.",
-        ));
+        return Err(LocationError::new(no_host));
     };
-    let port = parts.port()?;
+    let port = parts.port().map_err(|_| LocationError::new(bad_port))?;
     let host = if hostname.contains(':') {
         format!("[{hostname}]")
     } else {
@@ -343,60 +354,6 @@ fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
         None => host,
     };
     Ok(authority)
-}
-
-/// An SFTP, FTP, WebDAV or NFS URL (NET-029): the scheme canonical (`ssh`
-/// is `sftp`, `webdav` is `dav`), the host lower-cased, the port kept, and
-/// the path canonical as for SMB.
-///
-/// Unlike SMB, a user name may name the account (`sftp://anna@build/`), as
-/// Dolphin, Files and `GVfs` expect for SSH: it is not a secret. A password
-/// never enters the address (SAFE-010), and NFS takes no user at all.
-fn normalise_remote_url(address: &str) -> Result<String, LocationError> {
-    let parts = split_url(address)?;
-    let scheme = canonical_remote_scheme(&parts.scheme);
-    if !parts.query.is_empty() || !parts.fragment.is_empty() {
-        return Err(LocationError::query_or_fragment());
-    }
-    let user = remote_user(&parts, scheme)?;
-    let decoded = unquote_without_controls(&parts.path)?;
-    let server = LocationParts {
-        authority: after_user(&parts.authority).to_owned(),
-        ..parts.clone()
-    };
-    let authority = smb_authority(&server)?;
-    let path = absolute_normal_path(&decoded);
-    let user = user.map(|user| format!("{user}@")).unwrap_or_default();
-    Ok(format!("{scheme}://{user}{authority}{}", quote_path(&path)))
-}
-
-/// The user name of a remote URL, if any.
-///
-/// # Errors
-///
-/// The sign-in message for a password, an escaped or empty user name, or
-/// any user name on NFS.
-fn remote_user<'a>(parts: &'a LocationParts, scheme: &str) -> Result<Option<&'a str>, LocationError> {
-    let Some((user, _)) = parts.authority.rsplit_once('@') else {
-        return Ok(None);
-    };
-    let is_plain_name = !user.is_empty()
-        && !user.contains([':', '%', '@'])
-        && !has_control_character(user)
-        && !contains_python_space(user);
-    // Safety rule (SAFE-010): a password never reaches settings.json, a
-    // tab title or the clipboard.
-    if !is_plain_name || scheme == "nfs" {
-        return Err(LocationError::new(
-            "Do not put a username or password in the address. Use the OpenXplorer sign-in dialog.",
-        ));
-    }
-    Ok(Some(user))
-}
-
-/// The authority without its `user@`.
-fn after_user(authority: &str) -> &str {
-    authority.rsplit_once('@').map_or(authority, |(_, host)| host)
 }
 
 /// Ports `_normalise_device_location`: keeps the device authority as
@@ -539,55 +496,6 @@ mod tests {
         assert_eq!(canonical("smb://nas/a?").as_deref(), Ok("smb://nas/a"));
         assert!(canonical("smb://nas:x/a").is_err());
         assert!(canonical("smb://my nas/a").is_err());
-    }
-
-    /// Dolphin's other network protocols are typed and browsed like SMB.
-    ///
-    /// parity: NET-029, NET-030, NET-031, NET-032, NET-033
-    #[test]
-    fn sftp_ftp_webdav_and_nfs_urls_are_canonical() {
-        let cases = [
-            ("SFTP://Build-Host/home/anna/", "sftp://build-host/home/anna"),
-            ("ssh://anna@build:2222/srv/../etc", "sftp://anna@build:2222/etc"),
-            ("ftp://mirror.example", "ftp://mirror.example/"),
-            (
-                "ftps://files.example/pub/Q3 %231",
-                "ftps://files.example/pub/Q3%20%231",
-            ),
-            ("webdav://cloud/remote.php/dav", "dav://cloud/remote.php/dav"),
-            ("davs://anna@cloud.example/", "davs://anna@cloud.example/"),
-            (
-                "webdavs://cloud.example:8443/files",
-                "davs://cloud.example:8443/files",
-            ),
-            ("nfs://NAS/export/media", "nfs://nas/export/media"),
-        ];
-        for (typed, expected) in cases {
-            assert_eq!(canonical(typed).as_deref(), Ok(expected), "{typed}");
-        }
-        assert_eq!(
-            resolve("Q3 plans", "sftp://build/srv").as_deref(),
-            Ok("sftp://build/srv/Q3%20plans")
-        );
-        // Safety rule (SAFE-010): a password never enters an address.
-        for bad in [
-            "sftp://anna:secret@build/",
-            "ftp://@host/",
-            "dav://a%40b@cloud/",
-            "nfs://anna@nas/export",
-            "sftp:///home",
-            "ftp://host/?x",
-        ] {
-            assert!(canonical(bad).is_err(), "{bad} should be rejected");
-        }
-        assert_eq!(
-            require_share("sftp://build").as_deref(),
-            Ok("sftp://build/"),
-            "a server's root is a folder"
-        );
-        assert!(require_share("nfs://nas/").is_err(), "NFS needs an export");
-        assert!(require_item_uri("sftp://build/").is_err());
-        assert!(require_item_uri("sftp://build/a.txt").is_ok());
     }
 
     /// parity: NAV-034
