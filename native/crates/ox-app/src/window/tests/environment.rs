@@ -232,14 +232,15 @@ fn the_details_pane_follows_the_pointer_and_shows_the_chosen_fields() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let pane = test.window.details_pane();
-    let menu = pane.show_options_menu(1.0, 1.0);
     for label in ["Show the item under the pointer", "Size"] {
-        let check = descendants::<gtk::CheckButton>(&menu)
-            .into_iter()
-            .find(|check| check.label().as_deref() == Some(label))
-            .unwrap_or_else(|| panic!("a {label} choice"));
-        check.set_active(!check.is_active());
+        let menu = pane.show_options_menu(1.0, 1.0);
+        assert!(menu.checked_labels().contains(&"Type".to_owned()));
+        menu.row(label).emit_activate();
     }
+    let menu = pane.show_options_menu(1.0, 1.0);
+    let checked = menu.checked_labels();
+    assert!(checked.contains(&"Show the item under the pointer".to_owned()));
+    assert!(!checked.contains(&"Size".to_owned()));
     menu.popdown();
 
     let view = test.window.folder_pane().view_widget();

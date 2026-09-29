@@ -2,85 +2,91 @@
 //! The details pane's context menu (PROP-010), as Dolphin's Information
 //! panel offers it: follow the item under the pointer, choose the fields
 //! shown, condense dates, and let audio and video start by themselves.
-//! Every change is saved at once and redraws the pane.
+//! It is the app's usual menu with check marks; each choice runs
+//! `win.details-pane-option` with its name, is saved at once and redraws
+//! the pane.
 
 use gtk::prelude::*;
-use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::settings::DetailsPaneOptions;
 
 use super::DetailsPane;
+use crate::icons::Icon;
+use crate::window::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
+use crate::window::window_action::WindowAction;
 
-/// The fields the menu can turn off, in the order the pane shows them.
-pub(super) const FIELDS: [&str; 8] = [
-    "Type",
-    "Size",
-    "Modified",
-    "Location",
-    "Dimensions",
-    "Length",
-    "Items",
-    "Storage",
+/// The fields the menu can turn off, in the order the pane shows them,
+/// with their glyphs.
+pub(super) const FIELDS: [(&str, Icon); 8] = [
+    ("Type", Icon::Document),
+    ("Size", Icon::HardDrive),
+    ("Modified", Icon::Clock),
+    ("Location", Icon::Folder),
+    ("Dimensions", Icon::Image),
+    ("Length", Icon::Video),
+    ("Items", Icon::TextBulletList),
+    ("Storage", Icon::HardDrive),
 ];
 
-/// One choice of the menu: its label and how it reads and changes the
-/// options.
-struct Choice {
-    label: String,
-    is_on: fn(&DetailsPaneOptions, &str) -> bool,
-    set: fn(&mut DetailsPaneOptions, &str, bool),
-    /// The field a field choice is about; empty for the others.
-    field: &'static str,
-}
+/// The option names of the choices that are not fields.
+const FOLLOW_HOVER: &str = "follow-hover";
+const CONDENSED_DATES: &str = "condensed-dates";
+const AUTO_PLAY: &str = "auto-play";
 
-impl Choice {
-    fn flag(
-        label: &str,
-        is_on: fn(&DetailsPaneOptions, &str) -> bool,
-        set: fn(&mut DetailsPaneOptions, &str, bool),
-    ) -> Self {
-        Self {
-            label: label.to_owned(),
-            is_on,
-            set,
-            field: "",
+/// `options` with the choice `name` (an option name or a field) switched.
+fn toggled(mut options: DetailsPaneOptions, name: &str) -> DetailsPaneOptions {
+    match name {
+        FOLLOW_HOVER => options.follow_hover = !options.follow_hover,
+        CONDENSED_DATES => options.condensed_dates = !options.condensed_dates,
+        AUTO_PLAY => options.auto_play = !options.auto_play,
+        field => {
+            let shown = options.shows(field);
+            options.hidden_fields.retain(|hidden| hidden != field);
+            if shown {
+                options.hidden_fields.push(field.to_owned());
+            }
         }
     }
-
-    fn field(field: &'static str) -> Self {
-        Self {
-            label: field.to_owned(),
-            is_on: |options, field| options.shows(field),
-            set: |options, field, shown| {
-                options.hidden_fields.retain(|hidden| hidden != field);
-                if !shown {
-                    options.hidden_fields.push(field.to_owned());
-                }
-            },
-            field,
-        }
-    }
+    options
 }
 
-/// Every choice, top to bottom.
-fn choices() -> Vec<Choice> {
-    let mut choices = vec![Choice::flag(
-        "Show the item under the pointer",
-        |options, _| options.follow_hover,
-        |options, _, on| options.follow_hover = on,
-    )];
-    choices.extend(FIELDS.into_iter().map(Choice::field));
-    choices.push(Choice::flag(
+/// A checkable item for the choice `name`.
+fn choice(label: &str, glyph: Icon, name: &str, is_on: bool) -> MenuEntry {
+    let item = MenuItem::with_text_target(label, glyph, WindowAction::DetailsPaneOption, name);
+    MenuEntry::Item(MenuItem {
+        check: ItemCheck::Fixed(is_on),
+        ..item
+    })
+}
+
+/// The menu's entries for `options`, top to bottom.
+fn entries(options: &DetailsPaneOptions) -> Vec<MenuEntry> {
+    let mut entries = vec![
+        choice(
+            "Show the item under the pointer",
+            Icon::Eye,
+            FOLLOW_HOVER,
+            options.follow_hover,
+        ),
+        MenuEntry::Divider,
+    ];
+    for (field, glyph) in FIELDS {
+        entries.push(choice(field, glyph, field, options.shows(field)));
+    }
+    entries.push(MenuEntry::Divider);
+    entries.push(choice(
         "Condensed dates",
-        |options, _| options.condensed_dates,
-        |options, _, on| options.condensed_dates = on,
+        Icon::Clock,
+        CONDENSED_DATES,
+        options.condensed_dates,
     ));
-    choices.push(Choice::flag(
+    entries.push(choice(
         "Play audio and video automatically",
-        |options, _| options.auto_play,
-        |options, _, on| options.auto_play = on,
+        Icon::MusicNote,
+        AUTO_PLAY,
+        options.auto_play,
     ));
-    choices
+    entries
 }
 
 impl DetailsPane {
@@ -99,30 +105,8 @@ impl DetailsPane {
     }
 
     /// The menu as a popover at (`x`, `y`).
-    pub(in crate::window) fn show_options_menu(&self, x: f64, y: f64) -> gtk::Popover {
-        let column = gtk::Box::new(gtk::Orientation::Vertical, 2);
-        let heading = gtk::Label::builder()
-            .label("Details pane")
-            .xalign(0.0)
-            .css_classes(["detail-key"])
-            .build();
-        column.append(&heading);
-        let options = self.imp().options.borrow().clone();
-        for choice in choices() {
-            let check = gtk::CheckButton::with_label(&choice.label);
-            check.set_active((choice.is_on)(&options, choice.field));
-            let pane = self.downgrade();
-            check.connect_toggled(move |check| {
-                let Some(pane) = pane.upgrade() else {
-                    return;
-                };
-                let mut options = pane.imp().options.borrow().clone();
-                (choice.set)(&mut options, choice.field, check.is_active());
-                pane.change_options(options);
-            });
-            column.append(&check);
-        }
-        let popover = gtk::Popover::builder().child(&column).has_arrow(false).build();
+    pub(in crate::window) fn show_options_menu(&self, x: f64, y: f64) -> MenuPopover {
+        let popover = MenuPopover::new(entries(&self.options()));
         popover.set_parent(self);
         #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in i32")]
         popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
@@ -132,5 +116,11 @@ impl DetailsPane {
         });
         popover.popup();
         popover
+    }
+
+    /// Switches the menu's choice `name`, as `win.details-pane-option`
+    /// asks.
+    pub(in crate::window) fn toggle_option(&self, name: &str) {
+        self.change_options(toggled(self.options(), name));
     }
 }

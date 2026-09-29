@@ -9,7 +9,9 @@ use gtk::glib;
 use gtk::prelude::*;
 use ox_core::settings::DetailsPaneOptions;
 
+use super::actions::text_action;
 use super::preferences::Preference;
+use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 impl BrowserWindow {
@@ -46,6 +48,14 @@ impl BrowserWindow {
         if pane.set_hovered(item) {
             self.update_details_pane();
         }
+    }
+
+    /// Adds `win.details-pane-option`, which the pane's menu runs.
+    pub(super) fn install_details_pane_actions(&self) {
+        let option = text_action(WindowAction::DetailsPaneOption, |window, name| {
+            window.details_pane().toggle_option(name);
+        });
+        self.add_action_entries([option]);
     }
 
     /// Saves the options chosen in the details pane's menu and redraws the

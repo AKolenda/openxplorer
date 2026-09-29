@@ -80,6 +80,9 @@ pub(crate) enum WindowAction {
     Hidden,
     /// Shows or hides the details pane.
     DetailsPane,
+    /// Switches the details pane option or field named by the string
+    /// target (the pane's menu).
+    DetailsPaneOption,
     /// The column the details view sorts by.
     Sort,
     /// Whether the details view sorts ascending or descending.
@@ -296,6 +299,7 @@ impl WindowAction {
             WindowAction::View => "view",
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
+            WindowAction::DetailsPaneOption => "details-pane-option",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
             WindowAction::Theme => "theme",
