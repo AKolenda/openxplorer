@@ -4,10 +4,15 @@
 //! picture in place of its art in the details and icon views. The lookup
 //! runs when a cell is bound, at low priority, like a thumbnail lookup,
 //! and a picture that arrives after the cell shows another item is
-//! dropped.
+//! dropped. Pictures are decoded once at icon size and kept, so scrolling
+//! back to an item does not decode its picture again.
+
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::gdk_pixbuf::Pixbuf;
 use gtk::{gdk, gio, glib};
 
 use super::FileCell;
@@ -17,6 +22,32 @@ use crate::folder_view::item::FileItem;
 pub(crate) const CUSTOM_ICON: &str = "metadata::custom-icon";
 /// Pictures larger than this are not decoded for an icon.
 const MAX_ICON_BYTES: u64 = 16 * 1024 * 1024;
+/// The size a picture is decoded at: the largest icon the views draw.
+const ICON_PIXELS: i32 = 256;
+/// How many decoded pictures are kept.
+const MAX_CACHED_ICONS: usize = 256;
+
+thread_local! {
+    /// Decoded pictures by their URI.
+    static DECODED: RefCell<HashMap<String, gdk::Texture>> = RefCell::new(HashMap::new());
+}
+
+/// The decoded picture at `icon_uri`, decoding it off the main thread the
+/// first time.
+async fn icon_texture(icon_uri: String) -> Option<gdk::Texture> {
+    if let Some(texture) = DECODED.with_borrow(|decoded| decoded.get(&icon_uri).cloned()) {
+        return Some(texture);
+    }
+    let uri = icon_uri.clone();
+    let texture = gio::spawn_blocking(move || decode(&uri)).await.ok().flatten()?;
+    DECODED.with_borrow_mut(|decoded| {
+        if decoded.len() >= MAX_CACHED_ICONS {
+            decoded.clear();
+        }
+        decoded.insert(icon_uri, texture.clone());
+    });
+    Some(texture)
+}
 
 impl FileCell {
     /// Shows the art again, then looks up `item`'s custom icon.
@@ -42,11 +73,7 @@ impl FileCell {
             if icon_uri.is_empty() {
                 return;
             }
-            let icon_uri = icon_uri.to_string();
-            let texture = gio::spawn_blocking(move || decode(&icon_uri))
-                .await
-                .ok()
-                .flatten();
+            let texture = icon_texture(icon_uri.to_string()).await;
             let (Some(cell), Some(texture)) = (cell.upgrade(), texture) else {
                 return;
             };
@@ -66,12 +93,14 @@ impl FileCell {
     }
 }
 
-/// The picture at `uri`, if it is a local image of a sensible size.
+/// The picture at `uri` at icon size, if it is a local image of a
+/// sensible size.
 fn decode(uri: &str) -> Option<gdk::Texture> {
-    let file = gio::File::for_uri(uri);
-    let path = file.path()?;
+    let path = gio::File::for_uri(uri).path()?;
     let size = std::fs::metadata(&path).ok()?.len();
-    (size <= MAX_ICON_BYTES)
-        .then(|| gdk::Texture::from_file(&file).ok())
-        .flatten()
+    if size > MAX_ICON_BYTES {
+        return None;
+    }
+    let pixbuf = Pixbuf::from_file_at_scale(&path, ICON_PIXELS, ICON_PIXELS, true).ok()?;
+    Some(gdk::Texture::for_pixbuf(&pixbuf))
 }
