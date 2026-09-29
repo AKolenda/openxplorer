@@ -151,22 +151,22 @@ fn an_executable_script_opens_in_its_editor_and_is_never_run() {
     };
     assert_eq!(prepared.launcher, expected_launcher);
     assert_eq!(prepared.target, OpenTarget::LocalPath(script));
-    let content_type = prepared.entry.content_type.as_deref();
-    // shared-mime-info names shell scripts application/x-shellscript; some
-    // distributions ship the older alias text/x-shellscript.
+    let content_type = prepared.entry.content_type.clone().unwrap_or_default();
+    // shared-mime-info 2.5.1 and later name shell scripts text/x-shellscript
+    // and keep application/x-shellscript as its alias; older releases, as on
+    // Ubuntu 24.04, have it the other way round.
     assert!(
         matches!(
-            content_type,
-            Some("application/x-shellscript" | "text/x-shellscript")
+            content_type.as_str(),
+            "application/x-shellscript" | "text/x-shellscript"
         ),
         "{content_type:?}"
     );
+    // The lookup asks for the detected type as it is: GIO resolves either
+    // name to the applications registered under both.
     let asked = applications.asked_types();
     assert!(!asked.is_empty());
-    assert!(
-        asked.iter().all(|asked| asked == "application/x-shellscript"),
-        "{asked:?}"
-    );
+    assert!(asked.iter().all(|asked| *asked == content_type), "{asked:?}");
     assert!(!ran_marker.exists());
 }
 
