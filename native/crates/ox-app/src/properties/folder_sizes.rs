@@ -50,14 +50,14 @@ impl FolderSizeState {
         }
     }
 
-    /// The Contains text of Properties: `12 files, 3 folders`, with `≥`
+    /// The Contains text of Properties: `12 files, 1 folder`, with `≥`
     /// for a lower bound, `Scanning…` or `Unavailable` (PROP-004).
     pub(crate) fn contains_text(&self) -> String {
         let size = match self {
             FolderSizeState::Unavailable(_) => return UNAVAILABLE.to_owned(),
             FolderSizeState::Measured(size) => size,
         };
-        let counts = format!("{} files, {} folders", size.files, size.folders);
+        let counts = counts_text(size.files, size.folders);
         match size.status {
             ScanStatus::Scanning => SCANNING.to_owned(),
             ScanStatus::Complete => counts,
@@ -153,6 +153,22 @@ impl FolderSizes {
     pub(crate) fn remove(&mut self, uri: &str) {
         self.measured.remove(size_key(uri));
     }
+}
+
+/// How many files and folders: `3 files, 1 folder`, as the Contains row
+/// of every Properties dialog says it.
+pub(super) fn counts_text(files: u64, folders: u64) -> String {
+    let files = if files == 1 {
+        "1 file".to_owned()
+    } else {
+        format!("{files} files")
+    };
+    let folders = if folders == 1 {
+        "1 folder".to_owned()
+    } else {
+        format!("{folders} folders")
+    };
+    format!("{files}, {folders}")
 }
 
 #[cfg(test)]

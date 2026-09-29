@@ -16,6 +16,7 @@ use ox_core::permissions::Account;
 use ox_core::sizes::{scan_folder_size_in_background, ScanStatus};
 use ox_core::transfer::Cancellation;
 
+use super::folder_sizes::counts_text;
 use super::metadata::{read_properties, ItemProperties};
 use super::permissions_editor::{permissions_editor, EditedItems};
 use super::view::{can_edit_permissions, PropertiesContext};
@@ -152,21 +153,6 @@ fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext
     );
     panel.append(grid.widget());
     SizeRows { size, contains }
-}
-
-/// `3 files, 2 folders`.
-fn counts_text(files: u64, folders: u64) -> String {
-    let files = if files == 1 {
-        "1 file".to_owned()
-    } else {
-        format!("{files} files")
-    };
-    let folders = if folders == 1 {
-        "1 folder".to_owned()
-    } else {
-        format!("{folders} folders")
-    };
-    format!("{files}, {folders}")
 }
 
 /// The items' type when they share one, else "Multiple types".
