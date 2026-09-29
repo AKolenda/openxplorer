@@ -1540,7 +1540,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "DolphinTabBar::mouseDoubleClickEvent"
 native = "done"
-native_note = "A primary double-click on a tab opens a new tab at its location in front (select_on_click in native/crates/ox-app/src/window/tab_strip.rs). A double-click on the empty title bar still maximizes (Explorer wins there). Test: native/crates/ox-app/src/window/tests/tab_commands.rs (double_clicking_a_tab_opens_a_copy_in_front)."
+native_note = "A primary double-click on a tab opens a new tab at its location in front (copy_on_double_click in native/crates/ox-app/src/window/tab_strip.rs): the strip counts the clicks, so the tabs being built anew after the first click do not reset the count, and it claims the second press, so the title bar does not maximize the window. A double-click on the empty title bar still maximizes (Explorer wins there). Test: native/crates/ox-app/src/window/tests/tab_commands.rs (double_clicking_a_tab_opens_a_copy_in_front)."
 
 [[feature]]
 id = "TAB-015"
@@ -2526,7 +2526,7 @@ python_tests = [
 bridge = ["chrome", "window"]
 gnome = "Gtk.WindowHandle / HeaderBar honour org.gnome.desktop.wm.preferences action-double-click-titlebar and action-middle-click-titlebar; the Python app hard-codes toggle-maximize.; gtk_window_begin_move_drag (client-side decorations)"
 native = "done"
-native_note = "The whole title bar is a GtkWindowHandle with the hexpanding .title-drag area right of the tabs, so the compositor moves the window on a drag and the desktop's titlebar actions (double-click maximize, middle and right-click menu) apply; tabs and buttons claim their own clicks. Test: native/crates/ox-app/src/window/title_bar.rs (the_blank_title_bar_is_the_window_handle)."
+native_note = "The whole title bar is a GtkWindowHandle with the hexpanding .title-drag area right of the tabs, so the compositor moves the window on a drag and the desktop's titlebar actions (double-click maximize, middle and right-click menu) apply; buttons claim their own clicks, and the tab strip claims a double-click on a tab (TAB-014), so it opens a copy of the tab instead of maximizing. Test: native/crates/ox-app/src/window/title_bar.rs (the_blank_title_bar_is_the_window_handle)."
 
 [[feature]]
 id = "TAB-049"
@@ -2656,7 +2656,7 @@ bridge = ["preferences"]
 dolphin = "KMainWindow autosaved window geometry"
 gnome = "Persist gtk_window_get_default_size and is_maximized (Nautilus stores them in org.gnome.nautilus.window-state)"
 native = "done"
-native_note = "A window saves its unmaximized size and maximized state (preferences.windowSize, which the Python app ignores) 0.8 s after the user resizes, maximizes or restores it, and when it closes; new windows open at that size, maximized when it was, else at 1320 × 810. Sizes below the 670 × 470 minimum are never saved or used. Snapshot windows neither use nor save it (native/crates/ox-app/src/window/window_size.rs, ox-core settings/preferences.rs). Tests: native/crates/ox-app/src/application/state.rs (a_new_window_opens_at_the_last_windows_size), native/crates/ox-core/src/settings/preferences.rs (the_window_size_is_kept_only_within_the_window_limits)."
+native_note = "A window saves its unmaximized size and maximized state (preferences.windowSize, which the Python app ignores) 0.8 s after the user resizes, maximizes or restores it, and when it closes; new windows open at that size, maximized when it was, else at 1320 × 810. A size below the 670 × 470 minimum is saved as the minimum. Every browser window opens through BrowserWindow::present_as_new_window: Ctrl+N, --new-window, Open in new window, Move tab to new window and tab tear-out; snapshot windows neither use nor save it (native/crates/ox-app/src/window/window_size.rs, ox-core settings/preferences.rs). Open in new window is refused like Ctrl+N while an update restart is pending. Tests: native/crates/ox-app/src/application/state.rs (a_new_window_opens_at_the_last_windows_size), native/crates/ox-app/src/window/window_size.rs (a_new_window_opens_maximized_when_the_last_one_was), native/crates/ox-core/src/settings/preferences.rs (the_window_size_is_kept_only_within_the_window_limits)."
 
 [[feature]]
 id = "TAB-055"

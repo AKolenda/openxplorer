@@ -64,7 +64,7 @@ impl TestWindow {
 /// # Panics
 ///
 /// When `widget` has none.
-fn click_gesture(widget: &impl IsA<gtk::Widget>, button: u32) -> gtk::GestureClick {
+pub(super) fn click_gesture(widget: &impl IsA<gtk::Widget>, button: u32) -> gtk::GestureClick {
     let controllers = widget.observe_controllers();
     let gesture = controllers
         .iter::<glib::Object>()

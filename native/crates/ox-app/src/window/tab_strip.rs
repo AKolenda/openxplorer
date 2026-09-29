@@ -7,9 +7,10 @@
 //! ([`TabLayout`](super::tab_layout::TabLayout)), so opening many tabs
 //! never widens the window. The whole tab is the click target, as in
 //! app.js: it is one focusable widget announced as a tab of the "Folder
-//! tabs" list with its selected state; a click or Enter shows it and a
-//! middle-click closes it; a right-click opens the tab's menu
-//! ([`super::tab_menu`]). The close button inside claims its own clicks.
+//! tabs" list with its selected state; a click or Enter shows it, a
+//! double-click opens a copy of it and a middle-click closes it; a
+//! right-click opens the tab's menu ([`super::tab_menu`]). The close button
+//! inside claims its own clicks.
 //!
 //! [`TabStrip`] is a widget subclass whose scroller and tab list are the
 //! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
@@ -126,6 +127,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             gestures::scroll_sideways_with_wheel(&self.scroller);
+            self.obj().add_controller(super::copy_on_double_click());
             let menu = MenuPopover::new(Vec::new());
             menu.set_offset(0, 0);
             menu.set_parent(&*self.obj());
@@ -273,7 +275,7 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
     }
     widget.append(&close_button(tab));
     let id = tab.id.to_variant();
-    widget.add_controller(select_on_click(id.clone(), tab.uri.to_variant()));
+    widget.add_controller(select_on_click(id.clone()));
     widget.add_controller(select_on_enter(id.clone()));
     widget.add_controller(gestures::middle_click(move |gesture, _, _| {
         run_on(gesture.widget(), WindowAction::CloseTabById, &id);
@@ -334,17 +336,38 @@ fn run_on(widget: Option<gtk::Widget>, action: WindowAction, id: &glib::Variant)
 /// A primary click anywhere on the tab shows it, on release as `click` in
 /// app.js. Showing a tab draws the strip anew, which on the press would
 /// cancel a drag of the tab before it starts; a drag cancels the click, so
-/// a dragged tab is not shown (TAB-004). A double-click opens a copy of
-/// the tab, at `uri`, in front, as in Dolphin (TAB-014).
-fn select_on_click(id: glib::Variant, uri: glib::Variant) -> gtk::GestureClick {
+/// a dragged tab is not shown (TAB-004).
+fn select_on_click(id: glib::Variant) -> gtk::GestureClick {
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_PRIMARY);
-    click.connect_released(move |gesture, presses, _, _| {
-        if presses == 2 {
-            run_on(gesture.widget(), WindowAction::OpenTab, &uri);
-        } else {
-            run_on(gesture.widget(), WindowAction::SelectTab, &id);
+    click.connect_released(move |gesture, _, _, _| {
+        run_on(gesture.widget(), WindowAction::SelectTab, &id);
+    });
+    click
+}
+
+/// A double-click on a tab opens a copy of it in front, as in Dolphin
+/// (TAB-014). The strip counts the clicks, not the tab: the first click
+/// shows the tab, which builds the tabs anew, so the second press lands on
+/// a new tab widget. Claiming the second press keeps it from the title
+/// bar, whose double-click maximizes the window, and from the tab's own
+/// click. The close button claims its own presses, so a double-click on it
+/// never reaches the strip.
+fn copy_on_double_click() -> gtk::GestureClick {
+    let click = gtk::GestureClick::new();
+    click.set_button(gdk::BUTTON_PRIMARY);
+    click.connect_pressed(|gesture, presses, x, y| {
+        if presses != 2 {
+            return;
         }
+        let Some(strip) = gesture.widget().and_downcast::<TabStrip>() else {
+            return;
+        };
+        let Some(tab) = strip.tab_at(x, y) else {
+            return;
+        };
+        gesture.set_state(gtk::EventSequenceState::Claimed);
+        WindowAction::OpenTab.activate_from(&strip, Some(&tab.uri.to_variant()));
     });
     click
 }

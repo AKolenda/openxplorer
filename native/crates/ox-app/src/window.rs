@@ -247,6 +247,13 @@ impl BrowserWindow {
         self.folder_pane().model()
     }
 
+    /// The tab in front as a tab action's target, for tests.
+    #[cfg(test)]
+    pub(crate) fn active_tab_target(&self) -> Option<glib::Variant> {
+        let active = self.imp().session.borrow().active_id();
+        active.map(session::TabId::to_variant)
+    }
+
     /// Shows a message in the window's toast: a refused command, a
     /// failure, or a recoverable startup or integration problem.
     pub(crate) fn show_message(&self, message: &str) {

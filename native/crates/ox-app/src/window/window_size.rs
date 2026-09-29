@@ -5,15 +5,17 @@
 //! `desktop/winspace.py`); Dolphin and Nautilus remember the size and the
 //! maximized state, and so does this. A window saves its size a moment
 //! after the user stops resizing it, or maximizes or restores it, and when
-//! it closes; the size saved is the one it has when not maximized, and
-//! within the window's minimum of 670 × 470.
+//! it closes; the size saved is the one it has when not maximized, kept
+//! within the 670 × 470 minimum the settings accept. Every browser window
+//! opens through [`BrowserWindow::present_as_new_window`]; snapshot
+//! windows set their own size and do not save it.
 
 use std::time::Duration;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::settings::WindowSize;
+use ox_core::settings::{WindowSize, WINDOW_HEIGHTS, WINDOW_WIDTHS};
 
 use super::preferences::Preference;
 use super::BrowserWindow;
@@ -29,8 +31,16 @@ const DEFAULT_SIZE: WindowSize = WindowSize {
 };
 
 impl BrowserWindow {
+    /// Shows a new window at the saved size and saves its size from now
+    /// on.
+    pub(crate) fn present_as_new_window(&self) {
+        self.open_at_saved_size();
+        self.present();
+        self.remember_size();
+    }
+
     /// Gives the window the saved size, before it is shown.
-    pub(crate) fn open_at_saved_size(&self) {
+    fn open_at_saved_size(&self) {
         let Some(size) = self.context().settings_data().preferences.window_size else {
             return;
         };
@@ -44,7 +54,7 @@ impl BrowserWindow {
 
     /// Saves the window's size whenever the user changes it, once it is
     /// shown.
-    pub(crate) fn remember_size(&self) {
+    fn remember_size(&self) {
         for property in ["default-width", "default-height", "maximized"] {
             self.connect_notify_local(Some(property), |window, _| window.schedule_size_save());
         }
@@ -83,14 +93,51 @@ impl BrowserWindow {
         let (Ok(width), Ok(height)) = (u32::try_from(width), u32::try_from(height)) else {
             return;
         };
+        // A window narrower than the minimum saves the minimum rather than
+        // nothing, so the next window does not open at an older size.
         let size = WindowSize {
-            width,
-            height,
+            width: width.clamp(*WINDOW_WIDTHS.start(), *WINDOW_WIDTHS.end()),
+            height: height.clamp(*WINDOW_HEIGHTS.start(), *WINDOW_HEIGHTS.end()),
             maximized: self.is_maximized(),
         };
         let saved = self.context().settings_data().preferences.window_size;
         if saved.unwrap_or(DEFAULT_SIZE) != size {
             self.save_preference(Preference::WindowSize(size));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::harness::{application, settle, wait_until, Fixture, TestWindow};
+
+    /// A new window opens maximized when the last one was.
+    ///
+    /// parity: TAB-054
+    #[gtk::test]
+    fn a_new_window_opens_maximized_when_the_last_one_was() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let saved = WindowSize {
+            width: 900,
+            height: 640,
+            maximized: true,
+        };
+        test.window.save_preference(Preference::WindowSize(saved));
+        wait_until("the size to be saved", || {
+            test.context.settings_data().preferences.window_size == Some(saved)
+        });
+
+        let window = BrowserWindow::new(&application(), &test.context);
+        window.add_tab(&fixture.uri()).expect("valid folder");
+        window.present_as_new_window();
+        let maximized = window.is_maximized();
+        let size = window.default_size();
+        window.close();
+        settle();
+
+        assert!(maximized);
+        assert_eq!(size, (900, 640), "the size it restores to");
     }
 }

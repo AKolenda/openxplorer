@@ -8,7 +8,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::application::AppAction;
-use crate::test_support::harness::{application, Fixture, TestWindow};
+use super::support::{click_gesture, middle_of};
+use crate::test_support::harness::{application, wait_until, Fixture, TestWindow};
 use crate::window::session::TabId;
 
 fn tab_ids(test: &TestWindow) -> Vec<TabId> {
@@ -56,30 +57,34 @@ fn tab_numbers_and_ctrl_page_keys_show_tabs() {
     assert_eq!(test.active_tab(), Some(left), "Ctrl+Page Down wraps around");
 }
 
+/// A double-click on a tab behind opens a copy of it in front. The first
+/// click shows the tab, which builds the tabs anew, so the strip counts the
+/// clicks; it claims the second press, which keeps the title bar from
+/// maximizing the window.
+///
 /// parity: TAB-014
 #[gtk::test]
 fn double_clicking_a_tab_opens_a_copy_in_front() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let tab = test
-        .window
-        .tab_strip()
-        .tab_list()
-        .first_child()
-        .expect("the window has a tab");
-    let click = tab
-        .observe_controllers()
-        .iter::<glib::Object>()
-        .filter_map(Result::ok)
-        .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
-        .find(|click| click.button() == gtk::gdk::BUTTON_PRIMARY)
-        .expect("a tab takes primary clicks");
+    test.window.add_tab(&fixture.uri()).expect("valid folder");
+    test.wait_for_listing("the second tab");
+    let strip = test.window.tab_strip();
+    let first_tab = || strip.tab_list().first_child().expect("the window has a tab");
+    wait_until("the tabs to be laid out", || first_tab().width() > 0);
+    let first = first_tab();
+    let point = middle_of(&first, strip);
 
-    click.emit_by_name::<()>("released", &[&2_i32, &4.0_f64, &4.0_f64]);
+    click_gesture(&first, gtk::gdk::BUTTON_PRIMARY).emit_by_name::<()>("released", &[&1_i32, &point.0, &point.1]);
+    wait_until("the tabs built anew to be laid out", || {
+        let tab = first_tab();
+        tab != first && tab.width() > 0
+    });
+    click_gesture(strip, gtk::gdk::BUTTON_PRIMARY).emit_by_name::<()>("pressed", &[&2_i32, &point.0, &point.1]);
 
-    assert_eq!(test.window.tab_count(), 2);
+    assert_eq!(test.window.tab_count(), 3);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
-    assert_ne!(test.active_tab(), tab_ids(&test).first().copied());
+    assert_eq!(test.active_tab(), tab_ids(&test).last().copied(), "the copy is in front");
 }
 
 /// parity: TAB-015

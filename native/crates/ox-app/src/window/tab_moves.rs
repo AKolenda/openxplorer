@@ -243,7 +243,7 @@ impl BrowserWindow {
     pub(super) fn move_tab_to_new_window(&self, id: TabId) {
         match self.detach_tab(id) {
             Ok(window) => {
-                window.present();
+                window.present_as_new_window();
                 self.release_moved_tab(id);
             }
             Err(refusal) => self.show_message(&refusal.to_string()),

@@ -189,9 +189,7 @@ pub(super) fn open_window(
     start: Option<&str>,
 ) -> BrowserWindow {
     let window = build_window(app, context, start);
-    window.open_at_saved_size();
-    window.present();
-    window.remember_size();
+    window.present_as_new_window();
     window
 }
 
@@ -575,13 +573,15 @@ mod tests {
         assert!(browser_windows().is_empty());
     }
 
-    /// A resized window saves its size, and the next window opens at it.
+    /// A resized window saves its size, and every new window opens at it:
+    /// Ctrl+N's, Open in new window's and Move tab to new window's.
     ///
     /// parity: TAB-054
     #[gtk::test]
     fn a_new_window_opens_at_the_last_windows_size() {
+        let fixture = Fixture::standard();
         let app = TestApp::new();
-        let first = app.state.open_window(&application(), None);
+        let first = app.state.open_window(&application(), Some(&fixture.uri()));
         first.set_default_size(900, 640);
         wait_until("the size to be saved", || {
             app.state
@@ -591,13 +591,26 @@ mod tests {
                 .window_size
                 .is_some()
         });
+        let opened_from = |action: &str, target: glib::Variant| {
+            let before = browser_windows();
+            WidgetExt::activate_action(&first, action, Some(&target)).expect("a window action");
+            let after = browser_windows();
+            let new = after.into_iter().find(|window| !before.contains(window));
+            new.expect("the action opens a window")
+        };
+
+        let in_new_window = opened_from("win.open-window", fixture.uri_of("Documents").to_variant());
+        first.add_tab(&fixture.uri()).expect("valid folder");
+        let tab = first.active_tab_target().expect("a tab in front");
+        let moved_tab = opened_from("win.move-tab-to-new-window", tab);
         first.close();
         settle();
-
         let second = app.state.open_window(&application(), None);
 
-        assert_eq!(second.default_size(), (900, 640));
-        assert!(!second.is_maximized());
+        for window in [&in_new_window, &moved_tab, &second] {
+            assert_eq!(window.default_size(), (900, 640));
+            assert!(!window.is_maximized());
+        }
     }
 
     /// parity: TAB-050
