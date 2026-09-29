@@ -12754,8 +12754,8 @@ python_tests = []
 bridge = ["archiveInspect", "archiveExtract"]
 dolphin = "Ark service menu 'Extract archive here, autodetect subfolder' (added through KFileItemActions)"
 gnome = "gnome-autoar AutoarExtractor (Nautilus 'Extract', output-is-dest detection)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_here_uses_the_next_free_name, the_archive_commands_follow_the_selection); native/crates/ox-app/src/archive_view/extraction.rs (extract_here_tries_the_name_then_numbered_names): Extract here extracts beside the archive into '<name>', '<name> (2)', … with every ZIP rule, progress and Cancel, and is disabled in pages, server listings and previous versions. Missing: an archive with exactly one top-level folder is still nested instead of that folder becoming the output. Porting notes: OpenXplorer offers only the dialog (ARC-009) and never overwrites (ARC-012). ARC-024 extends this to other archive formats."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_here_uses_the_next_free_name, the_archive_commands_follow_the_selection); native/crates/ox-app/src/archive_view/extraction.rs (extract_here_tries_the_name_then_numbered_names); native/crates/ox-core/src/archive/extract/lift.rs (a_lone_top_folder_becomes_the_output_under_a_free_name, a_folder_named_like_the_archive_takes_its_name_and_mixed_content_stays). Extract here extracts beside the archive into '<name>', '<name> (2)', … with every ZIP rule, progress and Cancel, and is disabled in pages, server listings and previous versions. When the output holds exactly one visible top-level folder, that folder is renamed up beside the archive under the first free name (its own, then '(2)', …) instead of being nested; each step is a rename in the destination that never replaces or copies, and a failed step puts the output back. Porting notes: OpenXplorer offers only the dialog (ARC-009) and never overwrites (ARC-012). ARC-024 extends this to other archive formats."
 
 [[feature]]
 id = "PROP-001"

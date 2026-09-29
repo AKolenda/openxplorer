@@ -15,10 +15,11 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gtk::glib;
+use gtk::{gio, glib};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::archive::{
+    lift_single_folder,
     default_preview_root, ArchiveBrowser, ArchiveError, CompressionRequest, ExtractionRequest,
     GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
 };
@@ -288,7 +289,8 @@ impl BrowserWindow {
     }
 
     /// Extract here: into a new folder beside the archive, named after it,
-    /// or `<name> (2)` and so on while a name is taken (ARC-025).
+    /// or `<name> (2)` and so on while a name is taken; an archive holding
+    /// one top-level folder gives that folder instead (ARC-025).
     fn extract_here(&self) {
         let (Some(archive), Some(folder)) = (self.selected_archive(), self.current_uri()) else {
             return;
@@ -334,7 +336,12 @@ impl BrowserWindow {
                 .with_progress(self.operation_progress_sender());
             match extractor.extract_in_background(request, cancel.clone()).await {
                 Err(ArchiveError::DestinationExists) => {}
-                Ok(extracted) => return Ok(extraction_success_text(&extracted)),
+                Ok(extracted) => {
+                    // A lone top-level folder becomes the output (ARC-025).
+                    let lifted = gio::spawn_blocking(move || lift_single_folder(extracted)).await;
+                    let lifted = lifted.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+                    return Ok(extraction_success_text(&lifted));
+                }
                 Err(error) => return Err(error),
             }
         }
