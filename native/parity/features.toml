@@ -9466,7 +9466,8 @@ sources = [
 python_tests = ["desktop/tests/ui_release.py::Opening a folder leaves search"]
 bridge = []
 dolphin = "FilterBar lock button"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (the_pin_keeps_the_search_when_changing_folders). The search strip has a pin toggle before Clear search, \"Keep search when changing folders\" (Dolphin's lock button; the bundled Fluent pin, since no lock icon ships), off by default. While it is pressed, opening another folder in the tab keeps the search box's text and runs the search again there (window/folder_search.rs leave_search); otherwise the search ends on every location change, as before. Landing pages, which cannot be searched, end it."
 
 [[feature]]
 id = "SRCH-006"

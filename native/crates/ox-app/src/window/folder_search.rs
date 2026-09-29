@@ -383,9 +383,37 @@ impl BrowserWindow {
         }
     }
 
+    /// Leaving the folder ends the search, unless the strip's "Keep
+    /// search when changing folders" is pressed (SRCH-005): the search
+    /// then runs again in the folder the tab opens, once it has started
+    /// listing it.
+    pub(super) fn leave_search(&self) {
+        if !(self.is_searching() && self.search_strip().keeps_search()) {
+            self.end_search();
+            return;
+        }
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.search_here_again()
+        ));
+    }
+
+    /// Runs the kept search in the folder shown now, or ends it on a page,
+    /// where nothing is searched.
+    fn search_here_again(&self) {
+        let text = self.imp().search.borrow().query().to_owned();
+        if self.searched_folder().is_none() {
+            self.end_search();
+            return;
+        }
+        self.search_edited(&text);
+        self.run_search();
+    }
+
     /// Ends the search as leaving the folder does: empties the box and
     /// forgets the scope.
-    pub(super) fn end_search(&self) {
+    fn end_search(&self) {
         self.imp().search.borrow_mut().end();
         self.search_box().clear();
         self.show_searched_items();

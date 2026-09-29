@@ -131,6 +131,33 @@ fn enter_and_a_second_escape_move_focus_to_the_view() {
     wait_until("the view to take focus", || pane.view_has_focus());
 }
 
+/// Opening another folder ends the search, unless the strip's pin keeps
+/// it: then it runs again in the folder opened.
+///
+/// parity: SRCH-005
+#[gtk::test]
+fn the_pin_keeps_the_search_when_changing_folders() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/notes inside.txt"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.search_for("notes");
+    let strip = test.window.search_strip();
+    assert!(!strip.keeps_search(), "off until pressed");
+    strip.set_keeps_search(true);
+
+    test.activate("go-to", Some(&fixture.uri_of("Documents")));
+
+    wait_until("the search to run in the folder opened", || {
+        test.names() == ["notes inside.txt"] && test.status_count() == "1 result"
+    });
+    assert_eq!(test.window.search_box().entry().text().as_str(), "notes");
+    strip.set_keeps_search(false);
+    test.activate("go-to", Some(&fixture.uri()));
+    test.wait_for_listing("the first folder");
+    assert_eq!(test.window.search_box().entry().text().as_str(), "");
+    assert_eq!(test.names(), STANDARD_NAMES);
+}
+
 /// parity: SRCH-012
 #[gtk::test]
 fn the_strips_clear_button_ends_the_search() {

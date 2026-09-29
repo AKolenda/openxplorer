@@ -50,6 +50,9 @@ window.ox .search-info menubutton.choice-button > button {
   color: @ox_muted;
 }
 .search-info button.search-clear:hover { background-color: @ox_hover; color: @ox_text; }
+/* "Keep search when changing folders", pressed while it keeps the search. */
+.search-info button.search-keep:checked,
+.search-info button.search-keep:checked:hover { background-color: @ox_selected; color: @ox_accent; }
 
 /* ---- Search & indexing: the Indexed folders page
    (src/settings_page/indexed_folders; the settings mockup's .chip, .tag,

@@ -5,8 +5,9 @@
 //! `desktop/ui/style.css` (SRCH-012): a search glyph; the caption (the
 //! error, "Searching…" or where the search looked); the "Search scope"
 //! list; "Cache this folder" while the folder is not, or only partly,
-//! indexed; for cached results a note on how fresh they are; and a clear
-//! button. [`SearchInfoStrip`] is a `GtkBox` subclass laid out by the
+//! indexed; for cached results a note on how fresh they are; Dolphin's
+//! "Keep Filter When Changing Folders" as a pin toggle (SRCH-005); and a
+//! clear button. [`SearchInfoStrip`] is a `GtkBox` subclass laid out by the
 //! template `resources/ui/search-info-strip.ui`; the scope list is the
 //! app's compact drop-down ([`ChoiceButton`]), whose chevron and check
 //! mark are bundled icons.
@@ -64,6 +65,12 @@ mod imp {
         /// How fresh cached results are.
         #[template_child]
         pub(super) freshness: TemplateChild<gtk::Label>,
+        /// "Keep search when changing folders".
+        #[template_child]
+        pub(super) keep_button: TemplateChild<gtk::ToggleButton>,
+        /// The pin of the keep button.
+        #[template_child]
+        pub(super) keep_glyph: TemplateChild<gtk::Image>,
         /// "Clear search".
         #[template_child]
         pub(super) clear_button: TemplateChild<gtk::Button>,
@@ -124,6 +131,7 @@ impl SearchInfoStrip {
         let imp = self.imp();
         icons::set_icon(&imp.glyph, Icon::Search, SEARCH_GLYPH);
         icons::set_icon(&imp.cache_glyph, Icon::Add, BUTTON_GLYPH);
+        icons::set_icon(&imp.keep_glyph, Icon::Pin, BUTTON_GLYPH);
         icons::set_icon(&imp.clear_glyph, Icon::Dismiss16, BUTTON_GLYPH);
         imp.freshness.set_tooltip_text(Some(FRESHNESS_TOOLTIP));
         WindowAction::CacheFolder.assign_to(&*imp.cache_button);
@@ -194,6 +202,18 @@ impl SearchInfoStrip {
             // it announces is a no-op for the window.
             choices.set_selected(position);
         }
+    }
+
+    /// Whether the search stays when the tab opens another folder
+    /// (SRCH-005); off until the user presses the pin.
+    pub(crate) fn keeps_search(&self) -> bool {
+        self.imp().keep_button.is_active()
+    }
+
+    /// Presses or releases the pin, as the user would, for tests.
+    #[cfg(test)]
+    pub(crate) fn set_keeps_search(&self, keeps: bool) {
+        self.imp().keep_button.set_active(keeps);
     }
 
     /// Calls `callback` when the user chose another scope.

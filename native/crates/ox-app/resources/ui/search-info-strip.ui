@@ -3,7 +3,8 @@
 <!-- The search information strip above the columns while searching
      (src/search/info_strip.rs; renderSearchInfo in app.js): the glyph,
      what was searched, the scope, "Cache this folder", the note on cached
-     results and the clear button. -->
+     results, the button that keeps the search when changing folders and
+     the clear button. -->
 <interface>
   <requires lib="gtk" version="4.14"/>
   <template class="OxSearchInfoStrip" parent="GtkBox">
@@ -79,6 +80,28 @@
         <property name="ellipsize">end</property>
         <style>
           <class name="cache-freshness"/>
+        </style>
+      </object>
+    </child>
+    <child>
+      <!-- Dolphin's "Keep Filter When Changing Folders" lock (SRCH-005). -->
+      <object class="GtkToggleButton" id="keep_button">
+        <property name="valign">center</property>
+        <property name="tooltip-text">Keep search when changing folders</property>
+        <property name="child">
+          <object class="GtkImage" id="keep_glyph">
+            <property name="accessible-role">presentation</property>
+            <style>
+              <class name="glyph"/>
+            </style>
+          </object>
+        </property>
+        <accessibility>
+          <property name="label">Keep search when changing folders</property>
+        </accessibility>
+        <style>
+          <class name="search-clear"/>
+          <class name="search-keep"/>
         </style>
       </object>
     </child>
