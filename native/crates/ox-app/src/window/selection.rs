@@ -26,7 +26,9 @@ use super::BrowserWindow;
 fn position_after_removal(count: u32, selected: &[u32]) -> Option<u32> {
     let last = *selected.last()?;
     let kept = |position: &u32| selected.binary_search(position).is_err();
-    (last + 1..count).find(kept).or_else(|| (0..last).rev().find(kept))
+    (last + 1..count)
+        .find(kept)
+        .or_else(|| (0..last).rev().find(kept))
 }
 
 impl BrowserWindow {

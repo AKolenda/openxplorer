@@ -324,9 +324,8 @@ impl BrowserWindow {
         }
         // The details view's rows are an inner list view; its titles are
         // not inside it. The icon grid is the list itself.
-        view.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|picked| {
-            &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some()
-        })
+        view.pick(x, y, gtk::PickFlags::DEFAULT)
+            .is_some_and(|picked| &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some())
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;

@@ -68,11 +68,23 @@ fn typing_selects_the_next_matching_name_and_names_it_in_the_hint() {
     );
     test.window.type_text("otes 1");
     assert_eq!(test.selected_names(), ["Notes 10.txt"]);
-    assert!(test.window.folder_pane().view_has_focus(), "focus stays in the list");
+    assert!(
+        test.window.folder_pane().view_has_focus(),
+        "focus stays in the list"
+    );
     let view = test.window.folder_pane().details().column_view();
-    assert!(gtk::test_accessible_has_property(view, gtk::AccessibleProperty::Label));
-    wait_until("the hint to clear a second after the last key", || hint(&test).is_empty());
-    assert_eq!(test.selected_names(), ["Notes 10.txt"], "the match stays selected");
+    assert!(gtk::test_accessible_has_property(
+        view,
+        gtk::AccessibleProperty::Label
+    ));
+    wait_until("the hint to clear a second after the last key", || {
+        hint(&test).is_empty()
+    });
+    assert_eq!(
+        test.selected_names(),
+        ["Notes 10.txt"],
+        "the match stays selected"
+    );
 }
 
 /// parity: SEL-034

@@ -120,7 +120,10 @@ fn click_ctrl_click_and_shift_click_select_like_explorer() {
     let test = TestWindow::open(&fixture.uri());
     click(&test, 1, false, false);
     assert_eq!(selected(&test), [1]);
-    assert!(test.window.folder_pane().view_has_focus(), "a click focuses the list");
+    assert!(
+        test.window.folder_pane().view_has_focus(),
+        "a click focuses the list"
+    );
     click(&test, 3, false, true);
     assert_eq!(selected(&test), [1, 2, 3], "Shift+click selects from the anchor");
     click(&test, 2, true, false);
@@ -155,9 +158,16 @@ fn a_rubber_band_starts_on_blank_space_only() {
     let test = TestWindow::open(&fixture.uri());
     for view in ["details", "large"] {
         show_view(&test, view);
-        let item = test.window.folder_pane().owners().widget_at(1).expect("on screen");
+        let item = test
+            .window
+            .folder_pane()
+            .owners()
+            .widget_at(1)
+            .expect("on screen");
         let view_widget = test.window.folder_pane().view_widget();
-        let bounds = item.compute_bounds(&view_widget).expect("a shown item has bounds");
+        let bounds = item
+            .compute_bounds(&view_widget)
+            .expect("a shown item has bounds");
         press_at(
             &test,
             f64::from(bounds.x() + 4.0),
@@ -237,7 +247,10 @@ fn arrows_home_end_and_page_keys_move_and_shift_extends_from_the_anchor() {
     assert_eq!(selected(&test), [0]);
     press_key(&test, gdk::Key::Page_Down, none);
     let paged = selected(&test);
-    assert!(paged.len() == 1 && paged[0] > 5, "Page Down moves a page: {paged:?}");
+    assert!(
+        paged.len() == 1 && paged[0] > 5,
+        "Page Down moves a page: {paged:?}"
+    );
 }
 
 /// parity: SEL-009
@@ -266,7 +279,10 @@ fn arrows_move_in_two_dimensions_in_the_icon_grid() {
     assert_eq!(selected(&test), [1]);
     press_key(&test, gdk::Key::Down, none);
     let below = selected(&test);
-    assert!(below.len() == 1 && below[0] > 2, "Down goes to the next row: {below:?}");
+    assert!(
+        below.len() == 1 && below[0] > 2,
+        "Down goes to the next row: {below:?}"
+    );
     press_key(&test, gdk::Key::Left, none);
     assert_eq!(selected(&test), [below[0] - 1]);
     press_key(&test, gdk::Key::Up, none);
@@ -289,4 +305,26 @@ fn a_created_item_is_selected_and_scrolled_into_view() {
     wait_until("the copy to be scrolled into view", || {
         test.window.folder_pane().scroll_position() > 0.0
     });
+}
+
+/// parity: SEL-036
+#[gtk::test]
+fn space_selects_the_current_item() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    start_at(&test, 0);
+    press_key(&test, gdk::Key::Down, gdk::ModifierType::CONTROL_MASK);
+    press_key(&test, gdk::Key::space, gdk::ModifierType::empty());
+    assert_eq!(
+        selected(&test),
+        [0, 1],
+        "Space adds the current item, as in Dolphin"
+    );
+    test.window.type_text("notes");
+    test.window.type_text(" 1");
+    assert_eq!(
+        test.selected_names(),
+        ["Notes 10.txt"],
+        "inside a prefix Space is prefix text"
+    );
 }
