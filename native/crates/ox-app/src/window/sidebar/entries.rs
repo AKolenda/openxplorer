@@ -387,6 +387,7 @@ mod tests {
                     can_unmount: true,
                     can_eject: true,
                     can_stop: true,
+                    can_open_in_disks: false,
                 },
             },
         };

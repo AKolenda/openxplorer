@@ -14,7 +14,8 @@
 //! cameras and a server's share list), "Cache this folder for search"
 //! where the folder can be indexed (`cacheMenuItems`) and Properties. The
 //! Python app had the Terminal item on network places only, and the cache
-//! item on drives only.
+//! item on drives only. A removable drive also offers Open in Disks and
+//! Format… where GNOME Disks is installed.
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
@@ -100,6 +101,15 @@ fn removal_items(uri: &str, kind: VolumeKind, controls: MountControls) -> Vec<Me
     items.collect()
 }
 
+/// Open in Disks and Format… for the removable drive at `uri`, which
+/// GNOME Disks handles (DEV-012), as Dolphin offers its partition manager.
+fn disks_items(uri: &str) -> [MenuEntry; 2] {
+    [
+        item("Open in Disks", Icon::Settings, WindowAction::OpenInDisks, uri),
+        item("Format…", Icon::HardDrive, WindowAction::FormatDrive, uri),
+    ]
+}
+
 /// Open in Terminal for the place at `uri`, disabled where no terminal
 /// can open there (`terminalMenuItem`): anywhere but a local folder or an
 /// SMB share.
@@ -139,10 +149,13 @@ fn drive_entries(
     if !is_device_location(uri) {
         entries.extend(cache_entries(uri, caching));
     }
-    let removals = removal_items(uri, kind, controls);
-    if !removals.is_empty() {
+    let mut drive_tools = removal_items(uri, kind, controls);
+    if controls.can_open_in_disks {
+        drive_tools.extend(disks_items(uri));
+    }
+    if !drive_tools.is_empty() {
         entries.push(MenuEntry::Divider);
-        entries.extend(removals);
+        entries.extend(drive_tools);
     }
     entries.push(MenuEntry::Divider);
     entries.push(item("Properties", Icon::Info, WindowAction::PropertiesOf, uri));
@@ -409,13 +422,14 @@ mod tests {
         );
     }
 
-    /// parity: SIDE-017, DEV-003, DEV-007, DEV-008
+    /// parity: SIDE-017, DEV-003, DEV-007, DEV-008, DEV-012
     #[test]
     fn a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts() {
         let usb_disk = MountControls {
             can_unmount: true,
             can_eject: true,
             can_stop: true,
+            can_open_in_disks: true,
         };
         let drive = PlaceMenu::Drive {
             uri: "file:///media/demo/USB".into(),
@@ -441,6 +455,8 @@ mod tests {
                 "Disconnect mount",
                 "Eject",
                 "Safely remove",
+                "Open in Disks",
+                "Format…",
                 "-",
                 "Properties"
             ]

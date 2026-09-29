@@ -175,6 +175,16 @@ pub(crate) enum WindowAction {
     Eject,
     /// Powers off the drive that holds the location in the string target.
     SafelyRemove,
+    /// Shows the drive mounted at the string target in GNOME Disks.
+    OpenInDisks,
+    /// Opens GNOME Disks' Format dialog for the drive mounted at the
+    /// string target.
+    FormatDrive,
+    /// Attaches the disk image whose URI is the string target, read-only.
+    MountDiskImage,
+    /// Opens a disk-usage analyser at the folder whose URI is the string
+    /// target.
+    AnalyseDiskUsage,
     /// Caches the current folder for search, or stops caching it (a
     /// check item).
     CacheFolder,
@@ -324,6 +334,10 @@ impl WindowAction {
             WindowAction::Disconnect => "disconnect",
             WindowAction::Eject => "eject",
             WindowAction::SafelyRemove => "safely-remove",
+            WindowAction::OpenInDisks => "open-in-disks",
+            WindowAction::FormatDrive => "format-drive",
+            WindowAction::MountDiskImage => "mount-disk-image",
+            WindowAction::AnalyseDiskUsage => "analyse-disk-usage",
             WindowAction::CacheFolder => "cache-folder",
             WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",

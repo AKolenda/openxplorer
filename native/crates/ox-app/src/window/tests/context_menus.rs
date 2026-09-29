@@ -271,3 +271,25 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }
+
+/// Mount disk image and Analyse disk usage start their tool on the
+/// item's local path.
+///
+/// parity: DEV-011, PROP-015
+#[gtk::test]
+fn the_disk_tools_run_on_the_items_local_path() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("distro.iso"), b"image").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.activate("mount-disk-image", Some(&fixture.uri_of("distro.iso")));
+    test.activate("analyse-disk-usage", Some(&fixture.uri_of("Documents")));
+
+    assert_eq!(
+        test.context.recorded_launches(),
+        [
+            format!("MountImage {}", fixture.path("distro.iso").display()),
+            format!("AnalyseUsage {}", fixture.path("Documents").display()),
+        ]
+    );
+}

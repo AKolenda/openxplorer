@@ -68,6 +68,12 @@ pub(crate) struct ItemFacts {
     pub(crate) caching: Option<Caching>,
     /// Delete's label: "Move to Trash" or "Delete permanently".
     pub(crate) delete_label: &'static str,
+    /// A local `.iso` or `.img` file, and the Disk Image Mounter is
+    /// installed: Mount disk image (DEV-011).
+    pub(crate) can_mount_image: bool,
+    /// A local folder, and a disk-usage analyser is installed: Analyse
+    /// disk usage (PROP-015).
+    pub(crate) can_analyse_usage: bool,
 }
 
 /// A context menu: its rows, and the icon strip of the compact style.
@@ -99,6 +105,15 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         entries.extend(extraction_items(several));
     }
     entries.extend(application_items(facts));
+    if facts.can_mount_image {
+        let mount = MenuItem::with_text_target(
+            "Mount disk image",
+            Icon::HardDrive,
+            WindowAction::MountDiskImage,
+            &facts.navigation_uri,
+        );
+        entries.push(mount.disabled_when(several).into());
+    }
     if is_folder {
         let new_tab = MenuItem::with_text_target(
             "Open in new tab",
@@ -206,6 +221,15 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
             WindowAction::CalculateFolderSize,
         );
         entries.push(size.into());
+    }
+    if facts.can_analyse_usage {
+        let analyse = MenuItem::with_text_target(
+            "Analyse disk usage",
+            Icon::HardDrive,
+            WindowAction::AnalyseDiskUsage,
+            &facts.navigation_uri,
+        );
+        entries.push(analyse.disabled_when(several).into());
     }
     let versions = item("Previous versions", Icon::History, WindowAction::PreviousVersions);
     let properties = item("Properties", Icon::Info, WindowAction::Properties).with_shortcut("Alt+Enter");
@@ -373,6 +397,8 @@ mod tests {
             editors: Vec::new(),
             caching: None,
             delete_label: "Move to Trash",
+            can_mount_image: false,
+            can_analyse_usage: false,
         }
     }
 
@@ -486,6 +512,33 @@ mod tests {
         assert!(entries.contains(&"Delete permanently".to_owned()));
         assert!(entries.contains(&"Sign out of server…".to_owned()));
         assert!(!entries.contains(&"Calculate folder size".to_owned()));
+    }
+
+    /// A disk image offers Mount disk image after Open with, and a folder
+    /// Analyse disk usage after Calculate folder size, where their tools
+    /// are installed.
+    ///
+    /// parity: DEV-011, PROP-015
+    #[test]
+    fn disk_images_mount_and_folders_analyse_their_usage_where_the_tools_exist() {
+        let image = ItemFacts {
+            navigation_uri: "file:///home/user/distro.iso".to_owned(),
+            can_mount_image: true,
+            ..file()
+        };
+        let folder = ItemFacts {
+            can_analyse_usage: true,
+            ..folder()
+        };
+
+        let image_menu = labels(&item_menu(&image, MenuStyle::Classic).entries);
+        let folder_menu = labels(&item_menu(&folder, MenuStyle::Classic).entries);
+
+        assert_eq!(image_menu[3], "Mount disk image");
+        let size = folder_menu.iter().position(|label| label == "Calculate folder size");
+        let analyse = folder_menu.iter().position(|label| label == "Analyse disk usage");
+        assert_eq!(analyse, size.map(|size| size + 1));
+        assert!(!labels(&item_menu(&file(), MenuStyle::Classic).entries).contains(&"Mount disk image".to_owned()));
     }
 
     /// parity: CMD-009

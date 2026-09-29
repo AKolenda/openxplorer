@@ -135,6 +135,7 @@ impl BrowserWindow {
         self.install_appearance_actions();
         self.install_settings_actions();
         self.install_network_actions();
+        self.install_disk_tool_actions();
         self.install_search_actions();
         self.install_integration_actions();
         self.install_unported_actions();

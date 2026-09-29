@@ -19,12 +19,14 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 use ox_core::entry::Entry;
+use ox_core::integration::{is_disk_image, DiskTool};
 use ox_core::location::{is_smb_location, is_smb_server};
 use ox_core::ops::JournalDirection;
 use ox_core::settings::ContextMenu as MenuStyleChoice;
 
 use super::actions::{plain_action, text_action};
 use super::command_bar::new_menu;
+use super::disk_tools::is_installed;
 use super::menu_popover::{MenuPopover, MenuStyle};
 use super::widget_tree::children;
 use super::window_action::WindowAction;
@@ -167,6 +169,7 @@ impl BrowserWindow {
         } else {
             None
         };
+        let is_local = entry.navigation_uri().starts_with("file:");
         ItemFacts {
             navigation_uri: entry.navigation_uri().to_owned(),
             shape: item_shape(entry),
@@ -177,6 +180,9 @@ impl BrowserWindow {
             editors: self.context().desktop_integration().known_editor_shortcuts(),
             caching,
             delete_label: self.delete_label(),
+            can_mount_image: is_local && is_disk_image(&entry.name) && !entry.is_dir
+                && is_installed(DiskTool::MountImage),
+            can_analyse_usage: is_local && entry.is_dir && is_installed(DiskTool::AnalyseUsage),
         }
     }
 

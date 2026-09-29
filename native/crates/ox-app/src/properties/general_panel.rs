@@ -6,9 +6,12 @@
 //! name, then Type, Location, Full path, Size, Opens with, Created,
 //! Modified and Accessed, the Change app…, Copy full path and Calculate
 //! folder size buttons, and the read-only permissions the backend reports.
+//! A local folder also gets Analyse disk usage where an analyser is
+//! installed.
 
 use gtk::prelude::*;
 use ox_core::format;
+use ox_core::integration::DiskTool;
 use ox_core::location::{is_smb_server, LocationContext};
 use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
@@ -16,7 +19,7 @@ use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::ItemProperties;
 use crate::dialog_layer::{note, quiet_text, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
-use crate::window::{ButtonStyle, WindowAction};
+use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};
 
 /// The size of the item's picture at the top of the General tab
 /// (`fileIcon(current, 48)`).
@@ -135,7 +138,19 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
     if entry.is_dir && !is_smb_server(&entry.uri) {
         row.append(&calculate_size_button(&entry.uri));
     }
+    let is_local_folder = entry.is_dir && entry.uri.starts_with("file:");
+    if is_local_folder && is_disk_tool_installed(DiskTool::AnalyseUsage) {
+        row.append(&analyse_usage_button(&entry.uri));
+    }
     row
+}
+
+/// Analyse disk usage: a disk-usage analyser at the folder at `uri`, as
+/// Dolphin's "Explore in Filelight" (PROP-015).
+fn analyse_usage_button(uri: &str) -> gtk::Button {
+    let button = glyph_button("Analyse disk usage", Icon::HardDrive);
+    WindowAction::AnalyseDiskUsage.assign_with_target_to(&button, &uri.to_variant());
+    button
 }
 
 /// A bordered button with `glyph` and `label`.

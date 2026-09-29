@@ -11318,8 +11318,8 @@ python_tests = []
 bridge = ["openWith", "environment"]
 dolphin = "dolphin-plugins “Mount ISO” service menu"
 gnome = "gnome-disk-image-mounter (udisks2 Manager.LoopSetup)"
-native = "todo"
-native_note = "Today it works only through Open with (Disk Image Mounter). Existing OpenXplorer part is protected by OPEN-011 and OPEN-012."
+native = "done"
+native_note = "native/crates/ox-core/src/integration/disk_tools.rs (iso_and_img_files_are_disk_images_mounted_by_path); native/crates/ox-app/src/window/context_menu/entries.rs (disk_images_mount_and_folders_analyse_their_usage_where_the_tools_exist); native/crates/ox-app/src/window/tests/context_menus.rs (the_disk_tools_run_on_the_items_local_path). A local .iso or .img file (any case) gets 'Mount disk image' after Open with when GNOME's Disk Image Mounter is installed; it runs gnome-disk-image-mounter on the file's path, which attaches it read-only through a loop device, and the image then appears among the drives through the volume monitor. Existing OpenXplorer part is protected by OPEN-011 and OPEN-012."
 
 [[feature]]
 id = "DEV-012"
@@ -11334,7 +11334,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE Partition Manager integration (not Dolphin core)"
 gnome = "gnome-disks --block-device=<dev> [--format-device], with the device from g_volume_get_identifier(unix-device)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/integration/disk_tools.rs (disks_opens_or_formats_the_block_device, a_tool_is_found_only_when_installed_and_baobab_comes_first); native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts). A removable drive (it can be ejected or stopped) with a block device gets 'Open in Disks' and 'Format…' in its sidebar menu when GNOME Disks is installed (looked up in the system folders, on the host inside Flatpak); they run 'gnome-disks --block-device <device>' and '… --format-device' with an argument list, never a shell. Both are hidden when Disks is not installed."
 
 [[feature]]
 id = "DEV-013"
@@ -13078,7 +13079,8 @@ python_tests = []
 bridge = ["open"]
 dolphin = "Explore in Filelight"
 gnome = "Disk Usage Analyzer (org.gnome.baobab) with the folder URI"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/integration/disk_tools.rs (a_tool_is_found_only_when_installed_and_baobab_comes_first); native/crates/ox-app/src/window/context_menu/entries.rs (disk_images_mount_and_folders_analyse_their_usage_where_the_tools_exist); native/crates/ox-app/src/window/tests/context_menus.rs (the_disk_tools_run_on_the_items_local_path). A local folder's Properties (General tab) and context menu offer 'Analyse disk usage' when GNOME Disk Usage Analyzer (baobab) or Filelight is installed; it opens the analyser at the folder. Not yet in the status bar, which has no space menu."
 
 [[feature]]
 id = "PROP-016"
