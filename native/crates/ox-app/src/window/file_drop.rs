@@ -63,6 +63,9 @@ const FINISH_ACTIONS: [gdk::DragAction; 3] = [
 pub(crate) enum DropDestination {
     /// Into this folder.
     Folder(String),
+    /// Into the root of the volume with this identifier, once it is
+    /// mounted (DEV-010).
+    Volume(String),
     /// Pinned to Quick access before the pin at this location, or at the
     /// end (DND-014).
     QuickAccess {
@@ -230,7 +233,24 @@ impl BrowserWindow {
             self.show_message(&DropRefusal::DestinationChanged.to_string());
             return;
         }
-        self.complete_drop(&uris, Some(destination), action);
+        self.deliver_drop(&uris, destination, action).await;
+    }
+
+    /// Sends the dropped `uris` to `destination`, mounting a volume first.
+    pub(super) async fn deliver_drop(
+        &self,
+        uris: &[String],
+        destination: DropDestination,
+        action: DropAction,
+    ) {
+        let destination = match destination {
+            DropDestination::Volume(id) => match self.mount_for_drop(&id).await {
+                Some(root) => DropDestination::Folder(root),
+                None => return,
+            },
+            other => other,
+        };
+        self.complete_drop(uris, Some(destination), action);
     }
 
     /// Sends the dropped `uris` to `destination` with `action`; true when
@@ -272,6 +292,8 @@ impl BrowserWindow {
     ) -> Result<(), DropRefusal> {
         match destination {
             DropDestination::Folder(folder) => self.drop_into_folder(uris, folder, action),
+            // `deliver_drop` mounts the volume and sends its root instead.
+            DropDestination::Volume(_) => Err(DropRefusal::NoDestination),
             DropDestination::QuickAccess { before } => self.pin_dropped(uris, before),
             DropDestination::Program(program) => {
                 let items = dropped_uris(uris)?;

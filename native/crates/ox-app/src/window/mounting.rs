@@ -60,6 +60,21 @@ impl BrowserWindow {
         });
     }
 
+    /// Mounts the volume `id` for a drop onto its sidebar row (DEV-010)
+    /// and returns its root; a failure shows "Could not mount device".
+    pub(super) async fn mount_for_drop(&self, id: &str) -> Option<String> {
+        let volumes = self.volume_monitor().volumes();
+        let operation = gtk::MountOperation::new(Some(self));
+        match mount_volume(&volumes, id, Some(operation.upcast_ref())).await {
+            Ok(root) => Some(root),
+            Err(error) if error.is_cancelled() => None,
+            Err(error) => {
+                self.show_failure("Could not mount device", &error.to_string());
+                None
+            }
+        }
+    }
+
     /// Takes away the drive or device that holds `uri` as `removal` says.
     /// Disconnect asks first, as This PC's card does; nothing starts while
     /// this window writes.

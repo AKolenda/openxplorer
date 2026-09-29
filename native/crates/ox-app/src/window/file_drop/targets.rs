@@ -69,6 +69,7 @@ impl DropSpot {
         match self {
             DropSpot::FolderView { destination, .. } => destination.clone(),
             DropSpot::Sidebar(SidebarDropSpot::Folder { uri, .. }) => DropDestination::Folder(uri.clone()),
+            DropSpot::Sidebar(SidebarDropSpot::Volume { id, .. }) => DropDestination::Volume(id.clone()),
             DropSpot::Sidebar(SidebarDropSpot::Pin { before, .. }) => DropDestination::QuickAccess {
                 before: before.clone(),
             },
@@ -336,7 +337,9 @@ impl BrowserWindow {
             Some(DropSpot::FolderView { destination, row }) => {
                 let program = match destination {
                     DropDestination::Program(program) => Some(program.name.clone()),
-                    DropDestination::Folder(_) | DropDestination::QuickAccess { .. } => None,
+                    DropDestination::Folder(_)
+                    | DropDestination::Volume(_)
+                    | DropDestination::QuickAccess { .. } => None,
                 };
                 (*row, row.is_none(), program)
             }
@@ -508,6 +511,48 @@ mod tests {
         assert_eq!(line, Some("drop-before"));
         assert_eq!(sidebar.drop_highlight_of("Documents"), None);
         assert_eq!(test.window.sidebar_spot(this_pc), None, "a page takes no drop");
+    }
+
+    /// A drive still to be mounted takes a drop, which mounts it first;
+    /// a volume that cannot be mounted says so and copies nothing.
+    ///
+    /// parity: DEV-010
+    #[gtk::test]
+    fn a_drop_on_an_unmounted_drive_mounts_it_first() {
+        use crate::volumes::{VolumeKind, VolumeRow, VolumeState};
+
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        test.window.imp().volumes.replace(vec![VolumeRow {
+            label: "USB stick".to_owned(),
+            kind: VolumeKind::Drive,
+            state: VolumeState::Mountable {
+                id: "gone-volume".to_owned(),
+            },
+        }]);
+        test.window.render_places();
+        wait_for_frames(&test.window, 2);
+        let drive = test.window.sidebar().middle_of("USB stick");
+
+        let spot = test.window.sidebar_spot(drive).map(|spot| spot.destination());
+        assert_eq!(spot, Some(DropDestination::Volume("gone-volume".to_owned())));
+        let window = test.window.clone();
+        let dropped = vec![fixture.uri_of("Notes 2.txt")];
+        glib::spawn_future_local(async move {
+            let destination = DropDestination::Volume("gone-volume".to_owned());
+            window.deliver_drop(&dropped, destination, DropAction::Copy).await;
+        });
+        let says_so = |window: gtk::Window| {
+            crate::test_support::harness::descendants::<gtk::Label>(&window)
+                .iter()
+                .any(|label| label.text() == "Could not mount device")
+        };
+        wait_until("the mount failure", || {
+            gtk::Window::list_toplevels()
+                .into_iter()
+                .filter_map(|window| window.downcast::<gtk::Window>().ok())
+                .any(says_so)
+        });
     }
 
     /// parity: DND-014

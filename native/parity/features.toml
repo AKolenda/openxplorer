@@ -11302,8 +11302,8 @@ sources = ["kio:src/filewidgets/kfileplacesview.cpp:1443-1486"]
 python_tests = ["desktop/tests/ui_file_drag.py::Read-only folders have no copy destination"]
 bridge = ["mountVolume", "operate"]
 dolphin = "KFilePlacesView::dropEvent setupNeeded"
-native = "todo"
-native_note = "Porting notes: OpenXplorer deliberately publishes no drop target for unmounted sidebar devices."
+native = "done"
+native_note = "native/crates/ox-app/src/window/sidebar/drop_spots.rs, window/file_drop.rs (deliver_drop), window/mounting.rs (mount_for_drop); native/crates/ox-app/src/window/file_drop/targets.rs (a_drop_on_an_unmounted_drive_mounts_it_first). A drive or device row still to be mounted (outside Quick access) now takes dropped items and is highlighted like a folder; the drop is read and finished first, then the volume is mounted through GTK's mount operation (the desktop asks for an encrypted disk's password), and the items go through the usual drop into its root (copy, move or link, with the transfer engine's checks). A volume that cannot be mounted shows 'Could not mount device' and nothing is transferred; a cancelled password prompt does nothing. The test covers the drop spot, the mount-first route and the failure; a successful mount needs a real drive, which the isolated session does not have. Porting notes: OpenXplorer deliberately publishes no drop target for unmounted sidebar devices."
 
 [[feature]]
 id = "DEV-011"
