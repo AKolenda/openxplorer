@@ -99,7 +99,10 @@ pub fn walk_search(
         batch: Vec::new(),
         matched: 0,
     };
-    let mut pending = VecDeque::from([PendingFolder { uri: folder, depth: 0 }]);
+    let mut pending = VecDeque::from([PendingFolder {
+        uri: folder,
+        depth: 0,
+    }]);
     let mut is_first = true;
     while let Some(folder) = pending.pop_front() {
         check_cancelled(cancellable)?;
@@ -180,7 +183,8 @@ impl Walk<'_> {
             return true;
         }
         let reads_contents = self.is_local && search.search_in == SearchIn::NamesAndContents;
-        reads_contents && lowercase_text(entry).is_some_and(|text| search.pattern.matches_lowercase(&name, &text))
+        reads_contents
+            && lowercase_text(entry).is_some_and(|text| search.pattern.matches_lowercase(&name, &text))
     }
 
     /// Keeps a match; false once more than the limit matched.

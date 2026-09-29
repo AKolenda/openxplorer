@@ -73,13 +73,11 @@ impl KindFacet {
         if matches!(self, KindFacet::Any | KindFacet::Folders) || entry.is_dir {
             return self.matches_type(entry, "");
         }
-        match entry.content_type.as_deref() {
-            Some(content_type) => self.matches_type(entry, content_type),
-            None => {
-                let (guessed, _) = gio::content_type_guess(Some(entry.name.as_str()), None);
-                self.matches_type(entry, &guessed)
-            }
+        if let Some(content_type) = entry.content_type.as_deref() {
+            return self.matches_type(entry, content_type);
         }
+        let (guessed, _) = gio::content_type_guess(Some(entry.name.as_str()), None);
+        self.matches_type(entry, &guessed)
     }
 
     /// Whether `entry`, of `content_type`, is of this kind.

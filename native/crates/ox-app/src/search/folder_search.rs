@@ -255,6 +255,14 @@ impl FolderSearch {
     }
 }
 
+impl Drop for FolderSearch {
+    /// Stops the running search when its window goes, so a walk does not
+    /// go on reading files for no one.
+    fn drop(&mut self) {
+        self.cancel();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,7 +315,7 @@ mod tests {
     /// A share nobody indexed is filtered only, not walked over the
     /// network.
     ///
-    /// parity: SRCH-003
+    /// parity: SRCH-003, SRCH-035
     #[test]
     fn a_share_nobody_indexed_is_only_filtered() {
         let share = "smb://server/share/Work";

@@ -10,46 +10,29 @@
 //! the 120 ms pause the search runs. A folder the cache covers, or a
 //! search of every cached folder, shows the cache's results in place of
 //! the listing, with Folder path in place of Date modified. A folder no
-//! indexed folder is related to is walked live with its subfolders, and
-//! the matches appear as they are found (SRCH-035). The window's part of
-//! the work is here; the search itself is in [`crate::search`].
+//! indexed folder is related to is walked live with its subfolders
+//! ([`super::live_search`], SRCH-035); a result's folder opens from
+//! [`super::result_location`]. The window's part of the work is here; the
+//! search itself is in [`crate::search`].
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use std::collections::HashSet;
 
-use ox_core::entry::Entry;
-use ox_core::location::{parent_location, LocationError};
-use ox_core::search::{
-    walk_search, HiddenItems, LiveSearch, NamePattern, SearchError, SearchFacets, SearchIn, SearchQuery,
-    SearchResults,
-};
+use ox_core::search::{HiddenItems, SearchFacets, SearchIn, SearchQuery, SearchResults};
 
 use crate::folder_view::details::DetailsListing;
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::search::{
-    listed_name_matches, merge_results, related_roots, CacheError, Listing, SearchCount, SearchInfoStrip,
-    SearchRun, SearchScope, ShownOptions, RESULT_LIMIT,
+    merge_results, related_roots, CacheError, Listing, SearchCount, SearchInfoStrip, SearchRun, SearchScope,
+    ShownOptions, RESULT_LIMIT,
 };
 
 use super::empty_page::EmptyState;
 use super::search_box::ViewKey;
-use super::session::TabPlacement;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
-
-/// Where "Open file location" opens a search result's folder.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum LocationTarget {
-    /// In the tab that shows the search, which leaves the search.
-    ThisTab,
-    /// In a new tab behind it (SRCH-016).
-    NewTab,
-    /// In a new window (SRCH-016).
-    NewWindow,
-}
 
 impl BrowserWindow {
     /// The strip above the columns while searching.
@@ -221,84 +204,14 @@ impl BrowserWindow {
         });
     }
 
-    /// Walks the folder of `run` and its subfolders off the main thread,
-    /// adding the matches to the rows as they are found, after the
-    /// listing's own (SRCH-035). A newer edit cancels the walk.
-    fn walk_folder(&self, run: SearchRun) {
-        let rows = gio::ListStore::new::<FileItem>();
-        let mut shown = HashSet::new();
-        let active = self.imp().session.borrow().active_id();
-        if let Some(store) = active.and_then(|id| self.tab_store(id)) {
-            let listing = Listing {
-                items: &store,
-                folder: &run.folder,
-                shows_hidden: self.hidden_files_shown(),
-            };
-            let listed = listed_name_matches(listing, &run.text);
-            shown.extend(listed.iter().map(|item| item.entry().uri.clone()));
-            rows.extend_from_slice(&listed);
-        }
-        self.imp().search.borrow_mut().show_found(&run, rows.clone());
-        self.show_searched_items();
-        let search = LiveSearch {
-            folder: run.folder.clone(),
-            pattern: NamePattern::new(&run.text),
-            hidden_items: self.hidden_items(),
-            limit: RESULT_LIMIT,
-            search_in: run.search_in,
-        };
-        let (sender, batches) = async_channel::unbounded::<Vec<Entry>>();
-        let cancellable = run.cancellable.clone();
-        let walk = gio::spawn_blocking(move || {
-            walk_search(&search, &cancellable, &mut |batch| {
-                // Fails only once the window stopped listening.
-                let _ = sender.send_blocking(batch);
-            })
-        });
-        let window = self.downgrade();
-        glib::spawn_future_local(async move {
-            let mut is_truncated = false;
-            while let Ok(batch) = batches.recv().await {
-                let new = batch.into_iter().filter(|entry| shown.insert(entry.uri.clone()));
-                let room = RESULT_LIMIT.saturating_sub(rows.n_items() as usize);
-                let found: Vec<FileItem> = new.map(FileItem::new).collect();
-                is_truncated |= found.len() > room;
-                rows.extend_from_slice(&found[..found.len().min(room)]);
-            }
-            let outcome = walk.await.unwrap_or(Err(SearchError::Cancelled));
-            if let Some(window) = window.upgrade() {
-                let outcome = outcome.map(|end| end.is_truncated || is_truncated);
-                window.finish_walk(&run, rows, outcome);
-            }
-        });
-    }
-
-    /// Shows the rows the walk of `run` found, or why it failed; a late
-    /// answer never replaces a newer one (SAFE-013). `outcome` says
-    /// whether more matched than are shown.
-    fn finish_walk(&self, run: &SearchRun, rows: gio::ListStore, outcome: Result<bool, SearchError>) {
-        let is_current = self.imp().search.borrow().is_current(run);
-        let is_same_folder = self.current_uri().as_deref() == Some(run.folder.as_str());
-        if !is_current || !is_same_folder {
-            return;
-        }
-        match outcome {
-            Ok(is_truncated) => self.imp().search.borrow_mut().finish(run, rows, is_truncated),
-            Err(SearchError::Cancelled) => return,
-            Err(error) => self.imp().search.borrow_mut().fail(run, error.to_string()),
-        }
-        self.show_searched_items();
-        self.show_search_state();
-    }
-
     /// Whether "Show hidden files" is on.
-    fn hidden_files_shown(&self) -> bool {
+    pub(super) fn hidden_files_shown(&self) -> bool {
         let state = self.window_action_state(WindowAction::Hidden);
         state.and_then(|state| state.get::<bool>()).unwrap_or(false)
     }
 
     /// Whether hidden items are searched too: while they are shown.
-    fn hidden_items(&self) -> HiddenItems {
+    pub(super) fn hidden_items(&self) -> HiddenItems {
         if self.hidden_files_shown() {
             HiddenItems::Include
         } else {
@@ -347,7 +260,7 @@ impl BrowserWindow {
 
     /// Shows the search's rows: the cache's results, or else the listing
     /// filtered by the search box's words.
-    fn show_searched_items(&self) {
+    pub(super) fn show_searched_items(&self) {
         let search = self.imp().search.borrow();
         let results = search.results().cloned();
         let words = if results.is_some() {
@@ -373,7 +286,7 @@ impl BrowserWindow {
 
     /// Shows where the search stands: the strip, the columns, the status
     /// bar and the empty page.
-    fn show_search_state(&self) {
+    pub(super) fn show_search_state(&self) {
         let search = self.imp().search.borrow();
         let options = ShownOptions {
             scope: search.scope(),
@@ -495,87 +408,5 @@ impl BrowserWindow {
         }
         self.run_search();
         true
-    }
-
-    /// "Open file location" on a search result: opens the folder it is in
-    /// where `target` says, with the result selected and scrolled into
-    /// view (SRCH-015, SRCH-016). A new tab opens behind, so the search
-    /// stays in front, as Dolphin opens it.
-    pub(super) fn open_result_location(&self, target: LocationTarget) {
-        let items = self.folder_pane().model().selected_items();
-        let [item] = items.as_slice() else {
-            return;
-        };
-        let uri = item.entry().uri.clone();
-        let Some(folder) = parent_location(&uri) else {
-            return;
-        };
-        let opened = match target {
-            LocationTarget::ThisTab => self.navigate(&folder).map(|()| self.locate_in_active_tab(uri)),
-            LocationTarget::NewTab => self.open_located_tab(&folder, uri),
-            LocationTarget::NewWindow => self.open_located_window(&folder, uri),
-        };
-        if let Err(error) = opened {
-            self.show_message(&error.to_string());
-        }
-    }
-
-    /// Selects `uri` in the active tab once it has listed its folder.
-    fn locate_in_active_tab(&self, uri: String) {
-        if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
-            tab.selected = vec![uri.clone()];
-            tab.revealed_item = Some(uri);
-        }
-    }
-
-    /// Opens `folder` in a tab behind the current one, where `uri` is
-    /// selected when the tab is first shown.
-    fn open_located_tab(&self, folder: &str, uri: String) -> Result<(), LocationError> {
-        let folder = self.resolve_address(folder)?;
-        self.save_tab_view();
-        let mut session = self.imp().session.borrow_mut();
-        let id = session.add(&folder, TabPlacement::Background);
-        if let Some(tab) = session.tab_mut(id) {
-            tab.selected = vec![uri.clone()];
-            tab.revealed_item = Some(uri);
-        }
-        drop(session);
-        self.render_tabs();
-        Ok(())
-    }
-
-    /// Opens `folder` in a new window, with `uri` selected there.
-    fn open_located_window(&self, folder: &str, uri: String) -> Result<(), LocationError> {
-        let Some(app) = self.application() else {
-            return Ok(());
-        };
-        let window = BrowserWindow::new(&app, self.context());
-        if let Err(error) = window.add_tab(folder) {
-            window.destroy();
-            return Err(error);
-        }
-        window.locate_in_active_tab(uri);
-        window.present();
-        Ok(())
-    }
-
-    /// Scrolls tab `id`'s item that "Open file location" asked for into
-    /// view, once the tab has listed its folder.
-    pub(super) fn reveal_located_item(&self, id: super::session::TabId) {
-        let revealed = {
-            let mut session = self.imp().session.borrow_mut();
-            session.tab_mut(id).and_then(|tab| tab.revealed_item.take())
-        };
-        let Some(uri) = revealed else {
-            return;
-        };
-        let model = self.folder_pane().model();
-        let position = (0..model.n_items()).find(|position| {
-            let item = model.item(*position);
-            item.is_some_and(|item| item.entry().uri == uri)
-        });
-        if let Some(position) = position {
-            self.folder_pane().reveal(position);
-        }
     }
 }

@@ -76,7 +76,10 @@ impl SearchSource {
 
     /// Whether the search asks the cache.
     pub(crate) const fn uses_cache(self) -> bool {
-        !matches!(self, SearchSource::CurrentFolder | SearchSource::CurrentFolderOnly)
+        !matches!(
+            self,
+            SearchSource::CurrentFolder | SearchSource::CurrentFolderOnly
+        )
     }
 
     /// What the search strip says it searched.

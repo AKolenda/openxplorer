@@ -108,6 +108,9 @@ mod imp {
         pub(super) search_cache: SearchCache,
         /// The searches saved to the sidebar, as last read (SRCH-038).
         pub(super) saved_searches: RefCell<Vec<ox_core::search::SavedSearch>>,
+        /// The number of the reading the saved searches come from; an
+        /// older one that arrives later is dropped.
+        pub(super) saved_searches_reading: Cell<u64>,
         /// The application's updates, made on first use.
         pub(super) updates: OnceCell<Updates>,
         /// The desktop integration, made on first use.

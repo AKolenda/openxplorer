@@ -9,10 +9,12 @@
 //! in a file of their own, written with the same private-storage checks and
 //! atomic replace as the snapshot sources.
 
+use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use super::contents::SearchIn;
 use super::error::SearchError;
 use super::query::MAX_QUERY_CHARS;
 use crate::location::{normalise, safe_label};
@@ -42,6 +44,14 @@ pub struct SavedSearch {
     pub text: String,
     /// What the sidebar shows, "Search for <text> in <folder>".
     pub label: String,
+    /// Whether names or names and contents are searched; names in a file
+    /// saved before the choice was kept.
+    #[serde(default)]
+    pub search_in: SearchIn,
+    /// Whether every cached folder is searched rather than the folder's
+    /// tree.
+    #[serde(default)]
+    pub all_cached_folders: bool,
 }
 
 impl SavedSearch {
@@ -75,6 +85,18 @@ impl SavedSearch {
             folder,
             text: text.to_owned(),
             label: safe_label(label, "Saved search")?,
+            search_in: SearchIn::default(),
+            all_cached_folders: false,
+        })
+    }
+
+    /// `read`, as read back from the file, with its fields checked.
+    fn checked_copy(read: &SavedSearch) -> Result<Self, SearchError> {
+        let checked = Self::checked(&read.folder, &read.text, &read.label)?;
+        Ok(Self {
+            search_in: read.search_in,
+            all_cached_folders: read.all_cached_folders,
+            ..checked
         })
     }
 
@@ -102,19 +124,34 @@ impl SavedSearches {
     /// The saved searches, oldest first. A missing, refused or malformed
     /// file holds none, and invalid entries are dropped.
     pub fn read(&self) -> Vec<SavedSearch> {
+        self.read_for_change().unwrap_or_default()
+    }
+
+    /// The saved searches, for a change that writes them back; invalid
+    /// entries are dropped one by one.
+    ///
+    /// # Errors
+    ///
+    /// Why a file that is there could not be read, or that it is not a
+    /// list, so a change never overwrites searches it could not read.
+    fn read_for_change(&self) -> Result<Vec<SavedSearch>, SearchError> {
         let path = self.directory.join(FILE_NAME);
-        let Ok(Some(file)) = private_file_if_present(&path, PrivateFileOptions::default()) else {
-            return Vec::new();
+        let Some(file) = private_file_if_present(&path, PrivateFileOptions::default())? else {
+            return Ok(Vec::new());
         };
-        let Ok(text) = read_limited_text(file, &path, READ_LIMIT) else {
-            return Vec::new();
-        };
-        let saved: Vec<SavedSearch> = serde_json::from_str(&text).unwrap_or_default();
-        saved
+        let text = read_limited_text(file, &path, READ_LIMIT)?;
+        let entries: Vec<serde_json::Value> =
+            serde_json::from_str(&text).map_err(|error| SearchError::Io {
+                path: path.clone(),
+                error: io::Error::new(io::ErrorKind::InvalidData, error),
+            })?;
+        let searches = entries
             .into_iter()
+            .filter_map(|entry| serde_json::from_value::<SavedSearch>(entry).ok())
+            .filter_map(|search| SavedSearch::checked_copy(&search).ok())
             .take(MAX_SAVED_SEARCHES)
-            .filter_map(|search| SavedSearch::checked(&search.folder, &search.text, &search.label).ok())
-            .collect()
+            .collect();
+        Ok(searches)
     }
 
     /// Adds `search`, replacing an earlier save of the same search, and
@@ -122,9 +159,10 @@ impl SavedSearches {
     ///
     /// # Errors
     ///
-    /// [`SearchError::Storage`] when the file cannot be saved.
+    /// [`SearchError::Storage`] when the file cannot be saved, or the file
+    /// there cannot be read.
     pub fn add(&self, search: SavedSearch) -> Result<Vec<SavedSearch>, SearchError> {
-        let mut searches = self.read();
+        let mut searches = self.read_for_change()?;
         searches.retain(|saved| !saved.is_same_search(&search));
         searches.push(search);
         let excess = searches.len().saturating_sub(MAX_SAVED_SEARCHES);
@@ -137,9 +175,10 @@ impl SavedSearches {
     ///
     /// # Errors
     ///
-    /// [`SearchError::Storage`] when the file cannot be saved.
+    /// [`SearchError::Storage`] when the file cannot be saved, or the file
+    /// there cannot be read.
     pub fn remove(&self, search: &SavedSearch) -> Result<Vec<SavedSearch>, SearchError> {
-        let mut searches = self.read();
+        let mut searches = self.read_for_change()?;
         searches.retain(|saved| !saved.is_same_search(search));
         self.save(&searches)?;
         Ok(searches)
@@ -156,6 +195,8 @@ impl SavedSearches {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     /// parity: SRCH-038
@@ -176,5 +217,28 @@ mod tests {
         assert!(SavedSearch::new("file:///home/demo/Work", "  ", "Work").is_err());
         saved.remove(&report).unwrap();
         assert!(saved.read().is_empty());
+    }
+
+    /// An invalid entry is dropped alone, and a file that is not a list
+    /// is never overwritten by a change.
+    ///
+    /// parity: SRCH-038
+    #[test]
+    fn a_damaged_file_loses_no_search() {
+        let settings = tempfile::tempdir().unwrap();
+        let saved = SavedSearches::new(settings.path());
+        let mut contents = SavedSearch::new("file:///home/demo/Work", "budget", "Work").unwrap();
+        contents.search_in = SearchIn::NamesAndContents;
+        saved.add(contents.clone()).unwrap();
+        let path = settings.path().join(FILE_NAME);
+        let text = fs::read_to_string(&path).unwrap();
+        fs::write(&path, text.replacen('[', "[{\"folder\": 7},", 1)).unwrap();
+
+        assert_eq!(saved.read(), [contents.clone()], "the options are kept too");
+
+        fs::write(&path, "{ not a list").unwrap();
+        let report = SavedSearch::new("file:///home/demo/Work", "report", "Work").unwrap();
+        assert!(saved.add(report).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{ not a list");
     }
 }

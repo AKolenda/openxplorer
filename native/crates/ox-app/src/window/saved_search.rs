@@ -19,6 +19,7 @@ use super::menu_popover::{MenuEntry, MenuItem};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 use crate::icons::Icon;
+use crate::search::SearchScope;
 
 /// What the window says once a search was saved.
 const SEARCH_SAVED: &str = "Search saved to the navigation pane";
@@ -89,10 +90,17 @@ impl BrowserWindow {
         let Some(folder) = self.current_uri() else {
             return;
         };
-        let text = self.imp().search.borrow().query().to_owned();
+        let (text, search_in, scope) = {
+            let search = self.imp().search.borrow();
+            (search.query().to_owned(), search.search_in(), search.scope())
+        };
         let folder_name = self.imp().locations.borrow().title_for(&folder);
         let search = match SavedSearch::new(&folder, &text, &folder_name) {
-            Ok(search) => search,
+            Ok(search) => SavedSearch {
+                search_in,
+                all_cached_folders: scope == SearchScope::AllCachedFolders,
+                ..search
+            },
             Err(error) => {
                 self.show_message(&error.to_string());
                 return;
@@ -107,8 +115,14 @@ impl BrowserWindow {
         });
     }
 
-    /// Opens `folder` and searches it for `text` again.
+    /// Opens `folder` and searches it for `text` again, with the options
+    /// it was saved with.
     fn open_saved_search(&self, folder: &str, text: &str) {
+        let saved = self.context().saved_searches().into_iter();
+        let options = saved
+            .filter(|search| search.folder == folder && search.text == text)
+            .map(|search| (search.search_in, search.all_cached_folders))
+            .next_back();
         if let Err(error) = self.navigate(folder) {
             self.show_message(&error.to_string());
             return;
@@ -118,7 +132,18 @@ impl BrowserWindow {
         glib::idle_add_local_once(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || window.search_box().set_query(&text)
+            move || {
+                if let Some((search_in, all_cached_folders)) = options {
+                    let mut search = window.imp().search.borrow_mut();
+                    search.set_search_in(search_in);
+                    search.set_scope(if all_cached_folders {
+                        SearchScope::AllCachedFolders
+                    } else {
+                        SearchScope::ThisFolder
+                    });
+                }
+                window.search_box().set_query(&text);
+            }
         ));
     }
 }

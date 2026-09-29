@@ -4,7 +4,11 @@
 //!
 //! The file is read and written on a GIO worker thread; the searches as
 //! last read are kept here, and every window redraws its places when they
-//! change.
+//! change. One change at a time reads and writes the file, so two quick
+//! changes both last, and a slower, older answer never replaces a newer
+//! one.
+
+use std::sync::{Mutex, PoisonError};
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -13,6 +17,10 @@ use ox_core::search::{SavedSearch, SavedSearches, SearchError};
 use ox_core::LOG_DOMAIN;
 
 use super::AppContext;
+
+/// Held while a change reads and writes the file; counts the readings, so
+/// the newest is known.
+static FILE_TURN: Mutex<u64> = Mutex::new(0);
 
 impl AppContext {
     /// The saved searches, oldest first, as last read.
@@ -57,9 +65,14 @@ impl AppContext {
         reply: impl FnOnce(Result<(), SearchError>) + 'static,
     ) {
         let context = self.downgrade();
+        let in_turn = move || {
+            let mut reading = FILE_TURN.lock().unwrap_or_else(PoisonError::into_inner);
+            *reading += 1;
+            (*reading, change())
+        };
         glib::spawn_future_local(async move {
             // A change that panicked changed nothing.
-            let Ok(outcome) = gio::spawn_blocking(change).await else {
+            let Ok((reading, outcome)) = gio::spawn_blocking(in_turn).await else {
                 return;
             };
             let Some(context) = context.upgrade() else {
@@ -67,8 +80,11 @@ impl AppContext {
             };
             match outcome {
                 Ok(searches) => {
-                    context.imp().saved_searches.replace(searches);
-                    context.notify_places_changed();
+                    if reading > context.imp().saved_searches_reading.get() {
+                        context.imp().saved_searches_reading.set(reading);
+                        context.imp().saved_searches.replace(searches);
+                        context.notify_places_changed();
+                    }
                     reply(Ok(()));
                 }
                 Err(error) => reply(Err(error)),

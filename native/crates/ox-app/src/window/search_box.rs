@@ -17,6 +17,7 @@
 //! the box for the results through [`SearchBox::connect_view_requested`],
 //! never through the entry itself.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -116,15 +117,28 @@ impl SearchBox {
             on_view_requested,
             move |_| on_view_requested(ViewKey::Leave)
         ));
+        // While an input method composes text, its arrow keys choose among
+        // the candidates, so they stay in the box.
+        let is_composing = Rc::new(Cell::new(false));
+        if let Some(text) = entry.delegate().and_downcast::<gtk::Text>() {
+            text.connect_preedit_changed(glib::clone!(
+                #[strong]
+                is_composing,
+                move |_, preedit| is_composing.set(!preedit.is_empty())
+            ));
+        }
         let keys = gtk::EventControllerKey::new();
         // Before the text field, which would keep Up and Down.
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-        keys.connect_key_pressed(move |_, key, _, modifiers| match ViewKey::of(key, modifiers) {
-            Some(view_key) => {
-                on_view_requested(view_key);
-                glib::Propagation::Stop
+        keys.connect_key_pressed(move |_, key, _, modifiers| {
+            let view_key = ViewKey::of(key, modifiers).filter(|_| !is_composing.get());
+            match view_key {
+                Some(view_key) => {
+                    on_view_requested(view_key);
+                    glib::Propagation::Stop
+                }
+                None => glib::Propagation::Proceed,
             }
-            None => glib::Propagation::Proceed,
         });
         entry.add_controller(keys);
     }

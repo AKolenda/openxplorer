@@ -23,8 +23,8 @@ use crate::icons::Icon;
 use crate::locations::Page;
 
 use super::actions::{plain_action, text_action};
-use super::folder_search::LocationTarget;
 use super::menu_popover::{ItemCheck, MenuItem};
+use super::result_location::LocationTarget;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 

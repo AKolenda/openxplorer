@@ -7,8 +7,8 @@
 use std::time::{Duration, Instant};
 
 use gio::prelude::*;
-use rusqlite::types::Value;
 use rusqlite::functions::FunctionFlags;
+use rusqlite::types::Value;
 use rusqlite::{Connection, Row};
 
 use super::error::{check_cancelled, SearchError};

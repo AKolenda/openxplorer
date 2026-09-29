@@ -267,11 +267,17 @@ mod tests {
         assert_ne!(opened.thread, caller, "the cache opens off the caller's thread");
         for tick in &ticks {
             assert!(tick.is_tick);
-            assert_eq!(tick.thread, opened.thread, "every tick runs on the indexer's thread");
+            assert_eq!(
+                tick.thread, opened.thread,
+                "every tick runs on the indexer's thread"
+            );
         }
         for pair in ticks.windows(2) {
             let gap = pair[1].began.duration_since(pair[0].ended);
-            assert!(gap >= TICK_INTERVAL, "a tick waits a second after the last one ended");
+            assert!(
+                gap >= TICK_INTERVAL,
+                "a tick waits a second after the last one ended"
+            );
         }
     }
 }

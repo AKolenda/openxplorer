@@ -15,6 +15,7 @@ use std::fs::File;
 use std::io::Read;
 
 use gio::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::entry::{Entry, EntryKind};
 
@@ -25,7 +26,8 @@ pub const MAX_READ_BYTES: u64 = 16 * 1024 * 1024;
 const BINARY_SNIFF_BYTES: usize = 8 * 1024;
 
 /// What a search matches its words against.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SearchIn {
     /// File and folder names, as the cache and the filter do.
     #[default]
