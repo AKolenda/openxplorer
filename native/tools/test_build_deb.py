@@ -110,10 +110,11 @@ class ControlFieldTests(unittest.TestCase):
         stable = control_of(Channel.STABLE)['Recommends']
         preview = control_of(Channel.PREVIEW)['Recommends']
 
-        for name in ('pkexec', 'python3 (>= 3.10)', 'cifs-utils'):
+        for name in ('pkexec', 'cifs-utils'):
             with self.subTest(name=name):
                 self.assertIn(name, stable)
                 self.assertNotIn(name, preview)
+        self.assertNotIn('python', stable + preview)
 
     def test_the_preview_installs_beside_the_python_package(self) -> None:
         fields = control_of(Channel.PREVIEW)

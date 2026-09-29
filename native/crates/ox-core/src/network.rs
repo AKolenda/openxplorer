@@ -2,7 +2,7 @@
 //! Network shares, sign-in and mounts: the network service of the window.
 //!
 //! Ports `desktop/session_credentials.py`, `desktop/auth_bridge.py`,
-//! `desktop/mount_support.py`, the file rules of `desktop/mount_share.py`,
+//! `desktop/mount_support.py`, `desktop/mount_share.py`,
 //! and the network operations of `desktop/winspace.py` (`mount`,
 //! `connect`, `mountVolume`, `unmount`, `sign_out`, `discover_network`,
 //! `remember_network`), `verify_folder` and `discover_servers` of
@@ -34,7 +34,8 @@
 //! | `discovery` | Servers advertising on the local network | `winspace.py`, `gio_backend.py` |
 //! | `visited` | Servers and shares browsed this session | `winspace.py` |
 //! | `mount_table`, `local_path` | Local paths of SMB locations | `mount_support.py`, `native_opening.py` |
-//! | `mount_plan`, `mount_helper` | The persistent mount assistant | `mount_support.py`, `mount_share.py` |
+//! | `mount_plan` | The persistent mount assistant's plan | `mount_support.py` |
+//! | `mount_helper` | The administrator helper, `openxplorer-mount-share` | `mount_share.py` |
 //!
 //! The privacy rules of the Python modules hold here too, each enforced
 //! and documented where it applies:
@@ -56,15 +57,6 @@ mod discovery;
 mod error;
 mod keyring;
 mod local_path;
-// The helper program that uses these file rules is ported in the "Network
-// and devices" milestone of ROADMAP.md; until then only the tests call them.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "used by the openxplorer-mount-share helper, not ported yet"
-    )
-)]
 mod mount_helper;
 mod mount_plan;
 mod mount_table;
@@ -85,6 +77,7 @@ pub use discovery::{discover_servers, DiscoveredServer, Discovery, DISCOVERY_NOT
 pub use error::NetworkError;
 pub use keyring::{Keyring, KeyringCollection, KeyringError, NewSecret, SecretAttributes};
 pub use local_path::{fuse_export_path, local_path};
+pub use mount_helper::mount_share_command;
 pub use mount_plan::{mount_plan, DesktopUser, MountPlan, MountPlanError};
 pub use mount_table::{
     mount_for_path, parse_mount_table, read_mount_table, read_stable_smb_mounts, resolve_smb_path, MountEntry,

@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The file-safety rules of the administrator mount helper.
+//! The administrator mount helper, `openxplorer-mount-share`.
 //!
-//! Ports `secure_dir`, `exclusive_write` and the credential-file text of
-//! `desktop/mount_share.py`, the helper that `sudo` runs from the plan's
-//! command ([`MountPlan`](super::MountPlan)). The GUI never runs it and
-//! never gains privileges.
+//! Ports `desktop/mount_share.py`, the program that `sudo` runs from the
+//! plan's command ([`MountPlan`](super::MountPlan)) in the user's own
+//! terminal. The GUI never runs it and never gains privileges. It prints
+//! the plan, asks for `SETUP` (or `REMOVE`) and the SMB account, writes a
+//! root-only credential file and two systemd units without replacing
+//! anything, and rolls back on failure. It never edits fstab and never
+//! deletes shared or local files.
 //!
-//! The helper's interactive command line (`main` in `mount_share.py`:
-//! review, `SETUP`/`REMOVE` confirmation, `systemctl` and rollback) is a
-//! separate `sudo` program, ported with the rest of the network service
-//! (ROADMAP.md, "Network and devices"). Until then the packaged
-//! `openxplorer-mount-share` keeps running `mount_share.py`, which needs
-//! only `mount_support.py` and the standard library, and these rules are
-//! crate-private and called only by their tests.
+//! | Module | Responsibility |
+//! |---|---|
+//! | this file | The file-safety rules and the credential file |
+//! | `arguments` | The command line, as `argparse` read it |
+//! | `host` | The computer the helper changes: files, systemd, the desktop account |
+//! | `terminal` | Questions, answers and a password typed without echo |
+//! | `setup` | Setting up, removing and printing a managed mount |
 
 use std::fs::{self, DirBuilder, OpenOptions};
 use std::io::{self, Write};
@@ -21,15 +24,30 @@ use std::path::{Component, Path, PathBuf};
 
 use rustix::fs::OFlags;
 
+use super::MountPlanError;
 use crate::location::python_strip;
 use crate::private_storage::KernelOpenFlags;
+
+mod arguments;
+mod host;
+mod setup;
+mod terminal;
+#[cfg(test)]
+mod tests;
+
+use arguments::{Request, HELP, USAGE};
+use host::{Host, SystemSystemd};
+use terminal::ConsoleTerminal;
 
 /// Permission bits that let the group or others write.
 const GROUP_OR_OTHER_WRITE: u32 = 0o022;
 /// The mode parent directories are created with.
 const PARENT_MODE: u32 = 0o755;
+/// The user ID of root, who owns every file the helper manages.
+const ROOT_UID: u32 = 0;
 
-/// Why the helper refused a path or the credentials typed in its terminal.
+/// Why the helper stopped, in the words `mount_share.py` printed after
+/// `Mount setup: `.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum MountHelperError {
     /// A relative path, or one with `..`.
@@ -45,6 +63,41 @@ pub(crate) enum MountHelperError {
     /// `DOMAIN\` without a user name.
     #[error("Enter a username after the domain.")]
     MissingUsername,
+    /// Run from a root login, or `SUDO_UID` names root.
+    #[error("Run with sudo from your normal desktop account, not a root login.")]
+    RootLogin,
+    /// The desktop account is not in the user database.
+    #[error("No account has the user ID {0}.")]
+    UnknownAccount(String),
+    /// The share cannot be planned.
+    #[error(transparent)]
+    Plan(#[from] MountPlanError),
+    /// A change was asked for without `sudo`.
+    #[error("This operation requires sudo. The GUI itself must stay unprivileged.")]
+    NotAdministrator,
+    /// Standard input is not a terminal, so nobody can review the change.
+    #[error("Run in a terminal so you can review and confirm the change.")]
+    NotATerminal,
+    /// A managed file to remove is missing, a symlink or not root's.
+    #[error("Missing or unsafe managed files; refusing automatic removal.")]
+    UnsafeManagedFiles,
+    /// A managed unit no longer has the text the helper wrote.
+    #[error("Unit files have been edited. Remove them manually after review.")]
+    EditedUnits,
+    /// `mount.cifs` is not installed.
+    #[error("Install the cifs-utils package first, then run this command again.")]
+    MissingCifsUtils,
+    /// A unit, the credential file or the mount point already exists.
+    #[error("This mount already exists or a path is in use. Nothing was overwritten.\nRemoval command: {0}")]
+    AlreadyExists(String),
+    /// `systemctl` failed or took too long.
+    #[error("systemctl {command} {reason}")]
+    Systemctl {
+        /// The arguments, joined with spaces.
+        command: String,
+        /// What went wrong, such as `failed with exit status 1`.
+        reason: String,
+    },
     /// The file system refused an operation on `path`.
     #[error("{error}: {}", path.display())]
     Io {
@@ -53,6 +106,9 @@ pub(crate) enum MountHelperError {
         /// What the operating system reported.
         error: io::Error,
     },
+    /// Reading an answer or writing to the terminal failed.
+    #[error("{0}")]
+    Terminal(#[source] io::Error),
 }
 
 impl MountHelperError {
@@ -64,45 +120,79 @@ impl MountHelperError {
     }
 }
 
-/// Makes sure `path` and every directory above it are root-owned, real
-/// directories that only root can write, creating a missing one with
-/// `mode` (its missing parents with 0755).
+/// The folders the helper may write in: everything below `root`, where
+/// every directory must belong to `owner`.
 ///
-/// Safety rule (NET-028): the helper writes root-only files only where no
-/// other user can swap a directory for a symlink, so the whole existing
-/// parent chain is checked, not just the last directory.
-///
-/// # Errors
-///
-/// [`MountHelperError::NotAbsolute`], [`MountHelperError::UnsafeDirectory`]
-/// naming the first unsafe directory, or the I/O error of creating one.
-pub(crate) fn secure_directory(path: &Path, mode: u32) -> Result<(), MountHelperError> {
-    let has_parent_traversal = path
-        .components()
-        .any(|component| component == Component::ParentDir);
-    if !path.is_absolute() || has_parent_traversal {
-        return Err(MountHelperError::NotAbsolute);
-    }
-    if let Some(parent) = path.parent() {
-        secure_directory(parent, PARENT_MODE)?;
-    }
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            DirBuilder::new()
-                .mode(mode)
-                .create(path)
-                .map_err(|error| MountHelperError::io(path, error))?;
-            fs::symlink_metadata(path).map_err(|error| MountHelperError::io(path, error))?
+/// On a real system this is `/` and root; tests use a temporary folder
+/// and their own user.
+#[derive(Debug, Clone)]
+pub(crate) struct AdministrativeTree {
+    root: PathBuf,
+    owner: u32,
+}
+
+impl AdministrativeTree {
+    /// The whole file system, owned by root.
+    pub(crate) fn system() -> Self {
+        Self {
+            root: PathBuf::from("/"),
+            owner: ROOT_UID,
         }
-        Err(error) => return Err(MountHelperError::io(path, error)),
-    };
-    let is_root_only =
-        metadata.is_dir() && metadata.uid() == 0 && metadata.mode() & GROUP_OR_OTHER_WRITE == 0;
-    if !is_root_only {
-        return Err(MountHelperError::UnsafeDirectory(path.to_path_buf()));
     }
-    Ok(())
+
+    /// Where the absolute system path `path` is inside this tree.
+    pub(crate) fn path(&self, path: &Path) -> PathBuf {
+        self.root.join(path.strip_prefix("/").unwrap_or(path))
+    }
+
+    /// The user every administrative folder and managed file belongs to.
+    pub(crate) fn owner(&self) -> u32 {
+        self.owner
+    }
+
+    /// Makes sure `path` and every directory above it, up to the tree's
+    /// root, are real directories of the owner that only the owner can
+    /// write, creating a missing one with `mode` (its missing parents with
+    /// 0755).
+    ///
+    /// Safety rule (NET-028): the helper writes root-only files only where
+    /// no other user can swap a directory for a symlink, so the whole
+    /// existing parent chain is checked, not just the last directory.
+    ///
+    /// # Errors
+    ///
+    /// [`MountHelperError::NotAbsolute`], [`MountHelperError::UnsafeDirectory`]
+    /// naming the first unsafe directory, or the I/O error of creating one.
+    pub(crate) fn secure_directory(&self, path: &Path, mode: u32) -> Result<(), MountHelperError> {
+        let has_parent_traversal = path
+            .components()
+            .any(|component| component == Component::ParentDir);
+        if !path.is_absolute() || has_parent_traversal {
+            return Err(MountHelperError::NotAbsolute);
+        }
+        if path != self.root {
+            if let Some(parent) = path.parent() {
+                self.secure_directory(parent, PARENT_MODE)?;
+            }
+        }
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                DirBuilder::new()
+                    .mode(mode)
+                    .create(path)
+                    .map_err(|error| MountHelperError::io(path, error))?;
+                fs::symlink_metadata(path).map_err(|error| MountHelperError::io(path, error))?
+            }
+            Err(error) => return Err(MountHelperError::io(path, error)),
+        };
+        let is_owner_only =
+            metadata.is_dir() && metadata.uid() == self.owner && metadata.mode() & GROUP_OR_OTHER_WRITE == 0;
+        if !is_owner_only {
+            return Err(MountHelperError::UnsafeDirectory(path.to_path_buf()));
+        }
+        Ok(())
+    }
 }
 
 /// Writes `text` to a new file at `path` with `mode` and flushes it to
@@ -154,103 +244,34 @@ pub(crate) fn credential_file_text(typed_username: &str, password: &str) -> Resu
     Ok(format!("username={username}\npassword={password}\n{domain_line}"))
 }
 
-#[cfg(test)]
-mod tests {
-    use std::os::unix::fs::{symlink, PermissionsExt};
-
-    use super::*;
-
-    /// Ported from `desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_admin_helper_checks_existing_parent_chain`
-    ///
-    /// The temporary folder's parents (such as the world-writable `/tmp`,
-    /// or a home owned by the user) are unsafe even though the directory
-    /// itself looks private.
-    ///
-    /// parity: NET-028, SAFE-021
-    #[test]
-    fn an_unsafe_parent_chain_is_refused() {
-        let root = tempfile::tempdir().expect("temporary folder");
-        let owned = root.path().join("owned");
-        DirBuilder::new()
-            .mode(0o700)
-            .create(&owned)
-            .expect("private folder");
-
-        let refused = secure_directory(&owned, 0o700);
-
-        assert!(
-            matches!(refused, Err(MountHelperError::UnsafeDirectory(_))),
-            "{refused:?}"
-        );
-    }
-
-    /// parity: SAFE-021
-    #[test]
-    fn relative_and_traversing_paths_are_refused() {
-        for path in ["etc/winspace", "/etc/../tmp"] {
-            let refused = secure_directory(Path::new(path), 0o755);
-            assert!(
-                matches!(refused, Err(MountHelperError::NotAbsolute)),
-                "{path}: {refused:?}"
-            );
+/// Runs `openxplorer-mount-share` with the command-line `arguments`
+/// (without the program name) on this computer and returns its exit
+/// status: 0 when done, 1 when cancelled or refused, 2 for a usage error.
+pub fn mount_share_command(arguments: impl IntoIterator<Item = String>) -> u8 {
+    let request = match arguments::parse(arguments) {
+        Ok(request) => request,
+        Err(error) => {
+            eprintln!("{USAGE}\nopenxplorer-mount-share: error: {error}");
+            return 2;
         }
-    }
-
-    /// parity: NET-028, SAFE-021
-    #[test]
-    fn a_new_file_gets_its_mode_and_never_replaces_anything() {
-        let root = tempfile::tempdir().expect("temporary folder");
-        let credential = root.path().join("credential");
-
-        write_new_file(&credential, "username=sam\n", 0o600).expect("a new file");
-
-        let mode = fs::metadata(&credential).expect("written").permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600);
-        assert!(write_new_file(&credential, "other", 0o600).is_err());
-        assert_eq!(
-            fs::read_to_string(&credential).expect("readable"),
-            "username=sam\n"
-        );
-    }
-
-    /// parity: SAFE-021
-    #[test]
-    fn a_symlink_is_never_followed() {
-        let root = tempfile::tempdir().expect("temporary folder");
-        let target = root.path().join("target");
-        fs::write(&target, "unchanged").expect("target file");
-        let link = root.path().join("link");
-        symlink(&target, &link).expect("symlink");
-
-        assert!(write_new_file(&link, "password=x\n", 0o600).is_err());
-        assert_eq!(fs::read_to_string(&target).expect("readable"), "unchanged");
-    }
-
-    /// parity: NET-028
-    #[test]
-    fn the_credential_file_names_user_password_and_optional_domain() {
-        assert_eq!(
-            credential_file_text(" OFFICE\\sam ", "secret").expect("valid"),
-            "username=sam\npassword=secret\ndomain=OFFICE\n"
-        );
-        assert_eq!(
-            credential_file_text("sam", "secret").expect("valid"),
-            "username=sam\npassword=secret\n"
-        );
-    }
-
-    /// parity: NET-028
-    #[test]
-    fn credentials_that_would_break_the_file_are_refused() {
-        let invalid = [("", "secret"), ("sam", "line\nbreak"), ("sam\0", "secret")];
-        for (username, password) in invalid {
-            let refused = credential_file_text(username, password);
-            assert!(
-                matches!(refused, Err(MountHelperError::InvalidCredentials)),
-                "{username:?}"
-            );
+    };
+    let arguments = match request {
+        Request::Help => {
+            println!("{HELP}");
+            return 0;
         }
-        let without_user = credential_file_text("OFFICE\\", "secret");
-        assert!(matches!(without_user, Err(MountHelperError::MissingUsername)));
+        Request::Run(arguments) => arguments,
+    };
+    let mut systemd = SystemSystemd;
+    let result = host::invoking_account().and_then(|account| {
+        let mut host = Host::system(&mut systemd);
+        setup::run(&arguments, &account, &mut host, &mut ConsoleTerminal)
+    });
+    match result {
+        Ok(outcome) => outcome.exit_status(),
+        Err(error) => {
+            eprintln!("Mount setup: {error}");
+            1
+        }
     }
 }

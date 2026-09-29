@@ -99,11 +99,14 @@ class RpmFileListTests(unittest.TestCase):
         self.folder = Path(temporary.name)
         self.program = self.folder / 'openxplorer-native'
         self.program.write_bytes(b'\x7fELF fake program')
+        self.mount_helper = self.folder / 'openxplorer-mount-share'
+        self.mount_helper.write_bytes(b'\x7fELF fake helper')
 
     def installed_files(self, channel: Channel) -> list[str]:
         """Install the channel's FHS layout and return its files as installed paths."""
         staging = self.folder / channel.name
-        package_data.install(InstallRequest(channel, Layout.FHS, self.program, staging), [])
+        request = InstallRequest(channel, Layout.FHS, self.program, staging, self.mount_helper)
+        package_data.install(request, [])
         return sorted('/' + path.relative_to(staging).as_posix()
                       for path in staging.rglob('*') if path.is_file() or path.is_symlink())
 
@@ -126,6 +129,25 @@ class RpmFileListTests(unittest.TestCase):
                            if not any(is_listed(path, [entry]) for path in installed)]
 
                 self.assertEqual(missing, [])
+
+
+class RecipeBuildTests(unittest.TestCase):
+    """Every recipe builds and installs the mount helper, and none needs Python to run."""
+
+    def test_the_recipes_build_the_mount_helper(self) -> None:
+        for recipe in (SPEC, PKGBUILD):
+            with self.subTest(recipe=recipe.name):
+                text = recipe.read_text(encoding='utf-8')
+
+                self.assertIn('--package ox-core --bin openxplorer-mount-share', text)
+                self.assertIn('--mount-helper', text)
+
+    def test_python_is_only_a_build_tool(self) -> None:
+        spec = SPEC.read_text(encoding='utf-8')
+        pkgbuild = PKGBUILD.read_text(encoding='utf-8')
+
+        self.assertNotRegex(spec, r'(?m)^(Requires|Recommends):\s+python')
+        self.assertNotRegex(pkgbuild, r"optdepends\+?=\([^)]*'python")
 
 
 class SourceArchiveTests(unittest.TestCase):

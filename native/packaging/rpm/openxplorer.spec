@@ -60,8 +60,7 @@ Recommends:     xdg-utils
 # Open in archive manager.
 Recommends:     file-roller
 %if "%{app_id}" == "io.winspace.Development"
-# The persistent SMB mount helper, openxplorer-mount-share.
-Recommends:     python3
+# mount.cifs, which the persistent SMB mount helper's units run.
 Recommends:     cifs-utils
 %endif
 
@@ -86,12 +85,14 @@ EOF
 %build
 export OX_APP_ID=%{app_id}
 cargo build --release --locked --offline --manifest-path native/Cargo.toml \
-    --package ox-app --bin openxplorer-native
+    --package ox-app --bin openxplorer-native \
+    --package ox-core --bin openxplorer-mount-share
 
 %install
 # The shared install layout of every package format (native/tools/package_data.py).
 python3 native/tools/package_data.py --app-id %{app_id} --layout fhs \
-    --program native/target/release/openxplorer-native --destdir %{buildroot}
+    --program native/target/release/openxplorer-native \
+    --mount-helper native/target/release/openxplorer-mount-share --destdir %{buildroot}
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/%{app_id}.desktop
@@ -105,11 +106,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %{_datadir}/dbus-1/services/%{app_id}.service
 %{_datadir}/licenses/%{name}/
 %if "%{app_id}" == "io.winspace.Development"
-# The Python package's command names and its persistent SMB mount helper.
+# The Python package's command names and the persistent SMB mount helper.
 %{_bindir}/winspace
 %{_bindir}/openxplorer-mount-share
 %{_bindir}/winspace-mount-share
-%{_datadir}/%{name}/
 %endif
 
 %changelog
