@@ -9,6 +9,7 @@
 //! A local folder also gets Analyse disk usage where an analyser is
 //! installed.
 
+use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
 use ox_core::integration::DiskTool;
@@ -17,7 +18,7 @@ use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::{ItemProperties, MountFacts};
-use crate::dialog_layer::{note, quiet_text, PropertyGrid};
+use crate::dialog_layer::{note, quiet_text, DialogFrame, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};
 
@@ -57,6 +58,9 @@ pub(super) struct GeneralFacts<'a> {
     pub folder_size: Option<&'a FolderSizeState>,
     /// The snapshot collections known now, whose items are read-only.
     pub snapshot_roots: &'a [String],
+    /// The name can be edited to rename the item (PROP-005): not a
+    /// standard folder, a share, a page or a previous version.
+    pub can_rename: bool,
 }
 
 /// The values of a folder's General tab that a folder-size scan updates.
@@ -83,7 +87,7 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     clear(panel);
     let properties = facts.properties;
     let entry = &properties.entry;
-    panel.append(&header(properties));
+    panel.append(&header(properties, facts.can_rename));
     let grid = PropertyGrid::new();
     let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
     grid.add_row("Type", &entry.type_label);
@@ -152,13 +156,19 @@ fn add_mount_rows(grid: &PropertyGrid, mount: &MountFacts) {
     grid.widget().attach(&bar, column, line + 1, 1, 1);
 }
 
-/// The item's picture and name (`.property-file`).
-fn header(properties: &ItemProperties) -> gtk::Box {
+/// The item's picture and name (`.property-file`). The name is a field
+/// when the item can be renamed: Enter renames it, as OK does in
+/// Explorer's and Dolphin's Properties.
+fn header(properties: &ItemProperties, can_rename: bool) -> gtk::Box {
     let header = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .css_classes(["property-file"])
         .build();
     header.append(&ArtImage::new(Art::for_entry(&properties.entry), HEADER_ART_SIZE));
+    if can_rename {
+        header.append(&name_field(&properties.entry.uri, &properties.entry.name));
+        return header;
+    }
     let name = gtk::Label::builder()
         .label(&properties.entry.name)
         .xalign(0.0)
@@ -170,6 +180,39 @@ fn header(properties: &ItemProperties) -> gtk::Box {
         .build();
     header.append(&name);
     header
+}
+
+/// The editable name of the item at `uri`; Enter asks the window to
+/// rename it, and the dialog closes once it is renamed.
+fn name_field(uri: &str, name: &str) -> gtk::Entry {
+    let field = gtk::Entry::builder()
+        .text(name)
+        .hexpand(true)
+        .valign(gtk::Align::Center)
+        .build();
+    field.update_property(&[gtk::accessible::Property::Label("Name")]);
+    let uri = uri.to_owned();
+    let original = name.to_owned();
+    field.connect_activate(move |field| {
+        let name = field.text().to_string();
+        let window = field.root().and_downcast::<crate::window::BrowserWindow>();
+        let (false, Some(window)) = (name == original, window) else {
+            return;
+        };
+        let frame = field
+            .ancestor(DialogFrame::static_type())
+            .and_downcast::<DialogFrame>();
+        let uri = uri.clone();
+        glib::spawn_future_local(async move {
+            let renamed = window.rename_item_at(&uri, &name).await;
+            match (renamed, frame) {
+                (Ok(()), Some(frame)) => frame.close(),
+                (Err(message), Some(frame)) => frame.show_error(&message),
+                (_, None) => {}
+            }
+        });
+    });
+    field
 }
 
 /// The Size value: a file's size, or a folder's measured size or "Not

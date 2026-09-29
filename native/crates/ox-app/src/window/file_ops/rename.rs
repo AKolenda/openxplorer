@@ -78,6 +78,18 @@ impl BrowserWindow {
         }
     }
 
+    /// Renames the item at `uri` to `name`, as the name field of
+    /// Properties asks (PROP-005): the same checks, write protection and
+    /// Undo as Rename. The error is the message to show.
+    pub(crate) async fn rename_item_at(&self, uri: &str, name: &str) -> Result<(), String> {
+        let context = OperationContext::new(self.context().write_protection());
+        let renamed = rename_item(uri, name, &context)
+            .await
+            .map_err(|error| error.to_string())?;
+        self.finish_rename(renamed);
+        Ok(())
+    }
+
     /// Remembers the rename for Undo and selects the item under its new
     /// name.
     pub(super) fn finish_rename(&self, renamed: RenamedItem) {

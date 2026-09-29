@@ -16,7 +16,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::EntryError;
 use ox_core::folder_locations::FolderRelocation;
-use ox_core::location::{ItemKind, LocationContext};
+use ox_core::location::{is_smb_location, is_smb_server, is_smb_share_root, ItemKind, LocationContext};
+use ox_core::versions::is_conventional_snapshot;
 use ox_core::versions::PreviousVersions;
 
 use super::checksums_panel::ChecksumsPanel;
@@ -279,10 +280,25 @@ impl PropertiesView {
             locations: &context.locations,
             folder_size: context.folder_size.as_ref(),
             snapshot_roots: &context.locations.snapshot_roots,
+            can_rename: self.can_rename(&properties, context),
         };
         let folder_rows = general_panel::fill_general(&imp.general, &facts);
         imp.folder_rows.replace(folder_rows);
         general_panel::fill_permissions(&imp.permissions, &properties);
+    }
+
+    /// Whether the name can be edited: an item in a local or shared folder,
+    /// not a standard folder, a share or server, or inside a previous version.
+    fn can_rename(&self, properties: &ItemProperties, context: &PropertiesContext) -> bool {
+        let uri = &properties.entry.uri;
+        let is_share = is_smb_server(uri) || is_smb_share_root(uri);
+        let is_read_only = context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
+        let is_renamable_place = uri.starts_with("file:") || is_smb_location(uri);
+        self.target().known_folder.is_none()
+            && properties.parent_uri.is_some()
+            && !is_share
+            && !is_read_only
+            && is_renamable_place
     }
 
     /// Shows the folder's new measured size, if this dialog describes the

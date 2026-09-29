@@ -190,6 +190,35 @@ fn properties_without_a_selection_describe_the_folder() {
     assert_eq!(value_after(&general, "Contains").as_deref(), Some("Not scanned"));
 }
 
+/// The name in Properties renames the item on Enter, refusing a taken
+/// name inside the dialog, and the dialog closes once it is renamed.
+///
+/// parity: PROP-005
+#[gtk::test]
+fn the_name_in_properties_renames_the_item() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Taken.txt"), b"keep").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    let general = properties_view(&frame).general_panel();
+    wait_until("the name field", || !descendants::<gtk::Entry>(&general).is_empty());
+    let name = descendants::<gtk::Entry>(&general).remove(0);
+    assert_eq!(name.text(), "Notes 2.txt");
+
+    name.set_text("Taken.txt");
+    name.emit_activate();
+    wait_until("the refusal", || !frame.error_text().is_empty());
+    assert_eq!(fs::read(fixture.path("Taken.txt")).expect("kept"), b"keep");
+    name.set_text("Renamed.txt");
+    name.emit_activate();
+
+    wait_until("the rename", || fixture.path("Renamed.txt").exists());
+    assert!(!fixture.path("Notes 2.txt").exists());
+    wait_until("the dialog to close", || frame.is_closed());
+}
+
 /// A link says where it points, and a mount point what is mounted there
 /// and how much space is free.
 ///
@@ -621,7 +650,7 @@ fn the_snapshot_source_form_saves_a_mapping_and_lists_again() {
     wait_until("the versions", || !versions.version_labels().is_empty());
 
     press(&frame, "Snapshot source…");
-    let fields = descendants::<gtk::Entry>(&frame);
+    let fields = descendants::<gtk::Entry>(&versions);
     fields[1].set_text(&backups.display().to_string());
     press(&frame, "Save source");
 

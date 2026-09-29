@@ -12870,7 +12870,8 @@ sources = ["kio:src/widgets/kpropertiesdialog.cpp:920-1000"]
 python_tests = []
 bridge = ["rename"]
 dolphin = "KFilePropsPlugin name edit"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (the_name_in_properties_renames_the_item). The name at the top of the General tab is an editable field for an item in a local or shared folder (not a standard folder, a share or server, a page or anything inside a previous version); Enter renames it through the same rename operation as F2 (Python name checks, write protection, never overwriting, Undo), shows a refusal such as a taken name inside the dialog, and closes the dialog once renamed, as OK does in Explorer and Dolphin."
 
 [[feature]]
 id = "PROP-006"
