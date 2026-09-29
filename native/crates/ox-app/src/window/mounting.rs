@@ -63,6 +63,16 @@ impl BrowserWindow {
     /// Mounts the volume `id` for a drop onto its sidebar row (DEV-010)
     /// and returns its root; a failure shows "Could not mount device".
     pub(super) async fn mount_for_drop(&self, id: &str) -> Option<String> {
+        #[cfg(test)]
+        if let Some((_, root)) = self
+            .imp()
+            .test_volume
+            .borrow()
+            .as_ref()
+            .filter(|(test_id, _)| test_id == id)
+        {
+            return Some(root.clone());
+        }
         let volumes = self.volume_monitor().volumes();
         let operation = gtk::MountOperation::new(Some(self));
         match mount_volume(&volumes, id, Some(operation.upcast_ref())).await {

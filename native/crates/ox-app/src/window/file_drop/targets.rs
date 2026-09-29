@@ -513,8 +513,9 @@ mod tests {
         assert_eq!(test.window.sidebar_spot(this_pc), None, "a page takes no drop");
     }
 
-    /// A drive still to be mounted takes a drop, which mounts it first;
-    /// a volume that cannot be mounted says so and copies nothing.
+    /// A drive still to be mounted takes a drop, which mounts it first
+    /// and then copies the items into its root; a volume that cannot be
+    /// mounted says so and copies nothing.
     ///
     /// parity: DEV-010
     #[gtk::test]
@@ -553,6 +554,24 @@ mod tests {
                 .filter_map(|window| window.downcast::<gtk::Window>().ok())
                 .any(says_so)
         });
+
+        // A drive that mounts receives the items in its root.
+        std::fs::create_dir(fixture.path("USB")).expect("the drive's root");
+        let root = fixture.uri_of("USB");
+        test.window
+            .imp()
+            .test_volume
+            .replace(Some(("usb-volume".to_owned(), root)));
+        let window = test.window.clone();
+        let dropped = vec![fixture.uri_of("Notes 2.txt")];
+        glib::spawn_future_local(async move {
+            let destination = DropDestination::Volume("usb-volume".to_owned());
+            window.deliver_drop(&dropped, destination, DropAction::Copy).await;
+        });
+        wait_until("the copy on the drive", || {
+            fixture.path("USB/Notes 2.txt").exists()
+        });
+        assert!(fixture.path("Notes 2.txt").exists(), "a copy keeps the original");
     }
 
     /// parity: DND-014

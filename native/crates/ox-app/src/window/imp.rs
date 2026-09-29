@@ -125,6 +125,10 @@ pub(crate) struct BrowserWindow {
     pub(super) quick_look: super::quick_look::QuickLook,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
+    /// In tests, a volume id and the root it mounts at, standing in for a
+    /// drive the isolated session does not have.
+    #[cfg(test)]
+    pub(super) test_volume: RefCell<Option<(String, String)>>,
     /// Set while the window swaps or reloads the model, so the
     /// selection it restores is not saved over the tab's selection.
     pub(super) changing_model: Cell<bool>,
