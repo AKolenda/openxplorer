@@ -113,6 +113,57 @@ impl SearchCache {
             .await
     }
 
+    /// Pauses indexing of SMB server `host` while the user signs out of it
+    /// (`pause_server` in `index_service.py`): its running scans stop and it
+    /// is skipped until [`Self::resume_server`].
+    pub(crate) fn pause_server(&self, host: &str) {
+        let host = host.to_owned();
+        self.change_if_started("pause indexing the server", move |service| {
+            service.pause_server(&host)
+        });
+    }
+
+    /// Deletes the cached names of every indexed folder on SMB server
+    /// `host`, for "Also clear cached filenames for this server" (NET-022).
+    pub(crate) fn clear_server(&self, host: &str) {
+        let host = host.to_owned();
+        self.change_if_started("clear the server's cached names", move |service| {
+            service.clear_server(&host)
+        });
+    }
+
+    /// Indexes SMB server `host` again after a successful mount of it, so
+    /// a pinned share that needed sign-in is indexed now (SRCH-040).
+    pub(crate) fn resume_server(&self, host: &str) {
+        let host = host.to_owned();
+        self.change_if_started("resume indexing the server", move |service| {
+            service.resume_server(&host)
+        });
+    }
+
+    /// Whether indexing of SMB server `host` is paused for a sign-out.
+    ///
+    /// # Errors
+    ///
+    /// [`CacheError::NotStarted`] before [`Self::start`].
+    #[cfg(test)]
+    pub(crate) async fn is_server_paused(&self, host: &str) -> Result<bool, CacheError> {
+        let host = host.to_owned();
+        self.run(move |service| Ok(service.is_server_paused(&host))).await
+    }
+
+    /// Runs `change` in the background once the index service has
+    /// started; before that there is nothing to change.
+    fn change_if_started(
+        &self,
+        what: &'static str,
+        change: impl FnOnce(&IndexService) -> Result<(), SearchError> + Send + 'static,
+    ) {
+        if self.imp().indexer.borrow().is_some() {
+            self.change_in_background(what, change);
+        }
+    }
+
     /// Runs `change` like [`Self::run`] and reads the status again after it
     /// succeeded, so every window shows its effect and re-runs a shown
     /// search (`setCache` in app.js).

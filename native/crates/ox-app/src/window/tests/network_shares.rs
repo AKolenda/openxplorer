@@ -13,9 +13,9 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use gtk::gio;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::entry::entry_from_info;
 use ox_core::network::ConnectedShare;
 use ox_core::places::StableMount;
@@ -180,4 +180,49 @@ fn a_folder_without_change_notifications_refreshes_on_request() {
         test.names().contains(&"Added on the server.txt".to_owned())
     });
     assert_eq!(test.window.load_error(), None);
+}
+
+/// Whether the search cache pauses indexing of the server `host`.
+fn is_indexing_paused(test: &TestWindow, host: &str) -> bool {
+    let paused = test.context.search_cache().is_server_paused(host);
+    glib::MainContext::default()
+        .block_on(paused)
+        .expect("a started search cache")
+}
+
+/// Signing out pauses indexing of the server (and asks for its cached
+/// names to be cleared when chosen) until the next successful connection
+/// to it, which indexes a pinned share that needed sign-in.
+///
+/// parity: NET-022, SRCH-040
+#[gtk::test]
+fn signing_out_pauses_indexing_the_server_until_it_is_connected_again() {
+    let test = TestWindow::open(Page::Network.uri());
+    test.start_search_cache();
+
+    test.activate("sign-out", Some("smb://example.invalid/share"));
+    let dialog = open_form_dialog();
+    let choices = descendants::<gtk::CheckButton>(&dialog);
+    choices[0].set_active(false);
+    choices[1].set_active(true);
+    dialog.press_confirm();
+    wait_until("the Network page", || {
+        test.window.current_uri().as_deref() == Some(Page::Network.uri())
+    });
+    wait_until("the paused server", || {
+        is_indexing_paused(&test, "example.invalid")
+    });
+
+    test.activate("map-network-location", None);
+    let dialog = open_form_dialog();
+    let share = ConnectedShare {
+        uri: "smb://example.invalid/share".to_owned(),
+        label: "share".to_owned(),
+    };
+    test.window
+        .keep_mapped_share(&dialog, share, ShareKeeping::ThisSessionOnly);
+
+    wait_until("indexing to resume", || {
+        !is_indexing_paused(&test, "example.invalid")
+    });
 }

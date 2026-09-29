@@ -16,10 +16,10 @@
 //! 5. The tabs on the server are listed again when next shown, the window
 //!    shows Network, and a message says what was forgotten (NET-020).
 //!
-//! Clearing the server's cached file names (NET-022) belongs to the search
-//! cache: the application announces the sign-out with the user's choice
-//! ([`AppContext::announce_server_signed_out`]), for the search cache to
-//! clear the names (the "Search and metadata" milestone of ROADMAP.md).
+//! The search cache pauses the server's indexing when the sign-out starts,
+//! clears its cached file names at the end when the user asked to, and
+//! resumes after the next successful mount of the server (NET-022,
+//! [`AppContext::announce_server_signed_out`]).
 //!
 //! [`AppContext::announce_server_signed_out`]: crate::app_context::AppContext::announce_server_signed_out
 
@@ -136,8 +136,8 @@ impl BrowserWindow {
     }
 
     /// The server `host` is being signed out: every window stops listing
-    /// and watching it, and it leaves the session's Network list
-    /// (`serverSigningOut` in winspace.py).
+    /// and watching it, it leaves the session's Network list and its
+    /// indexing pauses (`serverSigningOut` in winspace.py).
     fn leave_server(&self, host: &str) {
         for window in self.browser_windows() {
             window.stop_reading_host(host);

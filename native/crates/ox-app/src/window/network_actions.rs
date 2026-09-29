@@ -96,15 +96,17 @@ impl BrowserWindow {
         });
     }
 
-    /// The share is connected: lists it under Network, saves it when the
-    /// user asked, then opens it (`after_connect`). A save that fails
-    /// keeps the dialog open with the reason.
+    /// The share is connected: resumes indexing its server, lists it under
+    /// Network, saves it when the user asked, then opens it
+    /// (`after_connect`). A save that fails keeps the dialog open with the
+    /// reason.
     pub(super) fn keep_mapped_share(
         &self,
         dialog: &NetworkFormDialog,
         share: ConnectedShare,
         keeping: ShareKeeping,
     ) {
+        self.context().signed_in_to(&share.uri);
         self.context().remember_network(&share.uri);
         if keeping == ShareKeeping::ThisSessionOnly {
             dialog.finish();

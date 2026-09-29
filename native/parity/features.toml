@@ -10218,8 +10218,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["pin", "bookmark"]
-native = "partial"
-native_note = "native/crates/ox-core/src/search/pins.rs (a_pin_gets_a_root_only_when_no_enabled_root_indexes_it, the_switch_is_on_until_turned_off_and_is_remembered); native/crates/ox-core/tests/search_pins.rs (pinning_a_folder_indexes_it_with_a_pinned_tag, unpinning_removes_only_roots_that_pinning_added, the_users_choice_outlasts_pinning, folders_pinned_earlier_are_indexed_once, a_removed_pinned_root_stays_removed_after_the_switch_was_turned_on, pinning_a_folder_inside_an_indexed_root_adds_no_root, a_pin_on_a_server_being_signed_out_of_waits_for_sign_in, the_switch_turns_indexing_of_pinned_folders_off_and_on, a_pinned_share_that_needs_sign_in_is_indexed_after_sign_in, pinned_devices_and_server_lists_are_not_indexed); native/crates/ox-app/src/search/pin_sync.rs (a_pin_is_reported_once_when_it_appears_and_once_when_it_goes, settings_that_fell_back_to_defaults_unpin_nothing); native/crates/ox-app/src/window/tests/search.rs (pinning_a_folder_indexes_it); native/crates/ox-app/src/settings_page/tests/indexing.rs (the_pinned_folders_switch_removes_what_pinning_added). New behaviour decided by the owner. Every pin change in any window or process reaches the service; folders pinned earlier are indexed once at start-up; the switch lives in the search cache (index_options), because both apps rewrite settings.json with only the keys they know; pinned folders carry a \"Pinned\" tag on the Indexed folders page. Missing: the sign-in and sign-out flows (network track) must call IndexService::resume_server and pause_server so a pinned share that needed sign-in is indexed after it."
+native = "done"
+native_note = "native/crates/ox-core/src/search/pins.rs (a_pin_gets_a_root_only_when_no_enabled_root_indexes_it, the_switch_is_on_until_turned_off_and_is_remembered); native/crates/ox-core/tests/search_pins.rs (pinning_a_folder_indexes_it_with_a_pinned_tag, unpinning_removes_only_roots_that_pinning_added, the_users_choice_outlasts_pinning, folders_pinned_earlier_are_indexed_once, a_removed_pinned_root_stays_removed_after_the_switch_was_turned_on, pinning_a_folder_inside_an_indexed_root_adds_no_root, a_pin_on_a_server_being_signed_out_of_waits_for_sign_in, the_switch_turns_indexing_of_pinned_folders_off_and_on, a_pinned_share_that_needs_sign_in_is_indexed_after_sign_in, pinned_devices_and_server_lists_are_not_indexed); native/crates/ox-app/src/search/pin_sync.rs (a_pin_is_reported_once_when_it_appears_and_once_when_it_goes, settings_that_fell_back_to_defaults_unpin_nothing); native/crates/ox-app/src/window/tests/search.rs (pinning_a_folder_indexes_it); native/crates/ox-app/src/window/tests/network_shares.rs (signing_out_pauses_indexing_the_server_until_it_is_connected_again); native/crates/ox-app/src/settings_page/tests/indexing.rs (the_pinned_folders_switch_removes_what_pinning_added). New behaviour decided by the owner. Every pin change in any window or process reaches the service; folders pinned earlier are indexed once at start-up; the switch lives in the search cache (index_options), because both apps rewrite settings.json with only the keys they know; pinned folders carry a \"Pinned\" tag on the Indexed folders page. Sign out pauses the server's indexing and every successful mount of an SMB server (opening a share, Map network location) resumes it, which scans a pinned share whose last scan stored nothing, so a share that needed sign-in is indexed right after it."
 
 [[feature]]
 id = "NET-001"
@@ -10733,8 +10733,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::Saved network row includes sign-out",
 ]
 bridge = ["signOut", "cancel", "environment", "cacheStatus"]
-native = "partial"
-native_note = "native/crates/ox-app/src/dialogs/network_sign_out.rs (the_dialog_forgets_credentials_and_keeps_the_cache_by_default); native/crates/ox-app/src/window/network_sign_out.rs (the_message_says_whether_saved_credentials_were_kept); native/crates/ox-app/src/window/tests/network.rs (signing_out_forgets_the_server_and_its_tabs, signing_out_without_a_keyring_says_the_credentials_remain); native/crates/ox-core/src/network/session_credentials/tests.rs and native/crates/ox-core/src/network/sign_out/tests.rs. Missing: the refusal while a file operation runs waits for the window to report its writes (the file-operations milestone)."
+native = "done"
+native_note = "native/crates/ox-app/src/dialogs/network_sign_out.rs (the_dialog_forgets_credentials_and_keeps_the_cache_by_default); native/crates/ox-app/src/window/network_sign_out.rs (the_message_says_whether_saved_credentials_were_kept, only_smb_locations_have_a_server_to_sign_out_of); native/crates/ox-app/src/window/tests/network.rs (signing_out_forgets_the_server_and_its_tabs, signing_out_of_the_server_on_screen_drops_its_rows, signing_out_without_a_keyring_says_the_credentials_remain, sign_out_and_disconnect_wait_for_a_running_file_operation); native/crates/ox-core/src/network/session_credentials/tests.rs and native/crates/ox-core/src/network/sign_out/tests.rs. The dialog, its two check boxes and note, the refusal while a file operation runs in any window, the cancelled listings and watches on the host, the stale tabs, the move to Network, the two messages and 'Sign-out did not fully finish' follow app.js and winspace.py."
 
 [[feature]]
 id = "NET-021"
@@ -10757,8 +10757,8 @@ python_tests = [
 bridge = ["signOut"]
 dolphin = "Manual removal in KWallet Manager"
 gnome = "libsecret password_clear (GVfs NetworkPassword schema); libsecret password_clear with the org.gnome.keyring.NetworkPassword schema (DONT_MATCH_NAME), the attribute schema GVfs writes"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/error.rs (a_failed_credential_removal_says_the_server_was_disconnected); native/crates/ox-core/src/network/session_credentials/tests.rs and native/crates/ox-core/src/network/sign_out/tests.rs; native/crates/ox-core/tests/network_secret_service.rs; native/crates/ox-app/src/window/tests/network.rs (signing_out_forgets_the_server_and_its_tabs, signing_out_without_a_keyring_says_the_credentials_remain). Missing: the deletion of GNOME's NetworkPassword entries has no direct test, and the report has no cacheCleared (NET-022)."
+native = "done"
+native_note = "native/crates/ox-core/src/network/error.rs (a_failed_credential_removal_says_the_server_was_disconnected); native/crates/ox-core/src/network/sign_out/tests.rs (signing_out_forgets_every_saved_credential_of_that_server_only: OpenXplorer's session and permanent entries and GNOME's org.gnome.keyring.NetworkPassword entries of that server only); native/crates/ox-core/src/network/session_credentials/tests.rs; native/crates/ox-core/tests/network_secret_service.rs; native/crates/ox-app/src/window/tests/network.rs (signing_out_forgets_the_server_and_its_tabs, signing_out_without_a_keyring_says_the_credentials_remain). The report (SignOutReport) names the host, the disconnected mounts, whether credentials were removed and what was asked to be forgotten; whether the cache is cleared travels with the app's server-signed-out announcement (NET-022)."
 
 [[feature]]
 id = "NET-022"
@@ -10777,8 +10777,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["signOut"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/search_pins.rs (a_pin_on_a_server_being_signed_out_of_waits_for_sign_in); native/crates/ox-core/tests/search_service.rs (signing_out_pauses_a_server_and_can_clear_its_names, signing_in_does_not_rescan_a_partly_unreadable_share). The Sign out dialog offers the check box and the app announces the finished sign-out with the choice (server-signed-out). Missing: the window runs no search cache yet to pause and clear (the Search and metadata milestone)."
+native = "done"
+native_note = "native/crates/ox-core/tests/search_pins.rs (a_pin_on_a_server_being_signed_out_of_waits_for_sign_in); native/crates/ox-core/tests/search_service.rs (signing_out_pauses_a_server_and_can_clear_its_names, signing_in_does_not_rescan_a_partly_unreadable_share); native/crates/ox-app/src/window/tests/network_shares.rs (signing_out_pauses_indexing_the_server_until_it_is_connected_again). When the sign-out starts, the app's search cache pauses the server (its scans stop); with 'Also clear cached filenames for this server' it clears every indexed folder on that host once the sign-out ends (AppContext::announce_server_signed_out); the next successful mount of the host (opening a share or Map network location) resumes indexing."
 
 [[feature]]
 id = "NET-023"

@@ -167,6 +167,11 @@ impl IndexService {
         Ok(())
     }
 
+    /// Whether indexing of SMB server `host` is paused for a sign-out.
+    pub fn is_server_paused(&self, host: &str) -> bool {
+        self.shared.state().paused_hosts.contains(&host.to_lowercase())
+    }
+
     /// Deletes the cached entries of every root on SMB server `host`, for a
     /// sign-out with "Also clear cached filenames for this server"
     /// (NET-022). The roots stay, as "Not indexed".
