@@ -58,7 +58,7 @@ fn duplicate_items_blocking(
     for group in &groups {
         context.protection.check(&group.folder_uri)?;
     }
-    let mut engine = gio_transfer_engine(&context.protection, progress);
+    let mut engine = gio_transfer_engine(context, progress);
     let mut outcome = TransferOutcome::default();
     for group in &groups {
         duplicate_in_folder(&mut engine, group, context, &mut outcome);

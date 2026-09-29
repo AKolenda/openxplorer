@@ -208,7 +208,13 @@ impl StagedCopy<'_> {
                 "Could not reserve a private staging name. Nothing was changed.",
             ));
         }
-        let mut copier = Copier::new(self.cancel, stage_name, modes, &mut *self.unstorable, &mut *self.emit);
+        let mut copier = Copier::new(
+            self.cancel,
+            stage_name,
+            modes,
+            &mut *self.unstorable,
+            &mut *self.emit,
+        );
         if self.source_kind == NodeKind::Directory {
             // XFER-002: a failed exclusive folder creation grants no right to
             // clean up this path.
@@ -253,7 +259,13 @@ impl StagedCopy<'_> {
         // XFER-004: the folder that was made private is the only one cleanup
         // may empty.
         staging.created = secure_local_staging(stage.root())?;
-        let mut copier = Copier::new(self.cancel, stage_name, modes, &mut *self.unstorable, &mut *self.emit);
+        let mut copier = Copier::new(
+            self.cancel,
+            stage_name,
+            modes,
+            &mut *self.unstorable,
+            &mut *self.emit,
+        );
         copier.copy(self.source, stage.item(), 0)?;
         if layout == Layout::SameDeviceCopy {
             self.rename_device_copy(stage)?;

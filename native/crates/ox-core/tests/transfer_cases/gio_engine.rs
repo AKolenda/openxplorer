@@ -248,6 +248,9 @@ fn a_move_to_another_filesystem_copies_then_removes_the_source() {
     assert!(!folder.exists(), "the source is removed after the copy");
     let moved = target_root.path().join("folder");
     assert_eq!(read(&moved.join("notes.txt")), "notes");
-    assert_eq!(fs::read_link(moved.join("link")).expect("a link"), Path::new("notes.txt"));
+    assert_eq!(
+        fs::read_link(moved.join("link")).expect("a link"),
+        Path::new("notes.txt")
+    );
     assert_eq!(raw_names(target_root.path()), [OsString::from("folder")]);
 }

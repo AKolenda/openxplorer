@@ -54,7 +54,10 @@ fn a_file_over_4_gib_is_refused_on_fat_with_a_message_that_says_why() {
     let fixture = Fixture::new();
     let source = fixture.source_folder.join("disk.img");
     // Sparse: no 4 GiB are written.
-    fs::File::create(&source).unwrap().set_len(FAT_MAX_FILE_SIZE + 1).unwrap();
+    fs::File::create(&source)
+        .unwrap()
+        .set_len(FAT_MAX_FILE_SIZE + 1)
+        .unwrap();
     let mut engine = fixture.engine(Arc::new(FatStick { free: None }));
 
     let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));

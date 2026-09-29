@@ -38,6 +38,7 @@
 //! | `clipboard` | Cut, Copy and the desktop's file clipboard |
 //! | `transfer` | Pasting into a folder, with the name-conflict check |
 //! | `conflict_dialog` | The name-conflict dialog |
+//! | `unstorable_dialog` | The question about names and links the destination cannot store |
 //! | `shortcuts` | The file commands' keys, which text fields keep |
 //! | `actions` | The window actions of these commands |
 
@@ -60,6 +61,7 @@ mod shortcuts;
 mod template_dialog;
 mod transfer;
 mod trash_support;
+mod unstorable_dialog;
 
 use ox_core::clipboard::ClipboardFiles;
 use ox_core::transfer::Cancellation;

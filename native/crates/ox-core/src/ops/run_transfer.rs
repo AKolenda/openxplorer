@@ -78,7 +78,7 @@ fn run_transfer_blocking(
     context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<TransferOutcome, OpsError> {
-    let mut engine = gio_transfer_engine(&context.protection, progress);
+    let mut engine = gio_transfer_engine(context, progress);
     run_on_engine(&mut engine, request, context)
 }
 
@@ -142,17 +142,18 @@ fn changes_sources(mode: TransferMode) -> bool {
     )
 }
 
-/// A transfer engine over the production GIO adapter, with `protection`
-/// as its write guard and `progress` throttled to [`PROGRESS_INTERVAL`].
+/// A transfer engine over the production GIO adapter, with the write
+/// guard and questions of `context` and `progress` throttled to
+/// [`PROGRESS_INTERVAL`].
 ///
 /// [`PROGRESS_INTERVAL`]: super::progress::PROGRESS_INTERVAL
 pub(crate) fn gio_transfer_engine(
-    protection: &WriteProtection,
+    context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> TransferEngine {
     let factory: NodeFactory = Arc::new(|uri: &str| Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>));
     let engine = TransferEngine::new(factory).with_progress(throttled(progress));
-    protection.install(engine)
+    context.install(engine)
 }
 
 /// What a run must remember before it starts, to tell afterwards where

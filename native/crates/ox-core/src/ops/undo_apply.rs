@@ -78,7 +78,7 @@ fn undo_blocking(
     context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<TransferResult, OpsError> {
-    let mut engine = gio_transfer_engine(&context.protection, progress);
+    let mut engine = gio_transfer_engine(context, progress);
     let result = match record {
         UndoRecord::Rename {
             original_uri,

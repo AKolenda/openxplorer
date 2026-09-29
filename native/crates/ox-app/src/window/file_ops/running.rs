@@ -70,7 +70,10 @@ impl BrowserWindow {
         if self.operation_panel().is_busy() {
             return None;
         }
-        let context = OperationContext::new(self.context().write_protection());
+        let mut context = OperationContext::new(self.context().write_protection());
+        // XFER-028: names and links the destination cannot store are asked
+        // about in a dialog.
+        context.unstorable = Some(self.unstorable_asker());
         {
             let mut operations = self.imp().file_operations.borrow_mut();
             if operations.is_running() {

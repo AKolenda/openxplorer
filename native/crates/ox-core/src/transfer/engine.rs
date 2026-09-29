@@ -155,7 +155,8 @@ impl TransferEngine {
                 let folder = destination_folder(&self.factory, folder_uri, cancel)?;
                 // XFER-028: what the destination's file system can hold.
                 let filesystem = folder.filesystem(Some(cancel)).unwrap_or_default();
-                self.unstorable.start_run(StorageRules::of(filesystem.kind.as_deref()));
+                self.unstorable
+                    .start_run(StorageRules::of(filesystem.kind.as_deref()));
                 let incoming = Incoming {
                     mode: operation.mode(),
                     policy,

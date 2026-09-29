@@ -33,8 +33,8 @@ use gio::prelude::*;
 
 use crate::location::split_location;
 use crate::transfer::{
-    check_cancelled, clean_staging, Cancellation, FilesystemInfo, ItemIdentity, Node, NodeInfo, TransferError,
-    WriteGuard,
+    check_cancelled, clean_staging, Cancellation, FilesystemInfo, ItemIdentity, Node, NodeInfo,
+    TransferError, WriteGuard,
 };
 
 /// A file or folder addressed through GIO, including `GVfs` remote backends.
