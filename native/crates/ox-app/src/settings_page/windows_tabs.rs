@@ -11,12 +11,16 @@
 
 use gtk::prelude::*;
 
+use ox_core::settings::PreferencesUpdate;
+
+use super::bindings::PreferenceBinding;
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
+use super::SettingsPage;
 use crate::application::AppAction;
 use crate::icons::Icon;
 use crate::window::list_open_windows_on_click;
@@ -61,11 +65,19 @@ const DRAGGING_NOTE: &str = "Right-click a tab → Move tab to window… lets yo
                              File drops never remove the source. ZIP contents must be extracted \
                              first; some apps need a mounted network path.";
 
+const BROWSE_ARCHIVES: RowText = RowText {
+    title: "Open archives as folders",
+    description: "Browse ZIP and TAR archives (.tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst) inside \
+                  OpenXplorer. Off, they open in their default application.",
+    keywords: "zip tar gz archive compressed browse extract",
+};
+
 /// The Windows & tabs page.
-pub(super) fn build() -> SettingsSection {
+pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::WindowsAndTabs;
     let windows = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     windows.append_group(&windows_group());
+    windows.append_group(&archives_group(page));
     windows.append_group(&dragging_group());
     windows.append_text(&parts::note(Icon::Info, DRAGGING_NOTE));
     windows
@@ -89,6 +101,23 @@ fn windows_group() -> SettingsGroup {
     button.set_action_name(Some(&AppAction::NewWindow.detailed_name()));
     new_window.add_control(&button, ControlName::OwnLabel);
     group.add_row(&new_window);
+    group
+}
+
+/// Whether archives open as folders (ARC-022), as Dolphin's Navigation
+/// setting "Open archives as folder".
+fn archives_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new("Archives");
+    let row = SettingRow::new(BROWSE_ARCHIVES);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.browse_archives,
+        write: |browse| PreferencesUpdate {
+            browse_archives: Some(browse),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&row);
     group
 }
 

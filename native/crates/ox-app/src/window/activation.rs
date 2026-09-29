@@ -90,8 +90,18 @@ impl BrowserWindow {
         match activation_for(entry) {
             Activation::Folder(uri) => self.navigate_or_report(&uri),
             Activation::File => self.open_file(entry),
-            Activation::Archive => self.open_archive(entry),
+            Activation::Archive => self.open_archive_or_file(entry),
             Activation::Refused(message) => self.show_message(message),
+        }
+    }
+
+    /// Opens an archive in the archive browser, or, with "Open archives
+    /// as folders" off (ARC-022), in its default application.
+    fn open_archive_or_file(&self, entry: &Entry) {
+        if self.context().settings_data().preferences.browse_archives {
+            self.open_archive(entry);
+        } else {
+            self.open_file(entry);
         }
     }
 
@@ -115,7 +125,9 @@ impl BrowserWindow {
             async move {
                 match query_entry(&uri).await {
                     Ok(entry) if activation_for(&entry) == Activation::File => window.open_file(&entry),
-                    Ok(entry) if activation_for(&entry) == Activation::Archive => window.open_archive(&entry),
+                    Ok(entry) if activation_for(&entry) == Activation::Archive => {
+                        window.open_archive_or_file(&entry);
+                    }
                     Ok(_) => {}
                     Err(error) => window.show_message(&error.to_string()),
                 }
@@ -212,7 +224,7 @@ impl BrowserWindow {
         match activation_for(&entry) {
             Activation::Folder(folder) => self.open_incoming_folder(&folder, tab),
             Activation::File => self.open_file(&entry),
-            Activation::Archive => self.open_archive(&entry),
+            Activation::Archive => self.open_archive_or_file(&entry),
             Activation::Refused(message) => self.show_message(message),
         }
     }

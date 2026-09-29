@@ -48,6 +48,7 @@ mod gio_reader;
 mod member_names;
 mod preview;
 mod source;
+mod tar;
 mod worker;
 mod zip;
 
@@ -61,7 +62,7 @@ pub use extract::{
     ExtractionSummary, GioExtractionOutput, OutputFile, ZipExtractor,
 };
 pub use gio_reader::GioArchiveReader;
-pub use member_names::suggested_folder_name;
+pub use member_names::{is_supported_archive, suggested_folder_name};
 pub use preview::{PreviewCopy, PREVIEW_NOTICE};
 pub use source::{ArchiveOpener, ArchiveStream, GioArchiveOpener};
 pub use zip::{Zip64Field, ZipFormatError};

@@ -12681,8 +12681,8 @@ python_tests = [
 bridge = ["archiveList", "archiveOpenMember"]
 dolphin = "BrowseThroughArchives (default false); Settings → Navigation “Open archives as folder” (BrowseThroughArchives, kio-extras archive worker)"
 gnome = "GVfs archive backend (archive:// via archive.mount, “Archive Mounter”) or libarchive"
-native = "todo"
-native_note = "Porting notes: OpenXplorer browses ZIP archives only, read-only, and always opens them in its archive browser rather than behind an option. Existing OpenXplorer part is protected by ARC-002 and ARC-003."
+native = "partial"
+native_note = "native/crates/ox-core/src/archive/tar.rs (a_gzipped_tar_lists_its_members_and_reads_them_in_any_order), native/crates/ox-core/tests/archive_tar.rs (a_tar_is_browsed_like_a_zip), native/crates/ox-core/src/archive/member_names.rs, native/crates/ox-core/src/settings/preferences.rs; native/crates/ox-app/src/window/tests/archives.rs (a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere). Besides ZIP, TAR archives plain or compressed with gzip, bzip2, XZ or Zstandard (.tar, .tar.gz/.tgz, .tar.bz2/.tbz2, .tar.xz/.txz, .tar.zst/.tzst, recognised by name, content type or signature) open in the read-only archive browser, whose listing, private preview copies, hidden links and special files, and limits are those of ZIP (the TAR members are read into the same member records). Settings > Windows & tabs > Archives > 'Open archives as folders' (preferences.browseArchives, on by default and saved only when off, Dolphin's BrowseThroughArchives) opens them in their default application instead. Missing: 7z and RAR, which need decoders the app does not link. Porting notes: OpenXplorer browses ZIP archives only, read-only, and always opens them in its archive browser rather than behind an option. Existing OpenXplorer part is protected by ARC-002 and ARC-003."
 
 [[feature]]
 id = "ARC-023"
@@ -12734,8 +12734,8 @@ python_tests = [
 bridge = ["archiveInspect", "archiveExtract"]
 dolphin = "Ark “Extract → Extract archive here, autodetect subfolder”"
 gnome = "gnome-autoar AutoarExtractor (libarchive), as Nautilus “Extract Here”"
-native = "todo"
-native_note = "OpenXplorer extracts ZIPs in-app; other archives open in their default application. Existing OpenXplorer part is protected by ARC-009, ARC-012 and OPEN-001."
+native = "partial"
+native_note = "native/crates/ox-core/src/archive/tar.rs, tar/header.rs, source.rs; native/crates/ox-core/tests/archive_tar.rs (compressed_tars_extract_into_a_new_folder, a_tar_with_a_link_extracts_nothing); native/crates/ox-app/src/window/tests/archives.rs (a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere). Extract all… and Extract here work for .tar, .tar.gz/.tgz, .tar.bz2/.tbz2, .tar.xz/.txz and .tar.zst/.tzst (ustar, GNU long names and pax paths/sizes; gzip, bzip2 and XZ through the flate2, bzip2 and lzma-rust2 decoders, Zstandard through ruzstd, all pure Rust) with exactly the ZIP guarantees: the TAR headers are read into the same member records, so a new folder, nothing overwritten, refused path traversal, links, devices and FIFOs, the size limits, private staging and all-or-nothing publishing apply unchanged; a leading './' is dropped and the suggested folder name drops the whole ending (Backup.tar.gz → Backup). Missing: .7z and .rar, which still open in their default application because the app links no 7z or RAR decoder. Porting notes: OpenXplorer extracts ZIPs in-app; other archives open in their default application. Existing OpenXplorer part is protected by ARC-009, ARC-012 and OPEN-001."
 
 [[feature]]
 id = "ARC-025"

@@ -41,15 +41,10 @@ use entries::{
 /// opened from the keyboard points.
 const KEYBOARD_MENU_INSET: i32 = 40;
 
-/// True for a ZIP archive, by its name or its type (`isZipEntry`).
+/// True for an archive the app extracts itself, by its name or its type
+/// (`isZipEntry`): a ZIP, or a TAR plain or compressed (ARC-024).
 fn is_zip(name: &str, content_type: Option<&str>) -> bool {
-    let named_zip = name.to_lowercase().ends_with(".zip");
-    let zip_types = [
-        "application/zip",
-        "application/x-zip",
-        "application/x-zip-compressed",
-    ];
-    named_zip || content_type.is_some_and(|content_type| zip_types.contains(&content_type))
+    ox_core::archive::is_supported_archive(name, content_type)
 }
 
 /// What `entry` is, as its menu cares.
@@ -309,5 +304,6 @@ mod tests {
         assert!(is_zip("Photos.ZIP", None));
         assert!(is_zip("download", Some("application/x-zip-compressed")));
         assert!(!is_zip("notes.txt", Some("text/plain")));
+        assert!(is_zip("backup.tar.gz", None));
     }
 }

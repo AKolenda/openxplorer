@@ -188,6 +188,58 @@ fn extract_here_uses_the_next_free_name() {
     });
 }
 
+/// Writes `Site.tar.gz` holding `Docs/a.txt` into `fixture`, with
+/// Python's `tarfile`.
+fn write_tar_gz(fixture: &Fixture) {
+    let script = "import io, sys, tarfile\n\
+                  with tarfile.open(sys.argv[1], 'w:gz') as archive:\n\
+                  \x20   member = tarfile.TarInfo('Docs/a.txt'); member.size = 5\n\
+                  \x20   archive.addfile(member, io.BytesIO(b'first'))\n";
+    let status = std::process::Command::new("python3")
+        .args(["-c", script])
+        .arg(fixture.path("Site.tar.gz"))
+        .status()
+        .expect("Python 3 writes the fixture archive");
+    assert!(status.success());
+}
+
+/// A .tar.gz opens in the archive browser and extracts like a ZIP; with
+/// "Open archives as folders" off it opens in its default application.
+///
+/// parity: ARC-022, ARC-024
+#[gtk::test]
+fn a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere() {
+    let fixture = Fixture::standard();
+    write_tar_gz(&fixture);
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Site.tar.gz");
+
+    test.activate("open", None);
+    let browser = archive_browser(&test);
+    wait_until("the listing", || browser.row_names() == ["Docs"]);
+    test.shown_dialog().expect("the browser").close();
+    test.activate("extract-here", None);
+    let extracted = fixture.path("Site/Docs/a.txt");
+    wait_until("the extracted file", || extracted.exists());
+    assert_eq!(fs::read(&extracted).expect("extracted"), b"first");
+
+    let turn_off = ox_core::settings::PreferencesUpdate {
+        browse_archives: Some(false),
+        ..ox_core::settings::PreferencesUpdate::default()
+    };
+    test.context
+        .update_preferences(turn_off, |result| result.expect("saved"));
+    wait_until("the preference", || {
+        !test.context.settings_data().preferences.browse_archives
+    });
+    test.select_named("Site.tar.gz");
+    test.activate("open", None);
+    wait_until("the default application", || {
+        !test.context.recorded_launches().is_empty()
+    });
+    assert!(test.context.recorded_launches()[0].contains("Site.tar.gz"));
+}
+
 /// parity: ARC-023
 #[gtk::test]
 fn compress_to_zip_puts_the_selection_into_a_new_zip_beside_it() {

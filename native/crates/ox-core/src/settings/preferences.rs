@@ -175,6 +175,12 @@ pub struct Preferences {
     /// Details-view column widths, once the user resized or reset them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub column_widths: Option<ColumnWidths>,
+    /// Archives the app can read open as folders in its archive browser
+    /// (Dolphin's "Open archives as folder", ARC-022); off, they open in
+    /// their default application. Saved only when off, like the options
+    /// below.
+    #[serde(skip_serializing_if = "is_true")]
+    pub browse_archives: bool,
     /// The details pane's own options; saved only once changed, so the
     /// settings of a new installation stay as the Python app writes them.
     #[serde(skip_serializing_if = "DetailsPaneOptions::is_default")]
@@ -194,6 +200,7 @@ impl Default for Preferences {
             text_size: DEFAULT_TEXT_SIZE,
             sidebar_width: None,
             column_widths: None,
+            browse_archives: true,
             details_pane_options: DetailsPaneOptions::default(),
         }
     }
@@ -227,6 +234,7 @@ impl Preferences {
         if let Some(widths) = column_widths {
             self.column_widths = Some(widths);
         }
+        replace_if_some(&mut self.browse_archives, update.browse_archives);
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
@@ -257,6 +265,8 @@ pub struct PreferencesUpdate {
     pub context_menu: Option<ContextMenu>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
+    /// Open archives as folders, or in their default application.
+    pub browse_archives: Option<bool>,
     /// Replaces the details pane's options.
     pub details_pane_options: Option<DetailsPaneOptions>,
 }
@@ -287,6 +297,7 @@ impl PreferencesUpdate {
             column_widths: values.get("columnWidths").and_then(read_column_widths),
             context_menu: text("contextMenu").and_then(ContextMenu::from_key),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
+            browse_archives: flag("browseArchives"),
             details_pane_options: values
                 .get("detailsPaneOptions")
                 .and_then(DetailsPaneOptions::from_json),
@@ -338,6 +349,15 @@ fn bounded_width(value: f64, range: RangeInclusive<u32>) -> Option<u32> {
     let high = f64::from(*range.end());
     let in_range = value >= low && value <= high;
     in_range.then(|| value.round_ties_even() as u32)
+}
+
+/// Whether `value` is true, for preferences saved only when turned off.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passes the field by reference"
+)]
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 /// Stores `value` in `slot` if there is one.

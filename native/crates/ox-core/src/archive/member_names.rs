@@ -60,7 +60,8 @@ fn extension(file_name: &str) -> Option<&str> {
 }
 
 /// ARC-009: the new folder name an extraction suggests for an archive
-/// named `archive_name`: the name without `.zip` (in any case) and without
+/// named `archive_name`: the name without `.zip` or a TAR ending such as
+/// `.tar.gz` (in any case) and without
 /// trailing spaces or dots, or "Extracted files" when nothing is left.
 ///
 /// # Errors
@@ -76,14 +77,51 @@ pub fn suggested_folder_name(archive_name: &str) -> Result<String, LocationError
     validate_name(name).map(str::to_owned)
 }
 
-/// `archive_name` without a final `.zip` in any case.
+/// The endings of the archives the app browses and extracts itself:
+/// ZIP, and TAR plain or compressed (ARC-022, ARC-024). Longer endings
+/// come first, so `.tar.gz` is removed whole.
+const ARCHIVE_EXTENSIONS: [&str; 12] = [
+    ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tgz", ".tbz2", ".tbz", ".txz", ".tzst", ".tar", ".zip",
+    ".taz",
+];
+
+/// The content types of those archives.
+const ARCHIVE_TYPES: [&str; 10] = [
+    "application/zip",
+    "application/x-zip",
+    "application/x-zip-compressed",
+    "application/x-tar",
+    "application/x-compressed-tar",
+    "application/x-bzip-compressed-tar",
+    "application/x-bzip2-compressed-tar",
+    "application/x-xz-compressed-tar",
+    "application/x-zstd-compressed-tar",
+    "application/x-gtar",
+];
+
+/// Whether the app browses and extracts the file named `name` of
+/// `content_type` itself: a ZIP, or a TAR plain or compressed with gzip,
+/// bzip2, XZ or Zstandard.
+pub fn is_supported_archive(name: &str, content_type: Option<&str>) -> bool {
+    let by_type = content_type.is_some_and(|content_type| ARCHIVE_TYPES.contains(&content_type));
+    by_type || archive_extension(name).is_some()
+}
+
+/// The archive ending of `name`, in any case.
+fn archive_extension(name: &str) -> Option<usize> {
+    ARCHIVE_EXTENSIONS.iter().find_map(|extension| {
+        let start = name.len().checked_sub(extension.len())?;
+        let ending = name.get(start..)?;
+        ending.eq_ignore_ascii_case(extension).then_some(start)
+    })
+}
+
+/// `archive_name` without a final archive ending (`.zip`, `.tar.gz`, …)
+/// in any case.
 fn strip_zip_extension(archive_name: &str) -> &str {
-    let Some(start) = archive_name.len().checked_sub(".zip".len()) else {
-        return archive_name;
-    };
-    match archive_name.get(start..) {
-        Some(extension) if extension.eq_ignore_ascii_case(".zip") => &archive_name[..start],
-        _ => archive_name,
+    match archive_extension(archive_name) {
+        Some(start) => &archive_name[..start],
+        None => archive_name,
     }
 }
 
@@ -173,6 +211,11 @@ mod tests {
     fn suggested_names_trim_trailing_dots_and_spaces_and_stay_valid() {
         assert_eq!(suggested_folder_name("Photos .. .zip"), Ok("Photos".to_owned()));
         assert_eq!(suggested_folder_name("Café.zip"), Ok("Café".to_owned()));
+        assert_eq!(suggested_folder_name("Backup.TAR.gz"), Ok("Backup".to_owned()));
+        assert_eq!(suggested_folder_name("site.tzst"), Ok("site".to_owned()));
+        assert!(is_supported_archive("x.tar.xz", None));
+        assert!(is_supported_archive("x", Some("application/x-compressed-tar")));
+        assert!(!is_supported_archive("x.gz", Some("application/gzip")));
         assert_eq!(suggested_folder_name("archive.tar"), Ok("archive.tar".to_owned()));
         assert!(suggested_folder_name("a\u{1}b.zip").is_err());
     }

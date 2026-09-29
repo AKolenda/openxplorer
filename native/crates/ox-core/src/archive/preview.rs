@@ -24,9 +24,9 @@ use gio::prelude::*;
 
 use super::browse::ArchiveBrowser;
 use super::member_names::{is_previewable, is_safe_member};
-use super::source::{open_archive, ArchiveStream};
+use super::source::{open_archive, OpenedArchive};
 use super::worker::on_worker;
-use super::zip::{MemberFileType, ZipArchive, ZipMember};
+use super::zip::{MemberFileType, ZipMember};
 use super::ArchiveError;
 use crate::private_storage::private_directory;
 use crate::random::{random_hex, NAME_BYTES};
@@ -169,7 +169,7 @@ fn create_preview_folder(root: &Path) -> Result<PathBuf, ArchiveError> {
 /// Decompresses the member at `index` into a new file at `copy_path` and
 /// makes it read-only.
 fn write_copy(
-    archive: &mut ZipArchive<Box<dyn ArchiveStream>>,
+    archive: &mut OpenedArchive,
     index: usize,
     copy_path: &Path,
     cancel: &Cancellation,

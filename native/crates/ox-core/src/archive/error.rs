@@ -35,6 +35,11 @@ pub enum ArchiveError {
     #[error(transparent)]
     Location(#[from] LocationError),
 
+    /// A TAR archive whose headers or compressed data are damaged, or a
+    /// compressed file that holds no TAR.
+    #[error("This archive is damaged or is not a TAR archive. Use an archive manager.")]
+    DamagedArchive,
+
     // Reading: desktop/archives.py and desktop/native_opening.py.
     /// ARC-005: the central directory is over 32 MiB.
     #[error("ZIP directory is too large for the built-in viewer. Use an archive manager.")]
