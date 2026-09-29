@@ -86,3 +86,28 @@ impl BrowserWindow {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+    use crate::test_support::harness::{wait_for, Fixture, TestWindow};
+
+    /// parity: OPS-024
+    #[gtk::test]
+    fn no_version_is_restored_while_a_file_operation_runs() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let running = test.window.begin_operation("Preparing copy…");
+
+        test.window
+            .restore_copy(fixture.uri_of("Notes 2.txt"), fixture.uri_of("Documents"));
+        wait_for(Duration::from_millis(200));
+
+        assert!(running.is_some());
+        assert_eq!(test.window.shown_message_text(), OPERATION_RUNNING);
+        assert!(!fixture.path("Documents/Notes 2.txt").exists());
+        test.window.end_operation();
+    }
+}

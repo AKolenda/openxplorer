@@ -70,7 +70,7 @@ impl BrowserWindow {
     /// progress report. Returns its context, or `None` while another
     /// operation runs (OPS-024: `if(state.operation)return` in app.js),
     /// an archive operation included.
-    pub(in crate::window) fn begin_operation(&self, label: &str) -> Option<OperationContext> {
+    pub(crate) fn begin_operation(&self, label: &str) -> Option<OperationContext> {
         if self.operation_panel().is_busy() {
             return None;
         }
@@ -88,7 +88,7 @@ impl BrowserWindow {
     }
 
     /// Forgets the running operation and hides its panel.
-    pub(in crate::window) fn end_operation(&self) {
+    pub(crate) fn end_operation(&self) {
         self.imp().file_operations.borrow_mut().running = None;
         self.transfer_panel().finish();
         self.update_file_commands();

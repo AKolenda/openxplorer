@@ -7001,8 +7001,8 @@ python_tests = [
   "desktop/tests/test_rc2.py::DispatchTests::test_busy_writer_blocks_before_extract",
 ]
 bridge = ["operate", "archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/file_ops/availability.rs (a_running_operation_or_a_share_root_disables_the_edit_commands); native/crates/ox-app/src/window/tests/network.rs (sign_out_and_disconnect_wait_for_a_running_file_operation). One rule covers every write of a window (BrowserWindow::is_writing_files): a transfer, and an extraction, compression or restored copy; each refuses to start while another runs, and Sign out, Disconnect, tab moves and an update's installation and restart wait for them. Missing: window tests of the extraction, restore and update-install refusals."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_transfer_panel_shows_the_running_operation_and_cancel_stops_it); native/crates/ox-app/src/window/file_ops/availability.rs (a_running_operation_or_a_share_root_disables_the_edit_commands); native/crates/ox-app/src/window/tests/network.rs (sign_out_and_disconnect_wait_for_a_running_file_operation); native/crates/ox-app/src/window/tests/archives.rs (nothing_is_extracted_while_a_file_operation_runs); native/crates/ox-app/src/window/version_restore.rs (no_version_is_restored_while_a_file_operation_runs); native/crates/ox-app/src/update/tests.rs (an_update_waits_for_the_file_operations_of_every_window). One rule covers every write of a window (BrowserWindow::is_writing_files): a transfer, and an extraction, compression or restored copy; each refuses to start while another runs, and Sign out, Disconnect, tab moves and an update's installation and restart wait for them."
 
 [[feature]]
 id = "OPS-025"

@@ -281,6 +281,33 @@ fn installing_verifies_installs_and_offers_the_restart() {
     dialog.close();
 }
 
+/// parity: OPS-024
+#[gtk::test]
+fn an_update_waits_for_the_file_operations_of_every_window() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    // The window's own command, which asks every window whether it works.
+    test.activate("check-updates", None);
+    wait_until("the check", || !simulated.updates.state().is_busy());
+    let dialog = gtk::Window::list_toplevels()
+        .into_iter()
+        .find_map(|window| window.downcast::<UpdateDialog>().ok())
+        .expect("the dialog opened");
+    let running = test.window.begin_operation("Preparing copy…");
+
+    dialog.click("Install update…");
+
+    assert!(running.is_some());
+    assert_eq!(
+        dialog.status(),
+        "Finish file operations before installing the update."
+    );
+    assert!(simulated.packages.programs().is_empty(), "nothing was installed");
+    test.window.end_operation();
+    dialog.close();
+}
+
 /// While the package manager runs, every window is locked: it cannot be
 /// closed or used, and the dialog cannot be dismissed.
 ///
