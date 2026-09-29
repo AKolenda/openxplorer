@@ -89,9 +89,9 @@
       "status": "native-tested",
       "note": "The tab strip is a GTK drag source offering the tab as a process-local value; a busy window or a close button starts no drag.",
       "evidence": [
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy",
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_drag_offers_the_tab_to_this_process_only",
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer"
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy",
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_drag_offers_the_tab_to_this_process_only",
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer"
       ]
     },
     "bookmark": {
@@ -297,7 +297,7 @@
       "evidence": [
         "native/crates/ox-app/src/window/tab_moves.rs::a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll",
         "native/crates/ox-app/src/window/tab_moves.rs::moving_the_only_tab_to_a_new_window_closes_the_old_one",
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays"
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays"
       ]
     },
     "discover": {
@@ -563,15 +563,15 @@
       "status": "native-tested",
       "note": "No layout is published: every window takes tab drops with one target that finds the strip, the insertion point and the tear-out area from its widgets.",
       "evidence": [
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::only_the_source_window_well_below_its_strip_tears_a_tab_out",
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_drag_shows_where_the_tab_would_go"
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::only_the_source_window_well_below_its_strip_tears_a_tab_out",
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_drag_shows_where_the_tab_would_go"
       ]
     },
     "tabTransferReady": {
       "status": "native-tested",
       "note": "The destination window adds the tab in this process and the source removes it only afterwards, once the drag has ended; a busy or dialog-holding destination refuses and the source keeps it. ox_core::ops::TabTransfers, which ports the Python broker, is not needed by the in-process move.",
       "evidence": [
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag",
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag",
         "native/crates/ox-app/src/window/tab_moves.rs::a_window_with_an_open_dialog_keeps_its_tabs_and_takes_none",
         "native/crates/ox-core/tests/ops_tab_transfer.rs::the_acknowledgement_commits_once_to_the_original_source"
       ]

@@ -1878,7 +1878,7 @@ bridge = [
 ]
 dolphin = "Dolphin: 'Detach Tab' moves the tab to a new window.; Dolphin: detach tab (Shift+Ctrl+N/drag tab out); Tab context menu 'Detach Tab'"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll, moving_the_only_tab_to_a_new_window_closes_the_old_one); native/crates/ox-app/src/window/tab_moves/drag.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out). The new window is built in this process before the tab leaves, so the Python 20 s readiness wait has no counterpart."
+native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll, moving_the_only_tab_to_a_new_window_closes_the_old_one); native/crates/ox-app/src/window/tab_moves/drag/tests.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out). The new window is built in this process before the tab leaves, so the Python 20 s readiness wait has no counterpart."
 
 [[feature]]
 id = "TAB-030"
@@ -1949,7 +1949,7 @@ python_tests = [
 ]
 bridge = ["beginTabDrag", "tabDragLayout"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_busy_window_keeps_its_tabs_and_takes_none, a_window_with_an_open_dialog_keeps_its_tabs_and_takes_none); native/crates/ox-app/src/window/tab_moves/drag.rs (no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy). Moves finish at once, so no second move can be in progress."
+native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_busy_window_keeps_its_tabs_and_takes_none, a_window_with_an_open_dialog_keeps_its_tabs_and_takes_none); native/crates/ox-app/src/window/tab_moves/drag/tests.rs (no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy). Moves finish at once, so no second move can be in progress."
 
 [[feature]]
 id = "TAB-032"
@@ -1986,7 +1986,7 @@ bridge = ["tabDragLayout", "beginTabDrag"]
 dolphin = "QTabBar::setMovable(true); Dolphin tab bar drag reorder"
 gnome = "Adw.TabBar/Adw.TabView provide reorder, cross-window drag and tear-out natively (create-window signal)."
 native = "done"
-native_note = "native/crates/ox-app/src/window/session.rs (a_reordered_tab_goes_before_the_named_tab_or_to_the_end); native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a tab dragged along its strip moved to the end. A tab shows on release, as in app.js, so pressing an inactive tab can drag it."
+native_note = "native/crates/ox-app/src/window/session.rs (a_reordered_tab_goes_before_the_named_tab_or_to_the_end); native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a tab dragged along its strip moved to the end. A tab shows on release, as in app.js, so pressing an inactive tab can drag it."
 
 [[feature]]
 id = "TAB-033"
@@ -2026,7 +2026,7 @@ python_tests = [
 ]
 bridge = ["beginTabDrag", "tabDragLayout", "tabTransferReady"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag); native/crates/ox-app/src/window/session.rs (a_moved_tab_keeps_its_history_and_goes_in_front_where_it_was_dropped). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: the only tab of one window dropped on another window's strip moved there and its window closed."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag); native/crates/ox-app/src/window/session.rs (a_moved_tab_keeps_its_history_and_goes_in_front_where_it_was_dropped). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: the only tab of one window dropped on another window's strip moved there and its window closed."
 
 [[feature]]
 id = "TAB-034"
@@ -2091,7 +2091,7 @@ bridge = ["beginTabDrag", "detachTab", "handoffReady", "tabDragLayout", "tabTran
 dolphin = "Detach tab; Drag tab out to detach; drag between windows"
 gnome = "AdwTabBar/AdwTabView drag and detach"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: releasing below the strip and over the desktop each opened one window. GTK 4 cannot place a window, so the compositor places it."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: releasing below the strip and over the desktop each opened one window. GTK 4 cannot place a window, so the compositor places it."
 
 [[feature]]
 id = "TAB-035"
@@ -2130,7 +2130,7 @@ python_tests = [
 ]
 bridge = ["beginTabDrag"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: Escape and a release in the 0-40 px gap kept the tab."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: Escape and a release in the 0-40 px gap kept the tab."
 
 [[feature]]
 id = "TAB-036"
@@ -2188,7 +2188,7 @@ python_tests = [
 ]
 bridge = ["moveTabToWindow", "tabTransferReady", "beginTabDrag", "detachTab"]
 native = "partial"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_offers_the_tab_to_this_process_only): every window lives in one process, so the drag carries a process-local value naming the source window and tab, never a location; a drop after the drag ended takes nothing, and the source keeps its tab until the destination added it. Not ported: the 64-hex token, the 30 s expiry and the 64-move limit, which guarded the WebKit round trip."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_offers_the_tab_to_this_process_only): every window lives in one process, so the drag carries a process-local value naming the source window and tab, never a location; a drop after the drag ended takes nothing, and the source keeps its tab until the destination added it. Not ported: the 64-hex token, the 30 s expiry and the 64-move limit, which guarded the WebKit round trip."
 
 [[feature]]
 id = "TAB-037"
@@ -2302,7 +2302,7 @@ python_tests = [
 ]
 bridge = ["beginTabDrag"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_drag_offers_the_tab_to_this_process_only): the tab is offered as a GType value GDK never serializes, and GNOME Shell's root-window format with no data."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_drag_offers_the_tab_to_this_process_only): the tab is offered as a GType value GDK never serializes, and GNOME Shell's root-window format with no data."
 
 [[feature]]
 id = "TAB-041"
