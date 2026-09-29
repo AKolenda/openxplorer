@@ -84,6 +84,16 @@ impl IconSize {
         }
     }
 
+    /// [`Self::accelerator`] as menus show it.
+    pub(crate) const fn shortcut_label(self) -> &'static str {
+        match self {
+            IconSize::ExtraLarge => "Ctrl+Shift+1",
+            IconSize::Large => "Ctrl+Shift+2",
+            IconSize::Medium => "Ctrl+Shift+3",
+            IconSize::Small => "Ctrl+Shift+4",
+        }
+    }
+
     /// The size for an action-state key.
     pub(crate) fn from_key(key: &str) -> Option<IconSize> {
         Self::ALL.into_iter().find(|size| size.as_str() == key)

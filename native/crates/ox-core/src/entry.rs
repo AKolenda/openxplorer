@@ -49,7 +49,7 @@ use std::path::PathBuf;
 /// into view included, which made listing 20,000 local files about three
 /// times slower. Views ask for [`THUMBNAIL_ATTRIBUTES`] when they show a row.
 pub const ATTRIBUTES: &str = concat!(
-    "standard::name,standard::display-name,standard::type,standard::is-hidden,",
+    "standard::name,standard::display-name,standard::type,standard::is-hidden,standard::is-backup,",
     "standard::is-symlink,standard::size,standard::content-type,standard::target-uri,",
     "standard::is-virtual,standard::icon,time::modified,",
     "access::can-rename,access::can-trash,access::can-delete,access::can-write,",
@@ -151,7 +151,8 @@ pub struct Entry {
     /// unknown.
     pub modified: Option<u64>,
     /// Hidden by name, by the folder's `.hidden` list or by the backend
-    /// (`standard::is-hidden`).
+    /// (`standard::is-hidden`), or a backup file such as `notes.txt~`
+    /// (`standard::is-backup`), which GNOME Files hides as well.
     pub is_hidden: bool,
     /// A symbolic link, listed with its target's type
     /// (`standard::is-symlink`).

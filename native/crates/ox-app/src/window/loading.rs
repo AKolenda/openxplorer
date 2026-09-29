@@ -4,7 +4,10 @@
 //! Ports `load` and the directory-monitor refresh in `desktop/ui/app.js`
 //! and `desktop/winspace.py`:
 //!
-//! - Moving to a folder clears the rows and fills them batch by batch.
+//! - Moving to a folder clears the rows and fills them batch by batch. The
+//!   blank list shows at once, with no "Loading" text; only a listing that
+//!   takes longer than a moment shows the thin loading line, as Windows
+//!   Explorer and Dolphin do. Landing pages never show it.
 //! - Listing the same folder again (F5, or a change the monitor saw) keeps
 //!   the rows on screen and merges the new listing in when it is complete,
 //!   so scroll position, keyboard focus and selection survive.
@@ -140,6 +143,7 @@ impl BrowserWindow {
         if page == Page::Network {
             self.discover_servers_once();
         }
+        self.refresh_free_space();
         self.render_landing();
         self.update_content();
     }
@@ -270,6 +274,7 @@ impl BrowserWindow {
         self.apply_measured_folder_sizes(id);
         if self.imp().session.borrow().is_active(id) {
             self.restore_selection(id);
+            self.refresh_free_space();
             self.update_content();
             self.update_details_pane();
             self.focus_new_file_list();
@@ -356,18 +361,21 @@ impl BrowserWindow {
 
     /// Shows the folder pane state that fits the active tab.
     pub(super) fn update_content(&self) {
-        let (page, loading, error) = {
+        let (uri, page, loading, error) = {
             let session = self.imp().session.borrow();
             let Some(tab) = session.active() else { return };
             let page = Page::from_uri(tab.uri());
             let loading = tab.listing_state.is_listing();
-            (page, loading, tab.error.as_ref().map(ToString::to_string))
+            let error = tab.error.as_ref().map(ToString::to_string);
+            (tab.uri().to_owned(), page, loading, error)
         };
         let pane = self.folder_pane();
         pane.set_loading(loading && page.is_none());
         if page.is_some() {
             pane.show_page(PanePage::Landing);
-        } else if pane.model().n_items() > 0 {
+        } else if pane.model().n_items() > 0 || (loading && error.is_none()) {
+            // A folder being listed keeps the blank list, with its column
+            // titles, until items come: no "Loading" text, no page swap.
             pane.show_page(PanePage::Listing);
             if let Some(error) = error {
                 self.show_message(&error);
@@ -375,8 +383,9 @@ impl BrowserWindow {
         } else {
             let state = match error {
                 Some(error) => EmptyState::Unavailable(error),
-                None if loading => EmptyState::Loading,
-                None => self.search_empty_state().unwrap_or(EmptyState::EmptyFolder),
+                None => self
+                    .search_empty_state()
+                    .unwrap_or_else(|| EmptyState::empty_listing(&uri)),
             };
             pane.show_empty(&state);
         }

@@ -36,7 +36,8 @@ use glib::DateTime;
 
 use locale_pattern::LocalePatterns;
 
-/// Shown in the Date modified column when a time is unknown.
+/// Shown in the Date modified column when a time is unknown, and in the
+/// Size column when a file's size is.
 const UNKNOWN_DATE: &str = "—";
 
 /// Shown in the Properties dialog when a time is unknown.
@@ -71,6 +72,12 @@ const SIZE_UNITS: [SizeUnit; 4] = [
         bytes: 1 << 40,
     },
 ];
+
+/// [`pretty_bytes`] of a size that may be unknown: `—` when it is
+/// (`prettyBytes(undefined)` in app.js).
+pub fn size_text(bytes: Option<u64>) -> String {
+    bytes.map_or_else(|| UNKNOWN_DATE.to_owned(), pretty_bytes)
+}
 
 /// `912 bytes`, `71.0 KB`, `130 KB`, `1.1 MB`: one decimal below 100 and
 /// none from 100 up, in powers of 1024.
@@ -128,6 +135,17 @@ pub fn date_time_text(unix_seconds: Option<u64>) -> String {
         .unwrap_or_else(|| UNKNOWN_TIMESTAMP.to_owned())
 }
 
+/// Local date and short clock time for the Date modified column, as
+/// Windows Explorer and Dolphin show it: the [`date_text`] date and the
+/// locale's clock time without seconds, for example `09/26/2026 7:35 PM`
+/// in the US or `26.09.2026 19:35` in Germany; `—` when unknown.
+pub fn date_short_time_text(unix_seconds: Option<u64>) -> String {
+    unix_seconds
+        .and_then(local_time)
+        .and_then(|time| format_date_short_time_with(&time, locale_pattern::current()))
+        .unwrap_or_else(|| UNKNOWN_DATE.to_owned())
+}
+
 /// [`date_text`] for a time GIO already returned as a [`DateTime`], in the
 /// time zone it carries. `None` if it cannot be formatted.
 pub fn format_date(time: &DateTime) -> Option<String> {
@@ -153,6 +171,27 @@ fn format_date_time_with(time: &DateTime, patterns: &LocalePatterns) -> Option<S
     let date = format_date_with(time, patterns)?;
     let clock = time.format(&patterns.time).ok()?;
     Some(format!("{date}, {clock}"))
+}
+
+/// [`date_short_time_text`] with the given locale `patterns`: the date, a
+/// space and the clock time without seconds.
+fn format_date_short_time_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
+    let date = format_date_with(time, patterns)?;
+    let clock = time.format(&without_seconds(&patterns.time)).ok()?;
+    Some(format!("{date} {clock}"))
+}
+
+/// A clock `pattern` without its seconds and the separator before them:
+/// `%-I:%M:%S %p` becomes `%-I:%M %p`, and a unit after the seconds, as in
+/// Korean `%H시 %M분 %S초`, goes with them.
+fn without_seconds(pattern: &str) -> String {
+    let Some(at) = pattern.find("%S") else {
+        return pattern.to_owned();
+    };
+    let is_separator = |c: char| c.is_whitespace() || (c.is_ascii_punctuation() && c != '%');
+    let before = pattern[..at].trim_end_matches(is_separator);
+    let after = pattern[at + 2..].trim_start_matches(|c: char| c.is_alphabetic() && !c.is_ascii());
+    format!("{before}{after}")
 }
 
 /// The local time for a Unix timestamp; `None` for times a [`DateTime`]
@@ -257,6 +296,8 @@ mod tests {
     /// parity: VIEW-003
     #[test]
     fn sizes_match_the_web_interface() {
+        assert_eq!(size_text(None), "—");
+        assert_eq!(size_text(Some(0)), "0 bytes");
         assert_eq!(pretty_bytes(0), "0 bytes");
         assert_eq!(pretty_bytes(1), "1 bytes");
         assert_eq!(pretty_bytes(912), "912 bytes");
@@ -331,6 +372,24 @@ mod tests {
             let date = format_date_with(&september_21(), &case.patterns());
             assert_eq!(date.as_deref(), Some(case.column), "{}", case.locale);
         }
+    }
+
+    /// The Date modified column shows the date and the clock time without
+    /// seconds, as Windows Explorer does.
+    ///
+    /// parity: VIEW-004
+    #[test]
+    fn column_dates_show_the_time_without_seconds() {
+        let us = LocalePatterns {
+            date: "%m/%d/%Y".to_owned(),
+            time: "%-I:%M:%S %p".to_owned(),
+        };
+        let time = DateTime::from_utc(2026, 9, 6, 19, 5, 7.0).expect("valid date");
+        let text = format_date_short_time_with(&time, &us);
+        assert_eq!(text.as_deref(), Some("09/06/2026 7:05 PM"));
+        assert_eq!(without_seconds("%H:%M:%S"), "%H:%M");
+        assert_eq!(without_seconds("%H시 %M분 %S초"), "%H시 %M분");
+        assert_eq!(date_short_time_text(None), "—");
     }
 
     /// The deliberate change from the web UI's `timestamp`, described in

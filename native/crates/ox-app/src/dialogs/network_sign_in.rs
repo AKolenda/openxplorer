@@ -75,6 +75,7 @@ impl SignInDialog {
     /// once a handler hears its answers.
     pub(crate) fn new(parent: &impl IsA<gtk::Window>, challenge: &Challenge) -> Self {
         let dialog: Self = glib::Object::builder().property("transient-for", parent).build();
+        crate::window::follow_text_size_keys(&dialog);
         match &challenge.kind {
             ChallengeKind::Password(fields) => dialog.ask_for_account(&challenge.host, fields),
             ChallengeKind::Question(question) => dialog.ask_question(question),

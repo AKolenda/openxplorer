@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use crate::locations::Page;
 use crate::test_support::harness::{
     settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, STANDARD_NAMES,
 };
@@ -354,4 +355,52 @@ fn the_loading_line_lies_over_the_pane_without_moving_the_items() {
         items_before,
         "the items stay put"
     );
+}
+
+/// Moving between folders and landing pages never says "Loading": a fast
+/// listing keeps the blank list with no page swap, no loading line and no
+/// "Loading…" in the status bar; the line waits for a slow listing (see
+/// `loading_line.rs`), as Windows Explorer and Dolphin do.
+///
+/// parity: VIEW-047
+#[gtk::test]
+fn switching_pages_never_flashes_a_loading_state() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let pane = test.window.folder_pane();
+    let empty = Fixture::empty();
+    let stops = [
+        Page::ThisPc.uri().to_owned(),
+        fixture.uri(),
+        Page::Network.uri().to_owned(),
+        empty.uri(),
+        Page::Settings.uri().to_owned(),
+        fixture.uri(),
+    ];
+    for stop in stops {
+        test.window
+            .navigate(&stop)
+            .expect("every stop is a valid address");
+        loop {
+            let (count, _) = test.window.status_bar().texts();
+            assert!(
+                !count.contains("Loading"),
+                "the status bar said {count:?} for {stop}"
+            );
+            assert!(
+                !pane.loading_line().is_visible(),
+                "a fast listing showed the line"
+            );
+            if test.window.is_loading() {
+                assert_eq!(pane.page(), Some(PanePage::Listing), "a listing keeps the list");
+            } else {
+                break;
+            }
+            settle();
+        }
+    }
+    test.window.navigate(&empty.uri()).expect("a folder");
+    test.wait_for_listing("the empty folder");
+    assert_eq!(pane.page(), Some(PanePage::Empty));
+    assert_eq!(pane.empty_page().title(), "This folder is empty");
 }

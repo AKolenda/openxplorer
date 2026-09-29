@@ -19,13 +19,14 @@
 //! widget's classes while GTK binds its cells upsets the list's
 //! bookkeeping (a Gtk-CRITICAL in `gtk_widget_get_next_sibling`).
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
 
+use super::row_tooltip::RowTooltip;
 use super::FileCell;
 use crate::folder_view::item::FileItem;
 
@@ -33,6 +34,11 @@ use crate::folder_view::item::FileItem;
 /// stylesheet draws such cells at half opacity (`.file-row.cut{opacity:.5}`
 /// in `desktop/ui/style.css`).
 const CUT_CSS_CLASS: &str = "cut";
+
+/// The CSS class of a cell whose item is hidden, shown only while "Show
+/// hidden files" is on; the stylesheet draws it faded, as Windows Explorer
+/// and Dolphin do (VIEW-026).
+const HIDDEN_CSS_CLASS: &str = "hidden-item";
 
 /// The CSS class of a cell whose item is being dragged out
 /// (`.file-dragging .drag-source{opacity:.55}`).
@@ -117,6 +123,8 @@ pub(crate) struct CellOwners {
     dragged_uris: RefCell<HashSet<String>>,
     /// The row or tile of the folder a drag hovers over, highlighted.
     drop_row: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
+    /// What the rows' tooltips name.
+    row_tooltip: Cell<RowTooltip>,
 }
 
 impl CellOwners {
@@ -136,6 +144,23 @@ impl CellOwners {
         });
     }
 
+    /// What the tooltips of the rows and tiles name now.
+    pub(crate) fn row_tooltip(&self) -> RowTooltip {
+        self.row_tooltip.get()
+    }
+
+    /// Makes the tooltips of the rows and tiles name `tooltip`: full paths
+    /// while the window searches, names otherwise.
+    pub(crate) fn set_row_tooltip(&self, tooltip: RowTooltip) {
+        self.row_tooltip.set(tooltip);
+    }
+
+    /// The item the registered `cell` shows, while it shows one.
+    pub(crate) fn item_of(&self, cell: &impl IsA<gtk::Widget>) -> Option<FileItem> {
+        let list_item = self.owner_of(cell.as_ref())?;
+        list_item.item().and_downcast::<FileItem>()
+    }
+
     /// Styles `cell`, which shows `item`: dimmed while a cut has `item` on
     /// the clipboard or a drag carries it. The views call this whenever
     /// they bind a cell, since GTK reuses cells for other items.
@@ -143,6 +168,7 @@ impl CellOwners {
         let uri = &item.entry().uri;
         toggle_class(cell, CUT_CSS_CLASS, self.cut_uris.borrow().contains(uri));
         toggle_class(cell, DRAGGED_CSS_CLASS, self.dragged_uris.borrow().contains(uri));
+        toggle_class(cell, HIDDEN_CSS_CLASS, item.entry().is_hidden);
     }
 
     /// Styles every cell on screen again after the state changed.
@@ -205,6 +231,13 @@ impl CellOwners {
     #[cfg(test)]
     pub(crate) fn is_shown_cut(&self, position: u32) -> Option<bool> {
         self.cells_have_class(position, CUT_CSS_CLASS)
+    }
+
+    /// Whether every cell on screen that shows `position` is faded as
+    /// hidden; `None` when none shows it. For tests.
+    #[cfg(test)]
+    pub(crate) fn is_shown_hidden(&self, position: u32) -> Option<bool> {
+        self.cells_have_class(position, HIDDEN_CSS_CLASS)
     }
 
     /// Whether every cell on screen that shows `position` is dimmed as

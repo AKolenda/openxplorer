@@ -52,6 +52,7 @@ impl BrowserWindow {
         let grid = self.folder_pane().icon_view().grid().clone();
         self.folder_input(details.upcast_ref());
         self.folder_input(grid.upcast_ref());
+        self.install_selection_keys();
         self.address_bar().connect_cancelled(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -255,7 +256,7 @@ impl BrowserWindow {
                 input.reset();
                 self.reset_typeahead();
             }
-            gdk::Key::Escape => self.folder_pane().model().select_none(),
+            gdk::Key::Escape => self.clear_selection(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
             // Space toggles the native selection unless a prefix is typed.
             gdk::Key::space if !prefix_active => return Some(glib::Propagation::Proceed),

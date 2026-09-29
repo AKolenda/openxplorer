@@ -197,6 +197,7 @@ impl BrowserWindow {
         self.render_navigation();
         self.update_content();
         self.update_details_pane();
+        self.refresh_free_space();
         self.folder_pane().restore_scroll_position(view.scroll);
         if had_focus {
             self.folder_pane().focus_view();

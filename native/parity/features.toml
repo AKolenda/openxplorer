@@ -2740,8 +2740,8 @@ python_tests = [
 ]
 bridge = ["list"]
 dolphin = "Details view mode"
-native = "partial"
-native_note = "Details ColumnView with a Modified column exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes); date text in native/crates/ox-core/src/format.rs (dates_follow_the_c_locale_with_a_full_year, local_dates_are_formatted)."
+native = "done"
+native_note = "Name (icon + name), Date modified, Type and Size columns in native/crates/ox-app/src/folder_view/details.rs; row tooltips name the item (native/crates/ox-app/src/folder_view/cells/row_tooltip.rs, a_row_names_its_item_or_its_full_path_while_searching); dates in native/crates/ox-core/src/format.rs (dates_follow_the_c_locale_with_a_full_year, column_dates_match_the_web_ui_in_each_locale); 38-pixel rows at 100% in native/crates/ox-app/src/text_size.rs (large_text_keeps_row_clearance). Date modified now also shows the clock time (VIEW-004)."
 
 [[feature]]
 id = "VIEW-002"
@@ -2768,8 +2768,8 @@ python_tests = [
 bridge = ["list", "properties"]
 dolphin = "KFileItem::mimeComment (QMimeDatabase)"
 gnome = "g_content_type_get_description (shared-mime-info)"
-native = "partial"
-native_note = "native/crates/ox-core/src/entry/info.rs (real_zero_byte_file_remains_zero_bytes, missing_file_size_does_not_claim_zero); native/crates/ox-core/src/entry/type_label.rs (folder_wording_wins, office_text_zip_and_video_files_use_the_interface_names, other_types_keep_the_gio_description); native/crates/ox-core/tests/entry_enumeration.rs (documents_are_listed_with_the_interface_type_names); native/crates/ox-app/src/window/tests/views.rs (the_type_column_shows_the_interface_names_for_documents). Word, Excel, PowerPoint, plain text, ZIP and MP4 files show the interface names of the preview listing in desktop/ui/app.js (Word document, Excel worksheet, PowerPoint presentation, Text document, Compressed folder, MP4 video), because GIO words them differently depending on the installed MIME definitions; every other type shows the GIO description."
+native = "done"
+native_note = "native/crates/ox-core/src/entry/info.rs (real_zero_byte_file_remains_zero_bytes, missing_file_size_does_not_claim_zero); native/crates/ox-core/src/entry/type_label.rs (folder_wording_wins, office_text_zip_and_video_files_use_the_interface_names, other_types_keep_the_gio_description); native/crates/ox-core/tests/entry_enumeration.rs (documents_are_listed_with_the_interface_type_names, hidden_items_are_listed_and_flagged, symlink_to_a_folder_is_browsable_without_recursing_into_it); native/crates/ox-app/src/window/tests/views.rs (the_type_column_shows_the_interface_names_for_documents). Word, Excel, PowerPoint, plain text, ZIP and MP4 files show the interface names of the preview listing in desktop/ui/app.js, because GIO words them differently depending on the installed MIME definitions; every other type shows the GIO description."
 
 [[feature]]
 id = "VIEW-003"
@@ -2782,8 +2782,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:122"]
 python_tests = ["desktop/tests/ui_v06.py::Properties uses the same measured folder total"]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/src/format.rs (sizes_match_the_web_interface, halves_round_up_like_to_fixed)."
+native = "done"
+native_note = "native/crates/ox-core/src/format.rs (sizes_match_the_web_interface, halves_round_up_like_to_fixed): pretty_bytes, and size_text, which gives '—' for a file of unknown size in the Size column (native/crates/ox-app/src/folder_view/details.rs); folders stay empty until measured."
 
 [[feature]]
 id = "VIEW-004"
@@ -2801,8 +2801,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "UseShortRelativeDates (default true)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's dateText() shows the date only, with no time. Explorer shows date and time. Existing OpenXplorer part is protected by VIEW-001."
+native = "partial"
+native_note = "Date modified shows the locale's numeric date and its clock time without seconds, as Windows Explorer does ('09/06/2026 7:05 PM'; native/crates/ox-core/src/format.rs, column_dates_show_the_time_without_seconds). Missing: Dolphin's relative dates ('Today at 3:00 PM') and the option that switches between relative and absolute; Windows 11 shows absolute dates only."
 
 [[feature]]
 id = "VIEW-005"
@@ -2830,8 +2830,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "Icons view mode"
-native = "partial"
-native_note = "native/crates/ox-app/src/folder_view/grid.rs (icon_sizes_round_trip_and_shrink); win.view \"large\" exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes)."
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/grid.rs (icon_sizes_round_trip_and_shrink); native/crates/ox-app/src/window/tests/views.rs (a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows, switching_views_keeps_the_selection_and_shows_the_active_view): 56-pixel icons, two-line names, as many 135-pixel columns as fit. Selection, cut dimming, middle-click, the context menu and type-to-select use the same controllers in both views (native/crates/ox-app/src/window/input.rs). The native app adds Explorer's Extra large, Medium and Small icon sizes."
 
 [[feature]]
 id = "VIEW-006"
@@ -2859,8 +2859,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "Dolphin: Ctrl+1/2/3 switch Icons/Compact/Details.; icons: Ctrl+1; details: Ctrl+3"
-native = "partial"
-native_note = "native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) switches win.view and keeps the selection; status-bar buttons untested. Porting notes: No keyboard shortcut for view modes in 1.1.4 (Dolphin: Ctrl+1/2/3). No keyboard shortcut for view modes (Windows Ctrl+Shift+1..8, Dolphin Ctrl+1..3)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/views.rs (switching_views_keeps_the_selection_and_shows_the_active_view: View menu choices and the status-bar Details view / Large icons buttons, the active one highlighted; a_chosen_view_starts_at_the_top_and_has_explorers_keys: a chosen view starts at the top, clears type-to-select and is saved for every tab and new window). Explorer's keys Ctrl+Shift+1 to 4 and 6 choose the views (VIEW-009)."
 
 [[feature]]
 id = "VIEW-007"
@@ -2881,7 +2881,8 @@ python_tests = [
   "desktop/tests/test_v06.py::PrefTests::test_other_preferences_retained",
 ]
 bridge = ["preferences"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/settings/tests/preferences.rs (the_view_is_details_grid_or_left_as_it_was); every native icon size is saved as the Python app's 'grid' (native/crates/ox-app/src/window/folder_pane/view.rs)."
 
 [[feature]]
 id = "VIEW-008"
@@ -2918,8 +2919,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "Ctrl+1 Icons, Ctrl+2 Compact, Ctrl+3 Details"
-native = "todo"
-native_note = "Porting notes: Explorer uses Ctrl+Shift+1…8 (Extra large, Large, Medium, Small icons, List, Details, Tiles, Content); follow Explorer. Ctrl+1..3 are unbound in Explorer and may be added as aliases."
+native = "done"
+native_note = "Explorer's keys: Ctrl+Shift+1 to 4 choose Extra large, Large, Medium and Small icons and Ctrl+Shift+6 chooses Details; the View menu shows them (native/crates/ox-app/src/window/actions.rs, native/crates/ox-app/src/window/command_bar/menus.rs; native/crates/ox-app/src/window/tests/views.rs, a_chosen_view_starts_at_the_top_and_has_explorers_keys). Ctrl+Shift+5 (List) waits for the compact view (VIEW-008); Ctrl+1 to 3 are not bound."
 
 [[feature]]
 id = "VIEW-010"
@@ -2962,8 +2963,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "DolphinView::wheelEvent"
-native = "todo"
-native_note = "Porting notes: Explorer also cycles view sizes with Ctrl+wheel."
+native = "done"
+native_note = "Ctrl+wheel over the folder pane steps Details, Small, Medium, Large and Extra large icons, one step per notch, adding up smooth-scroll fractions, and stops at the ends (native/crates/ox-app/src/window/view_zoom.rs; native/crates/ox-app/src/window/folder_pane/view.rs, the_wheel_steps_through_the_views_and_stops_at_the_ends). The chosen view is saved as a View menu choice is."
 
 [[feature]]
 id = "VIEW-012"
@@ -2999,8 +3000,8 @@ sources = [
 python_tests = ["desktop/tests/ui_v07.py::Transferred tab restores selection and sort"]
 bridge = []
 dolphin = "sort menu (sort_by_*)"
-native = "partial"
-native_note = "win.sort and win.direction action states exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes); the menu itself is untested."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/views.rs (the_sort_menu_leaves_one_arrow_on_the_sorted_column, sorting_by_a_header_updates_the_sort_menu): Name, Date modified, Type and Size, the current one checked, a divider, then the direction. The direction has two checked items, Ascending and Descending, as Windows 11's Sort menu has, where app.js had one item that flipped it."
 
 [[feature]]
 id = "VIEW-014"
@@ -3022,8 +3023,8 @@ sources = [
 python_tests = ["desktop/tests/ui_v06.py::Resizing does not change sort"]
 bridge = []
 dolphin = "KItemListHeaderWidget sort on click"
-native = "partial"
-native_note = "native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) sorts by the Modified column and checks the sort/direction states. Porting notes: Sort is not persisted; Dolphin remembers per-folder view properties. Persisting sort is a gain."
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/details.rs (the_sort_order_reads_back_and_one_arrow_shows_it); native/crates/ox-app/src/window/tests/views.rs (sorting_by_a_header_updates_the_sort_menu, only_the_sorted_column_shows_the_apps_arrow). A title click sorts ascending, a second click reverses it, only the sorted title shows the app's arrow and GTK reports the sort to screen readers; resizing never sorts. Sort is not persisted, as in the Python app (VIEW-020)."
 
 [[feature]]
 id = "VIEW-015"
@@ -3045,8 +3046,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "SortingChoice=NaturalSorting (default)"
-native = "partial"
-native_note = "native/crates/ox-app/src/folder_view/sorting.rs (digit_runs_compare_by_value, case_is_ignored, accents_are_ignored); folders-first ordering in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes). Porting notes: Sort not persisted in 1.1.4; Dolphin remembers per-folder or globally. Native may improve but must keep folders-first natural ordering."
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/sorting.rs (digit_runs_compare_by_value, case_is_ignored, accents_are_ignored, equal_keys_fall_back_to_the_raw_name); native/crates/ox-app/src/folder_view/model.rs (unmeasured_folders_and_unknown_sizes_sort_as_nothing); folders-first ordering in native/crates/ox-app/src/window/tests/listing.rs (folders_come_first_then_names_in_natural_order). Search results use the same sorter."
 
 [[feature]]
 id = "VIEW-016"
@@ -3208,8 +3209,8 @@ python_tests = [
 bridge = ["preferences", "list", "search"]
 dolphin = "Ctrl+H Show Hidden Files; Dolphin: Alt+. or Ctrl+H toggles hidden files.; Show Hidden Files (Alt+. / Ctrl+H); show_hidden_files: Ctrl+H, Alt+."
 gnome = "Nautilus: Ctrl+H; org.gtk.gtk4.Settings.FileChooser show-hidden."
-native = "partial"
-native_note = "win.hidden exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes); native/crates/ox-core/tests/entry_enumeration.rs (hidden_toggle_changes_the_listing_and_empty_folders_finish). Ctrl+H and the saved preference untested. Porting notes: Dolphin's alternate shortcut Alt+. is not bound in OpenXplorer."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/views.rs (ctrl_h_shows_hidden_files_outside_text_fields: Ctrl+H toggles and saves outside text fields and is left to the search box inside it; changed_view_preferences_are_saved_for_new_windows); native/crates/ox-app/src/folder_view/filter.rs; native/crates/ox-app/src/window/tests/listing.rs. Ctrl+H is a window key (native/crates/ox-app/src/window/selection_keys.rs), not an application accelerator, so it never fires in a text field. View and More menus show the toggle."
 
 [[feature]]
 id = "VIEW-024"
@@ -3235,8 +3236,8 @@ python_tests = [
 bridge = ["list", "preferences"]
 dolphin = "View > Show Hidden Files (Ctrl+H / Alt+.); KIO honours .hidden files"
 gnome = "standard::is-hidden (includes .hidden files); standard::is-hidden (GLib's local backend reads .hidden; verified with gio in the isolated runner)"
-native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (metadata_and_listing_preserve_hidden_files_and_do_not_follow_links); .hidden files are not covered by a native test. Porting notes: The behaviour comes from GIO and is untested; add a native test."
+native = "done"
+native_note = "native/crates/ox-core/tests/entry_enumeration.rs (hidden_items_are_listed_and_flagged, names_in_a_hidden_list_are_flagged_hidden, backup_files_are_flagged_hidden); the preference persists and defaults to off (native/crates/ox-core/src/settings)."
 
 [[feature]]
 id = "VIEW-025"
@@ -3251,7 +3252,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Dolphin shows backup files"
 gnome = "standard::is-backup (Nautilus treats is_hidden || is_backup as hidden); verified that b~ has is-backup TRUE and is-hidden FALSE"
-native = "todo"
+native = "done"
+native_note = "GIO's standard::is-backup (names ending in ~) counts as hidden, as in GNOME Files (native/crates/ox-core/src/entry/info.rs; native/crates/ox-core/tests/entry_enumeration.rs, backup_files_are_flagged_hidden)."
 
 [[feature]]
 id = "VIEW-026"
@@ -3270,8 +3272,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "Hidden items drawn semi-transparent"
-native = "todo"
-native_note = "Porting notes: Explorer also dims hidden items. OpenXplorer dims only cut items."
+native = "done"
+native_note = "Hidden items shown with Show hidden files are drawn at 60% opacity (native/crates/ox-app/src/folder_view/cells/cell_owners.rs, resources/skin/folder-views.css; native/crates/ox-app/src/window/tests/views.rs, ctrl_h_shows_hidden_files_outside_text_fields)."
 
 [[feature]]
 id = "VIEW-027"
@@ -3296,7 +3298,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "F11 Information panel; Information panel (F11)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/views.rs (the_details_button_shows_whether_the_pane_is_open): the command-bar Details toggle, View > Details pane and the pane's close button all run win.details-pane, which is saved."
 
 [[feature]]
 id = "VIEW-028"
@@ -3343,8 +3346,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "KItemListHeader column resize"
-native = "partial"
-native_note = "Stored widths: native/crates/ox-core/src/settings/tests/preferences.rs (layout_persists, columns_whitelist, width_rounding); GTK column resizing untested."
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/column_widths.rs (a_dragged_column_stops_at_its_limits); native/crates/ox-app/src/folder_view/details.rs (a_settled_resize_reports_the_widths_settings_save, applying_saved_widths_is_not_reported_as_a_resize); native/crates/ox-core/src/settings/tests/preferences.rs (layout_persists, columns_whitelist, width_rounding). GTK's own resize edge drags the columns; dragged widths are clamped to the Python limits and saved once the drag settles; Name stops filling once resized (VIEW-031)."
 
 [[feature]]
 id = "VIEW-029"
@@ -3368,7 +3371,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "Double-click header separator to fit"
-native = "todo"
+native = "done"
+native_note = "A double-click on a title's resize edge, or Home on a focused title, fits the column to the widest text among the first 2,000 shown items and saves it (native/crates/ox-app/src/folder_view/details/column_fit.rs, titles_fit_and_nudge_their_columns; native/crates/ox-app/src/folder_view/column_widths.rs, a_fitted_column_holds_its_widest_text_within_its_limits). The titles carry the web tooltip."
 
 [[feature]]
 id = "VIEW-030"
@@ -3381,7 +3385,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:1691-1699", "desktop/ui/app.js:1683"]
 python_tests = ["desktop/tests/ui_v06.py::Column handle supports keyboard resizing"]
 bridge = ["preferences"]
-native = "todo"
+native = "done"
+native_note = "Column titles are focusable and stand in for the web app's separator, as GTK draws the resize edge itself: Left and Right make the column 10 pixels narrower or wider within its limits and the width is saved; Home fits it. Each title describes this to screen readers ('Resize <column> column: ...') with its minimum, maximum and current width (native/crates/ox-app/src/folder_view/details/column_fit.rs, titles_fit_and_nudge_their_columns)."
 
 [[feature]]
 id = "VIEW-031"
@@ -3397,7 +3402,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Header scroll follows the file scroll",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "Name expands until it has a width of its own; a dragged, fitted or saved Name width is exact, and wider columns scroll sideways with the titles, which GTK's column view keeps aligned (native/crates/ox-app/src/folder_view/details/column_fit.rs, name_fills_the_width_until_it_is_resized; native/crates/ox-app/src/window/tests/settings.rs, reset_returns_every_windows_sidebar_to_its_default_width)."
 
 [[feature]]
 id = "VIEW-032"
@@ -3588,8 +3594,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "ShowToolTips (default false) + name tooltip for elided labels"
-native = "todo"
-native_note = "Porting notes: OpenXplorer sets the row title to the name, or to the path in search results, but has no rich tooltip. Existing OpenXplorer part is protected by VIEW-001 and VIEW-042."
+native = "partial"
+native_note = "Every row and tile shows its item's name as a tooltip, or its full path while searching, so an elided name in the icon view can be read in full (native/crates/ox-app/src/folder_view/cells/row_tooltip.rs, a_row_names_its_item_or_its_full_path_while_searching). Missing: Dolphin's 'Show tooltips' option with a preview and metadata."
 
 [[feature]]
 id = "VIEW-042"
@@ -3606,8 +3612,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Search Folder path column resizes independently",
 ]
 bridge = ["search"]
-native = "partial"
-native_note = "native/crates/ox-app/src/folder_view/details.rs (search_results_show_folder_path_in_place_of_date_modified, a_settled_resize_reports_the_widths_settings_save); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). Folder path replaces Date modified while searching (Name and Folder path in a compact window) and saves its width as parentUri. Missing: the full path shows as the Folder path cell's tooltip, not the whole row's."
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/details.rs (search_results_show_folder_path_in_place_of_date_modified, a_settled_resize_reports_the_widths_settings_save); native/crates/ox-app/src/folder_view/cells/row_tooltip.rs (a_row_names_its_item_or_its_full_path_while_searching); native/crates/ox-app/src/window/tests/search.rs. Folder path replaces Date modified while searching (Name and Folder path in a compact window), saves its width as parentUri, and every cell of a result row shows the full path as its tooltip."
 
 [[feature]]
 id = "VIEW-043"
@@ -3656,8 +3662,8 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "Ctrl+/Ctrl- zoom; Dolphin: Ctrl++ / Ctrl+- zoom icons, Ctrl+0 reset zoom."
 gnome = "GNOME text-scaling-factor (org.gnome.desktop.interface) is the system-wide setting; app-level zoom remains separate."
-native = "partial"
-native_note = "native/crates/ox-app/src/text_size.rs (control_plus_minus_and_zero_are_recognised, keypad_keys_are_recognised, alt_and_alt_graph_are_ignored, input_method_composition_is_ignored, other_shortcuts_are_not_captured)."
+native = "done"
+native_note = "native/crates/ox-app/src/text_size.rs (control_plus_minus_and_zero_are_recognised, keypad_keys_are_recognised, alt_and_alt_graph_are_ignored, input_method_composition_is_ignored, other_shortcuts_are_not_captured); native/crates/ox-app/src/window/tests/views.rs (the_text_size_shortcuts_are_the_table_with_ctrl_alone, text_size_keys_work_inside_dialogs). The keys are application accelerators in the browser windows, so they work in the file pane, the search box and the address bar without inserting characters; the modal dialogs, including network sign-in, run the same keys against their browser window (native/crates/ox-app/src/window/actions.rs, follow_text_size_keys). Each change shows 'Text size: N%' (native/crates/ox-app/src/window/preferences.rs)."
 
 [[feature]]
 id = "VIEW-044"
@@ -3712,8 +3718,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "Zoom in/out (Ctrl+wheel, Ctrl +/−)"
-native = "partial"
-native_note = "native/crates/ox-app/src/text_size.rs (supported_levels_are_kept, stepping_is_bounded, large_text_keeps_row_clearance); native/crates/ox-app/src/theme/fonts.rs (larger_text_scales_fonts_and_rows)."
+native = "done"
+native_note = "native/crates/ox-app/src/text_size.rs (supported_levels_are_kept, stepping_is_bounded, large_text_keeps_row_clearance); native/crates/ox-app/src/theme/fonts.rs (larger_text_scales_fonts_and_rows); native/crates/ox-app/src/window/tests/views.rs (text_size_steps_stay_between_80_and_200_percent)."
 
 [[feature]]
 id = "VIEW-045"
@@ -3744,8 +3750,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "Dolphin zoom slider / Ctrl+plus"
-native = "partial"
-native_note = "Stored preference: native/crates/ox-core/src/settings/tests/preferences.rs (text_size_multiple_instances_merge, text_size_all_sizes); live cross-window sync untested."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/tests/preferences.rs (text_size_multiple_instances_merge, text_size_all_sizes); native/crates/ox-app/src/window/preferences.rs (a_text_size_change_says_the_size_or_why_it_was_not_saved). Every window shares one skin, so a change reaches all windows at once; saves run in order so the last size wins; the View menu has Larger text, Smaller text and Reset text size and Settings mirrors the value."
 
 [[feature]]
 id = "VIEW-046"
@@ -3761,8 +3767,8 @@ python_tests = [
   "desktop/tests/test_v06.py::PrefTests::test_column_reset",
 ]
 bridge = ["preferences"]
-native = "todo"
-native_note = "Only the stored reset is ported (native/crates/ox-core/src/settings/tests/preferences.rs, column_reset); the Settings button is not implemented."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/settings.rs (reset_returns_every_windows_sidebar_to_its_default_width): Settings > Reset sidebar and column widths saves the 210-pixel sidebar and the default column widths, and every window shows them."
 
 [[feature]]
 id = "VIEW-047"
@@ -3780,8 +3786,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["list"]
-native = "partial"
-native_note = "native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) opens a missing folder, sees load_error() and recovers; empty and loading visuals untested."
+native = "done"
+native_note = "native/crates/ox-app/src/window/loading_line.rs (the_line_shows_once_a_listing_has_run_for_the_delay, a_listing_that_ends_at_once_never_shows_the_line); native/crates/ox-app/src/window/tests/listing.rs (switching_pages_never_flashes_a_loading_state, the_loading_line_lies_over_the_pane_without_moving_the_items); the unavailable page and Try again in native/crates/ox-app/src/window/tests/listing.rs. Deliberate change (owner request): a folder being listed keeps the blank list with its column titles and shows no 'Loading…' text or spinner; the 2-pixel line appears only after 300 ms, and landing pages never show it, as Windows Explorer and Dolphin behave."
 
 [[feature]]
 id = "VIEW-048"
@@ -3797,8 +3803,8 @@ python_tests = [
 ]
 bridge = ["list"]
 dolphin = "DolphinView::updatePlaceholderLabel"
-native = "todo"
-native_note = "Porting notes: OpenXplorer has 'This folder is empty', 'No matching items' and 'This location is unavailable' (with Try again). There are no trash or device variants."
+native = "done"
+native_note = "Empty listings say 'The Recycle Bin is empty' in trash:///, 'No shared folders found' on an SMB server, 'No MTP-compatible devices found' in mtp:/// and 'This folder is empty' elsewhere; a search with no results keeps 'No matching items' with its reason (native/crates/ox-app/src/window/empty_page.rs, empty_listings_say_what_is_missing_where)."
 
 [[feature]]
 id = "VIEW-049"
@@ -3818,7 +3824,7 @@ python_tests = []
 bridge = ["list", "cancel"]
 dolphin = "stop action + status bar progress"
 native = "todo"
-native_note = "Porting notes: OpenXplorer shows an indeterminate loading line. A listing is cancelled only by navigating away or closing the tab. Existing OpenXplorer part is protected by VIEW-047 and NAV-016."
+native_note = "Porting notes: OpenXplorer shows an indeterminate loading line. A listing is cancelled only by navigating away or closing the tab. Existing OpenXplorer part is protected by VIEW-047 and NAV-016. Owner decision (2026-09-29): no 'Loading' text while switching folders; a slow listing shows only the thin line after 300 ms (VIEW-047), so a status-bar percentage or Stop button must not bring the text back."
 
 [[feature]]
 id = "VIEW-050"
@@ -3852,8 +3858,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinView::requestStatusBarText"
-native = "todo"
-native_note = "Porting notes: OpenXplorer shows item and selection counts only, never sizes. Explorer also shows the size of the selection."
+native = "partial"
+native_note = "The selection shows its count and the selected files' total size, as Windows does (native/crates/ox-app/src/window/status_bar.rs, the_selection_shows_its_count_and_file_size). Missing: the folder's own total size beside its item count; Windows 11 shows only the count there."
 
 [[feature]]
 id = "VIEW-052"
@@ -3891,7 +3897,8 @@ python_tests = []
 bridge = ["properties", "list"]
 dolphin = "ShowSpaceInfo (default true); Status bar space info (ShowSpaceInfo, on by default)"
 gnome = "g_file_query_filesystem_info_async(filesystem::free)"
-native = "todo"
+native = "partial"
+native_note = "The status bar shows '<X> free' for the current folder's volume, with the tooltip '<X> free out of <Y> (<Z>% used)', read again when a listing ends or a tab is shown and hidden on landing pages (native/crates/ox-app/src/window/free_space.rs, the_status_bar_says_how_much_room_is_left). Missing: the capacity bar and the disk-usage tools on click."
 
 [[feature]]
 id = "VIEW-054"
@@ -3935,8 +3942,8 @@ python_tests = []
 bridge = ["list", "environment"]
 dolphin = "KDirWatch live updates; KDirWatch auto-refresh; KDirLister/KDirWatch; KDirWatch / KCoreDirLister auto-update"
 gnome = "GFileMonitor (g_file_monitor_directory); GFileMonitor / GVolumeMonitor; g_file_monitor_directory; Gio.File.monitor_directory; g_file_monitor_directory (inotify locally, GVfs monitors remotely)"
-native = "partial"
-native_note = "native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) writes a file and waits for the directory monitor to reload the listing; debounce, write suppression and the 8-monitor cap untested. Porting notes: No automated test for the folder-view monitor (LiveTests cover the index watcher only)."
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/watch.rs (a_burst_of_changes_is_reported_once_it_settles, a_watch_monitors_on_a_thread_of_its_own_until_dropped); native/crates/ox-app/src/window/listing_state.rs; native/crates/ox-app/src/window/tests/listing.rs. The monitor (WATCH_MOVES) is created on a thread of its own, changes are debounced 350 ms, and the tab lists again and merges in place, keeping scroll, focus and selection. Native design: each tab owns one watch, dropped when it leaves the folder, so the number of monitors is bounded by open tabs rather than a cap of 8; the in-place merge makes the Python app's write suppression unnecessary. Servers being signed out are not listed; locations without monitoring refresh with F5."
 
 [[feature]]
 id = "VIEW-056"
@@ -4098,8 +4105,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "show_information_panel: F11"
-native = "todo"
-native_note = "Porting notes: The toggle exists without a shortcut (VIEW-027). Shortcut conflict, Explorer wins: Dolphin's F11 is full screen in Explorer (PROP-010)."
+native = "done"
+native_note = "Alt+Shift+P runs win.details-pane like the toggle and the menu item, which saves it and leaves focus where it was (native/crates/ox-app/src/window/actions.rs; native/crates/ox-app/src/window/tests/views.rs, a_chosen_view_starts_at_the_top_and_has_explorers_keys). The View menu shows the key."
 
 [[feature]]
 id = "VIEW-064"

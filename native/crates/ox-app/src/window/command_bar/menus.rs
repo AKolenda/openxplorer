@@ -78,9 +78,15 @@ pub(super) fn sort_menu() -> Vec<MenuEntry> {
     entries
 }
 
-/// The View menu's item for `view`.
-fn view_item(label: &str, glyph: Icon, view: FolderView) -> MenuEntry {
-    MenuItem::choice(label, glyph, WindowAction::View, view.as_str()).into()
+/// The Details view's shortcut as the View menu shows it: Explorer's
+/// Ctrl+Shift+6.
+const DETAILS_VIEW_SHORTCUT: &str = "Ctrl+Shift+6";
+
+/// The View menu's item for `view`, showing its Explorer `shortcut`.
+fn view_item(label: &str, glyph: Icon, view: FolderView, shortcut: &'static str) -> MenuEntry {
+    MenuItem::choice(label, glyph, WindowAction::View, view.as_str())
+        .with_shortcut(shortcut)
+        .into()
 }
 
 /// The View menu's item for a text-size `step`, showing its `shortcut`.
@@ -93,15 +99,30 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 /// The View menu: the views (every icon size the native app has), the
 /// hidden-files and details-pane toggles, then the text size.
 pub(super) fn view_menu() -> Vec<MenuEntry> {
-    let mut entries = vec![view_item("Details", Icon::TextBulletList, FolderView::Details)];
-    let icon_sizes = IconSize::ALL
-        .into_iter()
-        .map(|size| view_item(size.label(), Icon::Grid, FolderView::Icons(size)));
+    let details = view_item(
+        "Details",
+        Icon::TextBulletList,
+        FolderView::Details,
+        DETAILS_VIEW_SHORTCUT,
+    );
+    let mut entries = vec![details];
+    let icon_sizes = IconSize::ALL.into_iter().map(|size| {
+        view_item(
+            size.label(),
+            Icon::Grid,
+            FolderView::Icons(size),
+            size.shortcut_label(),
+        )
+    });
     entries.extend(icon_sizes);
     entries.extend([
         MenuEntry::Divider,
-        MenuItem::toggle("Show hidden files", Icon::Eye, WindowAction::Hidden).into(),
-        MenuItem::toggle("Details pane", Icon::PanelRight, WindowAction::DetailsPane).into(),
+        MenuItem::toggle("Show hidden files", Icon::Eye, WindowAction::Hidden)
+            .with_shortcut("Ctrl+H")
+            .into(),
+        MenuItem::toggle("Details pane", Icon::PanelRight, WindowAction::DetailsPane)
+            .with_shortcut("Alt+Shift+P")
+            .into(),
         MenuEntry::Divider,
         text_size_item("Larger text", Icon::Add, Step::Increase, "Ctrl++"),
         text_size_item("Smaller text", Icon::Subtract, Step::Decrease, "Ctrl+−"),

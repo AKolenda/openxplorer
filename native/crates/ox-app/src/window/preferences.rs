@@ -72,6 +72,23 @@ impl Preference {
         }
         update
     }
+
+    /// What the window says when saving it failed with `error`. The
+    /// change stays in this window (`changeTextSize` and the other
+    /// `fire('preferences', …)` calls in app.js).
+    fn failure_message(&self, error: &SettingsError) -> String {
+        match self {
+            Preference::TextSize(_) => {
+                format!("Text size changed for this window, but could not be saved: {error}")
+            }
+            _ => format!("Changed for this window, but could not be saved: {error}"),
+        }
+    }
+}
+
+/// The toast a text-size change shows (`changeTextSize`).
+fn text_size_toast(size: TextSize) -> String {
+    format!("Text size: {}%", size.percent())
 }
 
 /// The sidebar widths the settings save (ox-core's [`SIDEBAR_WIDTHS`]),
@@ -237,18 +254,27 @@ impl BrowserWindow {
     /// Saves one preference. A failure leaves the change in this window and
     /// says so, as the Python app's text-size toast does.
     pub(super) fn save_preference(&self, preference: Preference) {
-        let update = preference.into_update();
+        let update = preference.clone().into_update();
         let reply = glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |result: Result<(), SettingsError>| {
                 if let Err(error) = result {
-                    let message = format!("Changed for this window, but could not be saved: {error}");
-                    window.show_message(&message);
+                    window.show_message(&preference.failure_message(&error));
                 }
             }
         );
         self.context().update_preferences(update, reply);
+    }
+
+    /// Draws text at `size` in every window, says so and saves it for all
+    /// windows (`changeTextSize` in app.js). Saves run one after another,
+    /// so the size asked for last is the one kept.
+    pub(super) fn change_text_size(&self, size: TextSize) {
+        self.reset_typeahead();
+        self.skin().set_text_size(size);
+        self.show_message(&text_size_toast(size));
+        self.save_preference(Preference::TextSize(size));
     }
 }
 
@@ -284,6 +310,18 @@ mod tests {
         assert_eq!(update.sidebar_width, Some(210.0));
         assert_eq!(update.column_widths, Some(Vec::new()));
         assert_eq!(update.theme, None, "nothing else changes");
+    }
+
+    /// parity: VIEW-045
+    #[test]
+    fn a_text_size_change_says_the_size_or_why_it_was_not_saved() {
+        assert_eq!(text_size_toast(TextSize::from_percent(125)), "Text size: 125%");
+        let error = SettingsError::Invalid("the disk is full".to_owned());
+        let failure = Preference::TextSize(TextSize::DEFAULT).failure_message(&error);
+        let expected = "Text size changed for this window, but could not be saved: the disk is full";
+        assert_eq!(failure, expected);
+        let other = Preference::ShowHidden(true).failure_message(&error);
+        assert!(other.starts_with("Changed for this window, but could not be saved: "));
     }
 
     #[test]

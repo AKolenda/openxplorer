@@ -54,6 +54,30 @@ impl FolderView {
         }
     }
 
+    /// The view `steps` wheel notches bigger (smaller when negative) than
+    /// this one, as Ctrl+wheel steps Explorer's layouts: Details, then
+    /// Small to Extra large icons. It stops at either end.
+    pub(crate) fn zoomed(self, steps: i32) -> FolderView {
+        let order = Self::ZOOM_ORDER;
+        let at = order.iter().position(|view| *view == self).unwrap_or_default();
+        let last = order.len() - 1;
+        let moved = if steps < 0 {
+            at.saturating_sub(steps.unsigned_abs() as usize)
+        } else {
+            at.saturating_add(steps.unsigned_abs() as usize).min(last)
+        };
+        order[moved]
+    }
+
+    /// The views from smallest to largest items, for [`Self::zoomed`].
+    const ZOOM_ORDER: [FolderView; 5] = [
+        FolderView::Details,
+        FolderView::Icons(IconSize::Small),
+        FolderView::Icons(IconSize::Medium),
+        FolderView::Icons(IconSize::Large),
+        FolderView::Icons(IconSize::ExtraLarge),
+    ];
+
     /// The name of the view's page in the pane's view stack; every icon
     /// size shares one icon view.
     pub(super) const fn stack_name(self) -> &'static str {
@@ -61,5 +85,24 @@ impl FolderView {
             FolderView::Details => "details",
             FolderView::Icons(_) => "grid",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Ctrl+wheel steps through the layouts one notch at a time and stops
+    /// at Details and at Extra large icons.
+    ///
+    /// parity: VIEW-011
+    #[test]
+    fn the_wheel_steps_through_the_views_and_stops_at_the_ends() {
+        let large = FolderView::Icons(IconSize::Large);
+        assert_eq!(FolderView::Details.zoomed(1), FolderView::Icons(IconSize::Small));
+        assert_eq!(large.zoomed(-1), FolderView::Icons(IconSize::Medium));
+        assert_eq!(large.zoomed(5), FolderView::Icons(IconSize::ExtraLarge));
+        assert_eq!(large.zoomed(-9), FolderView::Details);
+        assert_eq!(large.zoomed(0), large);
     }
 }

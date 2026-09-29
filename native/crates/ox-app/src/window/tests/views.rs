@@ -16,7 +16,9 @@ use crate::test_support::harness::{
 use crate::text_size::Step;
 use crate::theme::Skin;
 use crate::window::folder_pane::FolderView;
+use crate::window::selection_keys::WindowKey;
 use crate::window::widget_tree::children;
+use crate::window::WindowAction;
 
 use super::geometry::{pixels, Bounds};
 
@@ -122,6 +124,10 @@ fn switching_views_keeps_the_selection_and_shows_the_active_view() {
     assert_eq!(status_bar.active_view_buttons(), ["Details view"]);
 }
 
+/// The command-bar toggle, View › Details pane and the pane's own close
+/// button all run `win.details-pane`, which is saved.
+///
+/// parity: VIEW-027
 #[gtk::test]
 fn the_details_button_shows_whether_the_pane_is_open() {
     let fixture = Fixture::standard();
@@ -134,8 +140,16 @@ fn the_details_button_shows_whether_the_pane_is_open() {
     assert_eq!(toggle.is_active(), pane.is_visible());
     test.activate("details-pane", None);
     assert_eq!(toggle.is_active(), pane.is_visible());
+    let shown = pane.is_visible();
+    wait_until("the pane choice to be saved", || {
+        test.context.settings_data().preferences.show_details_pane == shown
+    });
     test.activate("details-pane", None);
     assert_eq!(toggle.is_active(), pane.is_visible());
+    let runs_the_toggle = descendants::<gtk::Button>(pane)
+        .into_iter()
+        .any(|button| button.action_name().as_deref() == Some("win.details-pane"));
+    assert!(runs_the_toggle, "the pane's close button runs the same toggle");
 }
 
 #[gtk::test]
@@ -388,4 +402,104 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
         .expect("a name");
     let name_top = name.compute_bounds(&first_cell).map(|rect| pixels(rect.y()));
     assert_eq!(name_top, Some(56 + 8), "the name starts 8 pixels under the icon");
+}
+
+/// Choosing a view starts it from the top and saves it; Explorer's keys
+/// choose Details (Ctrl+Shift+6) and the icon sizes (Ctrl+Shift+1 to 4),
+/// and Alt+Shift+P opens the details pane.
+///
+/// parity: VIEW-006, VIEW-007, VIEW-009, VIEW-063
+#[gtk::test]
+fn a_chosen_view_starts_at_the_top_and_has_explorers_keys() {
+    let fixture = Fixture::with_files(300);
+    let test = TestWindow::open(&fixture.uri());
+    let pane = test.window.folder_pane();
+    let last = pane.model().n_items() - 1;
+    pane.reveal(last);
+    wait_until("the list to scroll", || pane.scroll_position() > 0.0);
+    test.activate("view", Some("small"));
+    wait_until("the icons to start at the top", || pane.scroll_position() == 0.0);
+    wait_until("the view to be saved", || {
+        test.context.settings_data().preferences.view == View::Grid
+    });
+    let view = WindowAction::View.detailed_name();
+    let keys = |target: &str| application().accels_for_action(&format!("{view}::{target}"));
+    assert_eq!(keys("details"), ["<Shift><Control>6"]);
+    assert_eq!(keys("extra-large"), ["<Shift><Control>1"]);
+    let pane_keys = application().accels_for_action(&WindowAction::DetailsPane.detailed_name());
+    assert_eq!(pane_keys, ["<Shift><Alt>p"]);
+}
+
+/// Ctrl+H shows hidden files wherever focus is, except in a text field,
+/// where it is the field's own key.
+///
+/// parity: VIEW-023, VIEW-026
+#[gtk::test]
+fn ctrl_h_shows_hidden_files_outside_text_fields() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_pane().focus_view();
+    assert_eq!(
+        test.window.run_window_key(WindowKey::ToggleHidden),
+        gtk::glib::Propagation::Stop
+    );
+    test.wait_for_listing("the listing with hidden files");
+    assert!(test.names().contains(&".private".to_owned()));
+    wait_for_frames(&test.window, 2);
+    let owners = test.window.folder_pane().owners();
+    assert_eq!(
+        owners.is_shown_hidden(test.position_of(".private")),
+        Some(true),
+        "hidden items fade"
+    );
+    assert_eq!(
+        owners.is_shown_hidden(test.position_of("Notes 2.txt")),
+        Some(false)
+    );
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.show_hidden
+    });
+    test.window.search_box().entry().grab_focus();
+    wait_until("the search box to take focus", || {
+        test.window.focus_is_in_text_field()
+    });
+    let in_field = test.window.run_window_key(WindowKey::ToggleHidden);
+    assert_eq!(in_field, gtk::glib::Propagation::Proceed);
+    assert!(
+        test.names().contains(&".private".to_owned()),
+        "hidden files stay shown"
+    );
+}
+
+/// The text-size keys work inside a modal dialog too, which the
+/// application's accelerators do not reach: they change the size of the
+/// window the dialog belongs to.
+///
+/// parity: VIEW-043
+#[gtk::test]
+fn text_size_keys_work_inside_dialogs() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let _theme = ThemeGuard::keep();
+    let before = test.window.skin().text_size();
+    let dialog = crate::window::dialog::Dialog::new(&test.window, "Rename", "");
+    let plus = gtk::ShortcutTrigger::parse_string("<Control>plus").expect("a trigger");
+    let shortcut = dialog
+        .observe_controllers()
+        .iter::<gtk::glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+        .flat_map(|controller| {
+            let shortcuts = controller.iter::<gtk::glib::Object>().filter_map(Result::ok);
+            shortcuts
+                .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                .collect::<Vec<_>>()
+        })
+        .find(|shortcut| shortcut.trigger().is_some_and(|trigger| trigger.equal(&plus)))
+        .expect("the dialog has Ctrl+plus");
+    let action = shortcut.action().expect("the shortcut runs something");
+    assert!(action.activate(gtk::ShortcutActionFlags::empty(), &dialog, None));
+    assert_eq!(test.window.skin().text_size(), Step::Increase.apply(before));
+    dialog.destroy();
+    test.window.change_text_size(before);
 }

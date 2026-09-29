@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The folder pane's empty page: loading, an empty or filtered-out folder,
-//! and a location that could not be listed, with Try again.
+//! The folder pane's empty page: an empty or filtered-out folder, and a
+//! location that could not be listed, with Try again.
 //!
 //! Ports the empty-state branch of `renderRows` in `desktop/ui/app.js`.
+//! A folder that is still being listed shows no page of its own: the
+//! pane keeps its blank list, as Windows Explorer and Dolphin do (see
+//! [`super::loading`]).
 
 use gtk::prelude::*;
+use ox_core::location::{is_smb_server, same_location, split_location, TRASH_URI};
 
 use crate::icons::{self, Icon};
 
@@ -23,14 +27,37 @@ const MESSAGE_WIDTH_CHARS: i32 = 65;
 /// What the empty page says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum EmptyState {
-    /// The folder is still being listed.
-    Loading,
     /// The folder could not be listed: the error text and a Try again button.
     Unavailable(String),
     /// A search found nothing; the message says why (SRCH-013).
     NoMatches(String),
     /// The folder has no items.
     EmptyFolder,
+    /// The Recycle Bin has no items.
+    EmptyRecycleBin,
+    /// A server lists no shared folders.
+    NoShares,
+    /// The phone and camera list (`mtp://`) has no devices.
+    NoDevices,
+}
+
+impl EmptyState {
+    /// What an empty listing of `uri` says: Dolphin's placeholders for
+    /// the Recycle Bin, a server without shares and the device list, and
+    /// "This folder is empty" elsewhere.
+    pub(super) fn empty_listing(uri: &str) -> EmptyState {
+        if same_location(uri, TRASH_URI) {
+            EmptyState::EmptyRecycleBin
+        } else if is_smb_server(uri) {
+            EmptyState::NoShares
+        } else if split_location(uri)
+            .is_ok_and(|parts| parts.scheme.eq_ignore_ascii_case("mtp") && parts.authority.is_empty())
+        {
+            EmptyState::NoDevices
+        } else {
+            EmptyState::EmptyFolder
+        }
+    }
 }
 
 /// The empty page's widgets.
@@ -38,7 +65,6 @@ pub(super) enum EmptyState {
 pub(super) struct EmptyPage {
     /// The page, centred in the folder pane.
     pub root: gtk::Box,
-    spinner: gtk::Spinner,
     icon: gtk::Image,
     title: gtk::Label,
     message: gtk::Label,
@@ -65,11 +91,6 @@ impl EmptyPage {
             .valign(gtk::Align::Center)
             .css_classes(["empty-state"])
             .build();
-        // The one picture the app takes from the desktop theme: GTK spins
-        // the theme's process-working-symbolic, as WinUI spins its
-        // ProgressRing. It is an animation, not an icon of the owner's
-        // icon mapping, and the vendored Fluent set has no spinner.
-        let spinner = gtk::Spinner::new();
         let icon = icons::image(Icon::Folder, STATE_GLYPH);
         let title = centred_text();
         title.add_css_class("empty-title");
@@ -83,14 +104,12 @@ impl EmptyPage {
             .css_classes([ButtonStyle::Bordered.css_class()])
             .visible(false)
             .build();
-        root.append(&spinner);
         root.append(&icon);
         root.append(&title);
         root.append(&message);
         root.append(&retry);
         Self {
             root,
-            spinner,
             icon,
             title,
             message,
@@ -100,20 +119,18 @@ impl EmptyPage {
 
     /// Shows `state`, with the app.js wording (`renderRows`).
     pub(super) fn show(&self, state: &EmptyState) {
-        let loading = *state == EmptyState::Loading;
-        self.spinner.set_visible(loading);
-        self.spinner.set_spinning(loading);
-        self.icon.set_visible(!loading);
         let glyph = match state {
             EmptyState::Unavailable(_) => Icon::Organization,
             _ => Icon::Folder,
         };
         icons::set_icon(&self.icon, glyph, STATE_GLYPH);
         let (title, message) = match state {
-            EmptyState::Loading => ("Loading…", ""),
             EmptyState::Unavailable(error) => ("This location is unavailable", error.as_str()),
             EmptyState::NoMatches(reason) => ("No matching items", reason.as_str()),
             EmptyState::EmptyFolder => ("This folder is empty", ""),
+            EmptyState::EmptyRecycleBin => ("The Recycle Bin is empty", ""),
+            EmptyState::NoShares => ("No shared folders found", ""),
+            EmptyState::NoDevices => ("No MTP-compatible devices found", ""),
         };
         self.title.set_text(title);
         self.message.set_text(message);
@@ -141,5 +158,29 @@ impl EmptyPage {
         let refresh = WindowAction::Refresh.detailed_name();
         let runs_refresh = retry.action_name().as_deref() == Some(refresh.as_str());
         retry.is_visible() && runs_refresh
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// parity: VIEW-048
+    #[test]
+    fn empty_listings_say_what_is_missing_where() {
+        assert_eq!(
+            EmptyState::empty_listing("trash:///"),
+            EmptyState::EmptyRecycleBin
+        );
+        assert_eq!(EmptyState::empty_listing("smb://nas/"), EmptyState::NoShares);
+        assert_eq!(
+            EmptyState::empty_listing("smb://nas/Team"),
+            EmptyState::EmptyFolder
+        );
+        assert_eq!(EmptyState::empty_listing("mtp:///"), EmptyState::NoDevices);
+        assert_eq!(
+            EmptyState::empty_listing("file:///tmp/empty"),
+            EmptyState::EmptyFolder
+        );
     }
 }

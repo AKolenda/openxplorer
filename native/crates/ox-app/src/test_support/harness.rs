@@ -149,7 +149,7 @@ pub(crate) struct Fixture {
 
 impl Fixture {
     /// An empty "Example projects" folder.
-    fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         let directory = tempfile::tempdir().expect("the test home has room for fixtures");
         let root = directory.path().join("Example projects");
         fs::create_dir_all(&root).expect("fixture folder");

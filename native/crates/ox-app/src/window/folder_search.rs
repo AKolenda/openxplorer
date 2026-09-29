@@ -18,6 +18,7 @@ use gtk::{gio, glib};
 use ox_core::location::parent_location;
 use ox_core::search::{HiddenItems, SearchQuery, SearchResults};
 
+use crate::folder_view::cells::RowTooltip;
 use crate::folder_view::details::DetailsListing;
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
@@ -248,13 +249,14 @@ impl BrowserWindow {
     fn show_search_state(&self) {
         let search = self.imp().search.borrow();
         self.search_strip().show_report(search.report(), search.scope());
-        let listing = if search.is_active() {
-            DetailsListing::SearchResults
+        let (listing, row_tooltip) = if search.is_active() {
+            (DetailsListing::SearchResults, RowTooltip::FullPath)
         } else {
-            DetailsListing::Folder
+            (DetailsListing::Folder, RowTooltip::Name)
         };
         drop(search);
         self.folder_pane().details().show_listing(listing);
+        self.folder_pane().owners().set_row_tooltip(row_tooltip);
         self.update_content();
         self.update_details_pane();
     }
