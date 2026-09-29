@@ -7,8 +7,15 @@
 //! inside it.
 //!
 //! Permissions are set through GIO's `unix::mode` without following links;
-//! links have no permissions of their own and are left alone, and so are
-//! the setuid and setgid bits.
+//! links have no permissions of their own and are left alone, and the
+//! simple choices keep the setuid and setgid bits. Dolphin's Advanced
+//! Permissions set every bit, and the group (and, for the superuser, the
+//! owner) is changed through `unix::gid` and `unix::uid`; [`accounts`]
+//! lists the choices.
+
+mod accounts;
+
+pub use accounts::{current_user_is_superuser, group_choices, user_choices, Account};
 
 use gio::prelude::*;
 
@@ -21,7 +28,7 @@ const PERMISSION_BITS: u32 = 0o7777;
 /// The sticky bit: only owners rename and delete a folder's content.
 const STICKY: u32 = 0o1000;
 /// The attributes a change reads of each item.
-const MODE_ATTRIBUTES: &str = "standard::type,standard::name,unix::mode";
+const MODE_ATTRIBUTES: &str = "standard::type,standard::name,unix::mode,unix::uid,unix::gid";
 
 /// Who a permission is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,7 +154,70 @@ impl PermissionChange {
     }
 }
 
-/// Applies `change` to the item at `uri`, and with `recursive` to
+/// How a request changes the permission bits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModeChange {
+    /// The three accesses of the tab.
+    Simple(PermissionChange),
+    /// Dolphin's Advanced Permissions: exactly these `rwx`, setuid, setgid
+    /// and sticky bits for the item. What is inside a folder gets the same
+    /// `rwx` bits and keeps its own special bits, and a file inside gets
+    /// `x` only where it had some before, as `chmod -R a=rwX` does.
+    Advanced(u32),
+}
+
+impl ModeChange {
+    /// The bits for the item itself.
+    fn for_item(self, mode: u32, is_folder: bool) -> u32 {
+        match self {
+            Self::Simple(change) => change.apply_to(mode, is_folder),
+            Self::Advanced(bits) => bits & PERMISSION_BITS,
+        }
+    }
+
+    /// The bits for an item inside the folder the change was asked for.
+    fn for_content(self, mode: u32, is_folder: bool) -> u32 {
+        match self {
+            Self::Simple(change) => change.apply_to(mode, is_folder),
+            Self::Advanced(bits) => {
+                let special = mode & 0o7000;
+                let access = bits & 0o777;
+                if is_folder || mode & 0o111 != 0 {
+                    special | access
+                } else {
+                    special | (access & !0o111)
+                }
+            }
+        }
+    }
+}
+
+/// Everything the Permissions tab applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PermissionRequest {
+    /// The new permission bits.
+    pub mode: ModeChange,
+    /// The new owner's user id; only the superuser may change it.
+    pub owner: Option<u32>,
+    /// The new group id: one of the user's groups.
+    pub group: Option<u32>,
+    /// Whether a folder's change reaches everything inside it.
+    pub recursive: bool,
+}
+
+impl PermissionRequest {
+    /// A request that only changes the bits, as `change` says.
+    pub fn simple(change: PermissionChange, recursive: bool) -> Self {
+        Self {
+            mode: ModeChange::Simple(change),
+            owner: None,
+            group: None,
+            recursive,
+        }
+    }
+}
+
+/// Applies `request` to the item at `uri`, and when it is recursive to
 /// everything inside a folder, without following links. Blocking; see
 /// [`apply_in_background`].
 ///
@@ -155,27 +225,23 @@ impl PermissionChange {
 ///
 /// The first item that could not be read or changed, or
 /// [`EntryError::Cancelled`].
-pub fn apply(
-    uri: &str,
-    change: PermissionChange,
-    recursive: bool,
-    cancel: &Cancellation,
-) -> Result<(), EntryError> {
+pub fn apply(uri: &str, request: &PermissionRequest, cancel: &Cancellation) -> Result<(), EntryError> {
     let file = gio::File::for_uri(&normalise(uri)?);
     let info = file.query_info(
         MODE_ATTRIBUTES,
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         Some(cancel.cancellable()),
     )?;
-    apply_to_item(&file, &info, change, recursive, cancel)
+    apply_to_item(&file, &info, request, true, cancel)
 }
 
-/// Changes `file`, then what is inside it when `recursive`.
+/// Changes `file` (the item asked for when `is_top`), then what is inside
+/// it when the request is recursive.
 fn apply_to_item(
     file: &gio::File,
     info: &gio::FileInfo,
-    change: PermissionChange,
-    recursive: bool,
+    request: &PermissionRequest,
+    is_top: bool,
     cancel: &Cancellation,
 ) -> Result<(), EntryError> {
     if cancel.is_cancelled() {
@@ -188,8 +254,13 @@ fn apply_to_item(
         return Ok(());
     }
     let is_folder = kind == gio::FileType::Directory;
+    set_ownership(file, info, request, cancel)?;
     let mode = info.attribute_uint32("unix::mode") & PERMISSION_BITS;
-    let wanted = change.apply_to(mode, is_folder);
+    let wanted = if is_top {
+        request.mode.for_item(mode, is_folder)
+    } else {
+        request.mode.for_content(mode, is_folder)
+    };
     if wanted != mode {
         file.set_attribute_uint32(
             "unix::mode",
@@ -198,7 +269,7 @@ fn apply_to_item(
             Some(cancel.cancellable()),
         )?;
     }
-    if !(is_folder && recursive) {
+    if !(is_folder && request.recursive) {
         return Ok(());
     }
     let children = file.enumerate_children(
@@ -208,7 +279,33 @@ fn apply_to_item(
     )?;
     while let Some(child_info) = children.next_file(Some(cancel.cancellable()))? {
         let child = file.child(child_info.name());
-        apply_to_item(&child, &child_info, change, true, cancel)?;
+        apply_to_item(&child, &child_info, request, false, cancel)?;
+    }
+    Ok(())
+}
+
+/// Sets the group and owner the request names, where they differ. The
+/// group goes first: a user who may not change the owner may still change
+/// the group.
+fn set_ownership(
+    file: &gio::File,
+    info: &gio::FileInfo,
+    request: &PermissionRequest,
+    cancel: &Cancellation,
+) -> Result<(), EntryError> {
+    for (attribute, wanted) in [("unix::gid", request.group), ("unix::uid", request.owner)] {
+        let Some(wanted) = wanted else {
+            continue;
+        };
+        if info.has_attribute(attribute) && info.attribute_uint32(attribute) == wanted {
+            continue;
+        }
+        file.set_attribute_uint32(
+            attribute,
+            wanted,
+            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            Some(cancel.cancellable()),
+        )?;
     }
     Ok(())
 }
@@ -220,11 +317,10 @@ fn apply_to_item(
 /// As [`apply`].
 pub async fn apply_in_background(
     uri: String,
-    change: PermissionChange,
-    recursive: bool,
+    request: PermissionRequest,
     cancel: Cancellation,
 ) -> Result<(), EntryError> {
-    match gio::spawn_blocking(move || apply(&uri, change, recursive, &cancel)).await {
+    match gio::spawn_blocking(move || apply(&uri, &request, &cancel)).await {
         Ok(result) => result,
         // A panicking change is a bug; it surfaces where it is awaited.
         Err(panic) => std::panic::resume_unwind(panic),
@@ -284,7 +380,8 @@ mod tests {
             owners_only_delete: false,
         };
 
-        apply(&file_uri(&folder), change, true, &Cancellation::new()).expect("applies");
+        let request = PermissionRequest::simple(change, true);
+        apply(&file_uri(&folder), &request, &Cancellation::new()).expect("applies");
 
         assert_eq!(mode_of(&folder), 0o750);
         assert_eq!(mode_of(&folder.join("Sub")), 0o750);
@@ -294,5 +391,35 @@ mod tests {
             0o600,
             "links are not followed"
         );
+    }
+
+    /// Advanced Permissions set every bit of the folder, give its files
+    /// `x` only where they had it, and the group changes with them.
+    ///
+    /// parity: PROP-007
+    #[test]
+    fn advanced_permissions_and_the_group_reach_a_folders_content() {
+        use std::os::unix::fs::MetadataExt;
+
+        let root = tempfile::tempdir().expect("a folder");
+        let folder = root.path().join("Tools");
+        fs::create_dir(&folder).expect("folder");
+        fs::write(folder.join("notes.txt"), b"n").expect("file");
+        fs::write(folder.join("run.sh"), b"r").expect("file");
+        fs::set_permissions(folder.join("run.sh"), fs::Permissions::from_mode(0o700)).expect("mode");
+        let group = rustix::process::getegid().as_raw();
+        let request = PermissionRequest {
+            mode: ModeChange::Advanced(0o2771),
+            owner: None,
+            group: Some(group),
+            recursive: true,
+        };
+
+        apply(&file_uri(&folder), &request, &Cancellation::new()).expect("applies");
+
+        assert_eq!(mode_of(&folder), 0o2771, "setgid and every rwx bit");
+        assert_eq!(mode_of(&folder.join("notes.txt")), 0o660, "no x for a plain file");
+        assert_eq!(mode_of(&folder.join("run.sh")), 0o771);
+        assert_eq!(fs::metadata(&folder).expect("metadata").gid(), group);
     }
 }

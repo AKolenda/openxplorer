@@ -25,7 +25,7 @@ use super::folder_sizes::FolderSizeState;
 use super::general_panel::{self, GeneralFacts};
 use super::location_panel::LocationPanel;
 use super::metadata::{read_properties, ItemProperties};
-use super::permissions_editor::permissions_editor;
+use super::permissions_editor::{permissions_editor, EditedItems};
 use super::versions_panel::VersionsPanel;
 use super::{PropertiesTab, PropertiesTarget};
 use crate::dialog_layer::{quiet_text, DialogFrame, DialogWidth};
@@ -286,9 +286,15 @@ impl PropertiesView {
         let folder_rows = general_panel::fill_general(&imp.general, &facts);
         imp.folder_rows.replace(folder_rows);
         let editor = Self::can_edit_permissions(&properties, context).then(|| {
-            let mode = properties.mode.unwrap_or_default();
-            let versions = Arc::clone(&context.versions);
-            permissions_editor(&properties.entry.uri, mode, properties.entry.is_dir, versions)
+            let items = EditedItems {
+                uris: vec![properties.entry.uri.clone()],
+                mode: properties.mode.unwrap_or_default(),
+                has_files: !properties.entry.is_dir,
+                has_folders: properties.entry.is_dir,
+                owner: properties.owner_account(),
+                group: properties.group_account(),
+            };
+            permissions_editor(items, Arc::clone(&context.versions))
         });
         general_panel::fill_permissions(&imp.permissions, &properties, editor);
     }

@@ -241,16 +241,32 @@ fn the_owner_changes_a_files_permissions() {
         !descendants::<gtk::DropDown>(&permissions).is_empty()
     });
     let choices = descendants::<gtk::DropDown>(&permissions);
-    assert_eq!(choices.len(), 3, "owner, group and others");
+    assert_eq!(choices.len(), 4, "owner, group and others access, and the group");
     assert_eq!(choices[1].selected(), 1, "the group can only view");
 
     choices[1].set_selected(0);
     choices[2].set_selected(0);
     press(&permissions, "Apply permissions");
 
-    let mode = || fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+    let mode = || fs::metadata(&path).expect("metadata").permissions().mode() & 0o7777;
     wait_until("the new mode", || mode() == 0o600);
     assert_eq!(test.window.shown_message(), "Permissions changed.");
+
+    // Advanced Permissions set single bits, such as Others Exec and
+    // Set GID, which the three accesses cannot say.
+    let expander = descendants::<gtk::Expander>(&permissions).remove(0);
+    expander.set_expanded(true);
+    assert!(
+        !choices[0].is_sensitive(),
+        "the advanced bits replace the accesses"
+    );
+    let set_gid = descendants::<gtk::CheckButton>(&permissions)
+        .into_iter()
+        .find(|check| check.label().as_deref() == Some("Set GID"))
+        .expect("a Set GID check box");
+    set_gid.set_active(true);
+    press(&permissions, "Apply permissions");
+    wait_until("the advanced mode", || mode() == 0o2600);
 }
 
 /// A link says where it points, and a mount point what is mounted there

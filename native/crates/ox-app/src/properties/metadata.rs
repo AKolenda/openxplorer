@@ -12,12 +12,13 @@ use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry, EntryError, ATTRIBUTES};
 use ox_core::location::{normalise, parent_location};
 use ox_core::network::read_mount_table;
+use ox_core::permissions::Account;
 
 /// The attributes Properties asks for beyond a listing's
 /// (`PROPERTY_ATTRS` in `file_services.py`).
 const PROPERTY_ATTRIBUTES: &str = concat!(
     "time::created,time::access,access::can-read,access::can-write,",
-    "access::can-execute,owner::user,owner::group,unix::mode,",
+    "access::can-execute,owner::user,owner::group,unix::mode,unix::uid,unix::gid,",
     "standard::symlink-target",
 );
 
@@ -39,6 +40,10 @@ pub(crate) struct ItemProperties {
     pub owner: Option<String>,
     /// The owner's group.
     pub group: Option<String>,
+    /// The owner's user id.
+    pub uid: Option<u32>,
+    /// The group's id.
+    pub gid: Option<u32>,
     /// The permission bits, such as `0o644`.
     pub mode: Option<u32>,
     /// Whether the user may read, write and run the item, as the backend
@@ -77,10 +82,27 @@ pub(crate) struct Access {
 }
 
 impl ItemProperties {
+    /// The owner, with its id and name.
+    pub(crate) fn owner_account(&self) -> Option<Account> {
+        account(self.uid, self.owner.as_deref())
+    }
+
+    /// The group, with its id and name.
+    pub(crate) fn group_account(&self) -> Option<Account> {
+        account(self.gid, self.group.as_deref())
+    }
+
     /// The permission bits as Python's `oct()` writes them (`0o644`).
     pub(crate) fn mode_text(&self) -> Option<String> {
         self.mode.map(|mode| format!("0o{:o}", mode & PERMISSION_BITS))
     }
+}
+
+/// The account `id` named `name`, or its number.
+fn account(id: Option<u32>, name: Option<&str>) -> Option<Account> {
+    let id = id?;
+    let name = name.map_or_else(|| id.to_string(), str::to_owned);
+    Some(Account { id, name })
 }
 
 /// Reads the properties of the item at `uri` on a GIO worker thread.
@@ -117,6 +139,8 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
         accessed: optional_u64(&info, "time::access"),
         owner: optional_string(&info, "owner::user"),
         group: optional_string(&info, "owner::group"),
+        uid: optional_u32(&info, "unix::uid"),
+        gid: optional_u32(&info, "unix::gid"),
         mode: info
             .has_attribute("unix::mode")
             .then(|| info.attribute_uint32("unix::mode")),
@@ -186,6 +210,11 @@ fn optional_u64(info: &gio::FileInfo, attribute: &str) -> Option<u64> {
         .then(|| info.attribute_uint64(attribute))
 }
 
+fn optional_u32(info: &gio::FileInfo, attribute: &str) -> Option<u32> {
+    info.has_attribute(attribute)
+        .then(|| info.attribute_uint32(attribute))
+}
+
 fn optional_bool(info: &gio::FileInfo, attribute: &str) -> Option<bool> {
     info.has_attribute(attribute).then(|| info.boolean(attribute))
 }
@@ -208,6 +237,8 @@ mod tests {
             accessed: None,
             owner: None,
             group: None,
+            uid: None,
+            gid: None,
             mode: Some(0o100_644),
             access: Access::default(),
             link_target: None,
