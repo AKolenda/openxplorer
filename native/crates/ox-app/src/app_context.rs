@@ -358,6 +358,13 @@ impl AppContext {
     ) {
         let recent = recent_entry(entry);
         let uri = entry.navigation_uri().to_owned();
+        // Safety rule PROP-024: no file inside a snapshot or backup is
+        // handed to an application that could change it (`assert_writable`
+        // before `prepare_default` in winspace.py's `resolve_activation`).
+        if let Err(refusal) = self.previous_versions().check_writable(&uri) {
+            on_error(glib::Error::new(gio::IOErrorEnum::ReadOnly, &refusal.to_string()));
+            return;
+        }
         // Test safety: tests record the file instead of starting a real
         // application on the developer's desktop.
         #[cfg(test)]

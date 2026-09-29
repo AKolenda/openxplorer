@@ -259,6 +259,38 @@ fn an_unmounted_share_is_mounted_once_then_listed_again() {
     });
 }
 
+/// Measuring a share that is not mounted mounts it once and measures it
+/// again; a failed mount is what the folder's size reports.
+///
+/// parity: PROP-029, PROP-030
+#[gtk::test]
+fn an_unmounted_share_is_mounted_once_before_its_size_is_measured() {
+    use crate::properties::FolderSizeState;
+
+    let test = TestWindow::open(Page::Network.uri());
+    let mounts = Rc::new(Cell::new(0));
+    let counted = Rc::clone(&mounts);
+    test.window.network().answer_mounts_with(move || {
+        counted.set(counted.get() + 1);
+        Err(NetworkError::NotAFolder)
+    });
+    let share = "smb://example.invalid/share";
+
+    test.activate("calculate-folder-size-of", Some(share));
+
+    wait_until("the measured share", || {
+        matches!(
+            test.window.measured_folder_size(share),
+            Some(FolderSizeState::Unavailable(_))
+        )
+    });
+    assert_eq!(mounts.get(), 1, "mounted once");
+    assert_eq!(
+        test.window.measured_folder_size(share),
+        Some(FolderSizeState::Unavailable("This location is not a folder.".to_owned()))
+    );
+}
+
 /// While a server is signed out, it is neither listed nor connected.
 ///
 /// parity: NET-023

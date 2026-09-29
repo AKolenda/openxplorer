@@ -432,6 +432,25 @@ fn browse_opens_the_snapshot_in_a_marked_tab_with_its_banner() {
     assert!(!banner.is_visible(), "a live folder has no banner");
 }
 
+/// A file inside a snapshot is never handed to an application that could
+/// change it; opening it says to restore a copy first.
+///
+/// parity: PROP-024
+#[gtk::test]
+fn a_file_in_a_snapshot_does_not_open_in_an_application() {
+    let fixture = fixture_with_snapshot();
+    let snapshot = fixture.path("Documents").join(".snapshot").join(SNAPSHOT_NAME);
+    let test = TestWindow::open(&ox_core::location::file_uri(&snapshot));
+
+    test.window.activate_item(test.position_of("plan.txt"));
+
+    assert!(test.context.recorded_launches().is_empty());
+    assert_eq!(
+        test.window.shown_message(),
+        "Previous-version locations are read-only in OpenXplorer. Restore a copy to a different folder first."
+    );
+}
+
 /// parity: PROP-025
 #[gtk::test]
 fn restore_a_copy_copies_the_version_into_a_live_folder_only() {
