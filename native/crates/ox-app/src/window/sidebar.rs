@@ -218,15 +218,15 @@ impl Sidebar {
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
         let entry = entries.get(index)?;
+        let window = self.root().and_downcast::<BrowserWindow>();
         if entry.pinned {
             let RowTarget::Location(uri) = &entry.target else {
                 return None;
             };
-            let window = self.root().and_downcast::<BrowserWindow>();
             let caching = window.and_then(|window| window.caching_of(uri));
             return Some(menu::pin_menu(uri, caching));
         }
-        let place_menu = entry.menu.as_ref()?.entries();
+        let place_menu = entry.menu.as_ref()?.entries_in(window.as_ref());
         // A drive the system keeps mounted may have nothing to offer.
         (!place_menu.is_empty()).then_some(place_menu)
     }

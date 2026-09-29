@@ -9769,8 +9769,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:774-783"]
 python_tests = ["desktop/tests/test_v05.py::IndexTests::test_disable_clears_metadata"]
 bridge = ["cacheSet", "cacheStatus"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/search.rs (caching_the_folder_from_the_strip_searches_the_cache); native/crates/ox-app/src/window/cache_folder.rs (pages_devices_and_servers_are_not_offered_for_caching). More > \"Cache this folder for search\" is a check item that caches the folder or stops caching it, with the Python toasts, and the strip's \"Cache this folder\" runs it too; an active search runs again. The folder's background menu toggles the folder shown; a folder item's and a Quick access pin's menus cache their own folder (CacheFolderOf), checked while it is cached. Missing: the drive and network place menus; the check item keeps its label where Python said \"Stop caching this folder\"."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (caching_the_folder_from_the_strip_searches_the_cache); native/crates/ox-app/src/window/place_menus.rs (drives_and_shares_offer_to_cache_their_folder); native/crates/ox-app/src/window/cache_folder.rs (pages_devices_and_servers_are_not_offered_for_caching). More > \"Cache this folder for search\", the folder's background menu, a folder item's menu, a Quick access pin's menu, and now a drive's and a network share's menu in the sidebar and on the Network page offer the toggle (after the Open items, as driveMenu did); pages, phones, cameras and servers get none. Enabling and disabling show the Python toasts and an active search runs again. Deliberate difference: the item is a check item, checked while the folder is cached, where Python swapped the label to \"Stop caching this folder\"; unchecking it stops caching, as that item did."
 
 [[feature]]
 id = "SRCH-021"
