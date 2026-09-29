@@ -9234,8 +9234,8 @@ sources = [
 python_tests = []
 bridge = ["openWith"]
 dolphin = "DropJob local executable / desktop file"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (items_dropped_on_a_program_are_given_to_it_as_arguments): programs and scripts, see DND-026. Missing: .desktop launchers."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (items_dropped_on_a_program_are_given_to_it_as_arguments, items_dropped_on_a_trusted_launcher_start_its_application); native/crates/ox-app/src/window/file_drop/launcher.rs (only_shown_applications_with_a_command_are_launchers, a_launcher_runs_through_gio_launch_with_each_item_as_one_argument). Programs and scripts: see DND-026. A .desktop launcher takes drops when it is a shown Type=Application entry with an Exec and the user trusts it as GNOME does (executable, or in an applications folder of the XDG data folders); the hint names its application ('Open with Text Editor'). Its application starts through GLib's 'gio launch' with the dropped items as file arguments (via flatpak-spawn --host in the Flatpak), after the same 'Run this program?' question as programs on a network share or a removable drive. An executable .desktop file is no longer mistaken for a script."
 
 [[feature]]
 id = "DND-021"

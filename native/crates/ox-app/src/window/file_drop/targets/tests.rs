@@ -246,6 +246,36 @@ fn items_dropped_on_a_program_are_given_to_it_as_arguments() {
     assert_eq!(test.window.folder_pane().drag_hint(), None);
 }
 
+/// parity: DND-020
+#[gtk::test]
+fn items_dropped_on_a_trusted_launcher_start_its_application() {
+    let fixture = Fixture::standard();
+    let launched = fixture.path("launched.txt");
+    let entry = format!(
+        "[Desktop Entry]\nType=Application\nName=Copier\nExec=cp %f \"{}\"\n",
+        launched.display()
+    );
+    let launcher = fixture.path("copier.desktop");
+    std::fs::write(&launcher, entry).expect("the fixture is ours");
+    std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).expect("the fixture is ours");
+    let test = TestWindow::open(&fixture.uri());
+    let position = test.position_of("copier.desktop");
+
+    test.window.item_destination(position);
+    wait_until("GIO's answer", || {
+        test.window.item_destination(position).is_some()
+    });
+    let Some(DropDestination::Program(program)) = test.window.item_destination(position) else {
+        panic!("a trusted launcher takes drops");
+    };
+    let name = program.name.clone();
+    test.window
+        .open_with_program(program, vec![fixture.uri_of("Notes 2.txt")]);
+
+    assert_eq!(name, "Copier", "named after its application");
+    wait_until("the application to run", || launched.is_file());
+}
+
 /// parity: DND-026
 #[gtk::test]
 fn a_file_that_is_not_executable_is_no_program() {

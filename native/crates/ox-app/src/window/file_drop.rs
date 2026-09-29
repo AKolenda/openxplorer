@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Dropping files and folders onto the window (DND-009 to DND-014,
-//! DND-017 to DND-019, DND-026, TAB-018).
+//! DND-017 to DND-020, DND-026, TAB-018).
 //!
 //! Ports `decode_uris` and `NativeFileDrop` of
 //! `desktop/native_file_drop.py` and `receiveFileDrop` and
 //! `showFileDropHint` of `desktop/ui/app.js` on GTK's asynchronous drop
 //! target. The folder views, the sidebar, the breadcrumbs and the tabs
 //! take drops ([`targets`]). Where the items go is a [`DropDestination`]:
-//! a folder, Quick access, or a program ([`program`]). What happens to
-//! them in a folder is a [`DropAction`] ([`action`]): copy, move, link, or
-//! the drop menu that asks.
+//! a folder, Quick access, or a program or launcher ([`program`],
+//! [`launcher`]). What happens to them in a folder is a [`DropAction`]
+//! ([`action`]): copy, move, link, or the drop menu that asks.
 //!
 //! Safety rules:
 //! - "The source never deletes" (DND-009): every drop is finished as soon
@@ -24,6 +24,7 @@
 //!   never touches the clipboard.
 
 mod action;
+mod launcher;
 mod program;
 mod targets;
 
