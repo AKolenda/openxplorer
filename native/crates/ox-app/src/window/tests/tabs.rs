@@ -61,6 +61,7 @@ fn ctrl_tab_cycles_through_the_tabs_and_wraps() {
     assert_eq!(test.active_tab(), Some(tab_ids(&test)[2]));
 }
 
+/// parity: TAB-009
 #[gtk::test]
 fn a_background_tab_leaves_the_current_tab_alone_and_lists_when_first_shown() {
     let fixture = Fixture::standard();
@@ -90,6 +91,7 @@ fn a_background_tab_leaves_the_current_tab_alone_and_lists_when_first_shown() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
 }
 
+/// parity: TAB-021
 #[gtk::test]
 fn shift_middle_click_opens_the_tab_in_front() {
     let fixture = Fixture::standard();

@@ -399,7 +399,7 @@ mod tests {
         assert_eq!(window.current_uri(), Some(fixture.uri_of("Documents")));
     }
 
-    /// parity: TAB-042
+    /// parity: TAB-042, TAB-043
     #[gtk::test]
     fn ctrl_n_opens_another_window_at_the_current_folder() {
         // Declared first so it outlives the app, whose windows show it.
@@ -422,7 +422,7 @@ mod tests {
         assert_eq!(second.current_uri(), Some(fixture.uri()));
     }
 
-    /// parity: TAB-050
+    /// parity: TAB-043
     #[test]
     fn a_new_window_can_start_in_a_local_or_smb_folder_only() {
         assert!(can_start_a_new_window_in("file:///home/demo"));
@@ -573,6 +573,7 @@ mod tests {
         assert!(browser_windows().is_empty());
     }
 
+    /// parity: TAB-050
     #[gtk::test]
     fn closing_one_window_releases_it_while_another_stays_open() {
         let app = TestApp::new();
