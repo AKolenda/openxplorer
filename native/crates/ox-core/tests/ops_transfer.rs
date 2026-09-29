@@ -227,6 +227,53 @@ fn progress_is_reported_and_the_last_report_says_the_run_is_complete() {
         .all(|report| report.scope == ProgressScope::File));
 }
 
+/// Each item's batch report reaches the panel, even right after the
+/// previous file's full bar.
+///
+/// parity: OPS-020
+#[test]
+fn every_items_batch_report_arrives_in_a_quick_copy() {
+    let folders = Folders::new();
+    let names = ["a.txt", "b.txt", "c.txt"];
+    for name in names {
+        fs::write(folders.source().join(name), name).unwrap();
+    }
+    let sources: Vec<_> = names.iter().map(|name| folders.source().join(name)).collect();
+    let sources: Vec<&Path> = sources.iter().map(std::path::PathBuf::as_path).collect();
+    let reports: Arc<Mutex<Vec<Progress>>> = Arc::default();
+    let sink = Arc::clone(&reports);
+
+    let copy = request(
+        TransferMode::Copy,
+        &sources,
+        &folders.destination(),
+        ConflictPolicy::Skip,
+    );
+    block_on(run_transfer(
+        &copy,
+        &OperationContext::default(),
+        move |progress| sink.lock().unwrap().push(progress),
+    ))
+    .unwrap();
+
+    let batch_labels: Vec<String> = reports
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|report| report.scope == ProgressScope::Batch)
+        .map(|report| report.label.clone())
+        .collect();
+    assert_eq!(
+        batch_labels,
+        [
+            "Copy: a.txt (1/3)",
+            "Copy: b.txt (2/3)",
+            "Copy: c.txt (3/3)",
+            "3 item(s) completed"
+        ]
+    );
+}
+
 /// parity: OPS-022
 #[test]
 fn a_cancelled_copy_stops_before_anything_is_copied() {
