@@ -15,12 +15,17 @@
 //! toast with Undo says it is renamed (OPS-032), and Undo renames it back
 //! (OPS-029).
 
+use gtk::glib::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::ops::{rename_item, OperationContext, RenamedItem};
 
 use super::name_dialog::{ask_for_name, stem_length, NameRequest, NameSelection};
 use super::FileCommand;
 use crate::window::BrowserWindow;
+
+/// The Rename dialog's line when the user keeps a name that would hide
+/// the item.
+const NOT_RENAMED: &str = "The name was not changed.";
 
 /// How much of `entry`'s name a rename selects: a file's name before its
 /// extension, a folder's whole name.
@@ -75,8 +80,14 @@ impl BrowserWindow {
         let protection = self.context().write_protection();
         let renamed = ask_for_name(self, request, |name| {
             let uri = entry.uri.clone();
+            let old_name = entry.name.clone();
             let context = OperationContext::new(protection.clone());
+            let window = self.downgrade();
             async move {
+                let window = window.upgrade().ok_or_else(|| NOT_RENAMED.to_owned())?;
+                if !window.confirm_hiding_rename(&old_name, &name).await {
+                    return Err(NOT_RENAMED.to_owned());
+                }
                 rename_item(&uri, &name, &context)
                     .await
                     .map_err(|error| error.to_string())

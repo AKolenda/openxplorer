@@ -6731,7 +6731,8 @@ sources = ["dolphin:src/views/dolphinview.cpp:2016-2048"]
 python_tests = []
 bridge = ["rename"]
 dolphin = "ConfirmHide"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_ops/hide_confirm.rs (only_a_new_leading_dot_with_hidden_files_off_asks). Renaming a visible item, in place or with the Rename dialog, to a name starting with a dot while hidden files are not shown asks \"Adding a dot to the beginning of this file's name will hide it from view.\" with Cancel and \"Rename and Hide\". Differs: \"Don't ask again\" lasts for the window's session and is not saved."
 
 [[feature]]
 id = "OPS-014"

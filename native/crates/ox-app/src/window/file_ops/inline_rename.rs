@@ -8,7 +8,8 @@
 //! dialog's rules and messages (`validateName`, then the backend's); a
 //! refusal, such as a taken name, shows in the toast and editing goes on,
 //! so the typed name is not lost. While the rename runs the field is
-//! disabled, so a second commit cannot start it again.
+//! disabled, so a second commit cannot start it again. A name that would
+//! hide the item asks first ([`super::hide_confirm`]).
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
@@ -158,6 +159,11 @@ impl BrowserWindow {
         target: &RenameTarget,
         name: &str,
     ) {
+        if !self.confirm_hiding_rename(&target.name, name).await {
+            editor.set_sensitive(true);
+            editor.grab_focus();
+            return;
+        }
         let context = OperationContext::new(self.context().write_protection());
         match rename_item(&target.uri, name, &context).await {
             Ok(renamed) => {

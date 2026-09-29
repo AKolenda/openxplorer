@@ -32,6 +32,7 @@
 //! | `rename` | Rename: in place, or with the dialog |
 //! | `inline_rename` | Renaming in the item's row or tile |
 //! | `batch_rename` | Renaming several items to one numbered name |
+//! | `hide_confirm` | Asking before a rename hides an item |
 //! | `delete` | Move to Trash and permanent delete, with their confirmations |
 //! | `recycle_bin` | Restore, Delete permanently and Empty in the Recycle Bin |
 //! | `duplicate` | Duplicate |
@@ -54,6 +55,7 @@ mod conflict_dialog;
 mod conflict_rename;
 mod delete;
 mod duplicate;
+mod hide_confirm;
 mod inline_rename;
 mod journal;
 mod links;
@@ -94,6 +96,8 @@ pub(crate) struct FileOperations {
     /// How many times the clipboard changed while the window watched, so
     /// a read that an owner change overtook is dropped.
     clipboard_generation: u64,
+    /// "Don't ask again" was checked when a rename hid an item (OPS-013).
+    hiding_confirmed: bool,
 }
 
 impl FileOperations {

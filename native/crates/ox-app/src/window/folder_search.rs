@@ -170,7 +170,7 @@ impl BrowserWindow {
     }
 
     /// Whether "Show hidden files" is on.
-    fn hidden_files_shown(&self) -> bool {
+    pub(super) fn hidden_files_shown(&self) -> bool {
         let state = self.window_action_state(WindowAction::Hidden);
         state.and_then(|state| state.get::<bool>()).unwrap_or(false)
     }
