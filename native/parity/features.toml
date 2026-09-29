@@ -11287,8 +11287,8 @@ sources = [
 python_tests = []
 bridge = ["unmount", "list"]
 dolphin = "setViewsToHomeIfMountPathOpen"
-native = "todo"
-native_note = "Porting notes: OpenXplorer moves only the active tab, and only after unmounting (to Network). Natively, the tabs on a drive stop listing and watching it before Disconnect, Eject or Safely remove, so the window's own folder monitors never keep it busy; moving them to Home is still missing. Existing OpenXplorer part is protected by DEV-006."
+native = "done"
+native_note = "native/crates/ox-app/src/window/mounting.rs (move_tabs_home_from); native/crates/ox-app/src/window/tests/network.rs (the_tabs_on_a_drive_move_home_before_it_is_ejected). Before Disconnect, Eject or Safely remove, the tab in front navigates to Home when it shows a folder on the drive, and every tab behind it on the drive gets Home in its history, stops listing and watching the drive and lists Home when next shown, so the window's own monitors never keep the drive busy. Disconnect still ends on Network as app.js does. There is no split pane or terminal panel to move. Existing OpenXplorer part is protected by DEV-006."
 
 [[feature]]
 id = "DEV-010"
