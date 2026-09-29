@@ -300,11 +300,87 @@ style, so none of them needs a permission. A test
   the host package also looks for "dark" in the GTK theme's name, which the
   portal does not report; the Flatpak then keeps GTK's own preference.
 
-**Flathub** publication is not possible yet: Flathub requires the owner of the
-application ID's domain (`winspace.io`, which does not resolve), screenshots in
-the metainfo, and exceptions for `--filesystem=host`, `flatpak-spawn` and
-owning `org.freedesktop.FileManager1` (`flatpak-builder-lint` lists these).
-Until then the bundle is published with each release.
+### Publishing on Flathub
+
+The Flatpak is published as a bundle with each release. Flathub publication is
+prepared as far as the repository allows; the rest needs the owner.
+
+Already in place:
+
+- The stable metainfo
+  ([`data/io.winspace.Development.metainfo.xml`](data/io.winspace.Development.metainfo.xml))
+  passes `appstreamcli validate`: licences, developer, launchable, stock icon,
+  categories, keywords, homepage, help, source and bug tracker links, branding
+  colours, a release entry with notes for every version, and an OARS 1.1
+  content rating with no attributes (no violence, drugs, sex, language, social
+  chat, purchases or ads; nothing about the user is shared).
+- The icon is scalable SVG, and the build is offline: every crate comes from
+  [`flatpak/cargo-sources.json`](flatpak/cargo-sources.json).
+- Every permission is explained above ("Flatpak permissions") and below.
+
+Still to do:
+
+- **Screenshots** (TODO in both metainfo files). Flathub requires at least one
+  `<screenshot>` served over HTTPS. The website's screenshots
+  (`apps/web/public/assets/screenshots/`) show the 1.x web interface with a
+  "1.1.4 preview" label, so they are not used. Capture the native window on
+  fictional files with the snapshot hook (`OPENXPLORER_SNAPSHOT`, following
+  `docs/PRIVACY.md`), publish the images on the website, and add them with
+  their captions.
+- **Sources of the Flathub manifest.** Flathub builds the manifest from its
+  `flathub/<app-id>` repository, where the `dir` source above must be the
+  release's source archive (`openxplorer-<version>.tar.gz` from
+  `native/tools/source_archive.py`) or a git tag, with its checksum.
+- **Linter exceptions.** Run `flatpak run --command=flatpak-builder-lint
+  org.flatpak.Builder manifest native/packaging/flatpak/io.winspace.Development.yml`
+  and `... repo repo`, and ask for an exception for each finding in the
+  submission, with the reasons below.
+
+Only the owner can:
+
+- **Verify the application ID.** Flathub accepts `io.winspace.Development` only
+  from whoever controls `winspace.io`, which does not resolve, by serving a
+  token at `https://winspace.io/.well-known/org.flathub.VerifiedApps.txt`.
+  The alternative is an ID under a domain the project controls, such as
+  `app.openxplorer.OpenXplorer` for `openxplorer.app`; the ID is a
+  compatibility contract (AGENTS.md: the desktop entry, AppStream ID, D-Bus
+  name and Flatpak ID), so a new ID needs `build.rs`, the packaging data and
+  the migration of existing Flatpak users (`~/.var/app/<id>/`) changed
+  together, and an `<id>` rename entry (`<provides>`/`<replaces>`) in the
+  metainfo.
+- Open the submission pull request on `flathub/flathub`, accept Flathub's
+  terms, and maintain the `flathub/<app-id>` repository it creates.
+- Publish the screenshots on `openxplorer.app` (the website deploy).
+
+#### Why each permission is needed (for the Flathub review)
+
+- `--socket=wayland`, `--socket=fallback-x11`, `--share=ipc`,
+  `--device=dri`: the standard set for a GTK 4 window drawn with the GPU.
+- `--filesystem=host`: OpenXplorer is a file manager. Users browse, copy,
+  rename and delete files anywhere they have access, including other disks
+  under `/media`, `/run/media` and `/mnt`, `/opt` and `/srv`; the file
+  chooser portal cannot give a file manager its folders one at a time.
+  `host-os` and `host-etc` are not requested.
+- `--talk-name=org.gtk.vfs.*`, `--filesystem=xdg-run/gvfsd`,
+  `--filesystem=xdg-run/gvfs`: SMB shares, phones (MTP), cameras (PTP), the
+  Trash and the drive list come from the host's GVfs: GIO inside the
+  sandbox needs the daemons' D-Bus names, their private sockets and their
+  FUSE paths.
+- `--talk-name=org.freedesktop.secrets`: SMB passwords the user asks to
+  remember are stored in the Secret Service, under the schema the 1.x app
+  used, so both find the same saved sign-ins.
+- `--own-name=org.freedesktop.FileManager1`: the opt-in "Show in folder"
+  integration. After the user turns it on in Settings, browsers' "Show in
+  folder" requests reach OpenXplorer, as they reach Nautilus or Dolphin. The
+  app claims the name only while the integration is on.
+- `--talk-name=org.freedesktop.Flatpak`: `flatpak-spawn --host` for two
+  explicit user actions: Open in Terminal starts the host's terminal in the
+  current folder, and "Make OpenXplorer the default file manager" (opt-in)
+  runs the host's `xdg-mime`, since the default applications are the host's.
+- `--share=network`: "Check for updates" reads GitHub's public release list to
+  say whether a newer version exists; Flatpak installs it. SMB and phones
+  go through the host's GVfs, not this permission. If Flathub asks to drop
+  it, the Flatpak build must hide the update check first.
 
 ## RPM
 

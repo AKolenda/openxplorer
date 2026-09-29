@@ -35,7 +35,22 @@
     <color type="primary" scheme_preference="light">#fcd53f</color>
     <color type="primary" scheme_preference="dark">#7a5c00</color>
   </branding>
+  <!--
+    No OARS attribute applies: no violence, drugs, sex, language, social
+    chat, in-app purchases or advertising, and nothing about the user is
+    shared (the update check only reads GitHub's public release list).
+  -->
   <content_rating type="oars-1.1"/>
+  <!--
+    TODO(Flathub): add <screenshots> of the native app. Flathub requires at
+    least one, served over HTTPS from a stable URL such as
+    https://openxplorer.app/assets/screenshots/. The public screenshots in
+    apps/web/public/assets/screenshots/ show the 1.x web interface with a
+    "1.1.4 preview" label, so they do not describe this app; capture new ones
+    of the native window on fictional files (OPENXPLORER_SNAPSHOT, see
+    docs/PRIVACY.md) and publish them first. native/packaging/README.md,
+    "Publishing on Flathub", lists the remaining steps.
+  -->
   <releases>
     <release version="2.0.0" date="2026-09-28" type="development"><description><p>Preview build of OpenXplorer 2.0.0 under its own application ID.</p></description></release>
     <release version="0.1.0" date="2026-09-28" type="development"><description><p>First packaged native preview of the GTK 4 interface, for trying it beside the current OpenXplorer.</p></description></release>
@@ -43,6 +58,7 @@
   <url type="homepage">https://openxplorer.app</url>
   <url type="help">https://openxplorer.app/docs/installation/</url>
   <url type="vcs-browser">https://github.com/AKolenda/openxplorer</url>
+  <url type="bugtracker">https://github.com/AKolenda/openxplorer/issues</url>
   <keywords>
     <keyword>File Explorer</keyword>
     <keyword>File Manager</keyword>
