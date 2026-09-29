@@ -153,7 +153,7 @@ fn server_card(server: &DiscoveredServer, locations: &LocationContext) -> gtk::B
     let art = Art::for_network_location(NetworkKind::Server, &server.label, Connection::Connected);
     let texts = card_texts(&server.label, &locations.display_location(&server.uri));
     let protocol = gtk::Label::builder()
-        .label("SMB · Discovered")
+        .label(format!("{} · Discovered", protocol_name(&server.uri)))
         .xalign(0.0)
         .css_classes(["network-protocol"])
         .build();
@@ -164,6 +164,18 @@ fn server_card(server: &DiscoveredServer, locations: &LocationContext) -> gtk::B
     let card = location_card("drive-card", &server.uri, &content);
     card.add_css_class("discovered-server");
     card
+}
+
+/// The protocol a discovered server is reached with, as its card names it.
+fn protocol_name(uri: &str) -> &'static str {
+    match location::scheme(uri).as_deref() {
+        Some("sftp") => "SFTP",
+        Some("ftp") => "FTP",
+        Some("ftps") => "FTPS",
+        Some("dav" | "davs") => "WebDAV",
+        Some("nfs") => "NFS",
+        _ => "SMB",
+    }
 }
 
 /// "Discovered servers" with their count, their cards, the notice while

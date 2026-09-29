@@ -19,7 +19,8 @@ publish = false
 # unavailable.
 gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
 gio = "0.22"
-glib = "0.22"
+# GTK 4.14 needs GLib 2.76, so its APIs (GBookmarkFile among them) are safe.
+glib = { version = "0.22", features = ["v2_76"] }
 # Compiles the GResource bundles in build scripts; its version follows glib.
 glib-build-tools = "0.22"
 serde = { version = "1", features = ["derive"] }

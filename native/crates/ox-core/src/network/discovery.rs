@@ -23,17 +23,17 @@ pub const DISCOVERY_NOTE: &str = "Finds servers advertising on this network. Fir
 const NETWORK_ROOT: &str = "network:///";
 /// How long mounting and reading the browser may take together.
 const DISCOVERY_DEADLINE: Duration = Duration::from_secs(15);
-/// The most browser entries read, whether or not they are SMB servers.
+/// The most browser entries read, whether or not they are file servers.
 const MAX_ENTRIES: usize = 500;
 /// How many entries one read asks GIO for.
 const ENTRIES_PER_READ: i32 = 100;
 /// The attributes read for each entry.
 const ENTRY_ATTRIBUTES: &str = "standard::target-uri,standard::display-name";
 
-/// One SMB server found on the network.
+/// One SMB, SFTP, FTP, WebDAV or NFS server found on the network.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveredServer {
-    /// The server's location, `smb://host/` (with the port if it
+    /// The server's location, `smb://host/` or `sftp://host/` (with the port if it
     /// advertises one).
     pub uri: String,
     /// The advertised name, else the host name.
@@ -45,7 +45,7 @@ pub struct DiscoveredServer {
 /// The result of one discovery run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Discovery {
-    /// SMB servers, each once, sorted by label ignoring case.
+    /// Servers, each once, sorted by label ignoring case.
     pub servers: Vec<DiscoveredServer>,
     /// Why reading the browser stopped early, in GIO's words; the servers
     /// found until then are kept.
@@ -61,8 +61,8 @@ struct AdvertisedEntry {
     display_name: String,
 }
 
-/// Lists the SMB servers advertising on the local network, giving up after
-/// 15 seconds.
+/// Lists the SMB, SFTP, FTP, WebDAV and NFS servers advertising on the
+/// local network, giving up after 15 seconds.
 ///
 /// Discovery may start `GVfs` services, but it never asks for a password:
 /// a server that wants one is skipped.
@@ -148,11 +148,11 @@ fn advertised_entry(info: &gio::FileInfo) -> AdvertisedEntry {
     }
 }
 
-/// The SMB servers among `entries`: each server once (the latest entry
-/// wins), sorted by label ignoring case.
+/// The servers among `entries`: each server once (the latest entry wins),
+/// sorted by label ignoring case.
 fn servers_among(entries: impl IntoIterator<Item = AdvertisedEntry>) -> Vec<DiscoveredServer> {
     let mut servers: Vec<DiscoveredServer> = Vec::new();
-    for server in entries.into_iter().filter_map(smb_server) {
+    for server in entries.into_iter().filter_map(advertised_server) {
         match servers.iter_mut().find(|known| known.uri == server.uri) {
             Some(known) => *known = server,
             None => servers.push(server),
@@ -162,12 +162,14 @@ fn servers_among(entries: impl IntoIterator<Item = AdvertisedEntry>) -> Vec<Disc
     servers
 }
 
-/// The SMB server `entry` leads to, or `None` for another kind of service
-/// or an address that is not a valid location.
-fn smb_server(entry: AdvertisedEntry) -> Option<DiscoveredServer> {
+/// The SMB, SFTP, FTP, WebDAV or NFS server `entry` leads to (NET-025),
+/// or `None` for another kind of service, such as a printer, or an
+/// address that is not a valid location.
+fn advertised_server(entry: AdvertisedEntry) -> Option<DiscoveredServer> {
     let target = normalise(entry.target_uri.as_deref()?).ok()?;
     let parts = split_location(&target).ok()?;
-    if !parts.is_smb() {
+    // Privacy rule (NET-024): an advertised account is not used.
+    if !(parts.is_smb() || parts.is_remote()) || parts.has_credentials() {
         return None;
     }
     let host = parts.hostname()?;
@@ -177,7 +179,7 @@ fn smb_server(entry: AdvertisedEntry) -> Option<DiscoveredServer> {
         entry.display_name
     };
     Some(DiscoveredServer {
-        uri: format!("smb://{}/", parts.authority),
+        uri: format!("{}://{}/", parts.scheme, parts.authority),
         label,
         host,
     })
@@ -205,21 +207,25 @@ mod tests {
         }
     }
 
-    /// parity: NET-024
+    /// parity: NET-024, NET-025
     #[test]
-    fn only_smb_servers_are_listed_once_and_sorted_by_label() {
+    fn file_servers_are_listed_once_and_sorted_by_label() {
         let entries = [
             entry("smb://studio-nas/", "Studio NAS"),
-            entry("sftp://build-host/", "Build host"),
+            entry("sftp://build-host/home", "Build host"),
             entry("smb://archive-nas/Projects", "archive-nas"),
             entry("smb://STUDIO-NAS/", "Studio NAS (renamed)"),
             entry("https://printer.invalid/", "Printer"),
+            entry("davs://cloud:8443/", "Cloud"),
+            entry("ftp://anna@mirror/", "Mirror"),
         ];
 
         let servers = servers_among(entries);
 
         let expected = [
             server("smb://archive-nas/", "archive-nas", "archive-nas"),
+            server("sftp://build-host/", "Build host", "build-host"),
+            server("davs://cloud:8443/", "Cloud", "cloud"),
             server("smb://studio-nas/", "Studio NAS (renamed)", "studio-nas"),
         ];
         assert_eq!(servers, expected);

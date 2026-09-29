@@ -33,6 +33,7 @@
 //! | `sign_out` | Sign out of a server | `winspace.py` |
 //! | `discovery` | Servers advertising on the local network | `winspace.py`, `gio_backend.py` |
 //! | `visited` | Servers and shares browsed this session | `winspace.py` |
+//! | `recent_servers` | The recent-servers list GTK's Other Locations shares | GTK's places view |
 //! | `mount_table`, `local_path` | Local paths of SMB locations | `mount_support.py`, `native_opening.py` |
 //! | `mount_plan` | The persistent mount assistant's plan | `mount_support.py` |
 //! | `mount_helper` | The administrator helper, `openxplorer-mount-share` | `mount_share.py` |
@@ -62,6 +63,7 @@ mod mount_plan;
 mod mount_table;
 mod mounting;
 mod prompts;
+mod recent_servers;
 mod secret_service;
 mod server;
 mod session_credentials;
@@ -90,6 +92,7 @@ pub use prompts::{
     split_identity, Answer, Challenge, ChallengeId, ChallengeKind, Identity, MountOutcome, MountPrompts,
     PasswordChallenge, QuestionChallenge, SignIn, SignInError, SignInPrompter, KEYRING_SAVE_NOTICE,
 };
+pub use recent_servers::RecentServers;
 pub use secret_service::SecretService;
 pub use server::{ServerKey, DEFAULT_SMB_PORT};
 pub use session_credentials::SessionCredentials;

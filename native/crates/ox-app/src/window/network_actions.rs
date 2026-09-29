@@ -9,9 +9,9 @@
 //! [`super::network_sign_out`], the device commands in
 //! [`super::mounting`].
 
-use gtk::glib;
+use gtk::{gio, glib};
 use gtk::prelude::*;
-use ox_core::network::{connect_share, ConnectedShare};
+use ox_core::network::{connect_share, ConnectedShare, RecentServers};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
 use crate::devices::Removal;
@@ -32,6 +32,19 @@ fn share_change(action: BookmarkAction, uri: String, label: String) -> Change {
         let request = BookmarkRequest::new(uri, label);
         settings.bookmark(action, BookmarkKind::Share, &request)
     })
+}
+
+/// Adds a mapped folder to the recent servers GTK's Other Locations and
+/// Files suggest (NET-019), off the main thread. A failure only costs the
+/// suggestion.
+fn add_recent_server(share: &ConnectedShare) {
+    let (uri, label) = (share.uri.clone(), share.label.clone());
+    glib::spawn_future_local(async move {
+        let added = gio::spawn_blocking(move || RecentServers::for_user().add(&uri, &label)).await;
+        if let Ok(Err(error)) = added {
+            glib::g_warning!(ox_core::LOG_DOMAIN, "Could not update the recent servers: {error}");
+        }
+    });
 }
 
 impl BrowserWindow {
@@ -108,6 +121,7 @@ impl BrowserWindow {
     ) {
         self.context().signed_in_to(&share.uri);
         self.context().remember_network(&share.uri);
+        add_recent_server(&share);
         if keeping == ShareKeeping::ThisSessionOnly {
             dialog.finish();
             self.navigate_or_report(&share.uri);
