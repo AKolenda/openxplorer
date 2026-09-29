@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Tab commands Dolphin has beyond opening, closing and switching:
-//! Alt+1…9 and Alt+0 (TAB-007), Close other tabs (TAB-015) and reopening
-//! closed tabs (TAB-016).
+//! Alt+1…9 and Alt+0 (TAB-007), Open in new tabs for several folders
+//! (TAB-027), Close other tabs (TAB-015) and reopening closed tabs
+//! (TAB-016).
 //!
 //! A closed tab is remembered with its history, selection and scroll
 //! position, most recent first, as Dolphin's "Recently Closed Tabs" does.
@@ -16,7 +17,8 @@ use gtk::{gio, glib};
 use crate::history::History;
 
 use super::actions::{plain_action, tab_action};
-use super::session::TabId;
+use super::activation::{activation_for, Activation};
+use super::session::{TabId, TabPlacement};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -68,6 +70,10 @@ impl BrowserWindow {
             show_number,
             restore,
             tab_action(WindowAction::CloseOtherTabs, BrowserWindow::close_other_tabs),
+            plain_action(
+                WindowAction::OpenSelectionInTabs,
+                BrowserWindow::open_selection_in_tabs,
+            ),
             plain_action(WindowAction::ReopenClosedTab, |window| {
                 window.reopen_closed_tab(0);
             }),
@@ -88,6 +94,25 @@ impl BrowserWindow {
         };
         if let Some(id) = id {
             self.switch_tab(id);
+        }
+    }
+
+    /// Opens every selected folder in a background tab of its own, left to
+    /// right in the order of the view; selected files are skipped (Open in
+    /// new tabs, TAB-027).
+    fn open_selection_in_tabs(&self) {
+        let model = self.folder_pane().model();
+        let folders: Vec<String> = model
+            .selected_positions()
+            .into_iter()
+            .filter_map(|position| model.item(position))
+            .filter_map(|item| match activation_for(item.entry()) {
+                Activation::Folder(uri) => Some(uri),
+                Activation::File | Activation::Archive | Activation::Refused(_) => None,
+            })
+            .collect();
+        for uri in folders {
+            self.open_tab_or_report(&uri, TabPlacement::Background);
         }
     }
 

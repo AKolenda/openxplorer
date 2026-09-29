@@ -358,7 +358,7 @@ impl BrowserWindow {
 
     /// Opens a tab for `address`, showing a refused address in the
     /// message line.
-    fn open_tab_or_report(&self, address: &str, placement: TabPlacement) {
+    pub(super) fn open_tab_or_report(&self, address: &str, placement: TabPlacement) {
         if let Err(error) = self.open_tab(address, placement) {
             self.show_message(&error.to_string());
         }

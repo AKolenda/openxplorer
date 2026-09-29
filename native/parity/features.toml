@@ -1813,8 +1813,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "open_in_new_tab / open_in_new_tabs"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's 'Open in new tab' is disabled when more than one item is selected."
+native = "done"
+native_note = "With several items selected, a folder's context menu offers 'Open in new tabs' (win.open-selection-in-tabs), which opens every selected folder in a background tab in view order and skips files (native/crates/ox-app/src/window/tab_commands.rs, context_menu/entries.rs). Tests: native/crates/ox-app/src/window/tests/tab_commands.rs (open_in_new_tabs_opens_each_selected_folder), context_menu/entries.rs (several_selected_items_disable_what_acts_on_one)."
 
 [[feature]]
 id = "TAB-028"
@@ -1835,8 +1835,8 @@ sources = [
 python_tests = []
 bridge = ["newWindow"]
 dolphin = "open_in_new_window"
-native = "todo"
-native_note = "Porting notes: Available only for drive and network sidebar entries, not for folders in the file list. Explorer's classic menu also has 'Open in new window'."
+native = "done"
+native_note = "A folder's context menu in the file list offers 'Open in new window' after 'Open in new tab' (win.open-window, the same path as the drive and network menus), disabled for several items. The current folder opens in a new window with Ctrl+N or the Open windows menu's New window (TAB-043), so the empty-space menu keeps Explorer's items. Test: native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts)."
 
 [[feature]]
 id = "TAB-029"

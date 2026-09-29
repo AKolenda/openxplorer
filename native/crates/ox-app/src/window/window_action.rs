@@ -43,6 +43,9 @@ pub(crate) enum WindowAction {
     /// Reopens the closed tab at the `u32` target, 0 being the most
     /// recent.
     RestoreClosedTab,
+    /// Opens every selected folder in a tab of its own, behind the active
+    /// one (Open in new tabs).
+    OpenSelectionInTabs,
     /// Opens the location in the string target in a new tab in front.
     OpenTab,
     /// Opens the location in the string target in a new tab behind the
@@ -277,6 +280,7 @@ impl WindowAction {
             WindowAction::CloseOtherTabs => "close-other-tabs",
             WindowAction::ReopenClosedTab => "reopen-closed-tab",
             WindowAction::RestoreClosedTab => "restore-closed-tab",
+            WindowAction::OpenSelectionInTabs => "open-selection-in-tabs",
             WindowAction::OpenTab => "open-tab",
             WindowAction::OpenTabBackground => "open-tab-background",
             WindowAction::OpenWindow => "open-window",

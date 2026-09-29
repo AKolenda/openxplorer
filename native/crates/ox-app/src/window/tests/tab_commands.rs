@@ -138,3 +138,27 @@ fn ctrl_q_quits() {
         ["<Control>q"]
     );
 }
+
+/// Open in new tabs opens every selected folder behind the current tab
+/// and skips the files.
+///
+/// parity: TAB-027
+#[gtk::test]
+fn open_in_new_tabs_opens_each_selected_folder() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.root().join("Music")).expect("a new folder in the fixture");
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_model().select_all();
+
+    WidgetExt::activate_action(&test.window, "win.open-selection-in-tabs", None)
+        .expect("the window has the action");
+
+    let uris: Vec<String> = {
+        let session = test.window.imp().session.borrow();
+        session.tabs().iter().map(|tab| tab.uri().to_owned()).collect()
+    };
+    assert_eq!(uris.len(), 3, "one tab per folder, none for the files");
+    assert!(uris.contains(&fixture.uri_of("Documents")));
+    assert!(uris.contains(&fixture.uri_of("Music")));
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+}
