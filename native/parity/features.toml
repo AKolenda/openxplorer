@@ -14054,7 +14054,7 @@ bridge = ["preferences", "environment"]
 dolphin = "KDE colour scheme via the Qt platform theme"
 gnome = "GSettings org.gnome.desktop.interface color-scheme / gtk-theme (or Settings portal org.freedesktop.appearance color-scheme; AdwStyleManager)"
 native = "partial"
-native_note = "native/crates/ox-app/src/theme/system.rs (color_scheme_decides_first, default_scheme_falls_back_to_the_theme_name, portal_changes_accept_only_the_appearance_color_scheme); native/crates/ox-app/src/theme/system/portal_tests.rs (inside_flatpak_gnome_keys_never_decide, inside_flatpak_the_system_theme_follows_the_portal, a_portal_without_a_preference_keeps_the_startup_preference): inside Flatpak the Settings portal decides and each switch it announces is followed. Porting notes: Live following of GNOME's own keys on the host is untested; the tests cover the persisted preference, the manual switch and the portal."
+native_note = "native/crates/ox-app/src/theme/system.rs; tests in theme/system/tests.rs (color_scheme_decides_first, default_scheme_falls_back_to_the_theme_name, portal_changes_accept_only_the_color_scheme_and_gtk_theme) and theme/system/portal_tests.rs (inside_flatpak_gnome_keys_never_decide, inside_flatpak_the_system_theme_follows_the_portal, a_portal_without_a_preference_keeps_the_startup_preference, a_portal_without_a_preference_follows_the_gtk_theme_name): inside Flatpak the Settings portal decides and each switch it announces is followed; with its color-scheme at 0 the gtk-theme name that GNOME-based portals serve decides, as on the host. Porting notes: Live following of GNOME's own keys on the host is untested; the tests cover the persisted preference, the manual switch and the portal."
 
 [[feature]]
 id = "LOOK-005"

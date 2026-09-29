@@ -297,8 +297,10 @@ style, so none of them needs a permission. A test
   `org.gnome.desktop.interface` keys: the runtime ships that schema too, but
   the sandbox cannot read the host's values, so it holds only defaults
   (`crates/ox-app/src/theme/system.rs`). With `color-scheme` at "default",
-  the host package also looks for "dark" in the GTK theme's name, which the
-  portal does not report; the Flatpak then keeps GTK's own preference.
+  the app looks for "dark" in the GTK theme's name, as the host package
+  does; GNOME-based portals serve it (`org.gnome.desktop.interface`
+  `gtk-theme`). Where the portal has neither, the Flatpak keeps GTK's own
+  preference.
 
 ### Publishing on Flathub
 

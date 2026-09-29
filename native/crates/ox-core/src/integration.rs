@@ -74,7 +74,9 @@ mod worker;
 pub use activation::{choose_application, Activation, OpenError};
 pub use app_catalog::{editor_shortcuts, unique_applications, EditorShortcut};
 pub use applications::{ApplicationDatabase, ApplicationInfo, InstalledApplications};
-pub use background_portal::{request_autostart, AutostartRequest, BackgroundError, PORTAL_NAME};
+pub use background_portal::{
+    request_autostart, AutostartRequest, BackgroundError, DESKTOP_PORTAL_NAME, DESKTOP_PORTAL_PATH,
+};
 pub use brave::{
     BraveActivity, BraveChannel, BraveError, BraveIntegration, BravePaths, BraveProfile, BraveReach,
     BraveStatus, Confirmation, DownloadPreference, ProcessTable, ProfileFailure, SandboxedBrave, SyncOutcome,

@@ -8,16 +8,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use gtk::glib;
 use gtk::prelude::*;
-use gtk::{gio, glib};
-use ox_core::integration::FileManagerMethod;
+use ox_core::integration::{FileManagerMethod, DESKTOP_PORTAL_PATH};
 
 use super::{wait_for, AttachedIntegration};
 use crate::integration::DesktopIntegration;
 use crate::test_support::harness::wait_until;
-
-/// The object the portal interfaces are exported at.
-const PORTAL_PATH: &str = "/org/freedesktop/portal/desktop";
+use crate::test_support::portal::ExportedPortal;
 
 /// The part of `org.freedesktop.portal.Background` the app uses.
 const BACKGROUND_XML: &str = r#"<node>
@@ -53,23 +51,18 @@ struct Asked {
 /// A Background portal exported on its own connection to the session
 /// bus, which answers every request with `answer`.
 struct FakeBackgroundPortal {
-    connection: gio::DBusConnection,
-    registration: Option<gio::RegistrationId>,
+    portal: ExportedPortal,
     asked: Rc<RefCell<Vec<Asked>>>,
 }
 
 impl FakeBackgroundPortal {
     fn start(answer: Answer) -> Self {
-        let connection = session_connection();
-        let node = gio::DBusNodeInfo::for_xml(BACKGROUND_XML).expect("the interface XML is valid");
-        let interface = node
-            .lookup_interface("org.freedesktop.portal.Background")
-            .expect("BACKGROUND_XML declares the Background interface");
         let asked: Rc<RefCell<Vec<Asked>>> = Rc::default();
         let recorder = Rc::clone(&asked);
-        let registration = connection
-            .register_object(PORTAL_PATH, &interface)
-            .method_call(move |connection, sender, _, _, _, parameters, invocation| {
+        let portal = ExportedPortal::export(
+            BACKGROUND_XML,
+            "org.freedesktop.portal.Background",
+            move |connection, sender, _, _, _, parameters, invocation| {
                 let Some((_, options)) = parameters.get::<(String, glib::VariantDict)>() else {
                     invocation.return_dbus_error("org.freedesktop.DBus.Error.InvalidArgs", "(sa{sv})");
                     return;
@@ -90,7 +83,7 @@ impl FakeBackgroundPortal {
                 } else {
                     token
                 };
-                let handle = format!("{PORTAL_PATH}/request/{caller}/{token}");
+                let handle = format!("{DESKTOP_PORTAL_PATH}/request/{caller}/{token}");
                 let path = glib::variant::ObjectPath::try_from(handle.clone()).expect("a valid path");
                 invocation.return_value(Some(&(path,).to_variant()));
                 let (code, granted) = match answer {
@@ -109,47 +102,19 @@ impl FakeBackgroundPortal {
                         Some(&(code, results).to_variant()),
                     )
                     .expect("the answer is sent");
-            })
-            .build()
-            .expect("the fake portal can be exported");
-        Self {
-            connection,
-            registration: Some(registration),
-            asked,
-        }
+            },
+        );
+        Self { portal, asked }
     }
 
     /// The bus name the portal answers under.
     fn name(&self) -> String {
-        self.connection
-            .unique_name()
-            .expect("a bus connection has a unique name")
-            .to_string()
+        self.portal.name()
     }
 
     fn asked(&self) -> Vec<Asked> {
         self.asked.borrow().clone()
     }
-}
-
-impl Drop for FakeBackgroundPortal {
-    fn drop(&mut self) {
-        if let Some(registration) = self.registration.take() {
-            let _ = self.connection.unregister_object(registration);
-        }
-        let _ = self.connection.close_sync(gio::Cancellable::NONE);
-    }
-}
-
-/// A new connection to the test's session bus, as another process would
-/// have.
-fn session_connection() -> gio::DBusConnection {
-    let address = gio::dbus_address_get_for_bus_sync(gio::BusType::Session, gio::Cancellable::NONE)
-        .expect("the tests run on a private session bus");
-    let flags =
-        gio::DBusConnectionFlags::AUTHENTICATION_CLIENT | gio::DBusConnectionFlags::MESSAGE_BUS_CONNECTION;
-    gio::DBusConnection::for_address_sync(&address, flags, None, gio::Cancellable::NONE)
-        .expect("connect to the session bus")
 }
 
 /// An integration inside Flatpak that asks the portal named `portal`.
@@ -265,12 +230,9 @@ fn without_a_background_portal_show_in_folder_answers_while_running() {
 
     let toast = enable(&integration).expect("the toast explains the limit");
 
-    assert!(
-        toast.starts_with(
-            "Show in folder answers while OpenXplorer runs. The desktop's Background portal is not \
-             available:"
-        ),
-        "{toast}"
+    assert_eq!(
+        toast,
+        "Show in folder answers while OpenXplorer runs. The desktop cannot start OpenXplorer at login."
     );
     wait_until("the bus name", || integration.owns_file_manager());
 }

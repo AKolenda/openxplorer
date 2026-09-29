@@ -48,7 +48,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{
-    BraveIntegration, BravePaths, DefaultApps, RevealPaths, RevealRegistration, Sandbox, PORTAL_NAME,
+    BraveIntegration, BravePaths, DefaultApps, RevealPaths, RevealRegistration, Sandbox, DESKTOP_PORTAL_NAME,
 };
 
 pub(crate) use applications::{launch, prepare_launch, DefaultChoice};
@@ -198,7 +198,7 @@ impl DesktopIntegration {
         sandbox: Sandbox,
         mime_backend: MimeBackend,
     ) -> Self {
-        Self::with_background_portal(folders, sandbox, mime_backend, PORTAL_NAME)
+        Self::with_background_portal(folders, sandbox, mime_backend, DESKTOP_PORTAL_NAME)
     }
 
     /// The integration inside Flatpak, asking `background_portal`, the

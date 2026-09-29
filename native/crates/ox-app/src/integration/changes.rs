@@ -246,7 +246,14 @@ impl DesktopIntegration {
             commandline: service_commandline(),
             reason: AUTOSTART_REASON.to_owned(),
         };
-        request_autostart(&connection, &self.services().background_portal, &request).await
+        let result = request_autostart(&connection, &self.services().background_portal, &request).await;
+        if let Err(BackgroundError::Unavailable(error)) = &result {
+            glib::g_warning!(
+                ox_core::LOG_DOMAIN,
+                "The Background portal is not available: {error}"
+            );
+        }
+        result
     }
 
     /// Sends `ShowFolders` for the home folder through the bus, as a

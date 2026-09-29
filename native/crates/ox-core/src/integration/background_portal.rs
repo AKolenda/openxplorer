@@ -18,11 +18,12 @@ use futures_channel::mpsc;
 use futures_util::StreamExt;
 use gio::prelude::*;
 
-/// The bus name of the desktop portal.
-pub const PORTAL_NAME: &str = "org.freedesktop.portal.Desktop";
+/// The bus name of the XDG desktop portal, which serves every portal
+/// interface (Background, Settings, ...).
+pub const DESKTOP_PORTAL_NAME: &str = "org.freedesktop.portal.Desktop";
 
-/// The object every portal interface is exported at.
-const PORTAL_PATH: &str = "/org/freedesktop/portal/desktop";
+/// The object every desktop portal interface is exported at.
+pub const DESKTOP_PORTAL_PATH: &str = "/org/freedesktop/portal/desktop";
 
 /// The portal interface that asks to run in the background.
 const BACKGROUND_INTERFACE: &str = "org.freedesktop.portal.Background";
@@ -61,9 +62,10 @@ pub struct AutostartRequest {
 /// the window shows.
 #[derive(Debug, thiserror::Error)]
 pub enum BackgroundError {
-    /// The desktop has no Background portal, or the call failed.
-    #[error("The desktop's Background portal is not available: {0}")]
-    Unavailable(glib::Error),
+    /// The desktop has no Background portal, or the call failed; the
+    /// D-Bus error is the source, kept out of the message.
+    #[error("The desktop cannot start OpenXplorer at login.")]
+    Unavailable(#[source] glib::Error),
     /// The user or the desktop refused.
     #[error("The desktop did not allow OpenXplorer to start at login.")]
     Refused,
@@ -103,7 +105,7 @@ pub async fn request_autostart(
     let reply = connection
         .call_future(
             Some(portal),
-            PORTAL_PATH,
+            DESKTOP_PORTAL_PATH,
             BACKGROUND_INTERFACE,
             "RequestBackground",
             Some(&(String::new(), options(request, &token)).to_variant()),

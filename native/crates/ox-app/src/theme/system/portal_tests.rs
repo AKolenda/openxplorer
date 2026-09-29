@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use super::*;
 use crate::test_support::harness::wait_until;
+use crate::test_support::portal::{session_connection, ExportedPortal};
 
 /// The part of `org.freedesktop.portal.Settings` the app uses.
 const SETTINGS_XML: &str = r#"<node>
@@ -27,94 +28,91 @@ const SETTINGS_XML: &str = r#"<node>
   </interface>
 </node>"#;
 
-/// A Settings portal that holds one colour scheme, exported at the
-/// portal's object path on its own connection.
+/// A Settings portal that holds one colour scheme and, as GNOME-based
+/// portals do, may serve a GTK theme name, exported at the portal's
+/// object path on its own connection.
 struct FakePortal {
-    connection: gio::DBusConnection,
+    portal: ExportedPortal,
     color_scheme: Rc<Cell<u32>>,
-    registration: Option<gio::RegistrationId>,
+    gtk_theme: Rc<RefCell<Option<String>>>,
 }
 
 impl FakePortal {
     /// A portal that answers `color_scheme` (0 no preference, 1 dark,
-    /// 2 light) and refuses every other setting, as the real one does.
+    /// 2 light) and refuses every other setting, as a non-GNOME one does.
     fn start(color_scheme: u32) -> Self {
-        let connection = session_connection();
-        let node = gio::DBusNodeInfo::for_xml(SETTINGS_XML).expect("the interface XML is valid");
-        let interface = node
-            .lookup_interface(PORTAL_SETTINGS)
-            .expect("SETTINGS_XML declares the Settings interface");
+        Self::with_gtk_theme(color_scheme, None)
+    }
+
+    /// A portal that answers `color_scheme` and, when there is one,
+    /// `gtk_theme` for GNOME's `gtk-theme` key.
+    fn with_gtk_theme(color_scheme: u32, gtk_theme: Option<&str>) -> Self {
         let color_scheme = Rc::new(Cell::new(color_scheme));
-        let answered = Rc::clone(&color_scheme);
-        let registration = connection
-            .register_object(PORTAL_PATH, &interface)
-            .method_call(move |_, _, _, _, method, parameters, invocation| {
-                let setting = parameters.get::<(String, String)>();
-                let is_color_scheme = setting.is_some_and(|(namespace, key)| {
-                    namespace == APPEARANCE_NAMESPACE && key == COLOR_SCHEME_KEY
-                });
-                if method == "ReadOne" && is_color_scheme {
+        let gtk_theme = Rc::new(RefCell::new(gtk_theme.map(str::to_owned)));
+        let (scheme_answer, theme_answer) = (Rc::clone(&color_scheme), Rc::clone(&gtk_theme));
+        let portal = ExportedPortal::export(
+            SETTINGS_XML,
+            PORTAL_SETTINGS,
+            move |_, _, _, _, method, parameters, invocation| {
+                let setting = parameters.get::<(String, String)>().unwrap_or_default();
+                let value = match (method, setting.0.as_str(), setting.1.as_str()) {
+                    ("ReadOne", APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY) => {
+                        Some(scheme_answer.get().to_variant())
+                    }
+                    ("ReadOne", INTERFACE_SCHEMA, GTK_THEME_KEY) => {
+                        theme_answer.borrow().as_deref().map(ToVariant::to_variant)
+                    }
+                    _ => None,
+                };
+                match value {
                     // `(v)`: a tuple boxes the value it holds.
-                    invocation.return_value(Some(&(answered.get().to_variant(),).to_variant()));
-                } else {
-                    invocation.return_dbus_error(
+                    Some(value) => invocation.return_value(Some(&(value,).to_variant())),
+                    None => invocation.return_dbus_error(
                         "org.freedesktop.portal.Error.NotFound",
                         "Requested setting not found",
-                    );
+                    ),
                 }
-            })
-            .build()
-            .expect("the fake portal can be exported");
+            },
+        );
         Self {
-            connection,
+            portal,
             color_scheme,
-            registration: Some(registration),
+            gtk_theme,
         }
     }
 
     /// The bus name the portal answers under.
     fn name(&self) -> String {
-        self.connection
-            .unique_name()
-            .expect("a bus connection has a unique name")
-            .to_string()
+        self.portal.name()
     }
 
     /// Changes the colour scheme and announces it, as the portal does when
     /// the desktop switches.
     fn switch_to(&self, color_scheme: u32) {
         self.color_scheme.set(color_scheme);
-        let parameters = (APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, color_scheme.to_variant()).to_variant();
-        self.connection
+        self.announce(APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, color_scheme.to_variant());
+    }
+
+    /// Changes the GTK theme name and announces it.
+    fn switch_gtk_theme_to(&self, gtk_theme: &str) {
+        self.gtk_theme.replace(Some(gtk_theme.to_owned()));
+        self.announce(INTERFACE_SCHEMA, GTK_THEME_KEY, gtk_theme.to_variant());
+    }
+
+    /// Emits `SettingChanged` for `key` in `namespace`.
+    fn announce(&self, namespace: &str, key: &str, value: glib::Variant) {
+        let parameters = (namespace, key, value).to_variant();
+        self.portal
+            .connection()
             .emit_signal(
                 None,
-                PORTAL_PATH,
+                DESKTOP_PORTAL_PATH,
                 PORTAL_SETTINGS,
                 "SettingChanged",
                 Some(&parameters),
             )
             .expect("the signal is sent");
     }
-}
-
-impl Drop for FakePortal {
-    fn drop(&mut self) {
-        if let Some(registration) = self.registration.take() {
-            let _ = self.connection.unregister_object(registration);
-        }
-        let _ = self.connection.close_sync(gio::Cancellable::NONE);
-    }
-}
-
-/// A new connection to the test's session bus, as another process would
-/// have.
-fn session_connection() -> gio::DBusConnection {
-    let address = gio::dbus_address_get_for_bus_sync(gio::BusType::Session, gio::Cancellable::NONE)
-        .expect("the tests run on a private session bus");
-    let flags =
-        gio::DBusConnectionFlags::AUTHENTICATION_CLIENT | gio::DBusConnectionFlags::MESSAGE_BUS_CONNECTION;
-    gio::DBusConnection::for_address_sync(&address, flags, None, gio::Cancellable::NONE)
-        .expect("connect to the session bus")
 }
 
 /// The appearances a scheme reported, in order.
@@ -183,4 +181,34 @@ fn a_portal_without_a_preference_keeps_the_startup_preference() {
 
     wait_until("the portal's answer", || !reported.borrow().is_empty());
     assert_eq!(scheme.appearance(), Appearance::Dark);
+}
+
+/// While the portal's colour scheme has no preference, the GTK theme name
+/// that GNOME-based portals serve decides, as GNOME's own key does on the
+/// host (`ZorinBlue-Dark` asks for dark); a colour scheme with a
+/// preference still wins over it.
+///
+/// parity: LOOK-004
+#[gtk::test]
+fn a_portal_without_a_preference_follows_the_gtk_theme_name() {
+    let portal = FakePortal::with_gtk_theme(0, Some("ZorinBlue-Dark"));
+
+    let (scheme, reported) = follow_in_flatpak(Appearance::Light, &portal);
+
+    wait_until("the dark theme name", || {
+        reported.borrow().last() == Some(&Appearance::Dark)
+    });
+    assert_eq!(scheme.appearance(), Appearance::Dark);
+    portal.switch_gtk_theme_to("ZorinBlue-Light");
+    wait_until("the switch to a light theme", || {
+        reported.borrow().last() == Some(&Appearance::Light)
+    });
+    portal.switch_gtk_theme_to("ZorinBlue-Dark");
+    wait_until("the switch back to a dark theme", || {
+        scheme.appearance() == Appearance::Dark
+    });
+    portal.switch_to(2);
+    wait_until("the colour scheme preferring light", || {
+        scheme.appearance() == Appearance::Light
+    });
 }
