@@ -114,7 +114,8 @@ impl DefaultAppsView {
     }
 
     /// Test, Enable and Disable Show in folder. Enabling and disabling say
-    /// nothing when they work: the status line shows the result.
+    /// nothing when they work, since the status line shows the result,
+    /// except when the Flatpak answers only while it runs.
     fn connect_show_in_folder(&self, controls: &Controls) {
         let view = self.clone();
         controls.test_show_in_folder.connect_clicked(move |_| {
@@ -127,9 +128,12 @@ impl DefaultAppsView {
         });
         let view = self.clone();
         controls.enable_show_in_folder.connect_clicked(move |_| {
-            view.run_change(
-                |integration| async move { integration.enable_show_in_folder().await.map(|()| None) },
-            );
+            view.run_change(|integration| async move {
+                integration
+                    .enable_show_in_folder()
+                    .await
+                    .map(|reach| reach.message())
+            });
         });
         let view = self.clone();
         controls.disable_show_in_folder.connect_clicked(move |_| {

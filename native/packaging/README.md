@@ -261,7 +261,7 @@ flatpak run io.winspace.Development.Native
 | `--filesystem=host` | A file manager shows, copies and changes the user's files wherever they are: home, other disks under `/media`, `/run/media` and `/mnt`, `/opt`, `/srv`. |
 | `--talk-name=org.gtk.vfs.*`, `--filesystem=xdg-run/gvfsd`, `--filesystem=xdg-run/gvfs` | GVfs: the sandbox's GIO asks the host's GVfs daemons for `smb://`, `mtp://`, `trash:///` and the drive and phone list, reaches their private sockets, and opens files on shares through their FUSE paths. |
 | `--talk-name=org.freedesktop.secrets` | Saved SMB passwords live in the desktop's Secret Service under the Python app's schema, so both apps find each other's sign-ins. |
-| `--own-name=org.freedesktop.FileManager1` | "Show in folder" (opt-in): lets the running app answer the file-manager interface after the user turns it on; Flatpak only permits owning the name. The integration still refuses inside the Flatpak (see below), so today the name stays unclaimed. |
+| `--own-name=org.freedesktop.FileManager1` | "Show in folder" (opt-in): after the user turns it on in Settings, the running app answers browsers' and other apps' requests to show a downloaded file in its folder. Flatpak only permits owning the name; the app claims it only while the integration is on. |
 | `--talk-name=org.freedesktop.Flatpak` | `flatpak-spawn --host`: Open in Terminal starts the host's terminal, and making OpenXplorer the default file manager (opt-in) runs the host's `xdg-mime`. |
 | `--share=network` | "Check for updates" asks GitHub whether a newer release exists. SMB and phone traffic goes through GVfs on the host. |
 
@@ -279,11 +279,17 @@ style, so none of them needs a permission. A test
 - System folders (`/usr`, `/etc`) are the sandbox's own; the host's appear
   under `/run/host` only with the `host-os` and `host-etc` permissions, which
   the manifest does not request.
-- "Show in folder" cannot be turned on yet: the integration writes a per-user
-  D-Bus service file, which a Flatpak may not install for another
-  application's name, so it refuses and says why
-  (`crates/ox-core/src/integration/reveal.rs`). Answering requests only while
-  the app runs, which the permission above allows, is app work still to do.
+- "Show in folder" works while OpenXplorer runs, and after login if the desktop
+  allows it. A Flatpak may not install the per-user D-Bus service file and
+  autostart entry the host package writes, so turning it on writes only an
+  opt-in record in the app's settings folder, claims
+  `org.freedesktop.FileManager1` (the permission above), and asks the
+  Background portal (`org.freedesktop.portal.Background`) to start the app at
+  login without a window. When the desktop refuses or has no Background
+  portal, a message says that Show in folder answers only while OpenXplorer
+  runs. Nothing starts the app on demand when a request arrives
+  (`crates/ox-core/src/integration/reveal.rs`,
+  `crates/ox-core/src/integration/background_portal.rs`).
 - Updates come from Flatpak (GNOME Software or `flatpak update`); the app
   never installs one itself.
 - The System theme follows the desktop's light or dark style through the

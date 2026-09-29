@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Changing the defaults on request: Make `OpenXplorer` default, Restore
 //! previous, the ZIP handler, and enabling, testing and disabling Show in
-//! folder.
+//! folder. Inside Flatpak, Show in folder also asks the Background portal
+//! to start the app at login, in place of the host's autostart entry.
 //!
 //! Ports the `desktopDefault`, `desktopRestore`, `zipDefault`,
 //! `zipRestore`, `revealEnable`, `revealDisable` and `revealTest`
@@ -14,8 +15,8 @@
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::integration::{
-    DefaultApps, DefaultAppsError, DisabledReveal, RegistrationFailed, RestoreScope, RevealError,
-    RevealRegistration, ZipAssociation, BUS_NAME, OBJECT_PATH,
+    request_autostart, AutostartRequest, BackgroundError, DefaultApps, DefaultAppsError, DisabledReveal,
+    RegistrationFailed, RestoreScope, RevealError, RevealRegistration, ZipAssociation, BUS_NAME, OBJECT_PATH,
 };
 use ox_core::location::file_uri;
 
@@ -24,6 +25,14 @@ use super::DesktopIntegration;
 /// How long the Show in folder test waits for the answer, as in the
 /// Python app.
 const TEST_TIMEOUT_MS: i32 = 5000;
+
+/// The option that starts the Show in folder service without a window,
+/// as the host's session files run it.
+const SERVICE_OPTION: &str = "--filemanager-service";
+
+/// Why the Flatpak asks to start at login, which the portal may show.
+const AUTOSTART_REASON: &str =
+    "Answer Show in folder requests from browsers and other apps after you log in.";
 
 /// Why a change to the defaults or Show in folder failed. `Display` is
 /// the message the window shows.
@@ -52,6 +61,29 @@ pub(crate) enum IntegrationError {
     NoApplication,
 }
 
+/// How far Show in folder reaches once it is enabled.
+#[derive(Debug)]
+pub(crate) enum ShowInFolderReach {
+    /// It answers now and after the next login.
+    Always,
+    /// Inside Flatpak, when the portal did not let the app start at
+    /// login: it answers while the app runs.
+    WhileRunning(BackgroundError),
+}
+
+impl ShowInFolderReach {
+    /// The toast when the reach is limited; enabling says nothing
+    /// otherwise, since the status line shows the result.
+    pub(crate) fn message(&self) -> Option<String> {
+        match self {
+            Self::Always => None,
+            Self::WhileRunning(error) => {
+                Some(format!("Show in folder answers while OpenXplorer runs. {error}"))
+            }
+        }
+    }
+}
+
 /// The options sent with Make `OpenXplorer` default (INT-009).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MakeDefaultChoice {
@@ -68,6 +100,9 @@ pub(crate) enum ChangeOutcome {
     Done(&'static str),
     /// The handlers changed, but Show in folder could not be enabled.
     ShowInFolderFailed(String),
+    /// The handlers changed and Show in folder answers, but only while the
+    /// app runs; the text says why.
+    ShowInFolderWhileRunning(String),
 }
 
 impl ChangeOutcome {
@@ -78,6 +113,7 @@ impl ChangeOutcome {
             Self::ShowInFolderFailed(error) => {
                 format!("File handlers updated, but Show in folder setup failed: {error}")
             }
+            Self::ShowInFolderWhileRunning(note) => format!("File handlers updated. {note}"),
         }
     }
 }
@@ -99,8 +135,13 @@ impl DesktopIntegration {
             .run_in_background(move |defaults| defaults.make_default(choice.zip))
             .await?;
         if choice.show_in_folder {
-            if let Err(error) = self.enable_show_in_folder().await {
-                return Ok(ChangeOutcome::ShowInFolderFailed(error.to_string()));
+            match self.enable_show_in_folder().await {
+                Err(error) => return Ok(ChangeOutcome::ShowInFolderFailed(error.to_string())),
+                Ok(reach) => {
+                    if let Some(note) = reach.message() {
+                        return Ok(ChangeOutcome::ShowInFolderWhileRunning(note));
+                    }
+                }
             }
         }
         Ok(ChangeOutcome::Done(
@@ -149,16 +190,25 @@ impl DesktopIntegration {
     }
 
     /// Writes the two Show in folder session files and starts answering
-    /// `FileManager1` (`enable_reveal`).
+    /// `FileManager1` (`enable_reveal`). Inside Flatpak it writes the
+    /// opt-in record instead and asks the Background portal to start the
+    /// app at login; if the portal refuses, the app answers while it runs.
     ///
     /// # Errors
     ///
     /// The [`RevealError`] of the files, such as a foreign override, or a
     /// service that cannot start.
-    pub(crate) async fn enable_show_in_folder(&self) -> Result<(), IntegrationError> {
+    pub(crate) async fn enable_show_in_folder(&self) -> Result<ShowInFolderReach, IntegrationError> {
         let reveal = &self.services().reveal;
         reveal.run_in_background(RevealRegistration::enable).await?;
-        self.start_file_manager_service()
+        self.start_file_manager_service()?;
+        if !self.sandbox().is_flatpak() {
+            return Ok(ShowInFolderReach::Always);
+        }
+        Ok(match self.start_at_login(true).await {
+            Ok(()) => ShowInFolderReach::Always,
+            Err(error) => ShowInFolderReach::WhileRunning(error),
+        })
     }
 
     /// Removes the unmodified Show in folder files and stops answering
@@ -173,7 +223,30 @@ impl DesktopIntegration {
         let reveal = &self.services().reveal;
         let disabled = reveal.run_in_background(RevealRegistration::disable).await?;
         self.stop_file_manager_service();
+        if self.sandbox().is_flatpak() {
+            // An entry the portal keeps only starts the app at login, which
+            // then finds Show in folder off and quits.
+            if let Err(error) = self.start_at_login(false).await {
+                glib::g_warning!(ox_core::LOG_DOMAIN, "{error}");
+            }
+        }
         Ok(disabled)
+    }
+
+    /// Asks the Background portal to start the app at login without a
+    /// window, answering Show in folder, or to stop doing so.
+    async fn start_at_login(&self, autostart: bool) -> Result<(), BackgroundError> {
+        let Some(connection) = self.session_connection() else {
+            // Without the session bus the service never started, and no
+            // portal can be asked.
+            return Ok(());
+        };
+        let request = AutostartRequest {
+            autostart,
+            commandline: service_commandline(),
+            reason: AUTOSTART_REASON.to_owned(),
+        };
+        request_autostart(&connection, &self.services().background_portal, &request).await
     }
 
     /// Sends `ShowFolders` for the home folder through the bus, as a
@@ -204,4 +277,14 @@ impl DesktopIntegration {
         call.await.map_err(IntegrationError::TestFailed)?;
         Ok(ChangeOutcome::Done("Test request sent through FileManager1."))
     }
+}
+
+/// The command that starts the service without a window: this program,
+/// which inside Flatpak is `/app/bin/<command>`, with `--filemanager-service`.
+fn service_commandline() -> Vec<String> {
+    let program = std::env::current_exe().map_or_else(
+        |_| std::env::args().next().unwrap_or_default(),
+        |path| path.to_string_lossy().into_owned(),
+    );
+    vec![program, SERVICE_OPTION.to_owned()]
 }

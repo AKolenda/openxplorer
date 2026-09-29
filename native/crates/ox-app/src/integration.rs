@@ -48,7 +48,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::{
-    BraveIntegration, BravePaths, DefaultApps, RevealPaths, RevealRegistration, Sandbox,
+    BraveIntegration, BravePaths, DefaultApps, RevealPaths, RevealRegistration, Sandbox, PORTAL_NAME,
 };
 
 pub(crate) use applications::{launch, prepare_launch, DefaultChoice};
@@ -116,6 +116,8 @@ struct Services {
     brave: BraveIntegration,
     /// The settings folder, which keeps the records and backups.
     settings_directory: PathBuf,
+    /// The bus name of the desktop portal that starts the Flatpak at login.
+    background_portal: String,
 }
 
 mod imp {
@@ -196,6 +198,26 @@ impl DesktopIntegration {
         sandbox: Sandbox,
         mime_backend: MimeBackend,
     ) -> Self {
+        Self::with_background_portal(folders, sandbox, mime_backend, PORTAL_NAME)
+    }
+
+    /// The integration inside Flatpak, asking `background_portal`, the
+    /// bus name of a stand-in portal, to start the app at login.
+    #[cfg(test)]
+    pub(crate) fn in_flatpak(
+        folders: &IntegrationFolders,
+        mime_backend: MimeBackend,
+        background_portal: &str,
+    ) -> Self {
+        Self::with_background_portal(folders, Sandbox::Flatpak, mime_backend, background_portal)
+    }
+
+    fn with_background_portal(
+        folders: &IntegrationFolders,
+        sandbox: Sandbox,
+        mime_backend: MimeBackend,
+        background_portal: &str,
+    ) -> Self {
         let reveal_paths = RevealPaths {
             settings: folders.settings.clone(),
             config_home: folders.config_home.clone(),
@@ -212,6 +234,7 @@ impl DesktopIntegration {
             reveal: RevealRegistration::new(&reveal_paths, sandbox),
             brave: BraveIntegration::new(&brave_paths, sandbox),
             settings_directory: folders.settings.clone(),
+            background_portal: background_portal.to_owned(),
         };
         let integration: Self = glib::Object::new();
         integration
