@@ -82,7 +82,6 @@ impl BrowserWindow {
             self.refuse_listing(id, mode, listing_error(error));
             return;
         }
-        self.context().signed_in_to(&start.uri);
         // `retry_list` resets the rows a partial listing left.
         self.clear_rows(id);
         let listing = self.start_listing(id, start, LoadMode::Navigate, MountRetry::Used);

@@ -9,6 +9,7 @@
 //! (SAFE-011, TAB-050).
 
 use gtk::glib;
+use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::network::{SignInError, WriteActivity};
 
@@ -33,6 +34,16 @@ impl BrowserWindow {
             self,
             move |message| window.show_message(message)
         ));
+        // Every successful mount of an SMB server through this window,
+        // whatever read or connection asked for it, resumes indexing that
+        // server after a sign-out (`mount` in winspace.py, NET-022,
+        // SRCH-040).
+        let context = self.context().downgrade();
+        network.prompts().connect_server_mounted(move |host| {
+            if let Some(context) = context.upgrade() {
+                context.search_cache().resume_server(host);
+            }
+        });
         self.imp()
             .network
             .set(network)

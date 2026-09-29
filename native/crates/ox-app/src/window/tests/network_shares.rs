@@ -17,8 +17,9 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::entry_from_info;
-use ox_core::network::ConnectedShare;
+use ox_core::network::{ConnectedShare, MountOutcome};
 use ox_core::places::StableMount;
+use ox_core::search::{Caching, RootStatus};
 
 use super::network::open_form_dialog;
 use crate::dialogs::ShareKeeping;
@@ -190,17 +191,33 @@ fn is_indexing_paused(test: &TestWindow, host: &str) -> bool {
         .expect("a started search cache")
 }
 
-/// Signing out pauses indexing of the server (and asks for its cached
-/// names to be cleared when chosen) until the next successful connection
-/// to it, which indexes a pinned share that needed sign-in.
+/// Signing out pauses indexing of the server, and clears its cached
+/// names when chosen, until the next successful mount of it through any
+/// window's prompts, which indexes a pinned share that needed sign-in.
 ///
 /// parity: NET-022, SRCH-040
 #[gtk::test]
-fn signing_out_pauses_indexing_the_server_until_it_is_connected_again() {
+fn signing_out_pauses_indexing_the_server_until_it_is_mounted_again() {
     let test = TestWindow::open(Page::Network.uri());
     test.start_search_cache();
+    let share = "smb://example.invalid/share";
+    let cache = test.context.search_cache().clone();
+    glib::spawn_future_local(async move {
+        cache
+            .set_caching(share, Caching::Enabled, "share")
+            .await
+            .expect("a share can be indexed");
+    });
+    wait_until("the share's first scan", || {
+        test.find_root(share).is_some_and(|root| {
+            !matches!(
+                root.status,
+                RootStatus::NotIndexed | RootStatus::Queued | RootStatus::Indexing
+            )
+        })
+    });
 
-    test.activate("sign-out", Some("smb://example.invalid/share"));
+    test.activate("sign-out", Some(share));
     let dialog = open_form_dialog();
     let choices = descendants::<gtk::CheckButton>(&dialog);
     choices[0].set_active(false);
@@ -212,15 +229,14 @@ fn signing_out_pauses_indexing_the_server_until_it_is_connected_again() {
     wait_until("the paused server", || {
         is_indexing_paused(&test, "example.invalid")
     });
+    wait_until("the cleared share", || {
+        test.find_root(share)
+            .is_some_and(|root| root.status == RootStatus::NotIndexed)
+    });
 
-    test.activate("map-network-location", None);
-    let dialog = open_form_dialog();
-    let share = ConnectedShare {
-        uri: "smb://example.invalid/share".to_owned(),
-        label: "share".to_owned(),
-    };
-    test.window
-        .keep_mapped_share(&dialog, share, ShareKeeping::ThisSessionOnly);
+    let prompts = test.window.network().prompts();
+    let operation = prompts.create(share).expect("a share address");
+    prompts.finish(&operation, MountOutcome::Mounted);
 
     wait_until("indexing to resume", || {
         !is_indexing_paused(&test, "example.invalid")

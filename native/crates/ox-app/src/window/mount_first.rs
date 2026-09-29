@@ -115,4 +115,27 @@ mod tests {
         });
         assert_eq!(reads.get(), 2, "a failed mount runs no read");
     }
+
+    /// Properties of an item on a share goes through the mount first, as
+    /// opening a file, Open with, Open in Terminal and Calculate size do.
+    ///
+    /// parity: NET-004
+    #[gtk::test]
+    fn properties_of_an_item_on_a_share_mounts_it_first() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let mounts = Rc::new(Cell::new(0));
+        let counted = Rc::clone(&mounts);
+        test.window.network().answer_mounts_with(move || {
+            counted.set(counted.get() + 1);
+            Err(NetworkError::NotAFolder)
+        });
+
+        test.activate("properties-of", Some("smb://example.invalid/share/plan.odt"));
+
+        wait_until("the mount before Properties", || mounts.get() == 1);
+        wait_until("the failed mount's message", || {
+            test.window.shown_message().as_str() == "This location is not a folder."
+        });
+    }
 }

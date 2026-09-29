@@ -11,7 +11,6 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::network::ServerKey;
 use ox_core::settings::Bookmark;
 
 use super::{AppContext, SERVER_SIGNED_OUT};
@@ -57,15 +56,6 @@ impl AppContext {
             self.search_cache().clear_server(host);
         }
         self.emit_by_name::<()>(SERVER_SIGNED_OUT, &[&host, &clear_names]);
-    }
-
-    /// A share or server at `uri` was mounted: indexing of its SMB server
-    /// resumes after a sign-out, and a pinned share that needed sign-in is
-    /// indexed now (`mount` in winspace.py, NET-022, SRCH-040).
-    pub(crate) fn signed_in_to(&self, uri: &str) {
-        if let Some(server) = ServerKey::for_location(uri) {
-            self.search_cache().resume_server(server.host());
-        }
     }
 
     /// Reads the kernel's SMB mounts off the main thread, and tells every
