@@ -300,6 +300,18 @@ impl Dialog {
         }
     }
 
+    /// Shows the dialog with its first button focused even when it has a
+    /// text field, for a question whose field is only one of the answers:
+    /// a reflexive Enter then does not choose it.
+    pub(super) fn open_on_first_button(&self) {
+        let first_button = self.imp().buttons.borrow().first().cloned();
+        GtkWindowExt::set_focus(self, first_button.as_ref());
+        self.present();
+        if let Some(button) = first_button {
+            button.grab_focus();
+        }
+    }
+
     /// Waits for the next answer: the button pressed, or `None` for
     /// Cancel, Escape or closing, which also closes the dialog. After a
     /// button the dialog stays open; call [`Self::finish`] once the answer

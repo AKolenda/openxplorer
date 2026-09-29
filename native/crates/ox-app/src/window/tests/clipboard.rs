@@ -231,6 +231,54 @@ fn rename_in_the_conflict_dialog_copies_under_the_typed_name() {
     );
 }
 
+/// Marks the file at `path` as last modified an hour ago.
+fn make_an_hour_old(path: &std::path::Path) {
+    let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    let file = fs::File::options()
+        .write(true)
+        .open(path)
+        .expect("the fixture is ours");
+    file.set_modified(an_hour_ago).expect("the fixture is ours");
+}
+
+/// "Replace older" replaces only the files whose existing copy is older;
+/// Cancel has the focus, so a reflexive Enter changes nothing.
+///
+/// parity: OPS-028
+#[gtk::test]
+fn replace_older_replaces_only_the_older_existing_files() {
+    let fixture = Fixture::standard();
+    for name in ["Documents/Notes 2.txt", "Documents/Notes 10.txt"] {
+        fs::write(fixture.path(name), b"existing").expect("the fixture is ours");
+    }
+    make_an_hour_old(&fixture.path("Documents/Notes 2.txt"));
+    make_an_hour_old(&fixture.path("Notes 10.txt"));
+    let test = clipboard_then_documents(&fixture, "copy", &["Notes 2.txt", "Notes 10.txt"]);
+
+    test.activate("paste", None);
+    let dialog = open_dialog(&test);
+    let focused = GtkWindowExt::focus(&dialog).and_downcast::<gtk::Button>();
+    assert_eq!(
+        focused.and_then(|button| button.label()).as_deref(),
+        Some("Cancel")
+    );
+    dialog.press("Replace older");
+    wait_until("the report of one copied and one skipped", || {
+        super::file_ops_support::dialog_over(&test).is_some_and(|report| {
+            report != dialog && report.message_text().starts_with("1 completed.\n1 skipped")
+        })
+    });
+
+    assert_eq!(
+        fs::read(fixture.path("Documents/Notes 2.txt")).expect("the older copy was replaced"),
+        b"Synthetic test data\n"
+    );
+    assert_eq!(
+        fs::read(fixture.path("Documents/Notes 10.txt")).expect("the newer copy stays"),
+        b"existing"
+    );
+}
+
 /// The bytes the clipboard of `test`'s window offers as `mime_type`.
 fn clipboard_bytes(test: &TestWindow, mime_type: &str) -> Vec<u8> {
     let clipboard = test.window.clipboard();

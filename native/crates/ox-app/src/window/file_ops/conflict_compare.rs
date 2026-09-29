@@ -3,15 +3,17 @@
 //! name-conflict dialog (OPS-028).
 //!
 //! Dolphin's and Windows' conflict dialogs show both items' size and
-//! date, and say when the files are the same. [`compare`] reads both
-//! without following links; two regular local files of the same size up
-//! to [`MAX_COMPARED_BYTES`] are also compared byte for byte, on a worker
-//! thread. "Replace older" uses the dates to replace only files whose
-//! existing copy is older. An item copied into its own folder is the
-//! existing item itself, which Replace may not overwrite.
+//! date, and say when the files are the same. [`compare_dates`] reads both
+//! without following links; for the one item the dialog shows,
+//! [`compare`] also compares two files of the same size up to
+//! [`MAX_COMPARED_BYTES`] byte for byte, on a worker thread, when both
+//! are on a local disk rather than a network share seen through `GVfs`.
+//! "Replace older" uses only the dates to replace files whose existing
+//! copy is older. An item copied into its own folder is the existing item
+//! itself, which Replace may not overwrite.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use gtk::gio;
 use gtk::gio::prelude::*;
@@ -120,31 +122,57 @@ fn same_bytes(first: &Path, second: &Path) -> bool {
     }
 }
 
+/// True when `path` is on a local disk: not a `GVfs` share mounted through
+/// FUSE, nor any other file system GIO calls remote.
+fn is_on_local_disk(path: &Path) -> bool {
+    let fuse_folders = [
+        glib::user_runtime_dir().join("gvfs"),
+        glib::home_dir().join(".gvfs"),
+    ];
+    if fuse_folders.iter().any(|folder| path.starts_with(folder)) {
+        return false;
+    }
+    gio::File::for_path(path)
+        .query_filesystem_info(gio::FILE_ATTRIBUTE_FILESYSTEM_REMOTE, gio::Cancellable::NONE)
+        .is_ok_and(|info| !info.boolean(gio::FILE_ATTRIBUTE_FILESYSTEM_REMOTE))
+}
+
 /// The incoming item at `uri` beside the item of its name in
-/// `destination_folder`; `None` when either cannot be read.
-pub(super) async fn compare(uri: &str, destination_folder: &str) -> Option<Comparison> {
+/// `destination_folder`, by type, size and date only; `None` when either
+/// cannot be read.
+pub(super) async fn compare_dates(uri: &str, destination_folder: &str) -> Option<Comparison> {
     let incoming_file = gio::File::for_uri(uri);
     let existing_file = gio::File::for_uri(destination_folder).child(incoming_file.basename()?);
-    let incoming = side_of(&incoming_file).await?;
-    let existing = side_of(&existing_file).await?;
-    let same_item = incoming_file.equal(&existing_file);
-    let comparable = !same_item
+    Some(Comparison {
+        incoming: side_of(&incoming_file).await?,
+        existing: side_of(&existing_file).await?,
+        identical: false,
+        same_item: incoming_file.equal(&existing_file),
+    })
+}
+
+/// [`compare_dates`], and whether two files of the same size on a local
+/// disk hold the same bytes.
+pub(super) async fn compare(uri: &str, destination_folder: &str) -> Option<Comparison> {
+    let mut comparison = compare_dates(uri, destination_folder).await?;
+    let (incoming, existing) = (comparison.incoming, comparison.existing);
+    let comparable = !comparison.same_item
         && !incoming.is_folder
         && !existing.is_folder
         && incoming.size == existing.size
         && incoming.size.is_some_and(|size| size <= MAX_COMPARED_BYTES);
-    let identical = match (comparable, incoming_file.path(), existing_file.path()) {
-        (true, Some(first), Some(second)) => gio::spawn_blocking(move || same_bytes(&first, &second))
-            .await
-            .unwrap_or(false),
-        _ => false,
-    };
-    Some(Comparison {
-        incoming,
-        existing,
-        identical,
-        same_item,
-    })
+    let incoming_file = gio::File::for_uri(uri);
+    let existing_path: Option<PathBuf> = incoming_file
+        .basename()
+        .and_then(|name| gio::File::for_uri(destination_folder).child(name).path());
+    if let (true, Some(first), Some(second)) = (comparable, incoming_file.path(), existing_path) {
+        comparison.identical = gio::spawn_blocking(move || {
+            is_on_local_disk(&first) && is_on_local_disk(&second) && same_bytes(&first, &second)
+        })
+        .await
+        .unwrap_or(false);
+    }
+    Some(comparison)
 }
 
 #[cfg(test)]

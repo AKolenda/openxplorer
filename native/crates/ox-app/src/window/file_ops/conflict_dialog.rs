@@ -20,7 +20,7 @@
 use gtk::prelude::*;
 use ox_core::transfer::ConflictPolicy;
 
-use super::conflict_compare::{compare, Comparison};
+use super::conflict_compare::{compare, compare_dates, Comparison};
 use super::conflict_rename::{checked_new_name, suggested_name};
 use crate::window::dialog::{ButtonStyle, Dialog, DialogButton};
 use crate::window::BrowserWindow;
@@ -196,7 +196,7 @@ impl BrowserWindow {
             for (index, uri) in answered.iter().enumerate() {
                 let comparison = match (&choice, index) {
                     (Choice::ReplaceOlder, 0) => first,
-                    (Choice::ReplaceOlder, _) => compare(uri, destination_folder).await,
+                    (Choice::ReplaceOlder, _) => compare_dates(uri, destination_folder).await,
                     _ => None,
                 };
                 answers.push(ConflictAnswer {
@@ -233,12 +233,15 @@ impl BrowserWindow {
         let apply_to_all = (remaining.len() > 1).then(|| {
             let check = dialog.add_check_button(&apply_to_all_label(remaining.len()), true);
             let first = item_name(first_uri);
-            dialog.add_hint(&format!("Otherwise the choice is for “{first}” only."));
+            dialog.add_hint(&format!(
+                "Otherwise the choice is for “{first}” only. A new name is always for “{first}” only."
+            ));
             check
         });
         let buttons = PolicyButtons::add_to(&dialog, Offers::for_first(first));
         dialog.submit_with(&new_name, buttons.rename);
-        dialog.open();
+        // Cancel keeps the focus, as before the dialog had a name field.
+        dialog.open_on_first_button();
         let choice = loop {
             let pressed = dialog.next_response().await?;
             if let Some(choice) = buttons.policy_choice(pressed) {
