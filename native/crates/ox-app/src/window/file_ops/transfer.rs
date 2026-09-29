@@ -24,6 +24,7 @@ use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
 use super::conflict_dialog::ConflictAnswer;
 use super::running::FinishedOperation;
+use crate::search::changed_folders;
 use crate::window::dialog;
 use crate::window::BrowserWindow;
 
@@ -192,6 +193,9 @@ impl BrowserWindow {
                 let progress = self.progress_reporter(&context.cancel);
                 let outcome = run_chosen_transfer(chosen, &context, progress).await;
                 self.end_operation();
+                let items = chosen.items.iter().map(|item| item.uri.as_str());
+                let changed = changed_folders([chosen.destination_folder.as_str()], items);
+                self.context().search_cache().folders_written(changed);
                 Some(outcome)
             }
         }

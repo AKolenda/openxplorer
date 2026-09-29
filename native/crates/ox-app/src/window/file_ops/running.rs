@@ -20,6 +20,7 @@ use ox_core::ops::{
 };
 use ox_core::transfer::{Cancellation, Progress, TransferMode};
 
+use crate::search::changed_folders;
 use crate::window::dialog;
 use crate::window::loading::LoadMode;
 use crate::window::transfer_panel::TransferPanel;
@@ -138,6 +139,9 @@ impl BrowserWindow {
         let progress = self.progress_reporter(&context.cancel);
         let outcome = run_transfer(request, &context, progress).await;
         self.end_operation();
+        let destination = request.destination_folder.as_deref();
+        let changed = changed_folders(destination, request.uris.iter().map(String::as_str));
+        self.context().search_cache().folders_written(changed);
         Some(outcome)
     }
 
@@ -182,11 +186,15 @@ impl BrowserWindow {
 
     /// Lists the active folder again, then selects `uris` in it (the
     /// items an operation created or moved there; none clears the
-    /// selection, as app.js does after every operation).
+    /// selection, as app.js does after every operation). The search cache
+    /// reads the folder and the items' folders again (SRCH-033).
     pub(super) fn reload_selecting(&self, uris: Vec<String>) {
         let Some(id) = self.imp().session.borrow().active_id() else {
             return;
         };
+        let folder = self.current_uri();
+        let changed = changed_folders(folder.as_deref(), uris.iter().map(String::as_str));
+        self.context().search_cache().folders_written(changed);
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.selected = uris;
         }

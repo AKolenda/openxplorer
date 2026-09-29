@@ -113,6 +113,31 @@ impl SearchCache {
             .await
     }
 
+    /// Tells the service that the app wrote into `folders`, so every
+    /// indexed folder that holds one reads it again (SRCH-033). Local
+    /// folders follow their live watches as well; a share has none, so
+    /// only this shows the app's own changes there before the next check.
+    pub(crate) fn folders_written(&self, folders: Vec<String>) {
+        if folders.is_empty() || self.imp().indexer.borrow().is_none() {
+            return;
+        }
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = cache)]
+            self,
+            async move {
+                let outcome = cache
+                    .run(move |service| {
+                        let mut changed = folders.iter();
+                        changed.try_for_each(|folder| service.folder_changed(folder))
+                    })
+                    .await;
+                if let Err(error) = outcome {
+                    glib::g_warning!(LOG_DOMAIN, "Could not update the search cache: {error}");
+                }
+            }
+        ));
+    }
+
     /// Runs `change` like [`Self::run`] and reads the status again after it
     /// succeeded, so every window shows its effect and re-runs a shown
     /// search (`setCache` in app.js).

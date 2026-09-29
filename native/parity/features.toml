@@ -10074,8 +10074,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["operate", "create", "rename", "createTemplate", "archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/search_live.rs (the_uri_of_a_deleted_file_keeps_live_events); native/crates/ox-core/tests/search_service.rs (a_folder_the_app_changed_is_read_again, the_uri_of_a_deleted_file_re_reads_its_folder). Local indexed folders already follow the app's own changes through their live watches. Missing: the file-operation UI (another track) must report changed folders on shares through IndexService::folder_changed, reached as the app context's search cache."
+native = "done"
+native_note = "native/crates/ox-app/src/search/writes.rs (a_move_changes_its_destination_and_every_source_folder); native/crates/ox-core/tests/search_service.rs (a_folder_the_app_changed_is_read_again, the_uri_of_a_deleted_file_re_reads_its_folder); native/crates/ox-core/tests/search_live.rs (the_uri_of_a_deleted_file_keeps_live_events). After every write the window tells the search cache which folders changed (SearchCache::folders_written, IndexService::folder_changed): a copy, move, Trash or delete reports its destination and each item's folder (running.rs and transfer.rs, also with an answer per item); New, Rename, Duplicate, links, Restore, Undo and Redo report the folder shown and the folders of the items they created or moved (reload_selecting); extraction, compression and a restored previous version report their destination (reload_tabs_showing). Each indexed folder that holds one reads it again, so shares without live watches show the app's own changes at once; local indexed folders also follow their live watches."
 
 [[feature]]
 id = "SRCH-034"

@@ -20,6 +20,7 @@
 //! | `results` | The rows of a cached search | `app.js` |
 //! | `report` | The strip's, status bar's and empty page's wording | `app.js` |
 //! | `info_strip` | The [`SearchInfoStrip`] widget | `app.js`, `style.css` |
+//! | `writes` | The folders a file operation changed (SRCH-033) | `winspace.py` |
 //! | `error` | [`CacheError`] | both |
 
 mod cache;
@@ -31,6 +32,7 @@ mod pin_sync;
 mod report;
 mod results;
 mod source;
+mod writes;
 
 #[cfg(test)]
 pub(crate) mod test_roots;
@@ -44,3 +46,4 @@ pub(crate) use pin_sync::SettingsReading;
 pub(crate) use report::{SearchCount, RESULT_LIMIT};
 pub(crate) use results::{merge_results, Listing};
 pub(crate) use source::{related_roots, SearchScope};
+pub(crate) use writes::changed_folders;
