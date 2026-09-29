@@ -133,7 +133,7 @@ fn a_sign_in_the_keyring_cannot_keep_is_announced() {
 
 /// Closing a window cancels its open sign-ins, which aborts their mounts.
 ///
-/// parity: NET-012
+/// parity: NET-012, TAB-050
 #[gtk::test]
 fn closing_the_window_aborts_its_sign_ins() {
     let test = TestWindow::open(Page::Network.uri());

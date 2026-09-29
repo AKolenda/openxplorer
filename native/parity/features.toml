@@ -2568,7 +2568,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "Closing a window disconnects its desktop signal handlers, closes its network sessions and sign-in prompts and wipes their credentials (close_network), and drops its tabs, which cancels their listings and folder watches (imp.rs dispose); a window cannot close while it writes files (TAB-049), and it leaves the application's window list. Tests: native/crates/ox-app/src/application/state.rs (closing_one_window_releases_it_while_another_stays_open) and native/crates/ox-app/src/application.rs (closing_one_window_releases_its_controller_while_another_stays_open) prove the window is released."
+native_note = "Closing a window disconnects its desktop signal handlers, closes its network sessions and sign-in prompts, aborting their mounts and wiping their credentials from memory (close_network), and stops every tab's listing and folder watch, even while something still holds the window (close_request in native/crates/ox-app/src/window/imp.rs); dispose drops the tabs. A window cannot close while it writes files (TAB-049), and it leaves the application's window list. Tests: native/crates/ox-app/src/window/tests/closing.rs (closing_a_window_stops_its_listings_and_folder_watches), native/crates/ox-app/src/window/tests/network.rs (closing_the_window_aborts_its_sign_ins), native/crates/ox-core/src/network/prompts/tests.rs (closing_aborts_every_pending_prompt, closing_wipes_the_windows_credentials_from_memory), native/crates/ox-app/src/application/state.rs (closing_one_window_releases_it_while_another_stays_open)."
 
 [[feature]]
 id = "TAB-051"

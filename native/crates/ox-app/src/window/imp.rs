@@ -240,9 +240,13 @@ impl WindowImpl for BrowserWindow {
         // destroyed widget for its cursor position (a Gtk-CRITICAL).
         GtkWindowExt::set_focus(&*self.obj(), None::<&gtk::Widget>);
         self.obj().save_pending_size();
-        // A closed window's sign-ins end with it, even while something
-        // still holds the window (SAFE-011, TAB-050).
+        // A closed window's sign-ins, listings and folder watches end with
+        // it, even while something still holds the window (SAFE-011,
+        // TAB-050).
         self.obj().close_network();
+        for tab in self.session.borrow_mut().tabs_mut() {
+            tab.stop_reading();
+        }
         self.parent_close_request()
     }
 }

@@ -6,7 +6,7 @@
 use gtk::prelude::*;
 
 use super::item_dialogs::{press, texts};
-use crate::test_support::harness::{descendants, settle, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, settle, wait_until, Fixture, TestWindow};
 
 /// The caption Close button, when the desktop's layout shows one.
 fn caption_close(test: &TestWindow) -> Option<gtk::Button> {
@@ -97,4 +97,38 @@ fn the_close_button_closes_an_idle_window() {
     }
     settle();
     assert!(!test.window.is_visible());
+}
+
+/// The folder-watch threads of this process that run now.
+fn folder_watch_threads() -> usize {
+    let tasks = std::fs::read_dir("/proc/self/task").expect("Linux lists a process's threads");
+    let names = tasks
+        .filter_map(Result::ok)
+        .filter_map(|task| std::fs::read_to_string(task.path().join("comm")).ok());
+    names.filter(|name| name.trim() == "folder-watch").count()
+}
+
+/// Closing a window stops its running listings and its folder watches,
+/// even while something still holds the window. Its sign-ins end too: see
+/// `closing_the_window_aborts_its_sign_ins` in network.rs.
+///
+/// parity: TAB-050
+#[gtk::test]
+fn closing_a_window_stops_its_listings_and_folder_watches() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.add_tab(&fixture.uri_of("Documents")).expect("valid folder");
+    test.wait_for_listing("the second tab");
+    wait_until("both folder watches", || folder_watch_threads() >= 2);
+    let watching = folder_watch_threads();
+    test.window.refresh();
+    assert!(test.window.is_loading(), "a listing runs");
+
+    test.window.close();
+    settle();
+
+    assert!(!test.window.is_loading(), "the listing stopped");
+    wait_until("the window's folder watches to stop", || {
+        folder_watch_threads() <= watching - 2
+    });
 }
