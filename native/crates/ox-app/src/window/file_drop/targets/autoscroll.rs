@@ -56,29 +56,30 @@ pub(super) fn scroll_step(y: f64, height: f64) -> f64 {
 
 impl BrowserWindow {
     /// A drag hovers at `y` of `widget`: scrolls the scrolled window that
-    /// holds it while the pointer is near its top or bottom edge.
-    pub(super) fn scroll_drag_near_edge(&self, widget: &gtk::Widget, y: f64) {
+    /// holds it while the pointer is near its top or bottom edge. True
+    /// while it scrolls.
+    pub(super) fn scroll_drag_near_edge(&self, widget: &gtk::Widget, y: f64) -> bool {
         let scroller = widget
             .downcast_ref::<gtk::ScrolledWindow>()
             .cloned()
             .or_else(|| widget.ancestor(gtk::ScrolledWindow::static_type()).and_downcast());
         let Some(scroller) = scroller else {
-            return;
+            return false;
         };
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let point = graphene::Point::new(0.0, y as f32);
         let Some(in_scroller) = widget.compute_point(&scroller, &point) else {
-            return;
+            return false;
         };
         let step = scroll_step(f64::from(in_scroller.y()), f64::from(scroller.height()));
         if step.abs() < f64::EPSILON {
             self.stop_drag_scroll();
-            return;
+            return false;
         }
         if let Some(running) = self.imp().drag_scroll.borrow().as_ref() {
             if running.scroller == scroller {
                 running.step.set(step);
-                return;
+                return true;
             }
         }
         self.stop_drag_scroll();
@@ -106,6 +107,7 @@ impl BrowserWindow {
             step: shared_step,
             timer,
         }));
+        true
     }
 
     /// Stops the scroll a hovering drag started, if any.

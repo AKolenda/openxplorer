@@ -24,6 +24,8 @@ use gtk::{gdk, glib, graphene};
 
 pub(in crate::window) use autoscroll::DragScroll;
 
+use spot::DropSpot;
+
 use crate::window::file_drag::DraggedItems;
 use crate::window::BrowserWindow;
 
@@ -95,17 +97,29 @@ impl BrowserWindow {
         x: f64,
         y: f64,
     ) -> gdk::DragAction {
-        let widget = target.widget();
-        if let (Some(widget), DropZone::FolderView | DropZone::Sidebar) = (&widget, zone) {
-            self.scroll_drag_near_edge(widget, y);
-        }
-        let spot = widget.and_then(|widget| self.drop_spot(zone, &widget, x, y));
-        self.show_drop_spot(zone, spot.as_ref());
+        let spot = target
+            .widget()
+            .and_then(|widget| self.hover_drop_at(zone, &widget, x, y));
         let action = self.drop_action(drop);
         match (spot, action) {
             (Some(_), Some(action)) => action.as_drag_action(),
             _ => gdk::DragAction::empty(),
         }
+    }
+
+    /// A drag is at (`x`, `y`) of `widget`, the window's `zone`: scrolls
+    /// the zone near its edge, and highlights where a drop would go. While
+    /// the zone scrolls, the folder under the pointer changes without the
+    /// pointer moving, so no folder opens by staying under it (DND-021).
+    fn hover_drop_at(&self, zone: DropZone, widget: &gtk::Widget, x: f64, y: f64) -> Option<DropSpot> {
+        let scrolls =
+            matches!(zone, DropZone::FolderView | DropZone::Sidebar) && self.scroll_drag_near_edge(widget, y);
+        let spot = self.drop_spot(zone, widget, x, y);
+        self.show_drop_spot(zone, spot.as_ref());
+        if scrolls {
+            self.open_folder_after_hover(None);
+        }
+        spot
     }
 
     /// The drag left `zone`, or dropped there: its highlight and any
@@ -137,7 +151,7 @@ impl BrowserWindow {
         let (Some(spot), Some(action)) = (spot, self.drop_action(drop)) else {
             return false;
         };
-        if let Err(refusal) = self.check_idle() {
+        if let Err(refusal) = self.check_ready() {
             self.show_message(&refusal.to_string());
             return false;
         }

@@ -385,3 +385,78 @@ fn a_drag_that_stays_over_a_folder_opens_it() {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))
     });
 }
+
+/// A drag held still near the bottom of the file list scrolls it, and
+/// the folder that was under the pointer does not open meanwhile;
+/// leaving stops the scroll.
+///
+/// parity: DND-025, DND-021
+#[gtk::test]
+fn a_drag_near_the_bottom_edge_scrolls_without_opening_the_folder_under_it() {
+    let fixture = Fixture::standard();
+    for number in 0..80 {
+        std::fs::create_dir(fixture.path(&format!("Folder {number:02}"))).expect("the fixture is ours");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    let view = test.window.folder_pane().view_widget();
+    let scroller: gtk::ScrolledWindow = view
+        .ancestor(gtk::ScrolledWindow::static_type())
+        .and_downcast()
+        .expect("the view scrolls");
+    let adjustment = scroller.vadjustment();
+    let near_bottom = f64::from(scroller.height()) - 5.0;
+
+    let spot = test
+        .window
+        .hover_drop_at(DropZone::FolderView, &view, 40.0, near_bottom);
+    wait_until("the list to scroll", || adjustment.value() > 100.0);
+    wait_for(Duration::from_millis(900));
+    let shown_while_scrolling = test.window.current_uri();
+    test.window.leave_drop_zone(DropZone::FolderView);
+    let stopped_at = adjustment.value();
+    wait_for(Duration::from_millis(100));
+
+    assert!(
+        matches!(
+            spot,
+            Some(spot::DropSpot::FolderView {
+                destination: DropDestination::Folder(_),
+                row: Some(_)
+            })
+        ),
+        "the pointer is over a folder"
+    );
+    assert_eq!(shown_while_scrolling, Some(fixture.uri()), "no folder opened");
+    assert!(
+        (adjustment.value() - stopped_at).abs() < f64::EPSILON,
+        "leaving stops the scroll"
+    );
+}
+
+/// A folder dropped on the dashed row of an empty Quick access is pinned.
+///
+/// parity: DND-014
+#[gtk::test]
+fn a_folder_dropped_on_the_pin_row_of_an_empty_quick_access_is_pinned() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    for place in test.window.places().quick_access {
+        test.window.unpin(&place.uri);
+    }
+    wait_until("Quick access to empty", || {
+        sidebar.labels().contains(&"Pin to Quick access".to_owned())
+    });
+
+    let spot = test.window.sidebar_spot(sidebar.middle_of("Pin to Quick access"));
+    let destination = spot.map(|spot| spot.destination());
+    assert_eq!(destination, Some(DropDestination::QuickAccess { before: None }));
+    let taken = test
+        .window
+        .complete_drop(&[fixture.uri()], destination, DropAction::Copy);
+
+    assert!(taken);
+    wait_until("the pin", || {
+        sidebar.labels().contains(&"Example projects".to_owned())
+    });
+}
