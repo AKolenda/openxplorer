@@ -208,6 +208,7 @@ impl BrowserWindow {
             self.finish_address();
             return;
         }
+        self.forget_address_completions();
         let address = self.imp().locations.borrow().display_location(&uri);
         self.address_bar().edit(&address);
     }
@@ -215,6 +216,7 @@ impl BrowserWindow {
     /// Ends editing with Enter or Escape: back to the breadcrumbs, with
     /// keyboard focus in the folder view.
     pub(super) fn finish_address(&self) {
+        self.forget_address_completions();
         if let Some(uri) = self.current_uri() {
             let address = self.imp().locations.borrow().display_location(&uri);
             self.address_bar().show_crumbs(&address);

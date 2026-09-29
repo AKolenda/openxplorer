@@ -211,6 +211,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "MiddleClickActionEventFilter on the toolbar and history menus"
 native = "done"
+native_note = "native/crates/ox-app/src/window/history_menu.rs: a middle-click on Back, Forward or Up opens where it leads in a background tab (Ctrl/Shift choose a tab in front or a window, as elsewhere), and a middle-click on a row of the Back/Forward menu opens that entry the same way; the current tab does not change. Home has no toolbar button in this app. Tested in native/crates/ox-app/src/window/tests/history.rs (a_middle_click_on_back_or_up_opens_its_target_in_a_background_tab)."
 
 [[feature]]
 id = "NAV-008"
@@ -529,7 +530,7 @@ python_tests = [
 bridge = ["list"]
 dolphin = "KUrlNavigatorButton arrow menu; KUrlNavigatorButton::keyPressEvent"
 native = "done"
-native_note = "native/crates/ox-app/src/window/crumb_menus.rs: a click on the divider after a crumb, or Down on a focused crumb, lists that folder's subfolders (natural order, hidden ones only while hidden files are shown) in a menu under the crumb; the folder the address goes on to is bold, and past 30 entries a 'More' item opens the next 30. Choosing one runs win.go-to. The divider keeps the app.js '/' or '\\' glyph and gains a hover highlight. Tested in crumb_menus.rs (a_crumb_menu_lists_thirty_subfolders_with_the_shown_one_bold_then_more)."
+native_note = "native/crates/ox-app/src/window/crumb_menus.rs: a click on the divider after a crumb, or Down on a focused crumb, lists that folder's subfolders (natural order, hidden ones only while hidden files are shown) in a menu pointing at the crumb; the folder the address goes on to is bold, and past 30 entries a 'More' item opens the next 30. Choosing one runs win.go-to. The menu is parented to the address bar, not the crumb, as navigating rebuilds the crumbs. The divider keeps the app.js '/' or '\\' glyph and gains a hover highlight. Tested in crumb_menus.rs (a_crumb_menu_lists_thirty_subfolders_with_the_shown_one_bold_then_more) and native/crates/ox-app/src/window/tests/address_input.rs (choosing_a_folder_from_a_crumb_menu_goes_there, which opens the real menu and activates a row)."
 
 [[feature]]
 id = "NAV-021"
@@ -544,7 +545,7 @@ python_tests = []
 bridge = ["operate", "transferConflicts", "fileDragLayout"]
 dolphin = "KUrlNavigatorButton::dropEvent / dragMoveEvent"
 native = "done"
-native_note = "Drops on a crumb go into its folder with the normal drop action (native/crates/ox-app/src/window/file_drop/targets.rs, DropZone::Breadcrumbs, tested by a_crumb_takes_drops_for_its_folder). native/crates/ox-app/src/window/crumb_drop.rs: holding a file drag over the divider after a crumb for 800 ms opens that folder's subfolder menu without a pointer grab; its rows are a drop zone (DropZone::CrumbMenu) that highlights and takes the drop for the row's folder. The menu closes when the drag leaves it, drops on it, or moves over another drop zone. Tested in crumb_drop.rs (holding_a_drag_over_a_divider_opens_a_menu_whose_rows_take_the_drop); a real pointer drag cannot be synthesised under Xvfb, so the test drives the hover and hit-testing directly."
+native_note = "Drops on a crumb go into its folder with the normal drop action (native/crates/ox-app/src/window/file_drop/targets.rs, DropZone::Breadcrumbs, tested by a_crumb_takes_drops_for_its_folder). native/crates/ox-app/src/window/crumb_drop.rs: holding a file drag over the divider after a crumb for 800 ms opens that folder's subfolder menu without a pointer grab; its rows are a drop zone (DropZone::CrumbMenu) that highlights and takes the drop for the row's folder. The menu closes when the drag leaves it, drops anywhere, moves over another drop zone, or leaves the crumbs for 300 ms without reaching the menu (which also covers a drag cancelled over the address bar); a listing that ends after that opens nothing. Tested in crumb_drop.rs (holding_a_drag_over_a_divider_opens_a_menu_whose_rows_take_the_drop, including leaving the crumbs and a late listing); a real pointer drag cannot be synthesised under Xvfb, so the test drives the hover, leave and hit-testing directly."
 
 [[feature]]
 id = "NAV-022"
@@ -559,7 +560,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "KUrlNavigatorButton::wheelEvent"
 native = "done"
-native_note = "native/crates/ox-app/src/window/crumb_menus.rs: a vertical wheel step over a crumb goes to the previous or next folder beside it (win.crumb-sibling, hidden folders skipped unless shown) while the crumbs fit the bar; when they overflow, the wheel still scrolls the crumbs sideways. Tested in crumb_menus.rs (the_wheel_steps_to_the_folder_beside_and_stops_at_either_end) and native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_goes_to_the_next_folder_beside_it)."
+native_note = "native/crates/ox-app/src/window/crumb_menus.rs: each whole wheel notch over a crumb goes to the previous or next folder beside it (win.crumb-sibling, hidden folders skipped unless shown) while the crumbs fit the bar; the controller is discrete, so a high-resolution wheel's fractions add up to notches, and touchpad scrolling is ignored so one swipe cannot skip through folders. When the crumbs overflow, the wheel scrolls them sideways. Tested in crumb_menus.rs (the_wheel_steps_to_the_folder_beside_and_stops_at_either_end) and native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_goes_to_the_next_folder_beside_it, which emits scroll on the crumb's controller: 0.1 does nothing, 1.0 steps, overflowing crumbs pass the wheel on)."
 
 [[feature]]
 id = "NAV-023"
@@ -679,6 +680,7 @@ python_tests = []
 bridge = []
 dolphin = "replace_location: Ctrl+L"
 native = "done"
+native_note = "native/crates/ox-app/src/window/location_view.rs: edit_address returns to the crumbs when Ctrl+L is pressed while the whole address is selected and nothing was typed (AddressBar::edits_whole_address); otherwise it edits the address. Tested in native/crates/ox-app/src/window/tests/address_input.rs (a_second_ctrl_l_returns_to_the_crumbs_unless_something_was_typed)."
 
 [[feature]]
 id = "NAV-029"
@@ -712,7 +714,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "KUrlComboBox + KUrlCompletion (UrlCompletionMode)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/address_completion.rs with native/crates/ox-app/src/window/address_bar/suggestions.rs: while the address is typed, the text up to the last '/' or '\\' is resolved like any address, that folder is listed, and up to 12 names starting with the rest (ignoring case; hidden ones once a dot is typed) are listed under the entry, folders ending in the separator. Up/Down put a row into the entry, Enter or a click goes there, Escape closes the list. Tested in address_completion.rs (names_starting_with_the_typed_text_complete_it) and native/crates/ox-app/src/window/tests/address_input.rs (typing_a_path_offers_the_matching_names)."
+native_note = "native/crates/ox-app/src/window/address_completion.rs with native/crates/ox-app/src/window/address_bar/suggestions.rs: while the address is typed, the text up to the last '/' or '\\' is resolved like any address, that folder is listed once per edit and filtered locally as typing goes on (a listing still running is aborted when the folder changes or editing ends), and up to 12 names starting with the rest (ignoring case; hidden ones once a dot is typed) are listed under the entry, folders ending in the separator. Up/Down put a row into the entry, Enter or a click goes there, Escape closes the list. Tested in address_completion.rs (names_starting_with_the_typed_text_complete_it) and native/crates/ox-app/src/window/tests/address_input.rs (typing_a_path_offers_the_matching_names; f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there drives Down, Enter and a row)."
 
 [[feature]]
 id = "NAV-031"
@@ -742,6 +744,7 @@ python_tests = []
 bridge = ["normalise"]
 dolphin = "KUrlNavigator::mouseReleaseEvent (MiddleButton)"
 native = "done"
+native_note = "native/crates/ox-app/src/window/address_menu.rs: a middle-click on blank space of the crumbs goes to the primary selection's text as a pasted address (BrowserWindow::go_to_pasted_address in activation.rs, shared with Paste and go): a folder opens in the tab, a file is shown selected in its folder rather than launched, and the text is not added to the typed history (NAV-043). Tested in native/crates/ox-app/src/window/tests/address_input.rs (a_middle_click_on_blank_address_space_opens_the_selected_text)."
 
 [[feature]]
 id = "NAV-033"
@@ -997,7 +1000,7 @@ python_tests = [
 bridge = ["activateItem", "uiReady", "list"]
 gnome = "GApplication HANDLES_OPEN / open signal; GApplication HANDLES_OPEN"
 native = "done"
-native_note = "native/crates/ox-app/src/window/activation.rs (open_locations): the first location in the active tab, the others in new tabs, files in their applications and ZIPs in the archive browser. Tested in native/crates/ox-app/src/window/tests/opening.rs (command_line_locations_open_in_the_current_tab_then_in_new_tabs). Porting notes: Dolphin opens external folders in a new tab or window; a setting for that is NAV-042."
+native_note = "native/crates/ox-app/src/window/activation.rs (open_locations): with no window open, the command line, launcher and D-Bus Open fill the first window: the first location in its tab, the others in new tabs, files in their applications and ZIPs in the archive browser. With a window open, NAV-042 applies instead (native/crates/ox-app/src/application/requests.rs, open_in_active_window): the locations open in new tabs or a new window so the tab in use stays, as in Dolphin; the Python app replaced the current tab. Tested in native/crates/ox-app/src/application/state.rs (command_line_locations_fill_the_first_window_when_none_is_open) and native/crates/ox-app/src/window/tests/opening.rs (command_line_locations_open_in_the_current_tab_then_in_new_tabs)."
 
 [[feature]]
 id = "NAV-042"
@@ -1042,7 +1045,7 @@ bridge = ["normalise"]
 dolphin = "KUrlNavigator editable mode: KUrlComboBox history; slotApplyUrl prepends each applied URL and drops the oldest (RemoveBottom)"
 gnome = "GtkEntry with a GtkPopover or GtkListView of recent locations, persisted under $XDG_STATE_HOME"
 native = "done"
-native_note = "native/crates/ox-app/src/window/address_bar/suggestions.rs: every address applied with Enter goes to the top of the window's most-recent-first history (20 entries, no duplicates, addresses with user info never kept) for the session. F4, the address bar's chevron and Alt+Down while editing list it under the entry; choosing a row goes there in the active tab. Tested in suggestions.rs (typed_addresses_go_to_the_top_once_and_the_oldest_drop_off) and native/crates/ox-app/src/window/tests/address_input.rs (f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there)."
+native_note = "native/crates/ox-app/src/window/address_bar/suggestions.rs: every typed address that is accepted (navigated to, opened or handed to the web browser; refused or pasted text is not) goes to the top of the window's most-recent-first history (20 entries, no duplicates, addresses with user info never kept) for the session, recorded by BrowserWindow::accept_address in activation.rs. F4, the address bar's chevron and Alt+Down while editing list it under the entry; Down/Up put a row into the entry and a click on a row goes there in the active tab. Tested in suggestions.rs (typed_addresses_go_to_the_top_once_and_the_oldest_drop_off) and native/crates/ox-app/src/window/tests/address_input.rs (f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there)."
 
 [[feature]]
 id = "HOME-001"

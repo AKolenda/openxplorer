@@ -138,7 +138,13 @@ impl AddressBar {
             glib::Propagation::Stop
         });
         button.add_controller(keys);
-        let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+        // Discrete, so GTK adds up a high-resolution wheel's fractions to
+        // whole notches; a touchpad's pixel deltas are ignored, as Dolphin
+        // counts only whole wheel notches, so one swipe cannot skip
+        // through several folders.
+        let wheel = gtk::EventControllerScroll::new(
+            gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE,
+        );
         let folder = folder.to_owned();
         wheel.connect_scroll(glib::clone!(
             #[weak(rename_to = bar)]
@@ -146,10 +152,12 @@ impl AddressBar {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |wheel, _, dy| {
-                if bar.crumbs_overflow() || dy == 0.0 {
+                let notches = dy.trunc();
+                let touchpad = wheel.unit() == gdk::ScrollUnit::Surface;
+                if bar.crumbs_overflow() || touchpad || notches == 0.0 {
                     return glib::Propagation::Proceed;
                 }
-                let step: i32 = if dy > 0.0 { 1 } else { -1 };
+                let step: i32 = if notches > 0.0 { 1 } else { -1 };
                 if let Some(button) = wheel.widget() {
                     WindowAction::CrumbSibling.activate_from(&button, Some(&(&folder, step).to_variant()));
                 }
@@ -223,9 +231,21 @@ impl BrowserWindow {
             let target = crumb.action_target_value();
             target.as_ref().and_then(glib::Variant::str) == Some(folder)
         })?;
+        // Parented to the bar, not the crumb: choosing a row navigates,
+        // which rebuilds the crumbs while the menu is still attached.
+        let bar = self.address_bar();
+        let bounds = crumb.compute_bounds(bar)?;
         let popover = MenuPopover::new(entries);
         popover.set_autohide(autohide);
-        popover.set_parent(&crumb);
+        popover.set_parent(bar);
+        #[expect(clippy::cast_possible_truncation, reason = "widget bounds are small")]
+        let pointing = gdk::Rectangle::new(
+            bounds.x() as i32,
+            bounds.y() as i32,
+            bounds.width() as i32,
+            bounds.height() as i32,
+        );
+        popover.set_pointing_to(Some(&pointing));
         popover.connect_closed(|popover| {
             let closed = popover.clone();
             glib::idle_add_local_once(move || closed.unparent());

@@ -488,6 +488,28 @@ mod tests {
         assert_eq!(opened.current_uri(), Some(fixture.uri_of("Documents")));
     }
 
+    /// With no window open, the command line's locations open in the first
+    /// window: the first in its tab, the others in new tabs in front.
+    ///
+    /// parity: NAV-041
+    #[gtk::test]
+    fn command_line_locations_fill_the_first_window_when_none_is_open() {
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        let locations = vec![fixture.uri_of("Documents"), fixture.uri()];
+
+        app.state
+            .run_command(&application(), CommandRequest::Open(locations));
+
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+        wait_until("both locations to open", || window.tab_count() == 2);
+        assert_eq!(window.current_uri(), Some(fixture.uri()));
+        WidgetExt::activate_action(window, "win.previous-tab", None).expect("the action");
+        assert_eq!(window.current_uri(), Some(fixture.uri_of("Documents")));
+    }
+
     /// A folder opened from another app gets a new tab, or a new window
     /// when Settings asks for one; the tab in use stays where it was.
     ///

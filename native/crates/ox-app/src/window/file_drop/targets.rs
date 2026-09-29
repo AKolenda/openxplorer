@@ -139,8 +139,11 @@ impl BrowserWindow {
             .and_then(|widget| self.drop_spot(zone, &widget, x, y));
         self.show_drop_spot(zone, spot.as_ref());
         match zone {
-            DropZone::Breadcrumbs => self.open_subfolders_after_hover(x, y),
-            DropZone::CrumbMenu => {}
+            DropZone::Breadcrumbs => {
+                self.keep_drag_crumb_menu();
+                self.open_subfolders_after_hover(x, y);
+            }
+            DropZone::CrumbMenu => self.keep_drag_crumb_menu(),
             DropZone::FolderView | DropZone::Sidebar | DropZone::Tabs => self.close_drag_crumb_menu(),
         }
         let action = self.drop_action(drop);
@@ -157,7 +160,7 @@ impl BrowserWindow {
         self.show_drop_spot(zone, None);
         match zone {
             DropZone::FolderView => self.forget_program_checks(),
-            DropZone::Breadcrumbs => self.stop_divider_hover(),
+            DropZone::Breadcrumbs => self.leave_crumbs_during_drag(),
             DropZone::CrumbMenu => self.close_drag_crumb_menu(),
             DropZone::Sidebar | DropZone::Tabs => {}
         }
@@ -178,6 +181,7 @@ impl BrowserWindow {
         };
         let spot = self.drop_spot(zone, &widget, x, y);
         self.leave_drop_zone(zone);
+        self.close_drag_crumb_menu();
         let (Some(spot), Some(action)) = (spot, self.drop_action(drop)) else {
             return false;
         };

@@ -158,7 +158,9 @@ pub(crate) struct BrowserWindow {
     /// opens its subfolder menu (NAV-021).
     pub(super) divider_hover: RefCell<Option<(String, glib::SourceId)>>,
     /// The subfolder menu a file drag opened, which takes the drop.
-    pub(super) drag_crumb_menu: RefCell<Option<MenuPopover>>,
+    pub(super) drag_crumb_menu: super::crumb_drop::DragCrumbMenu,
+    /// The folder listed to complete the typed address (NAV-030).
+    pub(super) completion_listing: super::address_completion::CompletionListing,
     /// The tab drag this window started, while it lasts.
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
     /// The in-window dialogs, Properties by tab, and the tabs that

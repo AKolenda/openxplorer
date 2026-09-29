@@ -93,6 +93,24 @@ pub(super) async fn query_entry(uri: &str) -> Result<Entry, EntryError> {
     Ok(entry::entry_from_info(&file, &info))
 }
 
+/// Where an address given to the address bar came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AddressSource {
+    /// Typed and applied with Enter, or chosen from the list below.
+    Typed,
+    /// Pasted: Paste and go, or the primary selection.
+    Pasted,
+}
+
+/// An address being opened: where it resolved to, as given, the place
+/// of that name if any, and where it came from.
+struct AddressRequest<'a> {
+    uri: &'a str,
+    typed: &'a str,
+    place: Option<&'a str>,
+    source: AddressSource,
+}
+
 impl BrowserWindow {
     /// Opens the item at a display position (Enter, double-click, Open).
     pub(super) fn activate_item(&self, position: u32) {
@@ -140,9 +158,22 @@ impl BrowserWindow {
 
     /// Opens what was typed into the address bar and pressed Enter on.
     pub(super) fn submit_address(&self, text: &str) {
+        self.open_address(text, AddressSource::Typed);
+    }
+
+    /// Goes to a pasted address: Paste and go, or the text selected
+    /// elsewhere and middle-clicked onto the crumbs (NAV-032). A file
+    /// named there is shown in its folder rather than launched, and the
+    /// address is not added to the typed history.
+    pub(super) fn go_to_pasted_address(&self, text: &str) {
+        self.open_address(text, AddressSource::Pasted);
+    }
+
+    /// Opens the address `text`, given as `source` says.
+    fn open_address(&self, text: &str, source: AddressSource) {
         let typed = text.trim();
         if is_web_address(typed) {
-            self.finish_address();
+            self.accept_address(typed, source);
             self.open_web_address(typed);
             return;
         }
@@ -151,7 +182,7 @@ impl BrowserWindow {
         let unchanged_page = place.is_some() && place == current;
         let is_page_uri = locations::is_home_alias(typed) || Page::from_uri(typed).is_some();
         if unchanged_page || is_page_uri {
-            self.finish_address();
+            self.accept_address(typed, source);
             self.navigate_or_report(typed);
             return;
         }
@@ -159,20 +190,39 @@ impl BrowserWindow {
             Ok(folder) => folder,
             Err(error) => {
                 match place {
-                    Some(place) => self.navigate_or_report(&place),
+                    Some(place) => {
+                        self.accept_address(typed, source);
+                        self.navigate_or_report(&place);
+                    }
                     None => self.show_message(&error.to_string()),
                 }
                 return;
             }
         };
+        let typed = typed.to_owned();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
                 let result = query_entry(&folder).await;
-                window.open_typed_location(&folder, place.as_deref(), result);
+                let request = AddressRequest {
+                    uri: &folder,
+                    typed: &typed,
+                    place: place.as_deref(),
+                    source,
+                };
+                window.open_typed_location(&request, result);
             }
         ));
+    }
+
+    /// The address `typed` is going to be opened: the crumbs show again,
+    /// and a typed one goes to the top of the typed history (NAV-043).
+    fn accept_address(&self, typed: &str, source: AddressSource) {
+        self.finish_address();
+        if source == AddressSource::Typed {
+            self.address_bar().remember_typed(typed);
+        }
     }
 
     /// Hands a typed web address to the web browser and says so, as
@@ -187,19 +237,21 @@ impl BrowserWindow {
         self.show_message(&format!("Opening {address} in your web browser."));
     }
 
-    fn open_typed_location(&self, uri: &str, place: Option<&str>, result: Result<Entry, EntryError>) {
-        let entry = match (result, place) {
+    /// Opens the location an address resolved to, whose metadata query
+    /// gave `result`.
+    fn open_typed_location(&self, request: &AddressRequest<'_>, result: Result<Entry, EntryError>) {
+        let entry = match (result, request.place) {
             (Ok(entry), _) => entry,
             (Err(EntryError::NotFound(_)), Some(place)) => {
-                self.finish_address();
+                self.accept_address(request.typed, request.source);
                 self.navigate_or_report(place);
                 return;
             }
             // An unmounted share opens in the tab, which says why it is
             // unavailable and offers Try again.
             (Err(EntryError::NotMounted(_)), _) => {
-                self.finish_address();
-                self.navigate_or_report(uri);
+                self.accept_address(request.typed, request.source);
+                self.navigate_or_report(request.uri);
                 return;
             }
             (Err(error), _) => {
@@ -207,10 +259,17 @@ impl BrowserWindow {
                 return;
             }
         };
-        if !matches!(activation_for(&entry), Activation::Refused(_)) {
-            self.finish_address();
+        match activation_for(&entry) {
+            Activation::Refused(message) => self.show_message(message),
+            Activation::File if request.source == AddressSource::Pasted => {
+                self.accept_address(request.typed, request.source);
+                self.show_in_its_folder(&entry.uri);
+            }
+            _ => {
+                self.accept_address(request.typed, request.source);
+                self.activate_entry(&entry);
+            }
         }
-        self.activate_entry(&entry);
     }
 
     /// Opens command-line or desktop locations, as `openIncoming`: the

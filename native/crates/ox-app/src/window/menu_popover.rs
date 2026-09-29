@@ -231,24 +231,13 @@ impl MenuPopover {
     pub(super) fn item_at(&self, y: f64) -> Option<MenuItem> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let row = self.list().row_at_y(y as i32)?;
-        let index = usize::try_from(row.index()).ok()?;
-        let entries = self.imp().entries.borrow();
-        let mut items = entries.iter().filter_map(|entry| match entry {
-            MenuEntry::Item(item) => Some(item),
-            MenuEntry::Divider => None,
-        });
-        items.nth(index).cloned()
+        self.item(row.index())
     }
 
     /// Marks the row of the item whose target is `target` with
     /// `css_class`, and no other row.
     pub(super) fn mark_row(&self, target: Option<&glib::Variant>, css_class: &str) {
-        let entries = self.imp().entries.borrow();
-        let items = entries.iter().filter_map(|entry| match entry {
-            MenuEntry::Item(item) => Some(item),
-            MenuEntry::Divider => None,
-        });
-        for (index, item) in items.enumerate() {
+        for (index, item) in self.items().into_iter().enumerate() {
             let Some(row) = i32::try_from(index)
                 .ok()
                 .and_then(|index| self.list().row_at_index(index))
@@ -261,6 +250,22 @@ impl MenuPopover {
                 row.remove_css_class(css_class);
             }
         }
+    }
+
+    /// The items, one per row, without the dividers.
+    fn items(&self) -> Vec<MenuItem> {
+        let entries = self.imp().entries.borrow();
+        let items = entries.iter().filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some(item.clone()),
+            MenuEntry::Divider => None,
+        });
+        items.collect()
+    }
+
+    /// The item of the row at `index`.
+    fn item(&self, index: i32) -> Option<MenuItem> {
+        let index = usize::try_from(index).ok()?;
+        self.items().into_iter().nth(index)
     }
 
     fn list(&self) -> &gtk::ListBox {
@@ -336,18 +341,7 @@ impl MenuPopover {
 
     /// Runs the item of the row at `index`.
     fn choose_row(&self, index: i32) {
-        let item = {
-            let entries = self.imp().entries.borrow();
-            let items = entries.iter().filter_map(|entry| match entry {
-                MenuEntry::Item(item) => Some(item),
-                MenuEntry::Divider => None,
-            });
-            let mut items = items;
-            usize::try_from(index)
-                .ok()
-                .and_then(|index| items.nth(index).cloned())
-        };
-        if let Some(item) = item {
+        if let Some(item) = self.item(index) {
             self.choose(&item);
         }
     }

@@ -4,7 +4,7 @@
 //! (NAV-030), as Explorer's address bar and Dolphin's location combo box
 //! offer them.
 //!
-//! Every address applied with Enter goes to the top of a most-recent-first
+//! Every typed address applied with Enter goes to the top of a most-recent-first
 //! history of the window, moving up if it was there, and the oldest drop
 //! off past [`HISTORY_LENGTH`]. F4 or the chevron edits the address with
 //! the history listed below; Alt+Down lists it while editing. The window
@@ -86,10 +86,7 @@ impl AddressBar {
         imp.entry.connect_activate(glib::clone!(
             #[weak(rename_to = bar)]
             self,
-            move |entry| {
-                remember(&mut bar.imp().typed_history.borrow_mut(), &entry.text());
-                bar.hide_suggestions();
-            }
+            move |_| bar.hide_suggestions()
         ));
         let focus = gtk::EventControllerFocus::new();
         focus.connect_leave(glib::clone!(
@@ -162,6 +159,16 @@ impl AddressBar {
         ));
     }
 
+    /// Adds `address`, just applied, to the typed history.
+    pub(in crate::window) fn remember_typed(&self, address: &str) {
+        remember(&mut self.imp().typed_history.borrow_mut(), address);
+    }
+
+    /// The entry's text.
+    pub(in crate::window) fn typed_text(&self) -> String {
+        self.imp().entry.text().into()
+    }
+
     /// Whether the entry shows and has keyboard focus.
     pub(in crate::window) fn is_typing(&self) -> bool {
         self.mode() == AddressMode::Entry && self.imp().entry.focus_child().is_some()
@@ -228,6 +235,15 @@ impl AddressBar {
         };
         let rows = (0..).map_while(|index| list.row_at_index(index));
         rows.filter_map(|row| row_text(&row)).collect()
+    }
+}
+
+#[cfg(test)]
+impl AddressBar {
+    /// The row at `index` of the list, for tests.
+    pub(in crate::window) fn suggestion_row(&self, index: i32) -> gtk::ListBoxRow {
+        let list = self.imp().suggestion_list.get().expect("the list is built");
+        list.row_at_index(index).expect("a row there")
     }
 }
 

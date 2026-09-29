@@ -110,16 +110,20 @@ impl AddressBar {
         popover
     }
 
-    /// Opens the primary selection's text as a typed address, as though it
-    /// was typed and Enter pressed.
+    /// Goes to the primary selection's text as a pasted address (NAV-032).
     fn open_primary_selection(&self) {
         let primary = WidgetExt::display(self).primary_clipboard();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = bar)]
             self,
             async move {
-                if let Ok(Some(text)) = primary.read_text_future().await {
-                    bar.submit_text(&text);
+                let Ok(Some(text)) = primary.read_text_future().await else {
+                    return;
+                };
+                if let Some(window) = bar.root().and_downcast::<BrowserWindow>() {
+                    if !text.trim().is_empty() {
+                        window.go_to_pasted_address(&text);
+                    }
                 }
             }
         ));
@@ -143,7 +147,7 @@ impl BrowserWindow {
             self,
             async move {
                 match clipboard.read_text_future().await {
-                    Ok(Some(text)) if !text.trim().is_empty() => window.submit_address(&text),
+                    Ok(Some(text)) if !text.trim().is_empty() => window.go_to_pasted_address(&text),
                     _ => window.show_message("The clipboard holds no address."),
                 }
             }

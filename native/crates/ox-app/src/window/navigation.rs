@@ -135,6 +135,19 @@ impl BrowserWindow {
         Ok(())
     }
 
+    /// Goes to the folder holding `item` and selects it there once
+    /// listed, as a pasted file's address does rather than launch it.
+    pub(super) fn show_in_its_folder(&self, item: &str) {
+        let Some(folder) = parent_location(item) else {
+            return;
+        };
+        self.navigate_or_report(&folder);
+        let active = self.imp().session.borrow().active_id();
+        if let Some(id) = active.filter(|_| self.current_uri().as_deref() == Some(folder.as_str())) {
+            self.reveal_when_listed(id, item.to_owned());
+        }
+    }
+
     /// Navigates, showing a refused address in the message line.
     pub(super) fn navigate_or_report(&self, address: &str) {
         if let Err(error) = self.navigate(address) {

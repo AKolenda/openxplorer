@@ -71,11 +71,17 @@ fn history_steps(history: &History, direction: Direction) -> Vec<(i32, String)> 
 impl BrowserWindow {
     /// The Back or Forward menu of the active tab: one item per location,
     /// with the icon the address bar would show there.
+    #[cfg(test)]
     pub(super) fn history_menu_entries(&self, direction: Direction) -> Vec<MenuEntry> {
+        self.history_menu(direction).0
+    }
+
+    /// The Back or Forward menu's entries, and the location of each.
+    fn history_menu(&self, direction: Direction) -> (Vec<MenuEntry>, Vec<String>) {
         let steps = {
             let session = self.imp().session.borrow();
             let Some(tab) = session.active() else {
-                return Vec::new();
+                return (Vec::new(), Vec::new());
             };
             history_steps(&tab.history, direction)
         };
@@ -86,9 +92,10 @@ impl BrowserWindow {
             .map(|(steps, uri)| {
                 let label = history_label(&locations, &uri);
                 let glyph = address_icon(&uri, &home);
-                MenuItem::with_target(&label, glyph, WindowAction::GoHistory, steps.to_variant()).into()
+                let item = MenuItem::with_target(&label, glyph, WindowAction::GoHistory, steps.to_variant());
+                (item.into(), uri)
             })
-            .collect()
+            .unzip()
     }
 
     /// Where Back, Forward or Up leads from the active tab, for a
@@ -158,15 +165,10 @@ impl BrowserWindow {
         button: &gtk::Widget,
         direction: Direction,
     ) -> Option<MenuPopover> {
-        let entries = self.history_menu_entries(direction);
+        let (entries, targets) = self.history_menu(direction);
         if entries.is_empty() {
             return None;
         }
-        let targets: Vec<String> = {
-            let session = self.imp().session.borrow();
-            let steps = session.active().map(|tab| history_steps(&tab.history, direction));
-            steps.into_iter().flatten().map(|(_, uri)| uri).collect()
-        };
         let popover = MenuPopover::new(entries);
         popover.connect_row_middle_click(glib::clone!(
             #[weak(rename_to = window)]

@@ -26,7 +26,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::folder_view::sorting::SortOrder;
-use crate::history::History;
+use crate::history::{History, HistoryViews};
 use crate::icons::Icon;
 use crate::locations::Page;
 use crate::settings_page::SettingsView;
@@ -66,6 +66,9 @@ pub(super) enum TabMoveRefusal {
 pub(super) struct MovedTab {
     /// Where it has been and where it is.
     history: History,
+    /// The scroll position and current item of each place it left, which
+    /// Back and Forward restore (NAV-008).
+    left_views: HistoryViews,
     /// The selected items' URIs.
     selected: Vec<String>,
     /// The vertical scroll position.
@@ -156,6 +159,7 @@ impl BrowserWindow {
         let is_settings = Page::from_uri(tab.uri()) == Some(Page::Settings);
         Some(MovedTab {
             history: tab.history.clone(),
+            left_views: tab.left_views.clone(),
             selected: tab.selected.clone(),
             scroll: tab.scroll,
             view: self.folder_pane().view(),
@@ -185,6 +189,7 @@ impl BrowserWindow {
         let id = self.imp().session.borrow_mut().insert_moved(tab.history, before);
         if let Some(received) = self.imp().session.borrow_mut().tab_mut(id) {
             received.selected = tab.selected;
+            received.left_views = tab.left_views;
             received.scroll_after_listing = Some(tab.scroll);
         }
         self.context().remember_network(&uri);

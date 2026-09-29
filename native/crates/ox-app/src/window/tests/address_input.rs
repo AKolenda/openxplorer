@@ -16,6 +16,7 @@ use super::archives::{archive_browser, fixture_with_zip};
 use crate::locations::Page;
 use crate::test_support::harness::{application, descendants, wait_for, wait_until, Fixture, TestWindow};
 use crate::window::address_bar::AddressMode;
+use crate::window::menu_popover::MenuPopover;
 
 /// The controllers of type `T` that `widget` has.
 fn controllers<T: IsA<gtk::EventController> + IsA<glib::Object>>(widget: &impl IsA<gtk::Widget>) -> Vec<T> {
@@ -273,8 +274,33 @@ fn f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there() {
     assert!(address.suggestions_shown());
     let documents = fixture.path("Documents").display().to_string();
     let root = fixture.path("").display().to_string();
-    assert_eq!(address.suggestion_rows(), [root, documents]);
-    address.hide_suggestions();
+    assert_eq!(address.suggestion_rows(), [root.clone(), documents.clone()]);
+    let list_keys = controllers::<gtk::EventControllerKey>(&address.entry())
+        .into_iter()
+        .find(|keys| keys.propagation_phase() == gtk::PropagationPhase::Capture)
+        .expect("the list's keys");
+    for _ in 0..2 {
+        let no_keycode = 0_u32;
+        let down = gdk::Key::Down.into_glib();
+        list_keys.emit_by_name::<bool>("key-pressed", &[&down, &no_keycode, &gdk::ModifierType::empty()]);
+    }
+    assert_eq!(
+        address.entry().text(),
+        documents,
+        "Down puts the row into the address"
+    );
+    address.entry().emit_by_name::<()>("activate", &[]);
+    wait_until("the typed address", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents"))
+    });
+    test.wait_for_listing("Documents");
+
+    test.activate("address-history", None);
+    assert_eq!(address.suggestion_rows(), [documents, root]);
+    address.suggestion_row(1).activate();
+    wait_until("the chosen address", || {
+        test.window.current_uri() == Some(fixture.uri())
+    });
 }
 
 /// parity: NAV-030
@@ -297,6 +323,36 @@ fn typing_a_path_offers_the_matching_names() {
     address.hide_suggestions();
 }
 
+/// parity: NAV-020
+#[gtk::test]
+fn choosing_a_folder_from_a_crumb_menu_goes_there() {
+    let fixture = Fixture::standard();
+    for folder in ["Documents/Letters", "Documents/Bills"] {
+        std::fs::create_dir(fixture.path(folder)).expect("fixture subfolder");
+    }
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let address = test.window.address_bar();
+    let target = (fixture.uri_of("Documents"), "", 0_u32).to_variant();
+
+    WidgetExt::activate_action(&test.window, "win.crumb-subfolders", Some(&target)).expect("the action");
+
+    let menu = || {
+        descendants::<MenuPopover>(address)
+            .into_iter()
+            .find(WidgetExt::is_visible)
+    };
+    wait_until("the crumb menu", || menu().is_some());
+    let menu = menu().expect("the menu");
+    assert_eq!(menu.row_labels(), ["Bills", "Letters"]);
+    menu.row("Letters").activate();
+    wait_until("the chosen folder", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents/Letters"))
+    });
+    test.wait_for_listing("Letters");
+    wait_for(std::time::Duration::from_millis(100));
+    assert!(descendants::<MenuPopover>(address).is_empty(), "the menu is gone");
+}
+
 /// parity: NAV-022
 #[gtk::test]
 fn the_wheel_on_a_crumb_goes_to_the_next_folder_beside_it() {
@@ -304,25 +360,41 @@ fn the_wheel_on_a_crumb_goes_to_the_next_folder_beside_it() {
     for folder in ["Music", ".cache"] {
         std::fs::create_dir(fixture.path(folder)).expect("fixture subfolder");
     }
+    let deep = (1..=12).fold(String::from("Documents"), |path, level| {
+        format!("{path}/A rather long folder name at level {level}")
+    });
+    std::fs::create_dir_all(fixture.path(&deep)).expect("fixture subfolders");
     let test = TestWindow::open(&fixture.uri_of("Documents"));
-    let step = |step: i32| {
-        let target = (fixture.uri_of("Documents"), step).to_variant();
-        WidgetExt::activate_action(&test.window, "win.crumb-sibling", Some(&target)).expect("the action");
+    let address = test.window.address_bar();
+    let scroll_last_crumb = |dy: f64| {
+        let crumb = address.crumb_buttons().pop().expect("a crumb");
+        let wheel = controllers::<gtk::EventControllerScroll>(&crumb)
+            .pop()
+            .expect("the crumb's wheel");
+        wheel.emit_by_name::<bool>("scroll", &[&0.0_f64, &dy])
     };
 
-    step(1);
-
+    assert!(!scroll_last_crumb(0.1), "a fraction of a notch does nothing");
+    wait_for(std::time::Duration::from_millis(200));
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    assert!(scroll_last_crumb(1.0));
     wait_until("the next folder", || {
         test.window.current_uri() == Some(fixture.uri_of("Music"))
     });
     test.wait_for_listing("Music");
-    step(-1);
+    assert!(scroll_last_crumb(1.0));
     wait_for(std::time::Duration::from_millis(200));
     assert_eq!(
         test.window.current_uri(),
         Some(fixture.uri_of("Music")),
-        "hidden .cache is skipped and Documents is first"
+        "hidden .cache is skipped and Music is last"
     );
+
+    test.window
+        .navigate(&fixture.uri_of(&deep))
+        .expect("valid folder");
+    wait_until("the crumbs to overflow", || address.crumbs_overflow());
+    assert!(!scroll_last_crumb(1.0), "overflowing crumbs scroll sideways");
 }
 
 /// parity: NAV-029
@@ -464,17 +536,32 @@ fn the_address_menu_copies_the_address_and_pastes_one_to_go_to() {
 #[gtk::test]
 fn a_middle_click_on_blank_address_space_opens_the_selected_text() {
     let fixture = Fixture::standard();
+    fixture.write("Documents/Letter.txt");
     let test = TestWindow::open(&fixture.uri());
     let address = test.window.address_bar();
     let primary = WidgetExt::display(address).primary_clipboard();
+    let middle = click_gesture(address, gdk::BUTTON_MIDDLE);
     primary.set_text("Documents");
 
-    let middle = click_gesture(address, gdk::BUTTON_MIDDLE);
     middle.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &1.0_f64]);
 
     wait_until("the selected folder", || {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))
     });
+    test.wait_for_listing("Documents");
+    test.window.navigate(&fixture.uri()).expect("valid folder");
+    test.wait_for_listing("the fixture");
+    primary.set_text(&fixture.path("Documents/Letter.txt").display().to_string());
+    middle.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &1.0_f64]);
+    wait_until("the file selected in its folder", || {
+        test.window.folder_pane().model().selected_uris() == [fixture.uri_of("Documents/Letter.txt")]
+    });
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    test.activate("address-history", None);
+    assert!(
+        address.suggestion_rows().is_empty(),
+        "pasted text is not typed history"
+    );
 }
 
 /// parity: NAV-033

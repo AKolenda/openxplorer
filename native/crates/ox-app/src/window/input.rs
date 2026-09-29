@@ -233,7 +233,7 @@ impl BrowserWindow {
             self.reset_typeahead();
             return glib::Propagation::Proceed;
         }
-        if let Some(handled) = self.prefix_editing_key(input, key) {
+        if let Some(handled) = self.prefix_editing_key(controller, input, key) {
             return handled;
         }
         // The input method composes text before it reaches type-to-select.
@@ -253,9 +253,15 @@ impl BrowserWindow {
     /// Escape, Backspace and Space, which act on a typed prefix first:
     /// Escape clears the prefix, and only without one the selection;
     /// Backspace erases a typed character, and only without a prefix goes
-    /// back, as in Dolphin and Explorer (NAV-004). `None` for every other
+    /// back, as in Dolphin and Explorer (NAV-004), once the input method
+    /// did not take it for text it is composing. `None` for every other
     /// key.
-    fn prefix_editing_key(&self, input: &gtk::IMMulticontext, key: gdk::Key) -> Option<glib::Propagation> {
+    fn prefix_editing_key(
+        &self,
+        controller: &gtk::EventControllerKey,
+        input: &gtk::IMMulticontext,
+        key: gdk::Key,
+    ) -> Option<glib::Propagation> {
         let now = monotonic_now();
         let prefix_active = self.imp().typeahead.borrow().is_active(now);
         match key {
@@ -265,7 +271,14 @@ impl BrowserWindow {
             }
             gdk::Key::Escape => self.folder_pane().model().select_none(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
-            gdk::Key::BackSpace => self.go_history(Direction::Backward),
+            gdk::Key::BackSpace => {
+                let composing = controller
+                    .current_event()
+                    .is_some_and(|event| input.filter_keypress(&event));
+                if !composing {
+                    self.go_history(Direction::Backward);
+                }
+            }
             // Space toggles the native selection unless a prefix is typed.
             gdk::Key::space if !prefix_active => return Some(glib::Propagation::Proceed),
             _ => return None,
