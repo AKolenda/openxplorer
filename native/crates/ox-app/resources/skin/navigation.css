@@ -53,7 +53,9 @@
   background-color: @ox_selected;
   border-color: @ox_accent;
 }
-.address .crumb-divider { color: @ox_text_tertiary; padding: 0 1px; }
+.address .crumb-divider { color: @ox_text_tertiary; padding: 0 1px; border-radius: 4px; }
+/* A divider opens the subfolder menu of the crumb before it (NAV-020). */
+.address .crumb-divider:hover { background-color: @ox_hover; }
 .address button.address-chevron { min-width: 22px; min-height: 24px; }
 .address entry {
   border: none;

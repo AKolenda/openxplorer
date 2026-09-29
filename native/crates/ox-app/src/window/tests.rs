@@ -8,6 +8,7 @@
 //! they never touch the user's desktop, files or settings.
 
 mod address_bar;
+mod address_input;
 mod archives;
 mod captures;
 mod chrome;
@@ -21,6 +22,7 @@ mod file_operations;
 mod file_ops_captures;
 mod file_ops_support;
 mod geometry;
+mod history;
 mod icons;
 mod input;
 mod item_dialogs;

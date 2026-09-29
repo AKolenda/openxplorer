@@ -44,6 +44,8 @@ pub(crate) enum DropZone {
     Breadcrumbs,
     /// The tabs.
     Tabs,
+    /// A crumb's subfolder menu a drag opened (NAV-021).
+    CrumbMenu,
 }
 
 /// Where a drop at one point of a zone goes, and what shows it.
@@ -136,6 +138,11 @@ impl BrowserWindow {
             .widget()
             .and_then(|widget| self.drop_spot(zone, &widget, x, y));
         self.show_drop_spot(zone, spot.as_ref());
+        match zone {
+            DropZone::Breadcrumbs => self.open_subfolders_after_hover(x, y),
+            DropZone::CrumbMenu => {}
+            DropZone::FolderView | DropZone::Sidebar | DropZone::Tabs => self.close_drag_crumb_menu(),
+        }
         let action = self.drop_action(drop);
         match (spot, action) {
             (Some(_), Some(action)) => action.as_drag_action(),
@@ -148,8 +155,11 @@ impl BrowserWindow {
     /// change before the next drag.
     fn leave_drop_zone(&self, zone: DropZone) {
         self.show_drop_spot(zone, None);
-        if zone == DropZone::FolderView {
-            self.forget_program_checks();
+        match zone {
+            DropZone::FolderView => self.forget_program_checks(),
+            DropZone::Breadcrumbs => self.stop_divider_hover(),
+            DropZone::CrumbMenu => self.close_drag_crumb_menu(),
+            DropZone::Sidebar | DropZone::Tabs => {}
         }
     }
 
@@ -215,6 +225,10 @@ impl BrowserWindow {
             DropZone::Sidebar => self.sidebar_spot(y),
             DropZone::Breadcrumbs => {
                 let folder = self.address_bar().crumb_location_at(x, y)?;
+                self.takes_drops(&folder).then_some(DropSpot::Crumb(folder))
+            }
+            DropZone::CrumbMenu => {
+                let folder = self.drag_crumb_menu_folder_at(y)?;
                 self.takes_drops(&folder).then_some(DropSpot::Crumb(folder))
             }
             DropZone::Tabs => {
@@ -316,6 +330,13 @@ impl BrowserWindow {
                     _ => None,
                 };
                 self.address_bar().highlight_crumb(crumb);
+            }
+            DropZone::CrumbMenu => {
+                let folder = match spot {
+                    Some(DropSpot::Crumb(folder)) => Some(folder.as_str()),
+                    _ => None,
+                };
+                self.highlight_drag_crumb_menu(folder);
             }
             DropZone::Tabs => {
                 let tab = match spot {

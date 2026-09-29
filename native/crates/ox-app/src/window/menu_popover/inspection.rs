@@ -2,6 +2,7 @@
 //! What the tests read of a [`MenuPopover`]: its rows, their labels and
 //! check marks, the compact style's strip and the style.
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
@@ -33,6 +34,22 @@ impl MenuPopover {
             .into_iter()
             .find(|row| row_label(row).as_deref() == Some(label))
             .unwrap_or_else(|| panic!("the menu has a {label} row"))
+    }
+
+    /// Middle-clicks the row labelled `label`, for tests.
+    pub(crate) fn middle_click_row(&self, label: &str) {
+        let row = self.row(label);
+        let list = self.list();
+        let point = row.compute_point(list, &gtk::graphene::Point::new(1.0, 1.0));
+        let y = point.map_or(0.0, |point| f64::from(point.y()));
+        let gesture = list
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+            .find(|gesture| gesture.button() == gtk::gdk::BUTTON_MIDDLE)
+            .expect("the menu listens to the middle button");
+        gesture.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &y]);
     }
 
     /// The labels of the rows showing a check mark, for tests.

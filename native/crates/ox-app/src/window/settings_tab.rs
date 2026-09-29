@@ -157,6 +157,7 @@ impl BrowserWindow {
         imp.surfaces.set_visible_child_name(surface.name());
         // Address editing is inert on the Settings tab (SET-001).
         self.set_action_enabled(WindowAction::Location, browsing);
+        self.set_action_enabled(WindowAction::AddressHistory, browsing);
         if leaves_settings {
             self.focus_file_list_when_listed();
         }

@@ -44,10 +44,32 @@ pub(crate) enum WindowAction {
     Forward,
     /// Opens the folder that contains the current one (Alt+Up).
     Up,
+    /// Opens the home folder in the active tab (Alt+Home).
+    Home,
+    /// Moves the active tab's history by the `i32` target, skipping the
+    /// steps between (the Back and Forward menus).
+    GoHistory,
     /// Lists the current folder again (F5, Ctrl+R).
     Refresh,
     /// Makes the address editable (Ctrl+L, Alt+D).
     Location,
+    /// Edits the address with the typed history listed (F4, the chevron;
+    /// NAV-043).
+    AddressHistory,
+    /// Copies the current location as the address bar shows it.
+    CopyAddress,
+    /// Opens the clipboard's text as a typed address.
+    PasteAddress,
+    /// Keeps the address editable text instead of crumbs (NAV-029).
+    EditableLocation,
+    /// Shows the full path in the crumbs (NAV-024).
+    ShowFullPath,
+    /// Opens the subfolder menu of a crumb; the target is the folder, the
+    /// subfolder shown in bold and the first one listed (NAV-020).
+    CrumbSubfolders,
+    /// Goes to the folder beside a crumb's; the target is the folder and
+    /// the step (NAV-022).
+    CrumbSibling,
     /// Moves keyboard focus to the search box (Ctrl+F).
     Search,
     /// Moves the active tab to the location in the string target.
@@ -250,6 +272,7 @@ impl WindowAction {
     ///
     /// This is the one table of every action's name, so it is longer than
     /// a function should be.
+    #[expect(clippy::too_many_lines, reason = "the one table of every action's name")]
     pub(crate) const fn name(self) -> &'static str {
         match self {
             WindowAction::NewTab => "new-tab",
@@ -264,8 +287,17 @@ impl WindowAction {
             WindowAction::Back => "back",
             WindowAction::Forward => "forward",
             WindowAction::Up => "up",
+            WindowAction::Home => "home",
+            WindowAction::GoHistory => "go-history",
             WindowAction::Refresh => "refresh",
             WindowAction::Location => "location",
+            WindowAction::AddressHistory => "address-history",
+            WindowAction::CopyAddress => "copy-address",
+            WindowAction::PasteAddress => "paste-address",
+            WindowAction::EditableLocation => "editable-location",
+            WindowAction::ShowFullPath => "show-full-path",
+            WindowAction::CrumbSubfolders => "crumb-subfolders",
+            WindowAction::CrumbSibling => "crumb-sibling",
             WindowAction::Search => "search",
             WindowAction::GoTo => "go-to",
             WindowAction::MountVolume => "mount-volume",

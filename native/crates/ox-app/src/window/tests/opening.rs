@@ -32,7 +32,7 @@ fn a_typed_file_path_opens_the_file_and_leaves_the_folder_and_history() {
     assert_eq!(test.window.load_error(), None);
 }
 
-/// parity: NAV-040
+/// parity: NAV-040, NAV-037
 #[gtk::test]
 fn a_tab_opened_on_a_file_shows_its_folder_and_opens_the_file() {
     let fixture = Fixture::standard();
@@ -80,6 +80,7 @@ fn a_typed_page_title_prefers_a_folder_of_that_name() {
     });
 }
 
+/// parity: NAV-041
 #[gtk::test]
 fn command_line_locations_open_in_the_current_tab_then_in_new_tabs() {
     let fixture = Fixture::standard();

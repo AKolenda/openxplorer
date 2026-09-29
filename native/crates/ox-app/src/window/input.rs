@@ -18,6 +18,7 @@ use super::activation::{activation_for, Activation};
 use super::file_drop::DropZone;
 use super::folder_pane::PanePage;
 use super::gestures;
+use super::session::Direction;
 use super::type_to_select::monotonic_now;
 use super::BrowserWindow;
 
@@ -102,6 +103,11 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             move |address| window.submit_address(address)
+        ));
+        self.address_bar().connect_typed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |typed| window.complete_address(typed)
         ));
     }
 
@@ -245,8 +251,10 @@ impl BrowserWindow {
     }
 
     /// Escape, Backspace and Space, which act on a typed prefix first:
-    /// Escape clears the prefix, and only without one the selection.
-    /// `None` for every other key.
+    /// Escape clears the prefix, and only without one the selection;
+    /// Backspace erases a typed character, and only without a prefix goes
+    /// back, as in Dolphin and Explorer (NAV-004). `None` for every other
+    /// key.
     fn prefix_editing_key(&self, input: &gtk::IMMulticontext, key: gdk::Key) -> Option<glib::Propagation> {
         let now = monotonic_now();
         let prefix_active = self.imp().typeahead.borrow().is_active(now);
@@ -257,6 +265,7 @@ impl BrowserWindow {
             }
             gdk::Key::Escape => self.folder_pane().model().select_none(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
+            gdk::Key::BackSpace => self.go_history(Direction::Backward),
             // Space toggles the native selection unless a prefix is typed.
             gdk::Key::space if !prefix_active => return Some(glib::Propagation::Proceed),
             _ => return None,

@@ -207,7 +207,7 @@ fn every_control_of_the_frame_runs_an_action_the_window_has() {
     let named = window_actions_named(&test);
     let from_templates = [
         "new-tab",
-        "location",
+        "address-history",
         "details-pane",
         "view",
         "check-updates",

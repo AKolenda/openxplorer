@@ -7,6 +7,7 @@
 //! An address or command-line argument is looked up first, so a file is
 //! opened without moving the tab or adding a history entry, and a typed
 //! page title ("Network") names a folder of that name when one exists.
+//! A typed `http:` or `https:` address opens in the web browser.
 //! Only an explicit request (Enter, double-click, Open, a typed address or
 //! a command-line argument) ever launches an application.
 
@@ -63,6 +64,20 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
         return Activation::Archive;
     }
     Activation::File
+}
+
+/// Whether `typed` is an `http:` or `https:` address with a host, which
+/// the address bar hands to the web browser.
+fn is_web_address(typed: &str) -> bool {
+    let Some((scheme, rest)) = typed.split_once("://") else {
+        return false;
+    };
+    let is_web = scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https");
+    let has_host = rest
+        .chars()
+        .next()
+        .is_some_and(|first| !matches!(first, '/' | '?' | '#'));
+    is_web && has_host && !typed.chars().any(char::is_control)
 }
 
 /// Queries `uri` without blocking the interface.
@@ -126,6 +141,11 @@ impl BrowserWindow {
     /// Opens what was typed into the address bar and pressed Enter on.
     pub(super) fn submit_address(&self, text: &str) {
         let typed = text.trim();
+        if is_web_address(typed) {
+            self.finish_address();
+            self.open_web_address(typed);
+            return;
+        }
         let current = self.current_uri();
         let place = self.place_titled(typed);
         let unchanged_page = place.is_some() && place == current;
@@ -153,6 +173,18 @@ impl BrowserWindow {
                 window.open_typed_location(&folder, place.as_deref(), result);
             }
         ));
+    }
+
+    /// Hands a typed web address to the web browser and says so, as
+    /// Explorer and Dolphin do, where app.js refused it (NAV-036).
+    fn open_web_address(&self, address: &str) {
+        let on_error = glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |error: glib::Error| window.show_message(&error.to_string())
+        );
+        self.context().open_uri(address, self.upcast_ref(), on_error);
+        self.show_message(&format!("Opening {address} in your web browser."));
     }
 
     fn open_typed_location(&self, uri: &str, place: Option<&str>, result: Result<Entry, EntryError>) {
@@ -247,6 +279,23 @@ mod tests {
             activation_for(&folder_entry("Archive.zip")),
             Activation::Folder(folder_entry("Archive.zip").uri)
         );
+    }
+
+    /// A folder's name never makes it a file, and a stale folder flag, such
+    /// as a search row's, never makes a file a folder (`activation_kind`).
+    ///
+    /// parity: NAV-040
+    #[test]
+    fn the_kind_decides_what_opens_not_the_name_or_a_stale_flag() {
+        let video_folder = folder_entry("clip.mp4");
+        let mut stale = file_entry("report.txt");
+        stale.is_dir = true;
+
+        assert_eq!(
+            activation_for(&video_folder),
+            Activation::Folder(video_folder.uri.clone())
+        );
+        assert_eq!(activation_for(&stale), Activation::File);
     }
 
     #[test]

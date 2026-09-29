@@ -154,6 +154,11 @@ pub(crate) struct BrowserWindow {
     pub(super) drop_menu: OnceCell<MenuPopover>,
     /// The tab a file drag hovers over, and the timer that shows it.
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
+    /// The crumb divider a file drag hovers over, and the timer that
+    /// opens its subfolder menu (NAV-021).
+    pub(super) divider_hover: RefCell<Option<(String, glib::SourceId)>>,
+    /// The subfolder menu a file drag opened, which takes the drop.
+    pub(super) drag_crumb_menu: RefCell<Option<MenuPopover>>,
     /// The tab drag this window started, while it lasts.
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
     /// The in-window dialogs, Properties by tab, and the tabs that

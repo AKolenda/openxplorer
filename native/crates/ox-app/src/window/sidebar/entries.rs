@@ -282,7 +282,7 @@ pub(in crate::window) fn section_edges(entries: &[SidebarEntry], index: usize) -
 mod tests {
     use std::path::PathBuf;
 
-    use ox_core::places::KnownFolder;
+    use ox_core::places::{KnownFolder, StableMount};
     use ox_core::settings::{Bookmark, SettingsData};
 
     use super::*;
@@ -525,5 +525,55 @@ mod tests {
         assert_eq!(section_edges(&entries, 1), starting, "Work starts Quick access");
         assert_eq!(section_edges(&entries, 2), ending, "Play ends Quick access");
         assert_eq!(section_edges(&entries, 3), starting, "This PC starts a group");
+    }
+
+    /// A standard folder moved onto a CIFS mount keeps its glyph on the
+    /// network pipe, and a standard folder the user hid has no row
+    /// (`folder_locations.py`, `hidden_quick`).
+    ///
+    /// parity: SIDE-006
+    #[test]
+    fn a_standard_folder_on_a_cifs_mount_shows_the_network_pipe_and_a_hidden_one_no_row() {
+        let known_folders = [
+            Place {
+                label: "Documents".into(),
+                uri: "file:///mnt/nas/Documents".into(),
+                known_folder: Some(KnownFolder::Documents),
+                is_shared: false,
+            },
+            Place {
+                label: "Music".into(),
+                uri: "file:///home/demo/Music".into(),
+                known_folder: Some(KnownFolder::Music),
+                is_shared: false,
+            },
+        ];
+        let settings = SettingsData {
+            hidden_quick: vec!["file:///home/demo/Music".into()],
+            ..SettingsData::default()
+        };
+        let cifs_mount = StableMount {
+            path: PathBuf::from("/mnt/nas"),
+            label: String::new(),
+            filesystem: "cifs".into(),
+        };
+        let places = compose(PlaceSources {
+            settings: &settings,
+            known_folders: &known_folders,
+            volumes: &[],
+            stable_mounts: &[cifs_mount],
+            visited_network: &[],
+        });
+
+        let entries = sidebar_entries(&places, &LocationContext::default());
+
+        let documents = entries.iter().find(|entry| entry.label == "Documents");
+        let documents = documents.expect("Documents is in Quick access");
+        let on_network = Art::for_quick_access(Some(KnownFolder::Documents), Storage::Network);
+        assert_eq!(documents.icon, on_network);
+        assert!(
+            !labels(&entries).contains(&"Music"),
+            "a hidden standard folder stays hidden"
+        );
     }
 }

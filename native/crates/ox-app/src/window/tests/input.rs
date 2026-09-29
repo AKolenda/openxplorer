@@ -106,6 +106,32 @@ fn escape_clears_the_typed_prefix_before_the_selection() {
     );
 }
 
+/// parity: NAV-004
+#[gtk::test]
+fn backspace_erases_a_typed_prefix_first_and_otherwise_goes_back() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("valid folder");
+    test.wait_for_listing("the subfolder");
+    test.window.navigate(&fixture.uri()).expect("valid folder");
+    test.wait_for_listing("the folder again");
+    test.window.type_text("no");
+
+    assert!(press(&test, gdk::Key::BackSpace));
+    assert_eq!(
+        hint(&test),
+        "Jump to: n — Notes 2.txt",
+        "the prefix loses a letter"
+    );
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    test.window.reset_typeahead();
+    press(&test, gdk::Key::BackSpace);
+    test.wait_for_listing("the folder before");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+}
+
 #[gtk::test]
 fn leaving_the_view_starts_a_new_prefix() {
     let fixture = Fixture::standard();

@@ -136,7 +136,7 @@ impl BrowserWindow {
     }
 
     /// True while a dialog of this window is open.
-    fn shows_dialog(&self) -> bool {
+    pub(super) fn shows_dialog(&self) -> bool {
         let this = self.upcast_ref::<gtk::Window>();
         let toplevels = gtk::Window::list_toplevels();
         toplevels
@@ -433,7 +433,7 @@ mod tests {
         test
     }
 
-    /// parity: TAB-029, TAB-038, TAB-039
+    /// parity: TAB-029, TAB-038, TAB-039, NAV-005
     #[gtk::test]
     fn a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll() {
         let first = Fixture::standard();

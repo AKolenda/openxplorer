@@ -4,7 +4,9 @@
 //! Ports `addTab`, `closeTab`, `switchTab`, `navigate` and `goHistory` in
 //! `desktop/ui/app.js`. Each tab keeps its own history, selection and
 //! scroll position; moving to another location forgets the selection and
-//! the scroll position, and showing another tab puts its own back.
+//! the scroll position, and showing another tab puts its own back. As in
+//! Dolphin, Back and Forward return to where the view was, and going up
+//! selects the folder just left.
 //! [`super::location_view`] draws the result into the frame.
 
 use gtk::prelude::*;
@@ -12,6 +14,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::{self, normalise_navigation, parent_location, LocationError, VirtualPlace};
 
+use crate::history::LeftView;
 use crate::locations::{self, Page};
 
 use super::loading::LoadMode;
@@ -119,11 +122,15 @@ impl BrowserWindow {
     /// folder stays.
     pub(super) fn navigate(&self, address: &str) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
+        let left = self.current_uri();
         let Some(id) = self.push_location(&uri) else {
             return self.add_tab(&uri);
         };
         self.leave_location();
         self.render_navigation();
+        if let Some(child) = left.as_deref().and_then(|left| child_toward(&uri, left)) {
+            self.reveal_when_listed(id, child);
+        }
         self.load_tab(id, LoadMode::Navigate);
         Ok(())
     }
@@ -135,14 +142,46 @@ impl BrowserWindow {
         }
     }
 
-    /// Adds `uri` to the active tab's history; the tab, or `None` before
-    /// the window has one.
+    /// Adds `uri` to the active tab's history, remembering where the view
+    /// was in the location it leaves; the tab, or `None` before the window
+    /// has one.
     fn push_location(&self, uri: &str) -> Option<TabId> {
+        let view = self.left_view();
         let mut session = self.imp().session.borrow_mut();
         let tab = session.active_mut()?;
-        tab.history.push(uri);
+        let left = tab.history.position();
+        if tab.history.push(uri) {
+            tab.left_views.forget_from(left + 1);
+            if let Some(view) = view {
+                tab.left_views.remember(left, view);
+            }
+        }
         tab.forget_location_state();
         Some(tab.id)
+    }
+
+    /// Where the view is in the active tab's folder: what Back or Forward
+    /// returns to; `None` on a landing page, which does not scroll.
+    fn left_view(&self) -> Option<LeftView> {
+        let uri = self.current_uri()?;
+        if Page::from_uri(&uri).is_some() {
+            return None;
+        }
+        let pane = self.folder_pane();
+        Some(LeftView {
+            scroll: pane.scroll_position(),
+            current: pane.model().selected_uris().into_iter().next(),
+        })
+    }
+
+    /// Makes tab `id` select `item`, give it keyboard focus and scroll it
+    /// into view once its folder is listed: the folder just left, when
+    /// going up (NAV-011), as Explorer and Dolphin do.
+    fn reveal_when_listed(&self, id: TabId, item: String) {
+        if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+            tab.selected = vec![item.clone()];
+            tab.revealed_item = Some(item);
+        }
     }
 
     /// Clears what belonged to the folder the active tab leaves: the
@@ -266,7 +305,20 @@ impl BrowserWindow {
     /// Moves one step through the active tab's history; at either end of
     /// it nothing happens.
     pub(super) fn go_history(&self, direction: Direction) {
-        let Some(id) = self.step_history(direction) else {
+        self.go_history_steps(direction.offset());
+    }
+
+    /// Jumps `steps` entries through the active tab's history, back for a
+    /// negative number, as an entry of the Back or Forward menu does; out
+    /// of range, nothing happens.
+    pub(super) fn go_history_by(&self, steps: i32) {
+        if let Ok(steps) = isize::try_from(steps) {
+            self.go_history_steps(steps);
+        }
+    }
+
+    fn go_history_steps(&self, steps: isize) {
+        let Some(id) = self.step_history(steps) else {
             return;
         };
         self.leave_location();
@@ -274,13 +326,33 @@ impl BrowserWindow {
         self.load_tab(id, LoadMode::Navigate);
     }
 
-    /// Moves the active tab's history one step in `direction`; the tab, or
-    /// `None` when there is no step to take.
-    fn step_history(&self, direction: Direction) -> Option<TabId> {
+    /// The mouse's Back or Forward side button: one step through the
+    /// history, unless a dialog is open (`winspace.py` ignores the buttons
+    /// while a dialog or sign-in prompt is shown).
+    pub(super) fn go_history_from_mouse(&self, direction: Direction) {
+        if self.takes_navigation_input() {
+            self.go_history(direction);
+        }
+    }
+
+    /// Moves the active tab's history `steps` entries; the tab, or `None`
+    /// when there is no such entry. Where the view was in the location it
+    /// returns to comes back once that is listed (NAV-008): the current
+    /// item selected and focused, and the scroll position.
+    fn step_history(&self, steps: isize) -> Option<TabId> {
+        let view = self.left_view();
         let mut session = self.imp().session.borrow_mut();
         let tab = session.active_mut()?;
-        tab.history.go(direction.offset())?;
+        let left = tab.history.position();
+        tab.history.go(steps)?;
+        if let Some(view) = view {
+            tab.left_views.remember(left, view);
+        }
         tab.forget_location_state();
+        if let Some(returned) = tab.left_views.take(tab.history.position()) {
+            tab.selected = returned.current.into_iter().collect();
+            tab.scroll_after_listing = Some(returned.scroll);
+        }
         Some(tab.id)
     }
 
@@ -290,6 +362,26 @@ impl BrowserWindow {
         if let Some(parent) = parent {
             self.navigate_or_report(&parent);
         }
+    }
+
+    /// Opens the home folder in the active tab (Alt+Home), as the sidebar's
+    /// Home does.
+    pub(super) fn go_home(&self) {
+        let home = self.imp().locations.borrow().home_uri();
+        self.navigate_or_report(&home);
+    }
+}
+
+/// The child of `ancestor` on the way down to `descendant`, as Up and the
+/// crumbs leave it; `None` when `ancestor` is not above `descendant`.
+fn child_toward(ancestor: &str, descendant: &str) -> Option<String> {
+    let mut child = descendant.to_owned();
+    loop {
+        let parent = parent_location(&child).filter(|parent| *parent != child)?;
+        if location::same_location(&parent, ancestor) {
+            return Some(child);
+        }
+        child = parent;
     }
 }
 
