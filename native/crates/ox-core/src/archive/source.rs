@@ -9,13 +9,13 @@
 use std::fs::OpenOptions;
 use std::io::{Read, Seek};
 
-use gio::prelude::*;
 use rustix::fs::OFlags;
 
 use super::gio_reader::GioArchiveReader;
 use super::zip::ZipArchive;
 use super::ArchiveError;
 use crate::location::normalise;
+use crate::network::local_path;
 use crate::private_storage::KernelOpenFlags;
 use crate::transfer::Cancellation;
 
@@ -52,24 +52,21 @@ where
     }
 }
 
-/// ARC-007: opens archives through GIO. A file with a local path,
-/// including the `GVfs` FUSE path of a mounted share, is read directly;
-/// anything else (an SMB share or a phone without a FUSE path) is read in
-/// place through a seekable GIO stream, never copied first.
-///
-/// `local_path` in `desktop/native_opening.py` also read an `smb://`
-/// archive through a kernel CIFS mount of the same share. Here such an
-/// archive is read through `GVfs`, which may have to mount the share
-/// first; the CIFS shortcut returns when the mount-table reader of the
-/// search service is part of `ox-core`.
+/// ARC-007: opens archives through GIO. A file with a local path is read
+/// directly, and so is an `smb://` archive inside a kernel CIFS mount or
+/// the `GVfs` FUSE export of its share ([`local_path`], as
+/// `archive_stream` in `desktop/native_opening.py`); anything else (a share
+/// or a phone without a local path) is read in place through a seekable
+/// GIO stream, never copied first.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GioArchiveOpener;
 
 impl ArchiveOpener for GioArchiveOpener {
     fn open(&self, uri: &str, cancel: &Cancellation) -> Result<Box<dyn ArchiveStream>, ArchiveError> {
         cancel.check()?;
-        let file = gio::File::for_uri(&normalise(uri)?);
-        let Some(path) = file.path() else {
+        let uri = normalise(uri)?;
+        let Some(path) = local_path(&uri) else {
+            let file = gio::File::for_uri(&uri);
             return Ok(Box::new(GioArchiveReader::open(&file, cancel)?));
         };
         // `O_NONBLOCK`: a FIFO named like an archive fails to read instead

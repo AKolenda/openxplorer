@@ -93,6 +93,25 @@ fn opening_a_zip_browses_it_and_opens_a_member_as_a_private_copy() {
     assert!(!fixture.path("readme.txt").exists(), "browsing extracts nothing");
 }
 
+/// A ZIP the browser refuses (corrupt, too large a directory, too many
+/// members) says why in the browser's status line.
+///
+/// parity: ARC-005
+#[gtk::test]
+fn a_corrupt_zip_says_why_it_cannot_be_browsed() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Broken.zip"), b"not a zip").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Broken.zip");
+
+    test.activate("open", None);
+
+    let browser = archive_browser(&test);
+    wait_until("the refusal", || !browser.status_text().is_empty());
+    assert_eq!(browser.status_text(), "File is not a zip file");
+    assert!(browser.row_names().is_empty());
+}
+
 /// parity: ARC-009, ARC-011, ARC-012
 #[gtk::test]
 fn extract_all_unpacks_into_a_new_folder_and_shows_it() {

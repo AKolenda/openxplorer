@@ -12102,8 +12102,8 @@ python_tests = [
   "desktop/tests/test_v05.py::OpeningTests::test_zip_by_extension",
 ]
 bridge = ["activateItem"]
-native = "partial"
-native_note = "native/crates/ox-app/src/icons/art.rs (zip_detection_matches_app_js, every_kind_renders_through_the_svg_loader)."
+native = "done"
+native_note = "native/crates/ox-app/src/icons/file_type.rs (zip_is_detected_by_name_in_any_case_or_by_content_type); native/crates/ox-app/src/icons/art.rs (a_folder_named_zip_keeps_the_plain_folder); native/crates/ox-app/src/icons/composition.rs (a_zip_archive_is_the_folder_with_the_zip_badge_in_its_corner); native/crates/ox-app/src/icons/art_image.rs (showing_other_art_replaces_every_piece). Regular files named *.zip in any case or typed application/zip, x-zip or x-zip-compressed show the file folder with the Fluent folder-zip badge (Windows 11's compressed-folder look); a directory named *.zip keeps the plain folder; ZIP rows stay files."
 
 [[feature]]
 id = "ARC-002"
@@ -12210,8 +12210,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_rejects_ambiguous_and_control_names",
 ]
 bridge = ["archiveList"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_browse.rs (a_central_directory_over_32_mib_is_not_read, more_than_100000_members_are_left_to_an_archive_manager, a_file_that_is_not_a_zip_reports_a_bad_zip). The native UI does not show these errors yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/archive_browse.rs (a_central_directory_over_32_mib_is_not_read, more_than_100000_members_are_left_to_an_archive_manager, a_file_that_is_not_a_zip_reports_a_bad_zip); native/crates/ox-app/src/window/tests/archives.rs (a_corrupt_zip_says_why_it_cannot_be_browsed). A central directory over 32 MiB, more than 100,000 members and a corrupt file are refused with the Python messages, which the archive browser shows in its status line with no rows."
 
 [[feature]]
 id = "ARC-006"
@@ -12267,8 +12267,8 @@ python_tests = [
   "desktop/tests/test_rc2.py::ArchiveReaderTests::test_nonseekable_closes_stream",
 ]
 bridge = ["archiveList", "archiveOpenMember", "archiveInspect", "archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_gio.rs (short_gio_reads_are_completed_by_further_reads, one_read_asks_gio_for_at_most_64_kib, a_stream_that_cannot_seek_is_refused_and_closed, a_cancelled_reader_stops_reading, the_production_opener_reads_local_archives, a_fifo_named_like_an_archive_fails_instead_of_blocking). Deferred: local_path in desktop/native_opening.py also reads an smb:// archive through a kernel CIFS mount of the share; the native opener reads it through GVfs until the mount-table reader of the search service is in ox-core."
+native = "done"
+native_note = "native/crates/ox-core/src/archive/source.rs (GioArchiveOpener); native/crates/ox-core/tests/archive_gio.rs (the_production_opener_reads_local_archives, a_share_archive_with_a_local_path_is_read_from_it, short_gio_reads_are_completed_by_further_reads, one_read_asks_gio_for_at_most_64_kib, a_stream_that_cannot_seek_is_refused_and_closed, a_cancelled_reader_stops_reading, a_fifo_named_like_an_archive_fails_instead_of_blocking). A ZIP with a local path, including an smb:// archive inside a kernel CIFS mount or the GVfs FUSE export of its share (network::local_path, as desktop/native_opening.py), is read directly; otherwise a seekable GIO stream is read in 64 KiB blocks, completing short reads and checking cancellation, and a stream that cannot seek is refused with the Python message."
 
 [[feature]]
 id = "ARC-008"
