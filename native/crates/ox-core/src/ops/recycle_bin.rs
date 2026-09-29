@@ -191,7 +191,7 @@ fn restore_items_blocking(uris: &[String], context: &OperationContext) -> Transf
 /// under the same name would then never be listed, although it is in the
 /// Trash. A failed listing only leaves this work to the next one; it runs
 /// even after a cancellation, because the removals already happened.
-fn forget_removed_items() {
+pub(super) fn forget_removed_items() {
     let _ = list_recycle_bin_blocking(&Cancellation::new());
 }
 
@@ -219,25 +219,36 @@ fn restore_item(uri: &str, context: &OperationContext) -> Result<String, OpsErro
 /// overwriting, and returns the restored item's URI.
 fn put_back(item: &gio::File, original_path: &Path, context: &OperationContext) -> Result<String, OpsError> {
     let target = gio::File::for_path(original_path);
-    let target_uri = target.uri().to_string();
+    let taken = || name_taken_in_original_folder(original_path);
+    move_out(item, &target, context, taken, |target| recreate_original_folder(target, context))
+}
+
+/// Moves the Recycle Bin item `item` to `target`, never overwriting, and
+/// returns `target`'s URI. `taken` is the error when `target` exists;
+/// `prepare` runs once the checks passed, before the move.
+pub(super) fn move_out(
+    item: &gio::File,
+    target: &gio::File,
+    context: &OperationContext,
+    taken: impl Fn() -> OpsError,
+    prepare: impl FnOnce(&gio::File) -> Result<(), OpsError>,
+) -> Result<String, OpsError> {
     let destination = GioNode::from_file(target.clone());
-    // XFER-020: the original location and every location the item's tree
-    // recreates below it. The Recycle Bin itself is no protected location.
+    // XFER-020: the target and every location the item's tree creates
+    // below it. The Recycle Bin itself is no protected location.
     let source = GioNode::from_file(item.clone());
     let protection = &context.protection;
     protection.check_tree(&source, &destination, &context.cancel, SourceChange::Kept)?;
     if unless_cancelled(&context.cancel, || destination.exists(Some(&context.cancel)))? {
-        return Err(name_taken_in_original_folder(original_path));
+        return Err(taken());
     }
-    recreate_original_folder(&target, context)?;
+    prepare(target)?;
     // Never overwriting (no OVERWRITE flag) and never degrading to a copy
     // that could leave a partial item behind (XFER-011).
     let flags = gio::FileCopyFlags::NOFOLLOW_SYMLINKS | gio::FileCopyFlags::NO_FALLBACK_FOR_MOVE;
-    match item.move_(&target, flags, Some(context.cancellable()), None) {
-        Ok(()) => Ok(target_uri),
-        Err(error) if error.matches(gio::IOErrorEnum::Exists) => {
-            Err(name_taken_in_original_folder(original_path))
-        }
+    match item.move_(target, flags, Some(context.cancellable()), None) {
+        Ok(()) => Ok(target.uri().to_string()),
+        Err(error) if error.matches(gio::IOErrorEnum::Exists) => Err(taken()),
         Err(error) => Err(error.into()),
     }
 }
@@ -291,7 +302,7 @@ fn delete_item(uri: &str, cancel: &Cancellation) -> Result<(), OpsError> {
 }
 
 /// The Recycle Bin item `uri`, when it is directly in the Recycle Bin.
-fn top_level_item(uri: &str) -> Result<gio::File, OpsError> {
+pub(super) fn top_level_item(uri: &str) -> Result<gio::File, OpsError> {
     let item = gio::File::for_uri(uri);
     let bin = gio::File::for_uri(TRASH_URI);
     let is_top_level = item.parent().is_some_and(|parent| parent.equal(&bin));

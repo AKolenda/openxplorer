@@ -10,8 +10,8 @@
 //! with the transfer panel and Cancel, and deleting asks first.
 
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, permanent_delete_confirmation, restore_from_recycle_bin,
-    summarize, summarize_restore, DeleteConfirmation,
+    delete_from_recycle_bin, empty_recycle_bin, move_out_of_recycle_bin, permanent_delete_confirmation,
+    restore_from_recycle_bin, summarize, summarize_restore, DeleteConfirmation,
 };
 use ox_core::transfer::TransferMode;
 
@@ -47,6 +47,22 @@ impl BrowserWindow {
             return;
         };
         let outcome = restore_from_recycle_bin(&uris, &context).await;
+        self.end_operation();
+        let finished = outcome.map(|outcome| FinishedOperation {
+            summary: summarize_restore(&outcome.result),
+            undo: outcome.undo,
+            created: outcome.created,
+        });
+        self.conclude_operation(finished).await;
+    }
+
+    /// Recycle Bin items dropped into `folder`: moved there under their
+    /// original names, never overwriting (OPS-046).
+    pub(crate) async fn move_out_of_recycle_bin(&self, uris: Vec<String>, folder: String) {
+        let Some(context) = self.begin_operation(RESTORING) else {
+            return;
+        };
+        let outcome = move_out_of_recycle_bin(&uris, &folder, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {
             summary: summarize_restore(&outcome.result),

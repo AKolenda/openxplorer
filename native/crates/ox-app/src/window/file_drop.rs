@@ -9,7 +9,8 @@
 //! take drops ([`targets`]). Where the items go is a [`DropDestination`]:
 //! a folder, Quick access, a program or launcher ([`program`],
 //! [`launcher`]), or the Recycle Bin, which moves them to the Trash as
-//! Delete does (OPS-045). What happens to them in a folder is a [`DropAction`]
+//! Delete does (OPS-045). Items dragged out of the Recycle Bin into a
+//! folder are always moved there (OPS-046). What happens to them in a folder is a [`DropAction`]
 //! ([`action`]): copy, move, link, or the drop menu that asks.
 //!
 //! Safety rules:
@@ -35,7 +36,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::location::{parent_location, require_item_uri, same_location, LocationError, TRASH_URI};
-use ox_core::ops::LinkRequest;
+use ox_core::ops::{is_recycle_bin_item, LinkRequest};
 use ox_core::transfer::TransferMode;
 
 use super::file_drag::DraggedItems;
@@ -121,6 +122,12 @@ pub(crate) enum DropRefusal {
     /// The items could not be read in time, or at all.
     #[error("The file drop is empty or too large.")]
     Unreadable,
+    /// Recycle Bin items dropped on the Recycle Bin.
+    #[error("These items are in the Recycle Bin already.")]
+    InRecycleBin,
+    /// Recycle Bin items dropped together with other items.
+    #[error("Drag items out of the Recycle Bin on their own.")]
+    MixedWithRecycleBin,
 }
 
 /// The items of a drop of `uris`: canonical, in order and without
@@ -317,6 +324,9 @@ impl BrowserWindow {
                 Ok(())
             }
             DropDestination::RecycleBin => {
+                if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
+                    return Err(DropRefusal::InRecycleBin);
+                }
                 let items = dropped_uris(uris)?;
                 glib::spawn_future_local(glib::clone!(
                     #[weak(rename_to = window)]
@@ -336,6 +346,9 @@ impl BrowserWindow {
         folder: String,
         action: DropAction,
     ) -> Result<(), DropRefusal> {
+        if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
+            return self.drop_from_recycle_bin(uris, folder);
+        }
         let uris = dropped_uris(uris)?;
         if uris.iter().any(|uri| same_location(uri, &folder)) {
             return Err(DropRefusal::IntoItself);
@@ -367,6 +380,24 @@ impl BrowserWindow {
                 destination_folder: folder,
             });
         }
+        Ok(())
+    }
+
+    /// Moves the Recycle Bin items `uris` into `folder`, whatever the
+    /// drop's action, as Dolphin does (OPS-046, DND-018).
+    fn drop_from_recycle_bin(&self, uris: &[String], folder: String) -> Result<(), DropRefusal> {
+        if !(1..=MAX_DROPPED_ITEMS).contains(&uris.len()) {
+            return Err(DropRefusal::ItemCount);
+        }
+        if !uris.iter().all(|uri| is_recycle_bin_item(uri)) {
+            return Err(DropRefusal::MixedWithRecycleBin);
+        }
+        let uris = uris.to_vec();
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move { window.move_out_of_recycle_bin(uris, folder).await }
+        ));
         Ok(())
     }
 

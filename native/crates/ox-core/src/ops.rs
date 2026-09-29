@@ -56,6 +56,7 @@
 //! | `progress` | Progress labels and throttling |
 //! | `report` | The toast or result dialog at the end |
 //! | `recycle_bin` | Listing, restoring, deleting and emptying `trash:///` |
+//! | `recycle_bin_drag` | Recycle Bin items dragged into a folder |
 //! | `undo` | What reverses each operation, and what reverses a reversal |
 //! | `journal` | The Undo and Redo stacks |
 //! | `undo_apply` | Carrying out an Undo or a Redo |
@@ -86,6 +87,7 @@ mod links;
 mod new_from_template;
 mod progress;
 mod recycle_bin;
+mod recycle_bin_drag;
 mod rename;
 mod report;
 mod results;
@@ -112,6 +114,7 @@ pub use journal::{JournalDirection, JournalEntry, UndoJournal, UNDO_LIMIT};
 pub use links::{create_link, create_links, CreatedLink, LinkRequest, NewLink};
 pub use new_from_template::{create_from_template, NewFromTemplate};
 pub use progress::{starting_label, PROGRESS_INTERVAL};
+pub use recycle_bin_drag::{is_recycle_bin_item, move_out_of_recycle_bin};
 pub use recycle_bin::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
     restore_from_recycle_bin, RecycledItem,

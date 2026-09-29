@@ -151,3 +151,28 @@ fn items_dropped_on_the_recycle_bin_go_to_the_trash() {
     });
     assert!(!fixture.path("Drop me in the bin.txt").exists());
 }
+
+/// parity: OPS-046, DND-018
+#[gtk::test]
+fn items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Bring me back here.txt");
+    trash(&fixture.path("Bring me back here.txt"));
+    let bin = TestWindow::open(TRASH_URI);
+    wait_until("the trashed file to be listed", || {
+        bin.names().contains(&"Bring me back here.txt".to_owned())
+    });
+    select_names(&bin, &["Bring me back here.txt"]);
+    let position = bin.window.folder_model().first_selected().expect("selected");
+    assert!(bin.window.drag_content_for(position).is_some(), "Recycle Bin items can be dragged");
+    let trashed = bin.window.folder_model().selected_uris();
+    assert!(!bin.window.drop_files(&trashed, None, DropAction::Copy), "not back into the Recycle Bin");
+
+    let documents = TestWindow::open(&fixture.uri_of("Documents"));
+    assert!(documents.window.drop_files(&trashed, None, DropAction::Copy));
+
+    let moved = fixture.path("Documents").join("Bring me back here.txt");
+    wait_until("the item to be moved into Documents", || moved.is_file());
+    assert!(!fixture.path("Bring me back here.txt").exists(), "moved, not restored");
+}

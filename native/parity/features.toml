@@ -7436,7 +7436,8 @@ sources = ["kio:src/widgets/dropjob.cpp:445-497"]
 python_tests = []
 bridge = ["operate"]
 dolphin = "DropJob allItemsAreFromTrash"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder); native/crates/ox-core/src/ops/recycle_bin_drag.rs (only_whole_items_in_the_recycle_bin_are_dragged_out). Items directly in the Recycle Bin can be dragged; dropped into a folder they are moved there under their original names without asking copy, move or link, never overwriting and never as copy-then-delete, and Undo trashes them again. Dropping them back on the Recycle Bin is refused (\"These items are in the Recycle Bin already.\"), and mixing them with other items is refused."
 
 [[feature]]
 id = "OPS-047"
@@ -9203,8 +9204,8 @@ python_tests = [
 bridge = ["operate", "transferConflicts"]
 dolphin = "KIO::DropJob / DropMenu; Dolphin drop popup (Move Here / Copy Here / Link Here) and modifier keys"
 gnome = "GdkDragAction negotiation (COPY|MOVE|LINK|ASK) in GtkDropTarget; Nautilus moves within a filesystem and copies across"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, the_drop_menu_offers_copy_move_link_and_cancel); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer). A plain drop copies (the current app's default); Shift moves, Ctrl copies, Ctrl+Shift links and Alt opens Copy here, Move here, Create links here and Cancel. Missing: Dolphin's Trash rules, since the Recycle Bin neither gives nor takes drags yet."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop/action.rs (a_drop_runs_the_modifiers_action_and_copies_when_several_remain, the_drop_menu_offers_copy_move_link_and_cancel); native/crates/ox-app/src/window/tests/drag_and_drop.rs (an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer); native/crates/ox-app/src/window/tests/recycle_bin.rs (items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder). Shift moves, Ctrl copies, Ctrl+Shift links and Alt opens Copy here, Move here, Create links here and Cancel; drops from the Recycle Bin are always moves and drops on it go to the Trash. Differs: a plain drop copies, the current app's default, instead of asking; GNOME has no stash, and the Recycle Bin has no sidebar place to drag as a link."
 
 [[feature]]
 id = "DND-019"
