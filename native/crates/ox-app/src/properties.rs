@@ -20,6 +20,7 @@
 //! | `view` | [`PropertiesView`]: the tabs and their panels |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_panel` | The General and Permissions tabs |
+//! | `mount_assistant` | The network mount assistant of the Location tab |
 //! | `versions_panel` | [`VersionsPanel`]: the Previous versions tab |
 //! | `version_row` | One row of the versions list |
 //! | `snapshot_source` | The Snapshot source form |
@@ -31,6 +32,7 @@
 mod folder_sizes;
 mod general_panel;
 mod metadata;
+mod mount_assistant;
 mod restore;
 mod size_scan_strip;
 mod snapshot_banner;
