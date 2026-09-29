@@ -9421,7 +9421,7 @@ python_tests = []
 bridge = []
 dolphin = "Ctrl+F search / Ctrl+I filter"
 native = "done"
-native_note = "native/crates/ox-app/src/folder_view/filter.rs (every_term_must_match_somewhere, empty_search_shows_everything_visible); native/crates/ox-app/src/search/source.rs (the_source_follows_the_indexed_folders_around_the_folder); native/crates/ox-app/src/search/folder_search.rs (a_folder_nobody_indexed_is_only_filtered); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so); filtering also exercised in native/crates/ox-app/tests/browsing.rs."
+native_note = "native/crates/ox-app/src/folder_view/filter.rs (every_term_must_match_somewhere, empty_search_shows_everything_visible); native/crates/ox-app/src/search/source.rs (the_source_follows_the_indexed_folders_around_the_folder); native/crates/ox-app/src/search/folder_search.rs (a_folder_nobody_indexed_is_filtered_then_walked); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so); filtering also exercised in native/crates/ox-app/tests/browsing.rs. Deliberate difference (SRCH-035): the filtered listing is shown at once and stays first, and the folder's subfolders are then searched live, so the strip reads \"Current folder + subfolders\" where Python said \"Current folder only\"."
 
 [[feature]]
 id = "SRCH-004"
@@ -9603,7 +9603,7 @@ python_tests = [
 ]
 bridge = ["cacheSet", "search"]
 native = "done"
-native_note = "native/crates/ox-app/src/search/report.rs (the_strip_says_where_the_search_looked); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders, a_folder_with_an_indexed_subfolder_shows_both, the_strips_clear_button_ends_the_search, all_cached_folders_searches_only_the_cache). The strip is native/crates/ox-app/src/search/info_strip.rs with resources/ui/search-info-strip.ui; its scope list is the settings drop-down with bundled glyphs."
+native_note = "native/crates/ox-app/src/search/report.rs (the_strip_says_where_the_search_looked); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders, a_folder_with_an_indexed_subfolder_shows_both, the_strips_clear_button_ends_the_search, all_cached_folders_searches_only_the_cache). The strip is native/crates/ox-app/src/search/info_strip.rs with resources/ui/search-info-strip.ui; its scope list is the settings drop-down with bundled glyphs. Deliberate difference (SRCH-035): a folder no cache covers is searched live with its subfolders, so its caption reads \"Current folder + subfolders\" in place of \"Current folder only\", and it shows \"First 500 results · narrow your search\" when the walk found more."
 
 [[feature]]
 id = "SRCH-013"
@@ -9622,7 +9622,7 @@ sources = [
 python_tests = []
 bridge = ["search", "cacheRefresh"]
 native = "done"
-native_note = "native/crates/ox-app/src/search/report.rs (an_empty_result_says_why); native/crates/ox-app/src/window/tests/search.rs (a_search_that_finds_nothing_says_why)."
+native_note = "native/crates/ox-app/src/search/report.rs (an_empty_result_says_why); native/crates/ox-app/src/window/tests/search.rs (a_search_that_finds_nothing_says_why). Deliberate difference (SRCH-035): a folder no cache covers is searched live with its subfolders, so its empty result says \"No items found in this folder or its subfolders.\" where Python said \"Only this folder is being filtered. Enable its search cache to include subfolders.\"; the strip still offers \"Cache this folder\"."
 
 [[feature]]
 id = "SRCH-014"
