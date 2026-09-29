@@ -68,7 +68,7 @@ pub async fn rename_item(
 }
 
 /// [`rename_item`] on the calling thread.
-fn rename_item_blocking(
+pub(super) fn rename_item_blocking(
     uri: &str,
     new_name: &str,
     context: &OperationContext,

@@ -62,7 +62,7 @@ impl BrowserWindow {
         [journal, clipboard]
     }
 
-    /// New ▸ Folder and the New menu's files.
+    /// New ▸ Folder, the New menu's files and New ▸ Link.
     fn install_new_actions(&self) {
         let starter = NewFileKind::Starter;
         self.add_action_entries([
@@ -79,6 +79,9 @@ impl BrowserWindow {
             new_file_action(WindowAction::NewJsonFile, starter(BuiltinTemplate::Json)),
             new_file_action(WindowAction::NewHtmlDocument, starter(BuiltinTemplate::Html)),
             new_file_action(WindowAction::NewFromTemplate, NewFileKind::AnyTemplate),
+            task_action(WindowAction::NewLink, |window| async move {
+                window.create_link().await;
+            }),
         ]);
     }
 

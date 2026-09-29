@@ -42,13 +42,14 @@
 //! | `templates` | The built-in and user templates New offers |
 //! | `new_from_template` | New from template, staged privately and published without overwriting |
 //! | `rename` | Rename, and renaming back for Undo |
+//! | `batch_rename` | Renaming several items to one numbered name |
 //! | `conflicts` | The name-conflict check before a paste or drop |
 //! | `delete_plan` | Trash support, and the Delete and Shift+Delete confirmations |
 //! | `run_transfer` | Copy, move, Trash and permanent delete through the engine |
 //! | `chosen_transfer` | A copy or move with an answer per name conflict |
 //! | `destinations` | Where a copy's or move's items are now |
 //! | `duplicate` | Duplicate in place |
-//! | `links` | Symbolic links to dropped items |
+//! | `links` | Symbolic links to dropped items, and New ▸ Link |
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
 //! | `results` | Adding up per-item results into one result |
 //! | `progress` | Progress labels and throttling |
@@ -67,6 +68,7 @@
 //! `SnapshotProvider` of `desktop/file_services.py`, which belong to the
 //! Properties and Open with services.
 
+mod batch_rename;
 mod chosen_transfer;
 mod conflicts;
 mod context;
@@ -90,6 +92,7 @@ mod templates;
 mod undo;
 mod undo_apply;
 
+pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
 pub use chosen_transfer::{run_chosen_transfer, ChosenTransfer, ItemChoice};
 pub use conflicts::find_conflicts;
 pub use context::{OperationContext, WriteProtection};
@@ -101,7 +104,7 @@ pub use delete_plan::{
 pub use duplicate::duplicate_items;
 pub use error::OpsError;
 pub use journal::{JournalDirection, JournalEntry, UndoJournal, UNDO_LIMIT};
-pub use links::{create_links, LinkRequest};
+pub use links::{create_link, create_links, CreatedLink, LinkRequest, NewLink};
 pub use new_from_template::{create_from_template, NewFromTemplate};
 pub use progress::{starting_label, PROGRESS_INTERVAL};
 pub use recycle_bin::{
@@ -110,8 +113,8 @@ pub use recycle_bin::{
 };
 pub use rename::{rename_item, RenamedItem};
 pub use report::{
-    summarize, summarize_duplicate, summarize_journal_step, summarize_links, summarize_restore,
-    summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
+    summarize, summarize_batch_rename, summarize_duplicate, summarize_journal_step, summarize_links,
+    summarize_restore, summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
 pub use tab_transfer::{
@@ -122,5 +125,5 @@ pub use templates::{
     list_templates, BuiltinTemplate, Template, TemplateId, TemplateList, MAX_TEMPLATE_BYTES,
     MAX_USER_TEMPLATES,
 };
-pub use undo::{MovedItem, UndoRecord};
+pub use undo::{MovedItem, RenamedPair, UndoRecord};
 pub use undo_apply::{reverse, undo, Reversal};

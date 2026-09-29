@@ -6543,7 +6543,8 @@ python_tests = []
 bridge = ["create"]
 dolphin = "KNewFileMenu 'Link to File or Directory…'; Create New → “Basic Link to File or Directory…”; drop menu “Link Here”"
 gnome = "Gio.File.make_symbolic_link; g_file_make_symbolic_link (Nautilus “Make Link”, Ctrl+M, show-create-link)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/ops/links.rs (new_link_points_to_the_typed_path_and_is_named_after_it_by_default); native/crates/ox-app/src/window/tests/file_operations.rs (new_link_asks_for_the_path_and_selects_the_new_link). New ▸ 'Link to file or folder…' asks 'New link' for 'Link to' (an absolute path, ~/…, a path relative to the folder or a file: URI) and 'Name' (empty uses the target's name). The target must exist; the link never replaces anything (a taken name stays in the dialog as 'An item named “X” already exists. Nothing was overwritten.'), the folder must be local and pass the write protection. The new link is selected and Undo moves it to the Trash ('Undo: Link'). Drops make links with Ctrl+Shift or the drop menu (DND-019)."
 
 [[feature]]
 id = "OPS-005"
@@ -6654,7 +6655,7 @@ python_tests = [
 bridge = ["rename", "list"]
 dolphin = "Dolphin: F2 renames inline, selecting the name without extension; Shift+F2? (batch rename for multi-selection).; F2 rename"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try, an_item_that_is_not_on_screen_is_renamed_with_the_dialog, rename_does_nothing_with_several_items_selected); native/crates/ox-app/src/window/file_ops/availability.rs. F2 renames in place (OPS-010) with the dialog's checks and messages, which show in the toast while the field stays; an item whose cell is not on screen gets the Rename dialog. The renamed item stays selected."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (rename_edits_the_name_in_place_and_undo_and_redo_walk_it, a_refused_name_in_place_keeps_the_field_for_another_try, an_item_that_is_not_on_screen_is_renamed_with_the_dialog, several_selected_items_are_renamed_with_one_numbered_name_and_undone_together); native/crates/ox-app/src/window/file_ops/availability.rs. F2 renames in place (OPS-010) with the dialog's checks and messages, which show in the toast while the field stays; an item whose cell is not on screen gets the Rename dialog. The renamed item stays selected. Differs on purpose: with several items selected, F2 and Rename open the batch rename (OPS-014) instead of doing nothing."
 
 [[feature]]
 id = "OPS-010"
@@ -6749,8 +6750,8 @@ sources = [
 python_tests = []
 bridge = ["rename"]
 dolphin = "renamefile: F2 with multiple items (KIO::RenameFileDialog)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer disables Rename unless exactly one item is selected."
+native = "done"
+native_note = "native/crates/ox-core/src/ops/batch_rename.rs (items_are_numbered_from_the_first_number_and_keep_their_extensions, a_taken_name_is_reported_and_the_rest_are_renamed); native/crates/ox-app/src/window/tests/file_operations.rs (several_selected_items_are_renamed_with_one_numbered_name_and_undone_together); native/crates/ox-core/tests/ops_undo.rs (a_batch_rename_is_undone_and_redone_as_one_step). F2, the command bar's and the context menu's Rename with several items open 'Rename items': 'Rename the <n> selected items to:', a Name field starting as 'New name #' with the part before # selected, and '# becomes ascending numbers starting at' (1). The first run of # becomes the number, zero-padded to its length (### gives 001); each item keeps its extension (.tar.gz and similar whole; folders have none). Without # the name is accepted only when every new name differs; otherwise 'Add # to the name, so each item gets its own number.' stays in the dialog. Items are numbered in view order and renamed as the window's one operation with the single-rename rules (never overwrites; a taken name is reported and the rest go on); the renamed items are selected, the toast '<n> item(s) renamed.' has Undo, and Undo and Redo reverse the batch as one step ('Undo: Batch rename')."
 
 [[feature]]
 id = "OPS-015"
@@ -6787,7 +6788,7 @@ bridge = ["trashSupport", "operate"]
 dolphin = "Move to Trash / Delete with confirmation; Dolphin: Delete moves to Trash without confirming by default; Shift+Delete deletes permanently.; Del → Trash, Shift+Del → delete; movetotrash: Delete; delete_shortcut (Delete mapped to delete when trash unavailable)"
 gnome = "g_file_trash / access::can-trash"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_undo_restores, cancelling_the_delete_confirmation_keeps_the_items); the wording of all three confirmations is tested in native/crates/ox-core/src/ops/delete_plan.rs."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores, cancelling_the_delete_confirmation_keeps_the_items); the wording of all three confirmations is tested in native/crates/ox-core/src/ops/delete_plan.rs."
 
 [[feature]]
 id = "OPS-016"
@@ -6853,7 +6854,7 @@ bridge = ["operate", "trashSupport"]
 dolphin = "KIO::trash (kio_trash implements the freedesktop Trash spec)"
 gnome = "g_file_trash + access::can-trash"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_undo_restores) trashes through GIO into the freedesktop Trash; the per-folder labels are CMD-003 and the engine never falls back to a delete (XFER-014)."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores) trashes through GIO into the freedesktop Trash; the per-folder labels are CMD-003 and the engine never falls back to a delete (XFER-014)."
 
 [[feature]]
 id = "OPS-019"
@@ -7129,8 +7130,8 @@ python_tests = []
 bridge = ["operate", "rename", "create"]
 dolphin = "edit_undo: Ctrl+Z (KIO::FileUndoManager); Ctrl+Z undo; KIO::FileUndoManager (Edit → Undo, Ctrl+Z)"
 gnome = "Nautilus-style undo stack (NautilusFileUndoManager) using trash::orig-path for Trash undo"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs undoes a rename, a Move to Trash and a duplicate; native/crates/ox-core/tests/ops_undo.rs covers copy, move and creation. The folder menu and the toasts name the step (\"Undo: Rename\", \"Rename undone.\"). Missing: links and batch rename, which the native app does not have yet."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs undoes a rename, a Move to Trash, a duplicate and a batch rename; native/crates/ox-core/tests/ops_undo.rs covers copy, move, creation, batch rename (a_batch_rename_is_undone_and_redone_as_one_step) and links (undoing_links_moves_only_the_links_to_the_trash). The folder menu and the toasts name the step ('Undo: Rename', 'Undo: Batch rename', 'Undo: Link', 'Rename undone.'); completion toasts carry an Undo button (OPS-032). Links go to the Trash as links; what they point to is never touched."
 
 [[feature]]
 id = "OPS-030"

@@ -2,9 +2,11 @@
 //! Rename (F2): the one selected item gets a new name in its folder
 //! (OPS-008, OPS-009, OPS-010).
 //!
-//! Ports `rename` in `desktop/ui/app.js`. It does nothing unless exactly
-//! one item is selected, no operation runs, and the item can be changed:
-//! not a share root, a virtual entry or a previous version. As in
+//! Ports `rename` in `desktop/ui/app.js`. It does nothing unless an item
+//! is selected, no operation runs, and the item can be changed: not a
+//! share root, a virtual entry or a previous version. With several items
+//! selected, the batch rename asks instead ([`super::batch_rename`]),
+//! where the Python app did nothing. As in
 //! Explorer and Dolphin, the name is edited in place in its row or tile
 //! ([`super::inline_rename`]); when the item's cell is not on screen, the
 //! Python app's Rename dialog asks instead. Either way the name is checked
@@ -32,12 +34,19 @@ pub(super) fn selected_name_length(entry: &Entry) -> usize {
 
 impl BrowserWindow {
     /// F2: renames the selected item in place, or with the dialog when its
-    /// cell is not on screen.
+    /// cell is not on screen; several selected items are renamed together
+    /// (OPS-014).
     pub(crate) async fn rename_selection(&self) {
         if !self.allows(FileCommand::Rename) {
             return;
         }
         let model = self.folder_pane().model();
+        let selected = model.selected_items();
+        if selected.len() > 1 {
+            let entries: Vec<Entry> = selected.iter().map(|item| item.entry().clone()).collect();
+            self.rename_several(&entries).await;
+            return;
+        }
         let Some(position) = model.first_selected() else {
             return;
         };

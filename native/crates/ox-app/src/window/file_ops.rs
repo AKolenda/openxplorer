@@ -30,6 +30,7 @@
 //! | `template_dialog` | The New file and New from template dialog |
 //! | `rename` | Rename: in place, or with the dialog |
 //! | `inline_rename` | Renaming in the item's row or tile |
+//! | `batch_rename` | Renaming several items to one numbered name |
 //! | `delete` | Move to Trash and permanent delete, with their confirmations |
 //! | `recycle_bin` | Restore, Delete permanently and Empty in the Recycle Bin |
 //! | `duplicate` | Duplicate |
@@ -43,6 +44,7 @@
 
 mod actions;
 mod availability;
+mod batch_rename;
 mod clipboard;
 mod conflict_dialog;
 mod delete;

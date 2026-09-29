@@ -79,7 +79,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
 }
 
-/// parity: CMD-009
+/// parity: CMD-009, OPS-014
 #[gtk::test]
 fn with_several_items_selected_the_one_item_commands_are_disabled() {
     let fixture = Fixture::standard();
@@ -94,10 +94,11 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    for disabled in ["Open", "Rename", "Copy path", "Properties"] {
+    for disabled in ["Open", "Copy path", "Properties"] {
         assert!(!menu.row(disabled).is_sensitive(), "{disabled}");
     }
-    for enabled in ["Cut", "Copy", "Move to Trash", "Duplicate"] {
+    // Rename renames them together (OPS-014).
+    for enabled in ["Cut", "Copy", "Rename", "Move to Trash", "Duplicate"] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
     }
 }
@@ -160,6 +161,8 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
             "HTML document",
             "-",
             "From template…",
+            "-",
+            "Link to file or folder…",
         ]
     );
 }

@@ -3,7 +3,10 @@
 //! reverses it, with all of that operation's safety rules:
 //!
 //! - A rename goes back through the rename rules: the write protection
-//!   first, then a same-folder move that never overwrites.
+//!   first, then a same-folder move that never overwrites. A batch rename
+//!   goes back item by item, the last renamed first.
+//! - Links go to the Trash as links; what they point to is never
+//!   touched.
 //! - Created items and copies go to the Trash through the transfer engine,
 //!   which never falls back to a permanent delete (XFER-014).
 //! - Moved items go back through a transfer-engine move with the Skip
@@ -19,7 +22,7 @@ use super::recycle_bin::restore_trashed_since;
 use super::rename::rename_back;
 use super::results::{merge_results, record_failure};
 use super::run_transfer::{gio_transfer_engine, unix_seconds_now};
-use super::undo::{MovedItem, UndoRecord};
+use super::undo::{MovedItem, RenamedPair, UndoRecord};
 use crate::gio_node::GioNode;
 use crate::transfer::{ConflictPolicy, Node, Operation, Progress, TransferEngine, TransferResult};
 
@@ -84,7 +87,9 @@ fn undo_blocking(
             original_uri,
             renamed_uri,
         } => undo_rename(original_uri, renamed_uri, context),
+        UndoRecord::BatchRename { items } => undo_batch_rename(items, context),
         UndoRecord::Create { uri, .. } => move_to_trash(&mut engine, std::slice::from_ref(uri), context),
+        UndoRecord::Link { links } => move_to_trash(&mut engine, links, context),
         UndoRecord::Copy { copies } | UndoRecord::Duplicate { copies } => {
             move_to_trash(&mut engine, copies, context)
         }
@@ -106,6 +111,23 @@ fn undo_rename(original_uri: &str, renamed_uri: &str, context: &OperationContext
         Err(error) => record_failure(&mut result, &GioNode::new(renamed_uri).display_name(), &error),
     }
     result
+}
+
+/// Renames each of `items` back, the last renamed first, so a name the
+/// batch freed is free again when an earlier item takes it back.
+fn undo_batch_rename(items: &[RenamedPair], context: &OperationContext) -> TransferResult {
+    let mut total = TransferResult::default();
+    for item in items.iter().rev() {
+        if context.cancel.is_cancelled() {
+            total.cancelled = true;
+            break;
+        }
+        merge_results(
+            &mut total,
+            undo_rename(&item.original_uri, &item.renamed_uri, context),
+        );
+    }
+    total
 }
 
 /// Moves `uris` to the Trash with the transfer engine.

@@ -13,8 +13,8 @@ use std::path::Path;
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
-    create_item, duplicate_items, list_recycle_bin, run_transfer, undo, OperationContext, TransferRequest,
-    UndoJournal, UndoRecord,
+    create_item, create_links, duplicate_items, list_recycle_bin, rename_batch, reverse, run_transfer, undo,
+    BatchItem, BatchRename, LinkRequest, OperationContext, TransferRequest, UndoJournal, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -186,4 +186,67 @@ fn permanent_delete_leaves_nothing_to_undo() {
     assert_eq!(outcome.result.done.len(), 1);
     assert_eq!(outcome.undo, None);
     assert!(outcome.created.is_empty());
+}
+
+/// parity: OPS-029, OPS-014
+#[test]
+fn a_batch_rename_is_undone_and_redone_as_one_step() {
+    let temp = tempfile::tempdir().unwrap();
+    for name in ["b.txt", "a.jpg"] {
+        fs::write(temp.path().join(name), name).unwrap();
+    }
+    let batch = BatchRename {
+        items: ["b.txt", "a.jpg"]
+            .map(|name| BatchItem {
+                uri: file_uri(&temp.path().join(name)),
+                name: name.to_owned(),
+                is_dir: false,
+            })
+            .to_vec(),
+        pattern: "Trip #".to_owned(),
+        first_number: 1,
+    };
+    let context = OperationContext::default();
+
+    let outcome = block_on(rename_batch(&batch, &context)).expect("valid names");
+    let record = outcome.undo.expect("an undoable batch");
+    let reversal = block_on(reverse(&record, &context, |_| {})).expect("an undo");
+    let names_after_undo = [
+        temp.path().join("b.txt").is_file(),
+        temp.path().join("a.jpg").is_file(),
+    ];
+    let redo = reversal.inverse.expect("the undo can be redone");
+    let redone = block_on(undo(&redo, &context, |_| {})).expect("a redo");
+
+    assert_eq!(record.undo_label(), "Undo: Batch rename");
+    assert_eq!(names_after_undo, [true, true]);
+    assert!(redone.errors.is_empty(), "{:?}", redone.errors);
+    assert_eq!(fs::read(temp.path().join("Trip 1.txt")).unwrap(), b"b.txt");
+    assert_eq!(fs::read(temp.path().join("Trip 2.jpg")).unwrap(), b"a.jpg");
+}
+
+/// parity: OPS-029, DND-019
+#[test]
+fn undoing_links_moves_only_the_links_to_the_trash() {
+    require_private_trash();
+    let temp = tempfile::tempdir().unwrap();
+    let (items, links) = (temp.path().join("items"), temp.path().join("links"));
+    fs::create_dir(&items).unwrap();
+    fs::create_dir(&links).unwrap();
+    fs::write(items.join("a.txt"), b"a").unwrap();
+    let request = LinkRequest {
+        uris: vec![file_uri(&items.join("a.txt"))],
+        destination_folder: file_uri(&links),
+    };
+
+    let outcome = block_on(create_links(&request, &OperationContext::default())).expect("a local folder");
+    let record = outcome.undo.expect("undoable links");
+    undo_fully(&record);
+
+    assert_eq!(record.undo_label(), "Undo: Link");
+    assert!(
+        links.join("a.txt").symlink_metadata().is_err(),
+        "the link is gone"
+    );
+    assert_eq!(fs::read(items.join("a.txt")).unwrap(), b"a", "its item stays");
 }

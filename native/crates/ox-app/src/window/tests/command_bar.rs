@@ -135,8 +135,8 @@ fn the_edit_commands_follow_the_selection_with_their_python_tooltips() {
     );
 }
 
-/// The New menu of `openNewMenu`, a divider as `-`.
-const NEW_MENU: [&str; 10] = [
+/// The New menu of `openNewMenu`, then New ▸ Link, a divider as `-`.
+const NEW_MENU: [&str; 12] = [
     "Folder",
     "Text document",
     "File…",
@@ -147,6 +147,8 @@ const NEW_MENU: [&str; 10] = [
     "HTML document",
     "-",
     "From template…",
+    "-",
+    "Link to file or folder…",
 ];
 
 /// The Sort menu: the columns, then one item per direction.
