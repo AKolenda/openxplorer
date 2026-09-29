@@ -12,6 +12,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::settings::Theme;
 
+use crate::application::AppAction;
 use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::text_size::Step;
@@ -126,6 +127,7 @@ impl BrowserWindow {
     /// Adds every window action (`win.*`).
     pub(super) fn install_actions(&self) {
         self.install_tab_actions();
+        self.install_tab_commands();
         self.install_closing_actions();
         self.install_window_keys();
         self.install_tab_move_actions();
@@ -382,6 +384,9 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 4] = [
     (WindowAction::Settings, &["<Primary>comma"]),
 ];
 
+/// Ctrl+Q: quit the application, from any window and any focus (TAB-058).
+const QUIT_ACCELERATORS: &[&str] = &["<Primary>q"];
+
 /// Alt+Enter: Properties of the selection or the folder (`onKey`).
 const PROPERTIES_ACCELERATORS: &[&str] = &["<Alt>Return", "<Alt>KP_Enter"];
 
@@ -391,6 +396,7 @@ pub(crate) fn install_accelerators(app: &gtk::Application) {
     for (action, keys) in WINDOW_ACCELERATORS {
         app.set_accels_for_action(&action.detailed_name(), keys);
     }
+    app.set_accels_for_action(&AppAction::Quit.detailed_name(), QUIT_ACCELERATORS);
     app.set_accels_for_action(&WindowAction::Properties.detailed_name(), PROPERTIES_ACCELERATORS);
     for step in Step::ALL {
         let keys = step.accelerators();

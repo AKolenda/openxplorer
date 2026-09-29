@@ -233,6 +233,23 @@ impl BrowserWindow {
             self.request_close();
             return;
         }
+        self.remember_closed_tab(id);
+        self.remove_tab(id);
+    }
+
+    /// Takes tab `id` out after another window took it: it is not
+    /// remembered as closed, and the last tab leaving closes the window.
+    pub(super) fn release_moved_tab(&self, id: TabId) {
+        if self.tab_count() <= 1 {
+            self.request_close();
+            return;
+        }
+        self.remove_tab(id);
+    }
+
+    /// Removes tab `id` and its dialog, and shows the next tab when it was
+    /// in front.
+    fn remove_tab(&self, id: TabId) {
         self.save_tab_view();
         self.discard_dialog_of_tab(id);
         let was_active = self.imp().session.borrow().is_active(id);

@@ -30,6 +30,8 @@ enum KeyCommand {
     Window(WindowAction),
     /// Ctrl+N: the application's New window.
     NewWindow,
+    /// Alt+digit: the tab of that number, 0 for the last.
+    TabNumber(u32),
 }
 
 impl KeyCommand {
@@ -47,26 +49,50 @@ impl KeyCommand {
         match self {
             KeyCommand::Window(action) => action.detailed_name(),
             KeyCommand::NewWindow => AppAction::NewWindow.detailed_name(),
+            KeyCommand::TabNumber(_) => WindowAction::ShowTabNumber.detailed_name(),
+        }
+    }
+
+    /// The action's parameter, if it takes one.
+    fn target(self) -> Option<glib::Variant> {
+        match self {
+            KeyCommand::TabNumber(number) => Some(number.to_variant()),
+            KeyCommand::Window(_) | KeyCommand::NewWindow => None,
         }
     }
 }
 
 /// Each command and its keys, as GTK parses them. Ctrl+Page Down and
-/// Ctrl+Page Up are the tab keys of GNOME apps and browsers, added to
-/// app.js's Ctrl+Tab.
-const WINDOW_KEYS: [(KeyCommand, &str); 9] = [
+/// Ctrl+Page Up are the tab keys of GNOME apps and browsers, and Ctrl+]
+/// and Ctrl+[ Dolphin's, added to app.js's Ctrl+Tab; Alt+digit and
+/// Ctrl+Shift+T are Dolphin's too.
+const WINDOW_KEYS: [(KeyCommand, &str); 20] = [
     (KeyCommand::Window(WindowAction::Hidden), "<Primary>h"),
     (KeyCommand::NewWindow, "<Primary>n"),
     (KeyCommand::Window(WindowAction::NewTab), "<Primary>t"),
     (KeyCommand::Window(WindowAction::CloseTab), "<Primary>w"),
     (
+        KeyCommand::Window(WindowAction::ReopenClosedTab),
+        "<Primary><Shift>t",
+    ),
+    (
         KeyCommand::Window(WindowAction::NextTab),
-        "<Primary>Tab|<Primary>KP_Tab|<Primary>Page_Down",
+        "<Primary>Tab|<Primary>KP_Tab|<Primary>Page_Down|<Primary>bracketright",
     ),
     (
         KeyCommand::Window(WindowAction::PreviousTab),
-        "<Primary><Shift>ISO_Left_Tab|<Primary><Shift>Tab|<Primary>Page_Up",
+        "<Primary><Shift>ISO_Left_Tab|<Primary><Shift>Tab|<Primary>Page_Up|<Primary>bracketleft",
     ),
+    (KeyCommand::TabNumber(1), "<Alt>1|<Alt>KP_1"),
+    (KeyCommand::TabNumber(2), "<Alt>2|<Alt>KP_2"),
+    (KeyCommand::TabNumber(3), "<Alt>3|<Alt>KP_3"),
+    (KeyCommand::TabNumber(4), "<Alt>4|<Alt>KP_4"),
+    (KeyCommand::TabNumber(5), "<Alt>5|<Alt>KP_5"),
+    (KeyCommand::TabNumber(6), "<Alt>6|<Alt>KP_6"),
+    (KeyCommand::TabNumber(7), "<Alt>7|<Alt>KP_7"),
+    (KeyCommand::TabNumber(8), "<Alt>8|<Alt>KP_8"),
+    (KeyCommand::TabNumber(9), "<Alt>9|<Alt>KP_9"),
+    (KeyCommand::TabNumber(0), "<Alt>0|<Alt>KP_0"),
     (KeyCommand::Window(WindowAction::Back), "<Alt>Left"),
     (KeyCommand::Window(WindowAction::Forward), "<Alt>Right"),
     (KeyCommand::Window(WindowAction::Up), "<Alt>Up"),
@@ -98,7 +124,7 @@ impl BrowserWindow {
         }
         // GTK fails only for an action no ancestor has; the window and
         // the application register all of these.
-        let _ = WidgetExt::activate_action(self, &command.detailed_name(), None);
+        let _ = WidgetExt::activate_action(self, &command.detailed_name(), command.target().as_ref());
         glib::Propagation::Stop
     }
 
@@ -140,7 +166,7 @@ mod tests {
             .map_or_else(|| panic!("{command:?} has keys"), |(_, keys)| *keys)
     }
 
-    /// parity: TAB-001, TAB-002, TAB-005, TAB-043
+    /// parity: TAB-001, TAB-002, TAB-005, TAB-006, TAB-007, TAB-016, TAB-043
     #[gtk::test]
     fn the_tab_and_window_keys_are_those_of_on_key() {
         assert_eq!(keys_of(KeyCommand::Window(WindowAction::NewTab)), "<Primary>t");
@@ -148,6 +174,14 @@ mod tests {
         assert_eq!(keys_of(KeyCommand::NewWindow), "<Primary>n");
         assert!(keys_of(KeyCommand::Window(WindowAction::NextTab)).starts_with("<Primary>Tab"));
         assert!(keys_of(KeyCommand::Window(WindowAction::PreviousTab)).contains("<Primary><Shift>Tab"));
+        assert!(keys_of(KeyCommand::Window(WindowAction::NextTab)).ends_with("|<Primary>bracketright"));
+        assert!(keys_of(KeyCommand::Window(WindowAction::PreviousTab)).ends_with("|<Primary>bracketleft"));
+        assert_eq!(
+            keys_of(KeyCommand::Window(WindowAction::ReopenClosedTab)),
+            "<Primary><Shift>t"
+        );
+        assert!(keys_of(KeyCommand::TabNumber(1)).starts_with("<Alt>1"));
+        assert!(keys_of(KeyCommand::TabNumber(0)).starts_with("<Alt>0"));
         for (_, keys) in WINDOW_KEYS {
             let trigger = gtk::ShortcutTrigger::parse_string(keys);
             assert!(trigger.is_some(), "GTK parses {keys}");

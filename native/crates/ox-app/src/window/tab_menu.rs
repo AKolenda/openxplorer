@@ -3,8 +3,8 @@
 //!
 //! Ports the `contextmenu` handler of `setupTabDrag` in
 //! `desktop/ui/app.js`: Move tab to new window, Move tab to window…,
-//! Duplicate tab, Open windows… and Close tab. The two moves are
-//! [`super::tab_moves`]'s.
+//! Duplicate tab, Open windows… and Close tab, and Dolphin's Close other
+//! tabs (TAB-015). The two moves are [`super::tab_moves`]'s.
 
 use gtk::subclass::prelude::*;
 
@@ -15,8 +15,9 @@ use super::session::TabId;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
-/// The menu of the tab `id`, which shows `uri`.
-pub(super) fn tab_menu(id: TabId, uri: &str) -> Vec<MenuEntry> {
+/// The menu of the tab `id`, which shows `uri`; Close other tabs is
+/// disabled when it is the only tab.
+pub(super) fn tab_menu(id: TabId, uri: &str, is_only_tab: bool) -> Vec<MenuEntry> {
     let tab = id.to_variant();
     vec![
         MenuItem::with_target(
@@ -36,7 +37,21 @@ pub(super) fn tab_menu(id: TabId, uri: &str) -> Vec<MenuEntry> {
         MenuItem::with_text_target("Duplicate tab", Icon::Copy, WindowAction::OpenTab, uri).into(),
         MenuItem::new("Open windows…", Icon::Desktop, WindowAction::OpenWindows).into(),
         MenuEntry::Divider,
-        MenuItem::with_target("Close tab", Icon::Dismiss, WindowAction::CloseTabById, tab).into(),
+        MenuItem::with_target(
+            "Close tab",
+            Icon::Dismiss,
+            WindowAction::CloseTabById,
+            tab.clone(),
+        )
+        .into(),
+        MenuItem::with_target(
+            "Close other tabs",
+            Icon::Dismiss,
+            WindowAction::CloseOtherTabs,
+            tab,
+        )
+        .disabled_when(is_only_tab)
+        .into(),
     ]
 }
 
@@ -60,7 +75,7 @@ mod tests {
     fn a_tab_menu_offers_the_python_items_in_order() {
         let tab = TabId::from_variant(&1_u64.to_variant()).expect("a tab id is a u64");
 
-        let labels: Vec<String> = tab_menu(tab, "file:///tmp")
+        let labels: Vec<String> = tab_menu(tab, "file:///tmp", false)
             .into_iter()
             .map(|entry| match entry {
                 MenuEntry::Item(item) => item.label,
@@ -77,6 +92,7 @@ mod tests {
                 "Open windows…",
                 "-",
                 "Close tab",
+                "Close other tabs",
             ]
         );
     }

@@ -94,6 +94,7 @@ mod settings_tab;
 mod sidebar;
 mod snapshot_tabs;
 mod status_bar;
+mod tab_commands;
 mod tab_layout;
 mod tab_menu;
 mod tab_moves;

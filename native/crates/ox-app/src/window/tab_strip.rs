@@ -273,7 +273,7 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
     }
     widget.append(&close_button(tab));
     let id = tab.id.to_variant();
-    widget.add_controller(select_on_click(id.clone()));
+    widget.add_controller(select_on_click(id.clone(), tab.uri.to_variant()));
     widget.add_controller(select_on_enter(id.clone()));
     widget.add_controller(gestures::middle_click(move |gesture, _, _| {
         run_on(gesture.widget(), WindowAction::CloseTabById, &id);
@@ -298,7 +298,8 @@ fn menu_on_right_click(id: TabId, uri: String) -> gtk::GestureClick {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let in_tab = graphene::Point::new(x as f32, y as f32);
         if let Some(point) = tab.compute_point(&strip, &in_tab) {
-            strip.show_menu(tab_menu(id, &uri), point);
+            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            strip.show_menu(tab_menu(id, &uri, is_only_tab), point);
         }
     });
     click
@@ -333,12 +334,17 @@ fn run_on(widget: Option<gtk::Widget>, action: WindowAction, id: &glib::Variant)
 /// A primary click anywhere on the tab shows it, on release as `click` in
 /// app.js. Showing a tab draws the strip anew, which on the press would
 /// cancel a drag of the tab before it starts; a drag cancels the click, so
-/// a dragged tab is not shown (TAB-004).
-fn select_on_click(id: glib::Variant) -> gtk::GestureClick {
+/// a dragged tab is not shown (TAB-004). A double-click opens a copy of
+/// the tab, at `uri`, in front, as in Dolphin (TAB-014).
+fn select_on_click(id: glib::Variant, uri: glib::Variant) -> gtk::GestureClick {
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_PRIMARY);
-    click.connect_released(move |gesture, _, _, _| {
-        run_on(gesture.widget(), WindowAction::SelectTab, &id);
+    click.connect_released(move |gesture, presses, _, _| {
+        if presses == 2 {
+            run_on(gesture.widget(), WindowAction::OpenTab, &uri);
+        } else {
+            run_on(gesture.widget(), WindowAction::SelectTab, &id);
+        }
     });
     click
 }

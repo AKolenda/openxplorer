@@ -55,7 +55,8 @@ pub(crate) fn list_open_windows_on_click(button: &gtk::MenuButton) {
 }
 
 /// Every browser window by title, this one checked, then New window and
-/// Quit (`windowsMenu`).
+/// Quit (`windowsMenu`). The tabs closed in this window come before New
+/// window, most recent first, as Dolphin's "Recently Closed Tabs" (TAB-016).
 fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
     let Some(this_window) = anchor.root().and_downcast::<BrowserWindow>() else {
         return Vec::new();
@@ -70,12 +71,40 @@ fn open_windows_menu(anchor: &gtk::MenuButton) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = browsers
         .map(|window| window_item(&window, &this_window))
         .collect();
+    entries.extend(closed_tab_items(&this_window));
     let new_window =
         MenuItem::new("New window", Icon::WindowNew, AppAction::NewWindow).with_shortcut("Ctrl+N");
     entries.push(MenuEntry::Divider);
     entries.push(new_window.into());
-    entries.push(MenuItem::new("Quit OpenXplorer", Icon::Dismiss, AppAction::Quit).into());
+    let quit = MenuItem::new("Quit OpenXplorer", Icon::Dismiss, AppAction::Quit).with_shortcut("Ctrl+Q");
+    entries.push(quit.into());
     entries
+}
+
+/// A divider and one "Reopen <title>" item per tab closed in `window`,
+/// most recent first; nothing when no tab has closed.
+fn closed_tab_items(window: &BrowserWindow) -> Vec<MenuEntry> {
+    let closed = window.closed_tabs();
+    if closed.is_empty() {
+        return Vec::new();
+    }
+    let locations = window.imp().locations.borrow();
+    let items = closed.iter().zip(0_u32..).map(|(tab, index)| {
+        let label = format!("Reopen {}", locations.title_for(tab.uri()));
+        let item = MenuItem::with_target(
+            &label,
+            Icon::History,
+            WindowAction::RestoreClosedTab,
+            index.to_variant(),
+        );
+        let item = if index == 0 {
+            item.with_shortcut("Ctrl+Shift+T")
+        } else {
+            item
+        };
+        MenuEntry::from(item)
+    });
+    std::iter::once(MenuEntry::Divider).chain(items).collect()
 }
 
 /// The item that brings `window` to the front, checked when it is

@@ -1372,8 +1372,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KStandardShortcut TabNext/TabPrev: Ctrl+PgDown, Ctrl+], Ctrl+PgUp, Ctrl+["
-native = "todo"
-native_note = "Ctrl+Page_Up/Page_Down are bound in native/crates/ox-app/src/window/actions.rs but untested."
+native = "done"
+native_note = "Ctrl+Page Down and Ctrl+] run win.next-tab, Ctrl+Page Up and Ctrl+[ win.previous-tab, wrapping around; with one tab they change nothing (native/crates/ox-app/src/window/window_keys.rs). Tests: window_keys.rs (the_tab_and_window_keys_are_those_of_on_key), native/crates/ox-app/src/window/tests/tab_commands.rs (tab_numbers_and_ctrl_page_keys_show_tabs)."
 
 [[feature]]
 id = "TAB-007"
@@ -1391,8 +1391,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "activate_tab_N: Alt+1…Alt+9; activate_last_tab: Alt+0"
-native = "todo"
-native_note = "Porting notes: Explorer has no digit tab shortcuts, and its view modes use Ctrl+Shift+1…8, so Alt+digit does not conflict."
+native = "done"
+native_note = "Alt+1…Alt+9 (and the keypad digits) run win.show-tab-number with the digit and Alt+0 shows the last tab; a number past the last tab does nothing (native/crates/ox-app/src/window/tab_commands.rs). Like the other tab keys they stay out of text fields. Tests: native/crates/ox-app/src/window/window_keys.rs (the_tab_and_window_keys_are_those_of_on_key), native/crates/ox-app/src/window/tests/tab_commands.rs (tab_numbers_and_ctrl_page_keys_show_tabs)."
 
 [[feature]]
 id = "TAB-008"
@@ -1539,8 +1539,8 @@ sources = ["dolphin:src/dolphintabbar.cpp:104-117"]
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinTabBar::mouseDoubleClickEvent"
-native = "todo"
-native_note = "Porting notes: Dolphin also opens a new tab on a double-click in the empty tab bar. That conflicts with Explorer, where double-clicking the empty title/tab strip maximizes the window; Explorer wins there."
+native = "done"
+native_note = "A primary double-click on a tab opens a new tab at its location in front (select_on_click in native/crates/ox-app/src/window/tab_strip.rs). A double-click on the empty title bar still maximizes (Explorer wins there). Test: native/crates/ox-app/src/window/tests/tab_commands.rs (double_clicking_a_tab_opens_a_copy_in_front)."
 
 [[feature]]
 id = "TAB-015"
@@ -1554,7 +1554,8 @@ sources = ["dolphin:src/dolphintabbar.cpp:129-146", "desktop/ui/app.js:1826-1831
 python_tests = []
 bridge = ["cancel"]
 dolphin = "Tab context menu 'Close Other Tabs'"
-native = "todo"
+native = "done"
+native_note = "The tab menu ends with 'Close other tabs' (disabled for the only tab), which brings the right-clicked tab to the front and closes every other tab through the normal close path (native/crates/ox-app/src/window/tab_commands.rs). Tests: native/crates/ox-app/src/window/tests/tab_commands.rs (close_other_tabs_keeps_only_the_chosen_tab), native/crates/ox-app/src/window/tab_menu.rs (a_tab_menu_offers_the_python_items_in_order)."
 
 [[feature]]
 id = "TAB-016"
@@ -1574,7 +1575,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "undo_close_tab: Ctrl+Shift+T; closed_tabs menu (Go menu)"
-native = "todo"
+native = "done"
+native_note = "Each window remembers its last 10 closed tabs (history, selection, scroll and place in the strip; a tab moved to another window is not remembered). Ctrl+Shift+T reopens the most recent one where it was; the title bar's Open windows menu lists them as 'Reopen <title>' items, the first showing Ctrl+Shift+T, and they do nothing when no tab has closed (native/crates/ox-app/src/window/tab_commands.rs, title_bar.rs). Split state and per-tab view do not exist natively (the view is per window). Test: native/crates/ox-app/src/window/tests/tab_commands.rs (a_closed_tab_reopens_where_it_was_with_its_history)."
 
 [[feature]]
 id = "TAB-017"
@@ -2726,8 +2728,8 @@ python_tests = []
 bridge = ["quit"]
 dolphin = "file_quit: Ctrl+Q (KStandardAction::quit)"
 gnome = "gtk_application_set_accels_for_action(\"app.quit\", \"<Primary>q\"), as Nautilus 46 binds app.quit"
-native = "todo"
-native_note = "Porting notes: The Quit action exists (TAB-052) but onKey binds no Ctrl+Q. Explorer has no Ctrl+Q, so there is no conflict; Alt+F4 closes one window (TAB-049)."
+native = "done"
+native_note = "Ctrl+Q is an application accelerator for app.quit, so it works in every window from any focus and goes through Quit's refusals (TAB-052); the Open windows menu shows Ctrl+Q beside 'Quit OpenXplorer'. Test: native/crates/ox-app/src/window/tests/tab_commands.rs (ctrl_q_quits)."
 
 [[feature]]
 id = "VIEW-001"

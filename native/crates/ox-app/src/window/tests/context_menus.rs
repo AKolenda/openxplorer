@@ -264,6 +264,7 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
             "Open windows…",
             "-",
             "Close tab",
+            "Close other tabs",
         ]
     );
     assert!(

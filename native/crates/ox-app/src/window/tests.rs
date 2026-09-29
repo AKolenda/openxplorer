@@ -37,5 +37,6 @@ mod search;
 mod settings;
 mod sidebar_layout;
 mod support;
+mod tab_commands;
 mod tabs;
 mod views;

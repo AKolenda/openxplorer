@@ -118,7 +118,7 @@ impl BrowserWindow {
         let tab = outgoing.tab;
         let finish: fn(&BrowserWindow, TabId) = match outgoing.outcome {
             TabDragOutcome::Pending | TabDragOutcome::TornOut => BrowserWindow::move_tab_to_new_window,
-            TabDragOutcome::MovedAway => BrowserWindow::close_tab,
+            TabDragOutcome::MovedAway => BrowserWindow::release_moved_tab,
             TabDragOutcome::Reordered | TabDragOutcome::Cancelled => return,
         };
         // After the drag's own signal handlers, so a window that closes

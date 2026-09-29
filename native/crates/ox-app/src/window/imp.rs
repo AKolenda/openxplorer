@@ -28,6 +28,7 @@ use super::session::TabId;
 use super::settings_tab::SettingsTabState;
 use super::sidebar::Sidebar;
 use super::status_bar::StatusBar;
+use super::tab_commands::ClosedTab;
 use super::tab_moves::OutgoingTabDrag;
 use super::tab_strip::TabStrip;
 use super::toast::Toast;
@@ -156,6 +157,8 @@ pub(crate) struct BrowserWindow {
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
     /// The tab drag this window started, while it lasts.
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
+    /// The tabs closed in this window, most recent first.
+    pub(super) closed_tabs: RefCell<Vec<ClosedTab>>,
     /// The in-window dialogs, Properties by tab, and the tabs that
     /// browse snapshots.
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
