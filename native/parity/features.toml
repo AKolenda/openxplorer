@@ -9480,8 +9480,8 @@ sources = ["dolphin:src/filterbar/filterbar.cpp:103-133"]
 python_tests = []
 bridge = []
 dolphin = "FilterBar::keyPressEvent"
-native = "todo"
-native_note = "OpenXplorer has only the first rule: Escape in the search box empties it. Existing OpenXplorer part is protected by SRCH-001."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (enter_and_a_second_escape_move_focus_to_the_view); native/crates/ox-app/src/window/search_box.rs (the_arrow_and_page_keys_move_into_the_results). Escape in the search box empties it (SRCH-001); Escape in an empty box moves focus to the view, which is what closing Dolphin's filter bar does here, since the Windows-style search box stays in the navigation row. Enter moves focus to the results, keeping the search. Down, Up, Page Down and Page Up (plain or on the keypad) move focus to the results and select the first item when nothing is selected, where Dolphin forwards the key to a view whose current item is the first; focus lands on the selected item otherwise."
 
 [[feature]]
 id = "SRCH-007"
@@ -10119,8 +10119,8 @@ python_tests = [
 bridge = ["search", "cacheStatus", "cancel"]
 dolphin = "edit_find: Ctrl+F (filenamesearch:/ or baloosearch:/); Baloo filename search (Search → File name, From here)"
 gnome = "Tracker3 nfo:fileName query scoped by URI prefix (Nautilus search engine, recursive-search=local-only)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer searches subfolders only below folders the user has added to its opt-in filename cache. Elsewhere it filters the current folder only. Existing OpenXplorer part is protected by SRCH-003 and SRCH-007."
+native = "done"
+native_note = "native/crates/ox-core/src/search/live.rs (subfolders_are_searched_without_following_links_or_hidden_folders, the_walk_stops_after_the_limit, a_missing_folder_is_an_error_and_a_cancelled_walk_stops); native/crates/ox-app/src/window/tests/search.rs (a_folder_nobody_indexed_is_searched_with_its_subfolders); native/crates/ox-app/src/search/folder_search.rs (a_folder_nobody_indexed_is_filtered_then_walked). Ctrl+F focuses the search box. In a folder no indexed folder covers, contains or sits under, typing filters the folder at once and, after the 120 ms pause (Python's delay; Dolphin waits 1 s) or on Enter, walks the folder and its subfolders live on a GIO worker thread (ox_core::search::walk_search): matches stream in level by level after the folder's own, with \"Searching…\" until the walk ends, at most 500 results (\"First 500 results · narrow your search\"), case-insensitive, with *, ? and [ ] wildcards (SRCH-004). The walk never follows links or enters shares, skips hidden folders unless hidden files are shown, skips /proc and /sys, stops at 128 levels, leaves out unreadable subfolders, and is cancelled by the next edit. The strip reads \"Current folder + subfolders\" and still offers \"Cache this folder\"; an empty result says \"No items found in this folder or its subfolders.\" Indexed folders keep searching the cache."
 
 [[feature]]
 id = "SRCH-036"

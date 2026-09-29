@@ -55,6 +55,19 @@ pub(crate) fn merge_results(listing: Option<Listing<'_>>, text: &str, found: Sea
     MergedResults { items, is_truncated }
 }
 
+/// The listed items whose names match `text` as the folder filter
+/// matches them (SRCH-003, SRCH-004): what a live search of the folder
+/// shows before its walk adds the subfolders' matches.
+pub(crate) fn listed_name_matches(listing: Listing<'_>, text: &str) -> Vec<FileItem> {
+    let pattern = NamePattern::new(text);
+    let items = listing.items.iter::<FileItem>().filter_map(Result::ok);
+    let matching = items.filter(|item| {
+        let is_listed = listing.shows_hidden || item.visibility() == Visibility::Visible;
+        is_listed && pattern.matches_lowercase(item.lowercase_name(), "")
+    });
+    matching.collect()
+}
+
 /// The listed items whose name and folder hold every word of `text`,
 /// ignoring case (`currentFolderMatches`); a wildcard word matches the
 /// whole name (SRCH-004).

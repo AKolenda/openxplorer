@@ -104,10 +104,11 @@ impl FolderSearch {
     }
 
     /// Starts the search of `folder`, with the indexed folders `roots`.
-    /// Returns the run that asks the cache, or `None` when the listing's
-    /// filter is the whole search, which is then shown at once. Earlier
-    /// cached results stay until the run replaces them, so a search that
-    /// runs again after the cache changed does not flicker.
+    /// Returns the run that asks the cache, or walks the folder's tree
+    /// when no indexed folder is related ([`SearchSource::CurrentFolder`]);
+    /// `None` while nothing is searched. Earlier cached results stay until
+    /// the run replaces them, so a search that runs again after the cache
+    /// changed does not flicker.
     pub(crate) fn begin(&mut self, folder: &str, roots: &[IndexRoot]) -> Option<SearchRun> {
         self.cancel();
         if !self.is_active() {
@@ -118,11 +119,6 @@ impl FolderSearch {
         let source = SearchSource::choose(roots, folder, self.scope);
         if !source.uses_cache() {
             self.results = None;
-            self.report = Some(SearchReport {
-                source,
-                progress: SearchProgress::Shown { is_truncated: false },
-            });
-            return None;
         }
         self.report = Some(SearchReport {
             source,
@@ -143,6 +139,14 @@ impl FolderSearch {
     /// Whether `run` is still the latest run, whose results may be shown.
     pub(crate) fn is_current(&self, run: &SearchRun) -> bool {
         run.generation == self.generation && self.running.is_some()
+    }
+
+    /// Shows the rows `run` has found so far, which it keeps adding to,
+    /// while it goes on.
+    pub(crate) fn show_found(&mut self, run: &SearchRun, rows: gio::ListStore) {
+        if self.is_current(run) {
+            self.results = Some(rows);
+        }
     }
 
     /// Shows `results` of `run`.
@@ -219,17 +223,20 @@ mod tests {
         assert_eq!(search.report().map(SearchReport::caption), Some("Searching…"));
     }
 
-    /// parity: SRCH-003
+    /// parity: SRCH-003, SRCH-035
     #[test]
-    fn a_folder_nobody_indexed_is_only_filtered() {
+    fn a_folder_nobody_indexed_is_filtered_then_walked() {
         let mut search = searching("report");
 
-        let run = search.begin(FOLDER, &[]);
+        let run = search.begin(FOLDER, &[]).expect("the folder's tree is walked");
 
-        assert!(run.is_none());
-        let report = search.report().expect("a search is reported");
-        assert_eq!(report.caption(), "Current folder only");
+        assert_eq!(run.source, SearchSource::CurrentFolder);
         assert!(search.results().is_none(), "the listing is shown, filtered");
+        search.show_found(&run, empty_results());
+        assert!(search.results().is_some(), "the walk's rows replace it");
+        search.finish(&run, empty_results(), false);
+        let report = search.report().expect("a search is reported");
+        assert_eq!(report.caption(), "Current folder + subfolders");
     }
 
     /// parity: SRCH-007

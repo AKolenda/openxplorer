@@ -42,6 +42,7 @@
 //! | `ownership` | Electing one owner across processes | `index_service.py` |
 //! | `crawl` | A full scan | `index_service.py` |
 //! | `update` | A live update of changed folders | `index_service.py` |
+//! | `live` | Searching a folder's tree without the cache (SRCH-035) | Dolphin |
 //! | `limits` | The entry, folder and watch limits | `index_service.py`, `local_watch.py` |
 //! | `policy` | What may be indexed, and network roots | `index_service.py` |
 //! | `mounts` | The kernel's mount table | `mount_support.py` |
@@ -58,6 +59,7 @@ mod error;
 mod hit;
 mod index;
 mod limits;
+mod live;
 mod mounts;
 mod ownership;
 mod pattern;
@@ -85,6 +87,7 @@ mod service_tests;
 
 pub use error::SearchError;
 pub use index::SearchIndex;
+pub use live::{walk_search, LiveSearch, LiveSearchEnd};
 pub use pattern::{is_wildcard, NamePattern};
 pub use pins::PinIndexing;
 pub use query::{

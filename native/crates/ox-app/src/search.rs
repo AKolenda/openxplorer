@@ -44,6 +44,6 @@ pub(crate) use indexer::{CacheLocation, IndexerStart};
 pub(crate) use info_strip::SearchInfoStrip;
 pub(crate) use pin_sync::SettingsReading;
 pub(crate) use report::{SearchCount, RESULT_LIMIT};
-pub(crate) use results::{merge_results, Listing};
+pub(crate) use results::{listed_name_matches, merge_results, Listing};
 pub(crate) use source::{related_roots, SearchScope};
 pub(crate) use writes::changed_folders;

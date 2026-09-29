@@ -49,14 +49,16 @@ impl SearchReport {
         }
     }
 
-    /// The strip's note on cached results, or `None` for a folder filter.
+    /// The strip's note: that results were cut off, or how fresh cached
+    /// ones are; `None` for a complete live search.
     pub(crate) fn freshness_note(&self) -> Option<&'static str> {
+        if self.is_truncated() {
+            return Some("First 500 results · narrow your search");
+        }
         if !self.source.uses_cache() {
             return None;
         }
-        let note = if self.is_truncated() {
-            "First 500 results · narrow your search"
-        } else if self.source == SearchSource::CurrentFolderAndCachedSubfolders {
+        let note = if self.source == SearchSource::CurrentFolderAndCachedSubfolders {
             "Other subfolders are not indexed."
         } else {
             "Cached metadata · see update coverage in Settings"
@@ -94,7 +96,7 @@ impl SearchReport {
         if self.source.uses_cache() {
             "No cached matches. Refresh the cache if this folder changed, or try another search."
         } else {
-            "Only this folder is being filtered. Enable its search cache to include subfolders."
+            "No items found in this folder or its subfolders."
         }
     }
 
@@ -178,8 +180,12 @@ mod tests {
             SearchProgress::Failed("Search must be at most 512 characters.".into()),
         );
 
-        assert_eq!(folder.caption(), "Current folder only");
+        assert_eq!(folder.caption(), "Current folder + subfolders");
         assert_eq!(folder.freshness_note(), None);
+        assert_eq!(
+            report(SearchSource::CurrentFolder, shown(true)).freshness_note(),
+            Some("First 500 results · narrow your search")
+        );
         assert!(folder.offers_to_cache_folder());
         assert_eq!(partial.caption(), "Current folder + cached subfolders");
         assert_eq!(
@@ -231,7 +237,7 @@ mod tests {
 
         assert_eq!(
             folder.empty_message(),
-            "Only this folder is being filtered. Enable its search cache to include subfolders."
+            "No items found in this folder or its subfolders."
         );
         assert_eq!(
             cached.empty_message(),

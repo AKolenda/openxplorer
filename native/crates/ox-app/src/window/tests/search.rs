@@ -53,13 +53,37 @@ fn typing_filters_a_folder_nobody_indexed_and_says_so() {
     assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt"]);
     let strip = test.window.search_strip();
     assert!(strip.is_visible());
-    assert_eq!(strip.caption(), "Current folder only");
+    assert_eq!(strip.caption(), "Current folder + subfolders");
     assert!(strip.offers_to_cache_folder());
     assert_eq!(strip.shown_note(), None);
     assert_eq!(test.status_count(), "2 results");
     assert!(test.shows_column(SortColumn::FolderPath));
     assert!(!test.shows_column(SortColumn::Modified));
     capture(&test.window, "search-folder-filter.png");
+}
+
+/// A folder nobody indexed is searched live with its subfolders, and
+/// wildcards work there too.
+///
+/// parity: SRCH-035
+#[gtk::test]
+fn a_folder_nobody_indexed_is_searched_with_its_subfolders() {
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Documents/Deep")).expect("fixture subfolder");
+    fs::write(fixture.path("Documents/Deep/notes archive.TXT"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.search_for("notes");
+
+    assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes archive.TXT"]);
+    assert_eq!(test.status_count(), "3 results");
+    let deep = test.window.folder_model().item(2).expect("a third result");
+    let expected = fixture.path("Documents/Deep");
+    assert_eq!(deep.folder_path().text, expected.to_string_lossy());
+
+    test.search_for("*.txt notes");
+
+    assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes archive.TXT"]);
 }
 
 /// parity: SRCH-001, SRCH-002
@@ -78,6 +102,33 @@ fn escape_empties_the_box_and_brings_the_listing_back() {
     assert!(test.shows_column(SortColumn::Modified));
     assert!(!test.shows_column(SortColumn::FolderPath));
     assert_eq!(test.status_count(), "4 items");
+}
+
+/// Enter moves to the results and keeps the search; Escape empties the
+/// box, and a second Escape moves to the view.
+///
+/// parity: SRCH-006
+#[gtk::test]
+fn enter_and_a_second_escape_move_focus_to_the_view() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.search_for("notes");
+    let entry = test.window.search_box().entry();
+    let pane = test.window.folder_pane();
+    test.activate("search", None);
+    wait_until("the box to take focus", || entry.focus_child().is_some());
+
+    entry.emit_activate();
+
+    wait_until("the results to take focus", || pane.view_has_focus());
+    assert_eq!(entry.text().as_str(), "notes");
+    test.activate("search", None);
+    wait_until("the box to take focus again", || entry.focus_child().is_some());
+    entry.emit_stop_search();
+    assert_eq!(entry.text().as_str(), "");
+    assert!(!pane.view_has_focus(), "the first Escape only empties the box");
+    entry.emit_stop_search();
+    wait_until("the view to take focus", || pane.view_has_focus());
 }
 
 /// parity: SRCH-012
@@ -179,7 +230,7 @@ fn a_search_that_finds_nothing_says_why() {
     assert_eq!(pane.empty_page().title(), "No matching items");
     assert_eq!(
         pane.empty_page().message(),
-        "Only this folder is being filtered. Enable its search cache to include subfolders."
+        "No items found in this folder or its subfolders."
     );
 }
 

@@ -9,24 +9,32 @@
 //! selection, scrolls to the top and filters the listing at once; after
 //! the 120 ms pause the search runs. A folder the cache covers, or a
 //! search of every cached folder, shows the cache's results in place of
-//! the listing, with Folder path in place of Date modified. The window's
-//! part of the work is here; the search itself is in [`crate::search`].
+//! the listing, with Folder path in place of Date modified. A folder no
+//! indexed folder is related to is walked live with its subfolders, and
+//! the matches appear as they are found (SRCH-035). The window's part of
+//! the work is here; the search itself is in [`crate::search`].
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
+use std::collections::HashSet;
+
+use ox_core::entry::Entry;
 use ox_core::location::parent_location;
-use ox_core::search::{HiddenItems, SearchQuery, SearchResults};
+use ox_core::search::{
+    walk_search, HiddenItems, LiveSearch, NamePattern, SearchError, SearchQuery, SearchResults,
+};
 
 use crate::folder_view::details::DetailsListing;
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::search::{
-    merge_results, related_roots, CacheError, Listing, SearchCount, SearchInfoStrip, SearchRun, SearchScope,
-    RESULT_LIMIT,
+    listed_name_matches, merge_results, related_roots, CacheError, Listing, SearchCount, SearchInfoStrip,
+    SearchRun, SearchScope, RESULT_LIMIT,
 };
 
 use super::empty_page::EmptyState;
+use super::search_box::ViewKey;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -48,6 +56,11 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             move |_| window.run_search()
+        ));
+        search_box.connect_view_requested(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |key| window.focus_results(key)
         ));
         let strip = self.search_strip();
         strip.connect_scope_changed(glib::clone!(
@@ -104,6 +117,25 @@ impl BrowserWindow {
         self.show_search_state();
     }
 
+    /// Moves keyboard focus from the search box to the items shown, as
+    /// Dolphin's filter bar does (SRCH-006): to the selected item, or the
+    /// first one, which a moving key also selects.
+    fn focus_results(&self, key: ViewKey) {
+        let pane = self.folder_pane();
+        let model = pane.model();
+        pane.focus_view();
+        if model.n_items() == 0 {
+            return;
+        }
+        let position = model.first_selected().unwrap_or_else(|| {
+            if key == ViewKey::Move {
+                model.select_only(0);
+            }
+            0
+        });
+        pane.reveal(position);
+    }
+
     /// Runs the search once typing paused (`runSearch`).
     fn run_search(&self) {
         let Some(folder) = self.searched_folder() else {
@@ -113,8 +145,10 @@ impl BrowserWindow {
         let run = self.imp().search.borrow_mut().begin(&folder, &roots);
         self.show_searched_items();
         self.show_search_state();
-        if let Some(run) = run {
-            self.ask_search_cache(run);
+        match run {
+            Some(run) if run.source.uses_cache() => self.ask_search_cache(run),
+            Some(run) => self.walk_folder(run),
+            None => {}
         }
     }
 
@@ -167,6 +201,75 @@ impl BrowserWindow {
                 window.finish_search(&run, outcome);
             }
         });
+    }
+
+    /// Walks the folder of `run` and its subfolders off the main thread,
+    /// adding the matches to the rows as they are found, after the
+    /// listing's own (SRCH-035). A newer edit cancels the walk.
+    fn walk_folder(&self, run: SearchRun) {
+        let rows = gio::ListStore::new::<FileItem>();
+        let mut shown = HashSet::new();
+        let active = self.imp().session.borrow().active_id();
+        if let Some(store) = active.and_then(|id| self.tab_store(id)) {
+            let listing = Listing {
+                items: &store,
+                folder: &run.folder,
+                shows_hidden: self.hidden_files_shown(),
+            };
+            let listed = listed_name_matches(listing, &run.text);
+            shown.extend(listed.iter().map(|item| item.entry().uri.clone()));
+            rows.extend_from_slice(&listed);
+        }
+        self.imp().search.borrow_mut().show_found(&run, rows.clone());
+        self.show_searched_items();
+        let search = LiveSearch {
+            folder: run.folder.clone(),
+            pattern: NamePattern::new(&run.text),
+            hidden_items: self.hidden_items(),
+            limit: RESULT_LIMIT,
+        };
+        let (sender, batches) = async_channel::unbounded::<Vec<Entry>>();
+        let cancellable = run.cancellable.clone();
+        let walk = gio::spawn_blocking(move || {
+            walk_search(&search, &cancellable, &mut |batch| {
+                // Fails only once the window stopped listening.
+                let _ = sender.send_blocking(batch);
+            })
+        });
+        let window = self.downgrade();
+        glib::spawn_future_local(async move {
+            let mut is_truncated = false;
+            while let Ok(batch) = batches.recv().await {
+                let new = batch.into_iter().filter(|entry| shown.insert(entry.uri.clone()));
+                let room = RESULT_LIMIT.saturating_sub(rows.n_items() as usize);
+                let found: Vec<FileItem> = new.map(FileItem::new).collect();
+                is_truncated |= found.len() > room;
+                rows.extend_from_slice(&found[..found.len().min(room)]);
+            }
+            let outcome = walk.await.unwrap_or(Err(SearchError::Cancelled));
+            if let Some(window) = window.upgrade() {
+                let outcome = outcome.map(|end| end.is_truncated || is_truncated);
+                window.finish_walk(&run, rows, outcome);
+            }
+        });
+    }
+
+    /// Shows the rows the walk of `run` found, or why it failed; a late
+    /// answer never replaces a newer one (SAFE-013). `outcome` says
+    /// whether more matched than are shown.
+    fn finish_walk(&self, run: &SearchRun, rows: gio::ListStore, outcome: Result<bool, SearchError>) {
+        let is_current = self.imp().search.borrow().is_current(run);
+        let is_same_folder = self.current_uri().as_deref() == Some(run.folder.as_str());
+        if !is_current || !is_same_folder {
+            return;
+        }
+        match outcome {
+            Ok(is_truncated) => self.imp().search.borrow_mut().finish(run, rows, is_truncated),
+            Err(SearchError::Cancelled) => return,
+            Err(error) => self.imp().search.borrow_mut().fail(run, error.to_string()),
+        }
+        self.show_searched_items();
+        self.show_search_state();
     }
 
     /// Whether "Show hidden files" is on.
