@@ -51,6 +51,9 @@ pub(in crate::window) enum RowTarget {
     Location(String),
     /// Mounts the volume with this identifier, then opens it.
     MountVolume(String),
+    /// Nothing: the drop tail of an empty Quick access, which only takes
+    /// dropped folders to pin (DND-014).
+    PinDropTail,
 }
 
 /// One sidebar row.
@@ -231,6 +234,23 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
     }
 }
 
+/// The dashed "Pin to Quick access" row an empty Quick access keeps, so
+/// folders can still be dropped there to pin them (`.quick-drop-tail` in
+/// `.quick-empty`).
+fn pin_drop_tail() -> SidebarEntry {
+    SidebarEntry {
+        section: Section::QuickAccess,
+        level: RowLevel::Place,
+        label: "Pin to Quick access".to_owned(),
+        icon: Art::Glyph(Icon::Add),
+        target: RowTarget::PinDropTail,
+        tooltip: "Quick access — drop folders here to pin".to_owned(),
+        pinned: false,
+        menu: None,
+        eject: None,
+    }
+}
+
 /// The sidebar rows, in the Python app's order.
 pub(in crate::window) fn sidebar_entries(places: &Places, locations: &LocationContext) -> Vec<SidebarEntry> {
     let home_uri = locations.home_uri();
@@ -249,6 +269,9 @@ pub(in crate::window) fn sidebar_entries(places: &Places, locations: &LocationCo
     let network_rows = places.network.iter().map(|row| network_entry(row, locations));
     let mut entries = vec![home];
     entries.extend(quick_access);
+    if places.quick_access.is_empty() {
+        entries.push(pin_drop_tail());
+    }
     entries.push(this_pc);
     entries.push(local_disk_entry(locations));
     entries.extend(drives);
@@ -345,6 +368,17 @@ mod tests {
         let media = entries.last().expect("network row");
         assert_eq!(media.tooltip, "\\\\nas\\media · Connected");
         assert_eq!(media.section, Section::Network);
+    }
+
+    /// parity: DND-014
+    #[test]
+    fn an_empty_quick_access_keeps_a_drop_tail_to_pin_into() {
+        let entries = entries_for(&SettingsData::default(), &[]);
+
+        let tail = &entries[1];
+        assert_eq!(tail.label, "Pin to Quick access");
+        assert_eq!(tail.target, RowTarget::PinDropTail);
+        assert_eq!(tail.section, Section::QuickAccess);
     }
 
     #[test]

@@ -262,7 +262,7 @@ impl Sidebar {
         let entries = self.imp().entries.borrow();
         match &entries.get(index)?.target {
             RowTarget::Location(uri) => Some(uri.clone()),
-            RowTarget::MountVolume(_) => None,
+            RowTarget::MountVolume(_) | RowTarget::PinDropTail => None,
         }
     }
 
@@ -294,7 +294,7 @@ impl Sidebar {
             .iter()
             .position(|entry| match &entry.target {
                 RowTarget::Location(candidate) => same_location(candidate, uri),
-                RowTarget::MountVolume(_) => false,
+                RowTarget::MountVolume(_) | RowTarget::PinDropTail => false,
             });
         let row = index
             .and_then(|index| i32::try_from(index).ok())

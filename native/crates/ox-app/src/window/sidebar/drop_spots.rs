@@ -67,8 +67,10 @@ impl Sidebar {
         let index = row.index();
         let entries = self.imp().entries.borrow();
         let entry = entries.get(usize::try_from(index).ok()?)?;
-        let RowTarget::Location(uri) = &entry.target else {
-            return None;
+        let uri = match &entry.target {
+            RowTarget::Location(uri) => uri,
+            RowTarget::PinDropTail => return Some(SidebarDropSpot::Pin { index, before: None }),
+            RowTarget::MountVolume(_) => return None,
         };
         if entry.section != Section::QuickAccess {
             return Some(SidebarDropSpot::Folder {

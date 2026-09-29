@@ -9093,8 +9093,8 @@ python_tests = [
 ]
 bridge = ["pin", "fileDragLayout"]
 dolphin = "Dolphin: drop folders on the Places panel to add them.; KFilePlacesView drop of folders"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, folders_dropped_on_quick_access_are_pinned_and_files_are_not). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a folder dropped between two Quick access rows was pinned there with the Python toast. Missing: the dashed drop tail of an empty Quick access."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows, folders_dropped_on_quick_access_are_pinned_and_files_are_not). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a folder dropped between two Quick access rows was pinned there with the Python toast. An empty Quick access keeps a dashed 'Pin to Quick access' row (native/crates/ox-app/src/window/sidebar/entries.rs pin_drop_tail) that takes pin drops at the end (native/crates/ox-app/src/window/sidebar/entries.rs an_empty_quick_access_keeps_a_drop_tail_to_pin_into)."
 
 [[feature]]
 id = "DND-015"
