@@ -292,16 +292,24 @@ impl TransferEngine {
         )?;
         if placement.mode == TransferMode::Move {
             moved_from.remember(source);
-            self.move_item(source, destination, placement.policy, batch.cancel)?;
+            match self.move_item(source, destination, placement.policy, batch.cancel) {
+                // XFER-013: the backend cannot move here (another filesystem,
+                // share or device), so the item is copied through staging and
+                // the source is removed only once its copy is published.
+                Err(TransferError::NotSupported(_)) => {
+                    self.move_by_copying(placement, selected, destination, batch.cancel, staging)?;
+                }
+                moved => moved?,
+            }
         } else {
             self.copy_item(placement, selected, destination, batch.cancel, staging)?;
         }
         Ok(ItemOutcome::Done)
     }
 
-    /// Moves one item. XFER-011: backends never degrade a move to
-    /// copy-then-delete (`NO_FALLBACK_FOR_MOVE`); Replace is an explicit
-    /// user choice and still never degrades.
+    /// Moves one item natively. XFER-011: backends never degrade a move to
+    /// an unstaged copy-then-delete (`NO_FALLBACK_FOR_MOVE`); where they
+    /// cannot move, the engine copies through staging instead (XFER-013).
     fn move_item(
         &self,
         source: &dyn Node,
@@ -314,6 +322,33 @@ impl TransferEngine {
         } else {
             source.move_native(destination, Some(cancel))
         }
+    }
+
+    /// XFER-013: moves one item the backend cannot move natively by copying
+    /// it through private staging (every copy rule applies) and then
+    /// removing the source. A failed or cancelled copy keeps the source.
+    /// Once the copy is published the source removal runs to the end, so
+    /// the item is either moved or kept, never half removed by a late
+    /// cancellation.
+    fn move_by_copying(
+        &mut self,
+        placement: &Placement,
+        selected: &SelectedItem,
+        destination: &dyn Node,
+        cancel: &Cancellation,
+        staging: &mut ItemStaging,
+    ) -> Result<(), TransferError> {
+        self.copy_item(placement, selected, destination, cancel, staging)?;
+        let source = selected.node.as_ref();
+        source
+            .delete_tree(&Cancellation::new(), self.guard())
+            .map_err(|error| {
+                TransferError::RecoveryRequired(format!(
+                    "The item was copied to {}, but the original could not be removed. \
+                     Check the copy, then delete the original. {error}",
+                    destination.uri()
+                ))
+            })
     }
 
     /// Copies one item into the destination folder of `placement` through

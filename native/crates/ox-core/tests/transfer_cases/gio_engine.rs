@@ -7,9 +7,10 @@
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::{Path, PathBuf};
 
-use ox_core::transfer::{ConflictPolicy, TransferEngine, TransferError};
+use ox_core::transfer::{Cancellation, ConflictPolicy, Operation, TransferEngine, TransferError};
 
 use crate::transfer_support::*;
 
@@ -211,4 +212,42 @@ fn keep_both_refuses_a_latin1_name_instead_of_renaming_it_lossily() {
     );
     assert_eq!(read(&existing), "existing song");
     fixture.assert_no_staging();
+}
+
+/// A cut and paste onto another filesystem copies the item through staging
+/// and removes the source only after the copy was published; links stay
+/// links. `/tmp` and `/dev/shm` are separate filesystems on Linux.
+///
+/// parity: XFER-013
+#[test]
+fn a_move_to_another_filesystem_copies_then_removes_the_source() {
+    let source_root = tempfile::tempdir_in("/tmp").expect("the test may create folders there");
+    let target_root = tempfile::tempdir_in("/dev/shm").expect("the test may create folders there");
+    let device_of = |path: &Path| fs::metadata(path).expect("the folder exists").dev();
+    assert_ne!(
+        device_of(source_root.path()),
+        device_of(target_root.path()),
+        "this Linux integration check needs separate tmp and shm filesystems"
+    );
+    let folder = source_root.path().join("folder");
+    fs::create_dir(&folder).expect("create the source folder");
+    write(&folder.join("notes.txt"), "notes");
+    symlink("notes.txt", folder.join("link")).expect("create a link");
+    let target_uri = file_uri(target_root.path());
+    let operation = Operation::Move {
+        destination_folder: &target_uri,
+        policy: ConflictPolicy::Skip,
+    };
+
+    let result = guarded_gio_engine()
+        .run(operation, &[file_uri(&folder)], &Cancellation::new())
+        .expect("the run is accepted");
+
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert_eq!(result.done, [file_uri(&folder)]);
+    assert!(!folder.exists(), "the source is removed after the copy");
+    let moved = target_root.path().join("folder");
+    assert_eq!(read(&moved.join("notes.txt")), "notes");
+    assert_eq!(fs::read_link(moved.join("link")).expect("a link"), Path::new("notes.txt"));
+    assert_eq!(raw_names(target_root.path()), [OsString::from("folder")]);
 }

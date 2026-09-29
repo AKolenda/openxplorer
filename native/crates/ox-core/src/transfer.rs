@@ -14,7 +14,10 @@
 //! - XFER-007: publishing never overwrites a name that appeared meanwhile.
 //! - XFER-009 and XFER-010: Replace never loses the existing item before
 //!   the new one is installed.
-//! - XFER-011: a move never degrades to copy-then-delete.
+//! - XFER-011: a move is a native rename wherever the backend can do one.
+//!   XFER-013: elsewhere (another filesystem, share or device) the item is
+//!   copied through staging and its source removed only after the copy
+//!   was published.
 //! - XFER-014: Trash never falls back to permanent deletion.
 //! - XFER-020: a protected location anywhere in an affected tree stops the
 //!   item before anything changes.
