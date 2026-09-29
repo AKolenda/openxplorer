@@ -67,9 +67,23 @@ impl KindFacet {
         }
     }
 
-    /// Whether `entry` is of this kind.
+    /// Whether `entry` is of this kind. An entry whose type is unknown,
+    /// as a cached result's is, is judged by the type its name suggests.
     pub fn matches(self, entry: &Entry) -> bool {
-        let content_type = entry.content_type.as_deref().unwrap_or_default();
+        if matches!(self, KindFacet::Any | KindFacet::Folders) || entry.is_dir {
+            return self.matches_type(entry, "");
+        }
+        match entry.content_type.as_deref() {
+            Some(content_type) => self.matches_type(entry, content_type),
+            None => {
+                let (guessed, _) = gio::content_type_guess(Some(entry.name.as_str()), None);
+                self.matches_type(entry, &guessed)
+            }
+        }
+    }
+
+    /// Whether `entry`, of `content_type`, is of this kind.
+    fn matches_type(self, entry: &Entry, content_type: &str) -> bool {
         match self {
             KindFacet::Any => true,
             KindFacet::Folders => entry.is_dir,
@@ -262,6 +276,12 @@ mod tests {
         assert_eq!(shown(kind(KindFacet::Images)), ["photo.jpg"]);
         assert_eq!(shown(kind(KindFacet::Audio)), ["song.ogg"]);
         assert_eq!(shown(kind(KindFacet::Videos)), ["clip.mp4"]);
+        let mut cached = entry("scan.png", "", None);
+        cached.content_type = None;
+        assert!(
+            KindFacet::Images.matches(&cached),
+            "a cached result's type is guessed from its name"
+        );
         assert_eq!(shown(date(DateFacet::Today)), ["report.docx"]);
         assert_eq!(shown(date(DateFacet::Yesterday)), ["photo.jpg"]);
         assert_eq!(

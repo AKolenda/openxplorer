@@ -44,6 +44,10 @@ pub(crate) enum SearchSource {
     /// listing is filtered (SRCH-003), then its tree is walked live
     /// (SRCH-035).
     CurrentFolder,
+    /// As [`SearchSource::CurrentFolder`], for a folder on the network,
+    /// whose tree is not walked: its listing is only filtered, as Python
+    /// filtered every such folder.
+    CurrentFolderOnly,
     /// Only folders inside it are indexed: the listing's matches, then
     /// the cached ones below it (SRCH-007).
     CurrentFolderAndCachedSubfolders,
@@ -72,13 +76,14 @@ impl SearchSource {
 
     /// Whether the search asks the cache.
     pub(crate) const fn uses_cache(self) -> bool {
-        !matches!(self, SearchSource::CurrentFolder)
+        !matches!(self, SearchSource::CurrentFolder | SearchSource::CurrentFolderOnly)
     }
 
     /// What the search strip says it searched.
     pub(crate) const fn caption(self) -> &'static str {
         match self {
             SearchSource::CurrentFolder => "Current folder + subfolders",
+            SearchSource::CurrentFolderOnly => "Current folder only",
             SearchSource::CurrentFolderAndCachedSubfolders => "Current folder + cached subfolders",
             SearchSource::Cache => "Cached names & paths",
         }

@@ -95,7 +95,7 @@ pub use contents::SearchIn;
 pub use error::SearchError;
 pub use facets::{DateFacet, FacetMatcher, KindFacet, SearchFacets};
 pub use index::SearchIndex;
-pub use live::{walk_search, LiveSearch, LiveSearchEnd};
+pub use live::{walk_search, walks_subfolders, LiveSearch, LiveSearchEnd};
 pub use pattern::{is_wildcard, NamePattern};
 pub use pins::PinIndexing;
 pub use query::{

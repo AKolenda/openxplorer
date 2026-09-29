@@ -12,7 +12,7 @@
 
 use gtk::gio;
 use gtk::prelude::*;
-use ox_core::search::{IndexRoot, SearchFacets, SearchIn};
+use ox_core::search::{walks_subfolders, IndexRoot, SearchFacets, SearchIn};
 
 use super::report::{SearchProgress, SearchReport};
 use super::source::{SearchScope, SearchSource};
@@ -30,6 +30,9 @@ pub(crate) struct SearchRun {
     pub scope: SearchScope,
     /// Where it looks.
     pub source: SearchSource,
+    /// Where the cache covers the folder, which a search of contents
+    /// does not use but the strip's offer to cache it follows.
+    pub coverage: SearchSource,
     /// Whether the text of files is searched too (SRCH-036).
     pub search_in: SearchIn,
     /// Cancelled when a newer edit replaces the run.
@@ -67,11 +70,20 @@ impl FolderSearch {
         self.cancel();
         self.results = None;
         text.clone_into(&mut self.query);
-        let source = self.source(roots, folder);
-        self.report = self.is_active().then_some(SearchReport {
-            source,
+        if !self.is_active() {
+            // Clearing the box ends the search: its kind and date go.
+            self.facets = SearchFacets::default();
+        }
+        self.report = self.is_active().then(|| self.searching_report(roots, folder));
+    }
+
+    /// The report of a search of `folder` that has not answered yet.
+    fn searching_report(&self, roots: &[IndexRoot], folder: &str) -> SearchReport {
+        SearchReport {
+            source: self.source(roots, folder),
+            coverage: SearchSource::choose(roots, folder, self.scope),
             progress: SearchProgress::Searching,
-        });
+        }
     }
 
     /// Stops the search and forgets it, as leaving the folder does
@@ -86,13 +98,19 @@ impl FolderSearch {
     }
 
     /// Where a search of `folder` looks: a search of contents walks the
-    /// folder, because the cache holds names only.
+    /// folder, because the cache holds names only, and a folder on the
+    /// network is only filtered.
     fn source(&self, roots: &[IndexRoot], folder: &str) -> SearchSource {
         let reads_contents = self.search_in == SearchIn::NamesAndContents;
-        if reads_contents && self.scope == SearchScope::ThisFolder {
+        let source = if reads_contents && self.scope == SearchScope::ThisFolder {
             SearchSource::CurrentFolder
         } else {
             SearchSource::choose(roots, folder, self.scope)
+        };
+        if source == SearchSource::CurrentFolder && !walks_subfolders(folder) {
+            SearchSource::CurrentFolderOnly
+        } else {
+            source
         }
     }
 
@@ -155,14 +173,18 @@ impl FolderSearch {
             self.report = None;
             return None;
         }
-        let source = self.source(roots, folder);
+        let mut report = self.searching_report(roots, folder);
+        let (source, coverage) = (report.source, report.coverage);
         if !source.uses_cache() {
             self.results = None;
         }
-        self.report = Some(SearchReport {
-            source,
-            progress: SearchProgress::Searching,
-        });
+        if source == SearchSource::CurrentFolderOnly {
+            // The filtered listing is the whole search.
+            report.progress = SearchProgress::Shown { is_truncated: false };
+            self.report = Some(report);
+            return None;
+        }
+        self.report = Some(report);
         let cancellable = gio::Cancellable::new();
         self.running = Some(cancellable.clone());
         Some(SearchRun {
@@ -171,6 +193,7 @@ impl FolderSearch {
             text: self.query.trim().to_owned(),
             scope: self.scope,
             source,
+            coverage,
             search_in: self.search_in,
             cancellable,
         })
@@ -195,6 +218,7 @@ impl FolderSearch {
         self.results = Some(results);
         self.report = Some(SearchReport {
             source: run.source,
+            coverage: run.coverage,
             progress: SearchProgress::Shown { is_truncated },
         });
     }
@@ -205,6 +229,7 @@ impl FolderSearch {
         self.results = Some(gio::ListStore::new::<crate::folder_view::item::FileItem>());
         self.report = Some(SearchReport {
             source: run.source,
+            coverage: run.coverage,
             progress: SearchProgress::Failed(message),
         });
     }
@@ -279,6 +304,23 @@ mod tests {
         assert_eq!(report.caption(), "Current folder + subfolders");
     }
 
+    /// A share nobody indexed is filtered only, not walked over the
+    /// network.
+    ///
+    /// parity: SRCH-003
+    #[test]
+    fn a_share_nobody_indexed_is_only_filtered() {
+        let share = "smb://server/share/Work";
+        let mut search = FolderSearch::default();
+        search.edit("report", share, &[]);
+
+        assert!(search.begin(share, &[]).is_none(), "nothing is walked");
+
+        let report = search.report().expect("a search is reported");
+        assert_eq!(report.caption(), "Current folder only");
+        assert!(report.offers_to_cache_folder());
+    }
+
     /// parity: SRCH-007
     #[test]
     fn the_latest_run_shows_its_results() {
@@ -318,6 +360,11 @@ mod tests {
 
         assert_eq!(run.source, SearchSource::CurrentFolder);
         assert_eq!(run.search_in, SearchIn::NamesAndContents);
+        let report = search.report().expect("a search is reported");
+        assert!(
+            !report.offers_to_cache_folder(),
+            "the folder is cached already; the button would switch it off"
+        );
         search.end();
         assert_eq!(
             search.search_in(),

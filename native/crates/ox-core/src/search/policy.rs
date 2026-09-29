@@ -125,6 +125,19 @@ impl IndexScope {
     /// so an explicitly chosen `/tmp/project` still indexes; otherwise its
     /// scan and every live update would silently find nothing.
     pub(crate) fn for_root(root: &str, index_directory: &Path, mounts: &[Mount]) -> Self {
+        let mut scope = Self::for_walk(root, mounts);
+        if local_path(root).is_some() {
+            let index_directory =
+                fs::canonicalize(index_directory).unwrap_or_else(|_| index_directory.to_path_buf());
+            scope.excluded.push(file_uri(&index_directory));
+        }
+        scope
+    }
+
+    /// The part below `root` a live search walks given the current
+    /// `mounts`: what a scan of `root` would index, apart from the index's
+    /// own directory, which holds no one's files.
+    pub(crate) fn for_walk(root: &str, mounts: &[Mount]) -> Self {
         let mut scope = Self {
             root: root.to_owned(),
             excluded: Vec::new(),
@@ -138,9 +151,6 @@ impl IndexScope {
             .filter(|folder| folder.starts_with(&root_prefix))
             .map(|folder| file_uri(Path::new(folder)));
         scope.excluded.extend(system_folders);
-        let index_directory =
-            fs::canonicalize(index_directory).unwrap_or_else(|_| index_directory.to_path_buf());
-        scope.excluded.push(file_uri(&index_directory));
         let nested_mounts = mounts
             .iter()
             .filter(|mount| mount.path != root_path && mount.path.starts_with(&root_path))

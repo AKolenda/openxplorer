@@ -380,13 +380,15 @@ impl BrowserWindow {
             search_in: search.search_in(),
             facets: search.facets(),
         };
-        self.search_strip().show_report(search.report(), options);
+        let report = search.report().cloned();
         let listing = if search.is_active() {
             DetailsListing::SearchResults
         } else {
             DetailsListing::Folder
         };
+        // Released first: the strip's lists change as it shows them.
         drop(search);
+        self.search_strip().show_report(report.as_ref(), options);
         self.folder_pane().details().show_listing(listing);
         self.update_content();
         self.update_details_pane();
@@ -405,9 +407,14 @@ impl BrowserWindow {
     /// contents runs the search again, and the kind and date options
     /// filter the rows shown (SRCH-036, SRCH-037).
     fn change_search_options(&self, search_in: SearchIn, facets: SearchFacets) {
-        let mut search = self.imp().search.borrow_mut();
+        let search = self.imp().search.borrow();
         let search_in_changed = search.search_in() != search_in;
         let facets_changed = search.facets() != facets;
+        drop(search);
+        if !search_in_changed && !facets_changed {
+            return;
+        }
+        let mut search = self.imp().search.borrow_mut();
         search.set_search_in(search_in);
         search.set_facets(facets);
         drop(search);

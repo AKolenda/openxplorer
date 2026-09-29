@@ -47,7 +47,7 @@ const SEARCH_GLYPH: i32 = 15;
 const BUTTON_GLYPH: i32 = 16;
 
 mod imp {
-    use std::cell::OnceCell;
+    use std::cell::{Cell, OnceCell};
     use std::sync::OnceLock;
 
     use gtk::glib;
@@ -105,6 +105,9 @@ mod imp {
         pub(super) kind: OnceCell<ChoiceButton>,
         /// When the items shown were modified; built by `constructed`.
         pub(super) date: OnceCell<ChoiceButton>,
+        /// Set while the strip shows the window's choices in its lists,
+        /// so the lists' changes are not reported as the user's.
+        pub(super) is_showing: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -203,11 +206,28 @@ impl SearchInfoStrip {
             list.choices.connect_selected_notify(glib::clone!(
                 #[weak(rename_to = strip)]
                 self,
-                move |_| strip.emit_by_name::<()>(OPTIONS_CHANGED, &[])
+                move |_| strip.report_choice(OPTIONS_CHANGED)
             ));
             imp.options_slot.append(&list.button);
             slot.set(list).expect("constructed adds the search options once");
         }
+    }
+
+    /// Emits `signal` for a list the user changed; a list the strip set
+    /// while showing the window's choices reports nothing, because the
+    /// window already holds them and may be busy showing them.
+    fn report_choice(&self, signal: &str) {
+        if !self.imp().is_showing.get() {
+            self.emit_by_name::<()>(signal, &[]);
+        }
+    }
+
+    /// Runs `show` without reporting the lists it changes.
+    fn showing(&self, show: impl FnOnce()) {
+        let is_showing = &self.imp().is_showing;
+        let was_showing = is_showing.replace(true);
+        show();
+        is_showing.set(was_showing);
     }
 
     /// The option list in `slot`.
@@ -237,9 +257,12 @@ impl SearchInfoStrip {
 
     /// Shows `search_in` and `facets` in the lists without reporting them
     /// as the user's choice. Contents cannot be searched in `scope` every
-    /// cached folder, whose cache holds names only.
+    /// cached folder, whose cache holds names only, so the list shows
+    /// "File names" there.
     fn show_options(&self, search_in: SearchIn, facets: SearchFacets, scope: SearchScope) {
         let imp = self.imp();
+        let names_only = scope == SearchScope::AllCachedFolders;
+        let search_in = if names_only { SearchIn::Names } else { search_in };
         let search_in_position = SEARCH_IN.iter().position(|(shown, _)| *shown == search_in);
         let kind = KindFacet::ALL.iter().position(|shown| *shown == facets.kind);
         let date = DateFacet::ALL.iter().position(|shown| *shown == facets.date);
@@ -248,15 +271,16 @@ impl SearchInfoStrip {
             (&imp.kind, kind),
             (&imp.date, date),
         ];
-        for (slot, position) in shown {
-            let choices = &Self::option_list(slot).choices;
-            let position = u32::try_from(position.unwrap_or_default()).unwrap_or_default();
-            if choices.selected() != position {
-                choices.set_selected(position);
+        self.showing(|| {
+            for (slot, position) in shown {
+                let choices = &Self::option_list(slot).choices;
+                let position = u32::try_from(position.unwrap_or_default()).unwrap_or_default();
+                if choices.selected() != position {
+                    choices.set_selected(position);
+                }
             }
-        }
+        });
         let search_in_button = &Self::option_list(&imp.search_in).button;
-        let names_only = scope == SearchScope::AllCachedFolders;
         search_in_button.set_sensitive(!names_only);
         search_in_button.set_tooltip_text(Some(if names_only {
             NAMES_ONLY_TOOLTIP
@@ -278,7 +302,7 @@ impl SearchInfoStrip {
         scope.choices.connect_selected_notify(glib::clone!(
             #[weak(rename_to = strip)]
             self,
-            move |_| strip.emit_by_name::<()>(SCOPE_CHANGED, &[])
+            move |_| strip.report_choice(SCOPE_CHANGED)
         ));
         let imp = self.imp();
         imp.scope_slot.append(&scope.button);
@@ -301,6 +325,9 @@ impl SearchInfoStrip {
     /// nothing is searched.
     pub(crate) fn show_report(&self, report: Option<&SearchReport>, options: ShownOptions) {
         let Some(report) = report else {
+            // The lists start from their defaults at the next search.
+            self.show_scope(SearchScope::default());
+            self.show_options(options.search_in, SearchFacets::default(), SearchScope::default());
             self.set_visible(false);
             return;
         };
@@ -321,9 +348,7 @@ impl SearchInfoStrip {
         let position = SearchScope::ALL.iter().position(|shown| *shown == scope);
         let position = u32::try_from(position.unwrap_or_default()).unwrap_or_default();
         if choices.selected() != position {
-            // Set while the window already holds `scope`, so the change
-            // it announces is a no-op for the window.
-            choices.set_selected(position);
+            self.showing(|| choices.set_selected(position));
         }
     }
 

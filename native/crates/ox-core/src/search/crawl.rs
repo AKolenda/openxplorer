@@ -107,8 +107,8 @@ struct Crawl<'a> {
     /// Folders still to read; the last is read next, so the walk is depth
     /// first, as in Python.
     pending: Vec<PendingFolder>,
-    /// When progress was last reported.
-    last_report: Instant,
+    /// Spaces the progress reports.
+    progress: ProgressPacer,
 }
 
 impl<'a> Crawl<'a> {
@@ -131,7 +131,7 @@ impl<'a> Crawl<'a> {
             errors: Vec::new(),
             visited: HashSet::new(),
             pending: Vec::new(),
-            last_report: Instant::now(),
+            progress: ProgressPacer::new(Instant::now()),
         }
     }
 }
@@ -227,11 +227,54 @@ impl Crawl<'_> {
 
     /// Records the watch status and notifies the app, at most every 0.8 s.
     fn report_progress(&mut self) {
-        if self.last_report.elapsed() <= PROGRESS_INTERVAL {
-            return;
+        if self.progress.is_due(Instant::now()) {
+            self.shared.report_monitoring(&self.job.root.uri, self.storage);
+            self.shared.notify();
         }
-        self.shared.report_monitoring(&self.job.root.uri, self.storage);
-        self.shared.notify();
-        self.last_report = Instant::now();
+    }
+}
+
+/// Lets a running scan report its progress at most every
+/// [`PROGRESS_INTERVAL`] (PERF-006), so a fast scan does not flood the
+/// app with status changes.
+#[derive(Debug)]
+struct ProgressPacer {
+    /// When progress was last reported, or the scan started.
+    last: Instant,
+}
+
+impl ProgressPacer {
+    fn new(started: Instant) -> Self {
+        Self { last: started }
+    }
+
+    /// Whether progress is reported at `now`; when it is, the next report
+    /// waits a whole interval again.
+    fn is_due(&mut self, now: Instant) -> bool {
+        if now.duration_since(self.last) <= PROGRESS_INTERVAL {
+            return false;
+        }
+        self.last = now;
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// parity: PERF-006
+    #[test]
+    fn a_scan_reports_its_progress_at_most_every_800_ms() {
+        let started = Instant::now();
+        let mut pacer = ProgressPacer::new(started);
+        let after = |millis| started + Duration::from_millis(millis);
+
+        let reported: Vec<u64> = (0..=2500)
+            .step_by(100)
+            .filter(|millis| pacer.is_due(after(*millis)))
+            .collect();
+
+        assert_eq!(reported, [900, 1800]);
     }
 }
