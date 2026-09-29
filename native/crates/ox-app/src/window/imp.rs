@@ -157,6 +157,8 @@ pub(crate) struct BrowserWindow {
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
     /// The tab drag this window started, while it lasts.
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
+    /// The timer that saves the window's size after a resize.
+    pub(super) size_save: RefCell<Option<glib::SourceId>>,
     /// The tabs closed in this window, most recent first.
     pub(super) closed_tabs: RefCell<Vec<ClosedTab>>,
     /// The in-window dialogs, Properties by tab, and the tabs that
@@ -237,6 +239,7 @@ impl WindowImpl for BrowserWindow {
         // otherwise keeps the focused address entry and later asks a
         // destroyed widget for its cursor position (a Gtk-CRITICAL).
         GtkWindowExt::set_focus(&*self.obj(), None::<&gtk::Widget>);
+        self.obj().save_pending_size();
         // A closed window's sign-ins end with it, even while something
         // still holds the window (SAFE-011, TAB-050).
         self.obj().close_network();

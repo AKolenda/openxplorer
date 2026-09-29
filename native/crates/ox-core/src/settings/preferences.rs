@@ -29,6 +29,46 @@ const DEFAULT_NETWORK_INTERVAL: u32 = 60;
 /// Accepted sidebar widths, in pixels.
 pub const SIDEBAR_WIDTHS: RangeInclusive<u32> = 140..=560;
 
+/// Accepted window widths, in pixels: from the window's minimum up.
+pub const WINDOW_WIDTHS: RangeInclusive<u32> = 670..=16_384;
+
+/// Accepted window heights, in pixels: from the window's minimum up.
+pub const WINDOW_HEIGHTS: RangeInclusive<u32> = 470..=16_384;
+
+/// The size new windows open at, and whether they open maximized: the
+/// last window's (TAB-054). The Python app ignores it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowSize {
+    /// The width when not maximized, in pixels.
+    pub width: u32,
+    /// The height when not maximized, in pixels.
+    pub height: u32,
+    /// Whether the window was maximized.
+    pub maximized: bool,
+}
+
+impl WindowSize {
+    /// Reads `{"width", "height", "maximized"}`; `None` unless both sizes
+    /// are within [`WINDOW_WIDTHS`] and [`WINDOW_HEIGHTS`].
+    fn from_json(value: &Value) -> Option<Self> {
+        let size = |key: &str, range: RangeInclusive<u32>| {
+            let pixels = value.get(key)?.as_u64()?;
+            u32::try_from(pixels).ok().filter(|pixels| range.contains(pixels))
+        };
+        Some(Self {
+            width: size("width", WINDOW_WIDTHS)?,
+            height: size("height", WINDOW_HEIGHTS)?,
+            maximized: value.get("maximized").and_then(Value::as_bool).unwrap_or(false),
+        })
+    }
+
+    /// Whether both sizes are ones a window may open at.
+    fn is_valid(self) -> bool {
+        WINDOW_WIDTHS.contains(&self.width) && WINDOW_HEIGHTS.contains(&self.height)
+    }
+}
+
 /// A resizable column of the Details view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Column {
@@ -174,6 +214,9 @@ pub struct Preferences {
     /// Details-view column widths, once the user resized or reset them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub column_widths: Option<ColumnWidths>,
+    /// The last window's size, once a window was resized.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window_size: Option<WindowSize>,
 }
 
 impl Default for Preferences {
@@ -189,6 +232,7 @@ impl Default for Preferences {
             text_size: DEFAULT_TEXT_SIZE,
             sidebar_width: None,
             column_widths: None,
+            window_size: None,
         }
     }
 }
@@ -221,6 +265,9 @@ impl Preferences {
         if let Some(widths) = column_widths {
             self.column_widths = Some(widths);
         }
+        if let Some(size) = update.window_size.filter(|size| size.is_valid()) {
+            self.window_size = Some(size);
+        }
     }
 }
 
@@ -248,6 +295,8 @@ pub struct PreferencesUpdate {
     pub context_menu: Option<ContextMenu>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
+    /// The size new windows open at.
+    pub window_size: Option<WindowSize>,
 }
 
 impl PreferencesUpdate {
@@ -276,6 +325,7 @@ impl PreferencesUpdate {
             column_widths: values.get("columnWidths").and_then(read_column_widths),
             context_menu: text("contextMenu").and_then(ContextMenu::from_key),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
+            window_size: values.get("windowSize").and_then(WindowSize::from_json),
         })
     }
 }
@@ -395,6 +445,36 @@ mod tests {
         assert_eq!(bounded_width(139.6, SIDEBAR_WIDTHS), None);
         assert_eq!(bounded_width(f64::NAN, SIDEBAR_WIDTHS), None);
         assert_eq!(bounded_width(f64::INFINITY, SIDEBAR_WIDTHS), None);
+    }
+
+    /// parity: TAB-054
+    #[test]
+    fn the_window_size_is_kept_only_within_the_window_limits() {
+        let read = |value| PreferencesUpdate::from_json(&json!({ "windowSize": value })).unwrap();
+        let saved = read(json!({"width": 1000, "height": 700, "maximized": true}));
+        let mut preferences = Preferences::default();
+        preferences.apply(&saved);
+        let stored = serde_json::to_value(&preferences).unwrap();
+
+        assert_eq!(
+            preferences.window_size,
+            Some(WindowSize {
+                width: 1000,
+                height: 700,
+                maximized: true
+            })
+        );
+        assert_eq!(
+            stored["windowSize"],
+            json!({"width": 1000, "height": 700, "maximized": true})
+        );
+        assert_eq!(
+            read(json!({"width": 300, "height": 700})).window_size,
+            None,
+            "below the minimum"
+        );
+        assert_eq!(read(json!({"width": 1000.5, "height": 700})).window_size, None);
+        assert_eq!(read(json!("big")).window_size, None);
     }
 
     /// parity: VIEW-028

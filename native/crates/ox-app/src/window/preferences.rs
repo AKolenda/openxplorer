@@ -16,7 +16,7 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::settings::{ColumnWidth, PreferencesUpdate, SettingsError, Theme, SIDEBAR_WIDTHS};
+use ox_core::settings::{ColumnWidth, PreferencesUpdate, SettingsError, Theme, WindowSize, SIDEBAR_WIDTHS};
 
 use super::folder_pane::FolderView;
 use super::BrowserWindow;
@@ -50,6 +50,8 @@ pub(super) enum Preference {
     ColumnWidths(Vec<ColumnWidth>),
     /// The default sidebar width and column widths (`resetLayout`).
     DefaultLayout,
+    /// The size new windows open at (TAB-054).
+    WindowSize(WindowSize),
 }
 
 impl Preference {
@@ -64,6 +66,7 @@ impl Preference {
             Preference::TextSize(size) => update.text_size = Some(size.percent()),
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
             Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
+            Preference::WindowSize(size) => update.window_size = Some(size),
             Preference::DefaultLayout => {
                 update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
                 // An empty list clears every saved column width.

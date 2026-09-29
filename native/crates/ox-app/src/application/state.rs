@@ -189,7 +189,9 @@ pub(super) fn open_window(
     start: Option<&str>,
 ) -> BrowserWindow {
     let window = build_window(app, context, start);
+    window.open_at_saved_size();
     window.present();
+    window.remember_size();
     window
 }
 
@@ -571,6 +573,31 @@ mod tests {
         // this closes the windows as Quit would, without quitting.
         close_all_windows();
         assert!(browser_windows().is_empty());
+    }
+
+    /// A resized window saves its size, and the next window opens at it.
+    ///
+    /// parity: TAB-054
+    #[gtk::test]
+    fn a_new_window_opens_at_the_last_windows_size() {
+        let app = TestApp::new();
+        let first = app.state.open_window(&application(), None);
+        first.set_default_size(900, 640);
+        wait_until("the size to be saved", || {
+            app.state
+                .context
+                .settings_data()
+                .preferences
+                .window_size
+                .is_some()
+        });
+        first.close();
+        settle();
+
+        let second = app.state.open_window(&application(), None);
+
+        assert_eq!(second.default_size(), (900, 640));
+        assert!(!second.is_maximized());
     }
 
     /// parity: TAB-050

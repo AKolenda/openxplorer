@@ -2655,7 +2655,8 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "KMainWindow autosaved window geometry"
 gnome = "Persist gtk_window_get_default_size and is_maximized (Nautilus stores them in org.gnome.nautilus.window-state)"
-native = "todo"
+native = "done"
+native_note = "A window saves its unmaximized size and maximized state (preferences.windowSize, which the Python app ignores) 0.8 s after the user resizes, maximizes or restores it, and when it closes; new windows open at that size, maximized when it was, else at 1320 × 810. Sizes below the 670 × 470 minimum are never saved or used. Snapshot windows neither use nor save it (native/crates/ox-app/src/window/window_size.rs, ox-core settings/preferences.rs). Tests: native/crates/ox-app/src/application/state.rs (a_new_window_opens_at_the_last_windows_size), native/crates/ox-core/src/settings/preferences.rs (the_window_size_is_kept_only_within_the_window_limits)."
 
 [[feature]]
 id = "TAB-055"
