@@ -12,6 +12,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::choices::{ContextMenu, Theme, View};
+use super::pane_options::DetailsPaneOptions;
 use super::SettingsError;
 
 /// Text sizes offered in Settings, in percent.
@@ -174,6 +175,10 @@ pub struct Preferences {
     /// Details-view column widths, once the user resized or reset them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub column_widths: Option<ColumnWidths>,
+    /// The details pane's own options; saved only once changed, so the
+    /// settings of a new installation stay as the Python app writes them.
+    #[serde(skip_serializing_if = "DetailsPaneOptions::is_default")]
+    pub details_pane_options: DetailsPaneOptions,
 }
 
 impl Default for Preferences {
@@ -189,6 +194,7 @@ impl Default for Preferences {
             text_size: DEFAULT_TEXT_SIZE,
             sidebar_width: None,
             column_widths: None,
+            details_pane_options: DetailsPaneOptions::default(),
         }
     }
 }
@@ -221,6 +227,9 @@ impl Preferences {
         if let Some(widths) = column_widths {
             self.column_widths = Some(widths);
         }
+        if let Some(options) = &update.details_pane_options {
+            self.details_pane_options = options.clone();
+        }
     }
 }
 
@@ -248,6 +257,8 @@ pub struct PreferencesUpdate {
     pub context_menu: Option<ContextMenu>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
+    /// Replaces the details pane's options.
+    pub details_pane_options: Option<DetailsPaneOptions>,
 }
 
 impl PreferencesUpdate {
@@ -276,6 +287,9 @@ impl PreferencesUpdate {
             column_widths: values.get("columnWidths").and_then(read_column_widths),
             context_menu: text("contextMenu").and_then(ContextMenu::from_key),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
+            details_pane_options: values
+                .get("detailsPaneOptions")
+                .and_then(DetailsPaneOptions::from_json),
         })
     }
 }

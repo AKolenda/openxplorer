@@ -98,7 +98,11 @@ impl BrowserWindow {
     /// Shows the selection's properties, or the folder's, in the details
     /// pane.
     pub(super) fn update_details_pane(&self) {
-        let selection = self.folder_pane().model().selected_items();
+        let pane = self.details_pane();
+        let selection = match pane.hovered() {
+            Some(hovered) => vec![hovered],
+            None => self.folder_pane().model().selected_items(),
+        };
         let Some(folder_uri) = self.current_uri() else {
             return;
         };
@@ -120,7 +124,8 @@ impl BrowserWindow {
             folder_item_count,
             locations: &locations,
             network: &network,
+            condensed_dates: pane.options().condensed_dates,
         });
-        self.details_pane().set_content(&content);
+        pane.set_content(&content);
     }
 }

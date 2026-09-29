@@ -179,6 +179,96 @@ fn the_details_pane_lists_a_file_and_the_folder() {
     assert_eq!(property(&file, "Location"), Some(folder_address.as_str()));
 }
 
+/// One selected image shows its picture and dimensions in the details
+/// pane.
+///
+/// parity: PROP-011, PROP-013
+#[gtk::test]
+fn the_details_pane_previews_an_image_and_names_its_dimensions() {
+    let fixture = Fixture::standard();
+    let pixels = gtk::glib::Bytes::from_owned(vec![0x40_u8; 4 * 3 * 4]);
+    let texture = gtk::gdk::MemoryTexture::new(4, 3, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, 16);
+    texture
+        .save_to_png(fixture.path("Beach.png"))
+        .expect("a synthetic image");
+    let test = TestWindow::open(&fixture.uri());
+    if !test.window.details_pane().is_visible() {
+        test.activate("details-pane", None);
+    }
+    let pane = test.window.details_pane();
+    test.select_named("Beach.png");
+
+    wait_until("the picture", || !descendants::<gtk::Picture>(pane).is_empty());
+    wait_until("the dimensions", || {
+        property(&pane.shown_properties(), "Dimensions") == Some("4 × 3 pixels")
+    });
+    test.activate("properties", None);
+    let frame = test.wait_for_dialog("the Properties dialog");
+    wait_until("the dimensions in Properties", || {
+        super::item_dialogs::texts(&frame).contains(&"4 × 3 pixels".to_owned())
+    });
+    frame.close();
+    test.window.folder_model().select_none();
+    wait_until("the folder's art again", || {
+        descendants::<gtk::Picture>(pane).is_empty()
+    });
+}
+
+/// The pane's menu makes it follow the pointer and drop a field, and
+/// the choice is saved.
+///
+/// parity: PROP-010
+#[gtk::test]
+fn the_details_pane_follows_the_pointer_and_shows_the_chosen_fields() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let pane = test.window.details_pane();
+    let menu = pane.show_options_menu(1.0, 1.0);
+    for label in ["Show the item under the pointer", "Size"] {
+        let check = descendants::<gtk::CheckButton>(&menu)
+            .into_iter()
+            .find(|check| check.label().as_deref() == Some(label))
+            .unwrap_or_else(|| panic!("a {label} choice"));
+        check.set_active(!check.is_active());
+    }
+    menu.popdown();
+
+    let view = test.window.folder_pane().view_widget();
+    let position = 1;
+    let row = test
+        .window
+        .folder_pane()
+        .owners()
+        .widget_at(position)
+        .expect("a shown row");
+    let point = row
+        .compute_point(&view, &gtk::graphene::Point::new(2.0, 2.0))
+        .expect("the row is in the view");
+    test.window
+        .pointer_over_items(&view, Some((f64::from(point.x()), f64::from(point.y()))));
+    let hovered = test.window.folder_model().name_at(position).expect("a name");
+    let shown = pane.shown_properties();
+    assert_eq!(
+        pane.shown_name(),
+        hovered,
+        "the pane describes the item under the pointer"
+    );
+    assert!(property(&shown, "Type").is_some());
+    assert!(property(&shown, "Size").is_none(), "Size is turned off");
+    test.window.pointer_over_items(&view, None);
+    assert!(
+        property(&pane.shown_properties(), "Items").is_some(),
+        "the folder again"
+    );
+    wait_until("the options saved", || {
+        let saved = Settings::open(test.settings_directory())
+            .data()
+            .preferences
+            .clone();
+        saved.details_pane_options.follow_hover && !saved.details_pane_options.shows("Size")
+    });
+}
+
 /// parity: SIDE-022
 #[gtk::test]
 fn pins_another_process_saved_appear_after_a_refresh() {

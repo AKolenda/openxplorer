@@ -34,6 +34,7 @@ mod error;
 mod labels;
 mod model;
 mod mutate;
+mod pane_options;
 mod preferences;
 mod python_conversions;
 mod read;
@@ -48,6 +49,7 @@ pub use choices::{Appearance, ContextMenu, Theme, View};
 pub use error::SettingsError;
 pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
+pub use pane_options::DetailsPaneOptions;
 pub use preferences::{
     Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, DEFAULT_TEXT_SIZE, NETWORK_INTERVALS,
     SIDEBAR_WIDTHS, TEXT_SIZES,

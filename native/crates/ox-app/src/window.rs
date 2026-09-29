@@ -55,6 +55,7 @@ mod command_bar;
 mod connections;
 mod context_menu;
 mod copy_path;
+mod details_hover;
 mod details_pane;
 mod dialog;
 mod disk_tools;

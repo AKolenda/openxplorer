@@ -155,6 +155,7 @@ impl BrowserWindow {
         view.add_controller(self.folder_middle_click(view));
         self.attach_context_menu(view);
         self.attach_file_drag(view);
+        self.attach_details_hover(view);
         self.attach_file_drop_zone(view, DropZone::FolderView);
     }
 

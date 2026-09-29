@@ -106,6 +106,9 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     if let Some(target) = &properties.link_target {
         grid.add_row("Points to", target);
     }
+    if let Some((width, height)) = properties.dimensions {
+        grid.add_row("Dimensions", &format!("{width} × {height} pixels"));
+    }
     if !entry.is_dir {
         let app = properties.default_app.as_deref().unwrap_or(NO_DEFAULT_APP);
         grid.add_row("Opens with", app);

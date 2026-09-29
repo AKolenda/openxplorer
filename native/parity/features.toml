@@ -12985,8 +12985,8 @@ sources = [
 python_tests = []
 bridge = ["properties"]
 dolphin = "show_information_panel: F11"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's Details pane shows an icon, type, size, modified date and location for the selection, but no content preview, hover tracking or configurable fields. Shortcut conflict, Explorer wins: F11 is full screen in Explorer, whose panes use Alt+Shift+P (Details) and Alt+P (Preview)."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/pane_options.rs (pane_options_round_trip_and_ignore_mistyped_values); native/crates/ox-app/src/window/details_pane/options_menu.rs, native/crates/ox-app/src/window/details_hover.rs; native/crates/ox-app/src/window/tests/environment.rs (the_details_pane_follows_the_pointer_and_shows_the_chosen_fields). A secondary click on the details pane opens its menu, as Dolphin's Information panel: 'Show the item under the pointer' (the pane describes the item the pointer is over in either view, and the selection again when the pointer leaves the items), one check per field (Type, Size, Modified, Location, Dimensions, Length, Items, Storage), 'Condensed dates' (on: the day only, as before; off: day and time) and 'Play audio and video automatically'. Choices are saved at once as preferences.detailsPaneOptions, written only once they differ from the defaults so a new installation's settings stay as the Python app writes them. Porting notes: OpenXplorer's Details pane shows an icon, type, size, modified date and location for the selection, but no content preview, hover tracking or configurable fields. Shortcut conflict, Explorer wins: F11 is full screen in Explorer, whose panes use Alt+Shift+P (Details) and Alt+P (Preview)."
 
 [[feature]]
 id = "PROP-011"
@@ -13007,8 +13007,8 @@ python_tests = []
 bridge = ["properties"]
 dolphin = "InformationPanel preview / media player; Information panel preview; Information panel (F11) preview"
 gnome = "Thumbnail factory large/x-large sizes; GtkPicture"
-native = "todo"
-native_note = "Porting notes: This is Explorer's Preview pane (Alt+P)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/details_pane/media.rs, details_pane/content.rs (a_local_file_is_previewed_by_its_type); native/crates/ox-app/src/window/tests/environment.rs (the_details_pane_previews_an_image_and_names_its_dimensions). With one local file selected, the details pane's preview area shows a scaled picture of an image (decoded off the main thread, up to 64 MiB), the valid cached freedesktop thumbnail of another document, or an inline GTK player (gtk::Video for video, the item's art with gtk::MediaControls for audio). Players start only when 'Play audio and video automatically' is on in the pane's menu (PROP-010). Shares, devices and folders keep their art, and a preview read for an earlier selection is dropped. Porting notes: This is Explorer's Preview pane (Alt+P)."
 
 [[feature]]
 id = "PROP-012"
@@ -13044,7 +13044,8 @@ python_tests = []
 bridge = ["properties"]
 dolphin = "Information panel and Properties Details (KFileMetaData)"
 gnome = "GStreamer discoverer / gdk-pixbuf / tracker-extract (Files uses the image-properties and totem-properties extension pages)"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/properties/metadata.rs, native/crates/ox-app/src/window/details_pane/media.rs; native/crates/ox-app/src/window/tests/environment.rs (the_details_pane_previews_an_image_and_names_its_dimensions). A local image's 'Dimensions' ('4 × 3 pixels') shows in the Properties General tab (read from the header with gdk-pixbuf) and in the details pane; a previewed audio or video file adds 'Length' to the pane once GTK's media backend knows its duration. Missing: camera (EXIF) data, codecs and document page counts, which need a metadata library the app does not link."
 
 [[feature]]
 id = "PROP-014"

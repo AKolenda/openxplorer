@@ -55,6 +55,9 @@ pub(crate) struct ItemProperties {
     pub default_app: Option<String>,
     /// What is mounted at the item, when a folder is a mount point.
     pub mount: Option<MountFacts>,
+    /// The width and height of a local image, read from its header
+    /// (PROP-013).
+    pub dimensions: Option<(i32, i32)>,
 }
 
 /// A mount point's details for the General tab (PROP-004).
@@ -133,6 +136,7 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
     let entry = entry_from_info(&file, &info);
     let default_app = default_app_for(&entry);
     let mount = if entry.is_dir { mount_at(&file) } else { None };
+    let dimensions = image_dimensions(&file, &entry);
     Ok(ItemProperties {
         parent_uri: parent_location(&entry.uri),
         created: optional_u64(&info, "time::created"),
@@ -152,6 +156,7 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
         link_target: link_target(&info),
         default_app,
         mount,
+        dimensions,
         entry,
     })
 }
@@ -181,6 +186,19 @@ fn mount_at(file: &gio::File) -> Option<MountFacts> {
         filesystem: mount.filesystem,
         space,
     })
+}
+
+/// The width and height of a local image, from its header only.
+fn image_dimensions(file: &gio::File, entry: &Entry) -> Option<(i32, i32)> {
+    let is_image = entry
+        .content_type
+        .as_deref()
+        .is_some_and(|kind| kind.starts_with("image/"));
+    if entry.is_dir || !is_image {
+        return None;
+    }
+    let (_, width, height) = gtk::gdk_pixbuf::Pixbuf::file_info(file.path()?)?;
+    Some((width, height))
 }
 
 /// The name of the application a file opens with; `None` for a folder
@@ -244,6 +262,7 @@ mod tests {
             link_target: None,
             default_app: None,
             mount: None,
+            dimensions: None,
         };
 
         assert_eq!(properties.mode_text().as_deref(), Some("0o644"));
