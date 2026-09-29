@@ -104,7 +104,7 @@ fn drag_icon(art: Art, count: usize) -> gtk::Widget {
 }
 
 /// True when a menu or other popover inside `widget` is open.
-fn has_open_popover(widget: &gtk::Widget) -> bool {
+pub(super) fn has_open_popover(widget: &gtk::Widget) -> bool {
     let mut child = widget.first_child();
     while let Some(current) = child {
         let is_open_popover = current.is::<gtk::Popover>() && current.is_mapped();

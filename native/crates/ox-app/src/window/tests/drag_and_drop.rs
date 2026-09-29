@@ -164,6 +164,36 @@ fn links_and_drops_during_a_search_or_an_operation_are_refused() {
     );
 }
 
+/// A drop while a dialog shows is refused, as the Python app refused it;
+/// the in-window dialogs leave the tabs usable, so a drop could reach
+/// the window then.
+///
+/// parity: DND-013
+#[gtk::test]
+fn a_drop_while_a_dialog_shows_is_refused() {
+    let fixture = Fixture::standard();
+    let source = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("properties", None);
+    wait_until("the Properties dialog", || {
+        test.window.dialog_layer().shown().is_some()
+    });
+
+    let taken = test.window.drop_files(
+        &[source.uri_of("Documents")],
+        Some(test.position_of("Documents")),
+        DropAction::Copy,
+    );
+
+    assert!(!taken);
+    assert_eq!(
+        test.window.shown_message(),
+        "Close the dialog and finish the current operation before dropping files."
+    );
+    assert!(!fixture.path("Documents/Documents").exists());
+}
+
 /// parity: DND-006
 #[gtk::test]
 fn no_drag_starts_while_a_file_operation_runs() {
@@ -335,6 +365,10 @@ fn an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer() {
     wait_until("the drop menu", || menu.is_mapped());
     let labels = menu.row_labels();
     test.activate("drop-choice", Some("cancel"));
+    // Choosing an entry closes the menu; the action alone does not, and
+    // no drop is taken while a menu is open.
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
     wait_for(Duration::from_millis(100));
     let cancelled_kept_source = source.path("Notes 2.txt").is_file();
     let cancelled_made_nothing = !fixture.path("Documents/Notes 2.txt").exists();

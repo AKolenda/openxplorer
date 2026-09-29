@@ -39,7 +39,7 @@ use ox_core::location::{parent_location, require_item_uri, same_location, Locati
 use ox_core::ops::{is_recycle_bin_item, LinkRequest};
 use ox_core::transfer::TransferMode;
 
-use super::file_drag::DraggedItems;
+use super::file_drag::{has_open_popover, DraggedItems};
 use super::file_ops::IncomingItems;
 use super::BrowserWindow;
 
@@ -109,6 +109,9 @@ pub(crate) enum DropRefusal {
     /// A file operation runs or is being planned.
     #[error("Finish the current operation before dropping files.")]
     Busy,
+    /// A dialog, sign-in prompt or menu is open.
+    #[error("Close the dialog and finish the current operation before dropping files.")]
+    DialogOpen,
     /// Nothing under the pointer takes files: a search, a page, a server
     /// listing or a previous version.
     #[error("Open a writable destination folder before dropping files.")]
@@ -286,6 +289,18 @@ impl BrowserWindow {
         destination: Option<DropDestination>,
         action: DropAction,
     ) -> bool {
+        match self.check_ready() {
+            Ok(()) => self.run_drop(uris, destination, action),
+            Err(refusal) => {
+                self.show_message(&refusal.to_string());
+                false
+            }
+        }
+    }
+
+    /// [`Self::complete_drop`] with the drop menu's answer, while the
+    /// menu may still be closing.
+    fn run_drop(&self, uris: &[String], destination: Option<DropDestination>, action: DropAction) -> bool {
         let outcome = self.check_idle().and_then(|()| {
             let destination = destination.ok_or(DropRefusal::NoDestination)?;
             self.send_dropped_items(uris, destination, action)
@@ -305,6 +320,22 @@ impl BrowserWindow {
             Ok(())
         } else {
             Err(DropRefusal::Busy)
+        }
+    }
+
+    /// Refuses a drop while a file operation runs or is being planned, or
+    /// while a dialog, sign-in prompt or menu is open, as drags are held
+    /// back then too (DND-006). The in-window dialogs leave the tab strip
+    /// usable, so a drop on a tab could otherwise slip past them.
+    fn check_ready(&self) -> Result<(), DropRefusal> {
+        self.check_idle()?;
+        let dialog_open = self.dialog_layer().shown().is_some()
+            || self.has_open_dialog()
+            || has_open_popover(self.upcast_ref());
+        if dialog_open {
+            Err(DropRefusal::DialogOpen)
+        } else {
+            Ok(())
         }
     }
 

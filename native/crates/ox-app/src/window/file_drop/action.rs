@@ -224,7 +224,7 @@ impl BrowserWindow {
             return;
         };
         let destination = super::DropDestination::Folder(pending.folder);
-        self.complete_drop(&pending.uris, Some(destination), action);
+        self.run_drop(&pending.uris, Some(destination), action);
     }
 
     /// The drop menu, for tests.
