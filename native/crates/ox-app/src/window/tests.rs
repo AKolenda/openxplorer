@@ -32,6 +32,7 @@ mod opening;
 mod panes_layout;
 mod recycle_bin;
 mod search;
+mod selection;
 mod settings;
 mod sidebar_layout;
 mod support;

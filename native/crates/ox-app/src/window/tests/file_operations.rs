@@ -296,7 +296,7 @@ fn cancelling_the_delete_confirmation_keeps_the_items() {
     assert!(fixture.path("Notes 10.txt").is_file());
 }
 
-/// parity: OPS-016
+/// parity: OPS-016, SEL-017
 #[gtk::test]
 fn shift_delete_deletes_permanently_after_its_own_confirmation() {
     let fixture = Fixture::standard();
@@ -316,6 +316,9 @@ fn shift_delete_deletes_permanently_after_its_own_confirmation() {
     wait_until("the folder to be deleted", || !fixture.path("Documents").exists());
     wait_until("the toast", || {
         test.window.shown_message() == "1 item(s) permanently deleted."
+    });
+    wait_until("the next item to be selected", || {
+        test.selected_names() == ["Notes 2.txt"]
     });
 }
 

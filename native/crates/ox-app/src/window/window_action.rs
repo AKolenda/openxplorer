@@ -64,6 +64,8 @@ pub(crate) enum WindowAction {
     SelectNone,
     /// Selects exactly the items that were not selected.
     InvertSelection,
+    /// Asks for a wildcard pattern and selects the items it matches.
+    SelectMatching,
     /// Pins the one selected folder to Quick access.
     PinSelected,
     /// Pins the current folder to Quick access.
@@ -274,6 +276,7 @@ impl WindowAction {
             WindowAction::SelectAll => "select-all",
             WindowAction::SelectNone => "select-none",
             WindowAction::InvertSelection => "invert-selection",
+            WindowAction::SelectMatching => "select-matching",
             WindowAction::PinSelected => "pin-selected",
             WindowAction::PinFolder => "pin-folder",
             WindowAction::CopyPath => "copy-path",

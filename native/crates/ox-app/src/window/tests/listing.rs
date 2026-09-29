@@ -116,7 +116,7 @@ fn a_selection_made_while_listing_survives_the_end_of_the_listing() {
     assert_eq!(test.selected_names(), ["Notes 2.txt"]);
 }
 
-/// parity: NAV-013, NAV-014
+/// parity: NAV-013, NAV-014, SEL-015
 #[gtk::test]
 fn refresh_keeps_the_rows_scroll_position_focus_and_selection() {
     let fixture = Fixture::with_files(LONG_FOLDER);
@@ -163,7 +163,7 @@ fn a_change_on_disk_is_listed_and_keeps_the_scroll_position() {
     assert_eq!(test.selected_names(), ["file 0299.txt"]);
 }
 
-/// parity: NAV-015
+/// parity: NAV-015, SEL-015
 #[gtk::test]
 fn navigating_to_another_folder_starts_at_the_top_without_a_selection() {
     let fixture = Fixture::with_files(LONG_FOLDER);

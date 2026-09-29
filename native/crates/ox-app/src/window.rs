@@ -87,6 +87,7 @@ mod place_menus;
 mod preferences;
 mod quick_access;
 mod search_box;
+mod select_matching;
 mod selection;
 mod session;
 mod settings_tab;

@@ -141,13 +141,17 @@ impl BrowserWindow {
         Some(outcome)
     }
 
-    /// Runs `request` and concludes it: [`Self::run_request`], then
-    /// [`Self::conclude_operation`].
-    pub(super) async fn run_and_conclude(&self, request: &TransferRequest) {
+    /// Runs `request`, a move to the Trash or a delete, and concludes it:
+    /// [`Self::run_request`], then [`Self::conclude_operation`], which
+    /// selects `next`, the item that followed the removed ones (SEL-017).
+    pub(super) async fn run_deletion(&self, request: &TransferRequest, next: Option<&String>) {
         let Some(outcome) = self.run_request(request).await else {
             return;
         };
-        let finished = outcome.map(|outcome| FinishedOperation::of_transfer(request.mode, outcome));
+        let finished = outcome.map(|outcome| FinishedOperation {
+            created: next.cloned().into_iter().collect(),
+            ..FinishedOperation::of_transfer(request.mode, outcome)
+        });
         self.conclude_operation(finished).await;
     }
 
@@ -180,14 +184,16 @@ impl BrowserWindow {
         }
     }
 
-    /// Lists the active folder again, then selects `uris` in it (the
-    /// items an operation created or moved there; none clears the
-    /// selection, as app.js does after every operation).
+    /// Lists the active folder again, then selects `uris` in it and
+    /// scrolls to the first (the items an operation created or moved
+    /// there, SEL-016; none clears the selection, as app.js does after
+    /// every operation).
     pub(super) fn reload_selecting(&self, uris: Vec<String>) {
         let Some(id) = self.imp().session.borrow().active_id() else {
             return;
         };
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+            tab.reveals_selection = !uris.is_empty();
             tab.selected = uris;
         }
         self.load_tab(id, LoadMode::Reload);

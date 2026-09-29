@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The file commands' keys, and where they work (CMD-016, CMD-017).
+//! The file commands' keys, and Ctrl+A, and where they work (CMD-016,
+//! CMD-017, SEL-004).
 //!
-//! Ports the file keys of `onKey` in `desktop/ui/app.js` and adds Undo,
+//! Ports the file keys and Ctrl+A of `onKey` in `desktop/ui/app.js`: Ctrl+A
+//! selects every shown item wherever focus is outside a text field, not
+//! only in the folder view. It adds Undo,
 //! Redo, Shift+Delete and Copy path's keys (Explorer's Ctrl+Shift+C for
 //! "Copy as path", and Dolphin's Ctrl+Alt+C for "Copy Location",
 //! CLIP-013). They are not application accelerators: a text field keeps
@@ -20,7 +23,8 @@ use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
 /// Each file command and its keys, as GTK parses them.
-const FILE_SHORTCUTS: [(WindowAction, &str); 10] = [
+const FILE_SHORTCUTS: [(WindowAction, &str); 11] = [
+    (WindowAction::SelectAll, "<Primary>a"),
     (WindowAction::Cut, "<Primary>x"),
     (WindowAction::Copy, "<Primary>c"),
     (WindowAction::Paste, "<Primary>v"),

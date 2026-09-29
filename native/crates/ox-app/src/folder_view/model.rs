@@ -230,6 +230,16 @@ impl FolderModel {
         self.selection.select_item(position, true);
     }
 
+    /// Selects exactly the items at `positions`.
+    pub(crate) fn select_positions(&self, positions: &[u32]) {
+        let selected = gtk::Bitset::new_empty();
+        for &position in positions {
+            selected.add(position);
+        }
+        let everything = gtk::Bitset::new_range(0, self.n_items());
+        self.selection.set_selection(&selected, &everything);
+    }
+
     /// Selects every shown item.
     pub(crate) fn select_all(&self) {
         self.selection.select_all();
