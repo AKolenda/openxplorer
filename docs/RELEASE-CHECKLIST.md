@@ -81,8 +81,9 @@ On Zorin under the intended Wayland session, then X11 where supported:
 ## Publication gate (owner action required)
 
 Private vulnerability reporting is enabled on the GitHub repository and
-SECURITY.md links to it. The Debian `Maintainer` field still carries a
-placeholder address; replace it with a monitored contact. Add the actual
+SECURITY.md links to it. The packages name "OpenXplorer contributors
+<openxplorer@users.noreply.github.com>", the project's commit identity, as
+maintainer; security reports go through GitHub's private reporting. Add the actual
 repository/source URL. Choose supported/tested distro versions and publish
 checksums via a trusted channel; checksums alone are not a signature. Create a
 signing/release process without embedding keys in the repo. Re-run current

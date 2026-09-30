@@ -37,6 +37,16 @@
 }
 .sidebar list > row.drop-before { box-shadow: inset 0 2px @ox_accent; }
 .sidebar list > row.drop-end { box-shadow: inset 0 -2px @ox_accent; }
+/* An empty Quick access keeps a dashed "Pin to Quick access" row that
+   takes dropped folders (`.quick-empty .quick-drop-tail`). */
+.sidebar list > row.quick-drop-tail {
+  min-height: 30px;
+  margin: 3px 6px 0;
+  border: 1px dashed @ox_border;
+  border-radius: 4px;
+  color: @ox_accent;
+}
+.sidebar list > row.quick-drop-tail:hover { background-color: transparent; }
 /* The row's parts sit 12px apart (`gap:12px`), as margins because the
    web row pulls its chevron into the padding with negative margins,
    which a GTK box cannot do. The icon box (.side-icon) is 20px around

@@ -26,7 +26,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::folder_view::sorting::SortOrder;
-use crate::history::History;
+use crate::history::{History, HistoryViews};
 use crate::icons::Icon;
 use crate::locations::Page;
 use crate::settings_page::SettingsView;
@@ -66,6 +66,9 @@ pub(super) enum TabMoveRefusal {
 pub(super) struct MovedTab {
     /// Where it has been and where it is.
     history: History,
+    /// The scroll position and current item of each place it left, which
+    /// Back and Forward restore (NAV-008).
+    left_views: HistoryViews,
     /// The selected items' URIs.
     selected: Vec<String>,
     /// The vertical scroll position.
@@ -136,7 +139,7 @@ impl BrowserWindow {
     }
 
     /// True while a dialog of this window is open.
-    fn shows_dialog(&self) -> bool {
+    pub(super) fn shows_dialog(&self) -> bool {
         let this = self.upcast_ref::<gtk::Window>();
         let toplevels = gtk::Window::list_toplevels();
         toplevels
@@ -156,6 +159,7 @@ impl BrowserWindow {
         let is_settings = Page::from_uri(tab.uri()) == Some(Page::Settings);
         Some(MovedTab {
             history: tab.history.clone(),
+            left_views: tab.left_views.clone(),
             selected: tab.selected.clone(),
             scroll: tab.scroll,
             view: self.folder_pane().view(),
@@ -185,6 +189,7 @@ impl BrowserWindow {
         let id = self.imp().session.borrow_mut().insert_moved(tab.history, before);
         if let Some(received) = self.imp().session.borrow_mut().tab_mut(id) {
             received.selected = tab.selected;
+            received.left_views = tab.left_views;
             received.scroll_after_listing = Some(tab.scroll);
         }
         self.context().remember_network(&uri);
@@ -243,8 +248,8 @@ impl BrowserWindow {
     pub(super) fn move_tab_to_new_window(&self, id: TabId) {
         match self.detach_tab(id) {
             Ok(window) => {
-                window.present();
-                self.close_tab(id);
+                window.present_as_new_window();
+                self.release_moved_tab(id);
             }
             Err(refusal) => self.show_message(&refusal.to_string()),
         }
@@ -262,7 +267,7 @@ impl BrowserWindow {
             return;
         };
         match self.hand_over_tab(id, &destination, None) {
-            Ok(()) => self.close_tab(id),
+            Ok(()) => self.release_moved_tab(id),
             Err(refusal) => self.show_message(&refusal.to_string()),
         }
     }
@@ -433,7 +438,7 @@ mod tests {
         test
     }
 
-    /// parity: TAB-029, TAB-038, TAB-039
+    /// parity: TAB-029, TAB-038, TAB-039, NAV-005
     #[gtk::test]
     fn a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll() {
         let first = Fixture::standard();

@@ -136,12 +136,11 @@ impl AppState {
         }
     }
 
-    /// Opens `files` in the active window, as `open_files` does.
+    /// Opens `files` from `GApplication` open (xdg-open) as the command
+    /// line opens its locations.
     pub(super) fn open(&self, app: &gtk::Application, files: &[gio::File]) {
-        let window = active_window(app).unwrap_or_else(|| self.open_window(app, None));
         let uris = files.iter().map(|file| file.uri().to_string()).collect();
-        window.open_locations(uris);
-        window.present();
+        self.open_in_active_window(app, uris);
     }
 
     /// Ctrl+N: another window at the active folder when it is a real
@@ -161,10 +160,13 @@ impl AppState {
 }
 
 /// Whether a new window may start in `uri`: a folder on this computer or
-/// on an SMB share, rather than a landing page, a device or another
+/// on a network server, rather than a landing page, a device or another
 /// virtual place (`newWindow` in app.js).
 fn can_start_a_new_window_in(uri: &str) -> bool {
-    matches!(location_kind(uri), LocationKind::Local | LocationKind::Smb)
+    matches!(
+        location_kind(uri),
+        LocationKind::Local | LocationKind::Smb | LocationKind::Remote
+    )
 }
 
 /// The focused browser window, else the most recent one.
@@ -174,7 +176,7 @@ pub(super) fn active_window(app: &gtk::Application) -> Option<BrowserWindow> {
 }
 
 /// The browser windows of `app`, most recent first.
-fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
+pub(super) fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
     let windows = app.windows();
     windows
         .into_iter()
@@ -189,7 +191,7 @@ pub(super) fn open_window(
     start: Option<&str>,
 ) -> BrowserWindow {
     let window = build_window(app, context, start);
-    window.present();
+    window.present_as_new_window();
     window
 }
 
@@ -263,7 +265,7 @@ mod tests {
     use std::path::Path;
 
     use ox_core::location::SETTINGS_URI;
-    use ox_core::settings::Theme;
+    use ox_core::settings::{PreferencesUpdate, Theme};
     use tempfile::TempDir;
 
     use super::super::command_line::CommandRequest;
@@ -379,7 +381,7 @@ mod tests {
     }
 
     #[gtk::test]
-    fn opened_folders_go_to_the_active_window_first_tab_first() {
+    fn opened_folders_go_to_new_tabs_of_the_active_window() {
         // Declared first so it outlives the app, whose windows show it.
         let fixture = Fixture::standard();
         let app = TestApp::new();
@@ -389,7 +391,7 @@ mod tests {
         let [window] = &browser_windows()[..] else {
             panic!("the open window takes the locations");
         };
-        wait_until("both folders to open", || window.tab_count() == 2);
+        wait_until("both folders to open", || window.tab_count() == 3);
         assert_eq!(
             window.current_uri(),
             Some(fixture.uri()),
@@ -399,7 +401,7 @@ mod tests {
         assert_eq!(window.current_uri(), Some(fixture.uri_of("Documents")));
     }
 
-    /// parity: TAB-042
+    /// parity: TAB-042, TAB-043
     #[gtk::test]
     fn ctrl_n_opens_another_window_at_the_current_folder() {
         // Declared first so it outlives the app, whose windows show it.
@@ -422,7 +424,7 @@ mod tests {
         assert_eq!(second.current_uri(), Some(fixture.uri()));
     }
 
-    /// parity: TAB-050
+    /// parity: TAB-043
     #[test]
     fn a_new_window_can_start_in_a_local_or_smb_folder_only() {
         assert!(can_start_a_new_window_in("file:///home/demo"));
@@ -489,6 +491,70 @@ mod tests {
         assert_eq!(opened.current_uri(), Some(fixture.uri_of("Documents")));
     }
 
+    /// With no window open, the command line's locations open in the first
+    /// window: the first in its tab, the others in new tabs in front.
+    ///
+    /// parity: NAV-041
+    #[gtk::test]
+    fn command_line_locations_fill_the_first_window_when_none_is_open() {
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        let locations = vec![fixture.uri_of("Documents"), fixture.uri()];
+
+        app.state
+            .run_command(&application(), CommandRequest::Open(locations));
+
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+        wait_until("both locations to open", || window.tab_count() == 2);
+        assert_eq!(window.current_uri(), Some(fixture.uri()));
+        WidgetExt::activate_action(window, "win.previous-tab", None).expect("the action");
+        assert_eq!(window.current_uri(), Some(fixture.uri_of("Documents")));
+    }
+
+    /// A folder opened from another app gets a new tab, or a new window
+    /// when Settings asks for one; the tab in use stays where it was.
+    ///
+    /// parity: NAV-042
+    #[gtk::test]
+    fn folders_from_other_apps_open_in_a_new_tab_or_a_new_window() {
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        app.state.activate(&application());
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+        let first = window.current_uri();
+
+        app.state
+            .open(&application(), &[gio::File::for_uri(&fixture.uri())]);
+
+        wait_until("the new tab", || window.tab_count() == 2);
+        assert_eq!(window.current_uri(), Some(fixture.uri()));
+        WidgetExt::activate_action(window, "win.previous-tab", None).expect("the action");
+        assert_eq!(window.current_uri(), first);
+        let update = PreferencesUpdate {
+            external_folders_in_new_window: Some(true),
+            ..PreferencesUpdate::default()
+        };
+        app.state
+            .context
+            .update_preferences(update, |result| result.expect("saved"));
+        wait_until("the saved option", || {
+            app.state
+                .context
+                .settings_data()
+                .preferences
+                .external_folders_in_new_window
+        });
+        let locations = vec![fixture.uri_of("Documents")];
+        app.state
+            .run_command(&application(), CommandRequest::Open(locations));
+        assert_eq!(browser_windows().len(), 2);
+        assert_eq!(window.tab_count(), 2);
+    }
+
     /// `--settings` and the launcher's Settings action open Settings in the
     /// open window, without a second window.
     ///
@@ -547,6 +613,73 @@ mod tests {
         });
     }
 
+    /// Quit refuses while any window writes files, and closes every window
+    /// once none does.
+    ///
+    /// parity: TAB-052
+    #[gtk::test]
+    fn quit_waits_for_the_file_operations_of_every_window() {
+        let app = TestApp::new();
+        let idle = app.state.open_window(&application(), None);
+        let writing = app.state.open_window(&application(), None);
+        assert!(writing.begin_test_write());
+
+        let quit = app.state.quit_safely(&application());
+
+        assert!(!quit);
+        assert_eq!(browser_windows().len(), 2, "no window closed");
+        assert_eq!(
+            idle.shown_message_text(),
+            "Finish or cancel active file operations before quitting OpenXplorer."
+        );
+        writing.end_test_write();
+        // The test application must keep running for the next test, so
+        // this closes the windows as Quit would, without quitting.
+        close_all_windows();
+        assert!(browser_windows().is_empty());
+    }
+
+    /// A resized window saves its size, and every new window opens at it:
+    /// Ctrl+N's, Open in new window's and Move tab to new window's.
+    ///
+    /// parity: TAB-054
+    #[gtk::test]
+    fn a_new_window_opens_at_the_last_windows_size() {
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        let first = app.state.open_window(&application(), Some(&fixture.uri()));
+        first.set_default_size(900, 640);
+        wait_until("the size to be saved", || {
+            app.state
+                .context
+                .settings_data()
+                .preferences
+                .window_size
+                .is_some()
+        });
+        let opened_from = |action: &str, target: glib::Variant| {
+            let before = browser_windows();
+            WidgetExt::activate_action(&first, action, Some(&target)).expect("a window action");
+            let after = browser_windows();
+            let new = after.into_iter().find(|window| !before.contains(window));
+            new.expect("the action opens a window")
+        };
+
+        let in_new_window = opened_from("win.open-window", fixture.uri_of("Documents").to_variant());
+        first.add_tab(&fixture.uri()).expect("valid folder");
+        let tab = first.active_tab_target().expect("a tab in front");
+        let moved_tab = opened_from("win.move-tab-to-new-window", tab);
+        first.close();
+        settle();
+        let second = app.state.open_window(&application(), None);
+
+        for window in [&in_new_window, &moved_tab, &second] {
+            assert_eq!(window.default_size(), (900, 640));
+            assert!(!window.is_maximized());
+        }
+    }
+
+    /// parity: TAB-050
     #[gtk::test]
     fn closing_one_window_releases_it_while_another_stays_open() {
         let app = TestApp::new();

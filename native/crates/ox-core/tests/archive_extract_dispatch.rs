@@ -50,7 +50,7 @@ fn a_protected_destination_folder_is_refused() {
 /// The `archiveExtract` branch of `dispatch` in `desktop/winspace.py`
 /// refuses a server's list of shares before resolving it.
 ///
-/// parity: ARC-010
+/// parity: ARC-010, OPS-036
 #[test]
 fn a_server_listing_is_not_a_destination() {
     let fixture = ExtractionFixture::new();
@@ -98,7 +98,7 @@ fn locations_are_normalised_first() {
         ox_core::location::file_uri(&fixture.destination)
     );
     let unsupported = ExtractionRequest {
-        destination_uri: "ftp://example.com/".to_owned(),
+        destination_uri: "http://example.com/".to_owned(),
         ..request
     };
     let error = fixture

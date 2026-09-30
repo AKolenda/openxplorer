@@ -93,6 +93,12 @@ window.ox button.danger:active { background-color: alpha(@ox_critical_fill, .8);
   border-radius: 2px;
   border: none;
 }
+/* The current file's bar under the batch bar (OPS-020): thinner and
+   muted, so the batch bar stays the one that says how far the job is. */
+.transfer progressbar.transfer-file { margin-top: -4px; }
+.transfer progressbar.transfer-file > trough,
+.transfer progressbar.transfer-file > trough > progress { min-height: 2px; }
+.transfer progressbar.transfer-file > trough > progress { background-color: @ox_muted; }
 window.ox .transfer button.bordered { padding: 4px 12px; }
 
 /* ---- Windows 11 style context menu (§4.9, CMD-008) ---- */

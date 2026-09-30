@@ -79,7 +79,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
 }
 
-/// parity: CMD-009
+/// parity: CMD-009, OPS-014
 #[gtk::test]
 fn with_several_items_selected_the_one_item_commands_are_disabled() {
     let fixture = Fixture::standard();
@@ -94,10 +94,11 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    for disabled in ["Open", "Rename", "Copy path", "Properties"] {
+    for disabled in ["Open", "Copy path", "Properties"] {
         assert!(!menu.row(disabled).is_sensitive(), "{disabled}");
     }
-    for enabled in ["Cut", "Copy", "Move to Trash", "Duplicate"] {
+    // Rename renames them together (OPS-014).
+    for enabled in ["Cut", "Copy", "Rename", "Move to Trash", "Duplicate"] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
     }
 }
@@ -160,6 +161,8 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
             "HTML document",
             "-",
             "From template…",
+            "-",
+            "Link to file or folder…",
         ]
     );
 }
@@ -229,11 +232,15 @@ fn right_clicking_a_pin_opens_its_menu() {
     );
 }
 
-/// parity: TAB-012
+/// parity: TAB-012, TAB-013
 #[gtk::test]
 fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the subfolder");
     let tab = test
         .window
         .tab_strip()
@@ -260,6 +267,7 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
             "Open windows…",
             "-",
             "Close tab",
+            "Close other tabs",
         ]
     );
     assert!(
@@ -269,5 +277,6 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     assert!(menu.row("Move tab to window…").is_sensitive());
     menu.row("Duplicate tab").emit_activate();
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
-    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    assert!(!test.window.is_action_enabled("back"), "the history stays behind");
 }

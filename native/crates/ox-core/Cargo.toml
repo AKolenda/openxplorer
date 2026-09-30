@@ -8,6 +8,12 @@ license.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+# The administrator's persistent SMB mount helper (network::mount_helper),
+# which the stable packages install.
+[[bin]]
+name = "openxplorer-mount-share"
+path = "src/bin/openxplorer-mount-share.rs"
+
 [dependencies]
 gio.workspace = true
 glib.workspace = true
@@ -21,8 +27,10 @@ percent-encoding.workspace = true
 thiserror.workspace = true
 # `event`: the search index's inotify watcher waits on its descriptor with
 # poll(2). `process` gives `setsid`, which starts `openxplorer --restart` in its
-# own session as desktop/winspace.py does (`update::SessionLauncher`).
-rustix = { workspace = true, features = ["event", "process"] }
+# own session as desktop/winspace.py does (`update::SessionLauncher`), and the
+# user IDs the mount helper checks. `termios` turns echo off while the mount
+# helper reads the SMB password.
+rustix = { workspace = true, features = ["event", "process", "termios"] }
 # The search cache; [workspace.dependencies] says why it links the system
 # SQLite.
 rusqlite.workspace = true

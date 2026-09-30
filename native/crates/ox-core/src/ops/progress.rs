@@ -5,11 +5,13 @@
 //! Ports the `progress` closure of the `operate` branch of `dispatch` in
 //! `desktop/winspace.py`, which forwards a report only when 80 ms have
 //! passed since the last one or the report says the work is complete, and
-//! the starting labels of `runOperation` in `desktop/ui/app.js`.
+//! the starting labels of `runOperation` in `desktop/ui/app.js`. The batch
+//! bar the Python app did not have (OPS-020) gets every report: there is at
+//! most one per top-level item, and a file's reports must not crowd it out.
 
 use std::time::{Duration, Instant};
 
-use crate::transfer::{Progress, TransferMode};
+use crate::transfer::{Progress, ProgressScope, TransferMode};
 
 /// The shortest time between two progress reports.
 pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(80);
@@ -25,8 +27,8 @@ pub fn starting_label(mode: TransferMode) -> &'static str {
     }
 }
 
-/// Lets through at most one progress report per [`PROGRESS_INTERVAL`],
-/// and always the report that says the work is complete.
+/// Lets through every batch report, and at most one file report per
+/// [`PROGRESS_INTERVAL`] besides the one that says the file is complete.
 #[derive(Debug, Default)]
 pub(crate) struct ProgressThrottle {
     last_delivery: Option<Instant>,
@@ -35,6 +37,9 @@ pub(crate) struct ProgressThrottle {
 impl ProgressThrottle {
     /// True when `progress`, reported at `now`, should reach the interface.
     pub(crate) fn admits(&mut self, progress: &Progress, now: Instant) -> bool {
+        if progress.scope == ProgressScope::Batch {
+            return true;
+        }
         let interval_has_passed = self
             .last_delivery
             .is_none_or(|last| now.duration_since(last) >= PROGRESS_INTERVAL);
@@ -67,9 +72,11 @@ mod tests {
         Progress {
             label: String::from("Copying a"),
             fraction,
+            scope: ProgressScope::File,
         }
     }
 
+    /// parity: PERF-006
     #[test]
     fn reports_are_spaced_by_the_interval_but_completion_always_arrives() {
         let start = Instant::now();
@@ -84,6 +91,25 @@ mod tests {
         assert!(!too_soon);
         assert!(complete);
         assert!(later);
+    }
+
+    /// parity: OPS-020
+    #[test]
+    fn a_full_file_bar_does_not_crowd_out_the_next_items_batch_report() {
+        let start = Instant::now();
+        let mut throttle = ProgressThrottle::default();
+        let next_item = Progress {
+            label: String::from("Copy: b (2/3)"),
+            fraction: 0.34,
+            scope: ProgressScope::Batch,
+        };
+
+        let file_done = throttle.admits(&progress(1.0), start);
+        let batch = throttle.admits(&next_item, start + Duration::from_millis(1));
+        let next_file = throttle.admits(&progress(0.5), start + Duration::from_millis(2));
+
+        assert!(file_done && batch);
+        assert!(!next_file, "file reports keep their interval");
     }
 
     #[test]

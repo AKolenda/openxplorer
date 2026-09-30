@@ -86,8 +86,10 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
 }
 
 /// The Open group: Open, the extraction commands, the applications, for
-/// folders Open in new tab and Pin to Quick access, and for a search
-/// result Open file location (SRCH-015).
+/// folders Open in new tab (Open in new tabs for several, TAB-027), Open
+/// in new window (TAB-028) and Pin to Quick access, and for a search
+/// result Open file location (SRCH-015), also in a new tab or window
+/// (SRCH-016).
 fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let several = !facts.is_single;
     let is_folder = facts.shape == ItemShape::Folder;
@@ -100,19 +102,44 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     }
     entries.extend(application_items(facts));
     if is_folder {
-        let new_tab = MenuItem::with_text_target(
-            "Open in new tab",
-            Icon::Add,
-            WindowAction::OpenTab,
+        let new_tab = if several {
+            item("Open in new tabs", Icon::Add, WindowAction::OpenSelectionInTabs)
+        } else {
+            MenuItem::with_text_target(
+                "Open in new tab",
+                Icon::Add,
+                WindowAction::OpenTab,
+                &facts.navigation_uri,
+            )
+        };
+        let new_window = MenuItem::with_text_target(
+            "Open in new window",
+            Icon::WindowNew,
+            WindowAction::OpenWindow,
             &facts.navigation_uri,
         );
         let pin = item("Pin to Quick access", Icon::Pin, WindowAction::PinSelected);
-        entries.push(new_tab.disabled_when(several).into());
+        entries.push(new_tab.into());
+        entries.push(new_window.disabled_when(several).into());
         entries.push(pin.disabled_when(several).into());
     }
     if facts.is_search_result {
-        let open_location = item("Open file location", Icon::Folder, WindowAction::OpenFileLocation);
-        entries.push(open_location.disabled_when(several).into());
+        let locations = [
+            ("Open file location", Icon::Folder, WindowAction::OpenFileLocation),
+            (
+                "Open file location in new tab",
+                Icon::Add,
+                WindowAction::OpenFileLocationInTab,
+            ),
+            (
+                "Open file location in new window",
+                Icon::WindowNew,
+                WindowAction::OpenFileLocationInWindow,
+            ),
+        ];
+        for (label, glyph, action) in locations {
+            entries.push(item(label, glyph, action).disabled_when(several).into());
+        }
     }
     entries
 }
@@ -410,7 +437,7 @@ mod tests {
             .collect()
     }
 
-    /// parity: CMD-009, CMD-016
+    /// parity: CMD-009, CMD-016, TAB-028
     #[test]
     fn a_folder_classic_menu_keeps_the_python_order_and_shortcuts() {
         let menu = item_menu(&folder(), MenuStyle::Classic);
@@ -422,6 +449,7 @@ mod tests {
                 "Open in Terminal",
                 "Open folder with…",
                 "Open in new tab",
+                "Open in new window",
                 "Pin to Quick access",
                 "-",
                 "Cut",
@@ -488,7 +516,7 @@ mod tests {
         assert!(!entries.contains(&"Calculate folder size".to_owned()));
     }
 
-    /// parity: CMD-009
+    /// parity: CMD-009, TAB-027
     #[test]
     fn several_selected_items_disable_what_acts_on_one() {
         let facts = ItemFacts {
@@ -504,7 +532,7 @@ mod tests {
                 "Open",
                 "Open in Terminal",
                 "Open folder with…",
-                "Open in new tab",
+                "Open in new window",
                 "Pin to Quick access",
                 "Copy path",
                 "Previous versions",
@@ -552,12 +580,14 @@ mod tests {
         let entries = labels(&item_menu(&facts, MenuStyle::Classic).entries);
 
         assert_eq!(
-            entries[..4],
+            entries[..6],
             [
                 "Open",
                 "Open containing folder in Terminal",
                 "Open with…",
-                "Open file location"
+                "Open file location",
+                "Open file location in new tab",
+                "Open file location in new window"
             ]
         );
         assert!(!labels(&item_menu(&file(), MenuStyle::Classic).entries)
@@ -578,6 +608,7 @@ mod tests {
                 "Open in Terminal",
                 "Open folder with…",
                 "Open in new tab",
+                "Open in new window",
                 "Pin to Quick access",
                 "Duplicate",
                 "Copy path",

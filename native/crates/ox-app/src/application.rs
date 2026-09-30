@@ -145,6 +145,9 @@ mod imp {
             if let Some(state) = AppState::new(app.upcast_ref(), Settings::open_default()) {
                 self.state.set(state).expect("GTK starts an application once");
             }
+            if let Launch::Interactive = app.launch() {
+                app.report_unfinished_operations();
+            }
         }
 
         /// A launch without a command line, such as D-Bus activation from
@@ -223,6 +226,21 @@ impl Application {
             .launch
             .get()
             .expect("Application::new sets the launch before GTK runs it")
+    }
+
+    /// Once the first window shows, tells the user what copies and moves
+    /// that never finished, because the app stopped, left behind
+    /// (OPS-038).
+    fn report_unfinished_operations(&self) {
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = app)]
+            self,
+            async move {
+                if let Some(window) = active_window(app.upcast_ref()) {
+                    window.report_unfinished_operations().await;
+                }
+            }
+        ));
     }
 
     /// Names the application as the desktop sees it (`startup` in

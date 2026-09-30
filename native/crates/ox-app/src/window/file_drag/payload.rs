@@ -18,6 +18,7 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::entry::{Entry, EntryKind};
 use ox_core::location::{file_uri, is_smb_location, is_smb_server, normalise};
+use ox_core::ops::is_recycle_bin_item;
 
 /// The most items one drag carries (`MAX_ITEMS`).
 pub(super) const MAX_DRAGGED_ITEMS: usize = 200;
@@ -76,14 +77,17 @@ pub(crate) fn is_draggable_location(uri: &str) -> bool {
 /// Whether `entry` may leave the app by a drag (`fileDragEntry`): a real
 /// local or SMB file, folder or link, not a share listing or a shortcut,
 /// whose address passes the location rules, which refuse a password or a
-/// control character (`file_uri`).
+/// control character (`file_uri`); or an item directly in the Recycle
+/// Bin, which a drop into a folder moves there (OPS-046).
 pub(super) fn is_draggable(entry: &Entry) -> bool {
     let is_plain_item = matches!(
         entry.kind,
         EntryKind::File | EntryKind::Directory | EntryKind::Symlink
     );
     let is_valid_address = normalise(&entry.uri).is_ok();
-    is_plain_item && !entry.is_virtual && is_valid_address && is_draggable_location(&entry.uri)
+    let may_leave =
+        (is_valid_address && is_draggable_location(&entry.uri)) || is_recycle_bin_item(&entry.uri);
+    is_plain_item && !entry.is_virtual && may_leave
 }
 
 /// The URIs a drag of `entries` carries: every one, in order, without
@@ -208,7 +212,7 @@ mod tests {
         assert_eq!(uris, Ok(vec![folder.uri.clone(), file.uri.clone()]));
     }
 
-    /// parity: DND-003
+    /// parity: DND-003, PERF-005
     #[test]
     fn one_item_that_may_not_leave_refuses_the_whole_drag() {
         let file = file_entry("notes.txt");
@@ -247,7 +251,7 @@ mod tests {
     /// Ported from `desktop/tests/test_native_file_drag.py::PayloadTests::test_existing_smb_mount_exports_local_path_and_keeps_original`
     /// and `test_unmounted_smb_remains_a_uri_without_implicit_download`.
     ///
-    /// parity: DND-004
+    /// parity: DND-004, NET-026
     #[test]
     fn a_mounted_share_exports_its_local_path_and_keeps_its_own_address() {
         let mounted = "smb://nas/projects/plan.odt".to_owned();

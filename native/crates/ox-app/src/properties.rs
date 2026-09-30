@@ -20,6 +20,8 @@
 //! | `view` | [`PropertiesView`]: the tabs and their panels |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_panel` | The General and Permissions tabs |
+//! | `mount_assistant` | The network mount assistant of the Location tab |
+//! | `sharing_panel` | The Sharing tab: Samba user shares of a local folder |
 //! | `versions_panel` | [`VersionsPanel`]: the Previous versions tab |
 //! | `version_row` | One row of the versions list |
 //! | `snapshot_source` | The Snapshot source form |
@@ -31,7 +33,9 @@
 mod folder_sizes;
 mod general_panel;
 mod metadata;
+mod mount_assistant;
 mod restore;
+mod sharing_panel;
 mod size_scan_strip;
 mod snapshot_banner;
 mod snapshot_source;
@@ -44,6 +48,7 @@ use ox_core::places::KnownFolder;
 
 pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes, NOT_SCANNED};
 pub(crate) use restore::RestoreRequest;
+pub(crate) use sharing_panel::system_usershares;
 pub(crate) use size_scan_strip::{progress_text, RunEnd, RunPosition, SizeScanStrip};
 pub(crate) use snapshot_banner::SnapshotBanner;
 pub(crate) use version_row::SnapshotTarget;
@@ -77,6 +82,8 @@ impl PropertiesTarget {
 pub(crate) enum PropertiesTab {
     /// Type, location, size, dates and the default application.
     General,
+    /// Sharing a local folder on the network (local folders only).
+    Sharing,
     /// Where a standard folder is stored (standard folders only).
     Location,
     /// Owner, group, mode and access.
@@ -90,6 +97,7 @@ impl PropertiesTab {
     pub(crate) const fn label(self) -> &'static str {
         match self {
             PropertiesTab::General => "General",
+            PropertiesTab::Sharing => "Sharing",
             PropertiesTab::Location => "Location",
             PropertiesTab::Permissions => "Permissions",
             PropertiesTab::PreviousVersions => "Previous versions",
@@ -100,6 +108,7 @@ impl PropertiesTab {
     pub(crate) const fn page_name(self) -> &'static str {
         match self {
             PropertiesTab::General => "general",
+            PropertiesTab::Sharing => "sharing",
             PropertiesTab::Location => "location",
             PropertiesTab::Permissions => "permissions",
             PropertiesTab::PreviousVersions => "versions",
@@ -110,6 +119,7 @@ impl PropertiesTab {
     pub(crate) fn from_page_name(name: &str) -> Option<Self> {
         [
             PropertiesTab::General,
+            PropertiesTab::Sharing,
             PropertiesTab::Location,
             PropertiesTab::Permissions,
             PropertiesTab::PreviousVersions,

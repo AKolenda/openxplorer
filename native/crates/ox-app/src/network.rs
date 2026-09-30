@@ -25,5 +25,5 @@ mod window_network;
 #[cfg(test)]
 pub(crate) use discovery::Discoverer;
 pub(crate) use discovery::DiscoveryState;
-pub(crate) use services::{read_stable_mounts, NetworkServices};
+pub(crate) use services::{read_stable_mounts, user_recent_servers, NetworkServices};
 pub(crate) use window_network::WindowNetwork;

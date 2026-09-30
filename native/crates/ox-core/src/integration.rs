@@ -28,8 +28,9 @@
 //! - **Flatpak.** Inside a Flatpak sandbox ([`Sandbox`]) host files are
 //!   never written directly: `xdg-mime` and the terminal run on the host
 //!   through `flatpak-spawn --host`, files open through the desktop
-//!   portal, and "Show in folder" and the Brave sync, which must write
-//!   host files, refuse.
+//!   portal, "Show in folder" keeps its opt-in inside the sandbox and
+//!   asks the Background portal to start the app at login, and the Brave
+//!   sync, which must write host files, refuses.
 //!
 //! Blocking work runs on GIO worker threads: each service has a
 //! `run_in_background`, `prepare_in_background` or
@@ -42,6 +43,7 @@
 //! |---|---|---|
 //! | `default_apps` | Default file manager and ZIP handler | `desktop_integration.py` |
 //! | `reveal` | The "Show in folder" session files | `reveal_integration.py` |
+//! | `background_portal` | Starting at login from inside Flatpak | (new) |
 //! | `file_manager_bus` | The `org.freedesktop.FileManager1` service | `filemanager_bus.py` |
 //! | `file_manager_request` | Checking FileManager1 requests | `window_state.py` |
 //! | `brave` | Brave's download folder | `brave_integration.py` |
@@ -55,6 +57,7 @@
 mod activation;
 mod app_catalog;
 mod applications;
+mod background_portal;
 mod brave;
 mod default_apps;
 mod file_manager_bus;
@@ -71,6 +74,9 @@ mod worker;
 pub use activation::{choose_application, Activation, OpenError};
 pub use app_catalog::{editor_shortcuts, unique_applications, EditorShortcut};
 pub use applications::{ApplicationDatabase, ApplicationInfo, InstalledApplications};
+pub use background_portal::{
+    request_autostart, AutostartRequest, BackgroundError, DESKTOP_PORTAL_NAME, DESKTOP_PORTAL_PATH,
+};
 pub use brave::{
     BraveActivity, BraveChannel, BraveError, BraveIntegration, BravePaths, BraveProfile, BraveReach,
     BraveStatus, Confirmation, DownloadPreference, ProcessTable, ProfileFailure, SandboxedBrave, SyncOutcome,
@@ -89,8 +95,8 @@ pub use file_manager_request::{
 pub use mime_type::MimeType;
 pub use opening::{DefaultOpener, Launcher, OpenTarget, PreparedOpen};
 pub use reveal::{
-    DisabledReveal, RevealError, RevealPaths, RevealRegistration, AUTOSTART_FILE, MANAGED_MARKER,
-    SERVICE_FILE,
+    DisabledReveal, RevealError, RevealPaths, RevealRegistration, AUTOSTART_FILE, FLATPAK_OPT_IN_FILE,
+    MANAGED_MARKER, SERVICE_FILE,
 };
 pub use sandbox::Sandbox;
 pub use terminal::{

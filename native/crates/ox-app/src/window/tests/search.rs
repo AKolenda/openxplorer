@@ -6,13 +6,16 @@
 use std::fs;
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::search::{
     Caching, GioFolderReader, HiddenItems, IndexService, RootOrigin, RootStatus, SearchIndex,
 };
 
+use super::file_ops_support::{is_enabled, select_names};
 use crate::folder_view::sorting::SortColumn;
 use crate::search::SearchScope;
-use crate::test_support::harness::{capture, wait_until, Fixture, TestWindow, STANDARD_NAMES};
+use crate::test_support::harness::{capture, wait_until, Fixture, OpenedWindows, TestWindow, STANDARD_NAMES};
+use crate::window::activation::{activation_for, Activation};
 use crate::window::folder_pane::PanePage;
 
 impl TestWindow {
@@ -51,13 +54,37 @@ fn typing_filters_a_folder_nobody_indexed_and_says_so() {
     assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt"]);
     let strip = test.window.search_strip();
     assert!(strip.is_visible());
-    assert_eq!(strip.caption(), "Current folder only");
+    assert_eq!(strip.caption(), "Current folder + subfolders");
     assert!(strip.offers_to_cache_folder());
     assert_eq!(strip.shown_note(), None);
     assert_eq!(test.status_count(), "2 results");
     assert!(test.shows_column(SortColumn::FolderPath));
     assert!(!test.shows_column(SortColumn::Modified));
     capture(&test.window, "search-folder-filter.png");
+}
+
+/// A folder nobody indexed is searched live with its subfolders, and
+/// wildcards work there too.
+///
+/// parity: SRCH-035
+#[gtk::test]
+fn a_folder_nobody_indexed_is_searched_with_its_subfolders() {
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Documents/Deep")).expect("fixture subfolder");
+    fs::write(fixture.path("Documents/Deep/notes archive.TXT"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.search_for("notes");
+
+    assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes archive.TXT"]);
+    assert_eq!(test.status_count(), "3 results");
+    let deep = test.window.folder_model().item(2).expect("a third result");
+    let expected = fixture.path("Documents/Deep");
+    assert_eq!(deep.folder_path().text, expected.to_string_lossy());
+
+    test.search_for("*.txt notes");
+
+    assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes archive.TXT"]);
 }
 
 /// parity: SRCH-001, SRCH-002
@@ -76,6 +103,60 @@ fn escape_empties_the_box_and_brings_the_listing_back() {
     assert!(test.shows_column(SortColumn::Modified));
     assert!(!test.shows_column(SortColumn::FolderPath));
     assert_eq!(test.status_count(), "4 items");
+}
+
+/// Enter moves to the results and keeps the search; Escape empties the
+/// box, and a second Escape moves to the view.
+///
+/// parity: SRCH-006
+#[gtk::test]
+fn enter_and_a_second_escape_move_focus_to_the_view() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.search_for("notes");
+    let entry = test.window.search_box().entry();
+    let pane = test.window.folder_pane();
+    test.activate("search", None);
+    wait_until("the box to take focus", || entry.focus_child().is_some());
+
+    entry.emit_activate();
+
+    wait_until("the results to take focus", || pane.view_has_focus());
+    assert_eq!(entry.text().as_str(), "notes");
+    test.activate("search", None);
+    wait_until("the box to take focus again", || entry.focus_child().is_some());
+    entry.emit_stop_search();
+    assert_eq!(entry.text().as_str(), "");
+    assert!(!pane.view_has_focus(), "the first Escape only empties the box");
+    entry.emit_stop_search();
+    wait_until("the view to take focus", || pane.view_has_focus());
+}
+
+/// Opening another folder ends the search, unless the strip's pin keeps
+/// it: then it runs again in the folder opened.
+///
+/// parity: SRCH-005
+#[gtk::test]
+fn the_pin_keeps_the_search_when_changing_folders() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/notes inside.txt"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.search_for("notes");
+    let strip = test.window.search_strip();
+    assert!(!strip.keeps_search(), "off until pressed");
+    strip.set_keeps_search(true);
+
+    test.activate("go-to", Some(&fixture.uri_of("Documents")));
+
+    wait_until("the search to run in the folder opened", || {
+        test.names() == ["notes inside.txt"] && test.status_count() == "1 result"
+    });
+    assert_eq!(test.window.search_box().entry().text().as_str(), "notes");
+    strip.set_keeps_search(false);
+    test.activate("go-to", Some(&fixture.uri()));
+    test.wait_for_listing("the first folder");
+    assert_eq!(test.window.search_box().entry().text().as_str(), "");
+    assert_eq!(test.names(), STANDARD_NAMES);
 }
 
 /// parity: SRCH-012
@@ -177,7 +258,7 @@ fn a_search_that_finds_nothing_says_why() {
     assert_eq!(pane.empty_page().title(), "No matching items");
     assert_eq!(
         pane.empty_page().message(),
-        "Only this folder is being filtered. Enable its search cache to include subfolders."
+        "No items found in this folder or its subfolders."
     );
 }
 
@@ -199,6 +280,36 @@ fn a_new_file_in_an_indexed_folder_appears_in_the_shown_search() {
     });
 }
 
+/// A move made in the window tells the search cache that both folders
+/// changed, so a share without a live watch shows it at once.
+///
+/// parity: SRCH-033
+#[gtk::test]
+fn file_operations_tell_the_search_cache_which_folders_changed() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.index_folder(&fixture.uri());
+    let written = |folder: String| {
+        let cache = test.context.search_cache().clone();
+        wait_until("the cache to read the folder again", move || {
+            cache.written_folders().contains(&folder)
+        });
+    };
+    select_names(&test, &["Notes 2.txt"]);
+
+    test.activate("cut", None);
+    test.activate("go-to", Some(&fixture.uri_of("Documents")));
+    test.wait_for_listing("the Documents folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+
+    written(fixture.uri_of("Documents"));
+    written(fixture.uri());
+    test.search_for("notes 2");
+    assert_eq!(test.names(), ["Notes 2.txt"]);
+}
+
 /// parity: SRCH-014, SRCH-015
 #[gtk::test]
 fn open_file_location_selects_the_result_in_its_folder() {
@@ -217,6 +328,90 @@ fn open_file_location_selects_the_result_in_its_folder() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     assert_eq!(test.selected_names(), ["deep notes.txt"]);
     assert_eq!(test.window.search_box().entry().text().as_str(), "");
+}
+
+/// A folder result middle-clicked opens behind in a new tab and the
+/// search stays; a ZIP result opens in the archive browser.
+///
+/// parity: SRCH-014
+#[gtk::test]
+fn a_middle_clicked_folder_result_opens_a_tab_and_keeps_the_search() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Documents/Reports")).expect("fixture subfolder");
+    fs::write(fixture.path("Documents/reports 2026.zip"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.index_folder(&fixture.uri());
+    test.search_for("reports");
+    assert_eq!(test.names(), ["Reports", "reports 2026.zip"]);
+    let result = |position| test.window.folder_model().item(position).expect("a result");
+    let zip = result(1);
+    assert_eq!(activation_for(zip.entry()), Activation::Archive);
+    let Activation::Folder(folder) = activation_for(result(0).entry()) else {
+        panic!("a folder result opens as a folder");
+    };
+
+    test.activate("open-tab-background", Some(&folder));
+
+    wait_until("the folder to open in a second tab", || {
+        test.window.imp().session.borrow().tabs().len() == 2
+    });
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    assert_eq!(test.window.search_box().entry().text().as_str(), "reports");
+    assert_eq!(test.names(), ["Reports", "reports 2026.zip"]);
+}
+
+/// "Open file location in new tab" opens the result's folder behind, with
+/// the result selected there, and the search stays; "in new window" opens
+/// it in a window of its own.
+///
+/// parity: SRCH-016
+#[gtk::test]
+fn a_results_folder_opens_in_a_new_tab_or_window_with_it_selected() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/deep notes.txt"), b"x").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.index_folder(&fixture.uri());
+    test.search_for("deep");
+    test.window.folder_model().select_only(0);
+    let search_tab = test.active_tab().expect("a tab in front");
+
+    test.activate("open-file-location-in-tab", None);
+
+    assert_eq!(test.active_tab(), Some(search_tab), "the new tab opens behind");
+    assert_eq!(test.window.search_box().entry().text().as_str(), "deep");
+    let tabs: Vec<_> = test
+        .window
+        .imp()
+        .session
+        .borrow()
+        .tabs()
+        .iter()
+        .map(|tab| tab.id)
+        .collect();
+    let [_, located] = tabs[..] else {
+        panic!("a second tab: {tabs:?}");
+    };
+    test.activate_tab(located);
+    test.wait_for_listing("the result's folder");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    assert_eq!(test.selected_names(), ["deep notes.txt"]);
+
+    test.activate_tab(search_tab);
+    test.search_for("deep");
+    test.window.folder_model().select_only(0);
+    test.activate("open-file-location-in-window", None);
+
+    let opened = OpenedWindows::only(&[&test.window]);
+    let window = opened.window();
+    wait_until("the new window to list the folder", || {
+        let listed = window.folder_model().n_items() > 0;
+        listed && window.current_uri() == Some(fixture.uri_of("Documents"))
+    });
+    let selected = window.folder_model().selected_items();
+    let names: Vec<&str> = selected.iter().map(|item| item.entry().name.as_str()).collect();
+    assert_eq!(names, ["deep notes.txt"]);
 }
 
 /// parity: SRCH-020

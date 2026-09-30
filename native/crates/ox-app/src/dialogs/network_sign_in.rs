@@ -61,6 +61,7 @@ const CONNECTING: &str = "Connecting…";
 type AnswerHandler = Rc<dyn Fn(&SignInDialog, Answer)>;
 
 mod imp;
+mod text_size_keys;
 
 glib::wrapper! {
     /// The dialog that asks one network sign-in or question.
@@ -160,6 +161,7 @@ impl SignInDialog {
             move |_| dialog.follow_the_eye()
         ));
         self.add_controller(self.escape_cancels());
+        self.forward_text_size_keys();
         self.set_default_widget(Some(&*imp.connect_button));
         self.connect_map(Self::select_username);
     }

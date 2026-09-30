@@ -7,6 +7,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use gtk::prelude::*;
 use ox_core::archive::{CompressionRequest, ZipCompressor};
@@ -15,11 +16,11 @@ use ox_core::transfer::Cancellation;
 
 use super::item_dialogs::{press, texts};
 use crate::archive_view::ArchiveBrowserView;
-use crate::test_support::harness::{capture, descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{capture, descendants, wait_for, wait_until, Fixture, TestWindow};
 
 /// A standard fixture with `Bundle.zip`, which holds `Docs/a.txt` and
 /// `readme.txt`.
-fn fixture_with_zip() -> Fixture {
+pub(super) fn fixture_with_zip() -> Fixture {
     let fixture = Fixture::standard();
     let sources = tempfile::tempdir().expect("a folder for the sources");
     fs::create_dir(sources.path().join("Docs")).expect("fixture folder");
@@ -44,7 +45,7 @@ fn uri_in(folder: &Path, name: &str) -> String {
 }
 
 /// The archive browser inside the dialog shown.
-fn archive_browser(test: &TestWindow) -> ArchiveBrowserView {
+pub(super) fn archive_browser(test: &TestWindow) -> ArchiveBrowserView {
     let frame = test.wait_for_dialog("the archive browser");
     descendants::<ArchiveBrowserView>(&frame)
         .into_iter()
@@ -126,7 +127,7 @@ fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
     assert_eq!(test.window.shown_message(), "Extracted 2 files into Bundle.");
 }
 
-/// parity: ARC-010
+/// parity: ARC-010, OPS-006
 #[gtk::test]
 fn extract_refuses_a_bad_name_and_keeps_the_dialog_open() {
     let fixture = fixture_with_zip();
@@ -167,6 +168,22 @@ fn extract_here_uses_the_next_free_name() {
     wait_until("the toast", || {
         test.window.shown_message() == "Extracted 2 files into Bundle (2)."
     });
+}
+
+/// parity: OPS-024
+#[gtk::test]
+fn nothing_is_extracted_while_a_file_operation_runs() {
+    let fixture = fixture_with_zip();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    let running = test.window.begin_operation("Preparing copy…");
+
+    test.activate("extract-here", None);
+    wait_for(Duration::from_millis(200));
+
+    assert!(running.is_some());
+    assert!(!fixture.path("Bundle").exists(), "the extraction waits");
+    test.window.end_operation();
 }
 
 /// parity: ARC-023

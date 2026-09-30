@@ -44,6 +44,24 @@ pub(super) fn text_field(dialog: &Dialog) -> gtk::Entry {
         .expect("the dialog has a text field")
 }
 
+/// The field that edits a name in place in `test`'s view, once it shows.
+pub(super) fn name_editor(test: &TestWindow) -> gtk::Entry {
+    let find = || {
+        descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
+            .into_iter()
+            .find(|field| field.has_css_class("rename-field"))
+    };
+    wait_until("the name to become editable", || find().is_some());
+    find().expect("wait_until returned only once the field showed")
+}
+
+/// Whether `test`'s view edits a name in place.
+pub(super) fn is_renaming_in_place(test: &TestWindow) -> bool {
+    descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
+        .iter()
+        .any(|field| field.has_css_class("rename-field"))
+}
+
 /// Selects the items called `names` in `test`'s folder view.
 pub(super) fn select_names(test: &TestWindow, names: &[&str]) {
     let model = test.window.folder_model();
@@ -75,6 +93,21 @@ pub(super) fn is_enabled(test: &TestWindow, name: &str) -> bool {
 /// When no shortcut of the window has that key.
 pub(super) fn press_shortcut(test: &TestWindow, keyval: gdk::Key, modifiers: gdk::ModifierType) {
     test.window.folder_pane().focus_view();
+    press_shortcut_where_focused(test, keyval, modifiers);
+}
+
+/// Presses `keyval` with exactly `modifiers` wherever keyboard focus is
+/// now, as far as the window's shortcut controllers go. Returns whether
+/// the window took the key.
+///
+/// # Panics
+///
+/// When no shortcut of the window has that key.
+pub(super) fn press_shortcut_where_focused(
+    test: &TestWindow,
+    keyval: gdk::Key,
+    modifiers: gdk::ModifierType,
+) -> bool {
     let shortcut = window_shortcuts(test)
         .into_iter()
         .find(|shortcut| {
@@ -83,7 +116,7 @@ pub(super) fn press_shortcut(test: &TestWindow, keyval: gdk::Key, modifiers: gdk
         })
         .expect("the window has a shortcut for the key");
     let action = shortcut.action().expect("every window shortcut has an action");
-    action.activate(gtk::ShortcutActionFlags::empty(), &test.window, None);
+    action.activate(gtk::ShortcutActionFlags::empty(), &test.window, None)
 }
 
 /// Every shortcut of the window's own shortcut controllers.

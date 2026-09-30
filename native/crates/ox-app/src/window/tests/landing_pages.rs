@@ -7,11 +7,13 @@
 use gtk::prelude::*;
 use ox_core::places::NetworkKind;
 
+use super::file_ops_support::is_enabled;
 use super::geometry::{bounds, laid_out, Bounds};
-use super::support::{art_image_showing, arts_in};
+use super::support::{art_image_showing, arts_in, menu_button_with_class, middle_click_at};
 use crate::icons::{Art, Connection, Icon};
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture};
+use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::window::landing;
 
 /// The labels `widget` shows, in order.
 fn texts_in(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
@@ -63,6 +65,56 @@ fn quick_access_cards_stretch_across_the_page_in_equal_columns() {
     );
 }
 
+/// parity: HOME-001
+#[gtk::test]
+fn this_pc_has_its_heading_three_sections_and_nothing_to_search_or_create() {
+    let test = TestWindow::open(Page::ThisPc.uri());
+    let landing = test.window.folder_pane().landing();
+
+    let texts = texts_in(landing);
+
+    assert_eq!(
+        texts[..2],
+        ["This PC", "Folders, devices, and connected storage."]
+    );
+    assert_eq!(
+        landing::section_titles(landing),
+        ["Quick access", "Devices and drives", "Network locations"]
+    );
+    assert_eq!(test.window.status_bar().texts().0, "Ready");
+    assert!(!test.window.search_box().is_sensitive(), "Search");
+    assert!(!is_enabled(&test, "up"), "Up");
+    assert!(
+        !menu_button_with_class(&test, "new-command").is_sensitive(),
+        "New"
+    );
+}
+
+/// parity: HOME-002
+#[gtk::test]
+fn a_quick_access_card_says_where_the_folder_is_and_opens_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("pin-folder", None);
+    wait_until("the pin", || !test.context.settings_data().pins.is_empty());
+    test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+    test.wait_for_listing("This PC");
+    let cards = descendants::<gtk::Button>(test.window.folder_pane().landing());
+    let card = cards
+        .into_iter()
+        .find(|card| card.has_css_class("quick-card") && texts_in(card)[0] == "Example projects")
+        .expect("the pinned folder has a card");
+
+    assert_eq!(texts_in(&card), ["Example projects", "Stored on this PC"]);
+    assert_eq!(arts_in(&card), [Art::Folder]);
+    middle_click_at(&card, (1.0, 1.0));
+    assert_eq!(test.window.tab_count(), 2, "a middle-click opens a tab");
+    assert_eq!(test.window.current_uri().as_deref(), Some(Page::ThisPc.uri()));
+    card.emit_clicked();
+    test.wait_for_listing("the pinned folder");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+}
+
 /// parity: HOME-006, HOME-009
 #[gtk::test]
 fn the_network_page_has_the_banner_address_field_and_notes() {
@@ -100,12 +152,12 @@ fn the_network_page_has_the_banner_address_field_and_notes() {
 
 /// parity: HOME-009
 #[gtk::test]
-fn open_address_refuses_anything_but_an_smb_server() {
+fn open_address_refuses_anything_but_a_network_server() {
     let fixture = Fixture::standard();
     let test = laid_out(Page::Network.uri());
     test.activate("open-server-address", Some(&fixture.uri()));
     let message = test.window.shown_message();
-    assert_eq!(message.as_str(), "Enter an SMB server or share.");
+    assert_eq!(message.as_str(), "Enter a network server or shared folder.");
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
 }
 

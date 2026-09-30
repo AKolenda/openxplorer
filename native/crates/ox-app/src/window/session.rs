@@ -14,7 +14,7 @@ use ox_core::entry::EntryError;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::loader::Listing;
 use crate::folder_view::watch::Watch;
-use crate::history::History;
+use crate::history::{History, HistoryViews};
 
 use super::listing_state::{ListingEnd, ListingState};
 
@@ -83,6 +83,8 @@ pub(super) struct Tab {
     pub id: TabId,
     /// The locations visited in this tab.
     pub history: History,
+    /// Where the view was in each location of the history the tab left.
+    pub left_views: HistoryViews,
     /// The tab's items, unfiltered and unsorted.
     pub store: gio::ListStore,
     /// Advanced only by [`Tab::begin_load`]; [`Session::accepts`] rejects
@@ -98,8 +100,14 @@ pub(super) struct Tab {
     /// The next listing scrolls to the first selected item, as a
     /// `FileManager1` `ShowItems` request asks.
     pub reveals_selection: bool,
+    /// The next listing starts renaming the selected item in place: Tab
+    /// moved on from a rename (OPS-012).
+    pub renames_selection: bool,
     /// The vertical scroll position, restored when the tab is shown again.
     pub scroll: f64,
+    /// The URI of the item with keyboard focus, which gets it back when
+    /// the tab is shown again (TAB-057).
+    pub focused: Option<String>,
     /// A scroll position to restore once the listing finishes: a tab moved
     /// from another window keeps its place in its folder (TAB-039).
     pub scroll_after_listing: Option<f64>,
@@ -110,6 +118,9 @@ pub(super) struct Tab {
     /// An item to scroll into view once the folder is listed, as "Open
     /// file location" asks.
     pub revealed_item: Option<String>,
+    /// Its network folder changed while it was in the background: it is
+    /// listed again when next shown (TAB-056).
+    pub changed_while_hidden: bool,
 }
 
 impl Tab {
@@ -117,17 +128,21 @@ impl Tab {
         Self {
             id,
             history: History::new(uri),
+            left_views: HistoryViews::default(),
             store: gio::ListStore::new::<FileItem>(),
             generation: 0,
             listing_state: ListingState::NotListed,
             error: None,
             selected: Vec::new(),
             reveals_selection: false,
+            renames_selection: false,
             scroll: 0.0,
+            focused: None,
             scroll_after_listing: None,
             listing: None,
             watch: None,
             revealed_item: None,
+            changed_while_hidden: false,
         }
     }
 
@@ -147,10 +162,14 @@ impl Tab {
     }
 
     /// Forgets what belonged to the previous location: the selection and
-    /// the scroll position, as `navigate()` does with `t.scroll = 0`.
+    /// the scroll position, as `navigate()` does with `t.scroll = 0`, and
+    /// where its next listing was to scroll.
     pub(super) fn forget_location_state(&mut self) {
         self.selected.clear();
         self.scroll = 0.0;
+        self.focused = None;
+        self.scroll_after_listing = None;
+        self.revealed_item = None;
     }
 
     /// Stops the tab's listing and folder watch, as Sign out cancels the

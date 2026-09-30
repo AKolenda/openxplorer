@@ -245,6 +245,35 @@ fn visited_servers_and_stable_mounts_need_no_saved_bookmark() {
     assert!(rows.iter().all(|row| !row.is_saved));
 }
 
+/// An SFTP folder browsed this session and the mount GIO reports for its
+/// server make one connected row, so the row the user opened offers
+/// Disconnect; a saved folder on the server keeps its own row.
+///
+/// parity: NET-030
+#[test]
+fn a_browsed_sftp_folder_joins_its_servers_mount() {
+    let mounts = [active_mount("sftp://anna@build/", "build")];
+    let visited = [bookmark("sftp://anna@build/home/anna", "")];
+    let rows = merge_network_locations(&[], &mounts, &[], &visited);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].uri, "sftp://anna@build/");
+    assert!(rows[0].is_connected);
+    assert!(!rows[0].is_saved);
+
+    let saved = [saved_share("sftp://anna@build/srv/data", "Data")];
+    let rows = merge_network_locations(&saved, &mounts, &[], &visited);
+    assert_eq!(rows.len(), 1, "the mount and the visit join the saved row");
+    assert_eq!(
+        (rows[0].uri.as_str(), rows[0].label.as_str()),
+        ("sftp://anna@build/srv/data", "Data")
+    );
+    assert!(rows[0].is_saved && rows[0].is_connected);
+
+    let other_account = [bookmark("sftp://build/home/anna", "")];
+    let rows = merge_network_locations(&[], &mounts, &[], &other_account);
+    assert_eq!(rows.len(), 2, "another account is another row");
+}
+
 /// Ported from `desktop/tests/test_v07.py::NetworkTests::test_ignore_local_and_unmounted`
 /// and `desktop/tests/test_v07.py::NetworkTests::test_invalid_saved_ignored`
 ///

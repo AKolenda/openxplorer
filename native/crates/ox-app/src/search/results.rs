@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 use gtk::gio;
 use gtk::prelude::*;
-use ox_core::search::{display_path, SearchResults};
+use ox_core::search::{display_path, NamePattern, SearchResults};
 
 use super::report::RESULT_LIMIT;
 use crate::folder_view::filter::Visibility;
@@ -55,28 +55,31 @@ pub(crate) fn merge_results(listing: Option<Listing<'_>>, text: &str, found: Sea
     MergedResults { items, is_truncated }
 }
 
-/// The listed items whose name and folder hold every word of `text`,
-/// ignoring case (`currentFolderMatches`).
-fn listing_matches(listing: Listing<'_>, text: &str) -> Vec<FileItem> {
-    let words: Vec<String> = text
-        .to_lowercase()
-        .split_whitespace()
-        .map(str::to_owned)
-        .collect();
-    let folder = display_path(listing.folder);
+/// The listed items whose names match `text` as the folder filter
+/// matches them (SRCH-003, SRCH-004): what a live search of the folder
+/// shows before its walk adds the subfolders' matches.
+pub(crate) fn listed_name_matches(listing: Listing<'_>, text: &str) -> Vec<FileItem> {
+    let pattern = NamePattern::new(text);
     let items = listing.items.iter::<FileItem>().filter_map(Result::ok);
     let matching = items.filter(|item| {
         let is_listed = listing.shows_hidden || item.visibility() == Visibility::Visible;
-        is_listed && holds_every_word(&item.entry().name, &folder, &words)
+        is_listed && pattern.matches_lowercase(item.lowercase_name(), "")
     });
     matching.collect()
 }
 
-/// Whether `name` followed by `folder` holds every one of `words`, which
-/// are lower case.
-fn holds_every_word(name: &str, folder: &str, words: &[String]) -> bool {
-    let text = format!("{name} {folder}").to_lowercase();
-    words.iter().all(|word| text.contains(word.as_str()))
+/// The listed items whose name and folder hold every word of `text`,
+/// ignoring case (`currentFolderMatches`); a wildcard word matches the
+/// whole name (SRCH-004).
+fn listing_matches(listing: Listing<'_>, text: &str) -> Vec<FileItem> {
+    let pattern = NamePattern::new(text);
+    let folder = display_path(listing.folder).to_lowercase();
+    let items = listing.items.iter::<FileItem>().filter_map(Result::ok);
+    let matching = items.filter(|item| {
+        let is_listed = listing.shows_hidden || item.visibility() == Visibility::Visible;
+        is_listed && pattern.matches_lowercase(item.lowercase_name(), &folder)
+    });
+    matching.collect()
 }
 
 #[cfg(test)]
@@ -164,16 +167,17 @@ mod tests {
     /// parity: SRCH-007, SRCH-008
     #[test]
     fn words_match_the_name_or_the_folder() {
-        assert!(holds_every_word(
-            "Plan.txt",
-            "/home/demo/Work",
-            &["work".into(), "plan".into()]
-        ));
-        assert!(!holds_every_word(
-            "Plan.txt",
-            "/home/demo/Work",
-            &["budget".into()]
-        ));
+        let store = store_of_files(&["Plan.txt"]);
+        let listing = Listing {
+            items: &store,
+            folder: "file:///home/demo/Work",
+            shows_hidden: false,
+        };
+
+        let matches = |text| listing_matches(listing, text).len();
+
+        assert_eq!(matches("work plan"), 1);
+        assert_eq!(matches("budget"), 0);
     }
 
     /// parity: SRCH-007, PERF-005

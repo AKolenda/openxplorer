@@ -10,7 +10,9 @@
 //! | Operation | Undone by |
 //! |---|---|
 //! | Rename | Renaming the item back |
+//! | Batch rename | Renaming each item back, newest first |
 //! | New folder, New file, New from template | Moving the new item to the Trash |
+//! | Links | Moving the links to the Trash; what they point to stays |
 //! | Copy (Skip or Keep both) and Duplicate | Moving the copies to the Trash, as Nautilus does |
 //! | Move (Skip) | Moving each item back to its folder |
 //! | Move to Trash | Restoring the items from the Recycle Bin |
@@ -49,6 +51,18 @@ pub enum UndoRecord {
         /// Whether it is a folder or a file, which names the step.
         kind: ItemKind,
     },
+    /// A batch rename (OPS-014), undone by renaming each item back, the
+    /// last renamed first. Never overwrites.
+    BatchRename {
+        /// Each renamed item, in the order it was renamed.
+        items: Vec<RenamedPair>,
+    },
+    /// Links made by a drop or New ▸ Link (DND-019, OPS-004), undone by
+    /// moving the links, never what they point to, to the Trash.
+    Link {
+        /// The new links.
+        links: Vec<String>,
+    },
     /// A copy, undone by moving the copies to the Trash.
     Copy {
         /// The copies the operation created.
@@ -82,6 +96,25 @@ pub enum UndoRecord {
     },
 }
 
+/// One item of a batch rename: its URI before and after.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenamedPair {
+    /// The item's URI before the rename.
+    pub original_uri: String,
+    /// The item's URI after the rename.
+    pub renamed_uri: String,
+}
+
+impl RenamedPair {
+    /// The pair that renames the item back.
+    fn swapped(&self) -> Self {
+        Self {
+            original_uri: self.renamed_uri.clone(),
+            renamed_uri: self.original_uri.clone(),
+        }
+    }
+}
+
 /// One item of a move and where it went.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MovedItem {
@@ -97,6 +130,8 @@ impl UndoRecord {
     pub fn title(&self) -> &'static str {
         match self {
             UndoRecord::Rename { .. } => "Rename",
+            UndoRecord::BatchRename { .. } => "Batch rename",
+            UndoRecord::Link { .. } => "Link",
             UndoRecord::Create {
                 kind: ItemKind::Folder,
                 ..
@@ -128,7 +163,8 @@ impl UndoRecord {
     /// | Reversing | did | so the inverse |
     /// |---|---|---|
     /// | Rename | renamed the item back | renames it forward again |
-    /// | New item, Copy, Duplicate, Restore | moved items to the Trash | restores them from the Recycle Bin |
+    /// | Batch rename | renamed items back, newest first | renames them forward again, oldest first |
+    /// | New item, Link, Copy, Duplicate, Restore | moved items to the Trash | restores them from the Recycle Bin |
     /// | Move | moved items back | moves them forward again |
     /// | Move to Trash | restored items | moves them to the Trash again |
     pub fn inverse(&self, result: &TransferResult, reversed_since: u64) -> Option<UndoRecord> {
@@ -144,7 +180,11 @@ impl UndoRecord {
                 original_uri: renamed_uri.clone(),
                 renamed_uri: original_uri.clone(),
             },
+            UndoRecord::BatchRename { items } => UndoRecord::BatchRename {
+                items: renamed_forward_again(items, finished),
+            },
             UndoRecord::Create { .. }
+            | UndoRecord::Link { .. }
             | UndoRecord::Copy { .. }
             | UndoRecord::Duplicate { .. }
             | UndoRecord::Restore { .. } => trashed_again(finished, reversed_since)?,
@@ -174,6 +214,19 @@ fn trashed_again(trashed: &[String], since: u64) -> Option<UndoRecord> {
         original_paths,
         trashed_since: since,
     })
+}
+
+/// The renames that take the `items` a reversal renamed back (their
+/// original URIs are in `renamed_back`) forward again. The reversal ran
+/// from the last item to the first, so its own reversal runs the other
+/// way: the list is kept in reverse, as the reversal walks it backwards.
+fn renamed_forward_again(items: &[RenamedPair], renamed_back: &[String]) -> Vec<RenamedPair> {
+    items
+        .iter()
+        .rev()
+        .filter(|item| renamed_back.contains(&item.original_uri))
+        .map(RenamedPair::swapped)
+        .collect()
 }
 
 /// The moves that take the `items` a reversal put back (their moved URIs

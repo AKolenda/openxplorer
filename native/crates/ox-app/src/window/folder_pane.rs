@@ -274,6 +274,29 @@ impl FolderPane {
         view.has_focus() || view.focus_child().is_some()
     }
 
+    /// The position of the item with keyboard focus in the visible view:
+    /// the one it had last, when focus is elsewhere in the window.
+    pub(super) fn focused_position(&self) -> Option<u32> {
+        let view = self.view_widget();
+        let focused = std::iter::successors(view.focus_child(), WidgetExt::focus_child).last()?;
+        self.owners().position_holding(&view, focused)
+    }
+
+    /// Gives the item at `uri` keyboard focus once the view has laid out
+    /// its items and scrolled to where [`Self::restore_scroll_position`]
+    /// put it, if the item is still shown then.
+    pub(super) fn focus_item_later(&self, uri: String) {
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = pane)]
+            self,
+            move || {
+                if let Some(position) = pane.model().position_of_uri(&uri) {
+                    pane.reveal(position);
+                }
+            }
+        ));
+    }
+
     /// Moves keyboard focus into the visible view.
     pub(super) fn focus_view(&self) {
         self.view_widget().grab_focus();
@@ -281,13 +304,26 @@ impl FolderPane {
 
     /// Scrolls to `position` and gives it keyboard focus.
     pub(super) fn reveal(&self, position: u32) {
+        self.focus_position(position, None);
+    }
+
+    /// Gives `position` keyboard focus without scrolling the view.
+    pub(super) fn focus_item(&self, position: u32) {
+        let stay = gtk::ScrollInfo::new();
+        stay.set_enable_horizontal(false);
+        stay.set_enable_vertical(false);
+        self.focus_position(position, Some(stay));
+    }
+
+    /// Gives `position` keyboard focus, scrolling as `scroll` allows.
+    fn focus_position(&self, position: u32, scroll: Option<gtk::ScrollInfo>) {
         let focus = gtk::ListScrollFlags::FOCUS;
         match self.view() {
             FolderView::Details => self
                 .details()
                 .column_view()
-                .scroll_to(position, None, focus, None),
-            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, focus, None),
+                .scroll_to(position, None, focus, scroll),
+            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, focus, scroll),
         }
     }
 

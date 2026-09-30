@@ -37,18 +37,24 @@ impl AppContext {
         }
     }
 
-    /// Forgets the servers and shares browsed on `host`, when signing out
-    /// of it.
+    /// The server `host` is being signed out: forgets the servers and
+    /// shares browsed on it, and pauses its indexing until the next
+    /// successful mount of it (`serverSigningOut` and `pause_server` in
+    /// winspace.py, NET-022).
     pub(crate) fn forget_network_host(&self, host: &str) {
         self.network().forget_visited_host(host);
+        self.search_cache().pause_server(host);
         self.notify_places_changed();
     }
 
-    /// Tells the search cache that the server `host` was signed out, and
-    /// whether the user asked to clear its cached file names ("Also clear
-    /// cached filenames for this server").
+    /// The server `host` was signed out: clears its cached file names when
+    /// the user asked to ("Also clear cached filenames for this server",
+    /// NET-022), and tells the windows.
     pub(crate) fn announce_server_signed_out(&self, host: &str, search_cache: SearchCacheChoice) {
         let clear_names = search_cache == SearchCacheChoice::Clear;
+        if clear_names {
+            self.search_cache().clear_server(host);
+        }
         self.emit_by_name::<()>(SERVER_SIGNED_OUT, &[&host, &clear_names]);
     }
 

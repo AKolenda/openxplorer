@@ -7,15 +7,18 @@
 //! ([`TabLayout`](super::tab_layout::TabLayout)), so opening many tabs
 //! never widens the window. The whole tab is the click target, as in
 //! app.js: it is one focusable widget announced as a tab of the "Folder
-//! tabs" list with its selected state; a click or Enter shows it and a
-//! middle-click closes it; a right-click opens the tab's menu
-//! ([`super::tab_menu`]). The close button inside claims its own clicks.
+//! tabs" list with its selected state; a click or Enter shows it, a
+//! double-click opens a copy of it and a middle-click closes it; a
+//! right-click opens the tab's menu ([`super::tab_menu`]). The close button
+//! inside claims its own clicks.
 //!
 //! [`TabStrip`] is a widget subclass whose scroller and tab list are the
 //! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
 //! shows while tabs and files are dragged is [`drag_marks`]'s.
 
 mod drag_marks;
+
+use std::cell::Cell;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -41,6 +44,9 @@ const CLOSE_GLYPH: i32 = 12;
 
 /// The clock in a snapshot tab's badge (`icon('clock', 12)`).
 const SNAPSHOT_BADGE_GLYPH: i32 = 12;
+
+/// The share of the window's width the strip takes at most, in percent.
+const MAX_STRIP_PERCENT: i32 = 70;
 
 /// The CSS class of a tab's icon.
 const TAB_ICON_CLASS: &str = "tab-icon";
@@ -123,6 +129,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             gestures::scroll_sideways_with_wheel(&self.scroller);
+            self.obj().add_controller(super::copy_on_double_click());
             let menu = MenuPopover::new(Vec::new());
             menu.set_offset(0, 0);
             menu.set_parent(&*self.obj());
@@ -152,6 +159,24 @@ impl TabStrip {
     /// a narrow window.
     pub(super) fn set_tab_width(&self, width: i32) {
         self.imp().layout.set_tab_width(width);
+    }
+
+    /// Keeps the strip within 70% of a window `window_width` pixels wide
+    /// (`.tabs{max-width:70%}`), so the drag area beside it stays wide
+    /// enough to grab; tabs that do not fit shrink and then scroll. The
+    /// cap changes after the allocation that reports the width, because
+    /// changing it during one would start it again.
+    pub(super) fn cap_width(&self, window_width: i32) {
+        let cap = window_width * MAX_STRIP_PERCENT / 100;
+        let scroller = self.imp().scroller.get();
+        if scroller.max_content_width() == cap {
+            return;
+        }
+        glib::idle_add_local_once(glib::clone!(
+            #[weak]
+            scroller,
+            move || scroller.set_max_content_width(cap)
+        ));
     }
 
     /// Replaces the tabs with `tabs` and scrolls the active one into view.
@@ -277,7 +302,8 @@ fn menu_on_right_click(id: TabId, uri: String) -> gtk::GestureClick {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let in_tab = graphene::Point::new(x as f32, y as f32);
         if let Some(point) = tab.compute_point(&strip, &in_tab) {
-            strip.show_menu(tab_menu(id, &uri), point);
+            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            strip.show_menu(tab_menu(id, &uri, is_only_tab), point);
         }
     });
     click
@@ -322,6 +348,67 @@ fn select_on_click(id: glib::Variant) -> gtk::GestureClick {
     click
 }
 
+/// A double-click on a tab opens a copy of it in front, as in Dolphin
+/// (TAB-014). The strip counts the clicks itself: the first click shows
+/// the tab, which builds the tabs anew under the pointer, and GTK then
+/// counts the second press as a first one. Claiming the second press keeps
+/// it from the title bar, whose double-click maximizes the window, and
+/// from the tab's own click. The close button claims its own presses, so
+/// a double-click on it never reaches the strip.
+fn copy_on_double_click() -> gtk::GestureClick {
+    let click = gtk::GestureClick::new();
+    click.set_button(gdk::BUTTON_PRIMARY);
+    let last_press = Cell::new(None);
+    click.connect_pressed(move |gesture, presses, x, y| {
+        let press = Press {
+            time: gesture.current_event_time(),
+            x,
+            y,
+        };
+        let previous = last_press.replace(Some(press));
+        let is_second = presses == 2 || previous.is_some_and(|first| press.follows(first));
+        if !is_second {
+            return;
+        }
+        last_press.set(None);
+        let Some(strip) = gesture.widget().and_downcast::<TabStrip>() else {
+            return;
+        };
+        let Some(tab) = strip.tab_at(x, y) else {
+            return;
+        };
+        gesture.set_state(gtk::EventSequenceState::Claimed);
+        WindowAction::OpenTab.activate_from(&strip, Some(&tab.uri.to_variant()));
+    });
+    click
+}
+
+/// A primary press on the strip: when, in milliseconds, and where.
+#[derive(Debug, Clone, Copy)]
+struct Press {
+    time: u32,
+    x: f64,
+    y: f64,
+}
+
+impl Press {
+    /// Whether this press and `first` make a double-click, by the
+    /// desktop's double-click time and distance.
+    fn follows(self, first: Press) -> bool {
+        let settings = gtk::Settings::default();
+        let time = settings
+            .as_ref()
+            .map_or(400, gtk::Settings::gtk_double_click_time);
+        let distance = settings
+            .as_ref()
+            .map_or(5, gtk::Settings::gtk_double_click_distance);
+        let soon = i64::from(self.time.wrapping_sub(first.time)) <= i64::from(time);
+        let near = (self.x - first.x).abs() <= f64::from(distance)
+            && (self.y - first.y).abs() <= f64::from(distance);
+        soon && near
+    }
+}
+
 /// Enter or Space on a focused tab shows it.
 fn select_on_enter(id: glib::Variant) -> gtk::EventControllerKey {
     let keys = gtk::EventControllerKey::new();
@@ -360,4 +447,63 @@ fn close_button(tab: &TabView) -> gtk::Button {
     let name = format!("Close {}", tab.title);
     close.update_property(&[gtk::accessible::Property::Label(&name)]);
     close
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::harness::descendants;
+
+    /// A tab on a snapshot folder, showing the previous version
+    /// `previous_version` when there is one.
+    fn tab_view(previous_version: Option<&str>) -> TabView {
+        TabView {
+            id: TabId::from_raw(1),
+            uri: "file:///srv/Documents/.snapshot/daily/Plans".to_owned(),
+            title: "Plans".to_owned(),
+            tooltip: "/srv/Documents/.snapshot/daily/Plans".to_owned(),
+            icon: Art::Folder,
+            active: true,
+            previous_version: previous_version.map(str::to_owned),
+        }
+    }
+
+    /// parity: TAB-011
+    #[gtk::test]
+    fn a_tab_in_a_snapshot_carries_the_previous_version_badge() {
+        let widget = tab_widget(&tab_view(Some("daily")));
+
+        assert!(
+            widget.has_css_class("snapshot-tab"),
+            "the amber edge and the wider tab"
+        );
+        let badge = descendants::<gtk::Box>(&widget)
+            .into_iter()
+            .find(|child| child.has_css_class("snapshot-tab-badge"))
+            .expect("a snapshot tab has its badge");
+        assert_eq!(badge.tooltip_text().as_deref(), Some("Previous version · daily"));
+        let texts: Vec<String> = descendants::<gtk::Label>(&badge)
+            .iter()
+            .map(|label| label.text().to_string())
+            .collect();
+        assert_eq!(texts, ["Previous version"]);
+    }
+
+    /// parity: TAB-010
+    #[gtk::test]
+    fn a_live_tab_has_no_badge_a_close_button_and_an_ellipsized_title() {
+        let widget = tab_widget(&tab_view(None));
+
+        assert!(!widget.has_css_class("snapshot-tab"));
+        let close = descendants::<gtk::Button>(&widget)
+            .into_iter()
+            .next()
+            .expect("a tab has its close button");
+        assert_eq!(close.tooltip_text().as_deref(), Some("Close tab"));
+        let title = descendants::<gtk::Label>(&widget)
+            .into_iter()
+            .next()
+            .expect("a tab shows its title");
+        assert_eq!(title.ellipsize(), gtk::pango::EllipsizeMode::End);
+    }
 }

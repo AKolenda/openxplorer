@@ -52,14 +52,17 @@ impl BrowserWindow {
         let journal = self.context().connect_journal_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || window.update_file_commands()
+            move || {
+                window.withdraw_toast_undo();
+                window.update_file_commands();
+            }
         ));
         let clipboard = self.follow_file_clipboard();
         self.update_file_commands();
         [journal, clipboard]
     }
 
-    /// New ▸ Folder and the New menu's files.
+    /// New ▸ Folder, the New menu's files and New ▸ Link.
     fn install_new_actions(&self) {
         let starter = NewFileKind::Starter;
         self.add_action_entries([
@@ -76,6 +79,9 @@ impl BrowserWindow {
             new_file_action(WindowAction::NewJsonFile, starter(BuiltinTemplate::Json)),
             new_file_action(WindowAction::NewHtmlDocument, starter(BuiltinTemplate::Html)),
             new_file_action(WindowAction::NewFromTemplate, NewFileKind::AnyTemplate),
+            task_action(WindowAction::NewLink, |window| async move {
+                window.create_link().await;
+            }),
         ]);
     }
 

@@ -51,7 +51,7 @@ impl SettingsPage {
             Category::Appearance => appearance::build(self),
             Category::SearchAndIndexing => indexing::build(self),
             Category::DefaultApps => default_apps::build(self),
-            Category::WindowsAndTabs => windows_tabs::build(),
+            Category::WindowsAndTabs => windows_tabs::build(self),
             Category::BraveAndDownloads => brave::build(self),
             Category::About => about::build(self),
         }

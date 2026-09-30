@@ -176,6 +176,33 @@ impl NetworkFormDialog {
         entry
     }
 
+    /// Adds a labelled drop-down of `choices`, the first one selected.
+    pub(crate) fn add_drop_down(&self, label: &str, choices: &[&str]) -> gtk::DropDown {
+        let drop_down = gtk::DropDown::from_strings(choices);
+        drop_down.update_property(&[gtk::accessible::Property::Label(label)]);
+        let caption = gtk::Label::builder()
+            .label(label)
+            .xalign(0.0)
+            .mnemonic_widget(&drop_down)
+            .css_classes(["field-label"])
+            .build();
+        let fields = &self.imp().fields;
+        fields.append(&caption);
+        fields.append(&drop_down);
+        drop_down
+    }
+
+    /// Shows or hides the field `field` with its caption.
+    pub(crate) fn set_field_visible(field: &impl IsA<gtk::Widget>, visible: bool) {
+        let caption = field
+            .prev_sibling()
+            .filter(glib::object::ObjectExt::is::<gtk::Label>);
+        if let Some(caption) = caption {
+            caption.set_visible(visible);
+        }
+        field.set_visible(visible);
+    }
+
     /// Adds a check box reading `label`, as `initially` says.
     pub(crate) fn add_check_box(&self, label: &str, initially: CheckState) -> gtk::CheckButton {
         let check = gtk::CheckButton::builder()

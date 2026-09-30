@@ -344,6 +344,16 @@ impl TestWindow {
 
 impl Drop for TestWindow {
     fn drop(&mut self) {
+        // A window asks before it closes while it writes files (TAB-049),
+        // and a test may end during a write: stop it first, so the window
+        // closes and no later test finds it. Never panics, as a drop may
+        // run during a failed test's unwinding.
+        let deadline = Instant::now() + WAIT_LIMIT;
+        while self.window.is_writing_files() && Instant::now() < deadline {
+            self.window.stop_writing_for_test();
+            settle();
+            thread::sleep(POLL_INTERVAL);
+        }
         self.window.close();
         // The search cache's thread would otherwise tick on in a settings
         // directory that is about to be deleted.

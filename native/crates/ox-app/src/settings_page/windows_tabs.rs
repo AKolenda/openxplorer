@@ -5,18 +5,22 @@
 //! Ports the "Windows & tabs" section of `appendV07Settings` in
 //! `desktop/ui/app.js` (SET-009). "Open windows…" opens the menu of the
 //! title bar's windows button (`windowsMenu`), and "New window" runs
-//! `app.new-window` (Ctrl+N). The Python
+//! `app.new-window` (Ctrl+N). Dolphin's options for folders opened from
+//! other apps and for the address bar join them. The Python
 //! section's paragraph about dragging tabs and files becomes three rows
 //! and a note with the rest.
 
 use gtk::prelude::*;
+use ox_core::settings::PreferencesUpdate;
 
+use super::bindings::PreferenceBinding;
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
 use super::row::{Availability, ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
+use super::SettingsPage;
 use crate::application::AppAction;
 use crate::icons::Icon;
 use crate::window::list_open_windows_on_click;
@@ -31,6 +35,26 @@ const NEW_WINDOW: RowText = RowText {
     title: "New window",
     description: "Opens another window (Ctrl+N).",
     keywords: "separate window",
+};
+
+const EXTERNAL_FOLDERS: RowText = RowText {
+    title: "Open folders from other apps in a new window",
+    description: "Off: a folder opened from another app or the command line opens in a new tab, \
+                  and the tab you are using stays where it is.",
+    keywords: "xdg-open command line external new tab window",
+};
+
+const FULL_PATH: RowText = RowText {
+    title: "Show full path in the address bar",
+    description: "Off: inside your home folder the address starts at Home, as in Home / Documents.",
+    keywords: "breadcrumbs crumbs location bar path root",
+};
+
+const EDITABLE_ADDRESS: RowText = RowText {
+    title: "Make the address bar editable in new windows",
+    description: "New windows show the address as text you can type in instead of breadcrumbs. \
+                  Right-click the address bar to switch one window.",
+    keywords: "breadcrumbs location bar type text",
 };
 
 const MOVE_TABS: RowText = RowText {
@@ -62,10 +86,11 @@ const DRAGGING_NOTE: &str = "Right-click a tab → Move tab to window… lets yo
                              first; some apps need a mounted network path.";
 
 /// The Windows & tabs page.
-pub(super) fn build() -> SettingsSection {
+pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::WindowsAndTabs;
     let windows = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
-    windows.append_group(&windows_group());
+    windows.append_group(&windows_group(page));
+    windows.append_group(&address_group(page));
     windows.append_group(&dragging_group());
     windows.append_text(&parts::note(Icon::Info, DRAGGING_NOTE));
     windows
@@ -79,7 +104,7 @@ fn open_windows_button() -> gtk::MenuButton {
     button
 }
 
-fn windows_group() -> SettingsGroup {
+fn windows_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new("Windows");
     let listing = SettingRow::new(OPEN_WINDOWS);
     listing.add_control(&open_windows_button(), ControlName::OwnLabel);
@@ -89,6 +114,42 @@ fn windows_group() -> SettingsGroup {
     button.set_action_name(Some(&AppAction::NewWindow.detailed_name()));
     new_window.add_control(&button, ControlName::OwnLabel);
     group.add_row(&new_window);
+    let external = SettingRow::new(EXTERNAL_FOLDERS);
+    let in_new_window = PreferenceBinding {
+        read: |preferences| preferences.external_folders_in_new_window,
+        write: |on| PreferencesUpdate {
+            external_folders_in_new_window: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    external.add_control(&page.preference_switch(in_new_window), ControlName::RowTitle);
+    group.add_row(&external);
+    group
+}
+
+/// The address bar's options (NAV-024, NAV-029).
+fn address_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new("Address bar");
+    let full_path = SettingRow::new(FULL_PATH);
+    let show_full_path = PreferenceBinding {
+        read: |preferences| preferences.show_full_path,
+        write: |on| PreferencesUpdate {
+            show_full_path: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    full_path.add_control(&page.preference_switch(show_full_path), ControlName::RowTitle);
+    group.add_row(&full_path);
+    let editable = SettingRow::new(EDITABLE_ADDRESS);
+    let editable_location = PreferenceBinding {
+        read: |preferences| preferences.editable_location,
+        write: |on| PreferencesUpdate {
+            editable_location: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    editable.add_control(&page.preference_switch(editable_location), ControlName::RowTitle);
+    group.add_row(&editable);
     group
 }
 

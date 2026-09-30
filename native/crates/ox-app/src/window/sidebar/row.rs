@@ -13,6 +13,7 @@ use crate::icons::{self, Art, ArtImage, Icon};
 use crate::window::place_menus::removal_action;
 use crate::window::window_action::WindowAction;
 
+use super::super::saved_search::saved_search_target;
 use super::entries::{EjectButton, RowLevel, RowTarget, Section, SectionEdges, SidebarEntry};
 
 /// Glyph icons are 18 pixels (`.side-icon svg`), art 19 (`folderIcon(19)`).
@@ -27,6 +28,9 @@ const PIN_SIZE: i32 = 11;
 
 /// The eject glyph of a removable drive's row.
 const EJECT_SIZE: i32 = 14;
+
+/// The class of the dashed drop tail of an empty Quick access.
+const PIN_DROP_TAIL_CLASS: &str = "quick-drop-tail";
 
 /// A row's icon at its size, with the class the skin spaces it by.
 fn row_icon(icon: Art) -> ArtImage {
@@ -105,7 +109,7 @@ fn placement_classes(entry: &SidebarEntry, edges: SectionEdges) -> Vec<&'static 
         RowLevel::Group => classes.push("group"),
         RowLevel::Child => classes.push("indent"),
     }
-    if entry.section == Section::QuickAccess {
+    if matches!(entry.section, Section::QuickAccess | Section::SavedSearches) {
         classes.push("quick-access");
         if edges.first {
             classes.push("section-start");
@@ -132,10 +136,17 @@ pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges) -> gtk::Lis
         gtk::accessible::Property::Description(&entry.tooltip),
     ]);
     let (action, target) = match &entry.target {
-        RowTarget::Location(uri) => (WindowAction::GoTo, uri),
-        RowTarget::MountVolume(id) => (WindowAction::MountVolume, id),
+        RowTarget::Location(uri) => (WindowAction::GoTo, uri.to_variant()),
+        RowTarget::MountVolume(id) => (WindowAction::MountVolume, id.to_variant()),
+        RowTarget::SavedSearch(search) => (WindowAction::OpenSavedSearch, saved_search_target(search)),
+        RowTarget::PinDropTail => {
+            row.set_activatable(false);
+            row.set_selectable(false);
+            row.add_css_class(PIN_DROP_TAIL_CLASS);
+            return row;
+        }
     };
     row.set_action_name(Some(&action.detailed_name()));
-    row.set_action_target_value(Some(&target.to_variant()));
+    row.set_action_target_value(Some(&target));
     row
 }

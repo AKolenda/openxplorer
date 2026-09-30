@@ -208,6 +208,31 @@ fn a_dragged_sidebar_stops_where_the_folder_pane_keeps_its_room() {
     );
 }
 
+/// parity: SIDE-023
+#[gtk::test]
+fn a_double_click_on_the_handle_resets_the_sidebar_to_210_and_saves_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let workspace = test.window.workspace();
+    workspace.set_position(320);
+    let controllers = workspace.observe_controllers();
+    let clicks = controllers
+        .iter::<gtk::glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok());
+    let reset = clicks
+        .into_iter()
+        .find(|click| click.propagation_phase() == gtk::PropagationPhase::Capture)
+        .expect("the workspace hears clicks on its handle");
+
+    reset.emit_by_name::<()>("pressed", &[&2_i32, &320.0_f64, &10.0_f64]);
+
+    assert_eq!(workspace.position(), 210);
+    wait_until("the width to be saved", || {
+        test.context.settings_data().preferences.sidebar_width == Some(210)
+    });
+}
+
 /// parity: SET-015, SET-016
 #[gtk::test]
 fn changed_view_preferences_are_saved_for_new_windows() {

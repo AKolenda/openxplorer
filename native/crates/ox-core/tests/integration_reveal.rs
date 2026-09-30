@@ -11,7 +11,8 @@ use std::os::unix::fs::{symlink, MetadataExt};
 use std::path::{Path, PathBuf};
 
 use ox_core::integration::{
-    RevealError, RevealPaths, RevealRegistration, Sandbox, AUTOSTART_FILE, MANAGED_MARKER, SERVICE_FILE,
+    RevealError, RevealPaths, RevealRegistration, Sandbox, AUTOSTART_FILE, FLATPAK_OPT_IN_FILE,
+    MANAGED_MARKER, SERVICE_FILE,
 };
 use tempfile::TempDir;
 
@@ -281,15 +282,82 @@ fn the_record_keeps_the_state_before_the_first_enable() {
         .exists());
 }
 
+/// Every file under `folder`, relative to it.
+fn files_under(folder: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let mut pending = vec![folder.to_owned()];
+    while let Some(current) = pending.pop() {
+        for entry in fs::read_dir(&current)
+            .expect("list")
+            .map(|entry| entry.expect("entry"))
+        {
+            if entry.file_type().expect("type").is_dir() {
+                pending.push(entry.path());
+            } else {
+                files.push(entry.path().strip_prefix(folder).expect("inside").to_owned());
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+/// Inside Flatpak the session files would be the sandbox's copies, which
+/// the host session never reads: only the opt-in record is written, in
+/// the settings folder, as a private file.
+///
 /// parity: INT-015
 #[test]
-fn inside_flatpak_enabling_is_refused_without_writing() {
+fn inside_flatpak_enabling_writes_only_the_opt_in_record() {
     let fixture = Fixture::in_sandbox(Sandbox::Flatpak);
 
-    let refused = fixture.registration.enable();
+    fixture.registration.enable().expect("enable");
 
-    assert!(matches!(refused, Err(RevealError::Sandboxed)), "{refused:?}");
-    assert!(fixture.is_root_empty());
+    assert!(fixture.registration.is_enabled());
+    let opt_in = fixture.root.path().join("winspace/reveal-integration.flatpak");
+    assert_eq!(fixture.files(), std::slice::from_ref(&opt_in));
+    assert_eq!(fs::read_to_string(&opt_in).expect("opt-in"), FLATPAK_OPT_IN_FILE);
+    assert!(FLATPAK_OPT_IN_FILE.starts_with(MANAGED_MARKER));
+    assert_eq!(fs::metadata(&opt_in).expect("stat").mode() & 0o777, 0o600);
+    assert_eq!(
+        files_under(fixture.root.path()),
+        [
+            PathBuf::from("winspace/reveal-integration.flatpak"),
+            PathBuf::from("winspace/reveal-integration.json"),
+        ]
+    );
+}
+
+/// parity: INT-015
+#[test]
+fn inside_flatpak_disabling_removes_the_opt_in_record() {
+    let fixture = Fixture::in_sandbox(Sandbox::Flatpak);
+    fixture.registration.enable().expect("enable");
+
+    let disabled = fixture.registration.disable().expect("disable");
+
+    assert!(!fixture.registration.is_enabled());
+    assert!(disabled.preserved_modified_files.is_empty());
+    assert!(files_under(fixture.root.path()).is_empty());
+}
+
+/// parity: INT-015
+#[test]
+fn inside_flatpak_a_changed_opt_in_record_is_kept() {
+    let fixture = Fixture::in_sandbox(Sandbox::Flatpak);
+    fixture.registration.enable().expect("enable");
+    let opt_in = fixture.files().remove(0);
+    fs::write(&opt_in, "changed by hand").expect("change");
+
+    let disabled = fixture.registration.disable().expect("disable");
+
+    assert!(!fixture.registration.is_enabled());
+    assert_eq!(disabled.preserved_modified_files, std::slice::from_ref(&opt_in));
+    assert_eq!(fs::read_to_string(&opt_in).expect("kept"), "changed by hand");
+    assert!(matches!(
+        fixture.registration.enable(),
+        Err(RevealError::ForeignOverride(path)) if path == opt_in
+    ));
 }
 
 /// parity: INT-015

@@ -14,6 +14,15 @@
 //! The file names, the managed marker and the `Exec` line are
 //! compatibility contracts (AGENTS.md): files written by the Python app
 //! are recognised as the app's own, and the reverse.
+//!
+//! Inside Flatpak the two files would be the sandbox's copies, which the
+//! host session never reads. The Flatpak therefore keeps only its opt-in,
+//! [`FLATPAK_OPT_IN_FILE`] in the settings folder: the running app owns
+//! the name, which the manifest's `--own-name` allows, and asks the
+//! Background portal to start it at login
+//! ([`request_autostart`](super::request_autostart)), in place of the
+//! autostart entry. Without a service file nothing starts it on demand, so
+//! it answers from login, or from when it was started, on.
 
 use std::fs;
 use std::future::Future;
@@ -46,6 +55,12 @@ Icon=io.winspace.Development\n\
 NoDisplay=true\n\
 X-GNOME-Autostart-enabled=true\n";
 
+/// The Flatpak's opt-in record, which says that the running app answers
+/// `org.freedesktop.FileManager1` and starts at login.
+pub const FLATPAK_OPT_IN_FILE: &str = "# Managed by Winspace: file-manager-integration v1\n\
+# Show in folder is enabled inside the Flatpak: the running app answers\n\
+# org.freedesktop.FileManager1, and the Background portal starts it at login.\n";
+
 /// The service file, relative to the user's data folder.
 const SERVICE_PATH: &str = "dbus-1/services/org.freedesktop.FileManager1.service";
 
@@ -54,6 +69,9 @@ const AUTOSTART_PATH: &str = "autostart/io.winspace.FileManager1.desktop";
 
 /// The record of what the two files held before, in the settings folder.
 const RECORD_FILE_NAME: &str = "reveal-integration.json";
+
+/// The Flatpak's opt-in record, in the settings folder.
+const FLATPAK_OPT_IN_NAME: &str = "reveal-integration.flatpak";
 
 /// The folders the registration uses.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,13 +105,6 @@ pub enum RevealError {
     /// One of the two files holds something the app did not write.
     #[error("An existing user override needs review before enabling OpenXplorer: {}", .0.display())]
     ForeignOverride(PathBuf),
-    /// The app runs in a Flatpak sandbox, which cannot write the
-    /// host's per-user session files.
-    #[error(
-        "Show in folder needs files outside the Flatpak sandbox. \
-         Install the OpenXplorer package to enable it."
-    )]
-    Sandboxed,
     /// Reading, writing or removing a file failed.
     #[error("{error}: {}", path.display())]
     Io {
@@ -123,59 +134,62 @@ struct ManagedFile {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RevealRegistration {
     record: PathBuf,
-    files: [ManagedFile; 2],
-    sandbox: Sandbox,
+    files: Vec<ManagedFile>,
 }
 
 impl RevealRegistration {
-    /// The registration in `paths`. Creating it touches nothing.
+    /// The registration in `paths`: the two session files on the host,
+    /// the opt-in record inside Flatpak. Creating it touches nothing.
     pub fn new(paths: &RevealPaths, sandbox: Sandbox) -> Self {
-        let service = ManagedFile {
-            path: paths.data_home.join(SERVICE_PATH),
-            contents: SERVICE_FILE,
-        };
-        let autostart = ManagedFile {
-            path: paths.config_home.join(AUTOSTART_PATH),
-            contents: AUTOSTART_FILE,
+        let files = match sandbox {
+            Sandbox::Host => vec![
+                ManagedFile {
+                    path: paths.data_home.join(SERVICE_PATH),
+                    contents: SERVICE_FILE,
+                },
+                ManagedFile {
+                    path: paths.config_home.join(AUTOSTART_PATH),
+                    contents: AUTOSTART_FILE,
+                },
+            ],
+            Sandbox::Flatpak => vec![ManagedFile {
+                path: paths.settings.join(FLATPAK_OPT_IN_NAME),
+                contents: FLATPAK_OPT_IN_FILE,
+            }],
         };
         Self {
             record: paths.settings.join(RECORD_FILE_NAME),
-            files: [service, autostart],
-            sandbox,
+            files,
         }
     }
 
-    /// The two files enabling writes.
+    /// The files enabling writes: the two session files, or the Flatpak's
+    /// opt-in record.
     pub fn managed_files(&self) -> impl Iterator<Item = &Path> {
         self.files.iter().map(|file| file.path.as_path())
     }
 
-    /// True if both files hold exactly what the app writes.
+    /// True if every managed file holds exactly what the app writes.
     pub fn is_enabled(&self) -> bool {
         self.files.iter().all(ManagedFile::is_installed)
     }
 
-    /// Writes both files, private and atomically (INT-015). Enabling again
-    /// is harmless.
+    /// Writes the managed files, private and atomically (INT-015).
+    /// Enabling again is harmless.
     ///
     /// Safety rule "never replace a symlink or someone else's override"
     /// (`enable` in `reveal_integration.py`): every file is checked before
     /// any is written, and if a write fails the files already written are
-    /// put back as they were.
+    /// put back as they were. Safety rule "never write host files from the
+    /// sandbox": inside Flatpak only the opt-in record in the settings
+    /// folder is written.
     ///
     /// # Errors
     ///
-    /// [`RevealError::Sandboxed`] inside Flatpak,
     /// [`RevealError::Symlink`] or [`RevealError::ForeignOverride`] for a
     /// file that must not be replaced, and [`RevealError::Io`] when a file
     /// cannot be read or written.
     pub fn enable(&self) -> Result<(), RevealError> {
-        // Safety rule "never write host files from the sandbox": inside
-        // Flatpak these paths are the sandbox's copies, which the session
-        // never reads, so enabling there would only claim success.
-        if self.sandbox.is_flatpak() {
-            return Err(RevealError::Sandboxed);
-        }
         let previous = self
             .files
             .iter()

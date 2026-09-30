@@ -104,6 +104,9 @@ pub(in crate::window) struct MenuItem {
     pub check: ItemCheck,
     /// Whether it can be chosen in this menu.
     pub availability: ItemAvailability,
+    /// Shown in bold, as a crumb's subfolder menu shows the folder the
+    /// address goes on to (NAV-020).
+    pub emphasised: bool,
 }
 
 impl MenuItem {
@@ -117,6 +120,7 @@ impl MenuItem {
             shortcut: None,
             check: ItemCheck::Plain,
             availability: ItemAvailability::FollowsAction,
+            emphasised: false,
         }
     }
 

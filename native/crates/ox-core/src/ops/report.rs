@@ -56,6 +56,11 @@ pub fn summarize_links(result: &TransferResult) -> OperationSummary {
     summarize_items("linked", result)
 }
 
+/// The summary of a batch rename (OPS-014): `3 item(s) renamed.`
+pub fn summarize_batch_rename(result: &TransferResult) -> OperationSummary {
+    summarize_items("renamed", result)
+}
+
 /// The summary of an Undo: `Rename undone.` when every step succeeded,
 /// otherwise the [`RESULT_TITLE`] report of what happened.
 pub fn summarize_undo(record: &UndoRecord, result: &TransferResult) -> OperationSummary {

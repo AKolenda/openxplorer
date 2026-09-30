@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The sidebar's rows as data, in the order of `renderSidebar` in
 //! `desktop/ui/app.js`: Home (the home folder), the Quick access folders
-//! and pins, This PC with Local Disk and the drives and devices, and
+//! and pins, the searches saved to the sidebar (SRCH-038), This PC with
+//! Local Disk and the drives and devices, and
 //! Network with the merged network locations. Mounted SMB shares appear
 //! once, under Network.
 //!
@@ -10,8 +11,9 @@
 //! their context menu ([`PlaceMenu`]), and a drive that can be removed its
 //! eject button (DEV-007).
 
-use ox_core::location::{is_smb_location, LocationContext, NETWORK_URI, PC_URI};
+use ox_core::location::{is_server_location, LocationContext, NETWORK_URI, PC_URI};
 use ox_core::places::{NetworkLocation, Place};
+use ox_core::search::SavedSearch;
 
 use crate::devices::Removal;
 use crate::icons::{Art, Icon, Storage, Tint};
@@ -27,6 +29,9 @@ pub(in crate::window) enum Section {
     Home,
     /// Known folders and pins.
     QuickAccess,
+    /// Searches saved to the sidebar, as Dolphin lists them among its
+    /// places (SRCH-038).
+    SavedSearches,
     /// This PC, Local Disk and the drives and devices.
     ThisPc,
     /// Network and the network locations.
@@ -51,6 +56,11 @@ pub(in crate::window) enum RowTarget {
     Location(String),
     /// Mounts the volume with this identifier, then opens it.
     MountVolume(String),
+    /// Nothing: the drop tail of an empty Quick access, which only takes
+    /// dropped folders to pin (DND-014).
+    PinDropTail,
+    /// Opens the folder of a saved search and runs it again (SRCH-038).
+    SavedSearch(SavedSearch),
 }
 
 /// One sidebar row.
@@ -103,7 +113,7 @@ impl EjectButton {
 }
 
 fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
-    let storage = if place.is_shared || is_smb_location(&place.uri) {
+    let storage = if place.is_shared || is_server_location(&place.uri) {
         Storage::Network
     } else {
         Storage::Local
@@ -116,6 +126,20 @@ fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
         target: RowTarget::Location(place.uri.clone()),
         tooltip: locations.display_location(&place.uri),
         pinned: true,
+        menu: None,
+        eject: None,
+    }
+}
+
+fn saved_search_entry(search: &SavedSearch, locations: &LocationContext) -> SidebarEntry {
+    SidebarEntry {
+        section: Section::SavedSearches,
+        level: RowLevel::Place,
+        label: search.label.clone(),
+        icon: Art::Glyph(Icon::Search),
+        target: RowTarget::SavedSearch(search.clone()),
+        tooltip: locations.display_location(&search.folder),
+        pinned: false,
         menu: None,
         eject: None,
     }
@@ -231,8 +255,30 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
     }
 }
 
-/// The sidebar rows, in the Python app's order.
-pub(in crate::window) fn sidebar_entries(places: &Places, locations: &LocationContext) -> Vec<SidebarEntry> {
+/// The dashed "Pin to Quick access" row an empty Quick access keeps, so
+/// folders can still be dropped there to pin them (`.quick-drop-tail` in
+/// `.quick-empty`).
+fn pin_drop_tail() -> SidebarEntry {
+    SidebarEntry {
+        section: Section::QuickAccess,
+        level: RowLevel::Place,
+        label: "Pin to Quick access".to_owned(),
+        icon: Art::Glyph(Icon::Add),
+        target: RowTarget::PinDropTail,
+        tooltip: "Quick access — drop folders here to pin".to_owned(),
+        pinned: false,
+        menu: None,
+        eject: None,
+    }
+}
+
+/// The sidebar rows, in the Python app's order, with the saved
+/// `searches` after Quick access.
+pub(in crate::window) fn sidebar_entries(
+    places: &Places,
+    searches: &[SavedSearch],
+    locations: &LocationContext,
+) -> Vec<SidebarEntry> {
     let home_uri = locations.home_uri();
     let home_icon = Art::TintedGlyph(Icon::Home, Tint::Home);
     let mut home = fixed_entry(Section::Home, "Home", home_icon, &home_uri);
@@ -247,8 +293,15 @@ pub(in crate::window) fn sidebar_entries(places: &Places, locations: &LocationCo
         .map(|place| place_entry(place, locations));
     let drives = places.drives.iter().map(|row| drive_entry(row, locations));
     let network_rows = places.network.iter().map(|row| network_entry(row, locations));
+    let saved = searches
+        .iter()
+        .map(|search| saved_search_entry(search, locations));
     let mut entries = vec![home];
     entries.extend(quick_access);
+    if places.quick_access.is_empty() {
+        entries.push(pin_drop_tail());
+    }
+    entries.extend(saved);
     entries.push(this_pc);
     entries.push(local_disk_entry(locations));
     entries.extend(drives);
@@ -282,7 +335,7 @@ pub(in crate::window) fn section_edges(entries: &[SidebarEntry], index: usize) -
 mod tests {
     use std::path::PathBuf;
 
-    use ox_core::places::KnownFolder;
+    use ox_core::places::{KnownFolder, StableMount};
     use ox_core::settings::{Bookmark, SettingsData};
 
     use super::*;
@@ -302,7 +355,7 @@ mod tests {
             home: Some(PathBuf::from("/home/demo")),
             ..LocationContext::default()
         };
-        sidebar_entries(&places, &locations)
+        sidebar_entries(&places, &[], &locations)
     }
 
     fn labels(entries: &[SidebarEntry]) -> Vec<&str> {
@@ -345,6 +398,17 @@ mod tests {
         let media = entries.last().expect("network row");
         assert_eq!(media.tooltip, "\\\\nas\\media · Connected");
         assert_eq!(media.section, Section::Network);
+    }
+
+    /// parity: DND-014
+    #[test]
+    fn an_empty_quick_access_keeps_a_drop_tail_to_pin_into() {
+        let entries = entries_for(&SettingsData::default(), &[]);
+
+        let tail = &entries[1];
+        assert_eq!(tail.label, "Pin to Quick access");
+        assert_eq!(tail.target, RowTarget::PinDropTail);
+        assert_eq!(tail.section, Section::QuickAccess);
     }
 
     #[test]
@@ -525,5 +589,55 @@ mod tests {
         assert_eq!(section_edges(&entries, 1), starting, "Work starts Quick access");
         assert_eq!(section_edges(&entries, 2), ending, "Play ends Quick access");
         assert_eq!(section_edges(&entries, 3), starting, "This PC starts a group");
+    }
+
+    /// A standard folder moved onto a CIFS mount keeps its glyph on the
+    /// network pipe, and a standard folder the user hid has no row
+    /// (`folder_locations.py`, `hidden_quick`).
+    ///
+    /// parity: SIDE-006
+    #[test]
+    fn a_standard_folder_on_a_cifs_mount_shows_the_network_pipe_and_a_hidden_one_no_row() {
+        let known_folders = [
+            Place {
+                label: "Documents".into(),
+                uri: "file:///mnt/nas/Documents".into(),
+                known_folder: Some(KnownFolder::Documents),
+                is_shared: false,
+            },
+            Place {
+                label: "Music".into(),
+                uri: "file:///home/demo/Music".into(),
+                known_folder: Some(KnownFolder::Music),
+                is_shared: false,
+            },
+        ];
+        let settings = SettingsData {
+            hidden_quick: vec!["file:///home/demo/Music".into()],
+            ..SettingsData::default()
+        };
+        let cifs_mount = StableMount {
+            path: PathBuf::from("/mnt/nas"),
+            label: String::new(),
+            filesystem: "cifs".into(),
+        };
+        let places = compose(PlaceSources {
+            settings: &settings,
+            known_folders: &known_folders,
+            volumes: &[],
+            stable_mounts: &[cifs_mount],
+            visited_network: &[],
+        });
+
+        let entries = sidebar_entries(&places, &[], &LocationContext::default());
+
+        let documents = entries.iter().find(|entry| entry.label == "Documents");
+        let documents = documents.expect("Documents is in Quick access");
+        let on_network = Art::for_quick_access(Some(KnownFolder::Documents), Storage::Network);
+        assert_eq!(documents.icon, on_network);
+        assert!(
+            !labels(&entries).contains(&"Music"),
+            "a hidden standard folder stays hidden"
+        );
     }
 }

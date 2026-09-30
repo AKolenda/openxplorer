@@ -25,14 +25,17 @@ pub(super) const TAB_GAP: i32 = 2;
 /// What a tab showing a previous version gets beyond the others, for its
 /// "Previous version" badge (`.tab.snapshot-tab{width:330px}`).
 const SNAPSHOT_TAB_EXTRA: i32 = 330 - TAB_WIDTH;
+/// The narrowest a tab showing a previous version gets, so its badge
+/// stays legible (`.tab.snapshot-tab{min-width:285px;flex-shrink:0}`).
+const MIN_SNAPSHOT_TAB_WIDTH: i32 = 285;
 
-/// The width `tab` gets beyond the shared tab width: a snapshot tab's
-/// badge needs more room.
-fn extra_width(tab: &gtk::Widget) -> i32 {
+/// The width `tab` gets while the other tabs get `shared`: a snapshot
+/// tab's badge needs more room, and never less than 285 pixels.
+fn width_of(tab: &gtk::Widget, shared: i32) -> i32 {
     if tab.has_css_class("snapshot-tab") {
-        SNAPSHOT_TAB_EXTRA
+        (shared + SNAPSHOT_TAB_EXTRA).max(MIN_SNAPSHOT_TAB_WIDTH)
     } else {
-        0
+        shared
     }
 }
 
@@ -70,12 +73,12 @@ pub(super) fn tab_width(available: i32, count: i32, widths: TabWidths) -> i32 {
     even_share.clamp(widths.narrowest_allowed(), widths.widest_allowed())
 }
 
-/// The strip's width for `count` tabs of `width` pixels.
-fn strip_width(count: i32, width: i32) -> i32 {
-    if count == 0 {
-        return 0;
-    }
-    count * width + TAB_GAP * (count - 1)
+/// The strip's width when each of `tabs` gets `shared` pixels, or what
+/// [`width_of`] gives a snapshot tab.
+fn strip_width(tabs: &[gtk::Widget], shared: i32) -> i32 {
+    let widths: i32 = tabs.iter().map(|tab| width_of(tab, shared)).sum();
+    let count = i32::try_from(tabs.len()).unwrap_or(i32::MAX);
+    widths + TAB_GAP * (count - 1).max(0)
 }
 
 mod imp {
@@ -86,8 +89,8 @@ mod imp {
     use gtk::subclass::prelude::*;
 
     use super::{
-        extra_width, laid_out_children, strip_width, tab_width, widest_minimum_width, TabWidths,
-        MIN_TAB_WIDTH, TAB_GAP, TAB_WIDTH,
+        laid_out_children, strip_width, tab_width, widest_minimum_width, width_of, TabWidths, MIN_TAB_WIDTH,
+        TAB_GAP, TAB_WIDTH,
     };
 
     /// Private state of [`super::TabLayout`].
@@ -143,11 +146,9 @@ mod imp {
                     .unwrap_or(0);
                 return (height, height, -1, -1);
             }
-            let count = i32::try_from(tabs.len()).unwrap_or(i32::MAX);
             let widths = self.widths(&tabs);
-            let minimum = strip_width(count, widths.narrowest_allowed());
-            let extras: i32 = tabs.iter().map(extra_width).sum();
-            let natural = strip_width(count, widths.widest_allowed()) + extras;
+            let minimum = strip_width(&tabs, widths.narrowest_allowed());
+            let natural = strip_width(&tabs, widths.widest_allowed());
             (minimum, natural, -1, -1)
         }
 
@@ -157,7 +158,7 @@ mod imp {
             let each = tab_width(width, count, self.widths(&tabs));
             let mut x = 0;
             for tab in tabs {
-                let tab_width = each + extra_width(&tab);
+                let tab_width = width_of(&tab, each);
                 let placement = gtk::Allocation::new(x, 0, tab_width, height);
                 tab.size_allocate(&placement, -1);
                 x += tab_width + TAB_GAP;
@@ -207,6 +208,19 @@ mod tests {
             100,
             "WinUI's minimum"
         );
+    }
+
+    /// parity: TAB-019
+    #[gtk::test]
+    fn a_snapshot_tab_is_wider_and_never_narrower_than_285_pixels() {
+        let plain = gtk::Box::new(gtk::Orientation::Horizontal, 0).upcast::<gtk::Widget>();
+        let snapshot = gtk::Box::new(gtk::Orientation::Horizontal, 0).upcast::<gtk::Widget>();
+        snapshot.add_css_class("snapshot-tab");
+        assert_eq!(width_of(&plain, TAB_WIDTH), TAB_WIDTH);
+        assert_eq!(width_of(&snapshot, TAB_WIDTH), 330);
+        assert_eq!(width_of(&plain, MIN_TAB_WIDTH), MIN_TAB_WIDTH);
+        assert_eq!(width_of(&snapshot, MIN_TAB_WIDTH), 285);
+        assert_eq!(strip_width(&[plain, snapshot], MIN_TAB_WIDTH), 100 + 2 + 285);
     }
 
     #[test]

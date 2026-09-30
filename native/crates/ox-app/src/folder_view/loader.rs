@@ -57,3 +57,49 @@ pub(crate) fn list_folder(
         on_done(result);
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use super::*;
+    use crate::test_support::harness::{wait_until, Fixture};
+
+    /// What a listing delivered.
+    #[derive(Debug, Default)]
+    struct Delivered {
+        batches: Cell<u32>,
+        done: Cell<bool>,
+    }
+
+    /// Lists `uri`, counting into `delivered`.
+    fn counted_listing(uri: &str, delivered: &Rc<Delivered>) -> Listing {
+        let batches = Rc::clone(delivered);
+        let done = Rc::clone(delivered);
+        list_folder(
+            uri,
+            move |_| batches.batches.set(batches.batches.get() + 1),
+            move |_| done.done.set(true),
+        )
+    }
+
+    /// A superseded listing is dropped, and nothing of it arrives, not even
+    /// while a listing of the same folder runs to its end.
+    ///
+    /// parity: NAV-016
+    #[gtk::test]
+    fn a_dropped_listing_delivers_no_rows_and_no_end() {
+        let fixture = Fixture::with_files(300);
+        let dropped = Rc::new(Delivered::default());
+        let kept = Rc::new(Delivered::default());
+
+        drop(counted_listing(&fixture.uri(), &dropped));
+        let _listing = counted_listing(&fixture.uri(), &kept);
+        wait_until("the kept listing to end", || kept.done.get());
+
+        assert!(kept.batches.get() > 0);
+        assert_eq!(dropped.batches.get(), 0);
+        assert!(!dropped.done.get());
+    }
+}

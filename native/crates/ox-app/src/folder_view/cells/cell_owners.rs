@@ -247,6 +247,13 @@ impl CellOwners {
         bound_position(&list_item)
     }
 
+    /// The position of the item whose row or tile holds `widget`, inside
+    /// `view`.
+    pub(crate) fn position_holding(&self, view: &impl IsA<gtk::Widget>, widget: gtk::Widget) -> Option<u32> {
+        let list_item = self.owner_near(view.as_ref(), widget)?;
+        bound_position(&list_item)
+    }
+
     /// The content widget showing `position`, if it is on screen.
     pub(crate) fn widget_at(&self, position: u32) -> Option<gtk::Widget> {
         self.owners

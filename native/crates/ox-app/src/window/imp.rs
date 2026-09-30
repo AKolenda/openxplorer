@@ -14,6 +14,7 @@ use ox_core::location::LocationContext;
 use super::address_bar::AddressBar;
 use super::breakpoints::WindowWidth;
 use super::caption_buttons::CaptionButtons;
+use super::closing::ClosingState;
 use super::command_bar::CommandBar;
 use super::connections::ExternalHandlers;
 use super::details_pane::DetailsPane;
@@ -28,6 +29,7 @@ use super::session::TabId;
 use super::settings_tab::SettingsTabState;
 use super::sidebar::Sidebar;
 use super::status_bar::StatusBar;
+use super::tab_commands::ClosedTab;
 use super::tab_moves::OutgoingTabDrag;
 use super::tab_strip::TabStrip;
 use super::toast::Toast;
@@ -137,6 +139,8 @@ pub(crate) struct BrowserWindow {
     /// The running file operation, Trash support and the file
     /// clipboard.
     pub(super) file_operations: RefCell<FileOperations>,
+    /// Whether a close waits for a running write (TAB-049).
+    pub(super) closing: Cell<ClosingState>,
     /// The file drag this window started, while it lasts.
     pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
     /// Until when clicks that open items are ignored, around a drag.
@@ -154,8 +158,23 @@ pub(crate) struct BrowserWindow {
     pub(super) drop_menu: OnceCell<MenuPopover>,
     /// The tab a file drag hovers over, and the timer that shows it.
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
+    /// The folder a file drag hovers over, and the timer that opens it.
+    pub(super) folder_hover: RefCell<Option<(String, glib::SourceId)>>,
+    /// The scroll of a zone a file drag hovers near the edge of.
+    pub(super) drag_scroll: RefCell<Option<super::file_drop::DragScroll>>,
+    /// The crumb divider a file drag hovers over, and the timer that
+    /// opens its subfolder menu (NAV-021).
+    pub(super) divider_hover: RefCell<Option<(String, glib::SourceId)>>,
+    /// The subfolder menu a file drag opened, which takes the drop.
+    pub(super) drag_crumb_menu: super::crumb_drop::DragCrumbMenu,
+    /// The folder listed to complete the typed address (NAV-030).
+    pub(super) completion_listing: super::address_completion::CompletionListing,
     /// The tab drag this window started, while it lasts.
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
+    /// The timer that saves the window's size after a resize.
+    pub(super) size_save: RefCell<Option<glib::SourceId>>,
+    /// The tabs closed in this window, most recent first.
+    pub(super) closed_tabs: RefCell<Vec<ClosedTab>>,
     /// The in-window dialogs, Properties by tab, and the tabs that
     /// browse snapshots.
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
@@ -224,18 +243,28 @@ impl WidgetImpl for BrowserWindow {
 impl WindowImpl for BrowserWindow {
     fn close_request(&self) -> glib::Propagation {
         // Safety rule "an update locks the application" (UPD-005): no
-        // window closes while an update installs.
+        // window closes while an update installs (closing.rs).
         if let Some(refusal) = self.obj().close_refusal() {
             self.obj().show_message(&refusal);
+            return glib::Propagation::Stop;
+        }
+        // Nor while it writes files: it asks whether to cancel first
+        // (TAB-049).
+        if !self.obj().may_close_now() {
             return glib::Propagation::Stop;
         }
         // Let go of keyboard focus first. On Wayland, GTK's input method
         // otherwise keeps the focused address entry and later asks a
         // destroyed widget for its cursor position (a Gtk-CRITICAL).
         GtkWindowExt::set_focus(&*self.obj(), None::<&gtk::Widget>);
-        // A closed window's sign-ins end with it, even while something
-        // still holds the window (SAFE-011, TAB-050).
+        self.obj().save_pending_size();
+        // A closed window's sign-ins, listings and folder watches end with
+        // it, even while something still holds the window (SAFE-011,
+        // TAB-050).
         self.obj().close_network();
+        for tab in self.session.borrow_mut().tabs_mut() {
+            tab.stop_reading();
+        }
         self.parent_close_request()
     }
 }

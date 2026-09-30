@@ -14,6 +14,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use ox_core::search::SearchFacets;
 
 use crate::folder_view::filter::FilterState;
 use crate::folder_view::item::FileItem;
@@ -96,7 +97,8 @@ impl FolderModel {
         let state = Rc::clone(&filter_state);
         let filter = gtk::CustomFilter::new(move |object| {
             let item = as_item(object);
-            state.borrow().accepts(item.lowercase_name(), item.visibility())
+            let state = state.borrow();
+            state.accepts(item.lowercase_name(), item.visibility()) && state.passes_facets(item.entry())
         });
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
@@ -159,6 +161,11 @@ impl FolderModel {
         self.sort_model.item(position).and_downcast::<FileItem>()
     }
 
+    /// The display position of the item at `uri`, if it is shown.
+    pub(crate) fn position_of_uri(&self, uri: &str) -> Option<u32> {
+        (0..self.n_items()).find(|&position| self.item(position).is_some_and(|item| item.entry().uri == uri))
+    }
+
     /// The display name at a position, or `None` past the end.
     pub(crate) fn name_at(&self, position: u32) -> Option<String> {
         let item = self.item(position)?;
@@ -168,6 +175,11 @@ impl FolderModel {
     /// Sets the search text; returns true when the shown items changed.
     pub(crate) fn set_query(&self, query: &str) -> bool {
         self.update_filter(|state| state.set_query(query))
+    }
+
+    /// Sets the search options (SRCH-037); returns true when they changed.
+    pub(crate) fn set_facets(&self, facets: SearchFacets) -> bool {
+        self.update_filter(|state| state.set_facets(facets))
     }
 
     /// Shows or hides hidden items; returns true when that changed.
@@ -344,6 +356,32 @@ mod tests {
         );
         model.set_show_hidden(true);
         assert_eq!(model.listed_count(&store), 3);
+    }
+
+    /// GTK's filter and sort models keep their result: setting the same
+    /// words or hidden flag again recomputes nothing, as app.js memoised
+    /// `filtered()`, and only a real change filters again.
+    ///
+    /// parity: PERF-004
+    #[gtk::test]
+    fn the_shown_items_are_recomputed_only_when_their_inputs_change() {
+        let (model, _store) = model_with(&["a.txt", "b.txt", "report.txt"]);
+        model.set_query("report");
+        let changes = Rc::new(std::cell::Cell::new(0));
+        let counter = Rc::clone(&changes);
+        model
+            .sorted()
+            .connect_items_changed(move |_, _, _, _| counter.set(counter.get() + 1));
+        let first = model.item(0);
+
+        assert!(!model.set_query("  Report "), "the same words");
+        assert!(!model.set_show_hidden(false), "the same hidden flag");
+        assert_eq!(changes.get(), 0);
+        assert_eq!(model.item(0), first, "the kept rows are reused");
+
+        assert!(model.set_query("a"));
+        assert!(changes.get() > 0);
+        assert_eq!(model.n_items(), 1);
     }
 
     #[gtk::test]

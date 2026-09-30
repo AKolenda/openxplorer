@@ -113,7 +113,7 @@ impl BrowserWindow {
             name: subject.name,
             is_folder: subject.is_folder,
         };
-        OpenWithDialog::present_for(self, subject, self.application_launcher(), self.reporter());
+        self.present_open_with(subject);
     }
 
     /// Open folder with…: the Open with dialog for the folder at `uri`,
@@ -125,7 +125,7 @@ impl BrowserWindow {
             name,
             is_folder: true,
         };
-        OpenWithDialog::present_for(self, subject, self.application_launcher(), self.reporter());
+        self.present_open_with(subject);
     }
 
     /// Change app… in Properties: closes Properties and opens the Open
@@ -140,7 +140,16 @@ impl BrowserWindow {
             name,
             is_folder: false,
         };
-        OpenWithDialog::present_for(self, subject, self.application_launcher(), self.reporter());
+        self.present_open_with(subject);
+    }
+
+    /// Shows the Open with dialog for `subject`, once its share is
+    /// mounted (NET-004).
+    fn present_open_with(&self, subject: OpenWithSubject) {
+        let uri = subject.uri.clone();
+        self.after_mounting(&uri, move |window| {
+            OpenWithDialog::present_for(window, subject, window.application_launcher(), window.reporter());
+        });
     }
 
     /// Starts applications with this window's display, so they get
@@ -172,6 +181,12 @@ impl BrowserWindow {
     /// Opens the terminal in the folder at `uri`, or in the folder of the
     /// file there; says in the message line what opened or why not.
     fn open_terminal_at(&self, uri: String) {
+        let place = uri.clone();
+        self.after_mounting(&place, move |window| window.open_terminal_in_mounted(uri));
+    }
+
+    /// [`Self::open_terminal_at`] once the share holding `uri` is mounted.
+    fn open_terminal_in_mounted(&self, uri: String) {
         let integration = self.context().desktop_integration();
         let settings_directory = integration.settings_directory().to_owned();
         let sandbox = integration.sandbox();
@@ -261,11 +276,6 @@ impl BrowserWindow {
         // Nothing in any window works while the package manager runs;
         // the Software updates dialog stays usable.
         self.set_sensitive(!state.is_installing());
-    }
-
-    /// Why the window may not close now, if it may not (UPD-005).
-    pub(super) fn close_refusal(&self) -> Option<String> {
-        self.context().updates().close_refusal()
     }
 
     /// The tooltip of the status bar's "Check for updates", for tests.

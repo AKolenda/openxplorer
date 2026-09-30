@@ -6,7 +6,10 @@
 //!
 //! Ports `handle_reveal`, `enable_reveal`/`disable_reveal` and
 //! `revealTest` of `desktop/winspace.py`, `handleFileManagerRequest` and
-//! `openWithDialog` of `desktop/ui/app.js`.
+//! `openWithDialog` of `desktop/ui/app.js`. Show in folder inside Flatpak
+//! is in `flatpak`.
+
+mod flatpak;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -35,10 +38,17 @@ struct AttachedIntegration {
 
 impl AttachedIntegration {
     fn new() -> Self {
+        Self::attach(|folders, backend| {
+            DesktopIntegration::with_mime_backend(folders, Sandbox::Host, backend)
+        })
+    }
+
+    /// An integration made by `make` in a temporary folder, attached.
+    fn attach(make: impl FnOnce(&IntegrationFolders, MimeBackend) -> DesktopIntegration) -> Self {
         let root = tempfile::tempdir().expect("a temporary folder");
         let folders = IntegrationFolders::inside(root.path());
         let (backend, _) = MimeBackend::in_memory("org.kde.dolphin.desktop");
-        let integration = DesktopIntegration::with_mime_backend(&folders, Sandbox::Host, backend);
+        let integration = make(&folders, backend);
         let received: Received = Rc::default();
         let recorder = Rc::clone(&received);
         integration.attach(&application(), move |request, _startup_id| {

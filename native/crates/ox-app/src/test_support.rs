@@ -2,10 +2,12 @@
 //! What the crate's tests share: listed entries built through ox-core's own
 //! conversion, so they carry every field a real listing does, rows of the
 //! Network list and of the volume monitor, the GTK [`harness`] for tests
-//! that open windows, [`python`], which runs the Python app's settings
-//! code, and [`search`], which starts the search cache beside a window.
+//! that open windows, [`portal`], which exports fake desktop portals,
+//! [`python`], which runs the Python app's settings code, and [`search`],
+//! which starts the search cache beside a window.
 
 pub(crate) mod harness;
+pub(crate) mod portal;
 pub(crate) mod python;
 pub(crate) mod search;
 

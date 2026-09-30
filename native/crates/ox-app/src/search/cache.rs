@@ -86,6 +86,10 @@ mod imp {
         pub(super) poll_timer: RefCell<Option<glib::SourceId>>,
         /// The Quick access pins as last read (SRCH-040).
         pub(super) pinned: RefCell<PinnedFolders>,
+        /// The folders the service read again after the app wrote into
+        /// them, for tests (SRCH-033).
+        #[cfg(test)]
+        pub(super) written: RefCell<Vec<String>>,
     }
 
     #[glib::object_subclass]

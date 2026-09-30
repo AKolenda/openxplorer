@@ -49,8 +49,8 @@ pub use error::SettingsError;
 pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use preferences::{
-    Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, DEFAULT_TEXT_SIZE, NETWORK_INTERVALS,
-    SIDEBAR_WIDTHS, TEXT_SIZES,
+    Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, WindowSize, DEFAULT_TEXT_SIZE,
+    NETWORK_INTERVALS, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS, WINDOW_WIDTHS,
 };
 
 use save::{replace_private_file, OldFile, SettingsLock};

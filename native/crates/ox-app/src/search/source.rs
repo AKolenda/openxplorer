@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Where a search of a folder looks: the folder's own listing, the cache,
-//! or both.
+//! Where a search of a folder looks: the folder's own tree, the cache, or
+//! both.
 //!
 //! Ports `cacheRootsFor`, `cacheCovers` and the choice `runSearch` and
 //! `renderSearchInfo` make in `desktop/ui/app.js` (SRCH-003, SRCH-007,
 //! SRCH-011). A folder no indexed folder covers, contains or sits under
-//! is only filtered; one an indexed folder covers is searched in the
-//! cache; one with only indexed subfolders gets both, because a cached
-//! child does not cover its parent.
+//! is filtered at once and then searched live with its subfolders, as
+//! Dolphin does (SRCH-035; Python filtered it only); one an indexed folder
+//! covers is searched in the cache; one with only indexed subfolders gets
+//! its own matches and the cached ones, because a cached child does not
+//! cover its parent.
 
 use ox_core::location::same_location;
 use ox_core::search::IndexRoot;
@@ -39,8 +41,13 @@ impl SearchScope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SearchSource {
     /// No indexed folder covers, contains or sits under the folder: its
-    /// listing is filtered (SRCH-003).
+    /// listing is filtered (SRCH-003), then its tree is walked live
+    /// (SRCH-035).
     CurrentFolder,
+    /// As [`SearchSource::CurrentFolder`], for a folder on the network,
+    /// whose tree is not walked: its listing is only filtered, as Python
+    /// filtered every such folder.
+    CurrentFolderOnly,
     /// Only folders inside it are indexed: the listing's matches, then
     /// the cached ones below it (SRCH-007).
     CurrentFolderAndCachedSubfolders,
@@ -69,13 +76,17 @@ impl SearchSource {
 
     /// Whether the search asks the cache.
     pub(crate) const fn uses_cache(self) -> bool {
-        !matches!(self, SearchSource::CurrentFolder)
+        !matches!(
+            self,
+            SearchSource::CurrentFolder | SearchSource::CurrentFolderOnly
+        )
     }
 
     /// What the search strip says it searched.
     pub(crate) const fn caption(self) -> &'static str {
         match self {
-            SearchSource::CurrentFolder => "Current folder only",
+            SearchSource::CurrentFolder => "Current folder + subfolders",
+            SearchSource::CurrentFolderOnly => "Current folder only",
             SearchSource::CurrentFolderAndCachedSubfolders => "Current folder + cached subfolders",
             SearchSource::Cache => "Cached names & paths",
         }

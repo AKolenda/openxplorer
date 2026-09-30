@@ -54,6 +54,7 @@ fn sidebar_rows_are_named_by_their_label_and_described_by_their_address() {
     }
 }
 
+/// parity: NAV-015
 #[gtk::test]
 fn the_home_row_is_selected_in_the_home_folder() {
     let fixture = Fixture::standard();

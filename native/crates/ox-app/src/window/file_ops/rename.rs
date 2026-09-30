@@ -2,22 +2,32 @@
 //! Rename (F2): the one selected item gets a new name in its folder
 //! (OPS-008, OPS-009, OPS-010).
 //!
-//! Ports `rename` in `desktop/ui/app.js`. It does nothing unless exactly
-//! one item is selected, no operation runs, and the item can be changed:
-//! not a share root, a virtual entry or a previous version. As in
+//! Ports `rename` in `desktop/ui/app.js`. It does nothing unless an item
+//! is selected, no operation runs, and the item can be changed: not a
+//! share root, a virtual entry or a previous version. With several items
+//! selected, the batch rename asks instead ([`super::batch_rename`]),
+//! where the Python app did nothing. As in
 //! Explorer and Dolphin, the name is edited in place in its row or tile
 //! ([`super::inline_rename`]); when the item's cell is not on screen, the
 //! Python app's Rename dialog asks instead. Either way the name is checked
 //! with the Python messages and the rename never overwrites. The renamed
-//! item is selected afterwards (the Python app cleared the selection), and
-//! Undo renames it back (OPS-029).
+//! item is selected afterwards (the Python app cleared the selection), a
+//! toast with Undo says it is renamed (OPS-032), and Undo renames it back
+//! (OPS-029).
 
+use gtk::glib::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
+use ox_core::location::parent_location;
 use ox_core::ops::{rename_item, OperationContext, RenamedItem};
 
 use super::name_dialog::{ask_for_name, stem_length, NameRequest, NameSelection};
 use super::FileCommand;
 use crate::window::BrowserWindow;
+
+/// The Rename dialog's line when the user keeps a name that would hide
+/// the item.
+const NOT_RENAMED: &str = "The name was not changed.";
 
 /// How much of `entry`'s name a rename selects: a file's name before its
 /// extension, a folder's whole name.
@@ -31,12 +41,19 @@ pub(super) fn selected_name_length(entry: &Entry) -> usize {
 
 impl BrowserWindow {
     /// F2: renames the selected item in place, or with the dialog when its
-    /// cell is not on screen.
+    /// cell is not on screen; several selected items are renamed together
+    /// (OPS-014).
     pub(crate) async fn rename_selection(&self) {
         if !self.allows(FileCommand::Rename) {
             return;
         }
         let model = self.folder_pane().model();
+        let selected = model.selected_items();
+        if selected.len() > 1 {
+            let entries: Vec<Entry> = selected.iter().map(|item| item.entry().clone()).collect();
+            self.rename_several(&entries).await;
+            return;
+        }
         let Some(position) = model.first_selected() else {
             return;
         };
@@ -57,16 +74,24 @@ impl BrowserWindow {
         } else {
             NameSelection::Stem
         };
+        let folder = parent_location(&entry.uri).unwrap_or_default();
         let request = NameRequest {
             title: "Rename",
             initial_name: &entry.name,
             selection,
+            folder: &folder,
         };
         let protection = self.context().write_protection();
         let renamed = ask_for_name(self, request, |name| {
             let uri = entry.uri.clone();
+            let old_name = entry.name.clone();
             let context = OperationContext::new(protection.clone());
+            let window = self.downgrade();
             async move {
+                let window = window.upgrade().ok_or_else(|| NOT_RENAMED.to_owned())?;
+                if !window.confirm_hiding_rename(&old_name, &name).await {
+                    return Err(NOT_RENAMED.to_owned());
+                }
                 rename_item(&uri, &name, &context)
                     .await
                     .map_err(|error| error.to_string())
@@ -78,12 +103,28 @@ impl BrowserWindow {
         }
     }
 
-    /// Remembers the rename for Undo and selects the item under its new
-    /// name.
+    /// Remembers the rename for Undo, selects the item under its new
+    /// name, and says so in a toast with Undo (OPS-032).
     pub(super) fn finish_rename(&self, renamed: RenamedItem) {
+        self.remember_rename(&renamed);
+        self.reload_selecting(vec![renamed.uri]);
+    }
+
+    /// Like [`Self::finish_rename`], but selects `next` and starts
+    /// renaming it once the folder is listed again: Tab moved on (OPS-012).
+    pub(super) fn finish_rename_and_continue(&self, renamed: &RenamedItem, next: String) {
+        self.remember_rename(renamed);
+        if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
+            tab.renames_selection = true;
+        }
+        self.reload_selecting(vec![next]);
+    }
+
+    /// Records the rename for Undo and says so in a toast with Undo.
+    fn remember_rename(&self, renamed: &RenamedItem) {
         if let Some(record) = renamed.undo_record() {
             self.context().record_operation(record);
+            self.show_message_with_undo(&format!("Renamed to “{}”.", renamed.name));
         }
-        self.reload_selecting(vec![renamed.uri]);
     }
 }

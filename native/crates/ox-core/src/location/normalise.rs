@@ -13,6 +13,10 @@ use std::path::Path;
 
 use percent_encoding::percent_encode;
 
+mod remote;
+
+use remote::normalise_remote_url;
+
 use super::device_uri::DeviceUriMatch;
 use super::parts::{split_location, split_scheme, split_url, LocationKind, LocationParts};
 use super::text::{
@@ -25,7 +29,8 @@ use super::LocationError;
 const MAX_DEVICE_AUTHORITY_CHARS: usize = 512;
 
 /// Accepts Linux paths (`/x`, `~`, `~/x`, or relative to `base`), `file://`
-/// and `smb://` URIs, UNC paths (`\\server\share` or `//server/share`) and
+/// and `smb://` URIs, UNC paths (`\\server\share` or `//server/share`), the
+/// other network protocols of [`REMOTE_SCHEMES`](super::REMOTE_SCHEMES) and
 /// connected-device URIs (`mtp://`, `gphoto2://`, `afc://`), and returns one
 /// canonical URI.
 ///
@@ -75,6 +80,7 @@ pub fn normalise_location(address: &str, base: Option<&str>, home: &Path) -> Res
     };
     match LocationKind::from_scheme(&scheme) {
         LocationKind::Device => normalise_device_location(&address, &scheme),
+        LocationKind::Remote => normalise_remote_url(&address),
         LocationKind::Local | LocationKind::Smb | LocationKind::Other => normalise_url(&address),
     }
 }
@@ -98,17 +104,23 @@ pub fn file_uri(path: &Path) -> String {
     format!("file://{escaped}")
 }
 
-/// Normalises a shared folder, rejecting a bare server (`smb://nas/`) and
-/// anything that is not SMB.
+/// Normalises a network folder for Map network location: an SMB shared
+/// folder (not a bare server such as `smb://nas/`), a folder on an SFTP,
+/// FTP or WebDAV server (its root included) or an NFS export.
 ///
 /// # Errors
 ///
 /// As [`normalise`], and a message asking for a shared folder such as
-/// `\\nas\Projects` for anything but an SMB shared folder.
+/// `\\nas\Projects` for anything else.
 pub fn require_share(address: &str) -> Result<String, LocationError> {
     let uri = normalise(address)?;
     let parts = split_location(&uri)?;
-    if !parts.is_smb() || parts.path_depth() == 0 {
+    let is_folder = match parts.kind() {
+        LocationKind::Smb => parts.path_depth() > 0,
+        LocationKind::Remote => parts.scheme != "nfs" || parts.path_depth() > 0,
+        LocationKind::Local | LocationKind::Device | LocationKind::Other => false,
+    };
+    if !is_folder {
         return Err(LocationError::new(
             "Enter a shared folder such as \\\\nas\\Projects, not only the server name.",
         ));
@@ -134,6 +146,12 @@ pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
     if parts.is_smb() && parts.path_depth() <= 1 {
         return Err(LocationError::new(
             "Open the network share first, then select files or folders inside it. The share itself \
+             cannot be renamed, moved, copied or trashed here.",
+        ));
+    }
+    if parts.is_remote() && parts.path_depth() == 0 {
+        return Err(LocationError::new(
+            "Open a folder on the server first, then select files or folders inside it. The server itself \
              cannot be renamed, moved, copied or trashed here.",
         ));
     }
@@ -221,7 +239,7 @@ fn expand_home(address: &str, home: &Path) -> String {
 /// True when relative paths should be appended to `base` as a URL: SMB
 /// and connected-device folders.
 fn is_remote_base(base: &str) -> bool {
-    split_location(base).is_ok_and(|parts| parts.is_smb() || parts.is_device())
+    split_location(base).is_ok_and(|parts| parts.is_smb() || parts.is_remote() || parts.is_device())
 }
 
 /// `os.path.join(base, path)`: an absolute `path` replaces `base`.
@@ -303,6 +321,17 @@ fn normalise_smb_url(parts: &LocationParts, decoded_path: &str) -> Result<String
 /// The canonical `host[:port]` of an SMB URL: the host lower-cased, an
 /// IPv6 host in brackets and an explicit port kept without leading zeros.
 fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
+    server_authority(
+        parts,
+        "Enter an SMB server name, for example smb://nas/Projects.",
+        "Invalid SMB port.",
+    )
+}
+
+/// The canonical `host[:port]` of a server URL, as [`smb_authority`];
+/// `no_host` and `bad_port` are the messages for a missing host and for
+/// a port that is not a number.
+fn server_authority(parts: &LocationParts, no_host: &str, bad_port: &str) -> Result<String, LocationError> {
     // Safety rule (`core.py`: `'%' in u.netloc or CONTROL.search(u.netloc)`):
     // an escaped server name could hide credentials (`u%40nas` is `u@nas`)
     // or a control character from the checks on the decoded address.
@@ -312,11 +341,9 @@ fn smb_authority(parts: &LocationParts) -> Result<String, LocationError> {
         ));
     }
     let Some(hostname) = parts.hostname().filter(|host| !contains_python_space(host)) else {
-        return Err(LocationError::new(
-            "Enter an SMB server name, for example smb://nas/Projects.",
-        ));
+        return Err(LocationError::new(no_host));
     };
-    let port = parts.port()?;
+    let port = parts.port().map_err(|_| LocationError::new(bad_port))?;
     let host = if hostname.contains(':') {
         format!("[{hostname}]")
     } else {

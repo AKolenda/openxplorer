@@ -57,7 +57,7 @@ never takes over the Python app's name. Every package build sets it.
 | Launcher icon | `/usr/share/icons/hicolor/scalable/apps/<id>.svg` | same | under `/app/share` |
 | D-Bus service file | `/usr/share/dbus-1/services/<id>.service` | same | under `/app/share` |
 | Licences | `/usr/share/doc/<command>/` | `/usr/share/licenses/<command>/` | `/app/share/licenses/<id>/` |
-| Mount helper (stable) | `/opt/openxplorer/mount-share/` | `/usr/share/openxplorer/mount-share/` | none |
+| Mount helper (stable) | `/opt/openxplorer/bin/openxplorer-mount-share`, linked from `/usr/bin` | `/usr/bin/openxplorer-mount-share` | none |
 
 - **Program folder.** The Debian program lives in `/opt/openxplorer/bin`
   because the in-app updater allows installing updates only for that folder
@@ -71,12 +71,15 @@ never takes over the Python app's name. Every package build sets it.
 - **Launcher icon.** The Fluent Emoji file folder the app shows for folders,
   byte for byte, following the rule that every icon is an unmodified Fluent
   file. It is an SVG, which GNOME, KDE, GNOME Software and Flatpak all accept.
-- **Mount helper.** Until the interactive command line of
-  `desktop/mount_share.py` is ported, the stable host packages ship it and the
-  three modules it imports unchanged, started by the launcher
-  [`data/openxplorer-mount-share.in`](data/openxplorer-mount-share.in) in
-  Python's isolated mode. The Settings mount assistant prints
-  `sudo /usr/bin/openxplorer-mount-share …` for the administrator to run.
+- **Mount helper.** `openxplorer-mount-share`, the port of
+  `desktop/mount_share.py`, is a second Rust program
+  (`crates/ox-core/src/bin/openxplorer-mount-share.rs`) with the same command
+  line. Only the stable host packages install it, with the Python package's
+  legacy name `winspace-mount-share` as a link: the preview installs beside
+  the Python package, which owns that command, and a Flatpak cannot add host
+  commands. The mount assistant in a folder's Location tab prints
+  `sudo /usr/bin/openxplorer-mount-share …` for the administrator to run; the
+  app never runs it. No package ships Python.
 
 ## Desktop integration data
 
@@ -126,17 +129,19 @@ explains a missing one when that feature is used:
 
 | Feature | Debian | Fedora | openSUSE | Arch |
 |---|---|---|---|---|
-| SMB shares, phones, Recycle Bin, drive list | `gvfs`, `gvfs-backends`, `gvfs-fuse` | `gvfs`, `gvfs-smb`, `gvfs-mtp`, `gvfs-fuse` | `gvfs`, `gvfs-backends`, `gvfs-fuse` | `gvfs`, `gvfs-smb`, `gvfs-mtp` |
+| SMB shares, phones, Recycle Bin, drive list | `gvfs`, `gvfs-backends`, `gvfs-fuse` | `gvfs`, `gvfs-smb`, `gvfs-mtp`, `gvfs-fuse` | `gvfs`, `gvfs-backends`, `gvfs-backend-samba`, `gvfs-fuse` | `gvfs`, `gvfs-smb`, `gvfs-mtp` |
 | Remembering SMB passwords (Secret Service) | `gnome-keyring \| keepassxc` | `gnome-keyring` | `gnome-keyring` | `gnome-keyring` |
 | Making OpenXplorer the default file manager | `xdg-utils` | `xdg-utils` | `xdg-utils` | `xdg-utils` |
 | Open in Terminal | `gnome-terminal \| x-terminal-emulator` | (every desktop has one) | (every desktop has one) | (every desktop has one) |
 | Open in archive manager | `file-roller` | `file-roller` | `file-roller` | `file-roller` |
 | In-app updates (stable `.deb` only) | `pkexec` | | | |
-| Persistent SMB mount helper (stable only) | `python3 (>= 3.10)`, `cifs-utils` | `python3`, `cifs-utils` | `python3`, `cifs-utils` | `python`, `cifs-utils` |
+| Persistent SMB mount helper (stable only) | `cifs-utils` | `cifs-utils` | `cifs-utils` | `cifs-utils` |
 
 **Not dependencies.** The Python package depended on Python, PyGObject,
-WebKitGTK, libsecret and `xdg-user-dirs`; the native program needs none of
-them (the Secret Service client is pure Rust). RPM and Arch have no virtual
+WebKitGTK, libsecret and `xdg-user-dirs`; the native programs need none of
+them (the Secret Service client is pure Rust, and the mount helper is a Rust
+program). Python is only a build tool: `tools/package_data.py` installs the
+files. RPM and Arch have no virtual
 terminal package, so they name none.
 
 ## Debian package
@@ -261,7 +266,7 @@ flatpak run io.winspace.Development.Native
 | `--filesystem=host` | A file manager shows, copies and changes the user's files wherever they are: home, other disks under `/media`, `/run/media` and `/mnt`, `/opt`, `/srv`. |
 | `--talk-name=org.gtk.vfs.*`, `--filesystem=xdg-run/gvfsd`, `--filesystem=xdg-run/gvfs` | GVfs: the sandbox's GIO asks the host's GVfs daemons for `smb://`, `mtp://`, `trash:///` and the drive and phone list, reaches their private sockets, and opens files on shares through their FUSE paths. |
 | `--talk-name=org.freedesktop.secrets` | Saved SMB passwords live in the desktop's Secret Service under the Python app's schema, so both apps find each other's sign-ins. |
-| `--own-name=org.freedesktop.FileManager1` | "Show in folder" (opt-in): lets the running app answer the file-manager interface after the user turns it on; Flatpak only permits owning the name. The integration still refuses inside the Flatpak (see below), so today the name stays unclaimed. |
+| `--own-name=org.freedesktop.FileManager1` | "Show in folder" (opt-in): after the user turns it on in Settings, the running app answers browsers' and other apps' requests to show a downloaded file in its folder. Flatpak only permits owning the name; the app claims it only while the integration is on. |
 | `--talk-name=org.freedesktop.Flatpak` | `flatpak-spawn --host`: Open in Terminal starts the host's terminal, and making OpenXplorer the default file manager (opt-in) runs the host's `xdg-mime`. |
 | `--share=network` | "Check for updates" asks GitHub whether a newer release exists. SMB and phone traffic goes through GVfs on the host. |
 
@@ -279,25 +284,111 @@ style, so none of them needs a permission. A test
 - System folders (`/usr`, `/etc`) are the sandbox's own; the host's appear
   under `/run/host` only with the `host-os` and `host-etc` permissions, which
   the manifest does not request.
-- "Show in folder" cannot be turned on yet: the integration writes a per-user
-  D-Bus service file, which a Flatpak may not install for another
-  application's name, so it refuses and says why
-  (`crates/ox-core/src/integration/reveal.rs`). Answering requests only while
-  the app runs, which the permission above allows, is app work still to do.
+- "Show in folder" works while OpenXplorer runs, and after login if the desktop
+  allows it. A Flatpak may not install the per-user D-Bus service file and
+  autostart entry the host package writes, so turning it on writes only an
+  opt-in record in the app's settings folder, claims
+  `org.freedesktop.FileManager1` (the permission above), and asks the
+  Background portal (`org.freedesktop.portal.Background`) to start the app at
+  login without a window. When the desktop refuses or has no Background
+  portal, a message says that Show in folder answers only while OpenXplorer
+  runs. Nothing starts the app on demand when a request arrives
+  (`crates/ox-core/src/integration/reveal.rs`,
+  `crates/ox-core/src/integration/background_portal.rs`).
 - Updates come from Flatpak (GNOME Software or `flatpak update`); the app
   never installs one itself.
-- Known issue: with the System theme the Flatpak stays light on a dark
-  desktop. `crates/ox-app/src/theme/system.rs` prefers GNOME's
-  `org.gnome.desktop.interface` settings when the schema is installed, and
-  inside the sandbox the runtime's schema holds only defaults; inside Flatpak
-  it has to read the Settings portal instead, which it already does on
-  desktops without the schema.
+- The System theme follows the desktop's light or dark style through the
+  Settings portal (`org.freedesktop.appearance` `color-scheme`), not GNOME's
+  `org.gnome.desktop.interface` keys: the runtime ships that schema too, but
+  the sandbox cannot read the host's values, so it holds only defaults
+  (`crates/ox-app/src/theme/system.rs`). With `color-scheme` at "default",
+  the app looks for "dark" in the GTK theme's name, as the host package
+  does; GNOME-based portals serve it (`org.gnome.desktop.interface`
+  `gtk-theme`). Where the portal has neither, the Flatpak keeps GTK's own
+  preference.
 
-**Flathub** publication is not possible yet: Flathub requires the owner of the
-application ID's domain (`winspace.io`, which does not resolve), screenshots in
-the metainfo, and exceptions for `--filesystem=host`, `flatpak-spawn` and
-owning `org.freedesktop.FileManager1` (`flatpak-builder-lint` lists these).
-Until then the bundle is published with each release.
+### Publishing on Flathub
+
+The Flatpak is published as a bundle with each release. Flathub publication is
+prepared as far as the repository allows; the rest needs the owner.
+
+Already in place:
+
+- The stable metainfo
+  ([`data/io.winspace.Development.metainfo.xml`](data/io.winspace.Development.metainfo.xml))
+  passes `appstreamcli validate`: licences, developer, launchable, stock icon,
+  categories, keywords, homepage, help, source and bug tracker links, branding
+  colours, a release entry with notes for every version, and an OARS 1.1
+  content rating of social-info mild (the update check contacts GitHub's API
+  for the latest release); no other attribute applies (no violence, drugs,
+  sex, language, social chat, purchases or ads).
+- The icon is scalable SVG, and the build is offline: every crate comes from
+  [`flatpak/cargo-sources.json`](flatpak/cargo-sources.json).
+- Every permission is explained above ("Flatpak permissions") and below.
+
+Still to do:
+
+- **Screenshots** (TODO in both metainfo files). Flathub requires at least one
+  `<screenshot>` served over HTTPS. The website's screenshots
+  (`apps/web/public/assets/screenshots/`) show the 1.x web interface with a
+  "1.1.4 preview" label, so they are not used. Capture the native window on
+  fictional files with the snapshot hook (`OPENXPLORER_SNAPSHOT`, following
+  `docs/PRIVACY.md`), publish the images on the website, and add them with
+  their captions.
+- **Sources of the Flathub manifest.** Flathub builds the manifest from its
+  `flathub/<app-id>` repository, where the `dir` source above must be the
+  release's source archive (`openxplorer-<version>.tar.gz` from
+  `native/tools/source_archive.py`) or a git tag, with its checksum.
+- **Linter exceptions.** Run `flatpak run --command=flatpak-builder-lint
+  org.flatpak.Builder manifest native/packaging/flatpak/io.winspace.Development.yml`
+  and `... repo repo`, and ask for an exception for each finding in the
+  submission, with the reasons below.
+
+Only the owner can:
+
+- **Verify the application ID.** Flathub accepts `io.winspace.Development` only
+  from whoever controls `winspace.io`, which does not resolve, by serving a
+  token at `https://winspace.io/.well-known/org.flathub.VerifiedApps.txt`.
+  The alternative is an ID under a domain the project controls, such as
+  `app.openxplorer.OpenXplorer` for `openxplorer.app`; the ID is a
+  compatibility contract (AGENTS.md: the desktop entry, AppStream ID, D-Bus
+  name and Flatpak ID), so a new ID needs `build.rs`, the packaging data and
+  the migration of existing Flatpak users (`~/.var/app/<id>/`) changed
+  together, and an `<id>` rename entry (`<provides>`/`<replaces>`) in the
+  metainfo.
+- Open the submission pull request on `flathub/flathub`, accept Flathub's
+  terms, and maintain the `flathub/<app-id>` repository it creates.
+- Publish the screenshots on `openxplorer.app` (the website deploy).
+
+#### Why each permission is needed (for the Flathub review)
+
+- `--socket=wayland`, `--socket=fallback-x11`, `--share=ipc`,
+  `--device=dri`: the standard set for a GTK 4 window drawn with the GPU.
+- `--filesystem=host`: OpenXplorer is a file manager. Users browse, copy,
+  rename and delete files anywhere they have access, including other disks
+  under `/media`, `/run/media` and `/mnt`, `/opt` and `/srv`; the file
+  chooser portal cannot give a file manager its folders one at a time.
+  `host-os` and `host-etc` are not requested.
+- `--talk-name=org.gtk.vfs.*`, `--filesystem=xdg-run/gvfsd`,
+  `--filesystem=xdg-run/gvfs`: SMB shares, phones (MTP), cameras (PTP), the
+  Trash and the drive list come from the host's GVfs: GIO inside the
+  sandbox needs the daemons' D-Bus names, their private sockets and their
+  FUSE paths.
+- `--talk-name=org.freedesktop.secrets`: SMB passwords the user asks to
+  remember are stored in the Secret Service, under the schema the 1.x app
+  used, so both find the same saved sign-ins.
+- `--own-name=org.freedesktop.FileManager1`: the opt-in "Show in folder"
+  integration. After the user turns it on in Settings, browsers' "Show in
+  folder" requests reach OpenXplorer, as they reach Nautilus or Dolphin. The
+  app claims the name only while the integration is on.
+- `--talk-name=org.freedesktop.Flatpak`: `flatpak-spawn --host` for two
+  explicit user actions: Open in Terminal starts the host's terminal in the
+  current folder, and "Make OpenXplorer the default file manager" (opt-in)
+  runs the host's `xdg-mime`, since the default applications are the host's.
+- `--share=network`: "Check for updates" reads GitHub's public release list to
+  say whether a newer version exists; Flatpak installs it. SMB and phones
+  go through the host's GVfs, not this permission. If Flathub asks to drop
+  it, the Flatpak build must hide the update check first.
 
 ## RPM
 
@@ -311,6 +402,9 @@ The spec builds offline from `openxplorer-<version>.tar.gz` (the committed
 sources) and `openxplorer-<version>-vendor.tar.gz` (every crate, from
 `cargo vendor`), with the distribution's own Rust. It works on Fedora and
 openSUSE; the GVfs backend names differ and are chosen with `%{suse_version}`.
+Fedora tags the release with its version (`.fc44`); openSUSE sets no tag, so
+`ci/build-package.sh` passes the distribution's ID (`.opensuse_tumbleweed`)
+and the two RPMs of a release have different names.
 
 ## Arch package
 
@@ -335,3 +429,13 @@ the Flatpak bundle. The scripts in [`ci/`](ci/) are its steps:
 unprivileged user the checks run as, `install-rust.sh` installs Rust 1.92.0
 (the minimum supported version) and stable, `run-checks.sh` runs the driver
 and `build-package.sh` builds and verifies the package.
+
+The `native-package` job of
+[`.github/workflows/checks.yml`](../../.github/workflows/checks.yml) runs the
+same steps for the release on every push to `main`, building the stable app:
+the `.deb` on Ubuntu 24.04, an RPM on Fedora and on openSUSE Tumbleweed, and
+the Arch package; `native-flatpak` builds the stable Flatpak bundle. The
+release needs the `.deb` (the 1.1.x updater installs it) and the Flatpak. An
+RPM or Arch build that fails is marked as allowed to fail, so the release
+goes ahead without that package, and `tools/release.py --packages` stages and
+checksums the packages that were built.

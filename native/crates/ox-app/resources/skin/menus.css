@@ -40,3 +40,18 @@ popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-
   margin-bottom: 48px;
   box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
 }
+/* The toast's action, such as Undo (OPS-032): a quiet button in the
+   toast's inverted colours. */
+.toast button.toast-action {
+  color: @ox_bg;
+  background-color: alpha(@ox_bg, .12);
+  border: 1px solid alpha(@ox_bg, .32);
+  border-radius: 4px;
+  padding: 2px 12px;
+  min-height: 0;
+  font-weight: 600;
+  box-shadow: none;
+}
+.toast button.toast-action:hover { background-color: alpha(@ox_bg, .22); }
+.toast button.toast-action:active { background-color: alpha(@ox_bg, .3); }
+.toast button.toast-action:focus-visible { outline: 2px solid @ox_bg; outline-offset: 1px; }

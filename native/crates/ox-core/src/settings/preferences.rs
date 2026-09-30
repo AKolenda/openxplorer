@@ -29,6 +29,46 @@ const DEFAULT_NETWORK_INTERVAL: u32 = 60;
 /// Accepted sidebar widths, in pixels.
 pub const SIDEBAR_WIDTHS: RangeInclusive<u32> = 140..=560;
 
+/// Accepted window widths, in pixels: from the window's minimum up.
+pub const WINDOW_WIDTHS: RangeInclusive<u32> = 670..=16_384;
+
+/// Accepted window heights, in pixels: from the window's minimum up.
+pub const WINDOW_HEIGHTS: RangeInclusive<u32> = 470..=16_384;
+
+/// The size new windows open at, and whether they open maximized: the
+/// last window's (TAB-054). The Python app ignores it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowSize {
+    /// The width when not maximized, in pixels.
+    pub width: u32,
+    /// The height when not maximized, in pixels.
+    pub height: u32,
+    /// Whether the window was maximized.
+    pub maximized: bool,
+}
+
+impl WindowSize {
+    /// Reads `{"width", "height", "maximized"}`; `None` unless both sizes
+    /// are within [`WINDOW_WIDTHS`] and [`WINDOW_HEIGHTS`].
+    fn from_json(value: &Value) -> Option<Self> {
+        let size = |key: &str, range: RangeInclusive<u32>| {
+            let pixels = value.get(key)?.as_u64()?;
+            u32::try_from(pixels).ok().filter(|pixels| range.contains(pixels))
+        };
+        Some(Self {
+            width: size("width", WINDOW_WIDTHS)?,
+            height: size("height", WINDOW_HEIGHTS)?,
+            maximized: value.get("maximized").and_then(Value::as_bool).unwrap_or(false),
+        })
+    }
+
+    /// Whether both sizes are ones a window may open at.
+    fn is_valid(self) -> bool {
+        WINDOW_WIDTHS.contains(&self.width) && WINDOW_HEIGHTS.contains(&self.height)
+    }
+}
+
 /// A resizable column of the Details view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Column {
@@ -148,6 +188,10 @@ impl ColumnWidths {
 }
 
 /// User preferences shared by every window and by the Python app.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate saved on/off preference"
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preferences {
@@ -174,6 +218,22 @@ pub struct Preferences {
     /// Details-view column widths, once the user resized or reset them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub column_widths: Option<ColumnWidths>,
+    /// The last window's size, once a window was resized.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window_size: Option<WindowSize>,
+    /// The address bar's crumbs start at `/` instead of the closest place
+    /// (Dolphin's `ShowFullPath`). Stored only when on, as are the next
+    /// two, so the Python app's file keeps its layout.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub show_full_path: bool,
+    /// New windows show the address as editable text instead of crumbs
+    /// (Dolphin's `EditableUrl`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub editable_location: bool,
+    /// Folders opened from other apps open in a new window instead of a
+    /// new tab (Dolphin's `OpenExternallyCalledFolderInNewTab`, inverted).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub external_folders_in_new_window: bool,
 }
 
 impl Default for Preferences {
@@ -189,6 +249,10 @@ impl Default for Preferences {
             text_size: DEFAULT_TEXT_SIZE,
             sidebar_width: None,
             column_widths: None,
+            window_size: None,
+            show_full_path: false,
+            editable_location: false,
+            external_folders_in_new_window: false,
         }
     }
 }
@@ -215,11 +279,20 @@ impl Preferences {
         replace_if_some(&mut self.context_menu, update.context_menu);
         replace_if_some(&mut self.network_interval, network_interval);
         replace_if_some(&mut self.text_size, text_size);
+        replace_if_some(&mut self.show_full_path, update.show_full_path);
+        replace_if_some(&mut self.editable_location, update.editable_location);
+        replace_if_some(
+            &mut self.external_folders_in_new_window,
+            update.external_folders_in_new_window,
+        );
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
         if let Some(widths) = column_widths {
             self.column_widths = Some(widths);
+        }
+        if let Some(size) = update.window_size.filter(|size| size.is_valid()) {
+            self.window_size = Some(size);
         }
     }
 }
@@ -248,6 +321,14 @@ pub struct PreferencesUpdate {
     pub context_menu: Option<ContextMenu>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
+    /// The size new windows open at.
+    pub window_size: Option<WindowSize>,
+    /// Show the full path in the address bar, or start at the closest place.
+    pub show_full_path: Option<bool>,
+    /// Open new windows with an editable address.
+    pub editable_location: Option<bool>,
+    /// Open folders from other apps in a new window, or in a new tab.
+    pub external_folders_in_new_window: Option<bool>,
 }
 
 impl PreferencesUpdate {
@@ -276,6 +357,10 @@ impl PreferencesUpdate {
             column_widths: values.get("columnWidths").and_then(read_column_widths),
             context_menu: text("contextMenu").and_then(ContextMenu::from_key),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
+            window_size: values.get("windowSize").and_then(WindowSize::from_json),
+            show_full_path: flag("showFullPath"),
+            editable_location: flag("editableLocation"),
+            external_folders_in_new_window: flag("externalFoldersInNewWindow"),
         })
     }
 }
@@ -397,6 +482,36 @@ mod tests {
         assert_eq!(bounded_width(f64::INFINITY, SIDEBAR_WIDTHS), None);
     }
 
+    /// parity: TAB-054
+    #[test]
+    fn the_window_size_is_kept_only_within_the_window_limits() {
+        let read = |value| PreferencesUpdate::from_json(&json!({ "windowSize": value })).unwrap();
+        let saved = read(json!({"width": 1000, "height": 700, "maximized": true}));
+        let mut preferences = Preferences::default();
+        preferences.apply(&saved);
+        let stored = serde_json::to_value(&preferences).unwrap();
+
+        assert_eq!(
+            preferences.window_size,
+            Some(WindowSize {
+                width: 1000,
+                height: 700,
+                maximized: true
+            })
+        );
+        assert_eq!(
+            stored["windowSize"],
+            json!({"width": 1000, "height": 700, "maximized": true})
+        );
+        assert_eq!(
+            read(json!({"width": 300, "height": 700})).window_size,
+            None,
+            "below the minimum"
+        );
+        assert_eq!(read(json!({"width": 1000.5, "height": 700})).window_size, None);
+        assert_eq!(read(json!("big")).window_size, None);
+    }
+
     /// parity: VIEW-028
     #[test]
     fn column_widths_keep_only_known_in_range_columns() {
@@ -444,6 +559,21 @@ mod tests {
         assert_eq!(preferences.view, View::Details);
         assert_eq!(preferences.context_menu, ContextMenu::Win11);
         assert_eq!(preferences.network_interval, 60);
+    }
+
+    #[test]
+    fn address_bar_and_external_folder_options_are_stored_only_when_on() {
+        let values =
+            json!({"showFullPath": true, "editableLocation": "yes", "externalFoldersInNewWindow": true});
+        let mut preferences = Preferences::default();
+
+        preferences.apply(&PreferencesUpdate::from_json(&values).unwrap());
+
+        assert!(preferences.show_full_path && preferences.external_folders_in_new_window);
+        assert!(!preferences.editable_location, "only a JSON boolean counts");
+        let stored = serde_json::to_value(&preferences).unwrap();
+        assert_eq!(stored["showFullPath"], json!(true));
+        assert!(stored.get("editableLocation").is_none());
     }
 
     /// parity: SET-016

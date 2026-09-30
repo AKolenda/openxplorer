@@ -11,9 +11,11 @@
 //! that names a device. Pinning a folder is in [`super::quick_access`] and
 //! mounting a volume in [`super::mounting`].
 
+use std::path::PathBuf;
+
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
 use ox_core::places::{NetworkLocation, Place};
 
 use crate::locations::{self, Page};
@@ -24,18 +26,20 @@ use super::landing;
 use super::sidebar;
 use super::BrowserWindow;
 
-/// A volume monitor handler that tells `window` about any mount or volume
-/// change; it holds the window weakly, so it never keeps a closed window.
-fn redraw_on_change<Changed>(
-    window: &glib::WeakRef<BrowserWindow>,
-) -> impl Fn(&gio::VolumeMonitor, &Changed) + 'static {
-    let window = window.clone();
-    move |_, _| {
-        if let Some(window) = window.upgrade() {
-            window.volumes_changed();
-        }
-    }
-}
+/// The volume monitor's signals that a drive, volume or mount appeared,
+/// went away or changed (`mounts` events in winspace.py). Each redraws
+/// every window (DEV-002).
+pub(super) const VOLUME_MONITOR_SIGNALS: [&str; 9] = [
+    "mount-added",
+    "mount-removed",
+    "mount-changed",
+    "volume-added",
+    "volume-removed",
+    "volume-changed",
+    "drive-connected",
+    "drive-disconnected",
+    "drive-changed",
+];
 
 impl BrowserWindow {
     /// Draws the sidebar, then redraws it whenever the volumes or the
@@ -45,22 +49,27 @@ impl BrowserWindow {
         self.render_places();
         self.context().refresh_stable_mounts();
         let monitor = self.volume_monitor();
-        let window = self.downgrade();
-        let handlers = [
-            monitor.connect_mount_added(redraw_on_change(&window)),
-            monitor.connect_mount_removed(redraw_on_change(&window)),
-            monitor.connect_mount_changed(redraw_on_change(&window)),
-            monitor.connect_volume_added(redraw_on_change(&window)),
-            monitor.connect_volume_removed(redraw_on_change(&window)),
-            monitor.connect_volume_changed(redraw_on_change(&window)),
-            monitor.connect_drive_connected(redraw_on_change(&window)),
-            monitor.connect_drive_disconnected(redraw_on_change(&window)),
-            monitor.connect_drive_changed(redraw_on_change(&window)),
-        ];
+        let handlers = VOLUME_MONITOR_SIGNALS.map(|signal| {
+            // The handler reads the monitor again rather than the object
+            // the signal names, so every signal takes the same handler.
+            monitor.connect_local(
+                signal,
+                false,
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    #[upgrade_or_default]
+                    move |_| {
+                        window.volumes_changed();
+                        None
+                    }
+                ),
+            )
+        });
         let places = self.context().connect_places_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || window.render_places()
+            move || window.places_changed()
         ));
         let mut external = self.imp().handlers.borrow_mut();
         external.volumes.extend(handlers);
@@ -73,8 +82,25 @@ impl BrowserWindow {
         let mut context = locations::location_context(glib::home_dir(), &rows);
         // Snapshot folders are read-only and mark the tabs inside them.
         context.snapshot_roots = self.context().previous_versions().snapshot_roots();
+        context.network_mounts = self.network_mount_points();
         self.imp().volumes.replace(rows);
         self.imp().locations.replace(context);
+    }
+
+    /// The places changed: the kernel's SMB mounts may have too, so the
+    /// locations under them count as network locations before everything
+    /// that shows a place is redrawn.
+    fn places_changed(&self) {
+        self.imp().locations.borrow_mut().network_mounts = self.network_mount_points();
+        self.render_places();
+    }
+
+    /// The mount points of the kernel's CIFS and SMB3 mounts, as last read:
+    /// a tab at or below one is a network location (NET-006,
+    /// `networkLocation` in app.js).
+    fn network_mount_points(&self) -> Vec<PathBuf> {
+        let mounts = self.context().network().stable_mounts();
+        mounts.into_iter().map(|mount| mount.path).collect()
     }
 
     /// A device was plugged in, renamed or removed: every title, crumb and
@@ -125,12 +151,14 @@ impl BrowserWindow {
     /// search index.
     pub(super) fn render_places(&self) {
         let places = self.places();
-        let entries = sidebar::sidebar_entries(&places, &self.imp().locations.borrow());
+        let searches = self.context().saved_searches();
+        let entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
         self.sidebar().set_entries(entries);
         if let Some(uri) = self.current_uri() {
             self.sidebar().select(&uri);
         }
         self.render_landing_with(&places);
+        self.follow_full_path_preference();
         self.render_tabs();
         self.update_details_pane();
         self.update_index_candidates(&places.quick_access);

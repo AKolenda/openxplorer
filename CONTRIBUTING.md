@@ -2,13 +2,27 @@
 
 ## Before a change
 
-Read [README.md](README.md), [AGENTS.md](AGENTS.md), [the development guide](docs/development.md) and [SECURITY.md](SECURITY.md). Keep a change focused and explain the observable problem before changing implementation details. A visual improvement must preserve file-operation and desktop integration safeguards.
+Read [README.md](README.md), [AGENTS.md](AGENTS.md), [native/README.md](native/README.md), [the development guide](docs/development.md) and [SECURITY.md](SECURITY.md). Keep a change focused and explain the observable problem before changing implementation details. A visual improvement must preserve file-operation and desktop integration safeguards.
 
 ## Local development
 
-The desktop uses distribution-managed Python GI, GTK 3, WebKitGTK 4.1 and GIO/GVfs. Follow [desktop/README.md](desktop/README.md) for native prerequisites. Do not pip-install an unrelated package named `gi` or run the file manager as root. Node and pnpm are website/build tooling; the installed desktop app does not depend on them.
+The app is the Rust and GTK 4 program in `native/` (crates `ox-core` for the GIO services and `ox-app` for the interface). It needs Rust 1.92 or newer (`rust-version` in `native/Cargo.toml`), GTK 4.14 or newer, SQLite and libsoup 3 development files, and Python 3.11+ for the check driver and parity tools. The distribution packages below are the ones CI installs in `native/packaging/ci/prepare-container.sh`, including the test tools:
 
-Use Node.js 22.13+ and the repository's pinned pnpm version:
+| Distribution | Packages |
+|---|---|
+| Ubuntu 24.04+, Zorin OS 18, Debian 13 | `build-essential pkg-config libgtk-4-dev libsqlite3-dev libsoup-3.0-dev xvfb xauth dbus-x11 gvfs gvfs-backends python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1 nodejs` |
+| Fedora | `gcc pkgconf-pkg-config 'pkgconfig(gtk4)' 'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' xvfb-run xorg-x11-server-Xvfb xauth gvfs gvfs-smb python3-gobject gnome-keyring libsecret nodejs` |
+| openSUSE Tumbleweed | `gcc pkgconf-pkg-config 'pkgconfig(gtk4)' 'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' glib2-tools xvfb-run xorg-x11-server-Xvfb xauth dbus-1 gvfs gvfs-backends gvfs-backend-samba python3-gobject typelib-1_0-Secret-1 gnome-keyring nodejs` |
+| Arch Linux | `base-devel rustup gtk4 sqlite libsoup3 xorg-server-xvfb xorg-xauth gvfs gvfs-smb python-gobject gnome-keyring libsecret nodejs` |
+
+Install Rust with rustup, then build and run the development build:
+
+```sh
+cargo build --locked --manifest-path native/Cargo.toml
+./native/target/debug/openxplorer-native
+```
+
+Do not run the file manager as root. Node and pnpm are website and test tooling; the installed app does not depend on them. For the website, use Node.js 22.13+ and the repository's pinned pnpm version:
 
 ```sh
 corepack enable
@@ -17,7 +31,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Commit dependency changes together with the updated `pnpm-lock.yaml`. A normal checkout uses the committed lock; do not regenerate it merely to bypass an installation failure. Keep local environment values and Cloudflare credentials outside source control. `.env.example` and `.dev.vars.example`, when present, may contain only public placeholder values.
+Commit dependency changes together with the updated `Cargo.lock` or `pnpm-lock.yaml`. After a `Cargo.lock` change, regenerate the Flatpak's crate list with `python3 native/tools/flatpak_cargo_sources.py`. Do not regenerate a lock merely to bypass an installation failure. Keep local environment values and Cloudflare credentials outside source control.
 
 ## Pull requests
 
@@ -28,30 +42,31 @@ Create a feature branch and open a pull request into `main`. Direct pushes, forc
 Run the checks that cover the change and include their actual outcomes:
 
 ```sh
-pnpm test:desktop
-node --test desktop/tests/*.test.cjs
-pnpm security:source
-pnpm check
-pnpm build
+cargo fmt --manifest-path native/Cargo.toml --all -- --check
+cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets --locked -- -D warnings \
+  -W clippy::pedantic -A clippy::module_name_repetitions -A clippy::must_use_candidate -A clippy::similar_names
+python3 native/tools/check.py
+python3 native/parity/check.py
 ```
 
-For desktop UI changes, generate the shared preview and run the appropriate `desktop/tests/ui_*.py` suites. Those suites require Python Playwright and Chromium; set `CHROMIUM` to the browser executable. They exercise simulated filesystem/bridge data and do not establish native WebKit or SMB behavior.
+`native/rustfmt.toml` sets a line width of 110. `native/tools/check.py` runs the parity inventory checks, the guard against icons drawn in code, rustfmt and Clippy with the workspace lints, and then every test executable and the doctests, each on its own Xvfb display with a private D-Bus session and disposable home, config, cache and runtime directories.
+
+Tests must never reach the live desktop, the real home folder or real user data: do not run GTK tests on your own display, keep `DISPLAY` and `WAYLAND_DISPLAY` unset, and write only inside temporary directories. To run a single test while iterating, wrap it the same way, for example `env -u DISPLAY -u WAYLAND_DISPLAY dbus-run-session -- xvfb-run -a cargo test -p ox-app <filter>` with `HOME` and the XDG directories pointing into a temporary folder. Tests must not mount or open remote locations; transfer tests use simulated devices.
+
+`native/parity/features.toml` lists every behaviour the app must provide, with its native status. A test that proves an item carries a `/// parity: ID` doc line; set the item to `done` and update its `native_note` only when it is implemented and a native test marked this way proves it. [native/parity/README.md](native/parity/README.md) explains the rules. `native/BACKLOG.md` lists the items still open after 2.0.0.
+
+Build and verify a package without installing it (see [native/packaging/README.md](native/packaging/README.md) for RPM, Arch and Flatpak):
 
 ```sh
-python3 desktop/tools/build_preview.py
-python3 desktop/tests/ui_file_drag.py
+python3 native/tools/build_deb.py --app-id io.winspace.Development
+python3 native/tools/verify_deb.py dist/native/<package>.deb
 ```
 
-`desktop/tests/native_file_transport.py` exercises the production GTK/WebKit transports using synthetic HTML and disposable files. Run it only on an isolated X11 display because it moves the pointer and presses keys. With Playwright and `CHROMIUM` configured, it also verifies real files arriving in a separate Chromium process. The [CI workflow](.github/workflows/checks.yml) declares the native prerequisites and command. This does not test the entire installed app, T3 Code, Wayland, live SMB, or the sandbox file-transfer portal.
+For website and repository changes, also run `pnpm check`, `pnpm build`, `pnpm security:source` and `python3 -m unittest discover -s tests -p 'test_*.py'`.
 
-The package builder needs `dpkg-deb` and CairoSVG or a GdkPixbuf SVG loader. Build and inspect the installer without installing it:
+GitHub checks use a read-only token. Pull requests run the native checks and the per-distribution package builds (Fedora, openSUSE Tumbleweed, Arch Linux, Ubuntu 24.04, Debian 13 and the Flatpak); the release and website jobs run only after a merge to `main`. A workflow file existing in the repository is not evidence that its hosted run passed.
 
-```sh
-python3 desktop/tools/build_deb.py --output /tmp/openxplorer-candidate.deb
-python3 desktop/tools/verify_deb.py /tmp/openxplorer-candidate.deb
-```
-
-GitHub checks use a read-only token and do not publish packages, create releases, deploy the website or modify desktop defaults. A workflow file existing in the repository is not evidence that its hosted run passed.
+The deprecated 1.x Python/GTK 3/WebKitGTK app in `desktop/` is kept as the behavioural specification. Its own tests and preview tools are described in [desktop/README.md](desktop/README.md); they do not test the native app.
 
 ## File-operation changes
 
@@ -59,7 +74,7 @@ Use disposable directory trees and non-critical shares. Test collisions, cancell
 
 ## UI and documentation
 
-Use existing tokens and semantic controls. Preserve keyboard access, responsive layout and reduced-motion behavior. Change shared TSX/CSS sources, then regenerate designs; do not hand-edit generated pitches. `apps/web/lib/docs.json` is the canonical guide source. Regenerate its Markdown with `python3 tools/sync-docs.py`; use `pnpm designs` to rebuild standalone designs. An offline TSX render is not a Next.js production build.
+Follow [native/docs/ui-spec.md](native/docs/ui-spec.md) for the look. Use only the Fluent icon files bundled under `native/crates/ox-app/resources/icons`; never draw icons in code. Preserve keyboard access, accessible names and reduced-motion behaviour. For the website, change shared TSX/CSS sources, then regenerate designs; do not hand-edit generated pitches. `apps/web/lib/docs.json` is the canonical guide source. Regenerate its Markdown with `python3 tools/sync-docs.py`; use `pnpm designs` to rebuild standalone designs.
 
 Use only fictional names, paths and shares in examples and screenshots, following [docs/PRIVACY.md](docs/PRIVACY.md). Use the capture scripts for public images, then run `python3 tools/audit-public-data.py`. Keep private denylist files outside the repository. The default audit verifies packaging and provenance; private identifiers require the optional external denylist and visual review.
 

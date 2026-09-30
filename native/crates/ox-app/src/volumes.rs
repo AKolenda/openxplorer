@@ -125,10 +125,11 @@ impl VolumeRow {
         }
     }
 
-    /// True for a mounted SMB share. It belongs under Network, never among
+    /// True for a mounted SMB share or other server (SFTP, FTP, WebDAV,
+    /// NFS). It belongs under Network, never among
     /// the drives (`!m.uri?.startsWith('smb:')` in app.js).
     pub(crate) fn is_network(&self) -> bool {
-        self.uri().is_some_and(location::is_smb_location)
+        self.uri().is_some_and(location::is_server_location)
     }
 }
 

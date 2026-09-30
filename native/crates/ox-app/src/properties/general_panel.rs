@@ -7,6 +7,7 @@
 //! Modified and Accessed, the Change app…, Copy full path and Calculate
 //! folder size buttons, and the read-only permissions the backend reports.
 
+use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
 use ox_core::location::{is_smb_server, LocationContext};
@@ -15,9 +16,10 @@ use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
 use super::metadata::ItemProperties;
+use super::mount_assistant::mount_assistant;
 use crate::dialog_layer::{note, quiet_text, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
-use crate::window::{ButtonStyle, WindowAction};
+use crate::window::{BrowserWindow, ButtonStyle, WindowAction};
 
 /// The size of the item's picture at the top of the General tab
 /// (`fileIcon(current, 48)`).
@@ -140,7 +142,7 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
 }
 
 /// A bordered button with `glyph` and `label`.
-fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
+pub(super) fn glyph_button(label: &str, glyph: Icon) -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     content.append(&icons::image(glyph, BUTTON_GLYPH));
     content.append(&gtk::Label::new(Some(label)));
@@ -225,8 +227,24 @@ pub(super) fn location_panel(folder: KnownFolder) -> gtk::Box {
     let notice = "Changing a standard folder's location is not in the native preview yet. Use the \
                   current OpenXplorer or xdg-user-dirs-update until it arrives.";
     panel.append(&note(notice));
+    // Until the tab has its Folder location field, Use this path puts the
+    // mounted folder on the clipboard for xdg-user-dirs-update.
+    panel.append(&mount_assistant(glib::clone!(
+        #[weak]
+        panel,
+        move |path: &str| {
+            panel.clipboard().set_text(path);
+            if let Some(window) = panel.root().and_downcast::<BrowserWindow>() {
+                window.show_message(MOUNT_PATH_COPIED);
+            }
+        }
+    )));
     panel
 }
+
+/// The toast after Use this path while the Location tab has no Folder
+/// location field.
+const MOUNT_PATH_COPIED: &str = "Linux path copied. After mounting, use it as the folder location.";
 
 /// Removes every child of `panel`.
 fn clear(panel: &gtk::Box) {

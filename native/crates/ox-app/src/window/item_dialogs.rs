@@ -200,9 +200,16 @@ impl BrowserWindow {
         ));
     }
 
+    /// Shows Properties of `target` on `tab`, once its share is mounted
+    /// (NET-004).
+    fn show_properties(&self, target: PropertiesTarget, tab: PropertiesTab) {
+        let uri = target.uri.clone();
+        self.after_mounting(&uri, move |window| window.show_mounted_properties(target, tab));
+    }
+
     /// Shows Properties of `target` on `tab`, owned by the active tab; a
     /// dialog the tab had is replaced.
-    fn show_properties(&self, target: PropertiesTarget, tab: PropertiesTab) {
+    fn show_mounted_properties(&self, target: PropertiesTarget, tab: PropertiesTab) {
         let Some(owner) = self.imp().session.borrow().active_id() else {
             return;
         };
@@ -211,6 +218,7 @@ impl BrowserWindow {
             versions: self.context().previous_versions().clone(),
             locations: self.imp().locations.borrow().clone(),
             folder_size: self.measured_folder_size(&target.uri),
+            usershares: crate::properties::system_usershares(self.context().desktop_integration().sandbox()),
         };
         let title = target.dialog_title();
         let view = PropertiesView::new(target, context, tab);
@@ -346,6 +354,21 @@ impl BrowserWindow {
         properties.iter().any(|entry| entry.tab == id)
     }
 
+    /// True while the dialog on screen is the active tab's Properties,
+    /// which Ctrl+Tab suspends with its tab (`state.modalOwner`).
+    pub(super) fn shows_dialog_of_active_tab(&self) -> bool {
+        let Some(shown) = self.dialog_layer().shown() else {
+            return false;
+        };
+        let Some(active) = self.imp().session.borrow().active_id() else {
+            return false;
+        };
+        let properties = self.item_dialogs().properties.borrow();
+        properties
+            .iter()
+            .any(|entry| entry.tab == active && entry.frame == shown)
+    }
+
     /// Every open Properties view, for updates such as a measured size.
     pub(super) fn properties_views(&self) -> Vec<PropertiesView> {
         let properties = self.item_dialogs().properties.borrow();
@@ -360,8 +383,12 @@ impl BrowserWindow {
         self.present_window_dialog(&frame);
     }
 
-    /// Lists again every tab showing `folder`, keeping their selection.
+    /// Lists again every tab showing `folder`, keeping their selection,
+    /// after something was written there; the search cache reads it
+    /// again too (SRCH-033).
     pub(super) fn reload_tabs_showing(&self, folder: &str) {
+        let changed = crate::search::changed_folders([folder], []);
+        self.context().search_cache().folders_written(changed);
         let tabs: Vec<TabId> = {
             let session = self.imp().session.borrow();
             let showing = session

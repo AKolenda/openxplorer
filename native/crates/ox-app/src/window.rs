@@ -30,8 +30,9 @@
 //! [`snapshot_tabs`], [`version_restore`]), folder sizes
 //! ([`folder_size_scan`]), ZIP archives ([`archive_actions`]), requests
 //! from other applications and the command line ([`external_requests`]),
-//! Open with, Open in Terminal and updates ([`integration_actions`]), and
-//! what the window connects and lets go of ([`connections`]).
+//! Open with, Open in Terminal and updates ([`integration_actions`]),
+//! closing while files are written ([`closing`]), and what the window
+//! connects and lets go of ([`connections`]).
 //! Widgets run window actions (`win.go-to`, `win.select-tab`, ...)
 //! and report typing through calls of their own (such as
 //! [`search_box::SearchBox::connect_query_changed`]), so the controller
@@ -43,6 +44,10 @@ mod actions;
 mod activation;
 mod active_tab;
 mod address_bar;
+mod address_completion;
+mod address_menu;
+mod address_options;
+mod address_protocols;
 mod appearance;
 mod archive_actions;
 mod breakpoints;
@@ -50,10 +55,13 @@ mod button_style;
 mod cache_folder;
 mod caption_buttons;
 mod card_grid;
+mod closing;
 mod command_bar;
 mod connections;
 mod context_menu;
 mod copy_path;
+mod crumb_drop;
+mod crumb_menus;
 mod details_pane;
 mod dialog;
 mod empty_page;
@@ -66,16 +74,19 @@ mod folder_pane;
 mod folder_search;
 mod folder_size_scan;
 mod gestures;
+mod history_menu;
 mod imp;
 mod input;
 mod integration_actions;
 mod item_dialogs;
 mod landing;
 mod listing_state;
+mod live_search;
 mod loading;
 mod loading_line;
 mod location_view;
 mod menu_popover;
+mod mount_first;
 mod mounting;
 mod navigation;
 mod navigation_buttons;
@@ -86,13 +97,17 @@ mod network_sign_out;
 mod place_menus;
 mod preferences;
 mod quick_access;
+mod result_location;
+mod saved_search;
 mod search_box;
 mod selection;
 mod session;
 mod settings_tab;
 mod sidebar;
+mod sidebar_resizer;
 mod snapshot_tabs;
 mod status_bar;
+mod tab_commands;
 mod tab_layout;
 mod tab_menu;
 mod tab_moves;
@@ -105,6 +120,8 @@ mod unported;
 mod version_restore;
 mod widget_tree;
 mod window_action;
+mod window_keys;
+mod window_size;
 
 #[cfg(test)]
 mod tests;
@@ -127,6 +144,7 @@ use tab_strip::TabStrip;
 
 pub(crate) use actions::install_accelerators;
 pub(crate) use button_style::ButtonStyle;
+pub(crate) use closing::QUIT_WHILE_WRITING;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;
@@ -240,6 +258,13 @@ impl BrowserWindow {
     #[cfg(test)]
     pub(crate) fn folder_model(&self) -> &crate::folder_view::model::FolderModel {
         self.folder_pane().model()
+    }
+
+    /// The tab in front as a tab action's target, for tests.
+    #[cfg(test)]
+    pub(crate) fn active_tab_target(&self) -> Option<glib::Variant> {
+        let active = self.imp().session.borrow().active_id();
+        active.map(session::TabId::to_variant)
     }
 
     /// Shows a message in the window's toast: a refused command, a

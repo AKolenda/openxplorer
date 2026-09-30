@@ -17,8 +17,11 @@
 //!   winspace.py, NET-004). A server being signed out is not listed
 //!   (NET-023), and a listed SMB location joins the session's Network
 //!   list (NET-016).
+//! - A folder that disappears while shown gives way to the nearest
+//!   existing folder above it (NAV-039).
 
 mod mount_retry;
+mod removed_folder;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -27,7 +30,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::{Entry, EntryError};
-use ox_core::location::parent_location;
+use ox_core::location::{is_smb_location, parent_location, same_location, TRASH_URI};
 
 use crate::folder_view::item::FileItem;
 use crate::folder_view::{loader, reconcile, watch};
@@ -39,6 +42,14 @@ use super::listing_state::{ListingEnd, ListingState, ReloadTiming};
 use super::session::TabId;
 use super::BrowserWindow;
 use mount_retry::MountRetry;
+
+/// Whether a change to the folder of a tab waits until the tab is shown:
+/// a background tab on a network share is not listed again, and so never
+/// asks for a sign-in, merely because its folder changed. Local folders in
+/// the background stay current, keeping their selection and scroll.
+fn waits_until_shown(is_active: bool, uri: &str) -> bool {
+    !is_active && is_smb_location(uri)
+}
 
 /// Why a tab is listed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +67,8 @@ struct LoadStart {
     uri: String,
     /// Results of an older generation are ignored.
     generation: u64,
+    /// The previous listing of the location succeeded, so it was shown.
+    was_shown: bool,
 }
 
 /// One listing of one tab.
@@ -67,6 +80,8 @@ struct LoadRun {
     /// Results of an older generation are ignored.
     generation: u64,
     mode: LoadMode,
+    /// The previous listing of the location succeeded, so it was shown.
+    was_shown: bool,
     /// Whether an unmounted share may still be mounted.
     mount_retry: MountRetry,
     /// A reload's rows, held back until the listing is complete.
@@ -122,9 +137,14 @@ impl BrowserWindow {
     fn begin_load(&self, id: TabId) -> Option<LoadStart> {
         let mut session = self.imp().session.borrow_mut();
         let tab = session.tab_mut(id)?;
+        let was_shown = tab.error.is_none();
         let generation = tab.begin_load();
         let uri = tab.uri().to_owned();
-        Some(LoadStart { uri, generation })
+        Some(LoadStart {
+            uri,
+            generation,
+            was_shown,
+        })
     }
 
     /// A landing page needs no listing and no watch: it is listed as soon
@@ -176,8 +196,18 @@ impl BrowserWindow {
     }
 
     /// The watched folder changed: list it again, or once more after the
-    /// listing that is running now.
+    /// listing that is running now. A network folder in a background tab
+    /// waits until the tab is shown (TAB-056).
     pub(super) fn folder_changed(&self, id: TabId) {
+        {
+            let mut session = self.imp().session.borrow_mut();
+            let is_active = session.is_active(id);
+            let Some(tab) = session.tab_mut(id) else { return };
+            if waits_until_shown(is_active, tab.uri()) {
+                tab.changed_while_hidden = true;
+                return;
+            }
+        }
         let timing = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.tab_mut(id) else { return };
@@ -203,6 +233,7 @@ impl BrowserWindow {
             tab: id,
             uri: start.uri.clone(),
             generation: start.generation,
+            was_shown: start.was_shown,
             mode,
             mount_retry,
             held_rows: RefCell::default(),
@@ -253,6 +284,10 @@ impl BrowserWindow {
                 self.open_folder_of_file(id, run.mode);
                 return;
             }
+            Err(error @ EntryError::NotFound(_)) if run.mode == LoadMode::Reload && run.was_shown => {
+                self.leave_removed_folder(run, error);
+                return;
+            }
             Err(error) if error.needs_mount() && run.mount_retry == MountRetry::Allowed => {
                 self.mount_and_list_again(run);
                 return;
@@ -300,23 +335,46 @@ impl BrowserWindow {
         }
     }
 
-    /// Selects the tab's saved selection again, and scrolls to its first
-    /// item when a Show in folder request asked for that.
-    fn restore_selection(&self, id: TabId) {
-        let (selected, reveals) = {
-            let mut session = self.imp().session.borrow_mut();
-            let Some(tab) = session.tab_mut(id) else { return };
-            (tab.selected.clone(), std::mem::take(&mut tab.reveals_selection))
-        };
-        self.change_model(|| self.folder_pane().model().select_uris(&selected));
-        let first = self.folder_pane().model().first_selected();
-        if let (true, Some(position)) = (reveals, first) {
-            self.folder_pane().reveal(position);
+    /// What an empty folder says: "Recycle Bin is empty" there, as
+    /// Dolphin's "Trash is empty" (OPS-040), else "This folder is empty".
+    fn empty_folder_state(&self) -> EmptyState {
+        let shows_recycle_bin = self
+            .current_uri()
+            .is_some_and(|uri| same_location(&uri, TRASH_URI));
+        if shows_recycle_bin {
+            EmptyState::EmptyRecycleBin
+        } else {
+            EmptyState::EmptyFolder
         }
     }
 
-    /// Scrolls to the position a moved tab brought along, now that its
-    /// items are listed (TAB-039).
+    /// Selects the tab's saved selection again, and scrolls to its first
+    /// item when a Show in folder request asked for that, or starts
+    /// renaming it when Tab moved a rename on to it (OPS-012).
+    fn restore_selection(&self, id: TabId) {
+        let (selected, reveals, renames) = {
+            let mut session = self.imp().session.borrow_mut();
+            let Some(tab) = session.tab_mut(id) else { return };
+            (
+                tab.selected.clone(),
+                std::mem::take(&mut tab.reveals_selection),
+                std::mem::take(&mut tab.renames_selection),
+            )
+        };
+        self.change_model(|| self.folder_pane().model().select_uris(&selected));
+        let first = self.folder_pane().model().first_selected();
+        if let (true, Some(position)) = (reveals || renames, first) {
+            self.folder_pane().reveal(position);
+        }
+        if renames && first.is_some() {
+            self.continue_renaming();
+        }
+    }
+
+    /// Puts the view back where a moved tab (TAB-039) or Back and Forward
+    /// (NAV-008) left it, now that its items are listed: the scroll
+    /// position, and, while the list has keyboard focus, the first
+    /// selected item as the current one.
     fn restore_scroll_after_listing(&self, id: TabId) {
         let scroll = {
             let mut session = self.imp().session.borrow_mut();
@@ -324,9 +382,12 @@ impl BrowserWindow {
                 .tab_mut(id)
                 .and_then(|tab| tab.scroll_after_listing.take())
         };
-        if let Some(scroll) = scroll {
-            self.folder_pane().restore_scroll_position(scroll);
+        let Some(scroll) = scroll else { return };
+        let pane = self.folder_pane();
+        if let (true, Some(current)) = (pane.view_has_focus(), pane.model().first_selected()) {
+            pane.focus_item(current);
         }
+        pane.restore_scroll_position(scroll);
     }
 
     /// The tab's location is a file: show its folder (or home) in place of
@@ -376,12 +437,27 @@ impl BrowserWindow {
             let state = match error {
                 Some(error) => EmptyState::Unavailable(error),
                 None if loading => EmptyState::Loading,
-                None => self.search_empty_state().unwrap_or(EmptyState::EmptyFolder),
+                None => self
+                    .search_empty_state()
+                    .unwrap_or_else(|| self.empty_folder_state()),
             };
             pane.show_empty(&state);
         }
         self.update_status();
         self.update_file_commands();
         self.learn_trash_support();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// parity: TAB-056
+    #[test]
+    fn only_a_background_network_tab_waits_to_be_shown() {
+        assert!(waits_until_shown(false, "smb://nas/media"));
+        assert!(!waits_until_shown(true, "smb://nas/media"));
+        assert!(!waits_until_shown(false, "file:///home/demo"));
     }
 }

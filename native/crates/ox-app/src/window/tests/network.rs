@@ -31,19 +31,19 @@ use crate::window::session::TabPlacement;
 use crate::window::BrowserWindow;
 
 /// The labels `widget` shows, in order.
-fn texts_in(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
+pub(super) fn texts_in(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
     let labels = descendants::<gtk::Label>(widget);
     let shown = labels.iter().filter(|label| label.is_mapped());
     shown.map(|label| label.text().to_string()).collect()
 }
 
 /// Whether `widget` shows `text`.
-fn shows(widget: &impl IsA<gtk::Widget>, text: &str) -> bool {
+pub(super) fn shows(widget: &impl IsA<gtk::Widget>, text: &str) -> bool {
     texts_in(widget).iter().any(|shown| shown == text)
 }
 
 /// The open network dialog, once it is shown.
-fn open_form_dialog() -> NetworkFormDialog {
+pub(super) fn open_form_dialog() -> NetworkFormDialog {
     let find = || {
         let toplevels = gtk::Window::list_toplevels().into_iter();
         let dialogs = toplevels.filter_map(|toplevel| toplevel.downcast::<NetworkFormDialog>().ok());
@@ -133,7 +133,7 @@ fn a_sign_in_the_keyring_cannot_keep_is_announced() {
 
 /// Closing a window cancels its open sign-ins, which aborts their mounts.
 ///
-/// parity: NET-012
+/// parity: NET-012, TAB-050
 #[gtk::test]
 fn closing_the_window_aborts_its_sign_ins() {
     let test = TestWindow::open(Page::Network.uri());
@@ -228,7 +228,7 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
 /// host that does not exist, which `GVfs` reports as not mounted without
 /// reaching a network, and the mount is the test's.
 ///
-/// parity: NET-004, NET-003
+/// parity: NET-004, NET-003, OPS-037
 #[gtk::test]
 fn an_unmounted_share_is_mounted_once_then_listed_again() {
     let test = TestWindow::open(Page::Network.uri());
@@ -609,7 +609,7 @@ fn capture_sign_in(test: &TestWindow, theme: &str) {
 /// Sign out and Disconnect wait for the window's file operation, so a
 /// mount never goes away under a write.
 ///
-/// parity: OPS-024
+/// parity: OPS-024, NET-020, DEV-006
 #[gtk::test]
 fn sign_out_and_disconnect_wait_for_a_running_file_operation() {
     let fixture = Fixture::standard();

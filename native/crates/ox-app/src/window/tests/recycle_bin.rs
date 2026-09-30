@@ -9,11 +9,14 @@ use std::path::Path;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::TRASH_URI;
-use ox_core::ops::list_recycle_bin;
+use ox_core::ops::{list_recycle_bin, JournalDirection};
 use ox_core::transfer::Cancellation;
 
-use super::file_ops_support::{open_dialog, require_private_trash, select_names};
+use super::file_ops_support::{
+    is_enabled, open_dialog, require_private_trash, select_names, wait_for_no_dialog,
+};
 use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use crate::window::file_drop::DropAction;
 
 /// Moves `path` to the Trash, as another file manager would.
 fn trash(path: &Path) {
@@ -122,8 +125,106 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
     assert_eq!(dialog.button_labels(), ["Cancel", "Empty Recycle Bin"]);
     dialog.press("Empty Recycle Bin");
     wait_until("the Recycle Bin to be empty", || test.names().is_empty());
+    wait_until("the empty Recycle Bin text", || {
+        test.window.folder_pane().empty_page().title() == "Recycle Bin is empty"
+    });
     let left = glib::MainContext::default()
         .block_on(list_recycle_bin(&Cancellation::new()))
         .expect("a readable Recycle Bin");
     assert!(left.is_empty(), "{left:?}");
+}
+
+/// parity: OPS-045
+#[gtk::test]
+fn items_dropped_on_the_recycle_bin_go_to_the_trash() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Drop me in the bin.txt");
+    let test = TestWindow::open(TRASH_URI);
+    test.wait_for_listing("the Recycle Bin");
+
+    let taken = test.window.drop_files(
+        &[fixture.uri_of("Drop me in the bin.txt")],
+        None,
+        DropAction::Copy,
+    );
+    assert!(taken, "{}", test.window.shown_message());
+    open_dialog(&test).press("Move to Trash");
+
+    wait_until("the dropped file to be listed", || {
+        test.names().contains(&"Drop me in the bin.txt".to_owned())
+    });
+    assert!(!fixture.path("Drop me in the bin.txt").exists());
+}
+
+/// parity: OPS-046, DND-018
+#[gtk::test]
+fn items_dragged_out_of_the_recycle_bin_are_moved_into_the_folder() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Bring me back here.txt");
+    trash(&fixture.path("Bring me back here.txt"));
+    let bin = TestWindow::open(TRASH_URI);
+    wait_until("the trashed file to be listed", || {
+        bin.names().contains(&"Bring me back here.txt".to_owned())
+    });
+    select_names(&bin, &["Bring me back here.txt"]);
+    let position = bin.window.folder_model().first_selected().expect("selected");
+    assert!(
+        bin.window.drag_content_for(position).is_some(),
+        "Recycle Bin items can be dragged"
+    );
+    let trashed = bin.window.folder_model().selected_uris();
+    assert!(
+        !bin.window.drop_files(&trashed, None, DropAction::Copy),
+        "not back into the Recycle Bin"
+    );
+
+    let documents = TestWindow::open(&fixture.uri_of("Documents"));
+    assert!(documents.window.drop_files(&trashed, None, DropAction::Copy));
+
+    let moved = fixture.path("Documents").join("Bring me back here.txt");
+    wait_until("the item to be moved into Documents", || moved.is_file());
+    assert!(
+        !fixture.path("Bring me back here.txt").exists(),
+        "moved, not restored"
+    );
+}
+
+/// Undo asks before it moves a copy that changed after the copy to the
+/// Recycle Bin; Cancel keeps the copy and the Undo step.
+///
+/// parity: OPS-030
+#[gtk::test]
+fn undoing_a_copy_that_changed_since_asks_and_cancel_keeps_it() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri_of("Documents")));
+    test.wait_for_listing("the Documents folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    let copy = fixture.path("Documents/Notes 2.txt");
+    wait_until("the copy", || test.window.shown_message() == "1 item(s) copied.");
+    let edited = std::fs::File::options()
+        .write(true)
+        .open(&copy)
+        .expect("the copy exists");
+    let a_minute_ahead = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+    edited.set_modified(a_minute_ahead).expect("the copy is ours");
+
+    test.activate("undo", None);
+    let question = open_dialog(&test);
+    assert_eq!(question.title_text(), "Undo copy?");
+    assert_eq!(
+        question.message_text(),
+        "“Notes 2.txt” was changed after it was copied. Undo moves it to the Recycle Bin anyway?"
+    );
+    question.press("Cancel");
+    wait_for_no_dialog(&test);
+
+    assert!(copy.is_file(), "the copy stays");
+    assert_eq!(test.window.journal_label(JournalDirection::Undo), "Undo: Copy");
 }

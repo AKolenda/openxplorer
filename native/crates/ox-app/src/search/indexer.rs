@@ -14,8 +14,8 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, OnceLock};
-use std::thread;
-use std::time::Duration;
+use std::thread::{self, ThreadId};
+use std::time::{Duration, Instant};
 
 use gtk::glib;
 use ox_core::search::{GioFolderReader, IndexService, IndexSettings, SearchError, SearchIndex};
@@ -75,12 +75,22 @@ impl Indexer {
         start: IndexerStart,
         on_change: impl Fn() + Send + Sync + 'static,
     ) -> std::io::Result<Self> {
+        Self::spawn(start, on_change, None)
+    }
+
+    /// Starts the thread, which tells `observer`, when there is one, what
+    /// it did.
+    fn spawn(
+        start: IndexerStart,
+        on_change: impl Fn() + Send + Sync + 'static,
+        observer: Option<Sender<Observed>>,
+    ) -> std::io::Result<Self> {
         let service = Arc::new(StartedService::new());
         let (settings, updates) = mpsc::channel();
         let slot = Arc::clone(&service);
         thread::Builder::new()
             .name("openxplorer-index-tick".to_owned())
-            .spawn(move || run(&start, on_change, &slot, &updates))?;
+            .spawn(move || run(&start, on_change, &slot, &updates, observer.as_ref()))?;
         Ok(Self { service, settings })
     }
 
@@ -120,6 +130,37 @@ pub(crate) fn started(service: &StartedService) -> Result<&IndexService, CacheEr
     }
 }
 
+/// What the thread did, as a test observes it.
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(not(test), expect(dead_code, reason = "only tests read what the thread did"))]
+struct Observed {
+    /// The thread that did it.
+    thread: ThreadId,
+    /// Whether it ticked; otherwise it opened the cache.
+    is_tick: bool,
+    /// When it began.
+    began: Instant,
+    /// When it ended.
+    ended: Instant,
+}
+
+/// Runs `work` and tells `observer` about it.
+fn observed<T>(observer: Option<&Sender<Observed>>, is_tick: bool, work: impl FnOnce() -> T) -> T {
+    let began = Instant::now();
+    let result = work();
+    if let Some(observer) = observer {
+        let event = Observed {
+            thread: thread::current().id(),
+            is_tick,
+            began,
+            ended: Instant::now(),
+        };
+        // A test that stopped listening no longer cares.
+        let _ = observer.send(event);
+    }
+    result
+}
+
 /// The thread: starts the service, indexes earlier pins once, then ticks
 /// until the indexer is dropped.
 fn run(
@@ -127,8 +168,10 @@ fn run(
     on_change: impl Fn() + Send + Sync + 'static,
     slot: &StartedService,
     updates: &Receiver<IndexSettings>,
+    observer: Option<&Sender<Observed>>,
 ) {
-    let service = match start_service(&start.location, on_change) {
+    let service = observed(observer, false, || start_service(&start.location, on_change));
+    let service = match service {
         Ok(service) => Arc::new(service),
         Err(error) => {
             glib::g_warning!(LOG_DOMAIN, "The search cache could not start: {error}");
@@ -138,7 +181,7 @@ fn run(
     };
     let _ = slot.set(Ok(Arc::clone(&service)));
     index_existing_pins(&service, &start.pins);
-    tick_until_stopped(&service, start.settings, updates);
+    tick_until_stopped(&service, start.settings, updates, observer);
 }
 
 /// Opens the cache at `location` and starts its service.
@@ -171,10 +214,11 @@ fn tick_until_stopped(
     service: &IndexService,
     mut settings: IndexSettings,
     updates: &Receiver<IndexSettings>,
+    observer: Option<&Sender<Observed>>,
 ) {
     let mut last_error = String::new();
     loop {
-        match service.tick(&settings) {
+        match observed(observer, true, || service.tick(&settings)) {
             Ok(()) => last_error.clear(),
             Err(error) => {
                 let message = error.to_string();
@@ -188,6 +232,52 @@ fn tick_until_stopped(
             Ok(changed) => settings = changed,
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Opening the cache and every tick happen on the indexer's thread,
+    /// never the caller's, and the ticks come one after the other, a
+    /// second apart, never overlapping.
+    ///
+    /// parity: PERF-006, PERF-003
+    #[test]
+    fn the_index_starts_and_ticks_off_the_callers_thread() {
+        let directory = tempfile::tempdir().expect("the test home has room for a cache");
+        let start = IndexerStart {
+            location: CacheLocation::Directory(directory.path().join("cache")),
+            settings: IndexSettings::default(),
+            pins: Vec::new(),
+        };
+        let (observer, events) = mpsc::channel();
+        let indexer = Indexer::spawn(start, || {}, Some(observer)).expect("the thread starts");
+        let wait = Duration::from_secs(10);
+        let opened = events.recv_timeout(wait).expect("the thread opens the cache");
+        let ticks: Vec<Observed> = (0..3)
+            .map(|_| events.recv_timeout(wait).expect("the thread ticks"))
+            .collect();
+        drop(indexer);
+
+        let caller = thread::current().id();
+        assert!(!opened.is_tick);
+        assert_ne!(opened.thread, caller, "the cache opens off the caller's thread");
+        for tick in &ticks {
+            assert!(tick.is_tick);
+            assert_eq!(
+                tick.thread, opened.thread,
+                "every tick runs on the indexer's thread"
+            );
+        }
+        for pair in ticks.windows(2) {
+            let gap = pair[1].began.duration_since(pair[0].ended);
+            assert!(
+                gap >= TICK_INTERVAL,
+                "a tick waits a second after the last one ended"
+            );
         }
     }
 }

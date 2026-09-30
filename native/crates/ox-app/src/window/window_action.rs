@@ -26,10 +26,26 @@ pub(crate) enum WindowAction {
     NextTab,
     /// Shows the previous tab, wrapping around (Ctrl+Shift+Tab).
     PreviousTab,
+    /// Closes the window after asking whether it may close: the caption's
+    /// Close button.
+    CloseWindow,
     /// Shows the tab whose id is the `u64` target.
     SelectTab,
     /// Closes the tab whose id is the `u64` target (its close button).
     CloseTabById,
+    /// Shows the tab whose number, counted from 1, is the `u32` target;
+    /// 0 shows the last tab (Alt+1…Alt+9, Alt+0).
+    ShowTabNumber,
+    /// Closes every tab but the one whose id is the `u64` target.
+    CloseOtherTabs,
+    /// Reopens the most recently closed tab (Ctrl+Shift+T).
+    ReopenClosedTab,
+    /// Reopens the closed tab at the `u32` target, 0 being the most
+    /// recent.
+    RestoreClosedTab,
+    /// Opens every selected folder in a tab of its own, behind the active
+    /// one (Open in new tabs).
+    OpenSelectionInTabs,
     /// Opens the location in the string target in a new tab in front.
     OpenTab,
     /// Opens the location in the string target in a new tab behind the
@@ -44,10 +60,32 @@ pub(crate) enum WindowAction {
     Forward,
     /// Opens the folder that contains the current one (Alt+Up).
     Up,
+    /// Opens the home folder in the active tab (Alt+Home).
+    Home,
+    /// Moves the active tab's history by the `i32` target, skipping the
+    /// steps between (the Back and Forward menus).
+    GoHistory,
     /// Lists the current folder again (F5, Ctrl+R).
     Refresh,
     /// Makes the address editable (Ctrl+L, Alt+D).
     Location,
+    /// Edits the address with the typed history listed (F4, the chevron;
+    /// NAV-043).
+    AddressHistory,
+    /// Copies the current location as the address bar shows it.
+    CopyAddress,
+    /// Opens the clipboard's text as a typed address.
+    PasteAddress,
+    /// Keeps the address editable text instead of crumbs (NAV-029).
+    EditableLocation,
+    /// Shows the full path in the crumbs (NAV-024).
+    ShowFullPath,
+    /// Opens the subfolder menu of a crumb; the target is the folder, the
+    /// subfolder shown in bold and the first one listed (NAV-020).
+    CrumbSubfolders,
+    /// Goes to the folder beside a crumb's; the target is the folder and
+    /// the step (NAV-022).
+    CrumbSibling,
     /// Moves keyboard focus to the search box (Ctrl+F).
     Search,
     /// Moves the active tab to the location in the string target.
@@ -108,6 +146,8 @@ pub(crate) enum WindowAction {
     NewHtmlDocument,
     /// New ▸ From template….
     NewFromTemplate,
+    /// New ▸ Link to file or folder… (OPS-004).
+    NewLink,
     /// Cut (Ctrl+X).
     Cut,
     /// Copy (Ctrl+C).
@@ -184,6 +224,19 @@ pub(crate) enum WindowAction {
     /// Opens the folder of the one selected search result, with the
     /// result selected.
     OpenFileLocation,
+    /// Opens the folder of the one selected search result in a new tab
+    /// behind, with the result selected there.
+    OpenFileLocationInTab,
+    /// Opens the folder of the one selected search result in a new
+    /// window, with the result selected there.
+    OpenFileLocationInWindow,
+    /// Save search: adds the search shown to the sidebar (SRCH-038).
+    SaveSearch,
+    /// Opens the saved search whose `(folder, text)` is the target.
+    OpenSavedSearch,
+    /// Removes the saved search whose `(folder, text)` is the target from
+    /// the sidebar.
+    ForgetSavedSearch,
     /// Opens the Settings page (Ctrl+,), as a tab of its own.
     Settings,
     /// Shows the licence and where the source is.
@@ -250,22 +303,41 @@ impl WindowAction {
     ///
     /// This is the one table of every action's name, so it is longer than
     /// a function should be.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one line per action: the table of every name"
+    )]
     pub(crate) const fn name(self) -> &'static str {
         match self {
             WindowAction::NewTab => "new-tab",
             WindowAction::CloseTab => "close-tab",
             WindowAction::NextTab => "next-tab",
             WindowAction::PreviousTab => "previous-tab",
+            WindowAction::CloseWindow => "close-window",
             WindowAction::SelectTab => "select-tab",
             WindowAction::CloseTabById => "close-tab-by-id",
+            WindowAction::ShowTabNumber => "show-tab-number",
+            WindowAction::CloseOtherTabs => "close-other-tabs",
+            WindowAction::ReopenClosedTab => "reopen-closed-tab",
+            WindowAction::RestoreClosedTab => "restore-closed-tab",
+            WindowAction::OpenSelectionInTabs => "open-selection-in-tabs",
             WindowAction::OpenTab => "open-tab",
             WindowAction::OpenTabBackground => "open-tab-background",
             WindowAction::OpenWindow => "open-window",
             WindowAction::Back => "back",
             WindowAction::Forward => "forward",
             WindowAction::Up => "up",
+            WindowAction::Home => "home",
+            WindowAction::GoHistory => "go-history",
             WindowAction::Refresh => "refresh",
             WindowAction::Location => "location",
+            WindowAction::AddressHistory => "address-history",
+            WindowAction::CopyAddress => "copy-address",
+            WindowAction::PasteAddress => "paste-address",
+            WindowAction::EditableLocation => "editable-location",
+            WindowAction::ShowFullPath => "show-full-path",
+            WindowAction::CrumbSubfolders => "crumb-subfolders",
+            WindowAction::CrumbSibling => "crumb-sibling",
             WindowAction::Search => "search",
             WindowAction::GoTo => "go-to",
             WindowAction::MountVolume => "mount-volume",
@@ -295,6 +367,7 @@ impl WindowAction {
             WindowAction::NewJsonFile => "new-json-file",
             WindowAction::NewHtmlDocument => "new-html-document",
             WindowAction::NewFromTemplate => "new-from-template",
+            WindowAction::NewLink => "new-link",
             WindowAction::Cut => "cut",
             WindowAction::Copy => "copy",
             WindowAction::Paste => "paste",
@@ -327,6 +400,11 @@ impl WindowAction {
             WindowAction::CacheFolder => "cache-folder",
             WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",
+            WindowAction::OpenFileLocationInTab => "open-file-location-in-tab",
+            WindowAction::OpenFileLocationInWindow => "open-file-location-in-window",
+            WindowAction::SaveSearch => "save-search",
+            WindowAction::OpenSavedSearch => "open-saved-search",
+            WindowAction::ForgetSavedSearch => "forget-saved-search",
             WindowAction::Settings => "settings",
             WindowAction::License => "license",
             WindowAction::DefaultFileExplorer => "default-file-explorer",

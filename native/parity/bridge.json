@@ -89,9 +89,9 @@
       "status": "native-tested",
       "note": "The tab strip is a GTK drag source offering the tab as a process-local value; a busy window or a close button starts no drag.",
       "evidence": [
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy",
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_drag_offers_the_tab_to_this_process_only",
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer"
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy",
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_drag_offers_the_tab_to_this_process_only",
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer"
       ]
     },
     "bookmark": {
@@ -297,7 +297,7 @@
       "evidence": [
         "native/crates/ox-app/src/window/tab_moves.rs::a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll",
         "native/crates/ox-app/src/window/tab_moves.rs::moving_the_only_tab_to_a_new_window_closes_the_old_one",
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays"
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays"
       ]
     },
     "discover": {
@@ -318,10 +318,10 @@
       "status": "native-tested",
       "note": "No layout is published: each drop target hit-tests a point in its own coordinates at its real size (folder rows and tiles, sidebar places, Quick access, crumbs and tabs).",
       "evidence": [
-        "native/crates/ox-app/src/window/file_drop/targets.rs::a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown",
-        "native/crates/ox-app/src/window/file_drop/targets.rs::only_the_folder_under_a_drag_is_highlighted",
-        "native/crates/ox-app/src/window/file_drop/targets.rs::sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows",
-        "native/crates/ox-app/src/window/file_drop/targets.rs::a_crumb_takes_drops_for_its_folder"
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::a_drop_goes_into_the_folder_under_the_pointer_or_the_folder_shown",
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::only_the_folder_under_a_drag_is_highlighted",
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::sidebar_places_take_drops_and_quick_access_pins_where_the_line_shows",
+        "native/crates/ox-app/src/window/file_drop/targets/tests.rs::a_crumb_takes_drops_for_its_folder"
       ]
     },
     "focusWindow": {
@@ -447,7 +447,7 @@
         "native/crates/ox-core/tests/transfer_cases/mtp_adapter.rs::the_engine_deletes_a_phone_folder_after_checking_every_item",
         "native/crates/ox-app/src/window/tests/clipboard.rs::copy_then_paste_copies_into_the_folder_shown_and_selects_the_copy",
         "native/crates/ox-app/src/window/tests/clipboard.rs::cut_then_paste_moves_the_items_and_empties_the_cut",
-        "native/crates/ox-app/src/window/tests/file_operations.rs::delete_asks_then_moves_to_the_trash_and_undo_restores",
+        "native/crates/ox-app/src/window/tests/file_operations.rs::delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores",
         "native/crates/ox-app/src/window/tests/file_operations.rs::shift_delete_deletes_permanently_after_its_own_confirmation"
       ]
     },
@@ -563,15 +563,15 @@
       "status": "native-tested",
       "note": "No layout is published: every window takes tab drops with one target that finds the strip, the insertion point and the tear-out area from its widgets.",
       "evidence": [
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::only_the_source_window_well_below_its_strip_tears_a_tab_out",
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_drag_shows_where_the_tab_would_go"
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::only_the_source_window_well_below_its_strip_tears_a_tab_out",
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_drag_shows_where_the_tab_would_go"
       ]
     },
     "tabTransferReady": {
       "status": "native-tested",
       "note": "The destination window adds the tab in this process and the source removes it only afterwards, once the drag has ended; a busy or dialog-holding destination refuses and the source keeps it. ox_core::ops::TabTransfers, which ports the Python broker, is not needed by the in-process move.",
       "evidence": [
-        "native/crates/ox-app/src/window/tab_moves/drag.rs::a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag",
+        "native/crates/ox-app/src/window/tab_moves/drag/tests.rs::a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag",
         "native/crates/ox-app/src/window/tab_moves.rs::a_window_with_an_open_dialog_keeps_its_tabs_and_takes_none",
         "native/crates/ox-core/tests/ops_tab_transfer.rs::the_acknowledgement_commits_once_to_the_original_source"
       ]
@@ -607,7 +607,7 @@
         "native/crates/ox-core/tests/ops_delete_plan.rs::a_share_that_cannot_answer_counts_as_having_a_trash",
         "native/crates/ox-core/tests/ops_delete_plan.rs::a_cancelled_trash_check_reports_the_cancellation_and_plans_nothing",
         "native/crates/ox-app/src/window/file_ops/trash_support.rs::delete_reads_delete_permanently_only_where_no_trash_is_known",
-        "native/crates/ox-app/src/window/tests/file_operations.rs::delete_asks_then_moves_to_the_trash_and_undo_restores"
+        "native/crates/ox-app/src/window/tests/file_operations.rs::delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores"
       ]
     },
     "uiReady": {

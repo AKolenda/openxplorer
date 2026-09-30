@@ -10,7 +10,7 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::{self, is_device_location, is_smb_location, parent_location, LocationContext};
+use ox_core::location::{self, is_device_location, is_server_location, parent_location, LocationContext};
 use ox_core::places::NetworkLocation;
 
 use crate::icons::{Art, Icon};
@@ -31,13 +31,17 @@ struct ActiveLocation {
 }
 
 /// The address-bar icon for a location (`address-icon` in
-/// `renderNavigation`): the page's glyph, the network glyph for SMB, a
-/// phone for devices, else the colour folder.
-fn address_icon(uri: &str) -> Icon {
+/// `renderNavigation`): the page's glyph, the house for the home folder
+/// at `home_uri` (the Home of app.js), the network glyph for SMB and the
+/// other network protocols, as their tabs show, a phone for devices, else
+/// the colour folder.
+pub(super) fn address_icon(uri: &str, home_uri: &str) -> Icon {
     if let Some(page) = Page::from_uri(uri) {
         return page.icon();
     }
-    if is_smb_location(uri) {
+    if location::same_location(uri, home_uri) {
+        Icon::Home
+    } else if is_server_location(uri) {
         Icon::Organization
     } else if is_device_location(uri) {
         Icon::Phone
@@ -46,18 +50,48 @@ fn address_icon(uri: &str) -> Icon {
     }
 }
 
+/// The crumbs the address bar shows for `uri`, divided as
+/// `renderNavigation` divides them. Inside the home folder they start at
+/// it, as "Home › Documents" in Dolphin and Explorer, unless `full_path`
+/// asks for the path from `/` (NAV-024).
+pub(super) fn crumb_buttons(locations: &LocationContext, uri: &str, full_path: bool) -> Vec<CrumbButton> {
+    let mut breadcrumbs = locations.breadcrumbs(uri);
+    let home = locations.home_uri();
+    let home_at = breadcrumbs
+        .iter()
+        .position(|crumb| location::same_location(&crumb.uri, &home))
+        .filter(|&index| !full_path && index > 0);
+    let skipped = home_at.unwrap_or(0);
+    if let Some(index) = home_at {
+        breadcrumbs.drain(..index);
+        breadcrumbs[0].label = locations.title_for(&home);
+    }
+    breadcrumbs
+        .into_iter()
+        .enumerate()
+        .map(|(index, crumb)| CrumbButton {
+            address: locations.display_location(&crumb.uri),
+            divider_before: (index > 0)
+                .then(|| location::crumb_divider(uri, index + skipped))
+                .flatten(),
+            crumb,
+        })
+        .collect()
+}
+
 /// A tab's icon, as `renderTabs` picks it: the network glyph on the
 /// Network page, the gear on Settings, a phone for devices, the colour
-/// folder everywhere else, This PC included, and for SMB the location on
-/// the network bar as its row of `network` shows it in the sidebar.
-fn tab_icon(uri: &str, network: &[NetworkLocation]) -> Art {
+/// folder everywhere else, This PC included, and for a network location
+/// (SMB, or a folder under a kernel CIFS/SMB3 mount, NET-006) the location
+/// on the network bar as its row of `network` shows it in the sidebar.
+fn tab_icon(uri: &str, locations: &LocationContext, network: &[NetworkLocation]) -> Art {
     match Page::from_uri(uri) {
         Some(page @ (Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
         Some(Page::ThisPc) | None => {}
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
-    } else if is_smb_location(uri) {
+    } else if locations.is_network_location(uri) {
         Art::for_smb_location(uri, network)
     } else {
         Art::Folder
@@ -65,7 +99,8 @@ fn tab_icon(uri: &str, network: &[NetworkLocation]) -> Art {
 }
 
 /// How the strip shows `tab`: its title, its address (with "Network
-/// location" for SMB) and its icon, which for SMB comes from `network`.
+/// location" for a network location) and its icon, which for a network
+/// location comes from `network`.
 fn tab_view(
     tab: &Tab,
     session: &Session,
@@ -74,7 +109,7 @@ fn tab_view(
 ) -> TabView {
     let uri = tab.uri();
     let mut tooltip = locations.display_location(uri);
-    if is_smb_location(uri) {
+    if locations.is_network_location(uri) {
         tooltip.push_str(" · Network location");
     }
     TabView {
@@ -82,7 +117,7 @@ fn tab_view(
         uri: uri.to_owned(),
         title: locations.title_for(uri),
         tooltip,
-        icon: tab_icon(uri, network),
+        icon: tab_icon(uri, locations, network),
         active: session.is_active(tab.id),
         previous_version: None,
     }
@@ -140,20 +175,12 @@ impl BrowserWindow {
     /// Shows `uri` in the address bar: its icon, and its crumbs divided as
     /// `renderNavigation` divides them.
     fn render_address(&self, uri: &str) {
+        let full_path = self.shows_full_path();
         let locations = self.imp().locations.borrow();
-        let breadcrumbs = locations.breadcrumbs(uri);
-        let crumbs: Vec<CrumbButton> = breadcrumbs
-            .iter()
-            .enumerate()
-            .map(|(index, crumb)| CrumbButton {
-                address: locations.display_location(&crumb.uri),
-                divider_before: location::crumb_divider(uri, index),
-                crumb: crumb.clone(),
-            })
-            .collect();
+        let crumbs = crumb_buttons(&locations, uri, full_path);
         let address = locations.display_location(uri);
-        self.address_bar()
-            .show_location(&crumbs, &address, address_icon(uri));
+        let icon = address_icon(uri, &locations.home_uri());
+        self.address_bar().show_location(&crumbs, &address, icon);
     }
 
     /// Redraws the tab strip.
@@ -172,9 +199,19 @@ impl BrowserWindow {
         self.tab_strip().set_tabs(&views);
     }
 
-    /// Replaces the breadcrumbs with the editable address (Ctrl+L).
+    /// Replaces the breadcrumbs with the editable address (Ctrl+L). The
+    /// Settings tab has no address to edit (`editAddress` in app.js). A
+    /// second Ctrl+L, before anything was typed, returns to the crumbs.
     pub(super) fn edit_address(&self) {
         let Some(uri) = self.current_uri() else { return };
+        if Page::from_uri(&uri) == Some(Page::Settings) {
+            return;
+        }
+        if self.address_bar().edits_whole_address() {
+            self.finish_address();
+            return;
+        }
+        self.forget_address_completions();
         let address = self.imp().locations.borrow().display_location(&uri);
         self.address_bar().edit(&address);
     }
@@ -182,6 +219,7 @@ impl BrowserWindow {
     /// Ends editing with Enter or Escape: back to the breadcrumbs, with
     /// keyboard focus in the folder view.
     pub(super) fn finish_address(&self) {
+        self.forget_address_completions();
         if let Some(uri) = self.current_uri() {
             let address = self.imp().locations.borrow().display_location(&uri);
             self.address_bar().show_crumbs(&address);
@@ -195,6 +233,36 @@ mod tests {
     use super::*;
     use crate::test_support::{studio_nas_mapped_drive, studio_nas_server};
 
+    /// parity: NAV-024
+    #[test]
+    fn crumbs_start_at_home_unless_the_full_path_is_asked_for() {
+        let locations = crate::locations::location_context("/home/demo".into(), &[]);
+        let shown = |uri: &str, full_path: bool| -> Vec<(String, Option<&str>)> {
+            let crumbs = crumb_buttons(&locations, uri, full_path);
+            crumbs
+                .into_iter()
+                .map(|button| (button.crumb.label, button.divider_before))
+                .collect()
+        };
+        let crumb = |label: &str, divider: Option<&'static str>| (label.to_owned(), divider);
+
+        let relative = shown("file:///home/demo/Documents/Letters", false);
+        let full = shown("file:///home/demo/Documents/Letters", true);
+
+        let home = crumb("Home", None);
+        assert_eq!(
+            relative,
+            [home, crumb("Documents", Some("/")), crumb("Letters", Some("/"))]
+        );
+        assert_eq!(full.len(), 5);
+        assert_eq!(full[..2], [crumb("/", None), crumb("home", None)]);
+        let outside = shown("file:///srv/media", false);
+        assert_eq!(
+            outside,
+            [crumb("/", None), crumb("srv", None), crumb("media", Some("/"))]
+        );
+    }
+
     /// A location and the tab and address-bar icons it shows.
     struct IconCase {
         uri: &'static str,
@@ -202,7 +270,7 @@ mod tests {
         address: Icon,
     }
 
-    /// parity: TAB-010, DEV-004
+    /// parity: TAB-010, DEV-004, NAV-025
     #[test]
     fn tabs_and_the_address_bar_show_the_current_apps_icons() {
         let cases = [
@@ -210,6 +278,11 @@ mod tests {
                 uri: "file:///tmp/work",
                 tab: Art::Folder,
                 address: Icon::FileFolder,
+            },
+            IconCase {
+                uri: "file:///home/demo/",
+                tab: Art::Folder,
+                address: Icon::Home,
             },
             IconCase {
                 uri: "smb://nas/media",
@@ -238,9 +311,64 @@ mod tests {
                 address: Icon::Settings,
             },
         ];
+        let locations = LocationContext::default();
         for case in cases {
-            assert_eq!(tab_icon(case.uri, &[]), case.tab, "{}", case.uri);
-            assert_eq!(address_icon(case.uri), case.address, "{}", case.uri);
+            assert_eq!(tab_icon(case.uri, &locations, &[]), case.tab, "{}", case.uri);
+            let address = address_icon(case.uri, "file:///home/demo");
+            assert_eq!(address, case.address, "{}", case.uri);
+        }
+    }
+
+    /// A location and the title and tooltip of its tab.
+    struct TabTextCase {
+        uri: &'static str,
+        title: &'static str,
+        tooltip: &'static str,
+    }
+
+    /// Tab titles and tooltips as `renderTabs` writes them: the page
+    /// names, the folder's decoded name, "Local Disk" for `/`, and "·
+    /// Network location" after an SMB address.
+    ///
+    /// parity: TAB-010
+    #[gtk::test]
+    fn tabs_are_titled_and_described_as_render_tabs_does() {
+        let locations = crate::locations::location_context("/home/demo".into(), &[]);
+        let cases = [
+            TabTextCase {
+                uri: "file:///home/demo",
+                title: "Home",
+                tooltip: "/home/demo",
+            },
+            TabTextCase {
+                uri: "file:///",
+                title: "Local Disk",
+                tooltip: "/",
+            },
+            TabTextCase {
+                uri: "file:///srv/Brand%20assets",
+                title: "Brand assets",
+                tooltip: "/srv/Brand assets",
+            },
+            TabTextCase {
+                uri: "smb://nas/media",
+                title: "media",
+                tooltip: "\\\\nas\\media · Network location",
+            },
+            TabTextCase {
+                uri: Page::Settings.uri(),
+                title: "Settings",
+                tooltip: "Settings",
+            },
+        ];
+        for case in cases {
+            let mut session = Session::default();
+            let id = session.add(case.uri, super::super::session::TabPlacement::Foreground);
+            let tab = session.tab(id).expect("the tab was added");
+            let view = tab_view(tab, &session, &locations, &[]);
+            assert_eq!(view.title, case.title, "{}", case.uri);
+            assert_eq!(view.tooltip, case.tooltip, "{}", case.uri);
+            assert!(view.active);
         }
     }
 
@@ -254,9 +382,30 @@ mod tests {
         let server = studio_nas_server();
         let mapped_drive = studio_nas_mapped_drive();
         let network = [server.clone(), mapped_drive.clone()];
-        let tab_on = |uri: &str| tab_icon(uri, &network);
+        let locations = LocationContext::default();
+        let tab_on = |uri: &str| tab_icon(uri, &locations, &network);
         assert_eq!(tab_on(&server.uri), Art::for_network_row(&server));
         assert_eq!(tab_on(&mapped_drive.uri), Art::for_network_row(&mapped_drive));
         assert_eq!(tab_on("smb://studio-nas/projects/2024"), Art::SHARE);
+    }
+
+    /// A tab at or below a kernel CIFS/SMB3 mount point stands on the
+    /// network bar like an SMB tab; a folder whose name only starts like
+    /// the mount point does not.
+    ///
+    /// Ported from `desktop/tests/ui_v06.py::Mounted CIFS paths are recognized`
+    ///
+    /// parity: NET-006
+    #[test]
+    fn a_tab_under_a_cifs_mount_is_a_network_location() {
+        let locations = LocationContext {
+            network_mounts: vec!["/mnt/nas".into()],
+            ..LocationContext::default()
+        };
+        let tab_on = |uri: &str| tab_icon(uri, &locations, &[]);
+        assert_eq!(tab_on("file:///mnt/nas"), Art::SHARE);
+        assert_eq!(tab_on("file:///mnt/nas/Projects"), Art::SHARE);
+        assert_eq!(tab_on("file:///mnt/nas-other"), Art::Folder);
+        assert_eq!(tab_on("file:///home/demo"), Art::Folder);
     }
 }

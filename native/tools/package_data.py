@@ -5,7 +5,7 @@
 The Debian package, the RPM, the Arch package and the Flatpak all install
 through this tool, so the program, the desktop entry, the AppStream
 metainfo, the icon, the D-Bus service file, the licences and the mount
-helper land in the same places with the same modes whichever format builds
+helper program land in the same places with the same modes whichever format builds
 them. It ports the file layout of desktop/tools/build_deb.py;
 native/packaging/README.md explains each decision.
 """
@@ -36,11 +36,9 @@ APP_ICON = NATIVE / 'crates/ox-app/resources/icons/hicolor/scalable/places/ox-fi
 # The D-Bus activation file; build_service_file fills in its placeholders.
 DBUS_SERVICE_TEMPLATE = PACKAGING_DATA / 'dbus-service.in'
 
-# The administrator mount helper and the modules it imports, in import
-# order: mount_share.py -> mount_support.py -> core.py -> private_storage.py.
-# All four use only the standard library.
-MOUNT_HELPER_MODULES = ('mount_share.py', 'mount_support.py', 'core.py', 'private_storage.py')
-MOUNT_HELPER_LAUNCHER = PACKAGING_DATA / 'openxplorer-mount-share.in'
+# The administrator's persistent SMB mount helper, a second Rust program
+# (crates/ox-core/src/bin/openxplorer-mount-share.rs). The mount assistant
+# prints "sudo /usr/bin/openxplorer-mount-share ..." for the user to run.
 MOUNT_HELPER_COMMAND = 'openxplorer-mount-share'
 
 # The Python package's older command names, which the stable package keeps.
@@ -110,7 +108,7 @@ class InstalledPaths:
     command: PurePosixPath
     share: PurePosixPath
     licences: PurePosixPath
-    # The mount helper's folder where the package takes over the Python
+    # The mount helper program where the package takes over the Python
     # package's commands (winspace and the mount helper), else None. Only
     # the stable host packages do: the preview installs beside the Python
     # package, and a Flatpak cannot add commands to the host.
@@ -137,14 +135,14 @@ def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
             command=PurePosixPath('/usr/bin', package),
             share=PurePosixPath('/usr/share'),
             licences=PurePosixPath('/usr/share/doc', package),
-            mount_helper=home / 'mount-share' if has_helper else None)
+            mount_helper=home / 'bin' / MOUNT_HELPER_COMMAND if has_helper else None)
     return InstalledPaths(
         program=PurePosixPath('/usr/bin', package),
         commands=PurePosixPath('/usr/bin'),
         command=PurePosixPath('/usr/bin', package),
         share=PurePosixPath('/usr/share'),
         licences=PurePosixPath('/usr/share/licenses', package),
-        mount_helper=PurePosixPath('/usr/share', package, 'mount-share') if has_helper else None)
+        mount_helper=PurePosixPath('/usr/bin', MOUNT_HELPER_COMMAND) if has_helper else None)
 
 
 @dataclass(frozen=True)
@@ -198,6 +196,9 @@ class InstallRequest:
     # The executable Cargo built (target/release/openxplorer-native).
     program: Path
     staging: Path
+    # The mount helper Cargo built (target/release/openxplorer-mount-share);
+    # required where the layout installs it (InstalledPaths.mount_helper).
+    mount_helper: Path | None = None
 
 
 def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
@@ -205,7 +206,8 @@ def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
 
     crates are the Rust crates linked into the program (see linked_crates),
     whose licences travel with it. Raises OSError when a source file is
-    missing or the staging folder is not writable.
+    missing or the staging folder is not writable, and RuntimeError when the
+    layout installs the mount helper but none was given.
     """
     paths = installed_paths(request.channel, request.layout)
     staging = Staging(request.staging)
@@ -214,7 +216,10 @@ def install(request: InstallRequest, crates: Sequence[Crate]) -> None:
     install_licences(staging, paths.licences)
     install_crate_licences(staging, paths.licences / 'rust-crates', crates)
     if paths.mount_helper is not None:
-        install_python_commands(staging, request.channel, paths.commands, paths.mount_helper)
+        if request.mount_helper is None:
+            raise RuntimeError(f'This package installs {MOUNT_HELPER_COMMAND}; pass --mount-helper.')
+        install_legacy_commands(staging, request.channel, paths.commands,
+                                (request.mount_helper, paths.mount_helper))
 
 
 def install_program(staging: Staging, program: Path, paths: InstalledPaths) -> None:
@@ -251,16 +256,18 @@ def install_licences(staging: Staging, licences: PurePosixPath) -> None:
         staging.copy(source, licences / 'licenses' / source.name, DATA_MODE)
 
 
-def install_python_commands(staging: Staging, channel: Channel, commands: PurePosixPath,
-                            helper: PurePosixPath) -> None:
-    """Install winspace, the Python mount helper, its launcher and its legacy name."""
+def install_legacy_commands(staging: Staging, channel: Channel, commands: PurePosixPath,
+                            mount_helper: tuple[Path, PurePosixPath]) -> None:
+    """Install winspace, the mount helper, its command and its legacy name.
+
+    mount_helper is the helper Cargo built and where the package installs it.
+    """
     staging.link(commands / LEGACY_COMMAND, commands / channel.package)
-    for module in MOUNT_HELPER_MODULES:
-        staging.copy(REPOSITORY / 'desktop' / module, helper / module, DATA_MODE)
-    template = MOUNT_HELPER_LAUNCHER.read_text(encoding='utf-8')
-    launcher = template.replace('@HELPER_DIRECTORY@', str(helper))
+    built, installed = mount_helper
+    staging.copy(built, installed, PROGRAM_MODE)
     command = commands / MOUNT_HELPER_COMMAND
-    staging.write(launcher, command, PROGRAM_MODE)
+    if command != installed:
+        staging.link(command, installed)
     staging.link(commands / LEGACY_MOUNT_HELPER_COMMAND, command)
 
 
@@ -376,6 +383,9 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
                         help='debian for the .deb, fhs for RPM and Arch, flatpak for the Flatpak')
     parser.add_argument('--program', required=True, type=Path,
                         help='the openxplorer-native executable Cargo built')
+    parser.add_argument('--mount-helper', type=Path,
+                        help='the openxplorer-mount-share executable Cargo built; required '
+                             'for the stable debian and fhs layouts, which install it')
     parser.add_argument('--destdir', required=True, type=Path,
                         help='the staging folder that stands for / (use / inside Flatpak)')
     return parser.parse_args(argv)
@@ -385,7 +395,8 @@ def main(argv: list[str] | None = None) -> int:
     """Install one package's files and return the exit status."""
     arguments = parse_arguments(argv)
     request = InstallRequest(channel=Channel(arguments.app_id), layout=Layout(arguments.layout),
-                             program=arguments.program, staging=arguments.destdir)
+                             program=arguments.program, staging=arguments.destdir,
+                             mount_helper=arguments.mount_helper)
     try:
         install(request, linked_crates())
     except (OSError, RuntimeError, subprocess.CalledProcessError) as error:

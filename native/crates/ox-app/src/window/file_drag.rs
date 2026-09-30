@@ -18,8 +18,8 @@
 //! offered, so a receiver can always finish the drop as a copy. The window
 //! never deletes what it offered, whatever the receiver answers, and
 //! nothing is mounted or downloaded during the gesture. No drag starts
-//! from blank space, with the secondary button, or while a file operation
-//! runs or is being planned.
+//! from blank space, with the secondary button, while a file operation
+//! runs or is being planned, or while a dialog or a menu is open.
 
 mod payload;
 
@@ -101,6 +101,19 @@ fn drag_icon(art: Art, count: usize) -> gtk::Widget {
         icon.append(&badge);
     }
     icon.upcast()
+}
+
+/// True when a menu or other popover inside `widget` is open.
+pub(super) fn has_open_popover(widget: &gtk::Widget) -> bool {
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        let is_open_popover = current.is::<gtk::Popover>() && current.is_mapped();
+        if is_open_popover || (current.is_visible() && has_open_popover(&current)) {
+            return true;
+        }
+        child = current.next_sibling();
+    }
+    false
 }
 
 impl BrowserWindow {
@@ -191,7 +204,7 @@ impl BrowserWindow {
     /// first when it is not selected; `None` while an operation runs or
     /// when the selection may not leave the app, which the toast explains.
     pub(super) fn drag_content_for(&self, position: u32) -> Option<gdk::ContentProvider> {
-        if !self.imp().file_operations.borrow().is_idle() {
+        if !self.may_start_drag() {
             return None;
         }
         let model = self.folder_pane().model();
@@ -208,11 +221,20 @@ impl BrowserWindow {
     /// What dragging the sidebar's folder at `uri` offers; `None` for a
     /// page, an unmounted drive or while an operation runs.
     fn sidebar_drag_content(&self, uri: String) -> Option<gdk::ContentProvider> {
-        let may_leave = is_draggable_location(&uri) && self.imp().file_operations.borrow().is_idle();
+        let may_leave = is_draggable_location(&uri) && self.may_start_drag();
         if !may_leave {
             return None;
         }
         self.offer_drag(DragPayload::new(vec![uri], local_path), Art::Folder)
+    }
+
+    /// True while nothing holds drags back: no file operation runs or is
+    /// planned, and no dialog, sign-in prompt or menu is open (DND-006).
+    fn may_start_drag(&self) -> bool {
+        self.imp().file_operations.borrow().is_idle()
+            && self.dialog_layer().shown().is_none()
+            && !self.has_open_dialog()
+            && !has_open_popover(self.upcast_ref())
     }
 
     /// Remembers the drag `prepared` describes and returns its content, or

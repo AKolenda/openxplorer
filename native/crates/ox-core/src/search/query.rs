@@ -7,11 +7,13 @@
 use std::time::{Duration, Instant};
 
 use gio::prelude::*;
+use rusqlite::functions::FunctionFlags;
 use rusqlite::types::Value;
 use rusqlite::{Connection, Row};
 
 use super::error::{check_cancelled, SearchError};
 use super::index::SearchIndex;
+use super::pattern::{is_wildcard, wildcard_matches};
 use super::root::{HiddenItems, RootStatus, SearchEngine};
 use super::text::{display_path, fold, folder_prefix, whole_seconds};
 use crate::entry::EntryKind;
@@ -148,6 +150,7 @@ impl SearchIndex {
         }
         let plan = QueryPlan::new(&words, scope.as_deref(), query.hidden_items, self.engine(), limit);
         let connection = self.connect()?;
+        add_name_pattern_function(&connection)?;
         let mut hits = run_cancellable(&connection, &plan, cancellable)?;
         let is_truncated = hits.len() > limit;
         hits.truncate(limit);
@@ -206,8 +209,15 @@ impl QueryPlan {
             conditions.extend(plan.trigram_condition(words));
         }
         for word in words {
-            conditions.push("instr(e.search_text, ?)>0".to_owned());
-            plan.values.push(Value::Text(word.clone()));
+            // A wildcard word matches the whole folded name (SRCH-004), by
+            // the rules the folder's filter uses.
+            if is_wildcard(word) {
+                conditions.push(format!("{NAME_PATTERN_FUNCTION}(?, e.name)"));
+                plan.values.push(Value::Text(word.clone()));
+            } else {
+                conditions.push("instr(e.search_text, ?)>0".to_owned());
+                plan.values.push(Value::Text(word.clone()));
+            }
         }
         if let Some(scope) = scope {
             conditions.push(plan.scope_condition(scope));
@@ -239,7 +249,7 @@ impl QueryPlan {
     fn trigram_condition(&mut self, words: &[String]) -> Option<String> {
         let quoted: Vec<String> = words
             .iter()
-            .filter(|word| word.chars().count() >= MIN_TRIGRAM_WORD_CHARS)
+            .filter(|word| !is_wildcard(word) && word.chars().count() >= MIN_TRIGRAM_WORD_CHARS)
             .map(|word| format!("\"{}\"", word.replace('"', "\"\"")))
             .collect();
         if quoted.is_empty() {
@@ -259,6 +269,22 @@ impl QueryPlan {
         self.values.push(Value::Text(prefix));
         "(e.uri=? OR substr(e.uri, 1, ?)=?)".to_owned()
     }
+}
+
+/// The SQL function that tells whether a name matches a wildcard word.
+const NAME_PATTERN_FUNCTION: &str = "ox_name_matches";
+
+/// Adds [`NAME_PATTERN_FUNCTION`] to `connection`: whether the folded
+/// name matches the folded wildcard word, as the folder's filter decides.
+/// `SQLite`'s own `lower()` and `GLOB` fold ASCII only and read an unclosed
+/// `[` differently, so `über*` would miss `Überblick.pdf`.
+fn add_name_pattern_function(connection: &Connection) -> rusqlite::Result<()> {
+    let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
+    connection.create_scalar_function(NAME_PATTERN_FUNCTION, 2, flags, |context| {
+        let word = context.get_raw(0).as_str().unwrap_or_default();
+        let name = context.get_raw(1).as_str().unwrap_or_default();
+        Ok(wildcard_matches(word, &fold(name)))
+    })
 }
 
 /// Runs `plan`, stopping when `cancellable` is cancelled.
@@ -391,6 +417,30 @@ mod tests {
 
         assert_eq!(in_reports, ["q3-bank.pdf"]);
         assert_eq!(everywhere, ["bank.pdf", "q3-bank.pdf"]);
+    }
+
+    /// parity: SRCH-004
+    #[test]
+    fn a_wildcard_word_matches_the_whole_cached_name() {
+        let share = ScannedShare::new();
+        let reports = format!("{SHARE}/Reports");
+        share.store(&[
+            listed_file(&reports, "Q3-bank.PDF"),
+            listed_file(SHARE, "bank.pdf.txt"),
+            listed_file(SHARE, "draft.pdf"),
+            listed_file(SHARE, "Überblick.pdf"),
+            listed_file(SHARE, "straße.txt"),
+            listed_file(SHARE, "[draft.txt"),
+        ]);
+
+        assert_eq!(
+            share.found_names("*.pdf"),
+            ["draft.pdf", "Q3-bank.PDF", "Überblick.pdf"]
+        );
+        assert_eq!(share.found_names("reports [!d]*.pdf"), ["Q3-bank.PDF"]);
+        assert_eq!(share.found_names("über*"), ["Überblick.pdf"]);
+        assert_eq!(share.found_names("straße*"), ["straße.txt"]);
+        assert_eq!(share.found_names("[draft*"), ["[draft.txt"]);
     }
 
     /// parity: SRCH-008

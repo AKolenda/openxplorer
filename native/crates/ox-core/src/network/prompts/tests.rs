@@ -190,6 +190,38 @@ fn a_keyring_credential_is_reused_without_a_dialog() {
     });
 }
 
+/// A sign-in in one window lets another window's prompts mount a share on
+/// the same server without a dialog: its own memory is empty, so the
+/// account comes from the keyring both windows share.
+///
+/// parity: NET-014
+#[test]
+fn another_window_signs_in_with_the_account_without_a_dialog() {
+    with_prompts(|fixture| {
+        let (first, _replies, id) = prompt(fixture);
+        answer_as_sam(fixture, id, "test", CredentialScope::Session);
+        fixture.prompts.finish(&first, MountOutcome::Mounted);
+        fixture.wait_until("the keyring save", || !fixture.keyring.saves().is_empty());
+        let other_prompter = Rc::new(crate::network::test_support::RecordingPrompter::default());
+        let other_window = MountPrompts::new(
+            crate::network::test_support::window_credentials(&fixture.store),
+            other_prompter.clone(),
+        );
+        let second = other_window.create("smb://NAS/b").expect("a valid SMB location");
+        let replies = Replies::default();
+        let recorded = Rc::clone(&replies);
+        second.connect_reply(move |_, result| recorded.borrow_mut().push(result));
+
+        ask_password(&second, SIGN_IN_FLAGS);
+
+        fixture.wait_until("the keyring lookup", || !replies.borrow().is_empty());
+        assert_eq!(second.username().as_deref(), Some("sam"));
+        assert_eq!(second.password().as_deref(), Some("test"));
+        assert_eq!(other_prompter.shown_count(), 0);
+        other_window.finish(&second, MountOutcome::Mounted);
+    });
+}
+
 /// The Secret Service may show an unlock prompt, so the keyring is read on
 /// a worker thread and the window stays responsive meanwhile.
 ///
@@ -372,9 +404,10 @@ fn a_guest_sign_in_after_a_rejected_credential_saves_nothing() {
     });
 }
 
-/// A server question is answered with the index of the chosen button.
+/// A server question is answered with the index of the chosen button;
+/// an SFTP server's host-key question is asked the same way.
 ///
-/// parity: NET-013
+/// parity: NET-013, NET-030
 #[test]
 fn a_question_is_answered_with_the_chosen_button() {
     with_prompts(|fixture| {
@@ -397,6 +430,19 @@ fn a_question_is_answered_with_the_chosen_button() {
             .answer(challenge.id, Answer::Choice(0))
             .expect("a valid choice");
         assert_eq!(operation.choice(), 0);
+        assert_eq!(*replies.borrow(), [gio::MountOperationResult::Handled]);
+
+        let (host_key, replies) = self::operation(fixture, "sftp://anna@build/home/anna");
+        let choices = glib::StrV::from(vec!["Log In Anyway", "Cancel"]);
+        host_key.emit_by_name::<()>("ask-question", &[&"The identity of build is unknown.", &choices]);
+        let challenge = fixture.prompter.last_shown();
+        assert_eq!(challenge.host, "build");
+        assert!(matches!(challenge.kind, ChallengeKind::Question(_)));
+        fixture
+            .prompts
+            .answer(challenge.id, Answer::Choice(1))
+            .expect("a valid choice");
+        assert_eq!(host_key.choice(), 1);
         assert_eq!(*replies.borrow(), [gio::MountOperationResult::Handled]);
     });
 }

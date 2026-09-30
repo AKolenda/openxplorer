@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Dropping files and folders onto the window (DND-009 to DND-014,
-//! DND-017 to DND-019, DND-026, TAB-018).
+//! DND-017 to DND-021, DND-025, DND-026, TAB-018).
 //!
 //! Ports `decode_uris` and `NativeFileDrop` of
 //! `desktop/native_file_drop.py` and `receiveFileDrop` and
 //! `showFileDropHint` of `desktop/ui/app.js` on GTK's asynchronous drop
 //! target. The folder views, the sidebar, the breadcrumbs and the tabs
 //! take drops ([`targets`]). Where the items go is a [`DropDestination`]:
-//! a folder, Quick access, or a program ([`program`]). What happens to
-//! them in a folder is a [`DropAction`] ([`action`]): copy, move, link, or
-//! the drop menu that asks.
+//! a folder, Quick access, a program or launcher ([`program`],
+//! [`launcher`]), or the Recycle Bin, which moves them to the Trash as
+//! Delete does (OPS-045). Items dragged out of the Recycle Bin into a
+//! folder are always moved there (OPS-046). What happens to them in a folder is a [`DropAction`]
+//! ([`action`]): copy, move, link, or the drop menu that asks.
 //!
 //! Safety rules:
 //! - "The source never deletes" (DND-009): every drop is finished as soon
@@ -24,6 +26,7 @@
 //!   never touches the clipboard.
 
 mod action;
+mod launcher;
 mod program;
 mod targets;
 
@@ -32,17 +35,17 @@ use std::time::Duration;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{parent_location, require_item_uri, same_location, LocationError};
-use ox_core::ops::LinkRequest;
+use ox_core::location::{parent_location, require_item_uri, same_location, LocationError, TRASH_URI};
+use ox_core::ops::{is_recycle_bin_item, LinkRequest};
 use ox_core::transfer::TransferMode;
 
-use super::file_drag::DraggedItems;
+use super::file_drag::{has_open_popover, DraggedItems};
 use super::file_ops::IncomingItems;
 use super::BrowserWindow;
 
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
 pub(super) use program::{ProgramChecks, ProgramTarget};
-pub(super) use targets::DropZone;
+pub(super) use targets::{DragScroll, DropZone};
 
 /// The most items one drop brings.
 const MAX_DROPPED_ITEMS: usize = 200;
@@ -71,6 +74,19 @@ pub(crate) enum DropDestination {
     },
     /// Given to this program to open (DND-026).
     Program(ProgramTarget),
+    /// Moved to the Trash: a drop on the Recycle Bin (OPS-045).
+    RecycleBin,
+}
+
+impl DropDestination {
+    /// A drop into `folder`: the Recycle Bin for its root, else the folder.
+    pub(crate) fn for_folder(folder: String) -> Self {
+        if same_location(&folder, TRASH_URI) {
+            DropDestination::RecycleBin
+        } else {
+            DropDestination::Folder(folder)
+        }
+    }
 }
 
 /// Why a drop is refused, in the Python app's words.
@@ -93,6 +109,9 @@ pub(crate) enum DropRefusal {
     /// A file operation runs or is being planned.
     #[error("Finish the current operation before dropping files.")]
     Busy,
+    /// A dialog, sign-in prompt or menu is open.
+    #[error("Close the dialog and finish the current operation before dropping files.")]
+    DialogOpen,
     /// Nothing under the pointer takes files: a search, a page, a server
     /// listing or a previous version.
     #[error("Open a writable destination folder before dropping files.")]
@@ -106,6 +125,12 @@ pub(crate) enum DropRefusal {
     /// The items could not be read in time, or at all.
     #[error("The file drop is empty or too large.")]
     Unreadable,
+    /// Recycle Bin items dropped on the Recycle Bin.
+    #[error("These items are in the Recycle Bin already.")]
+    InRecycleBin,
+    /// Recycle Bin items dropped together with other items.
+    #[error("Drag items out of the Recycle Bin on their own.")]
+    MixedWithRecycleBin,
 }
 
 /// The items of a drop of `uris`: canonical, in order and without
@@ -175,14 +200,24 @@ async fn read_dropped_uris(drop: &gdk::Drop) -> Result<Vec<String>, DropRefusal>
         return Ok(own);
     }
     let reading = drop.read_value_future(gdk::FileList::static_type(), glib::Priority::DEFAULT);
-    let value = glib::future_with_timeout(READ_TIMEOUT, reading)
-        .await
-        .map_err(|_| DropRefusal::Unreadable)?
-        .map_err(|_| DropRefusal::Unreadable)?;
+    let value = within(READ_TIMEOUT, reading).await?;
     let files = value
         .get::<gdk::FileList>()
         .map_err(|_| DropRefusal::Unreadable)?;
     Ok(files.files().iter().map(|file| file.uri().to_string()).collect())
+}
+
+/// The value `reading` gives within `timeout`: a drop whose data is late
+/// or fails is [`DropRefusal::Unreadable`], and data arriving after the
+/// timeout is never used.
+async fn within<T>(
+    timeout: Duration,
+    reading: impl std::future::Future<Output = Result<T, glib::Error>>,
+) -> Result<T, DropRefusal> {
+    glib::future_with_timeout(timeout, reading)
+        .await
+        .map_err(|_| DropRefusal::Unreadable)?
+        .map_err(|_| DropRefusal::Unreadable)
 }
 
 impl BrowserWindow {
@@ -219,18 +254,31 @@ impl BrowserWindow {
             gdk::DragAction::empty()
         };
         drop.finish(finished_as);
+        self.take_read_drop(shown.as_deref(), read, destination, action);
+    }
+
+    /// Runs `action` on the items a drop read, unless reading failed or
+    /// the tab left `shown`, the folder it showed when the drop began;
+    /// true when the drop is taken.
+    fn take_read_drop(
+        &self,
+        shown: Option<&str>,
+        read: Result<Vec<String>, DropRefusal>,
+        destination: DropDestination,
+        action: DropAction,
+    ) -> bool {
         let uris = match read {
             Ok(uris) => uris,
             Err(refusal) => {
                 self.show_message(&refusal.to_string());
-                return;
+                return false;
             }
         };
-        if self.current_uri() != shown {
+        if self.current_uri().as_deref() != shown {
             self.show_message(&DropRefusal::DestinationChanged.to_string());
-            return;
+            return false;
         }
-        self.complete_drop(&uris, Some(destination), action);
+        self.complete_drop(&uris, Some(destination), action)
     }
 
     /// Sends the dropped `uris` to `destination` with `action`; true when
@@ -241,6 +289,18 @@ impl BrowserWindow {
         destination: Option<DropDestination>,
         action: DropAction,
     ) -> bool {
+        match self.check_ready() {
+            Ok(()) => self.run_drop(uris, destination, action),
+            Err(refusal) => {
+                self.show_message(&refusal.to_string());
+                false
+            }
+        }
+    }
+
+    /// [`Self::complete_drop`] with the drop menu's answer, while the
+    /// menu may still be closing.
+    fn run_drop(&self, uris: &[String], destination: Option<DropDestination>, action: DropAction) -> bool {
         let outcome = self.check_idle().and_then(|()| {
             let destination = destination.ok_or(DropRefusal::NoDestination)?;
             self.send_dropped_items(uris, destination, action)
@@ -263,6 +323,22 @@ impl BrowserWindow {
         }
     }
 
+    /// Refuses a drop while a file operation runs or is being planned, or
+    /// while a dialog, sign-in prompt or menu is open, as drags are held
+    /// back then too (DND-006). The in-window dialogs leave the tab strip
+    /// usable, so a drop on a tab could otherwise slip past them.
+    fn check_ready(&self) -> Result<(), DropRefusal> {
+        self.check_idle()?;
+        let dialog_open = self.dialog_layer().shown().is_some()
+            || self.has_open_dialog()
+            || has_open_popover(self.upcast_ref());
+        if dialog_open {
+            Err(DropRefusal::DialogOpen)
+        } else {
+            Ok(())
+        }
+    }
+
     /// Sends `uris` to `destination` with `action`.
     fn send_dropped_items(
         &self,
@@ -278,6 +354,18 @@ impl BrowserWindow {
                 self.open_with_program(program, items);
                 Ok(())
             }
+            DropDestination::RecycleBin => {
+                if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
+                    return Err(DropRefusal::InRecycleBin);
+                }
+                let items = dropped_uris(uris)?;
+                glib::spawn_future_local(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    async move { window.trash_dropped(items).await }
+                ));
+                Ok(())
+            }
         }
     }
 
@@ -289,6 +377,9 @@ impl BrowserWindow {
         folder: String,
         action: DropAction,
     ) -> Result<(), DropRefusal> {
+        if uris.iter().any(|uri| is_recycle_bin_item(uri)) {
+            return self.drop_from_recycle_bin(uris, folder);
+        }
         let uris = dropped_uris(uris)?;
         if uris.iter().any(|uri| same_location(uri, &folder)) {
             return Err(DropRefusal::IntoItself);
@@ -323,6 +414,24 @@ impl BrowserWindow {
         Ok(())
     }
 
+    /// Moves the Recycle Bin items `uris` into `folder`, whatever the
+    /// drop's action, as Dolphin does (OPS-046, DND-018).
+    fn drop_from_recycle_bin(&self, uris: &[String], folder: String) -> Result<(), DropRefusal> {
+        if !(1..=MAX_DROPPED_ITEMS).contains(&uris.len()) {
+            return Err(DropRefusal::ItemCount);
+        }
+        if !uris.iter().all(|uri| is_recycle_bin_item(uri)) {
+            return Err(DropRefusal::MixedWithRecycleBin);
+        }
+        let uris = uris.to_vec();
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move { window.move_out_of_recycle_bin(uris, folder).await }
+        ));
+        Ok(())
+    }
+
     /// Runs `incoming` through the conflict check and the transfer engine
     /// once the drop handler has returned, so the drag has finished before
     /// the conflict dialog can open.
@@ -340,6 +449,7 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::harness::{Fixture, TestWindow};
 
     fn uris(items: &[&str]) -> Vec<String> {
         items.iter().map(ToString::to_string).collect()
@@ -387,5 +497,33 @@ mod tests {
         let moved = outside_folder(dropped, "file:///tmp/a");
 
         assert_eq!(moved, uris(&["file:///tmp/b/two.txt"]));
+    }
+
+    /// parity: DND-013
+    #[gtk::test]
+    fn a_drop_read_after_the_tab_moved_or_too_late_is_refused() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let destination = DropDestination::Folder(fixture.uri());
+        let items = vec![fixture.uri_of("Notes 2.txt")];
+
+        let moved = test.window.take_read_drop(
+            Some(&fixture.uri_of("Documents")),
+            Ok(items),
+            destination,
+            DropAction::Copy,
+        );
+        let late = glib::MainContext::default().block_on(within(
+            Duration::from_millis(50),
+            std::future::pending::<Result<(), glib::Error>>(),
+        ));
+
+        assert!(!moved);
+        assert_eq!(
+            test.window.shown_message(),
+            "The destination changed. Drop the files again."
+        );
+        assert_eq!(late, Err(DropRefusal::Unreadable));
+        assert_eq!(READ_TIMEOUT, Duration::from_secs(10));
     }
 }

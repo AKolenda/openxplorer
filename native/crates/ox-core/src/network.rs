@@ -2,7 +2,7 @@
 //! Network shares, sign-in and mounts: the network service of the window.
 //!
 //! Ports `desktop/session_credentials.py`, `desktop/auth_bridge.py`,
-//! `desktop/mount_support.py`, the file rules of `desktop/mount_share.py`,
+//! `desktop/mount_support.py`, `desktop/mount_share.py`,
 //! and the network operations of `desktop/winspace.py` (`mount`,
 //! `connect`, `mountVolume`, `unmount`, `sign_out`, `discover_network`,
 //! `remember_network`), `verify_folder` and `discover_servers` of
@@ -33,8 +33,11 @@
 //! | `sign_out` | Sign out of a server | `winspace.py` |
 //! | `discovery` | Servers advertising on the local network | `winspace.py`, `gio_backend.py` |
 //! | `visited` | Servers and shares browsed this session | `winspace.py` |
+//! | `usershare` | Sharing a local folder with Samba user shares | Dolphin's Share tab |
+//! | `recent_servers` | The recent-servers list GTK's Other Locations shares | GTK's places view |
 //! | `mount_table`, `local_path` | Local paths of SMB locations | `mount_support.py`, `native_opening.py` |
-//! | `mount_plan`, `mount_helper` | The persistent mount assistant | `mount_support.py`, `mount_share.py` |
+//! | `mount_plan` | The persistent mount assistant's plan | `mount_support.py` |
+//! | `mount_helper` | The administrator helper, `openxplorer-mount-share` | `mount_share.py` |
 //!
 //! The privacy rules of the Python modules hold here too, each enforced
 //! and documented where it applies:
@@ -56,26 +59,19 @@ mod discovery;
 mod error;
 mod keyring;
 mod local_path;
-// The helper program that uses these file rules is ported in the "Network
-// and devices" milestone of ROADMAP.md; until then only the tests call them.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "used by the openxplorer-mount-share helper, not ported yet"
-    )
-)]
 mod mount_helper;
 mod mount_plan;
 mod mount_table;
 mod mounting;
 mod prompts;
+mod recent_servers;
 mod secret_service;
 mod server;
 mod session_credentials;
 mod sign_out;
 #[cfg(test)]
 mod test_support;
+mod usershare;
 mod visited;
 mod volumes;
 
@@ -85,6 +81,7 @@ pub use discovery::{discover_servers, DiscoveredServer, Discovery, DISCOVERY_NOT
 pub use error::NetworkError;
 pub use keyring::{Keyring, KeyringCollection, KeyringError, NewSecret, SecretAttributes};
 pub use local_path::{fuse_export_path, local_path};
+pub use mount_helper::mount_share_command;
 pub use mount_plan::{mount_plan, DesktopUser, MountPlan, MountPlanError};
 pub use mount_table::{
     mount_for_path, parse_mount_table, read_mount_table, read_stable_smb_mounts, resolve_smb_path, MountEntry,
@@ -97,12 +94,14 @@ pub use prompts::{
     split_identity, Answer, Challenge, ChallengeId, ChallengeKind, Identity, MountOutcome, MountPrompts,
     PasswordChallenge, QuestionChallenge, SignIn, SignInError, SignInPrompter, KEYRING_SAVE_NOTICE,
 };
+pub use recent_servers::RecentServers;
 pub use secret_service::SecretService;
 pub use server::{ServerKey, DEFAULT_SMB_PORT};
 pub use session_credentials::SessionCredentials;
 pub use sign_out::{
     begin_sign_out, finish_sign_out, SignOutRegistry, SignOutReport, SignOutRequest, SigningOut,
 };
+pub use usershare::{validate_share_name, Usershare, UsershareError, Usershares};
 pub use visited::{session_network_root, VisitedNetwork};
 pub use volumes::{
     eject_location, mount_volume, safely_remove_location, unmount_location, volume_id, volume_id_from,
