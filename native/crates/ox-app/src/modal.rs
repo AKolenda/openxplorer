@@ -6,12 +6,14 @@
 //! Escape answers "cancel", as the dialog's Close or Cancel button does.
 //!
 //! A dialog window is filled before it is shown and fits its parent when
-//! it shows ([`fit_to_parent`], which each dialog calls as it is realized),
-//! so the desktop draws its first frame at the size it keeps, never a
-//! frame that is cut off and then grows. A dialog taller than the window
-//! it belongs to is capped at that window's height, less a margin, and its
-//! body scrolls, as `.modal{max-height:calc(100vh - 50px)}` did. The
-//! in-window dialogs of [`crate::dialog_layer`] follow the same rule.
+//! it shows ([`fit_to_parent`], which each dialog calls as it is realized
+//! and again whenever what it shows changes), so the desktop draws its
+//! first frame at the size it keeps, never a frame that is cut off and
+//! then grows. A dialog is never taller than the window it belongs to,
+//! less a margin: its body scrolls instead, as
+//! `.modal{max-height:calc(100vh - 50px)}` did, also when rows arrive after
+//! it is shown. The in-window dialogs of [`crate::dialog_layer`] follow the
+//! same rule.
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
@@ -19,19 +21,20 @@ use gtk::{gdk, glib};
 /// The room kept above and below a capped dialog (`.modal-layer`'s 25px).
 const WINDOW_MARGIN: i32 = 25;
 
-/// A content height any dialog body is taller than, used to find how much
-/// of the dialog is not its scrolling body.
+/// The body height a dialog is measured with to find how much of it is
+/// not its scrolling body.
 const PROBE_HEIGHT: i32 = 40;
 
 /// Caps `scroller`, the scrolling body of `dialog`, so the whole dialog is
-/// no taller than the window it belongs to. A dialog calls this as it is
-/// shown, once it is filled; one that reads what it shows in the
-/// background is shown once that has arrived.
+/// no taller than the window it belongs to, now and when its body grows.
+/// A dialog calls this as it is shown, once it is filled, and again when
+/// what it shows changes; one that reads what it shows in the background
+/// is shown once that has arrived.
 pub(crate) fn fit_to_parent(dialog: &impl IsA<gtk::Window>, scroller: &gtk::ScrolledWindow) {
     let dialog = dialog.upcast_ref::<gtk::Window>();
-    scroller.set_max_content_height(-1);
-    if let Some(cap) = height_cap(dialog) {
-        cap_body(dialog, scroller, cap);
+    match height_cap(dialog) {
+        Some(cap) => cap_body(dialog, scroller, cap),
+        None => scroller.set_max_content_height(-1),
     }
 }
 
@@ -44,18 +47,20 @@ fn height_cap(dialog: &gtk::Window) -> Option<i32> {
 }
 
 /// Limits `scroller` so `dialog`, at the width it will have, is at most
-/// `cap` tall; the body scrolls instead of the dialog outgrowing it.
+/// `cap` tall; the body scrolls instead of the dialog outgrowing it. A
+/// body shorter than the limit keeps its natural height.
 fn cap_body(dialog: &gtk::Window, scroller: &gtk::ScrolledWindow, cap: i32) {
     let width = dialog_width(dialog);
-    let natural = dialog.measure(gtk::Orientation::Vertical, width).1;
-    if natural <= cap {
-        return;
-    }
-    // With the body held to PROBE_HEIGHT, the rest of the dialog is what
-    // is left over: the title, the buttons and the padding.
+    // With the body held at exactly PROBE_HEIGHT, the rest of the dialog
+    // is what is left over: the title, the buttons and the padding.
+    let minimum = scroller.min_content_height();
+    scroller.set_min_content_height(-1);
     scroller.set_max_content_height(PROBE_HEIGHT);
+    scroller.set_min_content_height(PROBE_HEIGHT);
     let rest = dialog.measure(gtk::Orientation::Vertical, width).1 - PROBE_HEIGHT;
+    scroller.set_min_content_height(-1);
     scroller.set_max_content_height((cap - rest).max(PROBE_HEIGHT));
+    scroller.set_min_content_height(minimum.min(scroller.max_content_height()));
 }
 
 /// The width GTK gives `dialog`: its default width when it has one, never
@@ -152,10 +157,39 @@ mod tests {
     fn a_dialog_that_fits_keeps_its_natural_height() {
         let parent = parent(600);
         let (dialog, scroller) = dialog(&parent, 3);
+        let natural = dialog.measure(gtk::Orientation::Vertical, 400).1;
 
         fit_to_parent(&dialog, &scroller);
 
-        assert_eq!(scroller.max_content_height(), -1, "a short body is not capped");
+        assert_eq!(dialog.measure(gtk::Orientation::Vertical, 400).1, natural);
+        dialog.destroy();
+        parent.destroy();
+    }
+
+    #[gtk::test]
+    fn a_dialog_filled_after_it_shows_stays_within_its_window() {
+        let parent = parent(360);
+        let (dialog, scroller) = dialog(&parent, 3);
+        fit_to_parent(&dialog, &scroller);
+        dialog.present();
+        wait_until("the dialog to show", || dialog.height() > 0);
+
+        let body = scroller
+            .child()
+            .and_then(|viewport| viewport.first_child())
+            .and_downcast::<gtk::Box>()
+            .expect("the body is a box in a viewport");
+        for line in 0..200 {
+            body.append(&gtk::Label::new(Some(&format!("Added {line}"))));
+        }
+        settle();
+
+        let tallest = 360 - 2 * WINDOW_MARGIN;
+        assert!(
+            dialog.height() <= tallest,
+            "{} fits in {tallest}",
+            dialog.height()
+        );
         dialog.destroy();
         parent.destroy();
     }
