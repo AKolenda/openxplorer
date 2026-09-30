@@ -136,6 +136,25 @@ impl<B: InstanceBus> InstanceGuard<B> {
         })
     }
 
+    /// What runs, once the running instance has read its own identity.
+    ///
+    /// An instance publishes its identity without a digest until it has
+    /// read its executable, which takes a moment after it starts; a launch
+    /// in that moment would otherwise take it for an outdated build and
+    /// ask to restart it. The guard waits up to [`StopTiming::timeout`]
+    /// for the digest.
+    fn settled_status(&self, installed: &RuntimeIdentity) -> Result<InstanceStatus, InstanceError> {
+        let deadline = Instant::now() + self.timing.timeout;
+        loop {
+            let status = self.status(installed)?;
+            let is_pending = status.running.as_ref().is_some_and(|running| running.build.is_empty());
+            if !is_pending || Instant::now() >= deadline {
+                return Ok(status);
+            }
+            thread::sleep(self.timing.poll_interval);
+        }
+    }
+
     /// Asks the instance at `owner` to quit and waits for it to release
     /// the application name. It is never forced.
     ///
@@ -185,7 +204,7 @@ impl<B: InstanceBus> InstanceGuard<B> {
         mode: LaunchMode,
         confirm: Option<&dyn Fn(&InstanceStatus) -> bool>,
     ) -> Result<InstanceStatus, InstanceError> {
-        let status = self.status(installed)?;
+        let status = self.settled_status(installed)?;
         let Some(owner) = status.owner.as_deref() else {
             return Ok(status);
         };

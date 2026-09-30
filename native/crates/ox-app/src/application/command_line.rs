@@ -167,15 +167,18 @@ impl CommandRequest {
     }
 }
 
-/// Registers every option of [`CommandOption::ALL`] on `app`.
+/// Registers every option of [`CommandOption::ALL`] on `app`, and the
+/// launcher's own options so `--help` lists them
+/// ([`crate::update::LAUNCHER_OPTIONS`]).
 pub(super) fn add_options(app: &impl IsA<gio::Application>) {
-    for option in CommandOption::ALL {
+    let options = CommandOption::ALL.map(|option| (option.name(), option.description()));
+    for (name, description) in options.into_iter().chain(crate::update::LAUNCHER_OPTIONS) {
         app.add_main_option(
-            option.name(),
+            name,
             glib::Char::from(0),
             glib::OptionFlags::NONE,
             glib::OptionArg::None,
-            option.description(),
+            description,
             None,
         );
     }

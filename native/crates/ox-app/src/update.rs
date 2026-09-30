@@ -23,9 +23,11 @@
 //! | `service` | The [`UpdateService`] of this executable |
 //! | `dialog` | [`UpdateDialog`], "Software updates" |
 //! | `launch_guard` | `--restart`, `--version` and the outdated-instance check |
+//! | `report` | `--check` and `--diagnose` |
 
 mod dialog;
 mod launch_guard;
+mod report;
 mod service;
 mod state;
 #[cfg(test)]
@@ -43,7 +45,7 @@ use ox_core::update::{
 };
 
 pub(crate) use dialog::UpdateDialog;
-pub(crate) use launch_guard::{LaunchCheck, RuntimeInfo};
+pub(crate) use launch_guard::{LaunchCheck, RuntimeInfo, LAUNCHER_OPTIONS};
 pub(crate) use state::UpdateState;
 
 /// Emitted whenever [`Updates::state`] changes.

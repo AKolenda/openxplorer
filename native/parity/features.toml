@@ -14557,8 +14557,8 @@ python_tests = [
 bridge = ["windows", "focusWindow", "newWindow"]
 dolphin = "KDBusService single instance: a second `dolphin` call attaches to the running process"
 gnome = "GApplication D-Bus uniqueness; GtkApplication unique bus name (org.gtk.Application / org.freedesktop.Application); GApplicationCommandLine forwarding with G_APPLICATION_HANDLES_COMMAND_LINE|HANDLES_OPEN; Gio.Application actions exported via the .desktop file Actions= and GtkApplication; Mutter/Zorin panel right-click menu."
-native = "partial"
-native_note = "native/crates/ox-app/src/application.rs: a unique GApplication with HANDLES_COMMAND_LINE, so a later launch hands its command line and working directory to the running instance and exits. The preview runs as io.winspace.Development.Native; no test starts two processes yet. Porting notes: The native preview uses io.winspace.Development.Native. The final build must keep io.winspace.Development, which AGENTS.md treats as a compatibility contract."
+native = "done"
+native_note = "native/crates/ox-app/src/application.rs: a unique GApplication with HANDLES_OPEN and HANDLES_COMMAND_LINE, so a later launch hands its command line and working directory to the running instance and exits. Test: native/crates/ox-app/tests/launch.rs (launches_share_one_instance_that_quits_and_restarts_on_request) starts the real executable twice on the private session bus: the second launch exits at once and the first keeps the application name. The preview channel registers io.winspace.Development.Native; the stable packages are built as io.winspace.Development (INT-029)."
 
 [[feature]]
 id = "INT-002"
@@ -14640,8 +14640,8 @@ python_tests = [
 bridge = ["quit", "newWindow", "windows"]
 dolphin = "dolphin --new-window, --select, --daemon (and --split, which has no OpenXplorer equivalent)"
 gnome = "g_application_add_main_option + GApplicationCommandLine (get_arguments, get_cwd, get_options_dict)"
-native = "partial"
-native_note = "native/crates/ox-app/src/application/command_line.rs (each_option_asks_for_its_own_action, select_needs_a_file, the_options_keep_the_python_names): locations, --new-window, --windows, --settings, --select, --filemanager-service, --software-rendering and --quit, checked in the launching process so invalid input exits with status 2; native/crates/ox-app/src/update/launch_guard.rs handles --version, --quit and --restart before the application starts. Missing: --check and --diagnose. Porting notes: --split is tracked with split view (VIEW), not here."
+native = "done"
+native_note = "native/crates/ox-app/src/application/command_line.rs: locations, --new-window, --windows, --settings, --select, --filemanager-service, --software-rendering and --quit, checked in the launching process so invalid input prints the error to stderr and exits with status 2; native/crates/ox-app/src/update/launch_guard.rs and update/report.rs handle --version, --check, --diagnose, --quit and --restart before the application starts, and those are registered too so --help lists every option. Tests: command_line.rs (each_option_asks_for_its_own_action, select_needs_a_file, the_options_keep_the_python_names); native/crates/ox-app/tests/launch.rs (launches_share_one_instance_that_quits_and_restarts_on_request: --help, '--select' without a file exits 2, --version, --windows, --diagnose, --restart, --quit). Porting notes: --split is tracked with split view (INT-005, VIEW), not here."
 
 [[feature]]
 id = "INT-005"
@@ -15046,8 +15046,8 @@ python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_service_flag_does_not_create_window",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-app/src/integration/file_manager_service.rs holds the application while the service answers and releases it on Disable and Quit; --filemanager-service starts the service only when Show in folder is enabled and never asks to restart (native/crates/ox-app/src/update/launch_guard.rs). Tested in-process by show_in_folder_owns_file_manager1_until_disabled; a service-only process is not tested yet."
+native = "done"
+native_note = "native/crates/ox-app/src/integration/file_manager_service.rs holds the application while the service answers and releases it on Disable and Quit; --filemanager-service starts the service only when Show in folder is enabled, opens no window and never asks to restart (native/crates/ox-app/src/update/launch_guard.rs). Tests: native/crates/ox-app/src/integration/tests.rs (show_in_folder_owns_file_manager1_until_disabled) in-process; native/crates/ox-app/tests/launch.rs (launches_share_one_instance_that_quits_and_restarts_on_request) with real processes: without the opt-in --filemanager-service exits and leaves nothing running; with it the service process stays running, owns org.freedesktop.FileManager1 and quits on --quit."
 
 [[feature]]
 id = "INT-018"
@@ -15624,8 +15624,8 @@ python_tests = [
 ]
 bridge = ["quit"]
 gnome = "GtkApplication single-instance D-Bus name (org.gtk.Actions)."
-native = "partial"
-native_note = "native/crates/ox-core/tests/update_instance_bus.rs (nobody_owns_an_application_that_does_not_run, the_identity_is_read_through_org_gtk_actions, a_normal_launch_leaves_the_current_instance_running, an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed, a_legacy_instance_is_detected_and_quits_safely); native/crates/ox-core/tests/update_runtime_guard.rs (the_identity_changes_with_the_python_and_ui_files, identity_ignores_files_that_are_not_part_of_the_build, a_launch_with_no_running_instance_continues_without_asking_anything_to_quit, a_current_running_instance_is_left_running, an_outdated_instance_is_not_stopped_without_consent, declining_the_restart_never_stops_the_instance, confirming_asks_only_the_exact_owner_to_quit, an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, a_process_without_an_identity_is_a_legacy_process, a_match_needs_version_protocol_and_build). The launch guard runs before the application starts and asks \"Restart OpenXplorer to finish updating\" when the running instance's runtime-info differs (native/crates/ox-app/src/update/launch_guard.rs); not tested with two processes yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/update_instance_bus.rs (nobody_owns_an_application_that_does_not_run, the_identity_is_read_through_org_gtk_actions, a_normal_launch_leaves_the_current_instance_running, an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed, a_legacy_instance_is_detected_and_quits_safely); native/crates/ox-core/tests/update_runtime_guard.rs (a_starting_instance_is_waited_for_before_it_counts_as_outdated, an_outdated_instance_is_not_stopped_without_consent, declining_the_restart_never_stops_the_instance, confirming_asks_only_the_exact_owner_to_quit, a_busy_instance_is_never_killed, a_match_needs_version_protocol_and_build, and others). The native identity is the SHA-256 of the executable (not *.py and UI files), published through the runtime-info action; the launch guard (native/crates/ox-app/src/update/launch_guard.rs) asks 'Restart OpenXplorer to finish updating' with 'Not now' / 'Restart OpenXplorer' before the application starts, never in service mode, and waits for an instance that is still reading its own digest instead of taking it for an outdated build. native/crates/ox-app/tests/launch.rs runs two real processes of the same build, which are left running without a prompt."
 
 [[feature]]
 id = "UPD-009"
@@ -15645,8 +15645,8 @@ python_tests = [
   "desktop/tests/native_runtime_guard.py::Busy server refuses restart without being killed",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/tests/update_instance_bus.rs (an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed); native/crates/ox-core/tests/update_runtime_guard.rs (an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, another_instance_taking_the_name_during_restart_is_reported, a_failed_quit_from_an_instance_that_already_quit_is_fine). The native app has no --restart option yet. native/crates/ox-app/src/update/launch_guard.rs (the_restart_option_is_not_passed_on): openxplorer --restart asks the running instance to quit, waits and starts, exiting with status 3 on the guard's errors; not tested with two processes yet."
+native = "done"
+native_note = "native/crates/ox-app/src/update/launch_guard.rs: openxplorer --restart asks the running instance to quit through its quit action (refused while files are written), waits up to 6 s for its bus name to go, then starts this build; the guard's errors exit with status 3 and nothing is ever killed. Tests: native/crates/ox-core/tests/update_instance_bus.rs (an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed); native/crates/ox-core/tests/update_runtime_guard.rs (an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, another_instance_taking_the_name_during_restart_is_reported, a_failed_quit_from_an_instance_that_already_quit_is_fine); launch_guard.rs (the_restart_option_is_not_passed_on); native/crates/ox-app/tests/launch.rs (a real --restart replaces the running process, which exits normally)."
 
 [[feature]]
 id = "UPD-010"
@@ -15667,8 +15667,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "--version prints \"OpenXplorer <version>\" (native/crates/ox-app/src/update/launch_guard.rs). Missing: --check and --diagnose."
+native = "done"
+native_note = "native/crates/ox-app/src/update/launch_guard.rs and update/report.rs: --version prints 'OpenXplorer <version>'; --check prints the version, GTK, the GIO VFS class and the build digest without opening a window (no WebKitGTK line: the native app does not use it); --diagnose prints the Python report's JSON (installed, owner, running, matches, legacyProcess, associations from xdg-mime, showInFolder with owner, ownerLabel, ownedByOpenXplorer and enabled), without file names or credentials (native/crates/ox-core/src/update/diagnosis.rs). Tests: diagnosis.rs (the_report_keeps_the_python_keys_and_compares_the_builds), report.rs (the_check_names_the_libraries_and_the_build), native/crates/ox-app/tests/launch.rs (--version, and --diagnose reporting a matching running build)."
 
 [[feature]]
 id = "UPD-011"
