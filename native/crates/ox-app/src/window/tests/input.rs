@@ -19,6 +19,11 @@ use crate::window::menu_popover::MenuPopover;
 /// Presses `key` in the details view, as far as the window's own key
 /// handling goes. Returns true when the window handled the key itself.
 fn press(test: &TestWindow, key: gdk::Key) -> bool {
+    press_with(test, key, gdk::ModifierType::empty())
+}
+
+/// Presses `key` with `modifiers` held, as [`press`] does.
+fn press_with(test: &TestWindow, key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
     let view = test.window.folder_pane().details().column_view();
     let controller = view
         .observe_controllers()
@@ -28,10 +33,7 @@ fn press(test: &TestWindow, key: gdk::Key) -> bool {
         .find(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
         .expect("the details view has a capture-phase key controller");
     let no_keycode = 0_u32;
-    controller.emit_by_name::<bool>(
-        "key-pressed",
-        &[&key.into_glib(), &no_keycode, &gdk::ModifierType::empty()],
-    )
+    controller.emit_by_name::<bool>("key-pressed", &[&key.into_glib(), &no_keycode, &modifiers])
 }
 
 fn hint(test: &TestWindow) -> String {
@@ -200,6 +202,24 @@ fn modifier_keys_keep_the_typed_prefix() {
     press(&test, gdk::Key::Shift_L);
     test.window.type_text("otes 1");
     assert_eq!(test.selected_names(), ["Notes 10.txt"]);
+}
+
+/// parity: SEL-029
+#[gtk::test]
+fn keys_with_ctrl_or_alt_never_start_a_prefix() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_model().select_only(0);
+    for modifiers in [gdk::ModifierType::CONTROL_MASK, gdk::ModifierType::ALT_MASK] {
+        let handled = press_with(&test, gdk::Key::r, modifiers);
+        assert!(!handled, "{modifiers:?}+R goes on to the shortcuts");
+        assert_eq!(
+            test.window.folder_model().selected_positions(),
+            [0],
+            "{modifiers:?}"
+        );
+        assert!(hint(&test).is_empty(), "{modifiers:?}+R starts no prefix");
+    }
 }
 
 #[gtk::test]

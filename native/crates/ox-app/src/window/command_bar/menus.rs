@@ -162,7 +162,7 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
         item("Invert selection", Icon::ArrowSwap, WindowAction::InvertSelection),
         item(
             "Select items matching…",
-            Icon::Checkmark,
+            Icon::Search,
             WindowAction::SelectMatching,
         ),
         MenuEntry::Divider,

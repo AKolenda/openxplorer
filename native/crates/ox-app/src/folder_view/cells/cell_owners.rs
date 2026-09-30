@@ -247,6 +247,16 @@ impl CellOwners {
         bound_position(&list_item)
     }
 
+    /// The position of the item whose row or tile is, or contains,
+    /// `widget`, such as the one with keyboard focus.
+    pub(crate) fn position_of(&self, widget: &gtk::Widget) -> Option<u32> {
+        // A list's own first child is a row, so the walk stops below it.
+        let list_item = std::iter::successors(Some(widget.clone()), WidgetExt::parent)
+            .take_while(|widget| !widget.is::<gtk::ListBase>())
+            .find_map(|widget| self.owner_within(&widget))?;
+        bound_position(&list_item)
+    }
+
     /// The content widget showing `position`, if it is on screen.
     pub(crate) fn widget_at(&self, position: u32) -> Option<gtk::Widget> {
         self.owners

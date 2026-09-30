@@ -309,9 +309,13 @@ impl BrowserWindow {
             (tab.selected.clone(), std::mem::take(&mut tab.reveals_selection))
         };
         self.change_model(|| self.folder_pane().model().select_uris(&selected));
-        let first = self.folder_pane().model().first_selected();
-        if let (true, Some(position)) = (reveals, first) {
-            self.folder_pane().reveal(position);
+        let model = self.folder_pane().model();
+        match (reveals, model.selected_positions().as_slice()) {
+            // One item, such as the one after a deletion, also becomes the
+            // range anchor.
+            (true, [only]) => self.change_model(|| self.folder_pane().select_and_reveal(*only)),
+            (true, [first, ..]) => self.folder_pane().reveal(*first),
+            _ => {}
         }
     }
 

@@ -51,7 +51,7 @@ impl BrowserWindow {
         let finished = outcome.map(|outcome| FinishedOperation {
             summary: summarize_restore(&outcome.result),
             undo: outcome.undo,
-            created: outcome.created,
+            select_after: outcome.created,
         });
         self.conclude_operation(finished).await;
     }
@@ -75,7 +75,7 @@ impl BrowserWindow {
         let finished = outcome.map(|result| FinishedOperation {
             summary: summarize(TransferMode::Delete, &result),
             undo: None,
-            created: Vec::new(),
+            select_after: Vec::new(),
         });
         self.conclude_operation(finished).await;
     }
@@ -97,7 +97,7 @@ impl BrowserWindow {
         let finished = outcome.map(|result| FinishedOperation {
             summary: summarize(TransferMode::Delete, &result),
             undo: None,
-            created: Vec::new(),
+            select_after: Vec::new(),
         });
         self.conclude_operation(finished).await;
     }

@@ -67,11 +67,11 @@ impl BrowserWindow {
             return;
         }
         if !plan.to_trash.is_empty() {
-            self.run_deletion(&removal(TransferMode::Trash, plan.to_trash), next.as_ref())
+            self.run_deletion(&removal(TransferMode::Trash, plan.to_trash), next.as_deref())
                 .await;
         }
         if !plan.to_delete.is_empty() {
-            self.run_deletion(&removal(TransferMode::Delete, plan.to_delete), next.as_ref())
+            self.run_deletion(&removal(TransferMode::Delete, plan.to_delete), next.as_deref())
                 .await;
         }
     }
@@ -95,7 +95,7 @@ impl BrowserWindow {
             return;
         }
         let uris = items.into_iter().map(|item| item.uri).collect();
-        self.run_deletion(&removal(TransferMode::Delete, uris), next.as_ref())
+        self.run_deletion(&removal(TransferMode::Delete, uris), next.as_deref())
             .await;
     }
 

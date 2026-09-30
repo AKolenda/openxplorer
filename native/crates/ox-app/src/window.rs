@@ -66,6 +66,7 @@ mod folder_pane;
 mod folder_search;
 mod folder_size_scan;
 mod gestures;
+mod grid_keys;
 mod imp;
 mod input;
 mod integration_actions;

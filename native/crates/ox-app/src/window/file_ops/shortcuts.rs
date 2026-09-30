@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The file commands' keys, and Ctrl+A, and where they work (CMD-016,
-//! CMD-017, SEL-004).
+//! The file commands' keys, and the selection keys, and where they work
+//! (CMD-016, CMD-017, SEL-004, SEL-005).
 //!
-//! Ports the file keys and Ctrl+A of `onKey` in `desktop/ui/app.js`: Ctrl+A
-//! selects every shown item wherever focus is outside a text field, not
-//! only in the folder view. It adds Undo,
-//! Redo, Shift+Delete and Copy path's keys (Explorer's Ctrl+Shift+C for
-//! "Copy as path", and Dolphin's Ctrl+Alt+C for "Copy Location",
+//! Ports the file keys, Ctrl+A and Escape of `onKey` in `desktop/ui/app.js`:
+//! Ctrl+A selects every shown item and Escape clears the selection wherever
+//! focus is outside a text field, not only in the folder view. It adds
+//! Undo, Redo, Shift+Delete and Copy path's keys (Explorer's Ctrl+Shift+C
+//! for "Copy as path", and Dolphin's Ctrl+Alt+C for "Copy Location",
 //! CLIP-013). They are not application accelerators: a text field keeps
 //! its own Ctrl+C, Ctrl+V, Delete and F2, and on the Settings page or in
 //! the address bar they do nothing, as in app.js. The window handles them
 //! in the bubble phase, after the focused widget had its turn, and only
-//! when focus is elsewhere. A disabled command ignores its key, except
-//! Cut, Copy and Paste, which `onKey` runs directly so that they can say
-//! why nothing happens.
+//! when focus is elsewhere; menus and dialogs take their own Escape first.
+//! Ctrl+A alone is handled in the capture phase, because the sidebar's list
+//! would otherwise take it for its own rows. A disabled command ignores its
+//! key, except Cut, Copy and Paste, which `onKey` runs directly so that
+//! they can say why nothing happens.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -22,9 +24,10 @@ use ox_core::clipboard::ClipboardMode;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
-/// Each file command and its keys, as GTK parses them.
+/// Each file command and its keys, as GTK parses them, handled after the
+/// focused widget.
 const FILE_SHORTCUTS: [(WindowAction, &str); 11] = [
-    (WindowAction::SelectAll, "<Primary>a"),
+    (WindowAction::SelectNone, "Escape"),
     (WindowAction::Cut, "<Primary>x"),
     (WindowAction::Copy, "<Primary>c"),
     (WindowAction::Paste, "<Primary>v"),
@@ -40,19 +43,10 @@ const FILE_SHORTCUTS: [(WindowAction, &str); 11] = [
 impl BrowserWindow {
     /// Adds the file commands' keys to the window.
     pub(super) fn install_file_shortcuts(&self) {
-        let shortcuts = gtk::ShortcutController::new();
-        shortcuts.set_propagation_phase(gtk::PropagationPhase::Bubble);
-        for (action, keys) in FILE_SHORTCUTS {
-            let trigger = gtk::ShortcutTrigger::parse_string(keys);
-            let run = gtk::CallbackAction::new(move |widget, _| {
-                let Some(window) = widget.downcast_ref::<BrowserWindow>() else {
-                    return glib::Propagation::Proceed;
-                };
-                window.run_file_shortcut(action)
-            });
-            shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(run)));
-        }
+        let shortcuts = file_shortcuts(gtk::PropagationPhase::Bubble, &FILE_SHORTCUTS);
         self.add_controller(shortcuts);
+        let select_all = [(WindowAction::SelectAll, "<Primary>a")];
+        self.add_controller(file_shortcuts(gtk::PropagationPhase::Capture, &select_all));
     }
 
     /// Runs `action` for its key, unless focus is where the key means
@@ -97,4 +91,25 @@ impl BrowserWindow {
     pub(in crate::window) fn focus_is_in_text_field(&self) -> bool {
         GtkWindowExt::focus(self).is_some_and(|focus| focus.dynamic_cast_ref::<gtk::Editable>().is_some())
     }
+}
+
+/// A controller that runs each of `shortcuts`' commands for its keys in
+/// `phase`, where [`BrowserWindow::run_file_shortcut`] lets it.
+fn file_shortcuts(
+    phase: gtk::PropagationPhase,
+    shortcuts: &[(WindowAction, &str)],
+) -> gtk::ShortcutController {
+    let controller = gtk::ShortcutController::new();
+    controller.set_propagation_phase(phase);
+    for &(action, keys) in shortcuts {
+        let trigger = gtk::ShortcutTrigger::parse_string(keys);
+        let run = gtk::CallbackAction::new(move |widget, _| {
+            let Some(window) = widget.downcast_ref::<BrowserWindow>() else {
+                return glib::Propagation::Proceed;
+            };
+            window.run_file_shortcut(action)
+        });
+        controller.add_shortcut(gtk::Shortcut::new(trigger, Some(run)));
+    }
+    controller
 }

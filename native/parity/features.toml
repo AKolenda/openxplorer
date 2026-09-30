@@ -4201,7 +4201,7 @@ python_tests = [
 bridge = []
 dolphin = "KItemListController::onPress (empty area)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/input.rs (blank_space_press): a primary press below the rows or between tiles clears the selection and focuses the list; Ctrl or Shift keeps it. GTK keeps its range anchor, so a later Shift+click selects from the last clicked item, as in Windows Explorer. native/crates/ox-app/src/window/tests/selection.rs (a_click_on_blank_space_clears_the_selection_and_focuses_the_list), input.rs (ctrl_or_shift_keeps_the_selection_on_blank_space). Rubber-band selection is SEL-012."
+native_note = "native/crates/ox-app/src/window/input.rs (blank_space_press): a primary press below the rows or between tiles clears the selection and focuses the list; Ctrl or Shift keeps it. The same press allows the rubber band only from blank space (SEL-012). GTK keeps its range anchor, so a later Shift+click selects from the last clicked item, as in Windows Explorer; clearing the anchor too awaits the owner's confirmation. native/crates/ox-app/src/window/tests/selection.rs (a_click_on_blank_space_clears_the_selection_and_focuses_the_list), input.rs (ctrl_or_shift_keeps_the_selection_on_blank_space)."
 
 [[feature]]
 id = "SEL-003"
@@ -4224,7 +4224,7 @@ python_tests = [
 bridge = []
 dolphin = "KItemListController::onPress (RightButton)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/context_menu.rs (select_for_context_menu). native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_file_selects_it_and_opens_the_classic_menu, with_several_items_selected_the_one_item_commands_are_disabled)."
+native_note = "native/crates/ox-app/src/window/context_menu.rs (select_for_context_menu); the test helper right_click presses at the item's point through it. native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_file_selects_it_and_opens_the_classic_menu, with_several_items_selected_the_one_item_commands_are_disabled)."
 
 [[feature]]
 id = "SEL-004"
@@ -4246,7 +4246,7 @@ python_tests = ["desktop/tests/ui_type_select.py::A second Escape clears the sel
 bridge = []
 dolphin = "Dolphin: Ctrl+A select all, Ctrl+Shift+A invert selection.; Ctrl+A; edit_select_all: Ctrl+A"
 native = "done"
-native_note = "Ctrl+A is a bubble-phase window shortcut in native/crates/ox-app/src/window/file_ops/shortcuts.rs, so text fields keep their own Ctrl+A and it does nothing on the Settings page or in the address bar. native/crates/ox-app/src/window/tests/selection.rs (ctrl_a_selects_every_shown_item_outside_text_fields)."
+native_note = "Ctrl+A is a capture-phase window shortcut in native/crates/ox-app/src/window/file_ops/shortcuts.rs, so the sidebar's list cannot take it; text fields keep their own Ctrl+A, and it does nothing on the Settings page or in the address bar. native/crates/ox-app/src/window/tests/selection.rs (ctrl_a_and_escape_work_outside_the_view_but_not_in_text_fields: from a sidebar place and a button)."
 
 [[feature]]
 id = "SEL-005"
@@ -4260,7 +4260,7 @@ sources = ["desktop/ui/app.js:1032", "desktop/ui/app.js:405", "desktop/ui/app.js
 python_tests = ["desktop/tests/ui_type_select.py::A second Escape clears the selection"]
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/input.rs (prefix_editing_key). native/crates/ox-app/src/window/tests/input.rs (escape_clears_the_typed_prefix_before_the_selection). Escape clears the selection while focus is in the folder view; elsewhere it keeps its own meaning."
+native_note = "In the folder view native/crates/ox-app/src/window/input.rs (prefix_editing_key) clears a typed prefix first and then the selection; elsewhere outside text fields, the address bar and Settings, Escape is a bubble-phase window shortcut (native/crates/ox-app/src/window/file_ops/shortcuts.rs), after menus and dialogs took their own. native/crates/ox-app/src/window/tests/input.rs (escape_clears_the_typed_prefix_before_the_selection), tests/selection.rs (ctrl_a_and_escape_work_outside_the_view_but_not_in_text_fields)."
 
 [[feature]]
 id = "SEL-006"
@@ -4368,7 +4368,7 @@ python_tests = []
 bridge = []
 dolphin = "keyboard anchor handling (nextRowIndex/previousRowIndex); Arrow keys in icon view, PageUp/PageDown"
 native = "done"
-native_note = "GtkGridView's key bindings. native/crates/ox-app/src/window/tests/selection.rs (arrows_move_in_two_dimensions_in_the_icon_grid)."
+native_note = "GtkGridView's key bindings for Left and Right; native/crates/ox-app/src/window/grid_keys.rs handles plain Up and Down and remembers the column while focus stays on the item it moved to, as Dolphin's keyboard anchor does. grid_keys.rs (up_and_down_keep_the_column_across_a_shorter_last_row), native/crates/ox-app/src/window/tests/selection.rs (arrows_move_in_two_dimensions_in_the_icon_grid, with a shorter last row)."
 
 [[feature]]
 id = "SEL-011"
@@ -4405,8 +4405,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KItemListRubberBand; Rubber-band selection"
-native = "done"
-native_note = "GTK's rubber band on both views, started only from blank space (native/crates/ox-app/src/window/file_drag.rs, start_rubber_bands_on_blank_space_only) so dragging an item still drags it. GTK replaces the selection without modifiers, toggles with Ctrl, adds with Shift, autoscrolls at the edges and spans full rows in the details view. native/crates/ox-app/src/window/tests/selection.rs (a_rubber_band_starts_on_blank_space_only)."
+native = "partial"
+native_note = "GTK's rubber band on both views, allowed only from blank space by the press in native/crates/ox-app/src/window/input.rs (blank_space_press), so dragging an item still drags it; it replaces the selection without modifiers, autoscrolls at the edges and spans full rows in the details view. native/crates/ox-app/src/window/tests/selection.rs (a_rubber_band_starts_on_blank_space_only). Missing: GTK 4.14 applies the band only when it ends, with Ctrl adding the touched items to the selection and Shift (and Ctrl+Shift) removing them; Dolphin toggles with Ctrl and adds with Shift. GTK has no public way to learn the band's items, so matching Dolphin needs our own band."
 
 [[feature]]
 id = "SEL-013"
@@ -4865,7 +4865,7 @@ python_tests = [
 bridge = []
 gnome = "Use GtkIMContext-aware key handling (Gtk.EventControllerKey with im-context) so preedit never reaches type-ahead."
 native = "done"
-native_note = "native/crates/ox-app/src/typeahead.rs (named_keys_and_control_characters_are_not_prefixes, invalid_key_input_does_not_alter_the_buffer); the GTK controller in native/crates/ox-app/src/window/input.rs passes Ctrl/Alt/Super keys on and takes text only from the input method, so composition, dead keys and pre-edit never become prefix text. native/crates/ox-app/src/window/tests/input.rs (modifier_keys_keep_the_typed_prefix)."
+native_note = "native/crates/ox-app/src/typeahead.rs (named_keys_and_control_characters_are_not_prefixes, invalid_key_input_does_not_alter_the_buffer); the GTK controller in native/crates/ox-app/src/window/input.rs passes Ctrl/Alt/Super keys on and takes text only from the input method's commit, so composition, dead keys and pre-edit never become prefix text. native/crates/ox-app/src/window/tests/input.rs (keys_with_ctrl_or_alt_never_start_a_prefix, modifier_keys_keep_the_typed_prefix)."
 
 [[feature]]
 id = "SEL-030"
@@ -4995,7 +4995,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "select_only in native/crates/ox-app/src/window/type_to_select.rs. native/crates/ox-app/src/window/tests/input.rs (a_match_replaces_a_multi_selection)."
+native_note = "native/crates/ox-app/src/window/type_to_select.rs (apply_typeahead) selects the match through the view (FolderPane::select_and_reveal), so it becomes GTK's range anchor. native/crates/ox-app/src/window/tests/input.rs (a_match_replaces_a_multi_selection), tests/selection.rs (a_type_ahead_match_becomes_the_range_anchor)."
 
 [[feature]]
 id = "SEL-035"
@@ -5011,8 +5011,8 @@ python_tests = [
   "desktop/tests/type_select.test.cjs::prefix length is bounded",
 ]
 bridge = []
-native = "done"
-native_note = "native/crates/ox-app/src/typeahead.rs (spaces_within_a_filename_are_significant, prefix_length_is_bounded); native/crates/ox-app/src/window/tests/selection.rs (space_selects_the_current_item). Space inside an active prefix is prefix text; a lone Space selects the current item (SEL-036), the rule SEL-036 proposed."
+native = "partial"
+native_note = "native/crates/ox-app/src/typeahead.rs (spaces_within_a_filename_are_significant, prefix_length_is_bounded): Space inside an active prefix is prefix text. A lone Space does not start a prefix: it selects the current item and never deselects it (SEL-036, Dolphin and Explorer), where app.js started a ' ' prefix. Left partial until the product owner confirms the SEL-036 rule."
 
 [[feature]]
 id = "SEL-036"
@@ -5032,7 +5032,7 @@ python_tests = ["desktop/tests/type_select.test.cjs::spaces within a filename ar
 bridge = []
 dolphin = "Key_Space handling + handleSpaceAsNormalKey"
 native = "done"
-native_note = "native/crates/ox-app/src/window/input.rs (prefix_editing_key) leaves a lone Space to GTK's list, which adds the current item to the selection as Dolphin does; inside an active prefix Space is prefix text (SEL-035). native/crates/ox-app/src/window/tests/selection.rs (space_selects_the_current_item)."
+native_note = "native/crates/ox-app/src/window/input.rs (prefix_editing_key, select_current_item): a lone Space adds the item with keyboard focus to the selection and never removes it, as in Dolphin; Ctrl+Space still toggles (SEL-009); inside an active prefix Space is prefix text (SEL-035). native/crates/ox-app/src/window/tests/selection.rs (space_selects_the_current_item_and_never_deselects_it)."
 
 [[feature]]
 id = "SEL-037"
@@ -5047,7 +5047,7 @@ python_tests = []
 bridge = []
 gnome = "Nautilus 46 view.select-pattern ('Select Items Matching', Ctrl+S) using GPatternSpec"
 native = "done"
-native_note = "native/crates/ox-app/src/window/select_matching.rs: 'Select items matching…' in the More options menu asks for a * and ? pattern and selects the shown items it matches, ignoring case; no shortcut yet (Ctrl+S is undecided, VIEW-064). select_matching.rs (wildcards_match_whole_names_ignoring_case)."
+native_note = "native/crates/ox-app/src/window/select_matching.rs: 'Select items matching…' in the More options menu asks for a * and ? pattern and selects the shown items it matches, ignoring case; no shortcut yet (Ctrl+S is undecided, VIEW-064). select_matching.rs (wildcards_match_whole_names_ignoring_case), native/crates/ox-app/src/window/tests/selection.rs (select_matching_selects_the_shown_items_whose_names_match)."
 
 [[feature]]
 id = "SIDE-001"

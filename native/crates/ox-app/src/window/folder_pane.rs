@@ -281,13 +281,26 @@ impl FolderPane {
 
     /// Scrolls to `position` and gives it keyboard focus.
     pub(super) fn reveal(&self, position: u32) {
-        let focus = gtk::ListScrollFlags::FOCUS;
+        self.scroll_to(position, gtk::ListScrollFlags::FOCUS);
+    }
+
+    /// Selects only `position`, makes it the anchor Shift extends a range
+    /// from, scrolls to it and gives it keyboard focus, as a click on it
+    /// does.
+    pub(super) fn select_and_reveal(&self, position: u32) {
+        self.scroll_to(
+            position,
+            gtk::ListScrollFlags::FOCUS | gtk::ListScrollFlags::SELECT,
+        );
+    }
+
+    fn scroll_to(&self, position: u32, flags: gtk::ListScrollFlags) {
         match self.view() {
             FolderView::Details => self
                 .details()
                 .column_view()
-                .scroll_to(position, None, focus, None),
-            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, focus, None),
+                .scroll_to(position, None, flags, None),
+            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, flags, None),
         }
     }
 

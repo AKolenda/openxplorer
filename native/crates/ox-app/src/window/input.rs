@@ -15,6 +15,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::activation::{activation_for, Activation};
+use super::file_drag::allow_rubber_band;
 use super::file_drop::DropZone;
 use super::folder_pane::PanePage;
 use super::gestures;
@@ -25,7 +26,9 @@ use super::BrowserWindow;
 const FOLDER_VIEW_LABEL: &str = "Folder contents — type a filename prefix to select";
 
 /// Whether a press on blank space with `modifiers` held keeps the
-/// selection: Ctrl and Shift do, so a rubber band can add to it.
+/// selection: Ctrl and Shift do, for the rubber band that may follow. GTK's
+/// band adds its items to the kept selection with Ctrl and removes them
+/// with Shift (SEL-012).
 fn press_keeps_selection(modifiers: gdk::ModifierType) -> bool {
     modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK)
 }
@@ -242,6 +245,9 @@ impl BrowserWindow {
         if let Some(handled) = self.prefix_editing_key(input, key) {
             return handled;
         }
+        if let Some(handled) = self.grid_row_key(key, modifiers) {
+            return handled;
+        }
         // The input method composes text before it reaches type-to-select.
         let consumed = controller
             .current_event()
@@ -257,7 +263,8 @@ impl BrowserWindow {
     }
 
     /// Escape, Backspace and Space, which act on a typed prefix first:
-    /// Escape clears the prefix, and only without one the selection.
+    /// Escape clears the prefix, and only without one the selection; Space
+    /// is prefix text, and only without one selects the current item.
     /// `None` for every other key.
     fn prefix_editing_key(&self, input: &gtk::IMMulticontext, key: gdk::Key) -> Option<glib::Propagation> {
         let now = monotonic_now();
@@ -269,11 +276,23 @@ impl BrowserWindow {
             }
             gdk::Key::Escape => self.folder_pane().model().select_none(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
-            // Space toggles the native selection unless a prefix is typed.
-            gdk::Key::space if !prefix_active => return Some(glib::Propagation::Proceed),
+            gdk::Key::space if !prefix_active => self.select_current_item(),
             _ => return None,
         }
         Some(glib::Propagation::Stop)
+    }
+
+    /// Space: adds the item with keyboard focus to the selection, as in
+    /// Dolphin and Explorer, and never removes it (GTK's own Space toggles
+    /// it; Ctrl+Space still does).
+    fn select_current_item(&self) {
+        let pane = self.folder_pane();
+        let current = GtkWindowExt::focus(self).and_then(|focus| pane.owners().position_of(&focus));
+        if let Some(position) = current {
+            if !pane.model().selection().is_selected(position) {
+                pane.model().selection().select_item(position, false);
+            }
+        }
     }
 
     /// A pointer press in a view starts a new prefix; the click itself
@@ -290,10 +309,11 @@ impl BrowserWindow {
         click
     }
 
-    /// A primary press on blank space in `view`, below the rows or between
-    /// the tiles, clears the selection and keeps keyboard focus on the
-    /// view, as in Windows Explorer and Dolphin. With Ctrl or Shift held
-    /// the selection stays, for a rubber band that adds to it.
+    /// A primary press in `view` decides whether a drag draws a rubber band:
+    /// only from blank space (see [`allow_rubber_band`]). On blank space,
+    /// below the rows or between the tiles, it also clears the selection
+    /// and keeps keyboard focus on the view, as in Windows Explorer and
+    /// Dolphin; with Ctrl or Shift held the selection stays.
     fn blank_space_press(&self, view: &gtk::Widget) -> gtk::GestureClick {
         let press = gtk::GestureClick::new();
         press.set_button(gdk::BUTTON_PRIMARY);
@@ -304,7 +324,10 @@ impl BrowserWindow {
             #[weak]
             view,
             move |press, _, x, y| {
-                if window.are_item_clicks_paused() || !window.is_blank_space(&view, x, y) {
+                let on_blank_space = window.is_blank_space(&view, x, y);
+                // Before the rubber band's own gesture sees the press.
+                allow_rubber_band(&view, on_blank_space);
+                if window.are_item_clicks_paused() || !on_blank_space {
                     return;
                 }
                 if !press_keeps_selection(press.current_event_state()) {

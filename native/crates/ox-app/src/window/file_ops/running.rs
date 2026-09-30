@@ -32,8 +32,10 @@ pub(super) struct FinishedOperation {
     pub(super) summary: OperationSummary,
     /// How Undo reverses it, when it can.
     pub(super) undo: Option<UndoRecord>,
-    /// Where its new or moved items are now, to select them.
-    pub(super) created: Vec<String>,
+    /// The items to select once the folder is listed again: where its new
+    /// or moved items are now, or after a deletion the item that followed
+    /// the removed ones.
+    pub(super) select_after: Vec<String>,
 }
 
 impl FinishedOperation {
@@ -42,7 +44,7 @@ impl FinishedOperation {
         Self {
             summary: summarize(mode, &outcome.result),
             undo: outcome.undo,
-            created: outcome.created,
+            select_after: outcome.created,
         }
     }
 }
@@ -144,12 +146,12 @@ impl BrowserWindow {
     /// Runs `request`, a move to the Trash or a delete, and concludes it:
     /// [`Self::run_request`], then [`Self::conclude_operation`], which
     /// selects `next`, the item that followed the removed ones (SEL-017).
-    pub(super) async fn run_deletion(&self, request: &TransferRequest, next: Option<&String>) {
+    pub(super) async fn run_deletion(&self, request: &TransferRequest, next: Option<&str>) {
         let Some(outcome) = self.run_request(request).await else {
             return;
         };
         let finished = outcome.map(|outcome| FinishedOperation {
-            created: next.cloned().into_iter().collect(),
+            select_after: next.map(str::to_owned).into_iter().collect(),
             ..FinishedOperation::of_transfer(request.mode, outcome)
         });
         self.conclude_operation(finished).await;
@@ -165,7 +167,7 @@ impl BrowserWindow {
                 if let Some(record) = finished.undo {
                     self.context().record_operation(record);
                 }
-                self.reload_selecting(finished.created);
+                self.reload_selecting(finished.select_after);
                 self.report(finished.summary).await;
             }
             Err(error) => {

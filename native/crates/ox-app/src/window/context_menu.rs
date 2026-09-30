@@ -231,18 +231,37 @@ impl BrowserWindow {
     }
 
     /// Opens the context menu as a right-click at the item at `position`,
-    /// or on blank space without one, for tests.
+    /// or on blank space below the items without one, for tests: the
+    /// selection changes as [`Self::select_for_context_menu`] decides.
     #[cfg(test)]
     pub(super) fn right_click(&self, position: Option<u32>) {
-        let model = self.folder_pane().model();
-        match position {
-            Some(position) if !model.selection().is_selected(position) => model.select_only(position),
-            Some(_) => {}
-            None => model.select_none(),
-        }
         let view = self.folder_pane().view_widget();
+        let (x, y) = match position {
+            Some(position) => {
+                let point_on_item = || self.point_on_item(&view, position);
+                crate::test_support::harness::wait_until("the right-clicked item to be laid out", || {
+                    point_on_item().is_some()
+                });
+                point_on_item().expect("the right-clicked item is laid out")
+            }
+            None => (4.0, f64::from(view.height()) - 4.0),
+        };
+        self.select_for_context_menu(&view, x, y);
         let point = gdk::Rectangle::new(KEYBOARD_MENU_INSET, KEYBOARD_MENU_INSET, 1, 1);
         self.open_context_menu(&view, &point, self.preferred_menu_style());
+    }
+
+    /// A point in `view` on the item at `position`, once it is laid out
+    /// there, for tests.
+    #[cfg(test)]
+    fn point_on_item(&self, view: &gtk::Widget, position: u32) -> Option<(f64, f64)> {
+        let owners = self.folder_pane().owners();
+        let bounds = owners.file_cell_at(position, view)?.compute_bounds(view)?;
+        let (x, y) = (
+            f64::from(bounds.x()) + 4.0,
+            f64::from(bounds.y() + bounds.height() / 2.0),
+        );
+        (owners.position_at(view, x, y) == Some(position)).then_some((x, y))
     }
 }
 
