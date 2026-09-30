@@ -90,7 +90,7 @@ fn the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files() {
     test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
     let menu = test.window.context_menu();
     wait_for_frames(&test.window, 2);
-    let enabled: Vec<gtk::ListBoxRow> = menu.rows().into_iter().filter(|row| row.is_sensitive()).collect();
+    let enabled: Vec<gtk::ListBoxRow> = menu.rows().into_iter().filter(WidgetExt::is_sensitive).collect();
     let (first, last) = (enabled[0].clone(), enabled[enabled.len() - 1].clone());
     assert!(first.has_focus(), "the first enabled item has the keyboard");
 

@@ -409,9 +409,10 @@ fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
     } else {
         item.glyph
     };
-    let application_icon = (check != CheckMark::Checked)
-        .then(|| item.application.as_deref())
-        .flatten()
+    let application_icon = item
+        .application
+        .as_deref()
+        .filter(|_| check != CheckMark::Checked)
         .and_then(|desktop_id| integration::application_image(desktop_id, ROW_GLYPH));
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     content.append(&application_icon.unwrap_or_else(|| icons::image(glyph, ROW_GLYPH)));
