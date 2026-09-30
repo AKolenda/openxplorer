@@ -92,6 +92,10 @@ fn a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it() {
     wait_until("both lookups to answer", || {
         test.window.answered_activations() == 2
     });
+    // The opener reads each file again before it records the launch.
+    wait_until("both files to be opened", || {
+        test.context.recorded_launches().len() == 2
+    });
     let mut launches = test.context.recorded_launches();
     launches.sort();
     assert_eq!(
@@ -103,6 +107,8 @@ fn a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it() {
     test.window.switch_tab(background);
     test.window.switch_tab(front);
     wait_until("the lookup to answer", || test.window.answered_activations() == 3);
+    // An opener that did start would record its launch shortly after.
+    wait_for(std::time::Duration::from_millis(300));
     assert_eq!(
         test.context.recorded_launches().len(),
         2,

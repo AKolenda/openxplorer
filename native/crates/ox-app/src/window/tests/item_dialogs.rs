@@ -15,6 +15,7 @@ use crate::dialog_layer::DialogFrame;
 use crate::integration::OpenWithDialog;
 use crate::properties::{FolderSizeState, PropertiesView, RestoreRequest, SnapshotTarget};
 use crate::test_support::harness::{capture, descendants, wait_until, Fixture, TestWindow};
+use crate::window::tests::file_ops_support::open_dialog;
 use crate::window::widget_tree::children;
 use crate::window::WindowAction;
 
@@ -643,7 +644,8 @@ fn browse_opens_the_snapshot_in_a_marked_tab_with_its_banner() {
 }
 
 /// A file inside a snapshot is never handed to an application that could
-/// change it; opening it says to restore a copy first.
+/// change it; opening it says, in "Could not open the item", to restore a
+/// copy first.
 ///
 /// parity: PROP-024
 #[gtk::test]
@@ -654,11 +656,13 @@ fn a_file_in_a_snapshot_does_not_open_in_an_application() {
 
     test.window.activate_item(test.position_of("plan.txt"));
 
-    assert!(test.context.recorded_launches().is_empty());
+    let dialog = open_dialog(&test);
     assert_eq!(
-        test.window.shown_message(),
+        dialog.message_text(),
         "Previous-version locations are read-only in OpenXplorer. Restore a copy to a different folder first."
     );
+    assert!(test.context.recorded_launches().is_empty());
+    dialog.press("OK");
 }
 
 /// parity: PROP-025
