@@ -62,6 +62,10 @@ window.ox.ox-dialog .dialog-actions {
   border-radius: 0 0 8px 8px;
   padding: 18px 24px;
 }
+/* The dialog frame in a window (src/window/dialog.rs): the body a little
+   under the message, and the buttons 8 apart. */
+window.ox.ox-dialog ox-dialog-frame .dialog-body { margin-top: 3px; }
+window.ox.ox-dialog ox-dialog-frame .dialog-actions { border-spacing: 8px; }
 window.ox.ox-dialog button.dialog-button {
   min-height: 30px;
   min-width: 90px;

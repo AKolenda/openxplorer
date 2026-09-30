@@ -57,29 +57,16 @@ mod imp {
     use ox_core::transfer::Cancellation;
 
     use super::Answer;
+    use crate::dialog_layer::DialogFrame;
 
     /// Private state of [`super::Dialog`].
     #[derive(Debug, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/dialog.ui")]
     pub(crate) struct Dialog {
-        /// The scrolling body, capped to the parent window's height.
+        /// The heading, message, fields, error line and buttons; its body
+        /// scrolls, capped to the parent window's height.
         #[template_child]
-        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
-        /// The heading, which is also the window's title.
-        #[template_child]
-        pub(super) title_label: TemplateChild<gtk::Label>,
-        /// The question or the facts, with its line breaks kept.
-        #[template_child]
-        pub(super) message_label: TemplateChild<gtk::Label>,
-        /// The fields, notes and check boxes, in the order added.
-        #[template_child]
-        pub(super) fields: TemplateChild<gtk::Box>,
-        /// Why the last try failed (`.modal-error`).
-        #[template_child]
-        pub(super) error_label: TemplateChild<gtk::Label>,
-        /// The buttons, right-aligned.
-        #[template_child]
-        pub(super) actions: TemplateChild<gtk::Box>,
+        pub(super) frame: TemplateChild<DialogFrame>,
         /// The buttons, in the order added; a [`super::DialogButton`] is
         /// an index into it.
         pub(super) buttons: RefCell<Vec<gtk::Button>>,
@@ -102,12 +89,7 @@ mod imp {
         fn default() -> Self {
             let (answers, answer_queue) = async_channel::unbounded();
             Self {
-                scroller: TemplateChild::default(),
-                title_label: TemplateChild::default(),
-                message_label: TemplateChild::default(),
-                fields: TemplateChild::default(),
-                error_label: TemplateChild::default(),
-                actions: TemplateChild::default(),
+                frame: TemplateChild::default(),
                 buttons: RefCell::default(),
                 answers,
                 answer_queue,
@@ -125,6 +107,7 @@ mod imp {
         type ParentType = gtk::Window;
 
         fn class_init(klass: &mut Self::Class) {
+            DialogFrame::ensure_type();
             klass.bind_template();
         }
 
@@ -153,7 +136,7 @@ mod imp {
         /// Fits the dialog to its parent window before its first frame, as
         /// it is realized when it shows.
         fn realize(&self) {
-            crate::modal::fit_to_parent(&*self.obj(), &self.scroller);
+            crate::modal::fit_to_parent(&*self.obj(), &self.frame.scroller());
             self.parent_realize();
         }
     }
@@ -190,14 +173,18 @@ impl Dialog {
             .property("title", title)
             .build();
         super::actions::follow_text_size_keys(&dialog);
-        let imp = dialog.imp();
-        imp.title_label.set_text(title);
-        imp.message_label.set_text(message);
-        imp.message_label.set_visible(!message.is_empty());
-        dialog.update_relation(&[gtk::accessible::Relation::LabelledBy(&[imp
-            .title_label
+        let frame = &dialog.imp().frame;
+        frame.set_title(title);
+        frame.set_message(message);
+        dialog.update_relation(&[gtk::accessible::Relation::LabelledBy(&[frame
+            .title_label()
             .upcast_ref()])]);
         dialog
+    }
+
+    /// The box the fields, notes and check boxes go in, in the order added.
+    fn fields(&self) -> gtk::Box {
+        self.imp().frame.body()
     }
 
     /// Adds a labelled one-line text field showing `text`
@@ -219,8 +206,8 @@ impl Dialog {
             .build();
         let control = control.upcast_ref::<gtk::Widget>();
         control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
-        self.imp().fields.append(&caption);
-        self.imp().fields.append(control);
+        self.fields().append(&caption);
+        self.fields().append(control);
     }
 
     /// Adds a boxed note in muted text (`.modal-note`).
@@ -247,7 +234,7 @@ impl Dialog {
             .build();
         // Selectable with the pointer, but no stop for the keyboard.
         line.set_focusable(false);
-        self.imp().fields.append(&line);
+        self.fields().append(&line);
         line
     }
 
@@ -266,13 +253,13 @@ impl Dialog {
             .hscrollbar_policy(gtk::PolicyType::Automatic)
             .min_content_height(height)
             .build();
-        self.imp().fields.append(&scrolled);
+        self.fields().append(&scrolled);
     }
 
     /// The text of the scrolled box, for tests.
     #[cfg(test)]
     pub(crate) fn scrolled_text(&self) -> String {
-        let scrolled = super::widget_tree::children(&*self.imp().fields)
+        let scrolled = super::widget_tree::children(&self.fields())
             .find_map(|child| child.downcast::<gtk::ScrolledWindow>().ok());
         let label = scrolled
             .and_then(|scrolled| scrolled.child())
@@ -297,7 +284,7 @@ impl Dialog {
     pub(crate) fn add_check_button(&self, label: &str, active: bool) -> gtk::CheckButton {
         let check = gtk::CheckButton::builder().label(label).active(active).build();
         check.add_css_class("dialog-check");
-        self.imp().fields.append(&check);
+        self.fields().append(&check);
         check
     }
 
@@ -338,11 +325,8 @@ impl Dialog {
 
     /// A button appended to the actions and remembered.
     fn new_button(&self, label: &str, style: ButtonStyle) -> gtk::Button {
-        let button = gtk::Button::builder()
-            .label(label)
-            .css_classes([style.css_class(), "dialog-button"])
-            .build();
-        self.imp().actions.append(&button);
+        let button = self.imp().frame.add_button(label, style);
+        button.add_css_class("dialog-button");
         self.imp().buttons.borrow_mut().push(button.clone());
         button
     }
@@ -350,7 +334,7 @@ impl Dialog {
     /// Shows the dialog, focusing its first text field with the text
     /// selected, or else its first button.
     pub(crate) fn open(&self) {
-        let first_field = super::widget_tree::children(&*self.imp().fields)
+        let first_field = super::widget_tree::children(&self.fields())
             .find_map(|child| child.downcast::<gtk::Entry>().ok());
         let first_button = self.imp().buttons.borrow().first().cloned();
         // Set before the window shows, so GTK's initial focus lands there.
@@ -417,7 +401,7 @@ impl Dialog {
     /// or [`Self::finish`] ends it.
     pub(crate) fn run(&self, busy_label: &str, work: impl Future<Output = ()> + 'static) {
         let imp = self.imp();
-        imp.error_label.set_visible(false);
+        imp.frame.show_error("");
         if let Some(primary) = self.default_widget().and_downcast::<gtk::Button>() {
             if imp.busy_button.borrow().is_none() {
                 let label = primary.label().unwrap_or_default();
@@ -440,8 +424,7 @@ impl Dialog {
             button.set_label(&label);
             button.set_sensitive(true);
         }
-        imp.error_label.set_text(message);
-        imp.error_label.set_visible(true);
+        imp.frame.show_error(message);
     }
 
     /// Drops the work [`Self::run`] started, so its result is ignored.
@@ -472,20 +455,20 @@ impl Dialog {
     /// The heading, for tests.
     #[cfg(test)]
     pub(crate) fn title_text(&self) -> String {
-        self.imp().title_label.text().to_string()
+        self.imp().frame.title().to_string()
     }
 
     /// The message, for tests.
     #[cfg(test)]
     pub(crate) fn message_text(&self) -> String {
-        self.imp().message_label.text().to_string()
+        self.imp().frame.message().to_string()
     }
 
     /// The error line while shown, for tests.
     #[cfg(test)]
     pub(crate) fn error_text(&self) -> Option<String> {
-        let error_label = &self.imp().error_label;
-        error_label.is_visible().then(|| error_label.text().to_string())
+        let error = self.imp().frame.error_text();
+        (!error.is_empty()).then(|| error.to_string())
     }
 
     /// The button labels in order, for tests.

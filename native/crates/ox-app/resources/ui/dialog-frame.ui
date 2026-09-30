@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  One in-window dialog: section.modal of desktop/ui/index.html as
-  native/docs/ui-spec.md §4.11 refines it. The title, an optional message,
-  the body the dialog fills in, the error line and the footer with its
-  buttons. src/dialog_layer/frame.rs adds the buttons and the body.
+  One dialog: section.modal of desktop/ui/index.html (the title, the
+  message, the body, `.modal-error` and `.modal-actions`) as
+  native/docs/ui-spec.md §4.11 refines it to WinUI's ContentDialog. The
+  title, an optional message, the body the dialog fills in, the error line
+  and the footer with its buttons. It is shown in a window of its own
+  (src/window/dialog.rs) or on the dimmed layer over a browser window
+  (src/dialog_layer.rs). src/dialog_layer/frame.rs adds the buttons and
+  the body.
 -->
 <interface>
   <requires lib="gtk" version="4.14"/>
@@ -28,16 +32,24 @@
                 <property name="xalign">0</property>
                 <property name="wrap">true</property>
                 <property name="wrap-mode">word-char</property>
+                <property name="max-width-chars">40</property>
                 <style>
                   <class name="dialog-title"/>
                 </style>
               </object>
             </child>
             <child>
+              <!-- The message keeps its line breaks, as `white-space:
+                   pre-wrap` did, and can be selected and copied with the
+                   pointer. It takes no keyboard focus, which would select
+                   all of it when the dialog opens. -->
               <object class="GtkLabel" id="message_label">
                 <property name="xalign">0</property>
                 <property name="wrap">true</property>
                 <property name="wrap-mode">word-char</property>
+                <property name="max-width-chars">60</property>
+                <property name="selectable">true</property>
+                <property name="focusable">false</property>
                 <property name="visible">false</property>
                 <style>
                   <class name="dialog-message"/>
@@ -46,7 +58,8 @@
             </child>
             <child>
               <!-- Only the body scrolls, so the title and the buttons stay
-                   in view in a short window. -->
+                   in view when the dialog would be taller than its window
+                   (src/modal.rs, src/dialog_layer.rs). -->
               <object class="GtkScrolledWindow" id="scroller">
                 <property name="hscrollbar-policy">never</property>
                 <property name="propagate-natural-height">true</property>
@@ -66,11 +79,11 @@
                 <property name="xalign">0</property>
                 <property name="wrap">true</property>
                 <property name="wrap-mode">word-char</property>
+                <property name="max-width-chars">60</property>
                 <property name="selectable">true</property>
+                <property name="focusable">false</property>
                 <property name="visible">false</property>
-                <accessibility>
-                  <property name="label">Error</property>
-                </accessibility>
+                <property name="accessible-role">alert</property>
                 <style>
                   <class name="dialog-error"/>
                 </style>

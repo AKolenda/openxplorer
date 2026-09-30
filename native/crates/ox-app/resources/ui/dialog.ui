@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
-  A modal dialog: `.modal` of desktop/ui/style.css (the title, the
-  message, the fields, `.modal-error` and `.modal-actions`), refined to
-  WinUI's ContentDialog (native/docs/ui-spec.md §4.11). The window has no
-  title bar of its own; its title is the heading, and the whole surface is
-  a window handle, so it can be dragged where the desktop does not attach
-  it to its window. src/window/dialog.rs adds the fields and buttons.
+  A modal dialog window: the app's one dialog frame (dialog-frame.ui) in a
+  window of its own. The window has no title bar of its own; its title is
+  the heading, and the whole surface is a window handle, so it can be
+  dragged where the desktop does not attach it to its window.
+  src/window/dialog.rs adds the fields and buttons.
 -->
 <interface>
   <requires lib="gtk" version="4.14"/>
@@ -30,92 +29,10 @@
     <property name="child">
       <object class="GtkWindowHandle">
         <property name="child">
-          <object class="GtkBox">
-            <property name="orientation">vertical</property>
-            <child>
-              <!-- The body scrolls when the dialog would be taller than its
-                   window (src/modal.rs); otherwise it is as tall as its content. -->
-              <object class="GtkScrolledWindow" id="scroller">
-                <property name="hscrollbar-policy">never</property>
-                <property name="propagate-natural-width">true</property>
-                <property name="propagate-natural-height">true</property>
-                <property name="vexpand">true</property>
-                <property name="child">
-                  <object class="GtkBox" id="content">
-                    <property name="orientation">vertical</property>
-                    <style>
-                      <class name="dialog-content"/>
-                    </style>
-                    <child>
-                      <object class="GtkLabel" id="title_label">
-                        <property name="xalign">0</property>
-                        <property name="wrap">true</property>
-                        <property name="wrap-mode">word-char</property>
-                        <property name="max-width-chars">40</property>
-                        <style>
-                          <class name="dialog-title"/>
-                        </style>
-                      </object>
-                    </child>
-                    <child>
-                      <!-- The message keeps its line breaks, as `white-space:
-                           pre-wrap` did, and can be selected and copied with
-                           the pointer. It takes no keyboard focus, which would
-                           select all of it when the dialog opens. -->
-                      <object class="GtkLabel" id="message_label">
-                        <property name="xalign">0</property>
-                        <property name="wrap">true</property>
-                        <property name="wrap-mode">word-char</property>
-                        <property name="max-width-chars">60</property>
-                        <property name="selectable">true</property>
-                        <property name="focusable">false</property>
-                        <style>
-                          <class name="dialog-message"/>
-                        </style>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkBox" id="fields">
-                        <property name="orientation">vertical</property>
-                        <style>
-                          <class name="dialog-fields"/>
-                        </style>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="error_label">
-                        <property name="visible">false</property>
-                        <property name="xalign">0</property>
-                        <property name="wrap">true</property>
-                        <property name="wrap-mode">word-char</property>
-                        <property name="max-width-chars">60</property>
-                        <property name="selectable">true</property>
-                        <property name="focusable">false</property>
-                        <property name="accessible-role">alert</property>
-                        <style>
-                          <class name="dialog-error"/>
-                        </style>
-                      </object>
-                    </child>
-                  </object>
-                </property>
-              </object>
-            </child>
-            <child>
-              <!-- The footer spans the dialog; its buttons sit at the right. -->
-              <object class="GtkBox">
-                <style>
-                  <class name="dialog-actions"/>
-                </style>
-                <child>
-                  <object class="GtkBox" id="actions">
-                    <property name="hexpand">true</property>
-                    <property name="halign">end</property>
-                    <property name="spacing">8</property>
-                  </object>
-                </child>
-              </object>
-            </child>
+          <!-- The window is the dialog for assistive technologies, so the
+               frame in it is only a group. -->
+          <object class="OxDialogFrame" id="frame">
+            <property name="accessible-role">group</property>
           </object>
         </property>
       </object>
