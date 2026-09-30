@@ -5,6 +5,7 @@
 //! network locations' art.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::places::NetworkKind;
 
 use super::geometry::{bounds, laid_out, Bounds};
@@ -26,6 +27,8 @@ fn quick_access_cards_stretch_across_the_page_in_equal_columns() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     test.activate("pin-folder", None);
+    // One pin request runs at a time.
+    wait_until("the first pin", || !test.window.imp().pinning.get());
     test.window
         .navigate(&fixture.uri_of("Documents"))
         .expect("valid folder");

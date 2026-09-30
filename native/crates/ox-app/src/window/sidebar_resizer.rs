@@ -52,6 +52,7 @@ impl BrowserWindow {
             return;
         };
         handle.set_focusable(true);
+        handle.set_focus_on_click(false);
         handle.set_tooltip_text(Some(TOOLTIP));
         handle.add_css_class("sidebar-resizer");
         handle.update_property(&[gtk::accessible::Property::Label("Resize sidebar")]);
