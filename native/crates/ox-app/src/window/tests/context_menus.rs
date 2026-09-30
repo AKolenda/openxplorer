@@ -14,7 +14,7 @@ use crate::test_support::harness::{wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuStyle;
 
 /// The position of the item called `name` in `test`'s view.
-fn position_of(test: &TestWindow, name: &str) -> u32 {
+pub(super) fn position_of(test: &TestWindow, name: &str) -> u32 {
     let model = test.window.folder_model();
     (0..model.n_items())
         .find(|position| model.name_at(*position).as_deref() == Some(name))
@@ -23,7 +23,7 @@ fn position_of(test: &TestWindow, name: &str) -> u32 {
 
 /// Saves the "Right-click menu" choice `style`, as Settings does, and
 /// waits until the window reads it.
-fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
+pub(super) fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
     let update = PreferencesUpdate {
         context_menu: Some(style),
         ..PreferencesUpdate::default()
