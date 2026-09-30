@@ -153,11 +153,13 @@ impl NetworkFormDialog {
 
     /// Adds a labelled text field (`textField` in app.js) and returns its
     /// entry. The first one has focus; Enter in it presses the primary
-    /// button.
+    /// button. Addresses and labels are never spell-checked or completed
+    /// (`spellcheck=false` and `autocomplete=off` in app.js).
     pub(crate) fn add_text_field(&self, label: &str, placeholder: &str) -> gtk::Entry {
         let entry = gtk::Entry::builder()
             .placeholder_text(placeholder)
             .activates_default(true)
+            .input_hints(gtk::InputHints::NO_SPELLCHECK)
             .build();
         entry.update_property(&[gtk::accessible::Property::Label(label)]);
         let caption = gtk::Label::builder()

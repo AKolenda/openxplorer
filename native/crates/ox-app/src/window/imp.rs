@@ -115,6 +115,9 @@ pub(crate) struct BrowserWindow {
     pub(super) network: OnceCell<WindowNetwork>,
     /// The tabs and which one is active.
     pub(super) session: RefCell<Session>,
+    /// Counts navigations and typed-address lookups, so a lookup that
+    /// answers after the tab moved on is dropped (SAFE-013).
+    pub(super) activations: Cell<u64>,
     /// Display names of the home folder and the mounted devices.
     pub(super) locations: RefCell<LocationContext>,
     /// The drives and devices the volume monitor reported last.

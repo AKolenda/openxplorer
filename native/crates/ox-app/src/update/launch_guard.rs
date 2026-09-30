@@ -35,6 +35,12 @@ const SERVICE_OPTION: &str = "--filemanager-service";
 /// The exit status of a launch the guard stopped, as in the Python app.
 const GUARD_FAILURE: u8 = 3;
 
+/// What a launch as root prints before it exits (`main` in winspace.py).
+const RUN_AS_USER: &str = "Run OpenXplorer as your regular desktop user, not with sudo.";
+
+/// The user ID of root.
+const ROOT_USER_ID: u32 = 0;
+
 /// What the launch does after the guard.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LaunchCheck {
@@ -57,6 +63,9 @@ impl LaunchCheck {
             println!("OpenXplorer {}", running_version());
             return Self::Exit(glib::ExitCode::SUCCESS);
         }
+        if let Some(refusal) = refuse_root(effective_user_id()) {
+            return refusal;
+        }
         let outcome = if has(QUIT_OPTION) {
             quit_running_instance().map(|()| Self::Exit(glib::ExitCode::SUCCESS))
         } else {
@@ -73,6 +82,28 @@ impl LaunchCheck {
             Self::Exit(glib::ExitCode::from(GUARD_FAILURE))
         })
     }
+}
+
+/// Safety rule "never run as root" (`os.geteuid()==0` in `main`): a file
+/// manager running under sudo would create root-owned files in the user's
+/// folders and bypass every permission. A launch whose effective user is
+/// root says so and exits with status 1; only `--version` runs before
+/// this check.
+fn refuse_root(user_id: u32) -> Option<LaunchCheck> {
+    if user_id != ROOT_USER_ID {
+        return None;
+    }
+    eprintln!("{RUN_AS_USER}");
+    let _ = std::io::stderr().flush();
+    Some(LaunchCheck::Exit(glib::ExitCode::FAILURE))
+}
+
+/// This process's effective user ID, which `GCredentials` records on
+/// Linux; sudo makes it root's.
+fn effective_user_id() -> u32 {
+    gio::Credentials::new()
+        .unix_user()
+        .expect("GCredentials holds the effective user ID on Linux")
 }
 
 /// `arguments` without `--restart`.
@@ -185,6 +216,23 @@ mod tests {
     fn the_restart_option_is_not_passed_on() {
         let passed = without_restart(arguments(&["openxplorer", "--restart", "/tmp"]));
         assert_eq!(passed, arguments(&["openxplorer", "/tmp"]));
+    }
+
+    /// Root is refused with status 1; any other user goes on to the
+    /// running-instance checks.
+    ///
+    /// parity: SAFE-008
+    #[test]
+    fn a_launch_as_root_is_refused_with_status_1() {
+        assert_eq!(
+            refuse_root(ROOT_USER_ID),
+            Some(LaunchCheck::Exit(glib::ExitCode::FAILURE))
+        );
+        assert_eq!(refuse_root(1000), None);
+        assert_eq!(
+            RUN_AS_USER,
+            "Run OpenXplorer as your regular desktop user, not with sudo."
+        );
     }
 
     /// parity: INT-022

@@ -15,6 +15,35 @@ fn can_go_back(test: &TestWindow) -> bool {
     session.active().is_some_and(|tab| tab.history.can_go_back())
 }
 
+/// A typed address whose lookup answers after the tab navigated elsewhere
+/// is dropped: the file does not open and the tab stays where the user
+/// went.
+///
+/// Ported from `desktop/tests/ui_regressions.cjs::Navigation supersedes a delayed activation`
+///
+/// parity: SAFE-013
+#[gtk::test]
+fn navigating_drops_a_typed_address_that_answers_late() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let file = fixture.path("Notes 2.txt");
+    let typed = file.to_str().expect("fixture paths are UTF-8");
+
+    // The lookup answers on a later main-loop turn, after this navigation.
+    test.window.submit_address(typed);
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("the fixture folder");
+    wait_for(std::time::Duration::from_millis(300));
+
+    assert!(test.context.recorded_launches().is_empty());
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    test.window.submit_address(typed);
+    wait_until("the file to be opened", || {
+        !test.context.recorded_launches().is_empty()
+    });
+}
+
 /// parity: NAV-033, NAV-040
 #[gtk::test]
 fn a_typed_file_path_opens_the_file_and_leaves_the_folder_and_history() {

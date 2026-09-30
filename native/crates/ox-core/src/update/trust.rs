@@ -170,6 +170,37 @@ impl fmt::Display for TrustedUrl {
 mod tests {
     use super::*;
 
+    /// Only HTTPS to the four GitHub hosts, on the default port and
+    /// without a user name, is contacted; a redirect elsewhere is refused
+    /// with the Python app's message.
+    ///
+    /// parity: SAFE-016
+    #[test]
+    fn only_https_to_the_github_hosts_is_trusted() {
+        for host in TRUSTED_HOSTS {
+            assert!(TrustedUrl::parse(&format!("https://{host}/fixture")).is_ok(), "{host}");
+            assert!(TrustedUrl::parse(&format!("https://{host}:443/fixture")).is_ok(), "{host}");
+        }
+        let refused = [
+            "http://github.com/fixture",
+            "https://github.com:8443/fixture",
+            "https://user:secret@github.com/fixture",
+            "https://example.com/fixture",
+            "https://github.com.example.com/fixture",
+            "file:///etc/passwd",
+            "not a url",
+        ];
+        for url in refused {
+            assert!(TrustedUrl::parse(url).is_err(), "{url}");
+        }
+        let redirect = TrustedUrl::latest_release().redirect("https://example.com/installer.deb");
+        let error = redirect.expect_err("an untrusted redirect is refused");
+        assert_eq!(
+            error.to_string(),
+            "The update server returned an untrusted download location."
+        );
+    }
+
     #[test]
     fn host_names_are_compared_without_case() {
         let url = TrustedUrl::parse("https://GitHub.com/fixture").unwrap();

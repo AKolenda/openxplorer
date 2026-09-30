@@ -236,7 +236,7 @@ mod tests {
     /// Discovery never asks for a password: `GVfs`'s request is aborted
     /// and no password is set on the operation.
     ///
-    /// parity: NET-024
+    /// parity: NET-024, SAFE-014
     #[test]
     fn discovery_aborts_every_password_request() {
         let operation = silent_operation();

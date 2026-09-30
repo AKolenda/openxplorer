@@ -11,12 +11,14 @@
 //! a command-line argument) ever launches an application.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{self, Entry, EntryError, EntryKind};
 use ox_core::integration;
 
 use crate::locations::{self, Page};
 
+use super::session::TabId;
 use super::BrowserWindow;
 
 /// Why an item cannot be opened (`activation_kind` in activation.py).
@@ -42,6 +44,16 @@ pub(super) enum IncomingTab {
     Active,
     /// A new tab in front: every later location.
     New,
+}
+
+/// A lookup started for the active tab: a typed address or a location
+/// the tab found to be a file. Its answer counts only while the same tab
+/// is in front and nothing navigated since (the activation token of
+/// `openEntry`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct PendingActivation {
+    tab: Option<TabId>,
+    generation: u64,
 }
 
 /// What activating `entry` does, from freshly queried metadata.
@@ -79,6 +91,27 @@ pub(super) async fn query_entry(uri: &str) -> Result<Entry, EntryError> {
 }
 
 impl BrowserWindow {
+    /// Drops every lookup still running: the active tab moved on.
+    pub(super) fn supersede_activations(&self) {
+        let activations = &self.imp().activations;
+        activations.set(activations.get().wrapping_add(1));
+    }
+
+    /// Starts a lookup for the active tab, superseding any earlier one.
+    fn begin_activation(&self) -> PendingActivation {
+        self.supersede_activations();
+        PendingActivation {
+            tab: self.imp().session.borrow().active_id(),
+            generation: self.imp().activations.get(),
+        }
+    }
+
+    /// Whether `pending` still speaks for the tab in front.
+    fn is_current(&self, pending: PendingActivation) -> bool {
+        let imp = self.imp();
+        pending.generation == imp.activations.get() && pending.tab == imp.session.borrow().active_id()
+    }
+
     /// Opens the item at a display position (Enter, double-click, Open).
     pub(super) fn activate_item(&self, position: u32) {
         if let Some(item) = self.folder_pane().model().item(position) {
@@ -109,11 +142,16 @@ impl BrowserWindow {
     /// Opens the file at `uri`, which the tab tried to list as a folder.
     pub(super) fn open_file_location(&self, uri: &str) {
         let uri = uri.to_owned();
+        let pending = self.begin_activation();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
-                match query_entry(&uri).await {
+                let result = query_entry(&uri).await;
+                if !window.is_current(pending) {
+                    return;
+                }
+                match result {
                     Ok(entry) if activation_for(&entry) == Activation::File => window.open_file(&entry),
                     Ok(entry) if activation_for(&entry) == Activation::Archive => window.open_archive(&entry),
                     Ok(_) => {}
@@ -145,12 +183,15 @@ impl BrowserWindow {
                 return;
             }
         };
+        let pending = self.begin_activation();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
                 let result = query_entry(&folder).await;
-                window.open_typed_location(&folder, place.as_deref(), result);
+                if window.is_current(pending) {
+                    window.open_typed_location(&folder, place.as_deref(), result);
+                }
             }
         ));
     }

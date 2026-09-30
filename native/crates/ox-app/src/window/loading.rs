@@ -80,6 +80,9 @@ impl BrowserWindow {
         if is_active {
             self.reset_typeahead();
             self.hide_message();
+            if mode == LoadMode::Navigate {
+                self.supersede_activations();
+            }
         }
         let Some(start) = self.begin_load(id) else {
             return;
