@@ -19,6 +19,9 @@
     <!-- set_default_size(1320, 810) in desktop/winspace.py. -->
     <property name="default-width">1320</property>
     <property name="default-height">810</property>
+    <!-- set_size_request(670, 470) in desktop/winspace.py. -->
+    <property name="width-request">670</property>
+    <property name="height-request">470</property>
     <style>
       <class name="ox"/>
     </style>
