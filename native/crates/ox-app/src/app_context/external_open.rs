@@ -15,15 +15,6 @@ use gtk::{gio, glib};
 use super::AppContext;
 
 impl AppContext {
-    /// Opens `uri` in the desktop's default application for its type.
-    /// `on_error` hears GIO's reason when it could not be opened.
-    #[cfg_attr(
-        not(test),
-        expect(
-            clippy::unused_self,
-            reason = "tests record the launch on the context instead"
-        )
-    )]
     /// Starts `app` on `uris`, such as a file comparison tool on two
     /// files (OPEN-023).
     ///
@@ -55,6 +46,15 @@ impl AppContext {
         app.launch(&files, Some(&context))
     }
 
+    /// Opens `uri` in the desktop's default application for its type.
+    /// `on_error` hears GIO's reason when it could not be opened.
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::unused_self,
+            reason = "tests record the launch on the context instead"
+        )
+    )]
     pub(crate) fn open_uri(
         &self,
         uri: &str,

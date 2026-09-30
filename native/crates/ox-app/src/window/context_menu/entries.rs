@@ -41,6 +41,15 @@ pub(crate) enum ItemLocation {
     SmbServer,
 }
 
+/// Whether Compare files is offered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Comparison {
+    /// Not two files, or no comparison tool is installed.
+    Unavailable,
+    /// Exactly two files are selected and a comparison tool is installed.
+    TwoFiles,
+}
+
 /// What a file or folder's menu depends on: the right-clicked item and
 /// the selection it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,9 +67,8 @@ pub(crate) struct ItemFacts {
     /// It is a search result, listed away from its folder
     /// (`state.query`).
     pub(crate) is_search_result: bool,
-    /// Exactly two files are selected and a comparison tool is installed
-    /// (Dolphin's Compare Files).
-    pub(crate) can_compare: bool,
+    /// Whether the selection can be compared (Dolphin's Compare Files).
+    pub(crate) comparison: Comparison,
     /// The installed code editors, each offered as "Open in <editor>".
     pub(crate) editors: Vec<EditorShortcut>,
     /// Whether a folder is cached for search; `None` for a file or a
@@ -110,7 +118,7 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         entries.push(new_tab.disabled_when(several).into());
         entries.push(pin.disabled_when(several).into());
     }
-    if facts.can_compare {
+    if facts.comparison == Comparison::TwoFiles {
         entries.push(item("Compare files", Icon::DocumentCopy, WindowAction::CompareFiles).into());
     }
     if facts.is_search_result {
@@ -373,7 +381,7 @@ mod tests {
             is_read_only: false,
             is_single: true,
             is_search_result: false,
-            can_compare: false,
+            comparison: Comparison::Unavailable,
             editors: Vec::new(),
             caching: None,
             delete_label: "Move to Trash",
@@ -550,7 +558,7 @@ mod tests {
     fn two_files_with_a_comparison_tool_offer_compare_files() {
         let two = ItemFacts {
             is_single: false,
-            can_compare: true,
+            comparison: Comparison::TwoFiles,
             ..file()
         };
         assert!(labels(&item_menu(&two, MenuStyle::Classic).entries).contains(&"Compare files".to_owned()));
