@@ -220,14 +220,15 @@ impl BraveDialog {
             .status_label
             .set_text("Checking native Brave profiles…");
         let reading = self.brave().run_in_background(BraveIntegration::status);
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = dialog)]
-            self,
-            async move {
-                let status = reading.await;
+        // Only a weak reference waits for the reading: a dialog closed in
+        // the meantime is finalized at once, while its parent still exists.
+        let dialog = self.downgrade();
+        glib::spawn_future_local(async move {
+            let status = reading.await;
+            if let Some(dialog) = dialog.upgrade() {
                 dialog.show_status(&status);
             }
-        ));
+        });
     }
 
     fn show_status(&self, status: &BraveStatus) {
