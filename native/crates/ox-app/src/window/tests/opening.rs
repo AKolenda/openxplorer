@@ -15,6 +15,25 @@ fn can_go_back(test: &TestWindow) -> bool {
     session.active().is_some_and(|tab| tab.history.can_go_back())
 }
 
+/// A command that fails says why in the toast instead of failing
+/// silently: here Enter on an address that does not exist, which leaves
+/// the tab where it was.
+///
+/// parity: CMD-018
+#[gtk::test]
+fn a_failing_command_says_why_in_the_toast() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let missing = fixture.path("Missing folder");
+
+    test.window
+        .submit_address(missing.to_str().expect("fixture paths are UTF-8"));
+
+    wait_until("the toast", || !test.window.shown_message().is_empty());
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    assert!(test.context.recorded_launches().is_empty());
+}
+
 /// A typed address whose lookup answers after the tab navigated elsewhere
 /// is dropped: the file does not open and the tab stays where the user
 /// went.

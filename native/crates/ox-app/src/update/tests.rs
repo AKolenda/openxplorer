@@ -382,7 +382,9 @@ fn browsing_never_checks_and_untrusted_text_stays_text() {
         assert!(!label.uses_markup(), "{:?} is drawn as markup", label.label());
     }
     assert!(
-        dialog_labels.iter().all(|label| !label.label().contains("Fictional notes")),
+        dialog_labels
+            .iter()
+            .all(|label| !label.label().contains("Fictional notes")),
         "the release notes are not shown"
     );
     dialog.close();

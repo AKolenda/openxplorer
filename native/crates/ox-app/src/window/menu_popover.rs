@@ -21,6 +21,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::icons::{self, Icon};
+use crate::integration;
 
 use super::unported;
 
@@ -267,8 +268,10 @@ impl MenuPopover {
                 after_divider = true;
                 continue;
             };
+            let can_choose = self.can_choose(item);
             let row = item_row(item, self.check_mark(item));
-            row.set_sensitive(self.can_choose(item));
+            row.set_sensitive(can_choose);
+            explain_availability(row.upcast_ref(), item, can_choose);
             if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
                 after_divider = false;
@@ -297,12 +300,14 @@ impl MenuPopover {
 
     /// An icon button of the strip.
     fn strip_button(&self, item: &MenuItem) -> gtk::Button {
+        let can_choose = self.can_choose(item);
         let button = gtk::Button::builder()
             .child(&icons::image(item.glyph, ROW_GLYPH))
             .tooltip_text(item_tooltip(item))
-            .sensitive(self.can_choose(item))
+            .sensitive(can_choose)
             .build();
         button.update_property(&[gtk::accessible::Property::Label(&item.label)]);
+        explain_availability(button.upcast_ref(), item, can_choose);
         let item = item.clone();
         button.connect_clicked(glib::clone!(
             #[weak(rename_to = popover)]
@@ -369,16 +374,47 @@ fn item_tooltip(item: &MenuItem) -> String {
     }
 }
 
-/// A row's glyph (the check mark while checked, as app.js draws it), its
-/// label and its shortcut.
+/// Why `item` cannot be chosen, when something says: the reason this
+/// menu gave, the milestone that brings the command, or its action's.
+fn disabled_reason(item: &MenuItem) -> Option<String> {
+    if item.availability == ItemAvailability::Disabled {
+        if let Some(reason) = item.disabled_reason {
+            return Some(reason.to_owned());
+        }
+    }
+    let tooltip = item_tooltip(item);
+    if tooltip != item.label {
+        return None;
+    }
+    item.action.disabled_reason().map(str::to_owned)
+}
+
+/// Adds to the tooltip of `control`, which shows `item`, why it cannot be
+/// chosen, and tells screen readers too.
+fn explain_availability(control: &gtk::Widget, item: &MenuItem, can_choose: bool) {
+    let reason = (!can_choose).then(|| disabled_reason(item)).flatten();
+    let Some(reason) = reason else {
+        return;
+    };
+    control.set_tooltip_text(Some(&format!("{}\n{reason}", item.label)));
+    control.update_property(&[gtk::accessible::Property::Description(&reason)]);
+}
+
+/// A row's glyph (the check mark while checked, as app.js draws it; the
+/// application's own icon for an item that opens one), its label and its
+/// shortcut.
 fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
     let glyph = if check == CheckMark::Checked {
         Icon::Checkmark
     } else {
         item.glyph
     };
+    let application_icon = (check != CheckMark::Checked)
+        .then(|| item.application.as_deref())
+        .flatten()
+        .and_then(|desktop_id| integration::application_image(desktop_id, ROW_GLYPH));
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
-    content.append(&icons::image(glyph, ROW_GLYPH));
+    content.append(&application_icon.unwrap_or_else(|| icons::image(glyph, ROW_GLYPH)));
     let label = gtk::Label::builder()
         .label(&item.label)
         .xalign(0.0)

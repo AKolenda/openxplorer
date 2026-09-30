@@ -94,7 +94,10 @@ fn the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files() {
     let (first, last) = (enabled[0].clone(), enabled[enabled.len() - 1].clone());
     assert!(first.has_focus(), "the first enabled item has the keyboard");
 
-    let list = first.parent().and_downcast::<gtk::ListBox>().expect("rows are in a list");
+    let list = first
+        .parent()
+        .and_downcast::<gtk::ListBox>()
+        .expect("rows are in a list");
     list.emit_move_cursor(gtk::MovementStep::DisplayLines, -1, false, false);
     assert!(last.has_focus(), "Up on the first item wraps to the last");
     list.emit_move_cursor(gtk::MovementStep::DisplayLines, 1, false, false);
@@ -127,6 +130,9 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
     for disabled in ["Open", "Rename", "Copy path", "Properties"] {
         assert!(!menu.row(disabled).is_sensitive(), "{disabled}");
     }
+    // CMD-031: a disabled item says why.
+    let tooltip = menu.row("Properties").tooltip_text().unwrap_or_default();
+    assert_eq!(tooltip, "Properties\nSelect only one item for this command.");
     for enabled in ["Cut", "Copy", "Move to Trash", "Duplicate"] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
     }

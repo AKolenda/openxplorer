@@ -104,6 +104,11 @@ pub(in crate::window) struct MenuItem {
     pub check: ItemCheck,
     /// Whether it can be chosen in this menu.
     pub availability: ItemAvailability,
+    /// Why it is disabled in this menu, which its tooltip says.
+    pub disabled_reason: Option<&'static str>,
+    /// The desktop ID of the application it opens, whose icon replaces
+    /// the glyph.
+    pub application: Option<String>,
 }
 
 impl MenuItem {
@@ -117,6 +122,8 @@ impl MenuItem {
             shortcut: None,
             check: ItemCheck::Plain,
             availability: ItemAvailability::FollowsAction,
+            disabled_reason: None,
+            application: None,
         }
     }
 
@@ -177,6 +184,39 @@ impl MenuItem {
             self.availability
         };
         Self { availability, ..self }
+    }
+
+    /// The same item, disabled in this menu when `disabled` holds, with
+    /// `reason` in its tooltip.
+    pub(in crate::window) fn disabled_because(self, disabled: bool, reason: &'static str) -> Self {
+        if !disabled {
+            return self;
+        }
+        Self {
+            disabled_reason: Some(reason),
+            ..self.disabled_when(true)
+        }
+    }
+
+    /// The same item showing the icon of the application `desktop_id`.
+    pub(in crate::window) fn with_application_icon(self, desktop_id: &str) -> Self {
+        Self {
+            application: Some(desktop_id.to_owned()),
+            ..self
+        }
+    }
+}
+
+impl MenuAction {
+    /// Why the action is disabled, for the commands whose reason does not
+    /// depend on the item: nothing to undo, redo or paste.
+    pub(super) fn disabled_reason(self) -> Option<&'static str> {
+        match self {
+            MenuAction::Window(WindowAction::Undo) => Some("Nothing to undo."),
+            MenuAction::Window(WindowAction::Redo) => Some("Nothing to redo."),
+            MenuAction::Window(WindowAction::Paste) => Some("Nothing to paste here."),
+            _ => None,
+        }
     }
 }
 

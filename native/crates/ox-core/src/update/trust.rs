@@ -178,8 +178,14 @@ mod tests {
     #[test]
     fn only_https_to_the_github_hosts_is_trusted() {
         for host in TRUSTED_HOSTS {
-            assert!(TrustedUrl::parse(&format!("https://{host}/fixture")).is_ok(), "{host}");
-            assert!(TrustedUrl::parse(&format!("https://{host}:443/fixture")).is_ok(), "{host}");
+            assert!(
+                TrustedUrl::parse(&format!("https://{host}/fixture")).is_ok(),
+                "{host}"
+            );
+            assert!(
+                TrustedUrl::parse(&format!("https://{host}:443/fixture")).is_ok(),
+                "{host}"
+            );
         }
         let refused = [
             "http://github.com/fixture",

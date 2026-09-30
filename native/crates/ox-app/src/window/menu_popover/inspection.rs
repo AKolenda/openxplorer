@@ -41,15 +41,15 @@ impl MenuPopover {
         checked.filter_map(|row| row_label(&row)).collect()
     }
 
-    /// The accessible names of the strip's buttons while it shows, for
-    /// tests.
+    /// The labels of the strip's buttons while it shows (the first line of
+    /// their tooltips; a second says why one is disabled), for tests.
     pub(crate) fn strip_labels(&self) -> Vec<String> {
         if !self.strip().is_visible() {
             return Vec::new();
         }
         crate::window::widget_tree::children(self.strip())
             .filter_map(|child| child.tooltip_text())
-            .map(String::from)
+            .filter_map(|tooltip| tooltip.lines().next().map(str::to_owned))
             .collect()
     }
 

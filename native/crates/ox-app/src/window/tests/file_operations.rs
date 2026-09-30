@@ -173,6 +173,10 @@ fn rename_edits_the_name_in_place_and_undo_and_redo_walk_it() {
     });
 }
 
+/// The file keys work only in the file pane; the keys that act on the
+/// window (F5, Ctrl+L, Ctrl+F, Alt+Enter, Ctrl+comma and the text-size
+/// keys) are application accelerators, which GTK runs from any focus.
+///
 /// parity: CMD-017
 #[gtk::test]
 fn the_file_keys_leave_text_fields_and_the_settings_page_alone() {
@@ -183,6 +187,13 @@ fn the_file_keys_leave_text_fields_and_the_settings_page_alone() {
     let in_file_list = test.window.file_keys_apply();
     test.window.search_box().focus();
     let in_search = test.window.file_keys_apply();
+    let has_crumb = descendants::<gtk::Button>(test.window.address_bar())
+        .iter()
+        .any(WidgetExt::grab_focus);
+    assert!(has_crumb, "the address bar has a crumb to focus");
+    let on_crumb = test.window.file_keys_apply();
+    assert!(test.window.workspace().grab_focus(), "the splitter takes focus");
+    let on_splitter = test.window.file_keys_apply();
     test.activate("settings", None);
     let on_settings = test.window.file_keys_apply();
 
@@ -191,7 +202,20 @@ fn the_file_keys_leave_text_fields_and_the_settings_page_alone() {
         !in_search,
         "the search field keeps Delete, F2 and the clipboard keys"
     );
+    assert!(!on_crumb, "the crumbs keep their keys");
+    assert!(!on_splitter, "the splitter keeps its keys");
     assert!(!on_settings);
+    let app = test.window.application().expect("the window has an application");
+    for (action, key) in [
+        ("win.refresh", "F5"),
+        ("win.location", "<Control>l"),
+        ("win.search", "<Control>f"),
+        ("win.properties", "<Alt>Return"),
+        ("win.settings", "<Control>comma"),
+    ] {
+        let keys = app.accels_for_action(action);
+        assert!(keys.iter().any(|shown| shown == key), "{action}: {keys:?}");
+    }
 }
 
 /// parity: OPS-006, OPS-008, OPS-010
