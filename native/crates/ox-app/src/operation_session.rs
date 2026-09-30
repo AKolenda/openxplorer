@@ -3,8 +3,8 @@
 //! log out or suspend (INT-028) and the dock icon shows the progress
 //! (INT-027).
 //!
-//! The transfer panel and the archive operation panel each hold one
-//! [`OperationSession`] from the operation's start to its end.
+//! The transfer panel holds one [`OperationSession`] from an operation's
+//! start to its end.
 
 use gtk::prelude::*;
 

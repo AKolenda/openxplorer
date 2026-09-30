@@ -24,7 +24,7 @@ use super::unfinished::mark_unfinished;
 use crate::search::changed_folders;
 use crate::window::dialog;
 use crate::window::loading::LoadMode;
-use crate::window::transfer_panel::TransferPanel;
+use crate::window::transfer_panel::{TransferKind, TransferPanel};
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
@@ -57,7 +57,7 @@ impl FinishedOperation {
 
 impl BrowserWindow {
     /// The panel of the running operation.
-    pub(super) fn transfer_panel(&self) -> &TransferPanel {
+    pub(in crate::window) fn transfer_panel(&self) -> &TransferPanel {
         &self.imp().transfer_panel
     }
 
@@ -67,7 +67,7 @@ impl BrowserWindow {
     /// Sign out, Disconnect, moving a tab and an update's restart wait.
     pub(crate) fn is_writing_files(&self) -> bool {
         let is_operating = !self.imp().file_operations.borrow().is_idle();
-        is_operating || self.operation_panel().is_busy()
+        is_operating || self.transfer_panel().is_busy()
     }
 
     /// True, after saying why, once an application update installed files
@@ -89,7 +89,7 @@ impl BrowserWindow {
     /// an archive operation included, or once an application update
     /// waits for its restart, which the message line says (UPD-006).
     pub(crate) fn begin_operation(&self, label: &str) -> Option<OperationContext> {
-        if self.operation_panel().is_busy() {
+        if self.transfer_panel().is_busy() {
             return None;
         }
         if self.refuses_writes_during_update() {
@@ -106,7 +106,8 @@ impl BrowserWindow {
             }
             operations.running = Some(context.cancel.clone());
         }
-        self.transfer_panel().start(label);
+        self.transfer_panel()
+            .start(TransferKind::Files, label, context.cancel.clone());
         self.update_file_commands();
         Some(context)
     }
@@ -143,15 +144,13 @@ impl BrowserWindow {
         }
     }
 
-    /// Cancel on the transfer panel: stops the running operation between
-    /// steps; what is finished stays finished (OPS-022).
+    /// Cancel operation: stops the running file operation between steps,
+    /// as the transfer panel's Cancel does; what is finished stays
+    /// finished (OPS-022).
     pub(in crate::window) fn cancel_operation(&self) {
-        let running = self.imp().file_operations.borrow().running.clone();
-        let Some(cancel) = running else {
-            return;
-        };
-        cancel.cancel();
-        self.transfer_panel().show_cancelling();
+        if self.imp().file_operations.borrow().running.is_some() {
+            self.transfer_panel().cancel();
+        }
     }
 
     /// Runs `request` on the transfer engine as the window's one

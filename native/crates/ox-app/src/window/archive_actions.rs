@@ -5,13 +5,12 @@
 //! Ports `archiveDialog`, the `extractDialog` flow after its dialog and
 //! the `isZipEntry` item of `entryMenu` in `desktop/ui/app.js`: opening a
 //! ZIP browses it (ARC-002), Extract all… asks where (ARC-009) and runs
-//! the extraction with the operation panel and Cancel (ARC-011), then
+//! the extraction with the transfer panel and Cancel (ARC-011), then
 //! shows the result in the tab that asked, or a new tab. Extract here
 //! (ARC-025) and Compress to ZIP file (ARC-023) come from the Dolphin
 //! baseline. One archive operation runs at a time per window, and every
 //! write goes through the previous-versions write guard (ARC-020).
 
-use std::cell::OnceCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -33,13 +32,13 @@ use ox_core::versions::snapshot_location;
 use crate::archive_view::{
     archive_dialog, compressed_file_name, compression_failure_text, compression_success_text, extract_dialog,
     extraction_failure_text, extraction_success_text, unique_folder_names, ArchiveDialogActions,
-    ArchiveTarget, ExtractDialogSetup, ExtractionChoice, OperationPanel, COMPRESSION_STOPPED,
-    EXTRACTION_STOPPED,
+    ArchiveTarget, ExtractDialogSetup, ExtractionChoice, COMPRESSION_STOPPED, EXTRACTION_STOPPED,
 };
 use crate::locations::Page;
 
 use super::actions::plain_action;
 use super::session::TabId;
+use super::transfer_panel::TransferKind;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -50,35 +49,9 @@ const PREPARING: &str = "Preparing extraction…";
 /// The panel's first label of a compression.
 const PREPARING_COMPRESSION: &str = "Preparing compression…";
 
-/// The window's archive operation panel.
-#[derive(Debug, Default)]
-pub(super) struct ArchiveOperations {
-    /// Floats over the folder pane; set by `install_archive_actions`.
-    panel: OnceCell<OperationPanel>,
-}
-
 impl BrowserWindow {
-    /// The panel of the running extraction, compression or restored copy.
-    pub(super) fn operation_panel(&self) -> &OperationPanel {
-        self.imp()
-            .archive_operations
-            .panel
-            .get()
-            .expect("BrowserWindow::new installs the operation panel")
-    }
-
-    /// Floats the operation panel over the folder pane and adds the
-    /// archive actions.
+    /// Adds the archive actions.
     pub(super) fn install_archive_actions(&self) {
-        let panel = OperationPanel::default();
-        if let Some(overlay) = self.imp().toast.parent().and_downcast::<gtk::Overlay>() {
-            overlay.add_overlay(&panel);
-        }
-        self.imp()
-            .archive_operations
-            .panel
-            .set(panel)
-            .expect("installed once");
         self.add_action_entries([
             plain_action(WindowAction::ExtractAll, |window| {
                 if let Some(archive) = window.selected_archive() {
@@ -261,7 +234,7 @@ impl BrowserWindow {
             .with_write_guard(self.context().previous_versions().write_guard())
     }
 
-    /// Extracts `archive` as the user chose, with the operation panel, then
+    /// Extracts `archive` as the user chose, with the transfer panel, then
     /// shows the result in `origin` if it is still in front, else in a new
     /// tab, or lists the destination again (ARC-011).
     fn extract_archive(&self, archive: &ArchiveTarget, choice: ExtractionChoice, origin: Option<TabId>) {
@@ -271,7 +244,8 @@ impl BrowserWindow {
             return;
         }
         let cancel = Cancellation::new();
-        self.operation_panel().start(PREPARING, cancel.clone());
+        self.transfer_panel()
+            .start(TransferKind::Archive, PREPARING, cancel.clone());
         self.update_archive_actions();
         let request = ExtractionRequest {
             archive_uri: archive.uri.clone(),
@@ -333,7 +307,8 @@ impl BrowserWindow {
             return;
         }
         let cancel = Cancellation::new();
-        self.operation_panel().start(PREPARING, cancel.clone());
+        self.transfer_panel()
+            .start(TransferKind::Archive, PREPARING, cancel.clone());
         self.update_archive_actions();
         let base_name = ox_core::archive::suggested_folder_name(&archive.name).unwrap_or_default();
         glib::spawn_future_local(glib::clone!(
@@ -395,8 +370,8 @@ impl BrowserWindow {
         let uris: Vec<String> = selected.iter().map(|item| item.entry().uri.clone()).collect();
         let first_name = first.entry().name.clone();
         let cancel = Cancellation::new();
-        self.operation_panel()
-            .start(PREPARING_COMPRESSION, cancel.clone());
+        self.transfer_panel()
+            .start(TransferKind::Archive, PREPARING_COMPRESSION, cancel.clone());
         self.update_archive_actions();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -447,9 +422,7 @@ impl BrowserWindow {
             let window = window.clone();
             glib::MainContext::default().invoke(move || {
                 if let Some(window) = window.upgrade() {
-                    window
-                        .operation_panel()
-                        .show_progress(&progress.label, progress.fraction);
+                    window.transfer_panel().show_progress(&progress);
                 }
             });
         }
@@ -478,7 +451,7 @@ impl BrowserWindow {
 
     /// Hides the panel and enables the archive commands again.
     pub(super) fn finish_archive_operation(&self) {
-        self.operation_panel().finish();
+        self.transfer_panel().finish();
         self.update_archive_actions();
     }
 }

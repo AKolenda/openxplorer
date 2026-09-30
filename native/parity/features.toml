@@ -12466,7 +12466,7 @@ python_tests = [
 ]
 bridge = ["archiveExtract", "cancel", "list", "archiveInspect", "normalise"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it, extract_here_uses_the_next_free_name); native/crates/ox-app/src/archive_view/extraction.rs (a_failure_says_the_zip_and_existing_files_are_untouched); core rollback: native/crates/ox-core/tests/archive_extract_rollback.rs. The operation panel shows 'Preparing extraction…', progress and Cancel; failures open 'Extraction stopped'; success toasts and shows the folder in the asking tab or a new tab, or lists the destination again. Earlier evidence: native/crates/ox-core/tests/archive_extract_rollback.rs (progress_labels_name_the_check_each_file_and_the_result, progress_ends_complete_and_only_the_new_folder_remains, cancelling_while_writing_removes_the_staging_folder); native/crates/ox-core/tests/archive_extract.rs (an_existing_folder_is_never_merged_into)."
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_all_unpacks_into_a_new_folder_and_shows_it, extract_here_uses_the_next_free_name); native/crates/ox-app/src/archive_view/extraction.rs (a_failure_says_the_zip_and_existing_files_are_untouched); core rollback: native/crates/ox-core/tests/archive_extract_rollback.rs. The transfer panel (with the ZIP glyph) shows 'Preparing extraction…', progress and Cancel (native/crates/ox-app/src/window/transfer_panel.rs: an_archive_operation_shows_its_glyph_and_cancel_stops_it); failures open 'Extraction stopped'; success toasts and shows the folder in the asking tab or a new tab, or lists the destination again. Earlier evidence: native/crates/ox-core/tests/archive_extract_rollback.rs (progress_labels_name_the_check_each_file_and_the_result, progress_ends_complete_and_only_the_new_folder_remains, cancelling_while_writing_removes_the_staging_folder); native/crates/ox-core/tests/archive_extract.rs (an_existing_folder_is_never_merged_into)."
 
 [[feature]]
 id = "ARC-012"
@@ -13450,7 +13450,7 @@ python_tests = [
 ]
 bridge = ["normalise", "operate", "previousVersions"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (restore_a_copy_copies_the_version_into_a_live_folder_only); native/crates/ox-app/src/properties/restore.rs (a_destination_inside_a_snapshot_is_refused): the dialog, its note, Home as the default, normalising the destination, the refusal inside a snapshot, and the copy with Keep both on the transfer engine with progress and Cancel in the operation panel."
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (restore_a_copy_copies_the_version_into_a_live_folder_only); native/crates/ox-app/src/properties/restore.rs (a_destination_inside_a_snapshot_is_refused): the dialog, its note, Home as the default, normalising the destination, the refusal inside a snapshot, and the copy with Keep both on the transfer engine with progress and Cancel in the transfer panel."
 
 [[feature]]
 id = "PROP-026"
@@ -15367,7 +15367,7 @@ bridge = ["operate"]
 dolphin = "Plasma task-manager job progress"
 gnome = "com.canonical.Unity.LauncherEntry Update signal (progress, progress-visible), supported by Dash-to-Dock/Dash-to-Panel-style taskbars; GNOME Shell core has no equivalent"
 native = "done"
-native_note = "native/crates/ox-app/src/launcher_progress.rs: while the transfer panel or the archive operation panel runs, the app emits com.canonical.Unity.LauncherEntry.Update for application://<app id>.desktop with progress and progress-visible, on whole-percent changes only, and hides the bar when the operation ends. Docks and taskbars that implement the API (Dash to Dock, Dash to Panel, Zorin's taskbar, Plank, KDE) draw it; GNOME Shell's own dash has no equivalent and shows nothing. Test: launcher_progress.rs (the_update_names_the_app_and_its_progress). Not verified against a real dock."
+native_note = "native/crates/ox-app/src/launcher_progress.rs: while the transfer panel shows a running write, the app emits com.canonical.Unity.LauncherEntry.Update for application://<app id>.desktop with progress and progress-visible, on whole-percent changes only, and hides the bar when the operation ends. Docks and taskbars that implement the API (Dash to Dock, Dash to Panel, Zorin's taskbar, Plank, KDE) draw it; GNOME Shell's own dash has no equivalent and shows nothing. Test: launcher_progress.rs (the_update_names_the_app_and_its_progress). Not verified against a real dock."
 
 [[feature]]
 id = "INT-028"
@@ -15386,7 +15386,7 @@ bridge = ["operate", "archiveExtract", "updateInstall"]
 dolphin = "n/a in Dolphin by default"
 gnome = "gtk_application_inhibit(LOGOUT|SUSPEND) → org.gnome.SessionManager.Inhibit (gtk_application_inhibit is present in the Nautilus 46.4 binary)"
 native = "done"
-native_note = "native/crates/ox-app/src/write_inhibitor.rs: the transfer panel (copy, move, trash, delete, restore; native/crates/ox-app/src/window/transfer_panel.rs), the archive operation panel (extract, compress; native/crates/ox-app/src/archive_view/operation_panel.rs) and the Software updates dialog while APT runs (native/crates/ox-app/src/update/dialog.rs) hold gtk_application_inhibit(LOGOUT | SUSPEND, 'Copying files') from start to end, released on completion or cancellation. GTK passes it to org.gnome.SessionManager or the Inhibit portal. Test: native/crates/ox-app/src/window/tests/file_operations.rs (a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast). The session manager's dialogs themselves are not tested (no session manager on the test bus)."
+native_note = "native/crates/ox-app/src/write_inhibitor.rs: the transfer panel (copy, move, trash, delete, restore, extract, compress; native/crates/ox-app/src/window/transfer_panel.rs) and the Software updates dialog while APT runs (native/crates/ox-app/src/update/dialog.rs) hold gtk_application_inhibit(LOGOUT | SUSPEND, 'Copying files') from start to end, released on completion or cancellation. GTK passes it to org.gnome.SessionManager or the Inhibit portal. Test: native/crates/ox-app/src/window/tests/file_operations.rs (a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast). The session manager's dialogs themselves are not tested (no session manager on the test bus)."
 
 [[feature]]
 id = "INT-029"

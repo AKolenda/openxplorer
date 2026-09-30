@@ -13,6 +13,7 @@ use ox_core::transfer::Cancellation;
 use crate::archive_view::{compressed_file_name, compression_success_text};
 use crate::dialog_layer::{labelled_entry, DialogFrame, DialogWidth};
 
+use super::transfer_panel::TransferKind;
 use super::{BrowserWindow, ButtonStyle};
 
 /// The formats offered, with the ending each adds.
@@ -82,8 +83,8 @@ impl BrowserWindow {
             return;
         }
         let cancel = Cancellation::new();
-        self.operation_panel()
-            .start("Preparing compression…", cancel.clone());
+        self.transfer_panel()
+            .start(TransferKind::Archive, "Preparing compression…", cancel.clone());
         self.update_archive_actions();
         let compressor = ZipCompressor::new()
             .with_write_guard(self.context().previous_versions().write_guard())

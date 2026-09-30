@@ -196,8 +196,6 @@ pub(crate) struct BrowserWindow {
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
     /// Measured folder sizes and the running folder-size scan.
     pub(super) size_scans: super::folder_size_scan::SizeScans,
-    /// The panel of a running extraction or compression.
-    pub(super) archive_operations: super::archive_actions::ArchiveOperations,
 }
 
 #[glib::object_subclass]

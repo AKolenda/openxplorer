@@ -4,7 +4,7 @@
 //! Ports `restoreVersion` and the `runOperation('copy', …, 'keep-both')`
 //! it ends with in `desktop/ui/app.js`: the Restore dialog checks the
 //! destination, then the transfer engine copies the version there with
-//! Keep both, with progress and Cancel in the operation panel, so neither
+//! Keep both, with progress and Cancel in the transfer panel, so neither
 //! the live original nor the snapshot is replaced. The end is reported
 //! as every copy's is: a toast, or the Operation result dialog.
 
@@ -18,6 +18,7 @@ use ox_core::transfer::{ConflictPolicy, TransferMode};
 
 use crate::properties::RestoreRequest;
 
+use super::transfer_panel::TransferKind;
 use super::BrowserWindow;
 
 /// Shown when Restore a copy is asked for while a write runs, as the
@@ -61,8 +62,12 @@ impl BrowserWindow {
             policy: ConflictPolicy::KeepBoth,
         };
         let operation = OperationContext::new(self.context().write_protection());
-        let panel = self.operation_panel();
-        panel.start(starting_label(TransferMode::Copy), operation.cancel.clone());
+        let panel = self.transfer_panel();
+        panel.start(
+            TransferKind::Files,
+            starting_label(TransferMode::Copy),
+            operation.cancel.clone(),
+        );
         let progress = self.operation_progress_sender();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

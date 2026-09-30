@@ -20,7 +20,7 @@
     },
     "archiveExtract": {
       "status": "native-tested",
-      "note": "Extract all… and Extract here run the ox-core extractor with the write guard, the operation panel and Cancel, and show or list the result in the native window.",
+      "note": "Extract all… and Extract here run the ox-core extractor with the write guard, the transfer panel and Cancel, and show or list the result in the native window.",
       "evidence": [
         "native/crates/ox-app/src/window/tests/archives.rs::extract_all_unpacks_into_a_new_folder_and_shows_it",
         "native/crates/ox-app/src/window/tests/archives.rs::extract_here_uses_the_next_free_name",
