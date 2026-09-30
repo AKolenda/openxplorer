@@ -33,6 +33,7 @@ mod network;
 mod opening;
 mod panes_layout;
 mod recycle_bin;
+mod renaming;
 mod search;
 mod settings;
 mod sidebar_layout;

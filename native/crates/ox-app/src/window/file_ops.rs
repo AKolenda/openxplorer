@@ -22,6 +22,7 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `running` | One operation at a time: the transfer panel, Cancel and the report at the end |
+//! | `unfinished` | Marks of running copies, and what a crashed run left behind |
 //! | `availability` | When each file command is enabled (`updateToolbar`) |
 //! | `trash_support` | Whether each folder has a Trash, which labels Delete |
 //! | `names` | The name check of the name dialogs (`validateName`) |
@@ -30,6 +31,8 @@
 //! | `template_dialog` | The New file and New from template dialog |
 //! | `rename` | Rename: in place, or with the dialog |
 //! | `inline_rename` | Renaming in the item's row or tile |
+//! | `batch_rename` | Renaming several items to one numbered name |
+//! | `hide_confirm` | Asking before a rename hides an item |
 //! | `delete` | Move to Trash and permanent delete, with their confirmations |
 //! | `recycle_bin` | Restore, Delete permanently and Empty in the Recycle Bin |
 //! | `duplicate` | Duplicate |
@@ -38,15 +41,21 @@
 //! | `clipboard` | Cut, Copy and the desktop's file clipboard |
 //! | `transfer` | Pasting into a folder, with the name-conflict check |
 //! | `conflict_dialog` | The name-conflict dialog |
+//! | `conflict_compare` | The two items side by side in that dialog |
+//! | `conflict_rename` | The new name typed in that dialog |
 //! | `shortcuts` | The file commands' keys, which text fields keep |
 //! | `actions` | The window actions of these commands |
 
 mod actions;
 mod availability;
+mod batch_rename;
 mod clipboard;
+mod conflict_compare;
 mod conflict_dialog;
+mod conflict_rename;
 mod delete;
 mod duplicate;
+mod hide_confirm;
 mod inline_rename;
 mod journal;
 mod links;
@@ -60,6 +69,7 @@ mod shortcuts;
 mod template_dialog;
 mod transfer;
 mod trash_support;
+mod unfinished;
 
 use ox_core::clipboard::ClipboardFiles;
 use ox_core::transfer::Cancellation;
@@ -86,6 +96,11 @@ pub(crate) struct FileOperations {
     /// How many times the clipboard changed while the window watched, so
     /// a read that an owner change overtook is dropped.
     clipboard_generation: u64,
+    /// "Don't ask again" was checked when a rename hid an item (OPS-013).
+    hiding_confirmed: bool,
+    /// The item to rename in place next, once the rename Tab committed
+    /// has finished (OPS-012).
+    rename_next: Option<String>,
 }
 
 impl FileOperations {

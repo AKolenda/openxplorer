@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Closing a window: the caption's Close and the last tab ask first, and
-//! no close cuts off a running write (`askClose` in `desktop/ui/app.js`,
+//! Closing a window: every close asks first while a write runs, so no
+//! close cuts off a running write (`askClose` in `desktop/ui/app.js`,
 //! `on_delete` in `desktop/winspace.py`).
 
 use gtk::prelude::*;
 
-use super::item_dialogs::{press, texts};
+use super::file_ops_support::{open_dialog, wait_for_no_dialog};
 use crate::test_support::harness::{descendants, settle, wait_until, Fixture, TestWindow};
 
 /// The caption Close button, when the desktop's layout shows one.
@@ -28,35 +28,36 @@ fn the_close_button_asks_while_a_file_operation_runs() {
     }
 
     assert!(operation.is_some());
-    let dialog = test.wait_for_dialog("the refusal");
-    assert_eq!(dialog.title(), "A file operation is running");
-    assert!(texts(&dialog)
-        .iter()
-        .any(|text| text == "Cancel the operation and wait for its result before closing OpenXplorer."));
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.title_text(), "A file operation is running");
+    assert_eq!(
+        dialog.message_text(),
+        "Cancel it and close this window once it has stopped? Items already finished stay where they are."
+    );
     assert!(test.window.is_visible(), "the window stays open");
-    press(&dialog, "OK");
+    dialog.press("Keep open");
+    wait_for_no_dialog(&test);
     test.window.end_operation();
 }
 
 /// Alt+F4, the dock and the shell close through the window manager, which
-/// the window refuses with a toast while a write runs.
+/// asks the same question while a write runs.
 ///
 /// parity: TAB-049
 #[gtk::test]
-fn a_window_manager_close_is_refused_while_a_file_operation_runs() {
+fn a_window_manager_close_asks_while_a_file_operation_runs() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let operation = test.window.begin_operation("Preparing copy…");
 
     test.window.close();
-    settle();
+    let dialog = open_dialog(&test);
 
     assert!(operation.is_some());
+    assert_eq!(dialog.title_text(), "A file operation is running");
     assert!(test.window.is_visible(), "the window stays open");
-    assert_eq!(
-        test.window.shown_message_text(),
-        "A file operation is still finishing. Wait or cancel it before closing."
-    );
+    dialog.press("Keep open");
+    wait_for_no_dialog(&test);
     test.window.end_operation();
     test.window.close();
     settle();
@@ -73,10 +74,11 @@ fn closing_the_only_tab_closes_the_window_through_the_same_question() {
     test.activate("close-tab", None);
 
     assert!(operation.is_some());
-    let dialog = test.wait_for_dialog("the refusal");
-    assert_eq!(dialog.title(), "A file operation is running");
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.title_text(), "A file operation is running");
     assert_eq!(test.window.tab_count(), 1);
-    press(&dialog, "OK");
+    dialog.press("Keep open");
+    wait_for_no_dialog(&test);
     test.window.end_operation();
     test.activate("close-tab", None);
     settle();

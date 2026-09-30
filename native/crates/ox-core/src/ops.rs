@@ -42,21 +42,25 @@
 //! | `templates` | The built-in and user templates New offers |
 //! | `new_from_template` | New from template, staged privately and published without overwriting |
 //! | `rename` | Rename, and renaming back for Undo |
+//! | `batch_rename` | Renaming several items to one numbered name |
 //! | `conflicts` | The name-conflict check before a paste or drop |
 //! | `delete_plan` | Trash support, and the Delete and Shift+Delete confirmations |
 //! | `run_transfer` | Copy, move, Trash and permanent delete through the engine |
+//! | `changed_copies` | Copies changed since their copy, before Undo trashes them |
 //! | `chosen_transfer` | A copy or move with an answer per name conflict |
 //! | `destinations` | Where a copy's or move's items are now |
 //! | `duplicate` | Duplicate in place |
-//! | `links` | Symbolic links to dropped items |
+//! | `links` | Symbolic links to dropped items, and New ▸ Link |
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
 //! | `results` | Adding up per-item results into one result |
 //! | `progress` | Progress labels and throttling |
 //! | `report` | The toast or result dialog at the end |
 //! | `recycle_bin` | Listing, restoring, deleting and emptying `trash:///` |
+//! | `recycle_bin_drag` | Recycle Bin items dragged into a folder |
 //! | `undo` | What reverses each operation, and what reverses a reversal |
 //! | `journal` | The Undo and Redo stacks |
 //! | `undo_apply` | Carrying out an Undo or a Redo |
+//! | `unfinished` | Marks of running copies, and what a crashed run left |
 //! | `tab_transfer` | Moving a tab to another window |
 //!
 //! The tests of this service in `desktop/tests` are ported to
@@ -67,6 +71,8 @@
 //! `SnapshotProvider` of `desktop/file_services.py`, which belong to the
 //! Properties and Open with services.
 
+mod batch_rename;
+mod changed_copies;
 mod chosen_transfer;
 mod conflicts;
 mod context;
@@ -81,6 +87,7 @@ mod links;
 mod new_from_template;
 mod progress;
 mod recycle_bin;
+mod recycle_bin_drag;
 mod rename;
 mod report;
 mod results;
@@ -89,7 +96,10 @@ mod tab_transfer;
 mod templates;
 mod undo;
 mod undo_apply;
+mod unfinished;
 
+pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
+pub use changed_copies::changed_copies;
 pub use chosen_transfer::{run_chosen_transfer, ChosenTransfer, ItemChoice};
 pub use conflicts::find_conflicts;
 pub use context::{OperationContext, WriteProtection};
@@ -101,17 +111,18 @@ pub use delete_plan::{
 pub use duplicate::duplicate_items;
 pub use error::OpsError;
 pub use journal::{JournalDirection, JournalEntry, UndoJournal, UNDO_LIMIT};
-pub use links::{create_links, LinkRequest};
+pub use links::{create_link, create_links, CreatedLink, LinkRequest, NewLink};
 pub use new_from_template::{create_from_template, NewFromTemplate};
 pub use progress::{starting_label, PROGRESS_INTERVAL};
 pub use recycle_bin::{
     delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
     restore_from_recycle_bin, RecycledItem,
 };
+pub use recycle_bin_drag::{is_recycle_bin_item, move_out_of_recycle_bin};
 pub use rename::{rename_item, RenamedItem};
 pub use report::{
-    summarize, summarize_duplicate, summarize_journal_step, summarize_links, summarize_restore,
-    summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
+    summarize, summarize_batch_rename, summarize_duplicate, summarize_journal_step, summarize_links,
+    summarize_restore, summarize_undo, OperationSummary, RESULT_TITLE, STOPPED_TITLE,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
 pub use tab_transfer::{
@@ -122,5 +133,6 @@ pub use templates::{
     list_templates, BuiltinTemplate, Template, TemplateId, TemplateList, MAX_TEMPLATE_BYTES,
     MAX_USER_TEMPLATES,
 };
-pub use undo::{MovedItem, UndoRecord};
+pub use undo::{MovedItem, RenamedPair, UndoRecord};
 pub use undo_apply::{reverse, undo, Reversal};
+pub use unfinished::{leftovers_message, UnfinishedMark, UnfinishedMarks, UNFINISHED_TITLE};

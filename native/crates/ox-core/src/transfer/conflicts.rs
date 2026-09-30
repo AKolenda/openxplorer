@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Choosing the name an item gets in the destination folder when that name
-//! may be taken: Skip, Keep both or Replace, and moves into the folder an
-//! item is already in. Ports the conflict branch of `_run_items` in
-//! `desktop/operations.py`.
+//! may be taken: Skip, Keep both, Replace or a name the user typed, and
+//! moves into the folder an item is already in. Ports the conflict branch
+//! of `_run_items` in `desktop/operations.py`.
 
 use std::ffi::OsStr;
 
@@ -25,6 +25,9 @@ pub(crate) struct Placement<'a> {
     pub(crate) policy: ConflictPolicy,
     /// The folder the items go into.
     pub(crate) destination_folder: &'a dyn Node,
+    /// The name the item gets instead of its own, when the user answered
+    /// a conflict with Rename; `None` keeps each item's name.
+    pub(crate) name: Option<&'a OsStr>,
 }
 
 impl Placement<'_> {
@@ -47,7 +50,7 @@ impl Placement<'_> {
         cancel: &Cancellation,
     ) -> Result<Option<Box<dyn Node>>, TransferError> {
         let source_name = source.name();
-        let destination = child_node(self.destination_folder, &source_name)?;
+        let destination = child_node(self.destination_folder, self.name.unwrap_or(&source_name))?;
         // XFER-012: moving an item into its own folder would change nothing,
         // and with Keep both it would even rename the user's item, so it is
         // skipped.
@@ -56,6 +59,17 @@ impl Placement<'_> {
         }
         if !destination.exists(Some(cancel)) {
             return Ok(Some(destination));
+        }
+        // The user chose this name because the item's own was taken; it
+        // was free then, so a clash now is reported, never resolved.
+        if self.name.is_some() {
+            return Err(TransferError::failed(
+                "The new name is taken too. Choose another name.",
+            ));
+        }
+        // OPS-028: Dolphin refuses to overwrite an item with itself.
+        if self.policy == ConflictPolicy::Replace && destination.uri() == source.uri() {
+            return Err(TransferError::failed("An item cannot replace itself."));
         }
         match self.policy {
             // XFER-006: Skip never touches the existing item.

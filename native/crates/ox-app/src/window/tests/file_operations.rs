@@ -9,9 +9,11 @@ use std::fs;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::transfer::{Progress, ProgressScope};
 
 use super::file_ops_support::{
-    is_enabled, open_dialog, require_private_trash, select_names, text_field, wait_for_no_dialog,
+    is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash, select_names,
+    text_field, wait_for_no_dialog,
 };
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow};
@@ -104,6 +106,36 @@ fn a_new_menu_file_starts_from_its_template_and_is_created_from_it() {
     assert_eq!(contents, "# New document\n");
 }
 
+/// parity: OPS-004
+#[gtk::test]
+fn new_link_asks_for_the_path_and_selects_the_new_link() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    test.activate("new-link", None);
+    let dialog = open_dialog(&test);
+    let fields = descendants::<gtk::Entry>(&dialog);
+    let (target, name) = (&fields[0], &fields[1]);
+    target.set_text(&fixture.path("Documents").to_string_lossy());
+    dialog.press("Create");
+    wait_until("the refusal", || dialog.error_text().is_some());
+    let taken = dialog.error_text();
+    name.set_text("Documents link");
+    dialog.press("Create");
+    wait_for_no_dialog(&test);
+
+    assert_eq!(dialog.title_text(), "New link");
+    assert_eq!(
+        taken.as_deref(),
+        Some("An item named “Documents” already exists. Nothing was overwritten.")
+    );
+    wait_until("the link to be selected", || {
+        test.selected_names() == ["Documents link"]
+    });
+    let points_to = fs::read_link(fixture.path("Documents link")).expect("a symbolic link");
+    assert_eq!(points_to, fixture.path("Documents"));
+}
+
 /// parity: CMD-002
 #[gtk::test]
 fn new_is_disabled_where_nothing_can_be_created() {
@@ -112,24 +144,6 @@ fn new_is_disabled_where_nothing_can_be_created() {
     assert!(!is_enabled(&test, "new-folder"));
     assert!(!is_enabled(&test, "new-file"));
     assert!(!is_enabled(&test, "paste"));
-}
-
-/// The field that edits a name in place in `test`'s view, once it shows.
-fn name_editor(test: &TestWindow) -> gtk::Entry {
-    let find = || {
-        descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
-            .into_iter()
-            .find(|field| field.has_css_class("rename-field"))
-    };
-    wait_until("the name to become editable", || find().is_some());
-    find().expect("wait_until returned only once the field showed")
-}
-
-/// Whether `test`'s view edits a name in place.
-fn is_renaming_in_place(test: &TestWindow) -> bool {
-    descendants::<gtk::Entry>(&test.window.folder_pane().view_widget())
-        .iter()
-        .any(|field| field.has_css_class("rename-field"))
 }
 
 /// parity: OPS-009, OPS-010, OPS-029, OPS-031
@@ -241,19 +255,44 @@ fn an_item_that_is_not_on_screen_is_renamed_with_the_dialog() {
     wait_for_no_dialog(&test);
 }
 
-/// parity: OPS-009
+/// parity: OPS-014, OPS-029, OPS-032
 #[gtk::test]
-fn rename_does_nothing_with_several_items_selected() {
+fn several_selected_items_are_renamed_with_one_numbered_name_and_undone_together() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
 
-    assert!(!is_enabled(&test, "rename"));
+    test.activate("rename", None);
+    let dialog = open_dialog(&test);
+    let field = text_field(&dialog);
+
+    assert_eq!(dialog.title_text(), "Rename items");
+    assert_eq!(dialog.message_text(), "Rename the 2 selected items to:");
+    assert_eq!(field.text(), "New name #");
+    assert_eq!(field.selection_bounds(), Some((0, 9)), "the number stays");
+    field.set_text("Notes");
+    dialog.press("Rename");
+    wait_until("the refusal", || dialog.error_text().is_some());
+    field.set_text("Plan #");
+    dialog.press("Rename");
+    wait_for_no_dialog(&test);
+    wait_until("the renamed files to be selected", || {
+        test.selected_names() == ["Plan 1.txt", "Plan 2.txt"]
+    });
+    let first = fs::read_to_string(fixture.path("Plan 1.txt")).expect("renamed in view order");
+    assert_eq!(test.window.shown_message(), "2 item(s) renamed.");
+
+    test.window.imp().toast.get().press_action();
+    wait_until("the batch to be renamed back", || {
+        fixture.path("Notes 2.txt").is_file() && fixture.path("Notes 10.txt").is_file()
+    });
+    assert_eq!(first, "Synthetic test data\n");
+    assert!(!fixture.path("Plan 1.txt").exists());
 }
 
-/// parity: OPS-015, OPS-018, OPS-023, OPS-029
+/// parity: OPS-015, OPS-018, OPS-023, OPS-029, OPS-032
 #[gtk::test]
-fn delete_asks_then_moves_to_the_trash_and_undo_restores() {
+fn delete_asks_then_moves_to_the_trash_and_the_toasts_undo_restores() {
     require_private_trash();
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
@@ -273,9 +312,12 @@ fn delete_asks_then_moves_to_the_trash_and_undo_restores() {
         !fixture.path("Résumé.txt").exists() && !test.names().contains(&"Résumé.txt".to_owned())
     });
     assert_eq!(test.window.shown_message(), "1 item(s) sent to Trash.");
+    let toast = test.window.imp().toast.get();
+    assert_eq!(toast.action_label().as_deref(), Some("Undo"));
 
-    test.activate("undo", None);
+    toast.press_action();
     wait_until("the file to come back", || fixture.path("Résumé.txt").is_file());
+    assert_eq!(toast.action_label(), None, "the step is undone");
 }
 
 /// parity: OPS-015
@@ -366,4 +408,61 @@ fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
     test.window.end_operation();
     assert!(!panel.is_visible());
     assert!(!is_enabled(&test, "cancel-operation"));
+}
+
+/// A copied file's bytes fill a bar of their own: a full file bar leaves
+/// the batch bar where the batch is.
+///
+/// parity: OPS-020
+#[gtk::test]
+fn a_full_file_bar_is_never_shown_as_the_batch_finishing() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.imp().transfer_panel.get();
+    let report = |label: &str, fraction: f64, scope: ProgressScope| Progress {
+        label: label.to_owned(),
+        fraction,
+        scope,
+    };
+    let _context = test.window.begin_operation("Preparing copy…");
+
+    panel.show_progress(&report("Copy: a.txt (1/2)", 0.0, ProgressScope::Batch));
+    panel.show_progress(&report("Copying a.txt · 10 / 10 bytes", 1.0, ProgressScope::File));
+    let file_done = panel.fractions();
+    panel.show_progress(&report("Copy: b.txt (2/2)", 0.5, ProgressScope::Batch));
+    let next_item = panel.fractions();
+    test.window.end_operation();
+
+    assert_eq!(file_done, (0.0, Some(1.0)));
+    assert_eq!(next_item, (0.5, None));
+}
+
+/// parity: TAB-049
+#[gtk::test]
+fn closing_during_an_operation_asks_and_closes_only_once_it_stopped() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let context = test
+        .window
+        .begin_operation("Preparing copy…")
+        .expect("the operation starts");
+
+    test.window.close();
+    let question = open_dialog(&test);
+    let title = question.title_text();
+    let buttons = question.button_labels();
+    question.press("Keep open");
+    wait_for_no_dialog(&test);
+    let kept = test.window.is_visible() && !context.cancel.is_cancelled();
+    test.window.close();
+    open_dialog(&test).press("Cancel and close");
+    wait_until("the operation to be cancelled", || context.cancel.is_cancelled());
+    let open_while_running = test.window.is_visible();
+    test.window.end_operation();
+
+    assert_eq!(title, "A file operation is running");
+    assert_eq!(buttons, ["Keep open", "Cancel and close"]);
+    assert!(kept, "Keep open changes nothing");
+    assert!(open_while_running, "the window waits for the operation to stop");
+    wait_until("the window to close", || !test.window.is_visible());
 }

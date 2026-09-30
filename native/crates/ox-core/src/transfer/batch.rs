@@ -95,6 +95,7 @@ mod tests {
             mode,
             policy: ConflictPolicy::Skip,
             destination_folder: &folder,
+            name: None,
         };
         let cases = [
             ActionCase {

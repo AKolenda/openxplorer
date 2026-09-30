@@ -33,7 +33,7 @@ use super::ArchiveError;
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name};
 use crate::random::{random_hex, NAME_BYTES};
-use crate::transfer::{Cancellation, Node, NodeKind, Progress, TransferError, WriteGuard};
+use crate::transfer::{Cancellation, Node, NodeKind, Progress, ProgressScope, TransferError, WriteGuard};
 use zip_writer::{DosTime, ZipWriter, MAX_ENTRIES};
 
 /// Staging files are `.openxplorer-compress-<32 hex digits>.part`.
@@ -273,7 +273,11 @@ impl ZipCompressor {
     }
 
     fn report(&mut self, label: String, fraction: f64) {
-        (self.emit)(Progress { label, fraction });
+        (self.emit)(Progress {
+            label,
+            fraction,
+            scope: ProgressScope::Batch,
+        });
     }
 }
 

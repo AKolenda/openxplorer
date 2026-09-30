@@ -193,6 +193,7 @@ fn a_cancelled_creation_creates_nothing() {
     assert!(names_in(temp.path()).is_empty());
 }
 
+/// parity: OPS-048
 #[test]
 fn the_six_starters_come_first_with_their_fixed_names() {
     let temp = tempfile::tempdir().unwrap();
@@ -222,6 +223,7 @@ fn the_six_starters_come_first_with_their_fixed_names() {
     assert_eq!(list.folder, missing);
 }
 
+/// parity: OPS-048
 #[test]
 fn only_visible_regular_files_up_to_sixteen_mebibytes_are_user_templates() {
     let temp = tempfile::tempdir().unwrap();
@@ -284,6 +286,7 @@ fn a_starter_writes_its_content_to_a_private_new_file() {
     assert_eq!(names_in(temp.path()), ["Plan.md", "index.html"]);
 }
 
+/// parity: OPS-048
 #[test]
 fn a_user_template_is_copied_without_its_permissions() {
     let temp = tempfile::tempdir().unwrap();

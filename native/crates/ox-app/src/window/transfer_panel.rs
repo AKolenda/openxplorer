@@ -6,9 +6,12 @@
 //! `style.css` and `updateTransfer` in `desktop/ui/app.js`. The label
 //! starts as the operation's starting text ("Moving to Trash…") and then
 //! follows the transfer engine's reports ("Copy: a.txt (1/3)", "Copying
-//! a.txt · 8,192 / 35,000 bytes"), which say whether the bar shows one
-//! file or the whole batch. Cancel runs [`WindowAction::CancelOperation`]
-//! and the label reads "Cancelling…" until the operation stops.
+//! a.txt · 8,192 / 35,000 bytes"). The first bar shows the whole batch;
+//! while a file is copied a second, thinner bar shows that file's bytes,
+//! so a full file bar is never read as the batch finishing (OPS-020).
+//! Both bars are named for assistive technologies and carry the label as
+//! their value text. Cancel runs [`WindowAction::CancelOperation`] and the
+//! label reads "Cancelling…" until the operation stops.
 //!
 //! [`TransferPanel`] is a `GtkBox` subclass whose layout is the template
 //! `resources/ui/transfer-panel.ui`. It floats over the folder pane, so
@@ -17,6 +20,7 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::transfer::{Progress, ProgressScope};
 
 use super::window_action::WindowAction;
 
@@ -42,9 +46,12 @@ mod imp {
         /// What the operation is doing.
         #[template_child]
         pub(super) status_label: TemplateChild<gtk::Label>,
-        /// How far it is.
+        /// How far the batch is.
         #[template_child]
         pub(super) progress_bar: TemplateChild<gtk::ProgressBar>,
+        /// How far the file being copied is; hidden between files.
+        #[template_child]
+        pub(super) file_bar: TemplateChild<gtk::ProgressBar>,
         /// Stops the operation.
         #[template_child]
         pub(super) cancel_button: TemplateChild<gtk::Button>,
@@ -88,18 +95,27 @@ impl TransferPanel {
     /// Shows the panel for an operation that starts with `label`, its bar
     /// empty.
     pub(super) fn start(&self, label: &str) {
-        self.show_progress(label, 0.0);
+        self.show_progress(&Progress {
+            label: label.to_owned(),
+            fraction: 0.0,
+            scope: ProgressScope::Batch,
+        });
         self.set_visible(true);
     }
 
-    /// Shows the engine's report: `label` and the bar at `fraction`,
-    /// clamped to 0–1 as `updateTransfer` does.
-    pub(super) fn show_progress(&self, label: &str, fraction: f64) {
+    /// Shows the engine's report: its label, and its fraction, clamped to
+    /// 0–1 as `updateTransfer` does, on the batch bar or the file bar.
+    pub(super) fn show_progress(&self, progress: &Progress) {
         let imp = self.imp();
+        let label = progress.label.as_str();
         imp.status_label.set_text(label);
-        imp.progress_bar.set_fraction(fraction.clamp(0.0, 1.0));
-        imp.progress_bar
-            .update_property(&[gtk::accessible::Property::ValueText(label)]);
+        let bar = match progress.scope {
+            ProgressScope::Batch => &imp.progress_bar,
+            ProgressScope::File => &imp.file_bar,
+        };
+        bar.set_fraction(progress.fraction.clamp(0.0, 1.0));
+        bar.update_property(&[gtk::accessible::Property::ValueText(label)]);
+        imp.file_bar.set_visible(progress.scope == ProgressScope::File);
     }
 
     /// Says that the operation is stopping. The window shows no later
@@ -117,5 +133,14 @@ impl TransferPanel {
     #[cfg(test)]
     pub(crate) fn status_text(&self) -> String {
         self.imp().status_label.text().to_string()
+    }
+
+    /// The batch bar's fraction, and the file bar's while it shows, for
+    /// tests.
+    #[cfg(test)]
+    pub(crate) fn fractions(&self) -> (f64, Option<f64>) {
+        let imp = self.imp();
+        let file = imp.file_bar.is_visible().then(|| imp.file_bar.fraction());
+        (imp.progress_bar.fraction(), file)
     }
 }

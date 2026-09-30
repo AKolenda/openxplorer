@@ -8,12 +8,16 @@
 //! as a taken name, appears inside the dialog, which stays open for
 //! another try. For a file, Rename selects the name without its extension,
 //! as Windows and Dolphin do (OPS-010); the Python app selected all of it.
+//! While the user types, a line under the field warns, as Dolphin's New
+//! folder dialog does, about a taken name, a leading dot that hides the
+//! item, and a leading space or tilde (OPS-007).
 
 use std::future::Future;
 
 use gtk::prelude::*;
+use gtk::{gio, glib};
 
-use super::names::check_typed_name;
+use super::names::{check_typed_name, name_warning};
 use crate::window::dialog::{ButtonStyle, Dialog};
 use crate::window::BrowserWindow;
 
@@ -38,6 +42,9 @@ pub(super) struct NameRequest<'a> {
     pub(super) initial_name: &'a str,
     /// How much of it is selected.
     pub(super) selection: NameSelection,
+    /// The folder the name is for, which the dialog checks each typed
+    /// name against while the user types.
+    pub(super) folder: &'a str,
 }
 
 /// The number of characters of `name` before its extension: up to its last
@@ -47,6 +54,47 @@ pub(super) fn stem_length(name: &str) -> usize {
         Some(dot) if dot > 0 => name[..dot].chars().count(),
         _ => name.chars().count(),
     }
+}
+
+/// Shows under `field` what [`name_warning`] says about each name typed
+/// there, checking whether it is taken in the request's folder; the
+/// starting name, and a name refused anyway, are not warned about.
+fn warn_while_typing(dialog: &Dialog, field: &gtk::Entry, request: &NameRequest<'_>) {
+    let warning = dialog.add_hint("");
+    warning.set_visible(false);
+    let folder = gio::File::for_uri(request.folder);
+    let initial_name = request.initial_name.to_owned();
+    field.connect_changed(move |field| {
+        let typed = field.text().to_string();
+        if typed == initial_name || check_typed_name(&typed).is_err() {
+            warning.set_visible(false);
+            return;
+        }
+        let child = folder.child(&typed);
+        glib::spawn_future_local(glib::clone!(
+            #[weak]
+            field,
+            #[weak]
+            warning,
+            async move {
+                let taken = child
+                    .query_info_future(
+                        "standard::type",
+                        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+                        glib::Priority::DEFAULT,
+                    )
+                    .await
+                    .is_ok();
+                // A later change has its own check.
+                if field.text() != typed {
+                    return;
+                }
+                let text = name_warning(&typed, taken);
+                warning.set_text(text.as_deref().unwrap_or_default());
+                warning.set_visible(text.is_some());
+            }
+        ));
+    });
 }
 
 /// Asks for a name and tries `attempt` with each one the user saves,
@@ -63,6 +111,7 @@ where
 {
     let dialog = Dialog::new(window, request.title, NAME_HINT);
     let field = dialog.add_text_field("Name", request.initial_name);
+    warn_while_typing(&dialog, &field, &request);
     dialog.add_cancel_button();
     dialog.add_button("Save", ButtonStyle::Primary);
     dialog.open();

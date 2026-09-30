@@ -124,6 +124,8 @@ pub(crate) enum WindowAction {
     NewHtmlDocument,
     /// New ▸ From template….
     NewFromTemplate,
+    /// New ▸ Link to file or folder… (OPS-004).
+    NewLink,
     /// Cut (Ctrl+X).
     Cut,
     /// Copy (Ctrl+C).
@@ -266,7 +268,10 @@ impl WindowAction {
     ///
     /// This is the one table of every action's name, so it is longer than
     /// a function should be.
-    #[allow(clippy::too_many_lines, reason = "one arm per action")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one line per action: the table of every name"
+    )]
     pub(crate) const fn name(self) -> &'static str {
         match self {
             WindowAction::NewTab => "new-tab",
@@ -318,6 +323,7 @@ impl WindowAction {
             WindowAction::NewJsonFile => "new-json-file",
             WindowAction::NewHtmlDocument => "new-html-document",
             WindowAction::NewFromTemplate => "new-from-template",
+            WindowAction::NewLink => "new-link",
             WindowAction::Cut => "cut",
             WindowAction::Copy => "copy",
             WindowAction::Paste => "paste",

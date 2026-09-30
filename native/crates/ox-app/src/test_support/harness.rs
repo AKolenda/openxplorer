@@ -344,11 +344,13 @@ impl TestWindow {
 
 impl Drop for TestWindow {
     fn drop(&mut self) {
-        // A window refuses to close under a running write, so a test that
-        // ends while its copy still runs would leave the window open for
-        // the tests after it.
+        // A window asks before it closes while it writes files (TAB-049),
+        // and a test may end during a write: stop it first, so the window
+        // closes and no later test finds it. Never panics, as a drop may
+        // run during a failed test's unwinding.
         let deadline = Instant::now() + WAIT_LIMIT;
-        while self.window.has_running_write() && Instant::now() < deadline {
+        while self.window.is_writing_files() && Instant::now() < deadline {
+            self.window.stop_writing_for_test();
             settle();
             thread::sleep(POLL_INTERVAL);
         }

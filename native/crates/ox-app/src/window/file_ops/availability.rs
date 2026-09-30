@@ -11,7 +11,8 @@
 //! - Copy: something is selected, every selected item can be operated on,
 //!   and no operation runs.
 //! - Cut and Delete: as Copy, and nothing selected is read-only.
-//! - Rename: as Cut, with exactly one item selected.
+//! - Rename: as Cut, with exactly one item selected. The native app also
+//!   takes several, for the batch rename (OPS-014).
 //! - Paste: a file clipboard, no search, no operation, every selected item
 //!   operable, and a writable folder.
 //! - New: no search, no operation, and a writable folder.
@@ -91,6 +92,7 @@ impl FileCommand {
                 WindowAction::NewJsonFile,
                 WindowAction::NewHtmlDocument,
                 WindowAction::NewFromTemplate,
+                WindowAction::NewLink,
                 WindowAction::ShowNewMenu,
             ],
             FileCommand::Cut => &[WindowAction::Cut],
@@ -173,8 +175,9 @@ impl CommandFacts {
         match command {
             FileCommand::New => !folder.is_searching && !self.is_busy && folder.is_writable,
             FileCommand::Copy => can_copy,
-            FileCommand::Cut | FileCommand::Duplicate => can_copy && !selection.has_read_only,
-            FileCommand::Rename => can_copy && !selection.has_read_only && selection.count == 1,
+            FileCommand::Cut | FileCommand::Duplicate | FileCommand::Rename => {
+                can_copy && !selection.has_read_only
+            }
             FileCommand::Delete | FileCommand::DeletePermanently => can_change,
             FileCommand::Paste => {
                 self.has_file_clipboard && !folder.is_searching && !busy && folder.is_writable
@@ -299,13 +302,13 @@ mod tests {
         );
     }
 
-    /// parity: CMD-002
+    /// parity: CMD-002, OPS-014
     #[test]
-    fn rename_needs_exactly_one_item_and_nothing_needs_none() {
+    fn several_items_are_renamed_together_and_nothing_needs_none() {
         let two = selected(2);
         let none = selected(0);
 
-        assert!(!two.allows(FileCommand::Rename));
+        assert!(two.allows(FileCommand::Rename));
         assert!(two.allows(FileCommand::Copy));
         assert_eq!(enabled(&none), [FileCommand::New, FileCommand::Paste]);
     }

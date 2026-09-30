@@ -46,7 +46,9 @@ use super::source::{open_archive, ArchiveOpener};
 use super::worker::on_worker;
 use super::ArchiveError;
 use crate::location::{is_smb_server, normalise, validate_name};
-use crate::transfer::{Cancellation, Node, NodeFactory, NodeKind, Progress, TransferError, WriteGuard};
+use crate::transfer::{
+    Cancellation, Node, NodeFactory, NodeKind, Progress, ProgressScope, TransferError, WriteGuard,
+};
 use plan::{plan, ExtractionPlan};
 use staging::ExtractionStaging;
 use unpack::Unpacking;
@@ -308,7 +310,11 @@ impl ZipExtractor {
 
     /// Reports progress to the transfer panel.
     fn report(&mut self, label: String, fraction: f64) {
-        (self.emit)(Progress { label, fraction });
+        (self.emit)(Progress {
+            label,
+            fraction,
+            scope: ProgressScope::Batch,
+        });
     }
 }
 

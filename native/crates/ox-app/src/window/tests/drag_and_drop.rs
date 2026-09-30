@@ -63,7 +63,7 @@ fn dragging_an_unselected_item_selects_and_carries_only_it() {
     assert_eq!(test.selected_names(), ["Résumé.txt"]);
 }
 
-/// parity: DND-009, DND-011
+/// parity: DND-009, DND-011, OPS-027
 #[gtk::test]
 fn files_dropped_on_blank_space_are_copied_into_the_folder_shown() {
     let source = Fixture::standard();
@@ -80,7 +80,7 @@ fn files_dropped_on_blank_space_are_copied_into_the_folder_shown() {
     assert!(source.path("Notes 2.txt").is_file(), "a drop is a copy");
 }
 
-/// parity: DND-009, DND-011
+/// parity: DND-009, DND-011, OPS-026
 #[gtk::test]
 fn files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check() {
     let source = Fixture::standard();
@@ -104,6 +104,29 @@ fn files_dropped_on_a_folder_go_into_that_folder_after_the_conflict_check() {
             .count()
             == 2
     });
+}
+
+/// A drop onto a folder that went away since it was listed cannot be
+/// checked for conflicts: "Could not check destination" says so and
+/// nothing is copied.
+///
+/// parity: OPS-026
+#[gtk::test]
+fn a_drop_whose_folder_went_away_reports_the_failed_check() {
+    let source = Fixture::standard();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let documents = test.position_of("Documents");
+    std::fs::remove_dir_all(fixture.path("Documents")).expect("the fixture is ours");
+
+    let taken = test
+        .window
+        .drop_files(&[source.uri_of("Notes 2.txt")], Some(documents), DropAction::Copy);
+    let dialog = open_dialog(&test);
+
+    assert!(taken);
+    assert_eq!(dialog.title_text(), "Could not check destination");
+    assert!(!fixture.path("Documents").exists(), "nothing was copied");
 }
 
 /// parity: DND-012, DND-013
@@ -141,6 +164,36 @@ fn links_and_drops_during_a_search_or_an_operation_are_refused() {
     );
 }
 
+/// A drop while a dialog shows is refused, as the Python app refused it;
+/// the in-window dialogs leave the tabs usable, so a drop could reach
+/// the window then.
+///
+/// parity: DND-013
+#[gtk::test]
+fn a_drop_while_a_dialog_shows_is_refused() {
+    let fixture = Fixture::standard();
+    let source = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("properties", None);
+    wait_until("the Properties dialog", || {
+        test.window.dialog_layer().shown().is_some()
+    });
+
+    let taken = test.window.drop_files(
+        &[source.uri_of("Documents")],
+        Some(test.position_of("Documents")),
+        DropAction::Copy,
+    );
+
+    assert!(!taken);
+    assert_eq!(
+        test.window.shown_message(),
+        "Close the dialog and finish the current operation before dropping files."
+    );
+    assert!(!fixture.path("Documents/Documents").exists());
+}
+
 /// parity: DND-006
 #[gtk::test]
 fn no_drag_starts_while_a_file_operation_runs() {
@@ -155,6 +208,28 @@ fn no_drag_starts_while_a_file_operation_runs() {
     assert!(content.is_none());
     let after = test.window.drag_content_for(test.position_of("Notes 2.txt"));
     assert!(after.is_some(), "a drag starts again once the operation ended");
+}
+
+/// parity: DND-006
+#[gtk::test]
+fn no_drag_starts_while_a_menu_or_a_dialog_is_open() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let notes = test.position_of("Notes 2.txt");
+
+    test.window.right_click(Some(notes));
+    let with_menu = test.window.drag_content_for(notes);
+    test.window.context_menu().popdown();
+    test.activate("new-folder", None);
+    let dialog = open_dialog(&test);
+    let with_dialog = test.window.drag_content_for(notes);
+    dialog.press("Cancel");
+
+    assert!(with_menu.is_none());
+    assert!(with_dialog.is_none());
+    wait_until("drags to start again", || {
+        test.window.drag_content_for(notes).is_some()
+    });
 }
 
 /// parity: DND-007
@@ -290,6 +365,10 @@ fn an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer() {
     wait_until("the drop menu", || menu.is_mapped());
     let labels = menu.row_labels();
     test.activate("drop-choice", Some("cancel"));
+    // Choosing an entry closes the menu; the action alone does not, and
+    // no drop is taken while a menu is open.
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
     wait_for(Duration::from_millis(100));
     let cancelled_kept_source = source.path("Notes 2.txt").is_file();
     let cancelled_made_nothing = !fixture.path("Documents/Notes 2.txt").exists();

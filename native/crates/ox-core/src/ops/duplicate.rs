@@ -9,10 +9,10 @@
 //! (XFER-008). Items from several folders, as a search can select, are
 //! copied into their own folders one folder at a time.
 //!
-//! OPS-034 in `native/parity/features.toml` names duplicates the Dolphin
-//! way instead (`report copy.pdf`), which the transfer engine's Keep both
-//! cannot produce. Until OPS-034 records which names Duplicate uses, this
-//! module does not claim it.
+//! Dolphin names a duplicate `report copy.pdf`; OPS-034 in
+//! `native/parity/features.toml` records that Duplicate keeps the app's
+//! own `(copy N)` names instead, so a duplicate and a Keep both copy are
+//! named alike.
 
 use super::context::{on_worker, OperationContext};
 use super::destinations::DestinationTracker;

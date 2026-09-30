@@ -24,6 +24,7 @@ use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
 use super::conflict_dialog::ConflictAnswer;
 use super::running::FinishedOperation;
+use super::unfinished::mark_unfinished;
 use crate::window::dialog;
 use crate::window::BrowserWindow;
 
@@ -55,13 +56,25 @@ enum TransferPlan {
 impl TransferPlan {
     /// The plan for `incoming` with `answers`.
     fn new(incoming: IncomingItems, answers: &[ConflictAnswer]) -> Self {
-        let by_uri: HashMap<&str, ConflictPolicy> = answers
+        let by_uri: HashMap<&str, &ConflictAnswer> = answers
             .iter()
-            .map(|answer| (answer.uri.as_str(), answer.policy))
+            .map(|answer| (answer.uri.as_str(), answer))
             .collect();
-        let policy_of = |uri: &String| by_uri.get(uri.as_str()).copied().unwrap_or(ConflictPolicy::Skip);
+        let policy_of = |uri: &String| {
+            by_uri
+                .get(uri.as_str())
+                .map_or(ConflictPolicy::Skip, |answer| answer.policy)
+        };
+        let rename_of = |uri: &String| {
+            by_uri
+                .get(uri.as_str())
+                .and_then(|answer| answer.rename_to.clone())
+        };
         let first_policy = incoming.uris.first().map_or(ConflictPolicy::Skip, policy_of);
-        let is_uniform = incoming.uris.iter().all(|uri| policy_of(uri) == first_policy);
+        let is_uniform = incoming
+            .uris
+            .iter()
+            .all(|uri| policy_of(uri) == first_policy && rename_of(uri).is_none());
         if is_uniform {
             return TransferPlan::Uniform(TransferRequest {
                 mode: incoming.mode,
@@ -76,6 +89,7 @@ impl TransferPlan {
             .map(|uri| ItemChoice {
                 uri: uri.clone(),
                 policy: policy_of(uri),
+                rename_to: rename_of(uri),
             })
             .collect();
         TransferPlan::PerItem(ChosenTransfer {
@@ -180,7 +194,8 @@ impl BrowserWindow {
             .locations
             .borrow()
             .display_location(&incoming.destination_folder);
-        self.ask_about_conflicts(&conflicts, &destination).await
+        self.ask_about_conflicts(&conflicts, &incoming.destination_folder, &destination)
+            .await
     }
 
     /// Runs `plan` as the window's one operation; `None` when another runs.
@@ -190,7 +205,9 @@ impl BrowserWindow {
             TransferPlan::PerItem(chosen) => {
                 let context = self.begin_operation(starting_label(chosen.mode))?;
                 let progress = self.progress_reporter(&context.cancel);
+                let mark = mark_unfinished(Some(&chosen.destination_folder));
                 let outcome = run_chosen_transfer(chosen, &context, progress).await;
+                drop(mark);
                 self.end_operation();
                 Some(outcome)
             }
@@ -214,6 +231,7 @@ mod tests {
         ConflictAnswer {
             uri: uri.to_owned(),
             policy,
+            rename_to: None,
         }
     }
 

@@ -50,6 +50,7 @@ impl BrowserWindow {
             title: NEW_FOLDER_NAME,
             initial_name: NEW_FOLDER_NAME,
             selection: NameSelection::Whole,
+            folder: &folder,
         };
         let created = ask_for_name(self, request, |name| {
             let folder = folder.clone();

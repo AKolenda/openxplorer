@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Dropping items onto a program or script runs it with their paths
 //! (DND-026), as Windows Explorer does when a file is dropped onto an
-//! `.exe`.
+//! `.exe`, and onto a `.desktop` launcher starts its application with
+//! them ([`super::launcher`], DND-020).
 //!
 //! New in the native app, promised by the owner. A file under a drag is a
 //! program when GIO says it is a regular file the user may execute; the
@@ -35,6 +36,7 @@ use ox_core::entry::Entry;
 use ox_core::integration::{find_terminal, ExecutableSearch, Sandbox, Terminal, TerminalKind};
 use ox_core::network::local_path;
 
+use super::launcher;
 use crate::window::dialog::{ButtonStyle, Dialog};
 use crate::window::BrowserWindow;
 
@@ -70,6 +72,8 @@ pub(crate) enum ProgramKind {
     Binary,
     /// A script: runs in the terminal.
     Script,
+    /// A desktop launcher: its application starts with the items.
+    Launcher,
 }
 
 /// An executable file that dropped items can be given to.
@@ -264,10 +268,14 @@ impl BrowserWindow {
             )
             .await
             .map_err(|error| error.to_string())?;
-        if !info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE) {
+        let path = local_path(&program.uri).ok_or_else(|| NO_LOCAL_PATH.to_owned())?;
+        let may_run = match program.kind {
+            ProgramKind::Launcher => launcher::is_trusted(&path, &info),
+            ProgramKind::Binary | ProgramKind::Script => info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE),
+        };
+        if !may_run {
             return Err(format!("“{}” is not a program you can run.", program.name));
         }
-        let path = local_path(&program.uri).ok_or_else(|| NO_LOCAL_PATH.to_owned())?;
         // Safety rule "ask before running a program from elsewhere".
         if self.is_from_elsewhere(program).await && !self.confirm_run(program).await {
             return Ok(());
@@ -305,16 +313,25 @@ impl BrowserWindow {
     /// Starts `program`, at `path`, with the local paths of `items`.
     fn start_program(&self, program: &ProgramTarget, path: &Path, items: &[String]) -> Result<(), String> {
         let sandbox = Sandbox::detect();
-        let terminal = match program.kind {
-            ProgramKind::Script => Some(
-                find_terminal(&ExecutableSearch::for_sandbox(sandbox)).map_err(|error| error.to_string())?,
-            ),
-            ProgramKind::Binary => None,
-        };
         let arguments: Vec<OsString> = items.iter().map(|uri| item_argument(uri)).collect();
-        let command = program_command(path, program.kind, &arguments, terminal.as_ref());
-        let folder = path.parent().unwrap_or(Path::new("/"));
-        spawn_command(&command, folder, sandbox).map_err(|error| error.to_string())?;
+        let (command, folder) = match program.kind {
+            ProgramKind::Launcher => (
+                launcher::launch_command(path, &arguments),
+                launcher::launch_folder(),
+            ),
+            ProgramKind::Binary | ProgramKind::Script => {
+                let terminal = match program.kind {
+                    ProgramKind::Script => Some(
+                        find_terminal(&ExecutableSearch::for_sandbox(sandbox))
+                            .map_err(|error| error.to_string())?,
+                    ),
+                    _ => None,
+                };
+                let command = program_command(path, program.kind, &arguments, terminal.as_ref());
+                (command, path.parent().unwrap_or(Path::new("/")).to_path_buf())
+            }
+        };
+        spawn_command(&command, &folder, sandbox).map_err(|error| error.to_string())?;
         self.show_message(&format!("Opened {} item(s) with {}.", items.len(), program.name));
         Ok(())
     }
@@ -331,8 +348,8 @@ fn is_on_removable_drive(uri: &str) -> bool {
     mount.can_eject() || is_removable_drive
 }
 
-/// Asks GIO whether `entry` is a program; `None` for a file that is not
-/// one or cannot be read.
+/// Asks GIO whether `entry` is a program or a launcher; `None` for a file
+/// that is neither or cannot be read.
 async fn query_program(entry: &Entry) -> Option<ProgramTarget> {
     let file = gio::File::for_uri(&entry.uri);
     let info = file
@@ -343,6 +360,10 @@ async fn query_program(entry: &Entry) -> Option<ProgramTarget> {
         )
         .await
         .ok()?;
+    // A desktop entry is text, but never a script to run in a shell.
+    if launcher::is_desktop_entry(&info) {
+        return launcher::query_launcher(entry, &info).await;
+    }
     program_from_info(entry, &info)
 }
 

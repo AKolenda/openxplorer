@@ -131,8 +131,8 @@ impl OperationPanel {
         imp.progress.set_fraction(fraction.clamp(0.0, 1.0));
     }
 
-    /// Stops the running operation.
-    fn cancel(&self) {
+    /// Stops the running operation, as its Cancel button does.
+    pub(crate) fn cancel(&self) {
         let imp = self.imp();
         if let Some(cancel) = imp.cancel.borrow().as_ref() {
             cancel.cancel();

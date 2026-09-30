@@ -31,6 +31,8 @@ pub(super) enum EmptyState {
     NoMatches(String),
     /// The folder has no items.
     EmptyFolder,
+    /// The Recycle Bin has no items (OPS-040).
+    EmptyRecycleBin,
 }
 
 /// The empty page's widgets.
@@ -106,6 +108,7 @@ impl EmptyPage {
         self.icon.set_visible(!loading);
         let glyph = match state {
             EmptyState::Unavailable(_) => Icon::Organization,
+            EmptyState::EmptyRecycleBin => Icon::Delete,
             _ => Icon::Folder,
         };
         icons::set_icon(&self.icon, glyph, STATE_GLYPH);
@@ -114,6 +117,7 @@ impl EmptyPage {
             EmptyState::Unavailable(error) => ("This location is unavailable", error.as_str()),
             EmptyState::NoMatches(reason) => ("No matching items", reason.as_str()),
             EmptyState::EmptyFolder => ("This folder is empty", ""),
+            EmptyState::EmptyRecycleBin => ("Recycle Bin is empty", ""),
         };
         self.title.set_text(title);
         self.message.set_text(message);

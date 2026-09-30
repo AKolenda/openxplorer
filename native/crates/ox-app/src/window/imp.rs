@@ -14,6 +14,7 @@ use ox_core::location::LocationContext;
 use super::address_bar::AddressBar;
 use super::breakpoints::WindowWidth;
 use super::caption_buttons::CaptionButtons;
+use super::closing::ClosingState;
 use super::command_bar::CommandBar;
 use super::connections::ExternalHandlers;
 use super::details_pane::DetailsPane;
@@ -138,6 +139,8 @@ pub(crate) struct BrowserWindow {
     /// The running file operation, Trash support and the file
     /// clipboard.
     pub(super) file_operations: RefCell<FileOperations>,
+    /// Whether a close waits for a running write (TAB-049).
+    pub(super) closing: Cell<ClosingState>,
     /// The file drag this window started, while it lasts.
     pub(super) outgoing_drag: RefCell<Option<OutgoingDrag>>,
     /// Until when clicks that open items are ignored, around a drag.
@@ -155,6 +158,10 @@ pub(crate) struct BrowserWindow {
     pub(super) drop_menu: OnceCell<MenuPopover>,
     /// The tab a file drag hovers over, and the timer that shows it.
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
+    /// The folder a file drag hovers over, and the timer that opens it.
+    pub(super) folder_hover: RefCell<Option<(String, glib::SourceId)>>,
+    /// The scroll of a zone a file drag hovers near the edge of.
+    pub(super) drag_scroll: RefCell<Option<super::file_drop::DragScroll>>,
     /// The tab drag this window started, while it lasts.
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
     /// The timer that saves the window's size after a resize.
@@ -228,11 +235,15 @@ impl WidgetImpl for BrowserWindow {
 
 impl WindowImpl for BrowserWindow {
     fn close_request(&self) -> glib::Propagation {
-        // Safety rules "an update locks the application" (UPD-005) and
-        // "a window never closes under a running write" (TAB-049): see
-        // closing.rs.
+        // Safety rule "an update locks the application" (UPD-005): no
+        // window closes while an update installs (closing.rs).
         if let Some(refusal) = self.obj().close_refusal() {
             self.obj().show_message(&refusal);
+            return glib::Propagation::Stop;
+        }
+        // Nor while it writes files: it asks whether to cancel first
+        // (TAB-049).
+        if !self.obj().may_close_now() {
             return glib::Propagation::Stop;
         }
         // Let go of keyboard focus first. On Wayland, GTK's input method

@@ -98,6 +98,9 @@ pub(super) struct Tab {
     /// The next listing scrolls to the first selected item, as a
     /// `FileManager1` `ShowItems` request asks.
     pub reveals_selection: bool,
+    /// The next listing starts renaming the selected item in place: Tab
+    /// moved on from a rename (OPS-012).
+    pub renames_selection: bool,
     /// The vertical scroll position, restored when the tab is shown again.
     pub scroll: f64,
     /// The URI of the item with keyboard focus, which gets it back when
@@ -129,6 +132,7 @@ impl Tab {
             error: None,
             selected: Vec::new(),
             reveals_selection: false,
+            renames_selection: false,
             scroll: 0.0,
             focused: None,
             scroll_after_listing: None,

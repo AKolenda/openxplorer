@@ -228,7 +228,7 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
 /// host that does not exist, which `GVfs` reports as not mounted without
 /// reaching a network, and the mount is the test's.
 ///
-/// parity: NET-004, NET-003
+/// parity: NET-004, NET-003, OPS-037
 #[gtk::test]
 fn an_unmounted_share_is_mounted_once_then_listed_again() {
     let test = TestWindow::open(Page::Network.uri());

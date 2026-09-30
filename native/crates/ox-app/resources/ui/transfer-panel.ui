@@ -2,7 +2,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!--
   The transfer panel, `#transfer` of desktop/ui/index.html: the copy
-  glyph, what the operation is doing above its progress bar, and Cancel.
+  glyph, what the operation is doing above its progress bar, the current
+  file's bar while a file is copied, and Cancel.
   It floats above the status bar between the sidebar and the details pane
   (native/docs/ui-spec.md §4.15, "Transfer"). src/window/transfer_panel.rs
   sets the glyph and the Cancel action.
@@ -41,6 +42,17 @@
             <accessibility>
               <property name="label">Operation progress</property>
             </accessibility>
+          </object>
+        </child>
+        <child>
+          <object class="GtkProgressBar" id="file_bar">
+            <property name="visible">false</property>
+            <accessibility>
+              <property name="label">Current file progress</property>
+            </accessibility>
+            <style>
+              <class name="transfer-file"/>
+            </style>
           </object>
         </child>
       </object>

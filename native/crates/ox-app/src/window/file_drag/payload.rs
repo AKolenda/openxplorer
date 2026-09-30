@@ -18,6 +18,7 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::entry::{Entry, EntryKind};
 use ox_core::location::{file_uri, is_smb_location, is_smb_server, normalise};
+use ox_core::ops::is_recycle_bin_item;
 
 /// The most items one drag carries (`MAX_ITEMS`).
 pub(super) const MAX_DRAGGED_ITEMS: usize = 200;
@@ -76,14 +77,17 @@ pub(crate) fn is_draggable_location(uri: &str) -> bool {
 /// Whether `entry` may leave the app by a drag (`fileDragEntry`): a real
 /// local or SMB file, folder or link, not a share listing or a shortcut,
 /// whose address passes the location rules, which refuse a password or a
-/// control character (`file_uri`).
+/// control character (`file_uri`); or an item directly in the Recycle
+/// Bin, which a drop into a folder moves there (OPS-046).
 pub(super) fn is_draggable(entry: &Entry) -> bool {
     let is_plain_item = matches!(
         entry.kind,
         EntryKind::File | EntryKind::Directory | EntryKind::Symlink
     );
     let is_valid_address = normalise(&entry.uri).is_ok();
-    is_plain_item && !entry.is_virtual && is_valid_address && is_draggable_location(&entry.uri)
+    let may_leave =
+        (is_valid_address && is_draggable_location(&entry.uri)) || is_recycle_bin_item(&entry.uri);
+    is_plain_item && !entry.is_virtual && may_leave
 }
 
 /// The URIs a drag of `entries` carries: every one, in order, without

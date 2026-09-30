@@ -21,7 +21,7 @@ use super::labels::copy_label;
 use super::modes::{path_for_unix_modes, secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
 use super::names::child_node;
 use super::node::{Node, NodeInfo, NodeKind};
-use super::types::{progress_fraction, Progress};
+use super::types::{progress_fraction, Progress, ProgressScope};
 
 /// Copies one source tree into staging, reporting byte progress.
 pub(crate) struct Copier<'a> {
@@ -146,6 +146,7 @@ impl<'a> Copier<'a> {
             emit(Progress {
                 label: copy_label(&name, current, total),
                 fraction: progress_fraction(current, total),
+                scope: ProgressScope::File,
             });
         };
         source.copy_file(target, cancel, &mut progress)

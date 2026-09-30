@@ -13,8 +13,9 @@ use std::path::Path;
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
-    create_item, duplicate_items, list_recycle_bin, run_transfer, undo, OperationContext, TransferRequest,
-    UndoJournal, UndoRecord,
+    changed_copies, create_item, create_links, duplicate_items, list_recycle_bin, rename_batch, reverse,
+    run_transfer, undo, BatchItem, BatchRename, LinkRequest, OperationContext, TransferRequest, UndoJournal,
+    UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -54,6 +55,7 @@ fn undo_fully(record: &UndoRecord) {
     assert!(result.skipped.is_empty(), "{:?}", result.skipped);
 }
 
+/// parity: OPS-030
 #[test]
 fn undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources() {
     require_private_trash();
@@ -68,12 +70,55 @@ fn undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources() {
         &[&source.join("a.txt")],
         Some(&destination),
     ));
+    let an_hour_ahead = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 3600;
+    assert!(block_on(changed_copies(&record, an_hour_ahead)).is_empty());
+    assert_eq!(
+        block_on(changed_copies(&record, 0)),
+        ["a.txt"],
+        "changed since 1970"
+    );
     undo_fully(&record);
 
     assert_eq!(record.undo_label(), "Undo: Copy");
     assert!(!destination.join("a.txt").exists());
     assert_eq!(fs::read(source.join("a.txt")).unwrap(), b"a");
     assert!(is_in_recycle_bin(&destination.join("a.txt")));
+}
+
+/// A file edited inside a copied folder leaves the folder's own time
+/// alone, but still counts as a change to the copy.
+///
+/// parity: OPS-030
+#[test]
+fn an_edit_inside_a_copied_folder_counts_as_a_change() {
+    let temp = tempfile::tempdir().unwrap();
+    let (source, destination) = (temp.path().join("src"), temp.path().join("dst"));
+    fs::create_dir_all(source.join("project/notes")).unwrap();
+    fs::create_dir(&destination).unwrap();
+    fs::write(source.join("project/notes/work.txt"), b"draft").unwrap();
+    let record = undo_record_of(&request(
+        TransferMode::Copy,
+        &[&source.join("project")],
+        Some(&destination),
+    ));
+    let now = std::time::SystemTime::now();
+    let since = now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let untouched = block_on(changed_copies(&record, since));
+
+    let edited = fs::File::options()
+        .write(true)
+        .open(destination.join("project/notes/work.txt"))
+        .unwrap();
+    edited
+        .set_modified(now + std::time::Duration::from_secs(60))
+        .unwrap();
+
+    assert!(untouched.is_empty(), "{untouched:?}");
+    assert_eq!(block_on(changed_copies(&record, since)), ["project"]);
 }
 
 #[test]
@@ -186,4 +231,67 @@ fn permanent_delete_leaves_nothing_to_undo() {
     assert_eq!(outcome.result.done.len(), 1);
     assert_eq!(outcome.undo, None);
     assert!(outcome.created.is_empty());
+}
+
+/// parity: OPS-029, OPS-014
+#[test]
+fn a_batch_rename_is_undone_and_redone_as_one_step() {
+    let temp = tempfile::tempdir().unwrap();
+    for name in ["b.txt", "a.jpg"] {
+        fs::write(temp.path().join(name), name).unwrap();
+    }
+    let batch = BatchRename {
+        items: ["b.txt", "a.jpg"]
+            .map(|name| BatchItem {
+                uri: file_uri(&temp.path().join(name)),
+                name: name.to_owned(),
+                is_dir: false,
+            })
+            .to_vec(),
+        pattern: "Trip #".to_owned(),
+        first_number: 1,
+    };
+    let context = OperationContext::default();
+
+    let outcome = block_on(rename_batch(&batch, &context)).expect("valid names");
+    let record = outcome.undo.expect("an undoable batch");
+    let reversal = block_on(reverse(&record, &context, |_| {})).expect("an undo");
+    let names_after_undo = [
+        temp.path().join("b.txt").is_file(),
+        temp.path().join("a.jpg").is_file(),
+    ];
+    let redo = reversal.inverse.expect("the undo can be redone");
+    let redone = block_on(undo(&redo, &context, |_| {})).expect("a redo");
+
+    assert_eq!(record.undo_label(), "Undo: Batch rename");
+    assert_eq!(names_after_undo, [true, true]);
+    assert!(redone.errors.is_empty(), "{:?}", redone.errors);
+    assert_eq!(fs::read(temp.path().join("Trip 1.txt")).unwrap(), b"b.txt");
+    assert_eq!(fs::read(temp.path().join("Trip 2.jpg")).unwrap(), b"a.jpg");
+}
+
+/// parity: OPS-029, DND-019
+#[test]
+fn undoing_links_moves_only_the_links_to_the_trash() {
+    require_private_trash();
+    let temp = tempfile::tempdir().unwrap();
+    let (items, links) = (temp.path().join("items"), temp.path().join("links"));
+    fs::create_dir(&items).unwrap();
+    fs::create_dir(&links).unwrap();
+    fs::write(items.join("a.txt"), b"a").unwrap();
+    let request = LinkRequest {
+        uris: vec![file_uri(&items.join("a.txt"))],
+        destination_folder: file_uri(&links),
+    };
+
+    let outcome = block_on(create_links(&request, &OperationContext::default())).expect("a local folder");
+    let record = outcome.undo.expect("undoable links");
+    undo_fully(&record);
+
+    assert_eq!(record.undo_label(), "Undo: Link");
+    assert!(
+        links.join("a.txt").symlink_metadata().is_err(),
+        "the link is gone"
+    );
+    assert_eq!(fs::read(items.join("a.txt")).unwrap(), b"a", "its item stays");
 }

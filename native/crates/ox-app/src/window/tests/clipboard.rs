@@ -86,6 +86,8 @@ fn cut_then_paste_moves_the_items_and_empties_the_cut() {
     });
     assert!(fixture.path("Documents/Notes 10.txt").is_file());
     assert!(!fixture.path("Notes 10.txt").exists());
+    // The toast shows for a few seconds only, so it is read first.
+    wait_until("the toast", || test.window.shown_message() == "1 item(s) moved.");
     wait_until("the moved item to leave the clipboard", || {
         !is_enabled(&test, "paste")
     });
@@ -121,9 +123,11 @@ fn pasting_onto_a_taken_name_asks_and_keep_both_keeps_both() {
         "{}",
         dialog.message_text()
     );
+    // The copy is of the existing item itself, which may not replace
+    // itself.
     assert_eq!(
         dialog.button_labels(),
-        ["Cancel", "Skip duplicates", "Keep both", "Replace existing"]
+        ["Cancel", "Skip duplicates", "Keep both", "Rename"]
     );
     assert!(
         descendants::<gtk::CheckButton>(&dialog).is_empty(),
@@ -193,6 +197,89 @@ fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
         .filter(|name| name.contains("(copy"))
         .collect();
     assert_eq!(copies.len(), 1, "Notes 2.txt was skipped: {copies:?}");
+}
+
+/// parity: OPS-028
+#[gtk::test]
+fn rename_in_the_conflict_dialog_copies_under_the_typed_name() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("copy", None);
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+
+    test.activate("paste", None);
+    let dialog = open_dialog(&test);
+    let new_name = descendants::<gtk::Entry>(&dialog)
+        .into_iter()
+        .next()
+        .expect("the dialog has a New name field");
+    assert_eq!(
+        new_name.text(),
+        "Notes 2 (copy 2).txt",
+        "a free name is suggested"
+    );
+    new_name.set_text("Notes 10.txt");
+    dialog.press("Rename");
+    wait_until("the taken name to be refused", || dialog.error_text().is_some());
+    new_name.set_text("Renamed notes.txt");
+    dialog.press("Rename");
+
+    wait_until("the renamed copy to be selected", || {
+        test.selected_names() == ["Renamed notes.txt"]
+    });
+    assert_eq!(
+        fs::read(fixture.path("Renamed notes.txt")).expect("the copy exists"),
+        fs::read(fixture.path("Notes 2.txt")).expect("the original stays")
+    );
+}
+
+/// Marks the file at `path` as last modified an hour ago.
+fn make_an_hour_old(path: &std::path::Path) {
+    let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    let file = fs::File::options()
+        .write(true)
+        .open(path)
+        .expect("the fixture is ours");
+    file.set_modified(an_hour_ago).expect("the fixture is ours");
+}
+
+/// "Replace older" replaces only the files whose existing copy is older;
+/// Cancel has the focus, so a reflexive Enter changes nothing.
+///
+/// parity: OPS-028
+#[gtk::test]
+fn replace_older_replaces_only_the_older_existing_files() {
+    let fixture = Fixture::standard();
+    for name in ["Documents/Notes 2.txt", "Documents/Notes 10.txt"] {
+        fs::write(fixture.path(name), b"existing").expect("the fixture is ours");
+    }
+    make_an_hour_old(&fixture.path("Documents/Notes 2.txt"));
+    make_an_hour_old(&fixture.path("Notes 10.txt"));
+    let test = clipboard_then_documents(&fixture, "copy", &["Notes 2.txt", "Notes 10.txt"]);
+
+    test.activate("paste", None);
+    let dialog = open_dialog(&test);
+    let focused = GtkWindowExt::focus(&dialog).and_downcast::<gtk::Button>();
+    assert_eq!(
+        focused.and_then(|button| button.label()).as_deref(),
+        Some("Cancel")
+    );
+    dialog.press("Replace older");
+    wait_until("the report of one copied and one skipped", || {
+        super::file_ops_support::dialog_over(&test).is_some_and(|report| {
+            report != dialog && report.message_text().starts_with("1 completed.\n1 skipped")
+        })
+    });
+
+    assert_eq!(
+        fs::read(fixture.path("Documents/Notes 2.txt")).expect("the older copy was replaced"),
+        b"Synthetic test data\n"
+    );
+    assert_eq!(
+        fs::read(fixture.path("Documents/Notes 10.txt")).expect("the newer copy stays"),
+        b"existing"
+    );
 }
 
 /// The bytes the clipboard of `test`'s window offers as `mime_type`.

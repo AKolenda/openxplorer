@@ -24,7 +24,7 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuEntry {
 }
 
 /// The New menu (`openNewMenu`), which the folder background's "New…"
-/// opens too.
+/// opens too, and Dolphin's link item (OPS-004).
 pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
     vec![
         MenuItem::new("Folder", Icon::FolderAdd, WindowAction::NewFolder)
@@ -47,6 +47,8 @@ pub(in crate::window) fn new_menu() -> Vec<MenuEntry> {
             Icon::DocumentCopy,
             WindowAction::NewFromTemplate,
         ),
+        MenuEntry::Divider,
+        item("Link to file or folder…", Icon::Link, WindowAction::NewLink),
     ]
 }
 

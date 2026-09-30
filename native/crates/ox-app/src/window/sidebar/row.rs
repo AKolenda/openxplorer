@@ -28,6 +28,9 @@ const PIN_SIZE: i32 = 11;
 /// The eject glyph of a removable drive's row.
 const EJECT_SIZE: i32 = 14;
 
+/// The class of the dashed drop tail of an empty Quick access.
+const PIN_DROP_TAIL_CLASS: &str = "quick-drop-tail";
+
 /// A row's icon at its size, with the class the skin spaces it by.
 fn row_icon(icon: Art) -> ArtImage {
     let (size, class) = match icon {
@@ -134,6 +137,12 @@ pub(super) fn sidebar_row(entry: &SidebarEntry, edges: SectionEdges) -> gtk::Lis
     let (action, target) = match &entry.target {
         RowTarget::Location(uri) => (WindowAction::GoTo, uri),
         RowTarget::MountVolume(id) => (WindowAction::MountVolume, id),
+        RowTarget::PinDropTail => {
+            row.set_activatable(false);
+            row.set_selectable(false);
+            row.add_css_class(PIN_DROP_TAIL_CLASS);
+            return row;
+        }
     };
     row.set_action_name(Some(&action.detailed_name()));
     row.set_action_target_value(Some(&target.to_variant()));

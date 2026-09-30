@@ -205,12 +205,13 @@ impl Dialog {
     }
 
     /// Adds a line of small muted text that can be selected, such as a
-    /// folder's path (`.template-path`).
-    pub(super) fn add_hint(&self, text: &str) {
-        self.add_text_line(text, "dialog-hint");
+    /// folder's path (`.template-path`), and returns it, so a caller can
+    /// change it while the dialog is open.
+    pub(super) fn add_hint(&self, text: &str) -> gtk::Label {
+        self.add_text_line(text, "dialog-hint")
     }
 
-    fn add_text_line(&self, text: &str, css_class: &str) {
+    fn add_text_line(&self, text: &str, css_class: &str) -> gtk::Label {
         let line = gtk::Label::builder()
             .label(text)
             .xalign(0.0)
@@ -223,6 +224,7 @@ impl Dialog {
         // Selectable with the pointer, but no stop for the keyboard.
         line.set_focusable(false);
         self.imp().fields.append(&line);
+        line
     }
 
     /// Adds a check box (`.checkbox-row`).
@@ -258,6 +260,16 @@ impl Dialog {
         answer
     }
 
+    /// Makes Enter in `entry` press `button` instead of the primary
+    /// button, for a field that belongs to one of several answers.
+    pub(super) fn submit_with(&self, entry: &gtk::Entry, button: DialogButton) {
+        entry.set_activates_default(false);
+        let answers = self.imp().answers.clone();
+        entry.connect_activate(move |_| {
+            let _ = answers.try_send(Some(button));
+        });
+    }
+
     /// A button appended to the actions and remembered.
     fn new_button(&self, label: &str, style: ButtonStyle) -> gtk::Button {
         let button = gtk::Button::builder()
@@ -285,6 +297,18 @@ impl Dialog {
         if let Some(field) = first_field {
             field.grab_focus();
             field.select_region(0, -1);
+        }
+    }
+
+    /// Shows the dialog with its first button focused even when it has a
+    /// text field, for a question whose field is only one of the answers:
+    /// a reflexive Enter then does not choose it.
+    pub(super) fn open_on_first_button(&self) {
+        let first_button = self.imp().buttons.borrow().first().cloned();
+        GtkWindowExt::set_focus(self, first_button.as_ref());
+        self.present();
+        if let Some(button) = first_button {
+            button.grab_focus();
         }
     }
 
