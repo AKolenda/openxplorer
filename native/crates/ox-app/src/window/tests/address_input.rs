@@ -263,9 +263,13 @@ fn f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there() {
     let test = TestWindow::open(&fixture.uri());
     let address = test.window.address_bar();
     assert_eq!(application().accels_for_action("win.address-history"), ["F4"]);
-    for folder in ["Documents", ""] {
+    for (folder, uri) in [("Documents", fixture.uri_of("Documents")), ("", fixture.uri())] {
         test.activate("location", None);
         address.submit_text(&fixture.path(folder).display().to_string());
+        // The typed folder is looked up in the background before it opens.
+        wait_until("the typed folder", || {
+            test.window.current_uri() == Some(uri.clone())
+        });
         test.wait_for_listing(folder);
     }
 
