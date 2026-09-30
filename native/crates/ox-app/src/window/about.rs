@@ -14,18 +14,49 @@ use gtk::glib;
 
 use super::dialog::{ButtonStyle, Dialog};
 use super::BrowserWindow;
+use crate::config::{APP_ID, BUILD_NAME};
 
-/// The heading of About this build: the product and its version.
-const ABOUT_TITLE: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"));
+/// The heading of About this build in a stable build: the product and its
+/// version.
+const STABLE_TITLE: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"));
 
-/// What About this build says under its heading: the description, the
-/// platform line and the limitations, as the Python box had them.
-const ABOUT_TEXT: &str = "An independent Windows 11–inspired file manager for Zorin.\n\n\
-Desktop: Rust + GTK 4 + GIO/GVfs.\n\n\
-Stable release. Replacing existing files requires confirmation; locations without a Recycle \
-Bin offer a confirmed permanent delete. Cached filename/path search is opt-in. Thumbnails are \
-not implemented. ZIP files can be browsed read-only and extracted. Open folders update through \
-GIO file monitors.";
+/// What About this build says above the channel: the description and the
+/// platform line, as the Python box had them.
+const ABOUT_INTRODUCTION: &str = "An independent Windows 11–inspired file manager for Zorin.\n\n\
+Desktop: Rust + GTK 4 + GIO/GVfs.";
+
+/// What About this build says after the channel: the limitations.
+const ABOUT_LIMITS: &str = "Replacing existing files requires confirmation; locations without a \
+Recycle Bin offer a confirmed permanent delete. Cached filename/path search is opt-in. Thumbnails \
+are not implemented. ZIP files can be browsed read-only and extracted. Open folders update \
+through GIO file monitors.";
+
+/// Whether this is the native preview, built with its own application ID
+/// so it runs beside the stable app (`openxplorer-native`).
+fn is_preview() -> bool {
+    APP_ID.ends_with(".Native")
+}
+
+/// The heading of About this build: the stable product and version, or
+/// the preview's build name.
+fn about_title() -> &'static str {
+    if is_preview() {
+        BUILD_NAME
+    } else {
+        STABLE_TITLE
+    }
+}
+
+/// The text of About this build, whose channel sentence says which build
+/// this is.
+fn about_text() -> String {
+    let channel = if is_preview() {
+        "Native preview build: it runs beside the stable release."
+    } else {
+        "Stable release."
+    };
+    format!("{ABOUT_INTRODUCTION}\n\n{channel} {ABOUT_LIMITS}")
+}
 
 /// The heading of License & source.
 const LICENSE_TITLE: &str = "OpenXplorer · License & source";
@@ -61,7 +92,7 @@ impl BrowserWindow {
     }
 
     fn about_dialog(&self) -> Dialog {
-        let dialog = Dialog::new(self, ABOUT_TITLE, ABOUT_TEXT);
+        let dialog = Dialog::new(self, about_title(), &about_text());
         dialog.add_button("OK", ButtonStyle::Primary);
         dialog
     }
@@ -101,8 +132,14 @@ mod tests {
         let fixture = Fixture::standard();
         let test = TestWindow::open(&fixture.uri());
         let dialog = test.window.about_dialog();
-        assert_eq!(dialog.title_text(), ABOUT_TITLE);
+        assert_eq!(dialog.title_text(), about_title());
         let text = dialog.message_text();
+        let channel = if APP_ID == "io.winspace.Development.Native" {
+            "Native preview build"
+        } else {
+            "Stable release."
+        };
+        assert!(text.contains(channel), "{text}");
         assert!(text.contains("Desktop: Rust + GTK 4 + GIO/GVfs."), "{text}");
         assert!(text.contains("Thumbnails are not implemented."), "{text}");
         assert!(!text.contains("no permanent-delete fallback"), "{text}");
