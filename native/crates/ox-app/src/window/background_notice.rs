@@ -30,21 +30,20 @@ pub(super) struct Notice {
     pub(super) title: String,
     /// The report under it, for an operation that did not fully succeed.
     pub(super) body: Option<String>,
+    /// The window that clicking it or its Show button brings back, the
+    /// target of `app.focus-window`.
+    pub(super) window: u32,
 }
 
 impl Notice {
-    /// What the notification says about `summary`.
-    pub(super) fn of(summary: &OperationSummary) -> Self {
-        match summary {
-            OperationSummary::Toast(text) => Self {
-                title: text.clone(),
-                body: None,
-            },
-            OperationSummary::Report(text) => Self {
-                title: RESULT_TITLE.to_owned(),
-                body: Some(text.clone()),
-            },
-        }
+    /// What the notification says about `summary`, leading back to the
+    /// window whose ID is `window`.
+    pub(super) fn of(summary: &OperationSummary, window: u32) -> Self {
+        let (title, body) = match summary {
+            OperationSummary::Toast(text) => (text.clone(), None),
+            OperationSummary::Report(text) => (RESULT_TITLE.to_owned(), Some(text.clone())),
+        };
+        Self { title, body, window }
     }
 }
 
@@ -58,13 +57,13 @@ impl BrowserWindow {
         if app.windows().iter().any(GtkWindowExt::is_active) {
             return;
         }
-        let notice = Notice::of(summary);
+        let notice = Notice::of(summary, self.id());
         let notification = gio::Notification::new(&notice.title);
         if let Some(body) = &notice.body {
             notification.set_body(Some(body));
         }
         let focus = AppAction::FocusWindow.detailed_name();
-        let window = self.id().to_variant();
+        let window = notice.window.to_variant();
         notification.set_default_action_and_target_value(&focus, Some(&window));
         notification.add_button_with_target_value("Show", &focus, Some(&window));
         send(&app, &notification, notice);
@@ -106,12 +105,13 @@ mod tests {
     /// parity: INT-026
     #[test]
     fn the_notice_says_what_the_toast_or_report_says() {
-        let toast = Notice::of(&OperationSummary::Toast("12 item(s) copied.".to_owned()));
+        let toast = Notice::of(&OperationSummary::Toast("12 item(s) copied.".to_owned()), 3);
         assert_eq!(toast.title, "12 item(s) copied.");
         assert_eq!(toast.body, None);
-        let report = Notice::of(&OperationSummary::Report(
-            "1 item could not be copied.".to_owned(),
-        ));
+        let report = Notice::of(
+            &OperationSummary::Report("1 item could not be copied.".to_owned()),
+            3,
+        );
         assert_eq!(report.title, RESULT_TITLE);
         assert_eq!(report.body.as_deref(), Some("1 item could not be copied."));
     }
