@@ -214,6 +214,15 @@ impl FileCell {
     }
 }
 
+/// Names a file view for screen readers as the current app names its
+/// file list (`#file-canvas` and `#main` in index.html).
+pub(crate) fn label_view(view: &gtk::Widget) {
+    view.update_property(&[
+        gtk::accessible::Property::Label("Files"),
+        gtk::accessible::Property::Description("Folder contents — type a filename prefix to select"),
+    ]);
+}
+
 /// Connects `factory` so every list item shows a [`FileCell`] in
 /// `layout`, with icons of `icon_size` logical pixels, its row's tooltip,
 /// and each cell registered in `owners`, which dims the cells of cut
@@ -237,6 +246,8 @@ pub(crate) fn connect_file_cells(
         let list_item = as_list_item(object);
         let cell = list_item.child().and_downcast::<FileCell>();
         if let (Some(item), Some(cell)) = (bound_item(list_item), cell) {
+            // A tile is named after its item (`aria-label` in app.js).
+            list_item.set_accessible_label(&item.entry().name);
             cell.bind(&item);
             cell.look_up_custom_icon(&item);
             bind_owners.style_cell(&cell, &item);

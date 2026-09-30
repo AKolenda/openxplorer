@@ -5109,8 +5109,8 @@ python_tests = [
 ]
 bridge = ["environment", "bookmark", "pin"]
 dolphin = "Places panel; show_places_panel: F9"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, home_this_pc_and_network_show_their_glyphs_in_their_own_colours, a_section_knows_its_first_and_last_rows); native/crates/ox-app/src/places.rs (an_smb_mount_is_listed_under_network_and_not_among_the_drives); native/crates/ox-app/src/window/tests/sidebar_layout.rs (map_network_location_waits_below_the_list_for_its_milestone). The order, the blue Home glyph, the section separators, non-SMB volumes and devices under This PC and the Map network location bar are tested. Not tested yet: that the This PC and Network chevrons never collapse their sections, and that Quick access shows no heading or counter."
+native = "done"
+native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, home_this_pc_and_network_show_their_glyphs_in_their_own_colours, a_section_knows_its_first_and_last_rows); native/crates/ox-app/src/window/tests/sidebar_layout.rs (map_network_location_sits_below_the_list); native/crates/ox-app/src/window/tests/sidebar.rs (the_group_chevrons_never_collapse_and_quick_access_has_no_heading). The order, the blue Home glyph, the section separators, non-SMB volumes and devices under This PC, the Map network location bar, the decorative chevrons (images, not buttons; activating This PC opens it and its drives stay listed) and the absence of a Quick access heading or counter are tested."
 
 [[feature]]
 id = "SIDE-002"
@@ -5128,7 +5128,8 @@ sources = [
 python_tests = ["desktop/tests/ui_regressions.cjs::Enter activates a sidebar folder"]
 bridge = ["list"]
 dolphin = "DolphinMainWindow::slotPlaceActivated"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (clicking_the_open_place_reloads_it_and_clears_the_filter). A sidebar row runs win.go-to; navigating to the place already shown lists it again and ends the search filter (BrowserWindow::navigate and leave_location), which also lists a device again after it went away. Unmounting a real device is not simulated."
 
 [[feature]]
 id = "SIDE-003"
@@ -5146,7 +5147,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (the_open_place_is_highlighted_and_every_row_is_titled_with_its_path); native/crates/ox-app/src/window/tests/sidebar_layout.rs (the_selected_row_shows_the_accent_bar_at_its_edge); native/crates/ox-app/src/window/tests/accessibility.rs (higher_contrast_thickens_drop_outlines_and_outlines_the_open_place). The row of the open place is selected (same_location ignores a trailing slash) and shows the accent pill (3 x 16 per ui-spec.md §4.4; the web's is 3 x 15); high contrast adds an accent outline; each row's tooltip and accessible description is its display path."
 
 [[feature]]
 id = "SIDE-004"
@@ -5183,8 +5185,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Middle-click sidebar Downloads opens in background",
 ]
 bridge = ["environment"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/places_composition.rs (quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order); sidebar rendering untested."
+native = "done"
+native_note = "native/crates/ox-core/tests/places_composition.rs (quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order); native/crates/ox-app/src/window/sidebar/entries.rs (every_quick_access_folder_has_a_glyph_in_its_colour); native/crates/ox-app/src/window/tests/sidebar.rs (pins_show_the_pin_mark_and_open_in_a_background_tab_on_a_middle_click). Pins keep the user's order, standard folders their glyph and colour, SMB pins the network pipe titled 'Network share', and every pin its pin mark; a middle-click opens a background tab (Shift: foreground) and Enter or a click runs win.go-to (GtkListBoxRow activation)."
 
 [[feature]]
 id = "SIDE-006"
@@ -5262,8 +5264,8 @@ python_tests = [
 bridge = ["pin", "environment"]
 dolphin = "Add to Places / drag folder onto Places panel; Add to Places; add_to_places"
 gnome = "GTK bookmarks (~/.config/gtk-3.0/bookmarks) are the GNOME store; not used"
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (duplicate_batch_dedupes_canonical_uri, invalid_batch_has_no_partial_writes, pin_cap); native/crates/ox-core/src/entry/inspect.rs (verify_pin_rejects_regular_file, pin_inspects_browse_item_but_saves_real_share_target). Menus and toasts not implemented. Porting notes: OpenXplorer shows 'Pin to Quick access' or 'Pin this folder' even when the folder is already pinned, then reports 'Already pinned'."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/mutate.rs (duplicate_batch_dedupes_canonical_uri, invalid_batch_has_no_partial_writes, pin_cap); native/crates/ox-core/src/entry/inspect.rs (verify_pin_rejects_regular_file, pin_inspects_browse_item_but_saves_real_share_target); native/crates/ox-app/src/window/tests/environment.rs (pinning_the_current_folder_adds_it_to_quick_access); native/crates/ox-app/src/window/file_drop/targets.rs (folders_dropped_on_quick_access_are_pinned_and_files_are_not); native/crates/ox-app/src/window/tests/sidebar.rs (only_folders_are_pinned_one_request_at_a_time_and_not_from_pages). The context menu, background menu, More menu (disabled on pages) and details pane pin through win.pin-selected and win.pin-folder with the Python toasts; one pin request runs at a time (BrowserWindow::start_pinning). Porting notes: OpenXplorer shows 'Pin to Quick access' or 'Pin this folder' even when the folder is already pinned, then reports 'Already pinned'."
 
 [[feature]]
 id = "SIDE-008"
@@ -5299,8 +5301,8 @@ python_tests = [
 ]
 bridge = ["pin"]
 dolphin = "KFilePlacesView internal move"
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (insert_before_documents, reorder_offline_pin_without_querying_nas, drop_on_self_keeps_order); drag reordering not implemented."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/mutate.rs (insert_before_documents, reorder_offline_pin_without_querying_nas, drop_on_self_keeps_order); native/crates/ox-app/src/window/tests/sidebar.rs (dragging_a_pin_before_another_moves_it_there). Sidebar rows are drag sources and a drop on Quick access pins before the row under the pointer; a pin already shown keeps its label and is not checked through GIO, so reordering never contacts an offline NAS."
 
 [[feature]]
 id = "SIDE-009"
@@ -5324,8 +5326,8 @@ python_tests = [
 ]
 bridge = ["bookmark", "environment"]
 dolphin = "Places context menu 'Remove'"
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (unpin_removes_order_only_not_share, hidden_builtin_pin); native/crates/ox-app/src/window/tests/context_menus.rs (unpin_from_the_pin_menu_removes_only_the_pin). Missing: \"Remove saved location\" (SIDE-020)."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/mutate.rs (unpin_removes_order_only_not_share, hidden_builtin_pin); native/crates/ox-app/src/window/tests/context_menus.rs (unpin_from_the_pin_menu_removes_only_the_pin); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it). Unpin shows 'Unpinned. The folder was not deleted.' and Remove saved location 'Saved location removed.'."
 
 [[feature]]
 id = "SIDE-010"
@@ -5436,8 +5438,8 @@ bridge = [
   "previousVersions",
 ]
 dolphin = "Places context menu 'Properties'"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/sidebar/menu.rs (a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb, every_pin_menu_item_acts_on_the_pin, a_pin_that_cannot_be_indexed_has_no_cache_entry); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_pin_opens_its_menu). Every item works and acts on the pin: Open in Terminal, Open folder with…, the cache entry, Previous versions and Properties run the *Of window actions with the pin's location. Missing: window tests of each item's result."
+native = "done"
+native_note = "native/crates/ox-app/src/window/sidebar/menu.rs (a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb, every_pin_menu_item_acts_on_the_pin, a_pin_that_cannot_be_indexed_has_no_cache_entry); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_pin_opens_its_menu, unpin_from_the_pin_menu_removes_only_the_pin). Every item runs its window action (the *Of actions for Open in Terminal, Open folder with…, the cache entry, Previous versions and Properties) with the pin's location as target; those actions are tested with their own features."
 
 [[feature]]
 id = "SIDE-015"
@@ -5487,8 +5489,8 @@ python_tests = [
 ]
 bridge = ["mountVolume", "environment", "list"]
 gnome = "GVolumeMonitor volumes/mounts"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (a_removable_drive_has_an_eject_button_and_every_drive_a_menu); native/crates/ox-app/src/window/tests/network.rs (mounting_a_volume_that_went_away_says_so). Local Disk and every non-SMB mount are listed; an unmounted volume mounts, then opens, and a failure shows 'Could not mount device'. Missing: drives as drag sources and drop targets arrive with drag and drop."
+native = "done"
+native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (a_removable_drive_has_an_eject_button_and_every_drive_a_menu, an_unmounted_volume_mounts_when_clicked); native/crates/ox-app/src/window/tests/network.rs (mounting_a_volume_that_went_away_says_so); native/crates/ox-app/src/window/file_drag.rs (a_sidebar_folder_can_be_dragged_and_a_page_cannot); native/crates/ox-app/src/window/tests/sidebar.rs (a_volume_to_mount_is_neither_dragged_nor_dropped_on). Local Disk and every non-SMB mount are listed with a phone or drive glyph; mounted drives open, middle-click, drag and take drops; an unmounted volume mounts, then opens, a failure shows 'Could not mount device', and it is never a drag source or drop target. Dolphin's eject button is added for removable drives."
 
 [[feature]]
 id = "SIDE-017"
@@ -5502,7 +5504,7 @@ sources = ["desktop/ui/app.js:372", "desktop/ui/app.js:1563-1567"]
 python_tests = []
 bridge = ["newWindow", "cacheSet", "properties", "mountVolume"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts, a_drive_menu_caches_and_shows_properties_of_the_drive); native/crates/ox-app/src/window/tests/network.rs (open_in_new_window_shows_the_place_in_another_window). Open, Open in new window, the search cache toggle, then Dolphin's Disconnect, Eject and Safely remove where the drive allows them, then Properties; an unmounted volume offers only 'Mount volume'."
+native_note = "native/crates/ox-app/src/window/place_menus/tests.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts, drives_and_shares_offer_to_cache_their_folder, a_phone_is_not_cached_or_opened_in_a_terminal_and_drive_items_target_the_drive); native/crates/ox-app/src/window/tests/network.rs (open_in_new_window_shows_the_place_in_another_window). A mounted drive offers Open, Open in new window, Open in Terminal, the search cache entry (where the drive can be cached), Dolphin's Disconnect, Eject and Safely remove where the drive allows them, Open in Disks and Format… where GNOME Disks is installed, then Properties; an unmounted volume offers only 'Mount volume'."
 
 [[feature]]
 id = "SIDE-018"
@@ -5544,8 +5546,8 @@ python_tests = [
   "desktop/tests/test_v07.py::NetworkTests::test_host_aliases_not_merged",
 ]
 bridge = ["environment"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/places_composition.rs (network_identity_preserves_custom_ports_and_host_aliases, saved_labels_win_and_connected_state_merges, visited_servers_and_stable_mounts_need_no_saved_bookmark); native/crates/ox-app/src/places.rs (an_smb_mount_is_listed_under_network_and_not_among_the_drives); native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, network_rows_say_whether_they_are_connected_saved_or_visited, a_saved_share_that_is_not_mounted_shows_the_red_cross). Merging, the three tooltips and the green-bar and red-cross art are tested. A listed SMB location now joins Network without saving a bookmark; missing: a native test of that listing, which needs a share."
+native = "done"
+native_note = "native/crates/ox-core/tests/places_composition.rs (network_identity_preserves_custom_ports_and_host_aliases, saved_labels_win_and_connected_state_merges, visited_servers_and_stable_mounts_need_no_saved_bookmark); native/crates/ox-app/src/places.rs (an_smb_mount_is_listed_under_network_and_not_among_the_drives); native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_the_python_order_and_smb_mounts_appear_once_under_network, network_rows_say_whether_they_are_connected_saved_or_visited, a_saved_share_that_is_not_mounted_shows_the_red_cross); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it). Merging, the three tooltips, the green-bar and red-cross art, and a visited share joining Network without a saved bookmark are tested."
 
 [[feature]]
 id = "SIDE-020"
@@ -5563,7 +5565,7 @@ python_tests = [
 ]
 bridge = ["newWindow", "openTerminal", "bookmark", "signOut", "properties"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/place_menus.rs (a_network_share_can_be_kept_removed_and_signed_out_of, a_network_terminal_needs_a_folder_and_a_mount_has_properties); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it, open_in_new_window_shows_the_place_in_another_window). Open in Terminal is disabled for a bare server, which has no folder to open."
+native_note = "native/crates/ox-app/src/window/place_menus/tests.rs (a_network_share_can_be_kept_removed_and_signed_out_of, network_places_open_a_terminal_and_properties_where_they_can, a_connected_sftp_folder_can_be_kept_and_disconnected); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it, open_in_new_window_shows_the_place_in_another_window). Open, Open in new tab, Open in new window, Open in Terminal (disabled on a server's share list, as terminalMenuItem), the cache entry, Keep in Network or Remove saved location, Sign out of server… or Disconnect, and Properties of a mount or a connected share, in the sidebar and on the Network page."
 
 [[feature]]
 id = "SIDE-021"
@@ -5590,8 +5592,8 @@ openxplorer = "has"
 sources = ["desktop/core.py:188-205", "desktop/core.py:291-294"]
 python_tests = ["desktop/tests/test_v05.py::SettingsWindowsTests::test_two_windows_pins_not_lost"]
 bridge = ["pin", "bookmark", "environment"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/settings_interop.rs (python_and_rust_mutations_preserve_each_others_settings); native/crates/ox-core/src/settings/tests.rs (two_windows_pins_not_lost)."
+native = "done"
+native_note = "native/crates/ox-core/tests/settings_interop.rs (python_and_rust_mutations_preserve_each_others_settings); native/crates/ox-core/src/settings/tests.rs (two_windows_pins_not_lost); native/crates/ox-app/src/window/tests/environment.rs (pins_another_process_saved_appear_after_a_refresh). Every mutation re-reads the settings file under the Python app's exclusive lock before writing."
 
 [[feature]]
 id = "SIDE-023"
@@ -5630,7 +5632,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "QDockWidget resize"
 native = "done"
-native_note = "Pointer: native/crates/ox-app/src/window/preferences.rs (the_sidebar_starts_at_210_within_the_python_limits, the_sidebar_leaves_the_folder_pane_300_pixels) and native/crates/ox-app/src/window/tests/views.rs (a_dragged_sidebar_stops_where_the_folder_pane_keeps_its_room, a_double_click_on_the_handle_resets_the_sidebar_to_210_and_saves_it); stored width: native/crates/ox-core/src/settings/tests/preferences.rs. Keyboard and accessibility: native/crates/ox-app/src/window/sidebar_resizer.rs (arrows_move_the_handle_10_pixels_40_with_shift_and_home_resets_it) gives the handle its tooltip, announces the width and its limits, and takes Left, Right (10 px, 40 with Shift) and Home. The handle is GTK's pane handle, which takes focus with F8 rather than Tab."
+native_note = "Pointer: native/crates/ox-app/src/window/preferences.rs (the_sidebar_starts_at_210_within_the_python_limits, the_sidebar_leaves_the_folder_pane_300_pixels) and native/crates/ox-app/src/window/tests/views.rs (a_dragged_sidebar_stops_where_the_folder_pane_keeps_its_room, a_double_click_on_the_handle_resets_the_sidebar_to_210_and_saves_it); stored width: native/crates/ox-core/src/settings/tests/preferences.rs. Keyboard and accessibility: native/crates/ox-app/src/window/sidebar_resizer.rs (arrows_move_the_resizer_10_pixels_shift_40_and_home_resets_it), native/crates/ox-app/src/window/tests/sidebar.rs (the_resizer_is_a_titled_separator_that_the_keys_move) and native/crates/ox-app/src/window/tests/sidebar_layout.rs (the_sidebar_is_210_pixels_with_a_6_pixel_resizer). The GtkPaned handle is focusable, named 'Resize sidebar', titled 'Drag to resize sidebar · double-click to reset' and announces ValueMin/ValueMax/ValueNow; Left/Right move it 10 px (Shift 40), Home and a double-click reset it to 210, and every change is saved. GTK 4.14 gives the handle the generic accessible role, fixed at construction, so screen readers do not announce it as a separator as app.js's role=separator was."
 
 [[feature]]
 id = "SIDE-024"
@@ -16065,8 +16067,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "GtkAccessible roles/properties (AT-SPI)"
-native = "todo"
-native_note = "Porting notes: This is a starting point, not a conformance claim (NATIVE-EXPERIENCE-ROADMAP)."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (the_file_list_its_items_and_every_icon_button_are_named); native/crates/ox-app/src/window/tests/tabs.rs (tabs_are_announced_as_tabs_with_their_selected_state); native/crates/ox-app/src/icons.rs and icons/art_image.rs (icons are presentation); native/crates/ox-app/src/window/tests/sidebar.rs (the_resizer_is_a_titled_separator_that_the_keys_move). The tab strip is a TabList of Tab widgets with their selected state and a roving tab stop (ACC-008); the details and icon views are named 'Files' and described 'Folder contents — type a filename prefix to select', each row and tile is named after its item and the details view carries the row count; GTK's column view gives titles the column-header role; menus are Menu lists of MenuItem rows; dialogs have the dialog role and are labelled by their title; every icon-only button and menu button is named; icons are presentation; the toast, the item count, the type-to-select hint, the size scan, the extract summary and the update status are Status live regions. Left open: the resizers are not separators. The sidebar resizer is named and announces its values, but GTK 4.14's GtkPaned handle has the generic role, fixed at construction; a separator needs the workspace split drawn by a divider widget of the app's own in place of GtkPaned. The column titles resize from the keyboard (ACC-006) but have no separate 'Resize <column> column' control with values as the Python app's .column-resizer handles do. Not checked with Orca here."
 
 [[feature]]
 id = "ACC-002"
@@ -16108,7 +16110,8 @@ sources = [
 python_tests = []
 bridge = []
 gnome = "AT-SPI via GTK4 accessibility (GtkAccessible)"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (the_file_list_is_one_tab_stop_that_focuses_the_item_itself, the_file_list_its_items_and_every_icon_button_are_named); native/crates/ox-app/src/theme/stylesheets.rs (focus_rings_sit_on_controls_and_items_not_around_the_file_list). Both views are one tab stop (GtkListTabBehavior::Item); keyboard focus sits on the item's own row or tile, which is named after the item and has the row role, so screen readers follow it without an active descendant; focus draws a ring apart from the selection's fill; the details view carries the row count of the whole folder, drawn or not. Left open: nobody has checked it with Orca, as the behaviour requires (no screen reader in this environment), and the icon view's GtkGridView exposes no item count or position for tiles that are not drawn."
 
 [[feature]]
 id = "ACC-004"
@@ -16127,8 +16130,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "Adw.Dialog/Gtk.Window modal with default widget and Escape via Gtk.ShortcutController."
-native = "todo"
-native_note = "Porting notes: The Tab focus trap has no dedicated test. Enter on a checkbox confirming the dialog is a bug to fix, not preserve: natively only text entries activate the default button (GtkEntry activates-default)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button). A dialog focuses its first text field with the text selected, else its first button; it is a modal window, so Tab and Shift+Tab stay inside it; Enter in a text field presses the primary button; while the answer runs (Dialog::set_busy) the buttons are disabled, and Escape or closing the dialog cancels the running operation (rename, new folder, new file from a template) as well as the dialog, so a stalled share cannot hold a modal dialog open; opening it closes the window's menus and ends type-to-select. As the porting note asked, Enter on a check box no longer confirms the dialog: only text fields activate the default button."
 
 [[feature]]
 id = "ACC-005"
@@ -16146,7 +16149,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (closing_a_dialog_gives_focus_back_to_the_control_that_had_it, a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button); native/crates/ox-app/src/dialog_layer.rs (in-window dialogs make the content under them take neither focus nor clicks). A dialog is a modal window over the browser window, so the covered content is inert, every focusable widget (text areas and links included) is in its Tab cycle, and closing it gives focus back to the control that had it, which GTK keeps as the window's focus widget."
 
 [[feature]]
 id = "ACC-006"
@@ -16173,7 +16177,8 @@ python_tests = [
   "desktop/tests/ui_regressions.cjs::Enter activates a sidebar folder",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (column_titles_sort_and_resize_from_the_keyboard, menus_open_their_items_from_the_keyboard); native/crates/ox-app/src/folder_view/column_keys.rs (title_keys_sort_resize_within_the_limits_and_fit_the_items); native/crates/ox-app/src/window/sidebar_resizer.rs (arrows_move_the_resizer_10_pixels_shift_40_and_home_resets_it); native/crates/ox-app/src/window/tests/sidebar.rs (the_resizer_is_a_titled_separator_that_the_keys_move, the_group_chevrons_never_collapse_and_quick_access_has_no_heading). Buttons, tabs, close buttons, breadcrumbs, menu rows, sidebar rows, archive rows and Settings results are GTK buttons or activatable list rows that Enter (and Space) activate. The column titles take focus: Enter or Space sorts, Left/Right resize 10 px (Shift 40) and Home fits the column to the widest text among the first 2,000 listed items plus 64 px on Name or 30 px on the others, within the column's limits, and saves it, as fitColumn does. The sidebar resizer takes Left/Right and Home."
 
 [[feature]]
 id = "ACC-007"
@@ -16193,8 +16198,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Breadcrumb keyboard activation navigates rather than opening a selected file",
 ]
 bridge = []
-native = "todo"
-native_note = "Porting notes: 1.1.x bug fix ('Fix Enter on buttons', CHANGELOG)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (no_shortcut_takes_plain_enter_or_space_from_the_focused_control). No application or window shortcut takes plain Enter or Space, so a focused button, tab, menu row, sidebar row or crumb handles its own Enter; only the file list's own activation opens the selection."
 
 [[feature]]
 id = "ACC-008"
@@ -16207,8 +16212,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:292-305", "desktop/ui/index.html:14"]
 python_tests = ["desktop/tests/ui_regressions.cjs::Enter activates the nested Close tab button"]
 bridge = []
-native = "todo"
-native_note = "Porting notes: WAI-ARIA tablist arrow-key movement is missing; a gain for native (GTK Notebook/Adw.TabBar provide it)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (the_arrow_keys_move_between_tabs_and_only_the_front_tab_is_a_tab_stop); native/crates/ox-app/src/window/tests/tabs.rs (tabs_are_announced_as_tabs_with_their_selected_state). The strip is a TabList, each tab a Tab with its selected state; only the tab in front takes focus (roving tab stop); Enter or Space shows a focused tab; each close button is named 'Close <title>'. As a gain over the Python app (as GTK's tab bars and WAI-ARIA do), Left/Right, Home and End show the neighbouring, first or last tab and focus moves with it."
 
 [[feature]]
 id = "ACC-009"
@@ -16231,7 +16236,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Main file pane retains keyboard focus",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/theme/stylesheets.rs (focus_rings_sit_on_controls_and_items_not_around_the_file_list). Focused buttons and tabs draw a 2 px ring inside them; the file list draws none around itself; the focused row or tile draws a 1 px ring (ui-spec.md §4.13's focus colour rather than the accent), apart from the selection's fill."
 
 [[feature]]
 id = "ACC-010"
@@ -16246,8 +16252,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE animation speed set to instant"
 gnome = "org.gnome.desktop.interface enable-animations / gtk-enable-animations; gtk-enable-animations / AdwStyleManager high-contrast; org.gnome.desktop.interface enable-animations → gtk-enable-animations (GTK4 stops widget animations; custom animations must check it)"
-native = "todo"
-native_note = "Porting notes: Also an AGENTS.md requirement. No automated test."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (animations_stay_off_when_the_desktop_turns_them_off). Every motion in the skin is a CSS transition or animation (resources/skin), which GTK skips while gtk-enable-animations is off; GTK follows the desktop's reduced-motion setting (org.gnome.desktop.interface enable-animations) and the app never turns animations back on. The test also checks that no source outside the snapshot hook and the test support moves anything frame by frame (tick callbacks or timed animations), which the setting would not stop."
 
 [[feature]]
 id = "ACC-011"
@@ -16265,7 +16271,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE high-contrast colour schemes"
 gnome = "org.gnome.desktop.a11y.interface high-contrast; org.gnome.desktop.a11y.interface high-contrast (AdwStyleManager:high-contrast; Settings portal contrast)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/theme/stylesheets.rs (higher_contrast_thickens_drop_outlines_and_outlines_the_open_place, every_stylesheet_parses_without_errors). While GNOME's high-contrast setting is on (src/theme/contrast.rs), resources/skin/high-contrast.css outlines the open place in the sidebar, draws drop targets 3 px instead of 2 px, draws keyboard focus in rows, tiles and menus 2 px instead of 1 px, and draws place glyphs and Settings frames in the text colour."
 
 [[feature]]
 id = "ACC-012"
@@ -16281,7 +16288,8 @@ python_tests = [
   "desktop/tests/ui_v093.py::Virtualized row spacing accommodates larger text",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/theme/fonts.rs (controls_keep_their_heights_at_100_percent_and_grow_with_the_text, larger_text_scales_fonts_and_rows); native/crates/ox-app/src/window/tests/accessibility.rs (large_text_grows_rows_and_dialogs_still_fit_800_by_600). The text-size stylesheet grows the title bar, tabs, sidebar rows, command bar and commands, column titles, file rows, menus, status bar and the fields and buttons of every dialog (window dialogs, network dialogs and in-window dialogs) with the text, keeping the 100% heights; GTK sizes other controls from their text. A dialog with a field, a check box and three buttons fits an 800 x 600 window at 200%, so its action row needs no wrapping."
 
 [[feature]]
 id = "ACC-013"
@@ -16319,7 +16327,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "ATK accessible name"
-native = "todo"
+native = "n-a"
+native_note = "The startup placeholder covered the Python app's wait for its WebKit interface. The native window is built from GTK widgets before it is shown, so it has no placeholder to name and no WebKit recovery screen (see LOOK-008, UPD-012); from its first frame screen readers see the real, named controls, and the first listing shows the loading line."
 
 [[feature]]
 id = "ACC-015"

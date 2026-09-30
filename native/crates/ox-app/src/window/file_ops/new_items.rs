@@ -52,9 +52,12 @@ impl BrowserWindow {
             selection: NameSelection::Whole,
             folder: &folder,
         };
-        let created = ask_for_name(self, request, |name| {
+        let created = ask_for_name(self, request, |name, cancel| {
             let folder = folder.clone();
-            let context = OperationContext::new(protection.clone());
+            let context = OperationContext {
+                cancel,
+                ..OperationContext::new(protection.clone())
+            };
             async move {
                 create_item(&folder, &name, ItemKind::Folder, &context)
                     .await

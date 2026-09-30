@@ -14,6 +14,9 @@
     <child>
       <!-- #status-count -->
       <object class="GtkLabel" id="count">
+        <!-- Screen readers hear the item count and the type-to-select
+             hint change (the live regions of index.html). -->
+        <property name="accessible-role">status</property>
         <property name="label">Ready</property>
         <property name="xalign">0</property>
       </object>
@@ -26,6 +29,7 @@
     </child>
     <child>
       <object class="GtkLabel" id="typeahead_hint">
+        <property name="accessible-role">status</property>
         <property name="xalign">0</property>
         <property name="ellipsize">end</property>
         <style>

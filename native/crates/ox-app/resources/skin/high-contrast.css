@@ -2,10 +2,18 @@
 /* Higher contrast, loaded only while GNOME's accessibility setting asks
    for it (src/theme/contrast.rs): the `@media (prefers-contrast: more)`
    rules of style.css and ui-spec.md §4.13. The current location in the
-   sidebar gets an accent outline, and keyboard focus inside rows, tiles
-   and menus draws 2px instead of 1px. */
+   sidebar gets an accent outline, drop targets draw 3px instead of 2px
+   (`.quick-access.pin-drop-active{border-width:2px}`), and keyboard focus
+   inside rows, tiles and menus draws 2px instead of 1px. */
 
 .sidebar list > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }
+.sidebar list > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }
+.sidebar list > row.drop-before { box-shadow: inset 0 3px @ox_accent; }
+.sidebar list > row.drop-end { box-shadow: inset 0 -3px @ox_accent; }
+columnview.files.file-drop-active, gridview.files.file-drop-active,
+columnview.files > listview > row.file-drop-active,
+gridview.files > child.file-drop-active,
+.tab.file-drop-active { outline-width: 3px; outline-offset: -3px; }
 .sidebar list > row:focus-visible,
 columnview.files > listview > row:focus-visible,
 gridview.files > child:focus-visible,

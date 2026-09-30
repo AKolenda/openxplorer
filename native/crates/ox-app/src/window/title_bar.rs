@@ -17,7 +17,7 @@ use gtk::subclass::prelude::*;
 use crate::application::AppAction;
 use crate::icons::{self, Icon};
 
-use super::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuPopover};
+use super::menu_popover::{name_menu_button, ItemCheck, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -37,6 +37,7 @@ impl BrowserWindow {
         WindowAction::NewTab.assign_to(new_tab);
         let open_windows = &*imp.open_windows_button;
         open_windows.set_child(Some(&icons::image(Icon::Desktop, OPEN_WINDOWS_GLYPH)));
+        name_menu_button(open_windows, "Open windows");
         list_open_windows_on_click(open_windows);
     }
 }

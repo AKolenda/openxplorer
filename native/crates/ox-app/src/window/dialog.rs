@@ -11,9 +11,16 @@
 //!   the first button (Cancel) has it, so Enter never confirms a
 //!   destructive question by accident.
 //! - Enter in a text field presses the primary button.
-//! - Escape, the Cancel button and closing the window answer "cancelled".
+//! - Escape, the Cancel button and closing the window answer "cancelled";
+//!   while the answer is carried out ([`Dialog::set_busy`]) the buttons
+//!   are disabled and closing also cancels the running operation, so a
+//!   stalled share cannot hold the dialog open.
 //! - An error stays inside the dialog, which stays open for another try
 //!   ([`Dialog::show_error`]).
+//! - Opening a dialog closes the browser window's menus and ends its
+//!   type-to-select prefix; closing it gives keyboard focus back to the
+//!   control that had it (ACC-005), as GTK keeps a window's focus widget
+//!   while a modal dialog covers it.
 //!
 //! [`Dialog`] is a `GtkWindow` subclass whose layout is the template
 //! `resources/ui/dialog.ui`. It is a window of its own, modal and
@@ -25,6 +32,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
+use ox_core::transfer::Cancellation;
 
 /// How a button looks, and whether Enter in a field presses it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +69,7 @@ mod imp {
     use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
+    use ox_core::transfer::Cancellation;
 
     use super::Answer;
 
@@ -93,6 +102,9 @@ mod imp {
         pub(super) answers: async_channel::Sender<Answer>,
         /// Where [`super::Dialog::next_response`] reads it.
         pub(super) answer_queue: async_channel::Receiver<Answer>,
+        /// The operation carrying out an answer, while it runs; closing
+        /// the dialog cancels it.
+        pub(super) running: RefCell<Option<Cancellation>>,
     }
 
     impl Default for Dialog {
@@ -108,6 +120,7 @@ mod imp {
                 buttons: RefCell::default(),
                 answers,
                 answer_queue,
+                running: RefCell::default(),
             }
         }
     }
@@ -152,6 +165,9 @@ mod imp {
 
     impl WindowImpl for Dialog {
         fn close_request(&self) -> glib::Propagation {
+            if let Some(running) = self.running.take() {
+                running.cancel();
+            }
             // Closing is a cancellation; a caller that already has its
             // answer has stopped listening, which is fine.
             let _ = self.answers.try_send(None);
@@ -335,6 +351,9 @@ impl Dialog {
             (None, button) => button.map(Cast::upcast),
         };
         GtkWindowExt::set_focus(self, initial_focus.as_ref());
+        if let Some(parent) = self.transient_for().and_downcast::<super::BrowserWindow>() {
+            parent.quiet_for_dialog();
+        }
         self.present();
         if let Some(field) = first_field {
             field.grab_focus();
@@ -374,9 +393,12 @@ impl Dialog {
         error_label.set_visible(true);
     }
 
-    /// Disables the buttons while an answer is carried out, as `Create`
-    /// is disabled while it runs, and enables them again afterwards.
-    pub(super) fn set_busy(&self, busy: bool) {
+    /// Disables the buttons while `running` carries out an answer, as
+    /// `Create` is disabled while it runs, and enables them again with
+    /// `None`. Closing the dialog meanwhile cancels `running`.
+    pub(super) fn set_busy(&self, running: Option<&Cancellation>) {
+        let busy = running.is_some();
+        self.imp().running.replace(running.cloned());
         for button in self.imp().buttons.borrow().iter() {
             button.set_sensitive(!busy);
         }

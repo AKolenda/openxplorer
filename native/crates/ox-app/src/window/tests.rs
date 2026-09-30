@@ -7,6 +7,7 @@
 //! them on a private X display and D-Bus session with a disposable home, so
 //! they never touch the user's desktop, files or settings.
 
+mod accessibility;
 mod address_bar;
 mod address_input;
 mod archives;
@@ -45,6 +46,7 @@ mod search;
 mod search_options;
 mod selection;
 mod settings;
+mod sidebar;
 mod sidebar_layout;
 mod support;
 mod tab_commands;

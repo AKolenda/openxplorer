@@ -43,11 +43,17 @@ pub(crate) fn style_titles(view: &gtk::ColumnView) -> Vec<gtk::Image> {
     titles.iter().map(append_caret).collect()
 }
 
-/// The box inside each column title, in column order.
-fn title_boxes(view: &gtk::ColumnView) -> Vec<gtk::Box> {
+/// Each column title, in column order.
+pub(crate) fn title_buttons(view: &gtk::ColumnView) -> Vec<gtk::Widget> {
     let header = view.first_child().filter(|child| child.css_name() == "header");
     let first_title = header.and_then(|header| header.first_child());
-    std::iter::successors(first_title, WidgetExt::next_sibling)
+    std::iter::successors(first_title, WidgetExt::next_sibling).collect()
+}
+
+/// The box inside each column title, in column order.
+fn title_boxes(view: &gtk::ColumnView) -> Vec<gtk::Box> {
+    title_buttons(view)
+        .into_iter()
         .filter_map(|title| title.first_child().and_downcast::<gtk::Box>())
         .collect()
 }

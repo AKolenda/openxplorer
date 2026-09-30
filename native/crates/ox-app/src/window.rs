@@ -132,7 +132,7 @@ mod transfer_panel;
 mod type_to_select;
 mod version_restore;
 mod view_zoom;
-mod widget_tree;
+pub(crate) mod widget_tree;
 mod window_action;
 mod window_keys;
 mod window_size;
@@ -195,6 +195,7 @@ impl BrowserWindow {
         window.connect_settings_page();
         window.watch_environment();
         window.apply_preferences();
+        window.install_sidebar_resizer();
         window.focus_file_list_once_shown();
         window
     }

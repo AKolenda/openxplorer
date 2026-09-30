@@ -6,6 +6,7 @@
 //! button below the list.
 
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
 use super::geometry::{bounds, button_for, laid_out, Bounds};
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
@@ -37,6 +38,8 @@ fn rows_labelled(test: &TestWindow, label: &str) -> usize {
 fn with_two_pins(fixture: &Fixture) -> TestWindow {
     let test = laid_out(&fixture.uri());
     test.activate("pin-folder", None);
+    // One pin request runs at a time.
+    wait_until("the first pin", || !test.window.imp().pinning.get());
     test.window
         .navigate(&fixture.uri_of("Documents"))
         .expect("valid folder");

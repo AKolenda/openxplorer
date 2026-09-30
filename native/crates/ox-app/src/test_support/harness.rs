@@ -125,19 +125,7 @@ pub(crate) fn wait_for(duration: Duration) {
     }
 }
 
-/// Every descendant of `widget` of type `T`, in tree order.
-pub(crate) fn descendants<T: IsA<gtk::Widget>>(widget: &impl IsA<gtk::Widget>) -> Vec<T> {
-    let mut found = Vec::new();
-    let mut child = widget.first_child();
-    while let Some(current) = child {
-        if let Ok(matching) = current.clone().downcast::<T>() {
-            found.push(matching);
-        }
-        found.extend(descendants::<T>(&current));
-        child = current.next_sibling();
-    }
-    found
-}
+pub(crate) use crate::window::widget_tree::descendants;
 
 /// A folder tree in a temporary directory, deleted when dropped.
 #[derive(Debug)]

@@ -192,7 +192,7 @@ impl BrowserWindow {
 
     /// The widest the sidebar may be now, or `None` before the workspace
     /// is laid out.
-    fn sidebar_limit(&self) -> Option<i32> {
+    pub(super) fn sidebar_limit(&self) -> Option<i32> {
         let workspace_width = self.workspace().width();
         if workspace_width == 0 {
             return None;

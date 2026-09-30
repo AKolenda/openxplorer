@@ -63,7 +63,12 @@ fn row_content(entry: &SidebarEntry) -> gtk::Box {
         expander.add_css_class("expand");
         content.append(&expander);
     }
-    content.append(&row_icon(entry.icon));
+    let icon = row_icon(entry.icon);
+    if matches!(entry.icon, Art::Network(_)) {
+        // The network pipe says what it means (`.side-icon.shared`).
+        icon.set_tooltip_text(Some("Network share"));
+    }
+    content.append(&icon);
     content.append(&name_label(&entry.label));
     if entry.pinned {
         let pin = icons::image(Icon::Pin, PIN_SIZE);

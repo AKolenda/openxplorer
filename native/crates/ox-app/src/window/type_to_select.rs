@@ -11,12 +11,14 @@
 use std::time::Duration;
 
 use gtk::glib;
+use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::folder_view::model::FolderModel;
 use crate::typeahead::{self, PrefixMatch, Rows};
 
 use super::status_bar::TypeaheadMatch;
+use super::widget_tree::descendants;
 use super::BrowserWindow;
 
 /// The type-to-select prefix and the timer that clears its hint.
@@ -148,6 +150,16 @@ impl BrowserWindow {
             timer.remove();
         }
         self.status_bar().clear_typeahead_hint();
+    }
+
+    /// Ends the type-to-select prefix and closes every open menu of the
+    /// window, as opening a dialog does in app.js.
+    pub(super) fn quiet_for_dialog(&self) {
+        self.reset_typeahead();
+        let popovers = descendants::<gtk::Popover>(self);
+        for popover in popovers.iter().filter(|popover| popover.is_visible()) {
+            popover.popdown();
+        }
     }
 }
 
