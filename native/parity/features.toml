@@ -11605,7 +11605,8 @@ sources = ["dolphin:src/views/dolphinview.cpp:1700-1715"]
 python_tests = []
 bridge = ["activateItem"]
 dolphin = "openItemAsFolderUrl (application/x-desktop Link)"
-native = "todo"
+native = "done"
+native_note = "Opening a Type=Link desktop entry goes to its URL: a file:// or smb:// location in the tab, an http(s) or mailto address in the desktop's handler (gtk::UriLauncher); any other address is refused, and application entries open as files and are never run (native/crates/ox-app/src/window/desktop_link.rs, activation.rs). Tests: native/crates/ox-app/src/window/desktop_link.rs (a_link_entry_names_a_location_or_a_web_page_and_nothing_else_is_followed), native/crates/ox-app/src/window/tests/opening.rs (a_desktop_link_to_a_folder_opens_the_folder)."
 
 [[feature]]
 id = "OPEN-010"
@@ -11916,8 +11917,8 @@ python_tests = [
 bridge = ["openTerminal"]
 dolphin = "KDE Default Applications → Terminal emulator (TerminalApplication in kdeglobals)"
 gnome = "xdg-terminal-exec / org.gnome.desktop.default-applications.terminal (exec) / x-terminal-emulator alternative"
-native = "todo"
-native_note = "OpenXplorer uses the Debian alternative, then a fixed allowlist order. Existing OpenXplorer part is protected by OPEN-018."
+native = "done"
+native_note = "Open in Terminal first tries the terminal the desktop names: the xdg-terminals.list files of xdg-terminal-exec (the desktop's own list before the shared one, the user's folder before the system's) or GNOME's default-applications terminal exec key when the user set it; it must be a known terminal installed in the system folders, else the Debian alternative and the fixed order apply (native/crates/ox-core/src/integration/terminal/preference.rs, emulator.rs). Tests: native/crates/ox-core/src/integration/terminal/preference.rs (the_desktops_own_list_then_the_shared_one_names_the_terminal), native/crates/ox-core/tests/integration_terminal/launch.rs (the_desktops_configured_terminal_wins_when_it_is_installed). Existing OpenXplorer part is protected by OPEN-018."
 
 [[feature]]
 id = "OPEN-020"
@@ -11971,8 +11972,8 @@ python_tests = [
 bridge = ["openTerminal"]
 dolphin = "open_terminal: Shift+F4; open_terminal_here: Shift+Alt+F4; Dolphin Shift+F4 “Open Terminal”"
 gnome = "The default terminal (xdg-terminal-exec, or org.gnome.desktop.default-applications.terminal); GtkShortcutController / application accelerator"
-native = "todo"
-native_note = "Porting notes: OpenXplorer has context-menu entries only, with no keyboard shortcut, and one folder at a time (disabled for multiple selections). Explorer has no default shortcut for this. Existing OpenXplorer part is protected by OPEN-017."
+native = "done"
+native_note = "Shift+F4 (win.open-terminal) opens the terminal in the folder shown; Shift+Alt+F4 (win.open-terminal-here) opens one per distinct folder of the selection, a file standing for its folder, and asks 'Are you sure you want to open <n> terminals?' above five (native/crates/ox-app/src/window/integration_actions.rs). A share without a local mount keeps OPEN-017's message on how to mount it rather than opening Home. Test: native/crates/ox-app/src/window/tests/opening.rs (open_terminal_here_opens_one_per_folder_and_asks_for_many). Existing OpenXplorer part is protected by OPEN-017."
 
 [[feature]]
 id = "OPEN-022"
@@ -12013,7 +12014,8 @@ python_tests = []
 bridge = ["openWith"]
 dolphin = "compare_files (Kompare)"
 gnome = "Meld (org.gnome.Meld) when installed"
-native = "todo"
+native = "done"
+native_note = "The item menu offers 'Compare files' when exactly two files are selected and Meld, Kompare, KDiff3 or Diffuse is installed; win.compare-files hands both files to it through GIO, or says 'No file comparison tool is installed. Install Meld to compare files.' (native/crates/ox-app/src/integration/tools.rs, window/integration_actions.rs). Tests: native/crates/ox-app/src/window/context_menu/entries.rs (two_files_with_a_comparison_tool_offer_compare_files), native/crates/ox-app/src/window/tests/opening.rs (compare_files_hands_two_files_to_the_comparison_tool)."
 
 [[feature]]
 id = "OPEN-024"
@@ -12030,7 +12032,8 @@ sources = [
 python_tests = []
 bridge = ["open"]
 dolphin = "open_preferred_search_tool: Ctrl+Shift+F"
-native = "todo"
+native = "done"
+native_note = "Ctrl+Shift+F (win.search-tool) opens the first installed of KFind, Catfish and the GNOME search tool at the folder shown, or says 'No search tool is installed.' (native/crates/ox-app/src/integration/tools.rs). Test: native/crates/ox-app/src/window/tests/opening.rs (ctrl_shift_f_opens_the_search_tool_at_the_folder)."
 
 [[feature]]
 id = "OPEN-025"
@@ -12051,8 +12054,8 @@ python_tests = []
 bridge = ["activateItem", "open", "openWith"]
 dolphin = "KActivities ResourceInstance / KRecentDocument; KActivities / KRecentDocument::add"
 gnome = "Gtk.RecentManager.add_item (~/.local/share/recently-used.xbel); gtk_recent_manager_add_full"
-native = "todo"
-native_note = "Porting notes: OpenXplorer records up to 30 opened files in its private settings only. Existing OpenXplorer part is protected by HOME-011."
+native = "done"
+native_note = "Opened files and folders visited on disk or on shares are added to the desktop's recently used list (gtk::RecentManager), so the file chooser's Recent and other applications show them; the app's own 30 recent files are kept as before (native/crates/ox-app/src/app_context/default_open.rs, window/navigation.rs). Test: native/crates/ox-app/src/app_context/default_open.rs (an_opened_file_joins_the_desktop_recent_list). Existing OpenXplorer part is protected by HOME-011."
 
 [[feature]]
 id = "OPEN-026"
