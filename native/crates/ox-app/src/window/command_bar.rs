@@ -28,7 +28,7 @@ use crate::icons::{self, Icon};
 use crate::theme::AppearanceExt;
 
 use super::breakpoints::WindowWidth;
-use super::menu_popover::{MenuEntry, MenuPopover};
+use super::menu_popover::{name_menu_button, MenuEntry, MenuPopover};
 use super::unported;
 use super::window_action::WindowAction;
 
@@ -360,6 +360,6 @@ fn more_button() -> gtk::MenuButton {
         .valign(gtk::Align::Center)
         .css_classes(["command", "more-command"])
         .build();
-    button.update_property(&[gtk::accessible::Property::Label("More options")]);
+    name_menu_button(&button, "More options");
     button
 }

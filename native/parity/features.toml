@@ -16005,8 +16005,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "GtkAccessible roles/properties (AT-SPI)"
-native = "todo"
-native_note = "Porting notes: This is a starting point, not a conformance claim (NATIVE-EXPERIENCE-ROADMAP)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (the_file_list_its_items_and_every_icon_button_are_named); native/crates/ox-app/src/window/tests/tabs.rs (tabs_are_announced_as_tabs_with_their_selected_state); native/crates/ox-app/src/icons.rs and icons/art_image.rs (icons are presentation); native/crates/ox-app/src/window/tests/sidebar.rs (the_resizer_is_a_titled_separator_that_the_keys_move). The tab strip is a TabList of Tab widgets with their selected state and a roving tab stop (ACC-008); the details and icon views are named 'Files' and described 'Folder contents — type a filename prefix to select', each row and tile is named after its item and the details view carries the row count; GTK's column view gives titles the column-header role; menus are Menu lists of MenuItem rows; dialogs have the dialog role and are labelled by their title; every icon-only button and menu button is named; icons are presentation; the toast, the item count, the type-to-select hint, the size scan, the extract summary and the update status are Status live regions. The sidebar resizer is named and announces its values, but GTK 4.14's pane handle keeps the generic role, which cannot be changed after construction. Not checked with Orca here."
 
 [[feature]]
 id = "ACC-002"
@@ -16048,7 +16048,8 @@ sources = [
 python_tests = []
 bridge = []
 gnome = "AT-SPI via GTK4 accessibility (GtkAccessible)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (the_file_list_is_one_tab_stop_that_focuses_the_item_itself, the_file_list_its_items_and_every_icon_button_are_named); native/crates/ox-app/src/theme/stylesheets.rs (focus_rings_sit_on_controls_and_items_not_around_the_file_list). Both views are one tab stop (GtkListTabBehavior::Item); keyboard focus sits on the item's own row or tile, which is named after the item and has the row role, so screen readers follow it without an active descendant; focus draws a ring apart from the selection's fill; the details view carries the row count of the whole folder, drawn or not. Not checked with Orca here."
 
 [[feature]]
 id = "ACC-004"
@@ -16067,8 +16068,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "Adw.Dialog/Gtk.Window modal with default widget and Escape via Gtk.ShortcutController."
-native = "todo"
-native_note = "Porting notes: The Tab focus trap has no dedicated test. Enter on a checkbox confirming the dialog is a bug to fix, not preserve: natively only text entries activate the default button (GtkEntry activates-default)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button). A dialog focuses its first text field with the text selected, else its first button; it is a modal window, so Tab and Shift+Tab stay inside it; Enter in a text field presses the primary button; Escape cancels except while the answer runs (Dialog::set_busy); opening it closes the window's menus and ends type-to-select. As the porting note asked, Enter on a check box no longer confirms the dialog: only text fields activate the default button."
 
 [[feature]]
 id = "ACC-005"
@@ -16086,7 +16087,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (closing_a_dialog_gives_focus_back_to_the_control_that_had_it, a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button); native/crates/ox-app/src/dialog_layer.rs (in-window dialogs make the content under them take neither focus nor clicks). A dialog is a modal window over the browser window, so the covered content is inert, every focusable widget (text areas and links included) is in its Tab cycle, and closing it gives focus back to the control that had it, which GTK keeps as the window's focus widget."
 
 [[feature]]
 id = "ACC-006"
@@ -16113,7 +16115,8 @@ python_tests = [
   "desktop/tests/ui_regressions.cjs::Enter activates a sidebar folder",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (column_titles_sort_and_resize_from_the_keyboard, menus_open_their_items_from_the_keyboard); native/crates/ox-app/src/folder_view/column_keys.rs (title_keys_sort_resize_within_the_limits_and_restore_the_width); native/crates/ox-app/src/window/sidebar_resizer.rs (arrows_move_the_resizer_10_pixels_shift_40_and_home_resets_it); native/crates/ox-app/src/window/tests/sidebar.rs (the_resizer_is_a_titled_separator_that_the_keys_move, the_group_chevrons_never_collapse_and_quick_access_has_no_heading). Buttons, tabs, close buttons, breadcrumbs, menu rows, sidebar rows, archive rows and Settings results are GTK buttons or activatable list rows that Enter (and Space) activate. The column titles take focus: Enter or Space sorts, Left/Right resize 10 px (Shift 40) and Home restores the default width (the Python app's Home fits the loaded items instead). The sidebar resizer takes Left/Right and Home."
 
 [[feature]]
 id = "ACC-007"
@@ -16133,8 +16136,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Breadcrumb keyboard activation navigates rather than opening a selected file",
 ]
 bridge = []
-native = "todo"
-native_note = "Porting notes: 1.1.x bug fix ('Fix Enter on buttons', CHANGELOG)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (no_shortcut_takes_plain_enter_or_space_from_the_focused_control). No application or window shortcut takes plain Enter or Space, so a focused button, tab, menu row, sidebar row or crumb handles its own Enter; only the file list's own activation opens the selection."
 
 [[feature]]
 id = "ACC-008"
@@ -16147,8 +16150,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:292-305", "desktop/ui/index.html:14"]
 python_tests = ["desktop/tests/ui_regressions.cjs::Enter activates the nested Close tab button"]
 bridge = []
-native = "todo"
-native_note = "Porting notes: WAI-ARIA tablist arrow-key movement is missing; a gain for native (GTK Notebook/Adw.TabBar provide it)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (the_arrow_keys_move_between_tabs_and_only_the_front_tab_is_a_tab_stop); native/crates/ox-app/src/window/tests/tabs.rs (tabs_are_announced_as_tabs_with_their_selected_state). The strip is a TabList, each tab a Tab with its selected state; only the tab in front takes focus (roving tab stop); Enter or Space shows a focused tab; each close button is named 'Close <title>'. As a gain over the Python app (as GTK's tab bars and WAI-ARIA do), Left/Right, Home and End show the neighbouring, first or last tab and focus moves with it."
 
 [[feature]]
 id = "ACC-009"
@@ -16171,7 +16174,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Main file pane retains keyboard focus",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/theme/stylesheets.rs (focus_rings_sit_on_controls_and_items_not_around_the_file_list). Focused buttons and tabs draw a 2 px ring inside them; the file list draws none around itself; the focused row or tile draws a 1 px ring (ui-spec.md §4.13's focus colour rather than the accent), apart from the selection's fill."
 
 [[feature]]
 id = "ACC-010"
@@ -16186,8 +16190,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE animation speed set to instant"
 gnome = "org.gnome.desktop.interface enable-animations / gtk-enable-animations; gtk-enable-animations / AdwStyleManager high-contrast; org.gnome.desktop.interface enable-animations → gtk-enable-animations (GTK4 stops widget animations; custom animations must check it)"
-native = "todo"
-native_note = "Porting notes: Also an AGENTS.md requirement. No automated test."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/accessibility.rs (animations_stay_off_when_the_desktop_turns_them_off). Every motion in the skin is a CSS transition or animation (resources/skin), which GTK skips while gtk-enable-animations is off; GTK follows the desktop's reduced-motion setting (org.gnome.desktop.interface enable-animations) and the app never turns animations back on."
 
 [[feature]]
 id = "ACC-011"
@@ -16205,7 +16209,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE high-contrast colour schemes"
 gnome = "org.gnome.desktop.a11y.interface high-contrast; org.gnome.desktop.a11y.interface high-contrast (AdwStyleManager:high-contrast; Settings portal contrast)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/theme/stylesheets.rs (higher_contrast_thickens_drop_outlines_and_outlines_the_open_place, every_stylesheet_parses_without_errors). While GNOME's high-contrast setting is on (src/theme/contrast.rs), resources/skin/high-contrast.css outlines the open place in the sidebar, draws drop targets 3 px instead of 2 px, draws keyboard focus in rows, tiles and menus 2 px instead of 1 px, and draws place glyphs and Settings frames in the text colour."
 
 [[feature]]
 id = "ACC-012"
@@ -16221,7 +16226,8 @@ python_tests = [
   "desktop/tests/ui_v093.py::Virtualized row spacing accommodates larger text",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/theme/fonts.rs (controls_keep_their_heights_at_100_percent_and_grow_with_the_text, larger_text_scales_fonts_and_rows); native/crates/ox-app/src/window/tests/accessibility.rs (large_text_grows_rows_and_dialogs_still_fit_800_by_600). The text-size stylesheet grows the title bar, tabs, sidebar rows, command bar and commands, column titles, file rows, menus, status bar and dialog fields and buttons with the text, keeping the 100% heights; GTK sizes other controls from their text. A dialog with a field, a check box and three buttons fits an 800 x 600 window at 200%, so its action row needs no wrapping."
 
 [[feature]]
 id = "ACC-013"
@@ -16259,7 +16265,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "ATK accessible name"
-native = "todo"
+native = "n-a"
+native_note = "The startup placeholder covered the Python app's wait for its WebKit interface. The native window is built from GTK widgets before it is shown, so it has no placeholder to name and no WebKit recovery screen (see LOOK-008, UPD-012); from its first frame screen readers see the real, named controls, and the first listing shows the loading line."
 
 [[feature]]
 id = "ACC-015"
