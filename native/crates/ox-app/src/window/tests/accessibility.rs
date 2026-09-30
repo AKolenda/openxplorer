@@ -165,10 +165,6 @@ fn a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button() {
         "the first field has focus"
     );
     assert_eq!(field.selection_bounds(), Some((0, 11)), "with its text selected");
-    dialog.set_busy(true);
-    dialog.close();
-    assert!(dialog.is_visible(), "Escape does nothing while the answer runs");
-    dialog.set_busy(false);
     // Enter reaches the field's text, which activates the default button.
     let text = field
         .delegate()
@@ -177,7 +173,19 @@ fn a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button() {
     text.emit_activate();
     wait_until("Enter to press Save", || saved.get().is_some());
     assert_eq!(saved.get(), Some(true));
-    dialog.finish();
+
+    // While Save runs its buttons are off, and closing cancels the
+    // operation, so a stalled share cannot hold the dialog open.
+    let running = ox_core::transfer::Cancellation::new();
+    dialog.set_busy(Some(&running));
+    let save = descendants::<gtk::Button>(&dialog)
+        .into_iter()
+        .find(|button| button.label().as_deref() == Some("Save"))
+        .expect("a Save button");
+    assert!(!save.is_sensitive(), "Save is off while it runs");
+    dialog.close();
+    assert!(running.is_cancelled(), "closing cancels the running operation");
+    assert!(!dialog.is_visible());
 }
 
 /// parity: ACC-005
@@ -271,8 +279,16 @@ fn column_titles_sort_and_resize_from_the_keyboard() {
 
     assert!(press_on(type_title, gdk::Key::Right, gdk::ModifierType::empty()));
     assert_eq!(type_column.fixed_width(), before + 10);
+    assert!(press_on(
+        type_title,
+        gdk::Key::Right,
+        gdk::ModifierType::SHIFT_MASK
+    ));
+    assert_eq!(type_column.fixed_width(), before + 50);
+    // Home fits the column to the listed types, all shorter than 135.
     assert!(press_on(type_title, gdk::Key::Home, gdk::ModifierType::empty()));
-    assert_eq!(type_column.fixed_width(), before);
+    let fitted = type_column.fixed_width();
+    assert!((80..before).contains(&fitted), "fitted to the items: {fitted}");
     assert!(press_on(type_title, gdk::Key::Return, gdk::ModifierType::empty()));
     assert_eq!(details.sort_order().column, SortColumn::Type);
     assert!(press_on(type_title, gdk::Key::space, gdk::ModifierType::empty()));
@@ -296,6 +312,39 @@ fn animations_stay_off_when_the_desktop_turns_them_off() {
     let still_off = !settings.is_gtk_enable_animations();
     settings.set_gtk_enable_animations(before);
     assert!(still_off);
+    assert_eq!(
+        frame_driven_motion(),
+        Vec::<String>::new(),
+        "only the snapshot hook and the tests draw frame by frame"
+    );
+}
+
+/// The app's source files, outside the snapshot hook and the test
+/// support, that move something frame by frame, which GTK's animation
+/// setting would not stop.
+fn frame_driven_motion() -> Vec<String> {
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut folders = vec![source];
+    let mut found = Vec::new();
+    while let Some(folder) = folders.pop() {
+        for entry in std::fs::read_dir(&folder).expect("the source folder").flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if !path.ends_with("test_support") {
+                    folders.push(path);
+                }
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            let moves = ["add_tick_callback", "TimedAnimation", "SpringAnimation"]
+                .iter()
+                .any(|call| text.contains(call));
+            if moves && !path.ends_with("snapshot.rs") && !path.ends_with("accessibility.rs") {
+                found.push(path.display().to_string());
+            }
+        }
+    }
+    found
 }
 
 /// At 200% text the rows grow with their text and a dialog still fits an

@@ -84,9 +84,10 @@ impl BrowserWindow {
                 name: name.text().to_string(),
                 target: target.text().to_string(),
             };
-            dialog.set_busy(true);
-            let outcome = create_link(&request, &OperationContext::new(protection.clone())).await;
-            dialog.set_busy(false);
+            let context = OperationContext::new(protection.clone());
+            dialog.set_busy(Some(&context.cancel));
+            let outcome = create_link(&request, &context).await;
+            dialog.set_busy(None);
             match outcome {
                 Ok(link) => {
                     dialog.finish();

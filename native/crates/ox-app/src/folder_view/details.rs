@@ -42,7 +42,7 @@ const COLUMNS_RESIZED: &str = "columns-resized";
 /// The text `column` shows for `item`. A folder shows its measured size
 /// once measured; folders never measured and files of unknown size have
 /// an empty Size cell.
-fn cell_text(column: SortColumn, item: &FileItem) -> String {
+pub(crate) fn cell_text(column: SortColumn, item: &FileItem) -> String {
     let entry = item.entry();
     match column {
         SortColumn::Name => entry.name.clone(),
@@ -295,6 +295,17 @@ impl DetailsView {
     /// The adjustment of the vertical scroll position.
     pub(crate) fn vadjustment(&self) -> gtk::Adjustment {
         self.imp().scroller.vadjustment()
+    }
+
+    /// What `column` shows for the first `limit` items the view lists.
+    pub(crate) fn cell_texts(&self, column: SortColumn, limit: u32) -> Vec<String> {
+        let Some(items) = self.column_view().model() else {
+            return Vec::new();
+        };
+        (0..items.n_items().min(limit))
+            .filter_map(|position| items.item(position).and_downcast::<FileItem>())
+            .map(|item| cell_text(column, &item))
+            .collect()
     }
 
     /// The column view's column for `column`.

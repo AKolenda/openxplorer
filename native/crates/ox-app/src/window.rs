@@ -118,7 +118,7 @@ mod transfer_panel;
 mod type_to_select;
 mod unported;
 mod version_restore;
-mod widget_tree;
+pub(crate) mod widget_tree;
 mod window_action;
 mod window_keys;
 mod window_size;

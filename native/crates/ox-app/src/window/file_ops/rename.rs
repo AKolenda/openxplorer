@@ -82,10 +82,13 @@ impl BrowserWindow {
             folder: &folder,
         };
         let protection = self.context().write_protection();
-        let renamed = ask_for_name(self, request, |name| {
+        let renamed = ask_for_name(self, request, |name, cancel| {
             let uri = entry.uri.clone();
             let old_name = entry.name.clone();
-            let context = OperationContext::new(protection.clone());
+            let context = OperationContext {
+                cancel,
+                protection: protection.clone(),
+            };
             let window = self.downgrade();
             async move {
                 let window = window.upgrade().ok_or_else(|| NOT_RENAMED.to_owned())?;
