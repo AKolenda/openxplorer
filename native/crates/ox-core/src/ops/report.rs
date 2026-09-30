@@ -117,6 +117,7 @@ mod tests {
             skipped: vec![String::from("file:///tmp/skipped"); skipped],
             errors: errors.iter().map(ToString::to_string).collect(),
             cancelled,
+            landed: Vec::new(),
         }
     }
 

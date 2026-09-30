@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::os::unix::fs::symlink;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use ox_core::transfer::{
@@ -106,4 +107,73 @@ fn names_and_links_fat_cannot_store_are_renamed_or_left_out_as_answered() {
     assert_eq!(count(UnstorableReason::InvalidCharacters), 1, "{asked:?}");
     assert!(asked.contains(&("link".to_owned(), UnstorableReason::SymbolicLink)));
     fixture.assert_no_staging();
+}
+
+/// A renamed top-level item is reported where it landed, so Undo and the
+/// selection after a paste find `a_b.txt`, not `a:b.txt`.
+///
+/// parity: XFER-028
+#[test]
+fn a_renamed_item_is_reported_under_its_new_name() {
+    let fixture = Fixture::new();
+    let source = fixture.source_folder.join("a:b.txt");
+    write(&source, "a");
+    let mut engine = fixture
+        .engine(Arc::new(FatStick { free: None }))
+        .with_unstorable_question(|_| UnstorableAnswer::ReplaceAll);
+
+    let result = fixture.run(&mut engine, &[&source], Request::Copy(ConflictPolicy::Skip));
+
+    let landed = &result.landed[0];
+    assert_eq!(landed.source, file_uri(&source));
+    assert_eq!(
+        landed.destination,
+        file_uri(&fixture.destination_folder.join("a_b.txt"))
+    );
+}
+
+/// Two file systems, told apart by `id::filesystem`: the destination
+/// folder's and the source's.
+struct TwoFilesystems {
+    destination_folder: PathBuf,
+    /// The source's id; the destination's makes a move a rename.
+    source_id: &'static str,
+}
+
+impl Provider for TwoFilesystems {
+    fn filesystem(&self, node: &LocalNode) -> Option<FilesystemInfo> {
+        let is_destination = node.local_path().starts_with(&self.destination_folder);
+        let id = if is_destination {
+            "destination"
+        } else {
+            self.source_id
+        };
+        Some(FilesystemInfo {
+            kind: Some("ext4".into()),
+            free: Some(1024),
+            id: Some(id.into()),
+        })
+    }
+}
+
+/// A move needs free space only when it crosses file systems; within one
+/// it is a rename.
+///
+/// parity: XFER-028
+#[test]
+fn a_move_needs_free_space_only_across_file_systems() {
+    for (source_id, fits) in [("destination", true), ("other", false)] {
+        let fixture = Fixture::new();
+        let source = fixture.source_folder.join("video.mp4");
+        fs::write(&source, random_bytes(2048)).unwrap();
+        let provider = TwoFilesystems {
+            destination_folder: fixture.destination_folder.clone(),
+            source_id,
+        };
+        let mut engine = fixture.engine(Arc::new(provider));
+
+        let run = fixture.try_run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
+
+        assert_eq!(run.is_ok(), fits, "{source_id}: {run:?}");
+    }
 }

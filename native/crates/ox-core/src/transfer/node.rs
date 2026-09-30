@@ -69,7 +69,8 @@ pub struct ItemIdentity {
 /// - `&Cancellation` for the long operations the user starts and may stop
 ///   at any time: copying a file, moving to the Trash and deleting a tree.
 /// - No token for [`Node::delete`], which removes only the engine's own
-///   staging or backups: that cleanup must finish even after the user
+///   staging or backups, or one source item a move has already copied:
+///   that cleanup must finish even after the user
 ///   cancelled (`_clean_staging` and `_discard_stage` in
 ///   `desktop/operations.py` take no cancellation either).
 pub trait Node: Send + Sync {
@@ -181,8 +182,9 @@ pub trait Node: Send + Sync {
     /// in one step; the engine then replaces through reversible renames.
     fn replace_native(&self, target: &dyn Node, cancel: Option<&Cancellation>) -> Result<(), TransferError>;
 
-    /// Deletes one file or one empty folder. Only ever called on staging the
-    /// engine created, or a replacement backup it owns.
+    /// Deletes one file, one link or one empty folder. Only ever called on
+    /// staging the engine created, a replacement backup it owns, or a
+    /// source item a move has just copied (XFER-013).
     ///
     /// # Errors
     ///

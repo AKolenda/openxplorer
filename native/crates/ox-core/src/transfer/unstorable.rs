@@ -59,15 +59,30 @@ pub(crate) enum Fix {
     Skip,
 }
 
+/// The "all" answers that apply to the rest of a run.
+#[derive(Debug, Default)]
+struct RunAnswers {
+    /// Replace all: every forbidden name gets `_` instead.
+    replace_all: bool,
+    /// Skip all for names.
+    skip_all_names: bool,
+    /// Skip all for links.
+    skip_all_links: bool,
+}
+
 /// The rules of the run's destination and the answers that apply to the
 /// rest of the run.
 #[derive(Default)]
 pub(crate) struct Unstorable {
     question: Option<Box<UnstorableQuestion>>,
     pub(crate) rules: StorageRules,
-    replace_all: bool,
-    skip_all_names: bool,
-    skip_all_links: bool,
+    /// The destination's `id::filesystem`, when known.
+    destination_id: Option<String>,
+    /// True while the current item is on the destination's own file
+    /// system, which already stores its names and links.
+    same_filesystem: bool,
+    /// The "all" answers given so far in this run.
+    answers: RunAnswers,
     /// Items left out since [`Unstorable::take_skipped`] was last called.
     skipped: usize,
 }
@@ -81,14 +96,26 @@ impl Unstorable {
         }
     }
 
-    /// Starts a run into a file system with `rules`; earlier "all" answers
-    /// no longer apply.
-    pub(crate) fn start_run(&mut self, rules: StorageRules) {
+    /// Starts a run into a file system with `rules` and the id
+    /// `destination_id`; earlier "all" answers no longer apply.
+    pub(crate) fn start_run(&mut self, rules: StorageRules, destination_id: Option<String>) {
         self.rules = rules;
-        self.replace_all = false;
-        self.skip_all_names = false;
-        self.skip_all_links = false;
+        self.destination_id = destination_id;
+        self.same_filesystem = false;
+        self.answers = RunAnswers::default();
         self.skipped = 0;
+    }
+
+    /// Starts the top-level item `source`. An item already on the
+    /// destination's file system is stored there as it is, so nothing about
+    /// it is asked: `fuseblk` names both NTFS and exFAT through FUSE, and
+    /// ntfs-3g without `windows_names` stores the characters Windows forbids.
+    pub(crate) fn start_item(&mut self, source: &dyn Node, cancel: &Cancellation) {
+        self.skipped = 0;
+        let restricts = self.rules != StorageRules::default();
+        self.same_filesystem = restricts
+            && self.destination_id.is_some()
+            && source.filesystem(Some(cancel)).and_then(|info| info.id) == self.destination_id;
     }
 
     /// The number of items left out since the last call.
@@ -111,6 +138,9 @@ impl Unstorable {
         cancel: &Cancellation,
     ) -> Result<Fix, TransferError> {
         let name = item.name();
+        if self.same_filesystem {
+            return Ok(Fix::Name(name));
+        }
         if !self.rules.stores_links && self.question.is_some() {
             let kind = match kind {
                 Some(kind) => kind,
@@ -124,21 +154,21 @@ impl Unstorable {
         if !self.rules.forbids_name(&name) || self.question.is_none() {
             return Ok(Fix::Name(name));
         }
-        if self.replace_all {
+        if self.answers.replace_all {
             return Ok(Fix::Name(replace_forbidden_characters(&name)));
         }
-        if self.skip_all_names {
+        if self.answers.skip_all_names {
             self.skipped += 1;
             return Ok(Fix::Skip);
         }
         match self.ask(&name, UnstorableReason::InvalidCharacters, cancel)? {
             UnstorableAnswer::ReplaceAll => {
-                self.replace_all = true;
+                self.answers.replace_all = true;
                 Ok(Fix::Name(replace_forbidden_characters(&name)))
             }
             UnstorableAnswer::Replace => Ok(Fix::Name(replace_forbidden_characters(&name))),
             answer => {
-                self.skip_all_names |= answer == UnstorableAnswer::SkipAll;
+                self.answers.skip_all_names |= answer == UnstorableAnswer::SkipAll;
                 self.skipped += 1;
                 Ok(Fix::Skip)
             }
@@ -148,9 +178,9 @@ impl Unstorable {
     /// True when the link `name` is left out; links cannot be renamed into
     /// something the file system stores, so every answer but Cancel skips.
     fn skips_link(&mut self, name: &OsStr, cancel: &Cancellation) -> Result<bool, TransferError> {
-        if !self.skip_all_links {
+        if !self.answers.skip_all_links {
             let answer = self.ask(name, UnstorableReason::SymbolicLink, cancel)?;
-            self.skip_all_links = answer == UnstorableAnswer::SkipAll;
+            self.answers.skip_all_links = answer == UnstorableAnswer::SkipAll;
         }
         Ok(true)
     }

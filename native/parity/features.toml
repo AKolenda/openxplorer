@@ -7717,8 +7717,8 @@ native_note = "Implemented in native/crates/ox-core/src/transfer/commit.rs (repl
 [[feature]]
 id = "XFER-011"
 area = "XFER"
-title = "Moves are native renames, never an unstaged copy-then-delete"
-behaviour = "Move uses g_file_move with NOFOLLOW_SYMLINKS|NO_FALLBACK_FOR_MOVE, including Replace, so a move is a native rename and GIO never falls back to its own unstaged copy-then-delete. Where the backend cannot move natively (cross-filesystem or cross-share) it reports 'A native move is not supported here. Cross-filesystem/cross-share moves are deliberately disabled. Copy, verify, then trash the source separately.' and the source is untouched; the engine then moves by staged copy (XFER-013)."
+title = "Moves are native only, never copy-then-delete"
+behaviour = "Move uses g_file_move with NOFOLLOW_SYMLINKS|NO_FALLBACK_FOR_MOVE, including Replace. When a native move is impossible (cross-filesystem or cross-share) the source is kept and the error is 'A native move is not supported here. Cross-filesystem/cross-share moves are deliberately disabled. Copy, verify, then trash the source separately.'"
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -7740,8 +7740,8 @@ python_tests = [
   "desktop/tests/test_operations.py::TransferTests::test_move_same_directory_is_noop",
 ]
 bridge = ["operate"]
-native = "done"
-native_note = "Implemented in native/crates/ox-core/src/gio_node/move_item.rs (MOVE_FLAGS = NOFOLLOW_SYMLINKS|NO_FALLBACK_FOR_MOVE, also for Replace) and native/crates/ox-core/src/transfer/engine.rs. Tests: native/crates/ox-core/tests/transfer_cases/operations.rs (a_move_takes_the_item_out_of_its_folder), native/crates/ox-core/tests/transfer_cases/failures.rs (a_move_that_cannot_be_finished_by_copying_keeps_the_source), native/crates/ox-core/tests/transfer_cases/replace.rs, native/crates/ox-core/tests/transfer_cases/mtp_adapter.rs, native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (cross_filesystem_move_is_refused_without_copying_or_removing_the_source). Changed with XFER-013: where the backend reports that it cannot move, the engine now moves by staged copy and removes the source only after publication, instead of refusing."
+native = "partial"
+native_note = "OWNER DECISION NEEDED: conflicts with XFER-013. The backend part holds: native/crates/ox-core/src/gio_node/move_item.rs moves with MOVE_FLAGS = NOFOLLOW_SYMLINKS|NO_FALLBACK_FOR_MOVE (also for Replace), so GIO never degrades a move to its own unstaged copy-then-delete, and the node reports the quoted error with the source untouched (native/crates/ox-core/tests/gio_node_cases/local_adapter.rs, cross_filesystem_move_is_refused_without_copying_or_removing_the_source). The engine no longer refuses such a move: to satisfy XFER-013 (must, Dolphin behaviour) native/crates/ox-core/src/transfer/engine.rs copies the item through the normal staging and then removes only the copied source items. That contradicts this item's 'the source is kept' and the Python test_move_failure_does_not_copy_delete, so it stays partial until the owner accepts the change and the spec text is updated."
 
 [[feature]]
 id = "XFER-012"
@@ -7788,7 +7788,7 @@ python_tests = [
 bridge = ["operate", "clipboardConsume"]
 dolphin = "KIO::move (copy + delete fallback); KIO move across filesystems"
 native = "done"
-native_note = "Implemented in native/crates/ox-core/src/transfer/engine.rs (move_by_copying): when the native move reports NotSupported (another filesystem, share or device), the item is copied through the normal staging (every XFER copy rule applies) and the source is removed with delete_tree only after the copy was published; the removal is not cancellable once it starts, a source that cannot be removed is reported with the copy's location, and a copy that left out unstorable items keeps the source. Tests: native/crates/ox-core/tests/transfer_cases/gio_engine.rs (a_move_to_another_filesystem_copies_then_removes_the_source, /tmp to /dev/shm), native/crates/ox-core/tests/transfer_cases/failures.rs (a_move_that_cannot_be_finished_by_copying_keeps_the_source)."
+native_note = "Implemented in native/crates/ox-core/src/transfer/engine.rs (move_by_copying) and native/crates/ox-core/src/transfer/source_removal.rs: when the native move reports NotSupported (another filesystem, share or device), the item is copied through the normal staging (every XFER copy rule applies) while the copier records each source item it copied; after publication only those items are removed, children first, files and links one by one and folders only when empty. Anything saved into the source during the copy is kept and reported ('<n> item(s) appeared in the source during the move and were kept at <uri>'), as KIO does. The removal is not cancellable once it starts; a cancelled or failed copy keeps the source; a copy that left out unstorable items keeps the source; a source that cannot be removed is reported with the copy's location. The owner must still settle the conflict with XFER-011 (see there). Tests: native/crates/ox-core/tests/transfer_cases/cross_moves.rs (a_file_saved_into_the_source_during_the_move_is_kept, a_cancelled_copy_or_a_failed_removal_keeps_the_source, a_copy_that_left_items_out_keeps_the_source), native/crates/ox-core/tests/transfer_cases/gio_engine.rs (a_move_to_another_filesystem_copies_then_removes_the_source, /tmp to /dev/shm), native/crates/ox-core/tests/transfer_cases/failures.rs (a_move_that_cannot_be_finished_by_copying_keeps_the_source)."
 
 [[feature]]
 id = "XFER-014"

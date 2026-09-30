@@ -15,7 +15,6 @@
 //! module does not claim it.
 
 use super::context::{on_worker, OperationContext};
-use super::destinations::DestinationTracker;
 use super::error::OpsError;
 use super::folder_groups::{FolderGroup, FolderGroups};
 use super::results::{merge_results, record_failure};
@@ -23,7 +22,7 @@ use super::run_transfer::{gio_transfer_engine, TransferOutcome};
 use super::undo::UndoRecord;
 use crate::gio_node::GioNode;
 use crate::location::require_item_uri;
-use crate::transfer::{ConflictPolicy, Node, Operation, Progress, TransferEngine, TransferMode, MAX_ITEMS};
+use crate::transfer::{ConflictPolicy, Node, Operation, Progress, TransferEngine, MAX_ITEMS};
 
 /// Duplicates each of `uris` in its own folder, sending throttled progress
 /// to `progress` on the worker thread. The outcome lists the duplicates,
@@ -88,18 +87,9 @@ fn duplicate_in_folder(
         destination_folder: &group.folder_uri,
         policy: ConflictPolicy::KeepBoth,
     };
-    let tracker = DestinationTracker::before_run(
-        TransferMode::Copy,
-        &group.folder_uri,
-        ConflictPolicy::KeepBoth,
-        &context.cancel,
-    );
     match engine.run(operation, &group.uris, &context.cancel) {
         Ok(result) => {
-            let copies = tracker
-                .landed(&result.done)
-                .into_iter()
-                .map(|item| item.destination);
+            let copies = result.landed.iter().map(|item| item.destination.clone());
             outcome.created.extend(copies);
             merge_results(&mut outcome.result, result);
         }

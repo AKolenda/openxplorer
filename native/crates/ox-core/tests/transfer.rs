@@ -9,6 +9,7 @@
 //! | `containment` | Refusing to place a folder inside itself |
 //! | `conflicts` | Skip, Keep both and moves into the item's own folder |
 //! | `replace` | Replace: overwriting files and merging folders |
+//! | `cross_moves` | Moves finished by a staged copy and removing what was copied |
 //! | `failures` | Failures injected at every step of a copy or replacement |
 //! | `snapshots` | Previous-version (snapshot) protection |
 //! | `modes` | Unix modes on backends without `chmod` |
@@ -28,6 +29,8 @@ mod transfer_support;
 mod conflicts;
 #[path = "transfer_cases/containment.rs"]
 mod containment;
+#[path = "transfer_cases/cross_moves.rs"]
+mod cross_moves;
 #[path = "transfer_cases/device_cleanup.rs"]
 mod device_cleanup;
 #[path = "transfer_cases/device_replace.rs"]

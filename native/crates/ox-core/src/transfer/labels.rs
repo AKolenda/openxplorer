@@ -25,6 +25,11 @@ pub(crate) fn copy_label(name: &str, current: u64, total: u64) -> String {
     )
 }
 
+/// Shown while the free-space check measures the items (XFER-028), as
+/// Dolphin shows its examining phase. Not in the Python app, which had no
+/// such check.
+pub(crate) const CHECKING_SPACE_LABEL: &str = "Checking free space…";
+
 /// `3 item(s) completed`, emitted once at the end of every run.
 pub(crate) fn completed_label(done: usize) -> String {
     format!("{done} item(s) completed")

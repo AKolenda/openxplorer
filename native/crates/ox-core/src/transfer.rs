@@ -39,6 +39,7 @@
 //! | `labels` | Progress text |
 //! | `limits` | What the destination file system holds: free space, file size, names and links (XFER-028) |
 //! | `unstorable` | Asking about names and links the destination cannot store (XFER-028) |
+//! | `source_removal` | Removing the copied source of a move across filesystems (XFER-013) |
 //! | `relisting` | Relisting the folders moves took items from (MTP) |
 //! | `node` | The [`Node`] storage abstraction the engine works on |
 //! | `cancellation` | [`Cancellation`], the user's stop request |
@@ -75,6 +76,7 @@ mod names;
 mod node;
 mod relisting;
 mod request;
+mod source_removal;
 mod staged_copy;
 mod staging;
 mod types;
@@ -93,5 +95,5 @@ pub use names::is_own_staging_name;
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;
 pub(crate) use staging::{clean_staging, STAGING_LEVELS};
-pub use types::{ConflictPolicy, Operation, Progress, TransferMode, TransferResult};
+pub use types::{ConflictPolicy, Landed, Operation, Progress, TransferMode, TransferResult};
 pub use unstorable::{UnstorableAnswer, UnstorableItem, UnstorableQuestion, UnstorableReason};

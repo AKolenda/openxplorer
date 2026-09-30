@@ -253,7 +253,8 @@ impl Node for GioNode {
             .as_ref()
             .filter(|info| info.has_attribute("filesystem::free"))
             .map(|info| info.attribute_uint64("filesystem::free"));
-        Some(FilesystemInfo { kind, free, id })
+        // Nothing reported when both queries failed.
+        (filesystem.is_some() || id.is_some()).then_some(FilesystemInfo { kind, free, id })
     }
 }
 

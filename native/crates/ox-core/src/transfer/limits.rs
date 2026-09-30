@@ -61,8 +61,12 @@ impl Default for StorageRules {
 }
 
 impl StorageRules {
-    /// The rules of the file system GIO names `kind`. `fuseblk` is NTFS
-    /// through ntfs-3g in practice, which stores links.
+    /// The rules of the file system GIO names `kind`. `fuseblk` is any
+    /// FUSE block file system: NTFS through ntfs-3g in practice, which
+    /// stores links, but also exFAT through exfat-fuse, whose links are
+    /// then not detected. GIO does not report the FUSE subtype. Items
+    /// already on the destination's file system are never asked about
+    /// (`Unstorable::start_item`).
     pub(crate) fn of(kind: Option<&str>) -> Self {
         let kind = kind.map(str::to_ascii_lowercase);
         match kind.as_deref() {
@@ -136,7 +140,8 @@ impl Incoming<'_> {
     /// be written do not fit in the destination's free space. Items a move
     /// only renames, and items Skip will leave alone, need no space. An
     /// item that cannot be measured counts as empty: its copy reports the
-    /// problem.
+    /// problem. `on_folder` is called before each folder is listed, so the
+    /// caller can show that a long walk is under way.
     ///
     /// # Errors
     ///
@@ -146,6 +151,7 @@ impl Incoming<'_> {
         factory: &NodeFactory,
         uris: &[&str],
         cancel: &Cancellation,
+        on_folder: &mut dyn FnMut(),
     ) -> Result<(), TransferError> {
         let Some(free) = self.filesystem.free else {
             return Ok(());
@@ -158,7 +164,7 @@ impl Incoming<'_> {
             if !self.writes(source.as_ref(), cancel) {
                 continue;
             }
-            needed = needed.saturating_add(tree_size(source.as_ref(), cancel, 0)?);
+            needed = needed.saturating_add(tree_size(source.as_ref(), cancel, 0, on_folder)?);
             if needed > free {
                 return Err(TransferError::failed(format!(
                     "Not enough free space on {}: {} needed, {} free.",
@@ -186,6 +192,9 @@ impl Incoming<'_> {
                 return false;
             }
         }
+        // Checked under the source's own name. A name the destination
+        // forbids is never taken there, so an item that will be renamed
+        // always counts: the check is conservative.
         if self.policy == ConflictPolicy::Skip {
             let is_taken = child_node(self.folder, source.name())
                 .is_ok_and(|destination| destination.exists(Some(cancel)));
@@ -196,7 +205,13 @@ impl Incoming<'_> {
 }
 
 /// The bytes of the files in `node`'s tree, links not followed.
-fn tree_size(node: &dyn Node, cancel: &Cancellation, depth: usize) -> Result<u64, TransferError> {
+/// `on_folder` is called before each folder is listed.
+fn tree_size(
+    node: &dyn Node,
+    cancel: &Cancellation,
+    depth: usize,
+    on_folder: &mut dyn FnMut(),
+) -> Result<u64, TransferError> {
     cancel.check()?;
     let Ok(info) = node.info(Some(cancel)) else {
         return Ok(0);
@@ -204,12 +219,13 @@ fn tree_size(node: &dyn Node, cancel: &Cancellation, depth: usize) -> Result<u64
     match info.kind {
         NodeKind::File => Ok(info.size),
         NodeKind::Directory if depth < MAX_DEPTH => {
+            on_folder();
             let Ok(children) = node.children(Some(cancel)) else {
                 return Ok(0);
             };
             let mut total = 0_u64;
             for child in children {
-                total = total.saturating_add(tree_size(child.as_ref(), cancel, depth + 1)?);
+                total = total.saturating_add(tree_size(child.as_ref(), cancel, depth + 1, on_folder)?);
             }
             Ok(total)
         }

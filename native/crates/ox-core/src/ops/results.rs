@@ -25,6 +25,7 @@ pub(crate) fn merge_results(total: &mut TransferResult, part: TransferResult) {
     total.skipped.extend(part.skipped);
     total.errors.extend(part.errors);
     total.cancelled |= part.cancelled;
+    total.landed.extend(part.landed);
 }
 
 #[cfg(test)]

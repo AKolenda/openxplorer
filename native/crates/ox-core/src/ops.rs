@@ -46,7 +46,6 @@
 //! | `delete_plan` | Trash support, and the Delete and Shift+Delete confirmations |
 //! | `run_transfer` | Copy, move, Trash and permanent delete through the engine |
 //! | `chosen_transfer` | A copy or move with an answer per name conflict |
-//! | `destinations` | Where a copy's or move's items are now |
 //! | `duplicate` | Duplicate in place |
 //! | `links` | Symbolic links to dropped items |
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
@@ -72,7 +71,6 @@ mod conflicts;
 mod context;
 mod create;
 mod delete_plan;
-mod destinations;
 mod duplicate;
 mod error;
 mod folder_groups;

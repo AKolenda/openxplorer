@@ -174,6 +174,20 @@ pub struct TransferResult {
     pub errors: Vec<String>,
     /// The user cancelled; later items were not started.
     pub cancelled: bool,
+    /// Where each copied or moved item of `done` is now, in the same
+    /// order, under the name the engine gave it (a Keep both `(copy N)`
+    /// name or a name with unstorable characters replaced). Undo and the
+    /// selection after a paste use it (OPS-029, SEL-016).
+    pub landed: Vec<Landed>,
+}
+
+/// One copied or moved item and where it is now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Landed {
+    /// The item's URI before the run.
+    pub source: String,
+    /// The item's URI now.
+    pub destination: String,
 }
 
 #[cfg(test)]

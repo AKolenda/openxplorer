@@ -34,6 +34,7 @@ use super::error::TransferError;
 use super::modes::{secure_local_staging, DirectoryModes};
 use super::names::{child_node, staging_name, PAYLOAD_NAME};
 use super::node::{ItemIdentity, Node, NodeKind, WriteGuard};
+use super::source_removal::CopiedItem;
 use super::staging::StagingPlace;
 use super::types::{ConflictPolicy, Progress};
 use super::unstorable::Unstorable;
@@ -135,6 +136,9 @@ pub(crate) struct StagedCopy<'a> {
     pub(crate) unstorable: &'a mut Unstorable,
     /// Receives byte progress.
     pub(crate) emit: &'a mut dyn FnMut(Progress),
+    /// Receives every copied source item below `source` when the copy
+    /// finishes a move (XFER-013); `None` for a plain copy.
+    pub(crate) copied: Option<&'a mut Vec<CopiedItem>>,
 }
 
 impl StagedCopy<'_> {
@@ -214,7 +218,8 @@ impl StagedCopy<'_> {
             modes,
             &mut *self.unstorable,
             &mut *self.emit,
-        );
+        )
+        .recording(self.copied.as_deref_mut());
         if self.source_kind == NodeKind::Directory {
             // XFER-002: a failed exclusive folder creation grants no right to
             // clean up this path.
@@ -265,7 +270,8 @@ impl StagedCopy<'_> {
             modes,
             &mut *self.unstorable,
             &mut *self.emit,
-        );
+        )
+        .recording(self.copied.as_deref_mut());
         copier.copy(self.source, stage.item(), 0)?;
         if layout == Layout::SameDeviceCopy {
             self.rename_device_copy(stage)?;
