@@ -50,6 +50,7 @@ mod button_style;
 mod cache_folder;
 mod caption_buttons;
 mod card_grid;
+mod closing;
 mod command_bar;
 mod connections;
 mod context_menu;
@@ -93,6 +94,7 @@ mod settings_tab;
 mod sidebar;
 mod snapshot_tabs;
 mod status_bar;
+mod tab_commands;
 mod tab_layout;
 mod tab_menu;
 mod tab_moves;
@@ -105,6 +107,8 @@ mod unported;
 mod version_restore;
 mod widget_tree;
 mod window_action;
+mod window_keys;
+mod window_size;
 
 #[cfg(test)]
 mod tests;
@@ -127,6 +131,7 @@ use tab_strip::TabStrip;
 
 pub(crate) use actions::install_accelerators;
 pub(crate) use button_style::ButtonStyle;
+pub(crate) use closing::QUIT_WHILE_WRITING;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;
@@ -240,6 +245,13 @@ impl BrowserWindow {
     #[cfg(test)]
     pub(crate) fn folder_model(&self) -> &crate::folder_view::model::FolderModel {
         self.folder_pane().model()
+    }
+
+    /// The tab in front as a tab action's target, for tests.
+    #[cfg(test)]
+    pub(crate) fn active_tab_target(&self) -> Option<glib::Variant> {
+        let active = self.imp().session.borrow().active_id();
+        active.map(session::TabId::to_variant)
     }
 
     /// Shows a message in the window's toast: a refused command, a

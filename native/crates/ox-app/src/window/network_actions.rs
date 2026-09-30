@@ -158,8 +158,13 @@ impl BrowserWindow {
         );
     }
 
-    /// Open in new window: another window of the app showing `uri`.
+    /// Open in new window: another window of the app showing `uri`,
+    /// refused as Ctrl+N is while an update installs (TAB-043).
     fn open_in_new_window(&self, uri: &str) {
+        if let Some(refusal) = self.context().updates().new_window_refusal() {
+            self.show_message(&refusal);
+            return;
+        }
         let Some(app) = self.application() else {
             return;
         };
@@ -169,7 +174,7 @@ impl BrowserWindow {
             window.destroy();
             return;
         }
-        window.present();
+        window.present_as_new_window();
     }
 
     /// Discover servers: looks for advertised SMB servers, redrawing the

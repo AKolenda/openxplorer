@@ -75,6 +75,21 @@ pub(super) fn is_enabled(test: &TestWindow, name: &str) -> bool {
 /// When no shortcut of the window has that key.
 pub(super) fn press_shortcut(test: &TestWindow, keyval: gdk::Key, modifiers: gdk::ModifierType) {
     test.window.folder_pane().focus_view();
+    press_shortcut_where_focused(test, keyval, modifiers);
+}
+
+/// Presses `keyval` with exactly `modifiers` wherever keyboard focus is
+/// now, as far as the window's shortcut controllers go. Returns whether
+/// the window took the key.
+///
+/// # Panics
+///
+/// When no shortcut of the window has that key.
+pub(super) fn press_shortcut_where_focused(
+    test: &TestWindow,
+    keyval: gdk::Key,
+    modifiers: gdk::ModifierType,
+) -> bool {
     let shortcut = window_shortcuts(test)
         .into_iter()
         .find(|shortcut| {
@@ -83,7 +98,7 @@ pub(super) fn press_shortcut(test: &TestWindow, keyval: gdk::Key, modifiers: gdk
         })
         .expect("the window has a shortcut for the key");
     let action = shortcut.action().expect("every window shortcut has an action");
-    action.activate(gtk::ShortcutActionFlags::empty(), &test.window, None);
+    action.activate(gtk::ShortcutActionFlags::empty(), &test.window, None)
 }
 
 /// Every shortcut of the window's own shortcut controllers.

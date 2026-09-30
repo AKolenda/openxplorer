@@ -34,7 +34,7 @@ fn press(test: &TestWindow, key: gdk::Key) -> bool {
     )
 }
 
-fn hint(test: &TestWindow) -> String {
+pub(super) fn hint(test: &TestWindow) -> String {
     let label = test.window.status_bar().typeahead_hint_label();
     label.text().to_string()
 }

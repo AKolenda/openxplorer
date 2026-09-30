@@ -25,10 +25,14 @@ struct SavedTabView {
     store: gio::ListStore,
     /// The URIs of the items it had selected.
     selected: Vec<String>,
+    /// The URI of the item that had keyboard focus.
+    focused: Option<String>,
     /// Its vertical scroll position.
     scroll: f64,
     /// It was opened in the background and has not been listed yet.
     needs_listing: bool,
+    /// Its network folder changed while it was in the background.
+    changed_while_hidden: bool,
 }
 
 impl BrowserWindow {
@@ -111,7 +115,8 @@ impl BrowserWindow {
         self.open_tab(address, TabPlacement::Foreground)
     }
 
-    /// Navigates the active tab, or opens a first tab.
+    /// Navigates the active tab, or opens a first tab. A tab that is
+    /// being dragged stays where it is (TAB-003).
     ///
     /// # Errors
     ///
@@ -119,6 +124,9 @@ impl BrowserWindow {
     /// folder stays.
     pub(super) fn navigate(&self, address: &str) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
+        if self.refuse_while_active_tab_moves() {
+            return Ok(());
+        }
         let Some(id) = self.push_location(&uri) else {
             return self.add_tab(&uri);
         };
@@ -155,13 +163,18 @@ impl BrowserWindow {
         self.reset_typeahead();
     }
 
-    /// Remembers the active tab's selection and scroll position before
-    /// another tab is shown.
+    /// Remembers the active tab's selection, focused item and scroll
+    /// position before another tab is shown.
     pub(super) fn save_tab_view(&self) {
         self.save_selection();
-        let scroll = self.folder_pane().scroll_position();
+        let pane = self.folder_pane();
+        let scroll = pane.scroll_position();
+        let focused = pane
+            .focused_position()
+            .and_then(|position| pane.model().item(position));
         if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
             tab.scroll = scroll;
+            tab.focused = focused.map(|item| item.entry().uri.clone());
         }
     }
 
@@ -197,33 +210,64 @@ impl BrowserWindow {
         self.render_navigation();
         self.update_content();
         self.update_details_pane();
-        self.folder_pane().restore_scroll_position(view.scroll);
+        let pane = self.folder_pane();
+        pane.restore_scroll_position(view.scroll);
         if had_focus {
-            self.folder_pane().focus_view();
+            pane.focus_view();
+            if let Some(uri) = view.focused {
+                pane.focus_item_later(uri);
+            }
         }
         if view.needs_listing {
             self.load_tab(id, LoadMode::Navigate);
+        } else if view.changed_while_hidden {
+            self.folder_changed(id);
         }
     }
 
     /// What tab `id` needs to be shown again, while it is open.
     fn saved_tab_view(&self, id: TabId) -> Option<SavedTabView> {
-        let session = self.imp().session.borrow();
-        let tab = session.tab(id)?;
+        let mut session = self.imp().session.borrow_mut();
+        let tab = session.tab_mut(id)?;
+        let changed_while_hidden = std::mem::take(&mut tab.changed_while_hidden);
         Some(SavedTabView {
+            changed_while_hidden,
             store: tab.store.clone(),
             selected: tab.selected.clone(),
+            focused: tab.focused.clone(),
             scroll: tab.scroll,
             needs_listing: tab.listing_state.needs_listing(),
         })
     }
 
-    /// Closes a tab; closing the last one closes the window.
+    /// Closes a tab; closing the last one closes the window, after asking
+    /// as its Close button does (`closeTab` calls `askClose`). A tab that
+    /// is being dragged stays (TAB-003).
     pub(super) fn close_tab(&self, id: TabId) {
-        if self.tab_count() <= 1 {
-            self.close();
+        if self.refuse_while_moving(id) {
             return;
         }
+        if self.tab_count() <= 1 {
+            self.request_close();
+            return;
+        }
+        self.remember_closed_tab(id);
+        self.remove_tab(id);
+    }
+
+    /// Takes tab `id` out after another window took it: it is not
+    /// remembered as closed, and the last tab leaving closes the window.
+    pub(super) fn release_moved_tab(&self, id: TabId) {
+        if self.tab_count() <= 1 {
+            self.request_close();
+            return;
+        }
+        self.remove_tab(id);
+    }
+
+    /// Removes tab `id` and its dialog, and shows the next tab when it was
+    /// in front.
+    fn remove_tab(&self, id: TabId) {
         self.save_tab_view();
         self.discard_dialog_of_tab(id);
         let was_active = self.imp().session.borrow().is_active(id);
@@ -266,6 +310,9 @@ impl BrowserWindow {
     /// Moves one step through the active tab's history; at either end of
     /// it nothing happens.
     pub(super) fn go_history(&self, direction: Direction) {
+        if self.refuse_while_active_tab_moves() {
+            return;
+        }
         let Some(id) = self.step_history(direction) else {
             return;
         };

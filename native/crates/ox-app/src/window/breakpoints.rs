@@ -154,6 +154,7 @@ impl BrowserWindow {
     /// after the allocation, because changing styles during one would
     /// start it again.
     pub(super) fn follow_width(&self, width: i32) {
+        self.tab_strip().cap_width(width);
         let band = WindowWidth::for_width(width);
         if self.imp().window_width.replace(band) == band {
             return;

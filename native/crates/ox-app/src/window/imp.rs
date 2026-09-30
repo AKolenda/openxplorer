@@ -28,6 +28,7 @@ use super::session::TabId;
 use super::settings_tab::SettingsTabState;
 use super::sidebar::Sidebar;
 use super::status_bar::StatusBar;
+use super::tab_commands::ClosedTab;
 use super::tab_moves::OutgoingTabDrag;
 use super::tab_strip::TabStrip;
 use super::toast::Toast;
@@ -156,6 +157,10 @@ pub(crate) struct BrowserWindow {
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
     /// The tab drag this window started, while it lasts.
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
+    /// The timer that saves the window's size after a resize.
+    pub(super) size_save: RefCell<Option<glib::SourceId>>,
+    /// The tabs closed in this window, most recent first.
+    pub(super) closed_tabs: RefCell<Vec<ClosedTab>>,
     /// The in-window dialogs, Properties by tab, and the tabs that
     /// browse snapshots.
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
@@ -223,8 +228,9 @@ impl WidgetImpl for BrowserWindow {
 
 impl WindowImpl for BrowserWindow {
     fn close_request(&self) -> glib::Propagation {
-        // Safety rule "an update locks the application" (UPD-005): no
-        // window closes while an update installs.
+        // Safety rules "an update locks the application" (UPD-005) and
+        // "a window never closes under a running write" (TAB-049): see
+        // closing.rs.
         if let Some(refusal) = self.obj().close_refusal() {
             self.obj().show_message(&refusal);
             return glib::Propagation::Stop;
@@ -233,9 +239,14 @@ impl WindowImpl for BrowserWindow {
         // otherwise keeps the focused address entry and later asks a
         // destroyed widget for its cursor position (a Gtk-CRITICAL).
         GtkWindowExt::set_focus(&*self.obj(), None::<&gtk::Widget>);
-        // A closed window's sign-ins end with it, even while something
-        // still holds the window (SAFE-011, TAB-050).
+        self.obj().save_pending_size();
+        // A closed window's sign-ins, listings and folder watches end with
+        // it, even while something still holds the window (SAFE-011,
+        // TAB-050).
         self.obj().close_network();
+        for tab in self.session.borrow_mut().tabs_mut() {
+            tab.stop_reading();
+        }
         self.parent_close_request()
     }
 }

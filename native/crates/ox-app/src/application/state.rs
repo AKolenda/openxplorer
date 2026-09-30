@@ -174,7 +174,7 @@ pub(super) fn active_window(app: &gtk::Application) -> Option<BrowserWindow> {
 }
 
 /// The browser windows of `app`, most recent first.
-fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
+pub(super) fn browser_windows_of(app: &gtk::Application) -> impl Iterator<Item = BrowserWindow> {
     let windows = app.windows();
     windows
         .into_iter()
@@ -189,7 +189,7 @@ pub(super) fn open_window(
     start: Option<&str>,
 ) -> BrowserWindow {
     let window = build_window(app, context, start);
-    window.present();
+    window.present_as_new_window();
     window
 }
 
@@ -399,7 +399,7 @@ mod tests {
         assert_eq!(window.current_uri(), Some(fixture.uri_of("Documents")));
     }
 
-    /// parity: TAB-042
+    /// parity: TAB-042, TAB-043
     #[gtk::test]
     fn ctrl_n_opens_another_window_at_the_current_folder() {
         // Declared first so it outlives the app, whose windows show it.
@@ -422,7 +422,7 @@ mod tests {
         assert_eq!(second.current_uri(), Some(fixture.uri()));
     }
 
-    /// parity: TAB-050
+    /// parity: TAB-043
     #[test]
     fn a_new_window_can_start_in_a_local_or_smb_folder_only() {
         assert!(can_start_a_new_window_in("file:///home/demo"));
@@ -547,6 +547,73 @@ mod tests {
         });
     }
 
+    /// Quit refuses while any window writes files, and closes every window
+    /// once none does.
+    ///
+    /// parity: TAB-052
+    #[gtk::test]
+    fn quit_waits_for_the_file_operations_of_every_window() {
+        let app = TestApp::new();
+        let idle = app.state.open_window(&application(), None);
+        let writing = app.state.open_window(&application(), None);
+        assert!(writing.begin_test_write());
+
+        let quit = app.state.quit_safely(&application());
+
+        assert!(!quit);
+        assert_eq!(browser_windows().len(), 2, "no window closed");
+        assert_eq!(
+            idle.shown_message_text(),
+            "Finish or cancel active file operations before quitting OpenXplorer."
+        );
+        writing.end_test_write();
+        // The test application must keep running for the next test, so
+        // this closes the windows as Quit would, without quitting.
+        close_all_windows();
+        assert!(browser_windows().is_empty());
+    }
+
+    /// A resized window saves its size, and every new window opens at it:
+    /// Ctrl+N's, Open in new window's and Move tab to new window's.
+    ///
+    /// parity: TAB-054
+    #[gtk::test]
+    fn a_new_window_opens_at_the_last_windows_size() {
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        let first = app.state.open_window(&application(), Some(&fixture.uri()));
+        first.set_default_size(900, 640);
+        wait_until("the size to be saved", || {
+            app.state
+                .context
+                .settings_data()
+                .preferences
+                .window_size
+                .is_some()
+        });
+        let opened_from = |action: &str, target: glib::Variant| {
+            let before = browser_windows();
+            WidgetExt::activate_action(&first, action, Some(&target)).expect("a window action");
+            let after = browser_windows();
+            let new = after.into_iter().find(|window| !before.contains(window));
+            new.expect("the action opens a window")
+        };
+
+        let in_new_window = opened_from("win.open-window", fixture.uri_of("Documents").to_variant());
+        first.add_tab(&fixture.uri()).expect("valid folder");
+        let tab = first.active_tab_target().expect("a tab in front");
+        let moved_tab = opened_from("win.move-tab-to-new-window", tab);
+        first.close();
+        settle();
+        let second = app.state.open_window(&application(), None);
+
+        for window in [&in_new_window, &moved_tab, &second] {
+            assert_eq!(window.default_size(), (900, 640));
+            assert!(!window.is_maximized());
+        }
+    }
+
+    /// parity: TAB-050
     #[gtk::test]
     fn closing_one_window_releases_it_while_another_stays_open() {
         let app = TestApp::new();

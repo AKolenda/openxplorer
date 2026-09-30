@@ -244,6 +244,59 @@ mod tests {
         }
     }
 
+    /// A location and the title and tooltip of its tab.
+    struct TabTextCase {
+        uri: &'static str,
+        title: &'static str,
+        tooltip: &'static str,
+    }
+
+    /// Tab titles and tooltips as `renderTabs` writes them: the page
+    /// names, the folder's decoded name, "Local Disk" for `/`, and "·
+    /// Network location" after an SMB address.
+    ///
+    /// parity: TAB-010
+    #[gtk::test]
+    fn tabs_are_titled_and_described_as_render_tabs_does() {
+        let locations = crate::locations::location_context("/home/demo".into(), &[]);
+        let cases = [
+            TabTextCase {
+                uri: "file:///home/demo",
+                title: "Home",
+                tooltip: "/home/demo",
+            },
+            TabTextCase {
+                uri: "file:///",
+                title: "Local Disk",
+                tooltip: "/",
+            },
+            TabTextCase {
+                uri: "file:///srv/Brand%20assets",
+                title: "Brand assets",
+                tooltip: "/srv/Brand assets",
+            },
+            TabTextCase {
+                uri: "smb://nas/media",
+                title: "media",
+                tooltip: "\\\\nas\\media · Network location",
+            },
+            TabTextCase {
+                uri: Page::Settings.uri(),
+                title: "Settings",
+                tooltip: "Settings",
+            },
+        ];
+        for case in cases {
+            let mut session = Session::default();
+            let id = session.add(case.uri, super::super::session::TabPlacement::Foreground);
+            let tab = session.tab(id).expect("the tab was added");
+            let view = tab_view(tab, &session, &locations, &[]);
+            assert_eq!(view.title, case.title, "{}", case.uri);
+            assert_eq!(view.tooltip, case.tooltip, "{}", case.uri);
+            assert!(view.active);
+        }
+    }
+
     /// The owner's icon mapping (2026-09-28) shows a network location the
     /// same way everywhere, so a tab on a server or a mapped drive shows
     /// what its sidebar row shows.

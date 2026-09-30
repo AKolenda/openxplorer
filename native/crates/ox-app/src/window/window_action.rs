@@ -26,10 +26,26 @@ pub(crate) enum WindowAction {
     NextTab,
     /// Shows the previous tab, wrapping around (Ctrl+Shift+Tab).
     PreviousTab,
+    /// Closes the window after asking whether it may close: the caption's
+    /// Close button.
+    CloseWindow,
     /// Shows the tab whose id is the `u64` target.
     SelectTab,
     /// Closes the tab whose id is the `u64` target (its close button).
     CloseTabById,
+    /// Shows the tab whose number, counted from 1, is the `u32` target;
+    /// 0 shows the last tab (Alt+1…Alt+9, Alt+0).
+    ShowTabNumber,
+    /// Closes every tab but the one whose id is the `u64` target.
+    CloseOtherTabs,
+    /// Reopens the most recently closed tab (Ctrl+Shift+T).
+    ReopenClosedTab,
+    /// Reopens the closed tab at the `u32` target, 0 being the most
+    /// recent.
+    RestoreClosedTab,
+    /// Opens every selected folder in a tab of its own, behind the active
+    /// one (Open in new tabs).
+    OpenSelectionInTabs,
     /// Opens the location in the string target in a new tab in front.
     OpenTab,
     /// Opens the location in the string target in a new tab behind the
@@ -250,14 +266,21 @@ impl WindowAction {
     ///
     /// This is the one table of every action's name, so it is longer than
     /// a function should be.
+    #[allow(clippy::too_many_lines, reason = "one arm per action")]
     pub(crate) const fn name(self) -> &'static str {
         match self {
             WindowAction::NewTab => "new-tab",
             WindowAction::CloseTab => "close-tab",
             WindowAction::NextTab => "next-tab",
             WindowAction::PreviousTab => "previous-tab",
+            WindowAction::CloseWindow => "close-window",
             WindowAction::SelectTab => "select-tab",
             WindowAction::CloseTabById => "close-tab-by-id",
+            WindowAction::ShowTabNumber => "show-tab-number",
+            WindowAction::CloseOtherTabs => "close-other-tabs",
+            WindowAction::ReopenClosedTab => "reopen-closed-tab",
+            WindowAction::RestoreClosedTab => "restore-closed-tab",
+            WindowAction::OpenSelectionInTabs => "open-selection-in-tabs",
             WindowAction::OpenTab => "open-tab",
             WindowAction::OpenTabBackground => "open-tab-background",
             WindowAction::OpenWindow => "open-window",

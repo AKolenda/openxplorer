@@ -159,6 +159,11 @@ impl FolderModel {
         self.sort_model.item(position).and_downcast::<FileItem>()
     }
 
+    /// The display position of the item at `uri`, if it is shown.
+    pub(crate) fn position_of_uri(&self, uri: &str) -> Option<u32> {
+        (0..self.n_items()).find(|&position| self.item(position).is_some_and(|item| item.entry().uri == uri))
+    }
+
     /// The display name at a position, or `None` past the end.
     pub(crate) fn name_at(&self, position: u32) -> Option<String> {
         let item = self.item(position)?;

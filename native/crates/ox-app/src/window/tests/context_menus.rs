@@ -229,11 +229,15 @@ fn right_clicking_a_pin_opens_its_menu() {
     );
 }
 
-/// parity: TAB-012
+/// parity: TAB-012, TAB-013
 #[gtk::test]
 fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the subfolder");
     let tab = test
         .window
         .tab_strip()
@@ -260,6 +264,7 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
             "Open windows…",
             "-",
             "Close tab",
+            "Close other tabs",
         ]
     );
     assert!(
@@ -269,5 +274,6 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     assert!(menu.row("Move tab to window…").is_sensitive());
     menu.row("Duplicate tab").emit_activate();
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
-    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    assert!(!test.window.is_action_enabled("back"), "the history stays behind");
 }

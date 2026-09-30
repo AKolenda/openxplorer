@@ -344,6 +344,14 @@ impl TestWindow {
 
 impl Drop for TestWindow {
     fn drop(&mut self) {
+        // A window refuses to close under a running write, so a test that
+        // ends while its copy still runs would leave the window open for
+        // the tests after it.
+        let deadline = Instant::now() + WAIT_LIMIT;
+        while self.window.has_running_write() && Instant::now() < deadline {
+            settle();
+            thread::sleep(POLL_INTERVAL);
+        }
         self.window.close();
         // The search cache's thread would otherwise tick on in a settings
         // directory that is about to be deleted.

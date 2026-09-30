@@ -287,6 +287,10 @@ impl BrowserWindow {
             #[weak]
             view,
             move |gesture, x, y| {
+                // A sign-in or another dialog in front takes the clicks.
+                if window.shows_dialog() || window.dialog_layer().shown().is_some() {
+                    return;
+                }
                 let Some(uri) = window.folder_at(&view, x, y) else {
                     return;
                 };

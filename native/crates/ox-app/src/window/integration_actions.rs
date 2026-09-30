@@ -263,11 +263,6 @@ impl BrowserWindow {
         self.set_sensitive(!state.is_installing());
     }
 
-    /// Why the window may not close now, if it may not (UPD-005).
-    pub(super) fn close_refusal(&self) -> Option<String> {
-        self.context().updates().close_refusal()
-    }
-
     /// The tooltip of the status bar's "Check for updates", for tests.
     #[cfg(test)]
     pub(crate) fn status_bar_update_tooltip(&self) -> String {

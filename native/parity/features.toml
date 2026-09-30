@@ -1259,8 +1259,8 @@ python_tests = [
 ]
 bridge = ["list"]
 dolphin = "Ctrl+T New Tab; Dolphin: Ctrl+T new tab (opens the home or current folder depending on settings).; Ctrl+T; new_tab: Ctrl+T, Ctrl+Shift+N"
-native = "todo"
-native_note = "win.new-tab (Ctrl+T) exists; add_tab is exercised by the browsing test but New tab opening Home is untested. Porting notes: Dolphin opens the current location; Explorer (and OpenXplorer) open Home. Explorer wins. Dolphin's alternate shortcut Ctrl+Shift+N is Explorer's New folder, so Explorer wins there too."
+native = "done"
+native_note = "The '+' button (tooltip 'New tab (Ctrl+T)', accessible name 'New tab') and Ctrl+T run win.new-tab, which opens Home in front: native/crates/ox-app/src/window/tests/tabs.rs (the_new_tab_button_opens_the_home_folder_in_front); the key table is tested in native/crates/ox-app/src/window/window_keys.rs (the_tab_and_window_keys_are_those_of_on_key). Explorer's choice (Home) is kept over Dolphin's (current location)."
 
 [[feature]]
 id = "TAB-002"
@@ -1294,8 +1294,8 @@ python_tests = [
 ]
 bridge = ["cancel", "window"]
 dolphin = "Ctrl+W; middle-click closes tab; Dolphin: Ctrl+W close tab, middle-click tab closes; Ctrl+Shift+T reopens closed tab.; Ctrl+W, middle-click tab; file_close: Ctrl+W, Ctrl+Esc; DolphinTabBar::mousePressEvent/mouseReleaseEvent"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/session.rs (closing_the_active_tab_chooses_a_neighbor, closing_a_background_tab_keeps_the_active_tab); native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) closes a background tab. Last-tab window close and guards untested. Porting notes: No 'reopen closed tab' (Ctrl+Shift+T) and no 'Close other tabs'; both are Dolphin behaviours to gain."
+native = "done"
+native_note = "Close button, Ctrl+W, middle-click and the tab menu's Close tab all run close_tab (native/crates/ox-app/src/window/navigation.rs): the tab's listing and folder watch drop with it, its suspended Properties dialog is discarded, the tab to the right (or the last) becomes active, and the only tab closes the window through the guarded close. Tests: native/crates/ox-app/src/window/tests/tabs.rs (closing_the_active_tab_shows_the_tab_to_its_right), tests/middle_click.rs (middle_clicking_a_tab_closes_it), tests/closing.rs (closing_the_only_tab_closes_the_window_through_the_same_question), tests/item_dialogs.rs (closing_a_tab_discards_its_properties). A dragged tab refuses to close (TAB-003). Not ported (Dolphin gains, separate items): reopen closed tab, Close Other Tabs."
 
 [[feature]]
 id = "TAB-003"
@@ -1308,7 +1308,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:289", "desktop/ui/app.js:312"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "While a tab is being dragged (the only time a native tab is in transit; menu moves happen in one step), closing it, navigating it or stepping its history shows 'Wait for this tab to finish moving.' and does nothing: refuse_while_moving in native/crates/ox-app/src/window/tab_moves/drag.rs, tested by native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_dragged_tab_neither_closes_nor_navigates)."
 
 [[feature]]
 id = "TAB-004"
@@ -1332,8 +1333,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Ctrl+Tab suspends Properties rather than closing it",
 ]
 bridge = ["list"]
-native = "todo"
-native_note = "Porting notes: Ctrl+PageUp/PageDown are not bound in 1.1.4."
+native = "done"
+native_note = "A primary click (on release, so a tab drag cancels it and no click delay is needed) or Enter/Space on a focused tab runs win.select-tab; switching resets type-to-select, suspends the previous tab's Properties dialog, shows the new tab's and returns the address bar to breadcrumbs. Popover menus are modal, so a click that closes a menu never reaches the tab. Test: native/crates/ox-app/src/window/tests/tabs.rs (a_click_or_enter_on_a_tab_shows_it). Ctrl+Page Up/Down are bound as well (TAB-006)."
 
 [[feature]]
 id = "TAB-005"
@@ -1352,8 +1353,8 @@ sources = [
 python_tests = ["desktop/tests/ui_v06.py::Ctrl+Tab suspends Properties rather than closing it"]
 bridge = []
 dolphin = "Dolphin: Ctrl+Tab / Ctrl+Shift+Tab, also Ctrl+PageDown/PageUp.; activate_next_tab / activate_prev_tab: Ctrl+Tab, Ctrl+Shift+Tab"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/session.rs (tab_cycling_wraps_in_both_directions); win.previous-tab exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes)."
+native = "done"
+native_note = "Ctrl+Tab / Ctrl+Shift+Tab (and Ctrl+Page Down/Up) are a capture-phase shortcut controller on the window (native/crates/ox-app/src/window/window_keys.rs): a text field keeps them, other dialogs block them, and while the active tab's Properties dialog is open they switch tabs from any focus and the dialog is suspended with its tab. Tests: native/crates/ox-app/src/window/tests/tabs.rs (ctrl_tab_cycles_through_the_tabs_and_wraps, tab_keys_stay_out_of_text_fields_but_switch_away_from_properties)."
 
 [[feature]]
 id = "TAB-006"
@@ -1371,8 +1372,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KStandardShortcut TabNext/TabPrev: Ctrl+PgDown, Ctrl+], Ctrl+PgUp, Ctrl+["
-native = "todo"
-native_note = "Ctrl+Page_Up/Page_Down are bound in native/crates/ox-app/src/window/actions.rs but untested."
+native = "done"
+native_note = "Ctrl+Page Down and Ctrl+] run win.next-tab, Ctrl+Page Up and Ctrl+[ win.previous-tab, wrapping around; with one tab they change nothing (native/crates/ox-app/src/window/window_keys.rs). Tests: window_keys.rs (the_tab_and_window_keys_are_those_of_on_key), native/crates/ox-app/src/window/tests/tab_commands.rs (tab_numbers_and_ctrl_page_keys_show_tabs)."
 
 [[feature]]
 id = "TAB-007"
@@ -1390,8 +1391,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "activate_tab_N: Alt+1…Alt+9; activate_last_tab: Alt+0"
-native = "todo"
-native_note = "Porting notes: Explorer has no digit tab shortcuts, and its view modes use Ctrl+Shift+1…8, so Alt+digit does not conflict."
+native = "done"
+native_note = "Alt+1…Alt+9 (and the keypad digits) run win.show-tab-number with the digit and Alt+0 shows the last tab; a number past the last tab does nothing (native/crates/ox-app/src/window/tab_commands.rs). Like the other tab keys they stay out of text fields. Tests: native/crates/ox-app/src/window/window_keys.rs (the_tab_and_window_keys_are_those_of_on_key), native/crates/ox-app/src/window/tests/tab_commands.rs (tab_numbers_and_ctrl_page_keys_show_tabs)."
 
 [[feature]]
 id = "TAB-008"
@@ -1408,8 +1409,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Clicking the background tab loads its folder",
 ]
 bridge = ["list"]
-native = "todo"
-native_note = "Porting notes: Selection is not remembered per tab (Dolphin keeps each tab's view state)."
+native = "done"
+native_note = "Each tab saves its scroll position when it is left and gets it back when shown; showing a tab resets type-to-select, clears the search box and filter, and renders its navigation, sidebar highlight and content (show_tab in native/crates/ox-app/src/window/navigation.rs). Deliberate gain: each tab keeps its own selection (TAB-057, Dolphin) instead of clearing it. Test: native/crates/ox-app/src/window/tests/tabs.rs (switching_back_to_a_tab_restores_its_scroll_position)."
 
 [[feature]]
 id = "TAB-009"
@@ -1425,7 +1426,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Clicking the background tab loads its folder",
 ]
 bridge = ["list"]
-native = "todo"
+native = "done"
+native_note = "A background tab is created with its listing pending and is listed only by show_tab when first activated, so it does not read the folder, touch the network or ask for a sign-in before then. Tests: native/crates/ox-app/src/window/tests/tabs.rs (a_background_tab_leaves_the_current_tab_alone_and_lists_when_first_shown), tests/middle_click.rs (middle_clicking_a_folder_row_opens_it_in_a_background_tab)."
 
 [[feature]]
 id = "TAB-010"
@@ -1460,8 +1462,8 @@ python_tests = [
 ]
 bridge = ["windowMetadata", "environment"]
 dolphin = "DolphinTabWidget::tabName / tabUrlChanged"
-native = "partial"
-native_note = "native/crates/ox-app/src/locations.rs (titles_follow_app_js); native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) finds the \"Close Documents\" tab button. Icons and badges untested."
+native = "done"
+native_note = "Titles, icons and tooltips come from tab_view in native/crates/ox-app/src/window/location_view.rs (titles from locations::title_for, tooltip the display path plus ' · Network location'), with ' · Properties open' and the previous-version suffix added by native/crates/ox-app/src/window/snapshot_tabs.rs. Tests: location_view.rs (tabs_are_titled_and_described_as_render_tabs_does and the icon test), native/crates/ox-app/src/locations.rs (titles_follow_app_js), native/crates/ox-app/src/window/tab_strip.rs (a_live_tab_has_no_badge_a_close_button_and_an_ellipsized_title), tests/tabs.rs (tabs_are_announced_as_tabs_with_their_selected_state), tests/item_dialogs.rs (properties_belong_to_the_tab_that_opened_them). The home folder's tooltip is its path, not 'Home', since native Home is the real folder."
 
 [[feature]]
 id = "TAB-011"
@@ -1479,7 +1481,8 @@ python_tests = [
   "desktop/tests/ui_v09.py::Historical tab retains network green marker",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "Tabs inside a snapshot (snapshot_of_tab in native/crates/ox-app/src/window/snapshot_tabs.rs, which also covers subfolders) get the snapshot-tab class (amber top edge in skin/in-window-dialogs.css, wider layout in tab_layout.rs), a 'Previous version' badge with the clock icon and tooltip 'Previous version · <label>', and the accessible name '<title> — Previous version — <label>'. Test: native/crates/ox-app/src/window/tab_strip.rs (a_tab_in_a_snapshot_carries_the_previous_version_badge)."
 
 [[feature]]
 id = "TAB-012"
@@ -1501,8 +1504,8 @@ python_tests = [
 ]
 bridge = ["detachTab", "windows"]
 dolphin = "Dolphin tab menu (DolphinTabBar::contextMenuEvent): New Tab, Detach Tab, Close Other Tabs, Close Tab."
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tab_menu.rs (a_tab_menu_offers_the_python_items_in_order); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder). Duplicate tab, Open windows… and Close tab work; moving tabs comes with drag and drop."
+native = "done"
+native_note = "The tab menu (native/crates/ox-app/src/window/tab_menu.rs) offers Move tab to new window, Move tab to window…, Duplicate tab, Open windows…, a separator and Close tab; all work. Tests: tab_menu.rs (a_tab_menu_offers_the_python_items_in_order), native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder)."
 
 [[feature]]
 id = "TAB-013"
@@ -1521,7 +1524,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "Tab context menu 'New Tab'"
-native = "todo"
+native = "done"
+native_note = "Duplicate tab opens a new foreground tab at the tab's location with a fresh history, no selection and the top scroll position. Test: native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder)."
 
 [[feature]]
 id = "TAB-014"
@@ -1535,8 +1539,8 @@ sources = ["dolphin:src/dolphintabbar.cpp:104-117"]
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinTabBar::mouseDoubleClickEvent"
-native = "todo"
-native_note = "Porting notes: Dolphin also opens a new tab on a double-click in the empty tab bar. That conflicts with Explorer, where double-clicking the empty title/tab strip maximizes the window; Explorer wins there."
+native = "done"
+native_note = "A primary double-click on a tab opens a new tab at its location in front (copy_on_double_click in native/crates/ox-app/src/window/tab_strip.rs): the strip counts the clicks itself by the desktop's double-click time and distance, because the first click on a tab behind builds the tabs anew and GTK then counts the second press as a first one, and it claims the second press, so the title bar does not maximize or restore the window. Checked with a real pointer (Mutter RemoteDesktop in the isolated headless GNOME Shell) on the tab in front and on a tab behind. A double-click on the empty title bar still maximizes (Explorer wins there). Test: native/crates/ox-app/src/window/tests/tab_commands.rs (double_clicking_a_tab_opens_a_copy_in_front)."
 
 [[feature]]
 id = "TAB-015"
@@ -1550,7 +1554,8 @@ sources = ["dolphin:src/dolphintabbar.cpp:129-146", "desktop/ui/app.js:1826-1831
 python_tests = []
 bridge = ["cancel"]
 dolphin = "Tab context menu 'Close Other Tabs'"
-native = "todo"
+native = "done"
+native_note = "The tab menu ends with 'Close other tabs' (disabled for the only tab), which brings the right-clicked tab to the front and closes every other tab through the normal close path (native/crates/ox-app/src/window/tab_commands.rs). Tests: native/crates/ox-app/src/window/tests/tab_commands.rs (close_other_tabs_keeps_only_the_chosen_tab), native/crates/ox-app/src/window/tab_menu.rs (a_tab_menu_offers_the_python_items_in_order)."
 
 [[feature]]
 id = "TAB-016"
@@ -1570,7 +1575,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "undo_close_tab: Ctrl+Shift+T; closed_tabs menu (Go menu)"
-native = "todo"
+native = "done"
+native_note = "Each window remembers its last 10 closed tabs (history, selection, scroll and place in the strip; a tab moved to another window is not remembered). Ctrl+Shift+T reopens the most recent one where it was; the title bar's Open windows menu lists them as 'Reopen <title>' items, the first showing Ctrl+Shift+T; while no tab has closed there are no such items and Ctrl+Shift+T (win.reopen-closed-tab) is disabled (native/crates/ox-app/src/window/tab_commands.rs, title_bar.rs). Split state and per-tab view do not exist natively (the view is per window). Tests: native/crates/ox-app/src/window/tests/tab_commands.rs (a_closed_tab_reopens_where_it_was_with_its_history, the_tab_keys_reach_the_window_through_its_shortcuts)."
 
 [[feature]]
 id = "TAB-017"
@@ -1622,7 +1628,8 @@ openxplorer = "has"
 sources = ["desktop/ui/style.css:5", "desktop/ui/style.css:196"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "Tabs are 215 px (180/150 in narrow windows) and shrink evenly to 100 px (the Windows 11 minimum; the web's 80 px left too little of a title), then the strip scrolls with an external (hidden) scrollbar and a plain mouse wheel; the strip is capped at 70% of the window (TabStrip::cap_width) so the blank title bar stays grabbable. Snapshot tabs are wider and never under 285 px. Tests: native/crates/ox-app/src/window/tests/tabs.rs (many_tabs_keep_the_strip_within_seventy_percent_of_the_window), native/crates/ox-app/src/window/tab_layout.rs (a_snapshot_tab_is_wider_and_never_narrower_than_285_pixels and the width tests)."
 
 [[feature]]
 id = "TAB-020"
@@ -1673,7 +1680,8 @@ python_tests = [
 bridge = ["list"]
 dolphin = "Dolphin: middle-click a folder opens it in a new tab.; Middle-click opens folder in new tab; Middle-click folder opens it in a new tab; DolphinView::slotItemMiddleClicked (tabRequested / activeTabRequested)"
 gnome = "Nautilus: middle-click opens in new tab."
-native = "todo"
+native = "done"
+native_note = "A middle-click on a folder row or tile (details or icons, search results and share entries included, via activation_for) opens it in one background tab at its real target; the current tab, its selection and search stay, and the new tab lists only when shown (folder_middle_click in native/crates/ox-app/src/window/input.rs). Tests: native/crates/ox-app/src/window/tests/middle_click.rs (middle_clicking_a_folder_row_opens_it_in_a_background_tab, middle_clicking_a_folder_tile_opens_it_in_a_background_tab)."
 
 [[feature]]
 id = "TAB-021"
@@ -1689,7 +1697,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Foreground middle-click adds only one tab",
 ]
 bridge = ["list"]
-native = "todo"
+native = "done"
+native_note = "Shift held on a middle-click selects win.open-tab instead of win.open-tab-background, so exactly one tab opens in front (gestures::open_action, used by every middle-open). Tests: native/crates/ox-app/src/window/gestures.rs (shift_brings_a_middle_clicked_tab_to_the_front), native/crates/ox-app/src/window/tests/tabs.rs (shift_middle_click_opens_the_tab_in_front)."
 
 [[feature]]
 id = "TAB-022"
@@ -1706,8 +1715,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::No file-launch action is sent",
 ]
 bridge = []
-native = "todo"
-native_note = "Porting notes: Dolphin middle-click on a file opens it with the second preferred application; not in OpenXplorer."
+native = "done"
+native_note = "folder_at returns a location only for folders, so a middle-click on a file or archive opens no tab and launches nothing; the sidebar ignores volumes that still need mounting. Test: native/crates/ox-app/src/window/tests/middle_click.rs (middle_clicking_a_file_opens_nothing)."
 
 [[feature]]
 id = "TAB-023"
@@ -1724,7 +1733,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Mounted-volume sidebar entry supports middle-click",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "The sidebar's middle-click gesture opens the place under the pointer in a background tab and skips unmounted volumes (open_places_on_middle_click in native/crates/ox-app/src/window/sidebar.rs). Test: native/crates/ox-app/src/window/tests/middle_click.rs (middle_clicking_a_sidebar_place_opens_it_in_a_background_tab)."
 
 [[feature]]
 id = "TAB-024"
@@ -1740,7 +1750,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Network discovery cards open server tabs without leaving Network",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "Landing-page cards (This PC drives, Home Quick access, Network servers and locations) get gestures::open_folder_on_middle_click, which opens a background tab without leaving the page. Test: native/crates/ox-app/src/window/tests/middle_click.rs (middle_clicking_a_this_pc_card_opens_it_behind_the_page)."
 
 [[feature]]
 id = "TAB-025"
@@ -1763,7 +1774,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "Gtk.GestureClick(button=2) 'released' with pointer still inside."
-native = "todo"
+native = "done"
+native_note = "gestures::middle_click claims the press (so neither primary-selection paste nor the title bar's middle-click action sees it) and acts only on a release that follows its own press: a release with no press, after the gesture stopped because the pointer moved away, or after a cancel does nothing, and a press acts once (GTK has no separate auxclick). A middle-open in the folder view is ignored while a dialog of the window (a sign-in, a message) or the in-window dialog layer is shown, and resets type-to-select. Popover menus are modal and no click reaches a window during a drag. Test: native/crates/ox-app/src/window/tests/middle_click.rs (a_middle_click_opens_only_for_its_own_press_and_release)."
 
 [[feature]]
 id = "TAB-026"
@@ -1801,8 +1813,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "open_in_new_tab / open_in_new_tabs"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's 'Open in new tab' is disabled when more than one item is selected."
+native = "done"
+native_note = "With several items selected, a folder's context menu offers 'Open in new tabs' (win.open-selection-in-tabs), which opens every selected folder in a background tab in view order and skips files (native/crates/ox-app/src/window/tab_commands.rs, context_menu/entries.rs). Tests: native/crates/ox-app/src/window/tests/tab_commands.rs (open_in_new_tabs_opens_each_selected_folder), context_menu/entries.rs (several_selected_items_disable_what_acts_on_one)."
 
 [[feature]]
 id = "TAB-028"
@@ -1823,8 +1835,8 @@ sources = [
 python_tests = []
 bridge = ["newWindow"]
 dolphin = "open_in_new_window"
-native = "todo"
-native_note = "Porting notes: Available only for drive and network sidebar entries, not for folders in the file list. Explorer's classic menu also has 'Open in new window'."
+native = "done"
+native_note = "A folder's context menu in the file list offers 'Open in new window' after 'Open in new tab' (win.open-window, the same path as the drive and network menus), disabled for several items. The current folder opens in a new window with Ctrl+N or the Open windows menu's New window (TAB-043), so the empty-space menu keeps Explorer's items. Test: native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts)."
 
 [[feature]]
 id = "TAB-029"
@@ -1878,7 +1890,7 @@ bridge = [
 ]
 dolphin = "Dolphin: 'Detach Tab' moves the tab to a new window.; Dolphin: detach tab (Shift+Ctrl+N/drag tab out); Tab context menu 'Detach Tab'"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll, moving_the_only_tab_to_a_new_window_closes_the_old_one); native/crates/ox-app/src/window/tab_moves/drag.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out). The new window is built in this process before the tab leaves, so the Python 20 s readiness wait has no counterpart."
+native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll, moving_the_only_tab_to_a_new_window_closes_the_old_one); native/crates/ox-app/src/window/tab_moves/drag/tests.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out). The new window is built in this process before the tab leaves, so the Python 20 s readiness wait has no counterpart."
 
 [[feature]]
 id = "TAB-030"
@@ -1949,7 +1961,7 @@ python_tests = [
 ]
 bridge = ["beginTabDrag", "tabDragLayout"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_busy_window_keeps_its_tabs_and_takes_none, a_window_with_an_open_dialog_keeps_its_tabs_and_takes_none); native/crates/ox-app/src/window/tab_moves/drag.rs (no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy). Moves finish at once, so no second move can be in progress."
+native_note = "native/crates/ox-app/src/window/tab_moves.rs (a_busy_window_keeps_its_tabs_and_takes_none, a_window_with_an_open_dialog_keeps_its_tabs_and_takes_none); native/crates/ox-app/src/window/tab_moves/drag/tests.rs (no_tab_drag_starts_from_a_close_button_or_while_the_window_is_busy). Moves finish at once, so no second move can be in progress."
 
 [[feature]]
 id = "TAB-032"
@@ -1986,7 +1998,7 @@ bridge = ["tabDragLayout", "beginTabDrag"]
 dolphin = "QTabBar::setMovable(true); Dolphin tab bar drag reorder"
 gnome = "Adw.TabBar/Adw.TabView provide reorder, cross-window drag and tear-out natively (create-window signal)."
 native = "done"
-native_note = "native/crates/ox-app/src/window/session.rs (a_reordered_tab_goes_before_the_named_tab_or_to_the_end); native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a tab dragged along its strip moved to the end. A tab shows on release, as in app.js, so pressing an inactive tab can drag it."
+native_note = "native/crates/ox-app/src/window/session.rs (a_reordered_tab_goes_before_the_named_tab_or_to_the_end); native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_dropped_on_its_own_strip_goes_before_the_tab_right_of_the_pointer, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: a tab dragged along its strip moved to the end. A tab shows on release, as in app.js, so pressing an inactive tab can drag it."
 
 [[feature]]
 id = "TAB-033"
@@ -2026,7 +2038,7 @@ python_tests = [
 ]
 bridge = ["beginTabDrag", "tabDragLayout", "tabTransferReady"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag); native/crates/ox-app/src/window/session.rs (a_moved_tab_keeps_its_history_and_goes_in_front_where_it_was_dropped). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: the only tab of one window dropped on another window's strip moved there and its window closed."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_dropped_on_another_windows_strip_moves_there_and_leaves_after_the_drag); native/crates/ox-app/src/window/session.rs (a_moved_tab_keeps_its_history_and_goes_in_front_where_it_was_dropped). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: the only tab of one window dropped on another window's strip moved there and its window closed."
 
 [[feature]]
 id = "TAB-034"
@@ -2091,7 +2103,7 @@ bridge = ["beginTabDrag", "detachTab", "handoffReady", "tabDragLayout", "tabTran
 dolphin = "Detach tab; Drag tab out to detach; drag between windows"
 gnome = "AdwTabBar/AdwTabView drag and detach"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: releasing below the strip and over the desktop each opened one window. GTK 4 cannot place a window, so the compositor places it."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_shows_where_the_tab_would_go). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: releasing below the strip and over the desktop each opened one window. GTK 4 cannot place a window, so the compositor places it."
 
 [[feature]]
 id = "TAB-035"
@@ -2130,7 +2142,7 @@ python_tests = [
 ]
 bridge = ["beginTabDrag"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: Escape and a release in the 0-40 px gap kept the tab."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (only_the_source_window_well_below_its_strip_tears_a_tab_out, a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays). Real drags in a private headless GNOME Shell (Wayland), with the pointer driven through Mutter's RemoteDesktop API, confirmed it: Escape and a release in the 0-40 px gap kept the tab."
 
 [[feature]]
 id = "TAB-036"
@@ -2187,8 +2199,8 @@ python_tests = [
   "desktop/tests/test_rc4.py::TearOutTests::test_late_end_after_expiry_does_not_detach",
 ]
 bridge = ["moveTabToWindow", "tabTransferReady", "beginTabDrag", "detachTab"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_offers_the_tab_to_this_process_only): every window lives in one process, so the drag carries a process-local value naming the source window and tab, never a location; a drop after the drag ended takes nothing, and the source keeps its tab until the destination added it. Not ported: the 64-hex token, the 30 s expiry and the 64-move limit, which guarded the WebKit round trip."
+native = "done"
+native_note = "Every window lives in one process, so the WebKit handshake becomes a process-local drag value naming the source window (weak) and tab, never a location, with no MIME type GDK could hand to other apps (TAB-040); the moved state is the fixed MovedTab struct (history, selection, scroll, view, sort, Settings page) and nothing else; the source removes its tab only after the destination added it, a busy or closed destination refuses and keeps the original, a drop after the drag ended takes nothing, and one window drags one tab at a time. Tests: native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_released_outside_every_window_tears_out_and_a_cancelled_one_stays, a_tab_drag_offers_the_tab_to_this_process_only), native/crates/ox-app/src/window/tab_moves.rs (a_busy_window_keeps_its_tabs_and_takes_none). The 64-hex token, 30 s expiry and 64-move cap guarded the asynchronous WebKit round trip and have nothing to guard here."
 
 [[feature]]
 id = "TAB-037"
@@ -2302,7 +2314,7 @@ python_tests = [
 ]
 bridge = ["beginTabDrag"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/tab_moves/drag.rs (a_tab_drag_offers_the_tab_to_this_process_only): the tab is offered as a GType value GDK never serializes, and GNOME Shell's root-window format with no data."
+native_note = "native/crates/ox-app/src/window/tab_moves/drag/tests.rs (a_tab_drag_offers_the_tab_to_this_process_only): the tab is offered as a GType value GDK never serializes, and GNOME Shell's root-window format with no data."
 
 [[feature]]
 id = "TAB-041"
@@ -2351,8 +2363,8 @@ python_tests = [
 ]
 bridge = ["newWindow", "environment"]
 dolphin = "File > New Window (Ctrl+N); Ctrl+N new window"
-native = "partial"
-native_note = "native/crates/ox-app/src/application.rs (closing_one_window_releases_its_controller_while_another_stays_open)."
+native = "done"
+native_note = "Ctrl+N, --new-window and the launcher's app.new-window all go through AppState::open_window/new_window_at in one GtkApplication; each BrowserWindow has its own tabs, listings and workers; the renderer choice is process-wide, so every window shares it. Tests: native/crates/ox-app/src/application/state.rs (a_new_window_starts_in_the_home_folder, ctrl_n_opens_another_window_at_the_current_folder, new_window_opens_its_locations_in_a_window_of_its_own)."
 
 [[feature]]
 id = "TAB-043"
@@ -2380,7 +2392,8 @@ python_tests = [
 ]
 bridge = ["newWindow"]
 dolphin = "Dolphin: Ctrl+N new window.; Ctrl+N New Window; file_new: Ctrl+N"
-native = "todo"
+native = "done"
+native_note = "Ctrl+N (window_keys.rs, not from text fields) and the windows menu's New window run app.new-window, which opens the active window's folder when it is local or SMB and Home otherwise, and is refused while an update installs or waits for its restart (AppState::new_window). Tests: native/crates/ox-app/src/application/state.rs (ctrl_n_opens_another_window_at_the_current_folder, a_new_window_can_start_in_a_local_or_smb_folder_only), native/crates/ox-app/src/update/tests.rs checks the refusal text."
 
 [[feature]]
 id = "TAB-044"
@@ -2412,8 +2425,8 @@ python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_closed_window_removed",
 ]
 bridge = ["windows", "focusWindow", "newWindow", "quit"]
-native = "partial"
-native_note = "--windows and the launcher's app.windows action open the title bar's windows menu (native/crates/ox-app/src/window/external_requests.rs), and launching again with several windows open lists them (native/crates/ox-app/src/application/state.rs). Not tested yet."
+native = "done"
+native_note = "The title bar's Open windows button, --windows and the launcher's app.windows open the menu built by open_windows_menu (native/crates/ox-app/src/window/title_bar.rs): every window by title with this one checked, a separator, New window (Ctrl+N) and Quit OpenXplorer. Test: title_bar.rs (the_windows_menu_lists_every_window_by_its_tab_title)."
 
 [[feature]]
 id = "TAB-045"
@@ -2438,7 +2451,8 @@ python_tests = [
 ]
 bridge = ["windowMetadata"]
 dolphin = "DolphinViewContainer::captionWindowTitle"
-native = "todo"
+native = "done"
+native_note = "render_location sets the window title to '<active tab title> — OpenXplorer' on every tab switch and navigation, which the window list and the desktop show. Test: native/crates/ox-app/src/window/title_bar.rs (the_windows_menu_lists_every_window_by_its_tab_title)."
 
 [[feature]]
 id = "TAB-046"
@@ -2480,7 +2494,8 @@ python_tests = [
 ]
 bridge = ["window", "chrome", "windowMetadata"]
 gnome = "GtkHeaderBar/AdwHeaderBar with window controls; Respect org.gnome.desktop.wm.preferences button-layout (which buttons, left/right); the Python app always shows three on the right."
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/caption_buttons.rs draws 46 px Minimize, Maximize and Close buttons following the desktop's gtk-decoration-layout; Close runs win.close-window, the guarded close. The drag region is the GtkWindowHandle (TAB-048), so there is no geometry to publish. Tests: native/crates/ox-app/src/window/tests/closing.rs (the_close_button_closes_an_idle_window, the_close_button_asks_while_a_file_operation_runs)."
 
 [[feature]]
 id = "TAB-048"
@@ -2510,8 +2525,8 @@ python_tests = [
 ]
 bridge = ["chrome", "window"]
 gnome = "Gtk.WindowHandle / HeaderBar honour org.gnome.desktop.wm.preferences action-double-click-titlebar and action-middle-click-titlebar; the Python app hard-codes toggle-maximize.; gtk_window_begin_move_drag (client-side decorations)"
-native = "todo"
-native_note = "Porting notes: No automated test. Native should use Gtk.WindowHandle so GNOME titlebar actions and right-click window menu apply (a gain)."
+native = "done"
+native_note = "The whole title bar is a GtkWindowHandle with the hexpanding .title-drag area right of the tabs, so the compositor moves the window on a drag and the desktop's titlebar actions (double-click maximize, middle and right-click menu) apply; buttons claim their own clicks, and the tab strip claims a double-click on a tab (TAB-014), so it opens a copy of the tab instead of maximizing. Test: native/crates/ox-app/src/window/title_bar.rs (the_blank_title_bar_is_the_window_handle)."
 
 [[feature]]
 id = "TAB-049"
@@ -2534,8 +2549,8 @@ python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_quit_refuses_active_writes",
 ]
 bridge = ["window"]
-native = "todo"
-native_note = "Porting notes: app.js listens for a 'close-request' event, but no backend code emits it; window-manager closes reach only the native refusal."
+native = "done"
+native_note = "The caption Close and closing the only tab ask first (native/crates/ox-app/src/window/closing.rs): a toast while an update installs, the dialog 'A file operation is running' while a write runs. Window-manager closes are refused in close_request with 'A file operation is still finishing. Wait or cancel it before closing.' or the update refusal. The 'A tab is moving' refusal does not apply: tab moves settle in one step (see TAB-003). Tests: native/crates/ox-app/src/window/tests/closing.rs."
 
 [[feature]]
 id = "TAB-050"
@@ -2552,8 +2567,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-app/src/application.rs (closing_one_window_releases_its_controller_while_another_stays_open); jobs, monitors and credentials are not ported yet."
+native = "done"
+native_note = "Closing a window disconnects its desktop signal handlers, closes its network sessions and sign-in prompts, aborting their mounts and wiping their credentials from memory (close_network), and stops every tab's listing and folder watch, even while something still holds the window (close_request in native/crates/ox-app/src/window/imp.rs); dispose drops the tabs. A window cannot close while it writes files (TAB-049), and it leaves the application's window list. Tests: native/crates/ox-app/src/window/tests/closing.rs (closing_a_window_stops_its_listings_and_folder_watches), native/crates/ox-app/src/window/tests/network.rs (closing_the_window_aborts_its_sign_ins), native/crates/ox-core/src/network/prompts/tests.rs (closing_aborts_every_pending_prompt, closing_wipes_the_windows_credentials_from_memory), native/crates/ox-app/src/application/state.rs (closing_one_window_releases_it_while_another_stays_open)."
 
 [[feature]]
 id = "TAB-051"
@@ -2599,8 +2614,8 @@ python_tests = [
   "desktop/tests/test_updater.py::BridgeTests::test_quit_and_window_close_refuse_while_update_runs",
 ]
 bridge = ["quit"]
-native = "partial"
-native_note = "Quit OpenXplorer closes every window, stops the Show in folder service and quits, and is refused while an update installs (native/crates/ox-app/src/application/requests.rs). Refusing while file operations run comes with them; not tested yet."
+native = "done"
+native_note = "Quit OpenXplorer (windows menu, launcher action, --quit) closes every window and stops the Show in folder service, and is refused while an update installs or any window runs a file operation ('Finish or cancel active file operations before quitting OpenXplorer.'), native/crates/ox-app/src/application/requests.rs. Test: native/crates/ox-app/src/application/state.rs (quit_waits_for_the_file_operations_of_every_window)."
 
 [[feature]]
 id = "TAB-053"
@@ -2640,7 +2655,8 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "KMainWindow autosaved window geometry"
 gnome = "Persist gtk_window_get_default_size and is_maximized (Nautilus stores them in org.gnome.nautilus.window-state)"
-native = "todo"
+native = "done"
+native_note = "A window saves its unmaximized size and maximized state (preferences.windowSize, which the Python app ignores) 0.8 s after the user resizes, maximizes or restores it, and when it closes; new windows open at that size, maximized when it was, else at 1320 × 810. A size below the 670 × 470 minimum is saved as the minimum. Every browser window opens through BrowserWindow::present_as_new_window: Ctrl+N, --new-window, Open in new window, Move tab to new window and tab tear-out; snapshot windows neither use nor save it (native/crates/ox-app/src/window/window_size.rs, ox-core settings/preferences.rs). Open in new window is refused like Ctrl+N while an update restart is pending. Tests: native/crates/ox-app/src/application/state.rs (a_new_window_opens_at_the_last_windows_size), native/crates/ox-app/src/window/window_size.rs (a_new_window_opens_maximized_when_the_last_one_was), native/crates/ox-core/src/settings/preferences.rs (the_window_size_is_kept_only_within_the_window_limits)."
 
 [[feature]]
 id = "TAB-055"
@@ -2676,7 +2692,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["list"]
-native = "todo"
+native = "done"
+native_note = "Every tab keeps a folder watch while it shows a folder. A change to a local folder in a background tab lists it again in the background in Reload mode, which merges the rows and keeps the tab's selection (by URI) and scroll, so the tab is current when revisited. A change to a network (SMB) folder in a background tab only marks it (changed_while_hidden) and it is listed when next shown, so no background listing or sign-in happens because an event arrived (waits_until_shown in native/crates/ox-app/src/window/loading.rs, show_tab in navigation.rs). Tests: loading.rs (only_a_background_network_tab_waits_to_be_shown), native/crates/ox-app/src/window/tests/tabs.rs (a_background_tab_shows_changes_to_its_folder_and_keeps_its_selection, a_background_network_tab_is_listed_again_only_when_shown)."
 
 [[feature]]
 id = "TAB-057"
@@ -2692,7 +2709,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "Each tab saves its selection and focused item (by URI) and its scroll position when it is left and gets them back when shown; the focused item gets keyboard focus back when the list had it (save_tab_view / show_tab in native/crates/ox-app/src/window/navigation.rs). GTK 4.14 has no public API for the Shift selection anchor, so that is not saved per tab. Test: native/crates/ox-app/src/window/tests/tabs.rs (switching_back_to_a_tab_restores_its_scroll_position)."
 
 [[feature]]
 id = "TAB-058"
@@ -2712,8 +2730,8 @@ python_tests = []
 bridge = ["quit"]
 dolphin = "file_quit: Ctrl+Q (KStandardAction::quit)"
 gnome = "gtk_application_set_accels_for_action(\"app.quit\", \"<Primary>q\"), as Nautilus 46 binds app.quit"
-native = "todo"
-native_note = "Porting notes: The Quit action exists (TAB-052) but onKey binds no Ctrl+Q. Explorer has no Ctrl+Q, so there is no conflict; Alt+F4 closes one window (TAB-049)."
+native = "done"
+native_note = "Ctrl+Q is an application accelerator for app.quit, so it works in every window from any focus and goes through Quit's refusals (TAB-052); the Open windows menu shows Ctrl+Q beside 'Quit OpenXplorer'. Test: native/crates/ox-app/src/window/tests/tab_commands.rs (ctrl_q_quits)."
 
 [[feature]]
 id = "VIEW-001"

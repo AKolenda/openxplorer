@@ -27,7 +27,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::{Entry, EntryError};
-use ox_core::location::parent_location;
+use ox_core::location::{is_smb_location, parent_location};
 
 use crate::folder_view::item::FileItem;
 use crate::folder_view::{loader, reconcile, watch};
@@ -39,6 +39,14 @@ use super::listing_state::{ListingEnd, ListingState, ReloadTiming};
 use super::session::TabId;
 use super::BrowserWindow;
 use mount_retry::MountRetry;
+
+/// Whether a change to the folder of a tab waits until the tab is shown:
+/// a background tab on a network share is not listed again, and so never
+/// asks for a sign-in, merely because its folder changed. Local folders in
+/// the background stay current, keeping their selection and scroll.
+fn waits_until_shown(is_active: bool, uri: &str) -> bool {
+    !is_active && is_smb_location(uri)
+}
 
 /// Why a tab is listed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,8 +184,18 @@ impl BrowserWindow {
     }
 
     /// The watched folder changed: list it again, or once more after the
-    /// listing that is running now.
+    /// listing that is running now. A network folder in a background tab
+    /// waits until the tab is shown (TAB-056).
     pub(super) fn folder_changed(&self, id: TabId) {
+        {
+            let mut session = self.imp().session.borrow_mut();
+            let is_active = session.is_active(id);
+            let Some(tab) = session.tab_mut(id) else { return };
+            if waits_until_shown(is_active, tab.uri()) {
+                tab.changed_while_hidden = true;
+                return;
+            }
+        }
         let timing = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.tab_mut(id) else { return };
@@ -383,5 +401,18 @@ impl BrowserWindow {
         self.update_status();
         self.update_file_commands();
         self.learn_trash_support();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// parity: TAB-056
+    #[test]
+    fn only_a_background_network_tab_waits_to_be_shown() {
+        assert!(waits_until_shown(false, "smb://nas/media"));
+        assert!(!waits_until_shown(true, "smb://nas/media"));
+        assert!(!waits_until_shown(false, "file:///home/demo"));
     }
 }
