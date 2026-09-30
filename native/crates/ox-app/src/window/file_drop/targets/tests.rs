@@ -447,6 +447,9 @@ fn a_folder_dropped_on_the_pin_row_of_an_empty_quick_access_is_pinned() {
     wait_until("Quick access to empty", || {
         sidebar.labels().contains(&"Pin to Quick access".to_owned())
     });
+    // The new rows are laid out on the next frames; before that the pin
+    // row has no place to find.
+    wait_for_frames(&test.window, 3);
 
     let spot = test.window.sidebar_spot(sidebar.middle_of("Pin to Quick access"));
     let destination = spot.map(|spot| spot.destination());

@@ -7,10 +7,9 @@
 use gtk::prelude::*;
 use ox_core::places::NetworkKind;
 
-use super::address_input::click_gesture;
 use super::file_ops_support::is_enabled;
 use super::geometry::{bounds, laid_out, Bounds};
-use super::support::{art_image_showing, arts_in, menu_button_with_class};
+use super::support::{art_image_showing, arts_in, menu_button_with_class, middle_click_at};
 use crate::icons::{Art, Connection, Icon};
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
@@ -108,8 +107,7 @@ fn a_quick_access_card_says_where_the_folder_is_and_opens_it() {
 
     assert_eq!(texts_in(&card), ["Example projects", "Stored on this PC"]);
     assert_eq!(arts_in(&card), [Art::Folder]);
-    let middle = click_gesture(&card, gtk::gdk::BUTTON_MIDDLE);
-    middle.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &1.0_f64]);
+    middle_click_at(&card, (1.0, 1.0));
     assert_eq!(test.window.tab_count(), 2, "a middle-click opens a tab");
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::ThisPc.uri()));
     card.emit_clicked();

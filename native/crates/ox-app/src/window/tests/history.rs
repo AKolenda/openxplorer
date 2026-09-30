@@ -8,7 +8,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use super::file_ops_support::press_shortcut_where_focused;
+use super::file_ops_support::{press_shortcut, press_shortcut_where_focused};
 use super::support::middle_click_at;
 use crate::locations::Page;
 use crate::search::SearchScope;
@@ -341,7 +341,6 @@ fn navigating_ends_the_search_prefix_and_address_editing_and_updates_the_frame()
 fn home_new_tabs_and_ctrl_t_open_the_real_home_folder_titled_home() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    assert_eq!(application().accels_for_action("win.new-tab"), ["<Control>t"]);
     let home_row = test
         .window
         .sidebar()
@@ -354,7 +353,7 @@ fn home_new_tabs_and_ctrl_t_open_the_real_home_folder_titled_home() {
 
     assert_eq!(test.window.current_uri(), Some(home_uri()));
     assert_eq!(test.window.title().as_deref(), Some("Home — OpenXplorer"));
-    test.activate("new-tab", None);
+    press_shortcut(&test, gdk::Key::t, gdk::ModifierType::CONTROL_MASK);
     test.wait_for_listing("the new tab");
     assert_eq!(test.window.tab_count(), 2);
     assert_eq!(test.window.current_uri(), Some(home_uri()));
