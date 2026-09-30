@@ -19,8 +19,9 @@ use super::search::{jump_to, shown_text, SearchQuery};
 use crate::icons::{self, Icon};
 use crate::window::children;
 
-/// The glyph in a status card's round badge.
-const STATUS_GLYPH: i32 = 22;
+/// The glyph in a status card's round badge, at the size the bundled
+/// Fluent glyphs are drawn for, so its strokes stay sharp.
+const STATUS_GLYPH: i32 = 20;
 
 /// What a status card says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
