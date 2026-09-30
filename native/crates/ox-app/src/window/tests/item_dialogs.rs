@@ -21,7 +21,7 @@ const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
 
 impl TestWindow {
     /// Selects only the item called `name`.
-    pub(super) fn select_named(&self, name: &str) {
+    pub(crate) fn select_named(&self, name: &str) {
         let position = self
             .names()
             .iter()

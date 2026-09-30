@@ -165,14 +165,15 @@ impl BrowserWindow {
         self.context().open_uri(uri, self.upcast_ref(), on_error);
     }
 
-    /// True when no write runs in this window; otherwise says so, as one
-    /// operation runs at a time (OPS-024).
+    /// True when no write runs in this window and no update waits for its
+    /// restart; otherwise says why, as one operation runs at a time
+    /// (OPS-024) and writes wait for the restart (UPD-006).
     fn may_start_archive_operation(&self) -> bool {
         if self.is_writing_files() {
             self.show_message(OPERATION_RUNNING);
             return false;
         }
-        true
+        !self.refuses_writes_during_update()
     }
 
     /// Asks where to extract `archive` (Extract all…).
@@ -240,6 +241,11 @@ impl BrowserWindow {
     /// shows the result in `origin` if it is still in front, else in a new
     /// tab, or lists the destination again (ARC-011).
     fn extract_archive(&self, archive: &ArchiveTarget, choice: ExtractionChoice, origin: Option<TabId>) {
+        // The dialog may have stayed open while another write or an
+        // update began.
+        if !self.may_start_archive_operation() {
+            return;
+        }
         let cancel = Cancellation::new();
         self.operation_panel().start(PREPARING, cancel.clone());
         self.update_archive_actions();

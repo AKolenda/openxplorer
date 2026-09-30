@@ -158,6 +158,11 @@ impl BrowserWindow {
         target: &RenameTarget,
         name: &str,
     ) {
+        // An update may have finished installing while the field was open.
+        if self.refuses_writes_during_update() {
+            self.close_name_editor(cell);
+            return;
+        }
         let context = OperationContext::new(self.context().write_protection());
         match rename_item(&target.uri, name, &context).await {
             Ok(renamed) => {

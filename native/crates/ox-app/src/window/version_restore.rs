@@ -51,6 +51,9 @@ impl BrowserWindow {
             self.show_message(OPERATION_RUNNING);
             return;
         }
+        if self.refuses_writes_during_update() {
+            return;
+        }
         let request = TransferRequest {
             mode: TransferMode::Copy,
             uris: vec![source],

@@ -251,13 +251,13 @@ impl BrowserWindow {
 
     /// Hides the toast's message at once, as moving to another folder or
     /// tab does.
-    fn hide_message(&self) {
+    pub(crate) fn hide_message(&self) {
         self.imp().toast.hide();
     }
 
     /// The message the toast showed last, for tests.
     #[cfg(test)]
-    fn shown_message(&self) -> glib::GString {
+    pub(crate) fn shown_message(&self) -> glib::GString {
         self.imp().toast.text()
     }
 }

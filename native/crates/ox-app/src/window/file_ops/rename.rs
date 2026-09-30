@@ -33,7 +33,7 @@ impl BrowserWindow {
     /// F2: renames the selected item in place, or with the dialog when its
     /// cell is not on screen.
     pub(crate) async fn rename_selection(&self) {
-        if !self.allows(FileCommand::Rename) {
+        if !self.allows(FileCommand::Rename) || self.refuses_writes_during_update() {
             return;
         }
         let model = self.folder_pane().model();

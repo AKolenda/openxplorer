@@ -91,7 +91,7 @@ impl BrowserWindow {
     /// A New menu item: lists the templates, then asks for the file's
     /// name and template and creates it.
     pub(crate) async fn create_file(&self, kind: NewFileKind) {
-        if !self.allows(FileCommand::New) {
+        if !self.allows(FileCommand::New) || self.refuses_writes_during_update() {
             return;
         }
         let Some(folder_uri) = self.current_uri() else {

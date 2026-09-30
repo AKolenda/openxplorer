@@ -39,7 +39,7 @@ impl BrowserWindow {
     /// a search, while an operation runs, or in a folder that is not
     /// writable.
     pub(crate) async fn create_folder(&self) {
-        if !self.allows(FileCommand::New) {
+        if !self.allows(FileCommand::New) || self.refuses_writes_during_update() {
             return;
         }
         let Some(folder) = self.current_uri() else {

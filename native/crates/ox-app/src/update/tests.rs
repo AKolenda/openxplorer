@@ -285,6 +285,46 @@ fn installing_verifies_installs_and_offers_the_restart() {
     dialog.close();
 }
 
+/// Once an update installed files and waits for its restart, every
+/// writer refuses with the same message and leaves the folder as it was:
+/// Duplicate, Compress to ZIP, Rename and New folder, as the Python
+/// dispatch refused every file request in that state.
+///
+/// parity: UPD-006
+#[gtk::test]
+fn writes_wait_for_the_restart_after_an_installation() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    let dialog = open_dialog(&test, &simulated.updates);
+    dialog.click("Install update…");
+    wait_until("the installation", || !simulated.updates.state().is_installing());
+    dialog.close();
+    let listing = || {
+        let mut names: Vec<_> = std::fs::read_dir(fixture.root())
+            .expect("the fixture folder")
+            .map(|entry| entry.expect("a listed item").file_name())
+            .collect();
+        names.sort();
+        names
+    };
+    let before = listing();
+
+    for action in ["duplicate", "compress-to-zip", "rename", "new-folder"] {
+        test.select_named("Documents");
+        test.window.hide_message();
+        test.activate(action, None);
+        wait_until(action, || {
+            test.window.shown_message()
+                == "Restart OpenXplorer to finish the application update before using files."
+        });
+    }
+
+    settle();
+    assert_eq!(listing(), before);
+    assert!(!test.window.is_writing_files());
+}
+
 /// While the package manager runs, every window is locked: it cannot be
 /// closed or used, and the dialog cannot be dismissed.
 ///

@@ -57,9 +57,22 @@ impl BrowserWindow {
     /// being planned, or an extraction, compression or restored copy
     /// runs. Data safety (OPS-024): no other write starts meanwhile, and
     /// Sign out, Disconnect, moving a tab and an update's restart wait.
-    pub(in crate::window) fn is_writing_files(&self) -> bool {
+    pub(crate) fn is_writing_files(&self) -> bool {
         let is_operating = !self.imp().file_operations.borrow().is_idle();
         is_operating || self.operation_panel().is_busy()
+    }
+
+    /// True, after saying why, once an application update installed files
+    /// and waits for its restart (UPD-006). Every writer asks before it
+    /// starts: file operations, extraction, compression, a restored
+    /// version, rename and new items, as the Python app refused every
+    /// file request in that state.
+    pub(in crate::window) fn refuses_writes_during_update(&self) -> bool {
+        let Some(refusal) = self.context().updates().file_refusal() else {
+            return false;
+        };
+        self.show_message(&refusal);
+        true
     }
 
     /// Starts an operation whose panel reads `label` until the first
@@ -71,8 +84,7 @@ impl BrowserWindow {
         if self.operation_panel().is_busy() {
             return None;
         }
-        if let Some(refusal) = self.context().updates().file_refusal() {
-            self.show_message(&refusal);
+        if self.refuses_writes_during_update() {
             return None;
         }
         let context = OperationContext::new(self.context().write_protection());
