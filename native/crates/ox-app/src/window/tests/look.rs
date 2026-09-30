@@ -6,28 +6,19 @@
 //! reference captures (see [`super::geometry`] for where the numbers come
 //! from).
 
+use gtk::graphene;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, graphene};
 use ox_core::settings::ContextMenu;
 
 use super::context_menus::{choose_menu_style, position_of};
 use super::file_ops_support::open_dialog;
 use super::geometry::{bounds, laid_out, Bounds};
-use super::icons::{
-    assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME,
+use super::icons::{assert_same_colour, css_colour, painted, painted_colour, TRANSITION_TIME};
+use crate::test_support::harness::{
+    descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
-use crate::test_support::harness::{descendants, wait_for, wait_for_frames, Fixture, TestWindow, ThemeGuard};
 use crate::window::BrowserWindow;
-
-/// The colour `widget` paints at (`x`, `y`) of its own area.
-fn painted_colour(widget: &impl IsA<gtk::Widget>, x: i32, y: i32) -> gdk::RGBA {
-    let rows = pixel_rows(&painted(widget));
-    let row = usize::try_from(y).expect("a point inside the widget");
-    let column = usize::try_from(x).expect("a point inside the widget");
-    let [red, green, blue] = unpremultiplied_rgb(rows[row][column]);
-    gdk::RGBA::new(red, green, blue, 1.0)
-}
 
 /// Switches `test`'s window to `theme` and waits out the colour
 /// transitions.
@@ -341,6 +332,50 @@ fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
     menu.popdown();
 }
 
+/// Menus and the SMB sign-in dialog switch with the appearance: the
+/// context menu paints the flyout colour, and the sign-in dialog its
+/// caption bar and body, in the tokens of each appearance.
+///
+/// parity: LOOK-003
+#[gtk::test]
+fn menus_and_the_sign_in_dialog_paint_each_appearance() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let cases = [
+        ("light", "#f9f9f9", "#f9f9f9", "#ffffff"),
+        ("dark", "#2c2c2c", "#282828", "#202020"),
+    ];
+    for (theme, flyout, caption, body) in cases {
+        show_theme(&test, theme);
+        test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+        let menu = test.window.context_menu();
+        wait_for_frames(&test.window, 2);
+        let contents = menu.child().expect("the menu has contents");
+        let place = bounds_in(&contents, &menu);
+        // Inside the menu's 3 pixels of padding, left of its rows.
+        let menu_colour = painted_colour(&menu, place.x - 2, place.y + place.height / 2);
+        assert_same_colour(menu_colour, css_colour(flyout), &format!("{theme} menu"));
+        menu.popdown();
+
+        let prompts = test.window.network().prompts().clone();
+        let operation = prompts.create("smb://studio-nas/projects").expect("an SMB share");
+        let flags = gtk::gio::AskPasswordFlags::NEED_USERNAME | gtk::gio::AskPasswordFlags::NEED_PASSWORD;
+        operation.emit_by_name::<()>("ask-password", &[&"", &"sam", &"WORKGROUP", &flags]);
+        let sign_in = test.window.network().sign_in().clone();
+        wait_until("the sign-in dialog", || sign_in.shown_dialog().is_some());
+        let dialog = sign_in.shown_dialog().expect("the sign-in dialog");
+        wait_for_frames(&dialog, 3);
+        let caption_colour = painted_colour(&dialog, 10, 20);
+        assert_same_colour(caption_colour, css_colour(caption), &format!("{theme} caption"));
+        // The body's top padding, below the caption bar's 43 pixels and line.
+        let body_colour = painted_colour(&dialog, 10, 56);
+        assert_same_colour(body_colour, css_colour(body), &format!("{theme} sign-in body"));
+        prompts.finish(&operation, ox_core::network::MountOutcome::Failed);
+        wait_until("the sign-in dialog to close", || sign_in.shown_dialog().is_none());
+    }
+}
+
 /// A question is 510 pixels wide with the accent button that Enter
 /// presses, and paints the content colour of each appearance.
 ///
@@ -380,20 +415,23 @@ fn the_toast_is_an_inverted_status_78_pixels_above_the_bottom() {
     let _theme = ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    show_theme(&test, "light");
-    let message = "Path copied. Sharing permissions are unchanged. ".repeat(6);
-    test.window.show_message(&message);
-    wait_for_frames(&test.window, 2);
-    let label = descendants::<gtk::Label>(&*test.window.imp().toast)
-        .into_iter()
-        .next()
-        .expect("the toast shows its message");
-    assert_eq!(label.accessible_role(), gtk::AccessibleRole::Status);
-    let place = bounds(&test, &label);
-    assert_eq!(test.window.height() - place.y - place.height, 78);
-    assert!(place.width <= 650, "{place:?}");
-    let centre = place.x + place.width / 2;
-    assert!((centre - test.window.width() / 2).abs() <= 1, "{place:?}");
-    let background = painted_colour(&label, 4, place.height / 2);
-    assert_same_colour(background, css_colour("#1b1b1b"), "the text colour as background");
+    // The toast's background is the text colour of each appearance.
+    for (theme, inverted) in [("light", "#1b1b1b"), ("dark", "#f1f1f1")] {
+        show_theme(&test, theme);
+        let message = "Path copied. Sharing permissions are unchanged. ".repeat(6);
+        test.window.show_message(&message);
+        wait_for_frames(&test.window, 2);
+        let label = descendants::<gtk::Label>(&*test.window.imp().toast)
+            .into_iter()
+            .next()
+            .expect("the toast shows its message");
+        assert_eq!(label.accessible_role(), gtk::AccessibleRole::Status);
+        let place = bounds(&test, &label);
+        assert_eq!(test.window.height() - place.y - place.height, 78);
+        assert!(place.width <= 650, "{place:?}");
+        let centre = place.x + place.width / 2;
+        assert!((centre - test.window.width() / 2).abs() <= 1, "{place:?}");
+        let background = painted_colour(&label, 4, place.height / 2);
+        assert_same_colour(background, css_colour(inverted), &format!("{theme} toast"));
+    }
 }

@@ -6,7 +6,8 @@
 //! test runs on (`native/tools/check.py` gives it a private X server and a
 //! disposable home), once at `GDK_SCALE=1` and once at `GDK_SCALE=2`.
 //! Fractional scales need a Wayland compositor, which the test display is
-//! not.
+//! not. Outside that isolation the test does nothing: the app it starts
+//! would read the user's settings and could open on the live desktop.
 
 use std::path::Path;
 use std::process::Command;
@@ -25,6 +26,26 @@ const BARS: std::ops::Range<i32> = 42..159;
 
 /// How far a channel may stray between the two pictures.
 const CHANNEL_TOLERANCE: u8 = 2;
+
+/// Whether the test runs in `native/tools/check.py`'s isolation: temporary
+/// files in a private run directory rather than `/tmp`, the home folder and
+/// every XDG directory inside it, and a display to draw on.
+fn isolated() -> bool {
+    let temp = std::env::temp_dir();
+    let inside_temp =
+        |variable: &str| std::env::var_os(variable).is_some_and(|path| Path::new(&path).starts_with(&temp));
+    let user_directories = [
+        "HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_STATE_HOME",
+    ];
+    temp != Path::new("/tmp")
+        && user_directories.iter().all(|variable| inside_temp(variable))
+        && std::env::var_os("DISPLAY").is_some()
+        && std::env::var_os("WAYLAND_DISPLAY").is_none()
+}
 
 /// Saves the app's window at `scale` into `picture`, showing `folder`.
 fn snapshot(folder: &Path, scale: u32, picture: &Path) -> gdk::Texture {
@@ -64,13 +85,17 @@ fn same(first: [u8; 4], second: [u8; 4]) -> bool {
 }
 
 /// At twice the scale the window is drawn with twice the pixels, not
-/// enlarged: the layout doubles exactly, and every one-pixel line and fill
-/// of the bars covers exactly two device pixels of the same colour, where
-/// an enlarged picture would blur them into their neighbours.
+/// enlarged: the layout doubles exactly, and down one column of the
+/// navigation row and the command bar each line and fill covers exactly two
+/// device pixels of the same colour, where an enlarged picture would blur
+/// them into their neighbours.
 ///
 /// parity: LOOK-028
 #[test]
-fn twice_the_scale_draws_every_line_on_whole_device_pixels() {
+fn twice_the_scale_draws_the_bars_on_whole_device_pixels() {
+    if !isolated() {
+        return;
+    }
     gtk::init().expect("the test display");
     let folder = tempfile::tempdir().expect("a folder to show");
     std::fs::create_dir(folder.path().join("Documents")).expect("a subfolder");
