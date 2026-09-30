@@ -304,13 +304,26 @@ impl FolderPane {
 
     /// Scrolls to `position` and gives it keyboard focus.
     pub(super) fn reveal(&self, position: u32) {
+        self.focus_position(position, None);
+    }
+
+    /// Gives `position` keyboard focus without scrolling the view.
+    pub(super) fn focus_item(&self, position: u32) {
+        let stay = gtk::ScrollInfo::new();
+        stay.set_enable_horizontal(false);
+        stay.set_enable_vertical(false);
+        self.focus_position(position, Some(stay));
+    }
+
+    /// Gives `position` keyboard focus, scrolling as `scroll` allows.
+    fn focus_position(&self, position: u32, scroll: Option<gtk::ScrollInfo>) {
         let focus = gtk::ListScrollFlags::FOCUS;
         match self.view() {
             FolderView::Details => self
                 .details()
                 .column_view()
-                .scroll_to(position, None, focus, None),
-            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, focus, None),
+                .scroll_to(position, None, focus, scroll),
+            FolderView::Icons(_) => self.icon_view().grid().scroll_to(position, focus, scroll),
         }
     }
 

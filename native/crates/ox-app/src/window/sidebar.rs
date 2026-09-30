@@ -26,6 +26,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::location::same_location;
+use ox_core::search::Caching;
 
 use crate::icons::{self, Icon};
 
@@ -218,17 +219,26 @@ impl Sidebar {
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
         let entry = entries.get(index)?;
+        let caching = match &entry.target {
+            RowTarget::Location(uri) => self.caching_of(uri),
+            RowTarget::MountVolume(_) | RowTarget::PinDropTail => None,
+        };
         if entry.pinned {
             let RowTarget::Location(uri) = &entry.target else {
                 return None;
             };
-            let window = self.root().and_downcast::<BrowserWindow>();
-            let caching = window.and_then(|window| window.caching_of(uri));
             return Some(menu::pin_menu(uri, caching));
         }
-        let place_menu = entry.menu.as_ref()?.entries();
+        let place_menu = entry.menu.as_ref()?.entries_with_cache(caching);
         // A drive the system keeps mounted may have nothing to offer.
         (!place_menu.is_empty()).then_some(place_menu)
+    }
+
+    /// Whether the folder at `uri` is cached for search, as the window
+    /// knows; `None` where it cannot be cached.
+    fn caching_of(&self, uri: &str) -> Option<Caching> {
+        let window = self.root().and_downcast::<BrowserWindow>()?;
+        window.caching_of(uri)
     }
 
     /// Right-clicks the row labelled `label` and returns the sidebar's

@@ -20,7 +20,7 @@ use crate::test_support::harness::{capture, descendants, wait_for, wait_until, F
 
 /// A standard fixture with `Bundle.zip`, which holds `Docs/a.txt` and
 /// `readme.txt`.
-fn fixture_with_zip() -> Fixture {
+pub(super) fn fixture_with_zip() -> Fixture {
     let fixture = Fixture::standard();
     let sources = tempfile::tempdir().expect("a folder for the sources");
     fs::create_dir(sources.path().join("Docs")).expect("fixture folder");
@@ -45,7 +45,7 @@ fn uri_in(folder: &Path, name: &str) -> String {
 }
 
 /// The archive browser inside the dialog shown.
-fn archive_browser(test: &TestWindow) -> ArchiveBrowserView {
+pub(super) fn archive_browser(test: &TestWindow) -> ArchiveBrowserView {
     let frame = test.wait_for_dialog("the archive browser");
     descendants::<ArchiveBrowserView>(&frame)
         .into_iter()

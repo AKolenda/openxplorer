@@ -17,8 +17,11 @@
 //!   winspace.py, NET-004). A server being signed out is not listed
 //!   (NET-023), and a listed SMB location joins the session's Network
 //!   list (NET-016).
+//! - A folder that disappears while shown gives way to the nearest
+//!   existing folder above it (NAV-039).
 
 mod mount_retry;
+mod removed_folder;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -64,6 +67,8 @@ struct LoadStart {
     uri: String,
     /// Results of an older generation are ignored.
     generation: u64,
+    /// The previous listing of the location succeeded, so it was shown.
+    was_shown: bool,
 }
 
 /// One listing of one tab.
@@ -75,6 +80,8 @@ struct LoadRun {
     /// Results of an older generation are ignored.
     generation: u64,
     mode: LoadMode,
+    /// The previous listing of the location succeeded, so it was shown.
+    was_shown: bool,
     /// Whether an unmounted share may still be mounted.
     mount_retry: MountRetry,
     /// A reload's rows, held back until the listing is complete.
@@ -130,9 +137,14 @@ impl BrowserWindow {
     fn begin_load(&self, id: TabId) -> Option<LoadStart> {
         let mut session = self.imp().session.borrow_mut();
         let tab = session.tab_mut(id)?;
+        let was_shown = tab.error.is_none();
         let generation = tab.begin_load();
         let uri = tab.uri().to_owned();
-        Some(LoadStart { uri, generation })
+        Some(LoadStart {
+            uri,
+            generation,
+            was_shown,
+        })
     }
 
     /// A landing page needs no listing and no watch: it is listed as soon
@@ -221,6 +233,7 @@ impl BrowserWindow {
             tab: id,
             uri: start.uri.clone(),
             generation: start.generation,
+            was_shown: start.was_shown,
             mode,
             mount_retry,
             held_rows: RefCell::default(),
@@ -269,6 +282,10 @@ impl BrowserWindow {
             Ok(()) | Err(EntryError::Cancelled) => {}
             Err(EntryError::NotDirectory(_)) => {
                 self.open_folder_of_file(id, run.mode);
+                return;
+            }
+            Err(error @ EntryError::NotFound(_)) if run.mode == LoadMode::Reload && run.was_shown => {
+                self.leave_removed_folder(run, error);
                 return;
             }
             Err(error) if error.needs_mount() && run.mount_retry == MountRetry::Allowed => {
@@ -354,8 +371,10 @@ impl BrowserWindow {
         }
     }
 
-    /// Scrolls to the position a moved tab brought along, now that its
-    /// items are listed (TAB-039).
+    /// Puts the view back where a moved tab (TAB-039) or Back and Forward
+    /// (NAV-008) left it, now that its items are listed: the scroll
+    /// position, and, while the list has keyboard focus, the first
+    /// selected item as the current one.
     fn restore_scroll_after_listing(&self, id: TabId) {
         let scroll = {
             let mut session = self.imp().session.borrow_mut();
@@ -363,9 +382,12 @@ impl BrowserWindow {
                 .tab_mut(id)
                 .and_then(|tab| tab.scroll_after_listing.take())
         };
-        if let Some(scroll) = scroll {
-            self.folder_pane().restore_scroll_position(scroll);
+        let Some(scroll) = scroll else { return };
+        let pane = self.folder_pane();
+        if let (true, Some(current)) = (pane.view_has_focus(), pane.model().first_selected()) {
+            pane.focus_item(current);
         }
+        pane.restore_scroll_position(scroll);
     }
 
     /// The tab's location is a file: show its folder (or home) in place of

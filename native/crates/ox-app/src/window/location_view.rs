@@ -31,19 +31,51 @@ struct ActiveLocation {
 }
 
 /// The address-bar icon for a location (`address-icon` in
-/// `renderNavigation`): the page's glyph, the network glyph for SMB, a
-/// phone for devices, else the colour folder.
-fn address_icon(uri: &str) -> Icon {
+/// `renderNavigation`): the page's glyph, the house for the home folder
+/// at `home_uri` (the Home of app.js), the network glyph for SMB, a phone
+/// for devices, else the colour folder.
+pub(super) fn address_icon(uri: &str, home_uri: &str) -> Icon {
     if let Some(page) = Page::from_uri(uri) {
         return page.icon();
     }
-    if is_smb_location(uri) {
+    if location::same_location(uri, home_uri) {
+        Icon::Home
+    } else if is_smb_location(uri) {
         Icon::Organization
     } else if is_device_location(uri) {
         Icon::Phone
     } else {
         Icon::FileFolder
     }
+}
+
+/// The crumbs the address bar shows for `uri`, divided as
+/// `renderNavigation` divides them. Inside the home folder they start at
+/// it, as "Home › Documents" in Dolphin and Explorer, unless `full_path`
+/// asks for the path from `/` (NAV-024).
+pub(super) fn crumb_buttons(locations: &LocationContext, uri: &str, full_path: bool) -> Vec<CrumbButton> {
+    let mut breadcrumbs = locations.breadcrumbs(uri);
+    let home = locations.home_uri();
+    let home_at = breadcrumbs
+        .iter()
+        .position(|crumb| location::same_location(&crumb.uri, &home))
+        .filter(|&index| !full_path && index > 0);
+    let skipped = home_at.unwrap_or(0);
+    if let Some(index) = home_at {
+        breadcrumbs.drain(..index);
+        breadcrumbs[0].label = locations.title_for(&home);
+    }
+    breadcrumbs
+        .into_iter()
+        .enumerate()
+        .map(|(index, crumb)| CrumbButton {
+            address: locations.display_location(&crumb.uri),
+            divider_before: (index > 0)
+                .then(|| location::crumb_divider(uri, index + skipped))
+                .flatten(),
+            crumb,
+        })
+        .collect()
 }
 
 /// A tab's icon, as `renderTabs` picks it: the network glyph on the
@@ -140,20 +172,12 @@ impl BrowserWindow {
     /// Shows `uri` in the address bar: its icon, and its crumbs divided as
     /// `renderNavigation` divides them.
     fn render_address(&self, uri: &str) {
+        let full_path = self.shows_full_path();
         let locations = self.imp().locations.borrow();
-        let breadcrumbs = locations.breadcrumbs(uri);
-        let crumbs: Vec<CrumbButton> = breadcrumbs
-            .iter()
-            .enumerate()
-            .map(|(index, crumb)| CrumbButton {
-                address: locations.display_location(&crumb.uri),
-                divider_before: location::crumb_divider(uri, index),
-                crumb: crumb.clone(),
-            })
-            .collect();
+        let crumbs = crumb_buttons(&locations, uri, full_path);
         let address = locations.display_location(uri);
-        self.address_bar()
-            .show_location(&crumbs, &address, address_icon(uri));
+        let icon = address_icon(uri, &locations.home_uri());
+        self.address_bar().show_location(&crumbs, &address, icon);
     }
 
     /// Redraws the tab strip.
@@ -172,9 +196,19 @@ impl BrowserWindow {
         self.tab_strip().set_tabs(&views);
     }
 
-    /// Replaces the breadcrumbs with the editable address (Ctrl+L).
+    /// Replaces the breadcrumbs with the editable address (Ctrl+L). The
+    /// Settings tab has no address to edit (`editAddress` in app.js). A
+    /// second Ctrl+L, before anything was typed, returns to the crumbs.
     pub(super) fn edit_address(&self) {
         let Some(uri) = self.current_uri() else { return };
+        if Page::from_uri(&uri) == Some(Page::Settings) {
+            return;
+        }
+        if self.address_bar().edits_whole_address() {
+            self.finish_address();
+            return;
+        }
+        self.forget_address_completions();
         let address = self.imp().locations.borrow().display_location(&uri);
         self.address_bar().edit(&address);
     }
@@ -182,6 +216,7 @@ impl BrowserWindow {
     /// Ends editing with Enter or Escape: back to the breadcrumbs, with
     /// keyboard focus in the folder view.
     pub(super) fn finish_address(&self) {
+        self.forget_address_completions();
         if let Some(uri) = self.current_uri() {
             let address = self.imp().locations.borrow().display_location(&uri);
             self.address_bar().show_crumbs(&address);
@@ -195,6 +230,36 @@ mod tests {
     use super::*;
     use crate::test_support::{studio_nas_mapped_drive, studio_nas_server};
 
+    /// parity: NAV-024
+    #[test]
+    fn crumbs_start_at_home_unless_the_full_path_is_asked_for() {
+        let locations = crate::locations::location_context("/home/demo".into(), &[]);
+        let shown = |uri: &str, full_path: bool| -> Vec<(String, Option<&str>)> {
+            let crumbs = crumb_buttons(&locations, uri, full_path);
+            crumbs
+                .into_iter()
+                .map(|button| (button.crumb.label, button.divider_before))
+                .collect()
+        };
+        let crumb = |label: &str, divider: Option<&'static str>| (label.to_owned(), divider);
+
+        let relative = shown("file:///home/demo/Documents/Letters", false);
+        let full = shown("file:///home/demo/Documents/Letters", true);
+
+        let home = crumb("Home", None);
+        assert_eq!(
+            relative,
+            [home, crumb("Documents", Some("/")), crumb("Letters", Some("/"))]
+        );
+        assert_eq!(full.len(), 5);
+        assert_eq!(full[..2], [crumb("/", None), crumb("home", None)]);
+        let outside = shown("file:///srv/media", false);
+        assert_eq!(
+            outside,
+            [crumb("/", None), crumb("srv", None), crumb("media", Some("/"))]
+        );
+    }
+
     /// A location and the tab and address-bar icons it shows.
     struct IconCase {
         uri: &'static str,
@@ -202,7 +267,7 @@ mod tests {
         address: Icon,
     }
 
-    /// parity: TAB-010, DEV-004
+    /// parity: TAB-010, DEV-004, NAV-025
     #[test]
     fn tabs_and_the_address_bar_show_the_current_apps_icons() {
         let cases = [
@@ -210,6 +275,11 @@ mod tests {
                 uri: "file:///tmp/work",
                 tab: Art::Folder,
                 address: Icon::FileFolder,
+            },
+            IconCase {
+                uri: "file:///home/demo/",
+                tab: Art::Folder,
+                address: Icon::Home,
             },
             IconCase {
                 uri: "smb://nas/media",
@@ -240,7 +310,8 @@ mod tests {
         ];
         for case in cases {
             assert_eq!(tab_icon(case.uri, &[]), case.tab, "{}", case.uri);
-            assert_eq!(address_icon(case.uri), case.address, "{}", case.uri);
+            let address = address_icon(case.uri, "file:///home/demo");
+            assert_eq!(address, case.address, "{}", case.uri);
         }
     }
 

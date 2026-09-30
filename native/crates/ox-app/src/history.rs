@@ -5,6 +5,43 @@
 //! `desktop/ui/app.js`: navigating somewhere new drops the forward entries,
 //! navigating to the current location does not add a duplicate, and Back and
 //! Forward move within the list without changing it.
+//!
+//! [`HistoryViews`] adds what Dolphin keeps and app.js did not: where the
+//! view was in each location the tab left, so Back and Forward return to
+//! the same scroll position and current item (NAV-008).
+
+use std::collections::BTreeMap;
+
+/// Where the view was in a location a tab left.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct LeftView {
+    /// The vertical scroll position.
+    pub scroll: f64,
+    /// The URI of the current item: the first selected one, if any.
+    pub current: Option<String>,
+}
+
+/// The [`LeftView`] of each history position a tab left.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct HistoryViews(BTreeMap<usize, LeftView>);
+
+impl HistoryViews {
+    /// Remembers `view` for history position `position`.
+    pub(crate) fn remember(&mut self, position: usize, view: LeftView) {
+        self.0.insert(position, view);
+    }
+
+    /// Forgets the views from `position` on, whose entries a new location
+    /// replaced.
+    pub(crate) fn forget_from(&mut self, position: usize) {
+        self.0.split_off(&position);
+    }
+
+    /// Takes the view remembered for `position`.
+    pub(crate) fn take(&mut self, position: usize) -> Option<LeftView> {
+        self.0.remove(&position)
+    }
+}
 
 /// The locations a tab has visited, with the current position.
 ///
@@ -28,6 +65,16 @@ impl History {
     /// The location currently shown.
     pub(crate) fn current(&self) -> &str {
         &self.entries[self.position]
+    }
+
+    /// The index of the current location among the entries.
+    pub(crate) fn position(&self) -> usize {
+        self.position
+    }
+
+    /// Every location, oldest first.
+    pub(crate) fn entries(&self) -> &[String] {
+        &self.entries
     }
 
     /// Records a navigation to `uri`. Returns false (and changes nothing)

@@ -85,7 +85,7 @@ fn choice_action(
 }
 
 /// A check action that calls `apply` with its new state.
-fn toggle_action(
+pub(super) fn toggle_action(
     window_action: WindowAction,
     initial: bool,
     apply: impl Fn(&BrowserWindow, bool) + 'static,
@@ -132,6 +132,8 @@ impl BrowserWindow {
         self.install_window_keys();
         self.install_tab_move_actions();
         self.install_navigation_actions();
+        self.install_address_actions();
+        self.install_crumb_actions();
         self.install_selection_actions();
         self.install_view_actions();
         self.install_sort_actions();
@@ -187,8 +189,23 @@ impl BrowserWindow {
                 window.go_history(Direction::Forward);
             }),
             plain_action(WindowAction::Up, BrowserWindow::go_up),
+            plain_action(WindowAction::Home, BrowserWindow::go_home),
+            gio::ActionEntry::builder(WindowAction::GoHistory.name())
+                .parameter_type(Some(glib::VariantTy::INT32))
+                .activate(|window: &BrowserWindow, _, target| {
+                    if let Some(steps) = target.and_then(glib::Variant::get::<i32>) {
+                        window.go_history_by(steps);
+                    }
+                })
+                .build(),
             plain_action(WindowAction::Refresh, BrowserWindow::refresh),
             plain_action(WindowAction::Location, BrowserWindow::edit_address),
+            plain_action(
+                WindowAction::AddressHistory,
+                BrowserWindow::edit_address_from_history,
+            ),
+            plain_action(WindowAction::CopyAddress, BrowserWindow::copy_address),
+            plain_action(WindowAction::PasteAddress, BrowserWindow::paste_address),
             plain_action(WindowAction::Search, BrowserWindow::focus_search),
             text_action(WindowAction::GoTo, BrowserWindow::navigate_or_report),
             text_action(WindowAction::MountVolume, BrowserWindow::mount_volume),
@@ -375,11 +392,12 @@ impl BrowserWindow {
 
 /// The window's keyboard shortcuts of `onKey` that work from text fields
 /// too: each action and its accelerators, as GTK parses them. The keys a
-/// text field keeps are in [`super::window_keys`] and
-/// [`super::file_ops`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 4] = [
+/// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
+/// for the history keys, [`super::navigation_buttons`].
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 5] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
+    (WindowAction::AddressHistory, &["F4"]),
     (WindowAction::Search, &["<Primary>f"]),
     (WindowAction::Settings, &["<Primary>comma"]),
 ];

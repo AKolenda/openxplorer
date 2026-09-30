@@ -52,6 +52,7 @@ impl BrowserWindow {
         let start = LoadStart {
             uri: run.uri.clone(),
             generation: run.generation,
+            was_shown: run.was_shown,
         };
         let mode = run.mode;
         let listing = loader::Listing::spawn(async move {

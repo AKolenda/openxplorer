@@ -45,6 +45,13 @@ impl BrowserWindow {
                 };
                 self.address_bar().highlight_crumb(crumb);
             }
+            DropZone::CrumbMenu => {
+                let folder = match spot {
+                    Some(DropSpot::Crumb(folder)) => Some(folder.as_str()),
+                    _ => None,
+                };
+                self.highlight_drag_crumb_menu(folder);
+            }
             DropZone::Tabs => {
                 let tab = match spot {
                     Some(DropSpot::Tab { id, .. }) => Some(*id),

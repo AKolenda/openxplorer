@@ -188,6 +188,10 @@ impl ColumnWidths {
 }
 
 /// User preferences shared by every window and by the Python app.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate saved on/off preference"
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preferences {
@@ -217,6 +221,19 @@ pub struct Preferences {
     /// The last window's size, once a window was resized.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_size: Option<WindowSize>,
+    /// The address bar's crumbs start at `/` instead of the closest place
+    /// (Dolphin's `ShowFullPath`). Stored only when on, as are the next
+    /// two, so the Python app's file keeps its layout.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub show_full_path: bool,
+    /// New windows show the address as editable text instead of crumbs
+    /// (Dolphin's `EditableUrl`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub editable_location: bool,
+    /// Folders opened from other apps open in a new window instead of a
+    /// new tab (Dolphin's `OpenExternallyCalledFolderInNewTab`, inverted).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub external_folders_in_new_window: bool,
 }
 
 impl Default for Preferences {
@@ -233,6 +250,9 @@ impl Default for Preferences {
             sidebar_width: None,
             column_widths: None,
             window_size: None,
+            show_full_path: false,
+            editable_location: false,
+            external_folders_in_new_window: false,
         }
     }
 }
@@ -259,6 +279,12 @@ impl Preferences {
         replace_if_some(&mut self.context_menu, update.context_menu);
         replace_if_some(&mut self.network_interval, network_interval);
         replace_if_some(&mut self.text_size, text_size);
+        replace_if_some(&mut self.show_full_path, update.show_full_path);
+        replace_if_some(&mut self.editable_location, update.editable_location);
+        replace_if_some(
+            &mut self.external_folders_in_new_window,
+            update.external_folders_in_new_window,
+        );
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
@@ -297,6 +323,12 @@ pub struct PreferencesUpdate {
     pub network_interval: Option<u32>,
     /// The size new windows open at.
     pub window_size: Option<WindowSize>,
+    /// Show the full path in the address bar, or start at the closest place.
+    pub show_full_path: Option<bool>,
+    /// Open new windows with an editable address.
+    pub editable_location: Option<bool>,
+    /// Open folders from other apps in a new window, or in a new tab.
+    pub external_folders_in_new_window: Option<bool>,
 }
 
 impl PreferencesUpdate {
@@ -326,6 +358,9 @@ impl PreferencesUpdate {
             context_menu: text("contextMenu").and_then(ContextMenu::from_key),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
+            show_full_path: flag("showFullPath"),
+            editable_location: flag("editableLocation"),
+            external_folders_in_new_window: flag("externalFoldersInNewWindow"),
         })
     }
 }
@@ -524,6 +559,21 @@ mod tests {
         assert_eq!(preferences.view, View::Details);
         assert_eq!(preferences.context_menu, ContextMenu::Win11);
         assert_eq!(preferences.network_interval, 60);
+    }
+
+    #[test]
+    fn address_bar_and_external_folder_options_are_stored_only_when_on() {
+        let values =
+            json!({"showFullPath": true, "editableLocation": "yes", "externalFoldersInNewWindow": true});
+        let mut preferences = Preferences::default();
+
+        preferences.apply(&PreferencesUpdate::from_json(&values).unwrap());
+
+        assert!(preferences.show_full_path && preferences.external_folders_in_new_window);
+        assert!(!preferences.editable_location, "only a JSON boolean counts");
+        let stored = serde_json::to_value(&preferences).unwrap();
+        assert_eq!(stored["showFullPath"], json!(true));
+        assert!(stored.get("editableLocation").is_none());
     }
 
     /// parity: SET-016

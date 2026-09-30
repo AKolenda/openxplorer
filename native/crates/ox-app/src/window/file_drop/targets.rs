@@ -40,6 +40,8 @@ pub(crate) enum DropZone {
     Breadcrumbs,
     /// The tabs.
     Tabs,
+    /// A crumb's subfolder menu a drag opened (NAV-021).
+    CrumbMenu,
 }
 
 /// The formats a file drop target takes: this process's own dragged
@@ -100,6 +102,14 @@ impl BrowserWindow {
         let spot = target
             .widget()
             .and_then(|widget| self.hover_drop_at(zone, &widget, x, y));
+        match zone {
+            DropZone::Breadcrumbs => {
+                self.keep_drag_crumb_menu();
+                self.open_subfolders_after_hover(x, y);
+            }
+            DropZone::CrumbMenu => self.keep_drag_crumb_menu(),
+            DropZone::FolderView | DropZone::Sidebar | DropZone::Tabs => self.close_drag_crumb_menu(),
+        }
         let action = self.drop_action(drop);
         match (spot, action) {
             (Some(_), Some(action)) => action.as_drag_action(),
@@ -128,8 +138,11 @@ impl BrowserWindow {
     fn leave_drop_zone(&self, zone: DropZone) {
         self.show_drop_spot(zone, None);
         self.stop_drag_scroll();
-        if zone == DropZone::FolderView {
-            self.forget_program_checks();
+        match zone {
+            DropZone::FolderView => self.forget_program_checks(),
+            DropZone::Breadcrumbs => self.leave_crumbs_during_drag(),
+            DropZone::CrumbMenu => self.close_drag_crumb_menu(),
+            DropZone::Sidebar | DropZone::Tabs => {}
         }
     }
 
@@ -148,6 +161,7 @@ impl BrowserWindow {
         };
         let spot = self.drop_spot(zone, &widget, x, y);
         self.leave_drop_zone(zone);
+        self.close_drag_crumb_menu();
         let (Some(spot), Some(action)) = (spot, self.drop_action(drop)) else {
             return false;
         };

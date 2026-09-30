@@ -16,9 +16,9 @@
 mod inspection;
 mod items;
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gdk, glib};
 
 use crate::icons::{self, Icon};
 
@@ -199,6 +199,75 @@ impl MenuPopover {
         self.update_property(&[gtk::accessible::Property::Label(style.accessible_name())]);
     }
 
+    /// Calls `on_middle_click` with the index of a row middle-clicked and
+    /// the modifiers held, after closing the menu, so a history menu can
+    /// open its entry in a new tab (NAV-007).
+    pub(super) fn connect_row_middle_click(
+        &self,
+        on_middle_click: impl Fn(usize, gdk::ModifierType) + 'static,
+    ) {
+        self.list()
+            .add_controller(super::gestures::middle_click(glib::clone!(
+                #[weak(rename_to = popover)]
+                self,
+                move |gesture, _, y| {
+                    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+                    let row = popover.list().row_at_y(y as i32);
+                    let Some(index) = row.and_then(|row| usize::try_from(row.index()).ok()) else {
+                        return;
+                    };
+                    popover.popdown();
+                    on_middle_click(index, gesture.current_event_state());
+                }
+            )));
+    }
+
+    /// The rows' list, which a drag's drop target watches.
+    pub(super) fn row_list(&self) -> gtk::ListBox {
+        self.list().clone()
+    }
+
+    /// The item of the row at `y` in the rows' list.
+    pub(super) fn item_at(&self, y: f64) -> Option<MenuItem> {
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let row = self.list().row_at_y(y as i32)?;
+        self.item(row.index())
+    }
+
+    /// Marks the row of the item whose target is `target` with
+    /// `css_class`, and no other row.
+    pub(super) fn mark_row(&self, target: Option<&glib::Variant>, css_class: &str) {
+        for (index, item) in self.items().into_iter().enumerate() {
+            let Some(row) = i32::try_from(index)
+                .ok()
+                .and_then(|index| self.list().row_at_index(index))
+            else {
+                continue;
+            };
+            if target.is_some() && item.target.as_ref() == target {
+                row.add_css_class(css_class);
+            } else {
+                row.remove_css_class(css_class);
+            }
+        }
+    }
+
+    /// The items, one per row, without the dividers.
+    fn items(&self) -> Vec<MenuItem> {
+        let entries = self.imp().entries.borrow();
+        let items = entries.iter().filter_map(|entry| match entry {
+            MenuEntry::Item(item) => Some(item.clone()),
+            MenuEntry::Divider => None,
+        });
+        items.collect()
+    }
+
+    /// The item of the row at `index`.
+    fn item(&self, index: i32) -> Option<MenuItem> {
+        let index = usize::try_from(index).ok()?;
+        self.items().into_iter().nth(index)
+    }
+
     fn list(&self) -> &gtk::ListBox {
         self.imp().list.get().expect("constructed builds the list")
     }
@@ -272,18 +341,7 @@ impl MenuPopover {
 
     /// Runs the item of the row at `index`.
     fn choose_row(&self, index: i32) {
-        let item = {
-            let entries = self.imp().entries.borrow();
-            let items = entries.iter().filter_map(|entry| match entry {
-                MenuEntry::Item(item) => Some(item),
-                MenuEntry::Divider => None,
-            });
-            let mut items = items;
-            usize::try_from(index)
-                .ok()
-                .and_then(|index| items.nth(index).cloned())
-        };
-        if let Some(item) = item {
+        if let Some(item) = self.item(index) {
             self.choose(&item);
         }
     }
@@ -337,6 +395,11 @@ fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
         .hexpand(true)
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .build();
+    if item.emphasised {
+        let bold = gtk::pango::AttrList::new();
+        bold.insert(gtk::pango::AttrInt::new_weight(gtk::pango::Weight::Bold));
+        label.set_attributes(Some(&bold));
+    }
     content.append(&label);
     if let Some(shortcut) = item.shortcut {
         let shortcut = gtk::Label::builder()

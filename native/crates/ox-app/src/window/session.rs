@@ -14,7 +14,7 @@ use ox_core::entry::EntryError;
 use crate::folder_view::item::FileItem;
 use crate::folder_view::loader::Listing;
 use crate::folder_view::watch::Watch;
-use crate::history::History;
+use crate::history::{History, HistoryViews};
 
 use super::listing_state::{ListingEnd, ListingState};
 
@@ -83,6 +83,8 @@ pub(super) struct Tab {
     pub id: TabId,
     /// The locations visited in this tab.
     pub history: History,
+    /// Where the view was in each location of the history the tab left.
+    pub left_views: HistoryViews,
     /// The tab's items, unfiltered and unsorted.
     pub store: gio::ListStore,
     /// Advanced only by [`Tab::begin_load`]; [`Session::accepts`] rejects
@@ -126,6 +128,7 @@ impl Tab {
         Self {
             id,
             history: History::new(uri),
+            left_views: HistoryViews::default(),
             store: gio::ListStore::new::<FileItem>(),
             generation: 0,
             listing_state: ListingState::NotListed,
@@ -159,11 +162,14 @@ impl Tab {
     }
 
     /// Forgets what belonged to the previous location: the selection and
-    /// the scroll position, as `navigate()` does with `t.scroll = 0`.
+    /// the scroll position, as `navigate()` does with `t.scroll = 0`, and
+    /// where its next listing was to scroll.
     pub(super) fn forget_location_state(&mut self) {
         self.selected.clear();
         self.scroll = 0.0;
         self.focused = None;
+        self.scroll_after_listing = None;
+        self.revealed_item = None;
     }
 
     /// Stops the tab's listing and folder watch, as Sign out cancels the

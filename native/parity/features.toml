@@ -86,8 +86,8 @@ python_tests = [
 bridge = ["list"]
 dolphin = "Go > Back/Forward; Dolphin Back/Forward toolbar buttons with history dropdown on long-press/right-click.; Back/Forward, Alt+Left/Alt+Right; go_back: Alt+Left, Back key, Backspace; go_forward: Alt+Right, Forward key"
 gnome = "GtkButton in header; per-tab history model"
-native = "partial"
-native_note = "History model tested in native/crates/ox-app/src/history.rs (back_and_forward_move_without_changing_entries); go_history(-1) exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes). Toolbar buttons untested. Porting notes: No history dropdown on the Back/Forward buttons (Windows and Dolphin have one)."
+native = "done"
+native_note = "native/crates/ox-app/src/history.rs (a_new_history_has_nowhere_to_go, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tests/history.rs (back_and_forward_say_their_keys_and_follow_each_tabs_own_history): the buttons' tooltips, their enabled state at either end, and each tab's own history. The history drop-down of Windows and Dolphin is NAV-006."
 
 [[feature]]
 id = "NAV-002"
@@ -108,8 +108,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Dolphin: Alt+Left/Alt+Right (also Backspace for Back).; Alt+Left/Right, mouse back/forward buttons"
 gnome = "GtkGestureClick for buttons 8/9"
-native = "todo"
-native_note = "win.back/win.forward accelerators exist in native/crates/ox-app/src/window/actions.rs but have no test."
+native = "done"
+native_note = "native/crates/ox-app/src/window/navigation_buttons.rs adds Alt+Left, Alt+Right and Alt+Up as the window's own shortcuts, run after the focused widget, so the search box and the address field keep them, and ignored while a dialog is open. Tested in native/crates/ox-app/src/window/tests/history.rs (alt_left_and_alt_right_walk_the_history_from_the_file_list, the_history_keys_leave_text_fields_and_dialogs_alone)."
 
 [[feature]]
 id = "NAV-003"
@@ -134,8 +134,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Dolphin supports mouse back/forward buttons.; Dolphin maps extra mouse buttons to Back/Forward; Dolphin back/forward on mouse side buttons"
 gnome = "Gtk.GestureClick with button 8/9 on the window (Nautilus does the same).; GtkGestureClick on buttons 8/9 (Nautilus mouse-back-button / mouse-forward-button)"
-native = "todo"
-native_note = "Porting notes: No automated test exists; add one natively. No automated test."
+native = "done"
+native_note = "A capture-phase click gesture on the window takes buttons 8 and 9 (native/crates/ox-app/src/window/gestures.rs, connect_history_buttons) and steps through the history unless a dialog is open (go_history_from_mouse in navigation.rs). Tested in native/crates/ox-app/src/window/tests/history.rs (the_mouse_side_buttons_step_through_history_unless_a_dialog_is_open); GTK cannot synthesise a real side-button press, so the test checks the gesture and runs its handler."
 
 [[feature]]
 id = "NAV-004"
@@ -153,8 +153,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "go_back: Backspace (prepended to the KStandardShortcut Back keys)"
-native = "todo"
-native_note = "Porting notes: Explorer also maps Backspace to Back. OpenXplorer currently uses Backspace only to correct the type-ahead prefix, and that must keep precedence."
+native = "done"
+native_note = "native/crates/ox-app/src/window/input.rs: Backspace in the file list first edits an active type-ahead prefix and otherwise goes back one step; text fields keep the key. Tested in native/crates/ox-app/src/window/tests/input.rs (backspace_erases_a_typed_prefix_first_and_otherwise_goes_back)."
 
 [[feature]]
 id = "NAV-005"
@@ -171,8 +171,8 @@ python_tests = [
   "desktop/tests/test_v07.py::HandoffTests::test_history_size_limit",
 ]
 bridge = ["list"]
-native = "partial"
-native_note = "native/crates/ox-app/src/history.rs (navigating_after_back_drops_forward_entries, navigating_to_the_current_location_adds_nothing). Transfer of history between windows not implemented."
+native = "done"
+native_note = "native/crates/ox-app/src/history.rs (navigating_after_back_drops_forward_entries, navigating_to_the_current_location_adds_nothing, back_and_forward_move_without_changing_entries); native/crates/ox-app/src/window/tab_moves.rs (a_tab_moved_to_a_new_window_keeps_its_folder_history_selection_and_scroll): a moved tab keeps its history and position. Windows share one process, so the whole history moves; the Python app's 200-entry cap only bounded its JSON handoff."
 
 [[feature]]
 id = "NAV-006"
@@ -190,8 +190,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "go_back/go_forward KToolBarPopupAction (DelayedPopup)"
-native = "todo"
-native_note = "Porting notes: Explorer offers the same through right-click on Back/Forward or the Recent locations list."
+native = "done"
+native_note = "native/crates/ox-app/src/window/history_menu.rs: a right-click or long press on Back or Forward opens a menu of up to 12 history steps, nearest first, with the address icon and names relative to the home folder ('Home/Documents'); choosing one runs win.go-history with the step count, so the intermediate steps are skipped. Tested in history_menu.rs unit tests and native/crates/ox-app/src/window/tests/history.rs (the_back_menu_lists_the_history_and_jumps_straight_to_an_entry)."
 
 [[feature]]
 id = "NAV-007"
@@ -210,7 +210,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "MiddleClickActionEventFilter on the toolbar and history menus"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/history_menu.rs: a middle-click on Back, Forward or Up opens where it leads in a background tab (Ctrl/Shift choose a tab in front or a window, as elsewhere), and a middle-click on a row of the Back/Forward menu opens that entry the same way; the current tab does not change. Home has no toolbar button in this app. Tested in native/crates/ox-app/src/window/tests/history.rs (a_middle_click_on_back_or_up_opens_its_target_in_a_background_tab)."
 
 [[feature]]
 id = "NAV-008"
@@ -230,8 +231,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinView::saveState/restoreState via KUrlNavigator location state"
-native = "todo"
-native_note = "Porting notes: OpenXplorer resets tab scroll to 0 on every navigate(), including history steps."
+native = "done"
+native_note = "Each history step keeps the view it left (history.rs LeftView: scroll offset and selection); Back and Forward restore them after the listing (loading.rs restore_scroll_after_listing) and make the first selected item current while the list has focus. Expanded folders come with VIEW-035; the native Details view cannot expand folders yet. Tested in native/crates/ox-app/src/window/tests/listing.rs (navigating_starts_at_the_top_and_back_returns_to_where_the_view_was)."
 
 [[feature]]
 id = "NAV-009"
@@ -249,8 +250,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinViewContainer::redirect (empty location state)"
-native = "todo"
-native_note = "Porting notes: load() replaces t.uri with the resolved URI, but the history keeps the pre-redirect URI. Existing OpenXplorer part is protected by NAV-001 and NAV-005."
+native = "done"
+native_note = "Native navigation never keeps a redirecting location as its own step: an entry with a target URI (a share or shortcut) is opened at Entry::navigation_uri, and a location that turns out to be a file is replaced in the history by its folder (loading.rs open_folder_of_file, History::replace_current). Tested in native/crates/ox-app/src/window/tests/history.rs (a_location_that_redirects_is_not_kept_as_its_own_history_step)."
 
 [[feature]]
 id = "NAV-010"
@@ -275,8 +276,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "Dolphin: Alt+Up goes up.; Go > Up (Alt+Up); Up, Alt+Up; go_up: Alt+Up"
-native = "partial"
-native_note = "Parent computation tested in native/crates/ox-app/src/locations.rs (pages_have_one_crumb_and_no_parent); Up button and Alt+Up untested."
+native = "done"
+native_note = "Parents: native/crates/ox-core/src/location/display.rs and native/crates/ox-core/tests/location_javascript.rs (parent_locations_match_app_js). native/crates/ox-app/src/window/tests/history.rs (up_and_alt_up_open_the_parent_and_stop_at_pages_and_roots): the 'Up (Alt+Up)' tooltip, Alt+Up from the file list, and Up disabled on This PC, Network and at /."
 
 [[feature]]
 id = "NAV-011"
@@ -294,8 +295,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "KUrlNavigator::urlSelectionRequested"
-native = "todo"
-native_note = "Porting notes: Explorer behaves the same way. OpenXplorer's navigate() clears the selection."
+native = "done"
+native_note = "native/crates/ox-app/src/window/navigation.rs: Up and a click on an ancestor crumb remember the child folder left, and the parent listing selects it, makes it current and scrolls it into view. Tested in native/crates/ox-app/src/window/tests/history.rs (going_up_or_to_an_ancestor_crumb_selects_the_folder_left)."
 
 [[feature]]
 id = "NAV-012"
@@ -314,8 +315,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "go_home: Alt+Home, HomePage key"
-native = "todo"
-native_note = "Porting notes: Explorer also uses Alt+Home for Home. OpenXplorer offers only the sidebar Home entry."
+native = "done"
+native_note = "native/crates/ox-app/src/window/navigation_buttons.rs binds Alt+Home and the HomePage key to win.home, which opens the home folder in the active tab. Tested in native/crates/ox-app/src/window/tests/history.rs (alt_home_and_the_homepage_key_open_the_home_folder)."
 
 [[feature]]
 id = "NAV-013"
@@ -339,8 +340,8 @@ sources = [
 python_tests = ["desktop/tests/ui_rc3_contract.py::Selection restored after listing"]
 bridge = ["list", "environment", "cacheRefresh", "search", "cancel"]
 dolphin = "View > Reload (F5); Dolphin: F5 reload.; view_redisplay: F5, Refresh key"
-native = "partial"
-native_note = "refresh() exercised in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes); native/crates/ox-app/src/window/tests/search.rs (refresh_while_searching_runs_the_search_again): during a search, F5 rescans the first indexed folder around this one and runs the search again. Missing: a test of the F5/Ctrl+R accelerators themselves. Porting notes: app.js:1026 is an unreachable duplicate F5 branch."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/history.rs (refresh_says_f5_and_f5_and_ctrl_r_work_even_from_text_fields): the tooltip, and F5 and Ctrl+R as application accelerators, which run before a focused text field; native/crates/ox-app/src/window/tests/listing.rs (refresh_keeps_the_rows_scroll_position_focus_and_selection): the listing is reloaded in place; native/crates/ox-app/src/window/tests/search.rs (refresh_while_searching_runs_the_search_again). Refresh also rereads the settings (pins and saved shares); drives and mounts are live through GIO's volume monitor."
 
 [[feature]]
 id = "NAV-014"
@@ -368,8 +369,8 @@ python_tests = [
 ]
 bridge = ["list", "environment", "cacheRefresh"]
 dolphin = "F5 Reload; DolphinView::updateSelectionState"
-native = "partial"
-native_note = "native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) (refresh selection)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/listing.rs (refresh_keeps_the_rows_scroll_position_focus_and_selection, a_reload_keeps_the_selected_items_that_still_exist, a_change_on_disk_is_listed_and_keeps_the_scroll_position, navigating_to_another_folder_starts_at_the_top_without_a_selection)."
 
 [[feature]]
 id = "NAV-015"
@@ -390,8 +391,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Navigation clears the prefix",
 ]
 bridge = ["list", "cancel"]
-native = "partial"
-native_note = "native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) asserts the filter text is cleared after history navigation; other resets untested."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/history.rs (navigating_ends_the_search_prefix_and_address_editing_and_updates_the_frame): search text, scope, type-ahead, address editing, window title and crumbs; native/crates/ox-app/src/window/tests/listing.rs (navigating_to_another_folder_starts_at_the_top_without_a_selection); native/crates/ox-app/src/window/tests/environment.rs (the_home_row_is_selected_in_the_home_folder): the sidebar highlight. Cancelling the old listing is NAV-016."
 
 [[feature]]
 id = "NAV-016"
@@ -413,8 +414,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::No listing reload, history entry, search generation or filtering",
 ]
 bridge = ["list", "cancel", "search"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/session.rs (old_results_cannot_repopulate_a_navigated_or_closed_tab); native/crates/ox-core/tests/entry_enumeration.rs (cancelling_after_a_batch_stops_delivery)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/session.rs (old_results_cannot_repopulate_a_navigated_or_closed_tab, ending_the_listing_of_a_closed_tab_says_so): each load has a new generation and stale results are ignored; native/crates/ox-app/src/folder_view/loader.rs (a_dropped_listing_delivers_no_rows_and_no_end): replacing a tab's listing drops and cancels the old one, whose GIO futures cancel their GCancellable."
 
 [[feature]]
 id = "NAV-017"
@@ -455,8 +456,8 @@ python_tests = [
 ]
 bridge = ["list", "environment"]
 dolphin = "KUrlNavigator breadcrumb mode; Dolphin KUrlNavigator breadcrumb mode."
-native = "partial"
-native_note = "native/crates/ox-app/src/locations.rs (smb_breadcrumbs_use_a_backslash, remote_roots_are_labelled_with_the_host); GTK breadcrumb bar untested."
+native = "done"
+native_note = "native/crates/ox-app/src/locations.rs and native/crates/ox-core/src/location/display.rs (crumbs, labels, device mount names, SMB roots); native/crates/ox-app/src/window/tests/address_bar.rs (crumbs_name_their_folder_and_show_its_full_address, the_crumbs_stay_scrolled_to_the_current_folder, the_title_crumbs_and_address_call_a_phone_by_its_mount_name); native/crates/ox-app/src/window/tests/address_input.rs (an_smb_path_has_server_share_and_folder_crumbs_with_the_uri_encoded): backslash dividers, decoded labels, %23 and host:port kept in the target."
 
 [[feature]]
 id = "NAV-018"
@@ -481,8 +482,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Ancestor breadcrumb opens in background without navigating source",
 ]
 bridge = ["list"]
-native = "todo"
-native_note = "Porting notes: No per-crumb dropdown of sibling folders (Windows chevron / Dolphin crumb arrow). Candidate gain."
+native = "done"
+native_note = "native/crates/ox-app/src/window/address_bar.rs keeps Left and Right among the crumbs, clamped at the ends. Tested in native/crates/ox-app/src/window/tests/address_input.rs (left_and_right_stop_at_the_first_and_last_crumb, activating_a_focused_crumb_opens_it_not_the_selected_file, a_middle_clicked_crumb_opens_in_a_background_tab). The per-crumb subfolder menu is NAV-020."
 
 [[feature]]
 id = "NAV-019"
@@ -503,8 +504,8 @@ python_tests = [
 ]
 bridge = ["list", "newWindow"]
 dolphin = "KUrlNavigatorPrivate::slotNavigatorButtonClicked"
-native = "todo"
-native_note = "Porting notes: Middle and Shift+middle work. Ctrl+click and Shift+click are missing."
+native = "done"
+native_note = "native/crates/ox-app/src/window/address_bar.rs: a capture-phase click gesture on each crumb opens it in a background tab on Ctrl+click, a tab in front on Ctrl+Shift+click and a new window on Shift+click (modified_click_action); middle-click keeps working. Tested in address_bar.rs (ctrl_opens_a_crumb_in_a_tab_and_shift_in_a_window)."
 
 [[feature]]
 id = "NAV-020"
@@ -528,8 +529,8 @@ python_tests = [
 ]
 bridge = ["list"]
 dolphin = "KUrlNavigatorButton arrow menu; KUrlNavigatorButton::keyPressEvent"
-native = "todo"
-native_note = "Porting notes: Explorer's breadcrumb chevrons provide the same menus. Enter and Left/Right exist. The Down/Space subfolder menu does not."
+native = "done"
+native_note = "native/crates/ox-app/src/window/crumb_menus.rs: a click on the divider after a crumb, or Down on a focused crumb, lists that folder's subfolders (natural order, hidden ones only while hidden files are shown) in a menu pointing at the crumb; the folder the address goes on to is bold, and past 30 entries a 'More' item opens the next 30. Choosing one runs win.go-to. The menu is parented to the address bar, not the crumb, as navigating rebuilds the crumbs. The divider keeps the app.js '/' or '\\' glyph and gains a hover highlight. Tested in crumb_menus.rs (a_crumb_menu_lists_thirty_subfolders_with_the_shown_one_bold_then_more) and native/crates/ox-app/src/window/tests/address_input.rs (choosing_a_folder_from_a_crumb_menu_goes_there, which opens the real menu and activates a row)."
 
 [[feature]]
 id = "NAV-021"
@@ -543,8 +544,8 @@ sources = ["kio:src/filewidgets/kurlnavigatorbutton.cpp:285-333", "desktop/ui/ap
 python_tests = []
 bridge = ["operate", "transferConflicts", "fileDragLayout"]
 dolphin = "KUrlNavigatorButton::dropEvent / dragMoveEvent"
-native = "todo"
-native_note = "Porting notes: The OpenXplorer drop layout publishes rows, sidebar entries and the pane background, but no breadcrumbs."
+native = "done"
+native_note = "Drops on a crumb go into its folder with the normal drop action (native/crates/ox-app/src/window/file_drop/targets.rs, DropZone::Breadcrumbs, tested by a_crumb_takes_drops_for_its_folder). native/crates/ox-app/src/window/crumb_drop.rs: holding a file drag over the divider after a crumb for 800 ms opens that folder's subfolder menu without a pointer grab; its rows are a drop zone (DropZone::CrumbMenu) that highlights and takes the drop for the row's folder. The menu closes when the drag leaves it, drops anywhere, moves over another drop zone, or leaves the crumbs for 300 ms without reaching the menu (which also covers a drag cancelled over the address bar); a listing that ends after that opens nothing. Tested in crumb_drop.rs (holding_a_drag_over_a_divider_opens_a_menu_whose_rows_take_the_drop, including leaving the crumbs and a late listing); a real pointer drag cannot be synthesised under Xvfb, so the test drives the hover, leave and hit-testing directly."
 
 [[feature]]
 id = "NAV-022"
@@ -558,8 +559,8 @@ sources = ["kio:src/filewidgets/kurlnavigatorbutton.cpp:374-383", "desktop/ui/ap
 python_tests = []
 bridge = ["list"]
 dolphin = "KUrlNavigatorButton::wheelEvent"
-native = "todo"
-native_note = "Porting notes: OpenXplorer uses the wheel to scroll an overflowing breadcrumb strip horizontally. Keep that behaviour when the strip overflows."
+native = "done"
+native_note = "native/crates/ox-app/src/window/crumb_menus.rs: each whole wheel notch over a crumb goes to the previous or next folder beside it (win.crumb-sibling, hidden folders skipped unless shown) while the crumbs fit the bar; the controller is discrete, so a high-resolution wheel's fractions add up to notches, and touchpad scrolling is ignored so one swipe cannot skip through folders. When the crumbs overflow, the wheel scrolls them sideways. Tested in crumb_menus.rs (the_wheel_steps_to_the_folder_beside_and_stops_at_either_end) and native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_on_a_crumb_goes_to_the_next_folder_beside_it, which emits scroll on the crumb's controller: 0.1 does nothing, 1.0 steps, overflowing crumbs pass the wheel on)."
 
 [[feature]]
 id = "NAV-023"
@@ -572,8 +573,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:344", "desktop/ui/app.js:964"]
 python_tests = []
 bridge = []
-native = "todo"
-native_note = "Porting notes: Windows collapses leading crumbs into a '«' overflow menu; candidate gain."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/address_bar.rs (the_crumbs_stay_scrolled_to_the_current_folder); native/crates/ox-app/src/window/tests/address_input.rs (the_wheel_scrolls_overflowing_crumbs_sideways): a vertical wheel scrolls the crumbs sideways and the page does not scroll."
 
 [[feature]]
 id = "NAV-024"
@@ -592,8 +593,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "ShowFullPath (default false)"
-native = "todo"
-native_note = "Porting notes: Explorer also shows place-relative crumbs such as 'Home > Documents'. OpenXplorer always shows the full path from '/'. Existing OpenXplorer part is protected by NAV-017."
+native = "done"
+native_note = "native/crates/ox-app/src/window/location_view.rs crumb_buttons: inside the home folder the crumbs start at a 'Home' crumb (Home / Documents); outside it they still start at '/'. The toggle win.show-full-path (address bar menu, and Settings > Windows & tabs > Address bar, saved as showFullPath, off by default) shows the full path; every window follows the saved option. Tested in location_view.rs (crumbs_start_at_home_unless_the_full_path_is_asked_for)."
 
 [[feature]]
 id = "NAV-025"
@@ -606,7 +607,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:333"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/location_view.rs (tabs_and_the_address_bar_show_the_current_apps_icons): the house for the home folder, the laptop for This PC, the network glyph for Network and SMB, a phone for devices, else a folder. app.js keyed the house to the 'home:' page, which always resolves to the home folder, so the native app shows it on the home folder itself."
 
 [[feature]]
 id = "NAV-026"
@@ -638,8 +640,8 @@ python_tests = [
 bridge = ["normalise"]
 dolphin = "Ctrl+L editable location bar; Dolphin: Ctrl+L / F6 edit location; click empty breadcrumb area to edit.; KUrlNavigator toggle-editable area; replace_location: Ctrl+L"
 gnome = "Nautilus: Ctrl+L location entry."
-native = "todo"
-native_note = "Porting notes: Explorer also opens the address with F4. OpenXplorer does not bind F4."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/address_input.rs (ctrl_l_alt_d_the_chevron_and_blank_space_edit_the_whole_address, the_settings_tab_has_no_address_to_edit); native/crates/ox-app/src/window/tests/address_bar.rs (the_title_crumbs_and_address_call_a_phone_by_its_mount_name): the device address. Ctrl+L and Alt+D are application accelerators, so they work from other inputs. The chevron and F4 run win.address-history, which edits the address as Ctrl+L does and lists the typed history below it (NAV-043), as Explorer's chevron does."
 
 [[feature]]
 id = "NAV-027"
@@ -662,7 +664,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "KUrlNavigator::keyPressEvent Escape"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/address_input.rs (escape_keeps_the_folder_and_the_selection_and_switching_tabs_ends_editing); native/crates/ox-app/src/window/tests/address_bar.rs (editing_ends_when_focus_leaves_the_address, navigating_while_editing_returns_to_the_crumbs, escape_discards_the_typed_address)."
 
 [[feature]]
 id = "NAV-028"
@@ -676,7 +679,8 @@ sources = ["dolphin:src/dolphinmainwindow.cpp:987-1001"]
 python_tests = []
 bridge = []
 dolphin = "replace_location: Ctrl+L"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/location_view.rs: edit_address returns to the crumbs when Ctrl+L is pressed while the whole address is selected and nothing was typed (AddressBar::edits_whole_address); otherwise it edits the address. Tested in native/crates/ox-app/src/window/tests/address_input.rs (a_second_ctrl_l_returns_to_the_crumbs_unless_something_was_typed)."
 
 [[feature]]
 id = "NAV-029"
@@ -694,8 +698,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "editable_location: F6"
-native = "todo"
-native_note = "Porting notes: Shortcut conflict, Explorer wins: in Explorer F6 cycles focus between panes and F4 opens the address drop-down. Do not bind F6 to this toggle."
+native = "done"
+native_note = "native/crates/ox-app/src/window/address_options.rs: the toggle win.editable-location (address bar menu, and the entry's own right-click menu) keeps the address as editable text in this window (AddressBar::set_always_editable); Settings > Windows & tabs > 'Make the address bar editable in new windows' (editableLocation) chooses how new windows start. No F6 binding, as Explorer uses F6 for focus cycling. Tested in native/crates/ox-app/src/window/tests/address_input.rs (the_address_can_stay_editable_across_folders_until_toggled_back)."
 
 [[feature]]
 id = "NAV-030"
@@ -709,8 +713,8 @@ sources = ["dolphin:src/settings/dolphin_generalsettings.kcfg:21-24", "desktop/u
 python_tests = []
 bridge = ["list"]
 dolphin = "KUrlComboBox + KUrlCompletion (UrlCompletionMode)"
-native = "todo"
-native_note = "Porting notes: Explorer's address bar also autosuggests. OpenXplorer's address input has autocomplete=off and no completion."
+native = "done"
+native_note = "native/crates/ox-app/src/window/address_completion.rs with native/crates/ox-app/src/window/address_bar/suggestions.rs: while the address is typed, the text up to the last '/' or '\\' is resolved like any address, that folder is listed once per edit and filtered locally as typing goes on (a listing still running is aborted when the folder changes or editing ends), and up to 12 names starting with the rest (ignoring case; hidden ones once a dot is typed) are listed under the entry, folders ending in the separator. Up/Down put a row into the entry, Enter or a click goes there, Escape closes the list. Tested in address_completion.rs (names_starting_with_the_typed_text_complete_it) and native/crates/ox-app/src/window/tests/address_input.rs (typing_a_path_offers_the_matching_names; f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there drives Down, Enter and a row)."
 
 [[feature]]
 id = "NAV-031"
@@ -724,8 +728,8 @@ sources = ["kio:src/filewidgets/kurlnavigator.cpp:515-606", "dolphin:doc/index.d
 python_tests = []
 bridge = ["clipboardText", "normalise"]
 dolphin = "KUrlNavigatorPrivate::openContextMenu"
-native = "todo"
-native_note = "Porting notes: Explorer's address context menu similarly offers Copy address, Copy address as text and Edit address."
+native = "done"
+native_note = "native/crates/ox-app/src/window/address_menu.rs: a right-click on the crumbs offers Copy address, Paste and go, Open \"<crumb>\" in new tab / new window for the crumb under the pointer, Edit address, and the toggles Keep address editable and Show full path. While the address is edited, GTK's entry menu gets the two toggles. Tested in address_menu.rs (the_address_menu_copies_pastes_opens_the_crumb_elsewhere_and_edits) and native/crates/ox-app/src/window/tests/address_input.rs (the_address_menu_copies_the_address_and_pastes_one_to_go_to)."
 
 [[feature]]
 id = "NAV-032"
@@ -739,7 +743,8 @@ sources = ["kio:src/filewidgets/kurlnavigator.cpp:1134-1151"]
 python_tests = []
 bridge = ["normalise"]
 dolphin = "KUrlNavigator::mouseReleaseEvent (MiddleButton)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/address_menu.rs: a middle-click on blank space of the crumbs goes to the primary selection's text as a pasted address (BrowserWindow::go_to_pasted_address in activation.rs, shared with Paste and go): a folder opens in the tab, a file is shown selected in its folder rather than launched, and the text is not added to the typed history (NAV-043). Tested in native/crates/ox-app/src/window/tests/address_input.rs (a_middle_click_on_blank_address_space_opens_the_selected_text)."
 
 [[feature]]
 id = "NAV-033"
@@ -770,8 +775,8 @@ python_tests = [
 ]
 bridge = ["normalise", "activateItem", "list"]
 dolphin = "KUrlNavigator returnPressed → DolphinViewContainer::slotUrlNavigatorLocationChanged"
-native = "partial"
-native_note = "native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) navigates typed paths and rejects https://example.invalid without changing location; the address entry widget is untested. Porting notes: No autocompletion of paths while typing (Dolphin and Nautilus complete). Candidate gain."
+native = "done"
+native_note = "native/crates/ox-app/src/window/activation.rs (submit_address) looks the typed location up first. Tested in native/crates/ox-app/src/window/tests/address_input.rs (a_typed_relative_name_or_tilde_opens_in_the_same_tab, a_refused_address_is_explained_and_the_field_stays_open, a_typed_zip_opens_the_archive_browser) and native/crates/ox-app/src/window/tests/opening.rs (a_typed_file_path_opens_the_file_and_leaves_the_folder_and_history). Autocompletion is NAV-030."
 
 [[feature]]
 id = "NAV-034"
@@ -811,8 +816,8 @@ python_tests = [
 bridge = ["normalise"]
 dolphin = "Dolphin location bar accepts smb:// URLs; Dolphin location bar expands ~ and relative paths"
 gnome = "GVfs smb backend (smb:// GFile URIs)"
-native = "partial"
-native_note = "native/crates/ox-core/src/location/normalise.rs (unc_paths_become_smb, smb_urls_are_canonical, relative_paths_join_the_right_base, plain_paths_are_escaped_like_python); native/crates/ox-core/tests/location_python.rs and location_external.rs compare against the Python app."
+native = "done"
+native_note = "native/crates/ox-core/src/location/normalise.rs (unc_paths_become_smb, smb_urls_are_canonical, relative_paths_join_the_right_base, plain_paths_are_escaped_like_python); native/crates/ox-core/tests/location_python.rs and location_external.rs compare against the Python app; native/crates/ox-app/src/window/tests/address_input.rs (a_typed_relative_name_or_tilde_opens_in_the_same_tab) and opening.rs (a_typed_page_title_prefers_a_folder_of_that_name) type into the window."
 
 [[feature]]
 id = "NAV-035"
@@ -838,8 +843,8 @@ python_tests = [
   "desktop/tests/test_core.py::CoreTests::test_relative_connected_phone_path",
 ]
 bridge = ["normalise"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/location_python.rs (matches_python) compares accepted addresses and error messages with core.normalise_location. Porting notes: JS copy is used by the preview transport; the native app validates through core.normalise_location. Wording must stay user-facing and specific."
+native = "done"
+native_note = "native/crates/ox-core/tests/location_python.rs (matches_python) compares accepted addresses and error messages with core.normalise_location; native/crates/ox-app/src/window/tests/address_input.rs (a_refused_address_is_explained_and_the_field_stays_open) shows the drive-letter guidance in the window."
 
 [[feature]]
 id = "NAV-036"
@@ -860,8 +865,8 @@ python_tests = [
 ]
 bridge = ["normalise"]
 dolphin = "DolphinViewContainer::slotUrlNavigatorLocationChanged"
-native = "todo"
-native_note = "Porting notes: OpenXplorer rejects every scheme except file, smb and the device schemes with an explanatory toast. It never hands web URLs to the browser."
+native = "done"
+native_note = "native/crates/ox-app/src/window/activation.rs: a typed http:// or https:// address with a host is handed to the default browser (AppContext::open_uri) with the notice 'Opening <address> in your web browser.'; other schemes keep the specific refusal. Tested in native/crates/ox-app/src/window/tests/address_input.rs (a_typed_web_address_opens_in_the_browser_and_other_schemes_are_refused)."
 
 [[feature]]
 id = "NAV-037"
@@ -885,7 +890,8 @@ python_tests = [
 ]
 bridge = ["list", "activateItem", "normalise"]
 dolphin = "DolphinView::urlIsFileError"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/loading.rs (open_folder_of_file) lists the parent, or home, and opens the file when the user navigated to it; a reload never opens it. Tested in native/crates/ox-app/src/window/tests/opening.rs (a_tab_opened_on_a_file_shows_its_folder_and_opens_the_file, a_folder_replaced_by_a_file_is_never_opened_by_a_reload)."
 
 [[feature]]
 id = "NAV-038"
@@ -908,7 +914,8 @@ python_tests = [
   "desktop/tests/ui_release.py::New tab opens Home",
 ]
 bridge = ["environment", "list"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/history.rs (home_new_tabs_and_ctrl_t_open_the_real_home_folder_titled_home); native/crates/ox-app/src/locations.rs (the_legacy_home_page_means_the_home_folder)."
 
 [[feature]]
 id = "NAV-039"
@@ -927,8 +934,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "DolphinView::currentDirectoryRemoved"
-native = "todo"
-native_note = "Porting notes: OpenXplorer reloads on the change event and ends on the 'This location is unavailable' page with 'Try again'. Existing OpenXplorer part is protected by VIEW-047 and VIEW-055."
+native = "done"
+native_note = "native/crates/ox-app/src/window/loading/removed_folder.rs: when a reload of a folder that was listed fine finds it gone (folder watch or F5), the tab moves to the nearest existing folder above it and the message line says 'Current location changed, <path> is no longer accessible.'; background tabs move silently. With no existing ancestor, and for a first listing or Try again of a missing folder, the 'This location is unavailable' page stays. Tested in native/crates/ox-app/src/window/tests/listing.rs (a_folder_removed_while_shown_gives_way_to_the_nearest_existing_folder)."
 
 [[feature]]
 id = "NAV-040"
@@ -963,8 +970,8 @@ python_tests = [
   "desktop/tests/test_entry_model.py::EntryModelTests::test_local_directory",
 ]
 bridge = ["list", "activateItem"]
-native = "partial"
-native_note = "native/crates/ox-core/src/entry/classify.rs (local_directory, file_shortcut_is_not_a_folder, empty_regular_file_with_directory_mime_does_not_become_folder, credentials_in_backend_target_not_used)."
+native = "done"
+native_note = "native/crates/ox-core/src/entry/classify.rs (local_directory_is_a_folder, empty_regular_file_with_directory_mime_does_not_become_folder, unknown_kind_with_directory_mime_is_a_folder, mountable_share_without_optional_metadata_is_a_folder, non_smb_mountable_not_assumed_to_be_directory, file_shortcut_is_not_a_folder); native/crates/ox-app/src/window/activation.rs (the_kind_decides_what_opens_not_the_name_or_a_stale_flag, folders_open_in_the_tab_files_in_an_application_and_zips_in_the_browser); native/crates/ox-app/src/window/tests/opening.rs."
 
 [[feature]]
 id = "NAV-041"
@@ -992,8 +999,8 @@ python_tests = [
 ]
 bridge = ["activateItem", "uiReady", "list"]
 gnome = "GApplication HANDLES_OPEN / open signal; GApplication HANDLES_OPEN"
-native = "todo"
-native_note = "Porting notes: The first external location replaces the active tab's folder; Dolphin opens external folders in a new tab/window. Keeping the current behaviour is required; a setting to open in a new tab would be a gain."
+native = "done"
+native_note = "native/crates/ox-app/src/window/activation.rs (open_locations): with no window open, the command line, launcher and D-Bus Open fill the first window: the first location in its tab, the others in new tabs, files in their applications and ZIPs in the archive browser. With a window open, NAV-042 applies instead (native/crates/ox-app/src/application/requests.rs, open_in_active_window): the locations open in new tabs or a new window so the tab in use stays, as in Dolphin; the Python app replaced the current tab. Tested in native/crates/ox-app/src/application/state.rs (command_line_locations_fill_the_first_window_when_none_is_open) and native/crates/ox-app/src/window/tests/opening.rs (command_line_locations_open_in_the_current_tab_then_in_new_tabs)."
 
 [[feature]]
 id = "NAV-042"
@@ -1018,8 +1025,8 @@ python_tests = [
 bridge = ["activateItem", "list"]
 dolphin = "OpenExternallyCalledFolderInNewTab (“Open new folders in tabs”)"
 gnome = "GApplication::open / command-line (Nautilus opens a new window)"
-native = "todo"
-native_note = "Existing OpenXplorer part is protected by NAV-041 and INT-014."
+native = "done"
+native_note = "native/crates/ox-app/src/application/requests.rs open_in_active_window (used for `openxplorer <path>` and GApplication open/xdg-open): with a window open, locations open in new tabs of the active window, or in a new window when Settings > Windows & tabs > 'Open folders from other apps in a new window' (externalFoldersInNewWindow) is on; the tab in use stays. With no window open, the first window shows them as before. Tested in native/crates/ox-app/src/application/state.rs (folders_from_other_apps_open_in_a_new_tab_or_a_new_window, opened_folders_go_to_new_tabs_of_the_active_window)."
 
 [[feature]]
 id = "NAV-043"
@@ -1037,8 +1044,8 @@ python_tests = []
 bridge = ["normalise"]
 dolphin = "KUrlNavigator editable mode: KUrlComboBox history; slotApplyUrl prepends each applied URL and drops the oldest (RemoveBottom)"
 gnome = "GtkEntry with a GtkPopover or GtkListView of recent locations, persisted under $XDG_STATE_HOME"
-native = "todo"
-native_note = "Porting notes: Not covered by NAV-006 (Back/Forward menus), NAV-030 (completion) or NAV-026, where the chevron currently means 'Edit location'. The Windows 11 address bar has the same drop-down. Shortcut conflict, Explorer wins: F4 is also Dolphin's terminal panel key (OPEN-022)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/address_bar/suggestions.rs: every typed address that is accepted (navigated to, opened or handed to the web browser; refused or pasted text is not) goes to the top of the window's most-recent-first history (20 entries, no duplicates, addresses with user info never kept) for the session, recorded by BrowserWindow::accept_address in activation.rs. F4, the address bar's chevron and Alt+Down while editing list it under the entry; Down/Up put a row into the entry and a click on a row goes there in the active tab. Tested in suggestions.rs (typed_addresses_go_to_the_top_once_and_the_oldest_drop_off) and native/crates/ox-app/src/window/tests/address_input.rs (f4_lists_the_typed_addresses_most_recent_first_and_a_row_goes_there)."
 
 [[feature]]
 id = "HOME-001"
@@ -1058,7 +1065,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/ui_rc4.py::This PC drive cards support middle-click"]
 bridge = ["environment"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/landing.rs; tested in native/crates/ox-app/src/window/tests/landing_pages.rs (this_pc_has_its_heading_three_sections_and_nothing_to_search_or_create): heading, subtitle, the three sections, 'Ready' in the status bar, and Search, Up and New disabled."
 
 [[feature]]
 id = "HOME-002"
@@ -1071,7 +1079,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:428"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/landing.rs (quick_card); tested in native/crates/ox-app/src/window/tests/landing_pages.rs (a_quick_access_card_says_where_the_folder_is_and_opens_it, quick_access_cards_stretch_across_the_page_in_equal_columns): folder art, label, 'Stored on this PC', click and middle-click."
 
 [[feature]]
 id = "HOME-003"
@@ -1231,8 +1240,8 @@ sources = [
 python_tests = []
 bridge = ["environment", "activateItem", "open", "openWith"]
 gnome = "GtkRecentManager (recently-used.xbel) is the GNOME equivalent; not used"
-native = "partial"
-native_note = "Recording ported: native/crates/ox-core/src/settings/mutate.rs (remember_open_keeps_thirty_newest_unique_files). Presentation needs an explicit decision (Home section, Recent place or n-a). Porting notes: Dead code in 1.1.4. Decide explicitly whether the native Home should expose recent files (GNOME recent:// / Dolphin Recent Files) rather than silently dropping it. Recents are recorded but the rendering is unreachable (realLocation maps home: to the file URI). Decide where recents appear natively (e.g. a Recent place)."
+native = "done"
+native_note = "Recording ported: native/crates/ox-app/src/app_context.rs (open_file records each opened file); native/crates/ox-core/src/settings/mutate.rs (remember_open_keeps_thirty_newest_unique_files) and the settings round trips with the Python app. Decision: the native app shows what 1.1.4 shows, which is no recent-files page, because 'home:' always resolved to the home folder and the 'Recently opened' table was unreachable. Showing recent files (a Recent place as in GNOME's recent:/// or Dolphin's Recent Files) would be a new feature for the owner to schedule."
 
 [[feature]]
 id = "TAB-001"
@@ -5180,8 +5189,8 @@ python_tests = ["desktop/tests/test_core.py::CoreTests::test_hidden_builtin_pin"
 bridge = ["environment", "locationCheck", "locationApply"]
 dolphin = "KDE Places defaults from QStandardPaths (xdg-user-dirs); Dolphin Places panel defaults"
 gnome = "xdg-user-dirs (~/.config/user-dirs.dirs); xdg-user-dirs (user-dirs.dirs, xdg-user-dirs-update); g_get_user_special_dir is cached per process; xdg-user-dirs (user-dirs.dirs)"
-native = "partial"
-native_note = "native/crates/ox-core/src/places/known_folders.rs (a_missing_file_gives_every_default, every_call_reads_the_file_again, an_unreadable_file_gives_every_default, quick_access_shows_six_folders_with_their_glyphs_and_colours); native/crates/ox-core/tests/places_composition.rs (user_dirs_resolve_like_the_python_app, known_folders_use_the_standard_glyphs_and_colours); native/crates/ox-app/src/app_context/known_folders.rs (a_standard_folder_moved_in_user_dirs_shows_without_a_restart); native/crates/ox-app/src/window/sidebar/entries.rs (every_quick_access_folder_has_a_glyph_in_its_colour). The native app reads user-dirs.dirs off the main thread at start and again whenever the file changes, instead of on every sidebar redraw; a moved folder still shows at once. Not tested natively yet: a standard folder relocated onto a CIFS mount drawn on the network pipe in the sidebar, and hidden built-ins in the window (ox-core's quick_access_hides_builtins_preserves_labels_and_keeps_unranked_order covers the composition)."
+native = "done"
+native_note = "native/crates/ox-core/src/places/known_folders.rs (a_missing_file_gives_every_default, every_call_reads_the_file_again, an_unreadable_file_gives_every_default, quick_access_shows_six_folders_with_their_glyphs_and_colours); native/crates/ox-core/tests/places_composition.rs (user_dirs_resolve_like_the_python_app, known_folders_use_the_standard_glyphs_and_colours); native/crates/ox-app/src/app_context/known_folders.rs (a_standard_folder_moved_in_user_dirs_shows_without_a_restart); native/crates/ox-app/src/window/sidebar/entries.rs (every_quick_access_folder_has_a_glyph_in_its_colour, a_standard_folder_on_a_cifs_mount_shows_the_network_pipe_and_a_hidden_one_no_row). The native app reads user-dirs.dirs off the main thread at start and again whenever the file changes, instead of on every sidebar redraw; a moved folder still shows at once."
 
 [[feature]]
 id = "SIDE-007"
@@ -5471,8 +5480,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:372", "desktop/ui/app.js:1563-1567"]
 python_tests = []
 bridge = ["newWindow", "cacheSet", "properties", "mountVolume"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts); native/crates/ox-app/src/window/tests/network.rs (open_in_new_window_shows_the_place_in_another_window). Open, Open in new window and 'Mount volume' work, and Dolphin's Disconnect, Eject and Safely remove are added where the drive allows them. Missing: the search cache toggle and Properties join the menu with their milestones."
+native = "done"
+native_note = "native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts, a_drive_menu_caches_and_shows_properties_of_the_drive); native/crates/ox-app/src/window/tests/network.rs (open_in_new_window_shows_the_place_in_another_window). Open, Open in new window, the search cache toggle, then Dolphin's Disconnect, Eject and Safely remove where the drive allows them, then Properties; an unmounted volume offers only 'Mount volume'."
 
 [[feature]]
 id = "SIDE-018"
@@ -5532,8 +5541,8 @@ python_tests = [
   "desktop/tests/ui_terminal.py::Network sidebar share offers Terminal",
 ]
 bridge = ["newWindow", "openTerminal", "bookmark", "signOut", "properties"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/place_menus.rs (a_network_share_can_be_kept_removed_and_signed_out_of); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it, open_in_new_window_shows_the_place_in_another_window). Open, Open in new tab, Open in new window, Keep in Network, Remove saved location and Sign out of server… work in the sidebar and on the Network page. Missing: Open in Terminal and Properties arrive with desktop integration and properties."
+native = "done"
+native_note = "native/crates/ox-app/src/window/place_menus.rs (a_network_share_can_be_kept_removed_and_signed_out_of, a_network_terminal_needs_a_folder_and_a_mount_has_properties); native/crates/ox-app/src/window/tests/network.rs (keep_in_network_saves_a_browsed_share_and_remove_deletes_it, open_in_new_window_shows_the_place_in_another_window). Open in Terminal is disabled for a bare server, which has no folder to open."
 
 [[feature]]
 id = "SIDE-021"
@@ -5599,8 +5608,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "QDockWidget resize"
-native = "partial"
-native_note = "Stored width: native/crates/ox-core/src/settings/tests/preferences.rs (sidebar_width_bounds, width_rounding); the GTK divider is untested."
+native = "done"
+native_note = "Pointer: native/crates/ox-app/src/window/preferences.rs (the_sidebar_starts_at_210_within_the_python_limits, the_sidebar_leaves_the_folder_pane_300_pixels) and native/crates/ox-app/src/window/tests/views.rs (a_dragged_sidebar_stops_where_the_folder_pane_keeps_its_room, a_double_click_on_the_handle_resets_the_sidebar_to_210_and_saves_it); stored width: native/crates/ox-core/src/settings/tests/preferences.rs. Keyboard and accessibility: native/crates/ox-app/src/window/sidebar_resizer.rs (arrows_move_the_handle_10_pixels_40_with_shift_and_home_resets_it) gives the handle its tooltip, announces the width and its limits, and takes Left, Right (10 px, 40 with Shift) and Home. The handle is GTK's pane handle, which takes focus with F8 rather than Tab."
 
 [[feature]]
 id = "SIDE-024"

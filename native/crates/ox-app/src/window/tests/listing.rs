@@ -145,6 +145,21 @@ fn refresh_keeps_the_rows_scroll_position_focus_and_selection() {
     assert!(pane.view_has_focus(), "keyboard focus stays in the folder view");
 }
 
+/// parity: NAV-014
+#[gtk::test]
+fn a_reload_keeps_the_selected_items_that_still_exist() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let selected = [fixture.uri_of("Notes 2.txt"), fixture.uri_of("Résumé.txt")];
+    test.window.folder_model().select_uris(&selected);
+    fs::remove_file(fixture.path("Notes 2.txt")).expect("fixture file");
+
+    test.window.refresh();
+    test.wait_for_listing("the reload");
+
+    assert_eq!(test.selected_names(), ["Résumé.txt"]);
+}
+
 /// parity: VIEW-055
 #[gtk::test]
 fn a_change_on_disk_is_listed_and_keeps_the_scroll_position() {
@@ -163,21 +178,29 @@ fn a_change_on_disk_is_listed_and_keeps_the_scroll_position() {
     assert_eq!(test.selected_names(), ["file 0299.txt"]);
 }
 
-/// parity: NAV-015
+/// Navigating starts a folder at the top without a selection; Back and
+/// Forward return to where the view was, as in Dolphin.
+///
+/// parity: NAV-015, NAV-008
 #[gtk::test]
-fn navigating_to_another_folder_starts_at_the_top_without_a_selection() {
+fn navigating_starts_at_the_top_and_back_returns_to_where_the_view_was() {
     let fixture = Fixture::with_files(LONG_FOLDER);
-    fs::create_dir(fixture.path("Subfolder")).expect("fixture subfolder");
+    let other = Fixture::with_files(LONG_FOLDER);
     let test = TestWindow::open(&fixture.uri());
-    scroll_to_the_end(&test);
-    test.window
-        .navigate(&fixture.uri_of("Subfolder"))
-        .expect("valid folder");
-    test.wait_for_listing("the subfolder");
-    test.window.go_history(Direction::Backward);
-    test.wait_for_listing("the folder again");
-    assert!(test.window.folder_pane().scroll_position() < 1.0);
+    let scrolled = scroll_to_the_end(&test);
+    let pane = test.window.folder_pane();
+    test.window.navigate(&other.uri()).expect("valid folder");
+    test.wait_for_listing("another long folder");
+    assert!(pane.scroll_position() < 1.0);
     assert!(test.selected_names().is_empty());
+
+    test.window.go_history(Direction::Backward);
+    test.wait_for_listing("the first folder again");
+
+    wait_until("the scroll position of the first visit", || {
+        keeps_position(pane.scroll_position(), scrolled)
+    });
+    assert_eq!(test.selected_names(), ["file 0299.txt"]);
 }
 
 #[gtk::test]
@@ -232,6 +255,25 @@ fn a_superseded_listing_cannot_fill_the_tab() {
     test.wait_for_listing("the latest navigation");
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
     assert_eq!(test.names(), STANDARD_NAMES);
+}
+
+/// parity: NAV-039
+#[gtk::test]
+fn a_folder_removed_while_shown_gives_way_to_the_nearest_existing_folder() {
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Documents/Letters/2026")).expect("fixture subfolders");
+    let test = TestWindow::open(&fixture.uri_of("Documents/Letters/2026"));
+
+    fs::remove_dir_all(fixture.path("Documents/Letters")).expect("the fixture folder is removable");
+    test.activate("refresh", None);
+
+    wait_until("the nearest existing folder", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents")) && !test.window.is_loading()
+    });
+    let removed = fixture.path("Documents/Letters/2026").display().to_string();
+    let warning = format!("Current location changed, {removed} is no longer accessible.");
+    assert_eq!(test.window.shown_message().as_str(), warning);
+    assert_eq!(test.window.load_error(), None);
 }
 
 /// parity: NAV-035, VIEW-047

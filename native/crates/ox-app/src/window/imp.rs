@@ -162,6 +162,13 @@ pub(crate) struct BrowserWindow {
     pub(super) folder_hover: RefCell<Option<(String, glib::SourceId)>>,
     /// The scroll of a zone a file drag hovers near the edge of.
     pub(super) drag_scroll: RefCell<Option<super::file_drop::DragScroll>>,
+    /// The crumb divider a file drag hovers over, and the timer that
+    /// opens its subfolder menu (NAV-021).
+    pub(super) divider_hover: RefCell<Option<(String, glib::SourceId)>>,
+    /// The subfolder menu a file drag opened, which takes the drop.
+    pub(super) drag_crumb_menu: super::crumb_drop::DragCrumbMenu,
+    /// The folder listed to complete the typed address (NAV-030).
+    pub(super) completion_listing: super::address_completion::CompletionListing,
     /// The tab drag this window started, while it lasts.
     pub(super) outgoing_tab: RefCell<Option<OutgoingTabDrag>>,
     /// The timer that saves the window's size after a resize.

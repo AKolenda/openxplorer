@@ -71,6 +71,10 @@ impl BrowserWindow {
                 let folder = self.address_bar().crumb_location_at(x, y)?;
                 self.takes_drops(&folder).then_some(DropSpot::Crumb(folder))
             }
+            DropZone::CrumbMenu => {
+                let folder = self.drag_crumb_menu_folder_at(y)?;
+                self.takes_drops(&folder).then_some(DropSpot::Crumb(folder))
+            }
             DropZone::Tabs => {
                 let tab = self.tab_strip().tab_at(x, y)?;
                 self.takes_drops(&tab.uri).then_some(DropSpot::Tab {

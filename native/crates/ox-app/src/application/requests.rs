@@ -87,12 +87,26 @@ impl AppState {
         }
     }
 
-    /// Locations from the command line: they open in the active window,
-    /// or a new one when none is open.
-    fn open_in_active_window(&self, app: &gtk::Application, locations: Vec<String>) {
-        let window = active_window(app).unwrap_or_else(|| open_window(app, self.context(), None));
+    /// Locations from the command line or another app (NAV-042). With no
+    /// window open, the first window shows them. Otherwise they open in new
+    /// tabs of the active window, or in a new window when Settings asks
+    /// for that, so the tab in use stays where it is, as in Dolphin.
+    pub(super) fn open_in_active_window(&self, app: &gtk::Application, locations: Vec<String>) {
+        let Some(window) = active_window(app) else {
+            open_window(app, self.context(), None).open_locations(locations);
+            return;
+        };
+        if self
+            .context()
+            .settings_data()
+            .preferences
+            .external_folders_in_new_window
+        {
+            self.new_window_at(app, locations);
+            return;
+        }
         window.present();
-        window.open_locations(locations);
+        window.open_locations_as_tabs(locations);
     }
 
     /// Quit `OpenXplorer`: every window closes and the Show in folder

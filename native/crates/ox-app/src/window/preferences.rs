@@ -23,7 +23,7 @@ use super::BrowserWindow;
 use crate::text_size::TextSize;
 
 /// Sidebar width nobody changed (`resetLayout` in app.js).
-const DEFAULT_SIDEBAR_WIDTH: i32 = 210;
+pub(super) const DEFAULT_SIDEBAR_WIDTH: i32 = 210;
 
 /// Room the folder pane keeps beside the sidebar (`sidebarLimit` in app.js).
 const FOLDER_PANE_ROOM: i32 = 300;
@@ -52,6 +52,8 @@ pub(super) enum Preference {
     DefaultLayout,
     /// The size new windows open at (TAB-054).
     WindowSize(WindowSize),
+    /// Crumbs from `/` rather than from the home folder (NAV-024).
+    ShowFullPath(bool),
 }
 
 impl Preference {
@@ -67,6 +69,7 @@ impl Preference {
             Preference::SidebarWidth(width) => update.sidebar_width = Some(f64::from(width)),
             Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
             Preference::WindowSize(size) => update.window_size = Some(size),
+            Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
             Preference::DefaultLayout => {
                 update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
                 // An empty list clears every saved column width.
@@ -90,7 +93,7 @@ pub(super) fn sidebar_widths() -> RangeInclusive<i32> {
 }
 
 /// `width` limited to [`sidebar_widths`].
-fn clamp_sidebar_width(width: i32) -> i32 {
+pub(super) fn clamp_sidebar_width(width: i32) -> i32 {
     let limits = sidebar_widths();
     width.clamp(*limits.start(), *limits.end())
 }
@@ -134,6 +137,7 @@ impl BrowserWindow {
         self.save_sidebar_width_after_drags();
         self.keep_sidebar_within_limit();
         self.reset_sidebar_on_double_click();
+        self.install_sidebar_resizer();
         self.follow_layout_reset();
     }
 
