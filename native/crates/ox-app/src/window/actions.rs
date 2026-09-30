@@ -372,7 +372,7 @@ impl BrowserWindow {
 
 /// The window's keyboard shortcuts of `onKey` that never change: each
 /// action and its accelerators, as GTK parses them.
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 14] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 15] = [
     (WindowAction::NewTab, &["<Primary>t"]),
     (WindowAction::CloseTab, &["<Primary>w"]),
     (WindowAction::NextTab, &["<Primary>Tab", "<Primary>Page_Down"]),
@@ -391,6 +391,8 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 14] = [
     // Dolphin's Open Terminal and Open Terminal Here (OPEN-021).
     (WindowAction::OpenTerminal, &["<Shift>F4"]),
     (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
+    // Dolphin's Open Preferred Search Tool (OPEN-024).
+    (WindowAction::SearchTool, &["<Primary><Shift>f"]),
 ];
 
 /// Ctrl+N, the application's one shortcut: another window.

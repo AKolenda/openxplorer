@@ -7,6 +7,7 @@ use std::fs;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use crate::integration::{Tool, NO_DIFF_TOOL, NO_SEARCH_TOOL};
 use crate::locations::Page;
 use crate::test_support::harness::{application, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::window::session::Tab;
@@ -251,4 +252,49 @@ fn a_desktop_link_to_a_folder_opens_the_folder() {
         test.context.recorded_launches().is_empty(),
         "the link file is not opened"
     );
+}
+
+/// Compare files hands the two selected files to the installed comparison
+/// tool, or says that none is installed; the item menu offers it for two
+/// files when a tool is there.
+///
+/// parity: OPEN-023
+#[gtk::test]
+fn compare_files_hands_two_files_to_the_comparison_tool() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt", "Notes 10.txt"]);
+
+    test.activate("compare-files", None);
+
+    if Tool::Diff.installed().is_some() {
+        let pair = format!(
+            "{} {}",
+            fixture.uri_of("Notes 2.txt"),
+            fixture.uri_of("Notes 10.txt")
+        );
+        assert_eq!(test.context.recorded_launches(), [pair]);
+    } else {
+        assert_eq!(test.window.shown_message(), NO_DIFF_TOOL);
+    }
+}
+
+/// Ctrl+Shift+F opens the installed search tool at the folder shown, or
+/// says that none is installed.
+///
+/// parity: OPEN-024
+#[gtk::test]
+fn ctrl_shift_f_opens_the_search_tool_at_the_folder() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let keys = application().accels_for_action("win.search-tool");
+    assert_eq!(keys, ["<Shift><Control>f"]);
+
+    test.activate("search-tool", None);
+
+    if Tool::Search.installed().is_some() {
+        assert_eq!(test.context.recorded_launches(), [fixture.uri()]);
+    } else {
+        assert_eq!(test.window.shown_message(), NO_SEARCH_TOOL);
+    }
 }
