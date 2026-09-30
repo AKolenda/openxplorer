@@ -49,6 +49,7 @@ class TemporaryFolderTestCase(unittest.TestCase):
 class PackageIdentityTests(unittest.TestCase):
     """The stable package is named and labelled as the 1.1.x updater requires."""
 
+    # parity: UPD-017
     def test_the_stable_package_is_the_installer_the_updater_downloads(self) -> None:
         identity = build_deb.package_identity(Channel.STABLE, '2.0.0', 'amd64')
 
@@ -97,6 +98,7 @@ class ControlFieldTests(unittest.TestCase):
         self.assertEqual(depends, 'libc6 (>= 2.34), libglib2.0-0t64 (>= 2.54.0), '
                                   'libgtk-4-1 (>= 4.14), hicolor-icon-theme')
 
+    # parity: INT-029, UPD-017
     def test_the_stable_package_takes_over_the_python_package(self) -> None:
         fields = control_of(Channel.STABLE)
 
@@ -144,6 +146,7 @@ class MaintainerScriptTests(TemporaryFolderTestCase):
         return subprocess.run(['sh', str(control / 'preinst'), 'upgrade', '1.1.4'],
                               capture_output=True, text=True, env=environment)
 
+    # parity: UPD-018
     def test_both_channels_pass_the_script_checks(self) -> None:
         for channel in Channel:
             with self.subTest(channel=channel.name):
@@ -171,6 +174,7 @@ class MaintainerScriptTests(TemporaryFolderTestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    # parity: UPD-018
     def test_a_script_that_changes_defaults_is_refused(self) -> None:
         control = self.write_scripts(Channel.PREVIEW)
         postinst = control / 'postinst'
@@ -179,6 +183,28 @@ class MaintainerScriptTests(TemporaryFolderTestCase):
 
         with self.assertRaises(verify_deb.VerificationError):
             verify_deb.check_maintainer_scripts(Report(), Channel.PREVIEW, control)
+
+
+class ReproducibilityTests(TemporaryFolderTestCase):
+    """The staged package has the same modes, times and checksums on every build."""
+
+    # parity: UPD-019
+    def test_staging_is_normalised_and_every_file_is_checksummed(self) -> None:
+        stage = self.folder / 'stage'
+        (stage / 'DEBIAN').mkdir(parents=True)
+        docs = stage / 'usr/share/doc/openxplorer'
+        docs.mkdir(parents=True, mode=0o700)
+        (docs / 'b.txt').write_text('b\n', encoding='utf-8')
+        (docs / 'a.txt').write_text('a\n', encoding='utf-8')
+
+        build_deb.write_md5sums(stage)
+        build_deb.normalise(stage, 1_700_000_000)
+
+        self.assertEqual(docs.stat().st_mode & 0o777, 0o755)
+        self.assertEqual({path.stat().st_mtime for path in stage.rglob('*')}, {1_700_000_000})
+        md5sums = (stage / 'DEBIAN/md5sums').read_text(encoding='utf-8').splitlines()
+        self.assertEqual([line.split('  ')[1] for line in md5sums],
+                         ['usr/share/doc/openxplorer/a.txt', 'usr/share/doc/openxplorer/b.txt'])
 
 
 @unittest.skipUnless(shutil.which('dpkg-deb'), 'needs dpkg-deb')

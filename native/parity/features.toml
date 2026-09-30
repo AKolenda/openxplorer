@@ -14604,8 +14604,8 @@ python_tests = [
 bridge = []
 dolphin = "org.kde.dolphin.desktop (MimeType=inode/directory, desktop actions)"
 gnome = "freedesktop Desktop Entry (Actions, MimeType); freedesktop Desktop Entry spec (MimeType, Actions, StartupWMClass) + update-desktop-database; GtkApplication app-id becomes the Wayland xdg_toplevel app_id; Desktop Entry actions, GApplication actions"
-native = "partial"
-native_note = "native/packaging/data/io.winspace.Development.desktop is the Python desktop entry key for key (checked by native/tools/verify_layout.py and, across a real upgrade, by native/tools/verify_upgrade.py); the preview entry claims no MIME type. Tests: native/tools/test_package_data.py (every_layout_installs_the_promised_files, the_desktop_validators_accept_both_channels). Missing in the app: the --windows and --settings options the quick actions run, and glib::set_prgname(APP_ID), which makes the X11 window class match StartupWMClass. Python tests cannot carry a parity marker. Porting notes: desktop/tools/verify_deb.py also checks Exec, Icon, StartupWMClass and Actions, and runs desktop-file-validate. Nautilus additionally sets DBusActivatable and X-GNOME-UsesNotifications; see those entries."
+native = "done"
+native_note = "native/packaging/data/io.winspace.Development.desktop is the Python desktop entry key for key (Name, GenericName, Keywords, Categories, the folder, SMB and ZIP MIME types, Exec 'openxplorer %U', StartupNotify, StartupWMClass and the New window, Open windows… and Settings actions), checked by native/tools/verify_layout.py and, across a real upgrade, native/tools/verify_upgrade.py; the preview entry claims no MIME type. The quick actions run --new-window, --windows and --settings (native/crates/ox-app/src/application/command_line.rs), and startup sets glib::set_prgname(APP_ID) so the X11 window class matches StartupWMClass (application.rs). Tests: native/tools/test_package_data.py (test_every_layout_installs_the_promised_files, test_the_desktop_validators_accept_both_channels, which run desktop-file-validate); command_line.rs (each_option_asks_for_its_own_action). Nautilus additionally sets DBusActivatable and X-GNOME-UsesNotifications; see INT-002 and INT-026."
 
 [[feature]]
 id = "INT-004"
@@ -15060,8 +15060,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:1973-1982"]
 python_tests = []
 bridge = []
-native = "todo"
-native_note = "Porting notes: Guide text has two items numbered '4.'; fix when porting."
+native = "done"
+native_note = "native/crates/ox-app/src/settings_page/troubleshooting.rs: the Troubleshooting row of Default apps opens the 'Zorin + Brave setup and troubleshooting' subpage (the native form of the collapsible section) with the Python steps numbered 1 to 6 (the duplicate '4.' fixed) and pointing at where the native controls are, then what Restore previous removes. Test: the_guide_shows_each_step_once_in_order."
 
 [[feature]]
 id = "INT-019"
@@ -15313,8 +15313,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_stable_version_upgrades_candidates",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/src/network/credential.rs (keyring_text_round_trips_under_its_scope, text_written_by_the_python_app_is_read); native/crates/ox-core/tests/integration_default_apps.rs (the_desktop_id_is_the_legacy_one); native/crates/ox-core/tests/integration_reveal.rs (the_managed_marker_is_the_legacy_one, the_service_file_is_byte_for_byte_the_legacy_one, the_autostart_entry_keeps_the_legacy_name, the_autostart_entry_is_byte_for_byte_the_legacy_one); native/crates/ox-core/tests/network_keyring_python.rs (credentials_saved_natively_load_in_the_python_app, credentials_saved_by_the_python_app_load_natively); native/crates/ox-core/tests/network_secret_service.rs (both_apps_find_each_others_credentials_in_the_keyring). These tests keep the keyring schema, the desktop ID of the default-app records and the Show in folder files; the application ID, the command aliases and the package's Replaces and Provides are not covered. Packaging: native/tools/test_build_deb.py (the_stable_package_takes_over_the_python_package) and native/tools/test_package_data.py (the_stable_host_packages_keep_the_python_commands) keep the winspace and winspace-mount-share commands and the Replaces, Conflicts and Provides of winspace-explorer; ox-app/build.rs builds the stable app under io.winspace.Development when OX_APP_ID asks for it. Porting notes: The native preview uses io.winspace.Development.Native; replacing the Python app needs a migration plan for the ID."
+native = "done"
+native_note = "Keyring schema: native/crates/ox-core/src/network/credential.rs (keyring_text_round_trips_under_its_scope, text_written_by_the_python_app_is_read), native/crates/ox-core/tests/network_keyring_python.rs and network_secret_service.rs (both apps find each other's credentials). Desktop ID of default-app records and the Show in folder files: native/crates/ox-core/tests/integration_default_apps.rs (the_desktop_id_is_the_legacy_one), integration_reveal.rs (the_managed_marker_is_the_legacy_one, the_service_file_is_byte_for_byte_the_legacy_one, the_autostart_entry_keeps_the_legacy_name, the_autostart_entry_is_byte_for_byte_the_legacy_one). Settings stay in ~/.config/winspace and the cache in ~/.cache/winspace (glib user dirs, so XDG_CONFIG_HOME and XDG_CACHE_HOME are respected; native/crates/ox-core/src/settings.rs). The stable packages are built with OX_APP_ID=io.winspace.Development (native/crates/ox-app/build.rs, native/tools/build_deb.py, the RPM, Arch and Flatpak recipes). Commands and package takeover: native/tools/test_package_data.py (test_the_stable_host_packages_keep_the_python_commands: winspace and winspace-mount-share) and native/tools/test_build_deb.py (test_the_stable_package_takes_over_the_python_package: Replaces, Conflicts and Provides winspace-explorer (<< 0.8.0)). The preview channel alone uses io.winspace.Development.Native so it can run beside the Python app."
 
 [[feature]]
 id = "INT-030"
@@ -15766,8 +15766,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/ui_release.py::Release label is 1.1.4"]
 bridge = ["environment"]
-native = "todo"
-native_note = "Porting notes: Text is stale: it says 'there is no permanent-delete fallback' although no-Trash locations offer confirmed permanent delete. Native About must list the native stack and accurate limitations."
+native = "done"
+native_note = "native/crates/ox-app/src/window/about.rs: More options > About this build and the About settings' button open the app's message box 'OpenXplorer <version>' with the description, 'Desktop: Rust + GTK 4 + GIO/GVfs.' and accurate limitations (confirmed replace, confirmed permanent delete where there is no Recycle Bin, opt-in cache search, no thumbnails, read-only ZIP browsing, GIO file monitors), and OK. The stale 'no permanent-delete fallback' is gone. Test: about_names_the_native_stack_and_its_limits."
 
 [[feature]]
 id = "UPD-016"
@@ -15795,8 +15795,8 @@ python_tests = [
   "desktop/tests/test_v08.py::RebrandTests::test_original_notice_kept",
 ]
 bridge = []
-native = "todo"
-native_note = "Porting notes: AGPL 'Appropriate Legal Notices' obligation; must remain reachable from the UI."
+native = "done"
+native_note = "native/crates/ox-app/src/window/about.rs: More options > License & source and the About settings' 'Read license & source information' open 'OpenXplorer · License & source' with the copyright, 'AGPL-3.0-only. No warranty.', where the corresponding source is published (the release source archive on GitHub Releases; the native build installs no editable source), and, in a scrolled monospace box, the full AGPL-3.0 text and the original 'Copyright (c) 2026 Winspace contributors' MIT notice, compiled in from LICENSE and licenses/Winspace-MIT.txt. Tests: the_license_dialog_holds_every_notice, the_license_menu_item_is_enabled."
 
 [[feature]]
 id = "UPD-017"
@@ -15824,8 +15824,8 @@ python_tests = [
   "desktop/tests/test_v08.py::RebrandTests::test_original_notice_kept",
 ]
 bridge = []
-native = "partial"
-native_note = "native/tools/build_deb.py builds openxplorer_<version>_all.deb (stable) and openxplorer-native_<version>_<arch>.deb (preview) through native/tools/package_data.py; native/tools/verify_deb.py checks them (native/packaging/README.md). Tests: native/tools/test_build_deb.py (the_stable_package_is_the_installer_the_updater_downloads, the_stable_package_takes_over_the_python_package, only_the_stable_package_recommends_updates_and_the_mount_helper, the_stable_preinst_refuses_a_foreign_processor, the_updater_installs_a_package_labelled_all), native/tools/test_package_data.py (every_layout_installs_the_promised_files, the_stable_host_packages_keep_the_python_commands, crate_licences_travel_with_the_program). native/tools/verify_upgrade.py proved the upgrade from the Python package, the rollback and the coexistence of the preview with real dpkg installations. Differences by design: the program is Rust in /opt/openxplorer/bin with a preinst refusing foreign processors, dependencies come from the linked libraries, and only the SVG icon is installed (no PNG sizes). Not done: the parity marker scanner reads only Rust sources and native/ui-tests, so these Python tests cannot carry a marker. Porting notes: The native build needs its own packaging with the same promises; tools/verify_deb.py checks the Python package."
+native = "done"
+native_note = "native/tools/build_deb.py builds openxplorer_<version>_all.deb (stable) and openxplorer-native_<version>_<arch>.deb (preview) through native/tools/package_data.py; native/tools/verify_deb.py checks them (native/packaging/README.md). The stable package installs the program, /usr/bin/openxplorer, the mount helper, the legacy winspace and winspace-mount-share commands, the desktop entry, metainfo with the swcatalog catalog, the icon and the licences, Replaces/Conflicts winspace-explorer (<< 0.8.0) and Provides it. Tests: native/tools/test_build_deb.py (test_the_stable_package_is_the_installer_the_updater_downloads, test_the_stable_package_takes_over_the_python_package), native/tools/test_package_data.py (test_every_layout_installs_the_promised_files, test_the_stable_host_packages_keep_the_python_commands). native/tools/verify_upgrade.py proved the upgrade from the Python package, the rollback and the coexistence of the preview with real dpkg installations. Differences by design: the program is Rust in /opt/openxplorer/bin with a preinst refusing foreign processors, Depends come from the linked libraries (dpkg-shlibdeps) instead of Python/WebKit packages, and only the SVG icon is installed (no PNG sizes)."
 
 [[feature]]
 id = "UPD-018"
@@ -15842,8 +15842,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/packaging/debian/refresh-caches (postinst and postrm) refreshes the desktop, icon and AppStream caches only; no package installs a FileManager1 service. Tests: native/tools/test_build_deb.py (both_channels_pass_the_script_checks, a_script_that_changes_defaults_is_refused), native/tools/test_package_data.py (a_system_wide_file_manager_service_is_refused); verify_deb.py and verify_layout.py apply the same checks to every built package. Not done: Python tests cannot carry a parity marker."
+native = "done"
+native_note = "native/packaging/debian/refresh-caches (postinst and postrm) refreshes the desktop, icon and AppStream caches only; no package installs a FileManager1 service. verify_deb.py and verify_layout.py apply the same checks to every built package. Tests: native/tools/test_build_deb.py (test_both_channels_pass_the_script_checks, test_a_script_that_changes_defaults_is_refused), native/tools/test_package_data.py (test_a_system_wide_file_manager_service_is_refused)."
 
 [[feature]]
 id = "UPD-019"
@@ -15856,8 +15856,8 @@ openxplorer = "has"
 sources = ["desktop/tools/build_deb.py:115-226", "desktop/tools/verify_deb.py:29-181"]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/tools/build_deb.py: SOURCE_DATE_EPOCH or the last commit, root:root, 0755/0644 modes, xz and md5sums; native/tools/source_archive.py writes reproducible source and vendored-crate archives. native/tools/verify_deb.py checks identity, dependencies, payload safety, promised files, launchers, desktop entry, D-Bus service and AppStream consistency, maintainer scripts, checksums, desktop-file-validate and appstreamcli, and runs the 1.1.x updater against the stable package. Tests: native/tools/test_build_deb.py, native/tools/test_package_data.py, native/tools/test_package_recipes.py (the_archive_is_reproducible_and_root_owned). Not done: Python tests cannot carry a parity marker."
+native = "done"
+native_note = "native/tools/build_deb.py: SOURCE_DATE_EPOCH or the last commit, root:root (dpkg-deb --root-owner-group), 0755 directories and 0755/0644 files, xz and DEBIAN/md5sums; native/tools/source_archive.py writes reproducible source and vendored-crate archives. native/tools/verify_deb.py checks identity, dependencies, payload safety, promised files, launchers, desktop entry, D-Bus service and AppStream consistency, maintainer scripts, checksums, desktop-file-validate and appstreamcli, and runs the 1.1.x updater against the stable package. The Python-3.10 parse and node --check steps have no native counterpart (no Python or JavaScript is packaged except the mount helper, which verify_layout checks). Tests: native/tools/test_build_deb.py (test_staging_is_normalised_and_every_file_is_checksummed), native/tools/test_package_recipes.py (test_the_archive_is_reproducible_and_root_owned), native/tools/test_package_data.py."
 
 [[feature]]
 id = "UPD-020"
@@ -15875,8 +15875,8 @@ python_tests = ["desktop/tests/test_v08.py::RebrandTests::test_appstream_license
 bridge = []
 dolphin = "org.kde.dolphin.appdata.xml"
 gnome = "AppStream metainfo (appstreamcli)"
-native = "partial"
-native_note = "native/packaging/data/<id>.metainfo.xml, installed by every format, pass appstreamcli validate; the stable one keeps the Python ID, licences and release history, and the Debian package adds the swcatalog catalog. Tests: native/tools/test_package_data.py (the_desktop_validators_accept_both_channels, a_metainfo_without_the_package_version_is_refused); verify_deb.py checks the catalog mapping. Not done: Python tests cannot carry a parity marker. Porting notes: desktop/tools/verify_deb.py also checks the metainfo ID, launchable and catalog mapping."
+native = "done"
+native_note = "native/packaging/data/<id>.metainfo.xml, installed by every format, pass appstreamcli validate; the stable one keeps the Python ID, launchable, licences and release history, and the Debian package adds the swcatalog catalog, whose mapping verify_deb.py checks. Tests: native/tools/test_package_data.py (test_the_desktop_validators_accept_both_channels, test_a_metainfo_without_the_package_version_is_refused)."
 
 [[feature]]
 id = "UPD-021"
