@@ -41,6 +41,7 @@ mod renaming;
 mod search;
 mod search_options;
 mod settings;
+mod sidebar;
 mod sidebar_layout;
 mod support;
 mod tab_commands;
