@@ -129,15 +129,15 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         entries.push(for_one_item(mount, facts, false).into());
     }
     if is_folder {
-        let new_tab = if !facts.is_single {
-            item("Open in new tabs", Icon::Add, WindowAction::OpenSelectionInTabs)
-        } else {
+        let new_tab = if facts.is_single {
             MenuItem::with_text_target(
                 "Open in new tab",
                 Icon::Add,
                 WindowAction::OpenTab,
                 &facts.navigation_uri,
             )
+        } else {
+            item("Open in new tabs", Icon::Add, WindowAction::OpenSelectionInTabs)
         };
         let new_window = MenuItem::with_text_target(
             "Open in new window",

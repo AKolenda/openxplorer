@@ -78,6 +78,10 @@ impl Direction {
 
 /// One tab: its history, its items and the state of its listing.
 #[derive(Debug)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate, independent piece of the tab's state"
+)]
 pub(super) struct Tab {
     /// The tab's identity for the window's lifetime.
     pub id: TabId,
