@@ -93,6 +93,7 @@ mod session;
 mod settings_tab;
 mod sidebar;
 mod snapshot_tabs;
+mod software_search;
 mod status_bar;
 mod tab_layout;
 mod tab_menu;

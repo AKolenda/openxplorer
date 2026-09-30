@@ -298,3 +298,26 @@ fn ctrl_shift_f_opens_the_search_tool_at_the_folder() {
         assert_eq!(test.window.shown_message(), NO_SEARCH_TOOL);
     }
 }
+
+/// When no application opens a file's type, "Could not open the item"
+/// offers to find one in Software, while Software is installed.
+///
+/// parity: OPEN-010
+#[gtk::test]
+fn a_file_without_an_application_offers_a_search_in_software() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let mut entry = crate::test_support::file_entry("scene.blend");
+    entry.content_type = Some("application/x-blender".to_owned());
+    let reason = ox_core::integration::OpenError::NoApplication.to_string();
+
+    test.window.report_open_failure(&reason, &entry);
+
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.message_text(), reason);
+    let offers_software = dialog
+        .button_labels()
+        .contains(&"Find an app in Software".to_owned());
+    assert_eq!(offers_software, crate::window::software_search::is_available());
+    dialog.press("OK");
+}

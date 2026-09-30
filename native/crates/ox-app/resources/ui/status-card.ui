@@ -15,9 +15,12 @@
       <class name="status-card"/>
     </style>
     <child>
+      <!-- A fixed round badge: the glyph's expansion stays inside it. -->
       <object class="GtkBox">
         <property name="valign">center</property>
         <property name="halign">start</property>
+        <property name="hexpand">false</property>
+        <property name="vexpand">false</property>
         <style>
           <class name="status-badge"/>
         </style>

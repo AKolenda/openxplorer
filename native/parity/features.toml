@@ -11621,7 +11621,8 @@ python_tests = []
 bridge = ["activateItem", "open"]
 dolphin = "n/a in Dolphin (Open With dialog only)"
 gnome = "org.freedesktop.PackageKit.Modify2.InstallMimeTypes (Nautilus install-mime-activation=true) or gnome-software --search"
-native = "todo"
+native = "done"
+native_note = "When no application opens a file's type, 'Could not open the item' shows 'No application is installed for this file type. Use Open with… to choose one.' and, while GNOME Software is installed, a 'Find an app in Software' button that asks Software over D-Bus (its search action) to search for the content type; no command line is built (native/crates/ox-app/src/window/software_search.rs, activation.rs). Tests: native/crates/ox-app/src/window/software_search.rs (only_a_type_without_an_application_is_searched_for), native/crates/ox-app/src/window/tests/opening.rs (a_file_without_an_application_offers_a_search_in_software)."
 
 [[feature]]
 id = "OPEN-011"
