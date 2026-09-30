@@ -6,8 +6,8 @@
 //! status bar's "Check for updates" (UPD-001). "About this build" runs the
 //! window's `win.about`, as the More menu does; "Check for updates" runs
 //! `win.check-updates`, the Software updates dialog, and its row says what
-//! the last check in any window found. The licence dialog runs
-//! `win.license`, which waits for the packaging and updates milestone.
+//! the last check in any window found. The licence button runs
+//! `win.license`, the License & source dialog.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -23,7 +23,7 @@ use super::{SettingsPage, SharedHandler};
 use crate::config::BUILD_NAME;
 use crate::icons::Icon;
 use crate::update::Updates;
-use crate::window::{ButtonStyle, Milestone, WindowAction};
+use crate::window::{ButtonStyle, WindowAction};
 
 /// A group of one row whose button runs a window action.
 struct ActionGroup {
@@ -68,8 +68,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let (updates, updates_row) = action_group(&UPDATES, Availability::Ready);
     about.append_group(&updates);
     follow_updates(page, &updates_row);
-    let pending = Availability::Unported(Milestone::Distribution);
-    about.append_group(&action_group(&LICENSE_AND_SOURCE, pending).0);
+    about.append_group(&action_group(&LICENSE_AND_SOURCE, Availability::Ready).0);
     about
 }
 

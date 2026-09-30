@@ -225,6 +225,36 @@ impl Dialog {
         self.imp().fields.append(&line);
     }
 
+    /// Adds a long selectable text, such as a licence, in a scrolled
+    /// box `height` pixels tall.
+    pub(super) fn add_scrolled_text(&self, text: &str, height: i32) {
+        let label = gtk::Label::builder()
+            .label(text)
+            .xalign(0.0)
+            .yalign(0.0)
+            .selectable(true)
+            .css_classes(["dialog-hint", "scrolled-text"])
+            .build();
+        let scrolled = gtk::ScrolledWindow::builder()
+            .child(&label)
+            .hscrollbar_policy(gtk::PolicyType::Automatic)
+            .min_content_height(height)
+            .build();
+        self.imp().fields.append(&scrolled);
+    }
+
+    /// The text of the scrolled box, for tests.
+    #[cfg(test)]
+    pub(crate) fn scrolled_text(&self) -> String {
+        let scrolled = super::widget_tree::children(&*self.imp().fields)
+            .find_map(|child| child.downcast::<gtk::ScrolledWindow>().ok());
+        let label = scrolled
+            .and_then(|scrolled| scrolled.child())
+            .and_then(|child| child.downcast::<gtk::Viewport>().ok()?.child())
+            .and_then(|child| child.downcast::<gtk::Label>().ok());
+        label.map(|label| label.text().to_string()).unwrap_or_default()
+    }
+
     /// Adds a check box (`.checkbox-row`).
     pub(super) fn add_check_button(&self, label: &str, active: bool) -> gtk::CheckButton {
         let check = gtk::CheckButton::builder().label(label).active(active).build();

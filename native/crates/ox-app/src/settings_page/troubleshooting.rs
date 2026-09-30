@@ -51,3 +51,27 @@ pub(super) fn build() -> SettingsSection {
     guide.append_text(&parts::note(Icon::Info, restore));
     guide
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::settings_page::search::shown_text;
+
+    /// The page shows the six numbered steps once each, in order, then
+    /// what Restore previous removes.
+    ///
+    /// parity: INT-018
+    #[gtk::test]
+    fn the_guide_shows_each_step_once_in_order() {
+        let text = shown_text(&build());
+        let positions: Vec<usize> = (1..=6)
+            .map(|step| text.find(&format!("{step}. ")).expect("every step is shown"))
+            .collect();
+        assert!(positions.is_sorted(), "{text}");
+        assert_eq!(text.matches("4. ").count(), 1, "one fourth step");
+        let topics = ["ZIP handler", "FileManager1", "Flatpak/Snap", "Open windows…", "Restore previous"];
+        for topic in topics {
+            assert!(text.contains(topic), "{topic} in {text}");
+        }
+    }
+}

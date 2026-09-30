@@ -50,6 +50,8 @@ window.ox.ox-dialog .dialog-note {
   color: @ox_muted;
 }
 window.ox.ox-dialog .dialog-hint { color: @ox_muted; margin-top: 12px; }
+/* A licence keeps its line breaks, so it reads best in a fixed width. */
+window.ox.ox-dialog .scrolled-text { font-family: monospace; font-size: 12px; }
 window.ox.ox-dialog .dialog-check { margin-top: 12px; }
 window.ox.ox-dialog .dialog-error { color: @ox_critical_fill; margin-top: 12px; }
 /* The footer of every dialog: a 1px line above the buttons on the chrome

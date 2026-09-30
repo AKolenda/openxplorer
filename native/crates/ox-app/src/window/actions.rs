@@ -218,6 +218,7 @@ impl BrowserWindow {
             plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
             plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),
             plain_action(WindowAction::About, BrowserWindow::show_about),
+            plain_action(WindowAction::License, BrowserWindow::show_license),
             plain_action(
                 WindowAction::ContextMenu,
                 BrowserWindow::open_context_menu_from_keyboard,

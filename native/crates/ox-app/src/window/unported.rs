@@ -19,7 +19,9 @@ use super::BrowserWindow;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Milestone {
     /// The "Distribution" service: packages, the source they ship with and
-    /// the update flow.
+    /// the update flow. Nothing waits for it now; it stays for the next
+    /// command or setting that is shown before it works.
+    #[allow(dead_code, reason = "no command or setting waits for a milestone at the moment")]
     Distribution,
 }
 
@@ -50,16 +52,9 @@ pub(super) struct UnportedCommand {
     pub milestone: Milestone,
 }
 
-const fn command(action: WindowAction, milestone: Milestone) -> UnportedCommand {
-    UnportedCommand { action, milestone }
-}
-
-/// Every command that is shown but disabled.
-pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 1] = [
-    // The dialog names where the installed source and the corresponding
-    // source archive are, which packaging decides.
-    command(WindowAction::License, Milestone::Distribution),
-];
+/// Every command that is shown but disabled: none since License & source
+/// arrived with the packages.
+pub(super) const UNPORTED_COMMANDS: [UnportedCommand; 0] = [];
 
 /// The milestone that brings the command `action`, or `None` for a
 /// command that works.
@@ -93,15 +88,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_disabled_command_names_the_milestone_that_brings_it() {
-        assert_eq!(
-            tooltip(WindowAction::License, "License & source"),
-            "License & source\nNot in the native preview yet: arrives with packaging and updates."
-        );
-    }
-
-    #[test]
     fn a_working_command_keeps_its_tooltip() {
+        assert_eq!(tooltip(WindowAction::License, "License & source"), "License & source");
         assert_eq!(tooltip(WindowAction::CopyPath, "Copy path"), "Copy path");
         assert_eq!(tooltip(WindowAction::Rename, "Rename (F2)"), "Rename (F2)");
         assert_eq!(tooltip(WindowAction::Cut, "Cut (Ctrl+X)"), "Cut (Ctrl+X)");

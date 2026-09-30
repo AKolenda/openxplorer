@@ -24,6 +24,7 @@ pub(crate) enum Availability {
     #[default]
     Ready,
     /// Shown but disabled until the milestone brings it.
+    #[allow(dead_code, reason = "no setting waits for a milestone at the moment")]
     Unported(Milestone),
 }
 
