@@ -26,6 +26,8 @@ mod network_places;
 mod previous_versions;
 mod search_cache;
 
+pub(crate) use default_open::{add_to_desktop_history, FOLDER_CONTENT_TYPE};
+
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;

@@ -9,6 +9,10 @@
 //! a share is handed over by its local path when it has one, and nothing
 //! is ever executed. A file inside a snapshot or backup is refused, so no
 //! application can change it in place.
+//!
+//! Opened files and visited folders also go to the desktop's recently used
+//! list, as Dolphin records them (OPEN-025), so the file chooser's Recent
+//! and other applications show them.
 
 use gtk::gio;
 use gtk::prelude::*;
@@ -23,7 +27,7 @@ use super::{recent_entry, AppContext};
 
 impl AppContext {
     /// Opens `entry` in its default application and records it among the
-    /// recently opened files.
+    /// recently opened files, the app's and the desktop's.
     ///
     /// # Errors
     ///
@@ -48,9 +52,31 @@ impl AppContext {
             .await
             .map_err(|error| error.to_string())?;
         launch(&prepared, window).await?;
+        let content_type = prepared.entry.content_type.as_deref();
+        add_to_desktop_history(&prepared.entry.uri, content_type.unwrap_or(UNKNOWN_CONTENT_TYPE));
         self.remember_open(recent_entry(&prepared.entry));
         Ok(())
     }
+}
+
+/// The content type of a file GIO could not identify.
+const UNKNOWN_CONTENT_TYPE: &str = "application/octet-stream";
+
+/// The content type of a folder.
+pub(crate) const FOLDER_CONTENT_TYPE: &str = "inode/directory";
+
+/// Adds `uri`, of `content_type`, to the desktop's recently used list,
+/// named as `OpenXplorer`'s. Tests add only with a private data folder
+/// (native/tools/check.py), never to the user's.
+pub(crate) fn add_to_desktop_history(uri: &str, content_type: &str) {
+    #[cfg(test)]
+    if !gtk::glib::user_data_dir().starts_with(std::env::temp_dir()) {
+        return;
+    }
+    let program = gtk::glib::prgname().unwrap_or_else(|| "openxplorer".into());
+    let exec = format!("{program} %u");
+    let data = gtk::RecentData::new(None, None, content_type, "OpenXplorer", &exec, &[], false);
+    gtk::RecentManager::default().add_full(uri, &data);
 }
 
 /// Starts the application `prepared` names on its file, with the
@@ -83,3 +109,25 @@ const NOT_INSTALLED: &str = "That application is no longer installed.";
 
 /// Why the chosen application did not open the file (`launch_default`).
 const NOT_ACCEPTED: &str = "The application did not accept this file.";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// parity: OPEN-025
+    #[gtk::test]
+    fn an_opened_file_joins_the_desktop_recent_list() {
+        if !gtk::glib::user_data_dir().starts_with(std::env::temp_dir()) {
+            return;
+        }
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let uri = ox_core::location::file_uri(&folder.path().join("report.txt"));
+        std::fs::write(folder.path().join("report.txt"), "report").expect("the folder is writable");
+
+        add_to_desktop_history(&uri, "text/plain");
+
+        let recent = gtk::RecentManager::default();
+        let is_listed = || recent.items().iter().any(|item| item.uri() == uri);
+        crate::test_support::harness::wait_until("the desktop to list it", is_listed);
+    }
+}
