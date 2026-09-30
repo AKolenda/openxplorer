@@ -426,12 +426,14 @@ fn the_toast_is_an_inverted_status_78_pixels_above_the_bottom() {
             .next()
             .expect("the toast shows its message");
         assert_eq!(label.accessible_role(), gtk::AccessibleRole::Status);
-        let place = bounds(&test, &label);
+        // The rounded surface holds the message and the Undo button.
+        let surface = label.parent().expect("the toast's surface");
+        let place = bounds(&test, &surface);
         assert_eq!(test.window.height() - place.y - place.height, 78);
         assert!(place.width <= 650, "{place:?}");
         let centre = place.x + place.width / 2;
         assert!((centre - test.window.width() / 2).abs() <= 1, "{place:?}");
-        let background = painted_colour(&label, 4, place.height / 2);
+        let background = painted_colour(&surface, 4, place.height / 2);
         assert_same_colour(background, css_colour(inverted), &format!("{theme} toast"));
     }
 }
