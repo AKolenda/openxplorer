@@ -34,27 +34,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::transfer::Cancellation;
 
-/// How a button looks, and whether Enter in a field presses it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ButtonStyle {
-    /// A bordered button, such as "Skip duplicates".
-    Standard,
-    /// The accent button Enter presses, such as "Save".
-    Primary,
-    /// The red button of a destructive question, such as "Move to Trash".
-    Danger,
-}
-
-impl ButtonStyle {
-    /// The CSS class the skin draws the button with.
-    const fn css_class(self) -> &'static str {
-        match self {
-            ButtonStyle::Standard => "bordered",
-            ButtonStyle::Primary => "accent",
-            ButtonStyle::Danger => "danger",
-        }
-    }
-}
+use super::ButtonStyle;
 
 /// A button of one dialog, as [`Dialog::next_response`] reports it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,7 +275,7 @@ impl Dialog {
 
     /// Adds the Cancel button, which answers "cancelled" like Escape.
     pub(super) fn add_cancel_button(&self) {
-        let button = self.new_button("Cancel", ButtonStyle::Standard);
+        let button = self.new_button("Cancel", ButtonStyle::Bordered);
         let answers = self.imp().answers.clone();
         button.connect_clicked(move |_| {
             let _ = answers.try_send(None);
@@ -303,8 +283,8 @@ impl Dialog {
     }
 
     /// Adds a button labelled `label` in `style`; clicking it answers the
-    /// returned [`DialogButton`]. A primary button is the one Enter in a
-    /// field presses.
+    /// returned [`DialogButton`]. The accent button is the primary one,
+    /// which Enter in a field presses.
     pub(super) fn add_button(&self, label: &str, style: ButtonStyle) -> DialogButton {
         let button = self.new_button(label, style);
         let answer = DialogButton(self.imp().buttons.borrow().len() - 1);
@@ -312,7 +292,7 @@ impl Dialog {
         button.connect_clicked(move |_| {
             let _ = answers.try_send(Some(answer));
         });
-        if style == ButtonStyle::Primary {
+        if style == ButtonStyle::Accent {
             self.set_default_widget(Some(&button));
         }
         answer
@@ -472,7 +452,7 @@ fn escape_cancels() -> gtk::ShortcutController {
 /// and returns once it is dismissed.
 pub(super) async fn show_message(parent: &impl IsA<gtk::Window>, title: &str, text: &str) {
     let dialog = Dialog::new(parent, title, text);
-    dialog.add_button("OK", ButtonStyle::Primary);
+    dialog.add_button("OK", ButtonStyle::Accent);
     dialog.open();
     dialog.next_response().await;
     dialog.finish();

@@ -18,8 +18,9 @@ use ox_core::ops::{
 };
 
 use super::FileCommand;
-use crate::window::dialog::{self, ButtonStyle, Dialog};
+use crate::window::dialog::{self, Dialog};
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// The title of the question before Undo moves changed copies to the
 /// Trash (Dolphin's "Undo File Copy Confirmation").
@@ -88,7 +89,7 @@ impl BrowserWindow {
         };
         let dialog = Dialog::new(self, UNDO_COPY_TITLE, &message);
         dialog.add_cancel_button();
-        dialog.add_button("Undo copy", ButtonStyle::Primary);
+        dialog.add_button("Undo copy", ButtonStyle::Accent);
         dialog.open();
         let confirmed = dialog.next_response().await.is_some();
         if confirmed {

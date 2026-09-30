@@ -19,8 +19,9 @@ use ox_core::transfer::TransferMode;
 
 use super::running::FinishedOperation;
 use super::FileCommand;
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// New ▸ Link's title.
 const NEW_LINK_TITLE: &str = "New link";
@@ -72,7 +73,7 @@ impl BrowserWindow {
         target.set_placeholder_text(Some("For example ~/Documents"));
         let name = dialog.add_text_field("Name", "");
         dialog.add_cancel_button();
-        dialog.add_button("Create", ButtonStyle::Primary);
+        dialog.add_button("Create", ButtonStyle::Accent);
         dialog.open();
         let protection = self.context().write_protection();
         loop {

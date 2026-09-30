@@ -37,8 +37,9 @@ use ox_core::integration::{find_terminal, ExecutableSearch, Sandbox, Terminal, T
 use ox_core::network::local_path;
 
 use super::launcher;
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// What GIO is asked about a file under a drag.
 const PROGRAM_ATTRIBUTES: &str = "standard::type,standard::content-type,access::can-execute";
@@ -303,7 +304,7 @@ impl BrowserWindow {
         );
         let dialog = Dialog::new(self, "Run this program?", &message);
         dialog.add_cancel_button();
-        dialog.add_button("Run", ButtonStyle::Primary);
+        dialog.add_button("Run", ButtonStyle::Accent);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();

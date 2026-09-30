@@ -22,9 +22,10 @@ use ox_core::location::file_uri;
 use ox_core::ops::TransferOutcome;
 use ox_core::transfer::TransferMode;
 
-use super::dialog::{ButtonStyle, Dialog};
+use super::dialog::Dialog;
 use super::file_ops::IncomingItems;
 use super::BrowserWindow;
+use super::ButtonStyle;
 
 /// The question's title.
 const TITLE: &str = "Move files";
@@ -72,8 +73,8 @@ impl BrowserWindow {
         dialog.add_hint(&format!("Old location: {}", previous.display()));
         dialog.add_hint(&format!("New location: {}", destination.display()));
         dialog.add_note(CONFLICTS);
-        dialog.add_button("Don't move", ButtonStyle::Standard);
-        let move_files = dialog.add_button("Move files", ButtonStyle::Primary);
+        dialog.add_button("Don't move", ButtonStyle::Bordered);
+        let move_files = dialog.add_button("Move files", ButtonStyle::Accent);
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();

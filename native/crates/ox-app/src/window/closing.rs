@@ -27,9 +27,10 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::actions::plain_action;
-use super::dialog::{ButtonStyle, Dialog};
+use super::dialog::Dialog;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use super::ButtonStyle;
 
 /// The caption's refusal while an update installs (`askClose`).
 const WAIT_FOR_UPDATE: &str = "Wait for the update to finish before closing OpenXplorer.";
@@ -132,7 +133,7 @@ impl BrowserWindow {
     async fn ask_to_cancel_and_close(&self) {
         let dialog = Dialog::new(self, RUNNING_TITLE, RUNNING_QUESTION);
         // First, so it has the focus and Enter never cancels by accident.
-        dialog.add_button(KEEP_OPEN, ButtonStyle::Standard);
+        dialog.add_button(KEEP_OPEN, ButtonStyle::Bordered);
         let close = dialog.add_button(CANCEL_AND_CLOSE, ButtonStyle::Danger);
         dialog.open();
         let answer = dialog.next_response().await;

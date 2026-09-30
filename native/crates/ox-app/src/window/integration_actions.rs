@@ -17,9 +17,10 @@ use ox_core::location::{is_smb_server, parent_location};
 use ox_core::update::Activity;
 
 use super::actions::{plain_action, text_action};
-use super::dialog::{ButtonStyle, Dialog};
+use super::dialog::Dialog;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use super::ButtonStyle;
 use crate::integration::{self, OpenWithDialog, OpenWithSubject, Tool};
 use crate::locations::Page;
 use crate::update::{UpdateDialog, UpdateState};
@@ -246,7 +247,7 @@ impl BrowserWindow {
             async move {
                 let dialog = Dialog::new(&window, "Open Terminal Here", &question);
                 dialog.add_cancel_button();
-                let open = dialog.add_button("Open terminals", ButtonStyle::Primary);
+                let open = dialog.add_button("Open terminals", ButtonStyle::Accent);
                 dialog.open();
                 let answer = dialog.next_response().await;
                 dialog.finish();

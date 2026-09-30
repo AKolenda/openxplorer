@@ -15,8 +15,9 @@ use gtk::prelude::*;
 use ox_core::ops::UnstorableAsker;
 use ox_core::transfer::{UnstorableAnswer, UnstorableItem, UnstorableReason};
 
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// A question from the worker and where its answer goes.
 type Question = (UnstorableItem, async_channel::Sender<UnstorableAnswer>);
@@ -82,9 +83,9 @@ impl BrowserWindow {
         let dialog = Dialog::new(self, title, &message);
         let for_all = dialog.add_check_button("Do this for all such items", false);
         dialog.add_cancel_button();
-        let skip = dialog.add_button("Skip", ButtonStyle::Standard);
+        let skip = dialog.add_button("Skip", ButtonStyle::Bordered);
         let replace = (item.reason == UnstorableReason::InvalidCharacters)
-            .then(|| dialog.add_button("Replace invalid characters", ButtonStyle::Primary));
+            .then(|| dialog.add_button("Replace invalid characters", ButtonStyle::Accent));
         dialog.open();
         let pressed = dialog.next_response().await;
         let for_all = for_all.is_active();

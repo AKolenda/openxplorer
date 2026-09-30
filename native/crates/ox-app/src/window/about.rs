@@ -13,8 +13,9 @@
 use gtk::glib;
 use ox_core::update::REPOSITORY;
 
-use super::dialog::{ButtonStyle, Dialog};
+use super::dialog::Dialog;
 use super::BrowserWindow;
+use super::ButtonStyle;
 use crate::config::{APP_ID, BUILD_NAME};
 
 /// The heading of About this build in a stable build: the product and its
@@ -100,7 +101,7 @@ impl BrowserWindow {
 
     fn about_dialog(&self) -> Dialog {
         let dialog = Dialog::new(self, about_title(), &about_text());
-        dialog.add_button("OK", ButtonStyle::Primary);
+        dialog.add_button("OK", ButtonStyle::Accent);
         dialog
     }
 
@@ -108,7 +109,7 @@ impl BrowserWindow {
         let dialog = Dialog::new(self, LICENSE_TITLE, &license_text());
         let notices = format!("{AGPL}\n\nOriginal notice:\n\n{WINSPACE_NOTICE}");
         dialog.add_scrolled_text(&notices, LICENSE_TEXT_HEIGHT);
-        dialog.add_button("OK", ButtonStyle::Primary);
+        dialog.add_button("OK", ButtonStyle::Accent);
         dialog
     }
 }

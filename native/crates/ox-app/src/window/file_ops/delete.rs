@@ -24,8 +24,9 @@ use ox_core::ops::{
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
 use super::FileCommand;
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// A Trash or delete request for `uris`.
 fn removal(mode: TransferMode, uris: Vec<String>) -> TransferRequest {

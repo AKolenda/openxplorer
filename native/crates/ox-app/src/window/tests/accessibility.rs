@@ -20,7 +20,8 @@ use crate::test_support::harness::{
     application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow,
 };
 use crate::text_size::TextSize;
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
+use crate::window::ButtonStyle;
 
 /// Emits `key` with `modifiers` on the key controller of `widget`;
 /// returns true when the widget handled it.
@@ -147,7 +148,7 @@ fn a_dialog_focuses_its_field_closes_menus_and_enter_presses_its_button() {
     let dialog = Dialog::new(&test.window, "Rename", "");
     let field = dialog.add_text_field("Name", "Notes 2.txt");
     dialog.add_cancel_button();
-    dialog.add_button("Save", ButtonStyle::Primary);
+    dialog.add_button("Save", ButtonStyle::Accent);
     dialog.open();
     let saved = Rc::new(Cell::new(None));
     let answer = Rc::clone(&saved);
@@ -372,8 +373,8 @@ fn large_text_grows_rows_and_dialogs_still_fit_800_by_600() {
     );
     dialog.add_text_field("Name", "Notes 2.txt");
     dialog.add_check_button("Do this for all conflicts", false);
-    dialog.add_button("Replace", ButtonStyle::Primary);
-    dialog.add_button("Skip duplicates", ButtonStyle::Standard);
+    dialog.add_button("Replace", ButtonStyle::Accent);
+    dialog.add_button("Skip duplicates", ButtonStyle::Bordered);
     dialog.add_cancel_button();
     let height_at = |percent: u32| {
         skin.set_text_size(TextSize::from_percent(percent));

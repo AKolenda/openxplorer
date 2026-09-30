@@ -23,8 +23,9 @@ use ox_core::transfer::Cancellation;
 use super::names::check_typed_name;
 use super::new_items::NewFileKind;
 use super::FileCommand;
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// Why an empty office document is useless, and that templates are safe
 /// (`.modal-note` in `newTemplateDialog`).
@@ -124,7 +125,7 @@ impl BrowserWindow {
         let dialog = Dialog::new(self, title, description);
         let fields = add_template_fields(&dialog, list, initial_position(kind, list));
         dialog.add_cancel_button();
-        dialog.add_button("Create", ButtonStyle::Primary);
+        dialog.add_button("Create", ButtonStyle::Accent);
         dialog.open();
         loop {
             dialog.next_response().await?;

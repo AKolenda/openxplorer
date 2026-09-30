@@ -22,10 +22,11 @@ use ox_core::integration;
 use crate::locations::{self, Page};
 
 use super::desktop_link::{link_target_of_file, may_be_link, LinkTarget};
-use super::dialog::{ButtonStyle, Dialog};
+use super::dialog::Dialog;
 use super::session::TabId;
 use super::software_search::{self, FIND_IN_SOFTWARE};
 use super::BrowserWindow;
+use super::ButtonStyle;
 
 /// Why an item cannot be opened (`activation_kind` in activation.py).
 const NOT_OPENABLE: &str = "This item is not a regular file or a readable folder.";
@@ -362,8 +363,8 @@ impl BrowserWindow {
                 let dialog = Dialog::new(&window, OPEN_FAILED, &reason);
                 let find = unhandled
                     .as_ref()
-                    .map(|_| dialog.add_button(FIND_IN_SOFTWARE, ButtonStyle::Standard));
-                dialog.add_button("OK", ButtonStyle::Primary);
+                    .map(|_| dialog.add_button(FIND_IN_SOFTWARE, ButtonStyle::Bordered));
+                dialog.add_button("OK", ButtonStyle::Accent);
                 dialog.open();
                 let answer = dialog.next_response().await;
                 dialog.finish();

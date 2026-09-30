@@ -10,8 +10,9 @@
 use gtk::glib;
 use gtk::prelude::*;
 
-use super::dialog::{ButtonStyle, Dialog};
+use super::dialog::Dialog;
 use super::BrowserWindow;
+use super::ButtonStyle;
 
 /// Whether `name` matches `pattern`, with `*` for any run of characters
 /// and `?` for exactly one, ignoring case.
@@ -59,7 +60,7 @@ impl BrowserWindow {
                 );
                 let field = dialog.add_text_field("Pattern", "*");
                 dialog.add_cancel_button();
-                dialog.add_button("Select", ButtonStyle::Primary);
+                dialog.add_button("Select", ButtonStyle::Accent);
                 dialog.open();
                 let answer = dialog.next_response().await;
                 dialog.finish();

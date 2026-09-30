@@ -19,8 +19,9 @@ use gtk::{gio, glib};
 use ox_core::transfer::Cancellation;
 
 use super::names::{check_typed_name, name_warning};
-use crate::window::dialog::{ButtonStyle, Dialog};
+use crate::window::dialog::Dialog;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// The line under the title (`nameDialog`).
 const NAME_HINT: &str = "Names must not contain slashes.";
@@ -114,7 +115,7 @@ where
     let field = dialog.add_text_field("Name", request.initial_name);
     warn_while_typing(&dialog, &field, &request);
     dialog.add_cancel_button();
-    dialog.add_button("Save", ButtonStyle::Primary);
+    dialog.add_button("Save", ButtonStyle::Accent);
     dialog.open();
     if request.selection == NameSelection::Stem {
         let stem = i32::try_from(stem_length(request.initial_name)).unwrap_or(-1);
