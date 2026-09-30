@@ -6,10 +6,13 @@
 //! tabs shrink toward 100 pixels and then scroll sideways
 //! ([`TabLayout`](super::tab_layout::TabLayout)), so opening many tabs
 //! never widens the window. The whole tab is the click target, as in
-//! app.js: it is one focusable widget announced as a tab of the "Folder
-//! tabs" list with its selected state; a click or Enter shows it and a
-//! middle-click closes it; a right-click opens the tab's menu
-//! ([`super::tab_menu`]). The close button inside claims its own clicks.
+//! app.js: it is one widget announced as a tab of the "Folder tabs" list
+//! with its selected state; a click or Enter shows it and a middle-click
+//! closes it; a right-click opens the tab's menu ([`super::tab_menu`]).
+//! The close button inside claims its own clicks. Only the tab in front
+//! takes keyboard focus (a roving tab stop, ACC-008), and the arrow keys,
+//! Home and End show another tab and move focus with it, as GTK's own tab
+//! bars do.
 //!
 //! [`TabStrip`] is a widget subclass whose scroller and tab list are the
 //! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
@@ -157,6 +160,8 @@ impl TabStrip {
     /// Replaces the tabs with `tabs` and scrolls the active one into view.
     pub(super) fn set_tabs(&self, tabs: &[TabView]) {
         let imp = self.imp();
+        // A tab being shown by the keyboard keeps focus in the strip.
+        let had_focus = imp.tab_list.focus_child().is_some();
         remove_children(&*imp.tab_list);
         let mut active = None;
         let mut shown = Vec::with_capacity(tabs.len());
@@ -172,6 +177,9 @@ impl TabStrip {
         let Some(active) = active else {
             return;
         };
+        if had_focus {
+            active.grab_focus();
+        }
         // After the new tabs are laid out, so their positions are known.
         let viewport = imp.viewport.get();
         glib::idle_add_local_once(glib::clone!(
@@ -206,6 +214,22 @@ impl TabStrip {
         menu.popup();
     }
 
+    /// The tab `step` leads to from the tab `widget`; `None` past either
+    /// end.
+    fn tab_beside(&self, widget: &gtk::Widget, step: TabStep) -> Option<TabId> {
+        let shown = self.imp().shown.borrow();
+        let index = shown
+            .iter()
+            .position(|(_, tab)| tab.upcast_ref::<gtk::Widget>() == widget)?;
+        let target = match step {
+            TabStep::Previous => index.checked_sub(1)?,
+            TabStep::Next => index + 1,
+            TabStep::First => 0,
+            TabStep::Last => shown.len().checked_sub(1)?,
+        };
+        shown.get(target).map(|(tab, _)| tab.id)
+    }
+
     /// The tab list, for tests.
     #[cfg(test)]
     pub(super) fn tab_list(&self) -> gtk::Box {
@@ -229,13 +253,13 @@ fn tab_icon(icon: Art) -> ArtImage {
     image
 }
 
-/// The widget of `tab`: its icon, title and close button, one focusable
-/// target that shows the tab on a click or Enter and closes it on a
-/// middle-click.
+/// The widget of `tab`: its icon, title and close button, one target that
+/// shows the tab on a click or Enter and closes it on a middle-click. Only
+/// the tab in front takes keyboard focus.
 fn tab_widget(tab: &TabView) -> gtk::Box {
     let widget = gtk::Box::builder()
         .spacing(ICON_TO_TITLE)
-        .focusable(true)
+        .focusable(tab.active)
         .accessible_role(gtk::AccessibleRole::Tab)
         .tooltip_text(&tab.tooltip)
         .css_classes(["tab"])
@@ -322,15 +346,56 @@ fn select_on_click(id: glib::Variant) -> gtk::GestureClick {
     click
 }
 
-/// Enter or Space on a focused tab shows it.
+/// Where an arrow key, Home or End moves from a focused tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TabStep {
+    Previous,
+    Next,
+    First,
+    Last,
+}
+
+impl TabStep {
+    /// The step `key` asks for, if any.
+    fn for_key(key: gdk::Key) -> Option<Self> {
+        match key {
+            gdk::Key::Left | gdk::Key::KP_Left => Some(TabStep::Previous),
+            gdk::Key::Right | gdk::Key::KP_Right => Some(TabStep::Next),
+            gdk::Key::Home | gdk::Key::KP_Home => Some(TabStep::First),
+            gdk::Key::End | gdk::Key::KP_End => Some(TabStep::Last),
+            _ => None,
+        }
+    }
+}
+
+/// Shows the tab `step` leads to from the focused tab `widget`, if any;
+/// the strip then gives that tab focus.
+fn step_to_tab(widget: &gtk::Widget, step: TabStep) {
+    let strip = widget
+        .ancestor(TabStrip::static_type())
+        .and_downcast::<TabStrip>();
+    if let Some(id) = strip.and_then(|strip| strip.tab_beside(widget, step)) {
+        WindowAction::SelectTab.activate_from(widget, Some(&id.to_variant()));
+    }
+}
+
+/// Enter or Space on a focused tab shows it; the arrow keys, Home and End
+/// show another tab.
 fn select_on_enter(id: glib::Variant) -> gtk::EventControllerKey {
     let keys = gtk::EventControllerKey::new();
     keys.connect_key_pressed(move |keys, key, _, _| {
+        let Some(widget) = keys.widget() else {
+            return glib::Propagation::Proceed;
+        };
+        if let Some(step) = TabStep::for_key(key) {
+            step_to_tab(&widget, step);
+            return glib::Propagation::Stop;
+        }
         let activates = matches!(key, gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::space);
         if !activates {
             return glib::Propagation::Proceed;
         }
-        run_on(keys.widget(), WindowAction::SelectTab, &id);
+        run_on(Some(widget), WindowAction::SelectTab, &id);
         glib::Propagation::Stop
     });
     keys

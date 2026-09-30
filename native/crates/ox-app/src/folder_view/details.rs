@@ -21,6 +21,7 @@ use ox_core::search::display_path;
 use ox_core::settings::{ColumnWidth, ColumnWidths};
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners};
+use crate::folder_view::column_keys;
 use crate::folder_view::column_titles;
 use crate::folder_view::column_widths;
 use crate::folder_view::item::FileItem;
@@ -254,8 +255,35 @@ impl DetailsView {
             model.attach_column_sorter(&sorter);
         }
         view.add_sort_carets();
+        column_keys::make_titles_keyboard_operable(&view);
+        view.describe_rows(model);
         view.sort_by(SortOrder::DEFAULT);
         view
+    }
+
+    /// Names each row after its item and tells screen readers how many
+    /// rows the folder has, drawn or not (`aria-label` and
+    /// `aria-rowcount` in `renderRows`).
+    fn describe_rows(&self, model: &FolderModel) {
+        let column_view = self.column_view();
+        cells::label_view(column_view.upcast_ref());
+        let rows = gtk::SignalListItemFactory::new();
+        rows.connect_bind(|_, object| {
+            if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
+                if let Some(item) = row.item().and_downcast::<FileItem>() {
+                    row.set_accessible_label(&item.entry().name);
+                }
+            }
+        });
+        column_view.set_row_factory(Some(&rows));
+        model.selection().connect_items_changed(glib::clone!(
+            #[weak]
+            column_view,
+            move |selection, _, _, _| {
+                let count = i32::try_from(selection.n_items()).unwrap_or(i32::MAX);
+                column_view.update_relation(&[gtk::accessible::Relation::RowCount(count)]);
+            }
+        ));
     }
 
     /// The column view, which holds the selection model, the sorter and

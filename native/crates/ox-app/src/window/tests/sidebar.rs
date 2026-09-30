@@ -56,7 +56,10 @@ fn the_group_chevrons_never_collapse_and_quick_access_has_no_heading() {
         .iter()
         .map(|label| label.text().to_string())
         .collect();
-    assert!(!texts.iter().any(|text| text.contains("Quick access")), "{texts:?}");
+    assert!(
+        !texts.iter().any(|text| text.contains("Quick access")),
+        "{texts:?}"
+    );
     for group in ["This PC", "Network"] {
         let buttons = descendants::<gtk::Button>(&row_named(&test, group));
         assert!(buttons.is_empty(), "{group}'s chevron is no button");
@@ -153,7 +156,11 @@ fn pins_show_the_pin_mark_and_open_in_a_background_tab_on_a_middle_click() {
     middle.emit_by_name::<()>("released", &[&1_i32, &5.0_f64, &y]);
 
     assert_eq!(test.window.tab_count(), 2);
-    assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the new tab stays behind");
+    assert_eq!(
+        test.window.current_uri(),
+        Some(fixture.uri()),
+        "the new tab stays behind"
+    );
 }
 
 /// parity: SIDE-007
@@ -161,7 +168,9 @@ fn pins_show_the_pin_mark_and_open_in_a_background_tab_on_a_middle_click() {
 fn only_folders_are_pinned_one_request_at_a_time_and_not_from_pages() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    test.window.folder_model().select_only(test.position_of("Notes 2.txt"));
+    test.window
+        .folder_model()
+        .select_only(test.position_of("Notes 2.txt"));
     test.activate("pin-selected", None);
     assert_eq!(
         test.window.shown_message().as_str(),

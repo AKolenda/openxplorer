@@ -370,3 +370,13 @@ fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
     }
     row
 }
+
+/// Names an icon-only menu button for screen readers. GTK 4.14 gives
+/// keyboard focus to the menu button's inner toggle, which does not take
+/// the menu button's name, so both carry it.
+pub(super) fn name_menu_button(button: &gtk::MenuButton, name: &str) {
+    button.update_property(&[gtk::accessible::Property::Label(name)]);
+    if let Some(toggle) = button.first_child() {
+        toggle.update_property(&[gtk::accessible::Property::Label(name)]);
+    }
+}

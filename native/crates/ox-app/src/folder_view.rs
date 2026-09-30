@@ -10,10 +10,12 @@
 //!   [`reconcile`] merges a reload into a tab's store of [`item`]s.
 //! - [`model`] filters ([`filter`]) and sorts ([`sorting`]) the active
 //!   tab's store and holds the selection both views share.
-//! - [`details`] (with its [`column_titles`] and [`column_widths`]) and
-//!   [`grid`] show the model through the [`cells`] they share.
+//! - [`details`] (with its [`column_titles`], [`column_keys`] and
+//!   [`column_widths`]) and [`grid`] show the model through the
+//!   [`cells`] they share.
 
 pub(crate) mod cells;
+pub(crate) mod column_keys;
 pub(crate) mod column_titles;
 pub(crate) mod column_widths;
 pub(crate) mod details;

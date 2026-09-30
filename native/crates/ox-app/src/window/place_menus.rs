@@ -94,7 +94,12 @@ fn removal_items(uri: &str, kind: VolumeKind, controls: MountControls) -> Vec<Me
 
 /// `driveMenu`: Open, Open in new window and the cache entry, then what
 /// the drive allows and Properties.
-fn drive_entries(uri: &str, kind: VolumeKind, controls: MountControls, caching: Option<Caching>) -> Vec<MenuEntry> {
+fn drive_entries(
+    uri: &str,
+    kind: VolumeKind,
+    controls: MountControls,
+    caching: Option<Caching>,
+) -> Vec<MenuEntry> {
     let mut entries = vec![
         item("Open", Icon::HardDrive, WindowAction::GoTo, uri),
         item("Open in new window", Icon::Add, WindowAction::OpenWindow, uri),
@@ -115,7 +120,12 @@ fn drive_entries(uri: &str, kind: VolumeKind, controls: MountControls, caching: 
 /// `terminalMenuItem`: Open in Terminal, disabled on a server's share list,
 /// which has no folder to open a terminal in.
 fn terminal_item(uri: &str) -> MenuEntry {
-    let item = MenuItem::with_text_target("Open in Terminal", Icon::WindowConsole, WindowAction::OpenInTerminalOf, uri);
+    let item = MenuItem::with_text_target(
+        "Open in Terminal",
+        Icon::WindowConsole,
+        WindowAction::OpenInTerminalOf,
+        uri,
+    );
     let availability = if is_smb_server(uri) {
         ItemAvailability::Disabled
     } else {
@@ -268,7 +278,12 @@ mod tests {
             is_saved: false,
             ..saved.clone()
         };
-        let common = ["Open", "Open in new tab", "Open in new window", "Open in Terminal"];
+        let common = [
+            "Open",
+            "Open in new tab",
+            "Open in new window",
+            "Open in Terminal",
+        ];
         let saved_menu = labels(&PlaceMenu::Network(saved));
         let browsed_menu = labels(&PlaceMenu::Network(browsed));
         let server_menu = labels(&PlaceMenu::Network(studio_nas_server()));
@@ -303,8 +318,14 @@ mod tests {
             is_connected: true,
             kind: NetworkKind::Mount,
         });
-        assert_eq!(availability_of_terminal(&server), Some(ItemAvailability::Disabled));
-        assert_eq!(availability_of_terminal(&share), Some(ItemAvailability::FollowsAction));
+        assert_eq!(
+            availability_of_terminal(&server),
+            Some(ItemAvailability::Disabled)
+        );
+        assert_eq!(
+            availability_of_terminal(&share),
+            Some(ItemAvailability::FollowsAction)
+        );
         assert_eq!(labels(&mount).last().map(String::as_str), Some("Properties"));
         assert!(!labels(&share).contains(&"Properties".to_owned()));
     }
@@ -375,7 +396,13 @@ mod tests {
             .collect();
         assert_eq!(
             cached,
-            ["Open", "Open in new window", "Cache this folder for search", "-", "Properties"],
+            [
+                "Open",
+                "Open in new window",
+                "Cache this folder for search",
+                "-",
+                "Properties"
+            ],
             "the cache entry follows Open in new window"
         );
     }
