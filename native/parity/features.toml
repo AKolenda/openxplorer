@@ -14574,7 +14574,7 @@ bridge = []
 dolphin = "Dolphin is Exec-launched and uses KDBusService (not DBusActivatable)"
 gnome = "org.freedesktop.Application (exported by GApplication), DBusActivatable desktop key, /usr/share/dbus-1/services/io.winspace.Development.service; Nautilus 46 uses DBusActivatable=true"
 native = "todo"
-native_note = "Porting notes: Keep the Exec fallback. Service activation for FileManager1 must never open a window."
+native_note = "Not done, needs an owner decision: the packages already install a D-Bus service file that starts the app with --gapplication-service (native/packaging/data/dbus-service.in), but DBusActivatable=true is not set. With it, GNOME Shell would start the app without running the launch guard that checks for an outdated running instance (UPD-008), and the quick actions would call ActivateAction with the desktop action IDs NewWindow, Windows and Settings, which are compatibility contracts while the app's actions are new-window, windows and settings. Porting notes: Keep the Exec fallback. Service activation for FileManager1 must never open a window."
 
 [[feature]]
 id = "INT-003"
@@ -14665,7 +14665,7 @@ python_tests = [
 bridge = ["newWindow"]
 dolphin = "dolphin --select / --split / --new-window / --daemon"
 native = "todo"
-native_note = "Porting notes: --split is missing."
+native_note = "Not done: the native app has no split view yet (tracked with VIEW), so --split has nothing to open. Add the option together with split view."
 
 [[feature]]
 id = "INT-006"
@@ -15230,6 +15230,7 @@ bridge = ["search"]
 dolphin = "KRunner Baloo runner (Plasma, not Dolphin)"
 gnome = "org.gnome.Shell.SearchProvider2 + /usr/share/gnome-shell/search-providers/*.ini (Nautilus ships one)"
 native = "todo"
+native_note = "Not done in this pass (could priority): it needs an org.gnome.Shell.SearchProvider2 object over the search cache, an opt-in setting, and a search-provider .ini in every package format, which the packaging verifiers must then promise."
 
 [[feature]]
 id = "INT-026"

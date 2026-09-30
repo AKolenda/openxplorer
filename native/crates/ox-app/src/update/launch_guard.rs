@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What happens before the application starts: `--version`, `--check`,
-//! `--diagnose`, `--quit`, `--restart`, and the check for a running instance an upgrade left
-//! outdated; and the `runtime-info` action that lets a later launch run
-//! that check against this process.
+//! `--diagnose`, `--quit`, `--restart`, and the check for a running
+//! instance an upgrade left outdated; and the `runtime-info` action that
+//! lets a later launch run that check against this process.
 //!
 //! Ports `main` and `confirm_restart` in `desktop/winspace.py` and the
 //! `runtime-info` action of `OpenXplorer.startup`; the guard itself is
