@@ -14,7 +14,6 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::{self, normalise_navigation, parent_location, LocationError, VirtualPlace};
 
-use crate::app_context::{add_to_desktop_history, FOLDER_CONTENT_TYPE};
 use crate::history::LeftView;
 use crate::locations::{self, Page};
 
@@ -130,11 +129,6 @@ impl BrowserWindow {
         let uri = self.resolve_address(address)?;
         if self.refuse_while_active_tab_moves() {
             return Ok(());
-        }
-        // Folders on disk and on shares join the desktop's recent list;
-        // the landing pages and the Recycle Bin are not places to reopen.
-        if uri.starts_with("file://") || uri.starts_with("smb://") {
-            add_to_desktop_history(&uri, FOLDER_CONTENT_TYPE);
         }
         let left = self.current_uri();
         let Some(id) = self.push_location(&uri) else {

@@ -28,10 +28,7 @@ pub(super) fn unhandled_type(reason: &str, content_type: Option<&str>) -> Option
 
 /// Whether GNOME Software is installed.
 pub(super) fn is_available() -> bool {
-    let desktop_id = format!("{SOFTWARE_ID}.desktop");
-    gio::AppInfo::all()
-        .iter()
-        .any(|app| app.id().as_deref() == Some(desktop_id.as_str()))
+    crate::integration::installed_application(&format!("{SOFTWARE_ID}.desktop")).is_some()
 }
 
 /// Asks GNOME Software to search for applications that open

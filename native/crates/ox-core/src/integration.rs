@@ -93,7 +93,7 @@ pub use file_manager_request::{
     FileManagerMethod, FileManagerRequest, FileManagerRequestError, MAX_REQUEST_LOCATIONS,
 };
 pub use mime_type::MimeType;
-pub use opening::{DefaultOpener, Launcher, OpenTarget, PreparedOpen};
+pub use opening::{DefaultOpener, Launcher, OpenTarget, PreparedOpen, UNKNOWN_CONTENT_TYPE};
 pub use reveal::{
     DisabledReveal, RevealError, RevealPaths, RevealRegistration, AUTOSTART_FILE, FLATPAK_OPT_IN_FILE,
     MANAGED_MARKER, SERVICE_FILE,

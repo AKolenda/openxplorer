@@ -26,15 +26,14 @@ use crate::location::normalise;
 use crate::transfer::Cancellation;
 
 /// The content type of a file GIO could not identify.
-const UNKNOWN_CONTENT_TYPE: &str = "application/octet-stream";
+pub const UNKNOWN_CONTENT_TYPE: &str = "application/octet-stream";
 
 /// What opens the file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Launcher {
     /// The installed application with this desktop ID.
     Application {
-        /// The application's desktop ID; launch it with
-        /// `gio::DesktopAppInfo::new(id)`.
+        /// The application's desktop ID, as `gio::AppInfo::id` gives it.
         id: String,
         /// The application's name, for the "Opened with" message.
         name: String,

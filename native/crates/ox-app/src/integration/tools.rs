@@ -59,14 +59,17 @@ impl Tool {
     /// The first installed application that can be the tool and takes
     /// files or addresses.
     pub(crate) fn installed(self) -> Option<gio::AppInfo> {
-        let installed = gio::AppInfo::all();
         self.candidates()
             .iter()
-            .find_map(|id| {
-                installed.iter().find(|app| {
-                    app.id().as_deref() == Some(*id) && (app.supports_files() || app.supports_uris())
-                })
-            })
-            .cloned()
+            .filter_map(|id| installed_application(id))
+            .find(|app| app.supports_files() || app.supports_uris())
     }
+}
+
+/// The installed application whose desktop ID is `id`, such as
+/// `org.gnome.Meld.desktop`.
+pub(crate) fn installed_application(id: &str) -> Option<gio::AppInfo> {
+    gio::AppInfo::all()
+        .into_iter()
+        .find(|application| application.id().as_deref() == Some(id))
 }

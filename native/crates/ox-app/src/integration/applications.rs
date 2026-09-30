@@ -17,15 +17,13 @@ use std::path::PathBuf;
 use gtk::gio;
 use gtk::prelude::*;
 use ox_core::entry::{inspect, Entry, EntryError, EntryKind};
-use ox_core::integration::{unique_applications, APP_ID};
+use ox_core::integration::{unique_applications, APP_ID, UNKNOWN_CONTENT_TYPE};
 use ox_core::location::{normalise, LocationError};
 use ox_core::network::local_path;
 use ox_core::transfer::Cancellation;
 
 /// The content type of a folder.
 const FOLDER_CONTENT_TYPE: &str = "inode/directory";
-/// The content type of a file GIO could not identify.
-const UNKNOWN_CONTENT_TYPE: &str = "application/octet-stream";
 
 /// Why Open with could not list or launch. `Display` is the message the
 /// window shows.
