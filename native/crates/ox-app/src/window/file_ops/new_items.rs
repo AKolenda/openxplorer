@@ -51,9 +51,12 @@ impl BrowserWindow {
             initial_name: NEW_FOLDER_NAME,
             selection: NameSelection::Whole,
         };
-        let created = ask_for_name(self, request, |name| {
+        let created = ask_for_name(self, request, |name, cancel| {
             let folder = folder.clone();
-            let context = OperationContext::new(protection.clone());
+            let context = OperationContext {
+                cancel,
+                protection: protection.clone(),
+            };
             async move {
                 create_item(&folder, &name, ItemKind::Folder, &context)
                     .await

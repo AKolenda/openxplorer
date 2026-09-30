@@ -63,9 +63,12 @@ impl BrowserWindow {
             selection,
         };
         let protection = self.context().write_protection();
-        let renamed = ask_for_name(self, request, |name| {
+        let renamed = ask_for_name(self, request, |name, cancel| {
             let uri = entry.uri.clone();
-            let context = OperationContext::new(protection.clone());
+            let context = OperationContext {
+                cancel,
+                protection: protection.clone(),
+            };
             async move {
                 rename_item(&uri, &name, &context)
                     .await

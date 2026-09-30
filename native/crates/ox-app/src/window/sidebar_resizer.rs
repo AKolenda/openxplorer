@@ -2,10 +2,11 @@
 //! The sidebar resizer as a keyboard and screen-reader control.
 //!
 //! Ports `#sidebar-resizer` and the keys of `setupSidebarResize` in
-//! `desktop/ui/app.js`: the handle of the workspace's `GtkPaned` is a
-//! focusable separator named "Resize sidebar", titled "Drag to resize
-//! sidebar · double-click to reset", that announces the width with its
-//! limits. Left and Right change the width by 10 pixels (40 with Shift)
+//! `desktop/ui/app.js`: the handle of the workspace's `GtkPaned` takes
+//! focus, is named "Resize sidebar", titled "Drag to resize sidebar ·
+//! double-click to reset", and announces the width with its limits. GTK
+//! 4.14 fixes the handle's role as generic, so unlike app.js's
+//! `role=separator` it is not announced as a separator. Left and Right change the width by 10 pixels (40 with Shift)
 //! and Home returns it to 210; every change is saved. Dragging and the
 //! double-click reset are [`super::preferences`]'.
 
@@ -44,7 +45,7 @@ fn width_for_key(key: gdk::Key, shift: bool, width: i32) -> Option<i32> {
 }
 
 impl BrowserWindow {
-    /// Makes the pane handle a named, focusable separator that the arrow
+    /// Makes the pane handle a named, focusable control that the arrow
     /// keys and Home move.
     pub(super) fn install_sidebar_resizer(&self) {
         let workspace = self.workspace();

@@ -12,6 +12,7 @@
 use std::future::Future;
 
 use gtk::prelude::*;
+use ox_core::transfer::Cancellation;
 
 use super::names::check_typed_name;
 use crate::window::dialog::{ButtonStyle, Dialog};
@@ -58,7 +59,7 @@ pub(super) async fn ask_for_name<T, Attempt, Outcome>(
     mut attempt: Attempt,
 ) -> Option<T>
 where
-    Attempt: FnMut(String) -> Outcome,
+    Attempt: FnMut(String, Cancellation) -> Outcome,
     Outcome: Future<Output = Result<T, String>>,
 {
     let dialog = Dialog::new(window, request.title, NAME_HINT);
@@ -80,9 +81,10 @@ where
                 continue;
             }
         };
-        dialog.set_busy(true);
-        let outcome = attempt(name).await;
-        dialog.set_busy(false);
+        let running = Cancellation::new();
+        dialog.set_busy(Some(&running));
+        let outcome = attempt(name, running).await;
+        dialog.set_busy(None);
         match outcome {
             Ok(value) => {
                 dialog.finish();

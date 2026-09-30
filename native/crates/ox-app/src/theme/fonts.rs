@@ -200,7 +200,8 @@ const fn grows(selector: &'static str, floor: i32, per_scale: f64, fixed: f64) -
 /// Every bar and control height that follows the text size: the title
 /// bar and tabs, the sidebar rows (`.side-entry`), the command bar and its
 /// commands, the column titles (`#column-head`), the status bar and the
-/// dialogs' fields and buttons (`.modal input`, `.modal-actions button`).
+/// fields and buttons of every dialog, in-window and network ones too
+/// (`.modal input`, `.modal-actions button`).
 /// The floors are the skin's heights at 100%, so only larger text changes
 /// them.
 const SCALED_HEIGHTS: &[ScaledHeight] = &[
@@ -218,6 +219,19 @@ const SCALED_HEIGHTS: &[ScaledHeight] = &[
     grows(".statusbar", 29, 15.0, 9.0),
     grows("window.ox.ox-dialog entry", 33, 24.0, 8.0),
     grows("window.ox.ox-dialog button.dialog-button", 30, 24.0, 6.0),
+    grows(
+        "window.ox.ox-dialog .dialog-actions button, window.ox.ox-dialog .sign-in-choices button",
+        20,
+        24.0,
+        -4.0,
+    ),
+    grows("ox-dialog-layer .ox-dialog entry", 33, 24.0, 8.0),
+    grows(
+        "window.ox ox-dialog-layer .ox-dialog .dialog-actions button",
+        30,
+        24.0,
+        6.0,
+    ),
 ];
 
 /// The padding of the solid window frame GTK draws without a compositor
@@ -329,6 +343,17 @@ mod tests {
             (".statusbar", 29, 39),
             ("window.ox.ox-dialog entry", 33, 56),
             ("window.ox.ox-dialog button.dialog-button", 30, 54),
+            (
+                "window.ox.ox-dialog .dialog-actions button, window.ox.ox-dialog .sign-in-choices button",
+                20,
+                44,
+            ),
+            ("ox-dialog-layer .ox-dialog entry", 33, 56),
+            (
+                "window.ox ox-dialog-layer .ox-dialog .dialog-actions button",
+                30,
+                54,
+            ),
         ] {
             assert!(
                 normal.contains(&format!("{selector} {{ min-height: {at_100}px; }}")),

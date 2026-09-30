@@ -131,10 +131,10 @@ impl BrowserWindow {
             let Some(request) = template_request(&dialog, &fields, list, folder_uri) else {
                 continue;
             };
-            dialog.set_busy(true);
             let context = OperationContext::new(self.context().write_protection());
+            dialog.set_busy(Some(&context.cancel));
             let outcome = create_from_template(&request, &context).await;
-            dialog.set_busy(false);
+            dialog.set_busy(None);
             match outcome {
                 Ok(created) => {
                     dialog.finish();

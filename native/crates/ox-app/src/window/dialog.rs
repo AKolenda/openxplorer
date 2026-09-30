@@ -11,8 +11,10 @@
 //!   the first button (Cancel) has it, so Enter never confirms a
 //!   destructive question by accident.
 //! - Enter in a text field presses the primary button.
-//! - Escape, the Cancel button and closing the window answer "cancelled",
-//!   except while the answer is carried out ([`Dialog::set_busy`]).
+//! - Escape, the Cancel button and closing the window answer "cancelled";
+//!   while the answer is carried out ([`Dialog::set_busy`]) the buttons
+//!   are disabled and closing also cancels the running operation, so a
+//!   stalled share cannot hold the dialog open.
 //! - An error stays inside the dialog, which stays open for another try
 //!   ([`Dialog::show_error`]).
 //! - Opening a dialog closes the browser window's menus and ends its
@@ -30,6 +32,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
+use ox_core::transfer::Cancellation;
 
 /// How a button looks, and whether Enter in a field presses it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,11 +64,12 @@ pub(super) struct DialogButton(usize);
 type Answer = Option<DialogButton>;
 
 mod imp {
-    use std::cell::{Cell, RefCell};
+    use std::cell::RefCell;
 
     use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
+    use ox_core::transfer::Cancellation;
 
     use super::Answer;
 
@@ -95,9 +99,9 @@ mod imp {
         pub(super) answers: async_channel::Sender<Answer>,
         /// Where [`super::Dialog::next_response`] reads it.
         pub(super) answer_queue: async_channel::Receiver<Answer>,
-        /// Set while an answer is carried out; the dialog cannot be
-        /// cancelled then.
-        pub(super) busy: Cell<bool>,
+        /// The operation carrying out an answer, while it runs; closing
+        /// the dialog cancels it.
+        pub(super) running: RefCell<Option<Cancellation>>,
     }
 
     impl Default for Dialog {
@@ -112,7 +116,7 @@ mod imp {
                 buttons: RefCell::default(),
                 answers,
                 answer_queue,
-                busy: Cell::new(false),
+                running: RefCell::default(),
             }
         }
     }
@@ -150,8 +154,8 @@ mod imp {
 
     impl WindowImpl for Dialog {
         fn close_request(&self) -> glib::Propagation {
-            if self.busy.get() {
-                return glib::Propagation::Stop;
+            if let Some(running) = self.running.take() {
+                running.cancel();
             }
             // Closing is a cancellation; a caller that already has its
             // answer has stopped listening, which is fine.
@@ -323,10 +327,12 @@ impl Dialog {
         error_label.set_visible(true);
     }
 
-    /// Disables the buttons while an answer is carried out, as `Create`
-    /// is disabled while it runs, and enables them again afterwards.
-    pub(super) fn set_busy(&self, busy: bool) {
-        self.imp().busy.set(busy);
+    /// Disables the buttons while `running` carries out an answer, as
+    /// `Create` is disabled while it runs, and enables them again with
+    /// `None`. Closing the dialog meanwhile cancels `running`.
+    pub(super) fn set_busy(&self, running: Option<&Cancellation>) {
+        let busy = running.is_some();
+        self.imp().running.replace(running.cloned());
         for button in self.imp().buttons.borrow().iter() {
             button.set_sensitive(!busy);
         }
@@ -380,30 +386,6 @@ impl Dialog {
             .unwrap_or_else(|| panic!("the dialog has a {label} button"));
         button.emit_clicked();
     }
-}
-
-impl super::BrowserWindow {
-    /// Closes every open menu of the window and ends its type-to-select
-    /// prefix, as opening a dialog does in app.js.
-    pub(super) fn quiet_for_dialog(&self) {
-        self.reset_typeahead();
-        let popovers = descendants_of_type::<gtk::Popover>(self.upcast_ref());
-        for popover in popovers.iter().filter(|popover| popover.is_visible()) {
-            popover.popdown();
-        }
-    }
-}
-
-/// Every descendant of `widget` of type `T`, depth first.
-fn descendants_of_type<T: IsA<gtk::Widget>>(widget: &gtk::Widget) -> Vec<T> {
-    let mut found = Vec::new();
-    for child in super::widget_tree::children(widget) {
-        found.extend(descendants_of_type::<T>(&child));
-        if let Ok(matching) = child.downcast::<T>() {
-            found.push(matching);
-        }
-    }
-    found
 }
 
 /// Escape closes the dialog, which cancels it (`closeModal` in app.js).

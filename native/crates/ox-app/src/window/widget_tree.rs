@@ -16,6 +16,19 @@ pub(crate) fn children(widget: &impl IsA<gtk::Widget>) -> impl Iterator<Item = g
     std::iter::successors(widget.first_child(), WidgetExt::next_sibling)
 }
 
+/// Every descendant of `widget` of type `T`, in tree order.
+pub(crate) fn descendants<T: IsA<gtk::Widget>>(widget: &impl IsA<gtk::Widget>) -> Vec<T> {
+    let mut found = Vec::new();
+    for child in children(widget) {
+        let below = descendants::<T>(&child);
+        if let Ok(matching) = child.downcast::<T>() {
+            found.push(matching);
+        }
+        found.extend(below);
+    }
+    found
+}
+
 /// The children of `widget` that a layout should place: the visible ones.
 pub(super) fn laid_out_children(widget: &gtk::Widget) -> Vec<gtk::Widget> {
     children(widget).filter(WidgetExt::should_layout).collect()
