@@ -12,6 +12,7 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `emulator` | Which terminal: [`find_terminal`], [`Terminal`] |
+//! | `preference` | The desktop's configured terminal: [`desktop_terminal`] |
 //! | `directory` | Which folder: [`prepare_directory`], [`checked_directory`] |
 //! | `launch` | Starting it: [`launch_terminal`] |
 //! | `error` | [`TerminalError`] |
@@ -20,6 +21,7 @@ mod directory;
 mod emulator;
 mod error;
 mod launch;
+mod preference;
 
 use std::future::Future;
 
@@ -27,6 +29,7 @@ pub use directory::{checked_directory, prepare_directory, DirectoryChecks, Prepa
 pub use emulator::{find_terminal, ExecutableSearch, Terminal, TerminalKind, SYSTEM_PATH};
 pub use error::TerminalError;
 pub use launch::{launch_terminal, terminal_arguments, LaunchedTerminal};
+pub use preference::{desktop_terminal, DesktopTerminalConfig};
 
 use super::sandbox::Sandbox;
 use super::worker::on_worker;
@@ -53,7 +56,8 @@ where
 {
     on_worker(move || {
         let prepared = prepare_directory(&uri, &checks, &cancel)?;
-        let terminal = find_terminal(&ExecutableSearch::for_sandbox(sandbox))?;
+        let preferred = desktop_terminal(&DesktopTerminalConfig::of_session());
+        let terminal = find_terminal(&ExecutableSearch::for_sandbox(sandbox).preferring(preferred))?;
         if cancel.is_cancelled() {
             return Err(TerminalError::Cancelled);
         }
