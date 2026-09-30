@@ -79,7 +79,14 @@ fn offered_actions(modifiers: gdk::ModifierType) -> gdk::DragAction {
 }
 
 /// Turns the rubber band of `view`, a column or grid view, on or off.
-fn allow_rubber_band(view: &gtk::Widget, allowed: bool) {
+///
+/// The rubber band starts only from blank space: a press on an item turns
+/// it off until the next press (see `input.rs`, `blank_space_press`), so
+/// dragging an item always drags it. GTK's rubber band takes a drag that
+/// moves past the threshold at once, while a drag source waits 100 ms, so
+/// a quick drag of an item would otherwise select rows instead (seen in a
+/// real drag in GNOME Shell).
+pub(super) fn allow_rubber_band(view: &gtk::Widget, allowed: bool) {
     if let Some(columns) = view.downcast_ref::<gtk::ColumnView>() {
         columns.set_enable_rubberband(allowed);
     } else if let Some(grid) = view.downcast_ref::<gtk::GridView>() {
@@ -119,7 +126,6 @@ pub(super) fn has_open_popover(widget: &gtk::Widget) -> bool {
 impl BrowserWindow {
     /// Lets items of `view` be dragged out to other windows and apps.
     pub(super) fn attach_file_drag(&self, view: &gtk::Widget) {
-        self.start_rubber_bands_on_blank_space_only(view);
         let source = gtk::DragSource::new();
         // Before the gestures of the rows inside the view, which could
         // take the press first.
@@ -140,30 +146,6 @@ impl BrowserWindow {
         ));
         self.follow_file_drag(&source);
         view.add_controller(source);
-    }
-
-    /// Lets the rubber band of `view` start only from blank space: a press
-    /// on an item turns it off until the next press, so dragging an item
-    /// always drags it. GTK's rubber band takes a drag that moves past the
-    /// threshold at once, while a drag source waits 100 ms, so a quick drag
-    /// of an item would otherwise select rows instead (seen in a real drag
-    /// in GNOME Shell).
-    fn start_rubber_bands_on_blank_space_only(&self, view: &gtk::Widget) {
-        let press = gtk::GestureClick::new();
-        press.set_button(gdk::BUTTON_PRIMARY);
-        // Before the rubber band's own gesture sees the press.
-        press.set_propagation_phase(gtk::PropagationPhase::Capture);
-        press.connect_pressed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            #[weak]
-            view,
-            move |_, _, x, y| {
-                let on_item = window.folder_pane().owners().position_at(&view, x, y).is_some();
-                allow_rubber_band(&view, !on_item);
-            }
-        ));
-        view.add_controller(press);
     }
 
     /// Lets the sidebar's folders be dragged out: to pin them, or to copy

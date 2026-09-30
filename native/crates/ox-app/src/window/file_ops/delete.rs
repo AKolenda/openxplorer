@@ -10,9 +10,11 @@
 //! others, each as an operation of its own. Shift+Delete, which the Python
 //! app did not have, deletes the selection permanently after its own
 //! confirmation. Both confirm with a red button and Cancel has focus, so
-//! Enter never deletes by accident. In the Recycle Bin, both delete the
-//! selected items for good ([`super::recycle_bin`]). Items dropped on the
-//! Recycle Bin go the way of Delete (OPS-045).
+//! Enter never deletes by accident. Afterwards the item that followed the
+//! removed ones is selected, as in Dolphin, so Delete can be pressed again
+//! (SEL-017). In the Recycle Bin, both delete the selected items for good
+//! ([`super::recycle_bin`]). Items dropped on the Recycle Bin go the way
+//! of Delete (OPS-045).
 
 use gtk::gio;
 use gtk::gio::prelude::*;
@@ -58,7 +60,8 @@ impl BrowserWindow {
             self.delete_from_recycle_bin().await;
             return;
         }
-        self.trash_items(&self.items_to_delete()).await;
+        let next = self.uri_after_selection();
+        self.trash_items(&self.items_to_delete(), next.as_deref()).await;
     }
 
     /// Items dropped on the Recycle Bin: moved to the Trash with Delete's
@@ -73,12 +76,12 @@ impl BrowserWindow {
                 DeleteItem { uri, name }
             })
             .collect();
-        self.trash_items(&items).await;
+        self.trash_items(&items, None).await;
     }
 
     /// Asks, then moves each of `items` to its folder's Trash, or deletes
-    /// it where the folder has none.
-    async fn trash_items(&self, items: &[DeleteItem]) {
+    /// it where the folder has none; `next` is selected afterwards.
+    async fn trash_items(&self, items: &[DeleteItem], next: Option<&str>) {
         // Only a cancellation fails the plan, and nothing cancels it here.
         let Ok(plan) = plan_delete(items, &Cancellation::new()).await else {
             return;
@@ -87,11 +90,11 @@ impl BrowserWindow {
             return;
         }
         if !plan.to_trash.is_empty() {
-            self.run_and_conclude(&removal(TransferMode::Trash, plan.to_trash))
+            self.run_deletion(&removal(TransferMode::Trash, plan.to_trash), next)
                 .await;
         }
         if !plan.to_delete.is_empty() {
-            self.run_and_conclude(&removal(TransferMode::Delete, plan.to_delete))
+            self.run_deletion(&removal(TransferMode::Delete, plan.to_delete), next)
                 .await;
         }
     }
@@ -107,6 +110,7 @@ impl BrowserWindow {
             return;
         }
         let items = self.items_to_delete();
+        let next = self.uri_after_selection();
         if !self
             .confirm_deletion(&permanent_delete_confirmation(&items))
             .await
@@ -114,7 +118,8 @@ impl BrowserWindow {
             return;
         }
         let uris = items.into_iter().map(|item| item.uri).collect();
-        self.run_and_conclude(&removal(TransferMode::Delete, uris)).await;
+        self.run_deletion(&removal(TransferMode::Delete, uris), next.as_deref())
+            .await;
     }
 
     /// Asks `confirmation`'s question with Cancel and its red button;

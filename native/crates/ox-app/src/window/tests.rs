@@ -40,6 +40,7 @@ mod recycle_bin;
 mod renaming;
 mod search;
 mod search_options;
+mod selection;
 mod settings;
 mod sidebar_layout;
 mod support;

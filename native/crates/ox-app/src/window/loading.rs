@@ -360,11 +360,16 @@ impl BrowserWindow {
             )
         };
         self.change_model(|| self.folder_pane().model().select_uris(&selected));
-        let first = self.folder_pane().model().first_selected();
-        if let (true, Some(position)) = (reveals || renames, first) {
-            self.folder_pane().reveal(position);
+        let model = self.folder_pane().model();
+        let positions = model.selected_positions();
+        match (reveals || renames, positions.as_slice()) {
+            // One item, such as the one after a deletion, also becomes the
+            // range anchor.
+            (true, [only]) => self.change_model(|| self.folder_pane().select_and_reveal(*only)),
+            (true, [first, ..]) => self.folder_pane().reveal(*first),
+            _ => {}
         }
-        if renames && first.is_some() {
+        if renames && !positions.is_empty() {
             self.continue_renaming();
         }
     }

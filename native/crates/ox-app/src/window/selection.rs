@@ -20,7 +20,27 @@ use super::status_bar::StatusSubject;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
+/// The position to select once the items at `selected` (ascending) are
+/// removed from `count` shown items: the first one after the last removed
+/// item, or the one before when nothing follows (SEL-017).
+fn position_after_removal(count: u32, selected: &[u32]) -> Option<u32> {
+    let last = *selected.last()?;
+    let kept = |position: &u32| selected.binary_search(position).is_err();
+    (last + 1..count)
+        .find(kept)
+        .or_else(|| (0..last).rev().find(kept))
+}
+
 impl BrowserWindow {
+    /// The item to select after the selection is moved to the Trash or
+    /// deleted, so that Delete can be pressed again; `None` when nothing
+    /// would be left.
+    pub(super) fn uri_after_selection(&self) -> Option<String> {
+        let model = self.folder_pane().model();
+        let position = position_after_removal(model.n_items(), &model.selected_positions())?;
+        model.item(position).map(|item| item.entry().uri.clone())
+    }
+
     /// Updates the status bar and the details pane whenever the selection
     /// or the shown items change.
     pub(super) fn follow_selection(&self) {
@@ -122,5 +142,20 @@ impl BrowserWindow {
             network: &network,
         });
         self.details_pane().set_content(&content);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// parity: SEL-017
+    #[test]
+    fn removal_selects_the_next_item_or_the_one_before() {
+        assert_eq!(position_after_removal(6, &[1, 2]), Some(3));
+        assert_eq!(position_after_removal(6, &[0, 5]), Some(4));
+        assert_eq!(position_after_removal(6, &[4, 5]), Some(3));
+        assert_eq!(position_after_removal(2, &[0, 1]), None);
+        assert_eq!(position_after_removal(3, &[]), None);
     }
 }

@@ -170,6 +170,11 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
             .into(),
         item("Select none", Icon::SelectAllOff, WindowAction::SelectNone),
         item("Invert selection", Icon::ArrowSwap, WindowAction::InvertSelection),
+        item(
+            "Select items matching…",
+            Icon::Search,
+            WindowAction::SelectMatching,
+        ),
         MenuEntry::Divider,
         item("License & source", Icon::Document, WindowAction::License),
         item("About this build", Icon::Info, WindowAction::About),

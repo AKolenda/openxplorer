@@ -193,7 +193,8 @@ pub(crate) enum Icon {
     /// `rename_20_regular`: Rename.
     Rename,
     /// `search_20_regular`: the search box, Cache this folder for search,
-    /// the settings search and the Search & indexing settings.
+    /// Select items matching, the settings search and the Search &
+    /// indexing settings.
     Search,
     /// `select_all_off_20_regular`: Select none.
     SelectAllOff,

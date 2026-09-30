@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Keyboard and pointer input of the folder views and the address entry:
 //! a new window's first keyboard focus, the keys and clicks that feed or
-//! end type-to-select, middle-click to open a folder in a tab, and
-//! activation. The typed prefix itself lives in [`super::type_to_select`],
-//! the context menu in [`super::context_menu`].
+//! end type-to-select, a click on blank space, middle-click to open a
+//! folder in a tab, and activation. The typed prefix itself lives in
+//! [`super::type_to_select`], the context menu in [`super::context_menu`].
 //!
 //! Ports `onKey` and the type-select glue in `desktop/ui/app.js`
 //! (`desktop/tests/ui_type_select.py` is its specification): Escape first
@@ -15,12 +15,24 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::activation::{activation_for, Activation};
+use super::file_drag::allow_rubber_band;
 use super::file_drop::DropZone;
 use super::folder_pane::PanePage;
 use super::gestures;
 use super::session::Direction;
 use super::type_to_select::monotonic_now;
 use super::BrowserWindow;
+
+/// What screen readers call a folder view (`#main`'s `aria-label`).
+const FOLDER_VIEW_LABEL: &str = "Folder contents — type a filename prefix to select";
+
+/// Whether a press on blank space with `modifiers` held keeps the
+/// selection: Ctrl and Shift do, for the rubber band that may follow. GTK's
+/// band adds its items to the kept selection with Ctrl and removes them
+/// with Shift (SEL-012).
+fn press_keeps_selection(modifiers: gdk::ModifierType) -> bool {
+    modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK)
+}
 
 /// Keys that only modify another key; pressing one keeps the prefix, so
 /// capitals and `AltGr` characters can be typed.
@@ -144,9 +156,11 @@ impl BrowserWindow {
     }
 
     /// Gives `view` type-to-select, the window's key handling, prefix
-    /// resets on clicks, middle-click to open a folder, the context menu,
-    /// and file drag and drop.
+    /// resets on clicks, deselection by a click on blank space,
+    /// middle-click to open a folder, the context menu, and file drag and
+    /// drop.
     fn folder_input(&self, view: &gtk::Widget) {
+        view.update_property(&[gtk::accessible::Property::Label(FOLDER_VIEW_LABEL)]);
         let input = self.typing_input(view);
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -158,6 +172,7 @@ impl BrowserWindow {
             move |controller, key, _, modifiers| window.folder_key(controller, &input, key, modifiers)
         ));
         view.add_controller(keys);
+        view.add_controller(self.blank_space_press(view));
         view.add_controller(self.folder_middle_click(view));
         self.attach_context_menu(view);
         self.attach_file_drag(view);
@@ -236,6 +251,9 @@ impl BrowserWindow {
         if let Some(handled) = self.prefix_editing_key(controller, input, key) {
             return handled;
         }
+        if let Some(handled) = self.grid_row_key(key, modifiers) {
+            return handled;
+        }
         // The input method composes text before it reaches type-to-select.
         let consumed = controller
             .current_event()
@@ -254,7 +272,8 @@ impl BrowserWindow {
     /// Escape clears the prefix, and only without one the selection;
     /// Backspace erases a typed character, and only without a prefix goes
     /// back, as in Dolphin and Explorer (NAV-004), once the input method
-    /// did not take it for text it is composing. `None` for every other
+    /// did not take it for text it is composing; Space is prefix text, and
+    /// only without one selects the current item. `None` for every other
     /// key.
     fn prefix_editing_key(
         &self,
@@ -279,11 +298,65 @@ impl BrowserWindow {
                     self.go_history(Direction::Backward);
                 }
             }
-            // Space toggles the native selection unless a prefix is typed.
-            gdk::Key::space if !prefix_active => return Some(glib::Propagation::Proceed),
+            gdk::Key::space if !prefix_active => self.select_current_item(),
             _ => return None,
         }
         Some(glib::Propagation::Stop)
+    }
+
+    /// Space: adds the item with keyboard focus to the selection, as in
+    /// Dolphin and Explorer, and never removes it (GTK's own Space toggles
+    /// it; Ctrl+Space still does).
+    fn select_current_item(&self) {
+        let pane = self.folder_pane();
+        let current = GtkWindowExt::focus(self).and_then(|focus| pane.owners().position_of(&focus));
+        if let Some(position) = current {
+            if !pane.model().selection().is_selected(position) {
+                pane.model().selection().select_item(position, false);
+            }
+        }
+    }
+
+    /// A primary press in `view` decides whether a drag draws a rubber band:
+    /// only from blank space (see [`allow_rubber_band`]). On blank space,
+    /// below the rows or between the tiles, it also clears the selection
+    /// and keeps keyboard focus on the view, as in Windows Explorer and
+    /// Dolphin; with Ctrl or Shift held the selection stays.
+    fn blank_space_press(&self, view: &gtk::Widget) -> gtk::GestureClick {
+        let press = gtk::GestureClick::new();
+        press.set_button(gdk::BUTTON_PRIMARY);
+        press.set_propagation_phase(gtk::PropagationPhase::Capture);
+        press.connect_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            view,
+            move |press, _, x, y| {
+                let on_blank_space = window.is_blank_space(&view, x, y);
+                // Before the rubber band's own gesture sees the press.
+                allow_rubber_band(&view, on_blank_space);
+                if window.are_item_clicks_paused() || !on_blank_space {
+                    return;
+                }
+                if !press_keeps_selection(press.current_event_state()) {
+                    window.folder_pane().model().select_none();
+                }
+                window.folder_pane().focus_view();
+            }
+        ));
+        press
+    }
+
+    /// Whether (`x`, `y`) in `view` is its blank space: inside the list,
+    /// not on an item, and not on the column titles.
+    fn is_blank_space(&self, view: &gtk::Widget, x: f64, y: f64) -> bool {
+        if self.folder_pane().owners().position_at(view, x, y).is_some() {
+            return false;
+        }
+        // The details view's rows are an inner list view; its titles are
+        // not inside it. The icon grid is the list itself.
+        view.pick(x, y, gtk::PickFlags::DEFAULT)
+            .is_some_and(|picked| &picked == view || picked.ancestor(gtk::ListView::static_type()).is_some())
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;
@@ -325,6 +398,14 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// parity: SEL-002
+    #[test]
+    fn ctrl_or_shift_keeps_the_selection_on_blank_space() {
+        assert!(!press_keeps_selection(gdk::ModifierType::empty()));
+        assert!(press_keeps_selection(gdk::ModifierType::CONTROL_MASK));
+        assert!(press_keeps_selection(gdk::ModifierType::SHIFT_MASK));
+    }
 
     /// parity: SEL-029
     #[test]

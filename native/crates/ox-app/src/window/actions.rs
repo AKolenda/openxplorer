@@ -234,6 +234,10 @@ impl BrowserWindow {
             plain_action(WindowAction::InvertSelection, |window| {
                 window.folder_pane().model().invert_selection();
             }),
+            plain_action(
+                WindowAction::SelectMatching,
+                BrowserWindow::ask_to_select_matching,
+            ),
             plain_action(WindowAction::PinSelected, BrowserWindow::pin_selected),
             plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
             plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),

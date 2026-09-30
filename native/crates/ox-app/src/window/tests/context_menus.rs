@@ -37,7 +37,7 @@ fn choose_menu_style(test: &TestWindow, style: ContextMenu) {
     });
 }
 
-/// parity: CMD-008, CMD-009, CMD-015
+/// parity: CMD-008, CMD-009, CMD-015, SEL-003
 #[gtk::test]
 fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     let fixture = Fixture::standard();
@@ -79,7 +79,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
 }
 
-/// parity: CMD-009, OPS-014
+/// parity: CMD-009, OPS-014, SEL-003
 #[gtk::test]
 fn with_several_items_selected_the_one_item_commands_are_disabled() {
     let fixture = Fixture::standard();

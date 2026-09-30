@@ -38,8 +38,10 @@ pub(super) struct FinishedOperation {
     pub(super) summary: OperationSummary,
     /// How Undo reverses it, when it can.
     pub(super) undo: Option<UndoRecord>,
-    /// Where its new or moved items are now, to select them.
-    pub(super) created: Vec<String>,
+    /// The items to select once the folder is listed again: where its new
+    /// or moved items are now, or after a deletion the item that followed
+    /// the removed ones.
+    pub(super) select_after: Vec<String>,
 }
 
 impl FinishedOperation {
@@ -48,7 +50,7 @@ impl FinishedOperation {
         Self {
             summary: summarize(mode, &outcome.result),
             undo: outcome.undo,
-            created: outcome.created,
+            select_after: outcome.created,
         }
     }
 }
@@ -152,13 +154,17 @@ impl BrowserWindow {
         Some(outcome)
     }
 
-    /// Runs `request` and concludes it: [`Self::run_request`], then
-    /// [`Self::conclude_operation`].
-    pub(super) async fn run_and_conclude(&self, request: &TransferRequest) {
+    /// Runs `request`, a move to the Trash or a delete, and concludes it:
+    /// [`Self::run_request`], then [`Self::conclude_operation`], which
+    /// selects `next`, the item that followed the removed ones (SEL-017).
+    pub(super) async fn run_deletion(&self, request: &TransferRequest, next: Option<&str>) {
         let Some(outcome) = self.run_request(request).await else {
             return;
         };
-        let finished = outcome.map(|outcome| FinishedOperation::of_transfer(request.mode, outcome));
+        let finished = outcome.map(|outcome| FinishedOperation {
+            select_after: next.map(str::to_owned).into_iter().collect(),
+            ..FinishedOperation::of_transfer(request.mode, outcome)
+        });
         self.conclude_operation(finished).await;
     }
 
@@ -174,7 +180,7 @@ impl BrowserWindow {
                 if let Some(record) = finished.undo {
                     self.context().record_operation(record);
                 }
-                self.reload_selecting(finished.created);
+                self.reload_selecting(finished.select_after);
                 match finished.summary {
                     OperationSummary::Toast(text) if is_undoable => self.show_message_with_undo(&text),
                     summary => self.report(summary).await,
@@ -211,10 +217,11 @@ impl BrowserWindow {
         }
     }
 
-    /// Lists the active folder again, then selects `uris` in it (the
-    /// items an operation created or moved there; none clears the
-    /// selection, as app.js does after every operation). The search cache
-    /// reads the folder and the items' folders again (SRCH-033).
+    /// Lists the active folder again, then selects `uris` in it and
+    /// scrolls to the first (the items an operation created or moved
+    /// there, SEL-016; none clears the selection, as app.js does after
+    /// every operation). The search cache reads the folder and the items'
+    /// folders again (SRCH-033).
     pub(super) fn reload_selecting(&self, uris: Vec<String>) {
         let Some(id) = self.imp().session.borrow().active_id() else {
             return;
@@ -223,6 +230,7 @@ impl BrowserWindow {
         let changed = changed_folders(folder.as_deref(), uris.iter().map(String::as_str));
         self.context().search_cache().folders_written(changed);
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+            tab.reveals_selection = !uris.is_empty();
             tab.selected = uris;
         }
         self.load_tab(id, LoadMode::Reload);

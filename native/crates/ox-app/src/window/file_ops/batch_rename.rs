@@ -82,7 +82,7 @@ impl BrowserWindow {
         let finished = outcome.map(|outcome| FinishedOperation {
             summary: summarize_batch_rename(&outcome.result),
             undo: outcome.undo,
-            created: outcome.created,
+            select_after: outcome.created,
         });
         self.conclude_operation(finished).await;
     }

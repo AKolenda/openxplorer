@@ -105,8 +105,8 @@ impl BrowserWindow {
     fn apply_typeahead(&self, result: &PrefixMatch) {
         let model = self.folder_pane().model();
         if let Some(row) = result.row {
-            model.select_only(row);
-            self.folder_pane().reveal(row);
+            // Through the view, so the match becomes the range anchor.
+            self.folder_pane().select_and_reveal(row);
         }
         let matched_name = result.row.and_then(|row| model.name_at(row));
         let hint = typeahead_hint(result, matched_name.as_deref());

@@ -123,6 +123,9 @@ pub(crate) struct BrowserWindow {
     pub(super) volumes: RefCell<Vec<VolumeRow>>,
     /// The type-to-select prefix of the folder views.
     pub(super) typeahead: RefCell<Typeahead>,
+    /// The column Up and Down keep to in the icon grid, across rows of
+    /// different lengths; see [`super::grid_keys`].
+    pub(super) grid_column: Cell<Option<super::grid_keys::GridColumn>>,
     /// The search box's search.
     pub(super) search: RefCell<FolderSearch>,
     /// Set while the window swaps or reloads the model, so the

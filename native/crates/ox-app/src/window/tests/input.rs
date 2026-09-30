@@ -13,12 +13,17 @@ use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use crate::test_support::harness::{descendants, Fixture, TestWindow, ThemeGuard};
+use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::window::menu_popover::MenuPopover;
 
 /// Presses `key` in the details view, as far as the window's own key
 /// handling goes. Returns true when the window handled the key itself.
 fn press(test: &TestWindow, key: gdk::Key) -> bool {
+    press_with(test, key, gdk::ModifierType::empty())
+}
+
+/// Presses `key` with `modifiers` held, as [`press`] does.
+fn press_with(test: &TestWindow, key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
     let view = test.window.folder_pane().details().column_view();
     let controller = view
         .observe_controllers()
@@ -28,10 +33,7 @@ fn press(test: &TestWindow, key: gdk::Key) -> bool {
         .find(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
         .expect("the details view has a capture-phase key controller");
     let no_keycode = 0_u32;
-    controller.emit_by_name::<bool>(
-        "key-pressed",
-        &[&key.into_glib(), &no_keycode, &gdk::ModifierType::empty()],
-    )
+    controller.emit_by_name::<bool>("key-pressed", &[&key.into_glib(), &no_keycode, &modifiers])
 }
 
 pub(super) fn hint(test: &TestWindow) -> String {
@@ -51,7 +53,7 @@ fn hint_is_drawn_in(test: &TestWindow, hex: &str) -> bool {
     channels.iter().all(|(a, b)| (a - b).abs() < 0.01)
 }
 
-/// parity: SEL-020, SEL-023
+/// parity: SEL-020, SEL-023, SEL-028
 #[gtk::test]
 fn typing_selects_the_next_matching_name_and_names_it_in_the_hint() {
     let fixture = Fixture::standard();
@@ -68,6 +70,57 @@ fn typing_selects_the_next_matching_name_and_names_it_in_the_hint() {
     );
     test.window.type_text("otes 1");
     assert_eq!(test.selected_names(), ["Notes 10.txt"]);
+    assert!(
+        test.window.folder_pane().view_has_focus(),
+        "focus stays in the list"
+    );
+    let view = test.window.folder_pane().details().column_view();
+    assert!(gtk::test_accessible_has_property(
+        view,
+        gtk::AccessibleProperty::Label
+    ));
+    wait_until("the hint to clear a second after the last key", || {
+        hint(&test).is_empty()
+    });
+    assert_eq!(
+        test.selected_names(),
+        ["Notes 10.txt"],
+        "the match stays selected"
+    );
+}
+
+/// parity: SEL-034
+#[gtk::test]
+fn a_match_replaces_a_multi_selection() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_model().select_all();
+    test.window.type_text("r");
+    assert_eq!(test.selected_names(), ["Résumé.txt"]);
+}
+
+/// parity: SEL-032
+#[gtk::test]
+fn a_match_below_the_visible_rows_is_scrolled_into_view() {
+    let fixture = Fixture::with_files(300);
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_pane().focus_view();
+    test.window.type_text("file 0250");
+    assert_eq!(test.selected_names(), ["file 0250.txt"]);
+    wait_until("the match to be scrolled to", || {
+        test.window.folder_pane().scroll_position() > 0.0
+    });
+}
+
+/// parity: SEL-030
+#[gtk::test]
+fn keys_typed_in_a_text_field_are_left_to_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_model().select_only(1);
+    test.window.search_box().focus();
+    assert!(!press(&test, gdk::Key::Escape), "the text field gets the key");
+    assert_eq!(test.selected_names(), ["Notes 2.txt"]);
 }
 
 /// parity: SEL-025
@@ -87,6 +140,7 @@ fn an_unmatched_prefix_keeps_the_selection_and_says_so() {
     );
 }
 
+/// parity: SEL-005, SEL-027
 #[gtk::test]
 fn escape_clears_the_typed_prefix_before_the_selection() {
     let fixture = Fixture::standard();
@@ -132,6 +186,7 @@ fn backspace_erases_a_typed_prefix_first_and_otherwise_goes_back() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
 }
 
+/// parity: SEL-031
 #[gtk::test]
 fn leaving_the_view_starts_a_new_prefix() {
     let fixture = Fixture::standard();
@@ -143,8 +198,11 @@ fn leaving_the_view_starts_a_new_prefix() {
     test.window.folder_pane().focus_view();
     test.window.type_text("r");
     assert_eq!(test.selected_names(), ["Résumé.txt"]);
+    test.activate("view", Some("large"));
+    assert_eq!(hint(&test), "", "changing the view ends the prefix");
 }
 
+/// parity: SEL-031
 #[gtk::test]
 fn navigation_keys_start_a_new_prefix() {
     let fixture = Fixture::standard();
@@ -170,6 +228,24 @@ fn modifier_keys_keep_the_typed_prefix() {
     press(&test, gdk::Key::Shift_L);
     test.window.type_text("otes 1");
     assert_eq!(test.selected_names(), ["Notes 10.txt"]);
+}
+
+/// parity: SEL-029
+#[gtk::test]
+fn keys_with_ctrl_or_alt_never_start_a_prefix() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_model().select_only(0);
+    for modifiers in [gdk::ModifierType::CONTROL_MASK, gdk::ModifierType::ALT_MASK] {
+        let handled = press_with(&test, gdk::Key::r, modifiers);
+        assert!(!handled, "{modifiers:?}+R goes on to the shortcuts");
+        assert_eq!(
+            test.window.folder_model().selected_positions(),
+            [0],
+            "{modifiers:?}"
+        );
+        assert!(hint(&test).is_empty(), "{modifiers:?}+R starts no prefix");
+    }
 }
 
 #[gtk::test]

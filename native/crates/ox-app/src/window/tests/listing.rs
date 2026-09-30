@@ -120,7 +120,7 @@ fn a_selection_made_while_listing_survives_the_end_of_the_listing() {
     assert_eq!(test.selected_names(), ["Notes 2.txt"]);
 }
 
-/// parity: NAV-013, NAV-014
+/// parity: NAV-013, NAV-014, SEL-015
 #[gtk::test]
 fn refresh_keeps_the_rows_scroll_position_focus_and_selection() {
     let fixture = Fixture::with_files(LONG_FOLDER);
@@ -185,7 +185,7 @@ fn a_change_on_disk_is_listed_and_keeps_the_scroll_position() {
 /// Navigating starts a folder at the top without a selection; Back and
 /// Forward return to where the view was, as in Dolphin.
 ///
-/// parity: NAV-015, NAV-008
+/// parity: NAV-015, NAV-008, SEL-015
 #[gtk::test]
 fn navigating_starts_at_the_top_and_back_returns_to_where_the_view_was() {
     let fixture = Fixture::with_files(LONG_FOLDER);

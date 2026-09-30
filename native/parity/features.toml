@@ -4211,7 +4211,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "Dolphin: Ctrl+click toggles selection.; Dolphin: Shift+click range, Ctrl+Shift+click adds range.; KItemListController::onPress/onRelease"
-native = "todo"
+native = "done"
+native_note = "GTK's multi-selection list handles click, Ctrl+click (toggle) and Shift+click (range from the anchor); the window pauses item clicks around a drag (DND-007). native/crates/ox-app/src/window/tests/selection.rs (click_ctrl_click_and_shift_click_select_like_explorer)."
 
 [[feature]]
 id = "SEL-002"
@@ -4233,8 +4234,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "KItemListController::onPress (empty area)"
-native = "todo"
-native_note = "Porting notes: No rubber-band (lasso) selection exists; Dolphin supports it. Candidate improvement, not a parity item."
+native = "done"
+native_note = "native/crates/ox-app/src/window/input.rs (blank_space_press): a primary press below the rows or between tiles clears the selection and focuses the list; Ctrl or Shift keeps it. The same press allows the rubber band only from blank space (SEL-012). GTK keeps its range anchor, so a later Shift+click selects from the last clicked item, as in Windows Explorer; clearing the anchor too awaits the owner's confirmation. native/crates/ox-app/src/window/tests/selection.rs (a_click_on_blank_space_clears_the_selection_and_focuses_the_list), input.rs (ctrl_or_shift_keeps_the_selection_on_blank_space)."
 
 [[feature]]
 id = "SEL-003"
@@ -4256,7 +4257,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "KItemListController::onPress (RightButton)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu.rs (select_for_context_menu); the test helper right_click presses at the item's point through it. native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_file_selects_it_and_opens_the_classic_menu, with_several_items_selected_the_one_item_commands_are_disabled)."
 
 [[feature]]
 id = "SEL-004"
@@ -4277,7 +4279,8 @@ sources = [
 python_tests = ["desktop/tests/ui_type_select.py::A second Escape clears the selection"]
 bridge = []
 dolphin = "Dolphin: Ctrl+A select all, Ctrl+Shift+A invert selection.; Ctrl+A; edit_select_all: Ctrl+A"
-native = "todo"
+native = "done"
+native_note = "Ctrl+A is a capture-phase window shortcut in native/crates/ox-app/src/window/file_ops/shortcuts.rs, so the sidebar's list cannot take it; text fields keep their own Ctrl+A, and it does nothing on the Settings page or in the address bar. native/crates/ox-app/src/window/tests/selection.rs (ctrl_a_and_escape_work_outside_the_view_but_not_in_text_fields: from a sidebar place and a button)."
 
 [[feature]]
 id = "SEL-005"
@@ -4290,7 +4293,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:1032", "desktop/ui/app.js:405", "desktop/ui/app.js:236"]
 python_tests = ["desktop/tests/ui_type_select.py::A second Escape clears the selection"]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "In the folder view native/crates/ox-app/src/window/input.rs (prefix_editing_key) clears a typed prefix first and then the selection; elsewhere outside text fields, the address bar and Settings, Escape is a bubble-phase window shortcut (native/crates/ox-app/src/window/file_ops/shortcuts.rs), after menus and dialogs took their own. native/crates/ox-app/src/window/tests/input.rs (escape_clears_the_typed_prefix_before_the_selection), tests/selection.rs (ctrl_a_and_escape_work_outside_the_view_but_not_in_text_fields)."
 
 [[feature]]
 id = "SEL-006"
@@ -4307,8 +4311,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "invert_selection: Ctrl+Shift+A"
-native = "todo"
-native_note = "Porting notes: Explorer has 'Invert selection' without a shortcut. Ctrl+Shift+A is unbound in Explorer."
+native = "done"
+native_note = "win.invert-selection in the More options menu. native/crates/ox-app/src/window/tests/selection.rs (invert_selection_swaps_selected_and_unselected_items)."
 
 [[feature]]
 id = "SEL-007"
@@ -4333,8 +4337,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "Dolphin: arrows move in 2-D in icon view, PageUp/PageDown page, Left/Right move between columns.; KItemListController::keyPressEvent"
-native = "todo"
-native_note = "Porting notes: Gap vs Dolphin: no Left/Right in grid, no PageUp/PageDown. The native port should add them without changing Up/Down/Home/End. ArrowLeft/Right, PageUp/PageDown and Ctrl+Space are not handled in 1.1.4; Dolphin supports them. Native must add 2-D grid movement."
+native = "done"
+native_note = "GTK's list key bindings: Up/Down/Home/End move and select, PageUp/PageDown too (SEL-011), and the icon grid moves in two dimensions (SEL-010), a gain over the Python app. native/crates/ox-app/src/window/tests/selection.rs (arrows_home_end_and_page_keys_move_and_shift_extends_from_the_anchor)."
 
 [[feature]]
 id = "SEL-008"
@@ -4355,8 +4359,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "Dolphin/Windows: Shift+arrow extends one item per press from the focused item; Ctrl+arrow moves focus without changing selection; Ctrl+Space toggles.; anchored selection"
-native = "todo"
-native_note = "Porting notes: Defect in the Python app: extension does not advance past one item. Native must at least keep Shift+Home/End and fix repeated Shift+Arrow (a gain, not a loss). Shift+Up/Down/Home/End work. The PageUp/PageDown and grid Left/Right forms are missing."
+native = "done"
+native_note = "GTK keeps a fixed anchor, so repeated Shift+Arrow extends and shrinks the range (the Python defect is fixed); Shift+PageUp/PageDown and grid Shift+Left/Right work too. native/crates/ox-app/src/window/tests/selection.rs (arrows_home_end_and_page_keys_move_and_shift_extends_from_the_anchor)."
 
 [[feature]]
 id = "SEL-009"
@@ -4376,8 +4380,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "Ctrl+arrows, Ctrl+Space"
-native = "todo"
-native_note = "Porting notes: Explorer uses the same keys. OpenXplorer's Ctrl+arrow toggles the target item instead."
+native = "done"
+native_note = "GTK's list bindings: Ctrl+Arrow/Home/End/PageUp/PageDown move the current item without selecting; Ctrl+Space toggles it. native/crates/ox-app/src/window/tests/selection.rs (ctrl_arrows_move_without_selecting_and_ctrl_space_toggles)."
 
 [[feature]]
 id = "SEL-010"
@@ -4397,8 +4401,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "keyboard anchor handling (nextRowIndex/previousRowIndex); Arrow keys in icon view, PageUp/PageDown"
-native = "todo"
-native_note = "Porting notes: In OpenXplorer's grid view, Down moves to the next item rather than the next row, and Left/Right do nothing."
+native = "done"
+native_note = "GtkGridView's key bindings for Left and Right; native/crates/ox-app/src/window/grid_keys.rs handles plain Up and Down and remembers the column while focus stays on the item it moved to, as Dolphin's keyboard anchor does. grid_keys.rs (up_and_down_keep_the_column_across_a_shorter_last_row), native/crates/ox-app/src/window/tests/selection.rs (arrows_move_in_two_dimensions_in_the_icon_grid, with a shorter last row)."
 
 [[feature]]
 id = "SEL-011"
@@ -4412,7 +4416,8 @@ sources = ["dolphin:src/kitemviews/kitemlistcontroller.cpp:357-411", "desktop/ui
 python_tests = []
 bridge = []
 dolphin = "Key_PageUp/Key_PageDown"
-native = "todo"
+native = "done"
+native_note = "GTK's list bindings. native/crates/ox-app/src/window/tests/selection.rs (arrows_home_end_and_page_keys_move_and_shift_extends_from_the_anchor)."
 
 [[feature]]
 id = "SEL-012"
@@ -4434,8 +4439,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KItemListRubberBand; Rubber-band selection"
-native = "todo"
-native_note = "Porting notes: Explorer also has marquee selection."
+native = "partial"
+native_note = "GTK's rubber band on both views, allowed only from blank space by the press in native/crates/ox-app/src/window/input.rs (blank_space_press), so dragging an item still drags it; it replaces the selection without modifiers, autoscrolls at the edges and spans full rows in the details view. native/crates/ox-app/src/window/tests/selection.rs (a_rubber_band_starts_on_blank_space_only). Missing: GTK 4.14 applies the band only when it ends, with Ctrl adding the touched items to the selection and Shift (and Ctrl+Shift) removing them; Dolphin toggles with Ctrl and adds with Shift. GTK has no public way to learn the band's items, so matching Dolphin needs our own band."
 
 [[feature]]
 id = "SEL-013"
@@ -4449,6 +4454,7 @@ sources = ["docs/NATIVE-EXPERIENCE-ROADMAP.md (P2 Faster selection and tab conti
 python_tests = []
 bridge = []
 native = "todo"
+native_note = "Porting notes: Not done. Windows 11 has this as View > Show > Item check boxes; it needs a new view preference in the shared settings file and a check box in both views' cells, a product decision for the View and Settings owners."
 
 [[feature]]
 id = "SEL-014"
@@ -4468,7 +4474,7 @@ python_tests = []
 bridge = []
 dolphin = "ShowSelectionToggle (default true)"
 native = "todo"
-native_note = "Porting notes: Explorer offers the same through its 'Item check boxes' option."
+native_note = "Porting notes: Explorer offers the same through its 'Item check boxes' option. Not done; it shares the preference and cell work of SEL-013."
 
 [[feature]]
 id = "SEL-015"
@@ -4491,8 +4497,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/ui_rc4.py::Source selection is not changed by middle-click"]
 bridge = ["list"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/search.rs (typing_clears_the_selection_and_scrolls_to_the_top): typing in the search box clears the selection. Missing: tests of the navigation, tab switch and reload rules, and the file-operation rules. Porting notes: Renamed or newly created items are not re-selected afterwards; Dolphin selects them (a gain for native)."
+native = "done"
+native_note = "Navigation, search and reload: native/crates/ox-app/src/window/tests/listing.rs (navigating_to_another_folder_starts_at_the_top_without_a_selection, refresh_keeps_the_rows_scroll_position_focus_and_selection), search.rs (typing_clears_the_selection_and_scrolls_to_the_top). Gains over the Python app: each tab keeps its own selection across tab switches (as in Explorer and Dolphin), and after an operation the created items (SEL-016) or the next item (SEL-017) are selected instead of none."
 
 [[feature]]
 id = "SEL-016"
@@ -4515,8 +4521,8 @@ sources = [
 python_tests = []
 bridge = ["operate", "create", "rename"]
 dolphin = "m_selectJobCreatedItems / forceUrlsSelection"
-native = "todo"
-native_note = "Porting notes: OpenXplorer clears the selection after every operation and after renaming. Explorer selects pasted or renamed items."
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_ops/running.rs (reload_selecting) selects the created, pasted, moved, duplicated or renamed items after the reload and scrolls to the first. native/crates/ox-app/src/window/tests/selection.rs (a_created_item_is_selected_and_scrolled_into_view), file_operations.rs (duplicate_copies_next_to_the_item_and_selects_the_copy, new_folder_asks_for_a_name_then_creates_and_selects_the_folder)."
 
 [[feature]]
 id = "SEL-017"
@@ -4530,7 +4536,8 @@ sources = ["dolphin:src/views/dolphinview.cpp:1851-1893", "desktop/ui/app.js:506
 python_tests = []
 bridge = ["operate"]
 dolphin = "DolphinView::selectNextItem (BUG 419914)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/selection.rs (position_after_removal; removal_selects_the_next_item_or_the_one_before); native/crates/ox-app/src/window/tests/file_operations.rs (shift_delete_deletes_permanently_after_its_own_confirmation)."
 
 [[feature]]
 id = "SEL-018"
@@ -4550,7 +4557,7 @@ python_tests = ["desktop/tests/ui_release.py::Double-click folder navigates"]
 bridge = ["activateItem"]
 dolphin = "SH_ItemView_ActivateItemOnSingleClick"
 native = "todo"
-native_note = "Porting notes: OpenXplorer always opens on double-click. Explorer's 'Single-click to open an item' would be the equivalent option. Existing OpenXplorer part is protected by OPEN-001."
+native_note = "Porting notes: OpenXplorer always opens on double-click. GNOME has no desktop click policy to follow (only KDE's kdeglobals SingleClick), so this needs an own preference like Explorer's 'Single-click to open an item', a product decision for Settings. Existing OpenXplorer part is protected by OPEN-001."
 
 [[feature]]
 id = "SEL-019"
@@ -4568,6 +4575,7 @@ python_tests = []
 bridge = []
 dolphin = "KItemListController gesture handlers"
 native = "todo"
+native_note = "Porting notes: GTK turns a tap into a click, so tap-to-select and tap-to-open work, but the other gestures are not wired and none can be verified without touch hardware."
 
 [[feature]]
 id = "SEL-020"
@@ -4630,8 +4638,8 @@ python_tests = [
 bridge = []
 dolphin = "Dolphin keyboard search (KItemListKeyboardSearchManager) jumps to the first matching item while typing in the view.; Type-ahead selection; KItemListKeyboardSearchManager (1000 ms timeout)"
 gnome = "GTK4 Gtk.ListView/GridView has no built-in type-ahead; implement with an EventControllerKey on the view (do not start Nautilus-style search).; GtkListView/GtkColumnView typeahead"
-native = "partial"
-native_note = "Matching logic in native/crates/ox-app/src/typeahead.rs (first_character_finds_the_first_name_when_nothing_is_selected); GTK key handling untested. Porting notes: Nautilus starts a search on typing by default; OpenXplorer deliberately selects instead (0.5.1 CHANGELOG)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/type_to_select.rs and input.rs; the views' accessible name is 'Folder contents — type a filename prefix to select'. native/crates/ox-app/src/window/tests/input.rs (typing_selects_the_next_matching_name_and_names_it_in_the_hint); matching in native/crates/ox-app/src/typeahead.rs. Porting notes: Nautilus starts a search on typing by default; OpenXplorer deliberately selects instead (0.5.1 CHANGELOG)."
 
 [[feature]]
 id = "SEL-021"
@@ -4652,7 +4660,7 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Matching is filename prefix, not substring",
 ]
 bridge = []
-native = "partial"
+native = "done"
 native_note = "native/crates/ox-app/src/typeahead.rs (unicode_case_insensitive_selection, canonical_unicode_accents_match_equivalent_names, supplementary_characters_can_be_typed, matching_is_by_prefix_not_substring)."
 
 [[feature]]
@@ -4672,7 +4680,7 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Fresh selection wraps to the beginning when needed",
 ]
 bridge = []
-native = "partial"
+native = "done"
 native_note = "native/crates/ox-app/src/typeahead.rs (fresh_typing_starts_after_the_current_item, search_wraps_around_the_display_list, out_of_range_anchors_start_at_the_beginning, empty_listings_are_safe)."
 
 [[feature]]
@@ -4705,7 +4713,7 @@ python_tests = [
   "desktop/tests/type_select.test.cjs::invalid timeout is rejected",
 ]
 bridge = []
-native = "partial"
+native = "done"
 native_note = "native/crates/ox-app/src/typeahead.rs (prefix_resets_at_the_timeout_boundary, typing_before_timeout_extends_the_prefix, refining_keeps_an_already_matching_selected_row, a_backwards_clock_resets_the_buffer)."
 
 [[feature]]
@@ -4735,7 +4743,7 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Fresh selection wraps to the beginning when needed",
 ]
 bridge = []
-native = "partial"
+native = "done"
 native_note = "native/crates/ox-app/src/typeahead.rs (repeated_single_letters_cycle_and_wrap, repeated_letters_are_case_insensitive)."
 
 [[feature]]
@@ -4767,8 +4775,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Escape clears an active prefix without clearing selection",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-app/src/typeahead.rs (unmatched_text_is_retained); the status-bar feedback is untested."
+native = "done"
+native_note = "native/crates/ox-app/src/typeahead.rs (unmatched_text_is_retained); status-bar feedback in native/crates/ox-app/src/window/tests/input.rs (an_unmatched_prefix_keeps_the_selection_and_says_so)."
 
 [[feature]]
 id = "SEL-026"
@@ -4793,8 +4801,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Escape clears an active prefix without clearing selection",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-app/src/typeahead.rs (backspace_corrects_an_unmatched_prefix, backspace_can_empty_a_prefix_without_choosing_a_row, backspace_after_expiry_has_no_effect). Porting notes: Backspace is not bound to Back or Up (Dolphin: Backspace = Back)."
+native = "done"
+native_note = "native/crates/ox-app/src/typeahead.rs (backspace_corrects_an_unmatched_prefix, backspace_can_empty_a_prefix_without_choosing_a_row, backspace_after_expiry_has_no_effect); native/crates/ox-app/src/window/input.rs routes Backspace to the prefix only while it is active. Porting notes: Backspace is not bound to Back or Up (Dolphin: Backspace = Back)."
 
 [[feature]]
 id = "SEL-027"
@@ -4816,7 +4824,8 @@ python_tests = [
 ]
 bridge = []
 dolphin = "Key_Escape"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/input.rs (prefix_editing_key). native/crates/ox-app/src/window/tests/input.rs (escape_clears_the_typed_prefix_before_the_selection)."
 
 [[feature]]
 id = "SEL-028"
@@ -4843,7 +4852,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Timeout leaves the chosen item selected",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/type_to_select.rs (typeahead_hint, the 1 s timer). native/crates/ox-app/src/window/tests/input.rs (typing_selects_the_next_matching_name_and_names_it_in_the_hint), type_to_select.rs (the_hint_names_the_item_it_jumped_to)."
 
 [[feature]]
 id = "SEL-029"
@@ -4888,8 +4898,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "Use GtkIMContext-aware key handling (Gtk.EventControllerKey with im-context) so preedit never reaches type-ahead."
-native = "partial"
-native_note = "native/crates/ox-app/src/typeahead.rs (named_keys_and_control_characters_are_not_prefixes, invalid_key_input_does_not_alter_the_buffer); modifier and IME filtering in the GTK controller untested."
+native = "done"
+native_note = "native/crates/ox-app/src/typeahead.rs (named_keys_and_control_characters_are_not_prefixes, invalid_key_input_does_not_alter_the_buffer); the GTK controller in native/crates/ox-app/src/window/input.rs passes Ctrl/Alt/Super keys on and takes text only from the input method's commit, so composition, dead keys and pre-edit never become prefix text. native/crates/ox-app/src/window/tests/input.rs (keys_with_ctrl_or_alt_never_start_a_prefix, modifier_keys_keep_the_typed_prefix)."
 
 [[feature]]
 id = "SEL-030"
@@ -4909,7 +4919,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Text entered into Search remains ordinary search input",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "Type-to-select lives only on the two folder views (native/crates/ox-app/src/window/input.rs), which pages, dialogs and the Settings page replace or cover, and it passes keys on while a text field inside a view has focus. native/crates/ox-app/src/window/tests/input.rs (keys_typed_in_a_text_field_are_left_to_it)."
 
 [[feature]]
 id = "SEL-031"
@@ -4945,7 +4956,8 @@ python_tests = [
   "desktop/tests/type_select.test.cjs::explicit reset clears accumulated text",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "reset_typeahead runs on any press in a view, focus leaving the view, other keys, navigation, tab switches and view changes. native/crates/ox-app/src/window/tests/input.rs (leaving_the_view_starts_a_new_prefix, navigation_keys_start_a_new_prefix)."
 
 [[feature]]
 id = "SEL-032"
@@ -4976,7 +4988,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "Gtk.ListView/GridView.scroll_to(position, Gtk.ListScrollFlags.SELECT|FOCUS)."
-native = "todo"
+native = "done"
+native_note = "apply_typeahead in native/crates/ox-app/src/window/type_to_select.rs scrolls the match into view with GTK's scroll_to, which renders only the rows it shows. native/crates/ox-app/src/window/tests/input.rs (a_match_below_the_visible_rows_is_scrolled_into_view)."
 
 [[feature]]
 id = "SEL-033"
@@ -4998,8 +5011,8 @@ python_tests = [
   "desktop/tests/type_select.test.cjs::no mutation of input records or their order",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-app/src/typeahead.rs (supplied_sort_order_is_preserved)."
+native = "done"
+native_note = "native/crates/ox-app/src/typeahead.rs (supplied_sort_order_is_preserved); the window passes the rows in display order, after the sort, hidden-file and search filters (type_to_select.rs, typeahead_rows)."
 
 [[feature]]
 id = "SEL-034"
@@ -5015,7 +5028,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Typing replaces an old multi-selection with one match",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/type_to_select.rs (apply_typeahead) selects the match through the view (FolderPane::select_and_reveal), so it becomes GTK's range anchor. native/crates/ox-app/src/window/tests/input.rs (a_match_replaces_a_multi_selection), tests/selection.rs (a_type_ahead_match_becomes_the_range_anchor)."
 
 [[feature]]
 id = "SEL-035"
@@ -5032,7 +5046,7 @@ python_tests = [
 ]
 bridge = []
 native = "partial"
-native_note = "native/crates/ox-app/src/typeahead.rs (spaces_within_a_filename_are_significant, prefix_length_is_bounded). Porting notes: Dolphin uses Ctrl+Space to toggle selection of the focused item; OpenXplorer has no toggle-by-keyboard. Conflicts with SEL-036 (a lone Space selects the current item in Dolphin and Explorer); see SEL-036 for the proposed rule. Keep this behaviour until the product owner decides."
+native_note = "native/crates/ox-app/src/typeahead.rs (spaces_within_a_filename_are_significant, prefix_length_is_bounded): Space inside an active prefix is prefix text. A lone Space does not start a prefix: it selects the current item and never deselects it (SEL-036, Dolphin and Explorer), where app.js started a ' ' prefix. Left partial until the product owner confirms the SEL-036 rule."
 
 [[feature]]
 id = "SEL-036"
@@ -5051,8 +5065,8 @@ sources = [
 python_tests = ["desktop/tests/type_select.test.cjs::spaces within a filename are significant"]
 bridge = []
 dolphin = "Key_Space handling + handleSpaceAsNormalKey"
-native = "todo"
-native_note = "Porting notes: In OpenXplorer a lone Space starts a type-ahead prefix ' '. Explorer uses Space to select the focused item. Existing OpenXplorer part is protected by SEL-035. Conflict: SEL-035 (replace gate) makes a lone Space a type-ahead prefix and never a selection key, so implementing this changes current behaviour. Product decision needed; proposed rule: Space inside an active prefix is prefix text (SEL-035) and a lone Space selects the current item (this feature), narrowing SEL-035. Until decided, SEL-035 wins."
+native = "done"
+native_note = "native/crates/ox-app/src/window/input.rs (prefix_editing_key, select_current_item): a lone Space adds the item with keyboard focus to the selection and never removes it, as in Dolphin; Ctrl+Space still toggles (SEL-009); inside an active prefix Space is prefix text (SEL-035). native/crates/ox-app/src/window/tests/selection.rs (space_selects_the_current_item_and_never_deselects_it)."
 
 [[feature]]
 id = "SEL-037"
@@ -5066,8 +5080,8 @@ sources = ["desktop/ui/app.js:1028"]
 python_tests = []
 bridge = []
 gnome = "Nautilus 46 view.select-pattern ('Select Items Matching', Ctrl+S) using GPatternSpec"
-native = "todo"
-native_note = "Porting notes: Explorer leaves Ctrl+S unbound, but Dolphin binds it to Stash (VIEW-064); choose the key when both are decided. The wildcard syntax can be shared with SRCH-004."
+native = "done"
+native_note = "native/crates/ox-app/src/window/select_matching.rs: 'Select items matching…' in the More options menu asks for a * and ? pattern and selects the shown items it matches, ignoring case; no shortcut yet (Ctrl+S is undecided, VIEW-064). select_matching.rs (wildcards_match_whole_names_ignoring_case), native/crates/ox-app/src/window/tests/selection.rs (select_matching_selects_the_shown_items_whose_names_match)."
 
 [[feature]]
 id = "SIDE-001"
