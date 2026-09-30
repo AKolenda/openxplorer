@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! What happens before the application starts: `--version`, `--quit`,
-//! `--restart`, and the check for a running instance an upgrade left
-//! outdated; and the `runtime-info` action that lets a later launch run
-//! that check against this process.
+//! What happens before the application starts: `--version`, `--check`,
+//! `--diagnose`, `--quit`, `--restart`, and the check for a running
+//! instance an upgrade left outdated; and the `runtime-info` action that
+//! lets a later launch run that check against this process.
 //!
 //! Ports `main` and `confirm_restart` in `desktop/winspace.py` and the
 //! `runtime-info` action of `OpenXplorer.startup`; the guard itself is
@@ -27,10 +27,31 @@ use crate::config::APP_ID;
 const RESTART_OPTION: &str = "--restart";
 /// The option that prints the version.
 const VERSION_OPTION: &str = "--version";
+/// The option that names the libraries and the build.
+const CHECK_OPTION: &str = "--check";
+/// The option that prints the installed and running builds as JSON.
+const DIAGNOSE_OPTION: &str = "--diagnose";
 /// The option that asks the running instance to quit safely.
 const QUIT_OPTION: &str = "--quit";
 /// The option of the Show in folder service, which never asks anything.
 const SERVICE_OPTION: &str = "--filemanager-service";
+
+/// The options only the launcher handles, without their dashes, and what
+/// `--help` says about each (`argument_parser` in `winspace.py`). The
+/// application registers them too, so `--help` lists them, but they never
+/// reach it: the guard exits or removes them first.
+pub(crate) const LAUNCHER_OPTIONS: [(&str, &str); 4] = [
+    ("check", "Check native libraries without opening a window"),
+    (
+        "restart",
+        "Safely quit the current process and launch the installed build; never force active transfers",
+    ),
+    (
+        "diagnose",
+        "Print installed and running build identities without filenames or credentials",
+    ),
+    ("version", "Print the installed application version"),
+];
 
 /// The exit status of a launch the guard stopped, as in the Python app.
 const GUARD_FAILURE: u8 = 3;
@@ -66,7 +87,16 @@ impl LaunchCheck {
         if let Some(refusal) = refuse_root(effective_user_id()) {
             return refusal;
         }
-        let outcome = if has(QUIT_OPTION) {
+        if has(CHECK_OPTION) {
+            println!("{}", super::report::check_report());
+            return Self::Exit(glib::ExitCode::SUCCESS);
+        }
+        let outcome = if has(DIAGNOSE_OPTION) {
+            super::report::diagnosis().map(|report| {
+                println!("{}", report.to_json());
+                Self::Exit(glib::ExitCode::SUCCESS)
+            })
+        } else if has(QUIT_OPTION) {
             quit_running_instance().map(|()| Self::Exit(glib::ExitCode::SUCCESS))
         } else {
             let mode = if has(RESTART_OPTION) {
@@ -143,7 +173,7 @@ fn require_current(mode: LaunchMode, is_service: bool) -> Result<(), InstanceErr
 
 /// The identity of this build, or one that matches no running instance
 /// when the executable cannot be read.
-fn this_identity() -> RuntimeIdentity {
+pub(super) fn this_identity() -> RuntimeIdentity {
     let version = running_version();
     running_identity(version).unwrap_or_else(|_| unknown_identity(version))
 }

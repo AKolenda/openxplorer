@@ -166,10 +166,16 @@ impl BrowserWindow {
         });
     }
 
+    /// The launch context of this window's display: an application
+    /// started with it gets startup notification and focus (INT-023).
+    pub(crate) fn launch_context(&self) -> gtk::gdk::AppLaunchContext {
+        WidgetExt::display(self).app_launch_context()
+    }
+
     /// Starts applications with this window's display, so they get
     /// startup notification and focus (INT-023).
     fn application_launcher(&self) -> integration::Launcher {
-        let launch_context = WidgetExt::display(self).app_launch_context();
+        let launch_context = self.launch_context();
         Box::new(move |app_id, prepared, default| {
             integration::launch(app_id, prepared, default, launch_context.upcast_ref())
         })

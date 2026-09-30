@@ -523,9 +523,12 @@ class MarkerTests(unittest.TestCase):
         ''')
         write(root / 'native/target/debug/b.rs', '// parity: SEL-001\n')
         write(root / 'native/ui-tests/flow.py', '# parity: SEL-002\n')
+        write(root / 'native/tools/test_package.py', '# parity: UPD-017\n')
+        write(root / 'native/tools/build.py', '# parity: UPD-018\n')
         found, errors = markers.scan(root)
         self.assertEqual(found, {'NAV-001': ['native/crates/src/a.rs:2'],
                                  'TAB-002': ['native/crates/src/a.rs:2'],
+                                 'UPD-017': ['native/tools/test_package.py:1'],
                                  'SEL-002': ['native/ui-tests/flow.py:1']})
         self.assertEqual(errors, [
             "native/crates/src/a.rs:4: malformed parity marker entry 'nav-3'"

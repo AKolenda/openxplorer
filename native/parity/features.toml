@@ -14643,8 +14643,8 @@ python_tests = [
 bridge = ["windows", "focusWindow", "newWindow"]
 dolphin = "KDBusService single instance: a second `dolphin` call attaches to the running process"
 gnome = "GApplication D-Bus uniqueness; GtkApplication unique bus name (org.gtk.Application / org.freedesktop.Application); GApplicationCommandLine forwarding with G_APPLICATION_HANDLES_COMMAND_LINE|HANDLES_OPEN; Gio.Application actions exported via the .desktop file Actions= and GtkApplication; Mutter/Zorin panel right-click menu."
-native = "partial"
-native_note = "native/crates/ox-app/src/application.rs: a unique GApplication with HANDLES_COMMAND_LINE, so a later launch hands its command line and working directory to the running instance and exits. The preview runs as io.winspace.Development.Native; no test starts two processes yet. Porting notes: The native preview uses io.winspace.Development.Native. The final build must keep io.winspace.Development, which AGENTS.md treats as a compatibility contract."
+native = "done"
+native_note = "native/crates/ox-app/src/application.rs: a unique GApplication with HANDLES_OPEN and HANDLES_COMMAND_LINE, so a later launch hands its command line and working directory to the running instance and exits. Test: native/crates/ox-app/tests/launch.rs (launches_share_one_instance_that_quits_and_restarts_on_request) starts the real executable twice on the private session bus: the second launch exits at once and the first keeps the application name. The preview channel registers io.winspace.Development.Native; the stable packages are built as io.winspace.Development (INT-029)."
 
 [[feature]]
 id = "INT-002"
@@ -14660,7 +14660,7 @@ bridge = []
 dolphin = "Dolphin is Exec-launched and uses KDBusService (not DBusActivatable)"
 gnome = "org.freedesktop.Application (exported by GApplication), DBusActivatable desktop key, /usr/share/dbus-1/services/io.winspace.Development.service; Nautilus 46 uses DBusActivatable=true"
 native = "todo"
-native_note = "Porting notes: Keep the Exec fallback. Service activation for FileManager1 must never open a window."
+native_note = "Not done, needs an owner decision: the packages already install a D-Bus service file that starts the app with --gapplication-service (native/packaging/data/dbus-service.in), but DBusActivatable=true is not set. With it, GNOME Shell would start the app without running the launch guard that checks for an outdated running instance (UPD-008), and the quick actions would call ActivateAction with the desktop action IDs NewWindow, Windows and Settings, which are compatibility contracts while the app's actions are new-window, windows and settings. Porting notes: Keep the Exec fallback. Service activation for FileManager1 must never open a window."
 
 [[feature]]
 id = "INT-003"
@@ -14690,8 +14690,8 @@ python_tests = [
 bridge = []
 dolphin = "org.kde.dolphin.desktop (MimeType=inode/directory, desktop actions)"
 gnome = "freedesktop Desktop Entry (Actions, MimeType); freedesktop Desktop Entry spec (MimeType, Actions, StartupWMClass) + update-desktop-database; GtkApplication app-id becomes the Wayland xdg_toplevel app_id; Desktop Entry actions, GApplication actions"
-native = "partial"
-native_note = "native/packaging/data/io.winspace.Development.desktop is the Python desktop entry key for key (checked by native/tools/verify_layout.py and, across a real upgrade, by native/tools/verify_upgrade.py); the preview entry claims no MIME type. Tests: native/tools/test_package_data.py (every_layout_installs_the_promised_files, the_desktop_validators_accept_both_channels). Missing in the app: the --windows and --settings options the quick actions run, and glib::set_prgname(APP_ID), which makes the X11 window class match StartupWMClass. Python tests cannot carry a parity marker. Porting notes: desktop/tools/verify_deb.py also checks Exec, Icon, StartupWMClass and Actions, and runs desktop-file-validate. Nautilus additionally sets DBusActivatable and X-GNOME-UsesNotifications; see those entries."
+native = "done"
+native_note = "native/packaging/data/io.winspace.Development.desktop is the Python desktop entry key for key (Name, GenericName, Keywords, Categories, the folder, SMB and ZIP MIME types, Exec 'openxplorer %U', StartupNotify, StartupWMClass and the New window, Open windows… and Settings actions), checked by native/tools/verify_layout.py and, across a real upgrade, native/tools/verify_upgrade.py; the preview entry claims no MIME type. The quick actions run --new-window, --windows and --settings (native/crates/ox-app/src/application/command_line.rs), and startup sets glib::set_prgname(APP_ID) so the X11 window class matches StartupWMClass (application.rs). Tests: native/tools/test_package_data.py (test_every_layout_installs_the_promised_files, test_the_desktop_validators_accept_both_channels, which run desktop-file-validate); command_line.rs (each_option_asks_for_its_own_action). Nautilus additionally sets DBusActivatable and X-GNOME-UsesNotifications; see INT-002 and INT-026."
 
 [[feature]]
 id = "INT-004"
@@ -14726,8 +14726,8 @@ python_tests = [
 bridge = ["quit", "newWindow", "windows"]
 dolphin = "dolphin --new-window, --select, --daemon (and --split, which has no OpenXplorer equivalent)"
 gnome = "g_application_add_main_option + GApplicationCommandLine (get_arguments, get_cwd, get_options_dict)"
-native = "partial"
-native_note = "native/crates/ox-app/src/application/command_line.rs (each_option_asks_for_its_own_action, select_needs_a_file, the_options_keep_the_python_names): locations, --new-window, --windows, --settings, --select, --filemanager-service, --software-rendering and --quit, checked in the launching process so invalid input exits with status 2; native/crates/ox-app/src/update/launch_guard.rs handles --version, --quit and --restart before the application starts. Missing: --check and --diagnose. Porting notes: --split is tracked with split view (VIEW), not here."
+native = "done"
+native_note = "native/crates/ox-app/src/application/command_line.rs: locations, --new-window, --windows, --settings, --select, --filemanager-service, --software-rendering and --quit, checked in the launching process so invalid input prints the error to stderr and exits with status 2; native/crates/ox-app/src/update/launch_guard.rs and update/report.rs handle --version, --check, --diagnose, --quit and --restart before the application starts, and those are registered too so --help lists every option. Tests: command_line.rs (each_option_asks_for_its_own_action, select_needs_a_file, the_options_keep_the_python_names); native/crates/ox-app/tests/launch.rs (launches_share_one_instance_that_quits_and_restarts_on_request: --help, '--select' without a file exits 2, --version, --windows, --diagnose, --restart, --quit). Porting notes: --split is tracked with split view (INT-005, VIEW), not here."
 
 [[feature]]
 id = "INT-005"
@@ -14751,7 +14751,7 @@ python_tests = [
 bridge = ["newWindow"]
 dolphin = "dolphin --select / --split / --new-window / --daemon"
 native = "todo"
-native_note = "Porting notes: --split is missing."
+native_note = "Not done: the native app has no split view yet (tracked with VIEW), so --split has nothing to open. Add the option together with split view."
 
 [[feature]]
 id = "INT-006"
@@ -14764,8 +14764,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:1662-1664"]
 python_tests = ["desktop/tests/test_v07.py::AppManagerTests::test_glib_parsed_new_window_flag"]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-app/src/application/state.rs (new_window_opens_its_locations_in_a_window_of_its_own): the first location opens in the new window, the others as tabs. --software-rendering applies only when the launch starts the application: GTK chooses its renderer once per process."
+native = "done"
+native_note = "native/crates/ox-app/src/application/requests.rs (new_window_at): the first location opens in a new window (or Home), the others as tabs in it. Tests: native/crates/ox-app/src/application/state.rs (new_window_opens_its_locations_in_a_window_of_its_own), command_line.rs (each_option_asks_for_its_own_action), application.rs (software_rendering_chooses_cairo_for_this_launch). Limitation by GTK: --software-rendering takes effect when the launch starts the application, because GTK 4 chooses one renderer per process (GSK_RENDERER); a --new-window --software-rendering handed to an already running instance opens its window with that instance's renderer."
 
 [[feature]]
 id = "INT-007"
@@ -15028,8 +15028,8 @@ python_tests = [
 bridge = ["list", "properties", "uiReady", "focusWindow"]
 dolphin = "OpenExternallyCalledFolderInNewTab"
 gnome = "org.freedesktop.FileManager1 ShowFolders/ShowItems/ShowItemProperties; org.freedesktop.FileManager1 D-Bus interface (ShowItems/ShowFolders/ShowItemProperties).; org.freedesktop.FileManager1.ShowItems"
-native = "partial"
-native_note = "native/crates/ox-core/tests/session_window_state.rs (show_items_keeps_a_file_location, show_folders_and_item_properties_keep_their_locations); native/crates/ox-core/tests/integration_file_manager/requests.rs (show_items_keeps_the_file_itself, show_folders_and_show_item_properties_are_accepted); native/crates/ox-core/tests/integration_file_manager/service.rs (show_items_reaches_the_app_with_the_startup_id). native/crates/ox-app/src/window/external_requests.rs (items_are_grouped_by_their_folder_in_request_order); native/crates/ox-app/src/integration/tests.rs (show_items_selects_the_files_in_their_folders, show_folders_opens_each_folder_in_a_tab). Missing: ShowItemProperties opens the parent with the item selected but does not show Properties yet; it needs the Properties dialog (native/props-ui). Porting notes: OpenXplorer's ShowFolders always adds tabs and is not configurable."
+native = "done"
+native_note = "native/crates/ox-app/src/window/external_requests.rs: ShowFolders opens each folder in a new tab; ShowItems groups files by folder, reuses a tab already showing it (listed again) or opens one, selects exactly the requested items and scrolls to the first, never opening a file as a folder; ShowItemProperties opens the parent in a new tab with the item selected and shows its Properties there. Tests: native/crates/ox-core/tests/session_window_state.rs (show_items_keeps_a_file_location, show_folders_and_item_properties_keep_their_locations); native/crates/ox-core/tests/integration_file_manager/requests.rs and service.rs; external_requests.rs (items_are_grouped_by_their_folder_in_request_order); native/crates/ox-app/src/integration/tests.rs (show_items_selects_the_files_in_their_folders, show_folders_opens_each_folder_in_a_tab); native/crates/ox-app/src/window/tests/item_dialogs.rs (show_item_properties_opens_the_folder_and_the_properties). Porting notes: OpenXplorer's ShowFolders always adds tabs and is not configurable."
 
 [[feature]]
 id = "INT-015"
@@ -15132,8 +15132,8 @@ python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_service_flag_does_not_create_window",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-app/src/integration/file_manager_service.rs holds the application while the service answers and releases it on Disable and Quit; --filemanager-service starts the service only when Show in folder is enabled and never asks to restart (native/crates/ox-app/src/update/launch_guard.rs). Tested in-process by show_in_folder_owns_file_manager1_until_disabled; a service-only process is not tested yet."
+native = "done"
+native_note = "native/crates/ox-app/src/integration/file_manager_service.rs holds the application while the service answers and releases it on Disable and Quit; --filemanager-service starts the service only when Show in folder is enabled, opens no window and never asks to restart (native/crates/ox-app/src/update/launch_guard.rs). Tests: native/crates/ox-app/src/integration/tests.rs (show_in_folder_owns_file_manager1_until_disabled) in-process; native/crates/ox-app/tests/launch.rs (launches_share_one_instance_that_quits_and_restarts_on_request) with real processes: without the opt-in --filemanager-service exits and leaves nothing running; with it the service process stays running, owns org.freedesktop.FileManager1 and quits on --quit."
 
 [[feature]]
 id = "INT-018"
@@ -15146,8 +15146,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:1973-1982"]
 python_tests = []
 bridge = []
-native = "todo"
-native_note = "Porting notes: Guide text has two items numbered '4.'; fix when porting."
+native = "done"
+native_note = "native/crates/ox-app/src/settings_page/troubleshooting.rs: the Troubleshooting row of Default apps opens the 'Zorin + Brave setup and troubleshooting' subpage (the native form of the collapsible section) with the Python steps numbered 1 to 6 (the duplicate '4.' fixed) and pointing at where the native controls are, then what Restore previous removes. Test: the_guide_shows_each_step_once_in_order."
 
 [[feature]]
 id = "INT-019"
@@ -15239,8 +15239,8 @@ python_tests = [
   "desktop/tests/test_v07.py::BraveTests::test_restore_consent_required",
 ]
 bridge = ["braveRestore"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_brave/restore.rs (restoring_puts_back_only_the_download_folders, restoring_keeps_unrelated_decimal_preferences_exactly, restoring_keeps_a_folder_the_user_changed_later, restoring_needs_explicit_consent, restoring_without_a_record_changes_nothing, restoring_removes_the_undo_record); native/crates/ox-core/tests/integration_brave/sync.rs (inside_flatpak_brave_is_never_changed). The Brave dialog's Restore previous needs the consent and exactly one profile (native/crates/ox-app/src/integration/brave_dialog.rs); its UI flow is not tested yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_brave/restore.rs (restoring_puts_back_only_the_download_folders, restoring_keeps_unrelated_decimal_preferences_exactly, restoring_keeps_a_folder_the_user_changed_later, restoring_needs_explicit_consent, restoring_without_a_record_changes_nothing, restoring_removes_the_undo_record); native/crates/ox-core/tests/integration_brave/sync.rs (inside_flatpak_brave_is_never_changed). The Brave dialog's Restore previous needs the consent and exactly one profile and shows the refusal in the dialog (native/crates/ox-app/src/integration/brave_dialog.rs); tested by native/crates/ox-app/src/integration/tests.rs (the_brave_dialogs_restore_needs_consent_and_a_record)."
 
 [[feature]]
 id = "INT-022"
@@ -15278,8 +15278,8 @@ python_tests = ["desktop/tests/test_v07.py::BusTests::test_showitems_dispatch"]
 bridge = ["open", "openWith", "activateItem"]
 dolphin = "KStartupInfo / KWindowSystem activation tokens"
 gnome = "gtk_window_set_startup_id (X11 startup-notification or Wayland xdg-activation token), GdkAppLaunchContext passed to g_app_info_launch; GdkAppLaunchContext"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_file_manager/service.rs (show_items_reaches_the_app_with_the_startup_id, a_long_startup_id_is_cut_to_4096_characters). The window raised for a FileManager1 request gets the caller's startup ID before present() (native/crates/ox-app/src/application/requests.rs), and Open with launches with the window display's launch context (native/crates/ox-app/src/window/integration_actions.rs). Not verified on a real Wayland session yet. Porting notes: Focus behaviour is unverified on a real Wayland session; the native app must verify it with xdg-activation."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_file_manager/service.rs (show_items_reaches_the_app_with_the_startup_id, a_long_startup_id_is_cut_to_4096_characters): the caller's startup ID reaches the app, cut to 4096 characters. The window raised for a FileManager1 request gets it through set_startup_id before present() (raise_for_caller in native/crates/ox-app/src/application/requests.rs, test the_startup_id_comes_before_the_window_is_presented), which GTK turns into an xdg-activation token on Wayland and startup notification on X11, and Open with launches with the window display's GdkAppLaunchContext (BrowserWindow::launch_context in native/crates/ox-app/src/window/integration_actions.rs, test native/crates/ox-app/src/integration/tests.rs applications_start_with_the_windows_display). Not verified by hand on a real GNOME Wayland session: focus-stealing prevention is the compositor's decision."
 
 [[feature]]
 id = "INT-024"
@@ -15299,8 +15299,8 @@ python_tests = []
 bridge = ["activateItem"]
 dolphin = "KDE Device Notifier “Open with File Manager”"
 gnome = "GNOME Shell autorun manager + org.gnome.desktop.media-handling automount-open → default inode/directory handler"
-native = "todo"
-native_note = "Porting notes: Not verified with real hardware."
+native = "done"
+native_note = "The desktop runs the folder handler's Exec (openxplorer %U) with the new mount root when GNOME's 'open folder on media insertion' is on; a later launch hands that location to the running instance, which opens it in the active window (native/crates/ox-app/src/application/requests.rs, open_in_active_window). Tests: native/crates/ox-app/src/window/tests/opening.rs (command_line_locations_open_in_the_current_tab_then_in_new_tabs), native/crates/ox-app/tests/launch.rs (a later launch hands over to the running instance). Porting notes: not verified with real removable media; that needs hardware."
 
 [[feature]]
 id = "INT-025"
@@ -15316,6 +15316,7 @@ bridge = ["search"]
 dolphin = "KRunner Baloo runner (Plasma, not Dolphin)"
 gnome = "org.gnome.Shell.SearchProvider2 + /usr/share/gnome-shell/search-providers/*.ini (Nautilus ships one)"
 native = "todo"
+native_note = "Not done in this pass (could priority): it needs an org.gnome.Shell.SearchProvider2 object over the search cache, an opt-in setting, and a search-provider .ini in every package format, which the packaging verifiers must then promise."
 
 [[feature]]
 id = "INT-026"
@@ -15335,7 +15336,8 @@ python_tests = []
 bridge = ["operate", "archiveExtract"]
 dolphin = "KIO job notifications in Plasma (“Open Destination”)"
 gnome = "GNotification via g_application_send_notification (used by Nautilus 46) + X-GNOME-UsesNotifications"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/background_notice.rs: when a copy, move, trash, delete or restore (native/crates/ox-app/src/window/file_ops/running.rs, window/version_restore.rs) or an extraction or compression (window/archive_actions.rs) ends while no OpenXplorer window has focus, a GNotification repeats the result: the toast's words as the title, or 'Operation result' with the report. Clicking it or its Show button runs app.focus-window for that window, which shows the destination folder with the new items selected; one notification ID is reused, so the latest result replaces the last. The in-app toast stays. Both desktop entries declare X-GNOME-UsesNotifications=true. Tests: background_notice.rs (the_notice_says_what_the_toast_or_report_says), native/crates/ox-app/src/window/tests/file_operations.rs (an_operation_ending_in_the_background_notifies_the_desktop: a Duplicate that ends while a window outside the app has focus records one notice with the toast's words aimed at that window's ID; a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast: a focused window sends nothing); tests record notifications instead of sending them, so no notification server is started."
 
 [[feature]]
 id = "INT-027"
@@ -15350,7 +15352,8 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "Plasma task-manager job progress"
 gnome = "com.canonical.Unity.LauncherEntry Update signal (progress, progress-visible), supported by Dash-to-Dock/Dash-to-Panel-style taskbars; GNOME Shell core has no equivalent"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/launcher_progress.rs: while the transfer panel or the archive operation panel runs, the app emits com.canonical.Unity.LauncherEntry.Update for application://<app id>.desktop with progress and progress-visible, on whole-percent changes only, and hides the bar when the operation ends. Docks and taskbars that implement the API (Dash to Dock, Dash to Panel, Zorin's taskbar, Plank, KDE) draw it; GNOME Shell's own dash has no equivalent and shows nothing. Test: launcher_progress.rs (the_update_names_the_app_and_its_progress). Not verified against a real dock."
 
 [[feature]]
 id = "INT-028"
@@ -15368,8 +15371,8 @@ python_tests = [
 bridge = ["operate", "archiveExtract", "updateInstall"]
 dolphin = "n/a in Dolphin by default"
 gnome = "gtk_application_inhibit(LOGOUT|SUSPEND) → org.gnome.SessionManager.Inhibit (gtk_application_inhibit is present in the Nautilus 46.4 binary)"
-native = "todo"
-native_note = "Porting notes: Protects SMB and MTP transfers from interruption by suspend; arguably must for data safety."
+native = "done"
+native_note = "native/crates/ox-app/src/write_inhibitor.rs: the transfer panel (copy, move, trash, delete, restore; native/crates/ox-app/src/window/transfer_panel.rs), the archive operation panel (extract, compress; native/crates/ox-app/src/archive_view/operation_panel.rs) and the Software updates dialog while APT runs (native/crates/ox-app/src/update/dialog.rs) hold gtk_application_inhibit(LOGOUT | SUSPEND, 'Copying files') from start to end, released on completion or cancellation. GTK passes it to org.gnome.SessionManager or the Inhibit portal. Test: native/crates/ox-app/src/window/tests/file_operations.rs (a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast). The session manager's dialogs themselves are not tested (no session manager on the test bus)."
 
 [[feature]]
 id = "INT-029"
@@ -15399,8 +15402,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_stable_version_upgrades_candidates",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/src/network/credential.rs (keyring_text_round_trips_under_its_scope, text_written_by_the_python_app_is_read); native/crates/ox-core/tests/integration_default_apps.rs (the_desktop_id_is_the_legacy_one); native/crates/ox-core/tests/integration_reveal.rs (the_managed_marker_is_the_legacy_one, the_service_file_is_byte_for_byte_the_legacy_one, the_autostart_entry_keeps_the_legacy_name, the_autostart_entry_is_byte_for_byte_the_legacy_one); native/crates/ox-core/tests/network_keyring_python.rs (credentials_saved_natively_load_in_the_python_app, credentials_saved_by_the_python_app_load_natively); native/crates/ox-core/tests/network_secret_service.rs (both_apps_find_each_others_credentials_in_the_keyring). These tests keep the keyring schema, the desktop ID of the default-app records and the Show in folder files; the application ID, the command aliases and the package's Replaces and Provides are not covered. Packaging: native/tools/test_build_deb.py (the_stable_package_takes_over_the_python_package) and native/tools/test_package_data.py (the_stable_host_packages_keep_the_python_commands) keep the winspace and winspace-mount-share commands and the Replaces, Conflicts and Provides of winspace-explorer; ox-app/build.rs builds the stable app under io.winspace.Development when OX_APP_ID asks for it. Porting notes: The native preview uses io.winspace.Development.Native; replacing the Python app needs a migration plan for the ID."
+native = "done"
+native_note = "Keyring schema: native/crates/ox-core/src/network/credential.rs (keyring_text_round_trips_under_its_scope, text_written_by_the_python_app_is_read), native/crates/ox-core/tests/network_keyring_python.rs and network_secret_service.rs (both apps find each other's credentials). Desktop ID of default-app records and the Show in folder files: native/crates/ox-core/tests/integration_default_apps.rs (the_desktop_id_is_the_legacy_one), integration_reveal.rs (the_managed_marker_is_the_legacy_one, the_service_file_is_byte_for_byte_the_legacy_one, the_autostart_entry_keeps_the_legacy_name, the_autostart_entry_is_byte_for_byte_the_legacy_one). Settings stay in ~/.config/winspace and the cache in ~/.cache/winspace (glib user dirs, so XDG_CONFIG_HOME and XDG_CACHE_HOME are respected; native/crates/ox-core/src/settings.rs). The stable packages are built with OX_APP_ID=io.winspace.Development (native/crates/ox-app/build.rs, native/tools/build_deb.py, the RPM, Arch and Flatpak recipes). Commands and package takeover: native/tools/test_package_data.py (test_the_stable_host_packages_keep_the_python_commands: winspace and winspace-mount-share) and native/tools/test_build_deb.py (test_the_stable_package_takes_over_the_python_package: Replaces, Conflicts and Provides winspace-explorer (<< 0.8.0)). The preview channel alone uses io.winspace.Development.Native so it can run beside the Python app."
 
 [[feature]]
 id = "INT-030"
@@ -15611,8 +15614,8 @@ python_tests = [
   "desktop/tests/test_updater.py::BridgeTests::test_active_work_in_any_window_blocks_install",
 ]
 bridge = ["updateInstall", "updateCheck", "updateRestart"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/update_install.rs (install_requires_literal_confirmation_before_any_network_or_process); native/crates/ox-core/tests/update_restart.rs (installed_update_blocks_files_but_allows_status_without_new_check, modified_installed_files_require_restart_after_success_or_failure, identity_read_failure_always_clears_busy_and_requires_restart); native/crates/ox-core/tests/update_service.rs (running_update_blocks_file_actions_and_other_updates_in_every_window, a_running_update_refuses_another_check_or_installation, confirmation_is_required_before_worker_or_busy_state, active_work_in_any_window_blocks_install, queued_install_blocks_second_window_before_worker_starts, only_version_confirmation_and_progress_cross_to_the_installation, a_worker_that_dies_does_not_leave_the_application_locked, quit_and_window_close_refuse_while_update_runs, new_windows_are_blocked_during_update_and_until_restart, an_abandoned_installation_keeps_the_application_locked_until_apt_finishes). native/crates/ox-app/src/update/tests.rs (an_installing_update_locks_every_window): while APT runs every window is insensitive and refuses to close, and the dialog cannot be dismissed; new windows are refused. Missing: running file operations must refuse Install update… once they are ported (they join work_in_windows in native/crates/ox-app/src/window/integration_actions.rs)."
+native = "done"
+native_note = "native/crates/ox-core/tests/update_install.rs (install_requires_literal_confirmation_before_any_network_or_process); native/crates/ox-core/tests/update_restart.rs and update_service.rs (running_update_blocks_file_actions_and_other_updates_in_every_window, confirmation_is_required_before_worker_or_busy_state, active_work_in_any_window_blocks_install, queued_install_blocks_second_window_before_worker_starts, quit_and_window_close_refuse_while_update_runs, new_windows_are_blocked_during_update_and_until_restart, and others). The Software updates dialog refuses Install update… with 'Finish file operations before installing the update.' while any window lists a folder or writes files (work_in_windows in native/crates/ox-app/src/window/integration_actions.rs, which covers file operations, extraction and restores); while APT runs every window is insensitive and refuses to close, the dialog cannot be dismissed and new windows are refused. Tests: native/crates/ox-app/src/update/tests.rs (installing_waits_for_file_operations, an_installing_update_locks_every_window, installing_verifies_installs_and_offers_the_restart)."
 
 [[feature]]
 id = "UPD-006"
@@ -15640,8 +15643,8 @@ python_tests = [
   "desktop/tests/test_updater.py::BridgeTests::test_identity_read_failure_always_clears_busy_and_requires_restart",
 ]
 bridge = ["updateCheck", "updateInstall", "updateRestart"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/update_restart.rs (installed_update_blocks_files_but_allows_status_without_new_check, modified_installed_files_require_restart_after_success_or_failure, an_installation_that_changed_nothing_needs_no_restart, identity_read_failure_always_clears_busy_and_requires_restart); native/crates/ox-core/tests/update_service.rs (new_windows_are_blocked_during_update_and_until_restart). native/crates/ox-app/src/update/state.rs (every_state_has_the_python_dialogs_status_line, only_a_restart_is_offered_once_files_changed); native/crates/ox-app/src/update/tests.rs (installing_verifies_installs_and_offers_the_restart): failure texts, Restart now and refused new windows. Missing: after an installation, file requests are not refused until the restart."
+native = "done"
+native_note = "native/crates/ox-core/tests/update_restart.rs (installed_update_blocks_files_but_allows_status_without_new_check, modified_installed_files_require_restart_after_success_or_failure, an_installation_that_changed_nothing_needs_no_restart, identity_read_failure_always_clears_busy_and_requires_restart); native/crates/ox-core/tests/update_service.rs (new_windows_are_blocked_during_update_and_until_restart). native/crates/ox-app/src/update/state.rs (every_state_has_the_python_dialogs_status_line, only_a_restart_is_offered_once_files_changed): the failure texts, Restart now only, 'Could not restart. <error>'. Until the restart, new windows are refused and every write is refused with 'Restart OpenXplorer to finish the application update before using files.': BrowserWindow::refuses_writes_during_update (native/crates/ox-app/src/window/file_ops/running.rs) asks Updates::file_refusal before every writer starts: begin_operation (copy, move, paste, drop, duplicate, trash, delete, restore, undo/redo, links), extraction and compression (window/archive_actions.rs), a restored previous version (window/version_restore.rs), rename by dialog or in place, New folder and New files. Browsing stays possible: the running Rust binary is not affected by replaced files, unlike the Python modules the rule protected. Tests: native/crates/ox-app/src/update/tests.rs (installing_verifies_installs_and_offers_the_restart, writes_wait_for_the_restart_after_an_installation: Duplicate, Compress to ZIP, Rename and New folder each show the message and the folder is unchanged)."
 
 [[feature]]
 id = "UPD-007"
@@ -15710,8 +15713,8 @@ python_tests = [
 ]
 bridge = ["quit"]
 gnome = "GtkApplication single-instance D-Bus name (org.gtk.Actions)."
-native = "partial"
-native_note = "native/crates/ox-core/tests/update_instance_bus.rs (nobody_owns_an_application_that_does_not_run, the_identity_is_read_through_org_gtk_actions, a_normal_launch_leaves_the_current_instance_running, an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed, a_legacy_instance_is_detected_and_quits_safely); native/crates/ox-core/tests/update_runtime_guard.rs (the_identity_changes_with_the_python_and_ui_files, identity_ignores_files_that_are_not_part_of_the_build, a_launch_with_no_running_instance_continues_without_asking_anything_to_quit, a_current_running_instance_is_left_running, an_outdated_instance_is_not_stopped_without_consent, declining_the_restart_never_stops_the_instance, confirming_asks_only_the_exact_owner_to_quit, an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, a_process_without_an_identity_is_a_legacy_process, a_match_needs_version_protocol_and_build). The launch guard runs before the application starts and asks \"Restart OpenXplorer to finish updating\" when the running instance's runtime-info differs (native/crates/ox-app/src/update/launch_guard.rs); not tested with two processes yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/update_instance_bus.rs (nobody_owns_an_application_that_does_not_run, the_identity_is_read_through_org_gtk_actions, a_normal_launch_leaves_the_current_instance_running, an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed, a_legacy_instance_is_detected_and_quits_safely); native/crates/ox-core/tests/update_runtime_guard.rs (a_starting_instance_is_waited_for_before_it_counts_as_outdated, an_outdated_instance_is_not_stopped_without_consent, declining_the_restart_never_stops_the_instance, confirming_asks_only_the_exact_owner_to_quit, a_busy_instance_is_never_killed, a_match_needs_version_protocol_and_build, and others). The native identity is the SHA-256 of the executable (not *.py and UI files), published through the runtime-info action; the launch guard (native/crates/ox-app/src/update/launch_guard.rs) asks 'Restart OpenXplorer to finish updating' with 'Not now' / 'Restart OpenXplorer' before the application starts, never in service mode, and waits for an instance that is still reading its own digest instead of taking it for an outdated build. native/crates/ox-app/tests/launch.rs runs two real processes of the same build, which are left running without a prompt."
 
 [[feature]]
 id = "UPD-009"
@@ -15731,8 +15734,8 @@ python_tests = [
   "desktop/tests/native_runtime_guard.py::Busy server refuses restart without being killed",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/tests/update_instance_bus.rs (an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed); native/crates/ox-core/tests/update_runtime_guard.rs (an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, another_instance_taking_the_name_during_restart_is_reported, a_failed_quit_from_an_instance_that_already_quit_is_fine). The native app has no --restart option yet. native/crates/ox-app/src/update/launch_guard.rs (the_restart_option_is_not_passed_on): openxplorer --restart asks the running instance to quit, waits and starts, exiting with status 3 on the guard's errors; not tested with two processes yet."
+native = "done"
+native_note = "native/crates/ox-app/src/update/launch_guard.rs: openxplorer --restart asks the running instance to quit through its quit action (refused while files are written), waits up to 6 s for its bus name to go, then starts this build; the guard's errors exit with status 3 and nothing is ever killed. Tests: native/crates/ox-core/tests/update_instance_bus.rs (an_explicit_restart_waits_for_the_exact_owner_to_exit, a_busy_instance_refuses_restart_and_is_not_killed); native/crates/ox-core/tests/update_runtime_guard.rs (an_explicit_restart_asks_even_a_current_instance_to_quit, a_refused_quit_stops_the_launch, stopping_waits_until_the_instance_releases_its_name, a_busy_instance_is_never_killed, another_instance_taking_the_name_during_restart_is_reported, a_failed_quit_from_an_instance_that_already_quit_is_fine); launch_guard.rs (the_restart_option_is_not_passed_on); native/crates/ox-app/tests/launch.rs (a real --restart replaces the running process, which exits normally)."
 
 [[feature]]
 id = "UPD-010"
@@ -15753,8 +15756,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "--version prints \"OpenXplorer <version>\" (native/crates/ox-app/src/update/launch_guard.rs). Missing: --check and --diagnose."
+native = "done"
+native_note = "native/crates/ox-app/src/update/launch_guard.rs and update/report.rs: --version prints 'OpenXplorer <version>'; --check prints the version, GTK, the GIO VFS class and the build digest without opening a window (no WebKitGTK line: the native app does not use it); --diagnose prints the Python report's JSON (installed, owner, running, matches, legacyProcess, associations from xdg-mime, showInFolder with owner, ownerLabel, ownedByOpenXplorer and enabled), without file names or credentials (native/crates/ox-core/src/update/diagnosis.rs). Tests: diagnosis.rs (the_report_keeps_the_python_keys_and_compares_the_builds), report.rs (the_check_names_the_libraries_and_the_build), native/crates/ox-app/tests/launch.rs (--version, and --diagnose reporting a matching running build)."
 
 [[feature]]
 id = "UPD-011"
@@ -15774,7 +15777,8 @@ python_tests = [
   "desktop/tests/test_startup.py::StartupTests::test_timeout_reveals_recovery_without_dismissing_cover",
 ]
 bridge = ["environment", "uiReady", "cacheStatus", "quit"]
-native = "todo"
+native = "n-a"
+native_note = "The Python app's interface was a WebKit page talking to a separate backend, so it needed a ready handshake, a startup error screen with Retry, a version check between page and backend and 15 s request timeouts. The native interface is compiled into the same process as the logic: there is no page that can fail to load or report a different version, and no bridge to time out. What remains applies natively and is done: preferences (view, details pane, hidden files, theme, text size, layout) are applied before the first window shows, a settings warning is shown in the window, the start location (or Home) opens, a folder that cannot be listed shows its error in the folder view, and an outdated running process is handled by the launch guard (UPD-008, UPD-009)."
 
 [[feature]]
 id = "UPD-012"
@@ -15804,7 +15808,8 @@ python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_glib_parsed_software_flag",
 ]
 bridge = ["uiReady"]
-native = "todo"
+native = "n-a"
+native_note = "The watchdog recovered a WebKit web view that stayed blank because of GPU acceleration. The native window is drawn by GTK in the same process, with no web view to load; if GTK's GPU renderer misbehaves, --software-rendering (UPD-013) starts the app with the Cairo renderer, as the watchdog's 'Retry with software rendering' did."
 
 [[feature]]
 id = "UPD-013"
@@ -15822,8 +15827,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/test_v07.py::AppManagerTests::test_glib_parsed_software_flag"]
 bridge = []
-native = "partial"
-native_note = "--software-rendering makes GTK draw with Cairo when the launch starts the application (native/crates/ox-app/src/application.rs); GTK cannot switch the renderer of a running instance."
+native = "done"
+native_note = "--software-rendering sets GSK_RENDERER=cairo for this launch only, unless the user already chose a renderer, and changes no desktop setting (native/crates/ox-app/src/application.rs, renderer_for). Test: software_rendering_chooses_cairo_for_this_launch. GTK 4 chooses one renderer per process, so it applies when the launch starts the application, not to a window a running instance opens."
 
 [[feature]]
 id = "UPD-014"
@@ -15836,7 +15841,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:20-31"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "n-a"
+native_note = "The Python app imported PyGObject, GTK 3 and WebKit2GTK at runtime and could explain a missing one. The native executable links GTK 4 and GLib directly: the packages depend on those libraries (dependencies are derived from the linked libraries), and a missing library stops the dynamic loader before any OpenXplorer code runs, so the app cannot print a message of its own."
 
 [[feature]]
 id = "UPD-015"
@@ -15852,8 +15858,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/ui_release.py::Release label is 1.1.4"]
 bridge = ["environment"]
-native = "todo"
-native_note = "Porting notes: Text is stale: it says 'there is no permanent-delete fallback' although no-Trash locations offer confirmed permanent delete. Native About must list the native stack and accurate limitations."
+native = "done"
+native_note = "native/crates/ox-app/src/window/about.rs: More options > About this build and the About settings' button open the app's message box 'OpenXplorer <version>' with the description, 'Desktop: Rust + GTK 4 + GIO/GVfs.' and accurate limitations (confirmed replace, confirmed permanent delete where there is no Recycle Bin, opt-in cache search, no thumbnails, read-only ZIP browsing, GIO file monitors), and OK. The stale 'no permanent-delete fallback' is gone. Test: about_names_the_native_stack_and_its_limits."
 
 [[feature]]
 id = "UPD-016"
@@ -15881,8 +15887,8 @@ python_tests = [
   "desktop/tests/test_v08.py::RebrandTests::test_original_notice_kept",
 ]
 bridge = []
-native = "todo"
-native_note = "Porting notes: AGPL 'Appropriate Legal Notices' obligation; must remain reachable from the UI."
+native = "done"
+native_note = "native/crates/ox-app/src/window/about.rs: More options > License & source and the About settings' 'Read license & source information' open 'OpenXplorer · License & source' with the copyright, 'AGPL-3.0-only. No warranty.', where the corresponding source is published (the release source archive on GitHub Releases; the native build installs no editable source), and, in a scrolled monospace box, the full AGPL-3.0 text and the original 'Copyright (c) 2026 Winspace contributors' MIT notice, compiled in from LICENSE and licenses/Winspace-MIT.txt. Tests: the_license_dialog_holds_every_notice, the_license_menu_item_is_enabled."
 
 [[feature]]
 id = "UPD-017"
@@ -15910,8 +15916,8 @@ python_tests = [
   "desktop/tests/test_v08.py::RebrandTests::test_original_notice_kept",
 ]
 bridge = []
-native = "partial"
-native_note = "native/tools/build_deb.py builds openxplorer_<version>_all.deb (stable) and openxplorer-native_<version>_<arch>.deb (preview) through native/tools/package_data.py; native/tools/verify_deb.py checks them (native/packaging/README.md). Tests: native/tools/test_build_deb.py (the_stable_package_is_the_installer_the_updater_downloads, the_stable_package_takes_over_the_python_package, only_the_stable_package_recommends_updates_and_the_mount_helper, the_stable_preinst_refuses_a_foreign_processor, the_updater_installs_a_package_labelled_all), native/tools/test_package_data.py (every_layout_installs_the_promised_files, the_stable_host_packages_keep_the_python_commands, crate_licences_travel_with_the_program). native/tools/verify_upgrade.py proved the upgrade from the Python package, the rollback and the coexistence of the preview with real dpkg installations. Differences by design: the program is Rust in /opt/openxplorer/bin with a preinst refusing foreign processors, dependencies come from the linked libraries, and only the SVG icon is installed (no PNG sizes). Not done: the parity marker scanner reads only Rust sources and native/ui-tests, so these Python tests cannot carry a marker. Porting notes: The native build needs its own packaging with the same promises; tools/verify_deb.py checks the Python package."
+native = "done"
+native_note = "native/tools/build_deb.py builds openxplorer_<version>_all.deb (stable) and openxplorer-native_<version>_<arch>.deb (preview) through native/tools/package_data.py; native/tools/verify_deb.py checks them (native/packaging/README.md). The stable package installs the program, /usr/bin/openxplorer, the mount helper, the legacy winspace and winspace-mount-share commands, the desktop entry, metainfo with the swcatalog catalog, the icon and the licences, Replaces/Conflicts winspace-explorer (<< 0.8.0) and Provides it. Tests: native/tools/test_build_deb.py (test_the_stable_package_is_the_installer_the_updater_downloads, test_the_stable_package_takes_over_the_python_package), native/tools/test_package_data.py (test_every_layout_installs_the_promised_files, test_the_stable_host_packages_keep_the_python_commands). native/tools/verify_upgrade.py proved the upgrade from the Python package, the rollback and the coexistence of the preview with real dpkg installations. Differences by design: the program is Rust in /opt/openxplorer/bin with a preinst refusing foreign processors, Depends come from the linked libraries (dpkg-shlibdeps) instead of Python/WebKit packages, and only the SVG icon is installed (no PNG sizes)."
 
 [[feature]]
 id = "UPD-018"
@@ -15928,8 +15934,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/packaging/debian/refresh-caches (postinst and postrm) refreshes the desktop, icon and AppStream caches only; no package installs a FileManager1 service. Tests: native/tools/test_build_deb.py (both_channels_pass_the_script_checks, a_script_that_changes_defaults_is_refused), native/tools/test_package_data.py (a_system_wide_file_manager_service_is_refused); verify_deb.py and verify_layout.py apply the same checks to every built package. Not done: Python tests cannot carry a parity marker."
+native = "done"
+native_note = "native/packaging/debian/refresh-caches (postinst and postrm) refreshes the desktop, icon and AppStream caches only; no package installs a FileManager1 service. verify_deb.py and verify_layout.py apply the same checks to every built package. Tests: native/tools/test_build_deb.py (test_both_channels_pass_the_script_checks, test_a_script_that_changes_defaults_is_refused), native/tools/test_package_data.py (test_a_system_wide_file_manager_service_is_refused)."
 
 [[feature]]
 id = "UPD-019"
@@ -15942,8 +15948,8 @@ openxplorer = "has"
 sources = ["desktop/tools/build_deb.py:115-226", "desktop/tools/verify_deb.py:29-181"]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/tools/build_deb.py: SOURCE_DATE_EPOCH or the last commit, root:root, 0755/0644 modes, xz and md5sums; native/tools/source_archive.py writes reproducible source and vendored-crate archives. native/tools/verify_deb.py checks identity, dependencies, payload safety, promised files, launchers, desktop entry, D-Bus service and AppStream consistency, maintainer scripts, checksums, desktop-file-validate and appstreamcli, and runs the 1.1.x updater against the stable package. Tests: native/tools/test_build_deb.py, native/tools/test_package_data.py, native/tools/test_package_recipes.py (the_archive_is_reproducible_and_root_owned). Not done: Python tests cannot carry a parity marker."
+native = "done"
+native_note = "native/tools/build_deb.py: SOURCE_DATE_EPOCH or the last commit, root:root (dpkg-deb --root-owner-group), 0755 directories and 0755/0644 files, xz and DEBIAN/md5sums; native/tools/source_archive.py writes reproducible source and vendored-crate archives. native/tools/verify_deb.py checks identity, dependencies, payload safety, promised files, launchers, desktop entry, D-Bus service and AppStream consistency, maintainer scripts, checksums, desktop-file-validate and appstreamcli, and runs the 1.1.x updater against the stable package. The Python-3.10 parse and node --check steps have no native counterpart (no Python or JavaScript is packaged except the mount helper, which verify_layout checks). Tests: native/tools/test_build_deb.py (test_staging_is_normalised_and_every_file_is_checksummed), native/tools/test_package_recipes.py (test_the_archive_is_reproducible_and_root_owned), native/tools/test_package_data.py."
 
 [[feature]]
 id = "UPD-020"
@@ -15961,8 +15967,8 @@ python_tests = ["desktop/tests/test_v08.py::RebrandTests::test_appstream_license
 bridge = []
 dolphin = "org.kde.dolphin.appdata.xml"
 gnome = "AppStream metainfo (appstreamcli)"
-native = "partial"
-native_note = "native/packaging/data/<id>.metainfo.xml, installed by every format, pass appstreamcli validate; the stable one keeps the Python ID, licences and release history, and the Debian package adds the swcatalog catalog. Tests: native/tools/test_package_data.py (the_desktop_validators_accept_both_channels, a_metainfo_without_the_package_version_is_refused); verify_deb.py checks the catalog mapping. Not done: Python tests cannot carry a parity marker. Porting notes: desktop/tools/verify_deb.py also checks the metainfo ID, launchable and catalog mapping."
+native = "done"
+native_note = "native/packaging/data/<id>.metainfo.xml, installed by every format, pass appstreamcli validate; the stable one keeps the Python ID, launchable, licences and release history, and the Debian package adds the swcatalog catalog, whose mapping verify_deb.py checks. Tests: native/tools/test_package_data.py (test_the_desktop_validators_accept_both_channels, test_a_metainfo_without_the_package_version_is_refused)."
 
 [[feature]]
 id = "UPD-021"
@@ -15979,8 +15985,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
-native_note = "Porting notes: Repository tooling, not app behaviour. Keep it in the native release pipeline."
+native = "partial"
+native_note = "Implemented in the repository's release pipeline, not the app: .github/workflows/checks.yml stages the verified native packages and the corresponding source with tools/release.py, runs tools/audit-public-data.py on the complete release, writes SHA256SUMS and publishes every listed asset with gh release create only when the tag does not exist yet, so existing assets are never overwritten. tests/test_release_source.py and tests/test_public_data.py test the source policy and the audit. Not done: those tests live outside native/, which the parity marker scanner does not read, and the never-overwrite rule is workflow YAML without a test."
 
 [[feature]]
 id = "UPD-022"
@@ -16018,7 +16024,7 @@ python_tests = [
 ]
 bridge = []
 native = "todo"
-native_note = "Needs an explicit product decision: the website preview is built from desktop/ui, not from the GTK app, and the UI regression suites depend on it. Record n-a here only once that decision is made. Porting notes: Website/demo artifact rather than desktop behaviour. The native GTK app need not reproduce it, but its removal should be an explicit decision because the UI regression suites depend on it. A GTK4 app cannot be embedded in the website, so the owner must decide whether the HTML preview stays as a separate artifact."
+native_note = "Needs an explicit product decision by the owner: the website preview is built from desktop/ui, not from the GTK app (a GTK 4 app cannot run in a browser), and the UI regression suites depend on it. Record n-a only once the owner decides whether the HTML preview stays as a separate artifact. Porting notes: Website/demo artifact rather than desktop behaviour."
 
 [[feature]]
 id = "ACC-001"

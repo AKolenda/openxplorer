@@ -55,6 +55,9 @@ LIVE_SESSION_VARIABLES = (
     'SESSION_MANAGER',
 )
 
+# Set only inside check.py's private display and session bus.
+ISOLATION_MARKER = 'OX_ISOLATED_SESSION'
+
 # Per-user directories, each redirected to this subdirectory of a run's root.
 USER_DIRECTORIES = {
     'HOME': 'home',
@@ -237,6 +240,9 @@ def isolated_environment(root: Path) -> dict[str, str]:
     # TMPDIR, which the Recycle Bin tests require of XDG_DATA_HOME.
     environment['TMPDIR'] = str(root)
     environment.update(GTK_AND_GIO_SETTINGS)
+    # Tests that start real processes run only when they see this: the
+    # command runs inside xvfb-run and dbus-run-session (isolated_command).
+    environment[ISOLATION_MARKER] = '1'
     return environment
 
 

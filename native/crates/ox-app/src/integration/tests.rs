@@ -16,7 +16,10 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::integration::{FileManagerMethod, FileManagerRequest, Sandbox, BUS_NAME, OBJECT_PATH};
+use ox_core::integration::{
+    BraveIntegration, BravePaths, FileManagerMethod, FileManagerRequest, ProcessTable, Sandbox, BUS_NAME,
+    OBJECT_PATH,
+};
 
 use super::{
     BraveDialog, DesktopIntegration, IntegrationFolders, MimeBackend, OpenWithDialog, OpenWithSubject,
@@ -317,6 +320,21 @@ fn an_application_is_drawn_with_its_own_icon() {
     assert!(missing.is_none());
 }
 
+/// Open with starts applications with the launch context of the window's
+/// own display, which gives them startup notification and focus.
+///
+/// parity: INT-023
+#[gtk::test]
+fn applications_start_with_the_windows_display() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let context = test.window.launch_context();
+    assert_eq!(
+        gtk::gdk::prelude::GdkAppLaunchContextExt::display(&context),
+        WidgetExt::display(&test.window)
+    );
+}
+
 /// For a folder every installed application is listed, and the
 /// file-manager default is never offered for change.
 ///
@@ -374,6 +392,48 @@ fn the_brave_dialog_lists_profiles_and_needs_consent() {
     capture_dialog(&dialog, "native-brave-dialog.png");
     dialog.click_apply();
     assert_eq!(dialog.status(), "Confirm the change using the checkbox.");
+    let unchanged = std::fs::read_to_string(profile.join("Preferences")).expect("the profile is readable");
+    assert_eq!(unchanged, preferences);
+    dialog.close();
+}
+
+/// Restore previous needs the consent and one profile, and says why it
+/// changed nothing when no earlier setting was recorded.
+///
+/// parity: INT-021
+#[gtk::test]
+fn the_brave_dialogs_restore_needs_consent_and_a_record() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let root = tempfile::tempdir().expect("a temporary folder");
+    let folders = IntegrationFolders::inside(root.path());
+    let profile = folders.config_home.join("BraveSoftware/Brave-Browser/Default");
+    std::fs::create_dir_all(&profile).expect("the temporary folder is writable");
+    let preferences = r#"{"download": {"default_directory": "/tmp/old"}}"#;
+    std::fs::write(profile.join("Preferences"), preferences).expect("the profile is writable");
+    // An empty process table: Brave does not run, whatever the machine runs.
+    let processes = root.path().join("proc");
+    std::fs::create_dir(&processes).expect("the temporary folder is writable");
+    let paths = BravePaths {
+        settings: folders.settings.clone(),
+        home: folders.home.clone(),
+        config_home: folders.config_home.clone(),
+    };
+    let brave = BraveIntegration::with_activity(&paths, Sandbox::Host, ProcessTable::at(&processes));
+    let dialog = BraveDialog::present_for(&test.window, brave, &fixture.uri(), |_| {});
+    wait_until("the profiles", || !dialog.profile_labels().is_empty());
+
+    dialog.click_restore();
+    assert_eq!(
+        dialog.status(),
+        "Select one profile and confirm to restore its previous download setting."
+    );
+
+    dialog.set_consent(true);
+    dialog.click_restore();
+    wait_until("the answer", || {
+        dialog.status() == "No previous download setting was recorded for this profile."
+    });
     let unchanged = std::fs::read_to_string(profile.join("Preferences")).expect("the profile is readable");
     assert_eq!(unchanged, preferences);
     dialog.close();

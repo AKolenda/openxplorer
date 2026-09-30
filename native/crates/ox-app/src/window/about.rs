@@ -1,66 +1,177 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! "About this build" in the More options menu and the About settings,
-//! and the licence dialog of the About settings.
+//! "About this build" and "License & source" in the More options menu and
+//! the About settings.
 //!
-//! Ports the `About this build` item of the More menu in
-//! `desktop/ui/app.js`, which shows a message box describing the build,
-//! and `showLicense`. The text says what the native preview is and what it
-//! cannot do yet.
+//! Ports the `About this build` item of the More menu and `showLicense`
+//! in `desktop/ui/app.js`: message boxes with one OK button. About names
+//! the native stack and what the app does not do (UPD-015); License &
+//! source keeps the AGPL's "Appropriate Legal Notices" reachable: the
+//! copyright, where the corresponding source is, the full AGPL-3.0 text
+//! and the original MIT notice (UPD-016). Both texts are compiled in from
+//! the repository's licence files, which every package installs too.
 
 use gtk::glib;
-use ox_core::update::REPOSITORY;
 
-use super::dialog::show_message;
+use super::dialog::{ButtonStyle, Dialog};
 use super::BrowserWindow;
-use crate::config::BUILD_NAME;
+use crate::config::{APP_ID, BUILD_NAME};
 
-/// What the message box says about the build, under its name.
-const DETAIL: &str = "An independent Windows 11–inspired file manager for Zorin.\n\n\
-Desktop: GTK 4 + GIO/GVfs.\n\n\
-This preview browses folders, copies, moves, renames and deletes files, \
-signs in to network shares, connects and removes drives and devices, \
-searches folders and the search index, shows Properties, previous \
-versions and folder sizes, opens and extracts ZIP files, and has the \
-Settings page, desktop integration (default apps, Show in folder, Open \
-with, Open in Terminal, Brave's download folder) and Check for updates. \
-What it still lacks, the installed OpenXplorer keeps doing.";
+/// The heading of About this build in a stable build: the product and its
+/// version.
+const STABLE_TITLE: &str = concat!("OpenXplorer ", env!("CARGO_PKG_VERSION"));
 
-/// The licence dialog's heading (`showLicense` in `desktop/ui/app.js`).
-const LICENSE_TITLE: &str = "OpenXplorer · License & source";
+/// What About this build says above the channel: the description and the
+/// platform line, as the Python box had them.
+const ABOUT_INTRODUCTION: &str = "An independent Windows 11–inspired file manager for Zorin.\n\n\
+Desktop: Rust + GTK 4 + GIO/GVfs.";
 
-/// The AGPL, as the packages install it beside the program.
-const AGPL: &str = include_str!("../../../../../LICENSE");
+/// What About this build says after the channel: the limitations.
+const ABOUT_LIMITS: &str = "Replacing existing files requires confirmation; locations without a \
+Recycle Bin offer a confirmed permanent delete. Cached filename/path search is opt-in. Thumbnails \
+are not implemented. ZIP files can be browsed read-only and extracted. Open folders update \
+through GIO file monitors.";
 
-/// What the licence dialog says: the copyright, where the corresponding
-/// source is, and the licence (`showLicense`).
-fn license_text() -> String {
-    let version = env!("CARGO_PKG_VERSION");
-    format!(
-        "Copyright (c) 2026 OpenXplorer contributors.\nAGPL-3.0-only. No warranty. You may \
-         redistribute and modify under the included terms.\n\nComplete corresponding source and \
-         build tools: {REPOSITORY}, tag v{version}. The licence texts of the components are \
-         installed with the package.\n\n{AGPL}"
-    )
+/// Whether this is the native preview, built with its own application ID
+/// so it runs beside the stable app (`openxplorer-native`).
+fn is_preview() -> bool {
+    APP_ID.ends_with(".Native")
 }
 
+/// The heading of About this build: the stable product and version, or
+/// the preview's build name.
+fn about_title() -> &'static str {
+    if is_preview() {
+        BUILD_NAME
+    } else {
+        STABLE_TITLE
+    }
+}
+
+/// The text of About this build, whose channel sentence says which build
+/// this is.
+fn about_text() -> String {
+    let channel = if is_preview() {
+        "Native preview build: it runs beside the stable release."
+    } else {
+        "Stable release."
+    };
+    format!("{ABOUT_INTRODUCTION}\n\n{channel} {ABOUT_LIMITS}")
+}
+
+/// The heading of License & source.
+const LICENSE_TITLE: &str = "OpenXplorer · License & source";
+
+/// The facts above the licence text (`showLicense`), with where this
+/// build's corresponding source is.
+const LICENSE_TEXT: &str = "Copyright (c) 2026 OpenXplorer contributors.\n\
+AGPL-3.0-only. No warranty. You may redistribute and modify under the included terms.\n\n\
+Complete corresponding source and build tools: the source archive published with each release \
+at https://github.com/AKolenda/openxplorer/releases, and the repository itself.";
+
+/// The GNU Affero General Public License, version 3, word for word.
+const AGPL: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../LICENSE"));
+
+/// The notice of the MIT-licensed Winspace code `OpenXplorer` started from.
+const WINSPACE_NOTICE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../licenses/Winspace-MIT.txt"
+));
+
+/// How tall the scrolled licence text is, in pixels.
+const LICENSE_TEXT_HEIGHT: i32 = 320;
+
 impl BrowserWindow {
-    /// Shows the copyright, the source and the licence in a dialog whose
-    /// body scrolls ("Read license & source information").
-    pub(super) fn show_license(&self) {
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            async move { show_message(&window, LICENSE_TITLE, &license_text()).await }
-        ));
+    /// Shows About this build over the window.
+    pub(super) fn show_about(&self) {
+        show_until_dismissed(self.about_dialog());
     }
 
-    /// Shows the build's description in a message box over the window.
-    pub(super) fn show_about(&self) {
-        let dialog = gtk::AlertDialog::builder()
-            .message(BUILD_NAME)
-            .detail(DETAIL)
-            .modal(true)
-            .build();
-        dialog.show(Some(self));
+    /// Shows License & source over the window.
+    pub(super) fn show_license(&self) {
+        show_until_dismissed(self.license_dialog());
+    }
+
+    fn about_dialog(&self) -> Dialog {
+        let dialog = Dialog::new(self, about_title(), &about_text());
+        dialog.add_button("OK", ButtonStyle::Primary);
+        dialog
+    }
+
+    fn license_dialog(&self) -> Dialog {
+        let dialog = Dialog::new(self, LICENSE_TITLE, LICENSE_TEXT);
+        let notices = format!("{AGPL}\n\nOriginal notice:\n\n{WINSPACE_NOTICE}");
+        dialog.add_scrolled_text(&notices, LICENSE_TEXT_HEIGHT);
+        dialog.add_button("OK", ButtonStyle::Primary);
+        dialog
+    }
+}
+
+/// Opens `dialog` and closes it once any answer arrives.
+fn show_until_dismissed(dialog: Dialog) {
+    dialog.open();
+    glib::spawn_future_local(async move {
+        dialog.next_response().await;
+        dialog.finish();
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use gtk::prelude::*;
+
+    use super::*;
+    use crate::test_support::harness::{Fixture, TestWindow};
+
+    /// About names the version, the native stack and what is not
+    /// implemented, without the Python box's stale "no permanent-delete
+    /// fallback".
+    ///
+    /// parity: UPD-015
+    #[gtk::test]
+    fn about_names_the_native_stack_and_its_limits() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let dialog = test.window.about_dialog();
+        assert_eq!(dialog.title_text(), about_title());
+        let text = dialog.message_text();
+        let channel = if APP_ID == "io.winspace.Development.Native" {
+            "Native preview build"
+        } else {
+            "Stable release."
+        };
+        assert!(text.contains(channel), "{text}");
+        assert!(text.contains("Desktop: Rust + GTK 4 + GIO/GVfs."), "{text}");
+        assert!(text.contains("Thumbnails are not implemented."), "{text}");
+        assert!(!text.contains("no permanent-delete fallback"), "{text}");
+        assert_eq!(dialog.button_labels(), ["OK"]);
+        dialog.finish();
+    }
+
+    /// License & source shows the copyright, the source, the whole AGPL and
+    /// the original MIT notice, and More options and Settings can open it.
+    ///
+    /// parity: UPD-016
+    #[gtk::test]
+    fn the_license_dialog_holds_every_notice() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let dialog = test.window.license_dialog();
+        assert_eq!(dialog.title_text(), LICENSE_TITLE);
+        assert!(dialog.message_text().contains("AGPL-3.0-only. No warranty."));
+        let notices = dialog.scrolled_text();
+        for part in [
+            "GNU AFFERO GENERAL PUBLIC LICENSE",
+            "13. Remote Network Interaction",
+            "END OF TERMS AND CONDITIONS",
+            "Copyright (c) 2026 Winspace contributors",
+        ] {
+            assert!(notices.contains(part), "{part}");
+        }
+        dialog.finish();
+        let license = crate::window::WindowAction::License.name();
+        assert!(
+            test.window.is_action_enabled(license),
+            "License & source can be opened"
+        );
     }
 }

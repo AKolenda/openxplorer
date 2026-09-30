@@ -51,6 +51,7 @@ mod address_options;
 mod address_protocols;
 mod appearance;
 mod archive_actions;
+mod background_notice;
 mod breakpoints;
 mod button_style;
 mod cache_folder;
@@ -289,7 +290,7 @@ impl BrowserWindow {
 
     /// Hides the toast's message at once, as moving to another folder or
     /// tab does.
-    fn hide_message(&self) {
+    pub(crate) fn hide_message(&self) {
         self.imp().toast.hide();
     }
 

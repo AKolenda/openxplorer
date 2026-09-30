@@ -181,7 +181,11 @@ fn a_typed_page_title_prefers_a_folder_of_that_name() {
     });
 }
 
-/// parity: NAV-041
+/// Locations another program passes (`openxplorer %U`, as GNOME does for
+/// the mount root of inserted media when `OpenXplorer` is the folder
+/// handler) open in the running instance's active window.
+///
+/// parity: NAV-041, INT-024
 #[gtk::test]
 fn command_line_locations_open_in_the_current_tab_then_in_new_tabs() {
     let fixture = Fixture::standard();

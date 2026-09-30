@@ -425,8 +425,7 @@ fn item_tooltip(item: &MenuItem) -> String {
 }
 
 /// Why `item` cannot be chosen, when something says: the reason this
-/// menu gave, the milestone that brings the command, or its action's in
-/// the window of `menu`.
+/// menu gave, or its action's in the window of `menu`.
 fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
     if item.availability == ItemAvailability::Disabled {
         if let Some(reason) = item.disabled_reason {
@@ -502,7 +501,7 @@ fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
     // Every item's title is its label (`b.title=it.label` in app.js); a
     // disabled command adds the milestone that brings it.
-    row.set_tooltip_text(Some(&item_tooltip(item)));
+    row.set_tooltip_text(Some(&item.label));
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }

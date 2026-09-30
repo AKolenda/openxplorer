@@ -37,6 +37,7 @@ mod imp {
 
     use super::WorkCheck;
     use crate::update::Updates;
+    use crate::write_inhibitor::WriteInhibitor;
 
     /// Private state of [`super::UpdateDialog`].
     #[derive(Default, gtk::CompositeTemplate)]
@@ -71,6 +72,9 @@ mod imp {
         /// A refusal shown instead of the state's status until the state
         /// changes.
         pub(super) refusal: RefCell<Option<&'static str>>,
+        /// Keeps the session from logging out or suspending while the
+        /// update installs (INT-028).
+        pub(super) inhibitor: RefCell<Option<WriteInhibitor>>,
     }
 
     impl std::fmt::Debug for UpdateDialog {
@@ -247,6 +251,19 @@ impl UpdateDialog {
         imp.hint_label.set_text(hint.unwrap_or_default());
         self.show_buttons(&state);
         crate::modal::fit_to_parent(self, &imp.scroller);
+        self.inhibit_while_installing(&state);
+    }
+
+    /// Holds the session's inhibitor, on behalf of the window the dialog
+    /// is over, while the package manager runs.
+    fn inhibit_while_installing(&self, state: &UpdateState) {
+        let mut inhibitor = self.imp().inhibitor.borrow_mut();
+        if !state.is_installing() {
+            *inhibitor = None;
+        } else if inhibitor.is_none() {
+            let parent = self.transient_for();
+            *inhibitor = parent.and_then(|parent| crate::write_inhibitor::WriteInhibitor::hold(&parent));
+        }
     }
 
     fn show_buttons(&self, state: &UpdateState) {

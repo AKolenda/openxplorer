@@ -3,7 +3,9 @@
 # and value is the Python package's (DESKTOP in desktop/tools/build_deb.py):
 # the ID, icon name, MIME types, StartupWMClass and quick actions are
 # compatibility contracts (AGENTS.md). native/packaging/README.md explains
-# the choices.
+# the choices. The one addition is X-GNOME-UsesNotifications: the native app notifies when
+# a file operation ends in the background, and GNOME lists it under
+# Notifications in Settings.
 [Desktop Entry]
 Type=Application
 Name=OpenXplorer
@@ -18,6 +20,7 @@ Categories=System;FileTools;FileManager;
 MimeType=inode/directory;x-scheme-handler/smb;application/zip;application/x-zip;application/x-zip-compressed;
 StartupNotify=true
 StartupWMClass=io.winspace.Development
+X-GNOME-UsesNotifications=true
 Actions=NewWindow;Windows;Settings;
 
 [Desktop Action NewWindow]

@@ -24,9 +24,11 @@ mod folder_view;
 mod history;
 mod icons;
 mod integration;
+mod launcher_progress;
 mod locations;
 mod modal;
 mod network;
+mod operation_session;
 mod places;
 mod properties;
 mod search;
@@ -39,6 +41,7 @@ mod typeahead;
 mod update;
 mod volumes;
 mod window;
+mod write_inhibitor;
 
 #[cfg(test)]
 mod test_support;

@@ -493,3 +493,61 @@ fn closing_during_an_operation_asks_and_closes_only_once_it_stopped() {
     assert!(open_while_running, "the window waits for the operation to stop");
     wait_until("the window to close", || !test.window.is_visible());
 }
+
+/// While an operation runs its panel holds the session's logout and
+/// suspend inhibitor. When it ends in the window that has focus, the
+/// toast is enough; a window in the background would also notify the
+/// desktop (`background_notice.rs`).
+///
+/// parity: INT-028
+#[gtk::test]
+fn a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.imp().transfer_panel.get();
+    crate::window::background_notice::take_sent();
+
+    let context = test.window.begin_operation("Preparing copy…");
+    assert!(context.is_some() && panel.inhibits_logout());
+    test.window.end_operation();
+    assert!(!panel.inhibits_logout());
+
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("duplicate", None);
+    wait_until("the toast", || {
+        test.window.shown_message() == "1 item(s) duplicated."
+    });
+    assert!(test.window.is_active(), "the test window has focus");
+    assert!(crate::window::background_notice::take_sent().is_empty());
+}
+
+/// A duplicate that ends while a window outside the application has
+/// focus, as another app's would, sends one notification with the toast's words, which brings
+/// back the window that ran it.
+///
+/// parity: INT-026
+#[gtk::test]
+fn an_operation_ending_in_the_background_notifies_the_desktop() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    crate::window::background_notice::take_sent();
+    // Not added to the application: it stands in for another app's window.
+    let other = gtk::Window::new();
+    other.present();
+    wait_until("the other window has focus", || {
+        other.is_active() && !test.window.is_active()
+    });
+
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("duplicate", None);
+    wait_until("the toast", || {
+        test.window.shown_message() == "1 item(s) duplicated."
+    });
+
+    let sent = crate::window::background_notice::take_sent();
+    other.destroy();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0].title, "1 item(s) duplicated.");
+    assert_eq!(sent[0].body, None);
+    assert_eq!(sent[0].window, test.window.id());
+}

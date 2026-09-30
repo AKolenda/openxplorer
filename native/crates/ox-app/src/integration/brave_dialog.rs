@@ -394,6 +394,18 @@ impl BraveDialog {
     pub(crate) fn click_apply(&self) {
         self.imp().apply_button.emit_clicked();
     }
+
+    /// Clicks Restore previous, for tests.
+    #[cfg(test)]
+    pub(crate) fn click_restore(&self) {
+        self.imp().restore_button.emit_clicked();
+    }
+
+    /// Ticks or clears the consent check box, for tests.
+    #[cfg(test)]
+    pub(crate) fn set_consent(&self, consent: bool) {
+        self.imp().consent_check.set_active(consent);
+    }
 }
 
 /// The check box of `profile`: "<name> · <channel>", then its download

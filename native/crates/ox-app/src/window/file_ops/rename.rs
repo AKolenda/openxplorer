@@ -44,7 +44,7 @@ impl BrowserWindow {
     /// cell is not on screen; several selected items are renamed together
     /// (OPS-014).
     pub(crate) async fn rename_selection(&self) {
-        if !self.allows(FileCommand::Rename) {
+        if !self.allows(FileCommand::Rename) || self.refuses_writes_during_update() {
             return;
         }
         let model = self.folder_pane().model();

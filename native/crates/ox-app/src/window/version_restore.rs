@@ -51,6 +51,9 @@ impl BrowserWindow {
             self.show_message(OPERATION_RUNNING);
             return;
         }
+        if self.refuses_writes_during_update() {
+            return;
+        }
         let request = TransferRequest {
             mode: TransferMode::Copy,
             uris: vec![source],
@@ -80,6 +83,7 @@ impl BrowserWindow {
     /// Shows how a copy ended: a toast for complete success, else the
     /// Operation result dialog.
     fn report_transfer(&self, summary: &OperationSummary) {
+        self.notify_if_in_background(summary);
         match summary {
             OperationSummary::Toast(text) => self.show_message(text),
             OperationSummary::Report(text) => self.show_result_dialog(RESULT_TITLE, text),

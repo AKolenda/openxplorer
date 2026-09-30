@@ -3,7 +3,7 @@
 //! Ports `RuntimeTests` of `desktop/tests/test_rc2.py`;
 //! `update_instance_bus.rs` runs the guard over a real session bus.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::fs;
 use std::time::Duration;
@@ -21,6 +21,8 @@ const OWNER: &str = ":1.55";
 struct ScriptedBus {
     owners: RefCell<VecDeque<Option<String>>>,
     running: Option<RuntimeIdentity>,
+    /// How many reports still lack the digest, as a starting instance's do.
+    pending_reports: Cell<usize>,
     refuses_quit: bool,
     quit_requests: RefCell<Vec<String>>,
 }
@@ -54,6 +56,15 @@ impl InstanceBus for ScriptedBus {
     }
 
     fn reported_identity(&self, _owner: &str) -> Option<RuntimeIdentity> {
+        let pending = self.pending_reports.get();
+        if pending > 0 {
+            self.pending_reports.set(pending - 1);
+            let running = self.running.clone()?;
+            return Some(RuntimeIdentity {
+                build: String::new(),
+                ..running
+            });
+        }
         self.running.clone()
     }
 
@@ -97,6 +108,7 @@ fn guard(bus: ScriptedBus) -> InstanceGuard<ScriptedBus> {
 fn impatient(bus: ScriptedBus) -> InstanceGuard<ScriptedBus> {
     let timing = StopTiming {
         timeout: Duration::ZERO,
+        settle_timeout: Duration::ZERO,
         poll_interval: Duration::ZERO,
     };
     InstanceGuard::with_timing(bus, timing)
@@ -167,6 +179,25 @@ fn a_current_running_instance_is_left_running() {
 
     let status = guard
         .require_current(&installed(), LaunchMode::Normal, None)
+        .unwrap();
+
+    assert_eq!(status.matches(), Some(true));
+    assert!(guard.bus().quit_requests().is_empty());
+}
+
+/// An instance that has not read its own digest yet is waited for, not
+/// taken for an outdated build.
+///
+/// parity: UPD-008
+#[test]
+fn a_starting_instance_is_waited_for_before_it_counts_as_outdated() {
+    let bus = ScriptedBus::new(&[Some(OWNER)], Some(installed()));
+    bus.pending_reports.set(3);
+    let guard = guard(bus);
+    let never = |_: &InstanceStatus| panic!("a current instance is never offered a restart");
+
+    let status = guard
+        .require_current(&installed(), LaunchMode::Normal, Some(&never))
         .unwrap();
 
     assert_eq!(status.matches(), Some(true));

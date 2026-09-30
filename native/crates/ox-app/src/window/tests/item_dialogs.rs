@@ -24,7 +24,7 @@ const SNAPSHOT_NAME: &str = "daily-2026-09-05_1230";
 
 impl TestWindow {
     /// Selects only the item called `name`.
-    pub(super) fn select_named(&self, name: &str) {
+    pub(crate) fn select_named(&self, name: &str) {
         let position = self
             .names()
             .iter()
@@ -103,6 +103,29 @@ fn fixture_with_snapshot() -> Fixture {
     fs::create_dir_all(&snapshot).expect("snapshot folder");
     fs::write(snapshot.join("plan.txt"), b"earlier plan").expect("snapshot file");
     fixture
+}
+
+/// `ShowItemProperties` from another application opens the item's folder
+/// in a new tab with the item selected, and its Properties over it.
+///
+/// parity: INT-014
+#[gtk::test]
+fn show_item_properties_opens_the_folder_and_the_properties() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/report.txt");
+    let test = TestWindow::open(&fixture.uri());
+    let item = [fixture.uri_of("Documents/report.txt")];
+    let request =
+        FileManagerRequest::new(FileManagerMethod::ShowItemProperties, &item).expect("a valid location");
+
+    test.window.show_file_manager_request(&request);
+
+    let frame = test.wait_for_dialog("the Properties dialog");
+    assert_eq!(frame.title(), "report.txt Properties");
+    assert_eq!(test.window.tab_count(), 2);
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+    test.wait_for_listing("the Documents listing");
+    wait_until("the selection", || test.selected_names() == ["report.txt"]);
 }
 
 /// parity: PROP-001, PROP-003, PROP-006

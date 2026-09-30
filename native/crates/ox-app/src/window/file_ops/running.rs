@@ -70,12 +70,29 @@ impl BrowserWindow {
         is_operating || self.operation_panel().is_busy()
     }
 
+    /// True, after saying why, once an application update installed files
+    /// and waits for its restart (UPD-006). Every writer asks before it
+    /// starts: file operations, extraction, compression, a restored
+    /// version, rename and new items, as the Python app refused every
+    /// file request in that state.
+    pub(in crate::window) fn refuses_writes_during_update(&self) -> bool {
+        let Some(refusal) = self.context().updates().file_refusal() else {
+            return false;
+        };
+        self.show_message(&refusal);
+        true
+    }
+
     /// Starts an operation whose panel reads `label` until the first
     /// progress report. Returns its context, or `None` while another
     /// operation runs (OPS-024: `if(state.operation)return` in app.js),
-    /// an archive operation included.
+    /// an archive operation included, or once an application update
+    /// waits for its restart, which the message line says (UPD-006).
     pub(crate) fn begin_operation(&self, label: &str) -> Option<OperationContext> {
         if self.operation_panel().is_busy() {
+            return None;
+        }
+        if self.refuses_writes_during_update() {
             return None;
         }
         let mut context = OperationContext::new(self.context().write_protection());
@@ -213,7 +230,10 @@ impl BrowserWindow {
 
     /// Shows `summary`: a toast for complete success, otherwise the
     /// "Operation result" dialog.
+    /// A desktop notification says it too while no window has focus
+    /// (INT-026).
     pub(super) async fn report(&self, summary: OperationSummary) {
+        self.notify_if_in_background(&summary);
         match summary {
             OperationSummary::Toast(text) => self.show_message(&text),
             OperationSummary::Report(text) => dialog::show_message(self, RESULT_TITLE, &text).await,

@@ -23,9 +23,11 @@
 //! | `service` | The [`UpdateService`] of this executable |
 //! | `dialog` | [`UpdateDialog`], "Software updates" |
 //! | `launch_guard` | `--restart`, `--version` and the outdated-instance check |
+//! | `report` | `--check` and `--diagnose` |
 
 mod dialog;
 mod launch_guard;
+mod report;
 mod service;
 mod state;
 #[cfg(test)]
@@ -38,10 +40,12 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::transfer::Cancellation;
-use ox_core::update::{Activity, Confirmation, InstallRequest, ReleaseVersion, UpdatePhase, UpdateService};
+use ox_core::update::{
+    Activity, AppRequest, Confirmation, InstallRequest, ReleaseVersion, UpdatePhase, UpdateService,
+};
 
 pub(crate) use dialog::UpdateDialog;
-pub(crate) use launch_guard::{LaunchCheck, RuntimeInfo};
+pub(crate) use launch_guard::{LaunchCheck, RuntimeInfo, LAUNCHER_OPTIONS};
 pub(crate) use state::UpdateState;
 
 /// Emitted whenever [`Updates::state`] changes.
@@ -224,6 +228,18 @@ impl Updates {
     pub(crate) fn quit_refusal(&self) -> Option<String> {
         let service = self.imp().service.get()?;
         service.check_quit().err().map(|refusal| refusal.to_string())
+    }
+
+    /// Why a window may not write files now, if it may not: an update
+    /// installed files and waits for the restart (UPD-006). The running
+    /// binary is unaffected, so browsing goes on; writes wait, as every
+    /// file request did in the Python app.
+    pub(crate) fn file_refusal(&self) -> Option<String> {
+        let service = self.imp().service.get()?;
+        service
+            .check_request(AppRequest::Files)
+            .err()
+            .map(|refusal| refusal.to_string())
     }
 
     /// Why another window may not open now, if it may not: an update is
