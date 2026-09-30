@@ -297,6 +297,10 @@ pub(crate) enum WindowAction {
     /// Open Terminal Here (Shift+Alt+F4): a terminal in each folder of the
     /// selection, or in the folder shown.
     OpenTerminalHere,
+    /// Compare Files: the two selected files in a comparison tool.
+    CompareFiles,
+    /// Open Preferred Search Tool (Ctrl+Shift+F) at the folder shown.
+    SearchTool,
     /// Opens the selected item in the code editor whose desktop ID is the
     /// string target.
     OpenInEditor,
@@ -433,6 +437,8 @@ impl WindowAction {
             WindowAction::OpenInTerminalOf => "open-in-terminal-of",
             WindowAction::OpenTerminal => "open-terminal",
             WindowAction::OpenTerminalHere => "open-terminal-here",
+            WindowAction::CompareFiles => "compare-files",
+            WindowAction::SearchTool => "search-tool",
             WindowAction::OpenInEditor => "open-in-editor",
         }
     }

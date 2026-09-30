@@ -20,7 +20,7 @@ use super::actions::{plain_action, text_action};
 use super::dialog::{ButtonStyle, Dialog};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
-use crate::integration::{self, OpenWithDialog, OpenWithSubject};
+use crate::integration::{self, OpenWithDialog, OpenWithSubject, Tool};
 use crate::locations::Page;
 use crate::update::{UpdateDialog, UpdateState};
 
@@ -65,6 +65,8 @@ impl BrowserWindow {
                 }
             }),
             plain_action(WindowAction::OpenTerminalHere, BrowserWindow::open_terminals_here),
+            plain_action(WindowAction::CompareFiles, BrowserWindow::compare_files),
+            plain_action(WindowAction::SearchTool, BrowserWindow::open_search_tool),
             text_action(WindowAction::OpenWithOf, BrowserWindow::open_folder_with),
             text_action(WindowAction::OpenInEditor, BrowserWindow::open_in_editor),
             plain_action(WindowAction::CheckUpdates, BrowserWindow::check_for_updates),
@@ -187,6 +189,35 @@ impl BrowserWindow {
     fn open_in_terminal(&self) {
         if let Some(subject) = self.command_subject() {
             self.open_terminal_at(subject.uri);
+        }
+    }
+
+    /// Compare Files: the two selected files in the first installed
+    /// comparison tool (OPEN-023).
+    fn compare_files(&self) {
+        let items = self.folder_pane().model().selected_items();
+        let uris: Vec<String> = items.iter().map(|item| item.entry().uri.clone()).collect();
+        if uris.len() == 2 {
+            self.run_tool(Tool::Diff, &uris);
+        }
+    }
+
+    /// Open Preferred Search Tool: the first installed search tool at the
+    /// folder shown (OPEN-024).
+    fn open_search_tool(&self) {
+        if let Some(folder) = self.folder_subject() {
+            self.run_tool(Tool::Search, &[folder.uri]);
+        }
+    }
+
+    /// Starts `tool` on `uris`, or says in the message line why not.
+    fn run_tool(&self, tool: Tool, uris: &[String]) {
+        let Some(app) = tool.installed() else {
+            self.show_message(tool.missing());
+            return;
+        };
+        if let Err(error) = self.context().launch_tool(&app, uris, self.upcast_ref()) {
+            self.show_message(&error.to_string());
         }
     }
 

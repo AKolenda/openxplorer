@@ -29,6 +29,7 @@
 //! | `applications` | The applications Open with lists |
 //! | `terminal` | Open in Terminal |
 //! | `editors` | The "Open in <editor>" shortcuts |
+//! | `tools` | Compare Files and the preferred search tool |
 
 mod applications;
 mod brave_dialog;
@@ -41,6 +42,7 @@ mod status;
 mod terminal;
 #[cfg(test)]
 mod tests;
+mod tools;
 
 use std::path::{Path, PathBuf};
 
@@ -59,6 +61,9 @@ pub(crate) use mime_backend::MimeBackend;
 pub(crate) use open_with_dialog::{Launcher, OpenWithDialog, OpenWithSubject};
 pub(crate) use status::{DefaultsReport, IntegrationStatus};
 pub(crate) use terminal::open_terminal;
+pub(crate) use tools::Tool;
+#[cfg(test)]
+pub(crate) use tools::{NO_DIFF_TOOL, NO_SEARCH_TOOL};
 
 /// Emitted when something the Settings status shows may have changed: the
 /// `FileManager1` name was acquired, lost or released.

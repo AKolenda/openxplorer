@@ -23,6 +23,8 @@ use ox_core::location::{is_smb_location, is_smb_server};
 use ox_core::ops::JournalDirection;
 use ox_core::settings::ContextMenu as MenuStyleChoice;
 
+use crate::integration::Tool;
+
 use super::actions::{plain_action, text_action};
 use super::command_bar::new_menu;
 use super::menu_popover::{MenuPopover, MenuStyle};
@@ -149,7 +151,10 @@ impl BrowserWindow {
             ),
             (Some(_), true) => recycle_bin_item_menu(items.len() == 1),
             (Some(first), false) => {
-                let facts = self.item_facts(first.entry(), items.len() == 1);
+                let mut facts = self.item_facts(first.entry(), items.len() == 1);
+                facts.can_compare = items.len() == 2
+                    && items.iter().all(|item| !item.entry().is_dir)
+                    && Tool::Diff.installed().is_some();
                 return item_menu(&facts, style);
             }
         };
@@ -174,6 +179,7 @@ impl BrowserWindow {
             is_read_only: self.imp().locations.borrow().is_snapshot_location(&entry.uri),
             is_single,
             is_search_result: self.is_searching(),
+            can_compare: false,
             editors: self.context().desktop_integration().known_editor_shortcuts(),
             caching,
             delete_label: self.delete_label(),
