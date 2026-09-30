@@ -538,7 +538,7 @@ mod tests {
         );
     }
 
-    /// parity: OPEN-017
+    /// parity: OPEN-015, OPEN-017
     #[test]
     fn each_code_editor_is_offered_after_open_with_for_one_item() {
         let code = EditorShortcut {

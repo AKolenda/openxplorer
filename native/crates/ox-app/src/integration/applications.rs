@@ -420,4 +420,37 @@ mod tests {
             "a local folder has a path"
         );
     }
+
+    /// "Always use this app" changes nothing unless ticked, never a
+    /// folder's handler, and makes the application the default for a
+    /// file's content type. The last part writes `mimeapps.list`, so it
+    /// runs only with a private configuration folder (native/tools/check.py).
+    ///
+    /// parity: OPEN-012
+    #[test]
+    fn always_use_this_app_sets_the_default_of_files_only() {
+        let app =
+            gio::AppInfo::create_from_commandline("true", Some("Test viewer"), gio::AppInfoCreateFlags::NONE)
+                .expect("an application made from a command line");
+        let prepared = |is_folder: bool| PreparedLaunch {
+            target: LaunchTarget::Uri("file:///tmp/example".to_owned()),
+            content_type: "application/x-openxplorer-test".to_owned(),
+            is_folder,
+        };
+        assert_eq!(
+            default_after_launch(&app, &prepared(false), DefaultChoice::Keep),
+            "Opened with the selected application."
+        );
+        assert_eq!(
+            default_after_launch(&app, &prepared(true), DefaultChoice::MakeDefault),
+            "Opened the folder. Its default file-manager association was not changed."
+        );
+        if !gtk::glib::user_config_dir().starts_with(std::env::temp_dir()) {
+            return;
+        }
+        let message = default_after_launch(&app, &prepared(false), DefaultChoice::MakeDefault);
+        assert_eq!(message, "Opened with the selected application.");
+        let default = gio::AppInfo::default_for_type("application/x-openxplorer-test", false);
+        assert_eq!(default.and_then(|default| default.id()), app.id());
+    }
 }

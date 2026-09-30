@@ -160,3 +160,35 @@ fn an_opened_folder_stays_with_the_tab_that_asked_for_it() {
         "a tab that moved on drops the result"
     );
 }
+
+/// Open in Terminal says in the message line why a location has no
+/// terminal, such as a server listing, and starts nothing.
+///
+/// parity: OPEN-017
+#[gtk::test]
+fn open_in_terminal_explains_a_refusal_in_the_message_line() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    test.activate("open-in-terminal-of", Some("smb://studio-nas/"));
+
+    wait_until("the refusal", || {
+        test.window.shown_message()
+            == "Open a network share first. A server listing is not a terminal directory."
+    });
+}
+
+/// "Open in new tab" of a folder, a pin, a network entry or a share card
+/// opens that folder in a new tab in front.
+///
+/// parity: OPEN-016
+#[gtk::test]
+fn open_in_new_tab_opens_the_folder_in_a_tab_in_front() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    test.activate("open-tab", Some(&fixture.uri_of("Documents")));
+
+    assert_eq!(tab_uris(&test), [fixture.uri(), fixture.uri_of("Documents")]);
+    assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+}

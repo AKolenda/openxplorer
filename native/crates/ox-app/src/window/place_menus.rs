@@ -408,7 +408,7 @@ mod tests {
         assert_eq!(menu[4..], ["Keep in Network", "Disconnect"]);
     }
 
-    /// parity: HOME-005
+    /// parity: HOME-005, OPEN-016
     #[test]
     fn a_saved_share_card_opens_removes_and_signs_out() {
         let menu = PlaceMenu::SavedShare {
