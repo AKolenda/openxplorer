@@ -42,6 +42,9 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/update-dialog.ui")]
     pub(crate) struct UpdateDialog {
+        /// The scrolling body, capped to the parent window's height.
+        #[template_child]
+        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
         /// "Installed: 1.1.4 · Available: 1.2.0".
         #[template_child]
         pub(super) versions_label: TemplateChild<gtk::Label>,
@@ -108,7 +111,14 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for UpdateDialog {}
+    impl WidgetImpl for UpdateDialog {
+        /// Fits the dialog to its parent window before its first frame, as
+        /// it is realized when it shows.
+        fn realize(&self) {
+            crate::modal::fit_to_parent(&*self.obj(), &self.scroller);
+            self.parent_realize();
+        }
+    }
 
     impl WindowImpl for UpdateDialog {
         /// Close and Escape cannot dismiss the dialog while an update
@@ -146,11 +156,12 @@ impl UpdateDialog {
         let dialog: Self = glib::Object::builder().property("transient-for", parent).build();
         crate::window::follow_text_size_keys(&dialog);
         dialog.bind(updates, Box::new(work));
-        dialog.present();
+        // The check starts first, so the first frame already says so.
         let state = updates.state();
         if !state.is_busy() && !state.needs_restart() {
             updates.check();
         }
+        dialog.present();
         dialog
     }
 
@@ -235,6 +246,7 @@ impl UpdateDialog {
         imp.hint_label.set_visible(hint.is_some());
         imp.hint_label.set_text(hint.unwrap_or_default());
         self.show_buttons(&state);
+        crate::modal::fit_to_parent(self, &imp.scroller);
     }
 
     fn show_buttons(&self, state: &UpdateState) {

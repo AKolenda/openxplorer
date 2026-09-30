@@ -10,9 +10,6 @@
 //! Delete, Undo and Redo in the folder's menu (as Windows offers "Undo
 //! Rename" there), and the Recycle Bin's own menus (Restore, Delete,
 //! Empty).
-//! Commands whose workflow another milestone brings (Open with, Open in
-//! Terminal, Properties, ...) are listed and disabled with a tooltip that
-//! names it ([`crate::window::unported`]).
 
 use ox_core::integration::DiskTool;
 use ox_core::search::Caching;
@@ -45,6 +42,15 @@ pub(crate) enum ItemLocation {
     SmbServer,
 }
 
+/// Whether Compare files is offered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Comparison {
+    /// Not two files, or no comparison tool is installed.
+    Unavailable,
+    /// Exactly two files are selected and a comparison tool is installed.
+    TwoFiles,
+}
+
 /// What a file or folder's menu depends on: the right-clicked item and
 /// the selection it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +68,8 @@ pub(crate) struct ItemFacts {
     /// It is a search result, listed away from its folder
     /// (`state.query`).
     pub(crate) is_search_result: bool,
+    /// Whether the selection can be compared (Dolphin's Compare Files).
+    pub(crate) comparison: Comparison,
     /// The installed code editors, each offered as "Open in <editor>".
     pub(crate) editors: Vec<EditorShortcut>,
     /// Whether a folder is cached for search; `None` for a file or a
@@ -149,6 +157,9 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         entries.push(new_tab.into());
         entries.push(for_one_item(new_window, facts, false).into());
         entries.push(for_one_item(pin, facts, false).into());
+    }
+    if facts.comparison == Comparison::TwoFiles {
+        entries.push(item("Compare files", Icon::DocumentCopy, WindowAction::CompareFiles).into());
     }
     if facts.is_search_result {
         let locations = [
@@ -434,6 +445,7 @@ mod tests {
             is_read_only: false,
             is_single: true,
             is_search_result: false,
+            comparison: Comparison::Unavailable,
             editors: Vec::new(),
             caching: None,
             delete_label: "Move to Trash",
@@ -610,7 +622,7 @@ mod tests {
         );
     }
 
-    /// parity: OPEN-017
+    /// parity: OPEN-015, OPEN-017
     #[test]
     fn each_code_editor_is_offered_after_open_with_for_one_item() {
         let code = EditorShortcut {
@@ -680,6 +692,20 @@ mod tests {
         for (label, reason) in reasons(&several) {
             assert_eq!(reason, Some(ONE_ITEM_AT_A_TIME), "{label}");
         }
+    }
+
+    /// parity: OPEN-023
+    #[test]
+    fn two_files_with_a_comparison_tool_offer_compare_files() {
+        let two = ItemFacts {
+            is_single: false,
+            comparison: Comparison::TwoFiles,
+            ..file()
+        };
+        assert!(labels(&item_menu(&two, MenuStyle::Classic).entries).contains(&"Compare files".to_owned()));
+        assert!(
+            !labels(&item_menu(&file(), MenuStyle::Classic).entries).contains(&"Compare files".to_owned())
+        );
     }
 
     /// parity: SRCH-015

@@ -7,8 +7,7 @@
 //! silently does nothing. [`WindowAction`] keeps every name in one table,
 //! which turns such a typo into a compile error. The templates in
 //! `resources/ui/` therefore name no action: their buttons get one through
-//! [`WindowAction::assign_to`]. [`super::actions`] registers the working
-//! actions and [`super::unported`] the disabled ones.
+//! [`WindowAction::assign_to`]. [`super::actions`] registers them.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -311,6 +310,15 @@ pub(crate) enum WindowAction {
     /// Open in Terminal in the folder whose URI is the string target (a
     /// Quick access pin's menu).
     OpenInTerminalOf,
+    /// Open Terminal (Shift+F4): the terminal in the folder shown.
+    OpenTerminal,
+    /// Open Terminal Here (Shift+Alt+F4): a terminal in each folder of the
+    /// selection, or in the folder shown.
+    OpenTerminalHere,
+    /// Compare Files: the two selected files in a comparison tool.
+    CompareFiles,
+    /// Open Preferred Search Tool (Ctrl+Shift+F) at the folder shown.
+    SearchTool,
     /// Opens the selected item in the code editor whose desktop ID is the
     /// string target.
     OpenInEditor,
@@ -452,6 +460,10 @@ impl WindowAction {
             WindowAction::OpenWithOf => "open-with-of",
             WindowAction::OpenInTerminal => "open-in-terminal",
             WindowAction::OpenInTerminalOf => "open-in-terminal-of",
+            WindowAction::OpenTerminal => "open-terminal",
+            WindowAction::OpenTerminalHere => "open-terminal-here",
+            WindowAction::CompareFiles => "compare-files",
+            WindowAction::SearchTool => "search-tool",
             WindowAction::OpenInEditor => "open-in-editor",
         }
     }

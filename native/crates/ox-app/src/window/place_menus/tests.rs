@@ -105,7 +105,7 @@ fn network_places_open_a_terminal_and_properties_where_they_can() {
     assert!(!is_disabled(&PlaceMenu::Network(mount), "Open in Terminal"));
 }
 
-/// parity: HOME-005
+/// parity: HOME-005, OPEN-016
 #[test]
 fn a_saved_share_card_opens_removes_and_signs_out() {
     let menu = PlaceMenu::SavedShare {

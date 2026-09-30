@@ -35,6 +35,7 @@ use gtk::subclass::prelude::*;
 use ox_core::entry::{Entry, EntryError};
 use ox_core::location::{is_smb_location, parent_location};
 
+use crate::app_context::{add_to_desktop_history, FOLDER_CONTENT_TYPE};
 use crate::folder_view::item::FileItem;
 use crate::folder_view::{loader, reconcile, watch};
 use crate::locations::Page;
@@ -310,6 +311,13 @@ impl BrowserWindow {
         if is_listed {
             // NET-016: a listed share joins Network for the session only.
             self.context().remember_network(&run.uri);
+            // OPEN-025: a folder on disk or on a share that was visited and
+            // listed joins the desktop's recent list; the landing pages and
+            // the Recycle Bin are not places to reopen.
+            let is_folder = run.uri.starts_with("file://") || run.uri.starts_with("smb://");
+            if run.mode == LoadMode::Navigate && is_folder {
+                add_to_desktop_history(&run.uri, FOLDER_CONTENT_TYPE);
+            }
         }
         let end = self.imp().session.borrow_mut().end_listing(id);
         if end == ListingEnd::TabClosed {

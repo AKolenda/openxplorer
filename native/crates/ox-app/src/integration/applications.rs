@@ -17,15 +17,13 @@ use std::path::PathBuf;
 use gtk::gio;
 use gtk::prelude::*;
 use ox_core::entry::{inspect, Entry, EntryError, EntryKind};
-use ox_core::integration::{unique_applications, APP_ID};
+use ox_core::integration::{unique_applications, APP_ID, UNKNOWN_CONTENT_TYPE};
 use ox_core::location::{normalise, LocationError};
 use ox_core::network::local_path;
 use ox_core::transfer::Cancellation;
 
 /// The content type of a folder.
 const FOLDER_CONTENT_TYPE: &str = "inode/directory";
-/// The content type of a file GIO could not identify.
-const UNKNOWN_CONTENT_TYPE: &str = "application/octet-stream";
 
 /// Why Open with could not list or launch. `Display` is the message the
 /// window shows.
@@ -436,5 +434,38 @@ mod tests {
             list.choices.iter().all(|choice| choice.is_available),
             "a local folder has a path"
         );
+    }
+
+    /// "Always use this app" changes nothing unless ticked, never a
+    /// folder's handler, and makes the application the default for a
+    /// file's content type. The last part writes `mimeapps.list`, so it
+    /// runs only with a private configuration folder (native/tools/check.py).
+    ///
+    /// parity: OPEN-012
+    #[test]
+    fn always_use_this_app_sets_the_default_of_files_only() {
+        let app =
+            gio::AppInfo::create_from_commandline("true", Some("Test viewer"), gio::AppInfoCreateFlags::NONE)
+                .expect("an application made from a command line");
+        let prepared = |is_folder: bool| PreparedLaunch {
+            target: LaunchTarget::Uri("file:///tmp/example".to_owned()),
+            content_type: "application/x-openxplorer-test".to_owned(),
+            is_folder,
+        };
+        assert_eq!(
+            default_after_launch(&app, &prepared(false), DefaultChoice::Keep),
+            "Opened with the selected application."
+        );
+        assert_eq!(
+            default_after_launch(&app, &prepared(true), DefaultChoice::MakeDefault),
+            "Opened the folder. Its default file-manager association was not changed."
+        );
+        if !gtk::glib::user_config_dir().starts_with(std::env::temp_dir()) {
+            return;
+        }
+        let message = default_after_launch(&app, &prepared(false), DefaultChoice::MakeDefault);
+        assert_eq!(message, "Opened with the selected application.");
+        let default = gio::AppInfo::default_for_type("application/x-openxplorer-test", false);
+        assert_eq!(default.and_then(|default| default.id()), app.id());
     }
 }

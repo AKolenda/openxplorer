@@ -572,6 +572,30 @@ mod tests {
         assert_eq!(window.current_uri().as_deref(), Some(SETTINGS_URI));
     }
 
+    /// A damaged settings file opens the window on safe defaults and says
+    /// so in the window.
+    ///
+    /// parity: SET-013
+    #[gtk::test]
+    fn a_damaged_settings_file_is_reported_at_startup() {
+        let settings = tempfile::tempdir().expect("the test home has room for settings");
+        fs::write(settings.path().join(Settings::FILE_NAME), "{ not json")
+            .expect("the test settings folder is writable");
+        let app = TestApp::with_settings_folder(settings);
+
+        app.state.activate(&application());
+
+        let [window] = &browser_windows()[..] else {
+            panic!("one window opens");
+        };
+        let message = window.shown_message();
+        assert!(
+            message.starts_with("Could not fully read settings; using safe defaults."),
+            "{message}"
+        );
+        close_all_windows();
+    }
+
     /// Settings opens a window when none is open.
     ///
     /// parity: SET-002

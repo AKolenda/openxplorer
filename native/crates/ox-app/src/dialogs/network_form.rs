@@ -47,6 +47,9 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/network-form.ui")]
     pub(crate) struct NetworkFormDialog {
+        /// The scrolling body, capped to the parent window's height.
+        #[template_child]
+        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
         /// The heading, which is also the window's title.
         #[template_child]
         pub(super) title_label: TemplateChild<gtk::Label>,
@@ -105,7 +108,14 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for NetworkFormDialog {}
+    impl WidgetImpl for NetworkFormDialog {
+        /// Fits the dialog to its parent window before its first frame, as
+        /// it is realized when it shows.
+        fn realize(&self) {
+            crate::modal::fit_to_parent(&*self.obj(), &self.scroller);
+            self.parent_realize();
+        }
+    }
 
     impl WindowImpl for NetworkFormDialog {
         /// Closing drops the work the dialog runs, so its result is

@@ -291,10 +291,10 @@ mod tests {
         }
     }
 
-    /// The refusals SET-018 describes. `native/parity/features.toml` still
-    /// lists SET-018 as `native = "todo"`, and the parity check rejects a
-    /// marker on a `todo` feature, so `parity: SET-018` is added here
-    /// together with that status change.
+    /// The refusals SET-018 describes: shell syntax, control characters
+    /// and relative paths fall back to the standard folder.
+    ///
+    /// parity: SET-018
     #[test]
     fn shell_syntax_control_characters_and_relative_paths_are_refused() {
         let lines = [

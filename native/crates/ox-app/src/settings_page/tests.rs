@@ -15,14 +15,14 @@ use ox_core::settings::{ContextMenu, Settings, Theme};
 
 use super::category_row::CategoryRow;
 use super::choice_list::ChoiceList;
-use super::group::SettingsGroup;
 use super::pages::{Category, SettingsView, Subpage};
-use super::row::{Availability, SettingRow};
+use super::row::SettingRow;
 use super::status_card::StatusCard;
 use super::SettingsPage;
 use crate::test_support::harness::{descendants, skin, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::test_support::python::{python_preference, python_saves_preferences};
 use crate::text_size::TextSize;
+use crate::window::WindowAction;
 
 mod indexing;
 
@@ -178,6 +178,41 @@ fn a_window_started_at_settings_shows_its_rows() {
     assert!(page.is_mapped());
 }
 
+/// The navigation column of `settingsDialog`: the heading, its subtitle,
+/// the search box, the categories and "Back to files".
+///
+/// parity: SET-003
+#[gtk::test]
+fn the_navigation_column_names_the_page_its_search_and_categories() {
+    let settings = SettingsTest::open();
+    let imp = settings.page.imp();
+    let heading = descendants::<gtk::Label>(&settings.page)
+        .into_iter()
+        .find(|label| label.has_css_class("settings-heading"))
+        .expect("the column has a heading");
+    assert_eq!(heading.text(), "Settings");
+    assert_eq!(imp.subtitle.text(), "Your explorer, your way.");
+    assert_eq!(
+        imp.search_entry.placeholder_text().as_deref(),
+        Some("Search settings")
+    );
+    assert_eq!(settings.listed_categories(), Category::ALL);
+    let titles: Vec<&str> = Category::ALL.iter().map(|category| category.title()).collect();
+    assert_eq!(
+        titles,
+        [
+            "Appearance",
+            "Search & indexing",
+            "Default apps",
+            "Windows & tabs",
+            "Brave & downloads",
+            "About"
+        ]
+    );
+    let back = descendants::<gtk::Label>(&imp.back_button.get());
+    assert!(back.iter().any(|label| label.text() == "Back to files"));
+}
+
 /// parity: SET-019
 #[gtk::test]
 fn choosing_a_category_shows_only_that_category() {
@@ -232,7 +267,7 @@ struct SearchCase {
 /// Ported from the keywords of `appendV07Settings` in `desktop/ui/app.js`,
 /// which make "zoom", "watch live" and "dolphin" find their settings.
 ///
-/// parity: SET-019
+/// parity: SET-019, SET-004
 #[gtk::test]
 fn the_search_filters_rows_across_every_category() {
     let settings = SettingsTest::open();
@@ -393,7 +428,7 @@ fn typing_on_the_page_starts_a_settings_search() {
     assert_eq!(capture, Some(settings.page.clone().upcast()));
 }
 
-/// parity: SET-019
+/// parity: SET-019, SET-004
 #[gtk::test]
 fn enter_in_the_search_jumps_to_the_first_match() {
     let settings = SettingsTest::open();
@@ -412,7 +447,7 @@ fn enter_in_the_search_jumps_to_the_first_match() {
     assert!(focus.is_ancestor(&row), "the row's drop-down has keyboard focus");
 }
 
-/// parity: SET-019
+/// parity: SET-019, SET-004
 #[gtk::test]
 fn escape_leaves_the_search_and_shows_every_row_again() {
     let settings = SettingsTest::open();
@@ -493,48 +528,25 @@ fn every_setting_of_the_python_page_has_a_row() {
 /// to do, as Restore previous with no handler recorded (INT-030).
 const ROWS_FOLLOWING_THEIR_STATE: [&str; 3] = ["Restore previous", "Restore ZIP handler", "ZIP files"];
 
-/// Checks that `row` of `group` is enabled or disabled as its availability
-/// says, and names its milestone, on itself or in the group's heading.
-fn assert_row_follows_its_availability(row: &SettingRow, group: &SettingsGroup) {
-    let title = row.text().title;
-    let notice = row.shown_notice().or_else(|| group.shown_notice());
-    let controls = row.controls();
-    let enabled = controls.iter().all(WidgetExt::is_sensitive);
-    let disabled = controls.iter().all(|control| !control.is_sensitive());
-    let milestone = match row.availability() {
-        Availability::Ready => {
-            let follows_state = ROWS_FOLLOWING_THEIR_STATE.contains(&title);
-            assert!(enabled || follows_state, "{title} works");
-            assert_eq!(notice, None, "{title} needs no milestone");
-            return;
-        }
-        Availability::Unported(milestone) => {
-            assert!(disabled, "{title} waits for its milestone");
-            milestone
-        }
-    };
-    let notice = notice.unwrap_or_default();
-    assert!(notice.contains(milestone.description()), "{title}: {notice}");
-}
-
+/// Every row of every category works: its controls take input, except
+/// those that wait for something to do.
+///
 /// parity: SET-019
 #[gtk::test]
-fn rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone() {
+fn every_row_can_be_used() {
     let settings = SettingsTest::open();
-    let groups = Category::ALL
+    let rows = Category::ALL
         .into_iter()
-        .flat_map(|category| settings.page.category_section(category).groups());
-    for group in groups {
-        for row in group.rows() {
-            assert_row_follows_its_availability(&row, &group);
-        }
+        .flat_map(|category| settings.page.category_section(category).groups())
+        .flat_map(|group| group.rows());
+    for row in rows {
+        let title = row.text().title;
+        let enabled = row.controls().iter().all(WidgetExt::is_sensitive);
+        assert!(
+            enabled || ROWS_FOLLOWING_THEIR_STATE.contains(&title),
+            "{title} works"
+        );
     }
-    let license = settings.row("OpenXplorer · License & source");
-    let tooltip = license.tooltip_text().unwrap_or_default();
-    assert!(
-        tooltip.ends_with("arrives with packaging and updates."),
-        "{tooltip}"
-    );
 }
 
 /// Choosing a theme card runs `win.theme`, which the Appearance menu runs
@@ -586,6 +598,45 @@ fn the_arrow_keys_move_between_the_theme_cards_and_choose_them() {
     assert!(dark.has_focus(), "the next card has keyboard focus");
     assert!(dark.is_active());
     assert_eq!(skin().theme(), Theme::Dark);
+}
+
+/// The choices of the Python "Appearance & layout" section: the theme,
+/// the text sizes with "100% (default)", the two menus, and the reset of
+/// the pane widths.
+///
+/// parity: SET-005
+#[gtk::test]
+fn appearance_offers_the_python_choices() {
+    let settings = SettingsTest::open();
+    for theme in ["System", "Light", "Dark"] {
+        settings.theme_radio(theme);
+    }
+    assert_eq!(
+        choices_of(&settings.row("Text size")).options(),
+        [
+            "80%",
+            "90%",
+            "100% (default)",
+            "110%",
+            "125%",
+            "150%",
+            "175%",
+            "200%"
+        ]
+    );
+    assert_eq!(
+        choices_of(&settings.row("Right-click menu")).options(),
+        ["Windows 10 · Classic (default)", "Windows 11 · Compact actions"]
+    );
+    let controls = settings.row("Sidebar and column widths").controls();
+    let reset = controls
+        .first()
+        .and_then(|control| control.downcast_ref::<gtk::Button>());
+    let reset = reset.expect("a Reset button");
+    assert_eq!(
+        reset.action_name().as_deref(),
+        Some(WindowAction::ResetLayout.detailed_name().as_str())
+    );
 }
 
 /// parity: SET-019, VIEW-045

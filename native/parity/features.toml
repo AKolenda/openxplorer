@@ -11478,8 +11478,8 @@ python_tests = [
 bridge = ["activateItem", "list", "archiveList", "open"]
 dolphin = "itemActivated → KIO::OpenUrlJob"
 gnome = "GtkFileLauncher / g_app_info_launch_default_for_uri; Honour org.gnome.desktop.peripherals.mouse double-click time (GTK does this); single-click mode is not offered.; Gio.AppInfo.get_default_for_type + launch (mimeapps.list)"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_opening/activation.rs (a_pdf_opens_as_a_file, a_video_opens_as_a_file, a_folder_named_like_a_video_opens_as_a_folder, a_folder_named_like_a_zip_opens_as_a_folder, a_zip_by_content_type_is_browsed, a_zip_by_name_in_any_case_is_browsed, an_item_of_unknown_type_is_not_opened, a_share_that_navigates_opens_as_a_folder, a_regular_file_is_opened_even_if_flagged_as_a_folder, openxplorer_is_skipped_for_the_next_application, another_default_application_is_used). Activation in the native UI does not use this yet, and the 'Could not open the item' dialog and toast are missing. Porting notes: Dolphin/KDE default is single-click open; OpenXplorer is double-click (Windows)."
+native = "done"
+native_note = "Double-click, Enter and Open read the item again (query_entry) and act on what it is now: folders and shares navigate in the tab, ZIPs open the archive browser, files open through the default opener (native/crates/ox-app/src/window/activation.rs). A failure shows the dialog 'Could not open the item' in the active tab, or the toast 'Could not open <name>: <error>' for a background tab. Tests: native/crates/ox-app/src/window/tests/opening.rs (an_item_is_read_again_when_opened_and_a_failure_is_a_dialog) and native/crates/ox-core/tests/integration_opening/activation.rs. Porting notes: Dolphin/KDE default is single-click open; OpenXplorer is double-click (Windows)."
 
 [[feature]]
 id = "OPEN-002"
@@ -11499,8 +11499,8 @@ python_tests = [
 ]
 bridge = ["activateItem", "list"]
 dolphin = "Dolphin: Enter opens all selected items."
-native = "todo"
-native_note = "Porting notes: Multi-selection Enter is a gap vs Dolphin/Windows."
+native = "done"
+native_note = "The file list's activate signal and win.open open the item only when it is the one selected item or nothing is selected (native/crates/ox-app/src/window/input.rs, actions.rs); GTK activates a focused toolbar button, menu item, tab, crumb or sidebar row itself. Test: native/crates/ox-app/src/window/tests/input.rs (enter_opens_only_a_single_selected_item). Porting notes: Multi-selection Enter is a gap vs Dolphin/Windows (OPEN-003)."
 
 [[feature]]
 id = "OPEN-003"
@@ -11541,8 +11541,8 @@ python_tests = [
   "desktop/tests/ui_regressions.cjs::Closing the original tab discards its pending activation",
 ]
 bridge = ["activateItem"]
-native = "todo"
-native_note = "Porting notes: Bug fix in 1.1.x ('delayed folder opens targeting another tab')."
+native = "done"
+native_note = "Each tab opens one item at a time (Tab::is_activating); the result carries the tab and how often it had moved (History::moves), is dropped when the tab closed or moved elsewhere, and a folder opens in its own tab even when another one is in front by then (native/crates/ox-app/src/window/activation.rs). Test: native/crates/ox-app/src/window/tests/opening.rs (an_opened_folder_stays_with_the_tab_that_asked_for_it)."
 
 [[feature]]
 id = "OPEN-005"
@@ -11584,8 +11584,8 @@ python_tests = [
 bridge = ["open", "activateItem"]
 dolphin = "KIO::OpenUrlJob with KApplicationTrader preferred service"
 gnome = "g_app_info_get_default_for_type; g_app_info_get_default_for_type / get_all_for_type (shared-mime-info + mimeapps.list), g_app_info_launch with GdkAppLaunchContext"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_opening/activation.rs (a_pdf_opens_as_a_file, a_video_opens_as_a_file, a_folder_named_like_a_video_opens_as_a_folder, a_folder_named_like_a_zip_opens_as_a_folder, a_zip_by_content_type_is_browsed, a_zip_by_name_in_any_case_is_browsed, an_item_of_unknown_type_is_not_opened, a_share_that_navigates_opens_as_a_folder, a_regular_file_is_opened_even_if_flagged_as_a_folder, openxplorer_is_skipped_for_the_next_application, without_another_application_nothing_opens, another_default_application_is_used); native/crates/ox-core/tests/integration_opening/default_opener.rs (a_local_file_opens_by_its_path_in_the_default_application, the_application_is_looked_up_by_content_type_never_by_uri_scheme, an_executable_script_opens_in_its_editor_and_is_never_run, a_folder_is_never_launched, a_special_file_is_never_launched, preparing_runs_on_a_worker_thread_and_can_be_cancelled). The native UI does not use this service yet to open files."
+native = "done"
+native_note = "Files open through ox-core's DefaultOpener (native/crates/ox-app/src/app_context/default_open.rs): the application is chosen by content type, OpenXplorer's own IDs are skipped, and its errors are the Python messages; a file inside a snapshot is refused first. Tests: native/crates/ox-core/tests/integration_opening/activation.rs and default_opener.rs; the app path in native/crates/ox-app/src/window/tests/opening.rs (a_file_in_a_previous_version_is_refused_and_not_opened, and the tests that open a file, which record the file DefaultOpener prepared in place of the launch)."
 
 [[feature]]
 id = "OPEN-006"
@@ -11616,8 +11616,8 @@ python_tests = [
 bridge = ["open", "activateItem", "openWith", "beginFileDrag", "openTerminal"]
 dolphin = "kio-fuse exposes KIO URLs as local paths for non-KIO apps (installed here)"
 gnome = "gvfsd-fuse ($XDG_RUNTIME_DIR/gvfs) and g_file_get_path on GVfs files; GAppInfo supports_files/supports_uris"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/local_path.rs (a_share_resolves_inside_its_fuse_export); native/crates/ox-core/tests/network_python.rs (fuse_export_paths_match_native_opening_py); native/crates/ox-core/tests/integration_opening/default_opener.rs (a_local_file_opens_by_its_path_in_the_default_application, without_a_local_path_only_an_application_that_reads_uris_opens_the_file, inside_flatpak_a_file_opens_through_the_portal_by_its_path_only); native/crates/ox-core/tests/integration_terminal/folder.rs (a_share_opens_as_a_local_shell_in_its_mount, a_share_without_a_local_mount_explains_how_to_mount_it). The native UI does not use this service yet to open files. Porting notes: MTP paths rely only on g_file_get_path (the fallback parser is SMB-only); verify with a phone natively."
+native = "done"
+native_note = "The default opener hands a share's file over by its CIFS or GVfs FUSE path (ox_core::network::local_path) and otherwise uses only URI-capable applications, with the Python message (native/crates/ox-app/src/app_context/default_open.rs). Tests: native/crates/ox-core/src/network/local_path.rs (a_share_resolves_inside_its_fuse_export), native/crates/ox-core/tests/network_python.rs, native/crates/ox-core/tests/integration_opening/default_opener.rs. Porting notes: MTP paths rely only on g_file_get_path (the fallback parser is SMB-only); verify with a phone natively."
 
 [[feature]]
 id = "OPEN-007"
@@ -11639,8 +11639,8 @@ python_tests = [
 ]
 bridge = ["activateItem", "open"]
 dolphin = "OpenUrlJob::setShowOpenOrExecuteDialog(true)"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_opening/default_opener.rs (an_executable_script_opens_in_its_editor_and_is_never_run). The native UI does not use this service yet to open files."
+native = "done"
+native_note = "Files open only through the default opener, which launches the content type's viewer or editor and never executes the file (native/crates/ox-app/src/app_context/default_open.rs). Tests: native/crates/ox-core/tests/integration_opening/default_opener.rs (an_executable_script_opens_in_its_editor_and_is_never_run), native/crates/ox-app/src/window/tests/opening.rs (a_file_in_a_previous_version_is_refused_and_not_opened: a file in a snapshot is never handed to an application)."
 
 [[feature]]
 id = "OPEN-008"
@@ -11675,7 +11675,8 @@ sources = ["dolphin:src/views/dolphinview.cpp:1700-1715"]
 python_tests = []
 bridge = ["activateItem"]
 dolphin = "openItemAsFolderUrl (application/x-desktop Link)"
-native = "todo"
+native = "done"
+native_note = "Opening a Type=Link desktop entry goes to its URL: a file:// or smb:// location in the tab, an http(s) or mailto address in the desktop's handler (gtk::UriLauncher); any other address is refused, and application entries open as files and are never run (native/crates/ox-app/src/window/desktop_link.rs, activation.rs). Tests: native/crates/ox-app/src/window/desktop_link.rs (a_link_entry_names_a_location_or_a_web_page_and_nothing_else_is_followed), native/crates/ox-app/src/window/tests/opening.rs (a_desktop_link_to_a_folder_opens_the_folder)."
 
 [[feature]]
 id = "OPEN-010"
@@ -11690,7 +11691,8 @@ python_tests = []
 bridge = ["activateItem", "open"]
 dolphin = "n/a in Dolphin (Open With dialog only)"
 gnome = "org.freedesktop.PackageKit.Modify2.InstallMimeTypes (Nautilus install-mime-activation=true) or gnome-software --search"
-native = "todo"
+native = "done"
+native_note = "When no application opens a file's type, 'Could not open the item' shows 'No application is installed for this file type. Use Open with… to choose one.' and, while GNOME Software is installed, a 'Find an app in Software' button that asks Software over D-Bus (its search action) to search for the content type; no command line is built (native/crates/ox-app/src/window/software_search.rs, activation.rs). Tests: native/crates/ox-app/src/window/software_search.rs (only_a_type_without_an_application_is_searched_for), native/crates/ox-app/src/window/tests/opening.rs (a_file_without_an_application_offers_a_search_in_software: with a test Software entry and a stand-in for Software on the private bus, pressing the button sends ActivateAction('search', [content type]))."
 
 [[feature]]
 id = "OPEN-011"
@@ -11764,8 +11766,8 @@ python_tests = [
 bridge = ["openWith"]
 dolphin = "KOpenWithDialog “Remember application association for all files of type …”"
 gnome = "g_app_info_set_as_default_for_type; g_app_info_set_as_default_for_type → ~/.config/mimeapps.list"
-native = "partial"
-native_note = "native/crates/ox-app/src/integration/tests.rs (open_with_lists_filters_and_launches_the_chosen_application): the chosen application is checked again and launched. \"Always use this app\" calls set_as_default_for_type and never applies to folders (native/crates/ox-app/src/integration/applications.rs), but is not tested: a test must not change the associations. Porting notes: No automated test."
+native = "done"
+native_note = "Open with checks the chosen application again and launches it; 'Always use this app' calls set_as_default_for_type for files only and never for folders (native/crates/ox-app/src/integration/applications.rs). Tests: native/crates/ox-app/src/integration/tests.rs (open_with_lists_filters_and_launches_the_chosen_application) and native/crates/ox-app/src/integration/applications.rs (always_use_this_app_sets_the_default_of_files_only, which writes mimeapps.list only with a private configuration folder)."
 
 [[feature]]
 id = "OPEN-013"
@@ -11842,8 +11844,8 @@ python_tests = [
   "desktop/tests/test_v06.py::CatalogTests::test_other_app_not_editor_shortcut",
 ]
 bridge = ["openWith", "environment"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_opening/app_catalog.rs (of_two_launchers_with_one_name_the_primary_one_is_offered, url_handler_helpers_are_not_offered, distinct_editors_each_get_a_shortcut, other_applications_get_no_editor_shortcut). The item menu lists \"Open in <editor>\" for each installed editor and win.open-in-editor opens the item through Open with's checks, toasting \"Opened with <name>\" (native/crates/ox-app/src/window/integration_actions.rs); disabled for several items. No UI test yet."
+native = "done"
+native_note = "The item menu lists 'Open in <editor>' for each installed editor (ox-core editor_shortcuts), disabled for several items or a previous version; win.open-in-editor opens the item through Open with's checks and toasts 'Opened with <name>' or the warning (native/crates/ox-app/src/window/integration_actions.rs). Tests: native/crates/ox-core/tests/integration_opening/app_catalog.rs and native/crates/ox-app/src/window/context_menu/entries.rs (each_code_editor_is_offered_after_open_with_for_one_item)."
 
 [[feature]]
 id = "OPEN-016"
@@ -11865,7 +11867,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["list", "newWindow"]
-native = "todo"
+native = "done"
+native_note = "Folder context menus, Quick access pins, network entries and saved-share cards offer 'Open in new tab', which runs win.open-tab with the target URI and opens a tab in front. Tests: native/crates/ox-app/src/window/tests/opening.rs (open_in_new_tab_opens_the_folder_in_a_tab_in_front), native/crates/ox-app/src/window/place_menus.rs (a_saved_share_card_opens_removes_and_signs_out)."
 
 [[feature]]
 id = "OPEN-017"
@@ -11935,8 +11938,8 @@ python_tests = [
 bridge = ["openTerminal"]
 dolphin = "Open Terminal Here (Shift+F4); Open Terminal Here (Alt+Shift+F4) / F4 terminal panel; Tools → Open Terminal (Shift+F4) and the “Open Terminal Here” context action (ShowOpenTerminal)"
 gnome = "nautilus-extension-gnome-terminal equivalent: GSubprocess argv spawn with the x-terminal-emulator alternative (xdg-terminal-exec on newer desktops)"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_terminal/folder.rs (a_local_folder_opens_in_itself, a_file_opens_its_folder, a_folder_named_like_a_file_opens_in_itself, a_share_opens_as_a_local_shell_in_its_mount, a_server_listing_is_refused_before_it_is_queried, a_share_without_a_local_mount_explains_how_to_mount_it, a_symbolic_link_is_refused, a_special_file_is_refused, an_item_of_unknown_type_is_refused, a_snapshot_folder_is_refused, a_link_into_a_snapshot_is_refused_after_resolving, a_link_into_a_snapshot_with_a_non_utf8_name_is_refused, the_write_guard_also_checks_the_resolved_local_folder, web_script_and_credential_addresses_are_refused, a_cancelled_request_stops, a_real_folder_is_prepared_through_gio, the_whole_request_runs_on_a_worker_thread_and_stops_when_cancelled). win.open-in-terminal opens the terminal in the selected folder, the selected file's folder or the folder shown, and toasts \"Opened <terminal> in <path>\" or the refusal (native/crates/ox-app/src/window/integration_actions.rs, native/crates/ox-app/src/integration/terminal.rs). The menu says \"Open in Terminal\" for every item until the context menus (native/ops-ui) name \"Open containing folder in Terminal\"; no UI test starts a terminal."
+native = "done"
+native_note = "The menus say 'Open in Terminal' for folders and 'Open containing folder in Terminal' for files, disabled for several items and read-only locations; win.open-in-terminal checks the folder in ox-core and toasts 'Opened <terminal> in <path>' or the refusal (native/crates/ox-app/src/window/integration_actions.rs, native/crates/ox-app/src/integration/terminal.rs). Tests: native/crates/ox-core/tests/integration_terminal/folder.rs, native/crates/ox-app/src/window/context_menu/entries.rs and native/crates/ox-app/src/window/tests/opening.rs (open_in_terminal_explains_a_refusal_in_the_message_line)."
 
 [[feature]]
 id = "OPEN-018"
@@ -11966,8 +11969,8 @@ python_tests = [
 ]
 bridge = ["openTerminal"]
 gnome = "x-terminal-emulator alternative; x-terminal-emulator alternative / gnome-terminal --working-directory"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_terminal/launch.rs (without_a_terminal_the_message_says_how_to_install_one, only_the_system_folders_are_searched, debians_gnome_wrapper_alternative_runs_the_real_gnome_terminal, the_debian_alternative_wins_over_the_preference_order, without_an_alternative_the_first_installed_terminal_in_order_is_used, only_known_terminals_with_absolute_programs_are_started, a_folder_named_like_shell_code_stays_a_name). The native UI does not open terminals yet."
+native = "done"
+native_note = "Open in Terminal launches through ox-core's terminal service, which picks the Debian alternative or the first installed known terminal from the system folders only (native/crates/ox-app/src/integration/terminal.rs). Tests: native/crates/ox-core/tests/integration_terminal/launch.rs."
 
 [[feature]]
 id = "OPEN-019"
@@ -11985,8 +11988,8 @@ python_tests = [
 bridge = ["openTerminal"]
 dolphin = "KDE Default Applications → Terminal emulator (TerminalApplication in kdeglobals)"
 gnome = "xdg-terminal-exec / org.gnome.desktop.default-applications.terminal (exec) / x-terminal-emulator alternative"
-native = "todo"
-native_note = "OpenXplorer uses the Debian alternative, then a fixed allowlist order. Existing OpenXplorer part is protected by OPEN-018."
+native = "done"
+native_note = "Open in Terminal first tries the terminal the desktop names: the xdg-terminals.list files of xdg-terminal-exec (the desktop's own list before the shared one, the user's folder before the system's) or GNOME's default-applications terminal exec key when the user set it; it must be a known terminal installed in the system folders, else the Debian alternative and the fixed order apply (native/crates/ox-core/src/integration/terminal/preference.rs, emulator.rs). Tests: native/crates/ox-core/src/integration/terminal/preference.rs (the_desktops_own_list_then_the_shared_one_names_the_terminal), native/crates/ox-core/tests/integration_terminal/launch.rs (the_desktops_configured_terminal_wins_when_it_is_installed). Existing OpenXplorer part is protected by OPEN-018."
 
 [[feature]]
 id = "OPEN-020"
@@ -12008,8 +12011,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::TerminalTests::test_unknown_executable_kind_rejected",
 ]
 bridge = ["openTerminal"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_terminal/folder.rs (a_relative_folder_is_refused, a_missing_folder_is_refused, a_file_is_not_a_starting_folder, a_folder_with_control_characters_is_refused); native/crates/ox-core/tests/integration_terminal/launch.rs (each_terminal_gets_its_own_working_directory_option, a_folder_named_like_shell_code_stays_a_name, a_terminal_that_fails_at_once_is_reported). The native UI does not open terminals yet."
+native = "done"
+native_note = "Open in Terminal launches through ox-core's terminal service with each terminal's working-directory option, a new session, no shell or command, and the early-exit report (native/crates/ox-app/src/integration/terminal.rs). Tests: native/crates/ox-core/tests/integration_terminal/folder.rs and launch.rs."
 
 [[feature]]
 id = "OPEN-021"
@@ -12040,8 +12043,8 @@ python_tests = [
 bridge = ["openTerminal"]
 dolphin = "open_terminal: Shift+F4; open_terminal_here: Shift+Alt+F4; Dolphin Shift+F4 “Open Terminal”"
 gnome = "The default terminal (xdg-terminal-exec, or org.gnome.desktop.default-applications.terminal); GtkShortcutController / application accelerator"
-native = "todo"
-native_note = "Porting notes: OpenXplorer has context-menu entries only, with no keyboard shortcut, and one folder at a time (disabled for multiple selections). Explorer has no default shortcut for this. Existing OpenXplorer part is protected by OPEN-017."
+native = "done"
+native_note = "Shift+F4 (win.open-terminal) opens the terminal in the folder shown; Shift+Alt+F4 (win.open-terminal-here) opens one per distinct folder of the selection, a file standing for its folder, and asks 'Are you sure you want to open <n> terminals?' above five (native/crates/ox-app/src/window/integration_actions.rs). A share without a local mount keeps OPEN-017's message on how to mount it rather than opening Home. Test: native/crates/ox-app/src/window/tests/opening.rs (open_terminal_here_opens_one_per_folder_and_asks_for_many). Existing OpenXplorer part is protected by OPEN-017."
 
 [[feature]]
 id = "OPEN-022"
@@ -12082,7 +12085,8 @@ python_tests = []
 bridge = ["openWith"]
 dolphin = "compare_files (Kompare)"
 gnome = "Meld (org.gnome.Meld) when installed"
-native = "todo"
+native = "done"
+native_note = "The item menu offers 'Compare files' when exactly two files are selected and Meld, Kompare, KDiff3 or Diffuse is installed; win.compare-files hands both files to it through GIO, or says 'No file comparison tool is installed. Install Meld to compare files.' (native/crates/ox-app/src/integration/tools.rs, window/integration_actions.rs). Tests: native/crates/ox-app/src/window/context_menu/entries.rs (two_files_with_a_comparison_tool_offer_compare_files), native/crates/ox-app/src/window/tests/opening.rs (compare_files_hands_two_files_to_the_comparison_tool, with a test Meld entry in the private data folder)."
 
 [[feature]]
 id = "OPEN-024"
@@ -12099,7 +12103,8 @@ sources = [
 python_tests = []
 bridge = ["open"]
 dolphin = "open_preferred_search_tool: Ctrl+Shift+F"
-native = "todo"
+native = "done"
+native_note = "Ctrl+Shift+F (win.search-tool) opens the first installed of KFind, Catfish and the GNOME search tool at the folder shown, or says 'No search tool is installed.' (native/crates/ox-app/src/integration/tools.rs). Test: native/crates/ox-app/src/window/tests/opening.rs (ctrl_shift_f_opens_the_search_tool_at_the_folder, with a test KFind entry in the private data folder)."
 
 [[feature]]
 id = "OPEN-025"
@@ -12120,8 +12125,8 @@ python_tests = []
 bridge = ["activateItem", "open", "openWith"]
 dolphin = "KActivities ResourceInstance / KRecentDocument; KActivities / KRecentDocument::add"
 gnome = "Gtk.RecentManager.add_item (~/.local/share/recently-used.xbel); gtk_recent_manager_add_full"
-native = "todo"
-native_note = "Porting notes: OpenXplorer records up to 30 opened files in its private settings only. Existing OpenXplorer part is protected by HOME-011."
+native = "done"
+native_note = "Opened files, and folders on disk or on shares once they are visited and listed, are added to the desktop's recently used list (gtk::RecentManager), so the file chooser's Recent and other applications show them; a mistyped or unreadable folder is not; the app's own 30 recent files are kept as before (native/crates/ox-app/src/app_context/default_open.rs, window/loading.rs). Test: native/crates/ox-app/src/app_context/default_open.rs (an_opened_file_joins_the_desktop_recent_list). Existing OpenXplorer part is protected by HOME-011."
 
 [[feature]]
 id = "OPEN-026"
@@ -13675,8 +13680,8 @@ python_tests = [
 bridge = ["cacheStatus", "desktopStatus", "preferences"]
 dolphin = "Dolphin: Ctrl+Shift+, opens Configure Dolphin dialog.; options_configure: Ctrl+Shift+,"
 gnome = "GNOME convention: Ctrl+, opens Preferences."
-native = "todo"
-native_note = "Porting notes: OpenXplorer opens Settings with Ctrl+,."
+native = "done"
+native_note = "Ctrl+,, the gear, More > Settings and More > Default file explorer… open Settings as a tab titled Settings; an open one is shown again, the folder shown before is remembered, Back to files closes the tab, and address editing is off on it (native/crates/ox-app/src/window/settings_tab.rs). Tests: native/crates/ox-app/src/window/tests/settings.rs (ctrl_comma_opens_settings_as_a_tab_of_its_own, back_to_files_closes_the_settings_tab). Porting notes: OpenXplorer opens Settings with Ctrl+,."
 
 [[feature]]
 id = "SET-002"
@@ -13711,7 +13716,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::Settings DOM has unique identifiers",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "The navigation column shows 'Settings', 'Your explorer, your way.', the 'Search settings' box with its match count, the category list and 'Back to files' (native/crates/ox-app/resources/ui/settings-page.ui). The sections are the SET-019 categories (Appearance, Search & indexing, Default apps, Windows & tabs, Brave & downloads, About), shown one at a time instead of scrolled to; a narrow window narrows the column instead of turning it into a top bar. GTK has no element ids. Test: native/crates/ox-app/src/settings_page/tests.rs (the_navigation_column_names_the_page_its_search_and_categories)."
 
 [[feature]]
 id = "SET-004"
@@ -13743,7 +13749,8 @@ python_tests = [
   "desktop/tests/ui_v093.py::Text size is searchable",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "The settings search matches every word against each row's title, description, keywords, control labels and group heading, and status cards (native/crates/ox-app/src/settings_page/search.rs). It says 'N matching settings' or 'No matching settings', lists only the categories with matches (in place of a button per match), marks matches with the accent side bar, Enter jumps to and focuses the first match, and Escape clears the query and the marks. Tests: native/crates/ox-app/src/settings_page/tests.rs (the_search_filters_rows_across_every_category, enter_in_the_search_jumps_to_the_first_match, escape_leaves_the_search_and_shows_every_row_again)."
 
 [[feature]]
 id = "SET-005"
@@ -13771,7 +13778,8 @@ python_tests = [
   "desktop/tests/test_v05.py::SettingsWindowsTests::test_default_context_menu_classic",
 ]
 bridge = ["preferences"]
-native = "todo"
+native = "done"
+native_note = "Appearance has the theme cards (System, Light, Dark) that apply at once, the text sizes 80%-200% with '100% (default)', the right-click menu choices 'Windows 10 · Classic (default)' and 'Windows 11 · Compact actions', and Reset for the sidebar and column widths (sidebar 210 px, column widths cleared) in every window (native/crates/ox-app/src/settings_page/appearance.rs). Descriptions are one line each (SET-019). Tests: native/crates/ox-app/src/settings_page/tests.rs (appearance_offers_the_python_choices), native/crates/ox-app/src/window/tests/settings.rs (reset_returns_every_windows_sidebar_to_its_default_width)."
 
 [[feature]]
 id = "SET-006"
@@ -13853,7 +13861,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["windows", "newWindow"]
-native = "todo"
+native = "done"
+native_note = "Folder sizes has its row and the 'How sizes are counted' page with the Python help; Windows & tabs explains tab and file dragging with 'Open windows…' and 'New window'; About has 'OpenXplorer · License & source' with the copyright line and 'Read license & source information', which shows the copyright, the corresponding source (repository and release tag) and the AGPL in a scrolling dialog (native/crates/ox-app/src/window/about.rs). Test: native/crates/ox-app/src/window/tests/settings.rs (the_license_dialog_shows_the_copyright_the_source_and_the_agpl)."
 
 [[feature]]
 id = "SET-010"
@@ -13909,8 +13918,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_still_persist",
 ]
 bridge = ["preferences", "environment"]
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/tests.rs (settings_private_and_atomic, settings_still_persist); native/crates/ox-core/src/settings/storage.rs (replace_writes_a_private_file_and_refuses_symlinks)."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/tests.rs (settings_private_and_atomic); native/crates/ox-core/src/settings/save.rs and private_storage/replace.rs (private file, temporary file, symlink refusal); native/crates/ox-core/src/settings/read.rs (lists_are_capped, invalid_entries_are_skipped_without_a_warning); native/crates/ox-core/src/settings/model.rs (file_text_uses_the_python_layout)."
 
 [[feature]]
 id = "SET-013"
@@ -13927,8 +13936,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_read_bound",
 ]
 bridge = ["environment"]
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/tests.rs (corrupt_settings); native/crates/ox-core/src/settings/read.rs (non_object_files_and_preferences_warn, a_section_of_the_wrong_type_stops_reading_with_a_warning)."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/tests.rs and tests/storage.rs (corrupt, unreadable, oversized and symlinked files, backups instead of overwriting); native/crates/ox-core/src/settings/read.rs (non_object_files_and_preferences_warn, a_section_of_the_wrong_type_stops_reading_with_a_warning); the startup toast in native/crates/ox-app/src/application/state.rs (a_damaged_settings_file_is_reported_at_startup)."
 
 [[feature]]
 id = "SET-014"
@@ -13960,8 +13969,8 @@ python_tests = [
   "desktop/tests/test_pins.py::PinTests::test_system_theme_and_legacy_migration",
 ]
 bridge = ["preferences", "environment"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/settings_interop.rs (python_and_rust_mutations_preserve_each_others_settings, rust_settings_mutation_waits_for_python_and_reloads_after_unlock); native/crates/ox-core/src/settings/tests.rs (two_windows_preserve_each_others_preferences). Porting notes: The native app must read and write this exact file and lock (native/README.md compatibility contract)."
+native = "done"
+native_note = "native/crates/ox-core/tests/settings_interop.rs (python_and_rust_mutations_preserve_each_others_settings, rust_settings_mutation_waits_for_python_and_reloads_after_unlock); native/crates/ox-core/src/settings/tests.rs (two_windows_preserve_each_others_preferences, a_change_holds_the_settings_lock_until_it_is_written). Porting notes: The native app must read and write this exact file and lock (native/README.md compatibility contract)."
 
 [[feature]]
 id = "SET-015"
@@ -13979,8 +13988,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "settingsChanged → refreshViews"
-native = "partial"
-native_note = "native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes) switches the theme in one window and checks the second window follows."
+native = "done"
+native_note = "A preference change reaches every window through the shared AppContext. Tests: native/crates/ox-app/src/window/tests/settings.rs (reset_returns_every_windows_sidebar_to_its_default_width), native/crates/ox-app/src/settings_page/tests.rs (a_theme_card_applies_the_theme_and_saves_it_for_both_apps)."
 
 [[feature]]
 id = "SET-016"
@@ -13998,8 +14007,8 @@ python_tests = [
   "desktop/tests/test_v06.py::PrefTests::test_other_preferences_retained",
 ]
 bridge = ["preferences"]
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/model.rs (defaults_match_the_python_app, choices_outside_the_whitelist_are_ignored, text_size_accepts_only_the_offered_sizes)."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/preferences.rs (defaults_match_the_python_app, choices_outside_the_whitelist_are_ignored, text_size_accepts_only_the_offered_sizes, network_intervals_outside_the_whitelist_are_ignored); native/crates/ox-core/src/settings/choices.rs; native/crates/ox-app/src/settings_page/indexing.rs (the_network_intervals_offered_are_the_ones_settings_accept)."
 
 [[feature]]
 id = "SET-017"
@@ -14012,8 +14021,8 @@ openxplorer = "has"
 sources = ["desktop/core.py:218-254"]
 python_tests = ["desktop/tests/test_pins.py::PinTests::test_system_theme_and_legacy_migration"]
 bridge = ["environment"]
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/tests.rs (system_theme_and_legacy_migration)."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/tests.rs (a_version_1_file_is_read_and_can_switch_to_the_system_theme); native/crates/ox-core/src/settings/read.rs (invalid_entries_are_skipped_without_a_warning)."
 
 [[feature]]
 id = "SET-018"
@@ -14026,7 +14035,8 @@ openxplorer = "has"
 sources = ["desktop/folder_locations.py:27-64"]
 python_tests = []
 bridge = ["environment", "locationCheck"]
-native = "todo"
+native = "done"
+native_note = "user-dirs.dirs is read as text of at most 128 KiB and parsed line by line; only $HOME and ${HOME} expand, and shell syntax, control characters and relative paths fall back to ~/<Name> (native/crates/ox-core/src/places/user_dirs.rs). Test: native/crates/ox-core/src/places/user_dirs.rs (shell_syntax_control_characters_and_relative_paths_are_refused)."
 
 [[feature]]
 id = "SET-019"
@@ -14042,8 +14052,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "Owner-requested usability improvement over the current single long settings page; it must keep every current setting (see the other SET features). Design target: the mockup /tmp/ox-work/settings-mock/index.html (open it with ?page=search, appearance or default, and &theme=dark) and its renders /tmp/ox-shots/progress/settings-mock-*.png: category list with coloured icons, a status summary card per category where useful, flat grouped rows, and the Search & indexing page as a list of indexed folders with status chips (Ready, Indexing with progress, Sign-in needed), per-folder refresh and remove, suggested folders as add-chips, then Options. Shares use the green network bar. Native: native/crates/ox-app/src/settings_page/ builds the page the first time Settings is shown: categories Appearance, Search & indexing, Default apps, Windows & tabs, Brave & downloads and About; rows with a one-line description; status cards that state the result, such as whether OpenXplorer is the default file explorer; a settings search over titles, descriptions, keywords, control labels, group headings and status cards, with counts, Enter jumps and Escape leaves; keyboard focus in the page when Settings opens; Indexed folders, Folder sizes and the Zorin + Brave troubleshooting guide as sub-pages with a back arrow; every Python setting keeps a row that a search for its Python wording finds. Tests: native/crates/ox-app/src/settings_page/tests.rs (choosing_a_category_shows_only_that_category, arrow_keys_move_through_the_categories, the_search_filters_rows_across_every_category, the_search_finds_what_buttons_options_and_headings_show, enter_in_the_search_jumps_to_the_first_match, default_file_explorer_during_a_search_shows_all_of_default_apps, every_setting_of_the_python_page_has_a_row, rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone, the_arrow_keys_move_between_the_theme_cards_and_choose_them, and the theme, text size, menu, watch and interval rows round-tripping with desktop/core.py), native/crates/ox-app/src/settings_page/group.rs (a milestone is named once whatever the order rows are marked in) and native/crates/ox-app/src/window/tests/settings.rs (opening_settings_moves_keyboard_focus_into_the_page, back_to_files_gives_the_file_list_keyboard_focus_again). The Indexed folders page has the status chips, per-folder refresh and remove and the suggested-folders table (native/crates/ox-app/src/settings_page/tests/indexing.rs). Missing: the Default apps actions, the Show in folder status chip and the Brave sync need desktop integration; the licence dialog and updates need distribution. Those rows are shown disabled and name their milestone."
+native = "done"
+native_note = "Owner-requested usability improvement over the current single long settings page; it must keep every current setting (see the other SET features). Design target: the mockup /tmp/ox-work/settings-mock/index.html (open it with ?page=search, appearance or default, and &theme=dark) and its renders /tmp/ox-shots/progress/settings-mock-*.png: category list with coloured icons, a status summary card per category where useful, flat grouped rows, and the Search & indexing page as a list of indexed folders with status chips (Ready, Indexing with progress, Sign-in needed), per-folder refresh and remove, suggested folders as add-chips, then Options. Shares use the green network bar. Native: native/crates/ox-app/src/settings_page/ builds the page the first time Settings is shown: categories Appearance, Search & indexing, Default apps, Windows & tabs, Brave & downloads and About; rows with a one-line description; status cards that state the result, such as whether OpenXplorer is the default file explorer; a settings search over titles, descriptions, keywords, control labels, group headings and status cards, with counts, Enter jumps and Escape leaves; keyboard focus in the page when Settings opens; Indexed folders, Folder sizes and the Zorin + Brave troubleshooting guide as sub-pages with a back arrow; every Python setting keeps a row that a search for its Python wording finds. Tests: native/crates/ox-app/src/settings_page/tests.rs (choosing_a_category_shows_only_that_category, arrow_keys_move_through_the_categories, the_search_filters_rows_across_every_category, the_search_finds_what_buttons_options_and_headings_show, enter_in_the_search_jumps_to_the_first_match, default_file_explorer_during_a_search_shows_all_of_default_apps, every_setting_of_the_python_page_has_a_row, the_arrow_keys_move_between_the_theme_cards_and_choose_them, and the theme, text size, menu, watch and interval rows round-tripping with desktop/core.py) and native/crates/ox-app/src/window/tests/settings.rs (opening_settings_moves_keyboard_focus_into_the_page, back_to_files_gives_the_file_list_keyboard_focus_again). The Indexed folders page has the status chips, per-folder refresh and remove and the suggested-folders table (native/crates/ox-app/src/settings_page/tests/indexing.rs). Every row works: the licence dialog (SET-009), Check for updates and the Default apps and Brave actions are live, so no row is disabled any more (native/crates/ox-app/src/settings_page/tests.rs, every_row_can_be_used)."
 
 [[feature]]
 id = "LOOK-001"

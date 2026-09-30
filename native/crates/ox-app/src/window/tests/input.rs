@@ -11,12 +11,13 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::time::Duration;
 
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 
-use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow, ThemeGuard};
+use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::window::menu_popover::MenuPopover;
 use crate::window::quick_look::{PREVIEWER_INTERFACE, PREVIEWER_NAME, PREVIEWER_PATH};
 
@@ -252,6 +253,7 @@ fn keys_with_ctrl_or_alt_never_start_a_prefix() {
     }
 }
 
+/// parity: OPEN-002
 #[gtk::test]
 fn enter_opens_only_a_single_selected_item() {
     let fixture = Fixture::standard();
@@ -261,6 +263,7 @@ fn enter_opens_only_a_single_selected_item() {
     model.select_only(1);
     model.selection().select_item(2, false);
     details.emit_by_name::<()>("activate", &[&2_u32]);
+    wait_for(Duration::from_millis(200));
     assert!(
         test.context.recorded_launches().is_empty(),
         "several selected items open nothing"
@@ -268,6 +271,9 @@ fn enter_opens_only_a_single_selected_item() {
     model.select_only(1);
     details.emit_by_name::<()>("activate", &[&1_u32]);
     let notes = fixture.uri_of("Notes 2.txt");
+    wait_until("the file to open", || {
+        !test.context.recorded_launches().is_empty()
+    });
     assert_eq!(test.context.recorded_launches(), [notes]);
 }
 

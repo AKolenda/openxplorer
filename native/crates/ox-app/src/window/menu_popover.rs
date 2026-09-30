@@ -23,8 +23,6 @@ use gtk::{gdk, glib};
 use crate::icons::{self, Icon};
 use crate::integration;
 
-use super::unported;
-
 pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
 
 /// The class of a row that follows a divider.
@@ -421,13 +419,9 @@ impl MenuPopover {
     }
 }
 
-/// The tooltip of `item`: its label, and for a command that another
-/// milestone brings, that milestone.
+/// The tooltip of `item`: its label, which a narrow menu may cut short.
 fn item_tooltip(item: &MenuItem) -> String {
-    match item.action {
-        MenuAction::Window(action) => unported::tooltip(action, &item.label),
-        MenuAction::Application(_) => item.label.clone(),
-    }
+    item.label.clone()
 }
 
 /// Why `item` cannot be chosen, when something says: the reason this

@@ -64,6 +64,7 @@ mod context_menu;
 mod copy_path;
 mod crumb_drop;
 mod crumb_menus;
+mod desktop_link;
 mod details_hover;
 mod details_pane;
 mod dialog;
@@ -117,6 +118,7 @@ mod settings_tab;
 mod sidebar;
 mod sidebar_resizer;
 mod snapshot_tabs;
+mod software_search;
 mod status_bar;
 mod tab_commands;
 mod tab_layout;
@@ -127,7 +129,6 @@ mod title_bar;
 mod toast;
 mod transfer_panel;
 mod type_to_select;
-mod unported;
 mod version_restore;
 mod view_zoom;
 mod widget_tree;
@@ -162,7 +163,6 @@ pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;
-pub(crate) use unported::Milestone;
 pub(crate) use widget_tree::children;
 pub(crate) use window_action::WindowAction;
 
@@ -295,7 +295,7 @@ impl BrowserWindow {
 
     /// The message the toast showed last, for tests.
     #[cfg(test)]
-    fn shown_message(&self) -> glib::GString {
+    pub(crate) fn shown_message(&self) -> glib::GString {
         self.imp().toast.text()
     }
 }

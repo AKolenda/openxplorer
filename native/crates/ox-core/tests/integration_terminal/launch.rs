@@ -104,6 +104,26 @@ fn the_debian_alternative_wins_over_the_preference_order() {
     assert_eq!(terminal.kind(), TerminalKind::Konsole);
 }
 
+/// The desktop's configured terminal wins over the Debian alternative when
+/// it is installed in the system folders, and is passed over when not.
+///
+/// parity: OPEN-019
+#[test]
+fn the_desktops_configured_terminal_wins_when_it_is_installed() {
+    let root = temporary_folder();
+    let usr_bin = root.path().join("usr/bin");
+    install_program(&usr_bin.join("gnome-terminal"), "#!/bin/sh\n");
+    install_program(&usr_bin.join("kgx"), "#!/bin/sh\n");
+    symlink("gnome-terminal", usr_bin.join("x-terminal-emulator")).expect("alternative");
+    let search = ExecutableSearch::under(root.path());
+
+    let console = find_terminal(&search.clone().preferring(Some(TerminalKind::Console))).expect("a terminal");
+    let missing = find_terminal(&search.preferring(Some(TerminalKind::Konsole))).expect("a terminal");
+
+    assert_eq!(console.kind(), TerminalKind::Console);
+    assert_eq!(missing.kind(), TerminalKind::GnomeTerminal);
+}
+
 /// parity: OPEN-018
 #[test]
 fn without_an_alternative_the_first_installed_terminal_in_order_is_used() {

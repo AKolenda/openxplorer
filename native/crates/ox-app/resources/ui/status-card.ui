@@ -15,14 +15,20 @@
       <class name="status-card"/>
     </style>
     <child>
+      <!-- A fixed round badge: the glyph's expansion stays inside it. -->
       <object class="GtkBox">
         <property name="valign">center</property>
         <property name="halign">start</property>
+        <property name="hexpand">false</property>
+        <property name="vexpand">false</property>
         <style>
           <class name="status-badge"/>
         </style>
         <child>
+          <!-- Expands to the whole badge so it sits in its centre. -->
           <object class="GtkImage" id="glyph">
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
             <property name="halign">center</property>
             <property name="valign">center</property>
             <property name="accessible-role">presentation</property>

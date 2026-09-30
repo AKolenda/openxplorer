@@ -144,7 +144,6 @@ impl BrowserWindow {
         self.install_saved_search_actions();
         self.install_details_pane_actions();
         self.install_integration_actions();
-        self.install_unported_actions();
         self.install_context_menu_actions();
         let [journal, clipboard] = self.install_file_actions();
         let mut handlers = self.imp().handlers.borrow_mut();
@@ -244,6 +243,7 @@ impl BrowserWindow {
             plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
             plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),
             plain_action(WindowAction::About, BrowserWindow::show_about),
+            plain_action(WindowAction::License, BrowserWindow::show_license),
             plain_action(
                 WindowAction::ContextMenu,
                 BrowserWindow::open_context_menu_from_keyboard,
@@ -406,13 +406,18 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 6] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 9] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
     (WindowAction::Search, &["<Primary>f"]),
     (WindowAction::DetailsPane, &["<Alt><Shift>p"]),
     (WindowAction::Settings, &["<Primary>comma"]),
+    // Dolphin's Open Terminal and Open Terminal Here (OPEN-021).
+    (WindowAction::OpenTerminal, &["<Shift>F4"]),
+    (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
+    // Dolphin's Open Preferred Search Tool (OPEN-024).
+    (WindowAction::SearchTool, &["<Primary><Shift>f"]),
 ];
 
 /// Ctrl+Q: quit the application, from any window and any focus (TAB-058).

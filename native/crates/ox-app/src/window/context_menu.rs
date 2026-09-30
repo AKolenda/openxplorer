@@ -24,6 +24,8 @@ use ox_core::location::{is_smb_location, is_smb_server};
 use ox_core::ops::JournalDirection;
 use ox_core::settings::ContextMenu as MenuStyleChoice;
 
+use crate::integration::Tool;
+
 use super::actions::{plain_action, text_action};
 use super::command_bar::new_menu;
 use super::disk_tools::is_installed;
@@ -33,8 +35,8 @@ use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 use entries::{
-    background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu, ContextMenu, ItemFacts,
-    ItemLocation, ItemShape,
+    background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu, Comparison, ContextMenu,
+    ItemFacts, ItemLocation, ItemShape,
 };
 
 /// How far into a row, and from the view's corner without one, a menu
@@ -156,7 +158,11 @@ impl BrowserWindow {
             ),
             (Some(_), true) => recycle_bin_item_menu(items.len() == 1),
             (Some(first), false) => {
-                let facts = self.item_facts(first.entry(), items.len() == 1);
+                let mut facts = self.item_facts(first.entry(), items.len() == 1);
+                let two_files = items.len() == 2 && items.iter().all(|item| !item.entry().is_dir);
+                if two_files && Tool::Diff.installed().is_some() {
+                    facts.comparison = Comparison::TwoFiles;
+                }
                 return item_menu(&facts, style);
             }
         };
@@ -181,6 +187,7 @@ impl BrowserWindow {
             is_read_only: self.imp().locations.borrow().is_snapshot_location(&entry.uri),
             is_single,
             is_search_result: self.is_searching(),
+            comparison: Comparison::Unavailable,
             editors: self.context().desktop_integration().known_editor_shortcuts(),
             caching,
             delete_label: self.delete_label(),
