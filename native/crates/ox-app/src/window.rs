@@ -107,6 +107,7 @@ mod settings_tab;
 mod sidebar;
 mod sidebar_resizer;
 mod snapshot_tabs;
+mod software_search;
 mod status_bar;
 mod tab_commands;
 mod tab_layout;

@@ -20,8 +20,9 @@ use ox_core::integration;
 use crate::locations::{self, Page};
 
 use super::desktop_link::{link_target_of_file, may_be_link, LinkTarget};
-use super::dialog::show_message;
+use super::dialog::{ButtonStyle, Dialog};
 use super::session::TabId;
+use super::software_search::{self, FIND_IN_SOFTWARE};
 use super::BrowserWindow;
 
 /// Why an item cannot be opened (`activation_kind` in activation.py).
@@ -243,7 +244,7 @@ impl BrowserWindow {
             Ok(Resolved::Folder(uri)) => self.navigate_background_tab(origin.tab, &uri),
             Ok(Resolved::Archive(archive)) if is_active => self.open_archive(&archive),
             Ok(Resolved::Archive(_) | Resolved::Opened) => {}
-            Err(reason) if is_active => self.report_open_failure(&reason),
+            Err(reason) if is_active => self.report_open_failure(&reason, entry),
             Err(reason) => self.show_message(&format!("Could not open {}: {reason}", entry.name)),
         }
     }
@@ -267,14 +268,33 @@ impl BrowserWindow {
         self.render_tabs();
     }
 
-    /// Says why the item could not be opened in a dialog, as
-    /// `showMessage('Could not open the item', …)` does.
-    fn report_open_failure(&self, reason: &str) {
+    /// Says why `entry` could not be opened in a dialog, as
+    /// `showMessage('Could not open the item', …)` does. When no
+    /// application opens its type, the dialog offers to find one in
+    /// Software (OPEN-010).
+    pub(super) fn report_open_failure(&self, reason: &str, entry: &Entry) {
         let reason = reason.to_owned();
+        let unhandled = software_search::unhandled_type(&reason, entry.content_type.as_deref())
+            .filter(|_| software_search::is_available());
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            async move { show_message(&window, OPEN_FAILED, &reason).await }
+            async move {
+                let dialog = Dialog::new(&window, OPEN_FAILED, &reason);
+                let find = unhandled
+                    .as_ref()
+                    .map(|_| dialog.add_button(FIND_IN_SOFTWARE, ButtonStyle::Standard));
+                dialog.add_button("OK", ButtonStyle::Primary);
+                dialog.open();
+                let answer = dialog.next_response().await;
+                dialog.finish();
+                let (Some(content_type), true) = (unhandled, answer.is_some() && answer == find) else {
+                    return;
+                };
+                if let Err(error) = software_search::search_software(&content_type).await {
+                    window.show_message(&error.to_string());
+                }
+            }
         ));
     }
 
@@ -304,7 +324,7 @@ impl BrowserWindow {
             async move {
                 let opened = window.context().open_file(&entry, window.upcast_ref()).await;
                 if let Err(reason) = opened {
-                    window.report_open_failure(&reason);
+                    window.report_open_failure(&reason, &entry);
                 }
             }
         ));
