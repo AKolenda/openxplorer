@@ -237,7 +237,8 @@ fn a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere() {
     wait_until("the listing", || browser.row_names() == ["Docs"]);
     test.shown_dialog().expect("the browser").close();
     test.activate("extract-here", None);
-    let extracted = fixture.path("Site/Docs/a.txt");
+    // Its lone top-level folder is lifted out rather than nested (ARC-025).
+    let extracted = fixture.path("Docs/a.txt");
     wait_until("the extracted file", || extracted.exists());
     assert_eq!(fs::read(&extracted).expect("extracted"), b"first");
 

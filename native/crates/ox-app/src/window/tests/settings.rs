@@ -272,7 +272,9 @@ fn the_license_dialog_shows_the_copyright_the_source_and_the_agpl() {
         "{text}"
     );
     assert!(text.contains("https://github.com/AKolenda/openxplorer, tag v"));
-    assert!(text.contains("GNU AFFERO GENERAL PUBLIC LICENSE"));
+    assert!(dialog
+        .scrolled_text()
+        .contains("GNU AFFERO GENERAL PUBLIC LICENSE"));
     wait_until("the dialog to have its size", || dialog.height() > 0);
     assert!(
         dialog.height() < test.window.height(),

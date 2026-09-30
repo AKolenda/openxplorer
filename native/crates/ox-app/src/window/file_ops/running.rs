@@ -202,7 +202,12 @@ impl BrowserWindow {
                 }
                 self.reload_selecting(finished.select_after);
                 match finished.summary {
-                    OperationSummary::Toast(text) if is_undoable => self.show_message_with_undo(&text),
+                    OperationSummary::Toast(text) if is_undoable => {
+                        // The toast has Undo; the desktop hears it too while
+                        // no window has focus (INT-026).
+                        self.notify_if_in_background(&OperationSummary::Toast(text.clone()));
+                        self.show_message_with_undo(&text);
+                    }
                     summary => self.report(summary).await,
                 }
             }

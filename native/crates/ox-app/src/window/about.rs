@@ -11,6 +11,7 @@
 //! the repository's licence files, which every package installs too.
 
 use gtk::glib;
+use ox_core::update::REPOSITORY;
 
 use super::dialog::{ButtonStyle, Dialog};
 use super::BrowserWindow;
@@ -62,11 +63,17 @@ fn about_text() -> String {
 const LICENSE_TITLE: &str = "OpenXplorer · License & source";
 
 /// The facts above the licence text (`showLicense`), with where this
-/// build's corresponding source is.
-const LICENSE_TEXT: &str = "Copyright (c) 2026 OpenXplorer contributors.\n\
-AGPL-3.0-only. No warranty. You may redistribute and modify under the included terms.\n\n\
-Complete corresponding source and build tools: the source archive published with each release \
-at https://github.com/AKolenda/openxplorer/releases, and the repository itself.";
+/// build's corresponding source is: its release tag in the repository,
+/// and the source archive published with each release.
+fn license_text() -> String {
+    let version = env!("CARGO_PKG_VERSION");
+    format!(
+        "Copyright (c) 2026 OpenXplorer contributors.\nAGPL-3.0-only. No warranty. You may \
+         redistribute and modify under the included terms.\n\nComplete corresponding source and \
+         build tools: {REPOSITORY}, tag v{version}, and the source archive published with each \
+         release at {REPOSITORY}/releases."
+    )
+}
 
 /// The GNU Affero General Public License, version 3, word for word.
 const AGPL: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../LICENSE"));
@@ -98,7 +105,7 @@ impl BrowserWindow {
     }
 
     fn license_dialog(&self) -> Dialog {
-        let dialog = Dialog::new(self, LICENSE_TITLE, LICENSE_TEXT);
+        let dialog = Dialog::new(self, LICENSE_TITLE, &license_text());
         let notices = format!("{AGPL}\n\nOriginal notice:\n\n{WINSPACE_NOTICE}");
         dialog.add_scrolled_text(&notices, LICENSE_TEXT_HEIGHT);
         dialog.add_button("OK", ButtonStyle::Primary);
