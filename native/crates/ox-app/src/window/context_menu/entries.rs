@@ -165,7 +165,7 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
         let label = format!("Open in {}", editor.name);
         let open_in_editor =
             MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
-                .with_application_icon(&editor.id);
+                .with_application_icon(editor.icon.as_deref());
         entries.push(for_one_item(open_in_editor, facts, true).into());
     }
     entries
@@ -531,6 +531,7 @@ mod tests {
         let code = EditorShortcut {
             id: "code.desktop".to_owned(),
             name: "Visual Studio Code".to_owned(),
+            icon: Some("com.visualstudio.code".to_owned()),
         };
         let facts = ItemFacts {
             editors: vec![code],
@@ -562,6 +563,7 @@ mod tests {
         let code = EditorShortcut {
             id: "code.desktop".to_owned(),
             name: "Visual Studio Code".to_owned(),
+            icon: Some("com.visualstudio.code".to_owned()),
         };
         let in_version = ItemFacts {
             editors: vec![code],
@@ -586,7 +588,7 @@ mod tests {
         let MenuEntry::Item(editor) = editor else {
             panic!("an editor is an item");
         };
-        assert_eq!(editor.application.as_deref(), Some("code.desktop"));
+        assert_eq!(editor.application_icon.as_deref(), Some("com.visualstudio.code"));
         for (label, reason) in reasons(&in_version) {
             assert_eq!(reason, Some(READ_ONLY_VERSION), "{label}");
         }

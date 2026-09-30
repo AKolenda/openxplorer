@@ -19,7 +19,7 @@ use crate::history::History;
 use super::listing_state::{ListingEnd, ListingState};
 
 /// Identifies a tab for the lifetime of its window.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) struct TabId(u64);
 
 impl TabId {

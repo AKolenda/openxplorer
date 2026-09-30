@@ -180,6 +180,7 @@ impl BrowserWindow {
     /// Puts the active tab's items, selection and scroll position on
     /// screen, and lists a tab that was opened in the background.
     pub(super) fn show_tab(&self, id: TabId) {
+        self.keep_activations_of(id);
         self.reset_typeahead();
         self.hide_message();
         self.show_dialog_of_tab(id);

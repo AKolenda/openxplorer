@@ -11,6 +11,7 @@ use gtk::prelude::*;
 use crate::application::AppAction;
 use crate::icons::Icon;
 use crate::window::window_action::WindowAction;
+use crate::window::BrowserWindow;
 
 /// Whether an item shows a check mark.
 #[derive(Debug, Clone, PartialEq)]
@@ -106,9 +107,10 @@ pub(in crate::window) struct MenuItem {
     pub availability: ItemAvailability,
     /// Why it is disabled in this menu, which its tooltip says.
     pub disabled_reason: Option<&'static str>,
-    /// The desktop ID of the application it opens, whose icon replaces
+    /// The icon of the application it opens
+    /// ([`ox_core::integration::ApplicationInfo::icon`]), which replaces
     /// the glyph.
-    pub application: Option<String>,
+    pub application_icon: Option<String>,
 }
 
 impl MenuItem {
@@ -123,7 +125,7 @@ impl MenuItem {
             check: ItemCheck::Plain,
             availability: ItemAvailability::FollowsAction,
             disabled_reason: None,
-            application: None,
+            application_icon: None,
         }
     }
 
@@ -198,25 +200,23 @@ impl MenuItem {
         }
     }
 
-    /// The same item showing the icon of the application `desktop_id`.
-    pub(in crate::window) fn with_application_icon(self, desktop_id: &str) -> Self {
+    /// The same item showing an application's `icon` instead of its glyph.
+    pub(in crate::window) fn with_application_icon(self, icon: Option<&str>) -> Self {
         Self {
-            application: Some(desktop_id.to_owned()),
+            application_icon: icon.map(str::to_owned),
             ..self
         }
     }
 }
 
 impl MenuAction {
-    /// Why the action is disabled, for the commands whose reason does not
-    /// depend on the item: nothing to undo, redo or paste.
-    pub(super) fn disabled_reason(self) -> Option<&'static str> {
-        match self {
-            MenuAction::Window(WindowAction::Undo) => Some("Nothing to undo."),
-            MenuAction::Window(WindowAction::Redo) => Some("Nothing to redo."),
-            MenuAction::Window(WindowAction::Paste) => Some("Nothing to paste here."),
-            _ => None,
-        }
+    /// Why `widget`'s window has the action disabled, when it says.
+    pub(super) fn disabled_reason(self, widget: &gtk::Widget) -> Option<&'static str> {
+        let MenuAction::Window(action) = self else {
+            return None;
+        };
+        let window = widget.root().and_downcast::<BrowserWindow>()?;
+        window.disabled_reason(action)
     }
 }
 

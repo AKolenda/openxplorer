@@ -6115,8 +6115,8 @@ python_tests = [
   "desktop/tests/ui_type_select.py::Ctrl+F still focuses Search and clears the prefix",
 ]
 bridge = []
-native = "done"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_file_keys_leave_text_fields_and_the_settings_page_alone): the file keys (Ctrl+C/X/V, Ctrl+Shift+N, Delete, Shift+Delete, F2, Ctrl+Z/Y) act only in the file pane, never in text fields, the address bar and its crumbs, the pane splitter or Settings; Enter, Escape, the arrows and Ctrl+A belong to the focused view. The window keys (F5, Ctrl+R, Ctrl+L, Alt+D, Ctrl+F, Alt+Enter, Ctrl+comma, text size, Ctrl+T/W/N, Ctrl+Tab, Alt+arrows, Ctrl+H) are GTK application accelerators and work from any focus, as in Windows 11 Explorer and Dolphin; a text field keeps every key it uses itself. GTK input methods keep composition keys."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_file_keys_leave_text_fields_and_the_settings_page_alone): the file keys (Ctrl+C/X/V, Ctrl+Shift+N, Delete, Shift+Delete, F2, Ctrl+Z/Y) act only in the file pane, never in text fields, the address bar and its crumbs, the pane splitter or Settings; Enter, Escape, the arrows and Ctrl+A belong to the focused view. Differs from the spec, awaiting owner sign-off: Ctrl+H, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab and Alt+Left/Right/Up are GTK application accelerators and also act from text fields, as in Windows 11 Explorer and Dolphin, where app.js ignored them there. Not tested: the Properties-dialog Ctrl+Tab exception, ContextMenu/Shift+F10 from text fields and IME composition keys (GTK input methods keep them)."
 
 [[feature]]
 id = "CMD-018"
@@ -6370,7 +6370,7 @@ bridge = ["applications"]
 dolphin = "KOpenWithDialog and the Open With submenu show service icons"
 gnome = "g_app_info_get_icon → GtkImage from GIcon"
 native = "done"
-native_note = "native/crates/ox-app/src/integration/tests.rs (an_application_is_drawn_with_its_own_icon); native/crates/ox-app/src/window/context_menu/entries.rs (editors_show_their_icon_and_disabled_items_say_why); native/crates/ox-app/src/window/tests/context_menus.rs (with_several_items_selected_the_one_item_commands_are_disabled, the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files). Open with rows and the \"Open in <editor>\" items show the application's own icon (GAppInfo icon), falling back to the generic glyph. Items disabled for several items or a previous version say why in the tooltip and accessible description; Undo, Redo and Paste say there is nothing to act on; unported commands name their milestone. Context menus give focus back to the file pane, command bar menus to their button."
+native_note = "native/crates/ox-app/src/integration/tests.rs (an_application_is_drawn_with_its_own_icon); native/crates/ox-app/src/window/context_menu/entries.rs (editors_show_their_icon_and_disabled_items_say_why); native/crates/ox-app/src/window/file_ops/availability.rs (a_disabled_command_says_why); native/crates/ox-app/src/window/tests/command_bar.rs (more_options_needs_a_folder_for_pin_and_cache, enter_on_a_command_opens_its_menu_below_it_and_not_the_selection); native/crates/ox-app/src/window/tests/context_menus.rs (with_several_items_selected_the_one_item_commands_are_disabled, the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files). Open with rows and the \"Open in <editor>\" items show the application's own icon (GAppInfo icon, read with the application list off the main thread), falling back to the generic glyph. Every disabled menu item says why in its tooltip and accessible description: the file commands from the rule that disables them (nothing selected, several selected, read-only folder or previous version, running operation, search, Recycle Bin, nothing to undo, redo or paste), the archive and folder-size commands, Pin current folder and the cache toggle on pages, the one-item commands; unported commands name their milestone. Context menus give focus back to the file pane, command bar menus to their button."
 
 [[feature]]
 id = "CMD-032"
@@ -16733,8 +16733,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/ui_regressions.cjs::Navigation supersedes a delayed activation"]
 bridge = ["cancel"]
-native = "done"
-native_note = "native/crates/ox-app/src/window/tests/opening.rs (navigating_drops_a_typed_address_that_answers_late): a typed address or a tab's file location whose lookup answers after a navigation or a tab switch is dropped. native/crates/ox-app/src/search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results). Listings use load generations (window/session.rs), archive listings a generation (archive_view/browser.rs); discovery aborts its passes on Stop (network/discovery.rs); extraction preflight, Map network location and Properties run in their dialogs, which closing cancels or drops."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/opening.rs (navigating_drops_a_typed_address_that_answers_late, a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it): each tab keeps its own newest lookup, so a typed address or a tab's file location that answers after that tab navigated, after the user switched away from it, or after it closed is dropped, and a background tab never cancels the front tab's lookup. native/crates/ox-app/src/search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results). Listings use load generations (window/session.rs), archive listings a generation (archive_view/browser.rs) and the Previous versions panel a generation (properties/versions_panel.rs); discovery aborts its passes on Stop (network/discovery.rs); extraction preflight and Map network location run in their dialogs, which closing cancels. Missing: no marked test yet proves the listing, archive-listing, discovery, extraction preflight, Map-location connect and Properties guards."
 
 [[feature]]
 id = "SAFE-014"
@@ -16873,8 +16873,8 @@ bridge = [
   "braveSync",
   "braveRestore",
 ]
-native = "done"
-native_note = "native/crates/ox-core/src/integration/default_apps/record.rs (plain_desktop_ids_are_accepted_and_anything_else_refused); native/crates/ox-core/src/integration/default_apps/xdg_mime.rs (xdg-mime runs without a shell with its 8 s limit); native/crates/ox-core/tests/integration_default_apps.rs; native/crates/ox-core/src/integration/brave/preferences.rs (a_preference_file_over_32_mb_is_refused); native/crates/ox-core/tests/integration_brave (running Brave blocks writes, private backups, symlinked preferences never written). xdg-user-dirs-update and its 15 s limit come with standard-folder relocation (PROP-031)."
+native = "partial"
+native_note = "native/crates/ox-core/src/integration/default_apps/record.rs (plain_desktop_ids_are_accepted_and_anything_else_refused); native/crates/ox-core/src/integration/default_apps/xdg_mime.rs (xdg-mime runs without a shell with its 8 s limit); native/crates/ox-core/tests/integration_default_apps.rs; native/crates/ox-core/src/integration/brave/preferences.rs (a_preference_file_over_32_mb_is_refused); native/crates/ox-core/tests/integration_brave (running Brave blocks writes, private backups, symlinked preferences never written). Missing: the native app never runs xdg-user-dirs-update yet, so its 15 s limit is not implemented; it arrives with standard-folder relocation (PROP-031)."
 
 [[feature]]
 id = "SAFE-021"

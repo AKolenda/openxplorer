@@ -284,13 +284,19 @@ fn an_application_is_drawn_with_its_own_icon() {
     let desktop_entry = "[Desktop Entry]\nType=Application\nName=Fixture Editor\nExec=true %F\n\
                          Icon=accessories-text-editor\n";
     std::fs::write(&entry, desktop_entry).expect("the fixture entry");
-    wait_until("GIO to read the entry", || {
-        super::applications::application_icons().contains_key(FIXTURE_ID)
-    });
+    let fixture_icon = || {
+        gio::AppInfo::all()
+            .into_iter()
+            .find(|info| info.id().as_deref() == Some(FIXTURE_ID))
+            .and_then(|info| ox_core::integration::ApplicationInfo::icon(&info))
+    };
+    wait_until("GIO to read the entry", || fixture_icon().is_some());
 
-    let image = super::application_image(FIXTURE_ID, 16).expect("the application has an icon");
-    let missing = super::application_image("io.winspace.Missing.desktop", 16);
+    // Read the way the worker threads read it, drawn on the main thread.
+    let listed = fixture_icon();
     std::fs::remove_file(&entry).expect("the fixture entry");
+    let image = super::application_image(listed.as_deref(), 16).expect("the application has an icon");
+    let missing = super::application_image(None, 16);
 
     let icon = image
         .gicon()

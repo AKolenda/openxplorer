@@ -12,7 +12,6 @@
 //! and nothing changes a default unless the user ticked "Always use this
 //! app", which never applies to folders.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use gtk::gio;
@@ -55,30 +54,17 @@ pub(crate) enum OpenWithError {
     Interrupted,
 }
 
-/// The icon of the installed application `desktop_id` at `size` pixels,
-/// as Dolphin's Open With and GNOME's app chooser show it
-/// (`g_app_info_get_icon`); `None` when the application or its icon is
-/// missing, so the caller keeps its glyph.
-pub(crate) fn application_image(desktop_id: &str, size: i32) -> Option<gtk::Image> {
-    let icon = application_icons().remove(desktop_id)?;
-    Some(icon_image(&icon, size))
-}
-
-/// The icon of every installed application that has one, by desktop ID.
-/// GIO keeps the desktop entries in memory, so this reads no files.
-pub(crate) fn application_icons() -> HashMap<String, gio::Icon> {
-    gio::AppInfo::all()
-        .into_iter()
-        .filter_map(|info| Some((info.id()?.to_string(), info.icon()?)))
-        .collect()
-}
-
-/// `icon` drawn at `size` pixels.
-pub(crate) fn icon_image(icon: &gio::Icon, size: i32) -> gtk::Image {
-    let image = gtk::Image::from_gicon(icon);
+/// An application's `icon`, read with the application list on a worker
+/// thread ([`ox_core::integration::ApplicationInfo::icon`]), drawn at
+/// `size` pixels as Dolphin's Open With and GNOME's app chooser show it;
+/// `None` without an icon or when it cannot be read back, so the caller
+/// keeps its glyph.
+pub(crate) fn application_image(icon: Option<&str>, size: i32) -> Option<gtk::Image> {
+    let icon = gio::Icon::for_string(icon?).ok()?;
+    let image = gtk::Image::from_gicon(&icon);
     image.set_pixel_size(size);
     image.add_css_class("app-icon");
-    image
+    Some(image)
 }
 
 /// Which applications the list shows.
@@ -104,6 +90,8 @@ pub(crate) struct ApplicationChoice {
     /// It can open the item: the item has a local path, or the
     /// application reads URIs.
     pub(crate) is_available: bool,
+    /// Its icon ([`ox_core::integration::ApplicationInfo::icon`]).
+    pub(crate) icon: Option<String>,
 }
 
 impl ApplicationChoice {
@@ -245,6 +233,7 @@ impl ChoiceFacts<'_> {
             is_recommended: self.recommended_ids.contains(&id),
             is_available: self.has_local_path || app.supports_uris(),
             name: app.display_name().to_string(),
+            icon: ox_core::integration::ApplicationInfo::icon(app),
             id,
         })
     }
@@ -378,6 +367,7 @@ mod tests {
             is_default,
             is_recommended,
             is_available,
+            icon: None,
         }
     }
 

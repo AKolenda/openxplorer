@@ -12,13 +12,13 @@
 //! [`OpenWithDialog`] is a `GtkWindow` subclass laid out by the template
 //! `resources/ui/open-with-dialog.ui`.
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
 
 use super::applications::{
-    application_icons, icon_image, list_applications_in_background, prepare_launch, ApplicationChoice,
-    ApplicationList, ApplicationScope, DefaultChoice, OpenWithError, PreparedLaunch,
+    application_image, list_applications_in_background, prepare_launch, ApplicationChoice, ApplicationList,
+    ApplicationScope, DefaultChoice, OpenWithError, PreparedLaunch,
 };
 use crate::icons::{self, Icon};
 
@@ -251,9 +251,8 @@ impl OpenWithDialog {
         let shown_ids = visible.iter().map(|choice| choice.id.clone()).collect();
         imp.shown_ids.replace(shown_ids);
         let chosen = imp.chosen.borrow().clone();
-        let icons = application_icons();
         for choice in &visible {
-            let row = application_row(choice, icons.get(&choice.id));
+            let row = application_row(choice);
             list.append(&row);
             if chosen.as_deref() == Some(choice.id.as_str()) {
                 list.select_row(Some(&row));
@@ -372,10 +371,10 @@ impl OpenWithDialog {
     }
 }
 
-/// The row of one application: its own `icon` (the generic glyph without
+/// The row of one application: its own icon (the generic glyph without
 /// one), its name and why it is offered. An application that cannot open
 /// the item is shown but cannot be chosen.
-fn application_row(choice: &ApplicationChoice, icon: Option<&gio::Icon>) -> gtk::ListBoxRow {
+fn application_row(choice: &ApplicationChoice) -> gtk::ListBoxRow {
     let name = gtk::Label::builder().label(&choice.name).xalign(0.0).build();
     name.add_css_class("app-name");
     let note = gtk::Label::builder().label(choice.note()).xalign(0.0).build();
@@ -384,10 +383,8 @@ fn application_row(choice: &ApplicationChoice, icon: Option<&gio::Icon>) -> gtk:
     text.append(&name);
     text.append(&note);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    let icon = icon.map_or_else(
-        || icons::image(Icon::Apps, ROW_GLYPH),
-        |icon| icon_image(icon, ROW_GLYPH),
-    );
+    let icon = application_image(choice.icon.as_deref(), ROW_GLYPH)
+        .unwrap_or_else(|| icons::image(Icon::Apps, ROW_GLYPH));
     content.append(&icon);
     content.append(&text);
     let row = gtk::ListBoxRow::builder().child(&content).build();

@@ -56,6 +56,7 @@ mod context_menu;
 mod copy_path;
 mod details_pane;
 mod dialog;
+mod disabled_reasons;
 mod empty_page;
 mod environment;
 mod external_requests;

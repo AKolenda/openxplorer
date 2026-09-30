@@ -87,7 +87,7 @@ pub(super) fn press_shortcut(test: &TestWindow, keyval: gdk::Key, modifiers: gdk
 }
 
 /// Every shortcut of the window's own shortcut controllers.
-fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
+pub(super) fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
     let controllers: Vec<gtk::ShortcutController> = test
         .window
         .observe_controllers()
@@ -106,7 +106,11 @@ fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
 
 /// Whether `trigger`, or one of its alternatives, is `keyval` with exactly
 /// `modifiers`.
-fn is_triggered_by(trigger: &gtk::ShortcutTrigger, keyval: gdk::Key, modifiers: gdk::ModifierType) -> bool {
+pub(super) fn is_triggered_by(
+    trigger: &gtk::ShortcutTrigger,
+    keyval: gdk::Key,
+    modifiers: gdk::ModifierType,
+) -> bool {
     if let Some(alternatives) = trigger.downcast_ref::<gtk::AlternativeTrigger>() {
         return is_triggered_by(&alternatives.first(), keyval, modifiers)
             || is_triggered_by(&alternatives.second(), keyval, modifiers);

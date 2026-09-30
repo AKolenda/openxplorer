@@ -116,13 +116,11 @@ mod imp {
             self.strip.set(strip).expect("constructed runs once per object");
             self.list.set(list).expect("constructed runs once per object");
             popover.set_style(MenuStyle::Classic);
-            // Check marks follow the actions' state when the menu opens.
-            // The keyboard starts on the first item that can be chosen,
-            // among the rows drawn for this opening.
-            popover.connect_show(|popover| {
-                popover.redraw();
-                popover.focus_first_item();
-            });
+            // Check marks follow the actions' state when the menu opens,
+            // so the rows are drawn on show. The keyboard starts on the
+            // first item that can be chosen once the popover is mapped:
+            // before that it cannot take focus.
+            popover.connect_show(super::MenuPopover::redraw);
             popover.connect_map(super::MenuPopover::focus_first_item);
         }
     }
@@ -271,7 +269,7 @@ impl MenuPopover {
             let can_choose = self.can_choose(item);
             let row = item_row(item, self.check_mark(item));
             row.set_sensitive(can_choose);
-            explain_availability(row.upcast_ref(), item, can_choose);
+            explain_availability(self, row.upcast_ref(), item, can_choose);
             if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
                 after_divider = false;
@@ -307,7 +305,7 @@ impl MenuPopover {
             .sensitive(can_choose)
             .build();
         button.update_property(&[gtk::accessible::Property::Label(&item.label)]);
-        explain_availability(button.upcast_ref(), item, can_choose);
+        explain_availability(self, button.upcast_ref(), item, can_choose);
         let item = item.clone();
         button.connect_clicked(glib::clone!(
             #[weak(rename_to = popover)]
@@ -375,8 +373,9 @@ fn item_tooltip(item: &MenuItem) -> String {
 }
 
 /// Why `item` cannot be chosen, when something says: the reason this
-/// menu gave, the milestone that brings the command, or its action's.
-fn disabled_reason(item: &MenuItem) -> Option<String> {
+/// menu gave, the milestone that brings the command, or its action's in
+/// the window of `menu`.
+fn disabled_reason(menu: &MenuPopover, item: &MenuItem) -> Option<String> {
     if item.availability == ItemAvailability::Disabled {
         if let Some(reason) = item.disabled_reason {
             return Some(reason.to_owned());
@@ -386,13 +385,13 @@ fn disabled_reason(item: &MenuItem) -> Option<String> {
     if tooltip != item.label {
         return None;
     }
-    item.action.disabled_reason().map(str::to_owned)
+    item.action.disabled_reason(menu.upcast_ref()).map(str::to_owned)
 }
 
-/// Adds to the tooltip of `control`, which shows `item`, why it cannot be
-/// chosen, and tells screen readers too.
-fn explain_availability(control: &gtk::Widget, item: &MenuItem, can_choose: bool) {
-    let reason = (!can_choose).then(|| disabled_reason(item)).flatten();
+/// Adds to the tooltip of `control`, which shows `item` in `menu`, why it
+/// cannot be chosen, and tells screen readers too.
+fn explain_availability(menu: &MenuPopover, control: &gtk::Widget, item: &MenuItem, can_choose: bool) {
+    let reason = (!can_choose).then(|| disabled_reason(menu, item)).flatten();
     let Some(reason) = reason else {
         return;
     };
@@ -410,10 +409,10 @@ fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
         item.glyph
     };
     let application_icon = item
-        .application
+        .application_icon
         .as_deref()
         .filter(|_| check != CheckMark::Checked)
-        .and_then(|desktop_id| integration::application_image(desktop_id, ROW_GLYPH));
+        .and_then(|icon| integration::application_image(Some(icon), ROW_GLYPH));
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     content.append(&application_icon.unwrap_or_else(|| icons::image(glyph, ROW_GLYPH)));
     let label = gtk::Label::builder()

@@ -8,7 +8,7 @@ use gtk::subclass::prelude::*;
 
 use crate::locations::Page;
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
-use crate::window::session::Tab;
+use crate::window::session::{Tab, TabPlacement};
 
 fn can_go_back(test: &TestWindow) -> bool {
     let session = test.window.imp().session.borrow();
@@ -53,7 +53,7 @@ fn navigating_drops_a_typed_address_that_answers_late() {
     test.window
         .navigate(&fixture.uri_of("Documents"))
         .expect("the fixture folder");
-    wait_for(std::time::Duration::from_millis(300));
+    wait_until("the lookup to answer", || test.window.answered_activations() == 1);
 
     assert!(test.context.recorded_launches().is_empty());
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
@@ -61,6 +61,47 @@ fn navigating_drops_a_typed_address_that_answers_late() {
     wait_until("the file to be opened", || {
         !test.context.recorded_launches().is_empty()
     });
+}
+
+/// Lookups belong to their own tab: a background tab that finds its
+/// location is a file does not cancel the address the user typed in the
+/// front tab, while switching away from a tab and back drops its lookup.
+///
+/// parity: SAFE-013
+#[gtk::test]
+fn a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let typed = fixture.path("Notes 2.txt");
+    let typed = typed.to_str().expect("fixture paths are UTF-8");
+    let front = test.window.imp().session.borrow().active_id().expect("a tab");
+    test.window
+        .open_tab(&fixture.uri_of("Documents"), TabPlacement::Background)
+        .expect("the fixture folder");
+    let background = test.window.imp().session.borrow().tabs()[1].id;
+
+    test.window.submit_address(typed);
+    test.window
+        .open_file_location(background, &fixture.uri_of("Notes 10.txt"));
+    wait_until("both lookups to answer", || {
+        test.window.answered_activations() == 2
+    });
+    let mut launches = test.context.recorded_launches();
+    launches.sort();
+    assert_eq!(
+        launches,
+        [fixture.uri_of("Notes 10.txt"), fixture.uri_of("Notes 2.txt")]
+    );
+
+    test.window.submit_address(typed);
+    test.window.switch_tab(background);
+    test.window.switch_tab(front);
+    wait_until("the lookup to answer", || test.window.answered_activations() == 3);
+    assert_eq!(
+        test.context.recorded_launches().len(),
+        2,
+        "the dropped lookup opens nothing"
+    );
 }
 
 /// parity: NAV-033, NAV-040
