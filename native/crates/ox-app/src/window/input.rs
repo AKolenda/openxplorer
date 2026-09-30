@@ -53,6 +53,7 @@ impl BrowserWindow {
         let grid = self.folder_pane().icon_view().grid().clone();
         self.folder_input(details.upcast_ref());
         self.folder_input(grid.upcast_ref());
+        self.install_selection_keys();
         self.address_bar().connect_cancelled(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -157,7 +158,6 @@ impl BrowserWindow {
             move |controller, key, _, modifiers| window.folder_key(controller, &input, key, modifiers)
         ));
         view.add_controller(keys);
-        view.add_controller(self.prefix_reset_on_click());
         view.add_controller(self.folder_middle_click(view));
         self.attach_context_menu(view);
         self.attach_file_drag(view);
@@ -269,7 +269,7 @@ impl BrowserWindow {
                 input.reset();
                 self.reset_typeahead();
             }
-            gdk::Key::Escape => self.folder_pane().model().select_none(),
+            gdk::Key::Escape => self.clear_selection(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
             gdk::Key::BackSpace => {
                 let composing = controller
@@ -284,20 +284,6 @@ impl BrowserWindow {
             _ => return None,
         }
         Some(glib::Propagation::Stop)
-    }
-
-    /// A pointer press in a view starts a new prefix; the click itself
-    /// goes on to the view.
-    fn prefix_reset_on_click(&self) -> gtk::GestureClick {
-        let click = gtk::GestureClick::new();
-        click.set_button(gestures::EVERY_BUTTON);
-        click.set_propagation_phase(gtk::PropagationPhase::Capture);
-        click.connect_pressed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _, _, _| window.reset_typeahead()
-        ));
-        click
     }
 
     /// Middle-click on a folder opens it in a tab without selecting it;

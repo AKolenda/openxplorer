@@ -52,16 +52,16 @@ const CAPACITY_ATTRIBUTES: &str = "filesystem::size,filesystem::free";
 
 /// How full a file system is, in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Capacity {
+pub(super) struct Capacity {
     /// The file system's size; never zero.
-    size: u64,
+    pub(super) size: u64,
     /// The space still free; at most `size`.
-    free: u64,
+    pub(super) free: u64,
 }
 
 impl Capacity {
     /// The share of the file system in use, from 0 to 1.
-    fn used_share(self) -> f64 {
+    pub(super) fn used_share(self) -> f64 {
         #[expect(clippy::cast_precision_loss, reason = "a bar needs no byte precision")]
         let share = (self.size - self.free) as f64 / self.size as f64;
         share
@@ -177,7 +177,7 @@ fn show_capacity(texts: &gtk::Box, uri: &str) {
 
 /// How full the file system of `file` is, or `None` when GIO cannot tell
 /// or it has no size (`if(m.total)` in app.js).
-async fn measure_capacity(file: &gio::File) -> Option<Capacity> {
+pub(super) async fn measure_capacity(file: &gio::File) -> Option<Capacity> {
     let filesystem = file
         .query_filesystem_info_future(CAPACITY_ATTRIBUTES, glib::Priority::LOW)
         .await

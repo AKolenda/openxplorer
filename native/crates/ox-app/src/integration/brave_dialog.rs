@@ -167,6 +167,7 @@ impl BraveDialog {
         report: impl Fn(&str) + 'static,
     ) -> Self {
         let dialog: Self = glib::Object::builder().property("transient-for", parent).build();
+        crate::window::follow_text_size_keys(&dialog);
         let imp = dialog.imp();
         imp.destination_label.set_text(destination);
         imp.brave

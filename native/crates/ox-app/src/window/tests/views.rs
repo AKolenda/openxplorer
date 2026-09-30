@@ -17,7 +17,9 @@ use crate::text_size::Step;
 use crate::theme::Skin;
 use crate::window::folder_pane::FolderView;
 use crate::window::widget_tree::children;
+use crate::window::WindowAction;
 
+use super::file_ops_support::press_shortcut_where_focused;
 use super::geometry::{pixels, Bounds};
 
 /// The sort direction each shown details header shows: `ascending`,
@@ -122,6 +124,10 @@ fn switching_views_keeps_the_selection_and_shows_the_active_view() {
     assert_eq!(status_bar.active_view_buttons(), ["Details view"]);
 }
 
+/// The command-bar toggle, View › Details pane and the pane's own close
+/// button all run `win.details-pane`, which is saved.
+///
+/// parity: VIEW-027
 #[gtk::test]
 fn the_details_button_shows_whether_the_pane_is_open() {
     let fixture = Fixture::standard();
@@ -134,8 +140,16 @@ fn the_details_button_shows_whether_the_pane_is_open() {
     assert_eq!(toggle.is_active(), pane.is_visible());
     test.activate("details-pane", None);
     assert_eq!(toggle.is_active(), pane.is_visible());
+    let shown = pane.is_visible();
+    wait_until("the pane choice to be saved", || {
+        test.context.settings_data().preferences.show_details_pane == shown
+    });
     test.activate("details-pane", None);
     assert_eq!(toggle.is_active(), pane.is_visible());
+    let runs_the_toggle = descendants::<gtk::Button>(pane)
+        .into_iter()
+        .any(|button| button.action_name().as_deref() == Some("win.details-pane"));
+    assert!(runs_the_toggle, "the pane's close button runs the same toggle");
 }
 
 #[gtk::test]
@@ -413,4 +427,154 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
         .expect("a name");
     let name_top = name.compute_bounds(&first_cell).map(|rect| pixels(rect.y()));
     assert_eq!(name_top, Some(56 + 8), "the name starts 8 pixels under the icon");
+}
+
+/// Choosing a view starts it from the top and saves it; Explorer's keys
+/// choose Details (Ctrl+Shift+6) and the icon sizes (Ctrl+Shift+1 to 4),
+/// and Alt+Shift+P opens the details pane.
+///
+/// parity: VIEW-006, VIEW-007, VIEW-009, VIEW-063
+#[gtk::test]
+fn a_chosen_view_starts_at_the_top_and_has_explorers_keys() {
+    let fixture = Fixture::with_files(300);
+    let test = TestWindow::open(&fixture.uri());
+    let pane = test.window.folder_pane();
+    let last = pane.model().n_items() - 1;
+    pane.reveal(last);
+    wait_until("the list to scroll", || pane.scroll_position() > 0.0);
+    test.activate("view", Some("small"));
+    wait_until("the icons to start at the top", || pane.scroll_position() == 0.0);
+    wait_until("the view to be saved", || {
+        test.context.settings_data().preferences.view == View::Grid
+    });
+    let view = WindowAction::View.detailed_name();
+    let keys = |target: &str| application().accels_for_action(&format!("{view}::{target}"));
+    assert_eq!(keys("details"), ["<Shift><Control>6"]);
+    assert_eq!(keys("extra-large"), ["<Shift><Control>1"]);
+    let pane_keys = application().accels_for_action(&WindowAction::DetailsPane.detailed_name());
+    assert_eq!(pane_keys, ["<Shift><Alt>p"]);
+}
+
+/// Ctrl+H shows hidden files wherever focus is, except in a text field,
+/// where it is the field's own key: also on a focused breadcrumb and on
+/// the Settings page, as `onKey` handles it before its early return.
+///
+/// parity: VIEW-023, VIEW-026
+#[gtk::test]
+fn ctrl_h_shows_hidden_files_outside_text_fields() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    assert!(
+        application().accels_for_action("win.hidden").is_empty(),
+        "Ctrl+H is no accelerator, which would run inside text fields too"
+    );
+    let ctrl_h = || press_shortcut_where_focused(&test, gtk::gdk::Key::h, gtk::gdk::ModifierType::CONTROL_MASK);
+    let shows_hidden = || test.context.settings_data().preferences.show_hidden;
+    test.window.folder_pane().focus_view();
+    assert!(ctrl_h());
+    test.wait_for_listing("the listing with hidden files");
+    assert!(test.names().contains(&".private".to_owned()));
+    wait_for_frames(&test.window, 2);
+    let owners = test.window.folder_pane().owners();
+    assert_eq!(
+        owners.is_shown_hidden(test.position_of(".private")),
+        Some(true),
+        "hidden items fade"
+    );
+    assert_eq!(
+        owners.is_shown_hidden(test.position_of("Notes 2.txt")),
+        Some(false)
+    );
+    // A cut hidden item carries both classes; the stylesheet fades it
+    // further (`.hidden-item.cut`), so the cut still shows.
+    let private = test.position_of(".private");
+    test.window.folder_pane().model().select_only(private);
+    test.activate("cut", None);
+    wait_until("the cut hidden item to dim", || {
+        owners.is_shown_cut(private) == Some(true)
+    });
+    assert_eq!(owners.is_shown_hidden(private), Some(true));
+    wait_until("the choice to be saved", shows_hidden);
+
+    test.window.search_box().entry().grab_focus();
+    wait_until("the search box to take focus", || {
+        test.window.focus_is_in_text_field()
+    });
+    assert!(!ctrl_h(), "Ctrl+H is the text field's own key");
+    assert!(shows_hidden(), "hidden files stay shown");
+
+    let crumbs = test.window.address_bar().crumb_buttons();
+    let crumb = crumbs.last().expect("the folder has breadcrumbs");
+    crumb.grab_focus();
+    wait_until("a breadcrumb to take focus", || crumb.has_focus());
+    assert!(ctrl_h(), "Ctrl+H works on a breadcrumb");
+    wait_until("hidden files to be hidden again", || !shows_hidden());
+
+    test.window.open_settings(None);
+    wait_until("the Settings page", || test.window.shows_settings());
+    assert!(ctrl_h(), "Ctrl+H works on the Settings page");
+    wait_until("hidden files to be shown again", shows_hidden);
+}
+
+/// The text-size keys work inside modal dialogs too, which the
+/// application's accelerators do not reach: they change the size of the
+/// window the dialog belongs to. The window's own dialogs and the network
+/// form (Map network location, Sign out) are checked; Open with, the
+/// update and the Brave dialogs install the same keys.
+///
+/// parity: VIEW-043
+#[gtk::test]
+fn text_size_keys_work_inside_dialogs() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let _theme = ThemeGuard::keep();
+    let before = test.window.skin().text_size();
+    let rename = crate::window::dialog::Dialog::new(&test.window, "Rename", "");
+    let map = crate::dialogs::NetworkFormDialog::new(&test.window, "Map network location", "", "Connect");
+    let dialogs: [&gtk::Window; 2] = [rename.upcast_ref(), map.upcast_ref()];
+    let plus = gtk::ShortcutTrigger::parse_string("<Control>plus").expect("a trigger");
+    let mut expected = before;
+    for dialog in dialogs {
+        let shortcut = dialog
+            .observe_controllers()
+            .iter::<gtk::glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+            .flat_map(|controller| {
+                let shortcuts = controller.iter::<gtk::glib::Object>().filter_map(Result::ok);
+                shortcuts
+                    .filter_map(|shortcut| shortcut.downcast::<gtk::Shortcut>().ok())
+                    .collect::<Vec<_>>()
+            })
+            .find(|shortcut| shortcut.trigger().is_some_and(|trigger| trigger.equal(&plus)))
+            .expect("the dialog has Ctrl+plus");
+        let action = shortcut.action().expect("the shortcut runs something");
+        assert!(action.activate(gtk::ShortcutActionFlags::empty(), dialog, None));
+        expected = Step::Increase.apply(expected);
+        assert_eq!(test.window.skin().text_size(), expected);
+    }
+    rename.destroy();
+    map.destroy();
+    test.window.change_text_size(before);
+}
+
+/// Ctrl+wheel zooming changes the view, its menu state and the saved
+/// preference, as choosing the view does.
+///
+/// parity: VIEW-011
+#[gtk::test]
+fn zooming_changes_and_saves_the_view() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_pane().model().select_only(3);
+    test.window.zoom_view(2);
+    assert_eq!(
+        test.window.folder_pane().view(),
+        FolderView::Icons(IconSize::Medium)
+    );
+    assert_eq!(test.action_state("view").as_deref(), Some("medium"));
+    wait_until("the icon view to be saved", || {
+        test.context.settings_data().preferences.view == View::Grid
+    });
+    assert_eq!(test.selected_names().len(), 1, "zooming keeps the selection");
 }

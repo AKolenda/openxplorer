@@ -88,7 +88,7 @@ impl BrowserWindow {
         } else {
             StatusSubject::Folder {
                 shown,
-                loading: self.is_loading(),
+                loading: self.is_loading() && self.folder_pane().shows_loading_line(),
             }
         };
         let selected = self.folder_pane().model().summary();

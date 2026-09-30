@@ -3,7 +3,7 @@
 //!
 //! Both views show an item as its icon art beside or above its name
 //! ([`FileCell`]), as the name cell of `renderRows` in `desktop/ui/app.js`
-//! does. Names that are cut off show the full name in a tooltip, as
+//! does. Every cell shows its row's tooltip ([`row_tooltip`]), as
 //! `row.title` does. While the item is renamed in place, a text field
 //! takes the name's place. [`CellOwners`] follows the cells the views
 //! bind and turns a click position back into a row. The art is an [`ArtImage`] of
@@ -11,6 +11,7 @@
 //! screen scale changes.
 
 mod cell_owners;
+mod row_tooltip;
 
 use std::rc::Rc;
 
@@ -19,6 +20,7 @@ use gtk::subclass::prelude::*;
 use gtk::{glib, pango};
 
 pub(crate) use cell_owners::CellOwners;
+pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip};
 
 use crate::folder_view::item::FileItem;
 use crate::icons::Art;
@@ -50,18 +52,6 @@ pub(crate) fn bound_item(list_item: &gtk::ListItem) -> Option<FileItem> {
     list_item.item().and_downcast::<FileItem>()
 }
 
-/// Shows the full label text in a tooltip only while it is ellipsized.
-fn show_tooltip_when_ellipsized(label: &gtk::Label) {
-    label.set_has_tooltip(true);
-    label.connect_query_tooltip(|label, _, _, _, tooltip| {
-        if !label.layout().is_ellipsized() {
-            return false;
-        }
-        tooltip.set_text(Some(&label.text()));
-        true
-    });
-}
-
 /// An ellipsized, left-aligned label in the muted colour of the date,
 /// type and size columns.
 pub(crate) fn dim_cell_label() -> gtk::Label {
@@ -89,7 +79,6 @@ mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
-    use super::show_tooltip_when_ellipsized;
     use crate::icons::ArtImage;
 
     /// Private state of [`super::FileCell`].
@@ -118,7 +107,6 @@ mod imp {
             let cell = self.obj();
             cell.append(&self.image);
             cell.append(&self.label);
-            show_tooltip_when_ellipsized(&self.label);
         }
     }
 
@@ -217,8 +205,9 @@ impl FileCell {
 }
 
 /// Connects `factory` so every list item shows a [`FileCell`] in
-/// `layout`, with icons of `icon_size` logical pixels and each cell
-/// registered in `owners`, which dims the cells of cut items.
+/// `layout`, with icons of `icon_size` logical pixels, its row's tooltip,
+/// and each cell registered in `owners`, which dims the cells of cut
+/// items.
 pub(crate) fn connect_file_cells(
     factory: &gtk::SignalListItemFactory,
     layout: CellLayout,
@@ -231,6 +220,7 @@ pub(crate) fn connect_file_cells(
         let list_item = as_list_item(object);
         list_item.set_child(Some(&cell));
         setup_owners.register(&cell, list_item);
+        show_row_tooltip(&cell, &setup_owners, |_| None);
     });
     let bind_owners = Rc::clone(owners);
     factory.connect_bind(move |_, object| {

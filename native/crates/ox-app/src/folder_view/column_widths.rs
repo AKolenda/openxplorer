@@ -4,9 +4,8 @@
 //!
 //! Ports `columnDefaults` and `applyColumnLayout` in `desktop/ui/app.js`:
 //! Name takes the remaining width until the user resizes it, the other
-//! columns default to 152, 330 (Folder path), 135 and 90 pixels, and
-//! saved widths are clamped
-//! to the limits the Python app uses (ox-core's [`Column::width_range`]).
+//! columns default to 176 (Date modified), 330 (Folder path), 135 and 90
+//! pixels, and saved widths are clamped to the limits the Python app uses (ox-core's [`Column::width_range`]).
 //! The details view applies these widths and saves them after a resize.
 
 use ox_core::settings::{Column, ColumnWidths};
@@ -44,11 +43,13 @@ const fn edge_gutter(column: SortColumn) -> u32 {
 }
 
 /// Width of a column nobody resized (`columnDefaults` in app.js). Name has
-/// none: it takes the remaining space.
+/// none: it takes the remaining space. Date modified shows the time too,
+/// so it starts wider than the web app's 152 pixels, enough for
+/// `12/31/2026 11:59 PM` at 125% text size.
 const fn default_width(column: SortColumn) -> Option<u32> {
     match column {
         SortColumn::Name => None,
-        SortColumn::Modified => Some(152),
+        SortColumn::Modified => Some(176),
         SortColumn::FolderPath => Some(330),
         SortColumn::Type => Some(135),
         SortColumn::Size => Some(90),
@@ -82,6 +83,52 @@ pub(crate) fn saved_width(column: SortColumn, fixed_width: i32) -> Option<f64> {
     Some(f64::from(without_gutter))
 }
 
+/// Room a fitted column keeps beside its widest text (`fitColumn` in
+/// app.js): the icon, its gap and the padding in Name, the padding
+/// elsewhere.
+const fn fit_padding(column: SortColumn) -> f64 {
+    match column {
+        SortColumn::Name => 64.0,
+        SortColumn::Modified | SortColumn::FolderPath | SortColumn::Type | SortColumn::Size => 30.0,
+    }
+}
+
+/// The width `column` may have, without its end gutter.
+pub(crate) fn width_limits(column: SortColumn) -> std::ops::RangeInclusive<u32> {
+    settings_column(column).width_range()
+}
+
+/// `fixed_width`, a GTK fixed width the user dragged `column` to, kept
+/// within the column's limits (`setColumnWidth` in app.js).
+pub(crate) fn clamped_fixed_width(column: SortColumn, fixed_width: i32) -> i32 {
+    let limits = width_limits(column);
+    let gutter = i32::try_from(edge_gutter(column)).unwrap_or_default();
+    let low = i32::try_from(*limits.start()).unwrap_or(i32::MAX);
+    let high = i32::try_from(*limits.end()).unwrap_or(i32::MAX);
+    (fixed_width - gutter).clamp(low, high) + gutter
+}
+
+/// The width that fits `column` to its widest text, `widest_text` pixels,
+/// within the column's limits (`fitColumn`).
+pub(crate) fn fitted_width(column: SortColumn, widest_text: f64) -> u32 {
+    let limits = width_limits(column);
+    let wanted = (widest_text + fit_padding(column)).ceil();
+    let low = f64::from(*limits.start());
+    let high = f64::from(*limits.end());
+    // Clamped to the limits, so the value fits a `u32`.
+    let fitted = wanted.clamp(low, high);
+    fitted_pixels(fitted)
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the width is clamped to the column limits first"
+)]
+fn fitted_pixels(width: f64) -> u32 {
+    width as u32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,7 +137,7 @@ mod tests {
     #[test]
     fn unsaved_columns_start_at_the_python_defaults() {
         assert_eq!(start_width(SortColumn::Name, None), None);
-        assert_eq!(start_width(SortColumn::Modified, None), Some(152));
+        assert_eq!(start_width(SortColumn::Modified, None), Some(176));
         assert_eq!(start_width(SortColumn::FolderPath, None), Some(330));
         assert_eq!(start_width(SortColumn::Type, None), Some(135));
         assert_eq!(start_width(SortColumn::Size, None), Some(90));
@@ -109,6 +156,36 @@ mod tests {
         assert_eq!(start_width(SortColumn::Modified, Some(&saved)), Some(100));
         assert_eq!(start_width(SortColumn::Size, Some(&saved)), Some(600));
         assert_eq!(start_width(SortColumn::Type, Some(&saved)), Some(135));
+    }
+
+    /// parity: VIEW-028
+    #[test]
+    fn a_dragged_column_stops_at_its_limits() {
+        assert_eq!(clamped_fixed_width(SortColumn::Name, 40), 140 + 14);
+        assert_eq!(clamped_fixed_width(SortColumn::Name, 400), 400);
+        assert_eq!(clamped_fixed_width(SortColumn::Modified, 2000), 1000);
+        assert_eq!(clamped_fixed_width(SortColumn::Type, 10), 80);
+        assert_eq!(clamped_fixed_width(SortColumn::Size, 900), 600 + 14);
+    }
+
+    /// Ported from `fitColumn` in `desktop/ui/app.js`: the widest text and
+    /// its padding, never below or above the column's limits.
+    ///
+    /// parity: VIEW-029
+    #[test]
+    fn a_fitted_column_holds_its_widest_text_within_its_limits() {
+        assert_eq!(fitted_width(SortColumn::Name, 200.4), 265);
+        assert_eq!(fitted_width(SortColumn::Type, 90.0), 120);
+        assert_eq!(
+            fitted_width(SortColumn::Size, 10.0),
+            70,
+            "never below the minimum"
+        );
+        assert_eq!(
+            fitted_width(SortColumn::Modified, 5000.0),
+            1000,
+            "never above the maximum"
+        );
     }
 
     #[test]

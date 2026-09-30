@@ -13,7 +13,6 @@ use gtk::{gio, glib};
 use ox_core::settings::Theme;
 
 use crate::application::AppAction;
-use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::text_size::Step;
 
@@ -255,8 +254,7 @@ impl BrowserWindow {
                 let Some(view) = FolderView::from_key(key) else {
                     return false;
                 };
-                window.show_view(view);
-                window.save_preference(Preference::View(view));
+                window.change_view(view);
                 true
             }),
             toggle_action(
@@ -357,8 +355,7 @@ impl BrowserWindow {
         let steps = Step::ALL.map(|step| {
             plain_action(WindowAction::TextSize(step), move |window| {
                 let size = step.apply(window.skin().text_size());
-                window.skin().set_text_size(size);
-                window.save_preference(Preference::TextSize(size));
+                window.change_text_size(size);
             })
         });
         self.add_action_entries(steps);
@@ -382,6 +379,14 @@ impl BrowserWindow {
         }
     }
 
+    /// The user chose `view`: shows it from the top and saves it as the
+    /// view of every tab and new window (`changeView` in app.js).
+    fn change_view(&self, view: FolderView) {
+        self.show_view(view);
+        self.folder_pane().restore_scroll_position(0.0);
+        self.save_preference(Preference::View(view));
+    }
+
     /// Shows `view` in the folder pane and the status bar, without saving
     /// it as the preferred view.
     pub(crate) fn show_view(&self, view: FolderView) {
@@ -395,11 +400,12 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 5] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 6] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
     (WindowAction::Search, &["<Primary>f"]),
+    (WindowAction::DetailsPane, &["<Alt><Shift>p"]),
     (WindowAction::Settings, &["<Primary>comma"]),
 ];
 
@@ -408,6 +414,31 @@ const QUIT_ACCELERATORS: &[&str] = &["<Primary>q"];
 
 /// Alt+Enter: Properties of the selection or the folder (`onKey`).
 const PROPERTIES_ACCELERATORS: &[&str] = &["<Alt>Return", "<Alt>KP_Enter"];
+
+/// Lets the text-size keys work inside `dialog`, a modal window of its
+/// own that the application's accelerators do not reach: they run the
+/// text-size actions of the browser window it belongs to, as the web
+/// app's key handler did in its sign-in and other dialogs (VIEW-043).
+pub(crate) fn follow_text_size_keys(dialog: &impl IsA<gtk::Window>) {
+    let shortcuts = gtk::ShortcutController::new();
+    shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+    for step in Step::ALL {
+        for accelerator in step.accelerators() {
+            let trigger = gtk::ShortcutTrigger::parse_string(&accelerator);
+            let run = gtk::CallbackAction::new(move |dialog, _| {
+                let owner = dialog
+                    .downcast_ref::<gtk::Window>()
+                    .and_then(GtkWindowExt::transient_for);
+                if let Some(owner) = owner {
+                    WindowAction::TextSize(step).activate_from(&owner, None);
+                }
+                glib::Propagation::Stop
+            });
+            shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(run)));
+        }
+    }
+    dialog.as_ref().add_controller(shortcuts);
+}
 
 /// Installs the keyboard shortcuts of the window actions that work from
 /// any focus.
@@ -422,9 +453,9 @@ pub(crate) fn install_accelerators(app: &gtk::Application) {
         let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
         app.set_accels_for_action(&WindowAction::TextSize(step).detailed_name(), &keys);
     }
-    for size in IconSize::ALL {
-        let view = WindowAction::View.detailed_name();
-        let detailed = format!("{view}::{}", size.as_str());
-        app.set_accels_for_action(&detailed, &[size.accelerator()]);
+    let action = WindowAction::View.detailed_name();
+    for view in FolderView::ZOOM_ORDER {
+        let (accelerator, _) = view.shortcut();
+        app.set_accels_for_action(&format!("{action}::{}", view.as_str()), &[accelerator]);
     }
 }

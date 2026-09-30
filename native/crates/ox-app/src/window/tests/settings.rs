@@ -10,6 +10,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::settings::{Column, ColumnWidth, PreferencesUpdate, Settings};
 
+use crate::folder_view::sorting::SortColumn;
 use crate::locations::Page;
 use crate::settings_page::{Category, SettingsView};
 use crate::test_support::harness::{application, wait_for, wait_until, Fixture, TestWindow};
@@ -213,7 +214,7 @@ fn settings_typed_in_the_address_bar_opens_a_folder_called_settings() {
 /// columns to their default widths, and saves the Python app's layout
 /// (`resetLayout`: a 210 px sidebar and no column widths).
 ///
-/// parity: SET-015
+/// parity: SET-015, VIEW-046
 #[gtk::test]
 fn reset_returns_every_windows_sidebar_to_its_default_width() {
     let fixture = Fixture::standard();
@@ -238,6 +239,9 @@ fn reset_returns_every_windows_sidebar_to_its_default_width() {
 
     for window in [&test.window, &beside.window] {
         assert_eq!(window.imp().workspace.position(), 210);
+        let details = window.folder_pane().details();
+        let name = details.column(SortColumn::Name).expect("a Name column");
+        assert!(name.expands(), "Name fills the space again");
     }
     let directory = test.settings_directory();
     wait_until("the default layout to be saved", || {

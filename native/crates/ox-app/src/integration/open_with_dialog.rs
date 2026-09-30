@@ -143,6 +143,7 @@ impl OpenWithDialog {
         report: impl Fn(&str) + 'static,
     ) -> Self {
         let dialog: Self = glib::Object::builder().property("transient-for", parent).build();
+        crate::window::follow_text_size_keys(&dialog);
         let imp = dialog.imp();
         imp.item_label.set_text(&subject.name);
         imp.make_default_check.set_visible(!subject.is_folder);

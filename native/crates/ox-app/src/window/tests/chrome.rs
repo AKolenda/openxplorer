@@ -231,8 +231,7 @@ fn every_control_of_the_frame_runs_an_action_the_window_has() {
 
 /// Every image the frame can show is a bundled icon, GTK's own included:
 /// the search box's clear button shows the bundled close glyph, not the
-/// desktop theme's. Only the loading spinner, which is not an image, comes
-/// from the theme (see `empty_page.rs`).
+/// desktop theme's. The frame shows no theme images at all.
 ///
 /// parity: LOOK-015
 #[gtk::test]

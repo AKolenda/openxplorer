@@ -53,6 +53,12 @@ impl BrowserWindow {
         self.connect_drag_and_drop();
         self.connect_tab_drag_and_drop();
         self.follow_skin();
+        self.install_view_zoom();
+        self.folder_pane().connect_loading_line_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.update_status()
+        ));
         gestures::connect_history_buttons(
             self,
             glib::clone!(

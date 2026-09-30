@@ -166,6 +166,7 @@ impl Dialog {
             .property("transient-for", parent)
             .property("title", title)
             .build();
+        super::actions::follow_text_size_keys(&dialog);
         let imp = dialog.imp();
         imp.title_label.set_text(title);
         imp.message_label.set_text(message);

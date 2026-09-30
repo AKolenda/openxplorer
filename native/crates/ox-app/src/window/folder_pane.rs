@@ -179,6 +179,19 @@ impl FolderPane {
         self.parts().loading_line.set_loading(loading);
     }
 
+    /// Whether the loading line shows now, which a listing does only once
+    /// it has run for a moment.
+    pub(super) fn shows_loading_line(&self) -> bool {
+        self.parts().loading_line.is_shown()
+    }
+
+    /// Calls `changed` whenever the loading line shows or hides.
+    pub(super) fn connect_loading_line_changed(&self, changed: impl Fn() + 'static) {
+        self.parts()
+            .loading_line
+            .connect_visible_notify(move |_| changed());
+    }
+
     /// Shows `hint` over the pane, saying what a drag would do there, or
     /// hides the note.
     pub(super) fn show_drag_hint(&self, hint: Option<&str>) {

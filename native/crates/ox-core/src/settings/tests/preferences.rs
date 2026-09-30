@@ -26,6 +26,21 @@ fn a_network_interval_outside_the_whitelist_is_not_saved() {
     assert_eq!(store.snapshot().preferences.network_interval, 30);
 }
 
+/// The view starts as details, is saved, and ignores unknown values.
+///
+/// parity: VIEW-007
+#[test]
+fn the_view_is_details_grid_or_left_as_it_was() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    assert_eq!(store.snapshot().preferences.view, View::Details);
+    save_preferences(&mut store, &json!({"view": "grid"}));
+    save_preferences(&mut store, &json!({"view": "tiles"}));
+    assert_eq!(store.snapshot().preferences.view, View::Grid);
+    let reopened = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(reopened.view, View::Grid);
+}
+
 /// Ported from `desktop/tests/test_v06.py::PrefTests::test_layout_persists`
 /// parity: SIDE-023, VIEW-028
 #[test]

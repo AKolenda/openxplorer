@@ -4,7 +4,10 @@
 //! Ports `load` and the directory-monitor refresh in `desktop/ui/app.js`
 //! and `desktop/winspace.py`:
 //!
-//! - Moving to a folder clears the rows and fills them batch by batch.
+//! - Moving to a folder clears the rows and fills them batch by batch. The
+//!   blank list shows at once, with no "Loading" text; only a listing that
+//!   takes longer than a moment shows the thin loading line, as Windows
+//!   Explorer and Dolphin do. Landing pages never show it.
 //! - Listing the same folder again (F5, or a change the monitor saw) keeps
 //!   the rows on screen and merges the new listing in when it is complete,
 //!   so scroll position, keyboard focus and selection survive.
@@ -30,7 +33,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::{Entry, EntryError};
-use ox_core::location::{is_smb_location, parent_location, same_location, TRASH_URI};
+use ox_core::location::{is_smb_location, parent_location};
 
 use crate::folder_view::item::FileItem;
 use crate::folder_view::{loader, reconcile, watch};
@@ -96,7 +99,7 @@ impl BrowserWindow {
             self.reset_typeahead();
             self.hide_message();
         }
-        let Some(start) = self.begin_load(id) else {
+        let Some(start) = self.begin_load(id, mode) else {
             return;
         };
         if let Some(page) = Page::from_uri(&start.uri) {
@@ -113,6 +116,11 @@ impl BrowserWindow {
         }
         self.keep_watching(id, &start.uri);
         if is_active {
+            if mode == LoadMode::Navigate {
+                // The previous folder's free space is wrong here while a
+                // slow folder lists; the end of the listing reads it again.
+                self.refresh_free_space();
+            }
             self.update_content();
         }
         let listing = self.start_listing(id, &start, mode, MountRetry::Allowed);
@@ -134,11 +142,12 @@ impl BrowserWindow {
     }
 
     /// Starts a load of tab `id`, or `None` once the tab has closed.
-    fn begin_load(&self, id: TabId) -> Option<LoadStart> {
+    fn begin_load(&self, id: TabId, mode: LoadMode) -> Option<LoadStart> {
         let mut session = self.imp().session.borrow_mut();
         let tab = session.tab_mut(id)?;
         let was_shown = tab.error.is_none();
         let generation = tab.begin_load();
+        tab.reloading = mode == LoadMode::Reload;
         let uri = tab.uri().to_owned();
         Some(LoadStart {
             uri,
@@ -160,6 +169,7 @@ impl BrowserWindow {
         if page == Page::Network {
             self.discover_servers_once();
         }
+        self.refresh_free_space();
         self.render_landing();
         self.update_content();
     }
@@ -305,6 +315,7 @@ impl BrowserWindow {
         self.apply_measured_folder_sizes(id);
         if self.imp().session.borrow().is_active(id) {
             self.restore_selection(id);
+            self.refresh_free_space();
             self.update_content();
             self.update_details_pane();
             self.focus_new_file_list();
@@ -332,19 +343,6 @@ impl BrowserWindow {
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.error = Some(error);
             tab.watch = None;
-        }
-    }
-
-    /// What an empty folder says: "Recycle Bin is empty" there, as
-    /// Dolphin's "Trash is empty" (OPS-040), else "This folder is empty".
-    fn empty_folder_state(&self) -> EmptyState {
-        let shows_recycle_bin = self
-            .current_uri()
-            .is_some_and(|uri| same_location(&uri, TRASH_URI));
-        if shows_recycle_bin {
-            EmptyState::EmptyRecycleBin
-        } else {
-            EmptyState::EmptyFolder
         }
     }
 
@@ -417,18 +415,24 @@ impl BrowserWindow {
 
     /// Shows the folder pane state that fits the active tab.
     pub(super) fn update_content(&self) {
-        let (page, loading, error) = {
+        let (uri, page, loading, reloading, error) = {
             let session = self.imp().session.borrow();
             let Some(tab) = session.active() else { return };
             let page = Page::from_uri(tab.uri());
             let loading = tab.listing_state.is_listing();
-            (page, loading, tab.error.as_ref().map(ToString::to_string))
+            let error = tab.error.as_ref().map(ToString::to_string);
+            (tab.uri().to_owned(), page, loading, tab.reloading, error)
         };
         let pane = self.folder_pane();
         pane.set_loading(loading && page.is_none());
         if page.is_some() {
             pane.show_page(PanePage::Landing);
-        } else if pane.model().n_items() > 0 {
+        } else if loading && reloading && pane.page() == Some(PanePage::Empty) {
+            // Listing an empty or unavailable location again keeps its
+            // page until the listing ends, as a reload keeps its rows.
+        } else if pane.model().n_items() > 0 || (loading && error.is_none()) {
+            // A folder being listed keeps the blank list, with its column
+            // titles, until items come: no "Loading" text, no page swap.
             pane.show_page(PanePage::Listing);
             if let Some(error) = error {
                 self.show_message(&error);
@@ -436,10 +440,9 @@ impl BrowserWindow {
         } else {
             let state = match error {
                 Some(error) => EmptyState::Unavailable(error),
-                None if loading => EmptyState::Loading,
                 None => self
                     .search_empty_state()
-                    .unwrap_or_else(|| self.empty_folder_state()),
+                    .unwrap_or_else(|| EmptyState::empty_listing(&uri)),
             };
             pane.show_empty(&state);
         }

@@ -95,6 +95,11 @@ columnview.files .row-icon { margin-top: 1px; }
    tiles, so their contents fade and the selection behind them stays
    clear. */
 .files .cut { opacity: 0.5; }
+/* Hidden items, while "Show hidden files" shows them: faded, as Windows
+   Explorer and Dolphin draw them (VIEW-026). */
+.files .hidden-item { opacity: 0.6; }
+/* A cut hidden item fades further, so the cut still shows (0.6 x 0.5). */
+.files .hidden-item.cut { opacity: 0.3; }
 
 columnview.files rubberband, gridview.files rubberband {
   border: 1px solid @ox_accent;

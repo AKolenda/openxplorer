@@ -384,6 +384,25 @@ mod tests {
         assert_eq!(model.n_items(), 1);
     }
 
+    /// Sizes sort by value; folders never measured and files of unknown
+    /// size count as 0.
+    ///
+    /// parity: VIEW-015
+    #[gtk::test]
+    fn unmeasured_folders_and_unknown_sizes_sort_as_nothing() {
+        let mut big = file_entry("big.bin");
+        big.size = Some(10);
+        let big = FileItem::new(big);
+        let folder = FileItem::new(crate::test_support::folder_entry("Photos"));
+        let unknown = FileItem::new(file_entry("unknown.bin"));
+        assert_eq!(compare_column(SortColumn::Size, &folder, &big), Ordering::Less);
+        assert_eq!(compare_column(SortColumn::Size, &unknown, &big), Ordering::Less);
+        assert_eq!(
+            compare_column(SortColumn::Size, &folder, &unknown),
+            Ordering::Equal
+        );
+    }
+
     #[gtk::test]
     fn a_position_past_the_end_has_no_name() {
         let (model, _store) = model_with(&["a.txt", "b.txt"]);

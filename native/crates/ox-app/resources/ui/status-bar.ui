@@ -39,6 +39,12 @@
       </object>
     </child>
     <child>
+      <!-- The current volume's free space (Dolphin's space info). -->
+      <object class="GtkLabel" id="free_space">
+        <property name="visible">false</property>
+      </object>
+    </child>
+    <child>
       <!-- #status-mode: the build, which a compact window hides. -->
       <object class="GtkLabel" id="build">
         <property name="ellipsize">end</property>

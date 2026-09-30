@@ -262,6 +262,7 @@ impl BrowserWindow {
         self.render_navigation();
         self.update_content();
         self.update_details_pane();
+        self.refresh_free_space();
         let pane = self.folder_pane();
         pane.restore_scroll_position(view.scroll);
         if had_focus {
