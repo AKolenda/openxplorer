@@ -8,20 +8,19 @@
 //! where a drive allows them. A menu is data ([`PlaceMenu`]); its items
 //! run window actions with the place as their target, and the menu opens
 //! where the pointer is ([`popup_place_menu`]).
-//!
-//! The items other milestones bring (Open in Terminal, the search cache
-//! toggle, Properties) join these menus with them.
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::location::{is_smb_location, is_smb_server};
 use ox_core::places::{NetworkKind, NetworkLocation};
+use ox_core::search::Caching;
 
 use crate::devices::Removal;
 use crate::icons::Icon;
 use crate::volumes::{MountControls, VolumeKind};
 
-use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
+use super::cache_folder::cache_item;
+use super::menu_popover::{ItemAvailability, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 
 /// What a place's menu is for.
@@ -93,28 +92,47 @@ fn removal_items(uri: &str, kind: VolumeKind, controls: MountControls) -> Vec<Me
     items.collect()
 }
 
-/// `driveMenu`: Open and Open in new window, then what the drive allows.
-fn drive_entries(uri: &str, kind: VolumeKind, controls: MountControls) -> Vec<MenuEntry> {
+/// `driveMenu`: Open, Open in new window and the cache entry, then what
+/// the drive allows and Properties.
+fn drive_entries(uri: &str, kind: VolumeKind, controls: MountControls, caching: Option<Caching>) -> Vec<MenuEntry> {
     let mut entries = vec![
         item("Open", Icon::HardDrive, WindowAction::GoTo, uri),
         item("Open in new window", Icon::Add, WindowAction::OpenWindow, uri),
     ];
+    if let Some(caching) = caching {
+        entries.push(cache_item(uri, caching).into());
+    }
     let removals = removal_items(uri, kind, controls);
     if !removals.is_empty() {
         entries.push(MenuEntry::Divider);
         entries.extend(removals);
     }
+    entries.push(MenuEntry::Divider);
+    entries.push(item("Properties", Icon::Info, WindowAction::PropertiesOf, uri));
     entries
 }
 
-/// `networkLocationMenu`: opening, keeping or removing a share, and Sign
-/// out for SMB.
+/// `terminalMenuItem`: Open in Terminal, disabled on a server's share list,
+/// which has no folder to open a terminal in.
+fn terminal_item(uri: &str) -> MenuEntry {
+    let item = MenuItem::with_text_target("Open in Terminal", Icon::WindowConsole, WindowAction::OpenInTerminalOf, uri);
+    let availability = if is_smb_server(uri) {
+        ItemAvailability::Disabled
+    } else {
+        ItemAvailability::FollowsAction
+    };
+    MenuItem { availability, ..item }.into()
+}
+
+/// `networkLocationMenu`: opening, keeping or removing a share, Sign out
+/// for SMB and Properties for a mount.
 fn network_entries(location: &NetworkLocation) -> Vec<MenuEntry> {
     let uri = location.uri.as_str();
     let mut entries = vec![
         item("Open", Icon::Folder, WindowAction::GoTo, uri),
         item("Open in new tab", Icon::Add, WindowAction::OpenTab, uri),
         item("Open in new window", Icon::Share, WindowAction::OpenWindow, uri),
+        terminal_item(uri),
     ];
     let is_smb = is_smb_location(uri);
     let is_share = is_smb && !is_smb_server(uri) && location.kind != NetworkKind::Server;
@@ -141,14 +159,23 @@ fn network_entries(location: &NetworkLocation) -> Vec<MenuEntry> {
             uri,
         ));
     }
+    if location.kind == NetworkKind::Mount {
+        entries.push(item("Properties", Icon::Info, WindowAction::PropertiesOf, uri));
+    }
     entries
 }
 
 impl PlaceMenu {
-    /// The menu's lines.
+    /// The menu's lines, without a search cache entry.
     pub(super) fn entries(&self) -> Vec<MenuEntry> {
+        self.entries_with_caching(None)
+    }
+
+    /// The menu's lines; a drive's has the search cache entry `caching`
+    /// describes, none for `None`.
+    pub(super) fn entries_with_caching(&self, caching: Option<Caching>) -> Vec<MenuEntry> {
         match self {
-            PlaceMenu::Drive { uri, kind, controls } => drive_entries(uri, *kind, *controls),
+            PlaceMenu::Drive { uri, kind, controls } => drive_entries(uri, *kind, *controls, caching),
             PlaceMenu::Volume { id } => vec![item(
                 "Mount volume",
                 Icon::HardDrive,
@@ -241,18 +268,45 @@ mod tests {
             is_saved: false,
             ..saved.clone()
         };
-        let common = ["Open", "Open in new tab", "Open in new window"];
+        let common = ["Open", "Open in new tab", "Open in new window", "Open in Terminal"];
         let saved_menu = labels(&PlaceMenu::Network(saved));
         let browsed_menu = labels(&PlaceMenu::Network(browsed));
         let server_menu = labels(&PlaceMenu::Network(studio_nas_server()));
-        assert_eq!(saved_menu[..3], common);
-        assert_eq!(saved_menu[3..], ["Remove saved location", "Sign out of server…"]);
-        assert_eq!(browsed_menu[3..], ["Keep in Network", "Sign out of server…"]);
+        assert_eq!(saved_menu[..4], common);
+        assert_eq!(saved_menu[4..], ["Remove saved location", "Sign out of server…"]);
+        assert_eq!(browsed_menu[4..], ["Keep in Network", "Sign out of server…"]);
         assert_eq!(
-            server_menu[3..],
+            server_menu[4..],
             ["Sign out of server…"],
             "a server is never saved"
         );
+    }
+
+    /// A server has no folder to open a terminal in, and a local CIFS
+    /// mount offers Properties (`networkLocationMenu`).
+    ///
+    /// parity: SIDE-020
+    #[test]
+    fn a_server_cannot_open_a_terminal_and_a_mount_has_properties() {
+        let availability_of_terminal = |menu: &PlaceMenu| {
+            menu.entries().into_iter().find_map(|entry| match entry {
+                MenuEntry::Item(item) if item.label == "Open in Terminal" => Some(item.availability),
+                _ => None,
+            })
+        };
+        let server = PlaceMenu::Network(studio_nas_server());
+        let share = PlaceMenu::Network(studio_nas_mapped_drive());
+        let mount = PlaceMenu::Network(NetworkLocation {
+            uri: "file:///mnt/nas".into(),
+            label: "nas".into(),
+            is_saved: false,
+            is_connected: true,
+            kind: NetworkKind::Mount,
+        });
+        assert_eq!(availability_of_terminal(&server), Some(ItemAvailability::Disabled));
+        assert_eq!(availability_of_terminal(&share), Some(ItemAvailability::FollowsAction));
+        assert_eq!(labels(&mount).last().map(String::as_str), Some("Properties"));
+        assert!(!labels(&share).contains(&"Properties".to_owned()));
     }
 
     /// parity: HOME-005
@@ -301,11 +355,29 @@ mod tests {
                 "-",
                 "Disconnect mount",
                 "Eject",
-                "Safely remove"
+                "Safely remove",
+                "-",
+                "Properties"
             ]
         );
-        assert_eq!(labels(&local_disk), ["Open", "Open in new window"]);
+        assert_eq!(
+            labels(&local_disk),
+            ["Open", "Open in new window", "-", "Properties"]
+        );
         assert_eq!(labels(&volume), ["Mount volume"]);
+        let cached: Vec<String> = local_disk
+            .entries_with_caching(Some(Caching::Enabled))
+            .iter()
+            .map(|entry| match entry {
+                MenuEntry::Item(item) => item.label.clone(),
+                MenuEntry::Divider => "-".to_owned(),
+            })
+            .collect();
+        assert_eq!(
+            cached,
+            ["Open", "Open in new window", "Cache this folder for search", "-", "Properties"],
+            "the cache entry follows Open in new window"
+        );
     }
 
     /// This PC's cards offer Disconnect device or Disconnect mount, and no

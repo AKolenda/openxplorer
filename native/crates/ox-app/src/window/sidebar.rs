@@ -218,15 +218,18 @@ impl Sidebar {
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
         let entry = entries.get(index)?;
+        let window = self.root().and_downcast::<BrowserWindow>();
+        let caching = match &entry.target {
+            RowTarget::Location(uri) => window.and_then(|window| window.caching_of(uri)),
+            RowTarget::MountVolume(_) => None,
+        };
         if entry.pinned {
             let RowTarget::Location(uri) = &entry.target else {
                 return None;
             };
-            let window = self.root().and_downcast::<BrowserWindow>();
-            let caching = window.and_then(|window| window.caching_of(uri));
             return Some(menu::pin_menu(uri, caching));
         }
-        let place_menu = entry.menu.as_ref()?.entries();
+        let place_menu = entry.menu.as_ref()?.entries_with_caching(caching);
         // A drive the system keeps mounted may have nothing to offer.
         (!place_menu.is_empty()).then_some(place_menu)
     }
