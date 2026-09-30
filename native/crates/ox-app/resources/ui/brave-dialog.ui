@@ -32,93 +32,103 @@
           <object class="GtkBox">
             <property name="orientation">vertical</property>
             <child>
-              <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <style>
-                  <class name="dialog-content"/>
-                </style>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Use this Downloads folder in Brave</property>
-                    <property name="xalign">0</property>
-                    <property name="wrap">true</property>
-                    <style>
-                      <class name="dialog-title"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">One-time sync. Quit Brave before applying. Your browser’s other settings are left alone.</property>
-                    <property name="xalign">0</property>
-                    <property name="wrap">true</property>
-                    <property name="max-width-chars">60</property>
-                    <style>
-                      <class name="dialog-message"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <!-- .brave-destination -->
-                  <object class="GtkLabel" id="destination_label">
-                    <property name="xalign">0</property>
-                    <property name="ellipsize">middle</property>
-                    <property name="selectable">true</property>
-                    <property name="focusable">false</property>
-                    <style>
-                      <class name="dialog-note"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkLabel" id="status_label">
-                    <property name="label">Checking native Brave profiles…</property>
-                    <property name="xalign">0</property>
-                    <property name="wrap">true</property>
-                    <property name="max-width-chars">60</property>
-                    <property name="accessible-role">status</property>
-                    <style>
-                      <class name="dialog-hint"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <!-- .brave-profile-list -->
-                  <object class="GtkBox" id="profile_list">
+              <!-- The body scrolls when the dialog would be taller than its
+                   window (src/modal.rs); otherwise it is as tall as its content. -->
+              <object class="GtkScrolledWindow" id="scroller">
+                <property name="hscrollbar-policy">never</property>
+                <property name="propagate-natural-width">true</property>
+                <property name="propagate-natural-height">true</property>
+                <property name="vexpand">true</property>
+                <property name="child">
+                  <object class="GtkBox">
                     <property name="orientation">vertical</property>
-                    <property name="spacing">6</property>
-                    <property name="margin-top">6</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkButton" id="recheck_button">
-                    <property name="label">Recheck profiles</property>
-                    <property name="halign">start</property>
-                    <property name="margin-top">12</property>
                     <style>
-                      <class name="bordered"/>
+                      <class name="dialog-content"/>
                     </style>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Use this Downloads folder in Brave</property>
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <style>
+                          <class name="dialog-title"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">One-time sync. Quit Brave before applying. Your browser’s other settings are left alone.</property>
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="max-width-chars">60</property>
+                        <style>
+                          <class name="dialog-message"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- .brave-destination -->
+                      <object class="GtkLabel" id="destination_label">
+                        <property name="xalign">0</property>
+                        <property name="ellipsize">middle</property>
+                        <property name="selectable">true</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="dialog-note"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="status_label">
+                        <property name="label">Checking native Brave profiles…</property>
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="max-width-chars">60</property>
+                        <property name="accessible-role">status</property>
+                        <style>
+                          <class name="dialog-hint"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- .brave-profile-list -->
+                      <object class="GtkBox" id="profile_list">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">6</property>
+                        <property name="margin-top">6</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="recheck_button">
+                        <property name="label">Recheck profiles</property>
+                        <property name="halign">start</property>
+                        <property name="margin-top">12</property>
+                        <style>
+                          <class name="bordered"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="consent_check">
+                        <property name="label">Back up and update the selected Brave profiles.</property>
+                        <style>
+                          <class name="dialog-check"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Only detected native profiles are changed. Passwords and account data are not shown here. Backups remain private in your OpenXplorer configuration directory.</property>
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="max-width-chars">60</property>
+                        <style>
+                          <class name="dialog-hint"/>
+                        </style>
+                      </object>
+                    </child>
                   </object>
-                </child>
-                <child>
-                  <object class="GtkCheckButton" id="consent_check">
-                    <property name="label">Back up and update the selected Brave profiles.</property>
-                    <style>
-                      <class name="dialog-check"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Only detected native profiles are changed. Passwords and account data are not shown here. Backups remain private in your OpenXplorer configuration directory.</property>
-                    <property name="xalign">0</property>
-                    <property name="wrap">true</property>
-                    <property name="max-width-chars">60</property>
-                    <style>
-                      <class name="dialog-hint"/>
-                    </style>
-                  </object>
-                </child>
+                </property>
               </object>
             </child>
             <child>

@@ -27,6 +27,10 @@ const PROFILE_NEEDED: &str = "Select at least one profile.";
 /// Why Restore previous did nothing.
 const ONE_PROFILE_NEEDED: &str = "Select one profile and confirm to restore its previous download setting.";
 
+/// How long the dialog waits for the profiles before it shows without
+/// them.
+const SHOW_PATIENCE: std::time::Duration = std::time::Duration::from_secs(1);
+
 /// Shows a message in the window that opened the dialog.
 type Report = Box<dyn Fn(&str)>;
 
@@ -76,7 +80,7 @@ pub(crate) fn sync_report(outcome: &SyncOutcome) -> Result<String, String> {
 }
 
 mod imp {
-    use std::cell::{OnceCell, RefCell};
+    use std::cell::{Cell, OnceCell, RefCell};
 
     use gtk::glib;
     use gtk::subclass::prelude::*;
@@ -88,6 +92,9 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/brave-dialog.ui")]
     pub(crate) struct BraveDialog {
+        /// The scrolling body, capped to the parent window's height.
+        #[template_child]
+        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
         pub(super) destination_label: TemplateChild<gtk::Label>,
         #[template_child]
@@ -112,6 +119,8 @@ mod imp {
         pub(super) report: OnceCell<Report>,
         /// One check box per profile, with the profile's ID.
         pub(super) choices: RefCell<Vec<(gtk::CheckButton, String)>>,
+        /// Set once the dialog was shown, so it is shown only once.
+        pub(super) was_shown: Cell<bool>,
     }
 
     impl std::fmt::Debug for BraveDialog {
@@ -145,7 +154,15 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for BraveDialog {}
+    impl WidgetImpl for BraveDialog {
+        /// Fits the dialog to its parent window before its first frame, as
+        /// it is realized when it shows.
+        fn realize(&self) {
+            crate::modal::fit_to_parent(&*self.obj(), &self.scroller);
+            self.parent_realize();
+        }
+    }
+
     impl WindowImpl for BraveDialog {}
 }
 
@@ -177,8 +194,17 @@ impl BraveDialog {
             .expect("a new dialog has no destination");
         let report: Report = Box::new(report);
         assert!(imp.report.set(report).is_ok(), "a new dialog has no report");
-        dialog.present();
+        // The dialog shows once the profiles are listed, at the size it
+        // keeps, or after SHOW_PATIENCE with "Checking…" if reading is slow.
         dialog.load();
+        glib::timeout_add_local_once(
+            SHOW_PATIENCE,
+            glib::clone!(
+                #[weak]
+                dialog,
+                move || dialog.show_once()
+            ),
+        );
         dialog
     }
 
@@ -214,6 +240,14 @@ impl BraveDialog {
         self.add_controller(crate::modal::escape_closes());
     }
 
+    /// Shows the dialog the first time it is asked to; later calls do
+    /// nothing, so a dialog the user closed never comes back.
+    fn show_once(&self) {
+        if !self.imp().was_shown.replace(true) {
+            self.present();
+        }
+    }
+
     /// Reads the profiles and whether Brave runs ("Recheck profiles").
     fn load(&self) {
         self.imp()
@@ -246,6 +280,7 @@ impl BraveDialog {
         }
         imp.choices.replace(choices);
         imp.status_label.set_text(&status_text(status));
+        self.show_once();
     }
 
     /// The IDs of the ticked profiles.

@@ -322,7 +322,13 @@ fn the_brave_dialog_lists_profiles_and_needs_consent() {
     let integration = DesktopIntegration::with_mime_backend(&folders, Sandbox::Host, backend);
 
     let dialog = BraveDialog::present_for(&test.window, integration.brave(), &fixture.uri(), |_| {});
-    wait_until("the profiles", || !dialog.profile_labels().is_empty());
+    wait_until("the dialog to show", || dialog.is_visible());
+    // It shows once the profiles are listed, so it never grows after its
+    // first frame, which cut its title off while it grew.
+    assert!(
+        !dialog.profile_labels().is_empty(),
+        "the profiles are listed before it shows"
+    );
 
     assert_eq!(dialog.profile_labels(), ["Personal · Brave-Browser\n/tmp/old"]);
     capture_dialog(&dialog, "native-brave-dialog.png");

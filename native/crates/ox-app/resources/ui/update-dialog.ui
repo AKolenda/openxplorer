@@ -32,54 +32,64 @@
           <object class="GtkBox">
             <property name="orientation">vertical</property>
             <child>
-              <object class="GtkBox">
-                <property name="orientation">vertical</property>
-                <style>
-                  <class name="dialog-content"/>
-                </style>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">Software updates</property>
-                    <property name="xalign">0</property>
+              <!-- The body scrolls when the dialog would be taller than its
+                   window (src/modal.rs); otherwise it is as tall as its content. -->
+              <object class="GtkScrolledWindow" id="scroller">
+                <property name="hscrollbar-policy">never</property>
+                <property name="propagate-natural-width">true</property>
+                <property name="propagate-natural-height">true</property>
+                <property name="vexpand">true</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
                     <style>
-                      <class name="dialog-title"/>
+                      <class name="dialog-content"/>
                     </style>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label">Software updates</property>
+                        <property name="xalign">0</property>
+                        <style>
+                          <class name="dialog-title"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- #update-versions -->
+                      <object class="GtkLabel" id="versions_label">
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="selectable">true</property>
+                        <property name="focusable">false</property>
+                        <style>
+                          <class name="dialog-message"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <!-- #update-status: role="status" aria-live="polite". -->
+                      <object class="GtkLabel" id="status_label">
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="wrap-mode">word-char</property>
+                        <property name="max-width-chars">60</property>
+                        <property name="focusable">true</property>
+                        <property name="accessible-role">status</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="hint_label">
+                        <property name="visible">false</property>
+                        <property name="xalign">0</property>
+                        <property name="wrap">true</property>
+                        <property name="max-width-chars">60</property>
+                        <style>
+                          <class name="dialog-hint"/>
+                        </style>
+                      </object>
+                    </child>
                   </object>
-                </child>
-                <child>
-                  <!-- #update-versions -->
-                  <object class="GtkLabel" id="versions_label">
-                    <property name="xalign">0</property>
-                    <property name="wrap">true</property>
-                    <property name="selectable">true</property>
-                    <property name="focusable">false</property>
-                    <style>
-                      <class name="dialog-message"/>
-                    </style>
-                  </object>
-                </child>
-                <child>
-                  <!-- #update-status: role="status" aria-live="polite". -->
-                  <object class="GtkLabel" id="status_label">
-                    <property name="xalign">0</property>
-                    <property name="wrap">true</property>
-                    <property name="wrap-mode">word-char</property>
-                    <property name="max-width-chars">60</property>
-                    <property name="focusable">true</property>
-                    <property name="accessible-role">status</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkLabel" id="hint_label">
-                    <property name="visible">false</property>
-                    <property name="xalign">0</property>
-                    <property name="wrap">true</property>
-                    <property name="max-width-chars">60</property>
-                    <style>
-                      <class name="dialog-hint"/>
-                    </style>
-                  </object>
-                </child>
+                </property>
               </object>
             </child>
             <child>

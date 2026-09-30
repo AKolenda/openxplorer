@@ -68,6 +68,9 @@ mod imp {
     #[derive(Debug, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/dialog.ui")]
     pub(crate) struct Dialog {
+        /// The scrolling body, capped to the parent window's height.
+        #[template_child]
+        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
         /// The heading, which is also the window's title.
         #[template_child]
         pub(super) title_label: TemplateChild<gtk::Label>,
@@ -96,6 +99,7 @@ mod imp {
         fn default() -> Self {
             let (answers, answer_queue) = async_channel::unbounded();
             Self {
+                scroller: TemplateChild::default(),
                 title_label: TemplateChild::default(),
                 message_label: TemplateChild::default(),
                 fields: TemplateChild::default(),
@@ -137,7 +141,14 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for Dialog {}
+    impl WidgetImpl for Dialog {
+        /// Fits the dialog to its parent window before its first frame, as
+        /// it is realized when it shows.
+        fn realize(&self) {
+            crate::modal::fit_to_parent(&*self.obj(), &self.scroller);
+            self.parent_realize();
+        }
+    }
 
     impl WindowImpl for Dialog {
         fn close_request(&self) -> glib::Propagation {

@@ -13,6 +13,9 @@ use super::AnswerHandler;
 #[derive(Default, gtk::CompositeTemplate)]
 #[template(file = "../../../resources/ui/network-sign-in.ui")]
 pub(crate) struct SignInDialog {
+    /// The scrolling body, capped to the parent window's height.
+    #[template_child]
+    pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
     /// The shield of the caption bar.
     #[template_child]
     pub(super) caption_glyph: TemplateChild<gtk::Image>,
@@ -124,7 +127,14 @@ impl ObjectImpl for SignInDialog {
     }
 }
 
-impl WidgetImpl for SignInDialog {}
+impl WidgetImpl for SignInDialog {
+    /// Fits the dialog to its parent window before its first frame, as
+    /// it is realized when it shows.
+    fn realize(&self) {
+        crate::modal::fit_to_parent(&*self.obj(), &self.scroller);
+        self.parent_realize();
+    }
+}
 
 impl WindowImpl for SignInDialog {
     /// Closing the window is Cancel. The dialog closes once the

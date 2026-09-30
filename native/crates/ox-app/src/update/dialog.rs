@@ -42,6 +42,9 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/update-dialog.ui")]
     pub(crate) struct UpdateDialog {
+        /// The scrolling body, capped to the parent window's height.
+        #[template_child]
+        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
         /// "Installed: 1.1.4 · Available: 1.2.0".
         #[template_child]
         pub(super) versions_label: TemplateChild<gtk::Label>,
@@ -108,7 +111,14 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for UpdateDialog {}
+    impl WidgetImpl for UpdateDialog {
+        /// Fits the dialog to its parent window before its first frame, as
+        /// it is realized when it shows.
+        fn realize(&self) {
+            crate::modal::fit_to_parent(&*self.obj(), &self.scroller);
+            self.parent_realize();
+        }
+    }
 
     impl WindowImpl for UpdateDialog {
         /// Close and Escape cannot dismiss the dialog while an update
