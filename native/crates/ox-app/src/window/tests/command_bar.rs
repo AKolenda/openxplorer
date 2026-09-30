@@ -10,8 +10,8 @@ use gtk::{gdk, glib};
 
 use super::file_ops_support::{press_shortcut, select_names};
 use super::geometry::laid_out;
-use crate::locations::Page;
 use crate::icons::Icon;
+use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
 use crate::window::menu_popover::MenuPopover;
 use crate::window::widget_tree::children;
@@ -224,7 +224,10 @@ fn the_appearance_button_shows_the_drawn_appearance_and_its_menu_checks_the_choi
         assert_eq!(icon_name.as_deref(), Some(glyph.name()), "{theme}");
         let tooltip = button.tooltip_text().unwrap_or_default();
         assert_eq!(tooltip, format!("Appearance: {theme}. Click to change."));
-        let menu = button.popover().and_downcast::<MenuPopover>().expect("an app menu");
+        let menu = button
+            .popover()
+            .and_downcast::<MenuPopover>()
+            .expect("an app menu");
         assert_eq!(menu.row_labels(), APPEARANCE_MENU);
         menu.popup();
         wait_for_frames(&test.window, 2);

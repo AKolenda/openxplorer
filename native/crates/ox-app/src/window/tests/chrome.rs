@@ -14,7 +14,9 @@ use gtk::gdk;
 use gtk::prelude::*;
 
 use super::geometry::{bounds, button_for, laid_out, Bounds};
-use super::icons::{assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME};
+use super::icons::{
+    assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME,
+};
 use super::support::{app_menu, menu_button_with_class};
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for, wait_for_frames, Fixture, TestWindow};
