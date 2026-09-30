@@ -390,7 +390,7 @@ pub fn run() -> glib::ExitCode {
     }
 }
 
-/// Names the process "OpenXplorer" with the application ID as its program
+/// Names the process `OpenXplorer` with the application ID as its program
 /// name and window icon, so the X11 window class matches the launcher's
 /// `StartupWMClass` (`startup` in winspace.py).
 fn name_the_process() {
@@ -419,6 +419,8 @@ mod tests {
             .join("../../packaging/data")
             .join(format!("{APP_ID}.desktop"));
         let entry = std::fs::read_to_string(&launcher).expect("the build's launcher is packaged");
-        assert!(entry.lines().any(|line| line == format!("StartupWMClass={APP_ID}")));
+        assert!(entry
+            .lines()
+            .any(|line| line == format!("StartupWMClass={APP_ID}")));
     }
 }

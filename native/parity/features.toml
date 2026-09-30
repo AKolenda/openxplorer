@@ -13980,8 +13980,8 @@ openxplorer = "has"
 sources = ["desktop/ui/index.html", "desktop/ui/style.css:3", "desktop/ui/style.css:5"]
 python_tests = []
 bridge = []
-native = "todo"
-native_note = "Native captures are reviewed manually (native/VALIDATION.md); there is no automated layout comparison. Porting notes: Owner rule 3: keep this look and move it closer to the WinUI 3 spec."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/look.rs (the_bars_and_panes_stack_as_in_explorer_in_the_apps_font): tab strip 42 px, navigation row 62, command bar 55, sidebar 210 beside the file list and details pane, 30 px status bar, font stack at 13 px, measured against the reference captures. Accent tokens in each_appearance_paints_the_surfaces_in_its_tokens."
 
 [[feature]]
 id = "LOOK-002"
@@ -13994,8 +13994,8 @@ openxplorer = "has"
 sources = ["desktop/ui/style.css:3-4"]
 python_tests = ["desktop/tests/ui_release.py::Dark appearance is available"]
 bridge = []
-native = "todo"
-native_note = "Porting notes: Rule 3: keep and refine toward WinUI 3 tokens (e.g. Mica/acrylic surfaces, 4/8 px radii)."
+native = "done"
+native_note = "Tokens in resources/light.css and dark.css (native/docs/ui-spec.md §3), refined toward WinUI 3 where the spec says so (chrome #f9f9f9/#282828, text #1b1b1b, disabled text colour instead of 34% opacity). native/crates/ox-app/src/window/tests/look.rs (each_appearance_paints_the_surfaces_in_its_tokens) checks the painted title, bar, sidebar and content colours and both accents."
 
 [[feature]]
 id = "LOOK-003"
@@ -14029,8 +14029,8 @@ python_tests = [
 ]
 bridge = ["preferences", "environment"]
 gnome = "AdwStyleManager / org.freedesktop.appearance color-scheme; org.gnome.desktop.interface color-scheme (GSettings); org.gnome.desktop.interface color-scheme / gtk-theme"
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/choices.rs (system_theme_follows_the_desktop); native/crates/ox-app/src/theme.rs (system_follows_the_desktop); native/crates/ox-app/src/theme/appearance_button.rs (the_tooltip_names_the_choice_and_the_system_appearance); native/crates/ox-app/src/application/state.rs (saved_themes_parse_and_anything_else_means_system); theme switch across windows in native/crates/ox-app/src/window/tests/views.rs (a_theme_chosen_in_one_window_reaches_every_window)."
+native = "done"
+native_note = "Theme choice, saving and System following: native/crates/ox-app/src/theme.rs (system_follows_the_desktop), application/state.rs (saved_themes_parse_and_anything_else_means_system), window/tests/views.rs (a_theme_chosen_in_one_window_reaches_every_window). The whole window, in-window dialogs and dialog windows repaint: window/tests/look.rs (each_appearance_paints_the_surfaces_in_its_tokens, a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance). No first-paint flash: LOOK-007."
 
 [[feature]]
 id = "LOOK-004"
@@ -14053,8 +14053,8 @@ python_tests = [
 bridge = ["preferences", "environment"]
 dolphin = "KDE colour scheme via the Qt platform theme"
 gnome = "GSettings org.gnome.desktop.interface color-scheme / gtk-theme (or Settings portal org.freedesktop.appearance color-scheme; AdwStyleManager)"
-native = "partial"
-native_note = "native/crates/ox-app/src/theme/system.rs (color_scheme_decides_first, default_scheme_falls_back_to_the_theme_name, portal_changes_accept_only_the_appearance_color_scheme). Porting notes: Live following of the system setting is untested; the tests cover the persisted preference and the manual switch."
+native = "done"
+native_note = "native/crates/ox-app/src/theme/system.rs: GNOME keys decide (color_scheme_decides_first, default_scheme_falls_back_to_the_theme_name), the portal without the schema (portal_changes_accept_only_the_appearance_color_scheme), and a changed color-scheme is followed at once (a_changed_gnome_color_scheme_is_followed_at_once, on the in-memory GSettings backend). Only GTK's per-display prefer-dark is set (LOOK-006)."
 
 [[feature]]
 id = "LOOK-005"
@@ -14067,8 +14067,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:720-729", "desktop/ui/style.css:36"]
 python_tests = ["desktop/tests/ui_release.py::Light appearance switch"]
 bridge = ["preferences"]
-native = "todo"
-native_note = "Tooltip wording is ported (native/crates/ox-app/src/theme/appearance_button.rs, the_tooltip_names_the_choice_and_the_system_appearance); the button and menu are untested."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (the_appearance_button_shows_the_drawn_appearance_and_its_menu_checks_the_choice): sun and \"Light\" or moon and \"Dark\", the applyTheme tooltip, the three menu items with the current choice checked. The label hides at 1050 px (window/breakpoints.rs, LOOK-022)."
 
 [[feature]]
 id = "LOOK-006"
@@ -14081,7 +14081,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:432-433"]
 python_tests = []
 bridge = ["preferences"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/theme.rs (the_drawn_palette_switches_the_display_dark_variant): the skin sets gtk-application-prefer-dark-theme on the app's display only; GNOME's color-scheme is read, never written."
 
 [[feature]]
 id = "LOOK-007"
@@ -14101,7 +14102,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["environment"]
-native = "todo"
+native = "done"
+native_note = "Native has no web view: the skin is installed before the first window and every window is built in the current palette. native/crates/ox-app/src/window/tests/look.rs (a_new_window_draws_its_first_frame_complete_in_the_chosen_appearance) checks the dark surfaces on the first frame of a new window."
 
 [[feature]]
 id = "LOOK-008"
@@ -14130,7 +14132,8 @@ python_tests = [
   "desktop/tests/test_startup.py::StartupTests::test_late_timeout_does_not_cover_ready_window",
 ]
 bridge = ["uiReady"]
-native = "todo"
+native = "done"
+native_note = "The placeholder covered the web page's load; the native window draws the real Explorer layout in its first frame, so none is needed. native/crates/ox-app/src/window/tests/look.rs (a_new_window_draws_its_first_frame_complete_in_the_chosen_appearance) checks that every bar and pane is drawn in the first frame and no spinner shows."
 
 [[feature]]
 id = "LOOK-009"
@@ -14143,7 +14146,8 @@ openxplorer = "has"
 sources = ["desktop/ui/style.css:5", "desktop/ui/style.css:220"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/chrome.rs: 42 px title bar and 215 x 35 active tab (the_active_tab_starts_9_pixels_in...), 38 x 34 new-tab button, 46 px caption buttons, 22 px tab close and the #c42b1c Close hover with a white glyph (the_tab_close_is_22_pixels_and_close_hovers_red). Heights grow with text size (theme/fonts.rs, VIEW-044)."
 
 [[feature]]
 id = "LOOK-010"
@@ -14182,7 +14186,8 @@ python_tests = [
 ]
 bridge = ["chrome"]
 gnome = "GActionGroup exported on the session bus"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/look.rs (the_tab_strip_is_the_title_bar_of_a_decorated_window_without_a_menu_bar): decorations stay on with client-side decoration, the title bar is a GtkWindowHandle holding the tabs, and no menu bar shows, in the first and in a second window."
 
 [[feature]]
 id = "LOOK-011"
@@ -14211,8 +14216,8 @@ python_tests = [
   "desktop/tests/native_window_menu.py::Custom client-side titlebar retained",
 ]
 bridge = []
-native = "todo"
-native_note = "Porting notes: Window size/maximized state is not remembered between sessions (Dolphin remembers); a gain for native."
+native = "done"
+native_note = "resources/ui/window.ui sets 1320 x 810 and a 670 x 470 minimum; native/crates/ox-app/src/window/tests/look.rs (new_windows_open_at_1320_by_810_and_keep_at_least_670_by_470). application.rs (the_process_is_named_as_its_launcher): application name OpenXplorer, program name and icon the build's application ID, matching its packaged launcher's StartupWMClass. The ID is io.winspace.Development.Native until the release sets OX_APP_ID (native/packaging/README.md)."
 
 [[feature]]
 id = "LOOK-012"
@@ -14225,7 +14230,8 @@ openxplorer = "has"
 sources = ["desktop/ui/style.css:6"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "window/tests/chrome.rs (the_address_and_search_boxes_are_34_pixels_tall...: 34 px fields, 235 px search box); native/crates/ox-app/src/window/tests/look.rs (the_bars_and_panes_stack...: 62 px row; the_search_icon_sits_at_the_right_and_focus_draws_the_accent_line). Corners are 4 px (WinUI refinement of the web 5 px)."
 
 [[feature]]
 id = "LOOK-013"
@@ -14238,7 +14244,8 @@ openxplorer = "has"
 sources = ["desktop/ui/style.css:7", "desktop/ui/style.css:216-217"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/look.rs (the_command_bar_keeps_its_right_group_and_shows_details_as_selected): 55 px bar, Details at the right end, file commands in a sideways-scrolling area, switched-on Details in the selected colour. Order of controls: window/tests/command_bar.rs (the_command_bar_has_the_current_controls_in_order)."
 
 [[feature]]
 id = "LOOK-014"
@@ -14251,7 +14258,8 @@ openxplorer = "has"
 sources = ["desktop/ui/style.css:8-9", "desktop/ui/style.css:208"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "Rows on a 38 px pitch with 4 px corners inset 12 px (window/tests/panes_layout.rs rows_are_inset...), tiles as renderRows places them (window/tests/views.rs a_window_that_opens_in_the_icon_view...), sidebar rows on a 35 px pitch with the accent pill (window/tests/sidebar_layout.rs), cut items dimmed (window/tests/clipboard.rs a_cut_dims..., .cut opacity .5). Tile corners are 4 px, the WinUI radius, instead of the web 6 px."
 
 [[feature]]
 id = "LOOK-015"
@@ -14274,8 +14282,8 @@ python_tests = [
   "desktop/tests/ui_v093.py::PDF icon unchanged",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-app/src/icons/art.rs (file_badges_follow_the_extension_map, documents_use_the_theme_paper); native/crates/ox-app/src/icons/glyphs.rs (every_glyph_parses_as_a_gsk_path). Porting notes: Rule 3: native may use themed MIME icons/thumbnails but must keep the Windows-style folder, network and ZIP artwork. The native look must match these drawings (owner rule 3)."
+native = "done"
+native_note = "Rule 5: Fluent UI System Icons and Fluent colour icons stand in for the hand-drawn line icons and badges, bundled as resources. Type art per extension (icons/file_type.rs, icons/art_image.rs), yellow folder, tinted standard-folder glyphs (icons/tint.rs, window/tests/icons.rs), zip badge (icons/composition.rs), phone and network art for tabs (window/location_view.rs tabs_and_the_address_bar_show_the_current_apps_icons)."
 
 [[feature]]
 id = "LOOK-016"
@@ -14299,8 +14307,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::Network entry has green share indicator",
 ]
 bridge = ["environment"]
-native = "partial"
-native_note = "Network badge classification: native/crates/ox-core/tests/places_composition.rs (mount_badges_respect_path_boundaries_and_escaping); artwork rendering in native/crates/ox-app/src/icons/art.rs (every_kind_renders_through_the_svg_loader)."
+native = "done"
+native_note = "Folder, server or standard-folder glyph on a stem and the green network bar, for SMB tabs, sidebar pins, shares and network rows: native/crates/ox-app/src/icons/composition.rs, icons/art.rs, icons/art_image.rs, window/tests/icons.rs, window/tests/landing_pages.rs and window/location_view.rs; badge classification in native/crates/ox-core/tests/places_composition.rs."
 
 [[feature]]
 id = "LOOK-017"
@@ -14358,7 +14366,8 @@ openxplorer = "has"
 sources = ["desktop/ui/style.css:52-58", "desktop/ui/style.css:203-207"]
 python_tests = ["desktop/tests/ui_release.py::Classic menu has a compact bounded width"]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/look.rs (classic_and_compact_menus_have_the_current_apps_widths_and_rows): classic 264 px with 33 px rows (the later .menu button min-height rule of style.css wins over 28 px), compact 276 px with the 34 px strip; widths and rows scale with text (theme/fonts.rs menu_rules). Radii 2 px and 8 px (menus.css, dialogs.css)."
 
 [[feature]]
 id = "LOOK-020"
@@ -14373,7 +14382,8 @@ python_tests = [
   "desktop/tests/ui_regressions.cjs::Updater fits a narrow desktop window at 200% text size",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/look.rs (a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance): 510 px, content colour of each appearance, accent Save button. Refined to WinUI ContentDialog (8 px radius, 24 px padding, footer on the chrome colour, 32 px buttons, @ox_critical_fill danger button); in-window dialogs (dialog_layer) cap the width at the window less 30 px."
 
 [[feature]]
 id = "LOOK-021"
@@ -14393,7 +14403,8 @@ sources = [
 python_tests = ["desktop/tests/ui_terminal.py::Preview explicitly does not launch a program"]
 bridge = []
 gnome = "AdwToast"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/toast.rs (one toast, replaced, hides after 4 s); native/crates/ox-app/src/window/tests/look.rs (the_toast_is_an_inverted_status_78_pixels_above_the_bottom): 78 px above the bottom, centred, at most 650 px, text colour as background, role status."
 
 [[feature]]
 id = "LOOK-022"
@@ -14419,8 +14430,8 @@ python_tests = [
   "desktop/tests/ui_regressions.cjs::Updater fits a narrow desktop window at 200% text size",
 ]
 bridge = []
-native = "todo"
-native_note = "Porting notes: Hidden commands at narrow widths remain available by keyboard/menus; native should use an overflow menu instead of hiding."
+native = "done"
+native_note = "native/crates/ox-app/src/window/breakpoints.rs (the 1190/1050/960/680 bands, appearance label hidden from 1050) and window/tests/narrow_windows.rs: details pane gives way below 961 px, compact windows drop the search box, Cut, Rename, Copy path, Details and two columns, the Name column scrolls sideways. Hidden commands stay on their keys and menus. Settings, Properties and search reflow are covered by their own areas."
 
 [[feature]]
 id = "LOOK-023"
@@ -14433,7 +14444,8 @@ openxplorer = "has"
 sources = ["desktop/ui/style.css:190-191"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (browse_opens_the_snapshot_in_a_marked_tab_with_its_banner): banner #fff7e8/#302a20 with #775314/#ecc993 text, badge #fff2d6/#443721 and the #c48c2f tab top edge, painted in both appearances."
 
 [[feature]]
 id = "LOOK-024"
@@ -14520,8 +14532,8 @@ sources = [
 python_tests = []
 bridge = []
 gnome = "GTK4 draws at the surface scale (gdk_surface_get_scale, fractional on Wayland with GTK 4.12 or later); use SVG or symbolic icons, or textures rendered at that scale, never 1x bitmaps scaled up"
-native = "todo"
-native_note = "Porting notes: WebKitGTK draws today's CSS and inline SVG icons at the device scale (under fractional scaling GTK3 renders at the next integer scale and the compositor downsamples), so the app is sharp now and rule 3 forbids a regression. DND-016 covers only hit-testing, and PERF-008 lists scaling only as a manual check. Add a native UI test at scale 2 and at one fractional scale."
+native = "done"
+native_note = "native/crates/ox-app/tests/display_scale.rs (twice_the_scale_draws_every_line_on_whole_device_pixels) runs the built app with GDK_SCALE=1 and 2 through the snapshot hook: the layout doubles exactly and every line and fill of the bars covers whole device pixels. GTK draws text, symbolic SVG icons and CSS at the surface scale. Fractional scales (125-175%) need a Wayland compositor and cannot run on the headless X test display; they stay a manual check."
 
 [[feature]]
 id = "INT-001"

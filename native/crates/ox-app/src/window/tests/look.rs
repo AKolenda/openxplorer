@@ -14,7 +14,9 @@ use ox_core::settings::ContextMenu;
 use super::context_menus::{choose_menu_style, position_of};
 use super::file_ops_support::open_dialog;
 use super::geometry::{bounds, laid_out, Bounds};
-use super::icons::{assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME};
+use super::icons::{
+    assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME,
+};
 use crate::test_support::harness::{descendants, wait_for, wait_for_frames, Fixture, TestWindow, ThemeGuard};
 use crate::window::BrowserWindow;
 
@@ -75,16 +77,32 @@ fn assert_surfaces(window: &BrowserWindow, expected: &Surfaces) {
     let theme = expected.theme;
     let title_bar = window.titlebar().expect("the tab strip is the title bar");
     let title_colour = painted_colour(&title_bar, title_bar.width() - 300, 4);
-    assert_same_colour(title_colour, css_colour(expected.title), &format!("{theme} title bar"));
+    assert_same_colour(
+        title_colour,
+        css_colour(expected.title),
+        &format!("{theme} title bar"),
+    );
     let navigation = &*window.imp().navigation_row;
     let chrome_colour = painted_colour(navigation, 3, 3);
-    assert_same_colour(chrome_colour, css_colour(expected.chrome), &format!("{theme} bars"));
+    assert_same_colour(
+        chrome_colour,
+        css_colour(expected.chrome),
+        &format!("{theme} bars"),
+    );
     let sidebar = window.sidebar();
     let sidebar_colour = painted_colour(sidebar, sidebar.width() - 3, sidebar.height() - 3);
-    assert_same_colour(sidebar_colour, css_colour(expected.sidebar), &format!("{theme} sidebar"));
+    assert_same_colour(
+        sidebar_colour,
+        css_colour(expected.sidebar),
+        &format!("{theme} sidebar"),
+    );
     let files = window.folder_pane();
     let content_colour = painted_colour(files, files.width() / 2, files.height() - 3);
-    assert_same_colour(content_colour, css_colour(expected.content), &format!("{theme} file list"));
+    assert_same_colour(
+        content_colour,
+        css_colour(expected.content),
+        &format!("{theme} file list"),
+    );
 }
 
 /// From top to bottom: the 42-pixel tab strip, the navigation row, the
@@ -140,8 +158,14 @@ fn each_appearance_paints_the_surfaces_in_its_tokens() {
     }
     let light = include_str!("../../../resources/light.css");
     let dark = include_str!("../../../resources/dark.css");
-    assert!(light.contains("@define-color ox_accent #0067c0;"), "the light accent");
-    assert!(dark.contains("@define-color ox_accent #74beff;"), "the dark accent");
+    assert!(
+        light.contains("@define-color ox_accent #0067c0;"),
+        "the light accent"
+    );
+    assert!(
+        dark.contains("@define-color ox_accent #74beff;"),
+        "the dark accent"
+    );
 }
 
 /// A new window draws its first frame complete and in the chosen
@@ -193,7 +217,10 @@ fn the_tab_strip_is_the_title_bar_of_a_decorated_window_without_a_menu_bar() {
         let is_client_side = window.has_css_class("csd") || window.has_css_class("solid-csd");
         assert!(is_client_side, "{:?}", window.css_classes());
         let title_bar = window.titlebar().expect("a title bar");
-        assert!(title_bar.is::<gtk::WindowHandle>(), "dragging it moves the window");
+        assert!(
+            title_bar.is::<gtk::WindowHandle>(),
+            "dragging it moves the window"
+        );
         assert!(window.tab_strip().is_ancestor(&title_bar), "the tabs are in it");
         assert!(!window.shows_menubar(), "no fallback menu bar");
     }
@@ -231,7 +258,11 @@ fn the_search_icon_sits_at_the_right_and_focus_draws_the_accent_line() {
         .find(|image| image.has_css_class("search-icon"))
         .expect("the search box shows a magnifier");
     let icon_place = bounds(&test, &icon);
-    assert_eq!(icon_place.right(), place.right() - 12, "11 pixels inside the border");
+    assert_eq!(
+        icon_place.right(),
+        place.right() - 12,
+        "11 pixels inside the border"
+    );
     search.entry().grab_focus();
     wait_for(TRANSITION_TIME);
     wait_for_frames(&test.window, 2);
@@ -261,7 +292,11 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
         .into_iter()
         .find(|button| button.has_css_class("details-toggle"))
         .expect("the Details toggle");
-    assert_eq!(bounds(&test, &details).right(), place.right() - 15, "at the right end");
+    assert_eq!(
+        bounds(&test, &details).right(),
+        place.right() - 15,
+        "at the right end"
+    );
     let scroller = descendants::<gtk::ScrolledWindow>(bar)
         .into_iter()
         .next()
@@ -328,7 +363,10 @@ fn a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance() {
             .find(|button| button.has_css_class("accent"))
             .expect("Save is the accent button");
         let save_place = bounds_in(save, &dialog);
-        assert!(save_place.height >= 32 && save_place.width >= 92, "{save_place:?}");
+        assert!(
+            save_place.height >= 32 && save_place.width >= 92,
+            "{save_place:?}"
+        );
         dialog.close();
     }
 }

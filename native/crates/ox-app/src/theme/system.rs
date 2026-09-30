@@ -381,7 +381,10 @@ mod tests {
             let heard = Rc::clone(&heard);
             move |appearance| heard.set(Some(appearance))
         });
-        for (value, expected) in [("prefer-dark", Appearance::Dark), ("prefer-light", Appearance::Light)] {
+        for (value, expected) in [
+            ("prefer-dark", Appearance::Dark),
+            ("prefer-light", Appearance::Light),
+        ] {
             settings
                 .set_string(COLOR_SCHEME_KEY, value)
                 .expect("the key is writable in memory");

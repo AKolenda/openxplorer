@@ -7,12 +7,14 @@
 
 use std::fs;
 
-use gtk::{gdk, glib};
 use gtk::prelude::*;
+use gtk::{gdk, glib};
 
+use super::icons::{
+    assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME,
+};
 use crate::dialog_layer::DialogFrame;
 use crate::properties::{FolderSizeState, PropertiesView, RestoreRequest, SnapshotTarget};
-use super::icons::{assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME};
 use crate::test_support::harness::{
     capture, descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
