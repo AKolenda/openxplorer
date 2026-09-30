@@ -155,11 +155,12 @@ impl UpdateDialog {
     ) -> Self {
         let dialog: Self = glib::Object::builder().property("transient-for", parent).build();
         dialog.bind(updates, Box::new(work));
-        dialog.present();
+        // The check starts first, so the first frame already says so.
         let state = updates.state();
         if !state.is_busy() && !state.needs_restart() {
             updates.check();
         }
+        dialog.present();
         dialog
     }
 
@@ -244,6 +245,7 @@ impl UpdateDialog {
         imp.hint_label.set_visible(hint.is_some());
         imp.hint_label.set_text(hint.unwrap_or_default());
         self.show_buttons(&state);
+        crate::modal::fit_to_parent(self, &imp.scroller);
     }
 
     fn show_buttons(&self, state: &UpdateState) {

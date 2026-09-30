@@ -280,6 +280,7 @@ impl BraveDialog {
         }
         imp.choices.replace(choices);
         imp.status_label.set_text(&status_text(status));
+        crate::modal::fit_to_parent(self, &imp.scroller);
         self.show_once();
     }
 
