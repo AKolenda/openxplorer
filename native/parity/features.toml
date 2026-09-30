@@ -16454,8 +16454,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["search", "previousVersions", "archiveList"]
-native = "partial"
-native_note = "native/crates/ox-app/src/search/results.rs (at_most_500_rows_are_shown: a search shows at most 500 results); native/crates/ox-app/src/window/file_drag/payload.rs (one_item_that_may_not_leave_refuses_the_whole_drag: a drag carries at most 200 items); native/crates/ox-core/tests/versions_lookup.rs (at_most_one_hundred_versions_are_returned_and_marked_truncated); native/crates/ox-core/tests/archive_browse.rs (a_listing_stops_at_5000_rows); cache status polling pauses while every window is hidden or minimised (native/crates/ox-app/src/search/cache.rs). Missing: the 2,000-row bound of column auto-fit, which waits for VIEW-029 (double-click a column edge to auto-fit), not ported yet."
+native = "done"
+native_note = "native/crates/ox-app/src/search/results.rs (at_most_500_rows_are_shown: a search shows at most 500 results); native/crates/ox-app/src/window/file_drag/payload.rs (one_item_that_may_not_leave_refuses_the_whole_drag: a drag carries at most 200 items); native/crates/ox-core/tests/versions_lookup.rs (at_most_one_hundred_versions_are_returned_and_marked_truncated); native/crates/ox-core/tests/archive_browse.rs (a_listing_stops_at_5000_rows); cache status polling pauses while every window is hidden or minimised (native/crates/ox-app/src/search/cache.rs); native/crates/ox-app/src/folder_view/details/column_fit.rs (fitting_measures_at_most_the_first_2000_items: column auto-fit measures at most the first 2,000 shown items)."
 
 [[feature]]
 id = "PERF-006"

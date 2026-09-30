@@ -236,6 +236,27 @@ mod tests {
         (view, model)
     }
 
+    /// Fitting measures only the first 2,000 shown items: a longer name
+    /// sorted after them does not widen the column (`fitColumn`).
+    ///
+    /// parity: PERF-005
+    #[gtk::test]
+    fn fitting_measures_at_most_the_first_2000_items() {
+        let names: Vec<String> = (0..FIT_ITEM_LIMIT)
+            .map(|number| format!("item {number:04}.txt"))
+            .collect();
+        let mut with_long_name: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (bounded, _model) = view_of(&with_long_name);
+        with_long_name.push("zz a far longer name than every item before it in this folder.txt");
+        let (with_more, model) = view_of(&with_long_name);
+
+        assert_eq!(model.n_items(), FIT_ITEM_LIMIT + 1);
+        assert!(
+            (with_more.widest_text(SortColumn::Name) - bounded.widest_text(SortColumn::Name)).abs() < 0.5,
+            "the 2,001st item is not measured"
+        );
+    }
+
     /// Home fits a column to its widest name; Left and Right step it by
     /// 10 pixels, never past its limits. The titles are focusable and
     /// describe their keys to screen readers.
