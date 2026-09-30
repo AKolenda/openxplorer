@@ -10,9 +10,9 @@
 //! file or the whole batch. Cancel runs [`WindowAction::CancelOperation`]
 //! and the label reads "Cancelling…" until the operation stops.
 //!
-//! While it shows, the panel holds a [`WriteInhibitor`], so the session
-//! does not log out or suspend in the middle of the operation (INT-028),
-//! and shows the progress on the dock icon ([`LauncherProgress`], INT-027).
+//! While it shows, the panel holds an [`OperationSession`], so the
+//! session does not log out or suspend in the middle of the operation
+//! (INT-028) and the dock icon shows the progress (INT-027).
 //!
 //! [`TransferPanel`] is a `GtkBox` subclass whose layout is the template
 //! `resources/ui/transfer-panel.ui`. It floats over the folder pane, so
@@ -23,8 +23,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::window_action::WindowAction;
-use crate::launcher_progress::LauncherProgress;
-use crate::write_inhibitor::WriteInhibitor;
+use crate::operation_session::OperationSession;
 
 /// The copy glyph's edge (`#transfer-icon`).
 const GLYPH_SIZE: i32 = 18;
@@ -39,8 +38,7 @@ mod imp {
     use gtk::subclass::prelude::*;
 
     use crate::icons::{self, Icon};
-    use crate::launcher_progress::LauncherProgress;
-    use crate::write_inhibitor::WriteInhibitor;
+    use crate::operation_session::OperationSession;
 
     /// Private state of [`super::TransferPanel`].
     #[derive(Debug, Default, gtk::CompositeTemplate)]
@@ -58,10 +56,8 @@ mod imp {
         /// Stops the operation.
         #[template_child]
         pub(super) cancel_button: TemplateChild<gtk::Button>,
-        /// Keeps the session from logging out or suspending meanwhile.
-        pub(super) inhibitor: RefCell<Option<WriteInhibitor>>,
-        /// The progress on the dock icon.
-        pub(super) launcher: RefCell<Option<LauncherProgress>>,
+        /// The inhibitor and dock progress of the running operation.
+        pub(super) session: RefCell<Option<OperationSession>>,
     }
 
     #[glib::object_subclass]
@@ -102,10 +98,9 @@ impl TransferPanel {
     /// Shows the panel for an operation that starts with `label`, its bar
     /// empty.
     pub(super) fn start(&self, label: &str) {
-        self.imp().launcher.replace(LauncherProgress::for_widget(self));
+        self.imp().session.replace(Some(OperationSession::start(self)));
         self.show_progress(label, 0.0);
         self.set_visible(true);
-        self.imp().inhibitor.replace(WriteInhibitor::hold(self));
     }
 
     /// Shows the engine's report: `label` and the bar at `fraction`,
@@ -116,8 +111,8 @@ impl TransferPanel {
         imp.progress_bar.set_fraction(fraction.clamp(0.0, 1.0));
         imp.progress_bar
             .update_property(&[gtk::accessible::Property::ValueText(label)]);
-        if let Some(launcher) = imp.launcher.borrow().as_ref() {
-            launcher.show(fraction);
+        if let Some(session) = imp.session.borrow().as_ref() {
+            session.show_progress(fraction);
         }
     }
 
@@ -130,14 +125,17 @@ impl TransferPanel {
     /// Hides the panel when the operation has ended.
     pub(super) fn finish(&self) {
         self.set_visible(false);
-        self.imp().inhibitor.replace(None);
-        self.imp().launcher.replace(None);
+        self.imp().session.replace(None);
     }
 
     /// Whether the panel holds the session's inhibitor, for tests.
     #[cfg(test)]
     pub(crate) fn inhibits_logout(&self) -> bool {
-        self.imp().inhibitor.borrow().is_some()
+        self.imp()
+            .session
+            .borrow()
+            .as_ref()
+            .is_some_and(OperationSession::inhibits_logout)
     }
 
     /// The label shown, for tests.

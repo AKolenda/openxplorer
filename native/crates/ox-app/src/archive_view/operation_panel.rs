@@ -31,8 +31,7 @@ mod imp {
     use gtk::subclass::prelude::*;
     use ox_core::transfer::Cancellation;
 
-    use crate::launcher_progress::LauncherProgress;
-    use crate::write_inhibitor::WriteInhibitor;
+    use crate::operation_session::OperationSession;
 
     /// Private state of [`super::OperationPanel`].
     #[derive(Debug, Default)]
@@ -45,11 +44,9 @@ mod imp {
         pub(super) cancel_button: gtk::Button,
         /// The running operation's cancellation.
         pub(super) cancel: RefCell<Option<Cancellation>>,
-        /// Keeps the session from logging out or suspending meanwhile
-        /// (INT-028).
-        pub(super) inhibitor: RefCell<Option<WriteInhibitor>>,
-        /// The progress on the dock icon (INT-027).
-        pub(super) launcher: RefCell<Option<LauncherProgress>>,
+        /// The inhibitor and dock progress of the running operation
+        /// (INT-027, INT-028).
+        pub(super) session: RefCell<Option<OperationSession>>,
     }
 
     #[glib::object_subclass]
@@ -120,12 +117,10 @@ impl OperationPanel {
         let imp = self.imp();
         imp.cancel.replace(Some(cancel));
         imp.cancel_button.set_sensitive(true);
-        imp.launcher
-            .replace(crate::launcher_progress::LauncherProgress::for_widget(self));
+        imp.session
+            .replace(Some(crate::operation_session::OperationSession::start(self)));
         self.show_progress(label, 0.0);
         self.set_visible(true);
-        imp.inhibitor
-            .replace(crate::write_inhibitor::WriteInhibitor::hold(self));
     }
 
     /// Shows `label` and the bar at `fraction` (clamped to 0–1). A report
@@ -141,8 +136,8 @@ impl OperationPanel {
             imp.label.set_text(label);
         }
         imp.progress.set_fraction(fraction.clamp(0.0, 1.0));
-        if let Some(launcher) = imp.launcher.borrow().as_ref() {
-            launcher.show(fraction);
+        if let Some(session) = imp.session.borrow().as_ref() {
+            session.show_progress(fraction);
         }
     }
 
@@ -159,8 +154,7 @@ impl OperationPanel {
     /// Hides the panel once the operation ended.
     pub(crate) fn finish(&self) {
         self.imp().cancel.replace(None);
-        self.imp().inhibitor.replace(None);
-        self.imp().launcher.replace(None);
+        self.imp().session.replace(None);
         self.set_visible(false);
     }
 }

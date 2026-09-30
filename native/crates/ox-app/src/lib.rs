@@ -28,6 +28,7 @@ mod launcher_progress;
 mod locations;
 mod modal;
 mod network;
+mod operation_session;
 mod places;
 mod properties;
 mod search;

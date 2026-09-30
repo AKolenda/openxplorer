@@ -36,7 +36,9 @@ fn isolated() -> bool {
     };
     std::env::var_os("OX_ISOLATED_SESSION").is_some_and(|marker| marker == "1")
         && temporary != Path::new("/tmp")
-        && ["HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"].into_iter().all(is_private)
+        && ["HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"]
+            .into_iter()
+            .all(is_private)
         && std::env::var_os("DISPLAY").is_some()
 }
 

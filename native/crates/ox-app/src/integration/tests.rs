@@ -279,7 +279,10 @@ fn applications_start_with_the_windows_display() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let context = test.window.launch_context();
-    assert_eq!(gtk::gdk::prelude::GdkAppLaunchContextExt::display(&context), WidgetExt::display(&test.window));
+    assert_eq!(
+        gtk::gdk::prelude::GdkAppLaunchContextExt::display(&context),
+        WidgetExt::display(&test.window)
+    );
 }
 
 /// For a folder every installed application is listed, and the
