@@ -83,10 +83,14 @@ fn cut_then_paste_moves_the_items_and_empties_the_cut() {
         fixture.path("Documents/Notes 10.txt").is_file()
     });
     assert!(!fixture.path("Notes 10.txt").exists());
+    // Paste is also disabled while the move runs, so wait for its report
+    // first.
+    wait_until("the move to be reported", || {
+        test.window.shown_message() == "1 item(s) moved."
+    });
     wait_until("the moved item to leave the clipboard", || {
         !is_enabled(&test, "paste")
     });
-    assert_eq!(test.window.shown_message(), "1 item(s) moved.");
 }
 
 /// parity: CLIP-005, CLIP-009, CLIP-016
