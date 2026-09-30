@@ -322,3 +322,42 @@ fn the_brave_dialog_lists_profiles_and_needs_consent() {
     assert_eq!(unchanged, preferences);
     dialog.close();
 }
+
+/// Restore previous needs the consent and one profile, and says why it
+/// changed nothing when no earlier setting was recorded.
+///
+/// parity: INT-021
+#[gtk::test]
+fn the_brave_dialogs_restore_needs_consent_and_a_record() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let root = tempfile::tempdir().expect("a temporary folder");
+    let folders = IntegrationFolders::inside(root.path());
+    let profile = folders.config_home.join("BraveSoftware/Brave-Browser/Default");
+    std::fs::create_dir_all(&profile).expect("the temporary folder is writable");
+    let preferences = r#"{"download": {"default_directory": "/tmp/old"}}"#;
+    std::fs::write(profile.join("Preferences"), preferences).expect("the profile is writable");
+    let (backend, _) = MimeBackend::in_memory("org.kde.dolphin.desktop");
+    let integration = DesktopIntegration::with_mime_backend(&folders, Sandbox::Host, backend);
+    let dialog = BraveDialog::present_for(&test.window, integration.brave(), &fixture.uri(), |_| {});
+    wait_until("the profiles", || !dialog.profile_labels().is_empty());
+
+    dialog.click_restore();
+    assert_eq!(
+        dialog.status(),
+        "Select one profile and confirm to restore its previous download setting."
+    );
+
+    dialog.set_consent(true);
+    dialog.click_restore();
+    // The dialog asks the real process table; Brave running on the test
+    // machine refuses the restore before the record is looked for.
+    let answers = [
+        "No previous download setting was recorded for this profile.",
+        "Fully quit Brave before restoring.",
+    ];
+    wait_until("the answer", || answers.contains(&dialog.status().as_str()));
+    let unchanged = std::fs::read_to_string(profile.join("Preferences")).expect("the profile is readable");
+    assert_eq!(unchanged, preferences);
+    dialog.close();
+}

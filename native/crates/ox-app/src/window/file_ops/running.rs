@@ -65,9 +65,14 @@ impl BrowserWindow {
     /// Starts an operation whose panel reads `label` until the first
     /// progress report. Returns its context, or `None` while another
     /// operation runs (OPS-024: `if(state.operation)return` in app.js),
-    /// an archive operation included.
+    /// an archive operation included, or once an application update
+    /// waits for its restart, which the message line says (UPD-006).
     pub(in crate::window) fn begin_operation(&self, label: &str) -> Option<OperationContext> {
         if self.operation_panel().is_busy() {
+            return None;
+        }
+        if let Some(refusal) = self.context().updates().file_refusal() {
+            self.show_message(&refusal);
             return None;
         }
         let context = OperationContext::new(self.context().write_protection());

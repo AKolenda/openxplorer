@@ -270,6 +270,10 @@ fn installing_verifies_installs_and_offers_the_restart() {
         simulated.updates.new_window_refusal().as_deref(),
         Some("Finish the application update and restart before opening another window.")
     );
+    assert_eq!(
+        simulated.updates.file_refusal().as_deref(),
+        Some("Restart OpenXplorer to finish the application update before using files.")
+    );
     dialog.click("Restart now");
     let launched = simulated
         .launches
@@ -317,6 +321,26 @@ fn an_installing_update_locks_every_window() {
     let_apt_finish.send(()).expect("APT is waiting");
     wait_until("the installation", || !simulated.updates.state().is_installing());
     assert!(test.window.is_sensitive(), "the window is usable again");
+    dialog.close();
+}
+
+/// Install update… is refused while a file operation runs in any window,
+/// before anything is downloaded or installed.
+///
+/// parity: UPD-005
+#[gtk::test]
+fn installing_waits_for_file_operations() {
+    let fixture = Fixture::standard();
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    let dialog = UpdateDialog::present_for(&test.window, &simulated.updates, || ox_core::update::Activity::Busy);
+    wait_until("the check", || !simulated.updates.state().is_busy());
+
+    dialog.click("Install update…");
+
+    assert_eq!(dialog.status(), "Finish file operations before installing the update.");
+    assert!(!simulated.updates.state().is_installing());
+    assert!(simulated.packages.programs().is_empty(), "nothing was installed");
     dialog.close();
 }
 

@@ -175,7 +175,7 @@ impl BrowserWindow {
     /// Opens Properties of the location `uri` on `tab`; the location need
     /// not be listed: it is queried first, off the main thread, to learn
     /// whether it is a folder.
-    fn open_properties_of(&self, uri: &str, tab: PropertiesTab) {
+    pub(super) fn open_properties_of(&self, uri: &str, tab: PropertiesTab) {
         let file = gio::File::for_uri(uri);
         let uri = uri.to_owned();
         glib::spawn_future_local(glib::clone!(
