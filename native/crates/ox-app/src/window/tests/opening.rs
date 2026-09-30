@@ -228,3 +228,28 @@ fn open_terminal_here_opens_one_per_folder_and_asks_for_many() {
     wait_for(std::time::Duration::from_millis(200));
     assert_eq!(test.window.shown_message(), "", "no terminal was started");
 }
+
+/// Opening a `.desktop` link to a folder browses that folder.
+///
+/// parity: OPEN-009
+#[gtk::test]
+fn a_desktop_link_to_a_folder_opens_the_folder() {
+    let fixture = Fixture::standard();
+    let link = format!(
+        "[Desktop Entry]\nType=Link\nName=Documents\nURL={}\n",
+        fixture.uri_of("Documents")
+    );
+    fs::write(fixture.path("Documents link.desktop"), link).expect("the fixture is writable");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.window
+        .activate_item(test.position_of("Documents link.desktop"));
+
+    wait_until("the linked folder", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents"))
+    });
+    assert!(
+        test.context.recorded_launches().is_empty(),
+        "the link file is not opened"
+    );
+}

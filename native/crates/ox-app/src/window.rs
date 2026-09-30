@@ -62,6 +62,7 @@ mod context_menu;
 mod copy_path;
 mod crumb_drop;
 mod crumb_menus;
+mod desktop_link;
 mod details_pane;
 mod dialog;
 mod empty_page;
