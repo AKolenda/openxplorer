@@ -137,7 +137,6 @@ impl BrowserWindow {
         self.install_network_actions();
         self.install_search_actions();
         self.install_integration_actions();
-        self.install_unported_actions();
         self.install_context_menu_actions();
         let [journal, clipboard] = self.install_file_actions();
         let mut handlers = self.imp().handlers.borrow_mut();

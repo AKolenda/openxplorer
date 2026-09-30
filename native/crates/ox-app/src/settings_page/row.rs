@@ -15,7 +15,37 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::search::{jump_to, shown_text, RowText, SearchQuery};
-use crate::window::{children, Milestone};
+use crate::window::children;
+
+/// The `native/ROADMAP.md` milestone that brings a setting shown before it
+/// works. A command shown before it works would be a disabled window
+/// action whose tooltip adds [`Milestone::notice`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Milestone {
+    /// Packages, the source they ship with and the update flow. No
+    /// setting waits for it now; it stays for the next one shown before
+    /// it works.
+    #[allow(dead_code, reason = "no setting waits for a milestone at the moment")]
+    Distribution,
+}
+
+impl Milestone {
+    /// How tooltips and disabled settings name the milestone.
+    pub(crate) const fn description(self) -> &'static str {
+        match self {
+            Milestone::Distribution => "packaging and updates",
+        }
+    }
+
+    /// The sentence a disabled control shows under its usual text: "Not in
+    /// the native preview yet: arrives with packaging and updates."
+    pub(crate) fn notice(self) -> String {
+        format!(
+            "Not in the native preview yet: arrives with {}.",
+            self.description()
+        )
+    }
+}
 
 /// Whether the native preview can do what a row controls.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

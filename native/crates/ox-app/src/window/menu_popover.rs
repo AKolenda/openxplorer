@@ -22,9 +22,8 @@ use gtk::subclass::prelude::*;
 
 use crate::icons::{self, Icon};
 
-use super::unported;
 
-pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
+pub(super) use items::{ItemAvailability, ItemCheck, MenuEntry, MenuItem, MenuStyle};
 
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
@@ -251,7 +250,7 @@ impl MenuPopover {
     fn strip_button(&self, item: &MenuItem) -> gtk::Button {
         let button = gtk::Button::builder()
             .child(&icons::image(item.glyph, ROW_GLYPH))
-            .tooltip_text(item_tooltip(item))
+            .tooltip_text(&item.label)
             .sensitive(self.can_choose(item))
             .build();
         button.update_property(&[gtk::accessible::Property::Label(&item.label)]);
@@ -312,15 +311,6 @@ impl MenuPopover {
     }
 }
 
-/// The tooltip of `item`: its label, and for a command that another
-/// milestone brings, that milestone.
-fn item_tooltip(item: &MenuItem) -> String {
-    match item.action {
-        MenuAction::Window(action) => unported::tooltip(action, &item.label),
-        MenuAction::Application(_) => item.label.clone(),
-    }
-}
-
 /// A row's glyph (the check mark while checked, as app.js draws it), its
 /// label and its shortcut.
 fn item_content(item: &MenuItem, check: CheckMark) -> gtk::Box {
@@ -361,7 +351,7 @@ fn item_row(item: &MenuItem, check: CheckMark) -> gtk::ListBoxRow {
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);
     // Every item's title is its label (`b.title=it.label` in app.js); a
     // disabled command adds the milestone that brings it.
-    row.set_tooltip_text(Some(&item_tooltip(item)));
+    row.set_tooltip_text(Some(&item.label));
     if let Some(state) = check.accessible_state() {
         row.update_state(&[gtk::accessible::State::Checked(state)]);
     }

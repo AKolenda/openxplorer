@@ -183,7 +183,7 @@ mod tests {
     use super::*;
     use crate::settings_page::row::ControlName;
     use crate::settings_page::search::RowText;
-    use crate::window::Milestone;
+    use crate::settings_page::row::Milestone;
 
     const RESTORE: RowText = RowText {
         title: "Restore previous",
