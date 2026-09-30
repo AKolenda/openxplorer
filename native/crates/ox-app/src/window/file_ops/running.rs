@@ -178,7 +178,10 @@ impl BrowserWindow {
 
     /// Shows `summary`: a toast for complete success, otherwise the
     /// "Operation result" dialog.
+    /// A desktop notification says it too while no window has focus
+    /// (INT-026).
     pub(super) async fn report(&self, summary: OperationSummary) {
+        self.notify_if_in_background(&summary);
         match summary {
             OperationSummary::Toast(text) => self.show_message(&text),
             OperationSummary::Report(text) => dialog::show_message(self, RESULT_TITLE, &text).await,

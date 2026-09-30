@@ -367,3 +367,30 @@ fn the_transfer_panel_shows_the_running_operation_and_cancel_stops_it() {
     assert!(!panel.is_visible());
     assert!(!is_enabled(&test, "cancel-operation"));
 }
+
+/// While an operation runs its panel holds the session's logout and
+/// suspend inhibitor. When it ends in the window that has focus, the
+/// toast is enough; a window in the background would also notify the
+/// desktop (`background_notice.rs`).
+///
+/// parity: INT-026, INT-028
+#[gtk::test]
+fn a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let panel = test.window.imp().transfer_panel.get();
+    crate::window::background_notice::take_sent();
+
+    let context = test.window.begin_operation("Preparing copy…");
+    assert!(context.is_some() && panel.inhibits_logout());
+    test.window.end_operation();
+    assert!(!panel.inhibits_logout());
+
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("duplicate", None);
+    wait_until("the toast", || {
+        test.window.shown_message() == "1 item(s) duplicated."
+    });
+    assert!(test.window.is_active(), "the test window has focus");
+    assert!(crate::window::background_notice::take_sent().is_empty());
+}

@@ -26,6 +26,7 @@ use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;
 use ox_core::integration::Activation;
 use ox_core::location::{is_smb_server, parent_location};
+use ox_core::ops::OperationSummary;
 use ox_core::transfer::{Cancellation, Node, NodeFactory, Progress};
 use ox_core::versions::snapshot_location;
 
@@ -260,10 +261,14 @@ impl BrowserWindow {
                     Ok(folder) => {
                         // Listing a folder hides the toast, so it comes last.
                         window.show_extracted(&folder.uri, &choice, origin);
-                        window.show_message(&extraction_success_text(&folder));
+                        let text = extraction_success_text(&folder);
+                        window.notify_if_in_background(&OperationSummary::Toast(text.clone()));
+                        window.show_message(&text);
                     }
                     Err(error) => {
-                        window.show_result_dialog(EXTRACTION_STOPPED, &extraction_failure_text(&error));
+                        let text = extraction_failure_text(&error);
+                        window.notify_if_in_background(&OperationSummary::Report(text.clone()));
+                        window.show_result_dialog(EXTRACTION_STOPPED, &text);
                     }
                 }
             }
@@ -419,6 +424,11 @@ impl BrowserWindow {
     /// `stopped_title`. Listing a folder hides the toast, so it comes last.
     fn report_in_folder(&self, folder: &str, outcome: Result<String, String>, stopped_title: &str) {
         self.reload_tabs_showing(folder);
+        let summary = match &outcome {
+            Ok(message) => OperationSummary::Toast(message.clone()),
+            Err(failure) => OperationSummary::Report(failure.clone()),
+        };
+        self.notify_if_in_background(&summary);
         match outcome {
             Ok(message) => self.show_message(&message),
             Err(failure) => self.show_result_dialog(stopped_title, &failure),

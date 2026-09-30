@@ -31,6 +31,8 @@ mod imp {
     use gtk::subclass::prelude::*;
     use ox_core::transfer::Cancellation;
 
+    use crate::write_inhibitor::WriteInhibitor;
+
     /// Private state of [`super::OperationPanel`].
     #[derive(Debug, Default)]
     pub(crate) struct OperationPanel {
@@ -42,6 +44,9 @@ mod imp {
         pub(super) cancel_button: gtk::Button,
         /// The running operation's cancellation.
         pub(super) cancel: RefCell<Option<Cancellation>>,
+        /// Keeps the session from logging out or suspending meanwhile
+        /// (INT-028).
+        pub(super) inhibitor: RefCell<Option<WriteInhibitor>>,
     }
 
     #[glib::object_subclass]
@@ -114,6 +119,8 @@ impl OperationPanel {
         imp.cancel_button.set_sensitive(true);
         self.show_progress(label, 0.0);
         self.set_visible(true);
+        imp.inhibitor
+            .replace(crate::write_inhibitor::WriteInhibitor::hold(self));
     }
 
     /// Shows `label` and the bar at `fraction` (clamped to 0–1). A report
@@ -144,6 +151,7 @@ impl OperationPanel {
     /// Hides the panel once the operation ended.
     pub(crate) fn finish(&self) {
         self.imp().cancel.replace(None);
+        self.imp().inhibitor.replace(None);
         self.set_visible(false);
     }
 }

@@ -15249,7 +15249,8 @@ python_tests = []
 bridge = ["operate", "archiveExtract"]
 dolphin = "KIO job notifications in Plasma (“Open Destination”)"
 gnome = "GNotification via g_application_send_notification (used by Nautilus 46) + X-GNOME-UsesNotifications"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/background_notice.rs: when a copy, move, trash, delete or restore (native/crates/ox-app/src/window/file_ops/running.rs, window/version_restore.rs) or an extraction or compression (window/archive_actions.rs) ends while no OpenXplorer window has focus, a GNotification repeats the result: the toast's words as the title, or 'Operation result' with the report. Clicking it or its Show button runs app.focus-window for that window, which shows the destination folder with the new items selected; one notification ID is reused, so the latest result replaces the last. The in-app toast stays. Both desktop entries declare X-GNOME-UsesNotifications=true. Tests: background_notice.rs (the_notice_says_what_the_toast_or_report_says), native/crates/ox-app/src/window/tests/file_operations.rs (a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast); tests record notifications instead of sending them, so no notification server is started."
 
 [[feature]]
 id = "INT-027"
@@ -15282,8 +15283,8 @@ python_tests = [
 bridge = ["operate", "archiveExtract", "updateInstall"]
 dolphin = "n/a in Dolphin by default"
 gnome = "gtk_application_inhibit(LOGOUT|SUSPEND) → org.gnome.SessionManager.Inhibit (gtk_application_inhibit is present in the Nautilus 46.4 binary)"
-native = "todo"
-native_note = "Porting notes: Protects SMB and MTP transfers from interruption by suspend; arguably must for data safety."
+native = "done"
+native_note = "native/crates/ox-app/src/write_inhibitor.rs: the transfer panel (copy, move, trash, delete, restore; native/crates/ox-app/src/window/transfer_panel.rs), the archive operation panel (extract, compress; native/crates/ox-app/src/archive_view/operation_panel.rs) and the Software updates dialog while APT runs (native/crates/ox-app/src/update/dialog.rs) hold gtk_application_inhibit(LOGOUT | SUSPEND, 'Copying files') from start to end, released on completion or cancellation. GTK passes it to org.gnome.SessionManager or the Inhibit portal. Test: native/crates/ox-app/src/window/tests/file_operations.rs (a_running_operation_inhibits_logout_and_a_focused_one_only_shows_the_toast). The session manager's dialogs themselves are not tested (no session manager on the test bus)."
 
 [[feature]]
 id = "INT-029"

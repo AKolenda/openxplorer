@@ -45,6 +45,7 @@ mod active_tab;
 mod address_bar;
 mod appearance;
 mod archive_actions;
+mod background_notice;
 mod breakpoints;
 mod button_style;
 mod cache_folder;

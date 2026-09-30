@@ -10,6 +10,9 @@
 //! file or the whole batch. Cancel runs [`WindowAction::CancelOperation`]
 //! and the label reads "Cancelling…" until the operation stops.
 //!
+//! While it shows, the panel holds a [`WriteInhibitor`], so the session
+//! does not log out or suspend in the middle of the operation (INT-028).
+//!
 //! [`TransferPanel`] is a `GtkBox` subclass whose layout is the template
 //! `resources/ui/transfer-panel.ui`. It floats over the folder pane, so
 //! browsing goes on around it.
@@ -19,6 +22,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::window_action::WindowAction;
+use crate::write_inhibitor::WriteInhibitor;
 
 /// The copy glyph's edge (`#transfer-icon`).
 const GLYPH_SIZE: i32 = 18;
@@ -27,10 +31,13 @@ const GLYPH_SIZE: i32 = 18;
 const CANCELLING: &str = "Cancelling…";
 
 mod imp {
+    use std::cell::RefCell;
+
     use gtk::glib;
     use gtk::subclass::prelude::*;
 
     use crate::icons::{self, Icon};
+    use crate::write_inhibitor::WriteInhibitor;
 
     /// Private state of [`super::TransferPanel`].
     #[derive(Debug, Default, gtk::CompositeTemplate)]
@@ -48,6 +55,8 @@ mod imp {
         /// Stops the operation.
         #[template_child]
         pub(super) cancel_button: TemplateChild<gtk::Button>,
+        /// Keeps the session from logging out or suspending meanwhile.
+        pub(super) inhibitor: RefCell<Option<WriteInhibitor>>,
     }
 
     #[glib::object_subclass]
@@ -90,6 +99,7 @@ impl TransferPanel {
     pub(super) fn start(&self, label: &str) {
         self.show_progress(label, 0.0);
         self.set_visible(true);
+        self.imp().inhibitor.replace(WriteInhibitor::hold(self));
     }
 
     /// Shows the engine's report: `label` and the bar at `fraction`,
@@ -111,6 +121,13 @@ impl TransferPanel {
     /// Hides the panel when the operation has ended.
     pub(super) fn finish(&self) {
         self.set_visible(false);
+        self.imp().inhibitor.replace(None);
+    }
+
+    /// Whether the panel holds the session's inhibitor, for tests.
+    #[cfg(test)]
+    pub(crate) fn inhibits_logout(&self) -> bool {
+        self.imp().inhibitor.borrow().is_some()
     }
 
     /// The label shown, for tests.

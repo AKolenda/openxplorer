@@ -39,6 +39,7 @@ mod typeahead;
 mod update;
 mod volumes;
 mod window;
+mod write_inhibitor;
 
 #[cfg(test)]
 mod test_support;
