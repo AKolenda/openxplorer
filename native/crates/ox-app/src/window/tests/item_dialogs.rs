@@ -7,12 +7,15 @@
 
 use std::fs;
 
-use gtk::glib;
+use gtk::{gdk, glib};
 use gtk::prelude::*;
 
 use crate::dialog_layer::DialogFrame;
 use crate::properties::{FolderSizeState, PropertiesView, RestoreRequest, SnapshotTarget};
-use crate::test_support::harness::{capture, descendants, wait_until, Fixture, TestWindow};
+use super::icons::{assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME};
+use crate::test_support::harness::{
+    capture, descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+};
 use crate::window::widget_tree::children;
 
 /// The name of the snapshot the fixtures create.
@@ -322,9 +325,10 @@ fn a_file_without_snapshots_explains_that_none_were_found() {
         .any(|text| text.starts_with("No matching previous versions were found")));
 }
 
-/// parity: PROP-021, PROP-022, PROP-024
+/// parity: PROP-021, PROP-022, PROP-024, LOOK-023
 #[gtk::test]
 fn browse_opens_the_snapshot_in_a_marked_tab_with_its_banner() {
+    let _theme = ThemeGuard::keep();
     let fixture = fixture_with_snapshot();
     let test = TestWindow::open(&fixture.uri());
     let first_tab = test.active_tab().expect("a tab");
@@ -350,8 +354,48 @@ fn browse_opens_the_snapshot_in_a_marked_tab_with_its_banner() {
         "{tooltips:?}"
     );
     capture(&test.window, "native-previous-version-tab.png");
+    assert_amber_marking(&test, banner);
     test.activate_tab(first_tab);
     assert!(!banner.is_visible(), "a live folder has no banner");
+}
+
+/// The colour `widget` paints at (`x`, `y`) of its own area.
+fn painted_colour(widget: &impl IsA<gtk::Widget>, x: i32, y: i32) -> gdk::RGBA {
+    let rows = pixel_rows(&painted(widget));
+    let row = usize::try_from(y).expect("a point inside the widget");
+    let column = usize::try_from(x).expect("a point inside the widget");
+    let [red, green, blue] = unpremultiplied_rgb(rows[row][column]);
+    gdk::RGBA::new(red, green, blue, 1.0)
+}
+
+/// Asserts the amber of a previous version in both appearances: the
+/// banner, the badge and the top edge of the snapshot's tab.
+fn assert_amber_marking(test: &TestWindow, banner: &impl IsA<gtk::Widget>) {
+    let cases = [
+        ("light", "#fff7e8", "#775314", "#fff2d6"),
+        ("dark", "#302a20", "#ecc993", "#443721"),
+    ];
+    for (theme, banner_bg, banner_text, badge_bg) in cases {
+        test.activate("theme", Some(theme));
+        wait_for(TRANSITION_TIME);
+        wait_for_frames(&test.window, 2);
+        // The tab strip draws its tabs again for a new appearance.
+        let tab = descendants::<gtk::Widget>(test.window.tab_strip())
+            .into_iter()
+            .find(|widget| widget.has_css_class("snapshot-tab"))
+            .expect("the snapshot's tab is marked");
+        let badge = descendants::<gtk::Widget>(&tab)
+            .into_iter()
+            .find(|widget| widget.has_css_class("snapshot-tab-badge"))
+            .expect("the tab has the badge");
+        let banner_colour = painted_colour(banner, banner.width() - 3, 3);
+        assert_same_colour(banner_colour, css_colour(banner_bg), theme);
+        assert_same_colour(banner.color(), css_colour(banner_text), theme);
+        let badge_colour = painted_colour(&badge, 1, badge.height() / 2);
+        assert_same_colour(badge_colour, css_colour(badge_bg), theme);
+        let edge = painted_colour(&tab, tab.width() / 2, 0);
+        assert_same_colour(edge, css_colour("#c48c2f"), theme);
+    }
 }
 
 /// parity: PROP-025

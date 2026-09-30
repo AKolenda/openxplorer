@@ -47,6 +47,7 @@ fn with_two_pins(fixture: &Fixture) -> TestWindow {
     test
 }
 
+/// parity: LOOK-014
 #[gtk::test]
 fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
     let fixture = Fixture::standard();
@@ -80,6 +81,7 @@ fn quick_access_rows_sit_4_pixels_in_on_a_35_pixel_pitch() {
     assert_eq!(this_pc.x, 7);
 }
 
+/// parity: LOOK-014
 #[gtk::test]
 fn the_selected_row_shows_the_accent_bar_at_its_edge() {
     let fixture = Fixture::standard();

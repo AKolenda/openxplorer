@@ -2,6 +2,8 @@
 //! How GNOME's keys and the portal's settings map to an appearance.
 
 use super::*;
+use crate::test_support::desktop_setting::DesktopSetting;
+use crate::test_support::harness::wait_until;
 
 /// parity: LOOK-004
 #[test]
@@ -133,5 +135,39 @@ fn portal_changes_accept_only_the_color_scheme_and_gtk_theme() {
             case.namespace,
             case.key
         );
+    }
+}
+
+/// A change of GNOME's colour scheme reaches the app at once, both
+/// ways, while the app writes nothing back. Skipped unless `GSettings`
+/// keeps its values in memory, so the user's dconf stays untouched.
+///
+/// parity: LOOK-004
+#[gtk::test]
+fn a_changed_gnome_color_scheme_is_followed_at_once() {
+    let Some(settings) = super::super::desktop_settings(INTERFACE_SCHEMA) else {
+        return;
+    };
+    let has_key = settings
+        .settings_schema()
+        .is_some_and(|schema| schema.has_key(COLOR_SCHEME_KEY));
+    if !has_key {
+        return;
+    }
+    let Some(color_scheme) = DesktopSetting::in_memory(settings, COLOR_SCHEME_KEY) else {
+        return;
+    };
+    let heard = Rc::new(Cell::new(None));
+    let scheme = SystemScheme::new(Appearance::Light, {
+        let heard = Rc::clone(&heard);
+        move |appearance| heard.set(Some(appearance))
+    });
+    for (value, expected) in [
+        ("prefer-dark", Appearance::Dark),
+        ("prefer-light", Appearance::Light),
+    ] {
+        color_scheme.set_string(value);
+        wait_until(value, || heard.get() == Some(expected));
+        assert_eq!(scheme.appearance(), expected);
     }
 }
