@@ -2964,7 +2964,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "DolphinView::wheelEvent"
 native = "done"
-native_note = "Ctrl+wheel over the folder pane steps Details, Small, Medium, Large and Extra large icons, one step per notch, adding up smooth-scroll fractions, and stops at the ends (native/crates/ox-app/src/window/view_zoom.rs; native/crates/ox-app/src/window/folder_pane/view.rs, the_wheel_steps_through_the_views_and_stops_at_the_ends). The chosen view is saved as a View menu choice is."
+native_note = "Ctrl+wheel over the folder pane steps Details, Small, Medium, Large and Extra large icons, one step per wheel notch, and stops at the ends. Smooth-scroll fractions add up, and touchpad deltas in pixels (Wayland's surface unit) count 50 pixels as a notch, so one swipe does not jump several views (native/crates/ox-app/src/window/view_zoom.rs, wheel_and_touchpad_deltas_add_up_to_whole_steps; native/crates/ox-app/src/window/folder_pane/view.rs, the_wheel_steps_through_the_views_and_stops_at_the_ends). The zoomed view is saved and the View menu follows it; unlike a menu choice, zooming keeps the selected item in sight instead of scrolling to the top (native/crates/ox-app/src/window/tests/views.rs, zooming_changes_and_saves_the_view)."
 
 [[feature]]
 id = "VIEW-012"
@@ -3210,7 +3210,7 @@ bridge = ["preferences", "list", "search"]
 dolphin = "Ctrl+H Show Hidden Files; Dolphin: Alt+. or Ctrl+H toggles hidden files.; Show Hidden Files (Alt+. / Ctrl+H); show_hidden_files: Ctrl+H, Alt+."
 gnome = "Nautilus: Ctrl+H; org.gtk.gtk4.Settings.FileChooser show-hidden."
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/views.rs (ctrl_h_shows_hidden_files_outside_text_fields: Ctrl+H toggles and saves outside text fields and is left to the search box inside it; changed_view_preferences_are_saved_for_new_windows); native/crates/ox-app/src/folder_view/filter.rs; native/crates/ox-app/src/window/tests/listing.rs. Ctrl+H is a window key (native/crates/ox-app/src/window/selection_keys.rs), not an application accelerator, so it never fires in a text field. View and More menus show the toggle."
+native_note = "Ctrl+H is a window key, not an application accelerator, so it is left to text fields and works everywhere else, the Settings page and a focused breadcrumb included, as onKey handles it before its early return (native/crates/ox-app/src/window/selection_keys.rs; native/crates/ox-app/src/window/tests/views.rs, ctrl_h_shows_hidden_files_outside_text_fields, which runs the real window shortcut and checks win.hidden has no accelerator; changed_view_preferences_are_saved_for_new_windows); native/crates/ox-app/src/folder_view/filter.rs; native/crates/ox-app/src/window/tests/listing.rs. View and More menus show the toggle."
 
 [[feature]]
 id = "VIEW-024"
@@ -3252,8 +3252,8 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Dolphin shows backup files"
 gnome = "standard::is-backup (Nautilus treats is_hidden || is_backup as hidden); verified that b~ has is-backup TRUE and is-hidden FALSE"
-native = "done"
-native_note = "GIO's standard::is-backup (names ending in ~) counts as hidden, as in GNOME Files (native/crates/ox-core/src/entry/info.rs; native/crates/ox-core/tests/entry_enumeration.rs, backup_files_are_flagged_hidden)."
+native = "n-a"
+native_note = "Owner decision pending: backup files (name~) stay visible, as Dolphin (the benchmark) and the Python app show them, so no current behaviour is lost (native/crates/ox-core/tests/entry_enumeration.rs, backup_files_are_not_hidden). Hiding them as GNOME Files does would need an option, and the search index reader would have to use the same hidden rule."
 
 [[feature]]
 id = "VIEW-026"
@@ -3273,7 +3273,7 @@ python_tests = []
 bridge = ["list"]
 dolphin = "Hidden items drawn semi-transparent"
 native = "done"
-native_note = "Hidden items shown with Show hidden files are drawn at 60% opacity (native/crates/ox-app/src/folder_view/cells/cell_owners.rs, resources/skin/folder-views.css; native/crates/ox-app/src/window/tests/views.rs, ctrl_h_shows_hidden_files_outside_text_fields)."
+native_note = "Hidden items shown with Show hidden files are drawn at 60% opacity; a cut hidden item fades to 30% so the cut still shows (native/crates/ox-app/src/folder_view/cells/cell_owners.rs, resources/skin/folder-views.css; native/crates/ox-app/src/window/tests/views.rs, ctrl_h_shows_hidden_files_outside_text_fields)."
 
 [[feature]]
 id = "VIEW-027"
@@ -3347,7 +3347,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "KItemListHeader column resize"
 native = "done"
-native_note = "native/crates/ox-app/src/folder_view/column_widths.rs (a_dragged_column_stops_at_its_limits); native/crates/ox-app/src/folder_view/details.rs (a_settled_resize_reports_the_widths_settings_save, applying_saved_widths_is_not_reported_as_a_resize); native/crates/ox-core/src/settings/tests/preferences.rs (layout_persists, columns_whitelist, width_rounding). GTK's own resize edge drags the columns; dragged widths are clamped to the Python limits and saved once the drag settles; Name stops filling once resized (VIEW-031)."
+native_note = "GTK's own resize edge drags the columns. The column's fixed-width handler clamps every width, dragged or set, to the Python limits (native/crates/ox-app/src/folder_view/details/column_fit.rs, a_dragged_width_stays_within_the_column_limits; native/crates/ox-app/src/folder_view/column_widths.rs, a_dragged_column_stops_at_its_limits), widths are saved once the drag settles (native/crates/ox-app/src/folder_view/details.rs, a_settled_resize_reports_the_widths_settings_save, applying_saved_widths_is_not_reported_as_a_resize; native/crates/ox-core/src/settings/tests/preferences.rs, layout_persists, columns_whitelist, width_rounding) and Name stops filling once resized (VIEW-031). Date modified shows date and time, so it defaults to 176 pixels, which fits a late PM time at 125% text size (the_default_date_width_fits_a_date_and_time_at_125_percent)."
 
 [[feature]]
 id = "VIEW-029"
@@ -3372,7 +3372,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "Double-click header separator to fit"
 native = "done"
-native_note = "A double-click on a title's resize edge, or Home on a focused title, fits the column to the widest text among the first 2,000 shown items and saves it (native/crates/ox-app/src/folder_view/details/column_fit.rs, titles_fit_and_nudge_their_columns; native/crates/ox-app/src/folder_view/column_widths.rs, a_fitted_column_holds_its_widest_text_within_its_limits). The titles carry the web tooltip."
+native_note = "A double-click on a title's resize edge, or Home on a focused title, fits the column to the widest text among the first 2,000 shown items, and the fitted width is reported for saving once it settles (native/crates/ox-app/src/folder_view/details/column_fit.rs, a_double_click_on_a_resize_edge_fits_and_saves_the_column, titles_fit_and_nudge_their_columns; native/crates/ox-app/src/folder_view/column_widths.rs, a_fitted_column_holds_its_widest_text_within_its_limits). The double-click gesture runs in the capture phase on the header and claims the second press, so GTK's own edge drag does not start. The titles carry the web tooltip."
 
 [[feature]]
 id = "VIEW-030"
@@ -3386,7 +3386,7 @@ sources = ["desktop/ui/app.js:1691-1699", "desktop/ui/app.js:1683"]
 python_tests = ["desktop/tests/ui_v06.py::Column handle supports keyboard resizing"]
 bridge = ["preferences"]
 native = "done"
-native_note = "Column titles are focusable and stand in for the web app's separator, as GTK draws the resize edge itself: Left and Right make the column 10 pixels narrower or wider within its limits and the width is saved; Home fits it. Each title describes this to screen readers ('Resize <column> column: ...') with its minimum, maximum and current width (native/crates/ox-app/src/folder_view/details/column_fit.rs, titles_fit_and_nudge_their_columns)."
+native_note = "Column titles are focusable and stand in for the web app's separator, as GTK draws the resize edge itself: Left and Right make the column 10 pixels narrower or wider within its limits and the width is saved; Home fits it (native/crates/ox-app/src/folder_view/details/column_fit.rs, titles_fit_and_nudge_their_columns). Each title keeps its column name as its accessible label and has the description 'Resize <column> column: ...', with its minimum, maximum and current width as value properties (the current width is set from the start and on every change). GTK gives the title a column-header role, which it builds itself, so screen readers may not announce the value range."
 
 [[feature]]
 id = "VIEW-031"
@@ -3663,7 +3663,7 @@ bridge = ["preferences"]
 dolphin = "Ctrl+/Ctrl- zoom; Dolphin: Ctrl++ / Ctrl+- zoom icons, Ctrl+0 reset zoom."
 gnome = "GNOME text-scaling-factor (org.gnome.desktop.interface) is the system-wide setting; app-level zoom remains separate."
 native = "done"
-native_note = "native/crates/ox-app/src/text_size.rs (control_plus_minus_and_zero_are_recognised, keypad_keys_are_recognised, alt_and_alt_graph_are_ignored, input_method_composition_is_ignored, other_shortcuts_are_not_captured); native/crates/ox-app/src/window/tests/views.rs (the_text_size_shortcuts_are_the_table_with_ctrl_alone, text_size_keys_work_inside_dialogs). The keys are application accelerators in the browser windows, so they work in the file pane, the search box and the address bar without inserting characters; the modal dialogs, including network sign-in, run the same keys against their browser window (native/crates/ox-app/src/window/actions.rs, follow_text_size_keys). Each change shows 'Text size: N%' (native/crates/ox-app/src/window/preferences.rs)."
+native_note = "native/crates/ox-app/src/text_size.rs (control_plus_minus_and_zero_are_recognised, keypad_keys_are_recognised, alt_and_alt_graph_are_ignored, input_method_composition_is_ignored, other_shortcuts_are_not_captured); native/crates/ox-app/src/window/tests/views.rs (the_text_size_shortcuts_are_the_table_with_ctrl_alone, text_size_keys_work_inside_dialogs). The keys are application accelerators in the browser windows, so they work in the file pane, the search box and the address bar without inserting characters. Every modal dialog window runs the same keys against the browser window it belongs to (native/crates/ox-app/src/window/actions.rs, follow_text_size_keys): the window's own dialogs, network sign-in, the network form (Map network location, Sign out, Disconnect), Open with, the update dialog and the Brave dialog. The test drives the Rename dialog and Map network location. Each change shows 'Text size: N%' (native/crates/ox-app/src/window/preferences.rs)."
 
 [[feature]]
 id = "VIEW-044"
@@ -3787,7 +3787,7 @@ sources = [
 python_tests = []
 bridge = ["list"]
 native = "done"
-native_note = "native/crates/ox-app/src/window/loading_line.rs (the_line_shows_once_a_listing_has_run_for_the_delay, a_listing_that_ends_at_once_never_shows_the_line); native/crates/ox-app/src/window/tests/listing.rs (switching_pages_never_flashes_a_loading_state, the_loading_line_lies_over_the_pane_without_moving_the_items); the unavailable page and Try again in native/crates/ox-app/src/window/tests/listing.rs. Deliberate change (owner request): a folder being listed keeps the blank list with its column titles and shows no 'Loading…' text or spinner; the 2-pixel line appears only after 300 ms, and landing pages never show it, as Windows Explorer and Dolphin behave."
+native_note = "native/crates/ox-app/src/window/loading_line.rs (the_line_shows_once_a_listing_has_run_for_the_delay, a_listing_that_ends_at_once_never_shows_the_line); native/crates/ox-app/src/window/tests/listing.rs (switching_pages_never_flashes_a_loading_state, a_slow_listing_shows_the_line_and_says_loading, the_loading_line_lies_over_the_pane_without_moving_the_items, and the unavailable page with Try again). An empty folder shows 'This folder is empty' and 'Create a folder or paste files here.'. Deliberate change (owner request): a folder being listed keeps the blank list with its column titles and shows no 'Loading…' text or spinner; the 2-pixel line appears only after 300 ms, and landing pages never show it, as Windows Explorer and Dolphin behave. A reload (F5, Try again, a change the folder watch saw) keeps the empty or unavailable page on screen until the listing ends, so nothing flashes."
 
 [[feature]]
 id = "VIEW-048"
@@ -3839,7 +3839,7 @@ python_tests = []
 bridge = []
 dolphin = "Dolphin status bar: 'N Folders, M Files (size)' and selection summary."
 native = "done"
-native_note = "native/crates/ox-app/src/window/status_bar.rs (the_status_counts_items_and_says_when_it_is_loading, the_selection_shows_its_count_and_file_size, a_landing_page_is_ready); native/crates/ox-app/src/search/report.rs (the_status_bar_counts_results); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). The selection also shows the selected files' total size, as Windows does."
+native_note = "native/crates/ox-app/src/window/status_bar.rs (the_status_counts_items_and_says_when_it_is_loading, the_selection_shows_its_count_and_file_size, a_landing_page_is_ready); native/crates/ox-app/src/window/tests/listing.rs (a_slow_listing_shows_the_line_and_says_loading); native/crates/ox-app/src/search/report.rs (the_status_bar_counts_results); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders). Deliberate change (owner request): 'N items · Loading…' shows only while the loading line shows, which is once a listing has run for 300 ms, so fast listings never flash it. The selection also shows the selected files' total size, as Windows does."
 
 [[feature]]
 id = "VIEW-051"

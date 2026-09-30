@@ -51,7 +51,7 @@ pub(super) fn build_entry(
         type_label,
         content_type,
         modified: time_attribute(info, "time::modified"),
-        is_hidden: info.boolean("standard::is-hidden") || info.boolean("standard::is-backup"),
+        is_hidden: info.boolean("standard::is-hidden"),
         is_symlink: info.boolean("standard::is-symlink"),
         trash_orig_path: path_attribute(info, "trash::orig-path"),
         trash_deletion_date: deletion_date(info),

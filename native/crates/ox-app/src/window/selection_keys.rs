@@ -60,11 +60,16 @@ impl BrowserWindow {
         self.add_controller(self.prefix_reset_on_any_press());
     }
 
-    /// Runs `key` unless focus is where it means something else: a text
-    /// field, the address bar or the Settings page (`onKey` returns there
-    /// before these keys).
+    /// Runs `key` unless focus is where it means something else. Ctrl+H
+    /// works everywhere but in a text field, as `onKey` handles it before
+    /// its Settings and address bar check; Ctrl+A and Escape also leave
+    /// the address bar and the Settings page alone.
     pub(super) fn run_window_key(&self, key: WindowKey) -> glib::Propagation {
-        if !self.file_keys_apply() {
+        let applies = match key {
+            WindowKey::ToggleHidden => !self.focus_is_in_text_field(),
+            WindowKey::SelectAll | WindowKey::ClearSelection => self.file_keys_apply(),
+        };
+        if !applies {
             return glib::Propagation::Proceed;
         }
         match key {

@@ -78,12 +78,9 @@ pub(super) fn sort_menu() -> Vec<MenuEntry> {
     entries
 }
 
-/// The Details view's shortcut as the View menu shows it: Explorer's
-/// Ctrl+Shift+6.
-const DETAILS_VIEW_SHORTCUT: &str = "Ctrl+Shift+6";
-
-/// The View menu's item for `view`, showing its Explorer `shortcut`.
-fn view_item(label: &str, glyph: Icon, view: FolderView, shortcut: &'static str) -> MenuEntry {
+/// The View menu's item for `view`, showing its Explorer shortcut.
+fn view_item(label: &str, glyph: Icon, view: FolderView) -> MenuEntry {
+    let (_, shortcut) = view.shortcut();
     MenuItem::choice(label, glyph, WindowAction::View, view.as_str())
         .with_shortcut(shortcut)
         .into()
@@ -99,21 +96,11 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 /// The View menu: the views (every icon size the native app has), the
 /// hidden-files and details-pane toggles, then the text size.
 pub(super) fn view_menu() -> Vec<MenuEntry> {
-    let details = view_item(
-        "Details",
-        Icon::TextBulletList,
-        FolderView::Details,
-        DETAILS_VIEW_SHORTCUT,
-    );
+    let details = view_item("Details", Icon::TextBulletList, FolderView::Details);
     let mut entries = vec![details];
-    let icon_sizes = IconSize::ALL.into_iter().map(|size| {
-        view_item(
-            size.label(),
-            Icon::Grid,
-            FolderView::Icons(size),
-            size.shortcut_label(),
-        )
-    });
+    let icon_sizes = IconSize::ALL
+        .into_iter()
+        .map(|size| view_item(size.label(), Icon::Grid, FolderView::Icons(size)));
     entries.extend(icon_sizes);
     entries.extend([
         MenuEntry::Divider,

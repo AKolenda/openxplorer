@@ -93,6 +93,9 @@ pub(super) struct Tab {
     pub listing_state: ListingState,
     /// Why the last listing failed.
     pub error: Option<EntryError>,
+    /// The running listing lists the same location again (F5, Try again
+    /// or a change the folder watch saw), so the page on screen stays.
+    pub reloading: bool,
     /// URIs of the selected items, restored after a reload or tab switch.
     pub selected: Vec<String>,
     /// The next listing scrolls to the first selected item, as a
@@ -121,6 +124,7 @@ impl Tab {
             generation: 0,
             listing_state: ListingState::NotListed,
             error: None,
+            reloading: false,
             selected: Vec::new(),
             reveals_selection: false,
             scroll: 0.0,

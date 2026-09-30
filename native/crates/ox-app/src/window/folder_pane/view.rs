@@ -69,8 +69,20 @@ impl FolderView {
         order[moved]
     }
 
+    /// Explorer's shortcut for the view: the accelerator GTK installs and
+    /// its text as menus show it, kept side by side so they cannot differ.
+    pub(crate) const fn shortcut(self) -> (&'static str, &'static str) {
+        match self {
+            FolderView::Icons(IconSize::ExtraLarge) => ("<Primary><Shift>1", "Ctrl+Shift+1"),
+            FolderView::Icons(IconSize::Large) => ("<Primary><Shift>2", "Ctrl+Shift+2"),
+            FolderView::Icons(IconSize::Medium) => ("<Primary><Shift>3", "Ctrl+Shift+3"),
+            FolderView::Icons(IconSize::Small) => ("<Primary><Shift>4", "Ctrl+Shift+4"),
+            FolderView::Details => ("<Primary><Shift>6", "Ctrl+Shift+6"),
+        }
+    }
+
     /// The views from smallest to largest items, for [`Self::zoomed`].
-    const ZOOM_ORDER: [FolderView; 5] = [
+    pub(crate) const ZOOM_ORDER: [FolderView; 5] = [
         FolderView::Details,
         FolderView::Icons(IconSize::Small),
         FolderView::Icons(IconSize::Medium),

@@ -127,7 +127,7 @@ impl EmptyPage {
         let (title, message) = match state {
             EmptyState::Unavailable(error) => ("This location is unavailable", error.as_str()),
             EmptyState::NoMatches(reason) => ("No matching items", reason.as_str()),
-            EmptyState::EmptyFolder => ("This folder is empty", ""),
+            EmptyState::EmptyFolder => ("This folder is empty", "Create a folder or paste files here."),
             EmptyState::EmptyRecycleBin => ("The Recycle Bin is empty", ""),
             EmptyState::NoShares => ("No shared folders found", ""),
             EmptyState::NoDevices => ("No MTP-compatible devices found", ""),

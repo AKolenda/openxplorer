@@ -42,7 +42,7 @@ fn columns_run_from_14_pixels_in_with_the_web_widths() {
     let widths: Vec<i32> = titles.iter().map(|title| title.width).collect();
     assert_eq!(
         &widths[1..],
-        [152, 135, 90 + 14],
+        [176, 135, 90 + 14],
         "Date, Type, and Size with the end padding"
     );
     assert_eq!(titles[0].x, list.x, "Name holds the 14 pixels before the columns");

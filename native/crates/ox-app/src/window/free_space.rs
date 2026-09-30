@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The free space of the current folder's volume in the status bar, as
 //! Dolphin shows it: "12.4 GB free", with "12.4 GB free out of 100 GB
-//! (88% used)" as its tooltip (VIEW-053). It is read again whenever a
-//! listing ends, so F5 refreshes it, and hidden on landing pages and
-//! where GIO cannot tell.
+//! (88% used)" as its tooltip (VIEW-053). It is read when a folder
+//! starts listing and again whenever a listing ends, so F5 refreshes it,
+//! and hidden on landing pages and where GIO cannot tell.
 
 use gtk::{gio, glib};
 use ox_core::format;

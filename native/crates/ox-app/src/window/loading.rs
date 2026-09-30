@@ -84,7 +84,7 @@ impl BrowserWindow {
             self.reset_typeahead();
             self.hide_message();
         }
-        let Some(start) = self.begin_load(id) else {
+        let Some(start) = self.begin_load(id, mode) else {
             return;
         };
         if let Some(page) = Page::from_uri(&start.uri) {
@@ -101,6 +101,11 @@ impl BrowserWindow {
         }
         self.keep_watching(id, &start.uri);
         if is_active {
+            if mode == LoadMode::Navigate {
+                // The previous folder's free space is wrong here while a
+                // slow folder lists; the end of the listing reads it again.
+                self.refresh_free_space();
+            }
             self.update_content();
         }
         let listing = self.start_listing(id, &start, mode, MountRetry::Allowed);
@@ -122,10 +127,11 @@ impl BrowserWindow {
     }
 
     /// Starts a load of tab `id`, or `None` once the tab has closed.
-    fn begin_load(&self, id: TabId) -> Option<LoadStart> {
+    fn begin_load(&self, id: TabId, mode: LoadMode) -> Option<LoadStart> {
         let mut session = self.imp().session.borrow_mut();
         let tab = session.tab_mut(id)?;
         let generation = tab.begin_load();
+        tab.reloading = mode == LoadMode::Reload;
         let uri = tab.uri().to_owned();
         Some(LoadStart { uri, generation })
     }
@@ -361,18 +367,21 @@ impl BrowserWindow {
 
     /// Shows the folder pane state that fits the active tab.
     pub(super) fn update_content(&self) {
-        let (uri, page, loading, error) = {
+        let (uri, page, loading, reloading, error) = {
             let session = self.imp().session.borrow();
             let Some(tab) = session.active() else { return };
             let page = Page::from_uri(tab.uri());
             let loading = tab.listing_state.is_listing();
             let error = tab.error.as_ref().map(ToString::to_string);
-            (tab.uri().to_owned(), page, loading, error)
+            (tab.uri().to_owned(), page, loading, tab.reloading, error)
         };
         let pane = self.folder_pane();
         pane.set_loading(loading && page.is_none());
         if page.is_some() {
             pane.show_page(PanePage::Landing);
+        } else if loading && reloading && pane.page() == Some(PanePage::Empty) {
+            // Listing an empty or unavailable location again keeps its
+            // page until the listing ends, as a reload keeps its rows.
         } else if pane.model().n_items() > 0 || (loading && error.is_none()) {
             // A folder being listed keeps the blank list, with its column
             // titles, until items come: no "Loading" text, no page swap.

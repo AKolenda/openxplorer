@@ -144,6 +144,7 @@ impl UpdateDialog {
         work: impl Fn() -> Activity + 'static,
     ) -> Self {
         let dialog: Self = glib::Object::builder().property("transient-for", parent).build();
+        crate::window::follow_text_size_keys(&dialog);
         dialog.bind(updates, Box::new(work));
         dialog.present();
         let state = updates.state();

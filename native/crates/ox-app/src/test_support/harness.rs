@@ -25,7 +25,7 @@ use crate::theme::Skin;
 use crate::window::BrowserWindow;
 
 /// How long a test waits for the window to settle before it fails.
-const WAIT_LIMIT: Duration = Duration::from_secs(8);
+pub(crate) const WAIT_LIMIT: Duration = Duration::from_secs(8);
 
 /// How often a waiting test checks its condition again.
 const POLL_INTERVAL: Duration = Duration::from_millis(5);

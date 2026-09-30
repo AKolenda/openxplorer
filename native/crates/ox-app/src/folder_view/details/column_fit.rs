@@ -61,12 +61,10 @@ impl DetailsView {
             #[weak]
             header,
             move |gesture, presses, x, _| {
-                if presses != 2 {
-                    return;
-                }
-                if let Some(column) = Self::column_at_edge(&header, x) {
+                // Capture on the header runs before GTK's own drag of the
+                // edge, so claiming the second press keeps it from starting.
+                if presses == 2 && view.fit_column_at_edge(&header, x) {
                     gesture.set_state(gtk::EventSequenceState::Claimed);
-                    view.fit_column(column);
                 }
             }
         ));
@@ -74,6 +72,9 @@ impl DetailsView {
         let titles = Self::titles(&header);
         for ((column, view_column), (_, title)) in self.view_columns().zip(titles) {
             // The title holds its column, so the column holds it weakly.
+            if let Some(start) = column_widths::saved_width(column, view_column.fixed_width()) {
+                title.update_property(&[gtk::accessible::Property::ValueNow(start)]);
+            }
             let title = title.downgrade();
             view_column.connect_fixed_width_notify(move |view_column| {
                 let width = view_column.fixed_width();
@@ -116,6 +117,17 @@ impl DetailsView {
             .filter_map(|(column, title)| Some((*column, title.compute_bounds(header)?)))
             .find(|(_, bounds)| (f64::from(bounds.x() + bounds.width()) - x).abs() <= RESIZE_EDGE)
             .map(|(column, _)| column)
+    }
+
+    /// Fits the column whose title ends at `x`, a position in `header`,
+    /// as a double-click on its resize edge does; `false` when no title
+    /// ends there.
+    fn fit_column_at_edge(&self, header: &gtk::Widget, x: f64) -> bool {
+        let Some(column) = Self::column_at_edge(header, x) else {
+            return false;
+        };
+        self.fit_column(column);
+        true
     }
 
     /// Left, Right and Home on `column`'s focused title.
@@ -181,7 +193,9 @@ impl DetailsView {
 
 /// Tells screen readers that `title` resizes `column` from the keyboard,
 /// and within which widths, as the web app's focusable separator did
-/// (`aria-label`, `aria-valuemin`, `aria-valuemax`).
+/// (`aria-label`, `aria-valuemin`, `aria-valuemax`). The title keeps its
+/// column's name as its label, so the resize text is its description;
+/// [`DetailsView::install_column_fit`] keeps its current width.
 fn describe_resizing(title: &gtk::Widget, column: SortColumn) {
     let limits = column_widths::width_limits(column);
     let description = format!(
@@ -197,12 +211,17 @@ fn describe_resizing(title: &gtk::Widget, column: SortColumn) {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
     use gtk::gio;
+    use ox_core::settings::{Column, ColumnWidth};
 
     use super::*;
     use crate::folder_view::cells::CellOwners;
     use crate::folder_view::model::FolderModel;
     use crate::test_support::file_entry;
+    use crate::test_support::harness::wait_until;
 
     /// A details view showing files named `names`.
     fn view_of(names: &[&str]) -> (DetailsView, FolderModel) {
@@ -255,6 +274,91 @@ mod tests {
             size.fixed_width(),
             narrowest,
             "Size stops at its 70-pixel minimum"
+        );
+    }
+
+    /// A double-click on a title's end edge fits that column, and the
+    /// fitted width is reported to be saved once it settles.
+    ///
+    /// parity: VIEW-029
+    #[gtk::test]
+    fn a_double_click_on_a_resize_edge_fits_and_saves_the_column() {
+        let (view, _model) = view_of(&["a.txt", "A rather long file name that needs a wide column.txt"]);
+        let window = gtk::Window::builder()
+            .default_width(900)
+            .default_height(300)
+            .child(&view)
+            .build();
+        window.present();
+        let header = view.header().expect("column titles");
+        let titles = DetailsView::titles(&header);
+        let name_title = &titles[0].1;
+        wait_until("the titles to be laid out", || name_title.width() > 0);
+        let reported = Rc::new(RefCell::new(None));
+        let sink = Rc::clone(&reported);
+        view.connect_columns_resized(move |widths| {
+            sink.replace(Some(widths));
+        });
+        let bounds = name_title.compute_bounds(&header).expect("a laid-out title");
+        let edge = f64::from(bounds.x() + bounds.width()) - 2.0;
+
+        assert!(!view.fit_column_at_edge(&header, f64::from(bounds.x()) + 20.0));
+        assert!(view.fit_column_at_edge(&header, edge));
+
+        let name = view.column(SortColumn::Name).expect("a Name column");
+        let fitted = column_widths::fitted_width(SortColumn::Name, view.widest_text(SortColumn::Name));
+        assert_eq!(
+            name.fixed_width(),
+            column_widths::fixed_width(SortColumn::Name, Some(fitted))
+        );
+        wait_until("the fit to be reported", || reported.borrow().is_some());
+        let widths: Vec<ColumnWidth> = reported.take().expect("reported widths");
+        let saved = widths.iter().find(|width| width.column == Column::Name);
+        assert_eq!(saved.map(|width| width.pixels), Some(f64::from(fitted)));
+        window.destroy();
+    }
+
+    /// Dragging a title's edge sets its column's fixed width; the column
+    /// holds it within its limits.
+    ///
+    /// parity: VIEW-028
+    #[gtk::test]
+    fn a_dragged_width_stays_within_the_column_limits() {
+        let (view, _model) = view_of(&["a.txt"]);
+        let name = view.column(SortColumn::Name).expect("a Name column");
+        name.set_fixed_width(40);
+        assert_eq!(
+            name.fixed_width(),
+            column_widths::clamped_fixed_width(SortColumn::Name, 40)
+        );
+        assert!(name.fixed_width() > 140, "Name keeps its 140-pixel minimum");
+        name.set_fixed_width(5_000);
+        assert_eq!(
+            name.fixed_width(),
+            column_widths::clamped_fixed_width(SortColumn::Name, 5_000)
+        );
+    }
+
+    /// Date modified starts wide enough for a late date and time at 125%
+    /// text size (13-pixel text grows to 16.25 pixels).
+    ///
+    /// parity: VIEW-028
+    #[gtk::test]
+    fn the_default_date_width_fits_a_date_and_time_at_125_percent() {
+        let (view, _model) = view_of(&["a.txt"]);
+        let layout = view
+            .column_view()
+            .create_pango_layout(Some("12/31/2026 11:59 PM"));
+        let mut font = gtk::pango::FontDescription::from_string("Sans");
+        font.set_absolute_size(16.25 * f64::from(gtk::pango::SCALE));
+        layout.set_font_description(Some(&font));
+        let text = layout.pixel_size().0;
+        let column = view.column(SortColumn::Modified).expect("a Date modified column");
+        let cell_padding = 12;
+        assert!(
+            text + cell_padding <= column.fixed_width(),
+            "{text} pixels of text in a {}-pixel column",
+            column.fixed_width()
         );
     }
 

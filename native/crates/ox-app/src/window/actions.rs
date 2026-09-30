@@ -13,7 +13,6 @@ use gtk::{gio, glib};
 use ox_core::settings::Theme;
 
 use crate::application::AppAction;
-use crate::folder_view::grid::IconSize;
 use crate::folder_view::sorting::{SortColumn, SortDirection, SortOrder};
 use crate::text_size::Step;
 
@@ -398,10 +397,6 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 12] = [
     (WindowAction::Settings, &["<Primary>comma"]),
 ];
 
-/// Explorer's Details layout key, beside Ctrl+Shift+1 to 4 of the icon
-/// sizes ([`IconSize::accelerator`]).
-const DETAILS_VIEW_ACCELERATORS: &[&str] = &["<Primary><Shift>6"];
-
 /// Ctrl+N, the application's one shortcut: another window.
 const NEW_WINDOW_ACCELERATORS: &[&str] = &["<Primary>n"];
 
@@ -445,11 +440,9 @@ pub(crate) fn install_accelerators(app: &gtk::Application) {
         let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
         app.set_accels_for_action(&WindowAction::TextSize(step).detailed_name(), &keys);
     }
-    let view = WindowAction::View.detailed_name();
-    for size in IconSize::ALL {
-        let detailed = format!("{view}::{}", size.as_str());
-        app.set_accels_for_action(&detailed, &[size.accelerator()]);
+    let action = WindowAction::View.detailed_name();
+    for view in FolderView::ZOOM_ORDER {
+        let (accelerator, _) = view.shortcut();
+        app.set_accels_for_action(&format!("{action}::{}", view.as_str()), &[accelerator]);
     }
-    let details = format!("{view}::{}", FolderView::Details.as_str());
-    app.set_accels_for_action(&details, DETAILS_VIEW_ACCELERATORS);
 }

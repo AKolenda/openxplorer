@@ -12,9 +12,11 @@ use gtk::subclass::prelude::*;
 
 use crate::locations::Page;
 use crate::test_support::harness::{
-    settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, STANDARD_NAMES,
+    settle, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, STANDARD_NAMES, WAIT_LIMIT,
 };
 use crate::window::folder_pane::{FolderView, PanePage};
+use crate::window::listing_state::ListingState;
+use crate::window::loading_line::APPEARANCE_DELAY;
 use crate::window::session::Direction;
 
 use super::geometry::bounds;
@@ -357,10 +359,39 @@ fn the_loading_line_lies_over_the_pane_without_moving_the_items() {
     );
 }
 
+/// Checks, until the active tab's listing ends, that the pane never says
+/// "Loading": a listing keeps the page `listing_page`, and the line and
+/// the status bar's "Loading…" wait for a slow listing.
+fn assert_no_loading_state(test: &TestWindow, what: &str, listing_page: PanePage) {
+    let pane = test.window.folder_pane();
+    let started = Instant::now();
+    loop {
+        settle();
+        let fast = started.elapsed() < APPEARANCE_DELAY;
+        let (count, _) = test.window.status_bar().texts();
+        if fast {
+            assert!(
+                !count.contains("Loading"),
+                "the status bar said {count:?} for {what}"
+            );
+            assert!(
+                !pane.loading_line().is_visible(),
+                "a fast listing showed the line"
+            );
+        }
+        if !test.window.is_loading() {
+            return;
+        }
+        assert_eq!(pane.page(), Some(listing_page), "{what} swapped the page");
+        assert!(started.elapsed() < WAIT_LIMIT, "timed out listing {what}");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
 /// Moving between folders and landing pages never says "Loading": a fast
 /// listing keeps the blank list with no page swap, no loading line and no
-/// "Loading…" in the status bar; the line waits for a slow listing (see
-/// `loading_line.rs`), as Windows Explorer and Dolphin do.
+/// "Loading…" in the status bar, and listing an empty folder again keeps
+/// its page (see `loading_line.rs`), as Windows Explorer and Dolphin do.
 ///
 /// parity: VIEW-047
 #[gtk::test]
@@ -381,26 +412,58 @@ fn switching_pages_never_flashes_a_loading_state() {
         test.window
             .navigate(&stop)
             .expect("every stop is a valid address");
-        loop {
-            let (count, _) = test.window.status_bar().texts();
-            assert!(
-                !count.contains("Loading"),
-                "the status bar said {count:?} for {stop}"
-            );
-            assert!(
-                !pane.loading_line().is_visible(),
-                "a fast listing showed the line"
-            );
-            if test.window.is_loading() {
-                assert_eq!(pane.page(), Some(PanePage::Listing), "a listing keeps the list");
-            } else {
-                break;
-            }
-            settle();
-        }
+        assert_no_loading_state(&test, &stop, PanePage::Listing);
     }
     test.window.navigate(&empty.uri()).expect("a folder");
     test.wait_for_listing("the empty folder");
     assert_eq!(pane.page(), Some(PanePage::Empty));
     assert_eq!(pane.empty_page().title(), "This folder is empty");
+    assert_eq!(
+        pane.empty_page().message(),
+        "Create a folder or paste files here."
+    );
+    test.window.refresh();
+    assert!(test.window.is_loading(), "F5 lists the folder again");
+    assert_no_loading_state(&test, "F5 in the empty folder", PanePage::Empty);
+    assert_eq!(pane.page(), Some(PanePage::Empty));
+}
+
+/// A listing that runs past the delay shows the loading line, and the
+/// status bar says "Loading…" while it shows.
+///
+/// parity: VIEW-047, VIEW-050
+#[gtk::test]
+fn a_slow_listing_shows_the_line_and_says_loading() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let pane = test.window.folder_pane();
+    // A listing that never ends: the tab stays in its listing state.
+    set_active_listing(
+        &test,
+        ListingState::Listing {
+            listed_before: true,
+            reload_pending: false,
+        },
+    );
+    test.window.update_content();
+    let started = Instant::now();
+    wait_until("the loading line", || pane.loading_line().is_visible());
+    assert!(
+        started.elapsed() >= APPEARANCE_DELAY,
+        "the line waited for the delay"
+    );
+    let (count, _) = test.window.status_bar().texts();
+    assert!(count.ends_with(" · Loading…"), "the status bar said {count:?}");
+
+    set_active_listing(&test, ListingState::Listed);
+    test.window.update_content();
+    wait_until("the line to go", || !pane.loading_line().is_visible());
+    let (count, _) = test.window.status_bar().texts();
+    assert!(!count.contains("Loading"), "the status bar said {count:?}");
+}
+
+/// Puts the active tab of `test` in `state`.
+fn set_active_listing(test: &TestWindow, state: ListingState) {
+    let mut session = test.window.imp().session.borrow_mut();
+    session.active_mut().expect("an active tab").listing_state = state;
 }

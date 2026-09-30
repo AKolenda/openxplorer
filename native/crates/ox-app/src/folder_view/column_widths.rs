@@ -4,9 +4,8 @@
 //!
 //! Ports `columnDefaults` and `applyColumnLayout` in `desktop/ui/app.js`:
 //! Name takes the remaining width until the user resizes it, the other
-//! columns default to 152, 330 (Folder path), 135 and 90 pixels, and
-//! saved widths are clamped
-//! to the limits the Python app uses (ox-core's [`Column::width_range`]).
+//! columns default to 176 (Date modified), 330 (Folder path), 135 and 90
+//! pixels, and saved widths are clamped to the limits the Python app uses (ox-core's [`Column::width_range`]).
 //! The details view applies these widths and saves them after a resize.
 
 use ox_core::settings::{Column, ColumnWidths};
@@ -44,11 +43,13 @@ const fn edge_gutter(column: SortColumn) -> u32 {
 }
 
 /// Width of a column nobody resized (`columnDefaults` in app.js). Name has
-/// none: it takes the remaining space.
+/// none: it takes the remaining space. Date modified shows the time too,
+/// so it starts wider than the web app's 152 pixels, enough for
+/// `12/31/2026 11:59 PM` at 125% text size.
 const fn default_width(column: SortColumn) -> Option<u32> {
     match column {
         SortColumn::Name => None,
-        SortColumn::Modified => Some(152),
+        SortColumn::Modified => Some(176),
         SortColumn::FolderPath => Some(330),
         SortColumn::Type => Some(135),
         SortColumn::Size => Some(90),
@@ -136,7 +137,7 @@ mod tests {
     #[test]
     fn unsaved_columns_start_at_the_python_defaults() {
         assert_eq!(start_width(SortColumn::Name, None), None);
-        assert_eq!(start_width(SortColumn::Modified, None), Some(152));
+        assert_eq!(start_width(SortColumn::Modified, None), Some(176));
         assert_eq!(start_width(SortColumn::FolderPath, None), Some(330));
         assert_eq!(start_width(SortColumn::Type, None), Some(135));
         assert_eq!(start_width(SortColumn::Size, None), Some(90));
