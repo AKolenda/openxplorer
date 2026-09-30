@@ -125,11 +125,37 @@ pub(super) fn show_file_manager_request(
     startup_id: &str,
 ) {
     let window = active_window(app).unwrap_or_else(|| open_window(app, context, None));
-    if !startup_id.is_empty() {
-        window.set_startup_id(startup_id);
-    }
-    window.present();
+    raise_for_caller(&window, startup_id);
     window.show_file_manager_request(request);
+}
+
+/// A window raised for another program: the two steps whose order
+/// decides whether the desktop lets it take focus.
+trait RaisedWindow {
+    /// Hands over the caller's startup ID (an xdg-activation token on
+    /// Wayland, a startup-notification ID on X11).
+    fn take_startup_id(&self, startup_id: &str);
+    /// Shows the window in front.
+    fn raise(&self);
+}
+
+impl RaisedWindow for BrowserWindow {
+    fn take_startup_id(&self, startup_id: &str) {
+        self.set_startup_id(startup_id);
+    }
+
+    fn raise(&self) {
+        self.present();
+    }
+}
+
+/// Gives `window` the caller's startup ID before it is presented, so
+/// GNOME's focus-stealing prevention lets it come to the front (INT-023).
+fn raise_for_caller(window: &impl RaisedWindow, startup_id: &str) {
+    if !startup_id.is_empty() {
+        window.take_startup_id(startup_id);
+    }
+    window.raise();
 }
 
 /// Shows `message` in the active window, if there is one.
@@ -147,5 +173,41 @@ fn report_in_every_window(app: &gtk::Application, message: &str) {
         .filter_map(|window| window.downcast::<BrowserWindow>().ok());
     for window in browsers {
         window.show_message(message);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+
+    use super::{raise_for_caller, RaisedWindow};
+
+    /// Records the steps it is asked to take.
+    #[derive(Default)]
+    struct RecordedWindow(RefCell<Vec<String>>);
+
+    impl RaisedWindow for RecordedWindow {
+        fn take_startup_id(&self, startup_id: &str) {
+            self.0.borrow_mut().push(format!("startup ID {startup_id}"));
+        }
+
+        fn raise(&self) {
+            self.0.borrow_mut().push("present".to_owned());
+        }
+    }
+
+    /// The caller's startup ID reaches the window before it is presented;
+    /// without one the window is only presented.
+    ///
+    /// parity: INT-023
+    #[test]
+    fn the_startup_id_comes_before_the_window_is_presented() {
+        let window = RecordedWindow::default();
+        raise_for_caller(&window, "caller_TIME42");
+        assert_eq!(*window.0.borrow(), ["startup ID caller_TIME42", "present"]);
+
+        let window = RecordedWindow::default();
+        raise_for_caller(&window, "");
+        assert_eq!(*window.0.borrow(), ["present"]);
     }
 }

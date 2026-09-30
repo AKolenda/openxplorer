@@ -267,6 +267,18 @@ fn open_with_lists_filters_and_launches_the_chosen_application() {
     }
 }
 
+/// Open with starts applications with the launch context of the window's
+/// own display, which gives them startup notification and focus.
+///
+/// parity: INT-023
+#[gtk::test]
+fn applications_start_with_the_windows_display() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let context = test.window.launch_context();
+    assert_eq!(gtk::gdk::prelude::GdkAppLaunchContextExt::display(&context), WidgetExt::display(&test.window));
+}
+
 /// For a folder every installed application is listed, and the
 /// file-manager default is never offered for change.
 ///
