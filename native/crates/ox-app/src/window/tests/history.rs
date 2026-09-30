@@ -8,8 +8,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use super::support::middle_click_at;
 use super::file_ops_support::press_shortcut_where_focused;
+use super::support::middle_click_at;
 use crate::locations::Page;
 use crate::search::SearchScope;
 use crate::test_support::harness::{application, descendants, wait_until, Fixture, TestWindow};
