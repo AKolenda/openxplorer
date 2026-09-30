@@ -333,12 +333,17 @@ fn installing_waits_for_file_operations() {
     let fixture = Fixture::standard();
     let simulated = SimulatedUpdates::new(Installation::DebianPackage);
     let test = simulated.window(&fixture);
-    let dialog = UpdateDialog::present_for(&test.window, &simulated.updates, || ox_core::update::Activity::Busy);
+    let dialog = UpdateDialog::present_for(&test.window, &simulated.updates, || {
+        ox_core::update::Activity::Busy
+    });
     wait_until("the check", || !simulated.updates.state().is_busy());
 
     dialog.click("Install update…");
 
-    assert_eq!(dialog.status(), "Finish file operations before installing the update.");
+    assert_eq!(
+        dialog.status(),
+        "Finish file operations before installing the update."
+    );
     assert!(!simulated.updates.state().is_installing());
     assert!(simulated.packages.programs().is_empty(), "nothing was installed");
     dialog.close();

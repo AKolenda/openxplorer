@@ -349,11 +349,18 @@ fn check_command_line(arguments: &[String]) -> Result<(), CommandLineError> {
 /// `--software-rendering`. It must run before GTK or any thread starts,
 /// and applies only when this process becomes the running instance.
 fn choose_renderer(arguments: &[String]) {
+    let is_chosen = std::env::var_os("GSK_RENDERER").is_some();
+    if let Some(renderer) = renderer_for(arguments, is_chosen) {
+        std::env::set_var("GSK_RENDERER", renderer);
+    }
+}
+
+/// The renderer `arguments` ask for: Cairo for `--software-rendering`,
+/// unless the user already chose one (`is_chosen`), which is kept.
+fn renderer_for(arguments: &[String], is_chosen: bool) -> Option<&'static str> {
     let option = format!("--{}", CommandOption::SoftwareRendering.name());
     let asks_software = arguments.iter().skip(1).any(|argument| *argument == option);
-    if asks_software && std::env::var_os("GSK_RENDERER").is_none() {
-        std::env::set_var("GSK_RENDERER", SOFTWARE_RENDERER);
-    }
+    (asks_software && !is_chosen).then_some(SOFTWARE_RENDERER)
 }
 
 /// Runs the app under the build's application ID (`APP_ID` in
@@ -389,5 +396,26 @@ pub fn run() -> glib::ExitCode {
         glib::ExitCode::FAILURE
     } else {
         status
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn words(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| (*word).to_owned()).collect()
+    }
+
+    /// `--software-rendering` draws with Cairo for this launch only, and
+    /// changes no desktop setting; a renderer the user chose is kept.
+    ///
+    /// parity: UPD-013, INT-006
+    #[test]
+    fn software_rendering_chooses_cairo_for_this_launch() {
+        let software = words(&["openxplorer", "--new-window", "--software-rendering"]);
+        assert_eq!(renderer_for(&software, false), Some("cairo"));
+        assert_eq!(renderer_for(&software, true), None);
+        assert_eq!(renderer_for(&words(&["openxplorer", "/tmp"]), false), None);
     }
 }

@@ -147,7 +147,10 @@ impl<B: InstanceBus> InstanceGuard<B> {
         let deadline = Instant::now() + self.timing.timeout;
         loop {
             let status = self.status(installed)?;
-            let is_pending = status.running.as_ref().is_some_and(|running| running.build.is_empty());
+            let is_pending = status
+                .running
+                .as_ref()
+                .is_some_and(|running| running.build.is_empty());
             if !is_pending || Instant::now() >= deadline {
                 return Ok(status);
             }

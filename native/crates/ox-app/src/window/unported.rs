@@ -21,7 +21,10 @@ pub(crate) enum Milestone {
     /// The "Distribution" service: packages, the source they ship with and
     /// the update flow. Nothing waits for it now; it stays for the next
     /// command or setting that is shown before it works.
-    #[allow(dead_code, reason = "no command or setting waits for a milestone at the moment")]
+    #[allow(
+        dead_code,
+        reason = "no command or setting waits for a milestone at the moment"
+    )]
     Distribution,
 }
 
@@ -89,7 +92,10 @@ mod tests {
 
     #[test]
     fn a_working_command_keeps_its_tooltip() {
-        assert_eq!(tooltip(WindowAction::License, "License & source"), "License & source");
+        assert_eq!(
+            tooltip(WindowAction::License, "License & source"),
+            "License & source"
+        );
         assert_eq!(tooltip(WindowAction::CopyPath, "Copy path"), "Copy path");
         assert_eq!(tooltip(WindowAction::Rename, "Rename (F2)"), "Rename (F2)");
         assert_eq!(tooltip(WindowAction::Cut, "Cut (Ctrl+X)"), "Cut (Ctrl+X)");

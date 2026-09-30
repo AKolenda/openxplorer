@@ -69,7 +69,13 @@ mod tests {
             .collect();
         assert!(positions.is_sorted(), "{text}");
         assert_eq!(text.matches("4. ").count(), 1, "one fourth step");
-        let topics = ["ZIP handler", "FileManager1", "Flatpak/Snap", "Open windows…", "Restore previous"];
+        let topics = [
+            "ZIP handler",
+            "FileManager1",
+            "Flatpak/Snap",
+            "Open windows…",
+            "Restore previous",
+        ];
         for topic in topics {
             assert!(text.contains(topic), "{topic} in {text}");
         }

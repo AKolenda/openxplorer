@@ -112,8 +112,8 @@ fn show_item_properties_opens_the_folder_and_the_properties() {
     fixture.write("Documents/report.txt");
     let test = TestWindow::open(&fixture.uri());
     let item = [fixture.uri_of("Documents/report.txt")];
-    let request = FileManagerRequest::new(FileManagerMethod::ShowItemProperties, &item)
-        .expect("a valid location");
+    let request =
+        FileManagerRequest::new(FileManagerMethod::ShowItemProperties, &item).expect("a valid location");
 
     test.window.show_file_manager_request(&request);
 

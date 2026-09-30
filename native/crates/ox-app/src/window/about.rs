@@ -40,7 +40,7 @@ at https://github.com/AKolenda/openxplorer/releases, and the repository itself."
 /// The GNU Affero General Public License, version 3, word for word.
 const AGPL: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../LICENSE"));
 
-/// The notice of the MIT-licensed Winspace code OpenXplorer started from.
+/// The notice of the MIT-licensed Winspace code `OpenXplorer` started from.
 const WINSPACE_NOTICE: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../licenses/Winspace-MIT.txt"
@@ -132,6 +132,9 @@ mod tests {
         }
         dialog.finish();
         let license = crate::window::WindowAction::License.name();
-        assert!(test.window.is_action_enabled(license), "License & source can be opened");
+        assert!(
+            test.window.is_action_enabled(license),
+            "License & source can be opened"
+        );
     }
 }

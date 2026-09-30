@@ -14678,8 +14678,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:1662-1664"]
 python_tests = ["desktop/tests/test_v07.py::AppManagerTests::test_glib_parsed_new_window_flag"]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-app/src/application/state.rs (new_window_opens_its_locations_in_a_window_of_its_own): the first location opens in the new window, the others as tabs. --software-rendering applies only when the launch starts the application: GTK chooses its renderer once per process."
+native = "done"
+native_note = "native/crates/ox-app/src/application/requests.rs (new_window_at): the first location opens in a new window (or Home), the others as tabs in it. Tests: native/crates/ox-app/src/application/state.rs (new_window_opens_its_locations_in_a_window_of_its_own), command_line.rs (each_option_asks_for_its_own_action), application.rs (software_rendering_chooses_cairo_for_this_launch). Limitation by GTK: --software-rendering takes effect when the launch starts the application, because GTK 4 chooses one renderer per process (GSK_RENDERER); a --new-window --software-rendering handed to an already running instance opens its window with that instance's renderer."
 
 [[feature]]
 id = "INT-007"
@@ -15192,8 +15192,8 @@ python_tests = ["desktop/tests/test_v07.py::BusTests::test_showitems_dispatch"]
 bridge = ["open", "openWith", "activateItem"]
 dolphin = "KStartupInfo / KWindowSystem activation tokens"
 gnome = "gtk_window_set_startup_id (X11 startup-notification or Wayland xdg-activation token), GdkAppLaunchContext passed to g_app_info_launch; GdkAppLaunchContext"
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_file_manager/service.rs (show_items_reaches_the_app_with_the_startup_id, a_long_startup_id_is_cut_to_4096_characters). The window raised for a FileManager1 request gets the caller's startup ID before present() (native/crates/ox-app/src/application/requests.rs), and Open with launches with the window display's launch context (native/crates/ox-app/src/window/integration_actions.rs). Not verified on a real Wayland session yet. Porting notes: Focus behaviour is unverified on a real Wayland session; the native app must verify it with xdg-activation."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_file_manager/service.rs (show_items_reaches_the_app_with_the_startup_id, a_long_startup_id_is_cut_to_4096_characters): the caller's startup ID reaches the app, cut to 4096 characters. The window raised for a FileManager1 request gets it through set_startup_id before present() (native/crates/ox-app/src/application/requests.rs), which GTK turns into an xdg-activation token on Wayland and startup notification on X11, and Open with launches with the window display's GdkAppLaunchContext (native/crates/ox-app/src/window/integration_actions.rs). Not verified by hand on a real GNOME Wayland session: focus-stealing prevention is the compositor's decision."
 
 [[feature]]
 id = "INT-024"
@@ -15213,8 +15213,8 @@ python_tests = []
 bridge = ["activateItem"]
 dolphin = "KDE Device Notifier “Open with File Manager”"
 gnome = "GNOME Shell autorun manager + org.gnome.desktop.media-handling automount-open → default inode/directory handler"
-native = "todo"
-native_note = "Porting notes: Not verified with real hardware."
+native = "done"
+native_note = "The desktop runs the folder handler's Exec (openxplorer %U) with the new mount root when GNOME's 'open folder on media insertion' is on; a later launch hands that location to the running instance, which opens it in the active window (native/crates/ox-app/src/application/requests.rs, open_in_active_window). Tests: native/crates/ox-app/src/window/tests/opening.rs (command_line_locations_open_in_the_current_tab_then_in_new_tabs), native/crates/ox-app/tests/launch.rs (a later launch hands over to the running instance). Porting notes: not verified with real removable media; that needs hardware."
 
 [[feature]]
 id = "INT-025"
@@ -15688,7 +15688,8 @@ python_tests = [
   "desktop/tests/test_startup.py::StartupTests::test_timeout_reveals_recovery_without_dismissing_cover",
 ]
 bridge = ["environment", "uiReady", "cacheStatus", "quit"]
-native = "todo"
+native = "n-a"
+native_note = "The Python app's interface was a WebKit page talking to a separate backend, so it needed a ready handshake, a startup error screen with Retry, a version check between page and backend and 15 s request timeouts. The native interface is compiled into the same process as the logic: there is no page that can fail to load or report a different version, and no bridge to time out. What remains applies natively and is done: preferences (view, details pane, hidden files, theme, text size, layout) are applied before the first window shows, a settings warning is shown in the window, the start location (or Home) opens, a folder that cannot be listed shows its error in the folder view, and an outdated running process is handled by the launch guard (UPD-008, UPD-009)."
 
 [[feature]]
 id = "UPD-012"
@@ -15718,7 +15719,8 @@ python_tests = [
   "desktop/tests/test_v07.py::AppManagerTests::test_glib_parsed_software_flag",
 ]
 bridge = ["uiReady"]
-native = "todo"
+native = "n-a"
+native_note = "The watchdog recovered a WebKit web view that stayed blank because of GPU acceleration. The native window is drawn by GTK in the same process, with no web view to load; if GTK's GPU renderer misbehaves, --software-rendering (UPD-013) starts the app with the Cairo renderer, as the watchdog's 'Retry with software rendering' did."
 
 [[feature]]
 id = "UPD-013"
@@ -15736,8 +15738,8 @@ sources = [
 ]
 python_tests = ["desktop/tests/test_v07.py::AppManagerTests::test_glib_parsed_software_flag"]
 bridge = []
-native = "partial"
-native_note = "--software-rendering makes GTK draw with Cairo when the launch starts the application (native/crates/ox-app/src/application.rs); GTK cannot switch the renderer of a running instance."
+native = "done"
+native_note = "--software-rendering sets GSK_RENDERER=cairo for this launch only, unless the user already chose a renderer, and changes no desktop setting (native/crates/ox-app/src/application.rs, renderer_for). Test: software_rendering_chooses_cairo_for_this_launch. GTK 4 chooses one renderer per process, so it applies when the launch starts the application, not to a window a running instance opens."
 
 [[feature]]
 id = "UPD-014"
@@ -15750,7 +15752,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:20-31"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "n-a"
+native_note = "The Python app imported PyGObject, GTK 3 and WebKit2GTK at runtime and could explain a missing one. The native executable links GTK 4 and GLib directly: the packages depend on those libraries (dependencies are derived from the linked libraries), and a missing library stops the dynamic loader before any OpenXplorer code runs, so the app cannot print a message of its own."
 
 [[feature]]
 id = "UPD-015"
@@ -15893,8 +15896,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "todo"
-native_note = "Porting notes: Repository tooling, not app behaviour. Keep it in the native release pipeline."
+native = "partial"
+native_note = "Implemented in the repository's release pipeline, not the app: .github/workflows/checks.yml stages the verified native packages and the corresponding source with tools/release.py, runs tools/audit-public-data.py on the complete release, writes SHA256SUMS and publishes every listed asset with gh release create only when the tag does not exist yet, so existing assets are never overwritten. tests/test_release_source.py and tests/test_public_data.py test the source policy and the audit. Not done: those tests live outside native/, which the parity marker scanner does not read, and the never-overwrite rule is workflow YAML without a test."
 
 [[feature]]
 id = "UPD-022"
@@ -15932,7 +15935,7 @@ python_tests = [
 ]
 bridge = []
 native = "todo"
-native_note = "Needs an explicit product decision: the website preview is built from desktop/ui, not from the GTK app, and the UI regression suites depend on it. Record n-a here only once that decision is made. Porting notes: Website/demo artifact rather than desktop behaviour. The native GTK app need not reproduce it, but its removal should be an explicit decision because the UI regression suites depend on it. A GTK4 app cannot be embedded in the website, so the owner must decide whether the HTML preview stays as a separate artifact."
+native_note = "Needs an explicit product decision by the owner: the website preview is built from desktop/ui, not from the GTK app (a GTK 4 app cannot run in a browser), and the UI regression suites depend on it. Record n-a only once the owner decides whether the HTML preview stays as a separate artifact. Porting notes: Website/demo artifact rather than desktop behaviour."
 
 [[feature]]
 id = "ACC-001"

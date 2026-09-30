@@ -94,8 +94,8 @@ fn owner() -> Option<String> {
 
 /// The unique bus name that owns `name`, if any. Never starts a service.
 fn owner_of(name: &str) -> Option<String> {
-    let bus = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE)
-        .expect("the private session bus");
+    let bus =
+        gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).expect("the private session bus");
     let reply = bus
         .call_sync(
             Some("org.freedesktop.DBus"),
@@ -142,20 +142,35 @@ fn launches_share_one_instance_that_quits_and_restarts_on_request() {
         format!("OpenXplorer {}\n", env!("CARGO_PKG_VERSION"))
     );
     let help = String::from_utf8_lossy(&run(&["--help-all"]).stdout).into_owned();
-    for option in ["--new-window", "--select", "--check", "--diagnose", "--restart", "--quit"] {
+    for option in [
+        "--new-window",
+        "--select",
+        "--check",
+        "--diagnose",
+        "--restart",
+        "--quit",
+    ] {
         assert!(help.contains(option), "--help lists {option}: {help}");
     }
     let invalid = run(&["--select"]);
     assert_eq!(invalid.status.code(), Some(2));
-    assert_eq!(String::from_utf8_lossy(&invalid.stderr), "--select needs a file path.\n");
+    assert_eq!(
+        String::from_utf8_lossy(&invalid.stderr),
+        "--select needs a file path.\n"
+    );
 
     let without_opt_in = run(&["--filemanager-service"]);
-    assert!(without_opt_in.status.success(), "the service without the opt-in exits");
+    assert!(
+        without_opt_in.status.success(),
+        "the service without the opt-in exits"
+    );
     assert_eq!(owner(), None, "and leaves nothing running");
 
     let settings = ox_core::settings::Settings::default_directory();
     let reveal = RevealRegistration::new(&RevealPaths::for_user(&settings), Sandbox::Host);
-    reveal.enable().expect("Show in folder can be enabled in the private session");
+    reveal
+        .enable()
+        .expect("Show in folder can be enabled in the private session");
     let mut service = Instance::start(&["--filemanager-service"]);
     wait_until("the service to own FileManager1", || {
         owner().is_some() && owner_of(BUS_NAME) == owner()
@@ -182,7 +197,9 @@ fn launches_share_one_instance_that_quits_and_restarts_on_request() {
 
     let mut restarted = Instance::start(&["--restart", &folder]);
     assert!(first.wait("the first instance to quit").success());
-    wait_until("the restarted instance", || owner().is_some_and(|name| Some(&name) != first_owner.as_ref()));
+    wait_until("the restarted instance", || {
+        owner().is_some_and(|name| Some(&name) != first_owner.as_ref())
+    });
 
     assert!(run(&["--quit"]).status.success());
     assert!(restarted.wait("the restarted instance to quit").success());

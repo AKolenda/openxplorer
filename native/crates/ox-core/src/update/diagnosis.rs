@@ -55,6 +55,10 @@ pub enum Associations {
 /// The handlers and what Restore previous could put back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "the keys of the Python app's JSON report"
+)]
 pub struct AssociationStatus {
     /// Each MIME type's current handler; empty when none.
     pub current: BTreeMap<&'static str, String>,
@@ -131,6 +135,11 @@ impl Diagnosis {
 
     /// The report as indented JSON, as `json.dumps(report, indent=2)`
     /// printed it.
+    ///
+    /// # Panics
+    ///
+    /// Never: the report is strings, numbers and booleans, which always
+    /// serialise.
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("the report is plain data")
     }

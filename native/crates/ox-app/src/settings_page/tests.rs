@@ -530,7 +530,11 @@ fn rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone() {
         }
     }
     let license = settings.row("OpenXplorer · License & source");
-    assert_eq!(license.availability(), Availability::Ready, "the licence can be read");
+    assert_eq!(
+        license.availability(),
+        Availability::Ready,
+        "the licence can be read"
+    );
 }
 
 /// Choosing a theme card runs `win.theme`, which the Appearance menu runs

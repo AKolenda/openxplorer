@@ -24,11 +24,15 @@ use crate::config::APP_ID;
 
 /// What `--check` prints: the version, GTK, GIO's VFS and the build
 /// digest, one per line, as the Python app printed them (without
-/// WebKitGTK, which the native app does not use).
+/// `WebKitGTK`, which the native app does not use).
 pub(super) fn check_report() -> String {
     let vfs = gio::Vfs::default();
     let build = this_identity().build;
-    let build = if build.is_empty() { "unknown".to_owned() } else { build };
+    let build = if build.is_empty() {
+        "unknown".to_owned()
+    } else {
+        build
+    };
     format!(
         "OpenXplorer {}\nGTK {}.{}.{}\nGIO/GVfs: {}\nBuild: {build}",
         running_version(),
