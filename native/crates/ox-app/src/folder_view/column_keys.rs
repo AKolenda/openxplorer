@@ -73,6 +73,8 @@ pub(crate) fn make_titles_keyboard_operable(view: &DetailsView) {
     let titles = title_buttons(view.column_view());
     for (column, title) in SortColumn::ALL.into_iter().zip(titles) {
         title.set_focusable(true);
+        // A click sorts and leaves focus in the list, as before.
+        title.set_focus_on_click(false);
         title.update_property(&[gtk::accessible::Property::Description(
             "Enter sorts by this column; Left and Right resize it; Home restores its width",
         )]);
