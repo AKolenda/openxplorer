@@ -15265,7 +15265,8 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "Plasma task-manager job progress"
 gnome = "com.canonical.Unity.LauncherEntry Update signal (progress, progress-visible), supported by Dash-to-Dock/Dash-to-Panel-style taskbars; GNOME Shell core has no equivalent"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/launcher_progress.rs: while the transfer panel or the archive operation panel runs, the app emits com.canonical.Unity.LauncherEntry.Update for application://<app id>.desktop with progress and progress-visible, on whole-percent changes only, and hides the bar when the operation ends. Docks and taskbars that implement the API (Dash to Dock, Dash to Panel, Zorin's taskbar, Plank, KDE) draw it; GNOME Shell's own dash has no equivalent and shows nothing. Test: launcher_progress.rs (the_update_names_the_app_and_its_progress). Not verified against a real dock."
 
 [[feature]]
 id = "INT-028"

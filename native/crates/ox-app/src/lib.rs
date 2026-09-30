@@ -24,6 +24,7 @@ mod folder_view;
 mod history;
 mod icons;
 mod integration;
+mod launcher_progress;
 mod locations;
 mod modal;
 mod network;

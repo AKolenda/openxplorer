@@ -31,6 +31,7 @@ mod imp {
     use gtk::subclass::prelude::*;
     use ox_core::transfer::Cancellation;
 
+    use crate::launcher_progress::LauncherProgress;
     use crate::write_inhibitor::WriteInhibitor;
 
     /// Private state of [`super::OperationPanel`].
@@ -47,6 +48,8 @@ mod imp {
         /// Keeps the session from logging out or suspending meanwhile
         /// (INT-028).
         pub(super) inhibitor: RefCell<Option<WriteInhibitor>>,
+        /// The progress on the dock icon (INT-027).
+        pub(super) launcher: RefCell<Option<LauncherProgress>>,
     }
 
     #[glib::object_subclass]
@@ -117,6 +120,8 @@ impl OperationPanel {
         let imp = self.imp();
         imp.cancel.replace(Some(cancel));
         imp.cancel_button.set_sensitive(true);
+        imp.launcher
+            .replace(crate::launcher_progress::LauncherProgress::for_widget(self));
         self.show_progress(label, 0.0);
         self.set_visible(true);
         imp.inhibitor
@@ -136,6 +141,9 @@ impl OperationPanel {
             imp.label.set_text(label);
         }
         imp.progress.set_fraction(fraction.clamp(0.0, 1.0));
+        if let Some(launcher) = imp.launcher.borrow().as_ref() {
+            launcher.show(fraction);
+        }
     }
 
     /// Stops the running operation.
@@ -152,6 +160,7 @@ impl OperationPanel {
     pub(crate) fn finish(&self) {
         self.imp().cancel.replace(None);
         self.imp().inhibitor.replace(None);
+        self.imp().launcher.replace(None);
         self.set_visible(false);
     }
 }

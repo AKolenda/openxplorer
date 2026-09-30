@@ -60,7 +60,9 @@ impl BrowserWindow {
         }
         let notice = Notice::of(summary);
         let notification = gio::Notification::new(&notice.title);
-        notification.set_body(notice.body.as_deref());
+        if let Some(body) = &notice.body {
+            notification.set_body(Some(body));
+        }
         let focus = AppAction::FocusWindow.detailed_name();
         let window = self.id().to_variant();
         notification.set_default_action_and_target_value(&focus, Some(&window));

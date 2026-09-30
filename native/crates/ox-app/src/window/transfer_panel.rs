@@ -11,7 +11,8 @@
 //! and the label reads "Cancelling…" until the operation stops.
 //!
 //! While it shows, the panel holds a [`WriteInhibitor`], so the session
-//! does not log out or suspend in the middle of the operation (INT-028).
+//! does not log out or suspend in the middle of the operation (INT-028),
+//! and shows the progress on the dock icon ([`LauncherProgress`], INT-027).
 //!
 //! [`TransferPanel`] is a `GtkBox` subclass whose layout is the template
 //! `resources/ui/transfer-panel.ui`. It floats over the folder pane, so
@@ -22,6 +23,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::window_action::WindowAction;
+use crate::launcher_progress::LauncherProgress;
 use crate::write_inhibitor::WriteInhibitor;
 
 /// The copy glyph's edge (`#transfer-icon`).
@@ -37,6 +39,7 @@ mod imp {
     use gtk::subclass::prelude::*;
 
     use crate::icons::{self, Icon};
+    use crate::launcher_progress::LauncherProgress;
     use crate::write_inhibitor::WriteInhibitor;
 
     /// Private state of [`super::TransferPanel`].
@@ -57,6 +60,8 @@ mod imp {
         pub(super) cancel_button: TemplateChild<gtk::Button>,
         /// Keeps the session from logging out or suspending meanwhile.
         pub(super) inhibitor: RefCell<Option<WriteInhibitor>>,
+        /// The progress on the dock icon.
+        pub(super) launcher: RefCell<Option<LauncherProgress>>,
     }
 
     #[glib::object_subclass]
@@ -97,6 +102,7 @@ impl TransferPanel {
     /// Shows the panel for an operation that starts with `label`, its bar
     /// empty.
     pub(super) fn start(&self, label: &str) {
+        self.imp().launcher.replace(LauncherProgress::for_widget(self));
         self.show_progress(label, 0.0);
         self.set_visible(true);
         self.imp().inhibitor.replace(WriteInhibitor::hold(self));
@@ -110,6 +116,9 @@ impl TransferPanel {
         imp.progress_bar.set_fraction(fraction.clamp(0.0, 1.0));
         imp.progress_bar
             .update_property(&[gtk::accessible::Property::ValueText(label)]);
+        if let Some(launcher) = imp.launcher.borrow().as_ref() {
+            launcher.show(fraction);
+        }
     }
 
     /// Says that the operation is stopping. The window shows no later
@@ -122,6 +131,7 @@ impl TransferPanel {
     pub(super) fn finish(&self) {
         self.set_visible(false);
         self.imp().inhibitor.replace(None);
+        self.imp().launcher.replace(None);
     }
 
     /// Whether the panel holds the session's inhibitor, for tests.
