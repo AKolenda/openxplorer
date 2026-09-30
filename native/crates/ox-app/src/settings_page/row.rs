@@ -4,9 +4,7 @@
 //!
 //! Replaces the `.settings-line` rows of `desktop/ui/app.js`
 //! (`renderSettingsPage`), whose controls sat under long paragraphs. The
-//! static layout is the template `resources/ui/settings-row.ui`. A row the
-//! native preview cannot run yet is still shown, with its current wording,
-//! and says which `native/ROADMAP.md` milestone brings it ([`Availability`]).
+//! static layout is the template `resources/ui/settings-row.ui`.
 
 use std::cell::{Cell, OnceCell};
 
@@ -15,33 +13,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::search::{jump_to, shown_text, RowText, SearchQuery};
-use crate::window::{children, Milestone};
-
-/// Whether the native preview can do what a row controls.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum Availability {
-    /// It works.
-    #[default]
-    Ready,
-    /// Shown but disabled until the milestone brings it.
-    Unported(Milestone),
-}
-
-impl Availability {
-    /// The line under the description, or `None` for a row that works.
-    pub(crate) fn notice(self) -> Option<String> {
-        match self {
-            Availability::Ready => None,
-            Availability::Unported(milestone) => Some(milestone.notice()),
-        }
-    }
-
-    /// Whether a row's controls take input: an unported row's are
-    /// disabled, so none of them looks as if it did something.
-    const fn enables_controls(self) -> bool {
-        !matches!(self, Availability::Unported(_))
-    }
-}
+use crate::window::children;
 
 /// What a screen reader calls a control put on a row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,7 +45,7 @@ pub(crate) enum RowLayout {
 }
 
 mod imp {
-    use super::{Availability, Cell, OnceCell, RowLayout, RowText};
+    use super::{Cell, OnceCell, RowLayout, RowText};
     use gtk::glib;
     use gtk::subclass::prelude::*;
 
@@ -87,18 +59,11 @@ mod imp {
         /// The line under the name.
         #[template_child]
         pub(super) description_label: TemplateChild<gtk::Label>,
-        /// Which milestone brings a row the preview cannot run yet.
-        #[template_child]
-        pub(super) notice_label: TemplateChild<gtk::Label>,
         /// The switch, drop-down or buttons.
         #[template_child]
         pub(super) control_slot: TemplateChild<gtk::Box>,
         /// What the row says, set once by `SettingRow::new`.
         pub(super) text: OnceCell<RowText>,
-        /// Whether the preview can do what the row controls.
-        pub(super) availability: Cell<Availability>,
-        /// What the heading of the row's group says for every row.
-        pub(super) heading_availability: Cell<Availability>,
         /// Where the controls go while the window has room.
         pub(super) roomy_layout: Cell<RowLayout>,
     }
@@ -163,8 +128,7 @@ impl SettingRow {
     }
 
     /// Puts `control` after the row's other controls, named for screen
-    /// readers as `name` says. On an unported row it is disabled at once,
-    /// like the controls added before [`Self::set_availability`].
+    /// readers as `name` says.
     pub(crate) fn add_control(&self, control: &impl IsA<gtk::Widget>, name: ControlName) {
         let imp = self.imp();
         let title: &gtk::Accessible = imp.title_label.upcast_ref();
@@ -175,60 +139,12 @@ impl SettingRow {
         };
         let control = control.upcast_ref::<gtk::Widget>();
         control.update_relation(&[relation]);
-        if !self.availability().enables_controls() {
-            control.set_sensitive(false);
-        }
         imp.control_slot.append(control);
     }
 
     /// The row's controls, in order.
     pub(crate) fn controls(&self) -> Vec<gtk::Widget> {
         children(&*self.imp().control_slot).collect()
-    }
-
-    /// Whether the native preview can do what the row controls.
-    pub(crate) fn availability(&self) -> Availability {
-        self.imp().availability.get()
-    }
-
-    /// Marks what the preview can do with the row: an unported row's
-    /// controls are disabled, those added later too, and both kinds of
-    /// pending row name their milestone in a tooltip and in a line under
-    /// the description, unless the group's heading names it already.
-    pub(crate) fn set_availability(&self, availability: Availability) {
-        let imp = self.imp();
-        imp.availability.set(availability);
-        let notice = availability.notice();
-        imp.notice_label.set_text(notice.as_deref().unwrap_or_default());
-        self.set_tooltip_text(notice.as_deref());
-        self.show_notice_unless_heading_has_it();
-        for control in self.controls() {
-            control.set_sensitive(availability.enables_controls());
-        }
-    }
-
-    /// Tells the row what its group's heading says for every row, so a row
-    /// pending the same milestone does not repeat it, whichever of the two
-    /// was set first.
-    pub(super) fn set_heading_availability(&self, heading: Availability) {
-        self.imp().heading_availability.set(heading);
-        self.show_notice_unless_heading_has_it();
-    }
-
-    /// Shows the milestone line when the row has one the heading lacks.
-    fn show_notice_unless_heading_has_it(&self) {
-        let imp = self.imp();
-        let availability = imp.availability.get();
-        let heading_has_it = availability == imp.heading_availability.get();
-        let shows_notice = availability.notice().is_some() && !heading_has_it;
-        imp.notice_label.set_visible(shows_notice);
-    }
-
-    /// The milestone line the row shows, if it shows one.
-    #[cfg(test)]
-    pub(crate) fn shown_notice(&self) -> Option<String> {
-        let label = &self.imp().notice_label;
-        label.is_visible().then(|| label.text().to_string())
     }
 
     /// Shows the row when it matches `query` by its own words, the labels
@@ -281,20 +197,5 @@ impl SettingRow {
                 slot.set_halign(gtk::Align::Fill);
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn an_unported_setting_names_its_milestone_and_a_working_one_nothing() {
-        let unported = Availability::Unported(Milestone::Distribution);
-        assert_eq!(
-            unported.notice().as_deref(),
-            Some("Not in the native preview yet: arrives with packaging and updates.")
-        );
-        assert_eq!(Availability::Ready.notice(), None);
     }
 }

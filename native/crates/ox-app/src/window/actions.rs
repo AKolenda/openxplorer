@@ -143,7 +143,6 @@ impl BrowserWindow {
         self.install_search_actions();
         self.install_saved_search_actions();
         self.install_integration_actions();
-        self.install_unported_actions();
         self.install_context_menu_actions();
         let [journal, clipboard] = self.install_file_actions();
         let mut handlers = self.imp().handlers.borrow_mut();
@@ -239,6 +238,7 @@ impl BrowserWindow {
             plain_action(WindowAction::PinFolder, BrowserWindow::pin_folder),
             plain_action(WindowAction::CopyPath, BrowserWindow::copy_path),
             plain_action(WindowAction::About, BrowserWindow::show_about),
+            plain_action(WindowAction::License, BrowserWindow::show_license),
             plain_action(
                 WindowAction::ContextMenu,
                 BrowserWindow::open_context_menu_from_keyboard,

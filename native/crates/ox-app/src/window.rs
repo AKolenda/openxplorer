@@ -116,7 +116,6 @@ mod title_bar;
 mod toast;
 mod transfer_panel;
 mod type_to_select;
-mod unported;
 mod version_restore;
 mod widget_tree;
 mod window_action;
@@ -148,7 +147,6 @@ pub(crate) use closing::QUIT_WHILE_WRITING;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;
-pub(crate) use unported::Milestone;
 pub(crate) use widget_tree::children;
 pub(crate) use window_action::WindowAction;
 
@@ -281,7 +279,7 @@ impl BrowserWindow {
 
     /// The message the toast showed last, for tests.
     #[cfg(test)]
-    fn shown_message(&self) -> glib::GString {
+    pub(crate) fn shown_message(&self) -> glib::GString {
         self.imp().toast.text()
     }
 }
