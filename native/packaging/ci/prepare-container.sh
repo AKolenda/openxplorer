@@ -36,9 +36,9 @@ case "$family" in
         zypper --non-interactive install --force-resolution \
             gcc pkgconf-pkg-config 'pkgconfig(gtk4)' \
             'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' glib2-tools python3 git-core curl \
-            xvfb-run xorg-x11-server-Xvfb xauth dbus-1 gvfs gvfs-backends python3-gobject \
-            typelib-1_0-Secret-1 gnome-keyring dejavu-fonts adwaita-icon-theme /usr/bin/node \
-            desktop-file-utils AppStream rpm-build cargo rust cpio
+            xvfb-run xorg-x11-server-Xvfb xauth dbus-1 gvfs gvfs-backends gvfs-backend-samba \
+            python3-gobject typelib-1_0-Secret-1 gnome-keyring dejavu-fonts adwaita-icon-theme \
+            /usr/bin/node desktop-file-utils AppStream rpm-build cargo rust cpio
         ;;
     arch)
         # rustup provides cargo for makepkg and the pinned compiler for check.py.

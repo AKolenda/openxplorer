@@ -129,7 +129,7 @@ explains a missing one when that feature is used:
 
 | Feature | Debian | Fedora | openSUSE | Arch |
 |---|---|---|---|---|
-| SMB shares, phones, Recycle Bin, drive list | `gvfs`, `gvfs-backends`, `gvfs-fuse` | `gvfs`, `gvfs-smb`, `gvfs-mtp`, `gvfs-fuse` | `gvfs`, `gvfs-backends`, `gvfs-fuse` | `gvfs`, `gvfs-smb`, `gvfs-mtp` |
+| SMB shares, phones, Recycle Bin, drive list | `gvfs`, `gvfs-backends`, `gvfs-fuse` | `gvfs`, `gvfs-smb`, `gvfs-mtp`, `gvfs-fuse` | `gvfs`, `gvfs-backends`, `gvfs-backend-samba`, `gvfs-fuse` | `gvfs`, `gvfs-smb`, `gvfs-mtp` |
 | Remembering SMB passwords (Secret Service) | `gnome-keyring \| keepassxc` | `gnome-keyring` | `gnome-keyring` | `gnome-keyring` |
 | Making OpenXplorer the default file manager | `xdg-utils` | `xdg-utils` | `xdg-utils` | `xdg-utils` |
 | Open in Terminal | `gnome-terminal \| x-terminal-emulator` | (every desktop has one) | (every desktop has one) | (every desktop has one) |

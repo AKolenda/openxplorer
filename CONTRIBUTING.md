@@ -12,7 +12,7 @@ The app is the Rust and GTK 4 program in `native/` (crates `ox-core` for the GIO
 |---|---|
 | Ubuntu 24.04+, Zorin OS 18, Debian 13 | `build-essential pkg-config libgtk-4-dev libsqlite3-dev libsoup-3.0-dev xvfb xauth dbus-x11 gvfs gvfs-backends python3-gi gir1.2-glib-2.0 gnome-keyring gir1.2-secret-1 nodejs` |
 | Fedora | `gcc pkgconf-pkg-config 'pkgconfig(gtk4)' 'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' xvfb-run xorg-x11-server-Xvfb xauth gvfs gvfs-smb python3-gobject gnome-keyring libsecret nodejs` |
-| openSUSE Tumbleweed | `gcc pkgconf-pkg-config 'pkgconfig(gtk4)' 'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' glib2-tools xvfb-run xorg-x11-server-Xvfb xauth dbus-1 gvfs gvfs-backends python3-gobject typelib-1_0-Secret-1 gnome-keyring nodejs` |
+| openSUSE Tumbleweed | `gcc pkgconf-pkg-config 'pkgconfig(gtk4)' 'pkgconfig(sqlite3)' 'pkgconfig(libsoup-3.0)' glib2-tools xvfb-run xorg-x11-server-Xvfb xauth dbus-1 gvfs gvfs-backends gvfs-backend-samba python3-gobject typelib-1_0-Secret-1 gnome-keyring nodejs` |
 | Arch Linux | `base-devel rustup gtk4 sqlite libsoup3 xorg-server-xvfb xorg-xauth gvfs gvfs-smb python-gobject gnome-keyring libsecret nodejs` |
 
 Install Rust with rustup, then build and run the development build:

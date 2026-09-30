@@ -48,7 +48,9 @@ Requires:       hicolor-icon-theme
 Recommends:     gvfs
 Recommends:     gvfs-fuse
 %if 0%{?suse_version}
+# openSUSE splits the SMB backend out of gvfs-backends.
 Recommends:     gvfs-backends
+Recommends:     gvfs-backend-samba
 %else
 Recommends:     gvfs-smb
 Recommends:     gvfs-mtp
