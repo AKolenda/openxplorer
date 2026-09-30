@@ -171,17 +171,23 @@ impl Incoming<'_> {
         Ok(())
     }
 
-    /// True when the run will write `source`'s bytes into the folder.
+    /// True when the run will write `source`'s bytes into the folder. A
+    /// move counts only when both file systems are known to differ: one
+    /// that turns out to need a copy still stops at a full disk, item by
+    /// item, without publishing anything partial.
     fn writes(&self, source: &dyn Node, cancel: &Cancellation) -> bool {
         if self.mode == TransferMode::Move {
-            let same_filesystem = self.filesystem.id.is_some()
-                && source.filesystem(Some(cancel)).and_then(|info| info.id) == self.filesystem.id;
-            if same_filesystem {
+            let source_id = source.filesystem(Some(cancel)).and_then(|info| info.id);
+            let crosses_filesystems = matches!(
+                (&source_id, &self.filesystem.id),
+                (Some(source_id), Some(destination_id)) if source_id != destination_id
+            );
+            if !crosses_filesystems {
                 return false;
             }
         }
         if self.policy == ConflictPolicy::Skip {
-            let is_taken = child_node(self.folder, &source.name())
+            let is_taken = child_node(self.folder, source.name())
                 .is_ok_and(|destination| destination.exists(Some(cancel)));
             return !is_taken;
         }
