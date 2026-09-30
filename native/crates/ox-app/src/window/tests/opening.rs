@@ -4,12 +4,13 @@
 
 use std::fs;
 
+use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::locations::Page;
-use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
+use crate::test_support::harness::{application, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::window::session::Tab;
-use crate::window::tests::file_ops_support::open_dialog;
+use crate::window::tests::file_ops_support::{open_dialog, select_names};
 
 fn can_go_back(test: &TestWindow) -> bool {
     let session = test.window.imp().session.borrow();
@@ -190,4 +191,39 @@ fn open_in_new_tab_opens_the_folder_in_a_tab_in_front() {
 
     assert_eq!(tab_uris(&test), [fixture.uri(), fixture.uri_of("Documents")]);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+}
+
+/// Shift+F4 opens a terminal in the folder shown and Shift+Alt+F4 one per
+/// folder of the selection, a file standing for its folder; more than
+/// five are asked about first, and Cancel opens none.
+///
+/// parity: OPEN-021
+#[gtk::test]
+fn open_terminal_here_opens_one_per_folder_and_asks_for_many() {
+    let fixture = Fixture::standard();
+    let names = ["A", "B", "C", "D", "E", "F"];
+    for name in names {
+        fs::create_dir(fixture.path(name)).expect("fixture subfolder");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    let keys = |action: &str| application().accels_for_action(&format!("win.{action}"));
+    assert_eq!(keys("open-terminal"), ["<Shift>F4"]);
+    assert_eq!(keys("open-terminal-here"), ["<Shift><Alt>F4"]);
+
+    select_names(&test, &["Notes 2.txt", "Résumé.txt", "Documents"]);
+    assert_eq!(
+        test.window.terminal_folders(),
+        [fixture.uri_of("Documents"), fixture.uri()]
+    );
+
+    select_names(&test, &names);
+    test.activate("open-terminal-here", None);
+    let dialog = open_dialog(&test);
+    assert_eq!(
+        dialog.message_text(),
+        "Are you sure you want to open 6 terminals?"
+    );
+    dialog.press("Cancel");
+    wait_for(std::time::Duration::from_millis(200));
+    assert_eq!(test.window.shown_message(), "", "no terminal was started");
 }
