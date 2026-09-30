@@ -14,7 +14,7 @@ use gtk::prelude::*;
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
-use super::row::{Availability, ControlName, SettingRow};
+use super::row::{ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
 use crate::application::AppAction;
@@ -96,9 +96,7 @@ fn windows_group() -> SettingsGroup {
 fn dragging_group() -> SettingsGroup {
     let group = SettingsGroup::new("Tabs and files");
     for text in [MOVE_TABS, DRAG_TO_APPS, DROP_ON_FOLDERS] {
-        let row = SettingRow::new(text);
-        row.set_availability(Availability::Ready);
-        group.add_row(&row);
+        group.add_row(&SettingRow::new(text));
     }
     group
 }

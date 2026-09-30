@@ -22,9 +22,7 @@ use gtk::subclass::prelude::*;
 
 use crate::icons::{self, Icon};
 
-use super::unported;
-
-pub(super) use items::{ItemAvailability, ItemCheck, MenuAction, MenuEntry, MenuItem, MenuStyle};
+pub(super) use items::{ItemAvailability, ItemCheck, MenuEntry, MenuItem, MenuStyle};
 
 /// The class of a row that follows a divider.
 const AFTER_DIVIDER: &str = "after-divider";
@@ -312,13 +310,9 @@ impl MenuPopover {
     }
 }
 
-/// The tooltip of `item`: its label, and for a command that another
-/// milestone brings, that milestone.
+/// The tooltip of `item`: its label, which a narrow menu may cut short.
 fn item_tooltip(item: &MenuItem) -> String {
-    match item.action {
-        MenuAction::Window(action) => unported::tooltip(action, &item.label),
-        MenuAction::Application(_) => item.label.clone(),
-    }
+    item.label.clone()
 }
 
 /// A row's glyph (the check mark while checked, as app.js draws it), its

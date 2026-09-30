@@ -218,6 +218,12 @@ impl ChoiceList {
         }
     }
 
+    /// Every option's label, top to bottom, for tests.
+    #[cfg(test)]
+    pub(crate) fn options(&self) -> Vec<String> {
+        self.imp().options.borrow().clone()
+    }
+
     /// Chooses the option labelled `label` from the list, as a click on
     /// its row does, for tests.
     ///

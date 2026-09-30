@@ -6,8 +6,8 @@
 //! status bar's "Check for updates" (UPD-001). "About this build" runs the
 //! window's `win.about`, as the More menu does; "Check for updates" runs
 //! `win.check-updates`, the Software updates dialog, and its row says what
-//! the last check in any window found. The licence dialog runs
-//! `win.license`, which waits for the packaging and updates milestone.
+//! the last check in any window found. "Read license & source
+//! information" runs `win.license`, the licence dialog.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -15,7 +15,7 @@ use gtk::subclass::prelude::*;
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
-use super::row::{Availability, ControlName, SettingRow};
+use super::row::{ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
 use super::status_card::{StatusCard, StatusText};
@@ -23,7 +23,7 @@ use super::{SettingsPage, SharedHandler};
 use crate::config::BUILD_NAME;
 use crate::icons::Icon;
 use crate::update::Updates;
-use crate::window::{ButtonStyle, Milestone, WindowAction};
+use crate::window::{ButtonStyle, WindowAction};
 
 /// A group of one row whose button runs a window action.
 struct ActionGroup {
@@ -65,11 +65,10 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::About;
     let about = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     about.append_card(&build_card());
-    let (updates, updates_row) = action_group(&UPDATES, Availability::Ready);
+    let (updates, updates_row) = action_group(&UPDATES);
     about.append_group(&updates);
     follow_updates(page, &updates_row);
-    let pending = Availability::Unported(Milestone::Distribution);
-    about.append_group(&action_group(&LICENSE_AND_SOURCE, pending).0);
+    about.append_group(&action_group(&LICENSE_AND_SOURCE).0);
     about
 }
 
@@ -87,18 +86,13 @@ fn build_card() -> StatusCard {
     StatusCard::new(status, &[about_build.upcast()])
 }
 
-/// The group `spec` describes, with `availability`, and its row. The
-/// heading of a group waiting for a milestone names it.
-fn action_group(spec: &ActionGroup, availability: Availability) -> (SettingsGroup, SettingRow) {
-    let group = match availability {
-        Availability::Ready => SettingsGroup::new(spec.heading),
-        Availability::Unported(_) => SettingsGroup::pending(spec.heading, availability),
-    };
+/// The group `spec` describes, and its row.
+fn action_group(spec: &ActionGroup) -> (SettingsGroup, SettingRow) {
+    let group = SettingsGroup::new(spec.heading);
     let row = SettingRow::new(spec.text);
     let button = parts::button(spec.button, ButtonStyle::Bordered);
     spec.action.assign_to(&button);
     row.add_control(&button, ControlName::OwnLabel);
-    row.set_availability(availability);
     group.add_row(&row);
     (group, row)
 }

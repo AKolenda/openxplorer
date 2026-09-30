@@ -39,16 +39,6 @@
             </child>
           </object>
         </child>
-        <child>
-          <object class="GtkLabel" id="notice_label">
-            <property name="visible">false</property>
-            <property name="xalign">0</property>
-            <property name="wrap">true</property>
-            <style>
-              <class name="setting-notice"/>
-            </style>
-          </object>
-        </child>
       </object>
     </child>
     <child>

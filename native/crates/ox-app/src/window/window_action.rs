@@ -7,8 +7,7 @@
 //! silently does nothing. [`WindowAction`] keeps every name in one table,
 //! which turns such a typo into a compile error. The templates in
 //! `resources/ui/` therefore name no action: their buttons get one through
-//! [`WindowAction::assign_to`]. [`super::actions`] registers the working
-//! actions and [`super::unported`] the disabled ones.
+//! [`WindowAction::assign_to`]. [`super::actions`] registers them.
 
 use gtk::glib;
 use gtk::prelude::*;

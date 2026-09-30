@@ -10,9 +10,6 @@
 //! Delete, Undo and Redo in the folder's menu (as Windows offers "Undo
 //! Rename" there), and the Recycle Bin's own menus (Restore, Delete,
 //! Empty).
-//! Commands whose workflow another milestone brings (Open with, Open in
-//! Terminal, Properties, ...) are listed and disabled with a tooltip that
-//! names it ([`crate::window::unported`]).
 
 use ox_core::search::Caching;
 
