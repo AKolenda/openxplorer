@@ -19,7 +19,7 @@ use crate::test_support::harness::{
 use crate::theme::contrast::Contrast;
 
 /// Longer than the skin's 83 ms colour transitions (ui-spec.md M01).
-const TRANSITION_TIME: Duration = Duration::from_millis(150);
+pub(super) const TRANSITION_TIME: Duration = Duration::from_millis(150);
 
 /// How far a painted colour channel may stray from the CSS colour: the
 /// rounding of 8-bit, premultiplied pixels.
@@ -39,7 +39,7 @@ const CROSS_RED: &str = "#c42b1c";
 
 /// A pixel in GDK's default memory format: blue, green, red and alpha,
 /// premultiplied.
-type Pixel = [u8; 4];
+pub(super) type Pixel = [u8; 4];
 
 /// Restores normal contrast when a test that raised it ends, even when an
 /// assertion fails, so later tests see the skin as designed.
@@ -78,7 +78,7 @@ fn sidebar_glyph(test: &TestWindow, tint_class: &str) -> gtk::Image {
 
 /// What `widget` looks like on its window, rendered by the window's own
 /// renderer.
-fn painted(widget: &impl IsA<gtk::Widget>) -> gdk::Texture {
+pub(super) fn painted(widget: &impl IsA<gtk::Widget>) -> gdk::Texture {
     let renderer = widget
         .native()
         .and_then(|native| native.renderer())
@@ -93,7 +93,7 @@ fn painted(widget: &impl IsA<gtk::Widget>) -> gdk::Texture {
 }
 
 /// The pixels of `texture`, row by row from the top.
-fn pixel_rows(texture: &gdk::Texture) -> Vec<Vec<Pixel>> {
+pub(super) fn pixel_rows(texture: &gdk::Texture) -> Vec<Vec<Pixel>> {
     let downloader = gdk::TextureDownloader::new(texture);
     let (bytes, stride) = downloader.download_bytes();
     let width = usize::try_from(texture.width()).expect("a texture's width is positive");
@@ -124,14 +124,23 @@ fn average_inked_colour(pixels: &[Pixel]) -> gdk::RGBA {
 }
 
 /// The red, green and blue of `pixel`, with the alpha divided back out.
-fn unpremultiplied_rgb(pixel: Pixel) -> [f32; 3] {
+pub(super) fn unpremultiplied_rgb(pixel: Pixel) -> [f32; 3] {
     let [blue, green, red, alpha] = pixel.map(f32::from);
     [red / alpha, green / alpha, blue / alpha]
 }
 
+/// The colour `widget` paints at (`x`, `y`) of its own area.
+pub(super) fn painted_colour(widget: &impl IsA<gtk::Widget>, x: i32, y: i32) -> gdk::RGBA {
+    let rows = pixel_rows(&painted(widget));
+    let row = usize::try_from(y).expect("a point inside the widget");
+    let column = usize::try_from(x).expect("a point inside the widget");
+    let [red, green, blue] = unpremultiplied_rgb(rows[row][column]);
+    gdk::RGBA::new(red, green, blue, 1.0)
+}
+
 /// Whether `painted` is `expected`, channel by channel, within
 /// [`CHANNEL_TOLERANCE`].
-fn is_same_colour(painted: gdk::RGBA, expected: gdk::RGBA) -> bool {
+pub(super) fn is_same_colour(painted: gdk::RGBA, expected: gdk::RGBA) -> bool {
     let channels = [
         (painted.red(), expected.red()),
         (painted.green(), expected.green()),
@@ -143,7 +152,7 @@ fn is_same_colour(painted: gdk::RGBA, expected: gdk::RGBA) -> bool {
 }
 
 /// Asserts that `painted` is `expected`, channel by channel.
-fn assert_same_colour(painted: gdk::RGBA, expected: gdk::RGBA, what: &str) {
+pub(super) fn assert_same_colour(painted: gdk::RGBA, expected: gdk::RGBA, what: &str) {
     let is_same = is_same_colour(painted, expected);
     assert!(is_same, "{what}: painted {painted}, expected {expected}");
 }
@@ -159,7 +168,7 @@ fn shows_colour(pixels: &[Pixel], colour: gdk::RGBA) -> bool {
 }
 
 /// A colour of the skin, in CSS notation.
-fn css_colour(css: &str) -> gdk::RGBA {
+pub(super) fn css_colour(css: &str) -> gdk::RGBA {
     gdk::RGBA::parse(css).expect("a CSS colour")
 }
 

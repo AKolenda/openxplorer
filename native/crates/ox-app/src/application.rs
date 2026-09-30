@@ -249,9 +249,7 @@ impl Application {
     /// show the app's icon. Also publishes the build's identity for later
     /// launches ([`RuntimeInfo`]).
     fn name_for_the_desktop(&self) {
-        glib::set_application_name("OpenXplorer");
-        glib::set_prgname(Some(APP_ID));
-        gtk::Window::set_default_icon_name(APP_ID);
+        name_the_process();
         RuntimeInfo::install(self);
     }
 
@@ -417,8 +415,19 @@ pub fn run() -> glib::ExitCode {
     }
 }
 
+/// Names the process `OpenXplorer` with the application ID as its program
+/// name and window icon, so the X11 window class matches the launcher's
+/// `StartupWMClass` (`startup` in winspace.py).
+fn name_the_process() {
+    glib::set_application_name("OpenXplorer");
+    glib::set_prgname(Some(APP_ID));
+    gtk::Window::set_default_icon_name(APP_ID);
+}
+
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
 
     fn words(words: &[&str]) -> Vec<String> {
@@ -435,5 +444,24 @@ mod tests {
         assert_eq!(renderer_for(&software, false), Some("cairo"));
         assert_eq!(renderer_for(&software, true), None);
         assert_eq!(renderer_for(&words(&["openxplorer", "/tmp"]), false), None);
+    }
+
+    /// The dock groups the windows under the launcher: the program name
+    /// is the launcher's `StartupWMClass`, and the icon its ID.
+    ///
+    /// parity: LOOK-011
+    #[gtk::test]
+    fn the_process_is_named_as_its_launcher() {
+        name_the_process();
+        assert_eq!(glib::application_name().as_deref(), Some("OpenXplorer"));
+        assert_eq!(glib::prgname().as_deref(), Some(APP_ID));
+        assert_eq!(gtk::Window::default_icon_name().as_deref(), Some(APP_ID));
+        let launcher = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packaging/data")
+            .join(format!("{APP_ID}.desktop"));
+        let entry = std::fs::read_to_string(&launcher).expect("the build's launcher is packaged");
+        assert!(entry
+            .lines()
+            .any(|line| line == format!("StartupWMClass={APP_ID}")));
     }
 }

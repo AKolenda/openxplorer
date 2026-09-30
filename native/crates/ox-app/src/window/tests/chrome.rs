@@ -10,14 +10,18 @@
 //! window actions of their buttons and their glyphs, which name bundled
 //! icons. The last tests prove that no control is left without either.
 
+use gtk::gdk;
 use gtk::prelude::*;
 
 use super::geometry::{bounds, button_for, laid_out, Bounds};
+use super::icons::{
+    assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME,
+};
 use super::support::{app_menu, menu_button_with_class};
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for, wait_for_frames, Fixture, TestWindow};
 
-/// parity: TAB-010
+/// parity: TAB-010, LOOK-009
 #[gtk::test]
 fn the_active_tab_starts_9_pixels_in_and_reaches_the_bottom_of_the_42_pixel_title_bar() {
     let fixture = Fixture::standard();
@@ -42,6 +46,7 @@ fn the_active_tab_starts_9_pixels_in_and_reaches_the_bottom_of_the_42_pixel_titl
     assert!(first_tab.has_css_class("active"));
 }
 
+/// parity: LOOK-009
 #[gtk::test]
 fn the_new_tab_button_follows_the_last_tab() {
     let fixture = Fixture::standard();
@@ -60,6 +65,7 @@ fn the_new_tab_button_follows_the_last_tab() {
     assert_eq!((plus.y, plus.width, plus.height), (8, 38, 34));
 }
 
+/// parity: LOOK-009
 #[gtk::test]
 fn the_caption_buttons_are_46_pixels_wide_and_as_tall_as_the_title_bar() {
     let fixture = Fixture::standard();
@@ -86,6 +92,7 @@ fn the_caption_buttons_are_46_pixels_wide_and_as_tall_as_the_title_bar() {
     }
 }
 
+/// parity: LOOK-012
 #[gtk::test]
 fn the_address_and_search_boxes_are_34_pixels_tall_14_pixels_below_the_title_bar() {
     let fixture = Fixture::standard();
@@ -99,6 +106,38 @@ fn the_address_and_search_boxes_are_34_pixels_tall_14_pixels_below_the_title_bar
         test.window.width() - 16,
         "the search box ends 16 pixels from the edge"
     );
+}
+
+/// A tab's close button is 22 pixels square, and Close turns red with a
+/// white glyph under the pointer, as in Windows.
+///
+/// parity: LOOK-009
+#[gtk::test]
+fn the_tab_close_is_22_pixels_and_close_hovers_red() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let buttons = descendants::<gtk::Button>(&test.window);
+    let tab_close = buttons
+        .iter()
+        .find(|button| button.has_css_class("tab-close"))
+        .expect("the tab has a close button");
+    let place = bounds(&test, tab_close);
+    assert_eq!((place.width, place.height), (22, 22));
+    let close = buttons
+        .iter()
+        .find(|button| button.has_css_class("caption") && button.has_css_class("close"));
+    let Some(close) = close else {
+        return;
+    };
+    close.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+    wait_for(TRANSITION_TIME);
+    wait_for_frames(&test.window, 2);
+    let rows = pixel_rows(&painted(close));
+    let [red, green, blue] = unpremultiplied_rgb(rows[3][3]);
+    let background = gdk::RGBA::new(red, green, blue, 1.0);
+    assert_same_colour(background, css_colour("#c42b1c"), "Close under the pointer");
+    assert_same_colour(close.color(), css_colour("#ffffff"), "its glyph");
+    close.unset_state_flags(gtk::StateFlags::PRELIGHT);
 }
 
 #[gtk::test]

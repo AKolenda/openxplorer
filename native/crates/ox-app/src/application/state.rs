@@ -261,6 +261,7 @@ fn follow_contrast(skin: &Skin) -> ContrastSetting {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
     use std::fs;
     use std::path::Path;
 
@@ -270,6 +271,7 @@ mod tests {
 
     use super::super::command_line::CommandRequest;
     use super::*;
+    use crate::test_support::desktop_setting::DesktopSetting;
     use crate::test_support::harness::{application, settle, skin, wait_until, Fixture, ThemeGuard};
     use crate::theme::contrast::{self, Contrast};
 
@@ -343,6 +345,7 @@ mod tests {
 
     /// The web app's `prefers-contrast: more` rules follow GNOME's
     /// accessibility setting; without its schema the contrast stays normal.
+    /// The setting changes only where `GSettings` keeps it in memory.
     #[gtk::test]
     fn the_skin_follows_the_desktop_high_contrast_setting() {
         let _app = TestApp::new();
@@ -350,13 +353,13 @@ mod tests {
             assert_eq!(skin().contrast(), Contrast::Normal);
             return;
         };
-        accessibility
-            .set_boolean(contrast::HIGH_CONTRAST_KEY, true)
-            .expect("the test settings backend is writable");
+        let Some(high_contrast) = DesktopSetting::in_memory(accessibility, contrast::HIGH_CONTRAST_KEY)
+        else {
+            return;
+        };
+        high_contrast.set_boolean(true);
         wait_until("the high-contrast rules", || skin().contrast() == Contrast::High);
-        accessibility
-            .set_boolean(contrast::HIGH_CONTRAST_KEY, false)
-            .expect("the test settings backend is writable");
+        high_contrast.set_boolean(false);
         wait_until("the normal rules", || skin().contrast() == Contrast::Normal);
     }
 
@@ -465,6 +468,37 @@ mod tests {
             let _app = TestApp::with_saved_theme(case.saved);
             assert_eq!(skin().theme(), case.theme, "{}", case.saved);
         }
+    }
+
+    /// A start with Dark saved draws the dark palette before the first
+    /// window exists, so that window's first frame already has the dark
+    /// text colour, with no light frame before it.
+    ///
+    /// parity: LOOK-007
+    #[gtk::test]
+    fn a_saved_dark_theme_is_drawn_from_the_first_frame_of_the_first_window() {
+        let _theme = ThemeGuard::keep();
+        skin().set_theme(Theme::Light);
+        let app = TestApp::with_saved_theme("dark");
+        assert!(browser_windows().is_empty(), "no window before activation");
+        assert_eq!(skin().appearance(), Appearance::Dark, "drawn before the window");
+
+        app.state.activate(&application());
+        let window = browser_windows()
+            .pop()
+            .expect("activation opens the first window");
+        let first_frame_text = Rc::new(Cell::new(None));
+        window.add_tick_callback({
+            let first_frame_text = Rc::clone(&first_frame_text);
+            move |window, _| {
+                first_frame_text.set(Some(window.color()));
+                glib::ControlFlow::Break
+            }
+        });
+        wait_until("the first frame", || first_frame_text.get().is_some());
+        let text = first_frame_text.get().expect("the first frame was seen");
+        // ox_text in dark.css is #f1f1f1; light.css draws #1b1b1b.
+        assert!(text.red() > 0.9 && text.blue() > 0.9, "{text:?}");
     }
 
     /// `--new-window` opens a window of its own at the first location, with

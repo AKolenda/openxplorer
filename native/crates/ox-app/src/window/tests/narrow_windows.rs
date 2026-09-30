@@ -17,6 +17,7 @@ fn resize(test: &TestWindow, width: i32) {
     wait_for_frames(&test.window, 3);
 }
 
+/// parity: LOOK-022
 #[gtk::test]
 fn the_details_pane_gives_way_below_961_pixels_and_comes_back() {
     let fixture = Fixture::standard();
@@ -36,11 +37,12 @@ fn the_details_pane_gives_way_below_961_pixels_and_comes_back() {
     assert!(pane.is_visible(), "the pane comes back");
 }
 
+/// parity: LOOK-022
 #[gtk::test]
 fn a_compact_window_drops_the_search_box_some_commands_and_two_columns() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
-    resize(&test, 660);
+    resize(&test, 672);
     assert!(!test.window.search_box().is_visible());
     for action in ["win.cut", "win.rename", "win.copy-path"] {
         assert!(!button_for(&test, action).is_visible(), "{action} is hidden");
@@ -56,6 +58,7 @@ fn a_compact_window_drops_the_search_box_some_commands_and_two_columns() {
     assert!(button_for(&test, "win.cut").is_visible());
 }
 
+/// parity: LOOK-022
 #[gtk::test]
 fn the_name_column_keeps_260_pixels_and_the_list_scrolls_sideways() {
     let fixture = Fixture::standard();
