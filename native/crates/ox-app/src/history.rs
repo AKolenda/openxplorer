@@ -14,6 +14,9 @@
 pub(crate) struct History {
     entries: Vec<String>,
     position: usize,
+    /// How many times the current location changed, so work started
+    /// before a navigation can tell its result is stale.
+    moves: u64,
 }
 
 impl History {
@@ -22,6 +25,7 @@ impl History {
         Self {
             entries: vec![uri.to_string()],
             position: 0,
+            moves: 0,
         }
     }
 
@@ -39,6 +43,7 @@ impl History {
         self.entries.truncate(self.position + 1);
         self.entries.push(uri.to_string());
         self.position = self.entries.len() - 1;
+        self.moves += 1;
         true
     }
 
@@ -46,6 +51,12 @@ impl History {
     /// when a location resolves to a different canonical URI.
     pub(crate) fn replace_current(&mut self, uri: &str) {
         self.entries[self.position] = uri.to_string();
+    }
+
+    /// How many times the tab moved to another location: a navigation,
+    /// Back or Forward.
+    pub(crate) fn moves(&self) -> u64 {
+        self.moves
     }
 
     /// True when Back has somewhere to go.
@@ -66,6 +77,7 @@ impl History {
             return None;
         }
         self.position = target;
+        self.moves += 1;
         Some(self.current())
     }
 }

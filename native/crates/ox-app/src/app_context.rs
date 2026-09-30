@@ -18,6 +18,7 @@
 //! the application's [`Updates`] and [`DesktopIntegration`], so every
 //! window shows the same update and integration state.
 
+mod default_open;
 mod external_open;
 mod file_operations;
 mod known_folders;
@@ -29,9 +30,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
 use ox_core::entry::Entry;
 use ox_core::places::FolderLocations;
 use ox_core::settings::{PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError};
@@ -316,38 +317,8 @@ impl AppContext {
         })
     }
 
-    /// Opens `entry` in its default application and records it among the
-    /// recently opened files, as `launch_default` in winspace.py does.
-    /// `on_error` hears GIO's reason when it could not be opened.
-    pub(crate) fn open_file(
-        &self,
-        entry: &Entry,
-        window: &gtk::Window,
-        on_error: impl FnOnce(glib::Error) + 'static,
-    ) {
-        let recent = recent_entry(entry);
-        let uri = entry.navigation_uri().to_owned();
-        // Test safety: tests record the file instead of starting a real
-        // application on the developer's desktop.
-        #[cfg(test)]
-        if let Some(launches) = self.imp().recorded_launches.borrow_mut().as_mut() {
-            launches.push(uri);
-            return;
-        }
-        let launch_context = WidgetExt::display(window).app_launch_context();
-        let context = self.downgrade();
-        glib::spawn_future_local(async move {
-            let launched = gio::AppInfo::launch_default_for_uri_future(&uri, Some(&launch_context)).await;
-            match (launched, context.upgrade()) {
-                (Err(error), _) => on_error(error),
-                (Ok(()), Some(context)) => context.remember_open(recent),
-                (Ok(()), None) => {}
-            }
-        });
-    }
-
     /// Records `recent` at the top of the recently opened files.
-    fn remember_open(&self, recent: RecentEntry) {
+    pub(super) fn remember_open(&self, recent: RecentEntry) {
         let change: Change = Box::new(move |settings| settings.remember_open(recent));
         // Recording a recent file is best effort, as in the Python app: the
         // file already opened, and a busy settings lock must not say otherwise.
@@ -370,7 +341,7 @@ impl AppContext {
 
 /// The recent-files record of an opened entry (`remember_open` in
 /// `desktop/core.py` keeps these fields).
-fn recent_entry(entry: &Entry) -> RecentEntry {
+pub(super) fn recent_entry(entry: &Entry) -> RecentEntry {
     RecentEntry {
         uri: entry.uri.clone(),
         name: entry.name.clone(),

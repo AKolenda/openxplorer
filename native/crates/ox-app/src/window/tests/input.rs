@@ -9,11 +9,13 @@
 //!
 //! [`BrowserWindow::type_text`]: crate::window::BrowserWindow
 
+use std::time::Duration;
+
 use gtk::glib::translate::IntoGlib;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use crate::test_support::harness::{descendants, Fixture, TestWindow, ThemeGuard};
+use crate::test_support::harness::{descendants, wait_for, wait_until, Fixture, TestWindow, ThemeGuard};
 use crate::window::menu_popover::MenuPopover;
 
 /// Presses `key` in the details view, as far as the window's own key
@@ -146,6 +148,7 @@ fn modifier_keys_keep_the_typed_prefix() {
     assert_eq!(test.selected_names(), ["Notes 10.txt"]);
 }
 
+/// parity: OPEN-002
 #[gtk::test]
 fn enter_opens_only_a_single_selected_item() {
     let fixture = Fixture::standard();
@@ -155,6 +158,7 @@ fn enter_opens_only_a_single_selected_item() {
     model.select_only(1);
     model.selection().select_item(2, false);
     details.emit_by_name::<()>("activate", &[&2_u32]);
+    wait_for(Duration::from_millis(200));
     assert!(
         test.context.recorded_launches().is_empty(),
         "several selected items open nothing"
@@ -162,6 +166,9 @@ fn enter_opens_only_a_single_selected_item() {
     model.select_only(1);
     details.emit_by_name::<()>("activate", &[&1_u32]);
     let notes = fixture.uri_of("Notes 2.txt");
+    wait_until("the file to open", || {
+        !test.context.recorded_launches().is_empty()
+    });
     assert_eq!(test.context.recorded_launches(), [notes]);
 }
 

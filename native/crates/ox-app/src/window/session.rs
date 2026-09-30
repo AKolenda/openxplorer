@@ -110,6 +110,9 @@ pub(super) struct Tab {
     /// An item to scroll into view once the folder is listed, as "Open
     /// file location" asks.
     pub revealed_item: Option<String>,
+    /// An item of this tab is being opened; a second one waits for it
+    /// (`tab.opening` in `openEntry`).
+    pub is_activating: bool,
 }
 
 impl Tab {
@@ -128,6 +131,7 @@ impl Tab {
             listing: None,
             watch: None,
             revealed_item: None,
+            is_activating: false,
         }
     }
 
