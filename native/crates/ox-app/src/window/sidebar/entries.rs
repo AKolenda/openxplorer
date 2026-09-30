@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The sidebar's rows as data, in the order of `renderSidebar` in
 //! `desktop/ui/app.js`: Home (the home folder), the Quick access folders
-//! and pins, This PC with Local Disk and the drives and devices, and
+//! and pins, the searches saved to the sidebar (SRCH-038), This PC with
+//! Local Disk and the drives and devices, and
 //! Network with the merged network locations. Mounted SMB shares appear
 //! once, under Network.
 //!
@@ -12,6 +13,7 @@
 
 use ox_core::location::{is_server_location, LocationContext, NETWORK_URI, PC_URI};
 use ox_core::places::{NetworkLocation, Place};
+use ox_core::search::SavedSearch;
 
 use crate::devices::Removal;
 use crate::icons::{Art, Icon, Storage, Tint};
@@ -27,6 +29,9 @@ pub(in crate::window) enum Section {
     Home,
     /// Known folders and pins.
     QuickAccess,
+    /// Searches saved to the sidebar, as Dolphin lists them among its
+    /// places (SRCH-038).
+    SavedSearches,
     /// This PC, Local Disk and the drives and devices.
     ThisPc,
     /// Network and the network locations.
@@ -54,6 +59,8 @@ pub(in crate::window) enum RowTarget {
     /// Nothing: the drop tail of an empty Quick access, which only takes
     /// dropped folders to pin (DND-014).
     PinDropTail,
+    /// Opens the folder of a saved search and runs it again (SRCH-038).
+    SavedSearch(SavedSearch),
 }
 
 /// One sidebar row.
@@ -119,6 +126,20 @@ fn place_entry(place: &Place, locations: &LocationContext) -> SidebarEntry {
         target: RowTarget::Location(place.uri.clone()),
         tooltip: locations.display_location(&place.uri),
         pinned: true,
+        menu: None,
+        eject: None,
+    }
+}
+
+fn saved_search_entry(search: &SavedSearch, locations: &LocationContext) -> SidebarEntry {
+    SidebarEntry {
+        section: Section::SavedSearches,
+        level: RowLevel::Place,
+        label: search.label.clone(),
+        icon: Art::Glyph(Icon::Search),
+        target: RowTarget::SavedSearch(search.clone()),
+        tooltip: locations.display_location(&search.folder),
+        pinned: false,
         menu: None,
         eject: None,
     }
@@ -251,8 +272,13 @@ fn pin_drop_tail() -> SidebarEntry {
     }
 }
 
-/// The sidebar rows, in the Python app's order.
-pub(in crate::window) fn sidebar_entries(places: &Places, locations: &LocationContext) -> Vec<SidebarEntry> {
+/// The sidebar rows, in the Python app's order, with the saved
+/// `searches` after Quick access.
+pub(in crate::window) fn sidebar_entries(
+    places: &Places,
+    searches: &[SavedSearch],
+    locations: &LocationContext,
+) -> Vec<SidebarEntry> {
     let home_uri = locations.home_uri();
     let home_icon = Art::TintedGlyph(Icon::Home, Tint::Home);
     let mut home = fixed_entry(Section::Home, "Home", home_icon, &home_uri);
@@ -267,11 +293,15 @@ pub(in crate::window) fn sidebar_entries(places: &Places, locations: &LocationCo
         .map(|place| place_entry(place, locations));
     let drives = places.drives.iter().map(|row| drive_entry(row, locations));
     let network_rows = places.network.iter().map(|row| network_entry(row, locations));
+    let saved = searches
+        .iter()
+        .map(|search| saved_search_entry(search, locations));
     let mut entries = vec![home];
     entries.extend(quick_access);
     if places.quick_access.is_empty() {
         entries.push(pin_drop_tail());
     }
+    entries.extend(saved);
     entries.push(this_pc);
     entries.push(local_disk_entry(locations));
     entries.extend(drives);
@@ -325,7 +355,7 @@ mod tests {
             home: Some(PathBuf::from("/home/demo")),
             ..LocationContext::default()
         };
-        sidebar_entries(&places, &locations)
+        sidebar_entries(&places, &[], &locations)
     }
 
     fn labels(entries: &[SidebarEntry]) -> Vec<&str> {
@@ -599,7 +629,7 @@ mod tests {
             visited_network: &[],
         });
 
-        let entries = sidebar_entries(&places, &LocationContext::default());
+        let entries = sidebar_entries(&places, &[], &LocationContext::default());
 
         let documents = entries.iter().find(|entry| entry.label == "Documents");
         let documents = documents.expect("Documents is in Quick access");

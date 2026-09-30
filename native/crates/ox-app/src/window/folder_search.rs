@@ -9,24 +9,28 @@
 //! selection, scrolls to the top and filters the listing at once; after
 //! the 120 ms pause the search runs. A folder the cache covers, or a
 //! search of every cached folder, shows the cache's results in place of
-//! the listing, with Folder path in place of Date modified. The window's
-//! part of the work is here; the search itself is in [`crate::search`].
+//! the listing, with Folder path in place of Date modified. A folder no
+//! indexed folder is related to is walked live with its subfolders
+//! ([`super::live_search`], SRCH-035); a result's folder opens from
+//! [`super::result_location`]. The window's part of the work is here; the
+//! search itself is in [`crate::search`].
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
-use ox_core::location::parent_location;
-use ox_core::search::{HiddenItems, SearchQuery, SearchResults};
+
+use ox_core::search::{HiddenItems, SearchFacets, SearchIn, SearchQuery, SearchResults};
 
 use crate::folder_view::details::DetailsListing;
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::search::{
     merge_results, related_roots, CacheError, Listing, SearchCount, SearchInfoStrip, SearchRun, SearchScope,
-    RESULT_LIMIT,
+    ShownOptions, RESULT_LIMIT,
 };
 
 use super::empty_page::EmptyState;
+use super::search_box::ViewKey;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -49,11 +53,21 @@ impl BrowserWindow {
             self,
             move |_| window.run_search()
         ));
+        search_box.connect_view_requested(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |key| window.focus_results(key)
+        ));
         let strip = self.search_strip();
         strip.connect_scope_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |scope| window.change_search_scope(scope)
+        ));
+        strip.connect_options_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |search_in, facets| window.change_search_options(search_in, facets)
         ));
         strip.connect_clear_requested(glib::clone!(
             #[weak(rename_to = window)]
@@ -104,6 +118,25 @@ impl BrowserWindow {
         self.show_search_state();
     }
 
+    /// Moves keyboard focus from the search box to the items shown, as
+    /// Dolphin's filter bar does (SRCH-006): to the selected item, or the
+    /// first one, which a moving key also selects.
+    fn focus_results(&self, key: ViewKey) {
+        let pane = self.folder_pane();
+        let model = pane.model();
+        pane.focus_view();
+        if model.n_items() == 0 {
+            return;
+        }
+        let position = model.first_selected().unwrap_or_else(|| {
+            if key == ViewKey::Move {
+                model.select_only(0);
+            }
+            0
+        });
+        pane.reveal(position);
+    }
+
     /// Runs the search once typing paused (`runSearch`).
     fn run_search(&self) {
         let Some(folder) = self.searched_folder() else {
@@ -113,8 +146,10 @@ impl BrowserWindow {
         let run = self.imp().search.borrow_mut().begin(&folder, &roots);
         self.show_searched_items();
         self.show_search_state();
-        if let Some(run) = run {
-            self.ask_search_cache(run);
+        match run {
+            Some(run) if run.source.uses_cache() => self.ask_search_cache(run),
+            Some(run) => self.walk_folder(run),
+            None => {}
         }
     }
 
@@ -176,7 +211,7 @@ impl BrowserWindow {
     }
 
     /// Whether hidden items are searched too: while they are shown.
-    fn hidden_items(&self) -> HiddenItems {
+    pub(super) fn hidden_items(&self) -> HiddenItems {
         if self.hidden_files_shown() {
             HiddenItems::Include
         } else {
@@ -225,7 +260,7 @@ impl BrowserWindow {
 
     /// Shows the search's rows: the cache's results, or else the listing
     /// filtered by the search box's words.
-    fn show_searched_items(&self) {
+    pub(super) fn show_searched_items(&self) {
         let search = self.imp().search.borrow();
         let results = search.results().cloned();
         let words = if results.is_some() {
@@ -233,27 +268,40 @@ impl BrowserWindow {
         } else {
             search.query().to_owned()
         };
+        let facets = if search.is_active() {
+            search.facets()
+        } else {
+            SearchFacets::default()
+        };
         drop(search);
         let active = self.imp().session.borrow().active_id();
         let rows = results.or_else(|| active.and_then(|id| self.tab_store(id)));
         let model = self.folder_pane().model();
         self.change_model(|| {
             model.set_query(&words);
+            model.set_facets(facets);
             model.set_store(rows.as_ref());
         });
     }
 
     /// Shows where the search stands: the strip, the columns, the status
     /// bar and the empty page.
-    fn show_search_state(&self) {
+    pub(super) fn show_search_state(&self) {
         let search = self.imp().search.borrow();
-        self.search_strip().show_report(search.report(), search.scope());
+        let options = ShownOptions {
+            scope: search.scope(),
+            search_in: search.search_in(),
+            facets: search.facets(),
+        };
+        let report = search.report().cloned();
         let listing = if search.is_active() {
             DetailsListing::SearchResults
         } else {
             DetailsListing::Folder
         };
+        // Released first: the strip's lists change as it shows them.
         drop(search);
+        self.search_strip().show_report(report.as_ref(), options);
         self.folder_pane().details().show_listing(listing);
         self.update_content();
         self.update_details_pane();
@@ -268,9 +316,60 @@ impl BrowserWindow {
         }
     }
 
+    /// The user chose other search options: a change between names and
+    /// contents runs the search again, and the kind and date options
+    /// filter the rows shown (SRCH-036, SRCH-037).
+    fn change_search_options(&self, search_in: SearchIn, facets: SearchFacets) {
+        let search = self.imp().search.borrow();
+        let search_in_changed = search.search_in() != search_in;
+        let facets_changed = search.facets() != facets;
+        drop(search);
+        if !search_in_changed && !facets_changed {
+            return;
+        }
+        let mut search = self.imp().search.borrow_mut();
+        search.set_search_in(search_in);
+        search.set_facets(facets);
+        drop(search);
+        if search_in_changed {
+            self.run_search();
+        } else if facets_changed {
+            self.show_searched_items();
+            self.show_search_state();
+        }
+    }
+
+    /// Leaving the folder ends the search, unless the strip's "Keep
+    /// search when changing folders" is pressed (SRCH-005): the search
+    /// then runs again in the folder the tab opens, once it has started
+    /// listing it.
+    pub(super) fn leave_search(&self) {
+        if !(self.is_searching() && self.search_strip().keeps_search()) {
+            self.end_search();
+            return;
+        }
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.search_here_again()
+        ));
+    }
+
+    /// Runs the kept search in the folder shown now, or ends it on a page,
+    /// where nothing is searched.
+    fn search_here_again(&self) {
+        let text = self.imp().search.borrow().query().to_owned();
+        if self.searched_folder().is_none() {
+            self.end_search();
+            return;
+        }
+        self.search_edited(&text);
+        self.run_search();
+    }
+
     /// Ends the search as leaving the folder does: empties the box and
     /// forgets the scope.
-    pub(super) fn end_search(&self) {
+    fn end_search(&self) {
         self.imp().search.borrow_mut().end();
         self.search_box().clear();
         self.show_searched_items();
@@ -309,46 +408,5 @@ impl BrowserWindow {
         }
         self.run_search();
         true
-    }
-
-    /// "Open file location" on a search result: opens the folder it is in,
-    /// with the result selected and scrolled into view (SRCH-015).
-    pub(super) fn open_result_location(&self) {
-        let items = self.folder_pane().model().selected_items();
-        let [item] = items.as_slice() else {
-            return;
-        };
-        let uri = item.entry().uri.clone();
-        let Some(folder) = parent_location(&uri) else {
-            return;
-        };
-        if let Err(error) = self.navigate(&folder) {
-            self.show_message(&error.to_string());
-            return;
-        }
-        if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
-            tab.selected = vec![uri.clone()];
-            tab.revealed_item = Some(uri);
-        }
-    }
-
-    /// Scrolls tab `id`'s item that "Open file location" asked for into
-    /// view, once the tab has listed its folder.
-    pub(super) fn reveal_located_item(&self, id: super::session::TabId) {
-        let revealed = {
-            let mut session = self.imp().session.borrow_mut();
-            session.tab_mut(id).and_then(|tab| tab.revealed_item.take())
-        };
-        let Some(uri) = revealed else {
-            return;
-        };
-        let model = self.folder_pane().model();
-        let position = (0..model.n_items()).find(|position| {
-            let item = model.item(*position);
-            item.is_some_and(|item| item.entry().uri == uri)
-        });
-        if let Some(position) = position {
-            self.folder_pane().reveal(position);
-        }
     }
 }

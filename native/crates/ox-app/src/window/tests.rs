@@ -39,6 +39,7 @@ mod panes_layout;
 mod recycle_bin;
 mod renaming;
 mod search;
+mod search_options;
 mod settings;
 mod sidebar_layout;
 mod support;

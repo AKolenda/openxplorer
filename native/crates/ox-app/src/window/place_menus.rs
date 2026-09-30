@@ -8,6 +8,10 @@
 //! where a drive allows them. A menu is data ([`PlaceMenu`]); its items
 //! run window actions with the place as their target, and the menu opens
 //! where the pointer is ([`popup_place_menu`]).
+//!
+//! A drive's and a share's menu also offer "Cache this folder for search"
+//! after the Open items, as `cacheMenuItems` did in `driveMenu` (SRCH-020);
+//! phones, cameras and servers get none.
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
@@ -20,8 +24,9 @@ use crate::icons::Icon;
 use crate::volumes::{MountControls, VolumeKind};
 
 use super::cache_folder::cache_item;
-use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
+use super::menu_popover::{MenuAction, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
+use super::BrowserWindow;
 
 /// What a place's menu is for.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,30 +97,16 @@ fn removal_items(uri: &str, kind: VolumeKind, controls: MountControls) -> Vec<Me
     items.collect()
 }
 
-/// A drive in the sidebar: its root, what it is and allows, and whether it
-/// is cached for search.
-#[derive(Debug, Clone, Copy)]
-struct DriveMenuParts<'a> {
-    uri: &'a str,
-    kind: VolumeKind,
-    controls: MountControls,
-    /// `None` where the drive cannot be cached, such as a phone.
-    caching: Option<Caching>,
-}
-
-/// `driveMenu`: Open, Open in new window and the search cache entry, then
-/// what the drive allows (Dolphin's removals), then Properties.
-fn drive_entries(drive: DriveMenuParts<'_>) -> Vec<MenuEntry> {
-    let uri = drive.uri;
+/// `driveMenu`: Open and Open in new window, then what the drive allows
+/// (Dolphin's removals), then Properties. [`PlaceMenu::entries`] adds the
+/// search cache entry after the Open items.
+fn drive_entries(uri: &str, kind: VolumeKind, controls: MountControls) -> Vec<MenuEntry> {
     let mut entries = vec![
         item("Open", Icon::HardDrive, WindowAction::GoTo, uri),
         item("Open in new window", Icon::Add, WindowAction::OpenWindow, uri),
     ];
-    if let Some(caching) = drive.caching {
-        entries.push(cache_item(uri, caching).into());
-    }
     entries.push(MenuEntry::Divider);
-    let removals = removal_items(uri, drive.kind, drive.controls);
+    let removals = removal_items(uri, kind, controls);
     if !removals.is_empty() {
         entries.extend(removals);
         entries.push(MenuEntry::Divider);
@@ -189,22 +180,59 @@ fn network_entries(location: &NetworkLocation) -> Vec<MenuEntry> {
     entries
 }
 
+/// Whether `entry` opens the place: Open, Open in new tab or Open in new
+/// window.
+fn is_open_item(entry: &MenuEntry) -> bool {
+    let MenuEntry::Item(item) = entry else {
+        return false;
+    };
+    let opens = [
+        WindowAction::GoTo,
+        WindowAction::OpenTab,
+        WindowAction::OpenWindow,
+    ];
+    opens
+        .iter()
+        .any(|action| item.action == MenuAction::Window(*action))
+}
+
 impl PlaceMenu {
-    /// The menu's lines, without a search cache entry.
-    pub(super) fn entries(&self) -> Vec<MenuEntry> {
-        self.entries_with_cache(None)
+    /// The folder "Cache this folder for search" would index: a mounted
+    /// drive's root or a network location; `None` for the rest.
+    pub(super) fn cacheable_folder(&self) -> Option<&str> {
+        match self {
+            PlaceMenu::Drive { uri, .. } | PlaceMenu::SavedShare { uri } => Some(uri),
+            PlaceMenu::Network(location) => Some(&location.uri),
+            PlaceMenu::Volume { .. } | PlaceMenu::DriveCard { .. } => None,
+        }
     }
 
-    /// The menu's lines. A drive's menu has the search cache entry
-    /// `caching` describes (`cacheMenuItems`), none for `None`.
-    pub(super) fn entries_with_cache(&self, caching: Option<Caching>) -> Vec<MenuEntry> {
+    /// The menu's lines, with "Cache this folder for search" after the
+    /// Open items, checked as `caching` says; `None` leaves it out, where
+    /// the place cannot be indexed.
+    pub(super) fn entries(&self, caching: Option<Caching>) -> Vec<MenuEntry> {
+        let mut entries = self.place_entries();
+        if let (Some(uri), Some(caching)) = (self.cacheable_folder(), caching) {
+            let after_open = entries.iter().take_while(|entry| is_open_item(entry)).count();
+            entries.insert(after_open, cache_item(uri, caching).into());
+        }
+        entries
+    }
+
+    /// The menu's lines as `window` shows them: with the cache toggle
+    /// where the place can be indexed.
+    pub(super) fn entries_in(&self, window: Option<&BrowserWindow>) -> Vec<MenuEntry> {
+        let folder = self.cacheable_folder();
+        let caching = folder
+            .zip(window)
+            .and_then(|(uri, window)| window.caching_of(uri));
+        self.entries(caching)
+    }
+
+    /// The menu's lines without the cache toggle.
+    fn place_entries(&self) -> Vec<MenuEntry> {
         match self {
-            PlaceMenu::Drive { uri, kind, controls } => drive_entries(DriveMenuParts {
-                uri,
-                kind: *kind,
-                controls: *controls,
-                caching,
-            }),
+            PlaceMenu::Drive { uri, kind, controls } => drive_entries(uri, *kind, *controls),
             PlaceMenu::Volume { id } => vec![item(
                 "Mount volume",
                 Icon::HardDrive,
@@ -242,7 +270,8 @@ pub(super) fn popup_place_menu(
     x: f64,
     y: f64,
 ) -> Option<MenuPopover> {
-    let entries = menu.entries();
+    let window = anchor.root().and_downcast::<BrowserWindow>();
+    let entries = menu.entries_in(window.as_ref());
     if entries.is_empty() {
         return None;
     }
@@ -291,12 +320,17 @@ mod tests {
 
     /// The labels of `menu`, a divider as `-`.
     fn labels(menu: &PlaceMenu) -> Vec<String> {
-        labels_of(&menu.entries())
+        labels_caching(menu, None)
+    }
+
+    /// The labels of `menu` with the cache toggle as `caching` says.
+    fn labels_caching(menu: &PlaceMenu, caching: Option<Caching>) -> Vec<String> {
+        labels_of(&menu.entries(caching))
     }
 
     /// The item of `menu` labelled `label`.
     fn item_labelled(menu: &PlaceMenu, label: &str) -> MenuItem {
-        let entries = menu.entries();
+        let entries = menu.entries(None);
         let items = entries.into_iter().filter_map(|entry| match entry {
             MenuEntry::Item(item) => Some(item),
             MenuEntry::Divider => None,
@@ -413,7 +447,7 @@ mod tests {
             id: "1234-ABCD".into(),
         };
         assert_eq!(
-            labels_of(&drive.entries_with_cache(Some(Caching::Disabled))),
+            labels_of(&drive.entries(Some(Caching::Disabled))),
             [
                 "Open",
                 "Open in new window",
@@ -446,7 +480,7 @@ mod tests {
             controls: MountControls::FIXED,
         };
 
-        let entries = drive.entries_with_cache(Some(Caching::Enabled));
+        let entries = drive.entries(Some(Caching::Enabled));
 
         let items: Vec<&MenuItem> = entries
             .iter()
@@ -483,5 +517,36 @@ mod tests {
         };
         assert_eq!(labels(&phone), ["Disconnect device"]);
         assert!(labels(&fixed).is_empty());
+    }
+
+    /// A drive and a share offer to cache their folder after the Open
+    /// items; a phone or a server gets no offer (`caching` is `None`).
+    ///
+    /// parity: SRCH-020
+    #[test]
+    fn drives_and_shares_offer_to_cache_their_folder() {
+        let drive = PlaceMenu::Drive {
+            uri: "file:///media/demo/USB".into(),
+            kind: VolumeKind::Drive,
+            controls: MountControls::FIXED,
+        };
+        let share = PlaceMenu::Network(studio_nas_mapped_drive());
+
+        let drive_menu = labels_caching(&drive, Some(Caching::Disabled));
+        let share_menu = labels_caching(&share, Some(Caching::Enabled));
+
+        let cache = "Cache this folder for search";
+        assert_eq!(drive_menu[..3], ["Open", "Open in new window", cache]);
+        assert_eq!(
+            share_menu[..4],
+            ["Open", "Open in new tab", "Open in new window", cache]
+        );
+        let checked = share
+            .entries(Some(Caching::Enabled))
+            .into_iter()
+            .any(|entry| matches!(entry, MenuEntry::Item(item) if item.check == ItemCheck::Fixed(true)));
+        assert!(checked, "a cached share's item is checked");
+        assert_eq!(drive.cacheable_folder(), Some("file:///media/demo/USB"));
+        assert_eq!(PlaceMenu::Volume { id: "1".into() }.cacheable_folder(), None);
     }
 }

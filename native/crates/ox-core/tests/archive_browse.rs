@@ -336,7 +336,7 @@ fn rows_list_folders_first_by_name_ignoring_case() {
 
 /// ARC-003: a listing stops at 5,000 rows and says so.
 ///
-/// parity: ARC-003
+/// parity: ARC-003, PERF-005
 #[test]
 fn a_listing_stops_at_5000_rows() {
     let temporary = tempfile::tempdir().expect("create a temporary folder");

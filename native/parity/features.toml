@@ -9455,7 +9455,7 @@ python_tests = []
 bridge = []
 dolphin = "Ctrl+F search / Ctrl+I filter"
 native = "done"
-native_note = "native/crates/ox-app/src/folder_view/filter.rs (every_term_must_match_somewhere, empty_search_shows_everything_visible); native/crates/ox-app/src/search/source.rs (the_source_follows_the_indexed_folders_around_the_folder); native/crates/ox-app/src/search/folder_search.rs (a_folder_nobody_indexed_is_only_filtered); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so); filtering also exercised in native/crates/ox-app/tests/browsing.rs."
+native_note = "native/crates/ox-app/src/folder_view/filter.rs (every_term_must_match_somewhere, empty_search_shows_everything_visible); native/crates/ox-app/src/search/source.rs (the_source_follows_the_indexed_folders_around_the_folder); native/crates/ox-app/src/search/folder_search.rs (a_folder_nobody_indexed_is_filtered_then_walked); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so); filtering also exercised in native/crates/ox-app/tests/browsing.rs. Deliberate difference (SRCH-035): the filtered listing is shown at once and stays first, and the folder's subfolders are then searched live, so the strip reads \"Current folder + subfolders\" where Python said \"Current folder only\"."
 
 [[feature]]
 id = "SRCH-004"
@@ -9481,8 +9481,8 @@ python_tests = [
 ]
 bridge = ["search"]
 dolphin = "show_filter_bar: Ctrl+I, /"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's search box filters folders that are not indexed by whitespace-separated substrings, with no wildcard support. Ctrl+F focuses it; Explorer also focuses search with Ctrl+E and F3."
+native = "done"
+native_note = "native/crates/ox-core/src/search/pattern.rs (wildcard_words_match_the_whole_name_and_other_words_anywhere); native/crates/ox-app/src/folder_view/filter.rs (a_wildcard_term_filters_by_the_whole_name); native/crates/ox-core/src/search/query.rs (a_wildcard_word_matches_the_whole_cached_name). A search word holding *, ? or [ ] is a wildcard pattern that must match the whole name, ignoring case, as in Dolphin's filter bar ([!a-c] and [^a-c] negate a set; a [ without ] is a plain character); other words keep matching anywhere in the name, as in Python. The same rule filters the folder (ox_core::search::NamePattern), the listing's matches merged into cached results, and the cache itself (a SQL function that folds the cached name as queries are folded and applies the same matcher, so non-ASCII names such as Überblick.pdf and straße.txt match too). When nothing matches, the empty page keeps the Python heading \"No matching items\" with its explanation, in place of Dolphin's \"No items matching the filter\"."
 
 [[feature]]
 id = "SRCH-005"
@@ -9500,7 +9500,8 @@ sources = [
 python_tests = ["desktop/tests/ui_release.py::Opening a folder leaves search"]
 bridge = []
 dolphin = "FilterBar lock button"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (the_pin_keeps_the_search_when_changing_folders). The search strip has a pin toggle before Clear search, \"Keep search when changing folders\" (Dolphin's lock button; the bundled Fluent pin, since no lock icon ships), off by default. While it is pressed, opening another folder in the tab keeps the search box's text and runs the search again there (window/folder_search.rs leave_search); otherwise the search ends on every location change, as before. Landing pages, which cannot be searched, end it."
 
 [[feature]]
 id = "SRCH-006"
@@ -9514,8 +9515,8 @@ sources = ["dolphin:src/filterbar/filterbar.cpp:103-133"]
 python_tests = []
 bridge = []
 dolphin = "FilterBar::keyPressEvent"
-native = "todo"
-native_note = "OpenXplorer has only the first rule: Escape in the search box empties it. Existing OpenXplorer part is protected by SRCH-001."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (enter_and_a_second_escape_move_focus_to_the_view); native/crates/ox-app/src/window/search_box.rs (the_arrow_and_page_keys_move_into_the_results). Escape in the search box empties it (SRCH-001); Escape in an empty box moves focus to the view, which is what closing Dolphin's filter bar does here, since the Windows-style search box stays in the navigation row. Enter moves focus to the results, keeping the search. Down, Up, Page Down and Page Up (plain or on the keypad) move focus to the results and select the first item when nothing is selected, where Dolphin forwards the key to a view whose current item is the first; focus lands on the selected item otherwise."
 
 [[feature]]
 id = "SRCH-007"
@@ -9637,7 +9638,7 @@ python_tests = [
 ]
 bridge = ["cacheSet", "search"]
 native = "done"
-native_note = "native/crates/ox-app/src/search/report.rs (the_strip_says_where_the_search_looked); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders, a_folder_with_an_indexed_subfolder_shows_both, the_strips_clear_button_ends_the_search, all_cached_folders_searches_only_the_cache). The strip is native/crates/ox-app/src/search/info_strip.rs with resources/ui/search-info-strip.ui; its scope list is the settings drop-down with bundled glyphs."
+native_note = "native/crates/ox-app/src/search/report.rs (the_strip_says_where_the_search_looked); native/crates/ox-app/src/window/tests/search.rs (typing_filters_a_folder_nobody_indexed_and_says_so, an_indexed_folder_is_searched_in_the_cache_with_its_subfolders, a_folder_with_an_indexed_subfolder_shows_both, the_strips_clear_button_ends_the_search, all_cached_folders_searches_only_the_cache). The strip is native/crates/ox-app/src/search/info_strip.rs with resources/ui/search-info-strip.ui; its scope list is the settings drop-down with bundled glyphs. Deliberate difference (SRCH-035): a folder no cache covers is searched live with its subfolders, so its caption reads \"Current folder + subfolders\" in place of \"Current folder only\", and it shows \"First 500 results · narrow your search\" when the walk found more."
 
 [[feature]]
 id = "SRCH-013"
@@ -9656,7 +9657,7 @@ sources = [
 python_tests = []
 bridge = ["search", "cacheRefresh"]
 native = "done"
-native_note = "native/crates/ox-app/src/search/report.rs (an_empty_result_says_why); native/crates/ox-app/src/window/tests/search.rs (a_search_that_finds_nothing_says_why)."
+native_note = "native/crates/ox-app/src/search/report.rs (an_empty_result_says_why); native/crates/ox-app/src/window/tests/search.rs (a_search_that_finds_nothing_says_why). Deliberate difference (SRCH-035): a folder no cache covers is searched live with its subfolders, so its empty result says \"No items found in this folder or its subfolders.\" where Python said \"Only this folder is being filtered. Enable its search cache to include subfolders.\"; the strip still offers \"Cache this folder\"."
 
 [[feature]]
 id = "SRCH-014"
@@ -9684,8 +9685,8 @@ python_tests = [
   "desktop/tests/ui_rc4.py::Middle-opening a search result does not erase the search",
 ]
 bridge = ["activateItem", "search"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/search.rs (open_file_location_selects_the_result_in_its_folder: opening a folder from a search leaves the search). Folder results navigate and leave the search and file results open in their app (window/activation.rs). Missing: ZIP results open the archive browser only once the archive dialog is ported (they open in the default app now); middle-click on a folder result keeping the search has no test."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (a_middle_clicked_folder_result_opens_a_tab_and_keeps_the_search, open_file_location_selects_the_result_in_its_folder); native/crates/ox-app/src/window/activation.rs (folders_open_in_the_tab_files_in_an_application_and_zips_in_the_browser). Activating a folder result navigates to its real target (Entry::navigation_uri) and leaves the search; a file result opens in its application without navigating; a ZIP result, recognised by its name since the cache stores no content type, opens in the archive browser (window/activation.rs). Middle-click on a folder result opens it in a background tab (Shift: in front) through open-tab-background, and the search, its text and its results stay in the tab."
 
 [[feature]]
 id = "SRCH-015"
@@ -9723,8 +9724,8 @@ python_tests = [
 ]
 bridge = ["list"]
 dolphin = "Open Path / Open Path in New Tab / Open Path in New Window"
-native = "todo"
-native_note = "Porting notes: OpenXplorer has 'Open file location', which selects the item, but no new-tab or new-window variants."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (a_results_folder_opens_in_a_new_tab_or_window_with_it_selected); native/crates/ox-app/src/window/context_menu/entries.rs (a_search_result_offers_open_file_location_after_the_open_group). A search result's menu lists \"Open file location\", \"Open file location in new tab\" and \"Open file location in new window\" (window/cache_folder.rs, window/folder_search.rs), enabled for one selected result. The tab opens behind, as Dolphin's Open Path in New Tab does, so the search stays in front; the window opens in front. Either lists the result's folder with the result selected and scrolled into view."
 
 [[feature]]
 id = "SRCH-017"
@@ -9803,8 +9804,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:774-783"]
 python_tests = ["desktop/tests/test_v05.py::IndexTests::test_disable_clears_metadata"]
 bridge = ["cacheSet", "cacheStatus"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/search.rs (caching_the_folder_from_the_strip_searches_the_cache); native/crates/ox-app/src/window/cache_folder.rs (pages_devices_and_servers_are_not_offered_for_caching). More > \"Cache this folder for search\" is a check item that caches the folder or stops caching it, with the Python toasts, and the strip's \"Cache this folder\" runs it too; an active search runs again. The folder's background menu toggles the folder shown; a folder item's and a Quick access pin's menus cache their own folder (CacheFolderOf), checked while it is cached. Missing: the drive and network place menus; the check item keeps its label where Python said \"Stop caching this folder\"."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/search.rs (caching_the_folder_from_the_strip_searches_the_cache); native/crates/ox-app/src/window/place_menus.rs (drives_and_shares_offer_to_cache_their_folder); native/crates/ox-app/src/window/cache_folder.rs (pages_devices_and_servers_are_not_offered_for_caching). More > \"Cache this folder for search\", the folder's background menu, a folder item's menu, a Quick access pin's menu, and now a drive's and a network share's menu in the sidebar and on the Network page offer the toggle (after the Open items, as driveMenu did); pages, phones, cameras and servers get none. Enabling and disabling show the Python toasts and an active search runs again. Deliberate difference: the item is a check item, checked while the folder is cached, where Python swapped the label to \"Stop caching this folder\"; unchecking it stops caching, as that item did."
 
 [[feature]]
 id = "SRCH-021"
@@ -10108,8 +10109,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["operate", "create", "rename", "createTemplate", "archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/search_live.rs (the_uri_of_a_deleted_file_keeps_live_events); native/crates/ox-core/tests/search_service.rs (a_folder_the_app_changed_is_read_again, the_uri_of_a_deleted_file_re_reads_its_folder). Local indexed folders already follow the app's own changes through their live watches. Missing: the file-operation UI (another track) must report changed folders on shares through IndexService::folder_changed, reached as the app context's search cache."
+native = "done"
+native_note = "native/crates/ox-app/src/search/writes.rs (a_move_changes_its_destination_and_every_source_folder); native/crates/ox-app/src/window/tests/search.rs (file_operations_tell_the_search_cache_which_folders_changed: a cut and paste in the window has the cache read both folders again); native/crates/ox-core/tests/search_service.rs (a_folder_the_app_changed_is_read_again, the_uri_of_a_deleted_file_re_reads_its_folder); native/crates/ox-core/tests/search_live.rs (the_uri_of_a_deleted_file_keeps_live_events). After every write the window tells the search cache which folders changed (SearchCache::folders_written, IndexService::folder_changed): a copy, move, Trash or delete reports its destination and each item's folder (running.rs and transfer.rs, also with an answer per item); New, Rename, Duplicate, links, Restore, Undo and Redo report the folder shown and the folders of the items they created or moved (reload_selecting); extraction, compression and a restored previous version report their destination (reload_tabs_showing). Each indexed folder that holds one reads it again, so shares without live watches show the app's own changes at once; local indexed folders also follow their live watches."
 
 [[feature]]
 id = "SRCH-034"
@@ -10153,8 +10154,8 @@ python_tests = [
 bridge = ["search", "cacheStatus", "cancel"]
 dolphin = "edit_find: Ctrl+F (filenamesearch:/ or baloosearch:/); Baloo filename search (Search → File name, From here)"
 gnome = "Tracker3 nfo:fileName query scoped by URI prefix (Nautilus search engine, recursive-search=local-only)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer searches subfolders only below folders the user has added to its opt-in filename cache. Elsewhere it filters the current folder only. Existing OpenXplorer part is protected by SRCH-003 and SRCH-007."
+native = "done"
+native_note = "native/crates/ox-core/src/search/live.rs (subfolders_are_searched_without_following_links_or_hidden_folders, the_walk_stops_after_the_limit, a_missing_folder_is_an_error_and_a_cancelled_walk_stops); native/crates/ox-app/src/window/tests/search.rs (a_folder_nobody_indexed_is_searched_with_its_subfolders); native/crates/ox-app/src/search/folder_search.rs (a_folder_nobody_indexed_is_filtered_then_walked). Ctrl+F focuses the search box. In a folder no indexed folder covers, contains or sits under, typing filters the folder at once and, after the 120 ms pause (Python's delay; Dolphin waits 1 s) or on Enter, walks the folder and its subfolders live on a GIO worker thread (ox_core::search::walk_search): matches stream in level by level after the folder's own, with \"Searching…\" until the walk ends, at most 500 results (\"First 500 results · narrow your search\"), case-insensitive, with *, ? and [ ] wildcards (SRCH-004). The walk enters only what a scan of the cache would index: it never follows links or enters shares, other mounted filesystems, system folders (/proc, /sys, /dev, /run, /tmp, /var/tmp) or snapshot history (.snapshot, #snapshot, .zfs), skips hidden folders unless hidden files are shown, stops at 128 levels, leaves out unreadable subfolders, and is cancelled by the next edit or when the window closes. A folder on the network (smb://, sftp://, a CIFS/NFS/sshfs or GVfs FUSE mount) is not walked, as Nautilus recurses into local folders only by default: its listing is filtered, as in Python, and the strip reads \"Current folder only\" (a_share_nobody_indexed_is_only_filtered). The strip reads \"Current folder + subfolders\" and still offers \"Cache this folder\"; an empty result says \"No items found in this folder or its subfolders.\" Indexed folders keep searching the cache."
 
 [[feature]]
 id = "SRCH-036"
@@ -10178,8 +10179,8 @@ python_tests = [
 bridge = ["search", "cacheStatus"]
 dolphin = "SearchSettings::What (FileName/Content); Baloo content search (Search → Content)"
 gnome = "LocalSearch/Tracker full-text index (tracker3 SPARQL fts:match), with a fallback grep for unindexed folders; Tracker 3 SPARQL endpoint org.freedesktop.Tracker3.Miner.Files (fts:match) via libtracker-sparql-3.0; renamed LocalSearch3 / TinySPARQL on GNOME 47+"
-native = "todo"
-native_note = "Porting notes: Explorer's search also covers contents through its index. Zorin 18 ships tracker 3.7.1 (tracker-miner-fs-3), not localsearch."
+native = "done"
+native_note = "native/crates/ox-core/src/search/contents.rs (text_files_are_read_and_binary_files_are_not); native/crates/ox-core/src/search/live.rs (a_search_of_contents_finds_files_by_their_text_too); native/crates/ox-app/src/search/folder_search.rs (a_search_of_contents_walks_the_folder_even_where_it_is_cached); native/crates/ox-app/src/window/tests/search_options.rs (names_and_contents_finds_files_by_their_text). The search strip's 'Search in' list offers File names or Names and contents, as Dolphin's search box does; the choice is kept after the search ends. A search of contents walks the folder and its subfolders live (the cache holds names only, so the list is disabled for All cached folders) and reads regular files of at most 16 MiB that look like text (no NUL byte in the first 8 KiB) on this computer's own disks only, never on a share or network mount; in a cached folder the strip does not offer 'Cache this folder', which would switch caching off; every word must occur in the name or the text, and a wildcard word must still match the name. No full-text index: Tracker/LocalSearch is not queried."
 
 [[feature]]
 id = "SRCH-037"
@@ -10197,8 +10198,8 @@ sources = [
 python_tests = []
 bridge = ["search"]
 dolphin = "DolphinFacetsWidget"
-native = "todo"
-native_note = "Porting notes: Explorer's equivalent is its search-options filters (Date modified, Kind, Size)."
+native = "partial"
+native_note = "native/crates/ox-core/src/search/facets.rs (kinds_and_dates_narrow_what_is_shown); native/crates/ox-app/src/window/tests/search_options.rs (the_kind_option_narrows_the_results_until_the_search_ends, the_kind_option_narrows_cached_results). The search strip's Kind list (Any kind, Folders, Documents, Images, Audio files, Videos, decided from the MIME type, or for a cached result from the type its name suggests) and Date modified list (Any date, Today, Yesterday, This week from Monday, This month, This year, in local time) narrow the rows shown at once, for the filtered listing, the cache's results and the live walk alike; clearing the box or leaving the folder resets them. Missing: the rating and tag filters, which need SRCH-039 (tags and ratings) first."
 
 [[feature]]
 id = "SRCH-038"
@@ -10216,7 +10217,8 @@ sources = [
 python_tests = []
 bridge = ["pin", "search"]
 dolphin = "DolphinSearchBox save search"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/search/saved.rs (a_saved_search_is_kept_once_and_can_be_removed, a_damaged_file_loses_no_search); native/crates/ox-app/src/window/tests/search_options.rs (a_saved_search_opens_its_folder_and_searches_again). The search strip's 'Save search' adds the search, with its File names or Names and contents choice and its scope, as a navigation-pane row 'Search for <text> in <folder>' below Quick access, with a search glyph; activating it opens the folder and runs the search again, and its menu offers Open and Remove from navigation pane. Saved searches live in saved-searches.json in the settings directory (private 0600 file, atomic replace, at most 64), not in settings.json, which the Python app rewrites with the keys it knows only; the same search saved again replaces the earlier row. Changes are made one at a time, so two quick ones both last; an invalid entry is dropped alone, and a file that is not a list is never overwritten."
 
 [[feature]]
 id = "SRCH-039"
@@ -16300,7 +16302,8 @@ python_tests = [
 bridge = ["list"]
 dolphin = "KFileItemModel incremental insertion + KItemListView virtualisation"
 gnome = "GtkListView/GtkColumnView recycling"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/listing.rs (a_huge_folder_builds_rows_only_for_the_visible_part). The details and icon views are GtkColumnView and GtkGridView, which build and recycle widgets only around the visible rows; a 10,001-file folder builds fewer than 300 rows at the top and at the end. GTK re-lays out rows on resize itself."
 
 [[feature]]
 id = "PERF-002"
@@ -16321,8 +16324,8 @@ python_tests = [
   "desktop/tests/test_gio_serialization.py::GioSerializationTests::test_serialization_requests_no_extra_filesystem_queries",
 ]
 bridge = ["list"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/entry_enumeration.rs (listing_batches_entries_and_preserves_metadata); a selection made during loading is kept in native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes)."
+native = "done"
+native_note = "native/crates/ox-core/src/entry/enumerate.rs (the_top_of_a_large_folder_arrives_first, later_batches_are_merged_until_the_window_has_passed); native/crates/ox-app/src/window/tests/listing.rs (a_selection_made_while_listing_survives_the_end_of_the_listing). GIO's asynchronous enumerator reads the folder; the first 64 rows are shown at once and later reads are merged for 250 ms (Python repainted at most every 90 ms), so large or slow folders fill in progressively without re-sorting per read."
 
 [[feature]]
 id = "PERF-003"
@@ -16345,8 +16348,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/tests/entry_enumeration.rs (worker_listing_completes_without_a_gtk_main_loop); native/crates/ox-core/src/entry/enumerate/task.rs (a_dropped_worker_still_completes_the_task)."
+native = "done"
+native_note = "native/crates/ox-core/tests/entry_enumeration.rs (worker_listing_completes_without_a_gtk_main_loop); native/crates/ox-core/src/entry/enumerate/task.rs (a_dropped_worker_still_completes_the_task); native/crates/ox-app/src/folder_view/watch.rs (a_watch_monitors_on_a_thread_of_its_own_until_dropped); native/crates/ox-core/src/network/prompts/tests.rs (the_keyring_is_read_off_the_main_thread); native/crates/ox-app/src/search/indexer.rs (the_index_starts_and_ticks_off_the_callers_thread: the test observes the thread that opens the cache and every tick, and checks it is not the caller's). Instead of Python's fixed worker pools, listings use GIO's asynchronous I/O (GIO worker threads), folder monitors run on their own thread, keyring lookups on a worker thread, and the search cache opens, elects and ticks on its own thread; search cache operations run on GIO worker threads."
 
 [[feature]]
 id = "PERF-004"
@@ -16359,7 +16362,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:332", "desktop/winspace.py:928"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/model.rs (the_shown_items_are_recomputed_only_when_their_inputs_change). The folder view shows a GtkFilterListModel under a GtkSortListModel, which keep their result; the filter is invalidated only when the search words or the hidden flag really change, and the sorter only when the sort column or direction changes."
 
 [[feature]]
 id = "PERF-005"
@@ -16380,7 +16384,7 @@ sources = [
 python_tests = []
 bridge = ["search", "previousVersions", "archiveList"]
 native = "partial"
-native_note = "native/crates/ox-app/src/search/results.rs (at_most_500_rows_are_shown): a search shows at most 500 results; cache status polling pauses while every window is hidden or minimised (native/crates/ox-app/src/search/cache.rs). Missing: the column auto-fit, drag, previous-versions and archive-listing bounds, which belong to features not ported yet."
+native_note = "native/crates/ox-app/src/search/results.rs (at_most_500_rows_are_shown: a search shows at most 500 results); native/crates/ox-app/src/window/file_drag/payload.rs (one_item_that_may_not_leave_refuses_the_whole_drag: a drag carries at most 200 items); native/crates/ox-core/tests/versions_lookup.rs (at_most_one_hundred_versions_are_returned_and_marked_truncated); native/crates/ox-core/tests/archive_browse.rs (a_listing_stops_at_5000_rows); cache status polling pauses while every window is hidden or minimised (native/crates/ox-app/src/search/cache.rs). Missing: the 2,000-row bound of column auto-fit, which waits for VIEW-029 (double-click a column edge to auto-fit), not ported yet."
 
 [[feature]]
 id = "PERF-006"
@@ -16398,8 +16402,8 @@ sources = [
 ]
 python_tests = []
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/src/sizes/scan.rs (progress_between_start_and_end_waits_for_the_interval). Only the folder-size progress interval has a marked test. Operation progress, folder-change debouncing, index status and the index coordinator's one-second tick are not proven by a marked test, and the native UI does not use these services yet."
+native = "done"
+native_note = "native/crates/ox-core/src/ops/progress.rs (reports_are_spaced_by_the_interval_but_completion_always_arrives: operation progress at most every 80 ms); native/crates/ox-core/src/sizes/scan.rs (progress_between_start_and_end_waits_for_the_interval: folder size progress every 200 ms); native/crates/ox-app/src/folder_view/watch.rs (a_burst_of_changes_is_reported_once_it_settles: folder changes after 350 ms of quiet); native/crates/ox-core/src/search/crawl.rs (a_scan_reports_its_progress_at_most_every_800_ms: index status at most every 0.8 s); native/crates/ox-app/src/search/indexer.rs (the_index_starts_and_ticks_off_the_callers_thread: ticks run on the indexer's thread, one after the other, each starting at least a second after the last one ended). The index coordinator ticks on its own thread and waits a second after each tick, so ticks never overlap."
 
 [[feature]]
 id = "PERF-007"

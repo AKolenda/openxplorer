@@ -35,7 +35,7 @@ rustix = { version = "1", features = ["fs"] }
 # system SQLite, as Python's sqlite3 module does, so building needs its
 # development files (libsqlite3-dev on Ubuntu). "hooks" provides the progress
 # handler that cancels a running search.
-rusqlite = { version = "0.38", default-features = false, features = ["hooks"] }
+rusqlite = { version = "0.38", default-features = false, features = ["functions", "hooks"] }
 # The Secret Service client for SMB credentials (session_credentials.py used
 # libsecret). Pure Rust with an encrypted session, so no C library or -dev
 # package is needed; async-io keeps it independent of Tokio.

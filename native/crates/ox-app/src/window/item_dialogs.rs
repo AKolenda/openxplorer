@@ -383,8 +383,12 @@ impl BrowserWindow {
         self.present_window_dialog(&frame);
     }
 
-    /// Lists again every tab showing `folder`, keeping their selection.
+    /// Lists again every tab showing `folder`, keeping their selection,
+    /// after something was written there; the search cache reads it
+    /// again too (SRCH-033).
     pub(super) fn reload_tabs_showing(&self, folder: &str) {
+        let changed = crate::search::changed_folders([folder], []);
+        self.context().search_cache().folders_written(changed);
         let tabs: Vec<TabId> = {
             let session = self.imp().session.borrow();
             let showing = session

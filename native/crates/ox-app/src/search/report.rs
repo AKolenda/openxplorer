@@ -35,6 +35,9 @@ pub(crate) enum SearchProgress {
 pub(crate) struct SearchReport {
     /// Where it looks.
     pub source: SearchSource,
+    /// Where the cache covers the folder; differs from `source` while a
+    /// search of contents walks a cached folder.
+    pub coverage: SearchSource,
     /// How far it has got.
     pub progress: SearchProgress,
 }
@@ -49,14 +52,16 @@ impl SearchReport {
         }
     }
 
-    /// The strip's note on cached results, or `None` for a folder filter.
+    /// The strip's note: that results were cut off, or how fresh cached
+    /// ones are; `None` for a complete live search.
     pub(crate) fn freshness_note(&self) -> Option<&'static str> {
+        if self.is_truncated() {
+            return Some("First 500 results · narrow your search");
+        }
         if !self.source.uses_cache() {
             return None;
         }
-        let note = if self.is_truncated() {
-            "First 500 results · narrow your search"
-        } else if self.source == SearchSource::CurrentFolderAndCachedSubfolders {
+        let note = if self.source == SearchSource::CurrentFolderAndCachedSubfolders {
             "Other subfolders are not indexed."
         } else {
             "Cached metadata · see update coverage in Settings"
@@ -65,9 +70,11 @@ impl SearchReport {
     }
 
     /// Whether the strip offers "Cache this folder": the folder is not
-    /// indexed, or only some of its subfolders are.
+    /// indexed, or only some of its subfolders are. A search of contents
+    /// in a cached folder does not offer it, because the button would
+    /// switch the folder's caching off.
     pub(crate) fn offers_to_cache_folder(&self) -> bool {
-        self.source != SearchSource::Cache
+        self.coverage != SearchSource::Cache
     }
 
     /// What the status bar counts while `shown` results are shown.
@@ -91,10 +98,14 @@ impl SearchReport {
         if let SearchProgress::Failed(message) = &self.progress {
             return message;
         }
-        if self.source.uses_cache() {
-            "No cached matches. Refresh the cache if this folder changed, or try another search."
-        } else {
-            "Only this folder is being filtered. Enable its search cache to include subfolders."
+        match self.source {
+            SearchSource::CurrentFolder => "No items found in this folder or its subfolders.",
+            SearchSource::CurrentFolderOnly => {
+                "Only this folder is being filtered. Enable its search cache to include subfolders."
+            }
+            SearchSource::Cache | SearchSource::CurrentFolderAndCachedSubfolders => {
+                "No cached matches. Refresh the cache if this folder changed, or try another search."
+            }
         }
     }
 
@@ -156,7 +167,11 @@ mod tests {
     use super::*;
 
     fn report(source: SearchSource, progress: SearchProgress) -> SearchReport {
-        SearchReport { source, progress }
+        SearchReport {
+            source,
+            coverage: source,
+            progress,
+        }
     }
 
     fn shown(is_truncated: bool) -> SearchProgress {
@@ -178,8 +193,12 @@ mod tests {
             SearchProgress::Failed("Search must be at most 512 characters.".into()),
         );
 
-        assert_eq!(folder.caption(), "Current folder only");
+        assert_eq!(folder.caption(), "Current folder + subfolders");
         assert_eq!(folder.freshness_note(), None);
+        assert_eq!(
+            report(SearchSource::CurrentFolder, shown(true)).freshness_note(),
+            Some("First 500 results · narrow your search")
+        );
         assert!(folder.offers_to_cache_folder());
         assert_eq!(partial.caption(), "Current folder + cached subfolders");
         assert_eq!(
@@ -231,7 +250,7 @@ mod tests {
 
         assert_eq!(
             folder.empty_message(),
-            "Only this folder is being filtered. Enable its search cache to include subfolders."
+            "No items found in this folder or its subfolders."
         );
         assert_eq!(
             cached.empty_message(),

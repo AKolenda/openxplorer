@@ -268,7 +268,7 @@ mod tests {
         wait_until("the monitor thread to end", || monitor_threads() == before);
     }
 
-    /// parity: VIEW-055
+    /// parity: VIEW-055, PERF-006
     #[gtk::test]
     fn a_burst_of_changes_is_reported_once_it_settles() {
         let folder = tempfile::tempdir().expect("the test home has room for a folder");

@@ -70,7 +70,7 @@ impl Sidebar {
         let uri = match &entry.target {
             RowTarget::Location(uri) => uri,
             RowTarget::PinDropTail => return Some(SidebarDropSpot::Pin { index, before: None }),
-            RowTarget::MountVolume(_) => return None,
+            RowTarget::MountVolume(_) | RowTarget::SavedSearch(_) => return None,
         };
         if entry.section != Section::QuickAccess {
             return Some(SidebarDropSpot::Folder {

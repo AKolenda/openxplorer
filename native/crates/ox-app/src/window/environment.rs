@@ -151,7 +151,8 @@ impl BrowserWindow {
     /// search index.
     pub(super) fn render_places(&self) {
         let places = self.places();
-        let entries = sidebar::sidebar_entries(&places, &self.imp().locations.borrow());
+        let searches = self.context().saved_searches();
+        let entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
         self.sidebar().set_entries(entries);
         if let Some(uri) = self.current_uri() {
             self.sidebar().select(&uri);

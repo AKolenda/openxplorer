@@ -38,6 +38,9 @@ pub enum SearchError {
     /// The search text is longer than [`MAX_QUERY_CHARS`](super::MAX_QUERY_CHARS).
     #[error("Search must be at most 512 characters.")]
     QueryTooLong,
+    /// A search with no words was to be saved (SRCH-038).
+    #[error("Type what to search for before saving the search.")]
+    EmptySearch,
     /// The search or scan was cancelled; not an error to show.
     #[error("Operation cancelled.")]
     Cancelled,

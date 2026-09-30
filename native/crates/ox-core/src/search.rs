@@ -42,29 +42,39 @@
 //! | `ownership` | Electing one owner across processes | `index_service.py` |
 //! | `crawl` | A full scan | `index_service.py` |
 //! | `update` | A live update of changed folders | `index_service.py` |
+//! | `live` | Searching a folder's tree without the cache (SRCH-035) | Dolphin |
+//! | `facets` | Narrowing a search by kind and date (SRCH-037) | Dolphin |
+//! | `saved` | Searches saved to the sidebar (SRCH-038) | Dolphin |
+//! | `contents` | Reading file text for a search of contents, never cached (SRCH-036) | Dolphin |
 //! | `limits` | The entry, folder and watch limits | `index_service.py`, `local_watch.py` |
 //! | `policy` | What may be indexed, and network roots | `index_service.py` |
 //! | `mounts` | The kernel's mount table | `mount_support.py` |
 //! | `watch` | inotify watches | `local_watch.py` |
 //! | `reader` | Reading one folder through GIO | `gio_backend.py` |
 //! | `pins` | Indexing pinned folders (SRCH-040) | new |
+//! | `pattern` | The words and wildcards a name must match | `app.js`, Dolphin |
 //! | `text` | Folding, display paths and URI containment | `search_index.py` |
 //! | `error` | The error of every operation | both |
 
 mod commands;
+mod contents;
 mod crawl;
 mod error;
+mod facets;
 mod hit;
 mod index;
 mod limits;
+mod live;
 mod mounts;
 mod ownership;
+mod pattern;
 mod pins;
 mod policy;
 mod query;
 mod reader;
 mod requests;
 mod root;
+mod saved;
 mod scan;
 mod schema;
 mod service;
@@ -81,8 +91,12 @@ mod fixtures;
 #[cfg(test)]
 mod service_tests;
 
+pub use contents::SearchIn;
 pub use error::SearchError;
+pub use facets::{DateFacet, FacetMatcher, KindFacet, SearchFacets};
 pub use index::SearchIndex;
+pub use live::{walk_search, walks_subfolders, LiveSearch, LiveSearchEnd};
+pub use pattern::{is_wildcard, NamePattern};
 pub use pins::PinIndexing;
 pub use query::{
     SearchHit, SearchQuery, SearchResults, DEFAULT_RESULT_LIMIT, MAX_QUERY_CHARS, MAX_RESULT_LIMIT,
@@ -92,6 +106,7 @@ pub use root::{
     CacheStatus, Caching, HiddenItems, IndexRoot, RootOrigin, RootStatus, ScanGeneration, SearchEngine,
     UpdateMode,
 };
+pub use saved::{SavedSearch, SavedSearches, MAX_SAVED_SEARCHES};
 pub use scan::ListedItem;
 pub use service::{AutoIndex, IndexService, IndexSettings};
 pub use text::display_path;

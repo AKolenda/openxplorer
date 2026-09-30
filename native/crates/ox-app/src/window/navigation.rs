@@ -209,7 +209,7 @@ impl BrowserWindow {
     /// filter, the selection and the type-to-select prefix.
     fn leave_location(&self) {
         self.change_model(|| {
-            self.end_search();
+            self.leave_search();
             self.folder_pane().model().select_none();
         });
         self.reset_typeahead();

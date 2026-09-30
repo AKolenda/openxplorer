@@ -26,11 +26,11 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 use ox_core::location::same_location;
-use ox_core::search::Caching;
 
 use crate::icons::{self, Icon};
 
 use super::menu_popover::{MenuEntry, MenuPopover};
+use super::saved_search::saved_search_menu;
 use super::window_action::WindowAction;
 use super::{gestures, preferences, BrowserWindow};
 
@@ -219,26 +219,20 @@ impl Sidebar {
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
         let entry = entries.get(index)?;
-        let caching = match &entry.target {
-            RowTarget::Location(uri) => self.caching_of(uri),
-            RowTarget::MountVolume(_) | RowTarget::PinDropTail => None,
-        };
+        let window = self.root().and_downcast::<BrowserWindow>();
+        if let RowTarget::SavedSearch(search) = &entry.target {
+            return Some(saved_search_menu(search));
+        }
         if entry.pinned {
             let RowTarget::Location(uri) = &entry.target else {
                 return None;
             };
+            let caching = window.and_then(|window| window.caching_of(uri));
             return Some(menu::pin_menu(uri, caching));
         }
-        let place_menu = entry.menu.as_ref()?.entries_with_cache(caching);
+        let place_menu = entry.menu.as_ref()?.entries_in(window.as_ref());
         // A drive the system keeps mounted may have nothing to offer.
         (!place_menu.is_empty()).then_some(place_menu)
-    }
-
-    /// Whether the folder at `uri` is cached for search, as the window
-    /// knows; `None` where it cannot be cached.
-    fn caching_of(&self, uri: &str) -> Option<Caching> {
-        let window = self.root().and_downcast::<BrowserWindow>()?;
-        window.caching_of(uri)
     }
 
     /// Right-clicks the row labelled `label` and returns the sidebar's
@@ -272,7 +266,7 @@ impl Sidebar {
         let entries = self.imp().entries.borrow();
         match &entries.get(index)?.target {
             RowTarget::Location(uri) => Some(uri.clone()),
-            RowTarget::MountVolume(_) | RowTarget::PinDropTail => None,
+            RowTarget::MountVolume(_) | RowTarget::PinDropTail | RowTarget::SavedSearch(_) => None,
         }
     }
 
@@ -304,7 +298,7 @@ impl Sidebar {
             .iter()
             .position(|entry| match &entry.target {
                 RowTarget::Location(candidate) => same_location(candidate, uri),
-                RowTarget::MountVolume(_) | RowTarget::PinDropTail => false,
+                RowTarget::MountVolume(_) | RowTarget::PinDropTail | RowTarget::SavedSearch(_) => false,
             });
         let row = index
             .and_then(|index| i32::try_from(index).ok())

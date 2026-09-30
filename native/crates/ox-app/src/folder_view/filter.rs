@@ -3,7 +3,15 @@
 //!
 //! Matches the filter in `filtered()` in `desktop/ui/app.js`: hidden items
 //! only with "Show hidden files", and every whitespace-separated search term
-//! must occur somewhere in the name, ignoring case.
+//! must occur somewhere in the name, ignoring case. A term with the
+//! wildcards `*`, `?` or `[ ]` must match the whole name instead, as in
+//! Dolphin's filter bar (SRCH-004, [`NamePattern`]). While searching,
+//! the search options narrow the items by kind and date too (SRCH-037,
+//! [`SearchFacets`]).
+
+use gtk::glib;
+use ox_core::entry::Entry;
+use ox_core::search::{FacetMatcher, NamePattern, SearchFacets};
 
 /// Whether GIO marks an item hidden (a dot file, or one named in its
 /// folder's `.hidden` file).
@@ -15,20 +23,24 @@ pub(crate) enum Visibility {
     Hidden,
 }
 
-/// The current search text and hidden-file preference.
+/// The current search text, search options and hidden-file preference.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct FilterState {
-    /// The lower-cased search terms; empty while nothing is searched.
-    terms: Vec<String>,
+    /// The search terms; empty while nothing is searched.
+    pattern: NamePattern,
     show_hidden: bool,
+    /// The search options as chosen.
+    facets: SearchFacets,
+    /// `facets` with their date range worked out when they were chosen.
+    facet_matcher: FacetMatcher,
 }
 
 impl FilterState {
     /// Sets the search text; returns true when the terms changed.
     pub(crate) fn set_query(&mut self, query: &str) -> bool {
-        let terms = query_terms(query);
-        let changed = terms != self.terms;
-        self.terms = terms;
+        let pattern = NamePattern::new(query);
+        let changed = pattern != self.pattern;
+        self.pattern = pattern;
         changed
     }
 
@@ -39,10 +51,24 @@ impl FilterState {
         changed
     }
 
+    /// Sets the search options; returns true when they changed. Date
+    /// ranges are counted from the local time now.
+    pub(crate) fn set_facets(&mut self, facets: SearchFacets) -> bool {
+        let changed = facets != self.facets;
+        self.facets = facets;
+        self.facet_matcher = facets.matcher(&now());
+        changed
+    }
+
+    /// Whether `entry` passes the search options.
+    pub(crate) fn passes_facets(&self, entry: &Entry) -> bool {
+        self.facet_matcher.matches(entry)
+    }
+
     /// True when a search is active.
     #[cfg(test)]
     pub(crate) fn is_searching(&self) -> bool {
-        !self.terms.is_empty()
+        !self.pattern.is_empty()
     }
 
     /// True when an item of `visibility` is listed at all, searched or
@@ -52,26 +78,17 @@ impl FilterState {
     }
 
     /// Whether an item is shown: it is listed, and `lowercase_name`, its
-    /// lower-cased display name, holds every search term.
+    /// lower-cased display name, matches every search term.
     pub(crate) fn accepts(&self, lowercase_name: &str, visibility: Visibility) -> bool {
-        self.lists(visibility) && self.matches_every_term(lowercase_name)
-    }
-
-    /// True when every search term occurs in `lowercase_name`.
-    fn matches_every_term(&self, lowercase_name: &str) -> bool {
-        self.terms
-            .iter()
-            .all(|term| lowercase_name.contains(term.as_str()))
+        self.lists(visibility) && self.pattern.matches_lowercase(lowercase_name, "")
     }
 }
 
-/// Splits search text into lower-cased terms.
-fn query_terms(query: &str) -> Vec<String> {
-    query
-        .to_lowercase()
-        .split_whitespace()
-        .map(str::to_string)
-        .collect()
+/// The local time now; the epoch should the clock be unreadable.
+fn now() -> glib::DateTime {
+    glib::DateTime::now_local()
+        .or_else(|_| glib::DateTime::from_unix_utc(0))
+        .expect("the Unix epoch is a valid time")
 }
 
 #[cfg(test)]
@@ -91,6 +108,15 @@ mod tests {
         let filter = searching("  Report  2026 ");
         assert!(filter.accepts("quarterly report 2026.docx", Visibility::Visible));
         assert!(!filter.accepts("quarterly report 2025.docx", Visibility::Visible));
+    }
+
+    /// parity: SRCH-004
+    #[test]
+    fn a_wildcard_term_filters_by_the_whole_name() {
+        let filter = searching("*.TXT notes");
+        assert!(filter.accepts("notes 10.txt", Visibility::Visible));
+        assert!(!filter.accepts("notes 10.txt.bak", Visibility::Visible));
+        assert!(!filter.accepts("résumé.txt", Visibility::Visible));
     }
 
     /// parity: SRCH-003, VIEW-023
