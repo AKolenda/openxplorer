@@ -58,6 +58,9 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/open-with-dialog.ui")]
     pub(crate) struct OpenWithDialog {
+        /// The scrolling body, capped to the parent window's height.
+        #[template_child]
+        pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
         pub(super) item_label: TemplateChild<gtk::Label>,
         #[template_child]
@@ -120,7 +123,15 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for OpenWithDialog {}
+    impl WidgetImpl for OpenWithDialog {
+        /// Fits the dialog to its parent window before its first frame, as
+        /// it is realized when it shows.
+        fn realize(&self) {
+            crate::modal::fit_to_parent(&*self.obj(), &self.scroller);
+            self.parent_realize();
+        }
+    }
+
     impl WindowImpl for OpenWithDialog {}
 }
 
