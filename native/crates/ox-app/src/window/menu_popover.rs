@@ -116,7 +116,13 @@ mod imp {
             self.list.set(list).expect("constructed runs once per object");
             popover.set_style(MenuStyle::Classic);
             // Check marks follow the actions' state when the menu opens.
-            popover.connect_show(super::MenuPopover::redraw);
+            // The keyboard starts on the first item that can be chosen,
+            // among the rows drawn for this opening.
+            popover.connect_show(|popover| {
+                popover.redraw();
+                popover.focus_first_item();
+            });
+            popover.connect_map(super::MenuPopover::focus_first_item);
         }
     }
 
@@ -166,7 +172,42 @@ fn item_list(popover: &MenuPopover) -> gtk::ListBox {
         popover,
         move |_, row| popover.choose_row(row.index())
     ));
+    // Up on the first item and Down on the last wrap around, as `openMenu`
+    // moves between enabled items.
+    list.connect_keynav_failed(|list, direction| {
+        let wrapped_to = match direction {
+            gtk::DirectionType::Down => first_enabled_row(list),
+            gtk::DirectionType::Up => last_enabled_row(list),
+            _ => None,
+        };
+        match wrapped_to {
+            Some(row) => {
+                row.grab_focus();
+                glib::Propagation::Stop
+            }
+            None => glib::Propagation::Proceed,
+        }
+    });
     list
+}
+
+/// The rows of `list` a user can choose, in order.
+fn enabled_rows(list: &gtk::ListBox) -> impl DoubleEndedIterator<Item = gtk::ListBoxRow> {
+    let rows: Vec<gtk::ListBoxRow> = super::widget_tree::children(list)
+        .filter_map(|child| child.downcast::<gtk::ListBoxRow>().ok())
+        .filter(WidgetExt::is_sensitive)
+        .collect();
+    rows.into_iter()
+}
+
+/// The first row of `list` a user can choose.
+fn first_enabled_row(list: &gtk::ListBox) -> Option<gtk::ListBoxRow> {
+    enabled_rows(list).next()
+}
+
+/// The last row of `list` a user can choose.
+fn last_enabled_row(list: &gtk::ListBox) -> Option<gtk::ListBoxRow> {
+    enabled_rows(list).next_back()
 }
 
 impl MenuPopover {
@@ -205,6 +246,13 @@ impl MenuPopover {
 
     fn strip(&self) -> &gtk::Box {
         self.imp().strip.get().expect("constructed builds the strip")
+    }
+
+    /// Moves the keyboard to the first row that can be chosen.
+    fn focus_first_item(&self) {
+        if let Some(row) = first_enabled_row(self.list()) {
+            row.grab_focus();
+        }
     }
 
     /// Rebuilds the strip and the rows, reading each action's state for

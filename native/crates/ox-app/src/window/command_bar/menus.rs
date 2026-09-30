@@ -161,7 +161,9 @@ pub(super) fn more_menu() -> Vec<MenuEntry> {
         item("Select none", Icon::SelectAllOff, WindowAction::SelectNone),
         item("Invert selection", Icon::ArrowSwap, WindowAction::InvertSelection),
         MenuEntry::Divider,
-        item("License & source", Icon::Document, WindowAction::License),
+        // app.js asked for a `code` glyph it did not have and drew a
+        // document; the native app has the code glyph.
+        item("License & source", Icon::Code, WindowAction::License),
         item("About this build", Icon::Info, WindowAction::About),
     ]);
     entries

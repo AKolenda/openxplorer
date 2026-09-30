@@ -11,7 +11,7 @@ use gtk::{gdk, glib};
 use super::file_ops_support::{press_shortcut, select_names};
 use super::geometry::laid_out;
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuPopover;
 use crate::window::widget_tree::children;
 
@@ -192,6 +192,92 @@ fn the_menus_list_the_current_items_between_the_same_dividers() {
     let more = menu_of(&test, "More options").row_labels();
     assert_eq!(&more[..MORE_MENU_START.len()], MORE_MENU_START);
     assert_eq!(&more[more.len() - MORE_MENU_END.len()..], MORE_MENU_END);
+}
+
+/// The command bar control named `name` as the menu button it is.
+fn menu_button(test: &TestWindow, name: &str) -> gtk::MenuButton {
+    command_bar_controls(test)
+        .into_iter()
+        .find(|control| control_name(control).as_deref() == Some(name))
+        .and_then(|control| control.downcast::<gtk::MenuButton>().ok())
+        .unwrap_or_else(|| panic!("{name} is a menu button"))
+}
+
+/// Every menu of the bar drops down below its button, and Enter on a
+/// focused button opens its menu without opening the selected file.
+///
+/// parity: CMD-005
+#[gtk::test]
+fn enter_on_a_command_opens_its_menu_below_it_and_not_the_selection() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    for name in ["New", "Sort", "View", "More options", "Light"] {
+        let popover = menu_button(&test, name).popover().expect("a menu");
+        assert_eq!(popover.position(), gtk::PositionType::Bottom, "{name}");
+    }
+    select_names(&test, &["Notes 2.txt"]);
+    let new = menu_button(&test, "New");
+
+    // Enter on a focused button is its "activate" key binding; the
+    // views' own Enter handling never sees the key.
+    new.emit_by_name::<()>("activate", &[]);
+
+    // A button shows the press for a moment before it acts.
+    let menu = new.popover().expect("New has a menu");
+    wait_until("Enter to open New's menu", || menu.is_visible());
+    assert!(test.context.recorded_launches().is_empty(), "no file opened");
+    menu.popdown();
+}
+
+/// The toggles of the View menu show their check while they are on.
+///
+/// parity: CMD-006
+#[gtk::test]
+fn the_view_menu_checks_hidden_files_and_the_details_pane_while_on() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let view = menu_of(&test, "View");
+    let toggles = ["Show hidden files", "Details pane"];
+    let checked_now = || {
+        view.popup();
+        wait_for_frames(&test.window, 2);
+        let checked = view.checked_labels();
+        view.popdown();
+        toggles.map(|toggle| checked.contains(&toggle.to_owned()))
+    };
+    let before = checked_now();
+
+    test.activate("hidden", None);
+    test.activate("details-pane", None);
+
+    assert_eq!(checked_now(), before.map(|was_checked| !was_checked));
+}
+
+/// More options: "Pin current folder" and the cache toggle need a
+/// folder, so pages disable them; "License & source" shows the code glyph
+/// app.js lacked.
+///
+/// parity: CMD-007
+#[gtk::test]
+fn more_options_needs_a_folder_for_pin_and_cache() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let more = menu_of(&test, "More options");
+    more.popup();
+    wait_for_frames(&test.window, 2);
+    assert!(more.row("Pin current folder").is_sensitive());
+    assert!(more.row("Cache this folder for search").is_sensitive());
+    more.popdown();
+
+    for page in [Page::ThisPc, Page::Settings] {
+        test.window.navigate(page.uri()).expect("a page");
+        more.popup();
+        wait_for_frames(&test.window, 2);
+        assert!(!more.row("Pin current folder").is_sensitive(), "{page:?}");
+        let cache = more.row("Cache this folder for search");
+        assert!(!cache.is_sensitive(), "{page:?}");
+        more.popdown();
+    }
 }
 
 /// parity: VIEW-006
