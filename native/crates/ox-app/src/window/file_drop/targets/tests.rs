@@ -175,12 +175,21 @@ fn a_drop_on_an_unmounted_drive_mounts_it_first() {
             .iter()
             .any(|label| label.text() == "Could not mount device")
     };
-    wait_until("the mount failure", || {
+    let failure = || {
         gtk::Window::list_toplevels()
             .into_iter()
             .filter_map(|window| window.downcast::<gtk::Window>().ok())
-            .any(says_so)
+            .find(|window| window.is_visible() && says_so(window.clone()))
+    };
+    wait_until("the mount failure", || failure().is_some());
+    // A drop waits while a dialog is open (DND-006): OK dismisses it.
+    let ok = failure().and_then(|dialog| {
+        crate::test_support::harness::descendants::<gtk::Button>(&dialog)
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some("OK"))
     });
+    ok.expect("the failure has OK").emit_clicked();
+    wait_until("the failure to close", || failure().is_none());
 
     // A drive that mounts receives the items in its root.
     std::fs::create_dir(fixture.path("USB")).expect("the drive's root");

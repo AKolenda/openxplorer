@@ -425,18 +425,24 @@ const PROPERTIES_ACCELERATORS: &[&str] = &["<Alt>Return", "<Alt>KP_Enter"];
 /// own that the application's accelerators do not reach: they run the
 /// text-size actions of the browser window it belongs to, as the web
 /// app's key handler did in its sign-in and other dialogs (VIEW-043).
+/// The dialog may sit on another dialog, so the first window up the chain
+/// of transient parents that has the actions runs them.
 pub(crate) fn follow_text_size_keys(dialog: &impl IsA<gtk::Window>) {
     let shortcuts = gtk::ShortcutController::new();
     shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
     for step in Step::ALL {
         for accelerator in step.accelerators() {
             let trigger = gtk::ShortcutTrigger::parse_string(&accelerator);
+            let name = WindowAction::TextSize(step).detailed_name();
             let run = gtk::CallbackAction::new(move |dialog, _| {
-                let owner = dialog
+                let mut owner = dialog
                     .downcast_ref::<gtk::Window>()
                     .and_then(GtkWindowExt::transient_for);
-                if let Some(owner) = owner {
-                    WindowAction::TextSize(step).activate_from(&owner, None);
+                while let Some(window) = owner {
+                    if window.activate_action(&name, None).is_ok() {
+                        break;
+                    }
+                    owner = window.transient_for();
                 }
                 glib::Propagation::Stop
             });
