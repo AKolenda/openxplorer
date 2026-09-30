@@ -99,6 +99,9 @@ impl BrowserWindow {
             self.reset_typeahead();
             self.hide_message();
         }
+        if mode == LoadMode::Navigate {
+            self.supersede_activations(id);
+        }
         let Some(start) = self.begin_load(id, mode) else {
             return;
         };
@@ -414,7 +417,7 @@ impl BrowserWindow {
         }
         self.load_tab(id, LoadMode::Navigate);
         if mode == LoadMode::Navigate {
-            self.open_file_location(&file);
+            self.open_file_location(id, &file);
         }
     }
 

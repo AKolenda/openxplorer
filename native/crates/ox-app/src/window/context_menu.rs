@@ -81,6 +81,16 @@ impl BrowserWindow {
         popover.set_offset(0, 0);
         popover.set_position(gtk::PositionType::Bottom);
         popover.set_parent(view);
+        // Escape, a click outside and a choice all give the keyboard back
+        // to the file pane; a chosen command runs after this, so a
+        // rename field or a dialog still takes it.
+        popover.connect_closed(glib::clone!(
+            #[weak]
+            view,
+            move |_| {
+                view.grab_focus();
+            }
+        ));
         view.connect_destroy(glib::clone!(
             #[weak]
             popover,

@@ -234,3 +234,30 @@ fn open_private_regular_file(path: &Path) -> Result<File, BraveError> {
     }
     Ok(file)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A preference file over 32 MB is refused before it is read; one at
+    /// the limit is read.
+    ///
+    /// parity: SAFE-020
+    #[test]
+    fn a_preference_file_over_32_mb_is_refused() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        let path = folder.path().join("Preferences");
+        let file = File::create(&path).expect("fixture");
+        // Sparse, so the test writes nothing to disk.
+        file.set_len(MAX_PREFERENCES_BYTES + 1).expect("fixture size");
+
+        let refused = read_preferences(&path);
+
+        assert!(
+            matches!(refused, Err(BraveError::NotPrivateRegularFile)),
+            "{refused:?}"
+        );
+        std::fs::write(&path, "{}").expect("fixture");
+        assert!(read_preferences(&path).is_ok());
+    }
+}

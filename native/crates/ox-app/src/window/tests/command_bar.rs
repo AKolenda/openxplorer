@@ -8,10 +8,11 @@
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use super::file_ops_support::{press_shortcut, select_names};
+use super::file_ops_support::{is_triggered_by, press_shortcut, select_names, window_shortcuts};
 use super::geometry::laid_out;
+use crate::icons::Icon;
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuPopover;
 use crate::window::widget_tree::children;
 
@@ -194,6 +195,136 @@ fn the_menus_list_the_current_items_between_the_same_dividers() {
     let more = menu_of(&test, "More options").row_labels();
     assert_eq!(&more[..MORE_MENU_START.len()], MORE_MENU_START);
     assert_eq!(&more[more.len() - MORE_MENU_END.len()..], MORE_MENU_END);
+}
+
+/// The command bar control named `name` as the menu button it is.
+fn menu_button(test: &TestWindow, name: &str) -> gtk::MenuButton {
+    command_bar_controls(test)
+        .into_iter()
+        .find(|control| control_name(control).as_deref() == Some(name))
+        .and_then(|control| control.downcast::<gtk::MenuButton>().ok())
+        .unwrap_or_else(|| panic!("{name} is a menu button"))
+}
+
+/// Every menu of the bar drops down below its button, Enter on a focused
+/// button opens its menu without opening the selected file, and closing
+/// the menu returns the keyboard to the button.
+///
+/// parity: CMD-005, CMD-031
+#[gtk::test]
+fn enter_on_a_command_opens_its_menu_below_it_and_not_the_selection() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    for name in ["New", "Sort", "View", "More options", "Light"] {
+        let popover = menu_button(&test, name).popover().expect("a menu");
+        assert_eq!(popover.position(), gtk::PositionType::Bottom, "{name}");
+    }
+    select_names(&test, &["Notes 2.txt"]);
+    let new = menu_button(&test, "New");
+    new.grab_focus();
+
+    // Enter goes to the focused button: the views' Enter handlers sit
+    // outside it, and no app shortcut or window key handler takes Enter
+    // (GtkWindow's own Enter only activates the focused widget).
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window).expect("a focused widget");
+    assert!(focus.is_ancestor(&new), "the button has the focus");
+    let takes_enter = window_shortcuts(&test).into_iter().any(|shortcut| {
+        let is_ours = shortcut
+            .action()
+            .is_some_and(|action| action.is::<gtk::NamedAction>() || action.is::<gtk::CallbackAction>());
+        let trigger = shortcut.trigger();
+        let on_enter = [gdk::Key::Return, gdk::Key::KP_Enter].into_iter().any(|key| {
+            trigger
+                .as_ref()
+                .is_some_and(|trigger| is_triggered_by(trigger, key, gdk::ModifierType::empty()))
+        });
+        is_ours && on_enter
+    });
+    assert!(!takes_enter, "no window shortcut of the app takes Enter");
+    // Enter on a focused button is its "activate" key binding.
+    new.emit_by_name::<()>("activate", &[]);
+
+    // A button shows the press for a moment before it acts.
+    let menu = new.popover().expect("New has a menu");
+    wait_until("Enter to open New's menu", || menu.is_visible());
+    assert!(test.context.recorded_launches().is_empty(), "no file opened");
+
+    // Closing the menu gives the keyboard back to its button (CMD-031).
+    menu.popdown();
+    wait_until("focus back on New", || {
+        gtk::prelude::GtkWindowExt::focus(&test.window).is_some_and(|focus| focus.is_ancestor(&new))
+    });
+}
+
+/// The toggles of the View menu show their check while they are on.
+///
+/// parity: CMD-006
+#[gtk::test]
+fn the_view_menu_checks_hidden_files_and_the_details_pane_while_on() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let view = menu_of(&test, "View");
+    let toggles = ["Show hidden files", "Details pane"];
+    let checked_now = || {
+        view.popup();
+        wait_for_frames(&test.window, 2);
+        let checked = view.checked_labels();
+        view.popdown();
+        toggles.map(|toggle| checked.contains(&toggle.to_owned()))
+    };
+    let before = checked_now();
+
+    test.activate("hidden", None);
+    test.activate("details-pane", None);
+
+    assert_eq!(checked_now(), before.map(|was_checked| !was_checked));
+}
+
+/// More options: "Pin current folder" and the cache toggle need a
+/// folder, so pages disable them and say why; "License & source" shows
+/// the code glyph app.js lacked.
+///
+/// parity: CMD-007, CMD-031
+#[gtk::test]
+fn more_options_needs_a_folder_for_pin_and_cache() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let more = menu_of(&test, "More options");
+    more.popup();
+    wait_for_frames(&test.window, 2);
+    assert!(more.row("Pin current folder").is_sensitive());
+    assert!(more.row("Cache this folder for search").is_sensitive());
+    more.popdown();
+
+    for page in [Page::ThisPc, Page::Settings] {
+        test.window.navigate(page.uri()).expect("a page");
+        more.popup();
+        wait_for_frames(&test.window, 2);
+        let pin = more.row("Pin current folder");
+        assert!(!pin.is_sensitive(), "{page:?}");
+        let cache = more.row("Cache this folder for search");
+        assert!(!cache.is_sensitive(), "{page:?}");
+        // Each says why (CMD-031).
+        for (row, reason) in [
+            (pin, "Only a folder can be pinned to Quick access."),
+            (
+                cache,
+                "Only a folder on a drive or share can be cached for search.",
+            ),
+        ] {
+            let tooltip = row.tooltip_text().unwrap_or_default();
+            assert_eq!(tooltip.lines().nth(1), Some(reason), "{page:?}");
+        }
+        more.popdown();
+    }
+
+    let license = more.row("License & source");
+    let glyph = license
+        .child()
+        .and_then(|content| content.first_child())
+        .and_downcast::<gtk::Image>()
+        .expect("a row starts with its glyph");
+    assert_eq!(glyph.icon_name().as_deref(), Some(Icon::Code.name()));
 }
 
 /// parity: VIEW-006

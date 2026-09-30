@@ -106,6 +106,28 @@ impl BrowserWindow {
         self.set_action_enabled(WindowAction::CompressToZip, can_compress);
     }
 
+    /// Why the archive command `action` is disabled, when it is one.
+    pub(super) fn archive_refusal(&self, action: WindowAction) -> Option<&'static str> {
+        let is_archive_command = matches!(
+            action,
+            WindowAction::ExtractAll | WindowAction::ExtractHere | WindowAction::CompressToZip
+        );
+        if !is_archive_command {
+            return None;
+        }
+        if self.is_writing_files() {
+            return Some("Wait for the running file operation to finish.");
+        }
+        let is_compress = action == WindowAction::CompressToZip;
+        if !is_compress && self.selected_archive().is_none() {
+            return Some("Select one ZIP archive.");
+        }
+        if is_compress && self.folder_pane().model().summary().count == 0 {
+            return Some("Select the items to compress.");
+        }
+        Some("This folder is read-only.")
+    }
+
     /// The one selected item, when it is a ZIP archive.
     fn selected_archive(&self) -> Option<ArchiveTarget> {
         let selected = self.folder_pane().model().selected_items();

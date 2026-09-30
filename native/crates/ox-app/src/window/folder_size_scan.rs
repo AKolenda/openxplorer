@@ -127,6 +127,18 @@ impl BrowserWindow {
         ]);
     }
 
+    /// Why a Calculate folder size command is disabled, when it is one.
+    pub(super) fn size_refusal(&self, action: WindowAction) -> Option<&'static str> {
+        let is_running = self.size_scans().run.borrow().is_some();
+        match action {
+            WindowAction::CalculateFolderSize | WindowAction::CalculateFolderSizes if is_running => {
+                Some("A folder size calculation is already running.")
+            }
+            WindowAction::CalculateFolderSize => Some("Select a folder first."),
+            _ => None,
+        }
+    }
+
     /// The items the folder view shows, in display order.
     fn shown_items(&self) -> Vec<FileItem> {
         let model = self.folder_pane().model();

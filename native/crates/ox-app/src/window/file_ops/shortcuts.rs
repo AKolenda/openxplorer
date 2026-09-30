@@ -76,14 +76,17 @@ impl BrowserWindow {
         ));
     }
 
-    /// False on the Settings page, in a text field and in the address
-    /// bar, where the keys edit text or move between crumbs.
+    /// False on the Settings page, in a text field, in the address bar,
+    /// where the keys edit text or move between crumbs, and on the pane
+    /// splitter's handle, whose keys move it.
     pub(in crate::window) fn file_keys_apply(&self) -> bool {
         if self.shows_settings() || self.focus_is_in_text_field() {
             return false;
         }
-        let focus = GtkWindowExt::focus(self);
-        !focus.is_some_and(|focus| focus.is_ancestor(self.address_bar()))
+        let Some(focus) = GtkWindowExt::focus(self) else {
+            return true;
+        };
+        !(focus.is_ancestor(self.address_bar()) || focus.is::<gtk::Paned>())
     }
 
     /// True while keyboard focus is in a text field: the search box, the

@@ -124,6 +124,8 @@ mod tests {
         let query = query_command(MimeType::Directory).to_command(Sandbox::Host);
 
         assert_eq!(argv(&query), ["xdg-mime", "query", "default", "inode/directory"]);
+        // `subprocess.run(..., timeout=8)` in desktop_integration.py.
+        assert_eq!(XDG_MIME_TIMEOUT, Duration::from_secs(8));
     }
 
     /// Ported from the `run` double of `desktop/tests/test_rc3.py::DefaultsTests::setUp`,

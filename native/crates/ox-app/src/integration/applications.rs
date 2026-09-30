@@ -54,6 +54,19 @@ pub(crate) enum OpenWithError {
     Interrupted,
 }
 
+/// An application's `icon`, read with the application list on a worker
+/// thread ([`ox_core::integration::ApplicationInfo::icon`]), drawn at
+/// `size` pixels as Dolphin's Open With and GNOME's app chooser show it;
+/// `None` without an icon or when it cannot be read back, so the caller
+/// keeps its glyph.
+pub(crate) fn application_image(icon: Option<&str>, size: i32) -> Option<gtk::Image> {
+    let icon = gio::Icon::for_string(icon?).ok()?;
+    let image = gtk::Image::from_gicon(&icon);
+    image.set_pixel_size(size);
+    image.add_css_class("app-icon");
+    Some(image)
+}
+
 /// Which applications the list shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApplicationScope {
@@ -77,6 +90,8 @@ pub(crate) struct ApplicationChoice {
     /// It can open the item: the item has a local path, or the
     /// application reads URIs.
     pub(crate) is_available: bool,
+    /// Its icon ([`ox_core::integration::ApplicationInfo::icon`]).
+    pub(crate) icon: Option<String>,
 }
 
 impl ApplicationChoice {
@@ -218,6 +233,7 @@ impl ChoiceFacts<'_> {
             is_recommended: self.recommended_ids.contains(&id),
             is_available: self.has_local_path || app.supports_uris(),
             name: app.display_name().to_string(),
+            icon: ox_core::integration::ApplicationInfo::icon(app),
             id,
         })
     }
@@ -351,6 +367,7 @@ mod tests {
             is_default,
             is_recommended,
             is_available,
+            icon: None,
         }
     }
 

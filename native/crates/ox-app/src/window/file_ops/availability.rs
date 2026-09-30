@@ -189,6 +189,43 @@ impl CommandFacts {
             FileCommand::CancelOperation => self.is_busy,
         }
     }
+
+    /// Why `command` is disabled, in the words a menu item's tooltip
+    /// shows; `None` while it is enabled.
+    pub(crate) fn refusal(&self, command: FileCommand) -> Option<&'static str> {
+        if self.allows(command) {
+            return None;
+        }
+        let selection = self.selection;
+        let folder = self.folder;
+        let reason = match command {
+            FileCommand::CancelOperation => "No file operation is running.",
+            FileCommand::Undo if !self.can_undo => "Nothing to undo.",
+            FileCommand::Redo if !self.can_redo => "Nothing to redo.",
+            FileCommand::Paste if !self.has_file_clipboard => "Nothing to paste here.",
+            FileCommand::Restore if !folder.is_recycle_bin => {
+                "Only items in the Recycle Bin can be restored."
+            }
+            FileCommand::EmptyRecycleBin if !folder.is_recycle_bin => "This is not the Recycle Bin.",
+            FileCommand::EmptyRecycleBin if !folder.has_items => "The Recycle Bin is empty.",
+            _ if self.is_busy => "Wait for the running file operation to finish.",
+            FileCommand::New | FileCommand::Paste if folder.is_searching => {
+                "Clear the search to add items to this folder."
+            }
+            FileCommand::New => "This folder is read-only.",
+            FileCommand::Paste if !selection.has_inoperable => "This folder is read-only.",
+            _ if selection.count == 0 => "Select an item first.",
+            _ if selection.has_inoperable => "Drives, shares and virtual items cannot be changed here.",
+            FileCommand::Copy | FileCommand::Cut | FileCommand::Rename | FileCommand::Duplicate
+                if folder.is_recycle_bin =>
+            {
+                "Items in the Recycle Bin can only be restored or deleted."
+            }
+            _ if selection.has_read_only => "A previous version is read-only.",
+            _ => "Rename one item at a time.",
+        };
+        Some(reason)
+    }
 }
 
 /// The facts about `items`, the selected items (`canOperate` and
@@ -300,6 +337,40 @@ mod tests {
                 FileCommand::Duplicate,
             ]
         );
+    }
+
+    /// Every disabled command says why, and an enabled one says nothing.
+    ///
+    /// parity: CMD-031
+    #[test]
+    fn a_disabled_command_says_why() {
+        let none = selected(0);
+        let mut busy = selected(1);
+        busy.is_busy = true;
+        let mut searching = selected(0);
+        searching.folder.is_searching = true;
+
+        assert_eq!(none.refusal(FileCommand::Copy), Some("Select an item first."));
+        // Several items are renamed together (OPS-014).
+        assert_eq!(selected(2).refusal(FileCommand::Rename), None);
+        assert_eq!(selected(1).refusal(FileCommand::Rename), None);
+        assert_eq!(
+            busy.refusal(FileCommand::Delete),
+            Some("Wait for the running file operation to finish.")
+        );
+        assert_eq!(
+            searching.refusal(FileCommand::New),
+            Some("Clear the search to add items to this folder.")
+        );
+        for facts in [none, selected(2), busy, searching] {
+            for command in FileCommand::ALL {
+                assert_eq!(
+                    facts.refusal(command).is_some(),
+                    !facts.allows(command),
+                    "{command:?}"
+                );
+            }
+        }
     }
 
     /// parity: CMD-002, OPS-014

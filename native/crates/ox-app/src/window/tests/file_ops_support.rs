@@ -120,7 +120,7 @@ pub(super) fn press_shortcut_where_focused(
 }
 
 /// Every shortcut of the window's own shortcut controllers.
-fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
+pub(super) fn window_shortcuts(test: &TestWindow) -> Vec<gtk::Shortcut> {
     let window = test.window.upcast_ref::<gtk::Widget>();
     let mut shortcuts = shortcuts_of(window, gtk::PropagationPhase::Capture);
     shortcuts.extend(shortcuts_of(window, gtk::PropagationPhase::Bubble));

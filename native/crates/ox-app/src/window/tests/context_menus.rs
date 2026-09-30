@@ -10,7 +10,7 @@ use gtk::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings};
 
 use super::file_ops_support::select_names;
-use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::menu_popover::MenuStyle;
 
 /// The position of the item called `name` in `test`'s view.
@@ -79,6 +79,39 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     );
 }
 
+/// The keyboard starts on the first enabled item, Up and Down wrap
+/// around, and closing the menu gives the keyboard back to the file pane.
+///
+/// parity: CMD-015
+#[gtk::test]
+fn the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    wait_for_frames(&test.window, 2);
+    let enabled: Vec<gtk::ListBoxRow> = menu.rows().into_iter().filter(WidgetExt::is_sensitive).collect();
+    let (first, last) = (enabled[0].clone(), enabled[enabled.len() - 1].clone());
+    assert!(first.has_focus(), "the first enabled item has the keyboard");
+
+    let list = first
+        .parent()
+        .and_downcast::<gtk::ListBox>()
+        .expect("rows are in a list");
+    list.emit_move_cursor(gtk::MovementStep::DisplayLines, -1, false, false);
+    assert!(last.has_focus(), "Up on the first item wraps to the last");
+    list.emit_move_cursor(gtk::MovementStep::DisplayLines, 1, false, false);
+    assert!(first.has_focus(), "Down on the last item wraps to the first");
+
+    menu.popdown();
+    let view = test.window.folder_pane().view_widget();
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
+    assert!(
+        focus.is_some_and(|focus| focus == view || focus.is_ancestor(&view)),
+        "the file pane has the keyboard again"
+    );
+}
+
 /// parity: CMD-009, OPS-014, SEL-003
 #[gtk::test]
 fn with_several_items_selected_the_one_item_commands_are_disabled() {
@@ -97,6 +130,9 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
     for disabled in ["Open", "Copy path", "Properties"] {
         assert!(!menu.row(disabled).is_sensitive(), "{disabled}");
     }
+    // CMD-031: a disabled item says why.
+    let tooltip = menu.row("Properties").tooltip_text().unwrap_or_default();
+    assert_eq!(tooltip, "Properties\nSelect only one item for this command.");
     // Rename renames them together (OPS-014).
     for enabled in ["Cut", "Copy", "Rename", "Move to Trash", "Duplicate"] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");

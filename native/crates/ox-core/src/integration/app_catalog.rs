@@ -31,6 +31,9 @@ pub struct EditorShortcut {
     pub id: String,
     /// The editor's name, as the menu shows it.
     pub name: String,
+    /// The editor's icon ([`ApplicationInfo::icon`]), which replaces the
+    /// menu glyph.
+    pub icon: Option<String>,
 }
 
 /// One application per visible name, sorted by that name.
@@ -86,6 +89,7 @@ pub fn editor_shortcuts<A: ApplicationInfo>(
         .map(|editor| EditorShortcut {
             id: editor.id().unwrap_or_default(),
             name: editor.display_name(),
+            icon: editor.icon(),
         })
         .collect()
 }

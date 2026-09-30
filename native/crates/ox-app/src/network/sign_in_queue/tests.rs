@@ -145,12 +145,18 @@ fn the_dialog_names_the_server_and_preselects_remember() {
 ///
 /// Ported from `desktop/tests/ui_release.py::Session-only credential form submits and clears its DOM`
 ///
-/// parity: NET-008, NET-011
+/// Neither field is spell-checked, which would hand the typed account
+/// to a spelling service (`spellcheck=false` in app.js).
+///
+/// parity: NET-008, NET-011, SAFE-010
 #[gtk::test]
 fn connect_hands_gvfs_the_account_and_empties_the_password() {
     let fixture = PromptsFixture::new();
     let (operation, replies) = fixture.mount();
     let dialog = fixture.ask_password(&operation, SIGN_IN_FLAGS);
+    for entry in descendants::<gtk::Entry>(&dialog) {
+        assert!(entry.input_hints().contains(gtk::InputHints::NO_SPELLCHECK));
+    }
 
     dialog.type_account("OFFICE\\sam", "not-a-real-password");
     dialog.press_connect();

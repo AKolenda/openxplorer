@@ -23,7 +23,7 @@ use ox_core::update::{
 use tempfile::TempDir;
 
 use super::{UpdateDialog, UpdateState, Updates};
-use crate::test_support::harness::{capture_dialog, settle, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{capture_dialog, descendants, settle, wait_until, Fixture, TestWindow};
 
 /// The running version in the simulation.
 const RUNNING: ReleaseVersion = ReleaseVersion::new(1, 0, 0);
@@ -31,6 +31,8 @@ const RUNNING: ReleaseVersion = ReleaseVersion::new(1, 0, 0);
 const NEXT: ReleaseVersion = ReleaseVersion::new(1, 0, 1);
 /// The simulated installer's bytes; never a real package.
 const PACKAGE: &[u8] = b"Fictional package bytes. Never an executable Debian package.\n";
+/// The release notes, with markup that must never be drawn as markup.
+const NOTES: &str = "<b>Fictional notes</b>";
 
 /// GitHub's answer for the release of [`NEXT`] with the simulated
 /// installer, as Python's `release()` fixture.
@@ -40,7 +42,7 @@ fn release_answer() -> String {
         glib::compute_checksum_for_data(glib::ChecksumType::Sha256, PACKAGE).expect("GLib computes SHA-256");
     let size = PACKAGE.len();
     format!(
-        r#"{{"tag_name": "v{NEXT}", "draft": false, "prerelease": false, "body": "Notes.",
+        r#"{{"tag_name": "v{NEXT}", "draft": false, "prerelease": false, "body": "{NOTES}",
             "assets": [{{"name": "{name}",
               "browser_download_url": "{REPOSITORY}/releases/download/v{NEXT}/{name}",
               "digest": "sha256:{digest}", "size": {size}}}]}}"#
@@ -374,4 +376,43 @@ fn a_flatpak_is_told_to_update_through_flatpak() {
     capture_dialog(&dialog, "native-update-flatpak.png");
     dialog.close();
     assert!(simulated.packages.programs().is_empty(), "nothing was installed");
+}
+
+/// Browsing never asks GitHub anything: only "Check for updates" does.
+/// The release notes GitHub sends are never shown, and no label of the
+/// window or the dialog reads its text as markup, so a file named like
+/// markup or a server's notes cannot draw anything but text.
+///
+/// Ported from `desktop/tests/ui_regressions.cjs::Folder browsing and search do not initiate update checks`
+/// and `desktop/tests/ui_regressions.cjs::Update dialog shows versions and availability without release notes or boilerplate`
+///
+/// parity: SAFE-002, SAFE-003
+#[gtk::test]
+fn browsing_never_checks_and_untrusted_text_stays_text() {
+    // A file name cannot hold "/", so the markup stays unclosed.
+    const MARKUP_NAME: &str = "<u>Underlined & <i>co.txt";
+    let fixture = Fixture::standard();
+    fixture.write(MARKUP_NAME);
+    let simulated = SimulatedUpdates::new(Installation::DebianPackage);
+    let test = simulated.window(&fixture);
+    test.show(&fixture.uri_of("Documents"));
+    test.show(&fixture.uri());
+    settle();
+    assert_eq!(simulated.updates.state(), UpdateState::NotChecked);
+    assert!(test.names().contains(&MARKUP_NAME.to_owned()));
+
+    let dialog = open_dialog(&test, &simulated.updates);
+
+    let window_labels = descendants::<gtk::Label>(&test.window);
+    let dialog_labels = descendants::<gtk::Label>(&dialog);
+    for label in window_labels.iter().chain(&dialog_labels) {
+        assert!(!label.uses_markup(), "{:?} is drawn as markup", label.label());
+    }
+    assert!(
+        dialog_labels
+            .iter()
+            .all(|label| !label.label().contains("Fictional notes")),
+        "the release notes are not shown"
+    );
+    dialog.close();
 }

@@ -80,9 +80,25 @@ pub(crate) struct ContextMenu {
     pub(crate) strip: Vec<MenuItem>,
 }
 
+/// Why a command for one item is disabled while several are selected.
+const ONE_ITEM_AT_A_TIME: &str = "Select only one item for this command.";
+
+/// Why a command that runs or changes an item is disabled in a previous
+/// version.
+const READ_ONLY_VERSION: &str = "Items in a previous version are read-only.";
+
 /// An item that runs `action`.
 fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
     MenuItem::new(label, glyph, action)
+}
+
+/// `item`, which acts on one item: disabled, saying why, while several
+/// are selected, and where `needs_writable` holds, in a previous version.
+fn for_one_item(item: MenuItem, facts: &ItemFacts, needs_writable: bool) -> MenuItem {
+    if !facts.is_single {
+        return item.disabled_because(true, ONE_ITEM_AT_A_TIME);
+    }
+    item.disabled_because(needs_writable && facts.is_read_only, READ_ONLY_VERSION)
 }
 
 /// The Open group: Open, the extraction commands, the applications, for
@@ -91,18 +107,15 @@ fn item(label: &str, glyph: Icon, action: WindowAction) -> MenuItem {
 /// result Open file location (SRCH-015), also in a new tab or window
 /// (SRCH-016).
 fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
-    let several = !facts.is_single;
     let is_folder = facts.shape == ItemShape::Folder;
-    let open = item("Open", Icon::Folder, WindowAction::Open)
-        .with_shortcut("Enter")
-        .disabled_when(several || (!is_folder && facts.is_read_only));
-    let mut entries: Vec<MenuEntry> = vec![open.into()];
+    let open = item("Open", Icon::Folder, WindowAction::Open).with_shortcut("Enter");
+    let mut entries: Vec<MenuEntry> = vec![for_one_item(open, facts, !is_folder).into()];
     if facts.shape == ItemShape::ZipArchive {
-        entries.extend(extraction_items(several));
+        entries.extend(extraction_items(facts));
     }
     entries.extend(application_items(facts));
     if is_folder {
-        let new_tab = if several {
+        let new_tab = if !facts.is_single {
             item("Open in new tabs", Icon::Add, WindowAction::OpenSelectionInTabs)
         } else {
             MenuItem::with_text_target(
@@ -120,8 +133,8 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
         );
         let pin = item("Pin to Quick access", Icon::Pin, WindowAction::PinSelected);
         entries.push(new_tab.into());
-        entries.push(new_window.disabled_when(several).into());
-        entries.push(pin.disabled_when(several).into());
+        entries.push(for_one_item(new_window, facts, false).into());
+        entries.push(for_one_item(pin, facts, false).into());
     }
     if facts.is_search_result {
         let locations = [
@@ -138,27 +151,26 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
             ),
         ];
         for (label, glyph, action) in locations {
-            entries.push(item(label, glyph, action).disabled_when(several).into());
+            entries.push(for_one_item(item(label, glyph, action), facts, false).into());
         }
     }
     entries
 }
 
 /// Extract all… and, beyond the Python app, Dolphin's Extract here.
-fn extraction_items(several: bool) -> [MenuEntry; 2] {
+fn extraction_items(facts: &ItemFacts) -> [MenuEntry; 2] {
     let extract_all = item("Extract all…", Icon::FolderZip, WindowAction::ExtractAll);
     let extract_here = item("Extract here", Icon::FolderZip, WindowAction::ExtractHere);
     [
-        extract_all.disabled_when(several).into(),
-        extract_here.disabled_when(several).into(),
+        for_one_item(extract_all, facts, false).into(),
+        for_one_item(extract_here, facts, false).into(),
     ]
 }
 
 /// The Terminal entry (`terminalMenuItem`), Open with and one "Open in
-/// <editor>" per installed code editor (`uniqueEditors`), all for one
-/// item outside a previous version.
+/// <editor>" per installed code editor (`uniqueEditors`, with the
+/// editor's own icon), all for one item outside a previous version.
 fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
-    let is_unavailable = !facts.is_single || facts.is_read_only;
     let is_folder = facts.shape == ItemShape::Folder;
     let terminal_label = if is_folder {
         "Open in Terminal"
@@ -173,14 +185,15 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     let terminal = item(terminal_label, Icon::WindowConsole, WindowAction::OpenInTerminal);
     let open_with = item(open_with_label, Icon::Apps, WindowAction::OpenWith);
     let mut entries = vec![
-        terminal.disabled_when(is_unavailable).into(),
-        open_with.disabled_when(is_unavailable).into(),
+        for_one_item(terminal, facts, true).into(),
+        for_one_item(open_with, facts, true).into(),
     ];
     for editor in &facts.editors {
         let label = format!("Open in {}", editor.name);
         let open_in_editor =
-            MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id);
-        entries.push(open_in_editor.disabled_when(is_unavailable).into());
+            MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
+                .with_application_icon(editor.icon.as_deref());
+        entries.push(for_one_item(open_in_editor, facts, true).into());
     }
     entries
 }
@@ -206,7 +219,7 @@ fn duplicate_item() -> MenuEntry {
 /// (CLIP-013).
 fn copy_path_item(facts: &ItemFacts) -> MenuEntry {
     let copy_path = item("Copy path", Icon::Link, WindowAction::CopyPath).with_shortcut("Ctrl+Shift+C");
-    copy_path.disabled_when(!facts.is_single).into()
+    for_one_item(copy_path, facts, false).into()
 }
 
 /// Compress to ZIP file, which the Python app did not have (Windows 11's
@@ -223,7 +236,6 @@ fn compress_item() -> MenuEntry {
 /// The end of both styles: Calculate folder size for folders, Previous
 /// versions and Properties.
 fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
-    let several = !facts.is_single;
     let mut entries = Vec::new();
     let is_measurable = facts.location != ItemLocation::SmbServer;
     if facts.shape == ItemShape::Folder && is_measurable {
@@ -236,8 +248,8 @@ fn details_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     }
     let versions = item("Previous versions", Icon::History, WindowAction::PreviousVersions);
     let properties = item("Properties", Icon::Info, WindowAction::Properties).with_shortcut("Alt+Enter");
-    entries.push(versions.disabled_when(several).into());
-    entries.push(properties.disabled_when(several).into());
+    entries.push(for_one_item(versions, facts, false).into());
+    entries.push(for_one_item(properties, facts, false).into());
     entries
 }
 
@@ -361,7 +373,7 @@ pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
             .with_shortcut("Delete")
             .into(),
         MenuEntry::Divider,
-        properties.disabled_when(!is_single).into(),
+        properties.disabled_because(!is_single, ONE_ITEM_AT_A_TIME).into(),
     ]
 }
 
@@ -547,6 +559,7 @@ mod tests {
         let code = EditorShortcut {
             id: "code.desktop".to_owned(),
             name: "Visual Studio Code".to_owned(),
+            icon: Some("com.visualstudio.code".to_owned()),
         };
         let facts = ItemFacts {
             editors: vec![code],
@@ -567,6 +580,49 @@ mod tests {
         assert_eq!(editor.target, Some("code.desktop".to_variant()));
         let disabled_for_several = disabled(&item_menu(&several, MenuStyle::Classic).entries);
         assert!(disabled_for_several.contains(&"Open in Visual Studio Code".to_owned()));
+    }
+
+    /// An editor's item carries the editor's desktop ID for its icon, and
+    /// every item a menu disables says why.
+    ///
+    /// parity: CMD-031
+    #[test]
+    fn editors_show_their_icon_and_disabled_items_say_why() {
+        let code = EditorShortcut {
+            id: "code.desktop".to_owned(),
+            name: "Visual Studio Code".to_owned(),
+            icon: Some("com.visualstudio.code".to_owned()),
+        };
+        let in_version = ItemFacts {
+            editors: vec![code],
+            is_read_only: true,
+            ..file()
+        };
+        let several = ItemFacts {
+            is_single: false,
+            ..folder()
+        };
+
+        let reasons = |facts: &ItemFacts| -> Vec<(String, Option<&'static str>)> {
+            let menu = item_menu(facts, MenuStyle::Classic);
+            let items = menu.entries.into_iter().filter_map(|entry| match entry {
+                MenuEntry::Item(item) if item.availability == ItemAvailability::Disabled => Some(item),
+                _ => None,
+            });
+            items.map(|item| (item.label, item.disabled_reason)).collect()
+        };
+
+        let editor = item_menu(&in_version, MenuStyle::Classic).entries[3].clone();
+        let MenuEntry::Item(editor) = editor else {
+            panic!("an editor is an item");
+        };
+        assert_eq!(editor.application_icon.as_deref(), Some("com.visualstudio.code"));
+        for (label, reason) in reasons(&in_version) {
+            assert_eq!(reason, Some(READ_ONLY_VERSION), "{label}");
+        }
+        for (label, reason) in reasons(&several) {
+            assert_eq!(reason, Some(ONE_ITEM_AT_A_TIME), "{label}");
+        }
     }
 
     /// parity: SRCH-015

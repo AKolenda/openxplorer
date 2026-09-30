@@ -5891,7 +5891,8 @@ python_tests = [
   "desktop/tests/ui_v093.py::View menu has Larger text",
 ]
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (enter_on_a_command_opens_its_menu_below_it_and_not_the_selection: every command bar menu drops down below its button, and Enter on a focused button opens its menu without opening the selected file; the_menus_list_the_current_items_between_the_same_dividers for New, Sort and More options; the_view_menu_keeps_the_text_size_items_and_checks_the_current_view). The View menu lists every icon size the native app has, not only Large icons."
 
 [[feature]]
 id = "CMD-006"
@@ -5904,7 +5905,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:976"]
 python_tests = ["desktop/tests/ui_v093.py::View menu has Larger text"]
 bridge = ["preferences"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (the_view_menu_keeps_the_text_size_items_and_checks_the_current_view, the_view_menu_checks_hidden_files_and_the_details_pane_while_on). Beyond the Python menu: one item per icon size (Large, Medium, Small icons and so on) where app.js had only Large icons."
 
 [[feature]]
 id = "CMD-007"
@@ -5918,8 +5920,8 @@ sources = ["desktop/ui/app.js:977", "dolphin:src/dolphinmainwindow.cpp:1319-1399
 python_tests = ["desktop/tests/test_v08.py::RebrandTests::test_visible_legal_notices"]
 bridge = ["newWindow", "cacheSet", "connect", "pin", "preferences"]
 dolphin = "hamburger_menu"
-native = "todo"
-native_note = "Porting notes: Bug to fix, not preserve: on the Settings tab the cache toggle is offered for 'settings:'. 'License & source' requests icon 'code', which is missing and falls back to the documents glyph."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/command_bar.rs (the_menus_list_the_current_items_between_the_same_dividers, more_options_needs_a_folder_for_pin_and_cache: Pin current folder and the cache toggle are disabled on This PC and on Settings, fixing the Python bug that offered caching for settings:). License & source shows the code glyph app.js lacked; its dialog is UPD-016. The menu also keeps Select all, Select none and Invert selection."
 
 [[feature]]
 id = "CMD-008"
@@ -5992,8 +5994,8 @@ bridge = [
   "properties",
 ]
 dolphin = "Item context menu; DolphinContextMenu::addItemContextMenu"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts, a_zip_file_on_a_share_offers_extraction_and_sign_out, several_selected_items_disable_what_acts_on_one); native/crates/ox-app/src/window/tests/context_menus.rs. Adds Duplicate. Missing: the \"Open in <editor>\" items, the \"Stop caching this folder\" label, and the commands of other milestones (Terminal, Open with, sizes, versions, Properties), which show disabled."
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts, a_zip_file_on_a_share_offers_extraction_and_sign_out, several_selected_items_disable_what_acts_on_one, each_code_editor_is_offered_after_open_with_for_one_item); native/crates/ox-app/src/window/tests/context_menus.rs. Every command works: Terminal, Open with, the editors, folder sizes, Previous versions and Properties. Adds Duplicate, Extract here and Compress to ZIP file. The cache toggle is a check item named \"Cache this folder for search\", checked while cached, where Python renamed it \"Stop caching this folder\"."
 
 [[feature]]
 id = "CMD-010"
@@ -6016,8 +6018,8 @@ python_tests = [
   "desktop/tests/ui_release.py::Show more options opens classic menu",
 ]
 bridge = ["clipboardSet", "operate", "rename", "previousVersions", "properties", "preferences"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (the_compact_menu_puts_the_edit_commands_in_its_strip); native/crates/ox-app/src/window/tests/context_menus.rs. Missing: the \"Open in <editor>\" items."
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (the_compact_menu_puts_the_edit_commands_in_its_strip, each_code_editor_is_offered_after_open_with_for_one_item: the compact list shares the Open group, editors included); native/crates/ox-app/src/window/tests/context_menus.rs (the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one)."
 
 [[feature]]
 id = "CMD-011"
@@ -6044,8 +6046,8 @@ bridge = [
   "properties",
 ]
 dolphin = "Viewport context menu"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (the_background_menu_acts_on_the_folder); native/crates/ox-app/src/window/tests/context_menus.rs. Adds Undo and Redo. Missing: Open in Terminal, the cache toggle, Calculate folder sizes, Previous versions and Properties work with their milestones and show disabled until then."
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (the_background_menu_acts_on_the_folder); native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place). Open in Terminal, the cache toggle, Calculate folder sizes, Previous versions and Properties all work on the current folder. Adds Undo and Redo, named after what they undo."
 
 [[feature]]
 id = "CMD-012"
@@ -6118,8 +6120,8 @@ python_tests = [
 ]
 bridge = []
 gnome = "GtkPopoverMenu"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/context_menus.rs: menus open at the pointer, a choice closes the menu before it runs, disabled items are insensitive, shortcuts show at the right, and the rows are menu items. Missing: tests of arrow-key wrapping, Escape returning focus and the 6 px clamping."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/context_menus.rs (right_clicking_a_file_selects_it_and_opens_the_classic_menu: menus open at the pointer, a choice closes the menu before it runs, disabled items are insensitive, shortcuts show at the right and rows are menu items; the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files: the first enabled item has the keyboard, Up and Down wrap between enabled items, closing gives the keyboard back to the file pane). Menus are GTK popovers, which the compositor keeps on screen; like Windows 11 and Dolphin menus they may extend past the window edge instead of being clamped 6 px inside it."
 
 [[feature]]
 id = "CMD-016"
@@ -6162,7 +6164,7 @@ python_tests = [
 ]
 bridge = []
 native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_file_keys_leave_text_fields_and_the_settings_page_alone): the file keys (Ctrl+C/X/V, Ctrl+Shift+N, Delete, Shift+Delete, F2, Ctrl+Z/Y) act only outside text fields, the address bar and Settings. Missing: tests of the other keys and the resize handle."
+native_note = "native/crates/ox-app/src/window/tests/file_operations.rs (the_file_keys_leave_text_fields_and_the_settings_page_alone): the file keys (Ctrl+C/X/V, Ctrl+Shift+N, Delete, Shift+Delete, F2, Ctrl+Z/Y) act only in the file pane, never in text fields, the address bar and its crumbs, the pane splitter or Settings; Enter, Escape, the arrows and Ctrl+A belong to the focused view. Differs from the spec, awaiting owner sign-off: Ctrl+H, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab and Alt+Left/Right/Up are GTK application accelerators and also act from text fields, as in Windows 11 Explorer and Dolphin, where app.js ignored them there. Not tested: the Properties-dialog Ctrl+Tab exception, ContextMenu/Shift+F10 from text fields and IME composition keys (GTK input methods keep them)."
 
 [[feature]]
 id = "CMD-018"
@@ -6175,7 +6177,8 @@ openxplorer = "has"
 sources = ["desktop/ui/app.js:120", "desktop/ui/app.js:211"]
 python_tests = []
 bridge = []
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/opening.rs (a_failing_command_says_why_in_the_toast). Every window action reports its error with show_message, the toast; Rust has no uncaught rejections to catch generically."
 
 [[feature]]
 id = "CMD-019"
@@ -6414,8 +6417,8 @@ python_tests = []
 bridge = ["applications"]
 dolphin = "KOpenWithDialog and the Open With submenu show service icons"
 gnome = "g_app_info_get_icon → GtkImage from GIcon"
-native = "todo"
-native_note = "Porting notes: Rows already show the name and default/recommended/requires-mount labels."
+native = "done"
+native_note = "native/crates/ox-app/src/integration/tests.rs (an_application_is_drawn_with_its_own_icon); native/crates/ox-app/src/window/context_menu/entries.rs (editors_show_their_icon_and_disabled_items_say_why); native/crates/ox-app/src/window/file_ops/availability.rs (a_disabled_command_says_why); native/crates/ox-app/src/window/tests/command_bar.rs (more_options_needs_a_folder_for_pin_and_cache, enter_on_a_command_opens_its_menu_below_it_and_not_the_selection); native/crates/ox-app/src/window/tests/context_menus.rs (with_several_items_selected_the_one_item_commands_are_disabled, the_keyboard_starts_on_the_first_item_wraps_and_returns_to_the_files). Open with rows and the \"Open in <editor>\" items show the application's own icon (GAppInfo icon, read with the application list off the main thread), falling back to the generic glyph. Every disabled menu item says why in its tooltip and accessible description: the file commands from the rule that disables them (nothing selected, several selected, read-only folder or previous version, running operation, search, Recycle Bin, nothing to undo, redo or paste), the archive and folder-size commands, Pin current folder and the cache toggle on pages, the one-item commands; unported commands name their milestone. Context menus give focus back to the file pane, command bar menus to their button."
 
 [[feature]]
 id = "CMD-032"
@@ -16514,7 +16517,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::No external network requests from preview",
 ]
 bridge = ["updateCheck"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/update/tests.rs (browsing_never_checks_and_untrusted_text_stays_text): browsing leaves the updater unchecked; only Check for updates asks GitHub (UPD-001). The app has no telemetry or analytics; network access is SMB and devices the user opens, discovery the user starts, and the manual update check."
 
 [[feature]]
 id = "SAFE-003"
@@ -16530,8 +16534,8 @@ python_tests = [
   "desktop/tests/ui_regressions.cjs::No uncaught JavaScript exceptions",
 ]
 bridge = []
-native = "todo"
-native_note = "Native equivalent: never pass file names, server messages or release data through Pango markup; use plain labels or escape them. Porting notes: In GTK, avoid Pango markup with untrusted text (use plain labels or escape)."
+native = "done"
+native_note = "native/crates/ox-app/src/update/tests.rs (browsing_never_checks_and_untrusted_text_stays_text): no label of the window or the update dialog uses Pango markup, a file named like markup is listed literally, and release notes are never shown. The code sets no markup anywhere."
 
 [[feature]]
 id = "SAFE-004"
@@ -16659,8 +16663,8 @@ python_tests = []
 bridge = ["environment"]
 dolphin = "Dolphin: “Executing Dolphin with sudo is not possible due to unfixable security vulnerabilities.”; getuid()==0 message"
 gnome = "geteuid check before GtkApplication run; elevation only via admin://"
-native = "todo"
-native_note = "Porting notes: No automated test. The OpenXplorer manual says not to launch with sudo, but the app shows no warning."
+native = "done"
+native_note = "native/crates/ox-app/src/update/launch_guard.rs (a_launch_as_root_is_refused_with_status_1): an effective user of root prints \"Run OpenXplorer as your regular desktop user, not with sudo.\" and exits with status 1; --version runs before the check. --check is not a native option yet (UPD-010); it must run before this check when it is added."
 
 [[feature]]
 id = "SAFE-009"
@@ -16696,8 +16700,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::PrivateStorageTests::test_settings_still_persist",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/src/private_storage.rs (effective_uid_owns_new_files, directory_symlink_not_chmodded, file_symlink_leaves_target_unchanged, a_hard_linked_file_is_refused, fifo_does_not_block, a_symlinked_database_is_refused_and_its_target_unchanged, database_sidecar_symlink_refused)."
+native = "done"
+native_note = "native/crates/ox-core/src/private_storage.rs (effective_uid_owns_new_files, directory_symlink_not_chmodded, file_symlink_leaves_target_unchanged, a_hard_linked_file_is_refused, fifo_does_not_block, the 4 MiB read limit); native/crates/ox-core/src/settings/tests/storage.rs (settings lock and settings file); native/crates/ox-core/tests/search_index.rs and src/search/cache_tests.rs (the search database and its -wal, -shm and -journal sidecars); native/crates/ox-core/src/integration/default_apps/record.rs (a_symlinked_record_is_never_followed_and_the_saved_one_is_private: previous defaults)."
 
 [[feature]]
 id = "SAFE-010"
@@ -16728,7 +16732,7 @@ python_tests = [
 ]
 bridge = ["normalise", "authReply", "connect", "bookmark", "pin"]
 native = "partial"
-native_note = "native/crates/ox-core/src/settings/mutate.rs (a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); address rejection compared with Python in native/crates/ox-core/tests/location_python.rs. SMB addresses still refuse any user name. SFTP, FTP and WebDAV addresses accept a plain user name (sftp://anna@host/), as Dolphin, Files and GVfs expect, since an SSH account is not a secret; a password, an escaped or empty user, and any user on NFS are refused (native/crates/ox-core/src/location/normalise/remote.rs, sftp_ftp_webdav_and_nfs_urls_are_canonical). Such a user name can reach settings.json, tab titles, the clipboard and GTK's recent-servers list."
+native_note = "native/crates/ox-core/src/settings/mutate.rs (a_bookmark_with_credentials_is_refused_and_leaves_the_settings_unchanged); address rejection compared with Python in native/crates/ox-core/tests/location_python.rs; native/crates/ox-app/src/network/sign_in_queue/tests.rs (connect_hands_gvfs_the_account_and_empties_the_password: the password field is emptied before the answer leaves the dialog and neither field is spell-checked); native/crates/ox-app/src/dialogs/network_map.rs (the Map dialog note says no passwords are saved in settings). The sign-in dialog empties the password on dismiss and keeps it in non-pageable memory. SMB addresses still refuse any user name. SFTP, FTP and WebDAV addresses accept a plain user name (sftp://anna@host/), as Dolphin, Files and GVfs expect, since an SSH account is not a secret; a password, an escaped or empty user, and any user on NFS are refused (native/crates/ox-core/src/location/normalise/remote.rs, sftp_ftp_webdav_and_nfs_urls_are_canonical). Such a user name can reach settings.json, tab titles, the clipboard and GTK's recent-servers list."
 
 [[feature]]
 id = "SAFE-011"
@@ -16754,8 +16758,8 @@ python_tests = [
   "desktop/tests/ui_release.py::Session-only credential form submits and clears its DOM",
 ]
 bridge = ["authReply"]
-native = "partial"
-native_note = "native/crates/ox-core/src/network/credential.rs (passwords_are_left_out_of_debug_output); native/crates/ox-core/src/network/keyring.rs (secrets_are_left_out_of_debug_output); native/crates/ox-core/src/network/prompts/tests.rs (a_credential_the_keyring_cannot_save_still_works_and_the_user_is_told, the_password_is_never_sent_back_to_the_window, closing_wipes_the_windows_credentials_from_memory); native/crates/ox-core/src/network/session_credentials/tests.rs (without_a_keyring_nothing_is_saved_and_memory_still_works, a_credential_in_one_windows_memory_is_not_seen_by_another, clearing_a_windows_memory_leaves_the_other_windows_alone, debug_output_names_servers_but_never_passwords); native/crates/ox-core/tests/network_secret_service.rs (a_credential_saved_in_the_session_keyring_serves_another_process_until_forgotten). The native UI does not use this service yet to mount shares."
+native = "done"
+native_note = "native/crates/ox-core/src/network/credential.rs and keyring.rs (debug output), native/crates/ox-core/src/network/prompts/tests.rs (the_password_is_never_sent_back_to_the_window, closing_wipes_the_windows_credentials_from_memory, a_credential_the_keyring_cannot_save_still_works_and_the_user_is_told), native/crates/ox-core/src/network/session_credentials/tests.rs, native/crates/ox-core/tests/network_secret_service.rs. Every window mounts shares through MountPrompts over its SessionCredentials (native/crates/ox-app/src/network/window_network.rs), which closing the window wipes."
 
 [[feature]]
 id = "SAFE-012"
@@ -16776,8 +16780,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_forget_waits_for_inflight_keyring_save",
 ]
 bridge = ["signOut"]
-native = "partial"
-native_note = "native/crates/ox-core/src/network/prompts/tests.rs (sign_out_during_the_mount_keeps_nothing); native/crates/ox-core/src/network/session_credentials/tests.rs (signing_out_in_one_window_wipes_the_server_from_every_windows_memory, a_save_started_before_sign_out_is_discarded, forgetting_waits_for_a_save_in_flight, a_lookup_that_raced_sign_out_loads_nothing); native/crates/ox-core/src/network/sign_out/tests.rs (signing_out_forgets_every_saved_credential_of_that_server_only). The native UI does not offer Sign out yet."
+native = "done"
+native_note = "native/crates/ox-core/src/network/prompts/tests.rs (sign_out_during_the_mount_keeps_nothing); native/crates/ox-core/src/network/session_credentials/tests.rs (a_save_started_before_sign_out_is_discarded, forgetting_waits_for_a_save_in_flight, a_lookup_that_raced_sign_out_loads_nothing); native/crates/ox-core/src/network/sign_out/tests.rs. The window offers Sign out of server (NET-020)."
 
 [[feature]]
 id = "SAFE-013"
@@ -16798,7 +16802,7 @@ sources = [
 python_tests = ["desktop/tests/ui_regressions.cjs::Navigation supersedes a delayed activation"]
 bridge = ["cancel"]
 native = "partial"
-native_note = "native/crates/ox-app/src/search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results): a search answer for an older edit, tab or folder is dropped; listings use load generations (native/crates/ox-app/src/window/session.rs). Missing: discovery, archive listings, extraction preflight, activation, Map-location connect and Properties lookups, which are not ported yet."
+native_note = "native/crates/ox-app/src/window/tests/opening.rs (navigating_drops_a_typed_address_that_answers_late, a_lookup_belongs_to_its_tab_and_a_tab_switch_drops_it): each tab keeps its own newest lookup, so a typed address or a tab's file location that answers after that tab navigated, after the user switched away from it, or after it closed is dropped, and a background tab never cancels the front tab's lookup. native/crates/ox-app/src/search/folder_search.rs (an_edit_cancels_the_running_search_and_drops_its_results). Listings use load generations (window/session.rs), archive listings a generation (archive_view/browser.rs) and the Previous versions panel a generation (properties/versions_panel.rs); discovery aborts its passes on Stop (network/discovery.rs); extraction preflight and Map network location run in their dialogs, which closing cancels. Missing: no marked test yet proves the listing, archive-listing, discovery, extraction preflight, Map-location connect and Properties guards."
 
 [[feature]]
 id = "SAFE-014"
@@ -16811,7 +16815,8 @@ openxplorer = "has"
 sources = ["desktop/winspace.py:1112-1117", "desktop/gio_backend.py:373-377"]
 python_tests = []
 bridge = ["discover"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/network/discovery.rs (discovery_aborts_every_password_request): discovery answers every ask-password with Aborted and carries no credentials; it only reads GVfs's network:/// browser, so there is no port scan and no share listing of discovered servers."
 
 [[feature]]
 id = "SAFE-015"
@@ -16833,8 +16838,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::TerminalTests::test_cancellation_checked",
 ]
 bridge = ["openTerminal"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/integration_terminal/launch.rs (only_the_system_folders_are_searched, only_known_terminals_with_absolute_programs_are_started, a_folder_named_like_shell_code_stays_a_name). The native UI does not open terminals yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/integration_terminal/launch.rs (only_the_system_folders_are_searched, only_known_terminals_with_absolute_programs_are_started, a_folder_named_like_shell_code_stays_a_name). The window passes only a location (native/crates/ox-app/src/integration/terminal.rs)."
 
 [[feature]]
 id = "SAFE-016"
@@ -16852,7 +16857,8 @@ python_tests = [
   "desktop/tests/test_updater.py::BridgeTests::test_bridge_only_passes_version_confirmation_and_progress_not_remote_commands",
 ]
 bridge = ["updateCheck", "updateInstall"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/update/trust.rs (only_https_to_the_github_hosts_is_trusted: HTTPS to the four GitHub hosts only, default port, no user info, a redirect elsewhere refused with \"The update server returned an untrusted download location.\"); native/crates/ox-core/src/update/github.rs (requests_carry_the_media_type_timeout_and_user_agent: 30 s, an_untrusted_redirect_target_is_never_contacted). Answers are capped at 2 MiB (update/server.rs) and installers at 100 MiB (update/release.rs); the window passes only the version, the confirmation, the activity and a progress callback (InstallRequest)."
 
 [[feature]]
 id = "SAFE-017"
@@ -16869,8 +16875,8 @@ python_tests = [
   "desktop/tests/test_v07.py::HandoffTests::test_no_virtual_locations_in_external_requests",
 ]
 bridge = []
-native = "partial"
-native_note = "native/crates/ox-core/tests/session_python.rs (tab_states_and_requests_match_the_python_window_state); native/crates/ox-core/tests/session_window_state.rs (show_items_keeps_a_file_location, an_unsupported_method_is_refused, a_request_without_locations_is_refused, a_request_accepts_100_locations_and_refuses_101, app_pages_and_other_schemes_are_refused_in_external_requests, shell_text_in_a_location_stays_literal); native/crates/ox-core/tests/integration_file_manager/requests.rs (an_unsupported_method_is_rejected, a_request_without_locations_is_rejected, more_than_100_locations_are_rejected, app_pages_cannot_be_requested_from_outside); native/crates/ox-core/tests/integration_file_manager/service.rs (an_unsupported_location_is_refused_without_reaching_the_app, an_unknown_method_is_refused, a_path_that_looks_like_a_command_stays_an_escaped_location). The native app does not register FileManager1 yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/session_python.rs, native/crates/ox-core/tests/session_window_state.rs, native/crates/ox-core/tests/integration_file_manager/requests.rs and service.rs (three methods only, 1 to 100 locations, pages, other schemes and credentials refused, shell text stays an escaped location). The app registers FileManager1 when Show in folder is enabled (native/crates/ox-app/src/integration)."
 
 [[feature]]
 id = "SAFE-018"
@@ -16886,8 +16892,8 @@ python_tests = [
   "desktop/tests/test_core.py::CoreTests::test_settings_private_and_atomic",
 ]
 bridge = ["preferences"]
-native = "partial"
-native_note = "native/crates/ox-core/src/settings/tests.rs (unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write); native/crates/ox-core/src/settings/validate.rs (labels_follow_the_python_rules)."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/tests.rs (unknown_keys_are_dropped_and_whitelisted_ones_survive_a_rust_write); native/crates/ox-core/src/location/names.rs and tests/location_python.rs (labels of at most 120 characters without control characters); native/crates/ox-core/src/settings/model.rs (a_stored_recent_entry_is_a_bounded_file); native/crates/ox-core/src/settings/read.rs (invalid entries are skipped, locations re-validated on load); native/crates/ox-core/src/settings/tests/preferences.rs (only known, in-range column widths)."
 
 [[feature]]
 id = "SAFE-019"
@@ -16936,7 +16942,7 @@ bridge = [
   "braveRestore",
 ]
 native = "partial"
-native_note = "native/crates/ox-core/src/integration/default_apps/record.rs (plain_desktop_ids_are_accepted_and_anything_else_refused); native/crates/ox-core/src/integration/default_apps/xdg_mime.rs (the_query_asks_xdg_mime_for_the_default_of_one_type, the_change_names_the_handler_before_the_type); native/crates/ox-core/tests/integration_default_apps.rs (a_handler_that_cannot_be_recorded_is_refused_before_any_change); native/crates/ox-core/tests/integration_brave/status.rs (a_profile_whose_preferences_are_not_a_file_is_not_offered, a_process_table_that_cannot_be_read_counts_as_brave_running); native/crates/ox-core/tests/integration_brave/sync.rs (syncing_waits_until_brave_is_closed, backups_records_and_preferences_are_private, symlinked_preferences_are_never_written). The xdg-mime and xdg-user-dirs-update time limits and the 32 MB bound of Brave's preference files are not proven by a marked test, and the native settings page does not use these services yet."
+native_note = "native/crates/ox-core/src/integration/default_apps/record.rs (plain_desktop_ids_are_accepted_and_anything_else_refused); native/crates/ox-core/src/integration/default_apps/xdg_mime.rs (xdg-mime runs without a shell with its 8 s limit); native/crates/ox-core/tests/integration_default_apps.rs; native/crates/ox-core/src/integration/brave/preferences.rs (a_preference_file_over_32_mb_is_refused); native/crates/ox-core/tests/integration_brave (running Brave blocks writes, private backups, symlinked preferences never written). Missing: the native app never runs xdg-user-dirs-update yet, so its 15 s limit is not implemented; it arrives with standard-folder relocation (PROP-031)."
 
 [[feature]]
 id = "SAFE-021"
@@ -16957,7 +16963,7 @@ python_tests = [
 ]
 bridge = ["mountPlan"]
 native = "partial"
-native_note = "native/crates/ox-core/src/network/mount_helper.rs (an_unsafe_parent_chain_is_refused, relative_and_traversing_paths_are_refused, a_new_file_gets_its_mode_and_never_replaces_anything, a_symlink_is_never_followed); native/crates/ox-core/src/network/mount_plan/tests.rs (the_plan_needs_an_administrator_and_holds_no_password, unsupported_shares_are_refused_in_the_assistant_wording); native/crates/ox-core/tests/network_python.rs (mount_plans_match_mount_support_py). The helper's command line (sudo from a normal account, the interactive terminal) is not ported; openxplorer-mount-share still runs desktop/mount_share.py."
+native_note = "native/crates/ox-core/src/network/mount_helper.rs (an_unsafe_parent_chain_is_refused, relative_and_traversing_paths_are_refused, a_new_file_gets_its_mode_and_never_replaces_anything, a_symlink_is_never_followed); native/crates/ox-core/src/network/mount_plan/tests.rs (the_plan_needs_an_administrator_and_holds_no_password, unsupported_shares_are_refused_in_the_assistant_wording); native/crates/ox-core/tests/network_python.rs (mount_plans_match_mount_support_py). The GUI never runs the helper. Missing: the helper's command line (sudo from a normal account, the interactive terminal, systemctl and rollback) in Rust; the packages still install openxplorer-mount-share as desktop/mount_share.py, which enforces these rules. Replacing it changes every package format (native/tools/package_data.py, verify_layout.py, the Debian, RPM and Arch recipes), which the packaging work owns."
 
 [[feature]]
 id = "SAFE-022"

@@ -20,6 +20,12 @@ pub trait ApplicationInfo {
     fn supports_files(&self) -> bool;
     /// True if it accepts URIs such as `smb://` as arguments.
     fn supports_uris(&self) -> bool;
+    /// Its icon as `g_icon_to_string` writes it, which
+    /// `g_icon_new_for_string` reads back on any thread; `None` without
+    /// one.
+    fn icon(&self) -> Option<String> {
+        None
+    }
 }
 
 impl ApplicationInfo for gio::AppInfo {
@@ -41,6 +47,11 @@ impl ApplicationInfo for gio::AppInfo {
 
     fn supports_uris(&self) -> bool {
         gio::prelude::AppInfoExt::supports_uris(self)
+    }
+
+    fn icon(&self) -> Option<String> {
+        let icon = gio::prelude::AppInfoExt::icon(self)?;
+        gio::prelude::IconExt::to_string(&icon).map(Into::into)
     }
 }
 

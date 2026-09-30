@@ -11,6 +11,7 @@ use gtk::prelude::*;
 use crate::application::AppAction;
 use crate::icons::Icon;
 use crate::window::window_action::WindowAction;
+use crate::window::BrowserWindow;
 
 /// Whether an item shows a check mark.
 #[derive(Debug, Clone, PartialEq)]
@@ -107,6 +108,12 @@ pub(in crate::window) struct MenuItem {
     /// Shown in bold, as a crumb's subfolder menu shows the folder the
     /// address goes on to (NAV-020).
     pub emphasised: bool,
+    /// Why it is disabled in this menu, which its tooltip says.
+    pub disabled_reason: Option<&'static str>,
+    /// The icon of the application it opens
+    /// ([`ox_core::integration::ApplicationInfo::icon`]), which replaces
+    /// the glyph.
+    pub application_icon: Option<String>,
 }
 
 impl MenuItem {
@@ -121,6 +128,8 @@ impl MenuItem {
             check: ItemCheck::Plain,
             availability: ItemAvailability::FollowsAction,
             emphasised: false,
+            disabled_reason: None,
+            application_icon: None,
         }
     }
 
@@ -181,6 +190,37 @@ impl MenuItem {
             self.availability
         };
         Self { availability, ..self }
+    }
+
+    /// The same item, disabled in this menu when `disabled` holds, with
+    /// `reason` in its tooltip.
+    pub(in crate::window) fn disabled_because(self, disabled: bool, reason: &'static str) -> Self {
+        if !disabled {
+            return self;
+        }
+        Self {
+            disabled_reason: Some(reason),
+            ..self.disabled_when(true)
+        }
+    }
+
+    /// The same item showing an application's `icon` instead of its glyph.
+    pub(in crate::window) fn with_application_icon(self, icon: Option<&str>) -> Self {
+        Self {
+            application_icon: icon.map(str::to_owned),
+            ..self
+        }
+    }
+}
+
+impl MenuAction {
+    /// Why `widget`'s window has the action disabled, when it says.
+    pub(super) fn disabled_reason(self, widget: &gtk::Widget) -> Option<&'static str> {
+        let MenuAction::Window(action) = self else {
+            return None;
+        };
+        let window = widget.root().and_downcast::<BrowserWindow>()?;
+        window.disabled_reason(action)
     }
 }
 

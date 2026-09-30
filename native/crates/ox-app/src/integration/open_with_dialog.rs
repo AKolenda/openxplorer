@@ -17,8 +17,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::applications::{
-    list_applications_in_background, prepare_launch, ApplicationChoice, ApplicationList, ApplicationScope,
-    DefaultChoice, OpenWithError, PreparedLaunch,
+    application_image, list_applications_in_background, prepare_launch, ApplicationChoice, ApplicationList,
+    ApplicationScope, DefaultChoice, OpenWithError, PreparedLaunch,
 };
 use crate::icons::{self, Icon};
 
@@ -372,8 +372,9 @@ impl OpenWithDialog {
     }
 }
 
-/// The row of one application: its glyph, its name and why it is offered.
-/// An application that cannot open the item is shown but cannot be chosen.
+/// The row of one application: its own icon (the generic glyph without
+/// one), its name and why it is offered. An application that cannot open
+/// the item is shown but cannot be chosen.
 fn application_row(choice: &ApplicationChoice) -> gtk::ListBoxRow {
     let name = gtk::Label::builder().label(&choice.name).xalign(0.0).build();
     name.add_css_class("app-name");
@@ -383,7 +384,9 @@ fn application_row(choice: &ApplicationChoice) -> gtk::ListBoxRow {
     text.append(&name);
     text.append(&note);
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    content.append(&icons::image(Icon::Apps, ROW_GLYPH));
+    let icon = application_image(choice.icon.as_deref(), ROW_GLYPH)
+        .unwrap_or_else(|| icons::image(Icon::Apps, ROW_GLYPH));
+    content.append(&icon);
     content.append(&text);
     let row = gtk::ListBoxRow::builder().child(&content).build();
     row.add_css_class("app-choice");

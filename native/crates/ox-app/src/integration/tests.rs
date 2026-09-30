@@ -277,6 +277,46 @@ fn open_with_lists_filters_and_launches_the_chosen_application() {
     }
 }
 
+/// Menus and Open with draw an application with its own icon, from its
+/// desktop entry, and keep their glyph for one without.
+///
+/// parity: CMD-031
+#[gtk::test]
+fn an_application_is_drawn_with_its_own_icon() {
+    const FIXTURE_ID: &str = "io.winspace.FixtureEditor.desktop";
+    let applications = glib::user_data_dir().join("applications");
+    assert!(
+        applications.starts_with(std::env::temp_dir()),
+        "tests run with a private XDG_DATA_HOME"
+    );
+    std::fs::create_dir_all(&applications).expect("the private data folder");
+    let entry = applications.join(FIXTURE_ID);
+    let desktop_entry = "[Desktop Entry]\nType=Application\nName=Fixture Editor\nExec=true %F\n\
+                         Icon=accessories-text-editor\n";
+    std::fs::write(&entry, desktop_entry).expect("the fixture entry");
+    let fixture_icon = || {
+        gio::AppInfo::all()
+            .into_iter()
+            .find(|info| info.id().as_deref() == Some(FIXTURE_ID))
+            .and_then(|info| ox_core::integration::ApplicationInfo::icon(&info))
+    };
+    wait_until("GIO to read the entry", || fixture_icon().is_some());
+
+    // Read the way the worker threads read it, drawn on the main thread.
+    let listed = fixture_icon();
+    std::fs::remove_file(&entry).expect("the fixture entry");
+    let image = super::application_image(listed.as_deref(), 16).expect("the application has an icon");
+    let missing = super::application_image(None, 16);
+
+    let icon = image
+        .gicon()
+        .and_downcast::<gio::ThemedIcon>()
+        .expect("a named icon");
+    assert!(icon.names().iter().any(|name| name == "accessories-text-editor"));
+    assert_eq!(image.pixel_size(), 16);
+    assert!(missing.is_none());
+}
+
 /// For a folder every installed application is listed, and the
 /// file-manager default is never offered for change.
 ///
