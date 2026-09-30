@@ -20,8 +20,8 @@ use ox_core::location::file_uri;
 use ox_core::network::{mount_volume, NetworkError, WriteActivity};
 
 use crate::devices::Removal;
-use crate::dialogs::NetworkFormDialog;
 use crate::locations::Page;
+use crate::window::{ButtonStyle, Dialog};
 
 use super::session::Tab;
 use super::BrowserWindow;
@@ -103,7 +103,9 @@ impl BrowserWindow {
     fn confirm_disconnect(&self, uri: &str) {
         let address = self.imp().locations.borrow().display_location(uri);
         let message = format!("{address}\n\n{DISCONNECT_NOTE}");
-        let dialog = NetworkFormDialog::new(self, "Disconnect this mount?", &message, "Disconnect");
+        let dialog = Dialog::new(self, "Disconnect this mount?", &message);
+        dialog.add_cancel_button();
+        dialog.add_button("Disconnect", ButtonStyle::Accent);
         let uri = uri.to_owned();
         dialog.connect_confirmed(glib::clone!(
             #[weak(rename_to = window)]
@@ -113,7 +115,7 @@ impl BrowserWindow {
                 window.run_removal(&uri, Removal::Disconnect);
             }
         ));
-        dialog.present();
+        dialog.open();
     }
 
     /// Stops reading the tabs on the drive, then removes it.

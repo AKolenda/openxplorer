@@ -19,7 +19,6 @@ use ox_core::network::{
     WriteActivity, KEYRING_SAVE_NOTICE,
 };
 
-use crate::dialogs::NetworkFormDialog;
 use crate::folder_view::item::FileItem;
 use crate::locations::Page;
 use crate::network::Discoverer;
@@ -29,6 +28,7 @@ use crate::test_support::harness::{
 };
 use crate::window::session::TabPlacement;
 use crate::window::BrowserWindow;
+use crate::window::Dialog;
 
 /// The labels `widget` shows, in order.
 pub(super) fn texts_in(widget: &impl IsA<gtk::Widget>) -> Vec<String> {
@@ -43,10 +43,10 @@ pub(super) fn shows(widget: &impl IsA<gtk::Widget>, text: &str) -> bool {
 }
 
 /// The open network dialog, once it is shown.
-pub(super) fn open_form_dialog() -> NetworkFormDialog {
+pub(super) fn open_form_dialog() -> Dialog {
     let find = || {
         let toplevels = gtk::Window::list_toplevels().into_iter();
-        let dialogs = toplevels.filter_map(|toplevel| toplevel.downcast::<NetworkFormDialog>().ok());
+        let dialogs = toplevels.filter_map(|toplevel| toplevel.downcast::<Dialog>().ok());
         dialogs.filter(WidgetExt::is_visible).last()
     };
     wait_until("the dialog", || find().is_some());
@@ -212,13 +212,13 @@ fn map_network_location_keeps_its_errors_inside_the_dialog() {
     let dialog = open_form_dialog();
     let entries = descendants::<gtk::Entry>(&dialog);
     entries[0].set_text("/home/demo");
-    dialog.press_confirm();
+    dialog.press_primary();
     wait_until("the error", || dialog.error_text().is_some());
 
     assert!(dialog.is_visible());
-    assert_eq!(dialog.confirm_state(), ("Connect".to_owned(), true));
-    dialog.press_cancel();
-    assert!(!dialog.is_visible());
+    assert!(dialog.can_press("Connect"), "Connect can be pressed again");
+    dialog.press("Cancel");
+    wait_until("Cancel to close the dialog", || !dialog.is_visible());
     assert_eq!(test.window.current_uri().as_deref(), Some(Page::Network.uri()));
 }
 
@@ -319,13 +319,13 @@ fn a_server_being_signed_out_is_neither_listed_nor_mapped() {
     test.activate("map-network-location", None);
     let dialog = open_form_dialog();
     descendants::<gtk::Entry>(&dialog)[0].set_text("\\\\nas\\Projects");
-    dialog.press_confirm();
+    dialog.press_primary();
     wait_until("the error", || dialog.error_text().is_some());
     assert_eq!(
         dialog.error_text().as_deref(),
         Some("Sign-out is in progress. Reconnect after it finishes.")
     );
-    dialog.press_cancel();
+    dialog.press("Cancel");
     drop(signing_out);
 }
 
@@ -349,7 +349,7 @@ fn signing_out_forgets_the_server_and_its_tabs() {
     let dialog = open_form_dialog();
     assert!(shows(&dialog, "Sign out of nas?"));
     descendants::<gtk::CheckButton>(&dialog)[0].set_active(false);
-    dialog.press_confirm();
+    dialog.press_primary();
     wait_until("the Network page", || {
         test.window.current_uri().as_deref() == Some(Page::Network.uri())
     });
@@ -390,7 +390,7 @@ fn signing_out_of_the_server_on_screen_drops_its_rows() {
     test.activate("sign-out", Some("smb://example.invalid/share"));
     let dialog = open_form_dialog();
     descendants::<gtk::CheckButton>(&dialog)[0].set_active(false);
-    dialog.press_confirm();
+    dialog.press_primary();
     wait_until("the Network page", || {
         test.window.current_uri().as_deref() == Some(Page::Network.uri())
     });
@@ -411,7 +411,7 @@ fn signing_out_without_a_keyring_says_the_credentials_remain() {
     let test = TestWindow::open(Page::Network.uri());
 
     test.activate("sign-out", Some("smb://nas/share"));
-    open_form_dialog().press_confirm();
+    open_form_dialog().press_primary();
 
     let texts = message_box_texts("Sign-out did not fully finish");
     let detail =
@@ -550,7 +550,7 @@ fn disconnect_asks_first_and_reports_a_location_without_a_mount() {
                     applications too.";
     assert!(shows(&dialog, "Disconnect this mount?"));
     assert!(shows(&dialog, question), "{:?}", dialog.texts());
-    dialog.press_confirm();
+    dialog.press_primary();
 
     let texts = message_box_texts("Could not disconnect");
     assert!(
@@ -648,7 +648,7 @@ fn the_network_surfaces_are_captured() {
                 dialog.upcast_ref::<gtk::Window>(),
                 &format!("native-{name}-{theme}.png"),
             );
-            dialog.press_cancel();
+            dialog.press("Cancel");
         }
     }
 }

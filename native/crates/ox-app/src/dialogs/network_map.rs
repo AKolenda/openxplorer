@@ -9,8 +9,8 @@
 
 use gtk::prelude::*;
 
-use super::network_form::{CheckState, NetworkFormDialog};
 use super::network_protocol::Protocol;
+use crate::window::{ButtonStyle, Dialog};
 
 /// What the dialog says under its heading.
 const MESSAGE: &str =
@@ -46,13 +46,15 @@ pub(crate) struct MapRequest {
 /// typed.
 pub(crate) fn map_network_dialog(
     parent: &impl IsA<gtk::Window>,
-    on_connect: impl Fn(&NetworkFormDialog, MapRequest) + 'static,
-) -> NetworkFormDialog {
-    let dialog = NetworkFormDialog::new(parent, "Map network location", MESSAGE, "Connect");
+    on_connect: impl Fn(&Dialog, MapRequest) + 'static,
+) -> Dialog {
+    let dialog = Dialog::new(parent, "Map network location", MESSAGE);
     let fields = ServerFields::add_to(&dialog);
-    let label = dialog.add_text_field("Display name (optional)", "Projects (Z:)");
-    let save = dialog.add_check_box("Save in the sidebar · reconnect when opened", CheckState::Checked);
+    let label = address_field(&dialog, "Display name (optional)", "Projects (Z:)");
+    let save = dialog.add_check_button("Save in the sidebar · reconnect when opened", true);
     dialog.add_note(NOTE);
+    dialog.add_cancel_button();
+    dialog.add_button("Connect", ButtonStyle::Accent);
     dialog.connect_confirmed(move |dialog| {
         let keeping = if save.is_active() {
             ShareKeeping::SaveInSidebar
@@ -69,6 +71,16 @@ pub(crate) fn map_network_dialog(
     dialog
 }
 
+/// Adds a text field labelled `label` showing `placeholder` while empty.
+/// Addresses and labels are never spell-checked or completed
+/// (`spellcheck=false` and `autocomplete=off` in app.js).
+fn address_field(dialog: &Dialog, label: &str, placeholder: &str) -> gtk::Entry {
+    let entry = dialog.add_text_field(label, "");
+    entry.set_placeholder_text(Some(placeholder));
+    entry.set_input_hints(gtk::InputHints::NO_SPELLCHECK);
+    entry
+}
+
 /// The fields that name the folder: the protocol, the folder, and for
 /// protocols other than SMB the port and user name (NET-002).
 struct ServerFields {
@@ -80,13 +92,14 @@ struct ServerFields {
 
 impl ServerFields {
     /// Adds the fields to `dialog`, showing those SMB uses.
-    fn add_to(dialog: &NetworkFormDialog) -> Self {
+    fn add_to(dialog: &Dialog) -> Self {
         let labels = Protocol::ALL.map(Protocol::label);
-        let protocol = dialog.add_drop_down("Type", &labels);
-        let folder = dialog.add_text_field("Folder", Protocol::Smb.placeholder());
-        let port = dialog.add_text_field("Port (optional)", "");
+        let protocol = gtk::DropDown::from_strings(&labels);
+        dialog.add_labelled("Type", &protocol);
+        let folder = address_field(dialog, "Folder", Protocol::Smb.placeholder());
+        let port = address_field(dialog, "Port (optional)", "");
         port.set_input_purpose(gtk::InputPurpose::Digits);
-        let user = dialog.add_text_field("User name (optional)", "");
+        let user = address_field(dialog, "User name (optional)", "");
         let fields = Self {
             protocol,
             folder,
@@ -98,16 +111,16 @@ impl ServerFields {
         fields.protocol.connect_selected_notify(move |protocol| {
             let chosen = Protocol::at(protocol.selected());
             folder.set_placeholder_text(Some(chosen.placeholder()));
-            NetworkFormDialog::set_field_visible(&port, chosen.asks_port());
-            NetworkFormDialog::set_field_visible(&user, chosen.asks_user());
+            Dialog::set_field_visible(&port, chosen.asks_port());
+            Dialog::set_field_visible(&user, chosen.asks_user());
         });
         fields
     }
 
     /// Shows the fields `protocol` asks for.
     fn show_fields_of(&self, protocol: Protocol) {
-        NetworkFormDialog::set_field_visible(&self.port, protocol.asks_port());
-        NetworkFormDialog::set_field_visible(&self.user, protocol.asks_user());
+        Dialog::set_field_visible(&self.port, protocol.asks_port());
+        Dialog::set_field_visible(&self.user, protocol.asks_user());
     }
 
     /// The address the fields describe.
@@ -132,7 +145,7 @@ mod tests {
         let requests = Rc::new(RefCell::new(Vec::new()));
         let heard = Rc::clone(&requests);
         let dialog = map_network_dialog(&parent, move |_, request| heard.borrow_mut().push(request));
-        dialog.present();
+        dialog.open();
         settle();
 
         let texts = dialog.texts();
@@ -169,7 +182,8 @@ mod tests {
 
         entries[0].set_text("\\\\nas\\Projects");
         entries[3].set_text("Projects (Z:)");
-        dialog.press_confirm();
+        dialog.press("Connect");
+        settle();
         let expected = MapRequest {
             address: "\\\\nas\\Projects".into(),
             label: "Projects (Z:)".into(),
@@ -190,7 +204,8 @@ mod tests {
         let save = descendants::<gtk::CheckButton>(&dialog);
         save[0].set_active(false);
 
-        dialog.press_confirm();
+        dialog.press("Connect");
+        settle();
 
         let keeping: Vec<ShareKeeping> = requests.borrow().iter().map(|request| request.keeping).collect();
         assert_eq!(keeping, [ShareKeeping::ThisSessionOnly]);
@@ -206,7 +221,7 @@ mod tests {
         let heard = Rc::clone(&requests);
         let dialog = map_network_dialog(&parent, move |_, request| heard.borrow_mut().push(request));
         let protocol = descendants::<gtk::DropDown>(&dialog);
-        dialog.present();
+        dialog.open();
         settle();
         protocol[0].set_selected(1);
         let entries = descendants::<gtk::Entry>(&dialog);
@@ -219,7 +234,8 @@ mod tests {
         entries[0].set_text("build/home/anna");
         entries[1].set_text("2222");
         entries[2].set_text("anna");
-        dialog.press_confirm();
+        dialog.press("Connect");
+        settle();
 
         let addresses: Vec<String> = requests
             .borrow()
@@ -230,6 +246,47 @@ mod tests {
         protocol[0].set_selected(6);
         assert!(!WidgetExt::is_visible(&entries[2]), "NFS asks for no user name");
         dialog.close();
+        parent.close();
+    }
+
+    /// Sets its flag when the work holding it is dropped.
+    struct DropFlag(Rc<std::cell::Cell<bool>>);
+
+    impl Drop for DropFlag {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
+
+    /// While a connection runs, Connect reads "Connecting…" and waits,
+    /// Cancel stays usable, and Cancel drops the connection so a late
+    /// success is ignored.
+    ///
+    /// parity: NET-001
+    #[gtk::test]
+    fn cancel_drops_the_running_connection() {
+        let parent = gtk::Window::new();
+        let dropped = Rc::new(std::cell::Cell::new(false));
+        let flag = Rc::clone(&dropped);
+        let dialog = map_network_dialog(&parent, move |dialog, _| {
+            let guard = DropFlag(Rc::clone(&flag));
+            dialog.run("Connecting…", async move {
+                let _guard = guard;
+                std::future::pending::<()>().await;
+            });
+        });
+        dialog.open();
+        settle();
+
+        dialog.press("Connect");
+        settle();
+        let connecting = !dialog.can_press("Connecting…") && dialog.can_press("Cancel");
+        dialog.press("Cancel");
+        settle();
+
+        assert!(connecting, "Connect waits, Cancel does not");
+        assert!(dropped.get(), "the connection is dropped");
+        assert!(!dialog.is_visible());
         parent.close();
     }
 }

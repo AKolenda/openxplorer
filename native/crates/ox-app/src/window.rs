@@ -160,6 +160,7 @@ pub(crate) use actions::follow_text_size_keys;
 pub(crate) use actions::install_accelerators;
 pub(crate) use button_style::ButtonStyle;
 pub(crate) use closing::QUIT_WHILE_WRITING;
+pub(crate) use dialog::Dialog;
 pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};

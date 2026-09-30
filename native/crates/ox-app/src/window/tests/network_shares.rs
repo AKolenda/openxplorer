@@ -222,7 +222,7 @@ fn signing_out_pauses_indexing_the_server_until_it_is_mounted_again() {
     let choices = descendants::<gtk::CheckButton>(&dialog);
     choices[0].set_active(false);
     choices[1].set_active(true);
-    dialog.press_confirm();
+    dialog.press_primary();
     wait_until("the Network page", || {
         test.window.current_uri().as_deref() == Some(Page::Network.uri())
     });

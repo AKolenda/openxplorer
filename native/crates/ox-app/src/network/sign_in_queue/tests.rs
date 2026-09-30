@@ -17,9 +17,10 @@ use ox_core::network::{
 };
 
 use super::*;
-use crate::dialogs::{NetworkFormDialog, SignInDialog};
+use crate::dialogs::SignInDialog;
 use crate::test_support::harness::{descendants, settle, wait_until};
 use crate::text_size::Step;
+use crate::window::Dialog;
 
 /// What `GVfs` asks for on a first sign-in to `nas` (the Python fixture's
 /// flags, `7`): a user name and a password, which the server can save.
@@ -350,7 +351,7 @@ fn closing_the_dialog_aborts_its_mount() {
 #[gtk::test]
 fn the_dialog_opens_over_the_windows_own_dialog() {
     let fixture = PromptsFixture::new();
-    let map = NetworkFormDialog::new(&fixture.window, "Map network location", "", "Connect");
+    let map = Dialog::new(&fixture.window, "Map network location", "");
     map.present();
     let (operation, _) = fixture.mount();
 
@@ -466,7 +467,7 @@ fn text_size_keys_reach_the_window_under_the_dialog() {
         window_actions.add_action(&action);
     }
     fixture.window.insert_action_group("win", Some(&window_actions));
-    let map = NetworkFormDialog::new(&fixture.window, "Map network location", "", "Connect");
+    let map = Dialog::new(&fixture.window, "Map network location", "");
     map.present();
     let (operation, _) = fixture.mount();
     let dialog = fixture.ask_password(&operation, SIGN_IN_FLAGS);

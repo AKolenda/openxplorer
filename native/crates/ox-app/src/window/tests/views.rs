@@ -519,8 +519,8 @@ fn ctrl_h_shows_hidden_files_outside_text_fields() {
 
 /// The text-size keys work inside modal dialogs too, which the
 /// application's accelerators do not reach: they change the size of the
-/// window the dialog belongs to. The window's own dialogs and the network
-/// form (Map network location, Sign out) are checked; Open with, the
+/// window the dialog belongs to. The window's dialogs, Rename and Map
+/// network location among them, are checked; Open with, the
 /// update and the Brave dialogs install the same keys.
 ///
 /// parity: VIEW-043
@@ -531,7 +531,7 @@ fn text_size_keys_work_inside_dialogs() {
     let _theme = ThemeGuard::keep();
     let before = test.window.skin().text_size();
     let rename = crate::window::dialog::Dialog::new(&test.window, "Rename", "");
-    let map = crate::dialogs::NetworkFormDialog::new(&test.window, "Map network location", "", "Connect");
+    let map = crate::dialogs::map_network_dialog(&test.window, |_, _| {});
     let dialogs: [&gtk::Window; 2] = [rename.upcast_ref(), map.upcast_ref()];
     let plus = gtk::ShortcutTrigger::parse_string("<Control>plus").expect("a trigger");
     let mut expected = before;

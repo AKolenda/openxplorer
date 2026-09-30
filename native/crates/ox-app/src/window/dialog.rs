@@ -14,7 +14,10 @@
 //! - Escape, the Cancel button and closing the window answer "cancelled";
 //!   while the answer is carried out ([`Dialog::set_busy`]) the buttons
 //!   are disabled and closing also cancels the running operation, so a
-//!   stalled share cannot hold the dialog open.
+//!   stalled share cannot hold the dialog open. Work that cannot be
+//!   cancelled, such as connecting a share, runs with [`Dialog::run`]:
+//!   its button reads "Connecting…" meanwhile, Cancel stays usable, and
+//!   cancelling drops the work so a late success is ignored.
 //! - An error stays inside the dialog, which stays open for another try
 //!   ([`Dialog::show_error`]).
 //! - Opening a dialog closes the browser window's menus and ends its
@@ -29,16 +32,18 @@
 //! not reach through it. A caller awaits [`Dialog::next_response`] on the
 //! main loop, so nothing blocks while the dialog is open.
 
+use std::future::Future;
+
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
 use ox_core::transfer::Cancellation;
 
 use super::ButtonStyle;
 
 /// A button of one dialog, as [`Dialog::next_response`] reports it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct DialogButton(usize);
+pub(crate) struct DialogButton(usize);
 
 /// The answer a button, Escape or closing the window gives.
 type Answer = Option<DialogButton>;
@@ -85,6 +90,12 @@ mod imp {
         /// The operation carrying out an answer, while it runs; closing
         /// the dialog cancels it.
         pub(super) running: RefCell<Option<Cancellation>>,
+        /// The work [`super::Dialog::run`] started, while it runs;
+        /// cancelling the dialog drops it.
+        pub(super) work: RefCell<Option<glib::JoinHandle<()>>>,
+        /// The button that started the work, disabled meanwhile, with its
+        /// own label to show again.
+        pub(super) busy_button: RefCell<Option<(gtk::Button, glib::GString)>>,
     }
 
     impl Default for Dialog {
@@ -101,6 +112,8 @@ mod imp {
                 answers,
                 answer_queue,
                 running: RefCell::default(),
+                work: RefCell::default(),
+                busy_button: RefCell::default(),
             }
         }
     }
@@ -123,7 +136,9 @@ mod imp {
     impl ObjectImpl for Dialog {
         fn constructed(&self) {
             self.parent_constructed();
-            self.obj().add_controller(super::escape_cancels());
+            // Escape closes the dialog, which cancels it (`closeModal` in
+            // app.js).
+            self.obj().add_controller(crate::modal::escape_closes());
         }
 
         fn dispose(&self) {
@@ -148,6 +163,7 @@ mod imp {
             if let Some(running) = self.running.take() {
                 running.cancel();
             }
+            self.obj().drop_work();
             // Closing is a cancellation; a caller that already has its
             // answer has stopped listening, which is fine.
             let _ = self.answers.try_send(None);
@@ -168,7 +184,7 @@ impl Dialog {
     /// A dialog over `parent` with the heading `title` and `message`
     /// under it; an empty message is not shown. Add fields and buttons,
     /// then [`Self::open`] it.
-    pub(super) fn new(parent: &impl IsA<gtk::Window>, title: &str, message: &str) -> Self {
+    pub(crate) fn new(parent: &impl IsA<gtk::Window>, title: &str, message: &str) -> Self {
         let dialog: Self = glib::Object::builder()
             .property("transient-for", parent)
             .property("title", title)
@@ -186,7 +202,7 @@ impl Dialog {
 
     /// Adds a labelled one-line text field showing `text`
     /// (`textField`), which Enter submits.
-    pub(super) fn add_text_field(&self, label: &str, text: &str) -> gtk::Entry {
+    pub(crate) fn add_text_field(&self, label: &str, text: &str) -> gtk::Entry {
         let entry = gtk::Entry::builder().text(text).activates_default(true).build();
         self.add_labelled(label, &entry);
         entry
@@ -194,7 +210,7 @@ impl Dialog {
 
     /// Adds `control` under a field label, which names it for screen
     /// readers too (`label.field-label`).
-    pub(super) fn add_labelled(&self, label: &str, control: &impl IsA<gtk::Widget>) {
+    pub(crate) fn add_labelled(&self, label: &str, control: &impl IsA<gtk::Widget>) {
         let caption = gtk::Label::builder()
             .label(label)
             .xalign(0.0)
@@ -208,14 +224,14 @@ impl Dialog {
     }
 
     /// Adds a boxed note in muted text (`.modal-note`).
-    pub(super) fn add_note(&self, text: &str) {
+    pub(crate) fn add_note(&self, text: &str) {
         self.add_text_line(text, "dialog-note");
     }
 
     /// Adds a line of small muted text that can be selected, such as a
     /// folder's path (`.template-path`), and returns it, so a caller can
     /// change it while the dialog is open.
-    pub(super) fn add_hint(&self, text: &str) -> gtk::Label {
+    pub(crate) fn add_hint(&self, text: &str) -> gtk::Label {
         self.add_text_line(text, "dialog-hint")
     }
 
@@ -237,7 +253,7 @@ impl Dialog {
 
     /// Adds a long selectable text, such as a licence, in a scrolled
     /// box `height` pixels tall.
-    pub(super) fn add_scrolled_text(&self, text: &str, height: i32) {
+    pub(crate) fn add_scrolled_text(&self, text: &str, height: i32) {
         let label = gtk::Label::builder()
             .label(text)
             .xalign(0.0)
@@ -265,8 +281,20 @@ impl Dialog {
         label.map(|label| label.text().to_string()).unwrap_or_default()
     }
 
+    /// Shows or hides `field`, added with [`Self::add_labelled`] or
+    /// [`Self::add_text_field`], together with its label.
+    pub(crate) fn set_field_visible(field: &impl IsA<gtk::Widget>, visible: bool) {
+        let caption = field
+            .prev_sibling()
+            .filter(|caption| caption.has_css_class("field-label"));
+        if let Some(caption) = caption {
+            caption.set_visible(visible);
+        }
+        field.set_visible(visible);
+    }
+
     /// Adds a check box (`.checkbox-row`).
-    pub(super) fn add_check_button(&self, label: &str, active: bool) -> gtk::CheckButton {
+    pub(crate) fn add_check_button(&self, label: &str, active: bool) -> gtk::CheckButton {
         let check = gtk::CheckButton::builder().label(label).active(active).build();
         check.add_css_class("dialog-check");
         self.imp().fields.append(&check);
@@ -274,7 +302,7 @@ impl Dialog {
     }
 
     /// Adds the Cancel button, which answers "cancelled" like Escape.
-    pub(super) fn add_cancel_button(&self) {
+    pub(crate) fn add_cancel_button(&self) {
         let button = self.new_button("Cancel", ButtonStyle::Bordered);
         let answers = self.imp().answers.clone();
         button.connect_clicked(move |_| {
@@ -285,7 +313,7 @@ impl Dialog {
     /// Adds a button labelled `label` in `style`; clicking it answers the
     /// returned [`DialogButton`]. The accent button is the primary one,
     /// which Enter in a field presses.
-    pub(super) fn add_button(&self, label: &str, style: ButtonStyle) -> DialogButton {
+    pub(crate) fn add_button(&self, label: &str, style: ButtonStyle) -> DialogButton {
         let button = self.new_button(label, style);
         let answer = DialogButton(self.imp().buttons.borrow().len() - 1);
         let answers = self.imp().answers.clone();
@@ -300,7 +328,7 @@ impl Dialog {
 
     /// Makes Enter in `entry` press `button` instead of the primary
     /// button, for a field that belongs to one of several answers.
-    pub(super) fn submit_with(&self, entry: &gtk::Entry, button: DialogButton) {
+    pub(crate) fn submit_with(&self, entry: &gtk::Entry, button: DialogButton) {
         entry.set_activates_default(false);
         let answers = self.imp().answers.clone();
         entry.connect_activate(move |_| {
@@ -321,7 +349,7 @@ impl Dialog {
 
     /// Shows the dialog, focusing its first text field with the text
     /// selected, or else its first button.
-    pub(super) fn open(&self) {
+    pub(crate) fn open(&self) {
         let first_field = super::widget_tree::children(&*self.imp().fields)
             .find_map(|child| child.downcast::<gtk::Entry>().ok());
         let first_button = self.imp().buttons.borrow().first().cloned();
@@ -344,7 +372,7 @@ impl Dialog {
     /// Shows the dialog with its first button focused even when it has a
     /// text field, for a question whose field is only one of the answers:
     /// a reflexive Enter then does not choose it.
-    pub(super) fn open_on_first_button(&self) {
+    pub(crate) fn open_on_first_button(&self) {
         let first_button = self.imp().buttons.borrow().first().cloned();
         GtkWindowExt::set_focus(self, first_button.as_ref());
         self.present();
@@ -354,29 +382,79 @@ impl Dialog {
     }
 
     /// Waits for the next answer: the button pressed, or `None` for
-    /// Cancel, Escape or closing, which also closes the dialog. After a
-    /// button the dialog stays open; call [`Self::finish`] once the answer
-    /// is accepted.
-    pub(super) async fn next_response(&self) -> Option<DialogButton> {
+    /// Cancel, Escape or closing, which also closes the dialog and drops
+    /// the work [`Self::run`] started. After a button the dialog stays
+    /// open; call [`Self::finish`] once the answer is accepted.
+    pub(crate) async fn next_response(&self) -> Option<DialogButton> {
         let queue = self.imp().answer_queue.clone();
         let answer = queue.recv().await.ok().flatten();
         if answer.is_none() {
+            self.drop_work();
             self.finish();
         }
         answer
     }
 
-    /// Shows why the last try failed and keeps the dialog open.
-    pub(super) fn show_error(&self, message: &str) {
-        let error_label = &self.imp().error_label;
-        error_label.set_text(message);
-        error_label.set_visible(true);
+    /// Calls `on_confirm` each time a button other than Cancel is pressed
+    /// (or Enter in a text field presses the primary one), until the
+    /// dialog is cancelled or finished; for a dialog that asks one thing
+    /// and stays open while the answer is carried out.
+    pub(crate) fn connect_confirmed(&self, on_confirm: impl Fn(&Self) + 'static) {
+        let dialog = self.clone();
+        glib::spawn_future_local(async move {
+            // Cancelling and finishing both end the answers.
+            while dialog.next_response().await.is_some() {
+                on_confirm(&dialog);
+            }
+        });
+    }
+
+    /// Carries out the primary button's answer with `work`, such as
+    /// connecting a share: meanwhile the error line hides and the primary
+    /// button is disabled and reads `busy_label`, while Cancel stays
+    /// usable. Cancelling the dialog drops `work`, so a late success is
+    /// ignored (the cancel token of `connectDialog`); [`Self::show_error`]
+    /// or [`Self::finish`] ends it.
+    pub(crate) fn run(&self, busy_label: &str, work: impl Future<Output = ()> + 'static) {
+        let imp = self.imp();
+        imp.error_label.set_visible(false);
+        if let Some(primary) = self.default_widget().and_downcast::<gtk::Button>() {
+            if imp.busy_button.borrow().is_none() {
+                let label = primary.label().unwrap_or_default();
+                imp.busy_button.replace(Some((primary.clone(), label)));
+            }
+            primary.set_sensitive(false);
+            primary.set_label(busy_label);
+        }
+        if let Some(earlier) = imp.work.replace(Some(glib::spawn_future_local(work))) {
+            earlier.abort();
+        }
+    }
+
+    /// Shows why the last try failed and keeps the dialog open; the
+    /// button whose work failed can be pressed again.
+    pub(crate) fn show_error(&self, message: &str) {
+        let imp = self.imp();
+        imp.work.take();
+        if let Some((button, label)) = imp.busy_button.take() {
+            button.set_label(&label);
+            button.set_sensitive(true);
+        }
+        imp.error_label.set_text(message);
+        imp.error_label.set_visible(true);
+    }
+
+    /// Drops the work [`Self::run`] started, so its result is ignored.
+    fn drop_work(&self) {
+        if let Some(work) = self.imp().work.take() {
+            work.abort();
+        }
     }
 
     /// Disables the buttons while `running` carries out an answer, as
     /// `Create` is disabled while it runs, and enables them again with
     /// `None`. Closing the dialog meanwhile cancels `running`.
-    pub(super) fn set_busy(&self, running: Option<&Cancellation>) {
+    pub(crate) fn set_busy(&self, running: Option<&Cancellation>) {
         let busy = running.is_some();
         self.imp().running.replace(running.cloned());
         for button in self.imp().buttons.borrow().iter() {
@@ -384,8 +462,10 @@ impl Dialog {
         }
     }
 
-    /// Closes the dialog for good.
-    pub(super) fn finish(&self) {
+    /// Closes the dialog for good. Work [`Self::run`] started that calls
+    /// this runs to its end.
+    pub(crate) fn finish(&self) {
+        self.imp().work.take();
         self.destroy();
     }
 
@@ -419,33 +499,43 @@ impl Dialog {
             .collect()
     }
 
+    /// Whether the button labelled `label` can be pressed, for tests.
+    #[cfg(test)]
+    pub(crate) fn can_press(&self, label: &str) -> bool {
+        self.button_labelled(label).is_sensitive()
+    }
+
+    /// Every text the dialog holds, shown or not, in order, for tests.
+    #[cfg(test)]
+    pub(crate) fn texts(&self) -> Vec<String> {
+        let labels = crate::test_support::harness::descendants::<gtk::Label>(self);
+        labels.iter().map(|label| label.text().to_string()).collect()
+    }
+
     /// Presses the button labelled `label`, as a click does, for tests.
     #[cfg(test)]
     pub(crate) fn press(&self, label: &str) {
-        let button = self
-            .imp()
+        self.button_labelled(label).emit_clicked();
+    }
+
+    /// Presses the primary button, the one Enter presses, for tests.
+    #[cfg(test)]
+    pub(crate) fn press_primary(&self) {
+        let primary = self.default_widget().and_downcast::<gtk::Button>();
+        primary.expect("the dialog has a primary button").emit_clicked();
+    }
+
+    /// The button labelled `label`, for tests.
+    #[cfg(test)]
+    fn button_labelled(&self, label: &str) -> gtk::Button {
+        self.imp()
             .buttons
             .borrow()
             .iter()
             .find(|button| button.label().as_deref() == Some(label))
             .cloned()
-            .unwrap_or_else(|| panic!("the dialog has a {label} button"));
-        button.emit_clicked();
+            .unwrap_or_else(|| panic!("the dialog has a {label} button"))
     }
-}
-
-/// Escape closes the dialog, which cancels it (`closeModal` in app.js).
-fn escape_cancels() -> gtk::ShortcutController {
-    let shortcuts = gtk::ShortcutController::new();
-    let trigger = gtk::KeyvalTrigger::new(gdk::Key::Escape, gdk::ModifierType::empty());
-    let close = gtk::CallbackAction::new(|widget, _| {
-        if let Some(window) = widget.downcast_ref::<gtk::Window>() {
-            window.close();
-        }
-        glib::Propagation::Stop
-    });
-    shortcuts.add_shortcut(gtk::Shortcut::new(Some(trigger), Some(close)));
-    shortcuts
 }
 
 /// Shows `text` under `title` with one OK button, as `showMessage` does,

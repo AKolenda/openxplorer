@@ -7,7 +7,7 @@
 use gtk::prelude::*;
 use ox_core::network::ForgetScope;
 
-use super::network_form::{CheckState, NetworkFormDialog};
+use crate::window::{ButtonStyle, Dialog};
 
 /// What the dialog says under its heading.
 const MESSAGE: &str =
@@ -44,16 +44,15 @@ pub(crate) struct SignOutChoice {
 pub(crate) fn sign_out_dialog(
     parent: &impl IsA<gtk::Window>,
     host: &str,
-    on_sign_out: impl Fn(&NetworkFormDialog, SignOutChoice) + 'static,
-) -> NetworkFormDialog {
+    on_sign_out: impl Fn(&Dialog, SignOutChoice) + 'static,
+) -> Dialog {
     let title = format!("Sign out of {host}?");
-    let dialog = NetworkFormDialog::new(parent, &title, MESSAGE, "Sign out");
-    let forget = dialog.add_check_box("Forget saved credentials for this server", CheckState::Checked);
-    let clear_cache = dialog.add_check_box(
-        "Also clear cached filenames for this server",
-        CheckState::Unchecked,
-    );
+    let dialog = Dialog::new(parent, &title, MESSAGE);
+    let forget = dialog.add_check_button("Forget saved credentials for this server", true);
+    let clear_cache = dialog.add_check_button("Also clear cached filenames for this server", false);
     dialog.add_note(NOTE);
+    dialog.add_cancel_button();
+    dialog.add_button("Sign out", ButtonStyle::Accent);
     dialog.connect_confirmed(move |dialog| {
         let forget = if forget.is_active() {
             ForgetScope::AllScopes
@@ -76,7 +75,7 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
-    use crate::test_support::harness::descendants;
+    use crate::test_support::harness::{descendants, settle};
 
     /// parity: NET-020
     #[gtk::test]
@@ -101,11 +100,13 @@ mod tests {
                 "{expected} in {texts:?}"
             );
         }
-        dialog.press_confirm();
+        dialog.press("Sign out");
+        settle();
         let boxes = descendants::<gtk::CheckButton>(&dialog);
         boxes[0].set_active(false);
         boxes[1].set_active(true);
-        dialog.press_confirm();
+        dialog.press("Sign out");
+        settle();
 
         let expected = [
             SignOutChoice {
