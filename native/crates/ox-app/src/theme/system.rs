@@ -292,6 +292,7 @@ fn portal_change(parameters: &glib::Variant) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::harness::wait_until;
 
     /// parity: LOOK-004
     #[test]
@@ -357,6 +358,37 @@ mod tests {
             startup_preference,
             "the portal has no preference"
         );
+    }
+
+    /// A change of GNOME's colour scheme reaches the app at once, both
+    /// ways, while the app writes nothing back (the tests' settings stay
+    /// in memory).
+    ///
+    /// parity: LOOK-004
+    #[gtk::test]
+    fn a_changed_gnome_color_scheme_is_followed_at_once() {
+        let Some(settings) = super::super::desktop_settings(INTERFACE_SCHEMA) else {
+            return;
+        };
+        let has_key = settings
+            .settings_schema()
+            .is_some_and(|schema| schema.has_key(COLOR_SCHEME_KEY));
+        if !has_key {
+            return;
+        }
+        let heard = Rc::new(Cell::new(None));
+        let scheme = SystemScheme::new(Appearance::Light, {
+            let heard = Rc::clone(&heard);
+            move |appearance| heard.set(Some(appearance))
+        });
+        for (value, expected) in [("prefer-dark", Appearance::Dark), ("prefer-light", Appearance::Light)] {
+            settings
+                .set_string(COLOR_SCHEME_KEY, value)
+                .expect("the key is writable in memory");
+            wait_until(value, || heard.get() == Some(expected));
+            assert_eq!(scheme.appearance(), expected);
+        }
+        settings.reset(COLOR_SCHEME_KEY);
     }
 
     /// One `SettingChanged` signal and the colour-scheme value expected

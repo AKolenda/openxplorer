@@ -361,7 +361,7 @@ fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
 /// sharing the width less 20 pixels, the first 10 pixels in and 5 down,
 /// 4 pixels apart, 128 pixels tall on a 130-pixel pitch.
 ///
-/// parity: VIEW-005
+/// parity: VIEW-005, LOOK-014
 #[gtk::test]
 fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     let fixture = Fixture::with_files(12);

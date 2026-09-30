@@ -11,7 +11,8 @@ use gtk::{gdk, glib};
 use super::file_ops_support::{press_shortcut, select_names};
 use super::geometry::laid_out;
 use crate::locations::Page;
-use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow};
+use crate::icons::Icon;
+use crate::test_support::harness::{descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard};
 use crate::window::menu_popover::MenuPopover;
 use crate::window::widget_tree::children;
 
@@ -192,6 +193,46 @@ fn the_menus_list_the_current_items_between_the_same_dividers() {
     let more = menu_of(&test, "More options").row_labels();
     assert_eq!(&more[..MORE_MENU_START.len()], MORE_MENU_START);
     assert_eq!(&more[more.len() - MORE_MENU_END.len()..], MORE_MENU_END);
+}
+
+/// The Appearance button shows a sun and "Light" or a moon and "Dark"
+/// for the drawn appearance, names the choice in its tooltip, and its
+/// menu checks the current choice (`applyTheme` in app.js).
+///
+/// parity: LOOK-005
+#[gtk::test]
+fn the_appearance_button_shows_the_drawn_appearance_and_its_menu_checks_the_choice() {
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    let button = descendants::<gtk::MenuButton>(test.window.command_bar())
+        .into_iter()
+        .find(|button| button.has_css_class("theme-toggle"))
+        .expect("the command bar has the Appearance button");
+    let cases = [
+        ("light", "Light", Icon::WeatherSunny, "Light appearance"),
+        ("dark", "Dark", Icon::WeatherMoon, "Dark appearance"),
+    ];
+    for (theme, label, glyph, checked) in cases {
+        test.activate("theme", Some(theme));
+        let shown = descendants::<gtk::Label>(&button);
+        assert_eq!(shown.first().map(gtk::Label::text).as_deref(), Some(label));
+        let image = descendants::<gtk::Image>(&button);
+        let icon_name = image.first().and_then(gtk::Image::icon_name);
+        assert_eq!(icon_name.as_deref(), Some(glyph.name()), "{theme}");
+        let tooltip = button.tooltip_text().unwrap_or_default();
+        assert_eq!(tooltip, format!("Appearance: {theme}. Click to change."));
+        let menu = button.popover().and_downcast::<MenuPopover>().expect("an app menu");
+        assert_eq!(menu.row_labels(), APPEARANCE_MENU);
+        menu.popup();
+        wait_for_frames(&test.window, 2);
+        let checked_labels = menu.checked_labels();
+        menu.popdown();
+        assert_eq!(checked_labels, [checked]);
+    }
+    test.activate("theme", Some("system"));
+    let tooltip = button.tooltip_text().unwrap_or_default();
+    assert!(tooltip.starts_with("Appearance: System ("), "{tooltip}");
 }
 
 /// parity: VIEW-006

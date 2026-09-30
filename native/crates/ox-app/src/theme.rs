@@ -298,17 +298,27 @@ mod tests {
     }
 
     /// GTK's own widgets under the skin, such as its dialogs, follow the
-    /// drawn palette through the dark variant of the skin's display.
+    /// drawn palette through the dark variant of the skin's display; the
+    /// desktop's own colour scheme is never written.
+    ///
+    /// parity: LOOK-006
     #[gtk::test]
     fn the_drawn_palette_switches_the_display_dark_variant() {
         let _theme = ThemeGuard::keep();
         let display = gdk::Display::default().expect("GTK tests run on a private display");
         let display_settings = gtk::Settings::for_display(&display);
+        let desktop = desktop_settings("org.gnome.desktop.interface").filter(|settings| {
+            let schema = settings.settings_schema();
+            schema.is_some_and(|schema| schema.has_key("color-scheme"))
+        });
+        let desktop_scheme = || desktop.as_ref().map(|settings| settings.string("color-scheme"));
+        let scheme_before = desktop_scheme();
 
         harness::skin().set_theme(Theme::Dark);
         assert!(display_settings.is_gtk_application_prefer_dark_theme());
 
         harness::skin().set_theme(Theme::Light);
         assert!(!display_settings.is_gtk_application_prefer_dark_theme());
+        assert_eq!(desktop_scheme(), scheme_before, "GNOME's setting is left alone");
     }
 }

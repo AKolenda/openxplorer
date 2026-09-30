@@ -275,7 +275,7 @@ fn paste_during_a_search_asks_to_open_the_destination_folder() {
     assert!(!fixture.path("Notes 2 (copy 2).txt").exists());
 }
 
-/// parity: CLIP-002, CLIP-009
+/// parity: CLIP-002, CLIP-009, LOOK-014
 #[gtk::test]
 fn a_cut_dims_its_items_in_both_views_until_the_clipboard_changes() {
     let fixture = Fixture::standard();
