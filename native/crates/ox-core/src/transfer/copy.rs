@@ -13,6 +13,11 @@
 //!   instead of copying itself forever.
 //! - XFER-004 and XFER-005: staged local folders are owner-only while being
 //!   built; the source's mode is recorded and applied only when publishing.
+//! - XFER-028: a file larger than the destination file system stores is
+//!   refused with a message that says so, and names and links it cannot
+//!   store are renamed or left out as the user answers.
+//! - XFER-013: for a move finished by copying, every copied source item is
+//!   recorded, so only those are removed afterwards.
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
@@ -21,7 +26,9 @@ use super::labels::copy_label;
 use super::modes::{path_for_unix_modes, secure_local_staging, DirectoryModes, PRIVATE_DIRECTORY_MODE};
 use super::names::child_node;
 use super::node::{Node, NodeInfo, NodeKind};
+use super::source_removal::CopiedItem;
 use super::types::{progress_fraction, Progress, ProgressScope};
+use super::unstorable::{Fix, Unstorable};
 
 /// Copies one source tree into staging, reporting byte progress.
 pub(crate) struct Copier<'a> {
@@ -30,7 +37,12 @@ pub(crate) struct Copier<'a> {
     own_stage_name: &'a str,
     /// Final modes of the staged local folders, applied when publishing.
     modes: &'a mut DirectoryModes,
+    /// What the destination cannot store, and the user's answers about it.
+    unstorable: &'a mut Unstorable,
     emit: &'a mut dyn FnMut(Progress),
+    /// Receives each source item below the top once it is copied, children
+    /// before their folder, when the copy finishes a move (XFER-013).
+    copied: Option<&'a mut Vec<CopiedItem>>,
 }
 
 impl<'a> Copier<'a> {
@@ -39,14 +51,24 @@ impl<'a> Copier<'a> {
         cancel: &'a Cancellation,
         own_stage_name: &'a str,
         modes: &'a mut DirectoryModes,
+        unstorable: &'a mut Unstorable,
         emit: &'a mut dyn FnMut(Progress),
     ) -> Self {
         Self {
             cancel,
             own_stage_name,
             modes,
+            unstorable,
             emit,
+            copied: None,
         }
+    }
+
+    /// Records every source item below the top into `copied` once it is
+    /// copied (XFER-013).
+    pub(crate) fn recording(mut self, copied: Option<&'a mut Vec<CopiedItem>>) -> Self {
+        self.copied = copied;
+        self
     }
 
     /// Copies `source` (at nesting `depth`) to the new name `target`.
@@ -62,6 +84,15 @@ impl<'a> Copier<'a> {
         target: &dyn Node,
         depth: usize,
     ) -> Result<(), TransferError> {
+        self.check_item(source, depth)?;
+        // XFER-017: inspected without following a symbolic link.
+        let info = source.info(Some(self.cancel))?;
+        self.copy_inspected(source, target, &info, depth)
+    }
+
+    /// Stops before `source` (at nesting `depth`) when the user cancelled,
+    /// the nesting limit is reached, or it is the copy's own staging.
+    fn check_item(&self, source: &dyn Node, depth: usize) -> Result<(), TransferError> {
         self.cancel.check()?;
         if depth > MAX_DEPTH {
             return Err(nesting_error());
@@ -74,15 +105,33 @@ impl<'a> Copier<'a> {
                 "The destination resolves inside the source through an alias. Copy stopped.",
             ));
         }
-        // XFER-017: inspected without following a symbolic link.
-        let info = source.info(Some(self.cancel))?;
+        Ok(())
+    }
+
+    /// Copies `source`, whose metadata is `info`, to the new name `target`.
+    fn copy_inspected(
+        &mut self,
+        source: &dyn Node,
+        target: &dyn Node,
+        info: &NodeInfo,
+        depth: usize,
+    ) -> Result<(), TransferError> {
         match info.kind {
-            NodeKind::Directory => self.copy_directory(source, target, &info, depth),
-            NodeKind::File | NodeKind::Symlink => self.copy_file(source, target),
-            NodeKind::Special => Err(TransferError::failed(
-                "Sockets, devices and other special files are not copied.",
-            )),
+            NodeKind::Directory => self.copy_directory(source, target, info, depth)?,
+            NodeKind::File => {
+                // XFER-028: FAT stores files up to 4 GiB only.
+                let rules = self.unstorable.rules;
+                rules.check_file_size(&source.display_name(), info.size)?;
+                self.copy_file(source, target)?;
+            }
+            NodeKind::Symlink => self.copy_file(source, target)?,
+            NodeKind::Special => {
+                return Err(TransferError::failed(
+                    "Sockets, devices and other special files are not copied.",
+                ));
+            }
         }
+        Ok(())
     }
 
     /// Creates the folder `target` for the folder `source`, whose metadata
@@ -127,8 +176,24 @@ impl<'a> Copier<'a> {
         depth: usize,
     ) -> Result<(), TransferError> {
         for child in source.children(Some(self.cancel))? {
-            let child_target = child_node(target, child.name())?;
-            self.copy(child.as_ref(), child_target.as_ref(), depth)?;
+            self.check_item(child.as_ref(), depth)?;
+            // XFER-017: inspected without following a symbolic link.
+            let info = child.info(Some(self.cancel))?;
+            // XFER-028: a name or link the destination cannot store.
+            let Fix::Name(name) = self
+                .unstorable
+                .fix(child.as_ref(), Some(info.kind), self.cancel)?
+            else {
+                continue;
+            };
+            let child_target = child_node(target, name)?;
+            self.copy_inspected(child.as_ref(), child_target.as_ref(), &info, depth)?;
+            if let Some(copied) = self.copied.as_deref_mut() {
+                copied.push(CopiedItem {
+                    node: child,
+                    kind: info.kind,
+                });
+            }
         }
         Ok(())
     }

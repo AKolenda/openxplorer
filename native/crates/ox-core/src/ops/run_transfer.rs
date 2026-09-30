@@ -15,14 +15,13 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::context::{on_worker, OperationContext, WriteProtection};
-use super::destinations::{DestinationTracker, Landed};
 use super::error::OpsError;
 use super::progress::throttled;
 use super::undo::{MovedItem, UndoRecord};
 use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, require_item_uri};
 use crate::transfer::{
-    Cancellation, ConflictPolicy, Node, NodeFactory, Operation, Progress, TransferEngine, TransferMode,
+    ConflictPolicy, Landed, Node, NodeFactory, Operation, Progress, TransferEngine, TransferMode,
     TransferResult,
 };
 
@@ -79,7 +78,7 @@ fn run_transfer_blocking(
     context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<TransferOutcome, OpsError> {
-    let mut engine = gio_transfer_engine(&context.protection, progress);
+    let mut engine = gio_transfer_engine(context, progress);
     run_on_engine(&mut engine, request, context)
 }
 
@@ -105,7 +104,7 @@ pub(super) fn run_on_engine(
         }
     }
     let operation = Operation::from_request(request.mode, destination.as_deref(), request.policy)?;
-    let tracking = RunTracking::before_run(operation, &context.cancel);
+    let tracking = RunTracking::before_run(operation);
     let result = engine.run(operation, &items, &context.cancel)?;
     Ok(tracking.finish(result))
 }
@@ -186,27 +185,27 @@ fn changes_sources(mode: TransferMode) -> bool {
     )
 }
 
-/// A transfer engine over the production GIO adapter, with `protection`
-/// as its write guard and `progress` throttled to [`PROGRESS_INTERVAL`].
+/// A transfer engine over the production GIO adapter, with the write
+/// guard and questions of `context` and `progress` throttled to
+/// [`PROGRESS_INTERVAL`].
 ///
 /// [`PROGRESS_INTERVAL`]: super::progress::PROGRESS_INTERVAL
 pub(crate) fn gio_transfer_engine(
-    protection: &WriteProtection,
+    context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> TransferEngine {
     let factory: NodeFactory = Arc::new(|uri: &str| Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>));
     let engine = TransferEngine::new(factory).with_progress(throttled(progress));
-    protection.install(engine)
+    context.install(engine)
 }
 
 /// What a run must remember before it starts, to tell afterwards where
 /// its items are and how to undo it.
 enum RunTracking {
-    /// A copy or move and its destination folder.
+    /// A copy or move; the engine reports where its items landed.
     Transfer {
         mode: TransferMode,
         policy: ConflictPolicy,
-        tracker: DestinationTracker,
     },
     /// Move to Trash, started at `since` (seconds since the Unix epoch).
     Trash { since: u64 },
@@ -216,24 +215,12 @@ enum RunTracking {
 
 impl RunTracking {
     /// Prepares to track `operation`.
-    fn before_run(operation: Operation<'_>, cancel: &Cancellation) -> Self {
+    fn before_run(operation: Operation<'_>) -> Self {
         match operation {
-            Operation::Copy {
-                destination_folder,
+            Operation::Copy { policy, .. } | Operation::Move { policy, .. } => RunTracking::Transfer {
+                mode: operation.mode(),
                 policy,
-            }
-            | Operation::Move {
-                destination_folder,
-                policy,
-            } => {
-                let mode = operation.mode();
-                let tracker = DestinationTracker::before_run(mode, destination_folder, policy, cancel);
-                RunTracking::Transfer {
-                    mode,
-                    policy,
-                    tracker,
-                }
-            }
+            },
             Operation::Trash => RunTracking::Trash {
                 since: unix_seconds_now(),
             },
@@ -244,12 +231,8 @@ impl RunTracking {
     /// The outcome of the run that ended with `result`.
     fn finish(self, result: TransferResult) -> TransferOutcome {
         match self {
-            RunTracking::Transfer {
-                mode,
-                policy,
-                tracker,
-            } => {
-                let landed = tracker.landed(&result.done);
+            RunTracking::Transfer { mode, policy } => {
+                let landed = result.landed.clone();
                 let created = landed.iter().map(|item| item.destination.clone()).collect();
                 let undo = transfer_undo(mode, policy, landed);
                 TransferOutcome {

@@ -82,7 +82,7 @@ fn run_chosen_transfer_blocking(
     context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<TransferOutcome, OpsError> {
-    let mut engine = gio_transfer_engine(&context.protection, progress);
+    let mut engine = gio_transfer_engine(context, progress);
     let mut total = TransferOutcome::default();
     let mut undo = CombinedUndo::Nothing;
     let renamed = request

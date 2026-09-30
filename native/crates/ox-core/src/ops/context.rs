@@ -14,7 +14,8 @@ use std::sync::Arc;
 
 use super::error::OpsError;
 use crate::transfer::{
-    check_write_tree, Cancellation, Node, SourceChange, TransferEngine, TransferError, WriteGuard,
+    check_write_tree, Cancellation, Node, SourceChange, TransferEngine, TransferError, UnstorableAnswer,
+    UnstorableItem, WriteGuard,
 };
 
 /// Locations that must never change, such as previous versions
@@ -107,8 +108,26 @@ impl fmt::Debug for WriteProtection {
     }
 }
 
-/// The user's cancellation and the app's write protection for one
-/// operation.
+/// Asks the user, from the operation's worker thread, about an item the
+/// destination cannot store (XFER-028), and waits for the answer.
+#[derive(Clone)]
+pub struct UnstorableAsker(Arc<dyn Fn(&UnstorableItem) -> UnstorableAnswer + Send + Sync>);
+
+impl UnstorableAsker {
+    /// An asker that answers with `ask`.
+    pub fn new(ask: impl Fn(&UnstorableItem) -> UnstorableAnswer + Send + Sync + 'static) -> Self {
+        Self(Arc::new(ask))
+    }
+}
+
+impl fmt::Debug for UnstorableAsker {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.debug_struct("UnstorableAsker").finish_non_exhaustive()
+    }
+}
+
+/// The user's cancellation, the app's write protection and the questions
+/// for one operation.
 #[derive(Debug, Clone, Default)]
 pub struct OperationContext {
     /// Stops the operation between steps and aborts in-flight GIO calls.
@@ -116,6 +135,9 @@ pub struct OperationContext {
     pub cancel: Cancellation,
     /// Locations the operation must not change.
     pub protection: WriteProtection,
+    /// Asks about names and links the destination cannot store; without
+    /// it they are attempted as they are.
+    pub unstorable: Option<UnstorableAsker>,
 }
 
 impl OperationContext {
@@ -124,6 +146,20 @@ impl OperationContext {
         Self {
             cancel: Cancellation::new(),
             protection,
+            unstorable: None,
+        }
+    }
+
+    /// `engine` with this context's write protection and question
+    /// installed.
+    pub(crate) fn install(&self, engine: TransferEngine) -> TransferEngine {
+        let engine = self.protection.install(engine);
+        match &self.unstorable {
+            Some(UnstorableAsker(ask)) => {
+                let ask = Arc::clone(ask);
+                engine.with_unstorable_question(move |item: &UnstorableItem| ask(item))
+            }
+            None => engine,
         }
     }
 

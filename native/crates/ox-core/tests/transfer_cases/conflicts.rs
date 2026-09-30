@@ -37,6 +37,8 @@ fn keep_both_skips_every_taken_copy_name() {
 /// item into the folder it is already in is skipped (XFER-012). With Keep
 /// both it would otherwise be renamed to "(copy 2)"; with Replace it would
 /// be replaced by itself.
+///
+/// parity: XFER-012
 #[test]
 fn moving_an_item_into_its_own_folder_changes_nothing() {
     for policy in [
@@ -118,7 +120,7 @@ fn rename_uses_the_typed_name_and_nothing_replaces_itself() {
 /// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_collision_keeps_source`: Skip leaves both the source
 /// and the item that holds its name alone (XFER-006, XFER-012).
 ///
-/// parity: XFER-006
+/// parity: XFER-006, XFER-012
 #[test]
 fn a_move_onto_a_taken_name_with_skip_keeps_both_items() {
     let fixture = Fixture::new();

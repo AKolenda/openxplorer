@@ -7554,8 +7554,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_local_stage_query_error_is_still_reported",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (complete_engine_stages_and_publishes_a_recursive_local_copy); native/crates/ox-core/tests/transfer_cases/failures.rs (failed_or_backend_cancelled_copies_keep_the_original_and_remove_private_staging)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/staged_copy.rs (private .winspace-transfer-<hex>.part folder holding payload, published by a no-replace rename, empty folder removed). Tests: native/crates/ox-core/tests/transfer_cases/operations.rs (a_copied_file_arrives_complete_and_leaves_no_staging, recursive_copy_preserves_sources_hidden_files_links_and_modes), native/crates/ox-core/tests/transfer_cases/failures.rs (failed_or_backend_cancelled_copies_keep_the_original_and_remove_private_staging), native/crates/ox-core/tests/gio_node_cases/local_adapter.rs, native/crates/ox-core/tests/transfer_cases/gio_engine.rs."
 
 [[feature]]
 id = "XFER-002"
@@ -7571,8 +7571,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::StagingNameTests::test_only_exact_generated_names_match",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/failures.rs (failed_stage_reservation_grants_no_cleanup_rights); native/crates/ox-core/tests/transfer_cases/devices.rs (a_device_staging_folder_created_by_someone_else_is_never_cleaned_up)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/staging.rs and native/crates/ox-core/src/transfer/staged_copy.rs: only an exclusively created stage (or a free random upload name) is recorded for cleanup; local cleanup is pinned to the created folder identity. Tests: native/crates/ox-core/tests/transfer_cases/failures.rs (failed_stage_reservation_grants_no_cleanup_rights), native/crates/ox-core/tests/transfer_cases/device_cleanup.rs, native/crates/ox-core/tests/transfer_cases/staging_cleanup.rs, native/crates/ox-core/src/transfer/names.rs unit tests."
 
 [[feature]]
 id = "XFER-003"
@@ -7588,8 +7588,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_persistent_cleanup_failure_reports_exact_location",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/failures.rs (rollback_failure_reports_the_exact_backup_and_preserves_its_contents, backup_cleanup_failure_reports_the_original_and_keeps_the_new_file)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/staging.rs (leftover_report: \"Incomplete staging folder|item left at <uri>. Inspect it before removing it. <reason>\"; one attempt for local and network, retries for devices). Tests: native/crates/ox-core/tests/transfer_cases/failures.rs, native/crates/ox-core/tests/transfer_cases/device_cleanup.rs, native/crates/ox-core/tests/transfer_cases/staging_cleanup.rs."
 
 [[feature]]
 id = "XFER-004"
@@ -7611,8 +7611,8 @@ python_tests = [
   "desktop/tests/test_zip_extract.py::ZipExtractTests::test_device_destination_does_not_require_unix_chmod",
 ]
 bridge = ["operate", "archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/src/transfer/modes.rs (modes_are_applied_through_a_no_follow_descriptor); remote no-chmod staging covered by native/crates/ox-core/tests/transfer_cases/devices.rs (uploads_publish_only_through_moves_the_device_can_perform)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/modes.rs (0700 through an O_DIRECTORY|O_NOFOLLOW descriptor, only for file: staging; remote and device staging never get chmod). Tests: native/crates/ox-core/src/transfer/modes.rs (unit), native/crates/ox-core/tests/transfer_cases/modes.rs, native/crates/ox-core/tests/transfer_cases/devices.rs."
 
 [[feature]]
 id = "XFER-005"
@@ -7645,8 +7645,8 @@ python_tests = [
 ]
 bridge = ["operate"]
 dolphin = "KIO::CopyJob metadata"
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (recursive_copy_preserves_sources_hidden_files_links_and_modes). Porting notes: A GIO copy with only NOFOLLOW_SYMLINKS keeps the file's mtime and mode (verified with a local GIO copy). KIO also restores directory modification times; OpenXplorer does not set those."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/copy.rs and native/crates/ox-core/src/transfer/commit.rs (modes recorded while copying, applied children-first before publishing, root set through the opened descriptor afterwards; \"The copied folder exists at <uri>, but its final permissions could not be restored.\"). Tests: native/crates/ox-core/tests/transfer_cases/operations.rs (recursive_copy_preserves_sources_hidden_files_links_and_modes), native/crates/ox-core/tests/transfer_cases/gio_integration.rs, native/crates/ox-core/tests/transfer_cases/modes.rs, native/crates/ox-core/tests/transfer_cases/staging_cleanup.rs. KIO also restores folder modification times; OpenXplorer does not."
 
 [[feature]]
 id = "XFER-006"
@@ -7668,8 +7668,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_publish_race_never_overwrites",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (conflict_policies_never_overwrite_without_replace)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/conflicts.rs (Skip returns no destination, nothing is staged). Tests: native/crates/ox-core/tests/transfer_cases/conflicts.rs (conflict_policies_never_overwrite_without_replace, a_move_onto_a_taken_name_with_skip_keeps_both_items), native/crates/ox-core/tests/transfer_cases/devices.rs."
 
 [[feature]]
 id = "XFER-007"
@@ -7685,8 +7685,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_publish_race_never_overwrites",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/failures.rs (a_name_taken_while_copying_is_not_overwritten_at_publication)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/commit.rs and native/crates/ox-core/src/gio_node/move_item.rs (renameat2 RENAME_NOREPLACE locally, GIO no-overwrite move elsewhere). Tests: native/crates/ox-core/tests/transfer_cases/failures.rs (a_name_taken_while_copying_is_not_overwritten_at_publication), native/crates/ox-core/tests/transfer_cases/device_replace.rs, native/crates/ox-core/tests/transfer_cases/gio_integration.rs, native/crates/ox-core/tests/gio_node_cases/local_adapter.rs."
 
 [[feature]]
 id = "XFER-008"
@@ -7710,8 +7710,8 @@ python_tests = [
 ]
 bridge = ["operate"]
 dolphin = "KIO 'Rename' suggestion in conflict dialog"
-native = "partial"
-native_note = "native/crates/ox-core/src/location/names.rs (copy_names_follow_python, long_copy_names_are_shortened_by_whole_characters); native/crates/ox-core/tests/transfer_cases/devices.rs (same_device_keep_both_renames_inside_staging_and_refreshes_before_cleanup)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/conflicts.rs with native/crates/ox-core/src/location/names.rs (new_copy_name). Tests: names.rs unit tests (copy_names_follow_python, long_copy_names_are_shortened_by_whole_characters), native/crates/ox-core/tests/transfer_cases/conflicts.rs (keep_both_skips_every_taken_copy_name), native/crates/ox-core/tests/transfer_cases/gio_integration.rs, native/crates/ox-core/tests/transfer_cases/gio_engine.rs, native/crates/ox-core/tests/location_python.rs."
 
 [[feature]]
 id = "XFER-009"
@@ -7738,8 +7738,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_replace_merges_folders_and_keeps_destination_only_items",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (replace_merges_folders_and_retains_destination_only_children, replacement_type_mismatch_preserves_both_items)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/commit.rs (Replacement: explicit overwrite move, recursive folder merge keeping destination-only children, type mismatch and other types refused with the Python messages). Tests: native/crates/ox-core/tests/transfer_cases/replace.rs, native/crates/ox-core/tests/transfer_cases/conflicts.rs, native/crates/ox-core/tests/transfer_cases/gio_integration.rs, native/crates/ox-core/tests/transfer_cases/device_replace.rs, native/crates/ox-core/tests/gio_node_cases/local_adapter.rs."
 
 [[feature]]
 id = "XFER-010"
@@ -7765,8 +7765,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_replace_never_uses_device_overwrite",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/failures.rs (replacement_install_failure_or_false_success_restores_the_old_name, cancellation_after_move_aside_finishes_the_small_commit_without_losing_the_old_name)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/commit.rs (replace_via_backup: .winspace-replaced-<hex>.backup, uncancellable move-aside and install, verified rollback). The unrecoverable cases name the backup location; the wording says the restoration could not be verified rather than \"the original remains\". Tests: native/crates/ox-core/tests/transfer_cases/failures.rs, native/crates/ox-core/tests/transfer_cases/device_replace.rs, native/crates/ox-core/tests/transfer_cases/replace.rs, native/crates/ox-core/tests/transfer_cases/mtp_adapter.rs."
 
 [[feature]]
 id = "XFER-011"
@@ -7795,7 +7795,7 @@ python_tests = [
 ]
 bridge = ["operate"]
 native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/failures.rs (native_move_failure_never_degrades_to_copy_then_delete); native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (cross_filesystem_move_is_refused_without_copying_or_removing_the_source). Porting notes: Dolphin/KIO performs cross-device moves as copy+delete; OpenXplorer deliberately refuses. The product owner must decide whether the native app gains this."
+native_note = "OWNER DECISION NEEDED: conflicts with XFER-013. The backend part holds: native/crates/ox-core/src/gio_node/move_item.rs moves with MOVE_FLAGS = NOFOLLOW_SYMLINKS|NO_FALLBACK_FOR_MOVE (also for Replace), so GIO never degrades a move to its own unstaged copy-then-delete, and the node reports the quoted error with the source untouched (native/crates/ox-core/tests/gio_node_cases/local_adapter.rs, cross_filesystem_move_is_refused_without_copying_or_removing_the_source). The engine no longer refuses such a move: to satisfy XFER-013 (must, Dolphin behaviour) native/crates/ox-core/src/transfer/engine.rs copies the item through the normal staging and then removes only the copied source items. That contradicts this item's 'the source is kept' and the Python test_move_failure_does_not_copy_delete, so it stays partial until the owner accepts the change and the spec text is updated."
 
 [[feature]]
 id = "XFER-012"
@@ -7811,7 +7811,8 @@ python_tests = [
   "desktop/tests/test_operations.py::TransferTests::test_move_collision_keeps_source",
 ]
 bridge = ["operate"]
-native = "todo"
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/conflicts.rs (a move into the item's own folder is skipped for every policy; Skip keeps both items). Tests: native/crates/ox-core/tests/transfer_cases/conflicts.rs (moving_an_item_into_its_own_folder_changes_nothing, a_move_onto_a_taken_name_with_skip_keeps_both_items)."
 
 [[feature]]
 id = "XFER-013"
@@ -7840,8 +7841,8 @@ python_tests = [
 ]
 bridge = ["operate", "clipboardConsume"]
 dolphin = "KIO::move (copy + delete fallback); KIO move across filesystems"
-native = "todo"
-native_note = "Porting notes: OpenXplorer moves only with native rename (NO_FALLBACK_FOR_MOVE), so a cross-filesystem cut fails. Its About text says this is not implemented. The data-safety rules of the existing staging engine must be kept when adding it."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/engine.rs (move_by_copying) and native/crates/ox-core/src/transfer/source_removal.rs: when the native move reports NotSupported (another filesystem, share or device), the item is copied through the normal staging (every XFER copy rule applies) while the copier records each source item it copied; after publication only those items are removed, children first, files and links one by one and folders only when empty. Anything saved into the source during the copy is kept and reported ('<n> item(s) appeared in the source during the move and were kept at <uri>'), as KIO does. The removal is not cancellable once it starts; a cancelled or failed copy keeps the source; a copy that left out unstorable items keeps the source; a source that cannot be removed is reported with the copy's location. The owner must still settle the conflict with XFER-011 (see there). Tests: native/crates/ox-core/tests/transfer_cases/cross_moves.rs (a_file_saved_into_the_source_during_the_move_is_kept, a_cancelled_copy_or_a_failed_removal_keeps_the_source, a_copy_that_left_items_out_keeps_the_source), native/crates/ox-core/tests/transfer_cases/gio_engine.rs (a_move_to_another_filesystem_copies_then_removes_the_source, /tmp to /dev/shm), native/crates/ox-core/tests/transfer_cases/failures.rs (a_move_that_cannot_be_finished_by_copying_keeps_the_source)."
 
 [[feature]]
 id = "XFER-014"
@@ -7865,8 +7866,8 @@ python_tests = ["desktop/tests/test_operations.py::TransferTests::test_trash_uns
 bridge = ["operate", "trashSupport"]
 dolphin = "movetotrash only enabled for local movable items"
 gnome = "g_file_trash (freedesktop Trash spec)"
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (delete_does_not_follow_symlinks_and_trash_never_falls_back_to_delete)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/gio_node/removal.rs and native/crates/ox-core/src/transfer/engine.rs (Trash errors are reported, never retried as a delete). Tests: native/crates/ox-core/tests/transfer_cases/operations.rs (unsupported_trash_never_falls_back_to_delete), native/crates/ox-core/src/transfer/batch.rs unit test."
 
 [[feature]]
 id = "XFER-015"
@@ -7889,8 +7890,8 @@ python_tests = [
 ]
 bridge = ["operate"]
 dolphin = "Shift+Delete"
-native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node_cases/removal.rs (local_recursive_delete_removes_selected_tree_without_following_its_links, an_ancestor_swapped_for_a_symlink_cannot_redirect_recursive_deletion). Remote directory deletion is refused natively (see ROADMAP.md)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/gio_node/local_delete.rs (pinned descriptors), remote_delete.rs and native/crates/ox-core/src/transfer/guard.rs (128-level limit, write guard per node). Tests: native/crates/ox-core/tests/gio_node_cases/removal.rs, native/crates/ox-core/tests/transfer_cases/operations.rs, native/crates/ox-core/tests/transfer_cases/snapshots.rs, native/crates/ox-core/tests/transfer_cases/gio_engine.rs, remote_delete.rs and local_delete.rs unit tests."
 
 [[feature]]
 id = "XFER-016"
@@ -7919,8 +7920,8 @@ python_tests = [
 ]
 bridge = ["operate", "transferConflicts"]
 dolphin = "ERR_DROP_ON_ITSELF"
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (self_and_descendant_destinations_are_rejected_including_symlink_aliases)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/containment.rs (realpath aliases, case-insensitive SMB host paths) and native/crates/ox-core/src/transfer/copy.rs (own staging name met through an alias). Tests: native/crates/ox-core/tests/transfer_cases/containment.rs, native/crates/ox-core/src/transfer/containment.rs unit tests."
 
 [[feature]]
 id = "XFER-017"
@@ -7947,8 +7948,8 @@ python_tests = [
 ]
 bridge = ["operate"]
 dolphin = "KIO::CopyJob (UDS_LINK_DEST)"
-native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (copying_a_link_copies_the_link_not_its_target); native/crates/ox-core/tests/gio_node_cases/removal.rs (deleting_a_copied_link_keeps_its_target)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/gio_node/query.rs (NOFOLLOW queries) and gio_node.rs (copy with NOFOLLOW_SYMLINKS). Tests: native/crates/ox-core/tests/gio_node_cases/local_adapter.rs (copying_a_link_copies_the_link_not_its_target), native/crates/ox-core/tests/gio_node_cases/removal.rs, native/crates/ox-core/tests/transfer_cases/operations.rs (loops and dangling links)."
 
 [[feature]]
 id = "XFER-018"
@@ -7964,8 +7965,8 @@ python_tests = [
   "desktop/tests/test_operations.py::TransferTests::test_failure_inside_tree_leaves_source",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (deep_trees_and_special_files_are_not_published)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/copy.rs (\"Sockets, devices and other special files are not copied.\"; a folder holding one fails as a whole and its stage is removed). Tests: native/crates/ox-core/tests/transfer_cases/operations.rs (deep_trees_and_special_files_are_not_published and the FIFO case)."
 
 [[feature]]
 id = "XFER-019"
@@ -7991,8 +7992,8 @@ python_tests = [
   "desktop/tests/test_operations.py::TransferTests::test_cancel_before_start",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/src/transfer/engine.rs (protocol_names_round_trip_and_unknown_ones_are_refused, duplicates_are_dropped_in_order); native/crates/ox-core/tests/transfer_cases/operations.rs (a_deep_move_merge_is_bounded_even_without_a_write_guard)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/request.rs and native/crates/ox-core/src/transfer/types.rs (modes, policies, 1-100,000 items, duplicates dropped, destination checks) and native/crates/ox-core/src/transfer/engine.rs (roots refused per item). Tests: request.rs and types.rs unit tests, native/crates/ox-core/tests/transfer_cases/operations.rs (a_source_selected_twice_is_copied_once)."
 
 [[feature]]
 id = "XFER-020"
@@ -8023,8 +8024,8 @@ python_tests = [
   "desktop/tests/test_v05.py::SettingsWindowsTests::test_snapshot_guard",
 ]
 bridge = ["operate", "rename", "create", "createTemplate", "archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/operations.rs (protected_descendants_stop_mutations_before_any_item_changes); native/crates/ox-core/tests/gio_node_cases/removal.rs (protected_descendants_are_preflighted_before_gio_permanent_deletion)."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/guard.rs (check_write_tree over the whole tree without following links, destination for every mode, source for move, Trash and delete). Tests: native/crates/ox-core/tests/transfer_cases/snapshots.rs, native/crates/ox-core/tests/versions_protection.rs, ops_transfer.rs, ops_recycle_bin.rs, native/crates/ox-core/tests/gio_node_cases/removal.rs."
 
 [[feature]]
 id = "XFER-021"
@@ -8055,8 +8056,8 @@ python_tests = [
 ]
 bridge = ["operate"]
 gnome = "GVfs MTP backend (MoveObject/SetObjectPropValue); GVfs MTP backend"
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/devices.rs (uploads_publish_only_through_moves_the_device_can_perform, a_devices_false_success_is_not_counted_as_a_published_copy). Simulated device only."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/staged_copy.rs (Layout::Sibling: hidden sibling stage, same-folder rename, verify_device_publication). Tests against a simulated MTP device: native/crates/ox-core/tests/transfer_cases/devices.rs, native/crates/ox-core/tests/transfer_cases/device_cleanup.rs, native/crates/ox-core/tests/gio_node_cases/device_capabilities.rs. Real phones are not available to the test run."
 
 [[feature]]
 id = "XFER-022"
@@ -8079,8 +8080,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_persistent_cleanup_failure_reports_exact_location",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/devices.rs (aborted_device_upload_cleanup_retries_transient_errors, device_not_found_requires_a_successful_parent_listing_without_the_stage). Simulated device only."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/staging.rs (retries after 0, 0.5 and 1.5 s; NOT_FOUND counts only when the parent listing confirms it). Tests: native/crates/ox-core/tests/transfer_cases/device_cleanup.rs (simulated device)."
 
 [[feature]]
 id = "XFER-023"
@@ -8104,8 +8105,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::GioMtpAdapterTests::test_same_device_copies_are_detected",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/devices.rs (same_device_keep_both_renames_inside_staging_and_refreshes_before_cleanup). Simulated device only."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/staged_copy.rs (Layout::SameDeviceCopy: copy under the source name inside a private folder, rename there, move out). Tests: native/crates/ox-core/tests/transfer_cases/same_device.rs, native/crates/ox-core/tests/gio_node_cases/device_capabilities.rs (simulated device)."
 
 [[feature]]
 id = "XFER-024"
@@ -8134,8 +8135,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_device_move_with_new_name_is_refused_not_misnamed",
 ]
 bridge = ["rename", "createTemplate", "archiveExtract", "operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/gio_node_cases/device_capabilities.rs (only_mtp_destinations_stage_beside_the_final_name, only_a_copy_within_one_mtp_device_keeps_the_source_name, a_device_move_under_a_new_name_or_with_replace_is_refused_without_device_io). Simulated device only."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/gio_node/move_item.rs (move_on_device, rename_mtp, settle_failed_rename). Tests: native/crates/ox-core/tests/transfer_cases/mtp_adapter.rs, native/crates/ox-core/tests/transfer_cases/devices.rs, native/crates/ox-core/tests/gio_node_cases/device_capabilities.rs (simulated device)."
 
 [[feature]]
 id = "XFER-025"
@@ -8156,8 +8157,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_device_move_relists_each_source_folder_once",
 ]
 bridge = ["operate"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/transfer_cases/devices.rs (device_moves_relist_the_old_folder_once_per_batch). Simulated device only."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/relisting.rs and native/crates/ox-core/src/transfer/engine.rs (each source folder relisted once per batch). Tests: native/crates/ox-core/tests/transfer_cases/devices.rs (device_moves_relist_the_old_folder_once_per_batch, simulated device)."
 
 [[feature]]
 id = "XFER-026"
@@ -8174,7 +8175,8 @@ python_tests = [
   "desktop/tests/test_device_staging.py::DeviceStagingTests::test_replace_merges_folders_and_keeps_destination_only_items",
 ]
 bridge = ["operate"]
-native = "todo"
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/gio_node/move_item.rs (Replace on mtp:// returns ReplaceUnsupported before any device call, so the engine uses reversible renames). Tests: native/crates/ox-core/tests/transfer_cases/mtp_adapter.rs (replace_on_a_device_is_never_attempted_in_one_step), native/crates/ox-core/tests/transfer_cases/device_replace.rs (device_replace_uses_reversible_same_folder_renames, device_replace_merges_folders_and_keeps_destination_only_items)."
 
 [[feature]]
 id = "XFER-027"
@@ -8189,6 +8191,7 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "RenameDialog Resume / .part files"
 native = "todo"
+native_note = "Not implemented: the staging rules (XFER-001 to XFER-003) remove a partial copy when it fails or is cancelled, so no .part file is left to resume. Resuming needs an owner decision to keep failed stages, which weakens those rules. Porting notes: KIO keeps <name>.part and offers Resume in its rename dialog."
 
 [[feature]]
 id = "XFER-028"
@@ -8211,8 +8214,8 @@ python_tests = []
 bridge = ["operate"]
 dolphin = "KIO CopyJob: ERR_DISK_FULL check after the stat phase, ERR_FILE_TOO_LARGE_FOR_FAT32, handleMsdosFsQuirks (SkipDialog_Replace_Invalid_Chars, SkipFatSymlinks)"
 gnome = "g_file_query_filesystem_info on the destination (filesystem::free, filesystem::type); G_IO_ERROR_NO_SPACE and G_IO_ERROR_INVALID_FILENAME"
-native = "todo"
-native_note = "Porting notes: desktop/operations.py has no free-space, FAT size or invalid-name handling; a full disk or a vfat name error shows only as the raw GIO error for that item. XFER-017 copies symlinks as links, which vfat and exFAT reject. The staging rules (XFER-001 to XFER-003) must still hold."
+native = "done"
+native_note = "Implemented in native/crates/ox-core/src/transfer/limits.rs (free-space preflight before anything is written, counting move items only when their file system is known to differ and leaving out items Skip leaves alone; FAT 4 GiB limit per file), native/crates/ox-core/src/transfer/unstorable.rs (forbidden characters on FAT, exFAT and NTFS; links on FAT and exFAT), gio_node.rs (filesystem::type, filesystem::free, id::filesystem) and native/crates/ox-app/src/window/file_ops/unstorable_dialog.rs. The dialog offers Skip, Replace invalid characters and Cancel with a \"Do this for all such items\" check box, which gives Replace all and Skip all. Tests: native/crates/ox-core/tests/transfer_cases/limits.rs, limits.rs unit test, unstorable_dialog.rs unit test."
 
 [[feature]]
 id = "CLIP-001"

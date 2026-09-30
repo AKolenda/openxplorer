@@ -55,11 +55,14 @@ fn failed_or_backend_cancelled_copies_keep_the_original_and_remove_private_stagi
     }
 }
 
-/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_failure_does_not_copy_delete`.
+/// Ported from `desktop/tests/test_operations.py::TransferTests::test_move_failure_does_not_copy_delete`:
+/// a backend that cannot move makes the engine copy through staging
+/// (XFER-013); this one cannot publish either, so the copy fails, nothing
+/// is left in the destination and the source is kept.
 ///
-/// parity: XFER-011
+/// parity: XFER-013
 #[test]
-fn native_move_failure_never_degrades_to_copy_then_delete() {
+fn a_move_that_cannot_be_finished_by_copying_keeps_the_source() {
     let fixture = Fixture::new();
     let source = fixture.source_folder.join("document");
     write(&source, "original");
@@ -67,10 +70,11 @@ fn native_move_failure_never_degrades_to_copy_then_delete() {
 
     let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
 
-    assert_eq!(result.errors.len(), 1);
+    assert_eq!(result.errors, ["document: Native move unsupported."]);
     assert!(result.done.is_empty());
     assert_eq!(read(&source), "original");
     assert!(list(&fixture.destination_folder).is_empty());
+    fixture.assert_no_staging();
 }
 
 /// Ported from `desktop/tests/test_operations.py::TransferTests::test_preflight_race_never_overwrites`: a name another program

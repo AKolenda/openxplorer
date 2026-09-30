@@ -9,6 +9,7 @@
 //! | `containment` | Refusing to place a folder inside itself |
 //! | `conflicts` | Skip, Keep both and moves into the item's own folder |
 //! | `replace` | Replace: overwriting files and merging folders |
+//! | `cross_moves` | Moves finished by a staged copy and removing what was copied |
 //! | `failures` | Failures injected at every step of a copy or replacement |
 //! | `snapshots` | Previous-version (snapshot) protection |
 //! | `modes` | Unix modes on backends without `chmod` |
@@ -20,6 +21,7 @@
 //! | `gio_integration` | The engine over the production GIO adapter |
 //! | `gio_engine` | File names that are not valid UTF-8 through GIO |
 //! | `staging_cleanup` | Local staging cleanup through GIO |
+//! | `limits` | Free space, file size, names and links the destination cannot hold |
 
 mod transfer_support;
 
@@ -27,6 +29,8 @@ mod transfer_support;
 mod conflicts;
 #[path = "transfer_cases/containment.rs"]
 mod containment;
+#[path = "transfer_cases/cross_moves.rs"]
+mod cross_moves;
 #[path = "transfer_cases/device_cleanup.rs"]
 mod device_cleanup;
 #[path = "transfer_cases/device_replace.rs"]
@@ -39,6 +43,8 @@ mod failures;
 mod gio_engine;
 #[path = "transfer_cases/gio_integration.rs"]
 mod gio_integration;
+#[path = "transfer_cases/limits.rs"]
+mod limits;
 #[path = "transfer_cases/modes.rs"]
 mod modes;
 #[path = "transfer_cases/mtp_adapter.rs"]

@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ox_core::transfer::{Cancellation, Node, NodeInfo, TransferError};
+use ox_core::transfer::{Cancellation, FilesystemInfo, Node, NodeInfo, TransferError};
 
 use super::LocalNode;
 use crate::transfer_support::file_uri;
@@ -125,6 +125,11 @@ pub trait Provider: Send + Sync + 'static {
             Some(base) => base.delete(node),
             None => node.local_delete(),
         }
+    }
+
+    /// [`Node::filesystem`]: nothing reported by default.
+    fn filesystem(&self, node: &LocalNode) -> Option<FilesystemInfo> {
+        self.base().and_then(|base| base.filesystem(node))
     }
 }
 

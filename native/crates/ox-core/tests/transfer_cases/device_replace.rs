@@ -20,7 +20,7 @@ use crate::transfer_support::{
 /// one renamed in and the backup removed, all within the destination
 /// folder.
 ///
-/// parity: XFER-010
+/// parity: XFER-010, XFER-026
 #[test]
 fn device_replace_uses_reversible_same_folder_renames() {
     let fixture = Fixture::with_destination("phone");
@@ -94,7 +94,7 @@ fn a_failed_device_install_restores_the_original_and_removes_the_stage() {
 /// for devices: a folder merge on a phone behaves as on a local disk
 /// (XFER-026).
 ///
-/// parity: XFER-009
+/// parity: XFER-009, XFER-026
 #[test]
 fn device_replace_merges_folders_and_keeps_destination_only_items() {
     let fixture = Fixture::with_destination("phone");

@@ -14,7 +14,10 @@
 //! - XFER-007: publishing never overwrites a name that appeared meanwhile.
 //! - XFER-009 and XFER-010: Replace never loses the existing item before
 //!   the new one is installed.
-//! - XFER-011: a move never degrades to copy-then-delete.
+//! - XFER-011: a move is a native rename wherever the backend can do one.
+//!   XFER-013: elsewhere (another filesystem, share or device) the item is
+//!   copied through staging and its source removed only after the copy
+//!   was published.
 //! - XFER-014: Trash never falls back to permanent deletion.
 //! - XFER-020: a protected location anywhere in an affected tree stops the
 //!   item before anything changes.
@@ -34,6 +37,9 @@
 //! | `modes` | Unix modes of local staging folders |
 //! | `names` | Staging, backup and validated child names |
 //! | `labels` | Progress text |
+//! | `limits` | What the destination file system holds: free space, file size, names and links (XFER-028) |
+//! | `unstorable` | Asking about names and links the destination cannot store (XFER-028) |
+//! | `source_removal` | Removing the copied source of a move across filesystems (XFER-013) |
 //! | `relisting` | Relisting the folders moves took items from (MTP) |
 //! | `node` | The [`Node`] storage abstraction the engine works on |
 //! | `cancellation` | [`Cancellation`], the user's stop request |
@@ -64,14 +70,17 @@ mod engine;
 mod error;
 mod guard;
 mod labels;
+mod limits;
 mod modes;
 mod names;
 mod node;
 mod relisting;
 mod request;
+mod source_removal;
 mod staged_copy;
 mod staging;
 mod types;
+mod unstorable;
 
 pub(crate) use cancellation::check_cancelled;
 pub use cancellation::Cancellation;
@@ -80,9 +89,11 @@ pub use engine::TransferEngine;
 pub use error::TransferError;
 pub use guard::MAX_DEPTH;
 pub(crate) use guard::{check_write_tree, nesting_error, SourceChange};
+pub use limits::{FilesystemInfo, FAT_MAX_FILE_SIZE};
 pub(crate) use modes::{secure_local_staging, PRIVATE_DIRECTORY_MODE};
 pub use names::{is_own_backup_name, is_own_staging_name};
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;
 pub(crate) use staging::{clean_staging, STAGING_LEVELS};
-pub use types::{ConflictPolicy, Operation, Progress, ProgressScope, TransferMode, TransferResult};
+pub use types::{ConflictPolicy, Landed, Operation, Progress, ProgressScope, TransferMode, TransferResult};
+pub use unstorable::{UnstorableAnswer, UnstorableItem, UnstorableQuestion, UnstorableReason};
