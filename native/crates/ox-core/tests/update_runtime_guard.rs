@@ -108,6 +108,7 @@ fn guard(bus: ScriptedBus) -> InstanceGuard<ScriptedBus> {
 fn impatient(bus: ScriptedBus) -> InstanceGuard<ScriptedBus> {
     let timing = StopTiming {
         timeout: Duration::ZERO,
+        settle_timeout: Duration::ZERO,
         poll_interval: Duration::ZERO,
     };
     InstanceGuard::with_timing(bus, timing)

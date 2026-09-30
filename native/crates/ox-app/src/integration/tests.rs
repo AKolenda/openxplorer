@@ -13,7 +13,10 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use ox_core::integration::{FileManagerMethod, FileManagerRequest, Sandbox, BUS_NAME, OBJECT_PATH};
+use ox_core::integration::{
+    BraveIntegration, BravePaths, FileManagerMethod, FileManagerRequest, ProcessTable, Sandbox, BUS_NAME,
+    OBJECT_PATH,
+};
 
 use super::{
     BraveDialog, DesktopIntegration, IntegrationFolders, MimeBackend, OpenWithDialog, OpenWithSubject,
@@ -349,9 +352,16 @@ fn the_brave_dialogs_restore_needs_consent_and_a_record() {
     std::fs::create_dir_all(&profile).expect("the temporary folder is writable");
     let preferences = r#"{"download": {"default_directory": "/tmp/old"}}"#;
     std::fs::write(profile.join("Preferences"), preferences).expect("the profile is writable");
-    let (backend, _) = MimeBackend::in_memory("org.kde.dolphin.desktop");
-    let integration = DesktopIntegration::with_mime_backend(&folders, Sandbox::Host, backend);
-    let dialog = BraveDialog::present_for(&test.window, integration.brave(), &fixture.uri(), |_| {});
+    // An empty process table: Brave does not run, whatever the machine runs.
+    let processes = root.path().join("proc");
+    std::fs::create_dir(&processes).expect("the temporary folder is writable");
+    let paths = BravePaths {
+        settings: folders.settings.clone(),
+        home: folders.home.clone(),
+        config_home: folders.config_home.clone(),
+    };
+    let brave = BraveIntegration::with_activity(&paths, Sandbox::Host, ProcessTable::at(&processes));
+    let dialog = BraveDialog::present_for(&test.window, brave, &fixture.uri(), |_| {});
     wait_until("the profiles", || !dialog.profile_labels().is_empty());
 
     dialog.click_restore();
@@ -362,13 +372,9 @@ fn the_brave_dialogs_restore_needs_consent_and_a_record() {
 
     dialog.set_consent(true);
     dialog.click_restore();
-    // The dialog asks the real process table; Brave running on the test
-    // machine refuses the restore before the record is looked for.
-    let answers = [
-        "No previous download setting was recorded for this profile.",
-        "Fully quit Brave before restoring.",
-    ];
-    wait_until("the answer", || answers.contains(&dialog.status().as_str()));
+    wait_until("the answer", || {
+        dialog.status() == "No previous download setting was recorded for this profile."
+    });
     let unchanged = std::fs::read_to_string(profile.join("Preferences")).expect("the profile is readable");
     assert_eq!(unchanged, preferences);
     dialog.close();

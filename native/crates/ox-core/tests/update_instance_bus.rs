@@ -186,6 +186,7 @@ fn guard(bus: SessionBus) -> InstanceGuard<SessionBus> {
     let timing = StopTiming {
         timeout: Duration::from_secs(1),
         poll_interval: Duration::from_millis(20),
+        ..StopTiming::default()
     };
     InstanceGuard::with_timing(bus, timing)
 }

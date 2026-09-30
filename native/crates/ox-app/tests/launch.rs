@@ -24,13 +24,19 @@ const APP_ID: &str = env!("OX_APP_ID");
 /// How long a process may take to start, answer or quit.
 const PATIENCE: Duration = Duration::from_secs(30);
 
-/// Whether the test runs in check.py's isolation: HOME inside a private
-/// temporary folder and a display of its own.
+/// Whether the test runs in check.py's isolation: its marker, which it
+/// sets only inside its private display and session bus, and HOME and the
+/// XDG folders Show in folder writes to inside a private temporary folder.
 fn isolated() -> bool {
     let temporary = std::env::temp_dir();
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    temporary != Path::new("/tmp")
-        && home.is_some_and(|home| home.starts_with(&temporary))
+    let is_private = |name: &str| {
+        std::env::var_os(name)
+            .map(PathBuf::from)
+            .is_some_and(|path| path.starts_with(&temporary))
+    };
+    std::env::var_os("OX_ISOLATED_SESSION").is_some_and(|marker| marker == "1")
+        && temporary != Path::new("/tmp")
+        && ["HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"].into_iter().all(is_private)
         && std::env::var_os("DISPLAY").is_some()
 }
 

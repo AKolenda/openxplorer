@@ -38,12 +38,17 @@ pub trait InstanceBus {
     fn request_quit(&self, owner: &str) -> Result<(), InstanceError>;
 }
 
-/// How long [`InstanceGuard::stop`] waits, and how often it looks.
+/// How long [`InstanceGuard`] waits, and how often it looks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StopTiming {
     /// How long the instance has to quit: 6 seconds.
     pub timeout: Duration,
-    /// How often the bus is asked whether it has: every 80 ms.
+    /// How long a starting instance has to publish its digest: 1.5
+    /// seconds. Reading it takes well under that; an instance that could
+    /// not read its executable never publishes one, and a launch must not
+    /// stall on it.
+    pub settle_timeout: Duration,
+    /// How often the bus is asked: every 80 ms.
     pub poll_interval: Duration,
 }
 
@@ -51,6 +56,7 @@ impl Default for StopTiming {
     fn default() -> Self {
         Self {
             timeout: Duration::from_secs(6),
+            settle_timeout: Duration::from_millis(1500),
             poll_interval: Duration::from_millis(80),
         }
     }
@@ -141,10 +147,11 @@ impl<B: InstanceBus> InstanceGuard<B> {
     /// An instance publishes its identity without a digest until it has
     /// read its executable, which takes a moment after it starts; a launch
     /// in that moment would otherwise take it for an outdated build and
-    /// ask to restart it. The guard waits up to [`StopTiming::timeout`]
+    /// ask to restart it. The guard waits up to
+    /// [`StopTiming::settle_timeout`]
     /// for the digest.
     fn settled_status(&self, installed: &RuntimeIdentity) -> Result<InstanceStatus, InstanceError> {
-        let deadline = Instant::now() + self.timing.timeout;
+        let deadline = Instant::now() + self.timing.settle_timeout;
         loop {
             let status = self.status(installed)?;
             let is_pending = status

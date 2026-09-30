@@ -229,6 +229,8 @@ class EnvironmentTests(unittest.TestCase):
                     self.assertTrue(Path(environment[name]).is_relative_to(root))
                     self.assertTrue(Path(environment[name]).is_dir())
             self.assertEqual(environment['GSETTINGS_BACKEND'], 'memory')
+            # The launch tests start real processes only when they see it.
+            self.assertEqual(environment['OX_ISOLATED_SESSION'], '1')
 
 
 class FuseMountTests(unittest.TestCase):
