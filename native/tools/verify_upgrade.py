@@ -37,6 +37,7 @@ PACKAGE = 'openxplorer'
 PREVIEW_PACKAGE = 'openxplorer-native'
 DESKTOP_ENTRY = 'usr/share/applications/io.winspace.Development.desktop'
 NATIVE_PROGRAM = 'opt/openxplorer/bin/openxplorer'
+NATIVE_MOUNT_HELPER = 'opt/openxplorer/bin/openxplorer-mount-share'
 # Files the maintainer scripts generate, which no package lists.
 GENERATED_FILES = ('usr/share/applications/mimeinfo.cache',
                    'usr/share/icons/hicolor/icon-theme.cache')
@@ -158,9 +159,9 @@ def check_upgrade(report: Report, packages: Packages, work: Path) -> None:
     commands = ('usr/bin/openxplorer', 'usr/bin/winspace')
     report.check('openxplorer and winspace now run the native program',
                  all((root.path / command).resolve() == program for command in commands))
-    helper = (root.path / 'usr/bin/openxplorer-mount-share').read_text(encoding='utf-8')
-    report.check('The mount helper command runs the packaged helper',
-                 '/opt/openxplorer/mount-share/mount_share.py' in helper)
+    helper = (root.path / 'usr/bin/openxplorer-mount-share').resolve()
+    report.check('The mount helper command runs the native helper',
+                 helper == (root.path / NATIVE_MOUNT_HELPER).resolve())
     report.check("The desktop entry keeps the Python app's keys, MIME types and actions",
                  desktop_entry_groups(root.path / DESKTOP_ENTRY) == python_entry)
 

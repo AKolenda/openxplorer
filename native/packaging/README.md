@@ -57,7 +57,7 @@ never takes over the Python app's name. Every package build sets it.
 | Launcher icon | `/usr/share/icons/hicolor/scalable/apps/<id>.svg` | same | under `/app/share` |
 | D-Bus service file | `/usr/share/dbus-1/services/<id>.service` | same | under `/app/share` |
 | Licences | `/usr/share/doc/<command>/` | `/usr/share/licenses/<command>/` | `/app/share/licenses/<id>/` |
-| Mount helper (stable) | `/opt/openxplorer/mount-share/` | `/usr/share/openxplorer/mount-share/` | none |
+| Mount helper (stable) | `/opt/openxplorer/bin/openxplorer-mount-share`, linked from `/usr/bin` | `/usr/bin/openxplorer-mount-share` | none |
 
 - **Program folder.** The Debian program lives in `/opt/openxplorer/bin`
   because the in-app updater allows installing updates only for that folder
@@ -71,12 +71,15 @@ never takes over the Python app's name. Every package build sets it.
 - **Launcher icon.** The Fluent Emoji file folder the app shows for folders,
   byte for byte, following the rule that every icon is an unmodified Fluent
   file. It is an SVG, which GNOME, KDE, GNOME Software and Flatpak all accept.
-- **Mount helper.** Until the interactive command line of
-  `desktop/mount_share.py` is ported, the stable host packages ship it and the
-  three modules it imports unchanged, started by the launcher
-  [`data/openxplorer-mount-share.in`](data/openxplorer-mount-share.in) in
-  Python's isolated mode. The Settings mount assistant prints
-  `sudo /usr/bin/openxplorer-mount-share …` for the administrator to run.
+- **Mount helper.** `openxplorer-mount-share`, the port of
+  `desktop/mount_share.py`, is a second Rust program
+  (`crates/ox-core/src/bin/openxplorer-mount-share.rs`) with the same command
+  line. Only the stable host packages install it, with the Python package's
+  legacy name `winspace-mount-share` as a link: the preview installs beside
+  the Python package, which owns that command, and a Flatpak cannot add host
+  commands. The mount assistant in a folder's Location tab prints
+  `sudo /usr/bin/openxplorer-mount-share …` for the administrator to run; the
+  app never runs it. No package ships Python.
 
 ## Desktop integration data
 
@@ -132,11 +135,13 @@ explains a missing one when that feature is used:
 | Open in Terminal | `gnome-terminal \| x-terminal-emulator` | (every desktop has one) | (every desktop has one) | (every desktop has one) |
 | Open in archive manager | `file-roller` | `file-roller` | `file-roller` | `file-roller` |
 | In-app updates (stable `.deb` only) | `pkexec` | | | |
-| Persistent SMB mount helper (stable only) | `python3 (>= 3.10)`, `cifs-utils` | `python3`, `cifs-utils` | `python3`, `cifs-utils` | `python`, `cifs-utils` |
+| Persistent SMB mount helper (stable only) | `cifs-utils` | `cifs-utils` | `cifs-utils` | `cifs-utils` |
 
 **Not dependencies.** The Python package depended on Python, PyGObject,
-WebKitGTK, libsecret and `xdg-user-dirs`; the native program needs none of
-them (the Secret Service client is pure Rust). RPM and Arch have no virtual
+WebKitGTK, libsecret and `xdg-user-dirs`; the native programs need none of
+them (the Secret Service client is pure Rust, and the mount helper is a Rust
+program). Python is only a build tool: `tools/package_data.py` installs the
+files. RPM and Arch have no virtual
 terminal package, so they name none.
 
 ## Debian package

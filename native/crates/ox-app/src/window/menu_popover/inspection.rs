@@ -49,6 +49,7 @@ impl MenuPopover {
             .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
             .find(|gesture| gesture.button() == gtk::gdk::BUTTON_MIDDLE)
             .expect("the menu listens to the middle button");
+        gesture.emit_by_name::<()>("pressed", &[&1_i32, &1.0_f64, &y]);
         gesture.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &y]);
     }
 

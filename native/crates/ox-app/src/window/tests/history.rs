@@ -8,7 +8,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
-use super::address_input::click_gesture;
+use super::support::middle_click_at;
 use super::file_ops_support::press_shortcut_where_focused;
 use crate::locations::Page;
 use crate::search::SearchScope;
@@ -265,8 +265,7 @@ fn a_middle_click_on_back_or_up_opens_its_target_in_a_background_tab() {
     let test = window_one_step_in(&fixture);
     let middle_click = |action: &str| {
         let button = navigation_button(&test, action);
-        let gesture = click_gesture(&button, gdk::BUTTON_MIDDLE);
-        gesture.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &1.0_f64]);
+        middle_click_at(&button, (1.0, 1.0));
     };
 
     middle_click("back");

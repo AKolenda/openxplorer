@@ -10,7 +10,7 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::{self, is_device_location, is_smb_location, parent_location, LocationContext};
+use ox_core::location::{self, is_device_location, is_server_location, parent_location, LocationContext};
 use ox_core::places::NetworkLocation;
 
 use crate::icons::{Art, Icon};
@@ -32,15 +32,16 @@ struct ActiveLocation {
 
 /// The address-bar icon for a location (`address-icon` in
 /// `renderNavigation`): the page's glyph, the house for the home folder
-/// at `home_uri` (the Home of app.js), the network glyph for SMB, a phone
-/// for devices, else the colour folder.
+/// at `home_uri` (the Home of app.js), the network glyph for SMB and the
+/// other network protocols, as their tabs show, a phone for devices, else
+/// the colour folder.
 pub(super) fn address_icon(uri: &str, home_uri: &str) -> Icon {
     if let Some(page) = Page::from_uri(uri) {
         return page.icon();
     }
     if location::same_location(uri, home_uri) {
         Icon::Home
-    } else if is_smb_location(uri) {
+    } else if is_server_location(uri) {
         Icon::Organization
     } else if is_device_location(uri) {
         Icon::Phone
@@ -80,16 +81,17 @@ pub(super) fn crumb_buttons(locations: &LocationContext, uri: &str, full_path: b
 
 /// A tab's icon, as `renderTabs` picks it: the network glyph on the
 /// Network page, the gear on Settings, a phone for devices, the colour
-/// folder everywhere else, This PC included, and for SMB the location on
-/// the network bar as its row of `network` shows it in the sidebar.
-fn tab_icon(uri: &str, network: &[NetworkLocation]) -> Art {
+/// folder everywhere else, This PC included, and for a network location
+/// (SMB, or a folder under a kernel CIFS/SMB3 mount, NET-006) the location
+/// on the network bar as its row of `network` shows it in the sidebar.
+fn tab_icon(uri: &str, locations: &LocationContext, network: &[NetworkLocation]) -> Art {
     match Page::from_uri(uri) {
         Some(page @ (Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
         Some(Page::ThisPc) | None => {}
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
-    } else if is_smb_location(uri) {
+    } else if locations.is_network_location(uri) {
         Art::for_smb_location(uri, network)
     } else {
         Art::Folder
@@ -97,7 +99,8 @@ fn tab_icon(uri: &str, network: &[NetworkLocation]) -> Art {
 }
 
 /// How the strip shows `tab`: its title, its address (with "Network
-/// location" for SMB) and its icon, which for SMB comes from `network`.
+/// location" for a network location) and its icon, which for a network
+/// location comes from `network`.
 fn tab_view(
     tab: &Tab,
     session: &Session,
@@ -106,7 +109,7 @@ fn tab_view(
 ) -> TabView {
     let uri = tab.uri();
     let mut tooltip = locations.display_location(uri);
-    if is_smb_location(uri) {
+    if locations.is_network_location(uri) {
         tooltip.push_str(" · Network location");
     }
     TabView {
@@ -114,7 +117,7 @@ fn tab_view(
         uri: uri.to_owned(),
         title: locations.title_for(uri),
         tooltip,
-        icon: tab_icon(uri, network),
+        icon: tab_icon(uri, locations, network),
         active: session.is_active(tab.id),
         previous_version: None,
     }
@@ -308,8 +311,9 @@ mod tests {
                 address: Icon::Settings,
             },
         ];
+        let locations = LocationContext::default();
         for case in cases {
-            assert_eq!(tab_icon(case.uri, &[]), case.tab, "{}", case.uri);
+            assert_eq!(tab_icon(case.uri, &locations, &[]), case.tab, "{}", case.uri);
             let address = address_icon(case.uri, "file:///home/demo");
             assert_eq!(address, case.address, "{}", case.uri);
         }
@@ -378,9 +382,30 @@ mod tests {
         let server = studio_nas_server();
         let mapped_drive = studio_nas_mapped_drive();
         let network = [server.clone(), mapped_drive.clone()];
-        let tab_on = |uri: &str| tab_icon(uri, &network);
+        let locations = LocationContext::default();
+        let tab_on = |uri: &str| tab_icon(uri, &locations, &network);
         assert_eq!(tab_on(&server.uri), Art::for_network_row(&server));
         assert_eq!(tab_on(&mapped_drive.uri), Art::for_network_row(&mapped_drive));
         assert_eq!(tab_on("smb://studio-nas/projects/2024"), Art::SHARE);
+    }
+
+    /// A tab at or below a kernel CIFS/SMB3 mount point stands on the
+    /// network bar like an SMB tab; a folder whose name only starts like
+    /// the mount point does not.
+    ///
+    /// Ported from `desktop/tests/ui_v06.py::Mounted CIFS paths are recognized`
+    ///
+    /// parity: NET-006
+    #[test]
+    fn a_tab_under_a_cifs_mount_is_a_network_location() {
+        let locations = LocationContext {
+            network_mounts: vec!["/mnt/nas".into()],
+            ..LocationContext::default()
+        };
+        let tab_on = |uri: &str| tab_icon(uri, &locations, &[]);
+        assert_eq!(tab_on("file:///mnt/nas"), Art::SHARE);
+        assert_eq!(tab_on("file:///mnt/nas/Projects"), Art::SHARE);
+        assert_eq!(tab_on("file:///mnt/nas-other"), Art::Folder);
+        assert_eq!(tab_on("file:///home/demo"), Art::Folder);
     }
 }

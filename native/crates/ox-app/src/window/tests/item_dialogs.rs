@@ -447,7 +447,7 @@ fn the_snapshot_source_form_saves_a_mapping_and_lists_again() {
     wait_until("the versions", || !versions.version_labels().is_empty());
 
     press(&frame, "Snapshot source…");
-    let fields = descendants::<gtk::Entry>(&frame);
+    let fields = descendants::<gtk::Entry>(&versions);
     fields[1].set_text(&backups.display().to_string());
     press(&frame, "Save source");
 

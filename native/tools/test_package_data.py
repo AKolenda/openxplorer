@@ -37,11 +37,11 @@ class LayoutCase:
 
 LAYOUT_CASES = (
     LayoutCase(Channel.STABLE, Layout.DEBIAN, '/opt/openxplorer/bin/openxplorer',
-               '/usr/bin/openxplorer', '/opt/openxplorer/mount-share'),
+               '/usr/bin/openxplorer', '/opt/openxplorer/bin/openxplorer-mount-share'),
     LayoutCase(Channel.PREVIEW, Layout.DEBIAN, '/opt/openxplorer-native/bin/openxplorer-native',
                '/usr/bin/openxplorer-native', None),
     LayoutCase(Channel.STABLE, Layout.FHS, '/usr/bin/openxplorer', '/usr/bin/openxplorer',
-               '/usr/share/openxplorer/mount-share'),
+               '/usr/bin/openxplorer-mount-share'),
     LayoutCase(Channel.PREVIEW, Layout.FHS, '/usr/bin/openxplorer-native',
                '/usr/bin/openxplorer-native', None),
     LayoutCase(Channel.STABLE, Layout.FLATPAK, '/app/bin/openxplorer', '/app/bin/openxplorer',
@@ -60,6 +60,9 @@ class StagingTestCase(unittest.TestCase):
         self.folder = Path(temporary.name)
         self.program = self.folder / 'openxplorer-native'
         self.program.write_bytes(b'\x7fELF fake program')
+        # A real compiled program that accepts --help stands for the helper.
+        self.mount_helper = self.folder / 'openxplorer-mount-share'
+        shutil.copyfile(shutil.which('true') or '/bin/true', self.mount_helper)
         crate_folder = self.folder / 'crates' / 'glib-0.22.0'
         crate_folder.mkdir(parents=True)
         (crate_folder / 'LICENSE-MIT').write_text('MIT licence text\n', encoding='utf-8')
@@ -69,7 +72,8 @@ class StagingTestCase(unittest.TestCase):
     def install(self, channel: Channel, layout: Layout) -> InstalledTree:
         """Install one package into a fresh staging folder and return it as a tree."""
         staging = self.folder / f'{channel.name}-{layout.name}'
-        package_data.install(InstallRequest(channel, layout, self.program, staging), self.crates)
+        request = InstallRequest(channel, layout, self.program, staging, self.mount_helper)
+        package_data.install(request, self.crates)
         root = staging / 'app' if layout is Layout.FLATPAK else staging
         return InstalledTree(root, channel, layout, METAINFO_VERSIONS[channel])
 
@@ -128,10 +132,19 @@ class InstallTests(StagingTestCase):
 
                 report = Report()
                 verify_layout.check_mount_helper(report, tree, helper)
+                verify_layout.check_no_python(report, tree)
 
                 winspace = tree.path_of(tree.paths.commands / package_data.LEGACY_COMMAND)
                 self.assertEqual(winspace.resolve(), tree.path_of(tree.paths.program).resolve())
-                self.assertIn('The mount helper starts in isolated mode', report.passed)
+                self.assertIn('The mount helper commands run the helper program', report.passed)
+                self.assertIn('The mount helper starts', report.passed)
+                self.assertIn('No Python module or script is installed', report.passed)
+
+    def test_the_stable_host_packages_need_the_mount_helper(self) -> None:
+        request = InstallRequest(Channel.STABLE, Layout.FHS, self.program, self.folder / 'stage')
+
+        with self.assertRaisesRegex(RuntimeError, 'openxplorer-mount-share'):
+            package_data.install(request, self.crates)
 
     def test_files_get_program_and_data_modes(self) -> None:
         tree = self.install(Channel.PREVIEW, Layout.FHS)
@@ -182,6 +195,14 @@ class VerifierTests(StagingTestCase):
 
         with self.assertRaisesRegex(VerificationError, 'newest release'):
             verify_layout.check_metainfo(Report(), newer)
+
+    def test_a_python_program_is_refused(self) -> None:
+        tree = self.install(Channel.STABLE, Layout.DEBIAN)
+        script = tree.path_of(tree.paths.commands / 'openxplorer-helper')
+        script.write_text('#!/usr/bin/python3\nprint()\n', encoding='utf-8')
+
+        with self.assertRaisesRegex(VerificationError, 'usr/bin/openxplorer-helper'):
+            verify_layout.check_no_python(Report(), tree)
 
     def test_a_missing_promised_file_is_named(self) -> None:
         tree = self.install(Channel.PREVIEW, Layout.FHS)

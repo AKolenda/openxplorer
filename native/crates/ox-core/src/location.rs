@@ -59,7 +59,7 @@ pub use names::{new_copy_name, safe_label, validate_name, ItemKind, MAX_LABEL_CH
 pub use normalise::{
     file_uri, is_smb_server, normalise, normalise_location, require_item_uri, require_share,
 };
-pub use parts::{split_location, LocationKind, LocationParts};
+pub use parts::{canonical_remote_scheme, split_location, LocationKind, LocationParts, REMOTE_SCHEMES};
 pub use virtual_place::{
     is_virtual_location, normalise_navigation, VirtualPlace, HOME_URI, NETWORK_URI, PC_URI, RECENT_URI,
     SETTINGS_URI, TRASH_URI,
@@ -132,6 +132,19 @@ pub fn location_kind(uri: &str) -> LocationKind {
 /// lower-case schemes make the same test.
 pub fn is_smb_location(uri: &str) -> bool {
     location_kind(uri) == LocationKind::Smb
+}
+
+/// True for the network protocols besides SMB: SFTP, FTP, FTPS, WebDAV
+/// and NFS (NET-029).
+pub fn is_remote_location(uri: &str) -> bool {
+    location_kind(uri) == LocationKind::Remote
+}
+
+/// True for any server location: SMB or another network protocol. Such
+/// locations are listed under Network, get the network icon and have no
+/// Recycle Bin.
+pub fn is_server_location(uri: &str) -> bool {
+    matches!(location_kind(uri), LocationKind::Smb | LocationKind::Remote)
 }
 
 /// True for phones, cameras and iOS devices (`mtp:`, `gphoto2:`, `afc:`).

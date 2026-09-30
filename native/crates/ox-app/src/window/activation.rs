@@ -122,8 +122,14 @@ impl BrowserWindow {
     fn activate_entry(&self, entry: &Entry) {
         match activation_for(entry) {
             Activation::Folder(uri) => self.navigate_or_report(&uri),
-            Activation::File => self.open_file(entry),
-            Activation::Archive => self.open_archive(entry),
+            Activation::File => {
+                let file = entry.clone();
+                self.after_mounting(&entry.uri, move |window| window.open_file(&file));
+            }
+            Activation::Archive => {
+                let archive = entry.clone();
+                self.after_mounting(&entry.uri, move |window| window.open_archive(&archive));
+            }
             Activation::Refused(message) => self.show_message(message),
         }
     }

@@ -37,6 +37,9 @@ OUTPUT_DIRECTORY = REPOSITORY / 'dist' / 'native'
 DEBIAN_DATA = REPOSITORY / 'native' / 'packaging' / 'debian'
 PYTHON_APP_CORE = REPOSITORY / 'desktop' / 'core.py'
 CARGO_PROGRAM = 'openxplorer-native'
+# The administrator's mount helper, a program of ox-core that only the stable
+# package installs.
+CARGO_MOUNT_HELPER = 'openxplorer-mount-share'
 
 # The version form the 1.1.x updater accepts (version_tuple in
 # desktop/updater.py): three numbers without leading zeros.
@@ -72,8 +75,7 @@ RECOMMENDS = (
 STABLE_RECOMMENDS = (
     # The administrator prompt of in-app updates.
     'pkexec',
-    # The persistent SMB mount helper, openxplorer-mount-share.
-    'python3 (>= 3.10)',
+    # mount.cifs, which the persistent SMB mount helper's units run.
     'cifs-utils',
 )
 # The maintainer scripts that run native/packaging/debian/refresh-caches.
@@ -104,6 +106,17 @@ DESCRIPTIONS = {
 
 class BuildError(Exception):
     """The package cannot be built; the message says why and what to do."""
+
+
+@dataclass(frozen=True)
+class Programs:
+    """The executables one package installs."""
+
+    # The app (openxplorer-native).
+    app: Path
+    # The mount helper (openxplorer-mount-share), which only the stable
+    # package installs.
+    mount_helper: Path | None
 
 
 @dataclass(frozen=True)
@@ -176,23 +189,27 @@ def build_architecture() -> str:
     return result.stdout.strip()
 
 
-def build_program(channel: Channel) -> Path:
-    """Build the release program with the channel's application ID and return its path."""
+def build_programs(channel: Channel) -> Programs:
+    """Build the release programs with the channel's application ID and return their paths."""
     command = ['cargo', 'build', '--release', '--locked', '--manifest-path', str(CARGO_MANIFEST),
                '--package', 'ox-app', '--bin', CARGO_PROGRAM,
+               '--package', 'ox-core', '--bin', CARGO_MOUNT_HELPER,
                '--message-format=json-render-diagnostics']
     environment = dict(os.environ, OX_APP_ID=channel.app_id)
     # Cargo's progress and errors go to the terminal; its JSON messages name
-    # the executable it built.
+    # the executables it built.
     result = subprocess.run(command, stdout=subprocess.PIPE, text=True, env=environment)
     if result.returncode != 0:
         raise BuildError('cargo build failed; its output is above.')
+    executables = {}
     for line in result.stdout.splitlines():
         message = json.loads(line)
-        is_program = message.get('target', {}).get('name') == CARGO_PROGRAM
-        if message.get('reason') == 'compiler-artifact' and is_program:
-            return Path(message['executable'])
-    raise BuildError(f'cargo build did not report the {CARGO_PROGRAM} executable.')
+        if message.get('reason') == 'compiler-artifact' and message.get('executable'):
+            executables[message['target']['name']] = Path(message['executable'])
+    for name in (CARGO_PROGRAM, CARGO_MOUNT_HELPER):
+        if name not in executables:
+            raise BuildError(f'cargo build did not report the {name} executable.')
+    return Programs(executables[CARGO_PROGRAM], executables[CARGO_MOUNT_HELPER])
 
 
 def shared_library_depends(program: Path) -> list[str]:
@@ -326,10 +343,10 @@ def source_date_epoch() -> int:
 
 @dataclass(frozen=True)
 class DebianBuild:
-    """What to build: the channel, an optional ready program and where to write."""
+    """What to build: the channel, optional ready programs and where to write."""
 
     channel: Channel
-    program: Path | None
+    programs: Programs | None
     output_directory: Path
 
 
@@ -340,13 +357,14 @@ def build(request: DebianBuild) -> Path:
         check_stable_version(version, python_app_version())
     architecture = build_architecture()
     identity = package_identity(request.channel, version, architecture)
-    program = request.program or build_program(request.channel)
+    programs = request.programs or build_programs(request.channel)
     epoch = source_date_epoch()
     request.output_directory.mkdir(parents=True, exist_ok=True)
     output = request.output_directory.resolve() / identity.file_name
     with tempfile.TemporaryDirectory(prefix='openxplorer-deb-') as temporary:
         stage = Path(temporary) / 'root'
-        install_request = InstallRequest(request.channel, Layout.DEBIAN, program, stage)
+        install_request = InstallRequest(request.channel, Layout.DEBIAN, programs.app, stage,
+                                         programs.mount_helper)
         package_data.install(install_request, package_data.linked_crates())
         install_debian_files(stage, request.channel)
         stage_control(stage, request.channel, identity, architecture)
@@ -389,6 +407,9 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument('--program', type=Path,
                         help='package this executable instead of building one; it must have '
                              'been built with OX_APP_ID set to --app-id')
+    parser.add_argument('--mount-helper', type=Path,
+                        help='with --program: the openxplorer-mount-share executable, which '
+                             'the stable package installs')
     parser.add_argument('--output-directory', type=Path, default=OUTPUT_DIRECTORY,
                         help='where to write the .deb (default: dist/native)')
     return parser.parse_args(argv)
@@ -402,8 +423,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f'Building the Debian package needs {", ".join(missing)}. On Debian and Ubuntu: '
               'sudo apt install dpkg-dev, and Rust from rustup.rs.', file=sys.stderr)
         return 2
-    request = DebianBuild(Channel(arguments.app_id), arguments.program,
-                          arguments.output_directory)
+    programs = None
+    if arguments.program is not None:
+        programs = Programs(arguments.program, arguments.mount_helper)
+    request = DebianBuild(Channel(arguments.app_id), programs, arguments.output_directory)
     try:
         print(build(request))
     except (BuildError, OSError, RuntimeError, subprocess.CalledProcessError) as error:

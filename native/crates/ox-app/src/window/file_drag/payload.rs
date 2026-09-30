@@ -251,7 +251,7 @@ mod tests {
     /// Ported from `desktop/tests/test_native_file_drag.py::PayloadTests::test_existing_smb_mount_exports_local_path_and_keeps_original`
     /// and `test_unmounted_smb_remains_a_uri_without_implicit_download`.
     ///
-    /// parity: DND-004
+    /// parity: DND-004, NET-026
     #[test]
     fn a_mounted_share_exports_its_local_path_and_keeps_its_own_address() {
         let mounted = "smb://nas/projects/plan.odt".to_owned();

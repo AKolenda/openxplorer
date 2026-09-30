@@ -7,7 +7,8 @@ of the installed system; a Flatpak's files folder stands for /app.
 This checks that every file package_data.py promises is there, that the
 desktop entry, D-Bus service file and AppStream metainfo name the program,
 icon and application ID the channel requires, that the desktop's own
-validators accept them, and that nothing touches user state. It ports the
+validators accept them, that nothing touches user state, and that no
+package ships Python. It ports the
 layout checks of desktop/tools/verify_deb.py; verify_deb.py adds the Debian
 ones.
 """
@@ -23,7 +24,7 @@ import sys
 import xml.etree.ElementTree as ElementTree
 
 import package_data
-from package_data import REPOSITORY, Channel, InstalledPaths, Layout
+from package_data import Channel, InstalledPaths, Layout
 
 # A system-wide FileManager1 service would take "Show in folder" requests
 # from every user without asking (the opt-in rule in AGENTS.md).
@@ -31,6 +32,8 @@ SYSTEM_FILE_MANAGER_SERVICE = 'dbus-1/services/org.freedesktop.FileManager1.serv
 # Installed paths that would hold personal settings, caches or databases.
 PERSONAL_PREFIXES = ('home/', 'root/', 'etc/')
 PERSONAL_SUFFIXES = ('.sqlite3', 'settings.json')
+# The first bytes of a compiled Linux program.
+ELF_MAGIC = b'\x7fELF'
 # The launcher keys the Python package's desktop entry has, which the
 # stable entry keeps (DESKTOP in desktop/tools/build_deb.py).
 STABLE_DESKTOP_KEYS = {
@@ -84,6 +87,7 @@ def verify_tree(report: Report, tree: InstalledTree) -> None:
     """Run every layout check on an unpacked package."""
     check_promised_files(report, tree)
     check_no_user_state(report, tree)
+    check_no_python(report, tree)
     check_desktop_entry(report, tree)
     check_service_file(report, tree)
     check_metainfo(report, tree)
@@ -108,7 +112,7 @@ def promised_files(tree: InstalledTree) -> list[PurePosixPath]:
         legacy = (package_data.LEGACY_COMMAND, package_data.MOUNT_HELPER_COMMAND,
                   package_data.LEGACY_MOUNT_HELPER_COMMAND)
         files += [paths.commands / name for name in legacy]
-        files += [paths.mount_helper / name for name in package_data.MOUNT_HELPER_MODULES]
+        files.append(paths.mount_helper)
     return files
 
 
@@ -133,6 +137,24 @@ def check_no_user_state(report: Report, tree: InstalledTree) -> None:
     report.check('No personal settings, caches or databases',
                  not any(name.startswith(PERSONAL_PREFIXES) or name.endswith(PERSONAL_SUFFIXES)
                          for name in names))
+
+
+def check_no_python(report: Report, tree: InstalledTree) -> None:
+    """Check that no Python module or script is installed: every program is native."""
+    python = [path.relative_to(tree.root).as_posix() for path in tree.root.rglob('*')
+              if path.is_file() and is_python(path)]
+    if python:
+        raise VerificationError(f'Python files are installed: {", ".join(sorted(python))}')
+    report.check('No Python module or script is installed', True)
+
+
+def is_python(path: Path) -> bool:
+    """Return whether path is a Python module, compiled module or script."""
+    if path.suffix in ('.py', '.pyc'):
+        return True
+    with path.open('rb') as file:
+        first_line = file.readline(256)
+    return first_line.startswith(b'#!') and b'python' in first_line
 
 
 def key_file(path: Path) -> configparser.ConfigParser:
@@ -217,20 +239,18 @@ def check_with_desktop_validators(report: Report, tree: InstalledTree) -> None:
 
 
 def check_mount_helper(report: Report, tree: InstalledTree, helper: PurePosixPath) -> None:
-    """Check that the mount helper is the Python app's and its launcher syntax is valid."""
+    """Check that the mount helper commands run the native helper program, which starts."""
     installed = tree.path_of(helper)
-    source = REPOSITORY / 'desktop'
-    changed = [module for module in package_data.MOUNT_HELPER_MODULES
-               if (installed / module).read_bytes() != (source / module).read_bytes()]
-    report.check("The mount helper is the Python app's, byte for byte", not changed)
-    launcher = tree.path_of(tree.paths.commands / package_data.MOUNT_HELPER_COMMAND)
-    subprocess.run(['sh', '-n', str(launcher)], check=True)
-    report.check('The mount helper launcher passes the shell syntax check', True)
-    # The launcher runs Python in isolated mode, as this does; the helper
-    # must find its modules in its own folder.
-    helper_program = ['python3', '-I', str(installed / 'mount_share.py'), '--help']
-    subprocess.run(helper_program, check=True, stdout=subprocess.DEVNULL)
-    report.check('The mount helper starts in isolated mode', True)
+    commands = tree.paths.commands
+    names = (package_data.MOUNT_HELPER_COMMAND, package_data.LEGACY_MOUNT_HELPER_COMMAND)
+    report.check('The mount helper commands run the helper program',
+                 all(tree.path_of(commands / name).resolve() == installed.resolve()
+                     for name in names)
+                 and installed.stat().st_mode & 0o111 != 0)
+    with installed.open('rb') as program:
+        report.check('The mount helper is a compiled program', program.read(4) == ELF_MAGIC)
+    subprocess.run([str(installed), '--help'], check=True, stdout=subprocess.DEVNULL)
+    report.check('The mount helper starts', True)
 
 
 def main(argv: list[str] | None = None) -> int:

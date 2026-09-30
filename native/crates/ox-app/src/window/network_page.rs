@@ -14,10 +14,11 @@
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::location::{self, is_smb_location, LocationContext};
+use ox_core::location::{self, is_server_location, LocationContext};
 use ox_core::network::DiscoveredServer;
 use ox_core::places::{NetworkKind, NetworkLocation};
 
+use crate::dialogs::Protocol;
 use crate::icons::{self, Art, ArtImage, Connection, Icon};
 use crate::network::DiscoveryState;
 use crate::places::Places;
@@ -153,7 +154,7 @@ fn server_card(server: &DiscoveredServer, locations: &LocationContext) -> gtk::B
     let art = Art::for_network_location(NetworkKind::Server, &server.label, Connection::Connected);
     let texts = card_texts(&server.label, &locations.display_location(&server.uri));
     let protocol = gtk::Label::builder()
-        .label("SMB · Discovered")
+        .label(format!("{} · Discovered", protocol_name(&server.uri)))
         .xalign(0.0)
         .css_classes(["network-protocol"])
         .build();
@@ -164,6 +165,12 @@ fn server_card(server: &DiscoveredServer, locations: &LocationContext) -> gtk::B
     let card = location_card("drive-card", &server.uri, &content);
     card.add_css_class("discovered-server");
     card
+}
+
+/// The protocol a discovered server is reached with, as its card names it.
+fn protocol_name(uri: &str) -> &'static str {
+    let protocol = location::scheme(uri).and_then(|scheme| Protocol::from_scheme(&scheme));
+    protocol.unwrap_or(Protocol::Smb).short_name()
 }
 
 /// "Discovered servers" with their count, their cards, the notice while
@@ -235,12 +242,12 @@ pub(super) fn render(
 }
 
 impl BrowserWindow {
-    /// Open address: opens the SMB server or share `typed` names, and
-    /// refuses anything else as the Network page's field does.
+    /// Open address: opens the SMB, SFTP, FTP, WebDAV or NFS location
+    /// `typed` names, and refuses anything else as the Network page does.
     pub(super) fn open_server_address(&self, typed: &str) {
         match location::normalise_location(typed, None, &glib::home_dir()) {
-            Ok(uri) if is_smb_location(&uri) => self.navigate_or_report(&uri),
-            Ok(_) => self.show_message("Enter an SMB server or share."),
+            Ok(uri) if is_server_location(&uri) => self.navigate_or_report(&uri),
+            Ok(_) => self.show_message("Enter a network server or shared folder."),
             Err(error) => self.show_message(&error.to_string()),
         }
     }

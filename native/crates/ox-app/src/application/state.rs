@@ -160,10 +160,13 @@ impl AppState {
 }
 
 /// Whether a new window may start in `uri`: a folder on this computer or
-/// on an SMB share, rather than a landing page, a device or another
+/// on a network server, rather than a landing page, a device or another
 /// virtual place (`newWindow` in app.js).
 fn can_start_a_new_window_in(uri: &str) -> bool {
-    matches!(location_kind(uri), LocationKind::Local | LocationKind::Smb)
+    matches!(
+        location_kind(uri),
+        LocationKind::Local | LocationKind::Smb | LocationKind::Remote
+    )
 }
 
 /// The focused browser window, else the most recent one.

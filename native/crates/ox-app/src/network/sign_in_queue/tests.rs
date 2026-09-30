@@ -19,6 +19,7 @@ use ox_core::network::{
 use super::*;
 use crate::dialogs::{NetworkFormDialog, SignInDialog};
 use crate::test_support::harness::{descendants, settle, wait_until};
+use crate::text_size::Step;
 
 /// What `GVfs` asks for on a first sign-in to `nas` (the Python fixture's
 /// flags, `7`): a user name and a password, which the server can save.
@@ -401,4 +402,75 @@ fn connect_as_guest_signs_in_anonymously() {
     assert!(operation.is_anonymous());
     assert_eq!(operation.password_save(), gio::PasswordSave::Never);
     fixture.prompts.finish(&operation, MountOutcome::Failed);
+}
+
+/// Presses `accelerator` in `dialog`, as its shortcut controllers see a
+/// key press.
+fn press_shortcut(dialog: &SignInDialog, accelerator: &str) {
+    let pressed = gtk::ShortcutTrigger::parse_string(accelerator).expect("a valid accelerator");
+    let controllers = dialog.observe_controllers();
+    let shortcut_controllers = (0..controllers.n_items())
+        .filter_map(|position| controllers.item(position))
+        .filter_map(|item| item.downcast::<gtk::ShortcutController>().ok());
+    // A shortcut controller lists its shortcuts as plain objects.
+    let shortcuts: Vec<gtk::Shortcut> = shortcut_controllers
+        .flat_map(|controller| controller.iter::<glib::Object>().flatten().collect::<Vec<_>>())
+        .filter_map(|item| item.downcast::<gtk::Shortcut>().ok())
+        .collect();
+    let matching = shortcuts
+        .iter()
+        .find(|shortcut| shortcut.trigger().is_some_and(|trigger| trigger.equal(&pressed)));
+    let action = matching
+        .and_then(gtk::Shortcut::action)
+        .unwrap_or_else(|| panic!("the dialog handles {accelerator}"));
+    action.activate(gtk::ShortcutActionFlags::empty(), dialog, None);
+}
+
+/// Escape answers Cancel for the shown challenge only, which aborts its
+/// mount.
+///
+/// parity: NET-009
+#[gtk::test]
+fn escape_cancels_the_shown_challenge() {
+    let fixture = PromptsFixture::new();
+    let (operation, replies) = fixture.mount();
+    let dialog = fixture.ask_password(&operation, SIGN_IN_FLAGS);
+
+    press_shortcut(&dialog, "Escape");
+
+    assert_eq!(*replies.borrow(), [gio::MountOperationResult::Aborted]);
+    assert!(fixture.queue.shown_dialog().is_none());
+    fixture.prompts.finish(&operation, MountOutcome::Failed);
+}
+
+/// The text-size keys still reach the window while the dialog is open,
+/// through Map network location when the dialog sits on it; the dialog
+/// stays open.
+///
+/// parity: NET-009
+#[gtk::test]
+fn text_size_keys_reach_the_window_under_the_dialog() {
+    let fixture = PromptsFixture::new();
+    let steps = Rc::new(RefCell::new(Vec::new()));
+    let window_actions = gio::SimpleActionGroup::new();
+    for step in Step::ALL {
+        let action = gio::SimpleAction::new(step.action_name(), None);
+        let recorded = Rc::clone(&steps);
+        action.connect_activate(move |_, _| recorded.borrow_mut().push(step));
+        window_actions.add_action(&action);
+    }
+    fixture.window.insert_action_group("win", Some(&window_actions));
+    let map = NetworkFormDialog::new(&fixture.window, "Map network location", "", "Connect");
+    map.present();
+    let (operation, _) = fixture.mount();
+    let dialog = fixture.ask_password(&operation, SIGN_IN_FLAGS);
+
+    for accelerator in ["<Control>plus", "<Control>minus", "<Control>0"] {
+        press_shortcut(&dialog, accelerator);
+    }
+
+    assert_eq!(*steps.borrow(), Step::ALL);
+    assert!(fixture.queue.shown_dialog().is_some(), "the dialog stays open");
+    fixture.prompts.finish(&operation, MountOutcome::Failed);
+    map.close();
 }

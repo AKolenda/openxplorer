@@ -120,6 +120,8 @@ mod imp {
         pub(super) typed_history: RefCell<Vec<String>>,
         /// The entry's text is being set from the list, not typed.
         pub(super) quiet_change: Cell<bool>,
+        /// The protocols offered under the empty entry (NET-029).
+        pub(super) protocols: OnceCell<gtk::Popover>,
     }
 
     #[glib::object_subclass]
@@ -146,6 +148,10 @@ mod imp {
         fn dispose(&self) {
             if let Some(popover) = self.suggestion_popover.get() {
                 popover.unparent();
+            }
+            // The chooser is parented to the entry, which does not know it.
+            if let Some(protocols) = self.protocols.get() {
+                protocols.unparent();
             }
         }
     }
@@ -178,6 +184,10 @@ impl AddressBar {
         self.add_location_menu();
         imp.entry.set_extra_menu(Some(&address_options_menu()));
         self.add_suggestions();
+        let protocols = super::address_protocols::protocol_chooser(&imp.entry);
+        imp.protocols
+            .set(protocols)
+            .expect("the template is finished once");
     }
 
     /// Scrolls to the last crumb whenever the crumbs or the width change,
@@ -349,6 +359,12 @@ impl AddressBar {
     #[cfg(test)]
     pub(super) fn entry(&self) -> gtk::Entry {
         self.imp().entry.get()
+    }
+
+    /// The protocol chooser, for tests.
+    #[cfg(test)]
+    pub(super) fn protocol_chooser(&self) -> gtk::Popover {
+        self.imp().protocols.get().expect("built with the bar").clone()
     }
 
     /// The folder of the crumb at (`x`, `y`) in the bar, where a drop

@@ -11,7 +11,7 @@
 
 use gtk::prelude::*;
 use gtk::{gdk, glib};
-use ox_core::location::{is_smb_location, is_smb_server};
+use ox_core::location::{is_remote_location, is_smb_location, is_smb_server};
 use ox_core::places::{NetworkKind, NetworkLocation};
 use ox_core::search::Caching;
 
@@ -148,7 +148,8 @@ fn network_entries(location: &NetworkLocation) -> Vec<MenuEntry> {
         network_terminal_item(uri),
     ];
     let is_smb = is_smb_location(uri);
-    let is_share = is_smb && !is_smb_server(uri) && location.kind != NetworkKind::Server;
+    let is_remote = is_remote_location(uri);
+    let is_share = (is_smb || is_remote) && !is_smb_server(uri) && location.kind != NetworkKind::Server;
     if is_share && location.is_saved {
         entries.push(item(
             "Remove saved location",
@@ -169,6 +170,16 @@ fn network_entries(location: &NetworkLocation) -> Vec<MenuEntry> {
             "Sign out of server…",
             Icon::ArrowEject,
             WindowAction::SignOut,
+            uri,
+        ));
+    }
+    // SFTP, FTP, WebDAV and NFS keep no OpenXplorer credentials to forget:
+    // their connection is ended as a mount, as Dolphin and Files do.
+    if is_remote && location.is_connected {
+        entries.push(item(
+            "Disconnect",
+            Icon::ArrowEject,
+            WindowAction::Disconnect,
             uri,
         ));
     }
@@ -343,6 +354,24 @@ mod tests {
         assert_eq!(share_terminal.action, WindowAction::OpenInTerminalOf.into());
         assert_eq!(mount_properties.action, WindowAction::PropertiesOf.into());
         assert!(!labels(&share).contains(&"Properties".to_owned()));
+    }
+
+    /// parity: NET-030
+    #[test]
+    fn a_connected_sftp_folder_can_be_kept_and_disconnected() {
+        let mount = ox_core::places::NetworkMount {
+            uri: "sftp://anna@build/".into(),
+            label: "build".into(),
+            is_mounted: true,
+        };
+        let visited = ox_core::settings::Bookmark {
+            uri: "sftp://anna@build/home/anna".into(),
+            label: String::new(),
+        };
+        let rows = ox_core::places::merge_network_locations(&[], &[mount], &[], &[visited]);
+        let [browsed] = <[NetworkLocation; 1]>::try_from(rows).expect("one row for the server");
+        let menu = labels(&PlaceMenu::Network(browsed));
+        assert_eq!(menu[4..], ["Keep in Network", "Disconnect"]);
     }
 
     /// parity: HOME-005

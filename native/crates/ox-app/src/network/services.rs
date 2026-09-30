@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use gtk::{gio, glib};
 use ox_core::network::{
-    read_stable_smb_mounts, CredentialStore, SecretService, SignOutRegistry, VisitedNetwork,
+    read_stable_smb_mounts, CredentialStore, RecentServers, SecretService, SignOutRegistry, VisitedNetwork,
 };
 use ox_core::places::StableMount;
 use ox_core::settings::Bookmark;
@@ -59,6 +59,17 @@ fn credential_store() -> CredentialStore {
         CredentialStore::memory_only()
     } else {
         CredentialStore::new(Arc::new(SecretService))
+    }
+}
+
+/// The recent-servers lists GTK's Other Locations shares (NET-019).
+/// Tests get none, so they never read or write the GTK list of the
+/// session they run in.
+pub(crate) fn user_recent_servers() -> Option<RecentServers> {
+    if cfg!(test) {
+        None
+    } else {
+        Some(RecentServers::for_user())
     }
 }
 

@@ -4,7 +4,8 @@
 //!
 //! Ports `mount_plan` in `desktop/mount_support.py`. Planning writes
 //! nothing and mounts nothing; the plan's command runs the administrator
-//! helper (`desktop/mount_share.py`) in the user's own terminal.
+//! helper (`openxplorer-mount-share`, in `mount_helper`)
+//! in the user's own terminal.
 
 use std::path::PathBuf;
 
@@ -72,6 +73,16 @@ pub struct DesktopUser {
     pub uid: u32,
     /// The primary group id.
     pub gid: u32,
+}
+
+impl DesktopUser {
+    /// The user running the app.
+    pub fn current() -> Self {
+        Self {
+            uid: rustix::process::getuid().as_raw(),
+            gid: rustix::process::getgid().as_raw(),
+        }
+    }
 }
 
 /// Plans an on-demand mount of `address` for `user`.

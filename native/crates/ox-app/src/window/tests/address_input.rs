@@ -13,6 +13,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
 
 use super::archives::{archive_browser, fixture_with_zip};
+use super::support::middle_click_at;
 use crate::locations::Page;
 use crate::test_support::harness::{application, descendants, wait_for, wait_until, Fixture, TestWindow};
 use crate::window::address_bar::AddressMode;
@@ -148,7 +149,7 @@ fn a_middle_clicked_crumb_opens_in_a_background_tab() {
     let crumbs = test.window.address_bar().crumb_buttons();
     let parent = &crumbs[crumbs.len() - 2];
 
-    click_gesture(parent, gdk::BUTTON_MIDDLE).emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &1.0_f64]);
+    middle_click_at(parent, (1.0, 1.0));
 
     assert_eq!(test.window.tab_count(), 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
@@ -506,7 +507,7 @@ fn a_typed_web_address_opens_in_the_browser_and_other_schemes_are_refused() {
     );
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
     test.activate("location", None);
-    test.window.submit_address("ftp://example.org/");
+    test.window.submit_address("gopher://example.org/");
     assert_eq!(
         test.window.shown_message().as_str(),
         "Only local paths, smb:// locations and connected devices are supported in this build."
@@ -540,10 +541,9 @@ fn a_middle_click_on_blank_address_space_opens_the_selected_text() {
     let test = TestWindow::open(&fixture.uri());
     let address = test.window.address_bar();
     let primary = WidgetExt::display(address).primary_clipboard();
-    let middle = click_gesture(address, gdk::BUTTON_MIDDLE);
     primary.set_text("Documents");
 
-    middle.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &1.0_f64]);
+    middle_click_at(address, (1.0, 1.0));
 
     wait_until("the selected folder", || {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))
@@ -552,7 +552,7 @@ fn a_middle_click_on_blank_address_space_opens_the_selected_text() {
     test.window.navigate(&fixture.uri()).expect("valid folder");
     test.wait_for_listing("the fixture");
     primary.set_text(&fixture.path("Documents/Letter.txt").display().to_string());
-    middle.emit_by_name::<()>("released", &[&1_i32, &1.0_f64, &1.0_f64]);
+    middle_click_at(address, (1.0, 1.0));
     wait_until("the file selected in its folder", || {
         test.window.folder_pane().model().selected_uris() == [fixture.uri_of("Documents/Letter.txt")]
     });

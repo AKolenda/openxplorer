@@ -88,7 +88,12 @@ def check_dependencies(report: Report, fields: dict[str, str], channel: Channel)
                      ('gvfs-backends', 'gvfs-fuse', 'gnome-keyring', 'xdg-utils', 'terminal')))
     if channel is Channel.STABLE:
         report.check('Updates and the mount helper have their programs recommended',
-                     all(name in recommends for name in ('pkexec', 'python3', 'cifs-utils')))
+                     all(name in recommends for name in ('pkexec', 'cifs-utils')))
+    report.check('Python is neither required nor recommended',
+                 not any(name.strip().startswith('python')
+                         for field in (depends, recommends)
+                         for alternatives in field.split(',')
+                         for name in alternatives.split('|')))
 
 
 def check_payload_safety(report: Report, members: dict[str, tarfile.TarInfo]) -> None:

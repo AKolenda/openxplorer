@@ -53,7 +53,7 @@ impl LocationContext {
     /// `networkLocation`.
     pub fn is_network_location(&self, uri: &str) -> bool {
         match location_kind(uri) {
-            LocationKind::Smb => true,
+            LocationKind::Smb | LocationKind::Remote => true,
             LocationKind::Local => self.is_on_network_mount(uri),
             LocationKind::Device | LocationKind::Other => false,
         }

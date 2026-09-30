@@ -9,13 +9,14 @@
 //! [`super::network_sign_out`], the device commands in
 //! [`super::mounting`].
 
-use gtk::glib;
 use gtk::prelude::*;
+use gtk::{gio, glib};
 use ox_core::network::{connect_share, ConnectedShare};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
 use crate::devices::Removal;
 use crate::dialogs::{map_network_dialog, MapRequest, NetworkFormDialog, ShareKeeping};
+use crate::network::user_recent_servers;
 use crate::places::network_row;
 use crate::settings_store::Change;
 
@@ -32,6 +33,25 @@ fn share_change(action: BookmarkAction, uri: String, label: String) -> Change {
         let request = BookmarkRequest::new(uri, label);
         settings.bookmark(action, BookmarkKind::Share, &request)
     })
+}
+
+/// Adds a mapped folder to the recent servers GTK's Other Locations and
+/// Files suggest (NET-019), off the main thread. A failure only costs the
+/// suggestion.
+fn add_recent_server(share: &ConnectedShare) {
+    let Some(servers) = user_recent_servers() else {
+        return;
+    };
+    let (uri, label) = (share.uri.clone(), share.label.clone());
+    glib::spawn_future_local(async move {
+        let added = gio::spawn_blocking(move || servers.add(&uri, &label)).await;
+        if let Ok(Err(error)) = added {
+            glib::g_warning!(
+                ox_core::LOG_DOMAIN,
+                "Could not update the recent servers: {error}"
+            );
+        }
+    });
 }
 
 impl BrowserWindow {
@@ -96,16 +116,25 @@ impl BrowserWindow {
         });
     }
 
-    /// The share is connected: lists it under Network, saves it when the
-    /// user asked, then opens it (`after_connect`). A save that fails
-    /// keeps the dialog open with the reason.
-    fn keep_mapped_share(&self, dialog: &NetworkFormDialog, share: ConnectedShare, keeping: ShareKeeping) {
+    /// The share is connected, and its mount resumed indexing its server:
+    /// lists it under Network, saves it when the user asked, then opens it
+    /// (`after_connect`). A save that fails keeps the dialog open with the
+    /// reason.
+    pub(super) fn keep_mapped_share(
+        &self,
+        dialog: &NetworkFormDialog,
+        share: ConnectedShare,
+        keeping: ShareKeeping,
+    ) {
         self.context().remember_network(&share.uri);
         if keeping == ShareKeeping::ThisSessionOnly {
             dialog.finish();
             self.navigate_or_report(&share.uri);
             return;
         }
+        // A share kept in the sidebar is offered to Files and the GTK file
+        // chooser too; one for this session only leaves no record.
+        add_recent_server(&share);
         let uri = share.uri.clone();
         let change = share_change(BookmarkAction::Add, share.uri, share.label);
         self.context().change_settings(

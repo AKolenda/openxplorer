@@ -24,6 +24,24 @@ const UNSAFE_URL_CHARACTERS: [char; 3] = ['\t', '\r', '\n'];
 /// (`mtp://[usb:001,002]/`), which ordinary URL parsers reject.
 const DEVICE_SCHEMES: [&str; 3] = ["mtp", "gphoto2", "afc"];
 
+/// The `GVfs` network schemes browsed besides SMB, in their canonical
+/// spelling: SSH (SFTP), FTP, FTP over TLS, WebDAV, WebDAV over HTTPS and
+/// NFS. The aliases users type (`ssh`, `webdav`, `webdavs`) are
+/// canonicalised to these by [`canonical_remote_scheme`].
+pub const REMOTE_SCHEMES: [&str; 6] = ["sftp", "ftp", "ftps", "dav", "davs", "nfs"];
+
+/// The canonical scheme of a remote-protocol alias: `ssh` is `sftp`,
+/// `webdav` is `dav` and `webdavs` is `davs`, as Dolphin and Files accept
+/// them. Other schemes are returned unchanged.
+pub fn canonical_remote_scheme(scheme: &str) -> &str {
+    match scheme {
+        "ssh" => "sftp",
+        "webdav" => "dav",
+        "webdavs" => "davs",
+        other => other,
+    }
+}
+
 /// What kind of place the scheme of a location names; see
 /// [`location_kind`](super::location_kind).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +52,9 @@ pub enum LocationKind {
     Smb,
     /// `mtp:`, `gphoto2:` or `afc:`: a phone, camera or iOS device.
     Device,
+    /// `sftp:`, `ftp:`, `ftps:`, `dav:`, `davs:` or `nfs:`: a server
+    /// reached over another network protocol (NET-029).
+    Remote,
     /// Any other scheme, or a plain path without one.
     Other,
 }
@@ -45,6 +66,7 @@ impl LocationKind {
             "file" => Self::Local,
             "smb" => Self::Smb,
             _ if DEVICE_SCHEMES.contains(&scheme) => Self::Device,
+            _ if REMOTE_SCHEMES.contains(&canonical_remote_scheme(scheme)) => Self::Remote,
             _ => Self::Other,
         }
     }
@@ -126,6 +148,11 @@ impl LocationParts {
     /// True for `smb:` locations.
     pub(crate) fn is_smb(&self) -> bool {
         self.kind() == LocationKind::Smb
+    }
+
+    /// True for SFTP, FTP, WebDAV and NFS locations.
+    pub(crate) fn is_remote(&self) -> bool {
+        self.kind() == LocationKind::Remote
     }
 
     /// True for phones, cameras and iOS devices: `mtp:`, `gphoto2:` and
