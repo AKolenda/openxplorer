@@ -9,6 +9,7 @@ use gtk::subclass::prelude::*;
 use crate::locations::Page;
 use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
 use crate::window::session::Tab;
+use crate::window::tests::file_ops_support::open_dialog;
 
 fn can_go_back(test: &TestWindow) -> bool {
     let session = test.window.imp().session.borrow();
@@ -103,4 +104,59 @@ fn command_line_locations_open_in_the_current_tab_then_in_new_tabs() {
         "the first location keeps the tab's history"
     );
     assert_eq!(test.context.recorded_launches(), [fixture.uri_of("Notes 2.txt")]);
+}
+
+/// The URIs of `test`'s tabs, left to right.
+fn tab_uris(test: &TestWindow) -> Vec<String> {
+    let session = test.window.imp().session.borrow();
+    session.tabs().iter().map(|tab| tab.uri().to_owned()).collect()
+}
+
+/// An item is read again when it is opened: one deleted since the
+/// folder was listed says why in "Could not open the item".
+///
+/// parity: OPEN-001
+#[gtk::test]
+fn an_item_is_read_again_when_opened_and_a_failure_is_a_dialog() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let position = test.position_of("Notes 2.txt");
+    fs::remove_file(fixture.path("Notes 2.txt")).expect("the fixture file can be removed");
+
+    test.window.activate_item(position);
+
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.title_text(), "Could not open the item");
+    assert!(test.context.recorded_launches().is_empty(), "nothing opened");
+    dialog.press("OK");
+}
+
+/// A folder opened just before another tab came to the front opens in
+/// the tab it was opened from; one whose tab moved on is dropped.
+///
+/// parity: OPEN-004
+#[gtk::test]
+fn an_opened_folder_stays_with_the_tab_that_asked_for_it() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.activate_item(test.position_of("Documents"));
+    test.window
+        .add_tab(&fixture.uri())
+        .expect("the fixture is a folder");
+    wait_until("the first tab to open Documents", || {
+        tab_uris(&test)[0] == fixture.uri_of("Documents")
+    });
+    assert_eq!(tab_uris(&test)[1], fixture.uri(), "the tab in front stays");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+
+    test.wait_for_listing("the second tab");
+    test.window.activate_item(test.position_of("Documents"));
+    test.window.navigate_or_report(&fixture.uri_of("Documents"));
+    test.window.navigate_or_report(&fixture.uri());
+    wait_for(std::time::Duration::from_millis(300));
+    assert_eq!(
+        tab_uris(&test)[1],
+        fixture.uri(),
+        "a tab that moved on drops the result"
+    );
 }
