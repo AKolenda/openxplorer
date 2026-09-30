@@ -45,7 +45,15 @@ case "$format" in
         # would; rustup's only downloads the vendored crates.
         PATH="$HOME/.cargo/bin:$PATH" python3 native/tools/source_archive.py --vendor \
             --output-directory "$HOME/rpmbuild/SOURCES"
-        rpmbuild -bb --define "app_id $app_id" native/packaging/rpm/openxplorer.spec
+        # Fedora tags the release with its version (.fc44); openSUSE sets no
+        # tag, so its RPM gets the distribution's ID (.opensuse_tumbleweed)
+        # and the release's two RPMs have names that tell them apart.
+        dist=$(rpm --eval '%{?dist}')
+        if [ -z "$dist" ]; then
+            dist=.$(. /etc/os-release && printf '%s' "$ID" | tr -c 'a-z0-9' '_')
+        fi
+        rpmbuild -bb --define "app_id $app_id" --define "dist $dist" \
+            native/packaging/rpm/openxplorer.spec
         package=$(find "$HOME/rpmbuild/RPMS" -name "$package_name-[0-9]*.rpm" | head -n 1)
         cp "$package" "$output/"
         rpm2cpio "$package" | (cd "$work/tree" && cpio -idm --quiet)

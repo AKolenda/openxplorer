@@ -42,7 +42,7 @@ CARGO_PROGRAM = 'openxplorer-native'
 # desktop/updater.py): three numbers without leading zeros.
 RELEASE_VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 
-MAINTAINER = 'OpenXplorer contributors <maintainer@example.invalid>'
+MAINTAINER = 'OpenXplorer contributors <openxplorer@users.noreply.github.com>'
 HOMEPAGE = 'https://openxplorer.app'
 
 # The dependency grouping native/packaging/README.md describes.

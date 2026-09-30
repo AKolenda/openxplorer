@@ -4,8 +4,9 @@
 tools/release.py chooses the files of the corresponding-source archive. These
 tests build throwaway repository trees and check which files source_files()
 selects, that it never follows links or reads special files, and that its
-policy agrees with .gitignore. They also check that a failed release ends in a
-one-line message. Run them from the repository root:
+policy agrees with .gitignore. They also check which CI-built packages a
+release stages and checksums, and that a failed release ends in a one-line
+message. Run them from the repository root:
 
     python3 -m unittest discover -s tests -p 'test_release_source.py'
 """
@@ -225,6 +226,97 @@ class SourceArchiveTests(unittest.TestCase):
             with self.subTest(path=name):
                 self.assertEqual(self.git_ignores(name), expected)
                 self.assertEqual(name not in self.selected(), expected)
+
+
+class ReleasePackageTests(unittest.TestCase):
+    """--packages stages every stable package of the release and checksums it.
+
+    The CI build's folder is simulated; building and verifying the Debian
+    package, the source archive and the preview are replaced, and dist/ is a
+    temporary folder, so nothing in the repository changes.
+    """
+
+    VERSION = '2.0.0'
+    STABLE_PACKAGES = [
+        'openxplorer_2.0.0_all.deb',
+        'io.winspace.Development.flatpak',
+        'openxplorer-2.0.0-1-x86_64.pkg.tar.zst',
+        'openxplorer-2.0.0-1.fc44.x86_64.rpm',
+        'openxplorer-2.0.0-1.opensuse_tumbleweed.x86_64.rpm',
+    ]
+    OTHER_FILES = [
+        # The preview's packages and bundle.
+        'openxplorer-native_2.0.0_amd64.deb',
+        'openxplorer-native-2.0.0-1.fc44.x86_64.rpm',
+        'openxplorer-native-2.0.0-1-x86_64.pkg.tar.zst',
+        'io.winspace.Development.Native.flatpak',
+        # Packages of another version.
+        'openxplorer-1.9.0-1.fc44.x86_64.rpm',
+        'openxplorer-2.0.1-1-x86_64.pkg.tar.zst',
+    ]
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory(prefix='openxplorer-release-test-')
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        self.packages = root / 'packages'
+        self.packages.mkdir()
+        self.dist = root / 'dist'
+        replacements: dict[str, Any] = {
+            'DIST': self.dist,
+            'TEST_RESULTS': root / 'test-results',
+            'DESIGNS': root / 'designs',
+            'release_version': lambda: self.VERSION,
+            'remove_website_downloads': lambda: None,
+            'verify_debian_package': lambda package: None,
+            'write_source_archive': lambda archive: archive.write_bytes(b'source'),
+            'publish_preview': lambda: None,
+        }
+        for name, value in replacements.items():
+            patcher = patch.object(release, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def build(self, names: list[str]) -> dict[str, str]:
+        """Build a release from a CI folder holding names; return SHA256SUMS by file name."""
+        for name in names:
+            (self.packages / name).write_bytes(name.encode())
+        release.build_release(release.parse_arguments(['--packages', str(self.packages)]))
+        checksums = {}
+        for line in (self.dist / 'SHA256SUMS').read_text().splitlines():
+            digest, name = line.split('  ')
+            checksums[name] = digest
+        return checksums
+
+    def test_every_stable_package_is_staged_and_checksummed(self) -> None:
+        """The .deb, both RPMs, the Arch package and the Flatpak go into dist/ and SHA256SUMS."""
+        checksums = self.build(self.STABLE_PACKAGES + self.OTHER_FILES)
+
+        source = f'openxplorer-{self.VERSION}-source.zip'
+        self.assertEqual(sorted(checksums), sorted([*self.STABLE_PACKAGES, source]))
+        for name, digest in checksums.items():
+            with self.subTest(name=name):
+                self.assertEqual(digest, release.sha256_hex(self.dist / name))
+
+    def test_preview_packages_and_other_versions_stay_out(self) -> None:
+        """Only the stable app of the release's version is published."""
+        self.build(self.STABLE_PACKAGES + self.OTHER_FILES)
+
+        for name in self.OTHER_FILES:
+            with self.subTest(name=name):
+                self.assertFalse((self.dist / name).exists())
+
+    def test_the_debian_package_alone_is_a_release(self) -> None:
+        """RPM and Arch builds that failed leave the release with the .deb and the source."""
+        checksums = self.build(['openxplorer_2.0.0_all.deb'])
+
+        self.assertEqual(sorted(checksums),
+                         ['openxplorer-2.0.0-source.zip', 'openxplorer_2.0.0_all.deb'])
+
+    def test_a_missing_debian_package_stops_the_release(self) -> None:
+        """The 1.1.x updater needs the .deb, so a release without it is refused."""
+        with self.assertRaises(FileNotFoundError):
+            self.build(self.STABLE_PACKAGES[1:])
 
 
 class ReleaseFailureTests(unittest.TestCase):

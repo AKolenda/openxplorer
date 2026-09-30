@@ -87,9 +87,12 @@ FLATPAK_REMOTE = 'https://dl.flathub.org/repo/flathub.flatpakrepo'
 FLATPAK_WORK = Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache') / \
     'openxplorer-flatpak-build'
 # The file names of the release's packages besides the Debian one, as the
-# RPM spec, the PKGBUILD and the Flatpak manifest name them. The preview's
-# names (openxplorer-native..., ...Development.Native.flatpak) never match.
-EXTRA_PACKAGE_PATTERNS = ('openxplorer-[0-9]*.rpm', 'openxplorer-[0-9]*.pkg.tar.zst',
+# RPM spec, the PKGBUILD and the Flatpak manifest name them for the version
+# in {version}: the Fedora and openSUSE RPMs, which differ in their
+# distribution tag (.fc44, .opensuse_tumbleweed), the Arch package and the
+# Flatpak bundle. The preview's names (openxplorer-native...,
+# ...Development.Native.flatpak) and packages of another version never match.
+EXTRA_PACKAGE_PATTERNS = ('openxplorer-{version}-*.rpm', 'openxplorer-{version}-*.pkg.tar.zst',
                           FLATPAK_BUNDLE)
 # Suffixes of the artifacts an earlier build left in dist/.
 ARTIFACT_SUFFIXES = ('.zip', '.deb', '.rpm', '.zst', '.flatpak')
@@ -250,13 +253,14 @@ def verify_debian_package(package: Path) -> None:
     report.write_text(result.stdout, encoding='utf-8')
 
 
-def copy_extra_packages(packages: Path | None) -> list[Path]:
+def copy_extra_packages(version: str, packages: Path | None) -> list[Path]:
     """Copy the release's RPMs, Arch packages and Flatpak bundle from packages into dist/."""
     if packages is None:
         return []
+    patterns = [pattern.format(version=version) for pattern in EXTRA_PACKAGE_PATTERNS]
     copied = []
     for path in sorted(packages.iterdir()):
-        wanted = any(fnmatchcase(path.name, pattern) for pattern in EXTRA_PACKAGE_PATTERNS)
+        wanted = any(fnmatchcase(path.name, pattern) for pattern in patterns)
         if wanted and path.is_file():
             shutil.copyfile(path, DIST / path.name)
             copied.append(DIST / path.name)
@@ -345,7 +349,7 @@ def build_release(arguments: argparse.Namespace) -> None:
     prepare_output_directories()
     package = obtain_debian_package(version, packages)
     verify_debian_package(package)
-    artifacts = [package, *copy_extra_packages(packages)]
+    artifacts = [package, *copy_extra_packages(version, packages)]
     if arguments.flatpak:
         artifacts = [path for path in artifacts if path.name != FLATPAK_BUNDLE]
         artifacts.append(build_flatpak_bundle(arguments.flatpak_work))

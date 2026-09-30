@@ -113,8 +113,8 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
-* Mon Sep 28 2026 OpenXplorer contributors <maintainer@example.invalid> - 2.0.0-1
+* Mon Sep 28 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.0-1
 - OpenXplorer 2.0.0: the native GTK 4 app replaces the Python app.
 
-* Mon Sep 28 2026 OpenXplorer contributors <maintainer@example.invalid> - 0.1.0-1
+* Mon Sep 28 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 0.1.0-1
 - First packaged native preview.
