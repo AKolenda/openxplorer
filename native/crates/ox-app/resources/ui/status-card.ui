@@ -22,7 +22,10 @@
           <class name="status-badge"/>
         </style>
         <child>
+          <!-- Expands to the whole badge so it sits in its centre. -->
           <object class="GtkImage" id="glyph">
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
             <property name="halign">center</property>
             <property name="valign">center</property>
             <property name="accessible-role">presentation</property>

@@ -124,7 +124,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     follow_cache_status(page, &card);
     indexing.append_group(&folders_group(page));
     indexing.append_group(&options_group(page));
-    indexing.append_text(&parts::note(Icon::ShieldLock, PRIVACY_NOTE));
+    indexing.append_text(&parts::note(Icon::Info, PRIVACY_NOTE));
     indexing.append_group(&folder_sizes_group(page));
     indexing
 }
