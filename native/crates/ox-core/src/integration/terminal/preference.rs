@@ -58,7 +58,8 @@ pub fn desktop_terminal(config: &DesktopTerminalConfig) -> Option<TerminalKind> 
     listed_terminal(config).or_else(gnome_terminal)
 }
 
-/// The first known terminal of the first `xdg-terminals.list` found.
+/// The first known terminal of the first `xdg-terminals.list` that names
+/// one; a list naming only other terminals leaves the choice to the next.
 fn listed_terminal(config: &DesktopTerminalConfig) -> Option<TerminalKind> {
     let names = config
         .desktops
@@ -70,8 +71,11 @@ fn listed_terminal(config: &DesktopTerminalConfig) -> Option<TerminalKind> {
         .config_dirs
         .iter()
         .flat_map(|folder| names.iter().map(move |name| folder.join(name)))
-        .find_map(|path| read_list(&path))
-        .and_then(|entries| entries.iter().find_map(|entry| kind_of_desktop_entry(entry)))
+        .find_map(|path| {
+            read_list(&path)?
+                .iter()
+                .find_map(|entry| kind_of_desktop_entry(entry))
+        })
 }
 
 /// The entries of the list at `path`, or `None` when there is none.
@@ -84,7 +88,7 @@ fn read_list(path: &Path) -> Option<Vec<String>> {
     let entries = text
         .lines()
         .map(str::trim)
-        // A leading + or - marks an entry as added or excluded; `/` starts
+        // A leading + or - marks an entry as added or excluded; `:` starts
         // an action, such as `org.gnome.Terminal.desktop:new-window`.
         .filter(|line| !line.is_empty() && !line.starts_with('#') && !line.starts_with('-'))
         .map(|line| line.trim_start_matches('+'))
@@ -154,5 +158,12 @@ mod tests {
         assert_eq!(listed_terminal(&gnome), Some(TerminalKind::Console));
         assert_eq!(listed_terminal(&other), Some(TerminalKind::GnomeTerminal));
         assert_eq!(listed_terminal(&config(&folder.path().join("none"), &[])), None);
+
+        write(&folder.path().join("user/xdg-terminals.list"), "kitty.desktop\n");
+        assert_eq!(
+            listed_terminal(&other),
+            Some(TerminalKind::GnomeTerminal),
+            "a list of unknown terminals leaves the choice to the next"
+        );
     }
 }

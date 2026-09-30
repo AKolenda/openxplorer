@@ -12,7 +12,6 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::{self, normalise_navigation, parent_location, LocationError, VirtualPlace};
 
-use crate::app_context::{add_to_desktop_history, FOLDER_CONTENT_TYPE};
 use crate::locations::{self, Page};
 
 use super::loading::LoadMode;
@@ -120,11 +119,6 @@ impl BrowserWindow {
     /// folder stays.
     pub(super) fn navigate(&self, address: &str) -> Result<(), LocationError> {
         let uri = self.resolve_address(address)?;
-        // Folders on disk and on shares join the desktop's recent list;
-        // the landing pages and the Recycle Bin are not places to reopen.
-        if uri.starts_with("file://") || uri.starts_with("smb://") {
-            add_to_desktop_history(&uri, FOLDER_CONTENT_TYPE);
-        }
         let Some(id) = self.push_location(&uri) else {
             return self.add_tab(&uri);
         };

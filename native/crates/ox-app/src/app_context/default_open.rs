@@ -19,7 +19,7 @@ use gtk::prelude::*;
 #[cfg(test)]
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
-use ox_core::integration::{DefaultOpener, Launcher, OpenTarget, PreparedOpen};
+use ox_core::integration::{DefaultOpener, Launcher, OpenTarget, PreparedOpen, UNKNOWN_CONTENT_TYPE};
 use ox_core::network::local_path;
 use ox_core::transfer::Cancellation;
 
@@ -36,13 +36,6 @@ impl AppContext {
     /// a local path, or the application did not start.
     pub(crate) async fn open_file(&self, entry: &Entry, window: &gtk::Window) -> Result<(), String> {
         let uri = entry.navigation_uri().to_owned();
-        // Test safety: tests record the file instead of starting a real
-        // application on the developer's desktop.
-        #[cfg(test)]
-        if let Some(launches) = self.imp().recorded_launches.borrow_mut().as_mut() {
-            launches.push(uri);
-            return Ok(());
-        }
         self.previous_versions()
             .check_writable(&uri)
             .map_err(|refusal| refusal.to_string())?;
@@ -51,6 +44,16 @@ impl AppContext {
             .prepare_in_background(uri, Cancellation::new())
             .await
             .map_err(|error| error.to_string())?;
+        // Test safety: tests record the file the application would get
+        // instead of starting a real application on the developer's desktop.
+        #[cfg(test)]
+        if let Some(launches) = self.imp().recorded_launches.borrow_mut().as_mut() {
+            launches.push(match &prepared.target {
+                OpenTarget::LocalPath(path) => ox_core::location::file_uri(path),
+                OpenTarget::Uri(uri) => uri.clone(),
+            });
+            return Ok(());
+        }
         launch(&prepared, window).await?;
         let content_type = prepared.entry.content_type.as_deref();
         add_to_desktop_history(&prepared.entry.uri, content_type.unwrap_or(UNKNOWN_CONTENT_TYPE));
@@ -58,9 +61,6 @@ impl AppContext {
         Ok(())
     }
 }
-
-/// The content type of a file GIO could not identify.
-const UNKNOWN_CONTENT_TYPE: &str = "application/octet-stream";
 
 /// The content type of a folder.
 pub(crate) const FOLDER_CONTENT_TYPE: &str = "inode/directory";
@@ -88,10 +88,8 @@ async fn launch(prepared: &PreparedOpen, window: &gtk::Window) -> Result<(), Str
     };
     match &prepared.launcher {
         Launcher::Application { id, .. } => {
-            let application = gio::AppInfo::all()
-                .into_iter()
-                .find(|application| application.id().as_deref() == Some(id.as_str()))
-                .ok_or_else(|| NOT_INSTALLED.to_owned())?;
+            let application =
+                crate::integration::installed_application(id).ok_or_else(|| NOT_INSTALLED.to_owned())?;
             let context = WidgetExt::display(window).app_launch_context();
             application
                 .launch(&[file], Some(&context))

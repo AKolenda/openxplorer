@@ -11515,7 +11515,7 @@ bridge = ["open", "activateItem"]
 dolphin = "KIO::OpenUrlJob with KApplicationTrader preferred service"
 gnome = "g_app_info_get_default_for_type; g_app_info_get_default_for_type / get_all_for_type (shared-mime-info + mimeapps.list), g_app_info_launch with GdkAppLaunchContext"
 native = "done"
-native_note = "Files open through ox-core's DefaultOpener (native/crates/ox-app/src/app_context/default_open.rs): the application is chosen by content type, OpenXplorer's own IDs are skipped, and its errors are the Python messages; a file inside a snapshot is refused first. Tests: native/crates/ox-core/tests/integration_opening/activation.rs and default_opener.rs; the UI path in native/crates/ox-app/src/window/tests/opening.rs."
+native_note = "Files open through ox-core's DefaultOpener (native/crates/ox-app/src/app_context/default_open.rs): the application is chosen by content type, OpenXplorer's own IDs are skipped, and its errors are the Python messages; a file inside a snapshot is refused first. Tests: native/crates/ox-core/tests/integration_opening/activation.rs and default_opener.rs; the app path in native/crates/ox-app/src/window/tests/opening.rs (a_file_in_a_previous_version_is_refused_and_not_opened, and the tests that open a file, which record the file DefaultOpener prepared in place of the launch)."
 
 [[feature]]
 id = "OPEN-006"
@@ -11570,7 +11570,7 @@ python_tests = [
 bridge = ["activateItem", "open"]
 dolphin = "OpenUrlJob::setShowOpenOrExecuteDialog(true)"
 native = "done"
-native_note = "Files open only through the default opener, which launches the content type's viewer or editor and never executes the file (native/crates/ox-app/src/app_context/default_open.rs). Test: native/crates/ox-core/tests/integration_opening/default_opener.rs (an_executable_script_opens_in_its_editor_and_is_never_run)."
+native_note = "Files open only through the default opener, which launches the content type's viewer or editor and never executes the file (native/crates/ox-app/src/app_context/default_open.rs). Tests: native/crates/ox-core/tests/integration_opening/default_opener.rs (an_executable_script_opens_in_its_editor_and_is_never_run), native/crates/ox-app/src/window/tests/opening.rs (a_file_in_a_previous_version_is_refused_and_not_opened: a file in a snapshot is never handed to an application)."
 
 [[feature]]
 id = "OPEN-008"
@@ -11622,7 +11622,7 @@ bridge = ["activateItem", "open"]
 dolphin = "n/a in Dolphin (Open With dialog only)"
 gnome = "org.freedesktop.PackageKit.Modify2.InstallMimeTypes (Nautilus install-mime-activation=true) or gnome-software --search"
 native = "done"
-native_note = "When no application opens a file's type, 'Could not open the item' shows 'No application is installed for this file type. Use Open with… to choose one.' and, while GNOME Software is installed, a 'Find an app in Software' button that asks Software over D-Bus (its search action) to search for the content type; no command line is built (native/crates/ox-app/src/window/software_search.rs, activation.rs). Tests: native/crates/ox-app/src/window/software_search.rs (only_a_type_without_an_application_is_searched_for), native/crates/ox-app/src/window/tests/opening.rs (a_file_without_an_application_offers_a_search_in_software)."
+native_note = "When no application opens a file's type, 'Could not open the item' shows 'No application is installed for this file type. Use Open with… to choose one.' and, while GNOME Software is installed, a 'Find an app in Software' button that asks Software over D-Bus (its search action) to search for the content type; no command line is built (native/crates/ox-app/src/window/software_search.rs, activation.rs). Tests: native/crates/ox-app/src/window/software_search.rs (only_a_type_without_an_application_is_searched_for), native/crates/ox-app/src/window/tests/opening.rs (a_file_without_an_application_offers_a_search_in_software: with a test Software entry and a stand-in for Software on the private bus, pressing the button sends ActivateAction('search', [content type]))."
 
 [[feature]]
 id = "OPEN-011"
@@ -12016,7 +12016,7 @@ bridge = ["openWith"]
 dolphin = "compare_files (Kompare)"
 gnome = "Meld (org.gnome.Meld) when installed"
 native = "done"
-native_note = "The item menu offers 'Compare files' when exactly two files are selected and Meld, Kompare, KDiff3 or Diffuse is installed; win.compare-files hands both files to it through GIO, or says 'No file comparison tool is installed. Install Meld to compare files.' (native/crates/ox-app/src/integration/tools.rs, window/integration_actions.rs). Tests: native/crates/ox-app/src/window/context_menu/entries.rs (two_files_with_a_comparison_tool_offer_compare_files), native/crates/ox-app/src/window/tests/opening.rs (compare_files_hands_two_files_to_the_comparison_tool)."
+native_note = "The item menu offers 'Compare files' when exactly two files are selected and Meld, Kompare, KDiff3 or Diffuse is installed; win.compare-files hands both files to it through GIO, or says 'No file comparison tool is installed. Install Meld to compare files.' (native/crates/ox-app/src/integration/tools.rs, window/integration_actions.rs). Tests: native/crates/ox-app/src/window/context_menu/entries.rs (two_files_with_a_comparison_tool_offer_compare_files), native/crates/ox-app/src/window/tests/opening.rs (compare_files_hands_two_files_to_the_comparison_tool, with a test Meld entry in the private data folder)."
 
 [[feature]]
 id = "OPEN-024"
@@ -12034,7 +12034,7 @@ python_tests = []
 bridge = ["open"]
 dolphin = "open_preferred_search_tool: Ctrl+Shift+F"
 native = "done"
-native_note = "Ctrl+Shift+F (win.search-tool) opens the first installed of KFind, Catfish and the GNOME search tool at the folder shown, or says 'No search tool is installed.' (native/crates/ox-app/src/integration/tools.rs). Test: native/crates/ox-app/src/window/tests/opening.rs (ctrl_shift_f_opens_the_search_tool_at_the_folder)."
+native_note = "Ctrl+Shift+F (win.search-tool) opens the first installed of KFind, Catfish and the GNOME search tool at the folder shown, or says 'No search tool is installed.' (native/crates/ox-app/src/integration/tools.rs). Test: native/crates/ox-app/src/window/tests/opening.rs (ctrl_shift_f_opens_the_search_tool_at_the_folder, with a test KFind entry in the private data folder)."
 
 [[feature]]
 id = "OPEN-025"
@@ -12056,7 +12056,7 @@ bridge = ["activateItem", "open", "openWith"]
 dolphin = "KActivities ResourceInstance / KRecentDocument; KActivities / KRecentDocument::add"
 gnome = "Gtk.RecentManager.add_item (~/.local/share/recently-used.xbel); gtk_recent_manager_add_full"
 native = "done"
-native_note = "Opened files and folders visited on disk or on shares are added to the desktop's recently used list (gtk::RecentManager), so the file chooser's Recent and other applications show them; the app's own 30 recent files are kept as before (native/crates/ox-app/src/app_context/default_open.rs, window/navigation.rs). Test: native/crates/ox-app/src/app_context/default_open.rs (an_opened_file_joins_the_desktop_recent_list). Existing OpenXplorer part is protected by HOME-011."
+native_note = "Opened files, and folders on disk or on shares once they are visited and listed, are added to the desktop's recently used list (gtk::RecentManager), so the file chooser's Recent and other applications show them; a mistyped or unreadable folder is not; the app's own 30 recent files are kept as before (native/crates/ox-app/src/app_context/default_open.rs, window/loading.rs). Test: native/crates/ox-app/src/app_context/default_open.rs (an_opened_file_joins_the_desktop_recent_list). Existing OpenXplorer part is protected by HOME-011."
 
 [[feature]]
 id = "OPEN-026"
@@ -13913,7 +13913,7 @@ python_tests = [
 bridge = ["preferences"]
 dolphin = "settingsChanged → refreshViews"
 native = "done"
-native_note = "A preference change reaches every window through the shared AppContext. Tests: native/crates/ox-app/tests/browsing.rs (browsing_preserves_native_models_and_tab_lifetimes: the theme follows in a second window), native/crates/ox-app/src/window/tests/settings.rs (reset_returns_every_windows_sidebar_to_its_default_width), native/crates/ox-app/src/settings_page/tests.rs (a_theme_card_applies_the_theme_and_saves_it_for_both_apps)."
+native_note = "A preference change reaches every window through the shared AppContext. Tests: native/crates/ox-app/src/window/tests/settings.rs (reset_returns_every_windows_sidebar_to_its_default_width), native/crates/ox-app/src/settings_page/tests.rs (a_theme_card_applies_the_theme_and_saves_it_for_both_apps)."
 
 [[feature]]
 id = "SET-016"
@@ -13977,7 +13977,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "Owner-requested usability improvement over the current single long settings page; it must keep every current setting (see the other SET features). Design target: the mockup /tmp/ox-work/settings-mock/index.html (open it with ?page=search, appearance or default, and &theme=dark) and its renders /tmp/ox-shots/progress/settings-mock-*.png: category list with coloured icons, a status summary card per category where useful, flat grouped rows, and the Search & indexing page as a list of indexed folders with status chips (Ready, Indexing with progress, Sign-in needed), per-folder refresh and remove, suggested folders as add-chips, then Options. Shares use the green network bar. Native: native/crates/ox-app/src/settings_page/ builds the page the first time Settings is shown: categories Appearance, Search & indexing, Default apps, Windows & tabs, Brave & downloads and About; rows with a one-line description; status cards that state the result, such as whether OpenXplorer is the default file explorer; a settings search over titles, descriptions, keywords, control labels, group headings and status cards, with counts, Enter jumps and Escape leaves; keyboard focus in the page when Settings opens; Indexed folders, Folder sizes and the Zorin + Brave troubleshooting guide as sub-pages with a back arrow; every Python setting keeps a row that a search for its Python wording finds. Tests: native/crates/ox-app/src/settings_page/tests.rs (choosing_a_category_shows_only_that_category, arrow_keys_move_through_the_categories, the_search_filters_rows_across_every_category, the_search_finds_what_buttons_options_and_headings_show, enter_in_the_search_jumps_to_the_first_match, default_file_explorer_during_a_search_shows_all_of_default_apps, every_setting_of_the_python_page_has_a_row, rows_the_preview_cannot_run_yet_are_disabled_and_name_their_milestone, the_arrow_keys_move_between_the_theme_cards_and_choose_them, and the theme, text size, menu, watch and interval rows round-tripping with desktop/core.py), native/crates/ox-app/src/settings_page/group.rs (a milestone is named once whatever the order rows are marked in) and native/crates/ox-app/src/window/tests/settings.rs (opening_settings_moves_keyboard_focus_into_the_page, back_to_files_gives_the_file_list_keyboard_focus_again). The Indexed folders page has the status chips, per-folder refresh and remove and the suggested-folders table (native/crates/ox-app/src/settings_page/tests/indexing.rs). Every row works: the licence dialog (SET-009), Check for updates and the Default apps and Brave actions are live, so no row is disabled any more (native/crates/ox-app/src/settings_page/tests.rs, every_row_can_be_used)."
+native_note = "Owner-requested usability improvement over the current single long settings page; it must keep every current setting (see the other SET features). Design target: the mockup /tmp/ox-work/settings-mock/index.html (open it with ?page=search, appearance or default, and &theme=dark) and its renders /tmp/ox-shots/progress/settings-mock-*.png: category list with coloured icons, a status summary card per category where useful, flat grouped rows, and the Search & indexing page as a list of indexed folders with status chips (Ready, Indexing with progress, Sign-in needed), per-folder refresh and remove, suggested folders as add-chips, then Options. Shares use the green network bar. Native: native/crates/ox-app/src/settings_page/ builds the page the first time Settings is shown: categories Appearance, Search & indexing, Default apps, Windows & tabs, Brave & downloads and About; rows with a one-line description; status cards that state the result, such as whether OpenXplorer is the default file explorer; a settings search over titles, descriptions, keywords, control labels, group headings and status cards, with counts, Enter jumps and Escape leaves; keyboard focus in the page when Settings opens; Indexed folders, Folder sizes and the Zorin + Brave troubleshooting guide as sub-pages with a back arrow; every Python setting keeps a row that a search for its Python wording finds. Tests: native/crates/ox-app/src/settings_page/tests.rs (choosing_a_category_shows_only_that_category, arrow_keys_move_through_the_categories, the_search_filters_rows_across_every_category, the_search_finds_what_buttons_options_and_headings_show, enter_in_the_search_jumps_to_the_first_match, default_file_explorer_during_a_search_shows_all_of_default_apps, every_setting_of_the_python_page_has_a_row, the_arrow_keys_move_between_the_theme_cards_and_choose_them, and the theme, text size, menu, watch and interval rows round-tripping with desktop/core.py) and native/crates/ox-app/src/window/tests/settings.rs (opening_settings_moves_keyboard_focus_into_the_page, back_to_files_gives_the_file_list_keyboard_focus_again). The Indexed folders page has the status chips, per-folder refresh and remove and the suggested-folders table (native/crates/ox-app/src/settings_page/tests/indexing.rs). Every row works: the licence dialog (SET-009), Check for updates and the Default apps and Brave actions are live, so no row is disabled any more (native/crates/ox-app/src/settings_page/tests.rs, every_row_can_be_used)."
 
 [[feature]]
 id = "LOOK-001"

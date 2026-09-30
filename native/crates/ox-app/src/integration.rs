@@ -61,9 +61,7 @@ pub(crate) use mime_backend::MimeBackend;
 pub(crate) use open_with_dialog::{Launcher, OpenWithDialog, OpenWithSubject};
 pub(crate) use status::{DefaultsReport, IntegrationStatus};
 pub(crate) use terminal::open_terminal;
-pub(crate) use tools::Tool;
-#[cfg(test)]
-pub(crate) use tools::{NO_DIFF_TOOL, NO_SEARCH_TOOL};
+pub(crate) use tools::{installed_application, Tool};
 
 /// Emitted when something the Settings status shows may have changed: the
 /// `FileManager1` name was acquired, lost or released.
