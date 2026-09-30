@@ -2,13 +2,13 @@
 
 A Windows File Explorer-inspired file manager, **developed for Zorin OS first and foremost**. Zorin is the primary target for its desktop experience and integration; Ubuntu and Debian are secondary compatibility targets and require compatible system packages.
 
-Browse local folders and SMB shares with tabs, clickable paths, pinned folders, search and light/dark themes.
+Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with tabs, clickable paths, pinned folders, search and light/dark themes.
 
 **[Releases](https://github.com/AKolenda/openxplorer/releases)** · **[Website](https://openxplorer.app)** · **[Installation](docs/installation.md)** · **[Documentation](docs/introduction.md)**
 
 ![OpenXplorer browsing fictional sample files](apps/web/public/assets/screenshots/explorer-light.png)
 
-*Actual application HTML captured in Chromium with fictional files; not a native desktop or live-SMB test.*
+*The interface of OpenXplorer 1.x, its HTML captured in Chromium with fictional files. The native 2.x app keeps this layout; this is not a capture of the native app or a live-SMB test.*
 
 ## Install
 
@@ -22,9 +22,16 @@ Follow the [installation guide](docs/installation.md), and finish file operation
 
 ## Develop
 
-The app lives in `native/` (Rust, GTK 4, GIO/GVfs); see [native/README.md](native/README.md). The Next.js website lives in `apps/web/`. The installed app does not depend on Node or pnpm.
+The app lives in `native/` (Rust, GTK 4, GIO/GVfs); see [native/README.md](native/README.md). It needs Rust 1.92 or newer and the GTK 4.14+, SQLite and libsoup 3 development packages (`libgtk-4-dev libsqlite3-dev libsoup-3.0-dev` on Ubuntu and Debian):
 
-**Deprecated:** `desktop/` holds the Python/GTK 3/WebKitGTK app of OpenXplorer 1.x. It stays in the repository as the behavioural specification the native app is checked against (`native/parity/`), for its tests and for the mount helper the packages still ship, but it is no longer released or maintained.
+```sh
+cargo build --release --locked --manifest-path native/Cargo.toml
+python3 native/tools/check.py
+```
+
+No package ships Python; the persistent SMB mount helper is a Rust program too. The Next.js website lives in `apps/web/`. The installed app does not depend on Node or pnpm.
+
+**Deprecated:** `desktop/` holds the Python/GTK 3/WebKitGTK app of OpenXplorer 1.x. It stays in the repository only as reference: the behavioural specification the native app is checked against (`native/parity/`), with its tests. It is no longer released or maintained.
 
 For the website, use Node.js 22.13+ and pnpm 10.34.5:
 
