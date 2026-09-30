@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What the crate's tests share: listed entries built through ox-core's own
 //! conversion, so they carry every field a real listing does, rows of the
-//! Network list and of the volume monitor, the GTK [`harness`] for tests
+//! Network list and of the volume monitor, [`desktop_setting`], which
+//! changes a GNOME setting only in memory, the GTK [`harness`] for tests
 //! that open windows, [`python`], which runs the Python app's settings
 //! code, and [`search`], which starts the search cache beside a window.
 
+pub(crate) mod desktop_setting;
 pub(crate) mod harness;
 pub(crate) mod python;
 pub(crate) mod search;

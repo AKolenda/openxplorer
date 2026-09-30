@@ -292,6 +292,7 @@ fn portal_change(parameters: &glib::Variant) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::desktop_setting::DesktopSetting;
     use crate::test_support::harness::wait_until;
 
     /// parity: LOOK-004
@@ -361,8 +362,8 @@ mod tests {
     }
 
     /// A change of GNOME's colour scheme reaches the app at once, both
-    /// ways, while the app writes nothing back (the tests' settings stay
-    /// in memory).
+    /// ways, while the app writes nothing back. Skipped unless `GSettings`
+    /// keeps its values in memory, so the user's dconf stays untouched.
     ///
     /// parity: LOOK-004
     #[gtk::test]
@@ -376,6 +377,9 @@ mod tests {
         if !has_key {
             return;
         }
+        let Some(color_scheme) = DesktopSetting::in_memory(settings, COLOR_SCHEME_KEY) else {
+            return;
+        };
         let heard = Rc::new(Cell::new(None));
         let scheme = SystemScheme::new(Appearance::Light, {
             let heard = Rc::clone(&heard);
@@ -385,13 +389,10 @@ mod tests {
             ("prefer-dark", Appearance::Dark),
             ("prefer-light", Appearance::Light),
         ] {
-            settings
-                .set_string(COLOR_SCHEME_KEY, value)
-                .expect("the key is writable in memory");
+            color_scheme.set_string(value);
             wait_until(value, || heard.get() == Some(expected));
             assert_eq!(scheme.appearance(), expected);
         }
-        settings.reset(COLOR_SCHEME_KEY);
     }
 
     /// One `SettingChanged` signal and the colour-scheme value expected

@@ -129,6 +129,15 @@ pub(super) fn unpremultiplied_rgb(pixel: Pixel) -> [f32; 3] {
     [red / alpha, green / alpha, blue / alpha]
 }
 
+/// The colour `widget` paints at (`x`, `y`) of its own area.
+pub(super) fn painted_colour(widget: &impl IsA<gtk::Widget>, x: i32, y: i32) -> gdk::RGBA {
+    let rows = pixel_rows(&painted(widget));
+    let row = usize::try_from(y).expect("a point inside the widget");
+    let column = usize::try_from(x).expect("a point inside the widget");
+    let [red, green, blue] = unpremultiplied_rgb(rows[row][column]);
+    gdk::RGBA::new(red, green, blue, 1.0)
+}
+
 /// Whether `painted` is `expected`, channel by channel, within
 /// [`CHANNEL_TOLERANCE`].
 pub(super) fn is_same_colour(painted: gdk::RGBA, expected: gdk::RGBA) -> bool {

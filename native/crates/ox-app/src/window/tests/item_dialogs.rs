@@ -7,12 +7,10 @@
 
 use std::fs;
 
+use gtk::glib;
 use gtk::prelude::*;
-use gtk::{gdk, glib};
 
-use super::icons::{
-    assert_same_colour, css_colour, painted, pixel_rows, unpremultiplied_rgb, TRANSITION_TIME,
-};
+use super::icons::{assert_same_colour, css_colour, painted_colour, TRANSITION_TIME};
 use crate::dialog_layer::DialogFrame;
 use crate::properties::{FolderSizeState, PropertiesView, RestoreRequest, SnapshotTarget};
 use crate::test_support::harness::{
@@ -359,15 +357,6 @@ fn browse_opens_the_snapshot_in_a_marked_tab_with_its_banner() {
     assert_amber_marking(&test, banner);
     test.activate_tab(first_tab);
     assert!(!banner.is_visible(), "a live folder has no banner");
-}
-
-/// The colour `widget` paints at (`x`, `y`) of its own area.
-fn painted_colour(widget: &impl IsA<gtk::Widget>, x: i32, y: i32) -> gdk::RGBA {
-    let rows = pixel_rows(&painted(widget));
-    let row = usize::try_from(y).expect("a point inside the widget");
-    let column = usize::try_from(x).expect("a point inside the widget");
-    let [red, green, blue] = unpremultiplied_rgb(rows[row][column]);
-    gdk::RGBA::new(red, green, blue, 1.0)
 }
 
 /// Asserts the amber of a previous version in both appearances: the

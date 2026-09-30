@@ -14030,7 +14030,7 @@ python_tests = [
 bridge = ["preferences", "environment"]
 gnome = "AdwStyleManager / org.freedesktop.appearance color-scheme; org.gnome.desktop.interface color-scheme (GSettings); org.gnome.desktop.interface color-scheme / gtk-theme"
 native = "done"
-native_note = "Theme choice, saving and System following: native/crates/ox-app/src/theme.rs (system_follows_the_desktop), application/state.rs (saved_themes_parse_and_anything_else_means_system), window/tests/views.rs (a_theme_chosen_in_one_window_reaches_every_window). The whole window, in-window dialogs and dialog windows repaint: window/tests/look.rs (each_appearance_paints_the_surfaces_in_its_tokens, a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance). No first-paint flash: LOOK-007."
+native_note = "Theme choice, saving and System following: native/crates/ox-app/src/theme.rs (system_follows_the_desktop), application/state.rs (saved_themes_parse_and_anything_else_means_system), window/tests/views.rs (a_theme_chosen_in_one_window_reaches_every_window). The whole window, in-window dialogs and dialog windows repaint: window/tests/look.rs (each_appearance_paints_the_surfaces_in_its_tokens, a_dialog_is_510_pixels_with_an_accent_button_in_each_appearance), and the context menu and the SMB sign-in dialog paint the tokens of each appearance (menus_and_the_sign_in_dialog_paint_each_appearance). No first-paint flash: LOOK-007."
 
 [[feature]]
 id = "LOOK-004"
@@ -14103,7 +14103,7 @@ sources = [
 python_tests = []
 bridge = ["environment"]
 native = "done"
-native_note = "Native has no web view: the skin is installed before the first window and every window is built in the current palette. native/crates/ox-app/src/window/tests/look.rs (a_new_window_draws_its_first_frame_complete_in_the_chosen_appearance) checks the dark surfaces on the first frame of a new window."
+native_note = "Native has no web view: the skin is installed before the first window and every window is built in the current palette. The startup order is proven by native/crates/ox-app/src/application/state.rs (a_saved_dark_theme_is_drawn_from_the_first_frame_of_the_first_window): with Dark saved, the dark palette is drawn before any window exists and the first window's first frame already has the dark text colour. window/tests/look.rs (a_new_window_draws_its_first_frame_complete_in_the_chosen_appearance) checks the dark surfaces on the first frame of a later window."
 
 [[feature]]
 id = "LOOK-008"
@@ -14133,7 +14133,7 @@ python_tests = [
 ]
 bridge = ["uiReady"]
 native = "done"
-native_note = "The placeholder covered the web page's load; the native window draws the real Explorer layout in its first frame, so none is needed. native/crates/ox-app/src/window/tests/look.rs (a_new_window_draws_its_first_frame_complete_in_the_chosen_appearance) checks that every bar and pane is drawn in the first frame and no spinner shows."
+native_note = "The placeholder covered the web page's load; the native window draws the real Explorer layout in its first frame, so none is needed. native/crates/ox-app/src/window/tests/look.rs (a_new_window_draws_its_first_frame_complete_in_the_chosen_appearance) checks that every bar and pane is drawn in the first frame; the window has no loading spinner at all, so its no-spinner assertion only guards against one being added."
 
 [[feature]]
 id = "LOOK-009"
@@ -14404,7 +14404,7 @@ python_tests = ["desktop/tests/ui_terminal.py::Preview explicitly does not launc
 bridge = []
 gnome = "AdwToast"
 native = "done"
-native_note = "native/crates/ox-app/src/window/toast.rs (one toast, replaced, hides after 4 s); native/crates/ox-app/src/window/tests/look.rs (the_toast_is_an_inverted_status_78_pixels_above_the_bottom): 78 px above the bottom, centred, at most 650 px, text colour as background, role status."
+native_note = "native/crates/ox-app/src/window/toast.rs (one toast, replaced, hides after 4 s); native/crates/ox-app/src/window/tests/look.rs (the_toast_is_an_inverted_status_78_pixels_above_the_bottom): 78 px above the bottom, centred, at most 650 px, text colour as background in light and dark, role status."
 
 [[feature]]
 id = "LOOK-022"
@@ -14532,8 +14532,8 @@ sources = [
 python_tests = []
 bridge = []
 gnome = "GTK4 draws at the surface scale (gdk_surface_get_scale, fractional on Wayland with GTK 4.12 or later); use SVG or symbolic icons, or textures rendered at that scale, never 1x bitmaps scaled up"
-native = "done"
-native_note = "native/crates/ox-app/tests/display_scale.rs (twice_the_scale_draws_every_line_on_whole_device_pixels) runs the built app with GDK_SCALE=1 and 2 through the snapshot hook: the layout doubles exactly and every line and fill of the bars covers whole device pixels. GTK draws text, symbolic SVG icons and CSS at the surface scale. Fractional scales (125-175%) need a Wayland compositor and cannot run on the headless X test display; they stay a manual check."
+native = "partial"
+native_note = "native/crates/ox-app/tests/display_scale.rs (twice_the_scale_draws_the_bars_on_whole_device_pixels) runs the built app with GDK_SCALE=1 and 2 through the snapshot hook: the layout doubles exactly and, down one column of the navigation row and the command bar, each line and fill covers whole device pixels. GTK draws text, symbolic SVG icons and CSS at the surface scale. Remaining: fractional scales (125/150/175%) need a Wayland compositor, which the headless X test display is not; sharpness of the folder and file artwork and of focus outlines, hit targets matching what is drawn, and the redraw when the window moves to a monitor of another scale are not tested."
 
 [[feature]]
 id = "INT-001"
