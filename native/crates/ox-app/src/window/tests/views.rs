@@ -468,7 +468,8 @@ fn ctrl_h_shows_hidden_files_outside_text_fields() {
         application().accels_for_action("win.hidden").is_empty(),
         "Ctrl+H is no accelerator, which would run inside text fields too"
     );
-    let ctrl_h = || press_shortcut_where_focused(&test, gtk::gdk::Key::h, gtk::gdk::ModifierType::CONTROL_MASK);
+    let ctrl_h =
+        || press_shortcut_where_focused(&test, gtk::gdk::Key::h, gtk::gdk::ModifierType::CONTROL_MASK);
     let shows_hidden = || test.context.settings_data().preferences.show_hidden;
     test.window.folder_pane().focus_view();
     assert!(ctrl_h());

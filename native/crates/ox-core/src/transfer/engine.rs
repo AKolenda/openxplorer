@@ -25,7 +25,9 @@ use super::request::{destination_folder, distinct_items};
 use super::source_removal::{remove_copied_source, CopiedItem};
 use super::staged_copy::{ItemStaging, StagedCopy};
 use super::staging::{discard_stage, leftover_report};
-use super::types::{ConflictPolicy, Landed, Operation, Progress, ProgressScope, TransferMode, TransferResult};
+use super::types::{
+    ConflictPolicy, Landed, Operation, Progress, ProgressScope, TransferMode, TransferResult,
+};
 use super::unstorable::{Fix, Unstorable, UnstorableAnswer, UnstorableItem};
 
 /// Receives the progress of a run for the transfer panel.

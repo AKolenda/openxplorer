@@ -136,7 +136,14 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
     assert_eq!(tooltip, "Copy path\nSelect only one item for this command.");
     // Rename renames them together (OPS-014); Properties describe them
     // together (PROP-002).
-    for enabled in ["Cut", "Copy", "Rename", "Move to Trash", "Duplicate", "Properties"] {
+    for enabled in [
+        "Cut",
+        "Copy",
+        "Rename",
+        "Move to Trash",
+        "Duplicate",
+        "Properties",
+    ] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
     }
 }

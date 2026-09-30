@@ -30,8 +30,8 @@ use ox_core::location::same_location;
 use crate::icons::{self, Icon};
 
 use super::menu_popover::{MenuEntry, MenuPopover};
-use super::saved_search::saved_search_menu;
 use super::place_menus::caching_in;
+use super::saved_search::saved_search_menu;
 use super::window_action::WindowAction;
 use super::{gestures, preferences, BrowserWindow};
 
