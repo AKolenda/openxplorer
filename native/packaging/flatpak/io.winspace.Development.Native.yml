@@ -36,6 +36,9 @@ finish-args:
   # Service under the Python app's schema io.winspace.SmbCredentials, so both
   # apps find each other's saved sign-ins.
   - --talk-name=org.freedesktop.secrets
+  # Quick Look (Space): asks GNOME Sushi on the host to preview the selected
+  # file and follows its window.
+  - --talk-name=org.gnome.NautilusPreviewer
   # "Show in folder" (opt-in): lets the running app answer
   # org.freedesktop.FileManager1 after the user turns the integration on in
   # Settings. Flatpak only permits owning the name; it never claims it itself.

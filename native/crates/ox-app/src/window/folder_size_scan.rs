@@ -209,8 +209,8 @@ impl BrowserWindow {
             let Some(cancel) = self.begin_folder(index, uri) else {
                 break;
             };
-            let progress = self.size_progress_sender(FolderScanId { run: number, index });
-            let result = scan_folder_size_in_background(uri.clone(), cancel, progress).await;
+            let scan = FolderScanId { run: number, index };
+            let result = self.scan_mounting_once(scan, uri, cancel).await;
             match self.finish_folder(uri, result) {
                 Some(true) => complete += 1,
                 Some(false) => partial += 1,
@@ -225,6 +225,28 @@ impl BrowserWindow {
         };
         self.size_strip().show_end(end);
         self.update_size_actions();
+    }
+
+    /// Measures the folder at `uri`. A share that is not mounted is
+    /// mounted once and measured again, as `mount_retry` of the Python
+    /// app's size worker; a failed mount is reported instead.
+    async fn scan_mounting_once(
+        &self,
+        scan: FolderScanId,
+        uri: &str,
+        cancel: Cancellation,
+    ) -> Result<FolderSize, SizeError> {
+        let progress = self.size_progress_sender(scan);
+        let first = scan_folder_size_in_background(uri.to_owned(), cancel.clone(), progress).await;
+        let needs_mount = matches!(&first, Err(SizeError::Read(error)) if error.needs_mount());
+        if !needs_mount || cancel.is_cancelled() {
+            return first;
+        }
+        if let Err(error) = self.network().mount(uri).await {
+            return Err(SizeError::Read(EntryError::Failed(error.to_string())));
+        }
+        let progress = self.size_progress_sender(scan);
+        scan_folder_size_in_background(uri.to_owned(), cancel, progress).await
     }
 
     /// Marks the folder at `uri` as being measured and returns its

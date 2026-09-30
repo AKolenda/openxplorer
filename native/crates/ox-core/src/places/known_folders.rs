@@ -146,6 +146,11 @@ impl FolderLocations {
         }
     }
 
+    /// The home folder, where the standard folders are by default.
+    pub fn home(&self) -> &Path {
+        &self.home
+    }
+
     /// The `user-dirs.dirs` file these locations read, for watching it.
     pub fn user_dirs_file(&self) -> &Path {
         &self.user_dirs_file

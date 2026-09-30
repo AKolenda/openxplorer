@@ -254,7 +254,7 @@ fn more_than_100000_members_are_left_to_an_archive_manager() {
     assert_eq!(error, ArchiveError::TooManyMembers);
     assert_eq!(
         error.to_string(),
-        "ZIP has more than 100,000 members. Use an archive manager."
+        "The archive has more than 100,000 members. Use an archive manager."
     );
 }
 

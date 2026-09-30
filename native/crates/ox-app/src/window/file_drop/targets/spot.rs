@@ -43,6 +43,7 @@ impl DropSpot {
             DropSpot::Sidebar(SidebarDropSpot::Folder { uri, .. }) => {
                 DropDestination::for_folder(uri.clone())
             }
+            DropSpot::Sidebar(SidebarDropSpot::Volume { id, .. }) => DropDestination::Volume(id.clone()),
             DropSpot::Sidebar(SidebarDropSpot::Pin { before, .. }) => DropDestination::QuickAccess {
                 before: before.clone(),
             },

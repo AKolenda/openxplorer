@@ -15,12 +15,12 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::archive::{
-    default_preview_root, ArchiveBrowser, ArchiveError, CompressionRequest, ExtractionRequest,
-    GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
+    default_preview_root, lift_single_folder, ArchiveBrowser, ArchiveError, CompressionRequest,
+    ExtractionRequest, GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
 };
 use ox_core::entry::Entry;
 use ox_core::gio_node::GioNode;
@@ -86,6 +86,7 @@ impl BrowserWindow {
             }),
             plain_action(WindowAction::ExtractHere, BrowserWindow::extract_here),
             plain_action(WindowAction::CompressToZip, BrowserWindow::compress_selection),
+            plain_action(WindowAction::CompressTo, BrowserWindow::ask_compress_to),
         ]);
     }
 
@@ -104,6 +105,7 @@ impl BrowserWindow {
         );
         let can_compress = is_idle && selected > 0 && folder_is_writable;
         self.set_action_enabled(WindowAction::CompressToZip, can_compress);
+        self.set_action_enabled(WindowAction::CompressTo, can_compress);
     }
 
     /// Why the archive command `action` is disabled, when it is one.
@@ -188,7 +190,7 @@ impl BrowserWindow {
 
     /// True when no write runs in this window; otherwise says so, as one
     /// operation runs at a time (OPS-024).
-    fn may_start_archive_operation(&self) -> bool {
+    pub(super) fn may_start_archive_operation(&self) -> bool {
         if self.is_writing_files() {
             self.show_message(OPERATION_RUNNING);
             return false;
@@ -310,7 +312,8 @@ impl BrowserWindow {
     }
 
     /// Extract here: into a new folder beside the archive, named after it,
-    /// or `<name> (2)` and so on while a name is taken (ARC-025).
+    /// or `<name> (2)` and so on while a name is taken; an archive holding
+    /// one top-level folder gives that folder instead (ARC-025).
     fn extract_here(&self) {
         let (Some(archive), Some(folder)) = (self.selected_archive(), self.current_uri()) else {
             return;
@@ -356,7 +359,12 @@ impl BrowserWindow {
                 .with_progress(self.operation_progress_sender());
             match extractor.extract_in_background(request, cancel.clone()).await {
                 Err(ArchiveError::DestinationExists) => {}
-                Ok(extracted) => return Ok(extraction_success_text(&extracted)),
+                Ok(extracted) => {
+                    // A lone top-level folder becomes the output (ARC-025).
+                    let lifted = gio::spawn_blocking(move || lift_single_folder(extracted)).await;
+                    let lifted = lifted.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+                    return Ok(extraction_success_text(&lifted));
+                }
                 Err(error) => return Err(error),
             }
         }
@@ -439,7 +447,12 @@ impl BrowserWindow {
     /// Lists `folder` again, then says how an operation ended: `outcome`'s
     /// message as a toast, or its failure in the dialog titled
     /// `stopped_title`. Listing a folder hides the toast, so it comes last.
-    fn report_in_folder(&self, folder: &str, outcome: Result<String, String>, stopped_title: &str) {
+    pub(super) fn report_in_folder(
+        &self,
+        folder: &str,
+        outcome: Result<String, String>,
+        stopped_title: &str,
+    ) {
         self.reload_tabs_showing(folder);
         match outcome {
             Ok(message) => self.show_message(&message),

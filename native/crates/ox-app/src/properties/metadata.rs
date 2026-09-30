@@ -11,13 +11,15 @@ use gio::prelude::*;
 use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry, EntryError, ATTRIBUTES};
 use ox_core::location::{normalise, parent_location};
+use ox_core::network::read_mount_table;
+use ox_core::permissions::Account;
 
 /// The attributes Properties asks for beyond a listing's
 /// (`PROPERTY_ATTRS` in `file_services.py`).
 const PROPERTY_ATTRIBUTES: &str = concat!(
     "time::created,time::access,access::can-read,access::can-write,",
-    "access::can-execute,owner::user,owner::group,unix::mode,",
-    "standard::symlink-target",
+    "access::can-execute,owner::user,owner::group,unix::mode,unix::uid,unix::gid,",
+    "standard::symlink-target,metadata::custom-icon",
 );
 
 /// The permission bits Properties shows (`& 0o7777`).
@@ -38,6 +40,10 @@ pub(crate) struct ItemProperties {
     pub owner: Option<String>,
     /// The owner's group.
     pub group: Option<String>,
+    /// The owner's user id.
+    pub uid: Option<u32>,
+    /// The group's id.
+    pub gid: Option<u32>,
     /// The permission bits, such as `0o644`.
     pub mode: Option<u32>,
     /// Whether the user may read, write and run the item, as the backend
@@ -47,6 +53,26 @@ pub(crate) struct ItemProperties {
     pub link_target: Option<String>,
     /// The name of the application a file opens with.
     pub default_app: Option<String>,
+    /// What is mounted at the item, when a folder is a mount point.
+    pub mount: Option<MountFacts>,
+    /// The width and height of a local image, read from its header
+    /// (PROP-013).
+    pub dimensions: Option<(i32, i32)>,
+    /// Whether the item has a custom icon (PROP-016).
+    pub has_custom_icon: bool,
+}
+
+/// A mount point's details for the General tab (PROP-004).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MountFacts {
+    /// Where it is mounted.
+    pub mounted_on: String,
+    /// What is mounted, for example `/dev/sdb1` or `//nas/share`.
+    pub mounted_from: String,
+    /// The file system type, for example `ext4`.
+    pub filesystem: String,
+    /// Free and total bytes, where the file system reports them.
+    pub space: Option<(u64, u64)>,
 }
 
 /// The user's access to an item, where the backend reports it.
@@ -61,10 +87,36 @@ pub(crate) struct Access {
 }
 
 impl ItemProperties {
+    /// The owner, with its id and name.
+    pub(crate) fn owner_account(&self) -> Option<Account> {
+        account(self.uid, self.owner.as_deref())
+    }
+
+    /// The group, with its id and name.
+    pub(crate) fn group_account(&self) -> Option<Account> {
+        account(self.gid, self.group.as_deref())
+    }
+
+    /// The item as the Permissions tab changes it.
+    pub(crate) fn edited_item(&self) -> super::permissions_editor::EditedItem {
+        super::permissions_editor::EditedItem {
+            uri: self.entry.uri.clone(),
+            mode: self.mode.unwrap_or_default() & PERMISSION_BITS,
+            is_folder: self.entry.is_dir,
+        }
+    }
+
     /// The permission bits as Python's `oct()` writes them (`0o644`).
     pub(crate) fn mode_text(&self) -> Option<String> {
         self.mode.map(|mode| format!("0o{:o}", mode & PERMISSION_BITS))
     }
+}
+
+/// The account `id` named `name`, or its number.
+fn account(id: Option<u32>, name: Option<&str>) -> Option<Account> {
+    let id = id?;
+    let name = name.map_or_else(|| id.to_string(), str::to_owned);
+    Some(Account { id, name })
 }
 
 /// Reads the properties of the item at `uri` on a GIO worker thread.
@@ -94,12 +146,16 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
     )?;
     let entry = entry_from_info(&file, &info);
     let default_app = default_app_for(&entry);
+    let mount = if entry.is_dir { mount_at(&file) } else { None };
+    let dimensions = image_dimensions(&file, &entry);
     Ok(ItemProperties {
         parent_uri: parent_location(&entry.uri),
         created: optional_u64(&info, "time::created"),
         accessed: optional_u64(&info, "time::access"),
         owner: optional_string(&info, "owner::user"),
         group: optional_string(&info, "owner::group"),
+        uid: optional_u32(&info, "unix::uid"),
+        gid: optional_u32(&info, "unix::gid"),
         mode: info
             .has_attribute("unix::mode")
             .then(|| info.attribute_uint32("unix::mode")),
@@ -110,8 +166,51 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
         },
         link_target: link_target(&info),
         default_app,
+        mount,
+        dimensions,
+        has_custom_icon: optional_string(&info, "metadata::custom-icon").is_some_and(|icon| !icon.is_empty()),
         entry,
     })
+}
+
+/// What is mounted at the folder `file`, if it is a mount point of the
+/// kernel's mount table. Reading the table never mounts anything.
+fn mount_at(file: &gio::File) -> Option<MountFacts> {
+    let path = file.path()?;
+    let path = path.to_str()?;
+    let mounts = read_mount_table().ok()?;
+    let mount = mounts.into_iter().rev().find(|mount| mount.path == path)?;
+    let space = file
+        .query_filesystem_info("filesystem::free,filesystem::size", gio::Cancellable::NONE)
+        .ok()
+        .and_then(|info| {
+            let known = info.has_attribute("filesystem::free") && info.has_attribute("filesystem::size");
+            known.then(|| {
+                (
+                    info.attribute_uint64("filesystem::free"),
+                    info.attribute_uint64("filesystem::size"),
+                )
+            })
+        });
+    Some(MountFacts {
+        mounted_on: mount.path,
+        mounted_from: mount.source,
+        filesystem: mount.filesystem,
+        space,
+    })
+}
+
+/// The width and height of a local image, from its header only.
+fn image_dimensions(file: &gio::File, entry: &Entry) -> Option<(i32, i32)> {
+    let is_image = entry
+        .content_type
+        .as_deref()
+        .is_some_and(|kind| kind.starts_with("image/"));
+    if entry.is_dir || !is_image {
+        return None;
+    }
+    let (_, width, height) = gtk::gdk_pixbuf::Pixbuf::file_info(file.path()?)?;
+    Some((width, height))
 }
 
 /// The name of the application a file opens with; `None` for a folder
@@ -141,6 +240,11 @@ fn optional_u64(info: &gio::FileInfo, attribute: &str) -> Option<u64> {
         .then(|| info.attribute_uint64(attribute))
 }
 
+fn optional_u32(info: &gio::FileInfo, attribute: &str) -> Option<u32> {
+    info.has_attribute(attribute)
+        .then(|| info.attribute_uint32(attribute))
+}
+
 fn optional_bool(info: &gio::FileInfo, attribute: &str) -> Option<bool> {
     info.has_attribute(attribute).then(|| info.boolean(attribute))
 }
@@ -163,10 +267,15 @@ mod tests {
             accessed: None,
             owner: None,
             group: None,
+            uid: None,
+            gid: None,
             mode: Some(0o100_644),
             access: Access::default(),
             link_target: None,
             default_app: None,
+            mount: None,
+            dimensions: None,
+            has_custom_icon: false,
         };
 
         assert_eq!(properties.mode_text().as_deref(), Some("0o644"));

@@ -259,6 +259,40 @@ fn an_unmounted_share_is_mounted_once_then_listed_again() {
     });
 }
 
+/// Measuring a share that is not mounted mounts it once and measures it
+/// again; a failed mount is what the folder's size reports.
+///
+/// parity: PROP-029, PROP-030
+#[gtk::test]
+fn an_unmounted_share_is_mounted_once_before_its_size_is_measured() {
+    use crate::properties::FolderSizeState;
+
+    let test = TestWindow::open(Page::Network.uri());
+    let mounts = Rc::new(Cell::new(0));
+    let counted = Rc::clone(&mounts);
+    test.window.network().answer_mounts_with(move || {
+        counted.set(counted.get() + 1);
+        Err(NetworkError::NotAFolder)
+    });
+    let share = "smb://example.invalid/share";
+
+    test.activate("calculate-folder-size-of", Some(share));
+
+    wait_until("the measured share", || {
+        matches!(
+            test.window.measured_folder_size(share),
+            Some(FolderSizeState::Unavailable(_))
+        )
+    });
+    assert_eq!(mounts.get(), 1, "mounted once");
+    assert_eq!(
+        test.window.measured_folder_size(share),
+        Some(FolderSizeState::Unavailable(
+            "This location is not a folder.".to_owned()
+        ))
+    );
+}
+
 /// While a server is signed out, it is neither listed nor connected.
 ///
 /// parity: NET-023
@@ -542,6 +576,34 @@ fn eject_and_safely_remove_report_a_location_without_a_mount() {
             "{texts:?}"
         );
     }
+}
+
+/// Before a drive is taken away, the tab in front and the tabs behind it
+/// that show a folder on it move to Home; other tabs stay.
+///
+/// parity: DEV-009
+#[gtk::test]
+fn the_tabs_on_a_drive_move_home_before_it_is_ejected() {
+    let fixture = Fixture::standard();
+    let home = ox_core::location::file_uri(&gtk::glib::home_dir());
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.window
+        .open_tab(&fixture.uri(), TabPlacement::Background)
+        .expect("a tab on the drive");
+    test.window
+        .open_tab(Page::ThisPc.uri(), TabPlacement::Background)
+        .expect("a tab elsewhere");
+
+    test.activate("eject", Some(&fixture.uri()));
+
+    message_box_texts("Could not eject");
+    let tab_uris: Vec<String> = {
+        use gtk::subclass::prelude::*;
+        let session = test.window.imp().session.borrow();
+        session.tabs().iter().map(|tab| tab.uri().to_owned()).collect()
+    };
+    assert_eq!(test.window.current_uri(), Some(home.clone()));
+    assert_eq!(tab_uris, [home.clone(), home, Page::ThisPc.uri().to_owned()]);
 }
 
 /// With `OX_NATIVE_CAPTURE_DIR` set, saves the network surfaces for visual

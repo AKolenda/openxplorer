@@ -35,12 +35,17 @@ pub enum ArchiveError {
     #[error(transparent)]
     Location(#[from] LocationError),
 
+    /// A TAR archive whose headers or compressed data are damaged, or a
+    /// compressed file that holds no TAR.
+    #[error("This archive is damaged or is not a TAR archive. Use an archive manager.")]
+    DamagedArchive,
+
     // Reading: desktop/archives.py and desktop/native_opening.py.
     /// ARC-005: the central directory is over 32 MiB.
     #[error("ZIP directory is too large for the built-in viewer. Use an archive manager.")]
     DirectoryTooLarge,
     /// ARC-005: the archive has more than 100,000 members.
-    #[error("ZIP has more than 100,000 members. Use an archive manager.")]
+    #[error("The archive has more than 100,000 members. Use an archive manager.")]
     TooManyMembers,
     /// ARC-007: the share cannot seek, which reading a ZIP needs.
     #[error("This share does not support seekable ZIP reading. Mount it locally or use an archive manager.")]
@@ -59,14 +64,14 @@ pub enum ArchiveError {
     )]
     UnsafePreviewType,
     /// The member to open is missing, or several members have its name.
-    #[error("ZIP member is missing or duplicated. Use an archive manager.")]
+    #[error("This archive member is missing or duplicated. Use an archive manager.")]
     MissingOrDuplicatedMember,
     /// The member to open is encrypted.
     #[error("Encrypted ZIP members require an archive manager.")]
     EncryptedMember,
     /// The member to open is a link or special file, has an altered name,
     /// is over 256 MiB or compressed more than 1,000 times.
-    #[error("ZIP member is a link, too large, or exceeds the decompression safety limit.")]
+    #[error("This archive member is a link, too large, or exceeds the decompression safety limit.")]
     MemberNotPreviewable,
     /// The member yielded more than 256 MiB while being opened.
     #[error("Decompression safety limit reached.")]
@@ -75,24 +80,24 @@ pub enum ArchiveError {
     // Checking members before extraction: desktop/zip_extraction.py.
     /// ARC-014: a member name is empty, over 4,096 characters, or hides a
     /// NUL or a different Unicode name.
-    #[error("ZIP contains an invalid or overlong member name.")]
+    #[error("The archive contains an invalid or overlong member name.")]
     InvalidMemberName,
     /// ARC-014: a member path is absolute or has backslashes or control
     /// characters.
-    #[error("ZIP contains an unsafe member path. Nothing was extracted.")]
+    #[error("The archive contains an unsafe member path. Nothing was extracted.")]
     UnsafeMemberPath,
     /// ARC-017: a member is more than 128 folders deep.
-    #[error("ZIP nesting exceeds the 128-level safety limit.")]
+    #[error("The archive's nesting exceeds the 128-level safety limit.")]
     NestingTooDeep,
     /// ARC-014: a path segment is empty, `.`, `..`, has a colon, ends in a
     /// space or dot, or is over 255 bytes.
-    #[error("ZIP contains a path unsafe for local/SMB extraction. Nothing was extracted.")]
+    #[error("The archive contains a path unsafe for local/SMB extraction. Nothing was extracted.")]
     PathUnsafeForShares,
     /// ARC-014: a path segment is a Windows device name such as `CON`.
-    #[error("ZIP contains a reserved device filename. Use an archive manager to inspect it.")]
+    #[error("The archive contains a reserved device filename. Use an archive manager to inspect it.")]
     ReservedDeviceName,
     /// ARC-016: a member is a symbolic link, FIFO, device or socket.
-    #[error("ZIP contains a symbolic link or special file. Nothing was extracted.")]
+    #[error("The archive contains a symbolic link or special file. Nothing was extracted. Use an archive manager.")]
     LinkOrSpecialFile,
     /// ARC-016: a member is encrypted.
     #[error("Password-protected ZIPs need an external archive manager in this release.")]
@@ -102,27 +107,27 @@ pub enum ArchiveError {
     #[error("This ZIP compression method needs an external archive manager.")]
     UnsupportedCompression,
     /// ARC-016: a folder entry carries data.
-    #[error("ZIP contains inconsistent size metadata.")]
+    #[error("The archive contains inconsistent size metadata.")]
     InconsistentSizes,
     /// ARC-017: a member is over the per-file size or compression ratio
     /// limit.
-    #[error("ZIP exceeds the per-file decompression safety limit. Use an archive manager.")]
+    #[error("The archive exceeds the per-file decompression safety limit. Use an archive manager.")]
     MemberTooLarge,
     /// ARC-017: the archive has more entries than the extractor accepts.
-    #[error("ZIP has too many entries for the built-in extractor.")]
+    #[error("The archive has too many entries for the built-in extractor.")]
     TooManyEntries,
     /// ARC-015: two members have the same name.
-    #[error("ZIP contains duplicate filenames. Nothing was extracted.")]
+    #[error("The archive contains duplicate filenames. Nothing was extracted.")]
     DuplicateNames,
     /// ARC-015: a path is both a file and a folder, or two paths differ only
     /// in case or Unicode normalisation.
-    #[error("ZIP has conflicting or case-ambiguous paths. Nothing was extracted.")]
+    #[error("The archive has conflicting or case-ambiguous paths. Nothing was extracted.")]
     AmbiguousPaths,
     /// ARC-017: the members and their implied folders are too many paths.
-    #[error("ZIP has too many paths for the built-in extractor.")]
+    #[error("The archive has too many paths for the built-in extractor.")]
     TooManyPaths,
     /// ARC-017: the members add up to more than the total size limit.
-    #[error("ZIP exceeds the 20 GiB extraction limit. Use an archive manager.")]
+    #[error("The archive exceeds the 20 GiB extraction limit. Use an archive manager.")]
     ArchiveTooLarge,
 
     // Extracting: desktop/zip_extraction.py and desktop/winspace.py.
@@ -138,13 +143,13 @@ pub enum ArchiveError {
     )]
     DestinationExists,
     /// ARC-017: a member yielded more than it declared or the limits allow.
-    #[error("ZIP exceeded its declared size or the extraction safety limit.")]
+    #[error("The archive exceeded its declared size or the extraction safety limit.")]
     SizeLimitExceeded,
     /// ARC-013: the destination accepted only part of a block.
     #[error("The destination did not accept all extracted bytes.")]
     IncompleteWrite,
     /// ARC-017: a member yielded less than it declared.
-    #[error("ZIP member has a truncated size. Extraction stopped.")]
+    #[error("This archive member has a truncated size. Extraction stopped.")]
     TruncatedMember,
     // Compressing: new in the native app (ARC-023).
     /// Compress was given nothing it can put in a ZIP.
@@ -162,6 +167,10 @@ pub enum ArchiveError {
     /// replaced.
     #[error("An item with this name already exists. Nothing was replaced.")]
     ArchiveExists,
+    /// ARC-023: a file held more or fewer bytes when it was written into
+    /// a `.tar.xz` than when it was measured.
+    #[error("An item changed while it was compressed. Nothing was created.")]
+    SourceChanged,
 
     /// ARC-013: the extraction failed and its staging folder could not be
     /// removed either.

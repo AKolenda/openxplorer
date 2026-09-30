@@ -41,11 +41,16 @@ rusqlite = { version = "0.38", default-features = false, features = ["functions"
 # package is needed; async-io keeps it independent of Tokio.
 oo7 = { version = "0.6", default-features = false, features = ["async-std", "native_crypto"] }
 # ZIP member decompression for ox-core's `archive`: raw deflate, bzip2 and LZMA
-# are the methods besides "stored" that desktop/zip_extraction.py accepts. All
-# three are pure Rust, so no C library is linked.
+# are the methods besides "stored" that desktop/zip_extraction.py accepts; the
+# same gzip, bzip2 and XZ decoders read .tar.gz, .tar.bz2 and .tar.xz
+# archives, and XZ writes .tar.xz (ARC-023, ARC-024). All are pure Rust, so no
+# C library is linked.
 flate2 = "1.1"
 bzip2 = "0.6"
-lzma-rust2 = { version = "0.21", default-features = false, features = ["std", "optimization"] }
+lzma-rust2 = { version = "0.21", default-features = false, features = ["std", "optimization", "xz", "encoder"] }
+# Zstandard decompression for .tar.zst archives (ARC-024), pure Rust like the
+# decoders above.
+ruzstd = { version = "0.8", default-features = false, features = ["std"] }
 # The CRC-32 every extracted or previewed ZIP member is checked against.
 crc32fast = "1.5"
 tempfile = "3"

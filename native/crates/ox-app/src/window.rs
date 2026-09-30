@@ -28,7 +28,8 @@
 //! ([`context_menu`], [`tab_menu`]), searching ([`folder_search`],
 //! [`cache_folder`]), Properties and previous versions ([`item_dialogs`],
 //! [`snapshot_tabs`], [`version_restore`]), folder sizes
-//! ([`folder_size_scan`]), ZIP archives ([`archive_actions`]), requests
+//! ([`folder_size_scan`]), moving a relocated standard folder's files
+//! ([`relocated_files`]), ZIP archives ([`archive_actions`]), requests
 //! from other applications and the command line ([`external_requests`]),
 //! Open with, Open in Terminal and updates ([`integration_actions`]),
 //! closing while files are written ([`closing`]), and what the window
@@ -57,14 +58,17 @@ mod caption_buttons;
 mod card_grid;
 mod closing;
 mod command_bar;
+mod compress_dialog;
 mod connections;
 mod context_menu;
 mod copy_path;
 mod crumb_drop;
 mod crumb_menus;
+mod details_hover;
 mod details_pane;
 mod dialog;
 mod disabled_reasons;
+mod disk_tools;
 mod empty_page;
 mod environment;
 mod external_requests;
@@ -100,6 +104,8 @@ mod network_sign_out;
 mod place_menus;
 mod preferences;
 mod quick_access;
+mod quick_look;
+mod relocated_files;
 mod result_location;
 mod saved_search;
 mod search_box;
@@ -152,6 +158,7 @@ pub(crate) use actions::follow_text_size_keys;
 pub(crate) use actions::install_accelerators;
 pub(crate) use button_style::ButtonStyle;
 pub(crate) use closing::QUIT_WHILE_WRITING;
+pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;

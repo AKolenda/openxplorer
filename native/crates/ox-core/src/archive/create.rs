@@ -17,10 +17,15 @@
 //! - The write guard is asked about the destination folder and the new
 //!   ZIP, so nothing is written into a previous version (PROP-024).
 //!
+//! A name ending in `.tar.xz` gives an XZ-compressed TAR instead of a ZIP,
+//! with the same rules (Dolphin's "Compress to…" formats).
+//!
 //! | Module | Responsibility |
 //! |---|---|
 //! | `zip_writer` | The ZIP format: headers, deflated data, the central directory |
+//! | `tar_writer` | The `.tar.xz` format: ustar headers in an XZ stream |
 
+mod tar_writer;
 mod zip_writer;
 
 use std::ffi::OsStr;
@@ -34,14 +39,18 @@ use crate::gio_node::GioNode;
 use crate::location::{is_smb_server, normalise, validate_name};
 use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{Cancellation, Node, NodeKind, Progress, ProgressScope, TransferError, WriteGuard};
+use tar_writer::TarXzWriter;
 use zip_writer::{DosTime, ZipWriter, MAX_ENTRIES};
+
+/// The ending that asks for a `.tar.xz` instead of a ZIP.
+const TAR_XZ_ENDING: &str = ".tar.xz";
 
 /// Staging files are `.openxplorer-compress-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-compress-";
 const STAGING_SUFFIX: &str = ".part";
 
 /// What a walk reads about each item.
-const WALK_ATTRIBUTES: &str = "standard::name,standard::type,standard::size,time::modified";
+const WALK_ATTRIBUTES: &str = "standard::name,standard::type,standard::size,time::modified,unix::mode";
 
 /// What to compress, and where.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,10 +83,12 @@ struct PlannedEntry {
     source: Option<gio::File>,
     /// The entry's name: `Photos/`, `Photos/a.jpg`.
     name: String,
-    /// When the item was last modified.
-    modified: DosTime,
+    /// When the item was last modified, in seconds since the Unix epoch.
+    modified: Option<u64>,
     /// The file's size, for progress.
     size: u64,
+    /// The item's `rwx` bits, which a TAR keeps; a ZIP gets fixed ones.
+    mode: Option<u32>,
 }
 
 /// Everything a compression will write.
@@ -168,7 +179,7 @@ impl ZipCompressor {
         self.report(format!("Preparing {name}…"), 0.0);
         let plan = plan(&request.uris, cancel)?;
         let staging = destination.folder.child(OsStr::new(&staging_name()?));
-        if let Err(error) = self.write_archive(&plan, staging.as_ref(), cancel) {
+        if let Err(error) = self.write_archive(&plan, staging.as_ref(), is_tar_xz(&name), cancel) {
             remove_staging(staging.as_ref());
             return Err(error.unless_cancelled(cancel));
         }
@@ -228,16 +239,23 @@ impl ZipCompressor {
         Ok(Destination { folder, archive })
     }
 
-    /// Writes every planned entry into a new file at `staging`.
+    /// Writes every planned entry into a new file at `staging`: a
+    /// `.tar.xz` with `tar_xz`, else a ZIP.
     fn write_archive(
         &mut self,
         plan: &CompressionPlan,
         staging: &dyn Node,
+        tar_xz: bool,
         cancel: &Cancellation,
     ) -> Result<(), ArchiveError> {
         let output = gio::File::for_uri(&staging.uri())
             .create(gio::FileCreateFlags::NONE, Some(cancel.cancellable()))?;
-        let mut writer = ZipWriter::new(output.clone().upcast::<gio::OutputStream>().into_write());
+        let stream = output.clone().upcast::<gio::OutputStream>().into_write();
+        let mut writer = if tar_xz {
+            EntryWriter::TarXz(Box::new(TarXzWriter::new(stream)?))
+        } else {
+            EntryWriter::Zip(ZipWriter::new(stream))
+        };
         let mut done_bytes = 0u64;
         for (index, entry) in plan.entries.iter().enumerate() {
             cancel.check()?;
@@ -249,12 +267,12 @@ impl ZipCompressor {
             );
             self.report(label, fraction(done_bytes, plan.total_bytes));
             let Some(source) = &entry.source else {
-                writer.add_folder(&entry.name, entry.modified)?;
+                writer.add_folder(entry)?;
                 continue;
             };
             let stream = source.read(Some(cancel.cancellable()))?;
             let mut content = stream.upcast::<gio::InputStream>().into_read();
-            writer.add_file(&entry.name, entry.modified, &mut content, cancel, &mut |_| {})?;
+            writer.add_file(entry, &mut content, cancel)?;
             done_bytes += entry.size;
         }
         writer.finish()?;
@@ -324,15 +342,18 @@ fn add_item(
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         Some(cancel.cancellable()),
     )?;
-    let modified = DosTime::from_unix_seconds(modified_seconds(&info));
+    let modified = modified_seconds(&info);
+    let mode = info
+        .has_attribute("unix::mode")
+        .then(|| info.attribute_uint32("unix::mode") & 0o777);
     match info.file_type() {
         gio::FileType::Regular => {
             let size = u64::try_from(info.size()).unwrap_or(0);
             plan.total_bytes += size;
-            push_entry(plan, Some(file.clone()), name, modified, size)
+            push_entry(plan, Some(file.clone()), name, (modified, mode), size)
         }
         gio::FileType::Directory => {
-            push_entry(plan, None, format!("{name}/"), modified, 0)?;
+            push_entry(plan, None, format!("{name}/"), (modified, mode), 0)?;
             add_folder_contents(plan, file, &name, cancel)
         }
         // Links are never followed and special files never opened.
@@ -372,7 +393,7 @@ fn push_entry(
     plan: &mut CompressionPlan,
     source: Option<gio::File>,
     name: String,
-    modified: DosTime,
+    (modified, mode): (Option<u64>, Option<u32>),
     size: u64,
 ) -> Result<(), ArchiveError> {
     if plan.entries.len() >= MAX_ENTRIES {
@@ -383,8 +404,64 @@ fn push_entry(
         name,
         modified,
         size,
+        mode,
     });
     Ok(())
+}
+
+/// The format a compression writes.
+enum EntryWriter<W: std::io::Write> {
+    Zip(ZipWriter<W>),
+    TarXz(Box<TarXzWriter<W>>),
+}
+
+impl<W: std::io::Write> EntryWriter<W> {
+    fn add_folder(&mut self, entry: &PlannedEntry) -> Result<(), ArchiveError> {
+        match self {
+            Self::Zip(writer) => writer.add_folder(&entry.name, DosTime::from_unix_seconds(entry.modified)),
+            Self::TarXz(writer) => writer.add_folder(
+                &entry.name,
+                entry.modified.unwrap_or(0),
+                entry.mode.unwrap_or(0o755),
+            ),
+        }
+    }
+
+    fn add_file(
+        &mut self,
+        entry: &PlannedEntry,
+        content: &mut dyn std::io::Read,
+        cancel: &Cancellation,
+    ) -> Result<(), ArchiveError> {
+        match self {
+            Self::Zip(writer) => {
+                let modified = DosTime::from_unix_seconds(entry.modified);
+                writer.add_file(&entry.name, modified, content, cancel, &mut |_| {})
+            }
+            Self::TarXz(writer) => writer.add_file(
+                &entry.name,
+                (entry.modified.unwrap_or(0), entry.mode.unwrap_or(0o644)),
+                entry.size,
+                content,
+                cancel,
+            ),
+        }
+    }
+
+    fn finish(self) -> Result<W, ArchiveError> {
+        match self {
+            Self::Zip(writer) => writer.finish(),
+            Self::TarXz(writer) => writer.finish(),
+        }
+    }
+}
+
+/// Whether `name` asks for a `.tar.xz`.
+fn is_tar_xz(name: &str) -> bool {
+    name.len() >= TAR_XZ_ENDING.len()
+        && name
+            .get(name.len() - TAR_XZ_ENDING.len()..)
+            .is_some_and(|ending| ending.eq_ignore_ascii_case(TAR_XZ_ENDING))
 }
 
 /// `time::modified`, in seconds since the Unix epoch.
@@ -469,6 +546,41 @@ mod tests {
         assert_eq!(inside_names, ["a.jpg", "b.jpg"]);
         let is_staging = |name: &String| name.starts_with(STAGING_PREFIX);
         assert!(!names_in(root.path()).iter().any(is_staging));
+
+        // A `.tar.xz` name writes an XZ-compressed TAR with the same items.
+        let long_name = format!("{}.jpg", "n".repeat(120));
+        fs::write(root.path().join("Photos").join(&long_name), b"long").unwrap();
+        for (name, mode) in [("a.jpg", 0o750), ("b.jpg", 0o640)] {
+            let permissions = std::os::unix::fs::PermissionsExt::from_mode(mode);
+            fs::set_permissions(root.path().join("Photos").join(name), permissions).unwrap();
+        }
+        let uris = vec![file_uri(&root.path().join("Photos"))];
+        let tar = ZipCompressor::new()
+            .compress(&request(root.path(), uris, "Photos.tar.xz"), &cancel)
+            .unwrap();
+        let inside = browser.list(&tar.uri, "Photos/", &cancel).unwrap();
+        let inside_names: Vec<&str> = inside.entries.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(inside_names, ["a.jpg", "b.jpg", long_name.as_str()]);
+        let copy = browser.preview_member(&tar.uri, "Photos/b.jpg", &cancel).unwrap();
+        assert_eq!(fs::read(copy.path).unwrap(), b"second picture");
+        // A TAR keeps each item's permissions, so a program stays runnable.
+        let archive = super::super::tar::TarArchive::open(
+            Box::new(fs::File::open(root.path().join("Photos.tar.xz")).unwrap()),
+            super::super::tar::TarCompression::Xz,
+            100,
+            &cancel,
+        )
+        .unwrap();
+        let mode_of = |name: &str| {
+            let member = archive
+                .members()
+                .iter()
+                .find(|member| member.name == name)
+                .unwrap();
+            (member.external_attributes >> 16) & 0o777
+        };
+        assert_eq!(mode_of("Photos/a.jpg"), 0o750);
+        assert_eq!(mode_of("Photos/b.jpg"), 0o640);
     }
 
     /// parity: ARC-023

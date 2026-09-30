@@ -10,8 +10,7 @@ use super::limits::WrittenBytes;
 use super::plan::{ExtractionPlan, ExtractionSummary, PathKind, PlannedMember};
 use super::staging::ExtractionStaging;
 use super::ZipExtractor;
-use crate::archive::source::ArchiveStream;
-use crate::archive::zip::ZipArchive;
+use crate::archive::source::OpenedArchive;
 use crate::archive::ArchiveError;
 use crate::transfer::{Cancellation, Node};
 
@@ -21,7 +20,7 @@ const BLOCK_BYTES: usize = 64 * 1024;
 const LAST_FRACTION_BEFORE_PUBLISHING: f64 = 0.99;
 
 /// An archive being read for extraction.
-pub(super) type SourceArchive = ZipArchive<Box<dyn ArchiveStream>>;
+pub(super) type SourceArchive = OpenedArchive;
 
 /// One extraction writing into its staging folder.
 pub(super) struct Unpacking<'a> {

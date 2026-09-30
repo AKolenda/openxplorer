@@ -158,7 +158,8 @@ impl ExecutableSearch {
 
     /// The host path of the first executable named `name` in
     /// [`SYSTEM_PATH`], like `shutil.which(name, path=SYSTEM_PATH)`.
-    fn find(&self, name: &str) -> Option<PathBuf> {
+    #[must_use]
+    pub fn find(&self, name: &str) -> Option<PathBuf> {
         SYSTEM_PATH
             .iter()
             .map(|folder| Path::new(folder).join(name))

@@ -6,20 +6,21 @@
 //! name, then Type, Location, Full path, Size, Opens with, Created,
 //! Modified and Accessed, the Change app…, Copy full path and Calculate
 //! folder size buttons, and the read-only permissions the backend reports.
+//! A local folder also gets Analyse disk usage where an analyser is
+//! installed.
 
 use gtk::glib;
 use gtk::prelude::*;
 use ox_core::format;
+use ox_core::integration::DiskTool;
 use ox_core::location::{is_smb_server, LocationContext};
-use ox_core::places::KnownFolder;
 use ox_core::versions::{is_conventional_snapshot, snapshot_location};
 
 use super::folder_sizes::{FolderSizeState, NOT_SCANNED};
-use super::metadata::ItemProperties;
-use super::mount_assistant::mount_assistant;
-use crate::dialog_layer::{note, quiet_text, PropertyGrid};
+use super::metadata::{ItemProperties, MountFacts};
+use crate::dialog_layer::{note, quiet_text, DialogFrame, PropertyGrid};
 use crate::icons::{self, Art, ArtImage, Icon};
-use crate::window::{BrowserWindow, ButtonStyle, WindowAction};
+use crate::window::{is_disk_tool_installed, ButtonStyle, WindowAction};
 
 /// The size of the item's picture at the top of the General tab
 /// (`fileIcon(current, 48)`).
@@ -57,15 +58,36 @@ pub(super) struct GeneralFacts<'a> {
     pub folder_size: Option<&'a FolderSizeState>,
     /// The snapshot collections known now, whose items are read-only.
     pub snapshot_roots: &'a [String],
+    /// The name can be edited to rename the item (PROP-005): not a
+    /// standard folder, a share, a page or a previous version.
+    pub can_rename: bool,
+}
+
+/// The values of a folder's General tab that a folder-size scan updates.
+#[derive(Debug, Clone)]
+pub(super) struct FolderRows {
+    /// The Size value.
+    pub size: gtk::Label,
+    /// The Contains value: how many files and folders it holds.
+    pub contains: gtk::Label,
+}
+
+impl FolderRows {
+    /// Shows the folder's measured size and counts.
+    pub(super) fn show(&self, state: &FolderSizeState) {
+        self.size.set_text(&state.size_text());
+        self.size.set_tooltip_text(Some(&state.summary_tooltip()));
+        self.contains.set_text(&state.contains_text());
+    }
 }
 
 /// Fills the General tab, replacing "Reading file properties…". Returns
-/// the Size value of a folder, which a folder-size scan updates.
-pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option<gtk::Label> {
+/// a folder's Size and Contains values, which a folder-size scan updates.
+pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option<FolderRows> {
     clear(panel);
     let properties = facts.properties;
     let entry = &properties.entry;
-    panel.append(&header(properties));
+    panel.append(&header(properties, facts.can_rename));
     let grid = PropertyGrid::new();
     let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
     grid.add_row("Type", &entry.type_label);
@@ -75,6 +97,18 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     if let Some(state) = facts.folder_size.filter(|_| entry.is_dir) {
         size_value.set_tooltip_text(Some(&state.summary_tooltip()));
     }
+    let contains = entry.is_dir.then(|| {
+        let text = facts
+            .folder_size
+            .map_or_else(|| NOT_SCANNED.to_owned(), FolderSizeState::contains_text);
+        grid.add_row("Contains", &text)
+    });
+    if let Some(target) = &properties.link_target {
+        grid.add_row("Points to", target);
+    }
+    if let Some((width, height)) = properties.dimensions {
+        grid.add_row("Dimensions", &format!("{width} × {height} pixels"));
+    }
     if !entry.is_dir {
         let app = properties.default_app.as_deref().unwrap_or(NO_DEFAULT_APP);
         grid.add_row("Opens with", app);
@@ -82,21 +116,62 @@ pub(super) fn fill_general(panel: &gtk::Box, facts: &GeneralFacts<'_>) -> Option
     grid.add_row("Created", &format::date_time_text(properties.created));
     grid.add_row("Modified", &format::date_time_text(entry.modified));
     grid.add_row("Accessed", &format::date_time_text(properties.accessed));
+    if let Some(mount) = &properties.mount {
+        add_mount_rows(&grid, mount);
+    }
     panel.append(grid.widget());
     panel.append(&buttons(facts));
     if entry.is_dir && !is_smb_server(&entry.uri) {
         panel.append(&quiet_text(SIZE_EXPLANATION));
     }
-    entry.is_dir.then_some(size_value)
+    contains.map(|contains| FolderRows {
+        size: size_value,
+        contains,
+    })
 }
 
-/// The item's picture and name (`.property-file`).
-fn header(properties: &ItemProperties) -> gtk::Box {
+/// Mounted on, Mounted from, File system and the free space with its bar,
+/// for a mount point (PROP-004, as Dolphin's General tab). They come last,
+/// so the bar under the free space ends the grid.
+fn add_mount_rows(grid: &PropertyGrid, mount: &MountFacts) {
+    grid.add_row("Mounted on", &mount.mounted_on);
+    grid.add_row("Mounted from", &mount.mounted_from);
+    grid.add_row("File system", &mount.filesystem);
+    let Some((free, total)) = mount.space.filter(|(_, total)| *total > 0) else {
+        return;
+    };
+    let text = format!(
+        "{} free of {}",
+        format::pretty_bytes(free),
+        format::pretty_bytes(total)
+    );
+    let value = grid.add_row("Free space", &text);
+    let bar = gtk::LevelBar::builder()
+        .min_value(0.0)
+        .max_value(1.0)
+        .hexpand(true)
+        .build();
+    #[expect(clippy::cast_precision_loss, reason = "a bar's fraction needs no exact bytes")]
+    bar.set_value(1.0 - free as f64 / total as f64);
+    bar.update_property(&[gtk::accessible::Property::Label(&text)]);
+    // The bar goes under the text; it is the grid's last line.
+    let (column, line, _, _) = grid.widget().query_child(&value);
+    grid.widget().attach(&bar, column, line + 1, 1, 1);
+}
+
+/// The item's picture and name (`.property-file`). The name is a field
+/// when the item can be renamed: Enter renames it, as OK does in
+/// Explorer's and Dolphin's Properties.
+fn header(properties: &ItemProperties, can_rename: bool) -> gtk::Box {
     let header = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .css_classes(["property-file"])
         .build();
     header.append(&ArtImage::new(Art::for_entry(&properties.entry), HEADER_ART_SIZE));
+    if can_rename {
+        header.append(&name_field(&properties.entry.uri, &properties.entry.name));
+        return header;
+    }
     let name = gtk::Label::builder()
         .label(&properties.entry.name)
         .xalign(0.0)
@@ -108,6 +183,39 @@ fn header(properties: &ItemProperties) -> gtk::Box {
         .build();
     header.append(&name);
     header
+}
+
+/// The editable name of the item at `uri`; Enter asks the window to
+/// rename it, and the dialog closes once it is renamed.
+fn name_field(uri: &str, name: &str) -> gtk::Entry {
+    let field = gtk::Entry::builder()
+        .text(name)
+        .hexpand(true)
+        .valign(gtk::Align::Center)
+        .build();
+    field.update_property(&[gtk::accessible::Property::Label("Name")]);
+    let uri = uri.to_owned();
+    let original = name.to_owned();
+    field.connect_activate(move |field| {
+        let name = field.text().to_string();
+        let window = field.root().and_downcast::<crate::window::BrowserWindow>();
+        let (false, Some(window)) = (name == original, window) else {
+            return;
+        };
+        let frame = field
+            .ancestor(DialogFrame::static_type())
+            .and_downcast::<DialogFrame>();
+        let uri = uri.clone();
+        glib::spawn_future_local(async move {
+            let renamed = window.rename_item_at(&uri, &name).await;
+            match (renamed, frame) {
+                (Ok(()), Some(frame)) => frame.close(),
+                (Err(message), Some(frame)) => frame.show_error(&message),
+                (_, None) => {}
+            }
+        });
+    });
+    field
 }
 
 /// The Size value: a file's size, or a folder's measured size or "Not
@@ -138,7 +246,22 @@ fn buttons(facts: &GeneralFacts<'_>) -> gtk::Box {
     if entry.is_dir && !is_smb_server(&entry.uri) {
         row.append(&calculate_size_button(&entry.uri));
     }
+    if entry.uri.starts_with("file:") && !is_read_only {
+        super::custom_icon::icon_buttons(&row, &entry.uri, facts.properties.has_custom_icon);
+    }
+    let is_local_folder = entry.is_dir && entry.uri.starts_with("file:");
+    if is_local_folder && is_disk_tool_installed(DiskTool::AnalyseUsage) {
+        row.append(&analyse_usage_button(&entry.uri));
+    }
     row
+}
+
+/// Analyse disk usage: a disk-usage analyser at the folder at `uri`, as
+/// Dolphin's "Explore in Filelight" (PROP-015).
+fn analyse_usage_button(uri: &str) -> gtk::Button {
+    let button = glyph_button("Analyse disk usage", Icon::HardDrive);
+    WindowAction::AnalyseDiskUsage.assign_with_target_to(&button, &uri.to_variant());
+    button
 }
 
 /// A bordered button with `glyph` and `label`.
@@ -179,8 +302,8 @@ fn calculate_size_button(uri: &str) -> gtk::Button {
     button
 }
 
-/// Fills the Permissions tab.
-pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties) {
+/// Fills the Permissions tab; `editor` changes them, where the user may.
+pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties, editor: Option<gtk::Box>) {
     clear(panel);
     let grid = PropertyGrid::new();
     grid.add_row("Owner", properties.owner.as_deref().unwrap_or_default());
@@ -191,6 +314,9 @@ pub(super) fn fill_permissions(panel: &gtk::Box, properties: &ItemProperties) {
     grid.add_row("Writable", access_text(access.writable));
     grid.add_row("Executable", access_text(access.executable));
     panel.append(grid.widget());
+    if let Some(editor) = editor {
+        panel.append(&editor);
+    }
     panel.append(&note(PERMISSIONS_NOTE));
 }
 
@@ -212,43 +338,27 @@ pub(super) fn show_read_failure(general: &gtk::Box, permissions: &gtk::Box, mess
     permissions.append(&quiet_text(METADATA_UNREADABLE));
 }
 
-/// The Location tab of a standard folder (PROP-017). Relocating a
-/// standard folder needs the folder-location service of
-/// `desktop/folder_locations.py`, which is not ported yet, so the tab
-/// says where the folder is and that moving it comes later.
-pub(super) fn location_panel(folder: KnownFolder) -> gtk::Box {
-    let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let label = folder.label();
-    let intro = format!(
-        "Choose where {label} is stored. Applications that honor Linux’s standard-folder settings will use \
-         this location."
-    );
-    panel.append(&quiet_text(&intro));
-    let notice = "Changing a standard folder's location is not in the native preview yet. Use the \
-                  current OpenXplorer or xdg-user-dirs-update until it arrives.";
-    panel.append(&note(notice));
-    // Until the tab has its Folder location field, Use this path puts the
-    // mounted folder on the clipboard for xdg-user-dirs-update.
-    panel.append(&mount_assistant(glib::clone!(
-        #[weak]
-        panel,
-        move |path: &str| {
-            panel.clipboard().set_text(path);
-            if let Some(window) = panel.root().and_downcast::<BrowserWindow>() {
-                window.show_message(MOUNT_PATH_COPIED);
-            }
-        }
-    )));
-    panel
-}
-
-/// The toast after Use this path while the Location tab has no Folder
-/// location field.
-const MOUNT_PATH_COPIED: &str = "Linux path copied. After mounting, use it as the folder location.";
-
 /// Removes every child of `panel`.
 fn clear(panel: &gtk::Box) {
     while let Some(child) = panel.first_child() {
         panel.remove(&child);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Properties button runs the analyser on the folder.
+    ///
+    /// parity: PROP-015
+    #[gtk::test]
+    fn the_analyse_button_runs_the_analyser_on_the_folder() {
+        let button = analyse_usage_button("file:///srv/media");
+        assert_eq!(button.action_name().as_deref(), Some("win.analyse-disk-usage"));
+        assert_eq!(
+            button.action_target_value(),
+            Some("file:///srv/media".to_variant())
+        );
     }
 }

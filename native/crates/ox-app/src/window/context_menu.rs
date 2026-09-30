@@ -19,12 +19,14 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 use ox_core::entry::Entry;
+use ox_core::integration::{is_disk_image, DiskTool};
 use ox_core::location::{is_smb_location, is_smb_server};
 use ox_core::ops::JournalDirection;
 use ox_core::settings::ContextMenu as MenuStyleChoice;
 
 use super::actions::{plain_action, text_action};
 use super::command_bar::new_menu;
+use super::disk_tools::is_installed;
 use super::menu_popover::{MenuPopover, MenuStyle};
 use super::widget_tree::children;
 use super::window_action::WindowAction;
@@ -39,15 +41,10 @@ use entries::{
 /// opened from the keyboard points.
 const KEYBOARD_MENU_INSET: i32 = 40;
 
-/// True for a ZIP archive, by its name or its type (`isZipEntry`).
+/// True for an archive the app extracts itself, by its name or its type
+/// (`isZipEntry`): a ZIP, or a TAR plain or compressed (ARC-024).
 fn is_zip(name: &str, content_type: Option<&str>) -> bool {
-    let named_zip = name.to_lowercase().ends_with(".zip");
-    let zip_types = [
-        "application/zip",
-        "application/x-zip",
-        "application/x-zip-compressed",
-    ];
-    named_zip || content_type.is_some_and(|content_type| zip_types.contains(&content_type))
+    ox_core::archive::is_supported_archive(name, content_type)
 }
 
 /// What `entry` is, as its menu cares.
@@ -187,6 +184,7 @@ impl BrowserWindow {
             editors: self.context().desktop_integration().known_editor_shortcuts(),
             caching,
             delete_label: self.delete_label(),
+            disk_tool: disk_tool_of(entry),
         }
     }
 
@@ -310,6 +308,22 @@ fn context_menu_shortcut() -> gtk::ShortcutController {
     shortcuts
 }
 
+/// The installed disk tool the menu of `entry` offers: Mount disk image
+/// for a local disk image, Analyse disk usage for a local folder.
+fn disk_tool_of(entry: &Entry) -> Option<DiskTool> {
+    if !entry.navigation_uri().starts_with("file:") {
+        return None;
+    }
+    let tool = if entry.is_dir {
+        DiskTool::AnalyseUsage
+    } else if is_disk_image(&entry.name) {
+        DiskTool::MountImage
+    } else {
+        return None;
+    };
+    is_installed(tool).then_some(tool)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,5 +333,6 @@ mod tests {
         assert!(is_zip("Photos.ZIP", None));
         assert!(is_zip("download", Some("application/x-zip-compressed")));
         assert!(!is_zip("notes.txt", Some("text/plain")));
+        assert!(is_zip("backup.tar.gz", None));
     }
 }

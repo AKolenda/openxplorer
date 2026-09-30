@@ -72,6 +72,7 @@ impl BrowserWindow {
                 let program = match destination {
                     DropDestination::Program(program) => Some(program.name.clone()),
                     DropDestination::Folder(_)
+                    | DropDestination::Volume(_)
                     | DropDestination::QuickAccess { .. }
                     | DropDestination::RecycleBin => None,
                 };

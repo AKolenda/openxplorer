@@ -16,7 +16,9 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::settings::{ColumnWidth, PreferencesUpdate, SettingsError, Theme, WindowSize, SIDEBAR_WIDTHS};
+use ox_core::settings::{
+    ColumnWidth, DetailsPaneOptions, PreferencesUpdate, SettingsError, Theme, WindowSize, SIDEBAR_WIDTHS,
+};
 
 use super::folder_pane::FolderView;
 use super::BrowserWindow;
@@ -54,6 +56,8 @@ pub(super) enum Preference {
     WindowSize(WindowSize),
     /// Crumbs from `/` rather than from the home folder (NAV-024).
     ShowFullPath(bool),
+    /// The details pane's own options (PROP-010).
+    DetailsPaneOptions(DetailsPaneOptions),
 }
 
 impl Preference {
@@ -70,6 +74,7 @@ impl Preference {
             Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
             Preference::WindowSize(size) => update.window_size = Some(size),
             Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
+            Preference::DetailsPaneOptions(options) => update.details_pane_options = Some(options),
             Preference::DefaultLayout => {
                 update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
                 // An empty list clears every saved column width.
@@ -140,6 +145,8 @@ impl BrowserWindow {
             .model()
             .set_show_hidden(preferences.show_hidden);
         // `win.details-pane` starts from the same preferences.
+        self.details_pane()
+            .set_options(preferences.details_pane_options.clone());
         self.fit_details_pane();
         self.show_view(FolderView::from_setting(preferences.view));
         let workspace = self.workspace();

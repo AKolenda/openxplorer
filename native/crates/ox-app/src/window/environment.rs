@@ -179,3 +179,33 @@ impl BrowserWindow {
         landing::render(body, page, places, &locations, &discovery);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ox_core::settings::{BookmarkRequest, Settings};
+
+    use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+
+    /// A test cannot plug in a drive, so the handler every volume monitor
+    /// signal is connected to is called as the monitor calls it: the window
+    /// reads the volumes and the settings again and redraws the sidebar.
+    ///
+    /// parity: DEV-001, DEV-002
+    #[gtk::test]
+    fn a_volume_monitor_change_redraws_the_sidebar() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let pin = BookmarkRequest::new(fixture.uri_of("Documents"), "Pinned while plugging in");
+        Settings::open(test.settings_directory())
+            .pin_many(&[pin], None, None)
+            .expect("the settings file takes a pin");
+
+        test.window.volumes_changed();
+
+        wait_until("the sidebar to be redrawn", || {
+            let labels = test.window.sidebar().labels();
+            labels.contains(&"Pinned while plugging in".to_owned())
+        });
+        assert!(test.window.sidebar().labels().contains(&"Local Disk".to_owned()));
+    }
+}

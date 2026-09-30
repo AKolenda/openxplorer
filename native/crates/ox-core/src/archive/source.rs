@@ -7,20 +7,24 @@
 //! goes through.
 
 use std::fs::OpenOptions;
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, SeekFrom};
 
-use gio::prelude::*;
 use rustix::fs::OFlags;
 
 use super::gio_reader::GioArchiveReader;
-use super::zip::ZipArchive;
+use super::member_names::has_tar_name;
+use super::tar::{TarArchive, TarCompression, TarMemberReader};
+use super::zip::{MemberReader, ZipArchive, ZipMember};
 use super::ArchiveError;
 use crate::location::normalise;
+use crate::network::local_path;
 use crate::private_storage::KernelOpenFlags;
 use crate::transfer::Cancellation;
 
 /// ARC-005: the most members the built-in reader accepts.
 const MAX_MEMBERS: usize = 100_000;
+/// A plain TAR says `ustar` just before this offset.
+const TAR_SIGNATURE_END: usize = 262;
 
 /// A seekable stream of archive bytes. Reading a ZIP starts at its end, so
 /// every source must be able to seek.
@@ -52,24 +56,21 @@ where
     }
 }
 
-/// ARC-007: opens archives through GIO. A file with a local path,
-/// including the `GVfs` FUSE path of a mounted share, is read directly;
-/// anything else (an SMB share or a phone without a FUSE path) is read in
-/// place through a seekable GIO stream, never copied first.
-///
-/// `local_path` in `desktop/native_opening.py` also read an `smb://`
-/// archive through a kernel CIFS mount of the same share. Here such an
-/// archive is read through `GVfs`, which may have to mount the share
-/// first; the CIFS shortcut returns when the mount-table reader of the
-/// search service is part of `ox-core`.
+/// ARC-007: opens archives through GIO. A file with a local path is read
+/// directly, and so is an `smb://` archive inside a kernel CIFS mount or
+/// the `GVfs` FUSE export of its share ([`local_path`], as
+/// `archive_stream` in `desktop/native_opening.py`); anything else (a share
+/// or a phone without a local path) is read in place through a seekable
+/// GIO stream, never copied first.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GioArchiveOpener;
 
 impl ArchiveOpener for GioArchiveOpener {
     fn open(&self, uri: &str, cancel: &Cancellation) -> Result<Box<dyn ArchiveStream>, ArchiveError> {
         cancel.check()?;
-        let file = gio::File::for_uri(&normalise(uri)?);
-        let Some(path) = file.path() else {
+        let uri = normalise(uri)?;
+        let Some(path) = local_path(&uri) else {
+            let file = gio::File::for_uri(&uri);
             return Ok(Box::new(GioArchiveReader::open(&file, cancel)?));
         };
         // `O_NONBLOCK`: a FIFO named like an archive fails to read instead
@@ -82,8 +83,58 @@ impl ArchiveOpener for GioArchiveOpener {
     }
 }
 
-/// Opens the archive at `uri` with `opener` and reads its central
-/// directory (`Archives.opened`).
+/// An open ZIP or TAR archive (ARC-022, ARC-024). Both are read into the
+/// same member records, so every rule applies to both.
+pub(super) enum OpenedArchive {
+    Zip(ZipArchive<Box<dyn ArchiveStream>>),
+    Tar(TarArchive),
+}
+
+impl OpenedArchive {
+    /// Every member, in archive order.
+    pub(super) fn members(&self) -> &[ZipMember] {
+        match self {
+            Self::Zip(archive) => archive.members(),
+            Self::Tar(archive) => archive.members(),
+        }
+    }
+
+    /// Starts reading the data of the member at `index`.
+    ///
+    /// # Errors
+    ///
+    /// Damaged data or the source's read error.
+    pub(super) fn open_member(&mut self, index: usize) -> Result<MemberData<'_>, ArchiveError> {
+        Ok(match self {
+            Self::Zip(archive) => MemberData::Zip(archive.open_member(index)?),
+            Self::Tar(archive) => MemberData::Tar(archive.open_member(index)?),
+        })
+    }
+}
+
+/// The data of one member being read.
+pub(super) enum MemberData<'a> {
+    Zip(MemberReader<'a>),
+    Tar(TarMemberReader<'a>),
+}
+
+impl MemberData<'_> {
+    /// Reads the next bytes into `buffer`; 0 at the member's end.
+    ///
+    /// # Errors
+    ///
+    /// Damaged data or the source's read error.
+    pub(super) fn read_chunk(&mut self, buffer: &mut [u8]) -> Result<usize, ArchiveError> {
+        match self {
+            Self::Zip(reader) => reader.read_chunk(buffer),
+            Self::Tar(reader) => reader.read_chunk(buffer),
+        }
+    }
+}
+
+/// Opens the archive at `uri` with `opener` and reads its members: a
+/// ZIP's central directory (`Archives.opened`), or every header of a TAR,
+/// plain or compressed.
 ///
 /// # Errors
 ///
@@ -93,12 +144,34 @@ pub(super) fn open_archive(
     opener: &dyn ArchiveOpener,
     uri: &str,
     cancel: &Cancellation,
-) -> Result<ZipArchive<Box<dyn ArchiveStream>>, ArchiveError> {
-    let stream = opener.open(uri, cancel)?;
+) -> Result<OpenedArchive, ArchiveError> {
+    let mut stream = opener.open(uri, cancel)?;
+    if let Some(compression) = tar_compression(&mut stream)? {
+        let archive = TarArchive::open(stream, compression, MAX_MEMBERS, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
+        return Ok(OpenedArchive::Tar(archive));
+    }
+    // A TAR this reader does not know (old V7, compress(1)) is not read
+    // as a ZIP, whose error would not say what is wrong.
+    if has_tar_name(uri.rsplit('/').next().unwrap_or_default()) {
+        return Err(ArchiveError::DamagedArchive);
+    }
     let archive = ZipArchive::open(stream, cancel)?;
     // ARC-005: an archive with more members is left to an archive manager.
     if archive.members().len() > MAX_MEMBERS {
         return Err(ArchiveError::TooManyMembers);
     }
-    Ok(archive)
+    Ok(OpenedArchive::Zip(archive))
+}
+
+/// The compression of a TAR in `stream`, by its first bytes; `None` for
+/// anything else, which is read as a ZIP. The stream is left at its start.
+fn tar_compression(stream: &mut Box<dyn ArchiveStream>) -> Result<Option<TarCompression>, ArchiveError> {
+    let mut start = Vec::with_capacity(TAR_SIGNATURE_END);
+    stream
+        .as_mut()
+        .take(TAR_SIGNATURE_END as u64)
+        .read_to_end(&mut start)?;
+    stream.seek(SeekFrom::Start(0))?;
+    Ok(TarCompression::detect(&start))
 }

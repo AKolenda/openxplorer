@@ -18,8 +18,13 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `view` | [`PropertiesView`]: the tabs and their panels |
+//! | `selection_view` | [`SelectionProperties`]: Properties of several items |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_panel` | The General and Permissions tabs |
+//! | `permissions_editor` | Changing permissions on the Permissions tab |
+//! | `checksums_panel` | The Checksums tab of a file |
+//! | `custom_icon` | Change icon… and Restore default icon |
+//! | `location_panel` | [`LocationPanel`](location_panel::LocationPanel): the Location tab of a standard folder |
 //! | `mount_assistant` | The network mount assistant of the Location tab |
 //! | `sharing_panel` | The Sharing tab: Samba user shares of a local folder |
 //! | `versions_panel` | [`VersionsPanel`]: the Previous versions tab |
@@ -30,11 +35,16 @@
 //! | `folder_sizes` | [`FolderSizeState`] and [`FolderSizes`]: measured sizes and their text |
 //! | `size_scan_strip` | [`SizeScanStrip`]: the bar of a running folder-size scan |
 
+mod checksums_panel;
+mod custom_icon;
 mod folder_sizes;
 mod general_panel;
+mod location_panel;
 mod metadata;
 mod mount_assistant;
+mod permissions_editor;
 mod restore;
+mod selection_view;
 mod sharing_panel;
 mod size_scan_strip;
 mod snapshot_banner;
@@ -46,8 +56,13 @@ mod view;
 use ox_core::location::ItemKind;
 use ox_core::places::KnownFolder;
 
+#[cfg(test)]
+pub(crate) use custom_icon::set_custom_icon;
 pub(crate) use folder_sizes::{size_key, FolderSizeState, FolderSizes, NOT_SCANNED};
+#[cfg(test)]
+pub(crate) use location_panel::LocationPanel;
 pub(crate) use restore::RestoreRequest;
+pub(crate) use selection_view::SelectionProperties;
 pub(crate) use sharing_panel::system_usershares;
 pub(crate) use size_scan_strip::{progress_text, RunEnd, RunPosition, SizeScanStrip};
 pub(crate) use snapshot_banner::SnapshotBanner;
@@ -88,6 +103,8 @@ pub(crate) enum PropertiesTab {
     Location,
     /// Owner, group, mode and access.
     Permissions,
+    /// MD5, SHA1, SHA256 and SHA512 of a file (files only).
+    Checksums,
     /// Snapshots and backups of the item.
     PreviousVersions,
 }
@@ -100,6 +117,7 @@ impl PropertiesTab {
             PropertiesTab::Sharing => "Sharing",
             PropertiesTab::Location => "Location",
             PropertiesTab::Permissions => "Permissions",
+            PropertiesTab::Checksums => "Checksums",
             PropertiesTab::PreviousVersions => "Previous versions",
         }
     }
@@ -111,6 +129,7 @@ impl PropertiesTab {
             PropertiesTab::Sharing => "sharing",
             PropertiesTab::Location => "location",
             PropertiesTab::Permissions => "permissions",
+            PropertiesTab::Checksums => "checksums",
             PropertiesTab::PreviousVersions => "versions",
         }
     }
@@ -122,6 +141,7 @@ impl PropertiesTab {
             PropertiesTab::Sharing,
             PropertiesTab::Location,
             PropertiesTab::Permissions,
+            PropertiesTab::Checksums,
             PropertiesTab::PreviousVersions,
         ]
         .into_iter()

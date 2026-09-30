@@ -12,6 +12,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::choices::{ContextMenu, Theme, View};
+use super::pane_options::DetailsPaneOptions;
 use super::SettingsError;
 
 /// Text sizes offered in Settings, in percent.
@@ -234,6 +235,16 @@ pub struct Preferences {
     /// new tab (Dolphin's `OpenExternallyCalledFolderInNewTab`, inverted).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub external_folders_in_new_window: bool,
+    /// Archives the app can read open as folders in its archive browser
+    /// (Dolphin's "Open archives as folder", ARC-022); off, they open in
+    /// their default application. Saved only when off, like the options
+    /// below.
+    #[serde(skip_serializing_if = "is_true")]
+    pub browse_archives: bool,
+    /// The details pane's own options; saved only once changed, so the
+    /// settings of a new installation stay as the Python app writes them.
+    #[serde(skip_serializing_if = "DetailsPaneOptions::is_default")]
+    pub details_pane_options: DetailsPaneOptions,
 }
 
 impl Default for Preferences {
@@ -253,6 +264,8 @@ impl Default for Preferences {
             show_full_path: false,
             editable_location: false,
             external_folders_in_new_window: false,
+            browse_archives: true,
+            details_pane_options: DetailsPaneOptions::default(),
         }
     }
 }
@@ -294,6 +307,10 @@ impl Preferences {
         if let Some(size) = update.window_size.filter(|size| size.is_valid()) {
             self.window_size = Some(size);
         }
+        replace_if_some(&mut self.browse_archives, update.browse_archives);
+        if let Some(options) = &update.details_pane_options {
+            self.details_pane_options = options.clone();
+        }
     }
 }
 
@@ -329,6 +346,10 @@ pub struct PreferencesUpdate {
     pub editable_location: Option<bool>,
     /// Open folders from other apps in a new window, or in a new tab.
     pub external_folders_in_new_window: Option<bool>,
+    /// Open archives as folders, or in their default application.
+    pub browse_archives: Option<bool>,
+    /// Replaces the details pane's options.
+    pub details_pane_options: Option<DetailsPaneOptions>,
 }
 
 impl PreferencesUpdate {
@@ -361,6 +382,10 @@ impl PreferencesUpdate {
             show_full_path: flag("showFullPath"),
             editable_location: flag("editableLocation"),
             external_folders_in_new_window: flag("externalFoldersInNewWindow"),
+            browse_archives: flag("browseArchives"),
+            details_pane_options: values
+                .get("detailsPaneOptions")
+                .and_then(DetailsPaneOptions::from_json),
         })
     }
 }
@@ -409,6 +434,15 @@ fn bounded_width(value: f64, range: RangeInclusive<u32>) -> Option<u32> {
     let high = f64::from(*range.end());
     let in_range = value >= low && value <= high;
     in_range.then(|| value.round_ties_even() as u32)
+}
+
+/// Whether `value` is true, for preferences saved only when turned off.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passes the field by reference"
+)]
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 /// Stores `value` in `slot` if there is one.

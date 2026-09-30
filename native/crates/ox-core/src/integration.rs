@@ -52,6 +52,7 @@
 //! | `terminal` | Open in Terminal | `terminal_integration.py` |
 //! | `mime_type` | The handled MIME types | `desktop_integration.py`, `activation.py` |
 //! | `sandbox`, `host_command` | Flatpak detection; running host programs | (new) |
+//! | `disk_tools` | Disks, the Disk Image Mounter and a disk-usage analyser | (new) |
 //! | `private_file`, `worker` | Atomic private writes; worker threads | the Python modules' helpers |
 
 mod activation;
@@ -60,9 +61,10 @@ mod applications;
 mod background_portal;
 mod brave;
 mod default_apps;
+mod disk_tools;
 mod file_manager_bus;
 mod file_manager_request;
-mod host_command;
+pub(crate) mod host_command;
 mod mime_type;
 mod opening;
 mod private_file;
@@ -86,6 +88,7 @@ pub use default_apps::{
     DefaultApps, DefaultAppsError, DefaultsStatus, DesktopId, MimeDefaults, RestoreScope, XdgMime,
     ZipAssociation, APP_ID, RESTORE_NOTE,
 };
+pub use disk_tools::{is_disk_image, DiskTool};
 pub use file_manager_bus::{
     BusStatus, FileManagerBus, RegistrationFailed, RequestNotOpened, BUS_NAME, OBJECT_PATH,
 };

@@ -120,6 +120,9 @@ pub(crate) enum WindowAction {
     Hidden,
     /// Shows or hides the details pane.
     DetailsPane,
+    /// Switches the details pane option or field named by the string
+    /// target (the pane's menu).
+    DetailsPaneOption,
     /// The column the details view sorts by.
     Sort,
     /// Whether the details view sorts ascending or descending.
@@ -217,6 +220,16 @@ pub(crate) enum WindowAction {
     Eject,
     /// Powers off the drive that holds the location in the string target.
     SafelyRemove,
+    /// Shows the drive mounted at the string target in GNOME Disks.
+    OpenInDisks,
+    /// Opens GNOME Disks' Format dialog for the drive mounted at the
+    /// string target.
+    FormatDrive,
+    /// Attaches the disk image whose URI is the string target, read-only.
+    MountDiskImage,
+    /// Opens a disk-usage analyser at the folder whose URI is the string
+    /// target.
+    AnalyseDiskUsage,
     /// Caches the current folder for search, or stops caching it (a
     /// check item).
     CacheFolder,
@@ -280,6 +293,9 @@ pub(crate) enum WindowAction {
     ExtractHere,
     /// Compress to ZIP file: the selection into a new ZIP beside it.
     CompressToZip,
+    /// Compress to…: asks for the new archive's name and format first
+    /// (ARC-023).
+    CompressTo,
     /// Open with…: the Open with dialog for the one selected item, or the
     /// folder.
     OpenWith,
@@ -357,6 +373,7 @@ impl WindowAction {
             WindowAction::View => "view",
             WindowAction::Hidden => "hidden",
             WindowAction::DetailsPane => "details-pane",
+            WindowAction::DetailsPaneOption => "details-pane-option",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",
             WindowAction::Theme => "theme",
@@ -400,6 +417,10 @@ impl WindowAction {
             WindowAction::Disconnect => "disconnect",
             WindowAction::Eject => "eject",
             WindowAction::SafelyRemove => "safely-remove",
+            WindowAction::OpenInDisks => "open-in-disks",
+            WindowAction::FormatDrive => "format-drive",
+            WindowAction::MountDiskImage => "mount-disk-image",
+            WindowAction::AnalyseDiskUsage => "analyse-disk-usage",
             WindowAction::CacheFolder => "cache-folder",
             WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",
@@ -425,6 +446,7 @@ impl WindowAction {
             WindowAction::ExtractAll => "extract-all",
             WindowAction::ExtractHere => "extract-here",
             WindowAction::CompressToZip => "compress-to-zip",
+            WindowAction::CompressTo => "compress-to",
             WindowAction::OpenWith => "open-with",
             WindowAction::ChangeApp => "change-app",
             WindowAction::OpenWithOf => "open-with-of",

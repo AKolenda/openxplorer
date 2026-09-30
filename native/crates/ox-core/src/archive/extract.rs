@@ -26,7 +26,9 @@
 //! | `staging` | The staging folder: creating, securing, publishing, removing |
 //! | `output` | [`ExtractionOutput`]: creating and writing the files |
 //! | `unpack` | Writing the planned members into the staging folder |
+//! | `lift` | Extract here: a lone top-level folder becomes the output |
 
+mod lift;
 mod limits;
 mod output;
 mod plan;
@@ -38,6 +40,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::sync::Arc;
 
+pub use lift::lift_single_folder;
 pub use limits::ExtractionLimits;
 pub use output::{ExtractionOutput, GioExtractionOutput, OutputFile};
 pub use plan::ExtractionSummary;

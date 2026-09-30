@@ -138,6 +138,12 @@ impl BrowserWindow {
         self.is_writing_files() || self.shows_dialog()
     }
 
+    /// True when tab `id` must stay here: the window is busy, or the tab
+    /// has Properties, open or withdrawn (`tabCanMove`, PROP-008).
+    pub(super) fn keeps_tab(&self, id: TabId) -> bool {
+        self.is_busy_for_tab_moves() || self.has_properties(id)
+    }
+
     /// True while a dialog of this window is open.
     pub(super) fn shows_dialog(&self) -> bool {
         let this = self.upcast_ref::<gtk::Window>();
@@ -215,7 +221,7 @@ impl BrowserWindow {
         if destination == self {
             return Err(TabMoveRefusal::NoDestination);
         }
-        if self.is_busy_for_tab_moves() {
+        if self.keeps_tab(id) {
             return Err(TabMoveRefusal::SourceBusy);
         }
         let tab = self.moved_tab(id).ok_or(TabMoveRefusal::NoDestination)?;
@@ -230,7 +236,7 @@ impl BrowserWindow {
     ///
     /// Why the tab stays: this window is busy, or the tab closed.
     fn detach_tab(&self, id: TabId) -> Result<BrowserWindow, TabMoveRefusal> {
-        if self.is_busy_for_tab_moves() {
+        if self.keeps_tab(id) {
             return Err(TabMoveRefusal::SourceBusy);
         }
         let tab = self.moved_tab(id).ok_or(TabMoveRefusal::NoDestination)?;
@@ -281,7 +287,7 @@ impl BrowserWindow {
     /// "Move tab to window…": lists the other windows under tab `id`
     /// (`moveTabMenu`), or says why the tab cannot move.
     pub(super) fn show_move_tab_menu(&self, id: TabId) {
-        if self.is_busy_for_tab_moves() {
+        if self.keeps_tab(id) {
             self.show_message(&TabMoveRefusal::SourceBusy.to_string());
             return;
         }

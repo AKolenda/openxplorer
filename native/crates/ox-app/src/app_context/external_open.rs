@@ -46,4 +46,20 @@ impl AppContext {
             }
         });
     }
+
+    /// Records a disk tool started on `target` as `<tool> <target>`, when
+    /// the test records launches; true if it did.
+    #[cfg(test)]
+    pub(crate) fn record_tool_launch(
+        &self,
+        tool: ox_core::integration::DiskTool,
+        target: &std::path::Path,
+    ) -> bool {
+        let mut launches = self.imp().recorded_launches.borrow_mut();
+        let Some(launches) = launches.as_mut() else {
+            return false;
+        };
+        launches.push(format!("{tool:?} {}", target.display()));
+        true
+    }
 }

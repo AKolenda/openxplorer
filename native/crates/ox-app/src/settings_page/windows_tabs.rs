@@ -85,12 +85,20 @@ const DRAGGING_NOTE: &str = "Right-click a tab → Move tab to window… lets yo
                              File drops never remove the source. ZIP contents must be extracted \
                              first; some apps need a mounted network path.";
 
+const BROWSE_ARCHIVES: RowText = RowText {
+    title: "Open archives as folders",
+    description: "Browse ZIP and TAR archives (.tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst) inside \
+                  OpenXplorer. Off, they open in their default application.",
+    keywords: "zip tar gz archive compressed browse extract",
+};
+
 /// The Windows & tabs page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::WindowsAndTabs;
     let windows = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     windows.append_group(&windows_group(page));
     windows.append_group(&address_group(page));
+    windows.append_group(&archives_group(page));
     windows.append_group(&dragging_group());
     windows.append_text(&parts::note(Icon::Info, DRAGGING_NOTE));
     windows
@@ -150,6 +158,23 @@ fn address_group(page: &SettingsPage) -> SettingsGroup {
     };
     editable.add_control(&page.preference_switch(editable_location), ControlName::RowTitle);
     group.add_row(&editable);
+    group
+}
+
+/// Whether archives open as folders (ARC-022), as Dolphin's Navigation
+/// setting "Open archives as folder".
+fn archives_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new("Archives");
+    let row = SettingRow::new(BROWSE_ARCHIVES);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.browse_archives,
+        write: |browse| PreferencesUpdate {
+            browse_archives: Some(browse),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&row);
     group
 }
 

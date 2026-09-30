@@ -67,6 +67,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Duplicate",
             "Copy path",
             "Compress to ZIP file",
+            "Compress to…",
             "-",
             "Previous versions",
             "Properties",
@@ -127,14 +128,15 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    for disabled in ["Open", "Copy path", "Properties"] {
+    for disabled in ["Open", "Copy path"] {
         assert!(!menu.row(disabled).is_sensitive(), "{disabled}");
     }
     // CMD-031: a disabled item says why.
-    let tooltip = menu.row("Properties").tooltip_text().unwrap_or_default();
-    assert_eq!(tooltip, "Properties\nSelect only one item for this command.");
-    // Rename renames them together (OPS-014).
-    for enabled in ["Cut", "Copy", "Rename", "Move to Trash", "Duplicate"] {
+    let tooltip = menu.row("Copy path").tooltip_text().unwrap_or_default();
+    assert_eq!(tooltip, "Copy path\nSelect only one item for this command.");
+    // Rename renames them together (OPS-014); Properties describe them
+    // together (PROP-002).
+    for enabled in ["Cut", "Copy", "Rename", "Move to Trash", "Duplicate", "Properties"] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
     }
 }
@@ -315,4 +317,26 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     assert!(!test.window.is_action_enabled("back"), "the history stays behind");
+}
+
+/// Mount disk image and Analyse disk usage start their tool on the
+/// item's local path.
+///
+/// parity: DEV-011, PROP-015
+#[gtk::test]
+fn the_disk_tools_run_on_the_items_local_path() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("distro.iso"), b"image").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.activate("mount-disk-image", Some(&fixture.uri_of("distro.iso")));
+    test.activate("analyse-disk-usage", Some(&fixture.uri_of("Documents")));
+
+    assert_eq!(
+        test.context.recorded_launches(),
+        [
+            format!("MountImage {}", fixture.path("distro.iso").display()),
+            format!("AnalyseUsage {}", fixture.path("Documents").display()),
+        ]
+    );
 }

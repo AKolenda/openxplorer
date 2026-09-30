@@ -32,7 +32,7 @@ mod records;
 use std::io::{Read, Seek};
 
 pub use error::{Zip64Field, ZipFormatError};
-pub(crate) use member::{MemberFileType, ZipMember};
+pub(crate) use member::{CompressionMethod, DosDateTime, MemberFileType, ZipMember};
 pub(crate) use reader::MemberReader;
 
 use crate::archive::ArchiveError;

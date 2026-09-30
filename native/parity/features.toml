@@ -5995,7 +5995,7 @@ bridge = [
 ]
 dolphin = "Item context menu; DolphinContextMenu::addItemContextMenu"
 native = "done"
-native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts, a_zip_file_on_a_share_offers_extraction_and_sign_out, several_selected_items_disable_what_acts_on_one, each_code_editor_is_offered_after_open_with_for_one_item); native/crates/ox-app/src/window/tests/context_menus.rs. Every command works: Terminal, Open with, the editors, folder sizes, Previous versions and Properties. Adds Duplicate, Extract here and Compress to ZIP file. The cache toggle is a check item named \"Cache this folder for search\", checked while cached, where Python renamed it \"Stop caching this folder\"."
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (a_folder_classic_menu_keeps_the_python_order_and_shortcuts, a_zip_file_on_a_share_offers_extraction_and_sign_out, several_selected_items_disable_what_acts_on_one, each_code_editor_is_offered_after_open_with_for_one_item); native/crates/ox-app/src/window/tests/context_menus.rs. Every command works: Terminal, Open with, the editors, folder sizes, Previous versions and Properties. Adds Duplicate, Extract here and Compress to ZIP file. The cache toggle is a check item named \"Cache this folder for search\", checked while cached, where Python renamed it \"Stop caching this folder\". Properties stays enabled with several items selected and describes them together (PROP-002), as in Dolphin and Explorer."
 
 [[feature]]
 id = "CMD-010"
@@ -11165,8 +11165,8 @@ python_tests = [
 bridge = ["environment", "mountVolume", "list"]
 dolphin = "Solid → Places panel Devices and Removable Devices; Dolphin Places 'Devices' section; KFilePlacesModel devices (Solid)"
 gnome = "GVolumeMonitor (udisks2, mtp, gphoto2, afc and goa remote monitors) with mount-/volume-/drive- signals; GVolumeMonitor mounts/volumes; Gio.VolumeMonitor + Gio.Volume.mount; GVolumeMonitor with GVfs mtp/gphoto2/afc"
-native = "partial"
-native_note = "native/crates/ox-app/src/volumes.rs (mounted_mtp_phone_and_afc_device_are_visible, unmounted_phone_is_click_to_connect_device, unsupported_and_shadowed_mounts_stay_hidden). Porting notes: GIO already filters system-internal mounts."
+native = "done"
+native_note = "native/crates/ox-app/src/volumes.rs (mounted_mtp_phone_and_afc_device_are_visible, unmounted_phone_is_click_to_connect_device, unsupported_and_shadowed_mounts_stay_hidden, a_volume_with_an_unsupported_activation_root_is_skipped, mount_roots_with_a_user_name_are_hidden); native/crates/ox-app/src/window/environment.rs (a_volume_monitor_change_redraws_the_sidebar). Mounted drives, unmounted mountable volumes ('Click to connect') and phones/cameras are listed from the volume monitor without mounting or probing; shadowed mounts, unmountable volumes and roots outside file/smb/mtp/gphoto2/afc are hidden; every monitor signal redraws the sidebar and This PC (DEV-002). Porting notes: GIO already filters system-internal mounts."
 
 [[feature]]
 id = "DEV-002"
@@ -11187,7 +11187,7 @@ python_tests = []
 bridge = ["environment"]
 gnome = "GVolumeMonitor signals"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/devices.rs (every_volume_monitor_signal_refreshes_every_window). The window connects one list of volume-monitor signals (mount, volume and drive added, removed and changed; window/environment.rs); the test emits each of them and proves every window reads the environment again. Real drives and phones are covered by the manual acceptance of ROADMAP.md."
+native_note = "native/crates/ox-app/src/window/tests/devices.rs (every_volume_monitor_signal_refreshes_every_window); native/crates/ox-app/src/window/environment.rs (a_volume_monitor_change_redraws_the_sidebar). The window connects one list of volume-monitor signals (mount, volume and drive added, removed and changed; window/environment.rs) to one handler that reads the volumes and the settings again and redraws the sidebar, the landing page (This PC), the tabs and the details pane; the tests emit each signal and prove every window reads the environment again. Real drives and phones are covered by the manual acceptance of ROADMAP.md."
 
 [[feature]]
 id = "DEV-003"
@@ -11267,8 +11267,8 @@ python_tests = [
 bridge = ["normalise", "list", "operate", "mountVolume", "environment", "cacheSet"]
 dolphin = "kio-extras mtp:/, afc:/ and camera:/ workers in Places Devices"
 gnome = "GVfs mtp/gphoto2/afc backends; GVfs mtp / gphoto2 / afc backends and their remote volume monitors"
-native = "partial"
-native_note = "native/crates/ox-core/src/location/normalise.rs (device_uris_keep_their_authority); native/crates/ox-core/src/entry/classify.rs (mtp_directory_with_bracketed_usb_identifier). Porting notes: Transfer staging for MTP is tracked under XFER."
+native = "done"
+native_note = "native/crates/ox-core/src/location/normalise.rs (device_uris_keep_their_authority, invalid_addresses_are_refused_with_specific_guidance); native/crates/ox-core/src/entry/classify.rs (mtp_directory_with_bracketed_usb_identifier); native/crates/ox-core/tests/location_python.rs (the Python fixtures). mtp://, gphoto2:// and afc:// addresses keep their bracketed USB authority and get a normalised, percent-encoded path; credentials, stray brackets, a query or fragment, a missing identifier and encoded control characters are refused with the Python messages. Porting notes: Transfer staging for MTP is tracked under XFER."
 
 [[feature]]
 id = "DEV-006"
@@ -11293,8 +11293,8 @@ python_tests = []
 bridge = ["unmount", "environment"]
 dolphin = "Places 'Unmount'/'Safely Remove'; Eject / Safely Remove in Places; Places panel “Unmount” / “Release”"
 gnome = "g_mount_unmount_with_operation; g_mount_unmount_with_operation + GMountOperation::show-processes"
-native = "partial"
-native_note = "native/crates/ox-core/src/network/volumes.rs (disconnect_waits_for_this_windows_writes, a_location_outside_every_user_mount_cannot_be_disconnected); native/crates/ox-app/src/devices.rs (disconnect_names_a_device_or_a_mount_as_app_js_does); native/crates/ox-app/src/window/place_menus.rs (a_drive_card_offers_disconnect_only_where_the_mount_allows_it); native/crates/ox-app/src/window/tests/network.rs (disconnect_asks_first_and_reports_a_location_without_a_mount). The card's menu, 'Disconnect this mount?', the unmount with GTK's mount operation, 'Could not disconnect' and the move to Network work. Missing: the toast while this window writes waits for the window to report its writes (the file-operations milestone). Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md. Porting notes: GNOME and Dolphin also offer Eject / Safely remove (DEV-007, DEV-008), now in the menus too."
+native = "done"
+native_note = "native/crates/ox-core/src/network/volumes.rs (disconnect_waits_for_this_windows_writes, a_location_outside_every_user_mount_cannot_be_disconnected); native/crates/ox-app/src/devices.rs (disconnect_names_a_device_or_a_mount_as_app_js_does); native/crates/ox-app/src/window/place_menus.rs (a_drive_card_offers_disconnect_only_where_the_mount_allows_it); native/crates/ox-app/src/window/tests/network.rs (disconnect_asks_first_and_reports_a_location_without_a_mount, sign_out_and_disconnect_wait_for_a_running_file_operation). The card's 'Disconnect device'/'Disconnect mount' menu, the toast 'Finish the current operation before disconnecting.' while this window writes, 'Disconnect this mount?', the unmount with GTK's mount operation, 'Could not disconnect' and the move to Network work. Real SMB servers and phones are covered by the manual acceptance of ROADMAP.md. Porting notes: GNOME and Dolphin also offer Eject / Safely remove (DEV-007, DEV-008), now in the menus too."
 
 [[feature]]
 id = "DEV-007"
@@ -11356,8 +11356,8 @@ sources = [
 python_tests = []
 bridge = ["unmount", "list"]
 dolphin = "setViewsToHomeIfMountPathOpen"
-native = "todo"
-native_note = "Porting notes: OpenXplorer moves only the active tab, and only after unmounting (to Network). Natively, the tabs on a drive stop listing and watching it before Disconnect, Eject or Safely remove, so the window's own folder monitors never keep it busy; moving them to Home is still missing. Existing OpenXplorer part is protected by DEV-006."
+native = "done"
+native_note = "native/crates/ox-app/src/window/mounting.rs (move_tabs_home_from); native/crates/ox-app/src/window/tests/network.rs (the_tabs_on_a_drive_move_home_before_it_is_ejected). Before Disconnect, Eject or Safely remove, the tab in front navigates to Home when it shows a folder on the drive, and every tab behind it on the drive gets Home in its history, stops listing and watching the drive and lists Home when next shown, so the window's own monitors never keep the drive busy. Disconnect still ends on Network as app.js does. There is no split pane or terminal panel to move. Existing OpenXplorer part is protected by DEV-006."
 
 [[feature]]
 id = "DEV-010"
@@ -11371,8 +11371,8 @@ sources = ["kio:src/filewidgets/kfileplacesview.cpp:1443-1486"]
 python_tests = ["desktop/tests/ui_file_drag.py::Read-only folders have no copy destination"]
 bridge = ["mountVolume", "operate"]
 dolphin = "KFilePlacesView::dropEvent setupNeeded"
-native = "todo"
-native_note = "Porting notes: OpenXplorer deliberately publishes no drop target for unmounted sidebar devices."
+native = "done"
+native_note = "native/crates/ox-app/src/window/sidebar/drop_spots.rs, window/file_drop.rs (deliver_drop), window/mounting.rs (mount_for_drop); native/crates/ox-app/src/window/file_drop/targets.rs (a_drop_on_an_unmounted_drive_mounts_it_first). A drive or device row still to be mounted (outside Quick access) now takes dropped items and is highlighted like a folder; the drop is read and finished first, then the volume is mounted through GTK's mount operation (the desktop asks for an encrypted disk's password), and the items go through the usual drop into its root (copy, move or link, with the transfer engine's checks). A volume that cannot be mounted shows 'Could not mount device' and nothing is transferred; a cancelled password prompt does nothing. The test covers the drop spot, the failure, and a drive that mounts (a test-only stand-in gives the volume's root, since the isolated session has no real drive), whose root then receives the copied item. Porting notes: OpenXplorer deliberately publishes no drop target for unmounted sidebar devices."
 
 [[feature]]
 id = "DEV-011"
@@ -11387,8 +11387,8 @@ python_tests = []
 bridge = ["openWith", "environment"]
 dolphin = "dolphin-plugins “Mount ISO” service menu"
 gnome = "gnome-disk-image-mounter (udisks2 Manager.LoopSetup)"
-native = "todo"
-native_note = "Today it works only through Open with (Disk Image Mounter). Existing OpenXplorer part is protected by OPEN-011 and OPEN-012."
+native = "done"
+native_note = "native/crates/ox-core/src/integration/disk_tools.rs (iso_and_img_files_are_disk_images_mounted_by_path); native/crates/ox-app/src/window/context_menu/entries.rs (disk_images_mount_and_folders_analyse_their_usage_where_the_tools_exist); native/crates/ox-app/src/window/tests/context_menus.rs (the_disk_tools_run_on_the_items_local_path). A local .iso or .img file (any case) gets 'Mount disk image' after Open with when GNOME's Disk Image Mounter is installed; it runs gnome-disk-image-mounter on the file's path, which attaches it read-only through a loop device, and the image then appears among the drives through the volume monitor. Existing OpenXplorer part is protected by OPEN-011 and OPEN-012."
 
 [[feature]]
 id = "DEV-012"
@@ -11403,7 +11403,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE Partition Manager integration (not Dolphin core)"
 gnome = "gnome-disks --block-device=<dev> [--format-device], with the device from g_volume_get_identifier(unix-device)"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/integration/disk_tools.rs (disks_opens_or_formats_the_block_device, a_tool_is_found_only_when_installed_and_baobab_comes_first); native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts). A removable drive (it can be ejected or stopped) with a block device gets 'Open in Disks' and 'Format…' in its sidebar menu when GNOME Disks is installed (looked up in the system folders, on the host inside Flatpak); they run 'gnome-disks --block-device <device>' and '… --format-device' with an argument list, never a shell. Both are hidden when Disks is not installed."
 
 [[feature]]
 id = "DEV-013"
@@ -11421,7 +11422,7 @@ bridge = ["environment", "list"]
 dolphin = "kio-gdrive gdrive:/ (KAccounts), a separate add-on outside Dolphin"
 gnome = "GOA + GVfs google-drive / onedrive / davs backends (google.mount and onedrive.mount present) via the goa volume monitor"
 native = "todo"
-native_note = "Dolphin 23.08.5 has no online-account drives of its own, so the origin is GNOME Online Accounts."
+native_note = "Dolphin 23.08.5 has no online-account drives of its own, so the origin is GNOME Online Accounts. Not ported yet: GOA mounts use account-bound addresses (google-drive://user@gmail.com/…, onedrive://…, davs://user@host/… for Nextcloud), which the shared location rules refuse on purpose (only file:, smb: and the device schemes are accepted, and a user name in an address is refused). Admitting them changes those rules, which native/crates/ox-core/tests/location_python.rs holds equal to the Python app's normaliser, and needs an owner decision on the user-name rule."
 
 [[feature]]
 id = "OPEN-001"
@@ -12171,8 +12172,8 @@ python_tests = [
   "desktop/tests/test_v05.py::OpeningTests::test_zip_by_extension",
 ]
 bridge = ["activateItem"]
-native = "partial"
-native_note = "native/crates/ox-app/src/icons/art.rs (zip_detection_matches_app_js, every_kind_renders_through_the_svg_loader)."
+native = "done"
+native_note = "native/crates/ox-app/src/icons/file_type.rs (zip_is_detected_by_name_in_any_case_or_by_content_type); native/crates/ox-app/src/icons/art.rs (a_folder_named_zip_keeps_the_plain_folder); native/crates/ox-app/src/icons/composition.rs (a_zip_archive_is_the_folder_with_the_zip_badge_in_its_corner); native/crates/ox-app/src/icons/art_image.rs (showing_other_art_replaces_every_piece). Regular files named *.zip in any case or typed application/zip, x-zip or x-zip-compressed show the file folder with the Fluent folder-zip badge (Windows 11's compressed-folder look); a directory named *.zip keeps the plain folder; ZIP rows stay files."
 
 [[feature]]
 id = "ARC-002"
@@ -12279,8 +12280,8 @@ python_tests = [
   "desktop/tests/test_terminal_security.py::AdditionalSecurityTests::test_zip_rejects_ambiguous_and_control_names",
 ]
 bridge = ["archiveList"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_browse.rs (a_central_directory_over_32_mib_is_not_read, more_than_100000_members_are_left_to_an_archive_manager, a_file_that_is_not_a_zip_reports_a_bad_zip). The native UI does not show these errors yet."
+native = "done"
+native_note = "native/crates/ox-core/tests/archive_browse.rs (a_central_directory_over_32_mib_is_not_read, more_than_100000_members_are_left_to_an_archive_manager, a_file_that_is_not_a_zip_reports_a_bad_zip); native/crates/ox-app/src/window/tests/archives.rs (a_corrupt_zip_says_why_it_cannot_be_browsed). A central directory over 32 MiB, more than 100,000 members and a corrupt file are refused with the Python messages, which the archive browser shows in its status line with no rows."
 
 [[feature]]
 id = "ARC-006"
@@ -12336,8 +12337,8 @@ python_tests = [
   "desktop/tests/test_rc2.py::ArchiveReaderTests::test_nonseekable_closes_stream",
 ]
 bridge = ["archiveList", "archiveOpenMember", "archiveInspect", "archiveExtract"]
-native = "partial"
-native_note = "native/crates/ox-core/tests/archive_gio.rs (short_gio_reads_are_completed_by_further_reads, one_read_asks_gio_for_at_most_64_kib, a_stream_that_cannot_seek_is_refused_and_closed, a_cancelled_reader_stops_reading, the_production_opener_reads_local_archives, a_fifo_named_like_an_archive_fails_instead_of_blocking). Deferred: local_path in desktop/native_opening.py also reads an smb:// archive through a kernel CIFS mount of the share; the native opener reads it through GVfs until the mount-table reader of the search service is in ox-core."
+native = "done"
+native_note = "native/crates/ox-core/src/archive/source.rs (GioArchiveOpener); native/crates/ox-core/tests/archive_gio.rs (the_production_opener_reads_local_archives, a_share_archive_with_a_local_path_is_read_from_it, short_gio_reads_are_completed_by_further_reads, one_read_asks_gio_for_at_most_64_kib, a_stream_that_cannot_seek_is_refused_and_closed, a_cancelled_reader_stops_reading, a_fifo_named_like_an_archive_fails_instead_of_blocking). A ZIP with a local path, including an smb:// archive inside a kernel CIFS mount or the GVfs FUSE export of its share (network::local_path, as desktop/native_opening.py), is read directly; otherwise a seekable GIO stream is read in 64 KiB blocks, completing short reads and checking cancellation, and a stream that cannot seek is refused with the Python message."
 
 [[feature]]
 id = "ARC-008"
@@ -12749,8 +12750,8 @@ python_tests = [
 bridge = ["archiveList", "archiveOpenMember"]
 dolphin = "BrowseThroughArchives (default false); Settings → Navigation “Open archives as folder” (BrowseThroughArchives, kio-extras archive worker)"
 gnome = "GVfs archive backend (archive:// via archive.mount, “Archive Mounter”) or libarchive"
-native = "todo"
-native_note = "Porting notes: OpenXplorer browses ZIP archives only, read-only, and always opens them in its archive browser rather than behind an option. Existing OpenXplorer part is protected by ARC-002 and ARC-003."
+native = "partial"
+native_note = "native/crates/ox-core/src/archive/tar.rs (a_gzipped_tar_lists_its_members_and_reads_them_in_any_order), native/crates/ox-core/tests/archive_tar.rs (a_tar_is_browsed_like_a_zip), native/crates/ox-core/src/archive/member_names.rs, native/crates/ox-core/src/settings/preferences.rs; native/crates/ox-app/src/window/tests/archives.rs (a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere). Besides ZIP, TAR archives plain or compressed with gzip, bzip2, XZ or Zstandard (.tar, .tar.gz/.tgz, .tar.bz2/.tbz2, .tar.xz/.txz, .tar.zst/.tzst, recognised by name, content type or signature) open in the read-only archive browser, whose listing, private preview copies, hidden links and special files, and limits are those of ZIP (the TAR members are read into the same member records). Settings > Windows & tabs > Archives > 'Open archives as folders' (preferences.browseArchives, on by default and saved only when off, Dolphin's BrowseThroughArchives) opens them in their default application instead. Missing: 7z and RAR, which need decoders the app does not link. Porting notes: OpenXplorer browses ZIP archives only, read-only, and always opens them in its archive browser rather than behind an option. Existing OpenXplorer part is protected by ARC-002 and ARC-003."
 
 [[feature]]
 id = "ARC-023"
@@ -12778,7 +12779,7 @@ bridge = ["archiveInspect", "archiveExtract"]
 dolphin = "Ark service menu “Compress → Here (as ZIP/TAR.GZ) / Compress to…”; Ark service menus (Extract/Compress)"
 gnome = "gnome-autoar AutoarCompressor (libgnome-autoar installed; Nautilus 46 “Compress…”) or File Roller's D-Bus/CLI; gnome-autoar (Nautilus 'Compress…' and 'Extract Here')"
 native = "partial"
-native_note = "native/crates/ox-core/src/archive/create.rs (items_are_compressed_into_a_new_zip_without_following_links, an_existing_name_is_never_replaced, the_write_guard_keeps_the_zip_out_of_protected_folders, a_cancelled_compression_leaves_nothing_behind) and create/zip_writer.rs (a_written_archive_reads_back_with_its_names_sizes_and_data); native/crates/ox-app/src/window/tests/archives.rs (compress_to_zip_puts_the_selection_into_a_new_zip_beside_it); native/crates/ox-app/src/archive_view/compress.rs (the_zip_is_named_after_the_first_item_then_numbered). Compress to ZIP file writes a deflated ZIP beside the selection, named after the first item or numbered, privately staged and published without replacing anything, with progress and Cancel; links and special files are left out. Missing: a name prompt, .tar.xz, .7z and password-protected ZIP, and ZIP64 (archives over 4 GiB or 65,535 items are refused). Porting notes: OpenXplorer offers 'Extract all…' for ZIP only and cannot compress. Explorer offers 'Compress to ZIP file' and 'Extract all'."
+native_note = "native/crates/ox-core/src/archive/create.rs (items_are_compressed_into_a_new_zip_without_following_links, an_existing_name_is_never_replaced, the_write_guard_keeps_the_zip_out_of_protected_folders, a_cancelled_compression_leaves_nothing_behind), create/zip_writer.rs (a_written_archive_reads_back_with_its_names_sizes_and_data) and create/tar_writer.rs; native/crates/ox-app/src/window/compress_dialog.rs; native/crates/ox-app/src/window/tests/archives.rs (compress_to_zip_puts_the_selection_into_a_new_zip_beside_it, compress_to_asks_for_a_name_and_a_format); native/crates/ox-app/src/archive_view/compress.rs (the_zip_is_named_after_the_first_item_then_numbered). Compress to ZIP file (both menus) writes a deflated ZIP beside the selection at once, named after the first item or numbered, as Explorer. Compress to… (classic menu) asks for the name and the format, 'ZIP (.zip)' by default or 'TAR.XZ (.tar.xz)' (ustar with GNU long names and base-256 sizes, XZ preset 6), and keeps the dialog open with the reason when the name is taken. Both are privately staged and published without replacing anything, with progress and Cancel; links and special files are left out, and a file that changes size while it is written into a .tar.xz stops the compression. Missing: .7z and password-protected ZIP (no 7z or AES encoder is linked) and ZIP64 (ZIPs over 4 GiB or 65,535 items are refused; the same item limit applies to .tar.xz). Porting notes: OpenXplorer offers 'Extract all…' for ZIP only and cannot compress. Explorer offers 'Compress to ZIP file' and 'Extract all'."
 
 [[feature]]
 id = "ARC-024"
@@ -12802,8 +12803,8 @@ python_tests = [
 bridge = ["archiveInspect", "archiveExtract"]
 dolphin = "Ark “Extract → Extract archive here, autodetect subfolder”"
 gnome = "gnome-autoar AutoarExtractor (libarchive), as Nautilus “Extract Here”"
-native = "todo"
-native_note = "OpenXplorer extracts ZIPs in-app; other archives open in their default application. Existing OpenXplorer part is protected by ARC-009, ARC-012 and OPEN-001."
+native = "partial"
+native_note = "native/crates/ox-core/src/archive/tar.rs, tar/header.rs, source.rs; native/crates/ox-core/tests/archive_tar.rs (compressed_tars_extract_into_a_new_folder, a_tar_with_a_link_extracts_nothing); native/crates/ox-app/src/window/tests/archives.rs (a_compressed_tar_is_browsed_and_extracted_unless_archives_open_elsewhere). Extract all… and Extract here work for .tar, .tar.gz/.tgz, .tar.bz2/.tbz2, .tar.xz/.txz and .tar.zst/.tzst (ustar, GNU long names and pax paths/sizes; gzip, bzip2 and XZ through the flate2, bzip2 and lzma-rust2 decoders, Zstandard through ruzstd, all pure Rust) with exactly the ZIP guarantees: the TAR headers are read into the same member records, so a new folder, nothing overwritten, refused path traversal, links, devices and FIFOs, the size limits, private staging and all-or-nothing publishing apply unchanged; a leading './' is dropped and the suggested folder name drops the whole ending (Backup.tar.gz → Backup). Missing: .7z and .rar, which still open in their default application because the app links no 7z or RAR decoder. Porting notes: OpenXplorer extracts ZIPs in-app; other archives open in their default application. Existing OpenXplorer part is protected by ARC-009, ARC-012 and OPEN-001."
 
 [[feature]]
 id = "ARC-025"
@@ -12822,8 +12823,8 @@ python_tests = []
 bridge = ["archiveInspect", "archiveExtract"]
 dolphin = "Ark service menu 'Extract archive here, autodetect subfolder' (added through KFileItemActions)"
 gnome = "gnome-autoar AutoarExtractor (Nautilus 'Extract', output-is-dest detection)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_here_uses_the_next_free_name, the_archive_commands_follow_the_selection); native/crates/ox-app/src/archive_view/extraction.rs (extract_here_tries_the_name_then_numbered_names): Extract here extracts beside the archive into '<name>', '<name> (2)', … with every ZIP rule, progress and Cancel, and is disabled in pages, server listings and previous versions. Missing: an archive with exactly one top-level folder is still nested instead of that folder becoming the output. Porting notes: OpenXplorer offers only the dialog (ARC-009) and never overwrites (ARC-012). ARC-024 extends this to other archive formats."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/archives.rs (extract_here_uses_the_next_free_name, the_archive_commands_follow_the_selection); native/crates/ox-app/src/archive_view/extraction.rs (extract_here_tries_the_name_then_numbered_names); native/crates/ox-core/src/archive/extract/lift.rs (a_lone_top_folder_becomes_the_output_under_a_free_name, a_folder_named_like_the_archive_takes_its_name_and_mixed_content_stays). Extract here extracts beside the archive into '<name>', '<name> (2)', … with every ZIP rule, progress and Cancel, and is disabled in pages, server listings and previous versions. When the output holds exactly one visible top-level folder, that folder is renamed up beside the archive under the first free name (its own, then '(2)', …) instead of being nested; each step is a rename in the destination that never replaces or copies, and a failed step puts the output back. Porting notes: OpenXplorer offers only the dialog (ARC-009) and never overwrites (ARC-012). ARC-024 extends this to other archive formats."
 
 [[feature]]
 id = "PROP-001"
@@ -12852,8 +12853,8 @@ python_tests = [
 ]
 bridge = ["properties"]
 dolphin = "Properties dialog (Alt+Return); Properties (Alt+Return); properties: Alt+Return, Alt+Enter; Dolphin: Alt+Return opens Properties."
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, properties_of_a_location_open_for_menus_outside_the_folder_view). Alt+Enter, the context menu's Properties and Previous versions, `win.properties-of` for any location, the standard-folder title, opening on a given tab and the lone Close button work. Missing: the sidebar, drive and network menus and FileManager1 ShowItemProperties do not call `win.properties-of` yet (their menus and the bus handler belong to other tracks), and the Location tab is a placeholder (PROP-017)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, properties_of_a_location_open_for_menus_outside_the_folder_view, show_item_properties_opens_the_properties_of_the_item); native/crates/ox-app/src/window/place_menus.rs (a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts, network_places_open_a_terminal_and_properties_where_they_can); native/crates/ox-app/src/window/sidebar/menu.rs (a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb); native/crates/ox-app/src/window/tests/folder_location.rs (the_location_tab_moves_documents_and_offers_to_move_its_files). Alt+Enter, the file and background menus, the Quick access pin menu, the drive menu (with Open in Terminal and the cache item), the network menu (Properties of a stable mount, as app.js, and of a connected share) and FileManager1 ShowItemProperties (a new tab at the parent with the item selected, then its Properties) open Properties; the title uses the standard-folder label, the tabs are General, Location (standard folders, a working tab), Permissions and Previous versions, it opens on a given tab and its only button is Close."
 
 [[feature]]
 id = "PROP-002"
@@ -12871,8 +12872,8 @@ sources = [
 python_tests = []
 bridge = ["properties", "folderSize"]
 dolphin = "KPropertiesDialog(KFileItemList)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer disables Properties when more than one item is selected."
+native = "done"
+native_note = "native/crates/ox-app/src/properties/selection_view.rs, properties/permissions_editor.rs and permissions_editor/choices.rs; native/crates/ox-core/src/permissions.rs (PermissionChange: every part is optional); native/crates/ox-app/src/window/tests/item_dialogs.rs (properties_of_several_items_total_them_and_change_them_together). With several items selected, Properties (Alt+Enter, the context menu and the command bar) opens '<n> items Properties' with a General tab (a '<n> files, <m> folders' heading, 'All of type …' or 'Multiple types', 'All in <folder>' or 'Multiple locations', and Size and Contains, which show 'Calculating…' while every selected folder is measured with the folder-size scan and then the combined bytes and files/folders, prefixed '≥' when a scan was partial) and a Permissions tab (Owner and Group, or 'Multiple'), whose editor, shown when the user owns every item, applies what the user changed to all of them, as Dolphin does: an access, owner or group the items do not share shows 'Varying (No Change)', 'Is executable' and the sticky box are half ticked when the items differ, only the controls the user changed are applied and every other bit stays as each item has it, Advanced Permissions are offered only when every item has the same mode, and 'Apply permissions' stays insensitive until something changes. Previous versions stays a one-item command. Closing the dialog cancels the measuring. Porting notes: OpenXplorer disables Properties when more than one item is selected."
 
 [[feature]]
 id = "PROP-003"
@@ -12898,8 +12899,8 @@ python_tests = [
 ]
 bridge = ["properties", "clipboardText", "folderSize"]
 dolphin = "Properties (Alt+Return) General/Permissions"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, calculate_folder_size_shows_the_size_everywhere_the_folder_is). Every row, Copy full path with its toast, Calculate folder size with its explanation, and the read-failure texts are ported (native/crates/ox-app/src/properties/general_panel.rs). Change app… closes Properties and opens the Open with dialog for the file (the ChangeApp window action). Missing: a window test of Change app…. Porting notes: Dolphin can edit permissions and ownership; the Python app shows them read-only."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_opens_the_properties_of_the_selected_file, properties_without_a_selection_describe_the_folder, calculate_folder_size_shows_the_size_everywhere_the_folder_is, change_app_closes_properties_and_opens_open_with). Every row, Copy full path with its toast, Calculate folder size with its explanation, and the read-failure texts are ported (native/crates/ox-app/src/properties/general_panel.rs). Change app… (files outside snapshots) closes Properties and opens the Open with dialog for the file. Porting notes: Dolphin can edit permissions and ownership (PROP-007); the Python app shows them read-only."
 
 [[feature]]
 id = "PROP-004"
@@ -12923,8 +12924,8 @@ python_tests = [
 ]
 bridge = ["properties", "folderSize", "applications"]
 dolphin = "KFilePropsPlugin"
-native = "todo"
-native_note = "Porting notes: OpenXplorer shows type, location, full path, size (or a folder-size scan), opens-with, created, modified and accessed. It has no content counts, symlink target, mount information or free-space bar."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (properties_show_a_links_target_and_a_mount_points_details, properties_without_a_selection_describe_the_folder). The General tab of a folder has a Contains row ('12 files, 3 folders', '≥ …' for a partial scan, 'Not scanned' until measured) that Calculate folder size updates with the Size row, as Explorer's Contains; a symbolic link has 'Points to' with its target; a mount point of the kernel mount table adds 'Mounted on', 'Mounted from', 'File system' and 'Free space' ('X free of Y') with a level bar. Counts come from the on-demand folder-size scan, not an automatic one, as opening a folder never measures it (PROP-027)."
 
 [[feature]]
 id = "PROP-005"
@@ -12938,7 +12939,8 @@ sources = ["kio:src/widgets/kpropertiesdialog.cpp:920-1000"]
 python_tests = []
 bridge = ["rename"]
 dolphin = "KFilePropsPlugin name edit"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (the_name_in_properties_renames_the_item). The name at the top of the General tab is an editable field for an item in a local or shared folder (not a standard folder, a share or server, a page or anything inside a previous version); Enter renames it through the same rename operation as F2 (Python name checks, write protection, never overwriting, Undo), shows a refusal such as a taken name inside the dialog, and closes the dialog once renamed, as OK does in Explorer and Dolphin."
 
 [[feature]]
 id = "PROP-006"
@@ -12974,8 +12976,8 @@ python_tests = ["desktop/tests/ui_release.py::Permissions tab opens"]
 bridge = ["properties"]
 dolphin = "KFilePermissionsPropsPlugin; Properties → Permissions tab (KPropertiesDialog, advanced ACLs)"
 gnome = "Gio 'unix::mode', 'unix::uid' and 'unix::gid' via Gio.File.set_attribute, as in Nautilus's Permissions tab; g_file_set_attribute_uint32(unix::mode) and unix::uid/gid (Nautilus Permissions page)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's Permissions tab is read-only, showing owner, group, POSIX mode and read/write/execute."
+native = "done"
+native_note = "native/crates/ox-core/src/permissions.rs (a_change_sets_only_the_chosen_bits_and_those_who_may_view_may_run, a_folder_change_reaches_its_content_but_never_a_link_target, advanced_permissions_and_the_group_reach_a_folders_content) and permissions/accounts.rs (groups_are_named_from_the_database_and_listed_once); native/crates/ox-app/src/window/tests/item_dialogs.rs (the_owner_changes_a_files_permissions). When the user owns an item with permission bits (not a link, a share root or anything inside a previous version), the Permissions tab adds Owner, Group and Others access choices ('No Access', 'Can Only View', 'Can View & Modify'), 'Is executable' for a file or 'Only owner can rename and delete folder content' (sticky bit) for a folder, a Group choice of the user's own groups (named from /etc/group), an Owner choice of every user only when running as the superuser (as Dolphin: only root may give an item away), Dolphin's 'Advanced Permissions' expander (Read/Write/Exec per class, Set UID, Set GID, Sticky; opening it starts from the simple choices and makes them insensitive), 'Apply changes to all subfolders and their contents' for a folder, and 'Apply permissions' (insensitive until something changes), which sets unix::gid, unix::uid and unix::mode through GIO without following links and says 'Permissions changed.' or shows the error. Only what the user changed is applied; setuid and setgid stay. A recursive change sets the chosen read/write access on the content, gives subfolders x where they may be viewed, and keeps each file's own x bits, cleared only for a class given no access (chmod -R u=rwX,g=rX,o= as Dolphin's +X emulation); Advanced Permissions give content the same rwx, files x only where they had some. The owner goes through the same unix::uid path as the group; the test proves an owner change reaches the system (a non-root user gets the refusal shown), since the isolated tests cannot run as root. Porting notes: OpenXplorer's Permissions tab is read-only, showing owner, group, POSIX mode and read/write/execute."
 
 [[feature]]
 id = "PROP-008"
@@ -13014,8 +13016,8 @@ python_tests = [
   "desktop/tests/ui_v06.py::Browse opens a new snapshot tab",
 ]
 bridge = ["properties", "previousVersions", "cancel"]
-native = "partial"
-native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (properties_belong_to_the_tab_that_opened_them, closing_a_tab_discards_its_properties). The dialog lies on an in-window layer under the title bar, is withdrawn when another tab (Ctrl+Tab, a new tab, Settings) comes to the front and comes back unchanged with its tab, is discarded with its tab, Close or Escape, and its tab's tooltip adds ' · Properties open'. Missing: a GTK test of Escape, and the rule that a tab with open Properties cannot move to another window, which applies once tab moves between windows exist."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (properties_belong_to_the_tab_that_opened_them, closing_a_tab_discards_its_properties, escape_closes_properties_and_a_tab_with_properties_stays_in_its_window). The dialog lies on an in-window layer under the title bar, is withdrawn when another tab (Ctrl+Tab, a new tab, Settings) comes to the front and comes back unchanged with its tab, is discarded with its tab, Close or Escape, and its tab's tooltip adds ' · Properties open'. A tab with Properties, open or withdrawn, cannot move to another window, by the tab menu or a drag ('Close this tab’s dialog and finish file operations before moving it.', tabCanMove)."
 
 [[feature]]
 id = "PROP-009"
@@ -13029,8 +13031,8 @@ sources = ["desktop/ui/app.js:421-425", "desktop/ui/app.js:421"]
 python_tests = []
 bridge = ["activateItem", "pin"]
 dolphin = "Information panel"
-native = "todo"
-native_note = "ROADMAP.md mentions a native selection metadata pane; it has no test yet. Porting notes: No file content preview/thumbnails in 1.1.4 (About says thumbnails not implemented). Dolphin's Information panel shows previews; native should add."
+native = "done"
+native_note = "native/crates/ox-app/src/window/details_pane/content.rs (a_file_shows_its_type_size_date_and_containing_folder, a_folder_can_be_pinned_and_is_not_scanned, no_selection_describes_the_folder, several_items_are_counted_and_shown_as_multiple, landing_pages_offer_no_pin); native/crates/ox-app/src/window/tests/environment.rs (the_details_pane_keeps_its_width_for_long_names). The pane (template resources/ui/details-pane.ui) has the 'Details' header with its close button, the item's art, the copy glyph for several items or the folder's art, the name or 'N items selected' and the type or 'Multiple items'/'Folder', Open plus Pin to Quick access for a folder, Pin to Quick access for the folder shown, the Properties rows (Type, Size with the measured size or 'Not scanned', Modified, Location; or Items, Location, Storage) and the SMB or local note, as renderDetails. Porting notes: previews and thumbnails are PROP-011."
 
 [[feature]]
 id = "PROP-010"
@@ -13052,8 +13054,8 @@ sources = [
 python_tests = []
 bridge = ["properties"]
 dolphin = "show_information_panel: F11"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's Details pane shows an icon, type, size, modified date and location for the selection, but no content preview, hover tracking or configurable fields. Shortcut conflict, Explorer wins: F11 is full screen in Explorer, whose panes use Alt+Shift+P (Details) and Alt+P (Preview)."
+native = "done"
+native_note = "native/crates/ox-core/src/settings/pane_options.rs (pane_options_round_trip_and_ignore_mistyped_values); native/crates/ox-app/src/window/details_pane/options_menu.rs, native/crates/ox-app/src/window/details_hover.rs; native/crates/ox-app/src/window/details_pane/content.rs (condensed_dates_drop_the_time); native/crates/ox-app/src/window/tests/environment.rs (the_details_pane_follows_the_pointer_and_shows_the_chosen_fields); native/crates/ox-app/src/window/tests/details_preview.rs (recordings_get_a_player_that_starts_only_with_auto_play). A secondary click on the details pane opens its menu, the app's usual Windows 11 style menu with check marks (win.details-pane-option), as Dolphin's Information panel: 'Show the item under the pointer' (the pane describes the item the pointer is over in either view, and the selection again when the pointer leaves the items), one checkable item per field (Type, Size, Modified, Location, Dimensions, Length, Items, Storage), 'Condensed dates' (on: the day only, as before; off: day and time) and 'Play audio and video automatically'. Choices are saved at once as preferences.detailsPaneOptions, written only once they differ from the defaults so a new installation's settings stay as the Python app writes them. Porting notes: OpenXplorer's Details pane shows an icon, type, size, modified date and location for the selection, but no content preview, hover tracking or configurable fields. Shortcut conflict, Explorer wins: F11 is full screen in Explorer, whose panes use Alt+Shift+P (Details) and Alt+P (Preview)."
 
 [[feature]]
 id = "PROP-011"
@@ -13074,8 +13076,8 @@ python_tests = []
 bridge = ["properties"]
 dolphin = "InformationPanel preview / media player; Information panel preview; Information panel (F11) preview"
 gnome = "Thumbnail factory large/x-large sizes; GtkPicture"
-native = "todo"
-native_note = "Porting notes: This is Explorer's Preview pane (Alt+P)."
+native = "done"
+native_note = "native/crates/ox-app/src/window/details_pane/media.rs, details_pane/content.rs (a_local_file_is_previewed_by_its_type); native/crates/ox-app/src/window/tests/environment.rs (the_details_pane_previews_an_image_and_names_its_dimensions); native/crates/ox-app/src/window/tests/details_preview.rs (recordings_get_a_player_that_starts_only_with_auto_play, a_document_shows_its_cached_thumbnail). With one local file selected and the pane shown, the details pane's preview area shows a picture of an image decoded off the main thread at the preview's size with its EXIF orientation (files up to 64 MiB; Dimensions from the file header), the valid cached freedesktop thumbnail of another document, or an inline GTK player (gtk::Video for video, the item's art with gtk::MediaControls for audio). Players start only when 'Play audio and video automatically' is on in the pane's menu (PROP-010). A redraw for the same item (size-scan progress, volume events, a folder change) keeps the preview, a playing player and its Dimensions or Length rows; nothing is read while the pane is hidden, and it catches up when shown. Shares, devices and folders keep their art, and a preview read for an earlier selection is dropped. Porting notes: This is Explorer's Preview pane (Alt+P)."
 
 [[feature]]
 id = "PROP-012"
@@ -13090,8 +13092,8 @@ python_tests = []
 bridge = []
 dolphin = "n/a (Information panel)"
 gnome = "org.gnome.NautilusPreviewer2 ShowFile (gnome-sushi 46 installed, org.gnome.NautilusPreviewer.service)"
-native = "todo"
-native_note = "Porting notes: Must not break type-ahead, where Space can be part of a name prefix."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/quick_look.rs; native/crates/ox-app/src/window/tests/input.rs (space_previews_the_selected_file_with_the_gnome_previewer). Each window follows GNOME Sushi through an asynchronous gio::DBusProxy for org.gnome.NautilusPreviewer2 made when the window is built (no D-Bus call blocks a key press): when Sushi runs or is D-Bus activatable, Space on one selected file (no typed prefix) calls ShowFile, moving the selection while the preview is open shows the newly selected file, the arrow keys pressed in Sushi's window (SelectionEvent) move the selection, and Space or Escape calls Close. When Sushi closes its window itself (its Visible property turns false after being true) or quits, the window stops following the selection, so the next Space opens a new preview. Without Sushi, or with a folder or several items selected, Space toggles the selection as before, and a typed prefix keeps its space. The Flatpak manifests allow talking to org.gnome.NautilusPreviewer. Missing: the preview is not transient for the OpenXplorer window, because the window handle needs the GDK X11/Wayland bindings (gdk4-x11, gdk4-wayland), which the app does not link. Porting notes: Must not break type-ahead, where Space can be part of a name prefix."
 
 [[feature]]
 id = "PROP-013"
@@ -13111,7 +13113,8 @@ python_tests = []
 bridge = ["properties"]
 dolphin = "Information panel and Properties Details (KFileMetaData)"
 gnome = "GStreamer discoverer / gdk-pixbuf / tracker-extract (Files uses the image-properties and totem-properties extension pages)"
-native = "todo"
+native = "partial"
+native_note = "native/crates/ox-app/src/properties/metadata.rs, native/crates/ox-app/src/window/details_pane/media.rs; native/crates/ox-app/src/window/tests/environment.rs (the_details_pane_previews_an_image_and_names_its_dimensions). A local image's 'Dimensions' ('4 × 3 pixels') shows in the Properties General tab (read from the header with gdk-pixbuf) and in the details pane; a previewed audio or video file adds 'Length' to the pane once GTK's media backend knows its duration. Missing: camera (EXIF) data, codecs and document page counts, which need a metadata library the app does not link."
 
 [[feature]]
 id = "PROP-014"
@@ -13129,7 +13132,8 @@ sources = [
 python_tests = []
 bridge = ["properties"]
 dolphin = "KChecksumsPlugin"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/checksums.rs (each_algorithm_gives_the_known_digest_and_a_pasted_one_is_recognised, a_cancelled_read_stops); native/crates/ox-app/src/window/tests/item_dialogs.rs (a_pasted_checksum_is_checked_against_the_file, alt_enter_opens_the_properties_of_the_selected_file). A file's Properties has a Checksums tab after Permissions: MD5, SHA1, SHA256 and SHA512 rows, each with Calculate (computed through GIO on a worker thread in 64 KiB blocks, cancelled when the dialog closes) that turns into Copy ('Checksum copied.'), and an 'Expected checksum' field whose algorithm is told by its length: 'Checksums match.', 'Checksums do not match.' or 'Enter an MD5, SHA1, SHA256 or SHA512 checksum.'. Folders have no Checksums tab."
 
 [[feature]]
 id = "PROP-015"
@@ -13147,7 +13151,8 @@ python_tests = []
 bridge = ["open"]
 dolphin = "Explore in Filelight"
 gnome = "Disk Usage Analyzer (org.gnome.baobab) with the folder URI"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-core/src/integration/disk_tools.rs (a_tool_is_found_only_when_installed_and_baobab_comes_first); native/crates/ox-app/src/window/context_menu/entries.rs (disk_images_mount_and_folders_analyse_their_usage_where_the_tools_exist); native/crates/ox-app/src/window/disk_tools.rs (the_status_bar_offers_the_analyser_for_a_local_folder); native/crates/ox-app/src/properties/general_panel.rs (the_analyse_button_runs_the_analyser_on_the_folder); native/crates/ox-app/src/window/tests/context_menus.rs (the_disk_tools_run_on_the_items_local_path). When GNOME Disk Usage Analyzer (baobab) or Filelight is installed, 'Analyse disk usage' opens it at a local folder from three places: the folder's Properties (General tab button, as Dolphin's 'Explore in Filelight'), its context menu, and a secondary click on the status bar for the folder shown (Dolphin offers it from its status-bar space indicator's menu; the Windows 11 status bar has no space indicator, so the menu belongs to the whole bar and adds nothing visible)."
 
 [[feature]]
 id = "PROP-016"
@@ -13162,8 +13167,8 @@ python_tests = []
 bridge = ["properties"]
 dolphin = "Properties icon button → .directory Icon= key"
 gnome = "GVfs metadata metadata::custom-icon / metadata::custom-icon-name / metadata::emblems (Nautilus 46 supports custom icons)"
-native = "todo"
-native_note = "Porting notes: The default Windows-style artwork stays."
+native = "done"
+native_note = "native/crates/ox-app/src/properties/custom_icon.rs, native/crates/ox-app/src/folder_view/cells/custom_icon.rs; native/crates/ox-app/src/window/tests/item_dialogs.rs (a_custom_icon_shows_in_the_view_until_the_default_is_restored). The General tab of a local item outside previous versions has 'Change icon…' (a GTK file dialog filtered to images) and, once one is set, 'Restore default icon'. The choice is stored as the GVfs metadata key metadata::custom-icon, the key Files reads and writes, so both file managers show it; restoring unsets the key with `gio set -t unset` because GIO's Rust binding cannot unset an attribute. The details and icon views look the key up at low priority whenever a cell is bound and show the picture (local images up to 16 MiB) in place of the Windows-style art, which every other item keeps. Porting notes: The default Windows-style artwork stays."
 
 [[feature]]
 id = "PROP-017"
@@ -13191,7 +13196,8 @@ python_tests = [
 ]
 bridge = ["locationCheck", "locationApply", "environment"]
 gnome = "xdg-user-dirs (user-dirs.dirs); xdg-user-dirs-update --set"
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/folder_location.rs (the_location_tab_moves_documents_and_offers_to_move_its_files); native/crates/ox-core/src/folder_locations/contents.rs (the_old_folders_items_may_follow_it_but_never_the_new_folder_or_another_standard_folder, nothing_follows_from_home_a_shared_folder_or_the_same_folder_through_a_link). The Location tab (native/crates/ox-app/src/properties/location_panel.rs) ports renderLocationPanel: the intro, Folder location, the mounted network drive picker, Check location, Restore default, Use previous, the status line with its Python wording, the warning, the consent box, Apply location enabled only for a consented, checked and unchanged path, 'Location updated. Configuration backed up. No files moved.' and the collapsed network mount assistant. Every window follows the change through the user-dirs.dirs monitor. Gain from Windows 11: after a change the window asks 'Do you want to move all of the files from the old location to the new location?' (Don't move / Move files, window/relocated_files.rs) and moves the old folder's items through the transfer engine with the name-conflict dialog; nothing is overwritten without a choice and skipped items stay in the old folder. Nothing is offered from the home folder, / or a folder another standard folder shares, and the new folder and other standard folders inside the old one never move. The warning now reads 'Apply changes only the setting: existing files are NOT moved unless you choose to move them afterwards. …'."
 
 [[feature]]
 id = "PROP-018"
@@ -13213,7 +13219,8 @@ python_tests = [
   "desktop/tests/ui_v07.py::Applying opted-in Downloads location opens profile sync",
 ]
 bridge = ["braveStatus", "braveSync", "locationApply"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/folder_location.rs (a_ticked_brave_follow_up_opens_brave_s_dialog_after_moving_downloads, the_location_tab_moves_documents_and_offers_to_move_its_files). Only Downloads shows the unticked 'Also update Brave’s download directory (choose profiles after Apply).'; after a successful Apply (and the offer to move the files) it opens Brave's download-folder dialog for the new path, which asks its own consent."
 
 [[feature]]
 id = "PROP-019"
@@ -13412,8 +13419,8 @@ bridge = [
   "activateItem",
   "openTerminal",
 ]
-native = "partial"
-native_note = "native/crates/ox-core/src/versions/paths.rs (an_address_that_does_not_split_counts_as_a_snapshot); native/crates/ox-core/src/versions/service.rs (a_discovered_collection_becomes_read_only); native/crates/ox-core/src/versions/source_file.rs (a_fifo_in_place_of_the_file_holds_no_sources_and_does_not_block); native/crates/ox-core/tests/versions_lookup.rs (a_collection_read_by_a_lookup_becomes_read_only); native/crates/ox-core/tests/versions_protection.rs (a_location_inside_a_snapshot_folder_is_refused_as_read_only, replace_cannot_overwrite_nested_snapshot, removal_or_move_preserves_whole_tree_containing_snapshot, configured_backup_descendant_is_protected, a_configured_backup_folder_can_be_copied_from_but_not_into, locations_are_protected_exactly_as_in_the_python_app, listing_rows_are_marked_read_only_with_one_snapshot_of_the_rule); native/crates/ox-core/tests/versions_sources.rs (sources_saved_by_either_app_are_used_by_the_other). The native listings, file operations, opening and terminal do not apply the rule yet. Porting notes: Opening a file inside a snapshot in an external application is refused; a copy must be restored first. Opening a file read-only from a snapshot is refused today; consider allowing read-only opening natively."
+native = "done"
+native_note = "native/crates/ox-core/src/versions/paths.rs (an_address_that_does_not_split_counts_as_a_snapshot); native/crates/ox-core/src/versions/service.rs (a_discovered_collection_becomes_read_only, the_write_guard_refuses_in_the_python_wording); native/crates/ox-core/tests/versions_lookup.rs (a_collection_read_by_a_lookup_becomes_read_only); native/crates/ox-core/tests/versions_protection.rs (a_location_inside_a_snapshot_folder_is_refused_as_read_only, replace_cannot_overwrite_nested_snapshot, removal_or_move_preserves_whole_tree_containing_snapshot, configured_backup_descendant_is_protected, a_configured_backup_folder_can_be_copied_from_but_not_into, locations_are_protected_exactly_as_in_the_python_app, listing_rows_are_marked_read_only_with_one_snapshot_of_the_rule); native/crates/ox-app/src/window/file_ops/availability.rs (a_read_only_item_can_be_copied_but_not_changed); native/crates/ox-app/src/window/tests/item_dialogs.rs (a_file_in_a_snapshot_does_not_open_in_an_application). Every file operation, rename, new item, restore, extraction and compression runs with the previous-versions write guard (AppContext::write_protection); the terminal folder check runs it too; the commands and menus that would change a previous version are disabled; opening a file inside one (double-click, Enter, Open) is refused with the Python message instead of reaching an application. Porting notes: consider allowing read-only opening natively."
 
 [[feature]]
 id = "PROP-025"
@@ -13571,8 +13578,8 @@ python_tests = [
   "desktop/tests/test_v06.py::FolderSizeTests::test_root_inspect_error_is_not_an_empty_directory",
 ]
 bridge = ["folderSize", "cancel"]
-native = "partial"
-native_note = "native/crates/ox-core/src/sizes/result.rs (statuses_and_reasons_use_the_python_wording); native/crates/ox-core/src/sizes/scan.rs (the_time_limit_marks_the_result_partial); native/crates/ox-core/tests/sizes_providers.rs (a_background_scan_publishes_progress_and_returns_the_totals, a_background_scan_cancelled_before_it_starts_returns_the_cancellation); native/crates/ox-core/tests/sizes_scan_limits.rs (a_link_to_a_folder_is_refused_as_the_scanned_folder, a_file_is_refused_as_the_scanned_folder, a_whole_smb_server_is_refused, the_entry_limit_marks_the_result_partial, limits_of_zero_are_refused, cancelling_returns_the_totals_counted_so_far, a_listing_error_on_the_scanned_folder_is_returned_for_a_retry, an_error_reading_the_scanned_folder_is_not_an_empty_folder, an_unmounted_scanned_folder_asks_for_a_mount). The native UI does not queue scans per window or mount and rescan an unmounted share yet."
+native = "done"
+native_note = "native/crates/ox-core/src/sizes/result.rs (statuses_and_reasons_use_the_python_wording); native/crates/ox-core/src/sizes/scan.rs (the_time_limit_marks_the_result_partial); native/crates/ox-core/tests/sizes_providers.rs (a_background_scan_publishes_progress_and_returns_the_totals, a_background_scan_cancelled_before_it_starts_returns_the_cancellation); native/crates/ox-core/tests/sizes_scan_limits.rs (a_link_to_a_folder_is_refused_as_the_scanned_folder, a_file_is_refused_as_the_scanned_folder, a_whole_smb_server_is_refused, the_entry_limit_marks_the_result_partial, limits_of_zero_are_refused, cancelling_returns_the_totals_counted_so_far, a_listing_error_on_the_scanned_folder_is_returned_for_a_retry, an_error_reading_the_scanned_folder_is_not_an_empty_folder, an_unmounted_scanned_folder_asks_for_a_mount); native/crates/ox-app/src/window/tests/network.rs (an_unmounted_share_is_mounted_once_before_its_size_is_measured). The limits, Cancel with partial totals and the refusals use the Python wording; a share that is not mounted is mounted once and measured again, and a failed mount is reported as the folder's size. Each window runs one scan at a time: a second request while one runs says 'Cancel or finish the current folder-size scan first.', as app.js does in front of the Python app's single-worker size pool."
 
 [[feature]]
 id = "PROP-030"
@@ -13585,8 +13592,8 @@ openxplorer = "has"
 sources = ["desktop/folder_sizes.py:53-89", "desktop/folder_sizes.py:103"]
 python_tests = []
 bridge = ["folderSize"]
-native = "partial"
-native_note = "native/crates/ox-core/src/sizes/gio_provider.rs (shares_are_folders_and_links_are_never_folders, a_size_the_backend_does_not_report_stays_unknown); native/crates/ox-core/tests/sizes_providers.rs (a_subfolder_on_another_filesystem_of_a_share_is_skipped, gio_metadata_gives_the_same_totals_without_following_links). The native UI does not scan folder sizes yet."
+native = "done"
+native_note = "native/crates/ox-core/src/sizes/gio_provider.rs (shares_are_folders_and_links_are_never_folders, a_size_the_backend_does_not_report_stays_unknown); native/crates/ox-core/tests/sizes_providers.rs (a_subfolder_on_another_filesystem_of_a_share_is_skipped, gio_metadata_gives_the_same_totals_without_following_links); native/crates/ox-app/src/window/tests/network.rs (an_unmounted_share_is_mounted_once_before_its_size_is_measured). Calculate folder size on an SMB share or other GIO location measures it with the GIO provider (sizes::run), which reads standard::size and id::filesystem without downloading content and skips subfolders on another filesystem id."
 
 [[feature]]
 id = "PROP-031"
@@ -13606,8 +13613,8 @@ sources = [
 python_tests = ["desktop/tests/test_v05.py::SettingsWindowsTests::test_mount_resolution"]
 bridge = ["locationCheck", "locationApply", "environment"]
 gnome = "xdg-user-dirs-update --set run without a shell; re-read user-dirs.dirs; detect CIFS and GVfs mounts from /proc/self/mountinfo"
-native = "todo"
-native_note = "Porting notes: PROP-017 describes the dialog, SET-018 the parsing and SAFE-020 the 15 s timeout. No test covers these backend rules; the PROP-017 tests run against the preview. The backend also accepts the TEMPLATES and PUBLICSHARE keys, although the UI offers six folders; decide whether to keep that."
+native = "done"
+native_note = "native/crates/ox-core/src/folder_locations/tests.rs (a_local_folder_is_checked_through_its_symlinks, unsafe_destinations_are_refused_in_the_python_wording, the_system_temporary_folders_are_refused_by_default, a_folder_without_write_access_is_refused, an_smb_folder_resolves_through_the_kernel_mount_of_its_share, nothing_changes_without_consent, applying_backs_up_changes_verifies_and_remembers_the_previous_folder, applying_the_current_folder_changes_nothing, a_change_the_configuration_does_not_keep_is_reported_with_the_backup_kept, a_missing_xdg_user_dirs_asks_for_it_to_be_installed); native/crates/ox-app/src/window/tests/folder_location.rs (the_location_tab_moves_documents_and_offers_to_move_its_files). FolderRelocation ports validate, apply and snapshot of folder_locations.py with the Python checks, order and wording, explicit consent, the private 0600 backup in a 0700 folder, xdg-user-dirs-update run without a shell with the 15 s limit, the read-back and the shared history file for Use previous. Every window refreshes through the user-dirs.dirs monitor (SIDE-006). As in Python the backend accepts every standard folder key, TEMPLATES and PUBLICSHARE included; the Location tab shows for the six Quick access folders."
 
 [[feature]]
 id = "PROP-032"

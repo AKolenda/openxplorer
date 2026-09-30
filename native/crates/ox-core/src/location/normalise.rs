@@ -650,6 +650,10 @@ mod tests {
             "mtp://a b/",
             "mtp://a%20b/",
             "mtp:///x",
+            "mtp://user@device/DCIM",
+            "mtp://[usb:001,002]/DCIM?mode=write",
+            "mtp://[usb:001,002]/DCIM#top",
+            "gphoto2://camera/a%01b",
         ] {
             assert!(canonical(bad).is_err(), "{bad} should be rejected");
         }

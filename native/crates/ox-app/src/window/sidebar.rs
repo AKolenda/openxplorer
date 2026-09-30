@@ -31,6 +31,7 @@ use crate::icons::{self, Icon};
 
 use super::menu_popover::{MenuEntry, MenuPopover};
 use super::saved_search::saved_search_menu;
+use super::place_menus::caching_in;
 use super::window_action::WindowAction;
 use super::{gestures, preferences, BrowserWindow};
 
@@ -230,7 +231,8 @@ impl Sidebar {
             let caching = window.and_then(|window| window.caching_of(uri));
             return Some(menu::pin_menu(uri, caching));
         }
-        let place_menu = entry.menu.as_ref()?.entries_in(window.as_ref());
+        let place = entry.menu.as_ref()?;
+        let place_menu = place.entries(caching_in(place, self));
         // A drive the system keeps mounted may have nothing to offer.
         (!place_menu.is_empty()).then_some(place_menu)
     }

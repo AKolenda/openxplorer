@@ -9,6 +9,10 @@
 //! and sidebar row picture it, on the network bar (the owner's icon
 //! mapping, 2026-09-28), where app.js drew the plain folder.
 
+use std::path::PathBuf;
+
+use gtk::gio;
+use gtk::prelude::FileExt;
 use ox_core::format;
 use ox_core::location::{is_smb_location, parent_location, LocationContext};
 use ox_core::places::NetworkLocation;
@@ -31,6 +35,49 @@ pub(in crate::window) enum Preview {
     Art(Art),
     /// The copy glyph for several items.
     Several,
+}
+
+/// What the preview area shows of one selected file's content
+/// (PROP-011).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::window) enum MediaPreview {
+    /// A local image, decoded and scaled; `size` is its size in bytes.
+    Image { path: PathBuf, size: u64 },
+    /// A local audio (`is_video` false) or video file, with a player;
+    /// audio keeps the item's `art` above its controls.
+    Recording { path: PathBuf, is_video: bool, art: Art },
+    /// Another local document, shown by its cached thumbnail if it has
+    /// one.
+    Document { uri: String },
+}
+
+impl MediaPreview {
+    /// The preview of `item`: only a local file has one.
+    fn of(item: &FileItem) -> Option<Self> {
+        let entry = item.entry();
+        if entry.is_dir || entry.is_virtual {
+            return None;
+        }
+        let path = gio::File::for_uri(&entry.uri)
+            .path()
+            .filter(|_| entry.uri.starts_with("file:"))?;
+        let content_type = entry.content_type.as_deref().unwrap_or_default();
+        let media = content_type.split('/').next().unwrap_or_default();
+        Some(match media {
+            "image" => Self::Image {
+                path,
+                size: entry.size.unwrap_or_default(),
+            },
+            "audio" | "video" => Self::Recording {
+                path,
+                is_video: media == "video",
+                art: item.art(),
+            },
+            _ => Self::Document {
+                uri: entry.uri.clone(),
+            },
+        })
+    }
 }
 
 /// The button under the name.
@@ -77,6 +124,8 @@ pub(in crate::window) struct PaneContent {
     pub properties: Vec<Property>,
     /// The note at the bottom.
     pub note: &'static str,
+    /// The content preview of one selected file.
+    pub media: Option<MediaPreview>,
 }
 
 /// What [`pane_content`] reads.
@@ -92,6 +141,8 @@ pub(in crate::window) struct PaneFacts<'a> {
     pub locations: &'a LocationContext,
     /// The Network list, for the picture of an SMB folder.
     pub network: &'a [NetworkLocation],
+    /// Dates show the day only; else the time too (PROP-010).
+    pub condensed_dates: bool,
 }
 
 /// The picture, name and type line when no single item is selected.
@@ -105,19 +156,20 @@ struct FolderHeading {
 /// What the pane shows for the selection in a folder.
 pub(in crate::window) fn pane_content(facts: &PaneFacts<'_>) -> PaneContent {
     match facts.selection {
-        [item] => item_content(item, facts.locations),
+        [item] => item_content(item, facts),
         _ => folder_content(facts),
     }
 }
 
-fn item_content(item: &FileItem, locations: &LocationContext) -> PaneContent {
+fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
+    let locations = facts.locations;
     let entry = item.entry();
     // The folder the item is in, as `displayUri(parentUri(e.uri)||e.uri)`.
     let container = parent_location(&entry.uri).unwrap_or_else(|| entry.uri.clone());
     let properties = vec![
         Property::new("Type", entry.type_label.clone()),
         Property::new("Size", size_text(item)),
-        Property::new("Modified", format::date_text(entry.modified)),
+        Property::new("Modified", modified_text(entry.modified, facts.condensed_dates)),
         Property::new("Location", locations.display_location(&container)),
     ];
     PaneContent {
@@ -129,6 +181,7 @@ fn item_content(item: &FileItem, locations: &LocationContext) -> PaneContent {
         },
         properties,
         note: note_for(&entry.uri),
+        media: MediaPreview::of(item),
     }
 }
 
@@ -157,6 +210,7 @@ fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
             Property::new("Storage", storage_of(uri).to_owned()),
         ],
         note: note_for(uri),
+        media: None,
     }
 }
 
@@ -195,6 +249,15 @@ fn size_text(item: &FileItem) -> String {
         (true, None, _) => NOT_SCANNED.to_owned(),
         (false, _, Some(size)) => format::pretty_bytes(size),
         (false, _, None) => String::new(),
+    }
+}
+
+/// The Modified row: the day, or the day and time.
+fn modified_text(modified: Option<u64>, condensed: bool) -> String {
+    if condensed {
+        format::date_text(modified)
+    } else {
+        format::date_time_text(modified)
     }
 }
 
@@ -238,6 +301,7 @@ mod tests {
             folder_item_count: 7,
             locations: &locations,
             network: &network,
+            condensed_dates: true,
         })
     }
 
@@ -249,6 +313,7 @@ mod tests {
             .map(|property| property.value.as_str())
     }
 
+    /// parity: PROP-009
     #[test]
     fn a_file_shows_its_type_size_date_and_containing_folder() {
         let mut entry = file_entry("Notes.txt");
@@ -268,6 +333,49 @@ mod tests {
         assert_eq!(content.action, PaneAction::Open { can_pin: false });
     }
 
+    /// Condensed dates give the day only; otherwise the time follows.
+    ///
+    /// parity: PROP-010
+    #[test]
+    fn condensed_dates_drop_the_time() {
+        let modified = Some(1_790_000_000);
+        assert_eq!(modified_text(modified, true), format::date_text(modified));
+        assert_eq!(modified_text(modified, false), format::date_time_text(modified));
+        assert!(modified_text(modified, false).starts_with(&modified_text(modified, true)));
+    }
+
+    /// Only a local file has a content preview, chosen by its type.
+    ///
+    /// parity: PROP-011
+    #[test]
+    fn a_local_file_is_previewed_by_its_type() {
+        let mut photo = file_entry("Beach.png");
+        photo.uri = "file:///tmp/ox-test/Beach.png".to_owned();
+        photo.content_type = Some("image/png".to_owned());
+        photo.size = Some(10);
+        let content = content_for(&[FileItem::new(photo.clone())], "file:///tmp/ox-test");
+        assert_eq!(
+            content.media,
+            Some(MediaPreview::Image {
+                path: PathBuf::from("/tmp/ox-test/Beach.png"),
+                size: 10
+            })
+        );
+        photo.content_type = Some("video/mp4".to_owned());
+        assert!(matches!(
+            MediaPreview::of(&FileItem::new(photo.clone())),
+            Some(MediaPreview::Recording { is_video: true, .. })
+        ));
+        photo.uri = "smb://nas/media/Beach.png".to_owned();
+        assert_eq!(
+            MediaPreview::of(&FileItem::new(photo)),
+            None,
+            "shares are not read for a preview"
+        );
+        assert_eq!(content_for(&[], "file:///tmp/ox-test").media, None);
+    }
+
+    /// parity: PROP-009
     #[test]
     fn a_folder_can_be_pinned_and_is_not_scanned() {
         let item = FileItem::new(folder_entry("Projects"));
@@ -276,6 +384,7 @@ mod tests {
         assert_eq!(property(&content, "Size"), Some("Not scanned"));
     }
 
+    /// parity: PROP-009
     #[test]
     fn no_selection_describes_the_folder() {
         let content = content_for(&[], "file:///home/demo");
@@ -287,6 +396,7 @@ mod tests {
         assert_eq!(content.note, LOCAL_NOTE);
     }
 
+    /// parity: PROP-009
     #[test]
     fn several_items_are_counted_and_shown_as_multiple() {
         let selection = [FileItem::new(file_entry("a")), FileItem::new(file_entry("b"))];
@@ -312,6 +422,7 @@ mod tests {
         assert_eq!(local.preview, Preview::Art(Art::Folder));
     }
 
+    /// parity: PROP-009
     #[test]
     fn landing_pages_offer_no_pin() {
         let content = content_for(&[], Page::ThisPc.uri());

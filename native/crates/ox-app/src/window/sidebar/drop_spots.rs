@@ -33,6 +33,14 @@ pub(in crate::window) enum SidebarDropSpot {
         /// Its folder.
         uri: String,
     },
+    /// Onto the drive of the row at `index`, which is mounted first
+    /// (DEV-010).
+    Volume {
+        /// The row.
+        index: i32,
+        /// The volume to mount.
+        id: String,
+    },
     /// Pinned to Quick access before the pin at `before`, whose row is at
     /// `index`, or after the last pin, at `index`, when `before` is
     /// `None`.
@@ -48,7 +56,9 @@ impl SidebarDropSpot {
     /// The row the highlight is drawn on, and its class.
     fn highlight(&self) -> (i32, &'static str) {
         match self {
-            SidebarDropSpot::Folder { index, .. } => (*index, FOLDER_DROP_CLASS),
+            SidebarDropSpot::Folder { index, .. } | SidebarDropSpot::Volume { index, .. } => {
+                (*index, FOLDER_DROP_CLASS)
+            }
             SidebarDropSpot::Pin {
                 index,
                 before: Some(_),
@@ -70,6 +80,14 @@ impl Sidebar {
         let uri = match &entry.target {
             RowTarget::Location(uri) => uri,
             RowTarget::PinDropTail => return Some(SidebarDropSpot::Pin { index, before: None }),
+            // A drive still to be mounted takes the drop and is mounted
+            // first, as Dolphin's places panel does (DEV-010).
+            RowTarget::MountVolume(id) if entry.section != Section::QuickAccess => {
+                return Some(SidebarDropSpot::Volume {
+                    index,
+                    id: id.clone(),
+                });
+            }
             RowTarget::MountVolume(_) | RowTarget::SavedSearch(_) => return None,
         };
         if entry.section != Section::QuickAccess {

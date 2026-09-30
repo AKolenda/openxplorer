@@ -176,6 +176,7 @@ impl BrowserWindow {
         view.add_controller(self.folder_middle_click(view));
         self.attach_context_menu(view);
         self.attach_file_drag(view);
+        self.attach_details_hover(view);
         self.attach_file_drop_zone(view, DropZone::FolderView);
     }
 
@@ -288,6 +289,7 @@ impl BrowserWindow {
                 input.reset();
                 self.reset_typeahead();
             }
+            gdk::Key::Escape if self.close_quick_look() => {}
             gdk::Key::Escape => self.clear_selection(),
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
             gdk::Key::BackSpace => {
@@ -298,6 +300,10 @@ impl BrowserWindow {
                     self.go_history(Direction::Backward);
                 }
             }
+            // Space previews the selected file in GNOME's previewer
+            // (PROP-012), else selects the current item, unless a prefix
+            // is typed.
+            gdk::Key::space if !prefix_active && self.toggle_quick_look() => {}
             gdk::Key::space if !prefix_active => self.select_current_item(),
             _ => return None,
         }

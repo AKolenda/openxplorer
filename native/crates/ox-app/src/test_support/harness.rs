@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::location::file_uri;
+use ox_core::places::FolderLocations;
 use ox_core::settings::{Settings, Theme};
 use tempfile::TempDir;
 
@@ -246,6 +247,18 @@ impl TestWindow {
         test
     }
 
+    /// A window like [`Self::open_prepared`] whose standard folders are
+    /// those of `folders`, never the ones of the test's own home.
+    pub(crate) fn open_with_standard_folders(
+        uri: &str,
+        folders: FolderLocations,
+        prepare: impl FnOnce(&AppContext),
+    ) -> Self {
+        let test = Self::with_context(&skin(), Some(folders), prepare);
+        test.show(uri);
+        test
+    }
+
     /// A window with its own settings file and no tab yet, following
     /// `skin`.
     fn with_skin(skin: &Skin) -> Self {
@@ -255,8 +268,23 @@ impl TestWindow {
     /// A window following `skin`, with no tab yet, whose shared state
     /// `prepare` sets up first.
     fn prepared(skin: &Skin, prepare: impl FnOnce(&AppContext)) -> Self {
+        Self::with_context(skin, None, prepare)
+    }
+
+    /// A window following `skin`, with no tab yet, with the standard
+    /// folders of `folders` (else the environment's), whose shared state
+    /// `prepare` sets up first.
+    fn with_context(
+        skin: &Skin,
+        folders: Option<FolderLocations>,
+        prepare: impl FnOnce(&AppContext),
+    ) -> Self {
         let settings = tempfile::tempdir().expect("the test home has room for settings");
-        let context = AppContext::new(skin.clone(), Settings::open(settings.path()));
+        let stored = Settings::open(settings.path());
+        let context = match folders {
+            Some(folders) => AppContext::with_folder_locations(skin.clone(), stored, folders),
+            None => AppContext::new(skin.clone(), stored),
+        };
         context.record_launches();
         prepare(&context);
         // The context menus list no "Open in <editor>", whatever editors
