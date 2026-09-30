@@ -15,6 +15,7 @@ use crate::icons::{Art, ArtImage, Icon};
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::sidebar::entries::{RowLevel, RowTarget, Section, SidebarEntry};
+use crate::window::sidebar::SidebarDropSpot;
 
 /// The sidebar row labelled `label`.
 fn row_named(test: &TestWindow, label: &str) -> gtk::ListBoxRow {
@@ -153,6 +154,8 @@ fn pins_show_the_pin_mark_and_open_in_a_background_tab_on_a_middle_click() {
         test.window.sidebar().location_at(y).is_some()
     });
     let y = test.window.sidebar().middle_of("Projects");
+    // Only a release that follows its own press opens the place.
+    middle.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &y]);
     middle.emit_by_name::<()>("released", &[&1_i32, &5.0_f64, &y]);
 
     assert_eq!(test.window.tab_count(), 2);
@@ -228,12 +231,12 @@ fn dragging_a_pin_before_another_moves_it_there() {
 }
 
 /// A volume that still has to be mounted mounts when clicked, but a
-/// middle-click, a drag or a drop does nothing on it; a mounted drive
-/// takes drops.
+/// middle-click or a drag does nothing on it; a drop on it mounts it and
+/// goes into its root (DEV-010), and a mounted drive takes drops.
 ///
 /// parity: SIDE-016
 #[gtk::test]
-fn a_volume_to_mount_is_neither_dragged_nor_dropped_on() {
+fn a_volume_to_mount_is_not_dragged_and_a_drop_mounts_it() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     wait_for_frames(&test.window, 3);
@@ -260,7 +263,13 @@ fn a_volume_to_mount_is_neither_dragged_nor_dropped_on() {
 
     assert_eq!(row.action_name().as_deref(), Some("win.mount-volume"));
     assert_eq!(sidebar.location_at(middle), None, "nothing to open or drag");
-    assert_eq!(sidebar.drop_spot_at(middle), None);
+    assert_eq!(
+        sidebar.drop_spot_at(middle),
+        Some(SidebarDropSpot::Volume {
+            index: 0,
+            id: "uuid-1".into()
+        })
+    );
 }
 
 /// parity: SIDE-023, ACC-001, ACC-006

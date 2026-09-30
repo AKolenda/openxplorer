@@ -5490,7 +5490,7 @@ python_tests = [
 bridge = ["mountVolume", "environment", "list"]
 gnome = "GVolumeMonitor volumes/mounts"
 native = "done"
-native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (a_removable_drive_has_an_eject_button_and_every_drive_a_menu, an_unmounted_volume_mounts_when_clicked); native/crates/ox-app/src/window/tests/network.rs (mounting_a_volume_that_went_away_says_so); native/crates/ox-app/src/window/file_drag.rs (a_sidebar_folder_can_be_dragged_and_a_page_cannot); native/crates/ox-app/src/window/tests/sidebar.rs (a_volume_to_mount_is_neither_dragged_nor_dropped_on). Local Disk and every non-SMB mount are listed with a phone or drive glyph; mounted drives open, middle-click, drag and take drops; an unmounted volume mounts, then opens, a failure shows 'Could not mount device', and it is never a drag source or drop target. Dolphin's eject button is added for removable drives."
+native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (a_removable_drive_has_an_eject_button_and_every_drive_a_menu, an_unmounted_volume_mounts_when_clicked); native/crates/ox-app/src/window/tests/network.rs (mounting_a_volume_that_went_away_says_so); native/crates/ox-app/src/window/file_drag.rs (a_sidebar_folder_can_be_dragged_and_a_page_cannot); native/crates/ox-app/src/window/tests/sidebar.rs (a_volume_to_mount_is_not_dragged_and_a_drop_mounts_it). Local Disk and every non-SMB mount are listed with a phone or drive glyph; mounted drives open, middle-click, drag and take drops; an unmounted volume mounts, then opens, a failure shows 'Could not mount device', and it is never a drag source; a drop on it mounts it first and goes into its root (DEV-010). Dolphin's eject button is added for removable drives."
 
 [[feature]]
 id = "SIDE-017"

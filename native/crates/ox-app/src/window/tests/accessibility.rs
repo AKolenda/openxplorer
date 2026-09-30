@@ -336,6 +336,8 @@ fn frame_driven_motion() -> Vec<String> {
                 continue;
             }
             let text = std::fs::read_to_string(&path).unwrap_or_default();
+            // A file's own test module may draw frame by frame too.
+            let text = text.split("#[cfg(test)]\nmod tests {").next().unwrap_or_default();
             let moves = ["add_tick_callback", "TimedAnimation", "SpringAnimation"]
                 .iter()
                 .any(|call| text.contains(call));
