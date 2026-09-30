@@ -54,6 +54,7 @@ mod command_bar;
 mod connections;
 mod context_menu;
 mod copy_path;
+mod desktop_link;
 mod details_pane;
 mod dialog;
 mod empty_page;

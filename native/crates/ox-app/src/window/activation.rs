@@ -18,6 +18,7 @@ use ox_core::integration;
 
 use crate::locations::{self, Page};
 
+use super::desktop_link::{link_target_of_file, may_be_link, LinkTarget};
 use super::dialog::show_message;
 use super::session::TabId;
 use super::BrowserWindow;
@@ -88,6 +89,16 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
         return Activation::Archive;
     }
     Activation::File
+}
+
+/// Where the local `.desktop` link file `entry` points, if it is one.
+fn desktop_link(entry: &Entry) -> Option<Result<LinkTarget, String>> {
+    if !may_be_link(entry.content_type.as_deref(), &entry.name) {
+        return None;
+    }
+    let path = gio::File::for_uri(&entry.uri).path()?;
+    let target = link_target_of_file(&path)?;
+    Some(target.map_err(str::to_owned))
 }
 
 /// Queries `uri` without blocking the interface.
@@ -166,8 +177,26 @@ impl BrowserWindow {
             Activation::Archive => Ok(Resolved::Archive(fresh)),
             Activation::Refused(message) => Err(message.to_owned()),
             Activation::File => {
+                if let Some(target) = desktop_link(&fresh) {
+                    return self.follow_link(target?).await;
+                }
                 let window = self.upcast_ref::<gtk::Window>();
                 self.context().open_file(&fresh, window).await?;
+                Ok(Resolved::Opened)
+            }
+        }
+    }
+
+    /// Goes where a `.desktop` link points: a folder in the tab, a web
+    /// page or mail address in the desktop's handler (OPEN-009).
+    async fn follow_link(&self, target: LinkTarget) -> Result<Resolved, String> {
+        match target {
+            LinkTarget::Location(uri) => Ok(Resolved::Folder(uri)),
+            LinkTarget::Web(url) => {
+                gtk::UriLauncher::new(&url)
+                    .launch_future(Some(self.upcast_ref::<gtk::Window>()))
+                    .await
+                    .map_err(|error| error.to_string())?;
                 Ok(Resolved::Opened)
             }
         }
