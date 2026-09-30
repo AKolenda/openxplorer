@@ -327,7 +327,7 @@ mod tests {
         }
     }
 
-    /// parity: DND-001, DND-003
+    /// parity: DND-001, DND-003, SIDE-016
     #[gtk::test]
     fn a_sidebar_folder_can_be_dragged_and_a_page_cannot() {
         let fixture = Fixture::standard();
@@ -348,6 +348,8 @@ mod tests {
             .expect("the drag offers its own items to this process");
         assert_eq!(own.get::<DraggedItems>().expect("the dragged items").0, [home]);
         assert!(page.is_none(), "a page is not a folder to drag");
+        let local_disk = test.window.sidebar_drag_content("file:///".to_owned());
+        assert!(local_disk.is_some(), "a drive is dragged as its folder");
     }
 
     /// parity: DND-004

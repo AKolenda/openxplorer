@@ -440,6 +440,51 @@ mod tests {
         }
     }
 
+    /// A standard folder moved onto a CIFS mount keeps its glyph on the
+    /// network pipe, and an unpinned standard folder stays hidden.
+    ///
+    /// parity: SIDE-006
+    #[test]
+    fn a_standard_folder_on_a_cifs_mount_shows_the_pipe_and_a_hidden_one_stays_hidden() {
+        let folder = |known: KnownFolder, uri: &str| Place {
+            label: known.label().into(),
+            uri: uri.into(),
+            known_folder: Some(known),
+            is_shared: false,
+        };
+        let known_folders = [
+            folder(KnownFolder::Desktop, "file:///home/demo/Desktop"),
+            folder(KnownFolder::Documents, "file:///mnt/nas/Documents"),
+        ];
+        let settings = SettingsData {
+            hidden_quick: vec!["file:///home/demo/Desktop".into()],
+            ..SettingsData::default()
+        };
+        let nas = ox_core::places::StableMount {
+            path: PathBuf::from("/mnt/nas"),
+            label: String::new(),
+            filesystem: "cifs".into(),
+        };
+        let places = compose(PlaceSources {
+            settings: &settings,
+            known_folders: &known_folders,
+            volumes: &[],
+            stable_mounts: &[nas],
+            visited_network: &[],
+        });
+        let entries = sidebar_entries(&places, &LocationContext::default());
+        let quick_access: Vec<&SidebarEntry> = entries
+            .iter()
+            .filter(|entry| entry.section == Section::QuickAccess)
+            .collect();
+        assert_eq!(quick_access.len(), 1, "Desktop stays hidden");
+        assert_eq!(
+            quick_access[0].icon,
+            Art::for_quick_access(Some(KnownFolder::Documents), crate::icons::Storage::Network)
+        );
+        assert!(matches!(quick_access[0].icon, Art::Network(_)));
+    }
+
     /// parity: LOOK-016, SIDE-019
     #[test]
     fn a_saved_share_that_is_not_mounted_shows_the_red_cross() {

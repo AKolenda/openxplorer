@@ -23,7 +23,7 @@ use super::BrowserWindow;
 use crate::text_size::TextSize;
 
 /// Sidebar width nobody changed (`resetLayout` in app.js).
-const DEFAULT_SIDEBAR_WIDTH: i32 = 210;
+pub(super) const DEFAULT_SIDEBAR_WIDTH: i32 = 210;
 
 /// Room the folder pane keeps beside the sidebar (`sidebarLimit` in app.js).
 const FOLDER_PANE_ROOM: i32 = 300;
@@ -161,7 +161,7 @@ impl BrowserWindow {
 
     /// The widest the sidebar may be now, or `None` before the workspace
     /// is laid out.
-    fn sidebar_limit(&self) -> Option<i32> {
+    pub(super) fn sidebar_limit(&self) -> Option<i32> {
         let workspace_width = self.workspace().width();
         if workspace_width == 0 {
             return None;

@@ -130,6 +130,9 @@ pub(crate) struct BrowserWindow {
     /// after Settings hides; see
     /// [`super::BrowserWindow::focus_new_file_list`].
     pub(super) file_list_awaits_focus: Cell<bool>,
+    /// Set while a pin request is being checked and saved; another waits
+    /// its turn by being ignored, as `state.pinBusy` in app.js.
+    pub(super) pinning: Cell<bool>,
     /// The width band the layout was last fitted to.
     pub(super) window_width: Cell<WindowWidth>,
     /// What the window must disconnect when it goes away.

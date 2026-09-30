@@ -76,7 +76,8 @@ paned.workspace > separator {
   background-image: none;
   border-right: 1px solid @ox_border;
 }
-paned.workspace > separator:hover {
+paned.workspace > separator:hover,
+paned.workspace > separator:focus-visible {
   background-color: @ox_selected;
   box-shadow: inset 2px 0 @ox_selected, inset 4px 0 @ox_accent;
 }

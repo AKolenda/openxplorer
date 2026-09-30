@@ -33,6 +33,7 @@ mod panes_layout;
 mod recycle_bin;
 mod search;
 mod settings;
+mod sidebar;
 mod sidebar_layout;
 mod support;
 mod tabs;

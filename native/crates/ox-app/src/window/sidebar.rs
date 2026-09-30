@@ -18,7 +18,7 @@
 //! [`drop_spots`]'s.
 
 mod drop_spots;
-mod entries;
+pub(super) mod entries;
 mod menu;
 mod row;
 

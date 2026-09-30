@@ -91,6 +91,7 @@ mod selection;
 mod session;
 mod settings_tab;
 mod sidebar;
+mod sidebar_resizer;
 mod snapshot_tabs;
 mod status_bar;
 mod tab_layout;
@@ -162,6 +163,7 @@ impl BrowserWindow {
         window.connect_settings_page();
         window.watch_environment();
         window.apply_preferences();
+        window.install_sidebar_resizer();
         window.focus_file_list_once_shown();
         window
     }

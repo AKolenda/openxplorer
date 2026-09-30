@@ -391,11 +391,14 @@ fn signing_out_without_a_keyring_says_the_credentials_remain() {
 ///
 /// Ported from `desktop/tests/ui_v07.py::Keep in Network explicitly persists location`
 ///
-/// parity: NET-016, NET-017, SIDE-020
+/// parity: NET-016, NET-017, SIDE-009, SIDE-019, SIDE-020
 #[gtk::test]
 fn keep_in_network_saves_a_browsed_share_and_remove_deletes_it() {
     let test = TestWindow::open(Page::Network.uri());
     test.window.context().remember_network("smb://nas/media");
+    wait_until("the visited share under Network", || {
+        test.window.sidebar().labels().contains(&"media".to_owned())
+    });
     assert!(
         test.context.settings_data().shares.is_empty(),
         "browsing alone saves nothing"
