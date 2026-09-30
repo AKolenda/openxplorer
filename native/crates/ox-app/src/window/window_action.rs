@@ -292,6 +292,11 @@ pub(crate) enum WindowAction {
     /// Open in Terminal in the folder whose URI is the string target (a
     /// Quick access pin's menu).
     OpenInTerminalOf,
+    /// Open Terminal (Shift+F4): the terminal in the folder shown.
+    OpenTerminal,
+    /// Open Terminal Here (Shift+Alt+F4): a terminal in each folder of the
+    /// selection, or in the folder shown.
+    OpenTerminalHere,
     /// Opens the selected item in the code editor whose desktop ID is the
     /// string target.
     OpenInEditor,
@@ -426,6 +431,8 @@ impl WindowAction {
             WindowAction::OpenWithOf => "open-with-of",
             WindowAction::OpenInTerminal => "open-in-terminal",
             WindowAction::OpenInTerminalOf => "open-in-terminal-of",
+            WindowAction::OpenTerminal => "open-terminal",
+            WindowAction::OpenTerminalHere => "open-terminal-here",
             WindowAction::OpenInEditor => "open-in-editor",
         }
     }

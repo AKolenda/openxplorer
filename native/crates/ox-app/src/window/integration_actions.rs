@@ -13,9 +13,11 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::location::parent_location;
 use ox_core::update::Activity;
 
 use super::actions::{plain_action, text_action};
+use super::dialog::{ButtonStyle, Dialog};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 use crate::integration::{self, OpenWithDialog, OpenWithSubject};
@@ -29,6 +31,10 @@ const SINGLE_ITEM_ACTIONS: [WindowAction; 3] = [
     WindowAction::OpenInTerminal,
     WindowAction::OpenInEditor,
 ];
+
+/// More terminals than this at once are asked about first (Dolphin's
+/// limit for Open Terminal Here).
+const MANY_TERMINALS: usize = 5;
 
 /// The item an integration command acts on: the one selected item, or the
 /// folder shown when nothing is selected.
@@ -53,6 +59,12 @@ impl BrowserWindow {
             text_action(WindowAction::OpenInTerminalOf, |window, uri| {
                 window.open_terminal_at(uri.to_owned());
             }),
+            plain_action(WindowAction::OpenTerminal, |window| {
+                if let Some(folder) = window.folder_subject() {
+                    window.open_terminal_at(folder.uri);
+                }
+            }),
+            plain_action(WindowAction::OpenTerminalHere, BrowserWindow::open_terminals_here),
             text_action(WindowAction::OpenWithOf, BrowserWindow::open_folder_with),
             text_action(WindowAction::OpenInEditor, BrowserWindow::open_in_editor),
             plain_action(WindowAction::CheckUpdates, BrowserWindow::check_for_updates),
@@ -176,6 +188,64 @@ impl BrowserWindow {
         if let Some(subject) = self.command_subject() {
             self.open_terminal_at(subject.uri);
         }
+    }
+
+    /// Open Terminal Here: a terminal in each distinct folder of the
+    /// selection, the parent folder for a file, or in the folder shown;
+    /// asks first when more than five would open (`open_terminal_here` in
+    /// Dolphin).
+    fn open_terminals_here(&self) {
+        let folders = self.terminal_folders();
+        if folders.len() <= MANY_TERMINALS {
+            for folder in folders {
+                self.open_terminal_at(folder);
+            }
+            return;
+        }
+        let question = format!("Are you sure you want to open {} terminals?", folders.len());
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let dialog = Dialog::new(&window, "Open Terminal Here", &question);
+                dialog.add_cancel_button();
+                let open = dialog.add_button("Open terminals", ButtonStyle::Primary);
+                dialog.open();
+                let answer = dialog.next_response().await;
+                dialog.finish();
+                if answer == Some(open) {
+                    for folder in folders {
+                        window.open_terminal_at(folder);
+                    }
+                }
+            }
+        ));
+    }
+
+    /// The distinct folders of the selection, a file standing for its
+    /// folder, in order; the folder shown when nothing is selected.
+    pub(super) fn terminal_folders(&self) -> Vec<String> {
+        let items = self.folder_pane().model().selected_items();
+        if items.is_empty() {
+            return self
+                .folder_subject()
+                .map(|folder| folder.uri)
+                .into_iter()
+                .collect();
+        }
+        let mut folders: Vec<String> = Vec::new();
+        for item in items {
+            let entry = item.entry();
+            let folder = if entry.is_dir {
+                Some(entry.navigation_uri().to_owned())
+            } else {
+                parent_location(&entry.uri)
+            };
+            if let Some(folder) = folder.filter(|folder| !folders.contains(folder)) {
+                folders.push(folder);
+            }
+        }
+        folders
     }
 
     /// Opens the terminal in the folder at `uri`, or in the folder of the

@@ -395,12 +395,15 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 5] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 7] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
     (WindowAction::Search, &["<Primary>f"]),
     (WindowAction::Settings, &["<Primary>comma"]),
+    // Dolphin's Open Terminal and Open Terminal Here (OPEN-021).
+    (WindowAction::OpenTerminal, &["<Shift>F4"]),
+    (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
 ];
 
 /// Ctrl+Q: quit the application, from any window and any focus (TAB-058).
