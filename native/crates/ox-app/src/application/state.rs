@@ -61,6 +61,9 @@ impl AppState {
         crate::window::install_accelerators(app);
         let context = AppContext::new(skin, settings);
         context.start_search_cache(CacheLocation::UserCache);
+        // Tests mirror pins into temporary lists only, never the user's.
+        #[cfg(not(test))]
+        context.export_pins_to(ox_core::places::bookmarks_file(&gtk::glib::user_config_dir()));
         attach_desktop_integration(app, &context);
         Self {
             context,

@@ -18,6 +18,7 @@
 //! the application's [`Updates`] and [`DesktopIntegration`], so every
 //! window shows the same update and integration state.
 
+mod desktop_bookmarks;
 mod external_open;
 mod file_operations;
 mod known_folders;
@@ -115,6 +116,11 @@ mod imp {
         pub(super) updates: OnceCell<Updates>,
         /// The desktop integration, made on first use.
         pub(super) desktop_integration: OnceCell<DesktopIntegration>,
+        /// The desktop's places list the pins are mirrored into, once the
+        /// application turns it on (SIDE-013).
+        pub(super) desktop_bookmarks: RefCell<Option<std::path::PathBuf>>,
+        /// The pins as last mirrored there.
+        pub(super) exported_pins: RefCell<Option<Vec<ox_core::settings::Bookmark>>>,
         /// In tests, the files that would have been opened.
         #[cfg(test)]
         pub(super) recorded_launches: RefCell<Option<Vec<String>>>,
@@ -312,6 +318,7 @@ impl AppContext {
 
     /// Tells every window to redraw its sidebar and landing page.
     fn notify_places_changed(&self) {
+        self.export_pins();
         self.emit_by_name::<()>(PLACES_CHANGED, &[]);
     }
 

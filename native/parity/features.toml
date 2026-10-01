@@ -5385,8 +5385,8 @@ python_tests = ["desktop/tests/test_pins.py::PinTests::test_bulk_pin_and_reload"
 bridge = ["pin", "bookmark", "environment"]
 dolphin = "KFilePlacesModel (user-places.xbel); user-places.xbel shared with KDE file dialogs (KFilePlacesModel)"
 gnome = "GTK bookmarks file ~/.config/gtk-3.0/bookmarks, shared with Nautilus and GtkFileChooser; GTK bookmarks file $XDG_CONFIG_HOME/gtk-3.0/bookmarks (“URI label” lines) read by GtkFileChooser and Nautilus"
-native = "todo"
-native_note = "Porting notes: OpenXplorer stores pins privately in ~/.config/winspace. On Zorin the default bookmarks file already lists the XDG folders."
+native = "done"
+native_note = "native/crates/ox-core/src/places/desktop_bookmarks.rs (pins_join_the_desktop_list_and_other_lines_stay, the_file_is_created_and_replaced_whole); native/crates/ox-app/src/app_context/desktop_bookmarks.rs (pins_are_mirrored_into_the_desktop_places_list). Pins stay in OpenXplorer's settings, which the Python app shares, and are mirrored into GTK's desktop-wide places list (/gtk-3.0/bookmarks, read by GTK open/save dialogs and GNOME Files): at start every pin the list lacks is added, and whenever the places change the pins added are appended and the pins removed are dropped; lines other apps wrote are never touched, and the file is replaced whole from a worker thread. The mirror is one way: bookmarks made in other file managers are not added to Quick access."
 
 [[feature]]
 id = "SIDE-014"
