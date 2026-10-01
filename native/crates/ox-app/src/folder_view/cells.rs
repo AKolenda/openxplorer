@@ -13,6 +13,7 @@
 mod cell_owners;
 mod custom_icon;
 mod row_tooltip;
+mod selection_marker;
 
 use std::rc::Rc;
 
@@ -104,10 +105,15 @@ mod imp {
         pub(super) icon_size: Cell<i32>,
         /// The text field in the name's place while the item is renamed.
         pub(super) name_editor: RefCell<Option<gtk::Entry>>,
-        /// The item's custom icon, shown in place of the art (PROP-016).
+        /// The item's custom icon, shown over the art, which it hides
+        /// (PROP-016).
         pub(super) custom_icon: gtk::Picture,
         /// Counts the lookups, so a late custom icon is dropped.
         pub(super) icon_lookup: Cell<u64>,
+        /// Holds the icon, with the selection marker over its corner.
+        pub(super) icon_frame: gtk::Overlay,
+        /// Adds the item to the selection or takes it out (SEL-014).
+        pub(super) marker: gtk::Button,
     }
 
     #[glib::object_subclass]
@@ -121,10 +127,12 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let cell = self.obj();
-            cell.append(&self.image);
+            self.icon_frame.set_child(Some(&self.image));
             self.custom_icon.set_content_fit(gtk::ContentFit::Contain);
             self.custom_icon.set_visible(false);
-            cell.append(&self.custom_icon);
+            self.icon_frame.add_overlay(&self.custom_icon);
+            self.icon_frame.add_overlay(&self.marker);
+            cell.append(&self.icon_frame);
             cell.append(&self.label);
         }
     }
@@ -187,6 +195,8 @@ impl FileCell {
         self.set_orientation(gtk::Orientation::Vertical);
         self.set_spacing(TILE_ICON_GAP);
         self.set_valign(gtk::Align::Start);
+        // The marker sits on the icon's corner, not the tile's.
+        self.imp().icon_frame.set_halign(gtk::Align::Center);
         let label = &self.imp().label;
         label.set_wrap(true);
         label.set_wrap_mode(pango::WrapMode::WordChar);
@@ -270,6 +280,7 @@ pub(crate) fn connect_file_cells(
         list_item.set_child(Some(&cell));
         setup_owners.register(&cell, list_item);
         show_row_tooltip(&cell, &setup_owners, |_| None);
+        cell.follow_selection_marker(list_item, &setup_owners);
     });
     let bind_owners = Rc::clone(owners);
     factory.connect_bind(move |_, object| {

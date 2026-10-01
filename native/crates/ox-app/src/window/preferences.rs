@@ -152,7 +152,7 @@ impl BrowserWindow {
         // The shared style; a folder with its own is shown in it once it
         // is opened (VIEW-020).
         self.apply_style(&preferences.view_for(""));
-        self.follow_date_style();
+        self.follow_item_preferences();
         let workspace = self.workspace();
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
         let details_view = self.folder_pane().details();

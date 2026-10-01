@@ -208,10 +208,14 @@ impl BrowserWindow {
         self.context().remember_view(uri.to_owned(), style, scope, reply);
     }
 
-    /// Writes dates as the preferences ask, redrawing them if that changed.
-    pub(super) fn follow_date_style(&self) {
+    /// Follows the preferences of how items are shown: the date style
+    /// (VIEW-004), redrawn if it changed, and the selection marker
+    /// (SEL-014).
+    pub(super) fn follow_item_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
-        self.folder_pane().details().set_date_style(date_style(&preferences));
+        let pane = self.folder_pane();
+        pane.details().set_date_style(date_style(&preferences));
+        pane.owners().set_selection_markers(preferences.selection_marker);
     }
 }
 

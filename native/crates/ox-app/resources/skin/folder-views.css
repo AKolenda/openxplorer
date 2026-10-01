@@ -108,6 +108,21 @@ columnview.files .row-icon { margin-top: 1px; }
   border-radius: 0;
 }
 
+/* The hover selection marker (SEL-014): a small check-box-like button on
+   the icon's corner, as Explorer's item check boxes. */
+.files .selection-marker {
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
+  margin: -3px 0 0 -3px;
+  border-radius: 4px;
+  border: 1px solid @ox_muted;
+  background-color: @ox_bg;
+  color: @ox_text;
+  box-shadow: none;
+}
+.files .selection-marker:hover { border-color: @ox_accent; color: @ox_accent; }
+
 /* ---- Icon view ---- */
 /* Tiles as renderRows places them: the first 10px in and 5px down, 4px
    apart across and 2px down, sharing the pane's width less 20px; the

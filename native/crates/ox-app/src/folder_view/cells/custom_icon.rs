@@ -56,7 +56,7 @@ impl FileCell {
         let lookup = imp.icon_lookup.get().wrapping_add(1);
         imp.icon_lookup.set(lookup);
         imp.custom_icon.set_visible(false);
-        imp.image.set_visible(true);
+        imp.image.set_opacity(1.0);
         let uri = item.entry().uri.clone();
         if !uri.starts_with("file:") {
             return;
@@ -81,7 +81,8 @@ impl FileCell {
             if imp.icon_lookup.get() == lookup {
                 imp.custom_icon.set_paintable(Some(&texture));
                 imp.custom_icon.set_visible(true);
-                imp.image.set_visible(false);
+                // The art keeps the icon's room; the picture covers it.
+                imp.image.set_opacity(0.0);
             }
         });
     }

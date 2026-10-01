@@ -125,6 +125,8 @@ pub(crate) struct CellOwners {
     drop_row: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
     /// What the rows' tooltips name.
     row_tooltip: Cell<RowTooltip>,
+    /// Hovering an item shows no selection marker (SEL-014).
+    hides_selection_markers: Cell<bool>,
 }
 
 impl CellOwners {
@@ -351,6 +353,16 @@ impl CellOwners {
             }
         }
         shown
+    }
+
+    /// Whether hovering an item shows its selection marker.
+    pub(crate) fn shows_selection_markers(&self) -> bool {
+        !self.hides_selection_markers.get()
+    }
+
+    /// Shows selection markers on hovered items, or never.
+    pub(crate) fn set_selection_markers(&self, shown: bool) {
+        self.hides_selection_markers.set(!shown);
     }
 
     /// The list item whose content widget is `widget`.
