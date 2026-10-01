@@ -134,6 +134,41 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
     assert!(left.is_empty(), "{left:?}");
 }
 
+/// The sidebar's Recycle Bin shows whether it is full and empties it
+/// from any folder; Recent files sits beside it.
+///
+/// parity: SIDE-025, SIDE-026
+#[gtk::test]
+fn the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Old draft.txt");
+    trash(&fixture.path("Old draft.txt"));
+    require_only_test_items_in_the_recycle_bin();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    let bin_tooltip = || {
+        let index = sidebar.labels().iter().position(|label| label == "Recycle Bin");
+        let index = i32::try_from(index.expect("the sidebar shows the Recycle Bin")).unwrap_or(0);
+        let row = sidebar.list().row_at_index(index).expect("its row");
+        row.tooltip_text().map(String::from).unwrap_or_default()
+    };
+    assert!(sidebar.labels().contains(&"Recent files".to_owned()));
+    wait_until("the full Recycle Bin", || bin_tooltip() == "Recycle Bin · 1 item");
+
+    let menu = sidebar.right_click_row("Recycle Bin");
+    let labels = menu.row_labels();
+    let empty = menu.row("Empty Recycle Bin");
+    menu.popdown();
+    assert_eq!(labels[..3], ["Open", "Open in new tab", "Open in new window"]);
+    assert!(empty.is_sensitive(), "something to empty");
+    test.activate("empty-trash", None);
+    open_dialog(&test).press("Empty Recycle Bin");
+
+    wait_until("the empty Recycle Bin", || bin_tooltip() == "Recycle Bin · Empty");
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the folder stays");
+}
+
 /// parity: OPS-045
 #[gtk::test]
 fn items_dropped_on_the_recycle_bin_go_to_the_trash() {

@@ -37,7 +37,7 @@ use super::window_action::WindowAction;
 use super::{gestures, preferences, BrowserWindow};
 
 pub(super) use drop_spots::SidebarDropSpot;
-pub(super) use entries::sidebar_entries;
+pub(super) use entries::{recent_and_bin_entries, sidebar_entries};
 use entries::{RowTarget, Section, SidebarEntry};
 
 /// The "+" of Map network location.

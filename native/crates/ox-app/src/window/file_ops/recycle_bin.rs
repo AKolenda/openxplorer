@@ -102,6 +102,12 @@ impl BrowserWindow {
         if !self.allows(FileCommand::EmptyRecycleBin) {
             return;
         }
+        self.empty_trash().await;
+    }
+
+    /// Empty Recycle Bin from the sidebar's Recycle Bin (SIDE-025), from
+    /// any folder: asks, then deletes everything in it for good.
+    pub(crate) async fn empty_trash(&self) {
         if !self.confirm_deletion(&empty_confirmation()).await {
             return;
         }

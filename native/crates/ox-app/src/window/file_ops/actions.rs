@@ -128,6 +128,9 @@ impl BrowserWindow {
             task_action(WindowAction::EmptyRecycleBin, |window| async move {
                 window.empty_recycle_bin().await;
             }),
+            task_action(WindowAction::EmptyTrash, |window| async move {
+                window.empty_trash().await;
+            }),
         ]);
     }
 }

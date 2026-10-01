@@ -175,6 +175,8 @@ pub(crate) enum WindowAction {
     Restore,
     /// Deletes everything in the Recycle Bin, after asking.
     EmptyRecycleBin,
+    /// The same from the sidebar's Recycle Bin, wherever the window is.
+    EmptyTrash,
     /// Opens the New menu where the last context menu opened (the folder
     /// background's "New…").
     ShowNewMenu,
@@ -383,6 +385,7 @@ impl WindowAction {
             WindowAction::CancelOperation => "cancel-operation",
             WindowAction::Restore => "restore",
             WindowAction::EmptyRecycleBin => "empty-recycle-bin",
+            WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
             WindowAction::Unpin => "unpin",

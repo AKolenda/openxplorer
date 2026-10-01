@@ -5651,8 +5651,8 @@ python_tests = []
 bridge = ["list", "operate", "environment"]
 dolphin = "Places 'Trash' entry; Places panel “Trash” (trash:/)"
 gnome = "GVfs trash:/// (Gio 'trash::item-count' for the full/empty icon); GVfs trash:/// backend, trash::item-count, GFileMonitor on trash:///"
-native = "todo"
-native_note = "Porting notes: Explorer has a Recycle Bin. OpenXplorer offers no way to reach the Trash. trash::item-count, trash::orig-path and trash::deletion-date were verified with gio in the isolated runner."
+native = "done"
+native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (the_recycle_bin_row_is_drawn_full_or_empty); native/crates/ox-app/src/window/tests/recycle_bin.rs (the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere). The sidebar ends with Recent files and the Recycle Bin (trash:///). A GIO directory monitor on trash:/// recounts its items off the main loop; the row's bin glyph takes the accent colour while anything is in it (no full-bin glyph ships with the bundled Fluent icons) and its tooltip says 'Recycle Bin · N items' or 'Empty'. Its menu has Open, Open in new tab, Open in new window and Empty Recycle Bin (disabled when empty), which asks and empties from whatever folder the window shows. Dolphin's 'Configure Trash…' is not offered: GIO's Trash has no settings of its own (the desktop's privacy settings own automatic emptying)."
 
 [[feature]]
 id = "SIDE-026"
@@ -5675,8 +5675,8 @@ python_tests = []
 bridge = ["environment", "open", "openWith", "activateItem"]
 dolphin = "recentlyused:/files, recentlyused:/locations; Places “Recent Files” (recentlyused:/files) and “Recent Locations”"
 gnome = "GtkRecentManager (~/.local/share/recently-used.xbel); GVfs recent:/// backend / GtkRecentManager (~/.local/share/recently-used.xbel)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's Home page lists up to 8 files opened in OpenXplorer only, from its private list. The existing OpenXplorer list must not be lost. Existing OpenXplorer part is protected by HOME-011."
+native = "partial"
+native_note = "native/crates/ox-app/src/window/tests/recycle_bin.rs (the_sidebar_recycle_bin_shows_it_is_full_and_empties_from_anywhere). A 'Recent files' row opens GIO's recent:/// (the desktop's recently-used.xbel), which lists like a folder, opens in tabs and windows and takes no drops; the Home page's own recent list (HOME-011) is unchanged. Left open: 'Recent Locations' (recently visited folders) has no GIO backend and would need a listing of the app's own."
 
 [[feature]]
 id = "SIDE-027"

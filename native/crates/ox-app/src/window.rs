@@ -98,6 +98,7 @@ mod network_sign_out;
 mod place_menus;
 mod preferences;
 mod quick_access;
+mod recycle_bin_place;
 mod result_location;
 mod saved_search;
 mod search_box;
@@ -181,6 +182,7 @@ impl BrowserWindow {
         window.connect_signals();
         window.connect_settings_page();
         window.watch_environment();
+        window.watch_recycle_bin();
         window.apply_preferences();
         window.focus_file_list_once_shown();
         window
