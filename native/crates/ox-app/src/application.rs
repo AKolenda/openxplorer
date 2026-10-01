@@ -296,7 +296,7 @@ impl Application {
             return;
         };
         let folder = (!folder.is_empty()).then_some(folder.as_str());
-        window.show_destination(folder, items);
+        window.show_destination(folder, &items);
     }
 
     /// An action that runs `run` on the application state.

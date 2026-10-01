@@ -431,7 +431,7 @@ fn an_operation_ending_in_the_background_notifies_the_desktop() {
     assert_eq!(sent[0].body, None);
     assert_eq!(sent[0].window, test.window.id());
     let copy = fixture.uri_of("Documents/Notes 2.txt");
-    assert_eq!(sent[0].destination.items, [copy.clone()]);
+    assert_eq!(sent[0].destination.items, std::slice::from_ref(&copy));
     let (action, target) = sent[0].show_action();
     assert_eq!(action, "app.show-destination");
     let (id, folder, items) = target
@@ -441,7 +441,7 @@ fn an_operation_ending_in_the_background_notifies_the_desktop() {
     assert_eq!(folder, "");
     assert_eq!(items, [copy]);
 
-    test.window.show_destination(None, items);
+    test.window.show_destination(None, &items);
     wait_until("the subfolder with the copy selected", || {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))
             && test.selected_names() == ["Notes 2.txt"]

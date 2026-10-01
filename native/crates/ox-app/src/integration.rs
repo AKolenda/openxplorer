@@ -51,7 +51,9 @@ use ox_core::integration::{
     BraveIntegration, BravePaths, DefaultApps, RevealPaths, RevealRegistration, Sandbox,
 };
 
-pub(crate) use applications::{launch, prepare_launch, DefaultChoice};
+#[cfg(test)]
+pub(crate) use applications::LaunchTarget;
+pub(crate) use applications::{launch, prepare_launch, DefaultChoice, OpenWithError, PreparedLaunch};
 pub(crate) use brave_dialog::BraveDialog;
 pub(crate) use changes::{IntegrationError, MakeDefaultChoice};
 pub(crate) use editors::{editor_shortcuts_in_background, EditorShortcut};

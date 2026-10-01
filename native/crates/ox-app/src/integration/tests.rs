@@ -19,7 +19,8 @@ use ox_core::integration::{
 };
 
 use super::{
-    BraveDialog, DesktopIntegration, IntegrationFolders, MimeBackend, OpenWithDialog, OpenWithSubject,
+    BraveDialog, DefaultChoice, DesktopIntegration, IntegrationFolders, LaunchTarget, MimeBackend,
+    OpenWithDialog, OpenWithError, OpenWithSubject, PreparedLaunch,
 };
 use crate::test_support::harness::{application, capture_dialog, wait_until, Fixture, TestWindow};
 
@@ -270,19 +271,57 @@ fn open_with_lists_filters_and_launches_the_chosen_application() {
     }
 }
 
-/// Open with starts applications with the launch context of the window's
-/// own display, which gives them startup notification and focus.
+/// The window's Open with launcher starts applications with a launch
+/// context of the window's own display, which gives them startup
+/// notification and focus.
 ///
 /// parity: INT-023
 #[gtk::test]
 fn applications_start_with_the_windows_display() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let context = test.window.launch_context();
+    let prepared = PreparedLaunch {
+        target: LaunchTarget::Path(fixture.path("Notes 2.txt")),
+        content_type: "text/plain".to_owned(),
+        is_folder: false,
+    };
+
+    let launcher = test.window.launcher_with(record_start);
+    let toast = launcher("demo-editor.desktop", &prepared, DefaultChoice::Keep);
+
+    assert_eq!(toast.ok(), Some("Opened with the selected application."));
+    let started = STARTED.with(RefCell::take);
+    assert_eq!(started.len(), 1);
+    assert_eq!(started[0].0, "demo-editor.desktop");
+    let context = started[0]
+        .1
+        .downcast_ref::<gtk::gdk::AppLaunchContext>()
+        .expect("a display's launch context");
     assert_eq!(
-        gtk::gdk::prelude::GdkAppLaunchContextExt::display(&context),
+        gtk::gdk::prelude::GdkAppLaunchContextExt::display(context),
         WidgetExt::display(&test.window)
     );
+}
+
+thread_local! {
+    /// What [`record_start`] was asked to start, with the launch context.
+    static STARTED: RefCell<Vec<(String, gio::AppLaunchContext)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Records a launch instead of starting an application.
+#[allow(clippy::unnecessary_wraps, reason = "it stands in for integration::launch")]
+fn record_start(
+    app_id: &str,
+    _prepared: &PreparedLaunch,
+    _default: DefaultChoice,
+    launch_context: &gio::AppLaunchContext,
+) -> Result<&'static str, OpenWithError> {
+    STARTED.with(|started| {
+        started
+            .borrow_mut()
+            .push((app_id.to_owned(), launch_context.clone()));
+    });
+    Ok("Opened with the selected application.")
 }
 
 /// For a folder every installed application is listed, and the

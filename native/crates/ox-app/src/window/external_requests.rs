@@ -68,11 +68,11 @@ impl BrowserWindow {
     /// (INT-026): `items` revealed in their folders, as `ShowItems`
     /// does, or, with none, `folder` in the tab that shows it or a new
     /// one. With neither the window only comes to the front.
-    pub(crate) fn show_destination(&self, folder: Option<&str>, items: Vec<String>) {
+    pub(crate) fn show_destination(&self, folder: Option<&str>, items: &[String]) {
         self.present();
         if !items.is_empty() {
             let home = self.imp().locations.borrow().home_uri();
-            for (folder, items) in items_by_folder(&items, &home) {
+            for (folder, items) in items_by_folder(items, &home) {
                 self.reveal_items(&folder, items);
             }
         } else if let Some(folder) = folder {
