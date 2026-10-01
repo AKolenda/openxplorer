@@ -24,6 +24,9 @@ pub(super) mod entries;
 mod menu;
 mod row;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
@@ -193,21 +196,49 @@ impl Sidebar {
 
     /// Ctrl+click on a place opens it in a background tab and
     /// Ctrl+Shift+click in a tab in front, as in Dolphin's Places panel;
-    /// a plain click goes on to the row.
+    /// a plain click goes on to the row. Like a middle-click it acts on
+    /// release, so Ctrl+drag still drags the place: a drag cancels it.
     fn open_places_in_tabs_on_ctrl_click(&self, list: &gtk::ListBox) {
         let click = gtk::GestureClick::new();
         click.set_button(gdk::BUTTON_PRIMARY);
         click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let pending: Rc<RefCell<Option<(WindowAction, String)>>> = Rc::default();
         click.connect_pressed(glib::clone!(
             #[weak(rename_to = sidebar)]
             self,
+            #[strong]
+            pending,
             move |gesture, _, _, y| {
-                let action = tab_action_for_click(gesture.current_event_state());
+                let action = tab_action_for_click(gestures::held_modifiers(gesture));
                 let target = action.zip(sidebar.location_at(y));
-                let Some((action, uri)) = target else {
+                if target.is_none() {
                     gesture.set_state(gtk::EventSequenceState::Denied);
+                }
+                pending.replace(target);
+            }
+        ));
+        click.connect_stopped(glib::clone!(
+            #[strong]
+            pending,
+            move |_| {
+                pending.take();
+            }
+        ));
+        click.connect_cancel(glib::clone!(
+            #[strong]
+            pending,
+            move |_, _| {
+                pending.take();
+            }
+        ));
+        click.connect_released(glib::clone!(
+            #[weak(rename_to = sidebar)]
+            self,
+            move |gesture, _, _, _| {
+                let Some((action, uri)) = pending.take() else {
                     return;
                 };
+                // Claiming keeps the row from also opening in this tab.
                 gesture.set_state(gtk::EventSequenceState::Claimed);
                 action.activate_from(&sidebar, Some(&uri.to_variant()));
             }
@@ -321,6 +352,48 @@ impl Sidebar {
         self.set_entries(entries);
         self.mark_hidden(hidden);
         self.imp().anything_hidden.set(anything_hidden);
+    }
+
+    /// Redraws the one row that goes to the same place as `entry` as
+    /// `entry`, keeping its selection, focus and dimming; the other rows
+    /// stay as they are. False when no row goes there.
+    pub(super) fn replace_entry(&self, entry: SidebarEntry) -> bool {
+        let imp = self.imp();
+        let Some(index) = imp
+            .entries
+            .borrow()
+            .iter()
+            .position(|row| row.target == entry.target)
+        else {
+            return false;
+        };
+        let Ok(position) = i32::try_from(index) else {
+            return false;
+        };
+        let Some(old) = self.list().row_at_index(position) else {
+            return false;
+        };
+        imp.entries.borrow_mut()[index] = entry;
+        let row = {
+            let entries = imp.entries.borrow();
+            let edges = entries::section_edges(&entries, index);
+            row::sidebar_row(&entries[index], edges, imp.icon_size.get())
+        };
+        let hidden = imp.hidden_rows.borrow().get(index).copied().unwrap_or_default();
+        if hidden != HiddenRow::Shown {
+            row.add_css_class(HIDDEN_ROW_CLASS);
+        }
+        let (selected, focused) = (old.is_selected(), old.has_focus());
+        let list = self.list();
+        list.remove(&old);
+        list.insert(&row, position);
+        if selected {
+            list.select_row(Some(&row));
+        }
+        if focused {
+            row.grab_focus();
+        }
+        true
     }
 
     /// Dims the rows `hidden` marks and remembers them for the menus.

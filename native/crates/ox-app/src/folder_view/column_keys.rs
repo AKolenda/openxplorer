@@ -133,6 +133,9 @@ fn add_column_resizer(view: &DetailsView, column: SortColumn, title: &gtk::Widge
         return;
     };
     let name = view_column.title().unwrap_or_default();
+    // Named outright, so the header is not named after the resizer
+    // inside it too.
+    title.update_property(&[gtk::accessible::Property::Label(&name)]);
     let resizer = ResizerControl::new(&format!("Resize {name} column"));
     title_box.prepend(&resizer);
     let announce = glib::clone!(
@@ -142,10 +145,8 @@ fn add_column_resizer(view: &DetailsView, column: SortColumn, title: &gtk::Widge
         resizer,
         move |view_column: &gtk::ColumnViewColumn| {
             let limits = settings_column(column).width_range();
-            let fixed = view_column.fixed_width();
-            let shown = if fixed > 0 { fixed } else { title.width() };
             #[expect(clippy::cast_possible_truncation, reason = "column widths are small")]
-            let width = column_widths::saved_width(column, shown).map_or(0, |width| width as i32);
+            let width = shown_width(column, view_column, &title).map_or(0, |width| width as i32);
             let min = i32::try_from(*limits.start()).unwrap_or(0);
             let max = i32::try_from(*limits.end()).unwrap_or(i32::MAX);
             resizer.set_values(min, max, width.clamp(min, max));
@@ -170,6 +171,14 @@ fn add_column_resizer(view: &DetailsView, column: SortColumn, title: &gtk::Widge
     ));
 }
 
+/// The width `column` shows, in the pixels settings save: its fixed
+/// width, else the width of its title.
+fn shown_width(column: SortColumn, view_column: &gtk::ColumnViewColumn, title: &gtk::Widget) -> Option<f64> {
+    let fixed = view_column.fixed_width();
+    let shown = if fixed > 0 { fixed } else { title.width() };
+    column_widths::saved_width(column, shown)
+}
+
 /// Carries out `action` on the title `title` of `column`.
 fn run_title_key(view: &DetailsView, title: &gtk::Widget, column: SortColumn, action: TitleKey) {
     let Some(view_column) = view.column(column) else {
@@ -178,9 +187,7 @@ fn run_title_key(view: &DetailsView, title: &gtk::Widget, column: SortColumn, ac
     match action {
         TitleKey::Sort => view.sort_by(order_after_sort_key(column, view.sort_order())),
         TitleKey::Resize(change) => {
-            let fixed = view_column.fixed_width();
-            let shown = if fixed > 0 { fixed } else { title.width() };
-            let current = column_widths::saved_width(column, shown).unwrap_or_default();
+            let current = shown_width(column, &view_column, title).unwrap_or_default();
             #[expect(clippy::cast_possible_truncation, reason = "column widths are small")]
             let width = resized_width(column, current as i32, change);
             view_column.set_expand(false);

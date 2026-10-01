@@ -23,6 +23,7 @@ use super::file_drop::{FirstOffer, PendingDrop, ProgramChecks};
 use super::file_ops::FileOperations;
 use super::folder_pane::FolderPane;
 use super::menu_popover::MenuPopover;
+use super::recycle_bin_place::RecycleBinWatch;
 use super::search_box::SearchBox;
 use super::session::Session;
 use super::session::TabId;
@@ -87,7 +88,7 @@ pub(crate) struct BrowserWindow {
     /// How many items the Recycle Bin holds, as its sidebar row shows.
     pub(super) trash_items: Cell<u32>,
     /// Watches the Recycle Bin for its sidebar row.
-    pub(super) trash_monitor: OnceCell<gio::FileMonitor>,
+    pub(super) recycle_bin_watch: RecycleBinWatch,
     /// The Places button shown in the navigation row while the navigation
     /// pane is hidden.
     pub(super) places_button: OnceCell<gtk::MenuButton>,

@@ -11,7 +11,8 @@
 //! sidebar" with the separator role and the width and its limits as its
 //! value, and lights the handle while it has focus. Left and Right change
 //! the width by 10 pixels (40 with Shift) and Home returns it to 210;
-//! every change is saved.
+//! every change is saved. F8, GTK's key to the pane handle, focuses the
+//! separator too, so both ways to the resizer move and save it alike.
 
 use gtk::gdk;
 use gtk::glib;
@@ -101,6 +102,16 @@ impl BrowserWindow {
             move |_| handle.remove_css_class("keyboard-focus")
         ));
         resizer.add_controller(focus);
+        workspace.connect_cycle_handle_focus(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            false,
+            move |paned, _| {
+                paned.stop_signal_emission_by_name("cycle-handle-focus");
+                window.sidebar_resizer().grab_focus()
+            }
+        ));
         workspace.connect_position_notify(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -127,8 +138,7 @@ impl BrowserWindow {
     /// Makes the sidebar `wanted` pixels wide, within its limits, and saves
     /// the width.
     fn resize_sidebar_to(&self, wanted: i32) {
-        let widest = self.sidebar_limit().unwrap_or(*sidebar_widths().end());
-        let width = wanted.clamp(*sidebar_widths().start(), widest);
+        let width = wanted.clamp(*sidebar_widths().start(), self.widest_sidebar());
         self.workspace().set_position(width);
         self.save_preference(Preference::SidebarWidth(width));
     }
@@ -136,10 +146,15 @@ impl BrowserWindow {
     /// Tells screen readers the sidebar width and its limits
     /// (`aria-valuemin`, `aria-valuemax`, `aria-valuenow`).
     fn announce_sidebar_width(&self) {
-        let widest = self.sidebar_limit().unwrap_or(*sidebar_widths().end());
         let width = self.workspace().position();
         self.sidebar_resizer()
-            .set_values(*sidebar_widths().start(), widest, width);
+            .set_values(*sidebar_widths().start(), self.widest_sidebar(), width);
+    }
+
+    /// The widest the sidebar may be now: the window's limit, else the
+    /// widest saved width.
+    fn widest_sidebar(&self) -> i32 {
+        self.sidebar_limit().unwrap_or(*sidebar_widths().end())
     }
 
     /// The pane handle, for tests.

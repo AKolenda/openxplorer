@@ -53,6 +53,7 @@ pub use preferences::{
     NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS, WINDOW_WIDTHS,
 };
 
+use crate::location::same_location;
 use save::{replace_private_file, OldFile, SettingsLock};
 
 /// Settings shared by every window of both applications.
@@ -189,6 +190,54 @@ impl Settings {
     pub fn update_preferences(&mut self, update: &PreferencesUpdate) -> Result<Preferences, SettingsError> {
         self.mutate(|data| {
             data.preferences.apply(update);
+            Ok(data.preferences.clone())
+        })
+    }
+
+    /// Hides or shows the sidebar section saved as `key`, changing only
+    /// that key of `hiddenSidebarSections` as the file now holds it, so a
+    /// section another window or process hid or showed meanwhile stays
+    /// as it set it. Returns the resulting preferences; an invalid key
+    /// changes nothing.
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn set_section_hidden(&mut self, key: &str, hidden: bool) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let mut keys = data.preferences.hidden_sidebar_sections.clone();
+            keys.retain(|shown| shown != key);
+            if hidden {
+                keys.push(key.to_owned());
+            }
+            let update = PreferencesUpdate {
+                hidden_sidebar_sections: Some(keys),
+                ..PreferencesUpdate::default()
+            };
+            data.preferences.apply(&update);
+            Ok(data.preferences.clone())
+        })
+    }
+
+    /// Hides or shows the sidebar place at `uri` (Dolphin's "Hide"),
+    /// changing only that place of `hiddenSidebarPlaces` as the file now
+    /// holds it. Returns the resulting preferences.
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn set_place_hidden(&mut self, uri: &str, hidden: bool) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let mut places = data.preferences.hidden_sidebar_places.clone();
+            places.retain(|place| !same_location(place, uri));
+            if hidden {
+                places.push(uri.to_owned());
+            }
+            let update = PreferencesUpdate {
+                hidden_sidebar_places: Some(places),
+                ..PreferencesUpdate::default()
+            };
+            data.preferences.apply(&update);
             Ok(data.preferences.clone())
         })
     }

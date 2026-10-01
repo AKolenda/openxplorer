@@ -5,9 +5,11 @@
 //! Dolphin's Places panel hides one place with "Hide" and a whole group
 //! with "Hide Section", and "Show All Entries" lists what is hidden,
 //! dimmed, so it can be shown again. Here "Unpin from Quick access" hides
-//! a standard folder (SIDE-009), every row's menu ends with "Hide section"
-//! for its group, saved for every window as `hiddenSidebarSections`, and
-//! the empty-space menu's "Show all entries" (this window only, available
+//! a standard folder (SIDE-009), "Hide" hides any other place (a drive, a
+//! network location, Recent files, the Recycle Bin), saved for every
+//! window as `hiddenSidebarPlaces`, every row's menu ends with "Hide
+//! section" for its group, saved as `hiddenSidebarSections`, and the
+//! empty-space menu's "Show all entries" (this window only, available
 //! while anything is hidden) lists the hidden rows dimmed, whose menus
 //! offer "Show" and "Show section".
 
@@ -15,19 +17,19 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::same_location;
-use ox_core::settings::{PreferencesUpdate, SettingsError};
+use ox_core::settings::SettingsError;
 
 use crate::settings_store::Change;
 
 use super::actions::{text_action, toggle_action};
-use super::sidebar::entries::{place_entry, Section, SidebarEntry};
+use super::sidebar::entries::{place_entry, RowTarget, Section, SidebarEntry};
 use super::sidebar::HiddenRow;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
 impl BrowserWindow {
     /// Adds `win.sidebar-show-all`, `win.hide-section`,
-    /// `win.show-section` and `win.show-place`.
+    /// `win.show-section`, `win.hide-place` and `win.show-place`.
     pub(super) fn install_sidebar_hiding(&self) {
         self.add_action_entries([
             toggle_action(WindowAction::SidebarShowAll, false, |window, on| {
@@ -40,6 +42,7 @@ impl BrowserWindow {
             text_action(WindowAction::ShowSection, |window, key| {
                 window.change_hidden_sections(key, false);
             }),
+            text_action(WindowAction::HidePlace, BrowserWindow::hide_place),
             text_action(WindowAction::ShowPlace, BrowserWindow::show_hidden_place),
         ]);
     }
@@ -54,6 +57,7 @@ impl BrowserWindow {
     ) -> (Vec<(SidebarEntry, HiddenRow)>, bool) {
         let settings = self.context().settings_data();
         let hidden_sections = &settings.preferences.hidden_sidebar_sections;
+        let hidden_places = &settings.preferences.hidden_sidebar_places;
         let show_all = self.imp().sidebar_show_all.get();
         let is_hidden = |section: Section| {
             section
@@ -62,10 +66,15 @@ impl BrowserWindow {
         };
         let mut rows: Vec<(SidebarEntry, HiddenRow)> = entries
             .into_iter()
-            .filter_map(|entry| match (is_hidden(entry.section), show_all) {
-                (false, _) => Some((entry, HiddenRow::Shown)),
-                (true, true) => Some((entry, HiddenRow::Section)),
-                (true, false) => None,
+            .filter_map(|entry| {
+                let state = if is_hidden(entry.section) {
+                    HiddenRow::Section
+                } else if is_hidden_place(&entry, hidden_places) {
+                    HiddenRow::Place
+                } else {
+                    HiddenRow::Shown
+                };
+                (state == HiddenRow::Shown || show_all).then_some((entry, state))
             })
             .collect();
         let hidden_folders: Vec<_> = self
@@ -90,29 +99,35 @@ impl BrowserWindow {
                 rows.insert(after_quick_access + offset, row);
             }
         }
-        let anything_hidden = !hidden_sections.is_empty() || !hidden_folders.is_empty();
+        let anything_hidden =
+            !hidden_sections.is_empty() || !hidden_places.is_empty() || !hidden_folders.is_empty();
         (rows, anything_hidden)
     }
 
     /// Hides or shows the sidebar section saved as `key`, for every window.
     fn change_hidden_sections(&self, key: &str, hide: bool) {
-        let mut keys = self.context().settings_data().preferences.hidden_sidebar_sections;
-        keys.retain(|hidden| hidden != key);
-        if hide {
-            keys.push(key.to_owned());
-        }
-        let update = PreferencesUpdate {
-            hidden_sidebar_sections: Some(keys),
-            ..PreferencesUpdate::default()
-        };
-        let change: Change = Box::new(move |settings| settings.update_preferences(&update).map(|_| ()));
+        let key = key.to_owned();
+        let change: Change = Box::new(move |settings| settings.set_section_hidden(&key, hide).map(|_| ()));
         self.save_sidebar_change(change);
     }
 
-    /// Shows the hidden standard folder `uri` in Quick access again.
+    /// Hides the place `uri` from the sidebar, for every window.
+    fn hide_place(&self, uri: &str) {
+        let uri = uri.to_owned();
+        let change: Change = Box::new(move |settings| settings.set_place_hidden(&uri, true).map(|_| ()));
+        self.save_sidebar_change(change);
+    }
+
+    /// Shows the hidden place `uri` again: a place hidden with Hide, or a
+    /// standard folder in Quick access.
     fn show_hidden_place(&self, uri: &str) {
         let uri = uri.to_owned();
-        let change: Change = Box::new(move |settings| settings.show_in_quick_access(&uri));
+        let hidden_places = self.context().settings_data().preferences.hidden_sidebar_places;
+        let change: Change = if hidden_places.iter().any(|place| same_location(place, &uri)) {
+            Box::new(move |settings| settings.set_place_hidden(&uri, false).map(|_| ()))
+        } else {
+            Box::new(move |settings| settings.show_in_quick_access(&uri))
+        };
         self.save_sidebar_change(change);
     }
 
@@ -130,5 +145,16 @@ impl BrowserWindow {
                 }
             ),
         );
+    }
+}
+
+/// Whether `entry` is a place hidden with Hide: one of `hidden_places`.
+/// Pins and standard folders are hidden from Quick access instead.
+fn is_hidden_place(entry: &SidebarEntry, hidden_places: &[String]) -> bool {
+    match &entry.target {
+        RowTarget::Location(uri) if !entry.pinned => {
+            hidden_places.iter().any(|place| same_location(place, uri))
+        }
+        _ => false,
     }
 }

@@ -25,7 +25,7 @@ use crate::window::saved_search::saved_search_menu;
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
-use super::entries::{RowTarget, SidebarEntry};
+use super::entries::{RowLevel, RowTarget, SidebarEntry};
 use super::{HiddenRow, Sidebar};
 
 /// The menu of the pin that opens `uri`; `caching` says whether it is
@@ -106,6 +106,12 @@ impl Sidebar {
             HiddenRow::Section => Vec::new(),
             HiddenRow::Shown => self.row_menu(entry).unwrap_or_default(),
         };
+        if let (Some(hide), HiddenRow::Shown) = (hide_place_item(entry), hidden) {
+            if !menu.is_empty() {
+                menu.push(MenuEntry::Divider);
+            }
+            menu.push(hide);
+        }
         if let Some((key, name)) = entry.section.hiding() {
             if !menu.is_empty() {
                 menu.push(MenuEntry::Divider);
@@ -190,6 +196,18 @@ fn show_place_menu(entry: &SidebarEntry) -> Vec<MenuEntry> {
         return Vec::new();
     };
     vec![MenuItem::with_text_target("Show", Icon::Eye, WindowAction::ShowPlace, uri).into()]
+}
+
+/// "Hide" for a place other than a pin or a standard folder, which are
+/// unpinned instead, and other than the heads of This PC and Network.
+fn hide_place_item(entry: &SidebarEntry) -> Option<MenuEntry> {
+    let RowTarget::Location(uri) = &entry.target else {
+        return None;
+    };
+    if entry.pinned || entry.level == RowLevel::Group {
+        return None;
+    }
+    Some(MenuItem::with_text_target("Hide", Icon::Eye, WindowAction::HidePlace, uri).into())
 }
 
 /// "Hide section" for a shown section, or "Show section" for a hidden

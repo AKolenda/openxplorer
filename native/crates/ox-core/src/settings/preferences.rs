@@ -247,11 +247,22 @@ pub struct Preferences {
     /// the keys the app gives them. Stored only when one is hidden.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hidden_sidebar_sections: Vec<String>,
+    /// The sidebar places the user hid one by one (Dolphin's "Hide"), by
+    /// location: drives, network locations, Recent files, the Recycle
+    /// Bin. Hidden standard folders are `hiddenQuick`. Stored only when
+    /// one is hidden.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub hidden_sidebar_places: Vec<String>,
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
 const MAX_HIDDEN_SECTIONS: usize = 16;
 const MAX_SECTION_KEY: usize = 32;
+
+/// The most sidebar places that may be hidden one by one, and the longest
+/// location.
+const MAX_HIDDEN_PLACES: usize = 64;
+const MAX_PLACE_LOCATION: usize = 4096;
 
 /// The sidebar icon sizes the user may choose, in pixels; 0 is automatic.
 pub const SIDEBAR_ICON_SIZES: [u32; 5] = [0, 16, 22, 32, 48];
@@ -285,6 +296,7 @@ impl Default for Preferences {
             hide_sidebar: false,
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
+            hidden_sidebar_places: Vec::new(),
         }
     }
 }
@@ -332,6 +344,15 @@ impl Preferences {
         });
         if let Some(sections) = sections {
             self.hidden_sidebar_sections.clone_from(sections);
+        }
+        let places = update.hidden_sidebar_places.as_ref().filter(|places| {
+            places.len() <= MAX_HIDDEN_PLACES
+                && places.iter().all(|uri| {
+                    !uri.is_empty() && uri.len() <= MAX_PLACE_LOCATION && !uri.contains(char::is_control)
+                })
+        });
+        if let Some(places) = places {
+            self.hidden_sidebar_places.clone_from(places);
         }
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
@@ -384,6 +405,9 @@ pub struct PreferencesUpdate {
     /// Replaces the hidden sidebar sections; up to 16 short ASCII keys,
     /// else ignored.
     pub hidden_sidebar_sections: Option<Vec<String>>,
+    /// Replaces the sidebar places hidden one by one; up to 64 locations,
+    /// else ignored.
+    pub hidden_sidebar_places: Option<Vec<String>>,
 }
 
 impl PreferencesUpdate {
@@ -422,6 +446,7 @@ impl PreferencesUpdate {
                 .and_then(Value::as_u64)
                 .and_then(|size| u32::try_from(size).ok()),
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
+            hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
         })
     }
 }

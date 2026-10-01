@@ -327,6 +327,10 @@ fn column_titles_sort_and_resize_from_the_keyboard() {
     let titles = crate::folder_view::column_titles::title_buttons(details.column_view());
     let type_title = &titles[3];
     assert!(titles.iter().all(WidgetExt::is_focusable));
+    assert!(
+        gtk::test_accessible_has_property(type_title, gtk::AccessibleProperty::Label),
+        "named after its column, not its resizer"
+    );
     let type_column = details.column(SortColumn::Type).expect("a Type column");
     let before = type_column.fixed_width();
 

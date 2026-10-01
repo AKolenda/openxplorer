@@ -96,13 +96,18 @@ impl BrowserWindow {
     }
 
     /// Starts a pin request; false while another one runs.
-    fn start_pinning(&self) -> bool {
+    pub(super) fn start_pinning(&self) -> bool {
         !self.imp().pinning.replace(true)
+    }
+
+    /// Ends the pin request.
+    pub(super) fn end_pinning(&self) {
+        self.imp().pinning.set(false);
     }
 
     /// Ends the pin request and shows `message`.
     fn finish_pinning(&self, message: &str) {
-        self.imp().pinning.set(false);
+        self.end_pinning();
         self.show_message(message);
     }
 

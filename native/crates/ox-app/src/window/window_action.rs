@@ -128,7 +128,10 @@ pub(crate) enum WindowAction {
     HideSection,
     /// Shows the hidden sidebar section whose key is the string target.
     ShowSection,
-    /// Shows the hidden standard folder in the string target again.
+    /// Hides the sidebar place at the string target (SIDE-010).
+    HidePlace,
+    /// Shows the hidden place in the string target again: a standard
+    /// folder or a place hidden with Hide.
     ShowPlace,
     /// The column the details view sorts by.
     Sort,
@@ -378,6 +381,7 @@ impl WindowAction {
             WindowAction::SidebarShowAll => "sidebar-show-all",
             WindowAction::HideSection => "hide-section",
             WindowAction::ShowSection => "show-section",
+            WindowAction::HidePlace => "hide-place",
             WindowAction::ShowPlace => "show-place",
             WindowAction::Sort => "sort",
             WindowAction::Direction => "direction",

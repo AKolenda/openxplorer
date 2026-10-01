@@ -397,6 +397,12 @@ impl Dialog {
             .collect()
     }
 
+    /// Whether an answer is being carried out, for tests.
+    #[cfg(test)]
+    pub(crate) fn is_busy(&self) -> bool {
+        self.imp().running.borrow().is_some()
+    }
+
     /// Presses the button labelled `label`, as a click does, for tests.
     #[cfg(test)]
     pub(crate) fn press(&self, label: &str) {

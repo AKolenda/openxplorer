@@ -17,6 +17,7 @@ use gtk::{gio, glib};
 use ox_core::entry::verify_pin;
 use ox_core::location::{normalise_navigation, same_location};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
+use ox_core::transfer::Cancellation;
 
 use crate::settings_store::Change;
 
@@ -86,11 +87,23 @@ impl BrowserWindow {
                     continue;
                 }
             };
-            match self.save_place(request, edited.clone()).await {
+            // One pin request at a time (SIDE-007), as pinning does.
+            if !self.start_pinning() {
+                dialog.show_error("Another folder is being pinned. Try again in a moment.");
+                continue;
+            }
+            let running = Cancellation::new();
+            dialog.set_busy(Some(&running));
+            let outcome = self.save_place(request, edited.clone(), &running).await;
+            self.end_pinning();
+            dialog.set_busy(None);
+            match outcome {
                 Ok(()) => {
                     dialog.finish();
                     return;
                 }
+                // Closing the dialog cancelled it and nothing was saved.
+                Err(_) if running.is_cancelled() => return,
                 Err(error) => dialog.show_error(&error),
             }
         }
@@ -160,14 +173,25 @@ impl BrowserWindow {
     }
 
     /// Checks `request` as a pin, off the main thread, then saves it as a
-    /// new pin or in place of `edited`.
-    async fn save_place(&self, request: BookmarkRequest, edited: Option<EditedPin>) -> Result<(), String> {
+    /// new pin or in place of `edited`, unless `running` was cancelled
+    /// meanwhile: closing the dialog stops the check and saves nothing.
+    async fn save_place(
+        &self,
+        request: BookmarkRequest,
+        edited: Option<EditedPin>,
+        running: &Cancellation,
+    ) -> Result<(), String> {
         let (uri, label) = (request.uri.clone(), request.label.clone());
+        let cancellable = running.cancellable().clone();
         let verifying = gio::spawn_blocking(move || {
             let label = (!label.is_empty()).then_some(label.as_str());
-            verify_pin(&uri, label, None::<&gio::Cancellable>)
+            verify_pin(&uri, label, Some(&cancellable))
         });
-        let target = match verifying.await {
+        let verified = verifying.await;
+        if running.is_cancelled() {
+            return Err("Cancelled.".to_owned());
+        }
+        let target = match verified {
             Ok(Ok(target)) => target,
             Ok(Err(error)) => return Err(format!("Could not add: {error}")),
             Err(_panic) => return Err("Could not add: the location could not be checked.".to_owned()),
