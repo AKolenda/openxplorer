@@ -23,7 +23,8 @@ use ox_core::location::{is_smb_location, is_smb_server};
 use ox_core::ops::JournalDirection;
 use ox_core::settings::ContextMenu as MenuStyleChoice;
 
-use crate::integration::Tool;
+use crate::integration::{self, ApplicationChoice, Tool};
+use crate::locations::Page;
 
 use super::actions::{plain_action, text_action};
 use super::command_bar::new_menu;
@@ -40,6 +41,9 @@ use entries::{
 /// How far into a row, and from the view's corner without one, a menu
 /// opened from the keyboard points.
 const KEYBOARD_MENU_INSET: i32 = 40;
+
+/// The most applications the item menu offers beside Open with… (OPEN-013).
+const MENU_APPLICATIONS: usize = 3;
 
 /// True for a ZIP archive, by its name or its type (`isZipEntry`).
 fn is_zip(name: &str, content_type: Option<&str>) -> bool {
@@ -148,6 +152,7 @@ impl BrowserWindow {
             (None, false) => background_menu(
                 &self.journal_label(JournalDirection::Undo),
                 &self.journal_label(JournalDirection::Redo),
+                &self.folder_applications(),
             ),
             (Some(_), true) => recycle_bin_item_menu(items.len() == 1),
             (Some(first), false) => {
@@ -162,6 +167,16 @@ impl BrowserWindow {
         ContextMenu {
             entries,
             strip: Vec::new(),
+        }
+    }
+
+    /// The applications the folder menu offers for the folder shown.
+    fn folder_applications(&self) -> Vec<ApplicationChoice> {
+        match self.current_uri() {
+            Some(uri) if Page::from_uri(&uri).is_none() => {
+                integration::menu_applications(&uri, None, true, MENU_APPLICATIONS)
+            }
+            _ => Vec::new(),
         }
     }
 
@@ -182,6 +197,12 @@ impl BrowserWindow {
             is_search_result: self.is_searching(),
             comparison: Comparison::Unavailable,
             editors: self.context().desktop_integration().known_editor_shortcuts(),
+            applications: if is_single {
+                let content_type = entry.content_type.as_deref();
+                integration::menu_applications(&entry.uri, content_type, entry.is_dir, MENU_APPLICATIONS)
+            } else {
+                Vec::new()
+            },
             caching,
             delete_label: self.delete_label(),
         }

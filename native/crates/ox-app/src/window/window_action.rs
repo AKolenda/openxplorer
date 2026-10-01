@@ -304,6 +304,9 @@ pub(crate) enum WindowAction {
     /// Opens the selected item in the code editor whose desktop ID is the
     /// string target.
     OpenInEditor,
+    /// Opens the selected item in the application whose desktop ID is
+    /// the string target (the item menu's "Open with <app>").
+    OpenWithApp,
 }
 
 impl WindowAction {
@@ -440,6 +443,7 @@ impl WindowAction {
             WindowAction::CompareFiles => "compare-files",
             WindowAction::SearchTool => "search-tool",
             WindowAction::OpenInEditor => "open-in-editor",
+            WindowAction::OpenWithApp => "open-with-app",
         }
     }
 

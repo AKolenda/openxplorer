@@ -11764,8 +11764,8 @@ python_tests = [
 bridge = ["applications", "openWith"]
 dolphin = "KFileItemActions::insertOpenWithActionsTo; Context menu “Open With” submenu (KFileItemActions::addOpenWithActionsTo)"
 gnome = "g_app_info_get_recommended_for_type"
-native = "todo"
-native_note = "Porting notes: OpenXplorer lists only editor shortcuts (VS Code, VSCodium) plus 'Open with…'. Explorer's 'Open with' submenu lists the recommended applications. Existing OpenXplorer part is protected by OPEN-011 and OPEN-015."
+native = "done"
+native_note = "The item menu of one item lists up to three other applications registered for its type, each as 'Open with <App>' before 'Open with…', and the folder background menu lists the folder's applications and 'Open folder with…' after Open in Terminal (native/crates/ox-app/src/integration/applications.rs menu_applications, window/context_menu/entries.rs). They are ordered as Open with orders them, only those that can open the item, never OpenXplorer itself, and without a file's default application, which Open already starts. Choosing one launches through Open with's checks (prepare_launch) and says 'Opened with <App>'. The rows are in the menu itself, as Nautilus has them, rather than in a submenu: the menu has no submenus. Tests: native/crates/ox-app/src/window/context_menu/entries.rs (the_items_other_applications_are_offered_before_open_with, the_background_menu_acts_on_the_folder)."
 
 [[feature]]
 id = "OPEN-014"

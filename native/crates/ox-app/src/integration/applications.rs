@@ -172,6 +172,40 @@ pub(crate) fn list_applications(
     })
 }
 
+/// The applications a menu offers for the item at `uri` beside Open
+/// with… (OPEN-013): up to `limit` of those registered for its type that
+/// can open it, as Open with orders them, leaving out a file's default,
+/// which Open starts. Reads the desktop's application database, not the
+/// item.
+pub(crate) fn menu_applications(
+    uri: &str,
+    content_type: Option<&str>,
+    is_folder: bool,
+    limit: usize,
+) -> Vec<ApplicationChoice> {
+    let content_type = match (is_folder, content_type) {
+        (true, _) => FOLDER_CONTENT_TYPE,
+        (false, known) => known.unwrap_or(UNKNOWN_CONTENT_TYPE),
+    };
+    let default_id: Option<String> = gio::AppInfo::default_for_type(content_type, false)
+        .and_then(|app| app.id())
+        .map(Into::into);
+    let recommended = gio::AppInfo::recommended_for_type(content_type);
+    let recommended_ids: Vec<String> = recommended
+        .iter()
+        .filter_map(|app| app.id().map(Into::into))
+        .collect();
+    let facts = ChoiceFacts {
+        default_id: default_id.as_deref(),
+        recommended_ids: &recommended_ids,
+        has_local_path: local_path(uri).is_some(),
+    };
+    let mut choices = facts.choices(recommended);
+    choices.retain(|choice| choice.is_available && !(choice.is_default && !is_folder));
+    choices.truncate(limit);
+    choices
+}
+
 /// The content type Open with lists applications for: `inode/directory`
 /// for a folder, `application/octet-stream` when GIO could not tell.
 fn content_type_of(entry: &Entry) -> String {

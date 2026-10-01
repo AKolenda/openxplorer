@@ -14,7 +14,7 @@
 use ox_core::search::Caching;
 
 use crate::icons::Icon;
-use crate::integration::EditorShortcut;
+use crate::integration::{ApplicationChoice, EditorShortcut};
 use crate::window::cache_folder::cache_item;
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
 use crate::window::window_action::WindowAction;
@@ -71,6 +71,9 @@ pub(crate) struct ItemFacts {
     pub(crate) comparison: Comparison,
     /// The installed code editors, each offered as "Open in <editor>".
     pub(crate) editors: Vec<EditorShortcut>,
+    /// The other applications for the item, each offered as "Open with
+    /// <app>" (OPEN-013).
+    pub(crate) applications: Vec<ApplicationChoice>,
     /// Whether a folder is cached for search; `None` for a file or a
     /// folder the search cache cannot take.
     pub(crate) caching: Option<Caching>,
@@ -183,10 +186,11 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     };
     let terminal = item(terminal_label, Icon::WindowConsole, WindowAction::OpenInTerminal);
     let open_with = item(open_with_label, Icon::Apps, WindowAction::OpenWith);
-    let mut entries = vec![
-        terminal.disabled_when(is_unavailable).into(),
-        open_with.disabled_when(is_unavailable).into(),
-    ];
+    let mut entries: Vec<MenuEntry> = vec![terminal.disabled_when(is_unavailable).into()];
+    for application in &facts.applications {
+        entries.push(open_with_application(application).disabled_when(is_unavailable).into());
+    }
+    entries.push(open_with.disabled_when(is_unavailable).into());
     for editor in &facts.editors {
         let label = format!("Open in {}", editor.name);
         let open_in_editor =
@@ -319,8 +323,12 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
 /// The menu of blank space in a folder, acting on the folder
 /// (`backgroundMenu`, CMD-011). `undo_label` and `redo_label` name what
 /// Undo and Redo would do, such as "Undo: Rename".
-pub(crate) fn background_menu(undo_label: &str, redo_label: &str) -> Vec<MenuEntry> {
-    vec![
+pub(crate) fn background_menu(
+    undo_label: &str,
+    redo_label: &str,
+    applications: &[ApplicationChoice],
+) -> Vec<MenuEntry> {
+    let mut entries: Vec<MenuEntry> = vec![
         item("New…", Icon::Add, WindowAction::ShowNewMenu).into(),
         item("Paste", Icon::ClipboardPaste, WindowAction::Paste)
             .with_shortcut("Ctrl+V")
@@ -340,6 +348,11 @@ pub(crate) fn background_menu(undo_label: &str, redo_label: &str) -> Vec<MenuEnt
             WindowAction::OpenInTerminal,
         )
         .into(),
+    ];
+    // The folder's applications and Open folder with… (OPEN-013).
+    entries.extend(applications.iter().map(|application| open_with_application(application).into()));
+    entries.push(item("Open folder with…", Icon::Apps, WindowAction::OpenWith).into());
+    entries.extend([
         MenuEntry::Divider,
         item("Pin this folder", Icon::Pin, WindowAction::PinFolder).into(),
         MenuItem::toggle(
@@ -359,7 +372,15 @@ pub(crate) fn background_menu(undo_label: &str, redo_label: &str) -> Vec<MenuEnt
         item("Properties", Icon::Info, WindowAction::Properties)
             .with_shortcut("Alt+Enter")
             .into(),
-    ]
+    ]);
+    entries
+}
+
+/// "Open with <app>", opening the item, or the folder when nothing is
+/// selected, in `application` (OPEN-013).
+fn open_with_application(application: &ApplicationChoice) -> MenuItem {
+    let label = format!("Open with {}", application.name);
+    MenuItem::with_text_target(&label, Icon::Apps, WindowAction::OpenWithApp, &application.id)
 }
 
 /// The menu of items in the Recycle Bin: Restore, Delete permanently and
@@ -410,6 +431,7 @@ mod tests {
             is_search_result: false,
             comparison: Comparison::Unavailable,
             editors: Vec::new(),
+            applications: Vec::new(),
             caching: None,
             delete_label: "Move to Trash",
         }
@@ -582,6 +604,34 @@ mod tests {
         assert!(disabled_for_several.contains(&"Open in Visual Studio Code".to_owned()));
     }
 
+    /// The item's other applications come before Open with…, each
+    /// opening the item in that application.
+    ///
+    /// parity: OPEN-013
+    #[test]
+    fn the_items_other_applications_are_offered_before_open_with() {
+        let viewer = ApplicationChoice {
+            id: "org.gnome.Papers.desktop".to_owned(),
+            name: "Papers".to_owned(),
+            is_default: false,
+            is_recommended: true,
+            is_available: true,
+        };
+        let facts = ItemFacts {
+            applications: vec![viewer],
+            ..file()
+        };
+
+        let entries = item_menu(&facts, MenuStyle::Classic).entries;
+
+        assert_eq!(labels(&entries)[2..4], ["Open with Papers", "Open with…"]);
+        let MenuEntry::Item(open) = &entries[2] else {
+            panic!("an application is an item");
+        };
+        assert_eq!(open.action, WindowAction::OpenWithApp.into());
+        assert_eq!(open.target, Some("org.gnome.Papers.desktop".to_variant()));
+    }
+
     /// parity: OPEN-023
     #[test]
     fn two_files_with_a_comparison_tool_offer_compare_files() {
@@ -650,11 +700,21 @@ mod tests {
         );
     }
 
-    /// parity: CMD-011, OPS-029
+    /// The folder's applications and Open folder with… follow Open in
+    /// Terminal (OPEN-013).
+    ///
+    /// parity: CMD-011, OPS-029, OPEN-013
     #[test]
     fn the_background_menu_acts_on_the_folder() {
+        let files = ApplicationChoice {
+            id: "org.gnome.Nautilus.desktop".to_owned(),
+            name: "Files".to_owned(),
+            is_default: true,
+            is_recommended: true,
+            is_available: true,
+        };
         assert_eq!(
-            labels(&background_menu("Undo: Rename", "Redo")),
+            labels(&background_menu("Undo: Rename", "Redo", &[files])),
             [
                 "New…",
                 "Paste",
@@ -662,6 +722,8 @@ mod tests {
                 "Redo",
                 "Refresh",
                 "Open in Terminal",
+                "Open with Files",
+                "Open folder with…",
                 "-",
                 "Pin this folder",
                 "Cache this folder for search",

@@ -10,7 +10,7 @@
 //! `desktop/winspace.py`, UPD-005). The work itself is in
 //! [`crate::integration`] and [`crate::update`].
 
-use gtk::glib;
+use gtk::{gio, glib};
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::integration::TerminalError;
@@ -27,10 +27,11 @@ use crate::update::{UpdateDialog, UpdateState};
 
 /// The actions that act on one item, or on the folder when nothing is
 /// selected, and are off for several items (`entryMenu`).
-const SINGLE_ITEM_ACTIONS: [WindowAction; 3] = [
+const SINGLE_ITEM_ACTIONS: [WindowAction; 4] = [
     WindowAction::OpenWith,
     WindowAction::OpenInTerminal,
     WindowAction::OpenInEditor,
+    WindowAction::OpenWithApp,
 ];
 
 /// More terminals than this at once are asked about first (Dolphin's
@@ -70,6 +71,7 @@ impl BrowserWindow {
             plain_action(WindowAction::SearchTool, BrowserWindow::open_search_tool),
             text_action(WindowAction::OpenWithOf, BrowserWindow::open_folder_with),
             text_action(WindowAction::OpenInEditor, BrowserWindow::open_in_editor),
+            text_action(WindowAction::OpenWithApp, BrowserWindow::open_with_app),
             plain_action(WindowAction::CheckUpdates, BrowserWindow::check_for_updates),
         ]);
         self.follow_selection_for_integration();
@@ -329,6 +331,34 @@ impl BrowserWindow {
                 let prepared = integration::prepare_launch(subject.uri, editor_id.clone()).await;
                 let launched = prepared
                     .and_then(|prepared| launcher(&editor_id, &prepared, integration::DefaultChoice::Keep));
+                let message = match launched {
+                    Ok(_) => format!("Opened with {name}"),
+                    Err(error) => error.to_string(),
+                };
+                window.show_message(&message);
+            }
+        ));
+    }
+
+    /// Open with <app>: the item in the application whose desktop ID is
+    /// `app_id`, through Open with's checks (OPEN-013).
+    fn open_with_app(&self, app_id: &str) {
+        let Some(subject) = self.command_subject() else {
+            return;
+        };
+        let launcher = self.application_launcher();
+        let app_id = app_id.to_owned();
+        let name = gio::AppInfo::all()
+            .into_iter()
+            .find(|app| app.id().is_some_and(|id| id == app_id.as_str()))
+            .map_or_else(|| app_id.clone(), |app| app.display_name().to_string());
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let prepared = integration::prepare_launch(subject.uri, app_id.clone()).await;
+                let launched =
+                    prepared.and_then(|prepared| launcher(&app_id, &prepared, integration::DefaultChoice::Keep));
                 let message = match launched {
                     Ok(_) => format!("Opened with {name}"),
                     Err(error) => error.to_string(),

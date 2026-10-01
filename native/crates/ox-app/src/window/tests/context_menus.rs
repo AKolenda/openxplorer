@@ -51,8 +51,14 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     assert!(menu.is_visible());
     assert_eq!(menu.style(), MenuStyle::Classic);
     assert!(menu.strip_labels().is_empty());
+    // "Open with <app>" rows name whatever the machine has installed.
+    let rows: Vec<String> = menu
+        .row_labels()
+        .into_iter()
+        .filter(|label| !label.starts_with("Open with "))
+        .collect();
     assert_eq!(
-        menu.row_labels(),
+        rows,
         [
             "Open",
             "Open containing folder in Terminal",
