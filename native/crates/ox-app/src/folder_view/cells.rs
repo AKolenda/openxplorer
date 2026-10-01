@@ -178,7 +178,9 @@ impl FileCell {
     pub(crate) fn bind(&self, item: &FileItem) {
         self.hide_name_editor();
         let imp = self.imp();
-        imp.image.set_art(item.art(), imp.icon_size.get());
+        let icon_size = imp.icon_size.get();
+        imp.image.set_art(item.art(), icon_size);
+        imp.image.set_emblems(item.emblems(), icon_size);
         imp.label.set_text(&item.entry().name);
     }
 
@@ -211,6 +213,12 @@ impl FileCell {
     #[cfg(test)]
     pub(crate) fn art(&self) -> Option<Art> {
         self.imp().image.art()
+    }
+
+    /// The emblems the icon shows, for tests.
+    #[cfg(test)]
+    pub(crate) fn emblems(&self) -> crate::icons::Emblems {
+        self.imp().image.shown_emblems()
     }
 }
 

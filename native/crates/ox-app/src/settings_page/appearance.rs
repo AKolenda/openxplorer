@@ -42,6 +42,12 @@ const TEXT_SIZE: RowText = RowText {
                scaling is unchanged.",
 };
 
+const DESKTOP_FONT: RowText = RowText {
+    title: "Use the desktop font",
+    description: "Text uses your desktop's interface font and size instead of Segoe UI.",
+    keywords: "font typeface family desktop system interface noto segoe size accessibility",
+};
+
 const RIGHT_CLICK_MENU: RowText = RowText {
     title: "Right-click menu",
     description: "Windows 10 is compact and shows familiar text commands.",
@@ -221,6 +227,7 @@ fn text_and_menus_group(page: &SettingsPage) -> SettingsGroup {
     let text_size = SettingRow::new(TEXT_SIZE);
     text_size.add_control(&text_size_choice(page), ControlName::RowTitle);
     group.add_row(&text_size);
+    group.add_row(&desktop_font_row(page));
     let menu = SettingRow::new(RIGHT_CLICK_MENU);
     let binding = PreferenceBinding {
         read: |preferences| preferences.context_menu,
@@ -237,6 +244,23 @@ fn text_and_menus_group(page: &SettingsPage) -> SettingsGroup {
     // (CMD-008, src/window/context_menu.rs).
     group.add_row(&menu);
     group
+}
+
+/// "Use the desktop font": the switch saves the choice and the skin draws
+/// it in every window at once.
+fn desktop_font_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(DESKTOP_FONT);
+    let switch = page.preference_switch(PreferenceBinding {
+        read: |preferences| preferences.desktop_font,
+        write: |on| PreferencesUpdate {
+            desktop_font: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    });
+    let skin = page.context().skin().clone();
+    switch.connect_active_notify(move |switch| skin.set_uses_desktop_font(switch.is_active()));
+    row.add_control(&switch, ControlName::RowTitle);
+    row
 }
 
 /// The text sizes of text-size.js, 100% marked as the default. The skin

@@ -267,6 +267,10 @@ pub struct Preferences {
     /// its application (Dolphin's "Always ask"); off, it only ever opens.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub ask_to_run_programs: bool,
+    /// Text uses the desktop's interface font and its size instead of the
+    /// Windows font stack. Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub desktop_font: bool,
 }
 
 impl Default for Preferences {
@@ -294,6 +298,7 @@ impl Default for Preferences {
             confirm_empty_trash: true,
             confirm_close_tabs: false,
             ask_to_run_programs: false,
+            desktop_font: false,
         }
     }
 }
@@ -332,6 +337,7 @@ impl Preferences {
         replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
         replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
         replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
+        replace_if_some(&mut self.desktop_font, update.desktop_font);
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
@@ -396,6 +402,8 @@ pub struct PreferencesUpdate {
     pub confirm_close_tabs: Option<bool>,
     /// Ask whether to run a program or script that is opened.
     pub ask_to_run_programs: Option<bool>,
+    /// Use the desktop's font, or the Windows font stack.
+    pub desktop_font: Option<bool>,
 }
 
 impl PreferencesUpdate {
@@ -438,6 +446,7 @@ impl PreferencesUpdate {
             confirm_empty_trash: flag("confirmEmptyTrash"),
             confirm_close_tabs: flag("confirmCloseTabs"),
             ask_to_run_programs: flag("askToRunPrograms"),
+            desktop_font: flag("desktopFont"),
         })
     }
 }

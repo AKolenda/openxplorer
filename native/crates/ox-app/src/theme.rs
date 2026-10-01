@@ -8,8 +8,10 @@
 //! connect to `places-changed` on the shared
 //! [`AppContext`](crate::app_context::AppContext).
 
+pub(crate) mod accent;
 mod appearance_button;
 pub(crate) mod contrast;
+pub(crate) mod desktop_text;
 mod fonts;
 mod providers;
 mod stylesheets;
@@ -24,7 +26,9 @@ use ox_core::settings::{Appearance, Theme};
 
 use crate::icons;
 use crate::text_size::TextSize;
+use accent::Accent;
 use contrast::Contrast;
+use desktop_text::{drawn_text_size, DesktopText};
 use providers::Providers;
 
 /// Emitted when the palette or the theme choice changed.
@@ -33,15 +37,23 @@ const APPEARANCE_CHANGED: &str = "appearance-changed";
 /// Emitted when text is drawn at another size.
 const TEXT_SIZE_CHANGED: &str = "text-size-changed";
 
+/// The text the skin draws: its size and, when the desktop's font is in
+/// use, that font's family.
+#[derive(Debug, Clone, PartialEq)]
+struct DrawnText {
+    size: TextSize,
+    family: Option<String>,
+}
+
 mod imp {
-    use std::cell::{Cell, OnceCell};
+    use std::cell::{Cell, OnceCell, RefCell};
     use std::sync::OnceLock;
 
     use gtk::glib;
     use gtk::glib::subclass::Signal;
     use gtk::subclass::prelude::*;
 
-    use super::{Appearance, Contrast, Providers, TextSize, Theme};
+    use super::{Accent, Appearance, Contrast, DesktopText, DrawnText, Providers, TextSize, Theme};
     use super::{APPEARANCE_CHANGED, TEXT_SIZE_CHANGED};
 
     /// Private state of [`super::Skin`].
@@ -51,10 +63,18 @@ mod imp {
         pub(super) providers: OnceCell<Providers>,
         /// The appearance the palette draws.
         pub(super) appearance: Cell<Appearance>,
+        /// The desktop's accent drawn over the palette.
+        pub(super) accent: Cell<Accent>,
         /// Whether the high-contrast rules are loaded.
         pub(super) contrast: Cell<Contrast>,
-        /// The size text is drawn at.
+        /// The text size the user chose.
         pub(super) text_size: Cell<TextSize>,
+        /// The text size and desktop font family drawn, once drawn.
+        pub(super) drawn_text: RefCell<Option<DrawnText>>,
+        /// What the desktop asks of text.
+        pub(super) desktop_text: RefCell<DesktopText>,
+        /// Whether text uses the desktop's font instead of the Windows one.
+        pub(super) uses_desktop_font: Cell<bool>,
         /// The user's theme choice.
         pub(super) theme: Cell<Theme>,
         /// The desktop's colour scheme, which [`Theme::System`] follows.
@@ -165,21 +185,80 @@ impl Skin {
             return;
         }
         self.providers().draw_palette(appearance);
+        self.providers().draw_accent(self.accent(), appearance);
         self.emit_by_name::<()>(APPEARANCE_CHANGED, &[]);
     }
 
-    /// The size text is drawn at.
+    /// The text size the user chose, which Ctrl+plus steps from and
+    /// Settings shows.
     pub(crate) fn text_size(&self) -> TextSize {
         self.imp().text_size.get()
     }
 
-    /// Draws text at `size` and tells the windows when it changed.
+    /// The text size drawn: the chosen one at the desktop's text factor,
+    /// which the windows lay rows and tiles out for.
+    pub(crate) fn drawn_text_size(&self) -> TextSize {
+        let drawn = self.imp().drawn_text.borrow();
+        drawn
+            .as_ref()
+            .map_or_else(|| self.text_size(), |drawn| drawn.size)
+    }
+
+    /// Chooses the text size `size` and tells the windows when it changed.
     pub(crate) fn set_text_size(&self, size: TextSize) {
-        if self.imp().text_size.replace(size) == size {
+        let chosen_changed = self.imp().text_size.replace(size) != size;
+        let drawn_changed = self.draw_text();
+        if chosen_changed && !drawn_changed {
+            self.emit_by_name::<()>(TEXT_SIZE_CHANGED, &[]);
+        }
+    }
+
+    /// Records what the desktop asks of text and redraws it.
+    pub(crate) fn set_desktop_text(&self, desktop: DesktopText) {
+        if *self.imp().desktop_text.borrow() == desktop {
             return;
         }
-        self.providers().draw_text_size(size);
+        self.imp().desktop_text.replace(desktop);
+        self.draw_text();
+    }
+
+    /// Uses the desktop's font, or the Windows font stack, and redraws text.
+    pub(crate) fn set_uses_desktop_font(&self, uses_desktop_font: bool) {
+        if self.imp().uses_desktop_font.replace(uses_desktop_font) != uses_desktop_font {
+            self.draw_text();
+        }
+    }
+
+    /// Draws text at the chosen size, the desktop's factor and the font in
+    /// use; tells the windows and returns true when that changed anything.
+    fn draw_text(&self) -> bool {
+        let imp = self.imp();
+        let uses_desktop_font = imp.uses_desktop_font.get();
+        let desktop = imp.desktop_text.borrow().clone();
+        let text = DrawnText {
+            size: drawn_text_size(imp.text_size.get(), desktop.factor(uses_desktop_font)),
+            family: desktop.family.filter(|_| uses_desktop_font),
+        };
+        if imp.drawn_text.borrow().as_ref() == Some(&text) {
+            return false;
+        }
+        self.providers().draw_text_size(text.size, text.family.as_deref());
+        imp.drawn_text.replace(Some(text));
         self.emit_by_name::<()>(TEXT_SIZE_CHANGED, &[]);
+        true
+    }
+
+    /// The desktop's accent drawn now.
+    pub(crate) fn accent(&self) -> Accent {
+        self.imp().accent.get()
+    }
+
+    /// Draws `accent` over the palette.
+    pub(crate) fn set_accent(&self, accent: Accent) {
+        if self.imp().accent.replace(accent) == accent {
+            return;
+        }
+        self.providers().draw_accent(accent, self.appearance());
     }
 
     /// The contrast drawn now, for tests that follow the desktop setting.
@@ -231,9 +310,24 @@ impl Skin {
     }
 }
 
+/// GNOME's interface schema, which holds the desktop's look and clock.
+pub(crate) const INTERFACE_SCHEMA: &str = "org.gnome.desktop.interface";
+
+/// The host desktop's settings under `schema_id`, when that schema is
+/// installed with `key`. `None` inside Flatpak, where the schema holds only
+/// the runtime's defaults, not the desktop's.
+pub(crate) fn host_desktop_key(schema_id: &str, key: &str) -> Option<gio::Settings> {
+    if ox_core::integration::Sandbox::detect().is_flatpak() {
+        return None;
+    }
+    let settings = desktop_settings(schema_id)?;
+    let has_key = settings.settings_schema()?.has_key(key);
+    has_key.then_some(settings)
+}
+
 /// The desktop's settings under `schema_id` (GNOME's interface and
 /// accessibility keys), when that schema is installed.
-fn desktop_settings(schema_id: &str) -> Option<gio::Settings> {
+pub(crate) fn desktop_settings(schema_id: &str) -> Option<gio::Settings> {
     let schema = gio::SettingsSchemaSource::default()?.lookup(schema_id, true)?;
     let settings = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
     Some(settings)
@@ -297,6 +391,32 @@ mod tests {
         assert_eq!(skin.appearance(), Appearance::Dark);
     }
 
+    /// The accent the desktop asks for replaces the Windows blue in what
+    /// the skin draws, in each appearance, and blue brings it back.
+    ///
+    /// parity: LOOK-024
+    #[gtk::test]
+    fn the_desktop_accent_replaces_the_windows_blue() {
+        #[expect(deprecated, reason = "GTK 4.14 offers no other lookup of a named colour")]
+        fn accent_of(widget: &gtk::Label) -> Option<gdk::RGBA> {
+            widget.style_context().lookup_color("ox_accent")
+        }
+        let _theme = ThemeGuard::keep();
+        let skin = harness::skin();
+        let label = gtk::Label::new(None);
+        skin.set_theme(Theme::Light);
+        let windows_blue = accent_of(&label);
+        assert_eq!(windows_blue, gdk::RGBA::parse("#0067c0").ok());
+
+        skin.set_accent(Accent::Green);
+        assert_eq!(accent_of(&label), gdk::RGBA::parse("#2e763b").ok());
+        skin.set_theme(Theme::Dark);
+        assert_eq!(accent_of(&label), gdk::RGBA::parse("#8dc196").ok());
+
+        skin.set_accent(Accent::Windows);
+        assert_eq!(accent_of(&label), gdk::RGBA::parse("#74beff").ok());
+    }
+
     /// GTK's own widgets under the skin, such as its dialogs, follow the
     /// drawn palette through the dark variant of the skin's display; the
     /// desktop's own colour scheme is never written.
@@ -307,7 +427,7 @@ mod tests {
         let _theme = ThemeGuard::keep();
         let display = gdk::Display::default().expect("GTK tests run on a private display");
         let display_settings = gtk::Settings::for_display(&display);
-        let desktop = desktop_settings("org.gnome.desktop.interface").filter(|settings| {
+        let desktop = desktop_settings(INTERFACE_SCHEMA).filter(|settings| {
             let schema = settings.settings_schema();
             schema.is_some_and(|schema| schema.has_key("color-scheme"))
         });

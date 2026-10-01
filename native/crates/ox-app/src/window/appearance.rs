@@ -27,11 +27,13 @@ impl BrowserWindow {
         let text_size_handler = self.skin().connect_text_size_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || window.folder_pane().set_text_size(window.skin().text_size())
+            move || window
+                .folder_pane()
+                .set_text_size(window.skin().drawn_text_size())
         ));
         self.imp().handlers.borrow_mut().skin = vec![appearance_handler, text_size_handler];
         self.show_appearance_choice();
-        self.folder_pane().set_text_size(self.skin().text_size());
+        self.folder_pane().set_text_size(self.skin().drawn_text_size());
     }
 
     /// Shows the chosen and drawn appearance on the Appearance button and

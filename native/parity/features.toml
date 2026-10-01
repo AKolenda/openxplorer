@@ -14419,8 +14419,8 @@ python_tests = [
 ]
 bridge = ["list"]
 dolphin = "KFileItem overlays (emblem-symbolic-link, emblem-locked)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer has only the green network marker. Explorer shows a shortcut arrow on links. Existing OpenXplorer part is protected by LOOK-016."
+native = "done"
+native_note = "native/crates/ox-app/src/icons/emblem.rs: every listed item's icon (details rows and icon tiles, FileCell) carries the link glyph in the bottom-left corner when it is a symbolic link (where Windows draws the shortcut arrow) and the lock in the top-right corner when GIO reports access::can-write false, each on a small plate in the item's fill colour (background, hover or selection); shares in a server listing and Recycle Bin items carry none. Mounted network shares and mapped drives keep the green network bar of LOOK-016. The lock follows the parity behaviour (not writable), where Dolphin's KFileItem::overlays locks unreadable items. Tests: icons/emblem.rs (links_and_read_only_items_carry_their_emblems) and window/tests/views.rs (listed_links_and_read_only_files_carry_their_emblems: a real symlink and a 0444 file opened in a window, both views). Search results carry no emblems: the search index records neither links nor write access. Not marked: folders shared from this computer (Samba usershares), which neither app detects."
 
 [[feature]]
 id = "LOOK-018"
@@ -14549,8 +14549,8 @@ python_tests = []
 bridge = ["environment"]
 dolphin = "KDE accent colour (kdeglobals AccentColor)"
 gnome = "Zorin 18 / GNOME 46 has no accent-color key: derive it from the Zorin theme variant in gtk-theme (ZorinBlue/Green/Orange/Red/Purple/Grey) or the theme's @accent_bg_color; on GNOME 47+ use org.gnome.desktop.interface accent-color, the Settings portal accent-color, or AdwStyleManager:accent-color"
-native = "todo"
-native_note = "Porting notes: Consistent with product rule 3, since Windows 11 itself follows the system accent."
+native = "done"
+native_note = "native/crates/ox-app/src/theme/accent.rs and theme/accent/setting.rs: the skin follows the desktop accent live through a fourth CSS layer over the palette (theme/providers.rs) that redefines ox_accent and the selection fill and edges tinted with it, so selection, focus rings, primary buttons, progress bars and the sidebar bar change together. Sources, in order: on the host GNOME 47+'s org.gnome.desktop.interface accent-color when it names an accent other than blue, else the Zorin OS theme variant in gtk-theme (ZorinBlue/Green/Orange/Red/Purple/Grey, which Zorin 18 / GNOME 46 uses as its accent); without the schema and inside Flatpak the Settings portal's org.freedesktop.appearance accent-color (an RGB value mapped to the nearest GNOME accent) and the gtk-theme that GNOME-based portals serve, both followed through SettingChanged. Blue keeps the Windows #0067c0 / #74beff; every other accent has a light and a dark shade checked for at least 4.5:1 under the text the palettes put on it. Tests: theme/accent.rs (gnome_accents_have_a_readable_shade_in_each_appearance), theme/accent/setting.rs (a_changed_desktop_accent_is_followed_at_once on the in-memory GSettings backend, the_portal_accent_is_followed_without_the_schema with a fake portal) and theme.rs (the_desktop_accent_replaces_the_windows_blue). A theme's own @accent_bg_color is not read."
 
 [[feature]]
 id = "LOOK-025"
@@ -14569,8 +14569,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE general font via the Qt platform theme"
 gnome = "org.gnome.desktop.interface font-name / text-scaling-factor; org.gnome.desktop.interface font-name → GtkSettings gtk-font-name"
-native = "todo"
-native_note = "Porting notes: A product decision under rule 3 (Windows look)."
+native = "done"
+native_note = "native/crates/ox-app/src/theme/desktop_text.rs: the skin reads the desktop's interface font (gtk-font-name) and its accessibility text scaling (gtk-xft-dpi, which GNOME's Large Text / text-scaling-factor sets) live from the display's GTK settings. Text, rows, menus and tiles are drawn as many levels above the chosen text size as the factor moves 100% (Large Text turns 100% into 125%, two levels), so every Ctrl+plus/minus stays a visible step until the largest or smallest size; the chosen size stays what Ctrl+plus steps from and Settings shows. The Windows font stack stays the default; Settings > Appearance > \"Use the desktop font\" (saved as desktopFont) switches to the desktop's family and scales text by its size against the Windows 13-pixel text. The Text size choice remains the in-app override. Test: theme/desktop_text.rs (the_desktops_font_and_large_text_reach_the_text_size). The desktop's high-contrast setting is followed separately (ACC-011)."
 
 [[feature]]
 id = "LOOK-026"
@@ -14585,8 +14585,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE regional settings (QLocale)"
 gnome = "org.gnome.desktop.interface clock-format; GDateTime locale formatting"
-native = "partial"
-native_note = "native/crates/ox-core/src/format/locale_pattern.rs (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); clock-format setting not read. Existing OpenXplorer part is protected by VIEW-001."
+native = "done"
+native_note = "native/crates/ox-core/src/format/locale_pattern.rs and format.rs: dates follow the LC_TIME locale (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); Properties timestamps move to GNOME's clock-format (12h/24h) once the user has set it (properties_timestamps_follow_the_desktop_clock_format), live, through native/crates/ox-app/src/application/clock_format.rs (the_desktop_clock_format_is_followed_at_once: unset keeps the locale's clock although the schema default is 24h, 12h and 24h apply at once, a reset returns to the locale). A locale without an AM/PM text keeps its 24-hour clock; inside Flatpak, where the schema holds only defaults, the locale's clock stays."
 
 [[feature]]
 id = "LOOK-027"
@@ -14601,8 +14601,8 @@ python_tests = []
 bridge = ["chrome", "window"]
 dolphin = "KWin title-bar actions (server-side decorations)"
 gnome = "GSettings org.gnome.desktop.wm.preferences action-*-titlebar; gdk_toplevel_titlebar_gesture / gdk_toplevel_show_window_menu (GTK 4.14)"
-native = "todo"
-native_note = "Porting notes: button-layout (left/right) is deliberately not followed, to keep the Windows look. Existing OpenXplorer part is protected by TAB-048."
+native = "done"
+native_note = "native/crates/ox-app/src/window/title_bar.rs: the whole title bar is a GtkWindowHandle with a blank drag area that claims no clicks of its own, so GTK applies the desktop's title-bar actions: GDK reads GNOME's org.gnome.desktop.wm.preferences action-double-click-titlebar, action-middle-click-titlebar and action-right-click-titlebar into gtk-titlebar-double-click/-middle-click/-right-click, and a right click (\"menu\") opens the compositor's window menu. Neither the skin nor the window overrides them; the caption buttons follow the desktop's gtk-decoration-layout, both which buttons show and on which side (window/caption_buttons.rs). Tests: the_blank_title_bar_is_the_window_handle (TAB-048) and the_blank_title_bar_follows_the_desktops_title_bar_actions, which sets non-default actions and checks they survive a window opening and a theme switch. The click itself is GTK's gesture and is not synthesised."
 
 [[feature]]
 id = "LOOK-028"
@@ -14622,7 +14622,7 @@ python_tests = []
 bridge = []
 gnome = "GTK4 draws at the surface scale (gdk_surface_get_scale, fractional on Wayland with GTK 4.12 or later); use SVG or symbolic icons, or textures rendered at that scale, never 1x bitmaps scaled up"
 native = "partial"
-native_note = "native/crates/ox-app/tests/display_scale.rs (twice_the_scale_draws_the_bars_on_whole_device_pixels) runs the built app with GDK_SCALE=1 and 2 through the snapshot hook: the layout doubles exactly and, down one column of the navigation row and the command bar, each line and fill covers whole device pixels. GTK draws text, symbolic SVG icons and CSS at the surface scale. Remaining: fractional scales (125/150/175%) need a Wayland compositor, which the headless X test display is not; sharpness of the folder and file artwork and of focus outlines, hit targets matching what is drawn, and the redraw when the window moves to a monitor of another scale are not tested."
+native_note = "native/crates/ox-app/tests/display_scale.rs (twice_the_scale_draws_the_bars_on_whole_device_pixels) runs the built app with GDK_SCALE=1 and 2 through the snapshot hook: the layout doubles exactly; down one column of the navigation row and the command bar each line and fill covers whole device pixels; and the first row's folder artwork at 2x equals the bundled vector file drawn at 42 device pixels, pixel for pixel (an enlarged 21-pixel picture differs by up to 194 per channel). Every icon is a bundled SVG looked up by name and every line is CSS, so GTK draws them at the surface scale; the app keeps no bitmap rendered at one scale. Remaining: fractional scales (125/150/175%) and the redraw when a window moves to a monitor of another scale need a Wayland compositor with fractional scaling, which check.py's Xvfb display is not; focus outlines and hit targets at 2x are not checked."
 
 [[feature]]
 id = "INT-001"

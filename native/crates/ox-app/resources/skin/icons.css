@@ -18,3 +18,20 @@ art .badge-plate { background-color: @ox_on_critical; border-radius: 9999px; }
    Windows draws one, and a server in the current app's share blue. */
 art .mapped-drive { color: @ox_mapped_drive; }
 art .server { color: @ox_share_glyph; }
+/* The link and lock emblems of a listed item (src/icons/emblem.rs), on a
+   small plate in the background colour so they read on any artwork. */
+art .emblem {
+  color: @ox_text;
+  background-color: @ox_bg;
+  border-radius: 2px;
+}
+/* On a hovered, pressed or selected item the plate takes the item's fill
+   (folder-views.css), so it does not cut a square into it. */
+columnview.files > listview > row:hover art .emblem,
+gridview.files > child:hover art .emblem { background-color: @ox_hover; }
+columnview.files > listview > row:active art .emblem,
+gridview.files > child:active art .emblem { background-color: @ox_pressed; }
+columnview.files > listview > row:selected art .emblem,
+gridview.files > child:selected art .emblem { background-color: @ox_selected; }
+columnview.files > listview > row:selected:hover art .emblem,
+gridview.files > child:selected:hover art .emblem { background-color: @ox_selected_hover; }

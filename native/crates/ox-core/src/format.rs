@@ -32,9 +32,38 @@
 
 mod locale_pattern;
 
+use std::sync::atomic::{AtomicU8, Ordering};
+
 use glib::DateTime;
 
+pub use locale_pattern::ClockFormat;
 use locale_pattern::LocalePatterns;
+
+/// The [`ClockFormat`] times are shown on, as its position in
+/// [`CLOCK_FORMATS`]; set by [`set_clock_format`].
+static CLOCK_FORMAT: AtomicU8 = AtomicU8::new(0);
+
+/// Every clock format, in the order [`CLOCK_FORMAT`] numbers them.
+const CLOCK_FORMATS: [ClockFormat; 3] = [
+    ClockFormat::Locale,
+    ClockFormat::TwentyFourHour,
+    ClockFormat::TwelveHour,
+];
+
+/// Shows every later clock time on `clock`, as the desktop's clock-format
+/// setting asks; [`ClockFormat::Locale`] until it is called.
+pub fn set_clock_format(clock: ClockFormat) {
+    let position = CLOCK_FORMATS
+        .iter()
+        .position(|listed| *listed == clock)
+        .unwrap_or(0);
+    CLOCK_FORMAT.store(u8::try_from(position).unwrap_or(0), Ordering::Relaxed);
+}
+
+/// The clock format set last.
+pub fn clock_format() -> ClockFormat {
+    CLOCK_FORMATS[usize::from(CLOCK_FORMAT.load(Ordering::Relaxed)) % CLOCK_FORMATS.len()]
+}
 
 /// Shown in the Date modified column when a time is unknown, and in the
 /// Size column when a file's size is.
@@ -142,7 +171,7 @@ pub fn date_time_text(unix_seconds: Option<u64>) -> String {
 pub fn date_short_time_text(unix_seconds: Option<u64>) -> String {
     unix_seconds
         .and_then(local_time)
-        .and_then(|time| format_date_short_time_with(&time, locale_pattern::current()))
+        .and_then(|time| format_date_short_time_with(&time, locale_pattern::current(), clock_format()))
         .unwrap_or_else(|| UNKNOWN_DATE.to_owned())
 }
 
@@ -155,7 +184,7 @@ pub fn format_date(time: &DateTime) -> Option<String> {
 /// [`date_time_text`] for a time GIO already returned as a [`DateTime`], in
 /// the time zone it carries. `None` if it cannot be formatted.
 pub fn format_date_time(time: &DateTime) -> Option<String> {
-    format_date_time_with(time, locale_pattern::current())
+    format_date_time_with(time, locale_pattern::current(), clock_format())
 }
 
 /// [`format_date`] with the given locale `patterns`, which the tests
@@ -166,18 +195,22 @@ fn format_date_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String
 }
 
 /// [`format_date_time`] with the given locale `patterns`: the date, a
-/// comma and the clock time.
-fn format_date_time_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
+/// comma and the clock time on `clock`.
+fn format_date_time_with(time: &DateTime, patterns: &LocalePatterns, clock: ClockFormat) -> Option<String> {
     let date = format_date_with(time, patterns)?;
-    let clock = time.format(&patterns.time).ok()?;
+    let clock = time.format(&patterns.time_on(clock)).ok()?;
     Some(format!("{date}, {clock}"))
 }
 
 /// [`date_short_time_text`] with the given locale `patterns`: the date, a
-/// space and the clock time without seconds.
-fn format_date_short_time_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
+/// space and the clock time on `clock` without seconds.
+fn format_date_short_time_with(
+    time: &DateTime,
+    patterns: &LocalePatterns,
+    clock: ClockFormat,
+) -> Option<String> {
     let date = format_date_with(time, patterns)?;
-    let clock = time.format(&without_seconds(&patterns.time)).ok()?;
+    let clock = time.format(&without_seconds(&patterns.time_on(clock))).ok()?;
     Some(format!("{date} {clock}"))
 }
 
@@ -383,10 +416,13 @@ mod tests {
         let us = LocalePatterns {
             date: "%m/%d/%Y".to_owned(),
             time: "%-I:%M:%S %p".to_owned(),
+            has_day_period: true,
         };
         let time = DateTime::from_utc(2026, 9, 6, 19, 5, 7.0).expect("valid date");
-        let text = format_date_short_time_with(&time, &us);
+        let text = format_date_short_time_with(&time, &us, ClockFormat::Locale);
         assert_eq!(text.as_deref(), Some("09/06/2026 7:05 PM"));
+        let on_24_hours = format_date_short_time_with(&time, &us, ClockFormat::TwentyFourHour);
+        assert_eq!(on_24_hours.as_deref(), Some("09/06/2026 19:05"), "the desktop's clock");
         assert_eq!(without_seconds("%H:%M:%S"), "%H:%M");
         assert_eq!(without_seconds("%H시 %M분 %S초"), "%H시 %M분");
         assert_eq!(date_short_time_text(None), "—");
@@ -399,9 +435,40 @@ mod tests {
     #[test]
     fn properties_timestamps_add_the_locale_clock_to_the_column_date() {
         for case in &LOCALE_CASES {
-            let timestamp = format_date_time_with(&september_21(), &case.patterns());
+            let timestamp = format_date_time_with(&september_21(), &case.patterns(), ClockFormat::Locale);
             assert_eq!(timestamp.as_deref(), Some(case.properties), "{}", case.locale);
         }
+    }
+
+    /// The desktop's clock format moves Properties timestamps to a 24-hour
+    /// or 12-hour clock; a locale without an AM/PM text keeps its own.
+    ///
+    /// parity: LOOK-026
+    #[test]
+    fn properties_timestamps_follow_the_desktop_clock_format() {
+        let on_clock = |locale: &str, clock| {
+            let case = LOCALE_CASES
+                .iter()
+                .find(|case| case.locale == locale)
+                .expect("a case");
+            format_date_time_with(&september_21(), &case.patterns(), clock).expect("formats")
+        };
+        assert_eq!(
+            on_clock("en_US", ClockFormat::TwentyFourHour),
+            "09/21/2026, 14:13:20"
+        );
+        assert_eq!(
+            on_clock("en_US", ClockFormat::TwelveHour),
+            "09/21/2026, 2:13:20 PM"
+        );
+        assert_eq!(
+            on_clock("en_GB", ClockFormat::TwentyFourHour),
+            "21/09/2026, 14:13:20"
+        );
+        assert_eq!(on_clock("de_DE", ClockFormat::TwelveHour), "21.09.2026, 14:13:20");
+        assert_eq!(ClockFormat::from_gnome(Some("12h")), ClockFormat::TwelveHour);
+        assert_eq!(ClockFormat::from_gnome(Some("24h")), ClockFormat::TwentyFourHour);
+        assert_eq!(ClockFormat::from_gnome(None), ClockFormat::Locale);
     }
 
     /// A Date modified text in the test process's own time zone has ten

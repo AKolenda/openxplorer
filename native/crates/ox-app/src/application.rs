@@ -17,6 +17,7 @@
 //! `activate`, `open` and `command_line` methods, and it keeps the
 //! `AppState` it creates at startup, which does the work (`state.rs`).
 
+mod clock_format;
 mod command_line;
 mod requests;
 mod state;
