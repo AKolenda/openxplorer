@@ -74,6 +74,9 @@ impl BrowserWindow {
         // XFER-028: names and links the destination cannot store are asked
         // about in a dialog.
         context.unstorable = Some(self.unstorable_asker());
+        // XFER-011 and XFER-013: a move the location cannot do natively is
+        // finished by copying only when the user agrees.
+        context.move_by_copying = Some(self.move_by_copying_asker());
         {
             let mut operations = self.imp().file_operations.borrow_mut();
             if operations.is_running() {

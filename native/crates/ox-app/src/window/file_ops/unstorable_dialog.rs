@@ -7,19 +7,16 @@
 //! "Replace invalid characters", "Replace all", "Skip", "Skip all" or
 //! "Cancel"; this dialog offers the same answers the way the name-conflict
 //! dialog does, with a check box that makes the answer apply to every such
-//! item of the operation. The engine asks from its worker thread and waits;
-//! the question crosses to the main loop through a channel.
+//! item of the operation. The engine asks from its worker thread and waits
+//! (see `worker_question`).
 
-use gtk::glib;
 use gtk::prelude::*;
 use ox_core::ops::UnstorableAsker;
 use ox_core::transfer::{UnstorableAnswer, UnstorableItem, UnstorableReason};
 
+use super::worker_question::worker_question;
 use crate::window::dialog::{ButtonStyle, Dialog};
 use crate::window::BrowserWindow;
-
-/// A question from the worker and where its answer goes.
-type Question = (UnstorableItem, async_channel::Sender<UnstorableAnswer>);
 
 /// The dialog's title and message for `item`.
 fn question_text(item: &UnstorableItem) -> (&'static str, String) {
@@ -54,26 +51,12 @@ impl BrowserWindow {
     /// An asker for the worker of one operation: each question opens the
     /// dialog over this window and waits for its answer. A question the
     /// window can no longer show is answered with Cancel.
-    pub(super) fn unstorable_asker(&self) -> UnstorableAsker {
-        let (questions, question_queue) = async_channel::unbounded::<Question>();
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
+    pub(in crate::window) fn unstorable_asker(&self) -> UnstorableAsker {
+        UnstorableAsker::new(worker_question(
             self,
-            async move {
-                // The loop ends when the operation drops its asker.
-                while let Ok((item, reply)) = question_queue.recv().await {
-                    let answer = window.ask_about_unstorable(&item).await;
-                    let _ = reply.send(answer).await;
-                }
-            }
-        ));
-        UnstorableAsker::new(move |item| {
-            let (reply, answer) = async_channel::bounded(1);
-            if questions.send_blocking((item.clone(), reply)).is_err() {
-                return UnstorableAnswer::Cancel;
-            }
-            answer.recv_blocking().unwrap_or(UnstorableAnswer::Cancel)
-        })
+            UnstorableAnswer::Cancel,
+            |window, item: UnstorableItem| async move { window.ask_about_unstorable(&item).await },
+        ))
     }
 
     /// Asks about `item`; Cancel, Escape and closing the dialog cancel.

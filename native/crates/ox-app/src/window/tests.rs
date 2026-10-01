@@ -37,3 +37,4 @@ mod sidebar_layout;
 mod support;
 mod tabs;
 mod views;
+mod worker_questions;

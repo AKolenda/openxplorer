@@ -15,9 +15,11 @@
 //! - XFER-009 and XFER-010: Replace never loses the existing item before
 //!   the new one is installed.
 //! - XFER-011: a move is a native rename wherever the backend can do one.
-//!   XFER-013: elsewhere (another filesystem, share or device) the item is
-//!   copied through staging and its source removed only after the copy
-//!   was published.
+//!   XFER-013: elsewhere (another filesystem, share or device) the move is
+//!   refused and the source kept, unless the user agreed to finish such
+//!   moves by copying: then the item is copied through staging and only
+//!   the source items that are unchanged since their copy are removed,
+//!   after the copy was published.
 //! - XFER-014: Trash never falls back to permanent deletion.
 //! - XFER-020: a protected location anywhere in an affected tree stops the
 //!   item before anything changes.
@@ -39,6 +41,7 @@
 //! | `labels` | Progress text |
 //! | `limits` | What the destination file system holds: free space, file size, names and links (XFER-028) |
 //! | `unstorable` | Asking about names and links the destination cannot store (XFER-028) |
+//! | `move_by_copying` | The user's consent to finish moves by copying (XFER-011, XFER-013) |
 //! | `source_removal` | Removing the copied source of a move across filesystems (XFER-013) |
 //! | `relisting` | Relisting the folders moves took items from (MTP) |
 //! | `node` | The [`Node`] storage abstraction the engine works on |
@@ -72,6 +75,7 @@ mod guard;
 mod labels;
 mod limits;
 mod modes;
+mod move_by_copying;
 mod names;
 mod node;
 mod relisting;
@@ -91,6 +95,7 @@ pub use guard::MAX_DEPTH;
 pub(crate) use guard::{check_write_tree, nesting_error, SourceChange};
 pub use limits::{FilesystemInfo, FAT_MAX_FILE_SIZE};
 pub(crate) use modes::{secure_local_staging, PRIVATE_DIRECTORY_MODE};
+pub use move_by_copying::{MoveByCopyingItem, MoveByCopyingQuestion};
 pub use names::is_own_staging_name;
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;

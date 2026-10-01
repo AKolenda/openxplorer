@@ -17,7 +17,8 @@
 //!   refused with a message that says so, and names and links it cannot
 //!   store are renamed or left out as the user answers.
 //! - XFER-013: for a move finished by copying, every copied source item is
-//!   recorded, so only those are removed afterwards.
+//!   recorded with what it was before its copy, so only those are removed
+//!   afterwards, and only while they are unchanged.
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
@@ -189,10 +190,7 @@ impl<'a> Copier<'a> {
             let child_target = child_node(target, name)?;
             self.copy_inspected(child.as_ref(), child_target.as_ref(), &info, depth)?;
             if let Some(copied) = self.copied.as_deref_mut() {
-                copied.push(CopiedItem {
-                    node: child,
-                    kind: info.kind,
-                });
+                copied.push(CopiedItem { node: child, info });
             }
         }
         Ok(())

@@ -436,7 +436,7 @@
         "native/crates/ox-core/tests/transfer_cases/snapshots.rs::protected_descendants_stop_mutations_before_any_item_changes",
         "native/crates/ox-core/tests/transfer_cases/operations.rs::deleting_a_link_keeps_its_target",
         "native/crates/ox-core/tests/transfer_cases/operations.rs::unsupported_trash_never_falls_back_to_delete",
-        "native/crates/ox-core/tests/transfer_cases/failures.rs::a_move_that_cannot_be_finished_by_copying_keeps_the_source",
+        "native/crates/ox-core/tests/transfer_cases/failures.rs::native_move_failure_never_degrades_to_copy_then_delete",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::a_name_taken_while_copying_is_not_overwritten_at_publication",
         "native/crates/ox-core/tests/transfer_cases/failures.rs::replacement_install_failure_or_false_success_restores_the_old_name",
         "native/crates/ox-core/tests/transfer_cases/devices.rs::uploads_publish_by_one_same_folder_rename_from_a_staged_sibling",

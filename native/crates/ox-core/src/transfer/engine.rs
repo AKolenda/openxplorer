@@ -18,7 +18,8 @@ use super::error::TransferError;
 use super::guard::{check_write_tree, SourceChange};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
 use super::limits::{Incoming, StorageRules};
-use super::node::{Node, NodeFactory, NodeKind, WriteGuard};
+use super::move_by_copying::{MoveByCopying, MoveByCopyingItem};
+use super::node::{Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 use super::relisting::SourceFolders;
 use super::request::{destination_folder, distinct_items};
 use super::source_removal::{remove_copied_source, CopiedItem};
@@ -42,6 +43,8 @@ pub struct TransferEngine {
     sleep: SleepCallback,
     /// What the run's destination cannot store (XFER-028).
     unstorable: Unstorable,
+    /// Whether moves the backend cannot do are finished by copying.
+    move_by_copying: MoveByCopying,
 }
 
 impl fmt::Debug for TransferEngine {
@@ -75,6 +78,8 @@ enum ItemOutcome {
 struct SelectedItem {
     node: Box<dyn Node>,
     kind: NodeKind,
+    /// What it was when selected, before anything changed it.
+    info: NodeInfo,
 }
 
 impl TransferEngine {
@@ -87,6 +92,7 @@ impl TransferEngine {
             write_guard: None,
             sleep: Box::new(std::thread::sleep),
             unstorable: Unstorable::default(),
+            move_by_copying: MoveByCopying::default(),
         }
     }
 
@@ -116,6 +122,20 @@ impl TransferEngine {
         question: impl FnMut(&UnstorableItem) -> UnstorableAnswer + Send + 'static,
     ) -> Self {
         self.unstorable = Unstorable::with_question(Box::new(question));
+        self
+    }
+
+    /// XFER-011 and XFER-013: asks, the first time in this engine's
+    /// operation, whether moves the backend cannot do natively are finished
+    /// by copying and then removing the unchanged originals. It runs on the
+    /// engine's thread and blocks the run until it answers. Without it, or
+    /// when it answers `false`, such moves are refused and the source kept.
+    #[must_use]
+    pub fn with_move_by_copying_question(
+        mut self,
+        question: impl FnMut(&MoveByCopyingItem) -> bool + Send + 'static,
+    ) -> Self {
+        self.move_by_copying = MoveByCopying::with_question(Box::new(question));
         self
     }
 
@@ -276,12 +296,16 @@ impl TransferEngine {
                 "Filesystem roots cannot be copied, moved or trashed as items.",
             ));
         }
-        let kind = node.info(Some(batch.cancel))?.kind;
+        let info = node.info(Some(batch.cancel))?;
         (self.emit)(Progress {
             label: item_label(batch.mode(), &node.display_name(), index + 1, batch.total),
             fraction: batch.start_fraction(index),
         });
-        Ok(SelectedItem { node, kind })
+        Ok(SelectedItem {
+            node,
+            kind: info.kind,
+            info,
+        })
     }
 
     /// Trashes or permanently deletes one user-selected item.
@@ -343,9 +367,15 @@ impl TransferEngine {
             state.moved_from.remember(source);
             match self.move_item(source, destination, placement.policy, batch.cancel) {
                 // XFER-013: the backend cannot move here (another filesystem,
-                // share or device), so the item is copied through staging and
-                // the source is removed only once its copy is published.
-                Err(TransferError::NotSupported(_)) => {
+                // share or device). Once the user agreed, the item is copied
+                // through staging and the source is removed only once its
+                // copy is published; otherwise it is kept (XFER-011).
+                Err(TransferError::NotSupported(_))
+                    if self.move_by_copying.allowed(|| MoveByCopyingItem {
+                        name: source.display_name(),
+                        destination: placement.destination_folder.display_name(),
+                    }) =>
+                {
                     let kept =
                         self.move_by_copying(placement, selected, destination, batch.cancel, staging)?;
                     if let Some(notice) = kept {
@@ -369,7 +399,8 @@ impl TransferEngine {
 
     /// Moves one item natively. XFER-011: backends never degrade a move to
     /// an unstaged copy-then-delete (`NO_FALLBACK_FOR_MOVE`); where they
-    /// cannot move, the engine copies through staging instead (XFER-013).
+    /// cannot move, the engine copies through staging instead once the user
+    /// agreed (XFER-013).
     fn move_item(
         &self,
         source: &dyn Node,
@@ -390,7 +421,8 @@ impl TransferEngine {
     /// the source. Once the copy is published the source removal runs to
     /// the end, so the item is either moved or kept, never half removed by
     /// a late cancellation. Items that appeared in the source during the
-    /// copy were not copied and are kept; the answer then says where.
+    /// copy, or changed after the copy read them, are kept; the answer then
+    /// says where.
     fn move_by_copying(
         &mut self,
         placement: &Placement,
@@ -416,7 +448,7 @@ impl TransferEngine {
             )));
         }
         let source = selected.node.as_ref();
-        let kept = remove_copied_source(source, selected.kind, &copied, self.guard()).map_err(|error| {
+        let kept = remove_copied_source(source, &selected.info, &copied, self.guard()).map_err(|error| {
             TransferError::RecoveryRequired(format!(
                 "The item was copied to {}, but the original could not be removed. \
                  Check the copy, then delete the original. {error}",

@@ -3,13 +3,16 @@
 //!
 //! Ports `GioNode.info` and `GioNode.children` in `desktop/gio_backend.py`.
 
+use std::time::{Duration, SystemTime};
+
 use gio::prelude::*;
 
 use super::{byte_count, gio_cancellable, GioNode};
-use crate::transfer::{check_cancelled, Cancellation, Node, NodeInfo, NodeKind, TransferError};
+use crate::transfer::{check_cancelled, Cancellation, ItemIdentity, Node, NodeInfo, NodeKind, TransferError};
 
 /// The attributes [`GioNode::query_info`] reads.
-const INFO_ATTRIBUTES: &str = "standard::type,standard::size,unix::mode";
+const INFO_ATTRIBUTES: &str =
+    "standard::type,standard::size,unix::mode,time::modified,time::modified-usec,unix::device,unix::inode";
 
 /// The permission bits of `unix::mode`, without the file type bits.
 const PERMISSION_BITS: u32 = 0o7777;
@@ -36,6 +39,8 @@ impl GioNode {
             kind: node_kind(info.file_type()),
             size: byte_count(info.size()),
             mode,
+            modified: modified_time(&info),
+            identity: identity(&info),
         })
     }
 
@@ -62,6 +67,25 @@ impl GioNode {
             .collect();
         Ok(children)
     }
+}
+
+/// The modification time GIO reports, to the microsecond.
+fn modified_time(info: &gio::FileInfo) -> Option<SystemTime> {
+    if !info.has_attribute("time::modified") {
+        return None;
+    }
+    let seconds = info.attribute_uint64("time::modified");
+    let microseconds = info.attribute_uint32("time::modified-usec");
+    let since_epoch = Duration::from_secs(seconds) + Duration::from_micros(u64::from(microseconds));
+    SystemTime::UNIX_EPOCH.checked_add(since_epoch)
+}
+
+/// The local object GIO reports (`st_dev`, `st_ino`), on local file systems.
+fn identity(info: &gio::FileInfo) -> Option<ItemIdentity> {
+    (info.has_attribute("unix::device") && info.has_attribute("unix::inode")).then(|| ItemIdentity {
+        device: u64::from(info.attribute_uint32("unix::device")),
+        inode: info.attribute_uint64("unix::inode"),
+    })
 }
 
 /// The kind of item GIO reports, without following links.

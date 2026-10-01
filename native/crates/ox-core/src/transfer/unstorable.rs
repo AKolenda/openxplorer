@@ -59,7 +59,7 @@ pub(crate) enum Fix {
     Skip,
 }
 
-/// The "all" answers that apply to the rest of a run.
+/// The "all" answers that apply to the rest of an operation.
 #[derive(Debug, Default)]
 struct RunAnswers {
     /// Replace all: every forbidden name gets `_` instead.
@@ -81,7 +81,7 @@ pub(crate) struct Unstorable {
     /// True while the current item is on the destination's own file
     /// system, which already stores its names and links.
     same_filesystem: bool,
-    /// The "all" answers given so far in this run.
+    /// The "all" answers given so far in this operation.
     answers: RunAnswers,
     /// Items left out since [`Unstorable::take_skipped`] was last called.
     skipped: usize,
@@ -97,12 +97,14 @@ impl Unstorable {
     }
 
     /// Starts a run into a file system with `rules` and the id
-    /// `destination_id`; earlier "all" answers no longer apply.
+    /// `destination_id`. The "all" answers of earlier runs of the engine
+    /// still apply: one operation may take several runs (one per conflict
+    /// answer or source folder), and "Do this for all such items" covers
+    /// the whole operation, as Dolphin's answers cover its job.
     pub(crate) fn start_run(&mut self, rules: StorageRules, destination_id: Option<String>) {
         self.rules = rules;
         self.destination_id = destination_id;
         self.same_filesystem = false;
-        self.answers = RunAnswers::default();
         self.skipped = 0;
     }
 

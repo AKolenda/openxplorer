@@ -16,13 +16,14 @@ mod provider;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{Read, Write};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gio::prelude::*;
 use ox_core::transfer::{
-    Cancellation, FilesystemInfo, Node, NodeFactory, NodeInfo, NodeKind, TransferError, WriteGuard,
+    Cancellation, FilesystemInfo, ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, TransferError,
+    WriteGuard,
 };
 use rustix::fs::{renameat_with, RenameFlags, CWD};
 
@@ -116,6 +117,11 @@ impl LocalNode {
             kind: node_kind(metadata.file_type()),
             size: metadata.len(),
             mode: Some(metadata.permissions().mode() & 0o7777),
+            modified: metadata.modified().ok(),
+            identity: Some(ItemIdentity {
+                device: metadata.dev(),
+                inode: metadata.ino(),
+            }),
         })
     }
 

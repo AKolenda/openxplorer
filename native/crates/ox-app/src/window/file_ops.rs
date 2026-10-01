@@ -51,6 +51,7 @@ mod duplicate;
 mod inline_rename;
 mod journal;
 mod links;
+mod move_by_copying_dialog;
 mod name_dialog;
 mod names;
 mod new_items;
@@ -62,6 +63,7 @@ mod template_dialog;
 mod transfer;
 mod trash_support;
 mod unstorable_dialog;
+mod worker_question;
 
 use ox_core::clipboard::ClipboardFiles;
 use ox_core::transfer::Cancellation;

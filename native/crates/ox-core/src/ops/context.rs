@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use super::error::OpsError;
 use crate::transfer::{
-    check_write_tree, Cancellation, Node, SourceChange, TransferEngine, TransferError, UnstorableAnswer,
-    UnstorableItem, WriteGuard,
+    check_write_tree, Cancellation, MoveByCopyingItem, Node, SourceChange, TransferEngine, TransferError,
+    UnstorableAnswer, UnstorableItem, WriteGuard,
 };
 
 /// Locations that must never change, such as previous versions
@@ -118,11 +118,42 @@ impl UnstorableAsker {
     pub fn new(ask: impl Fn(&UnstorableItem) -> UnstorableAnswer + Send + Sync + 'static) -> Self {
         Self(Arc::new(ask))
     }
+
+    /// Asks about `item` and waits for the answer.
+    pub fn ask(&self, item: &UnstorableItem) -> UnstorableAnswer {
+        (self.0)(item)
+    }
 }
 
 impl fmt::Debug for UnstorableAsker {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.debug_struct("UnstorableAsker").finish_non_exhaustive()
+    }
+}
+
+/// Asks the user, from the operation's worker thread, whether moves the
+/// backend cannot do natively are finished by copying and then removing the
+/// originals (XFER-011, XFER-013), and waits for the answer.
+#[derive(Clone)]
+pub struct MoveByCopyingAsker(Arc<dyn Fn(&MoveByCopyingItem) -> bool + Send + Sync>);
+
+impl MoveByCopyingAsker {
+    /// An asker that answers with `ask`.
+    pub fn new(ask: impl Fn(&MoveByCopyingItem) -> bool + Send + Sync + 'static) -> Self {
+        Self(Arc::new(ask))
+    }
+
+    /// Asks about `item` and waits for the answer.
+    pub fn ask(&self, item: &MoveByCopyingItem) -> bool {
+        (self.0)(item)
+    }
+}
+
+impl fmt::Debug for MoveByCopyingAsker {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MoveByCopyingAsker")
+            .finish_non_exhaustive()
     }
 }
 
@@ -138,6 +169,9 @@ pub struct OperationContext {
     /// Asks about names and links the destination cannot store; without
     /// it they are attempted as they are.
     pub unstorable: Option<UnstorableAsker>,
+    /// Asks whether moves the backend cannot do natively are finished by
+    /// copying; without it they are refused and the source kept.
+    pub move_by_copying: Option<MoveByCopyingAsker>,
 }
 
 impl OperationContext {
@@ -147,20 +181,21 @@ impl OperationContext {
             cancel: Cancellation::new(),
             protection,
             unstorable: None,
+            move_by_copying: None,
         }
     }
 
-    /// `engine` with this context's write protection and question
+    /// `engine` with this context's write protection and questions
     /// installed.
     pub(crate) fn install(&self, engine: TransferEngine) -> TransferEngine {
-        let engine = self.protection.install(engine);
-        match &self.unstorable {
-            Some(UnstorableAsker(ask)) => {
-                let ask = Arc::clone(ask);
-                engine.with_unstorable_question(move |item: &UnstorableItem| ask(item))
-            }
-            None => engine,
+        let mut engine = self.protection.install(engine);
+        if let Some(asker) = self.unstorable.clone() {
+            engine = engine.with_unstorable_question(move |item: &UnstorableItem| asker.ask(item));
         }
+        if let Some(asker) = self.move_by_copying.clone() {
+            engine = engine.with_move_by_copying_question(move |item: &MoveByCopyingItem| asker.ask(item));
+        }
+        engine
     }
 
     /// The GIO cancellable behind [`OperationContext::cancel`], for GIO
