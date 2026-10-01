@@ -17,6 +17,7 @@ use gtk::{gio, glib};
 use ox_core::location::{file_uri, location_kind, LocationKind, VirtualPlace};
 use ox_core::settings::{Appearance, Settings};
 
+use super::clock_format::ClockSetting;
 use crate::app_context::AppContext;
 use crate::search::CacheLocation;
 use crate::snapshot::SnapshotRequest;
@@ -35,6 +36,8 @@ pub(super) struct AppState {
     _system_scheme: Rc<SystemScheme>,
     /// Kept alive so the skin follows the desktop's high-contrast setting.
     _contrast_setting: ContrastSetting,
+    /// Kept alive so Properties timestamps follow the desktop's clock.
+    _clock_setting: ClockSetting,
 }
 
 impl AppState {
@@ -58,6 +61,7 @@ impl AppState {
         skin.set_text_size(TextSize::from_percent(preferences.text_size));
         let system_scheme = follow_system_scheme(&skin, gtk_preference);
         let contrast_setting = follow_contrast(&skin);
+        let clock_setting = ClockSetting::follow();
         crate::window::install_accelerators(app);
         let context = AppContext::new(skin, settings);
         context.start_search_cache(CacheLocation::UserCache);
@@ -66,6 +70,7 @@ impl AppState {
             context,
             _system_scheme: system_scheme,
             _contrast_setting: contrast_setting,
+            _clock_setting: clock_setting,
         }
     }
 

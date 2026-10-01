@@ -32,9 +32,38 @@
 
 mod locale_pattern;
 
+use std::sync::atomic::{AtomicU8, Ordering};
+
 use glib::DateTime;
 
+pub use locale_pattern::ClockFormat;
 use locale_pattern::LocalePatterns;
+
+/// The [`ClockFormat`] times are shown on, as its position in
+/// [`CLOCK_FORMATS`]; set by [`set_clock_format`].
+static CLOCK_FORMAT: AtomicU8 = AtomicU8::new(0);
+
+/// Every clock format, in the order [`CLOCK_FORMAT`] numbers them.
+const CLOCK_FORMATS: [ClockFormat; 3] = [
+    ClockFormat::Locale,
+    ClockFormat::TwentyFourHour,
+    ClockFormat::TwelveHour,
+];
+
+/// Shows every later clock time on `clock`, as the desktop's clock-format
+/// setting asks; [`ClockFormat::Locale`] until it is called.
+pub fn set_clock_format(clock: ClockFormat) {
+    let position = CLOCK_FORMATS
+        .iter()
+        .position(|listed| *listed == clock)
+        .unwrap_or(0);
+    CLOCK_FORMAT.store(u8::try_from(position).unwrap_or(0), Ordering::Relaxed);
+}
+
+/// The clock format set last.
+pub fn clock_format() -> ClockFormat {
+    CLOCK_FORMATS[usize::from(CLOCK_FORMAT.load(Ordering::Relaxed)) % CLOCK_FORMATS.len()]
+}
 
 /// Shown in the Date modified column when a time is unknown.
 const UNKNOWN_DATE: &str = "—";
@@ -137,7 +166,7 @@ pub fn format_date(time: &DateTime) -> Option<String> {
 /// [`date_time_text`] for a time GIO already returned as a [`DateTime`], in
 /// the time zone it carries. `None` if it cannot be formatted.
 pub fn format_date_time(time: &DateTime) -> Option<String> {
-    format_date_time_with(time, locale_pattern::current())
+    format_date_time_with(time, locale_pattern::current(), clock_format())
 }
 
 /// [`format_date`] with the given locale `patterns`, which the tests
@@ -148,10 +177,10 @@ fn format_date_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String
 }
 
 /// [`format_date_time`] with the given locale `patterns`: the date, a
-/// comma and the clock time.
-fn format_date_time_with(time: &DateTime, patterns: &LocalePatterns) -> Option<String> {
+/// comma and the clock time on `clock`.
+fn format_date_time_with(time: &DateTime, patterns: &LocalePatterns, clock: ClockFormat) -> Option<String> {
     let date = format_date_with(time, patterns)?;
-    let clock = time.format(&patterns.time).ok()?;
+    let clock = time.format(&patterns.time_on(clock)).ok()?;
     Some(format!("{date}, {clock}"))
 }
 
@@ -340,9 +369,44 @@ mod tests {
     #[test]
     fn properties_timestamps_add_the_locale_clock_to_the_column_date() {
         for case in &LOCALE_CASES {
-            let timestamp = format_date_time_with(&september_21(), &case.patterns());
+            let timestamp = format_date_time_with(&september_21(), &case.patterns(), ClockFormat::Locale);
             assert_eq!(timestamp.as_deref(), Some(case.properties), "{}", case.locale);
         }
+    }
+
+    /// The desktop's clock format moves Properties timestamps to a 24-hour
+    /// or 12-hour clock; a locale without an AM/PM text keeps its own.
+    ///
+    /// parity: LOOK-026
+    #[test]
+    fn properties_timestamps_follow_the_desktop_clock_format() {
+        let on_clock = |locale: &str, clock| {
+            let case = LOCALE_CASES
+                .iter()
+                .find(|case| case.locale == locale)
+                .expect("a case");
+            format_date_time_with(&september_21(), &case.patterns(), clock).expect("formats")
+        };
+        assert_eq!(
+            on_clock("en_US", ClockFormat::TwentyFourHour),
+            "09/21/2026, 14:13:20"
+        );
+        assert_eq!(
+            on_clock("en_US", ClockFormat::TwelveHour),
+            "09/21/2026, 2:13:20 PM"
+        );
+        assert_eq!(
+            on_clock("en_GB", ClockFormat::TwentyFourHour),
+            "21/09/2026, 14:13:20"
+        );
+        assert_eq!(on_clock("de_DE", ClockFormat::TwelveHour), "21.09.2026, 14:13:20");
+        assert_eq!(ClockFormat::from_gnome(Some("12h")), ClockFormat::TwelveHour);
+        assert_eq!(ClockFormat::from_gnome(Some("24h")), ClockFormat::TwentyFourHour);
+        assert_eq!(ClockFormat::from_gnome(None), ClockFormat::Locale);
+        set_clock_format(ClockFormat::TwelveHour);
+        assert_eq!(clock_format(), ClockFormat::TwelveHour);
+        set_clock_format(ClockFormat::Locale);
+        assert_eq!(clock_format(), ClockFormat::Locale);
     }
 
     /// A Date modified text in the test process's own time zone has ten

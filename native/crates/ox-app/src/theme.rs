@@ -233,7 +233,7 @@ impl Skin {
 
 /// The desktop's settings under `schema_id` (GNOME's interface and
 /// accessibility keys), when that schema is installed.
-fn desktop_settings(schema_id: &str) -> Option<gio::Settings> {
+pub(crate) fn desktop_settings(schema_id: &str) -> Option<gio::Settings> {
     let schema = gio::SettingsSchemaSource::default()?.lookup(schema_id, true)?;
     let settings = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
     Some(settings)

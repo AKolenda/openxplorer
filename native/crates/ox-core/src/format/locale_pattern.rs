@@ -39,6 +39,8 @@ pub(super) struct LocalePatterns {
     /// `%-I:%M:%S %p` for `en_US`. A time zone name in the locale's format
     /// (`en_IN` has one) is left out, as browsers leave it out.
     pub(super) time: String,
+    /// Whether the locale has an AM/PM text, which a 12-hour clock needs.
+    pub(super) has_day_period: bool,
 }
 
 impl LocalePatterns {
@@ -55,6 +57,56 @@ impl LocalePatterns {
         Self {
             date: date.unwrap_or_else(|| ISO_DATE.to_string()),
             time: time.unwrap_or_else(|| ISO_TIME.to_string()),
+            has_day_period: !samples.day_period.trim().is_empty(),
+        }
+    }
+
+    /// The clock-time pattern on `clock`: the locale's own, or it moved to
+    /// a 24-hour or 12-hour clock. A locale without an AM/PM text keeps its
+    /// own clock, as a 12-hour time without one would be ambiguous.
+    pub(super) fn time_on(&self, clock: ClockFormat) -> String {
+        let is_twelve_hour = self.time.contains(Field::Hour12.conversion());
+        match clock {
+            ClockFormat::TwentyFourHour if is_twelve_hour => {
+                let time = self
+                    .time
+                    .replace(Field::Hour12.conversion(), Field::Hour24.conversion());
+                let time = time.replace(Field::DayPeriod.conversion(), "");
+                time.split_whitespace().collect::<Vec<_>>().join(" ")
+            }
+            ClockFormat::TwelveHour if !is_twelve_hour && self.has_day_period => {
+                let time = self
+                    .time
+                    .replace(Field::Hour24.conversion(), Field::Hour12.conversion());
+                format!("{time} {}", Field::DayPeriod.conversion())
+            }
+            _ => self.time.clone(),
+        }
+    }
+}
+
+/// The clock that times are shown on: the locale's, or the one the user
+/// chose for the desktop (GNOME's `clock-format`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ClockFormat {
+    /// The locale's own clock.
+    #[default]
+    Locale,
+    /// A 24-hour clock: `19:35:35`.
+    TwentyFourHour,
+    /// A 12-hour clock with the locale's AM/PM text: `7:35:35 PM`.
+    TwelveHour,
+}
+
+impl ClockFormat {
+    /// The clock GNOME's `org.gnome.desktop.interface clock-format` asks
+    /// for: `24h` or `12h`, or the locale's while the user has not set the
+    /// key (`None`), whose schema default is `24h` in every locale.
+    pub fn from_gnome(value: Option<&str>) -> Self {
+        match value {
+            Some("24h") => Self::TwentyFourHour,
+            Some("12h") => Self::TwelveHour,
+            _ => Self::Locale,
         }
     }
 }

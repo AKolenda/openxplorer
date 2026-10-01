@@ -14372,8 +14372,8 @@ python_tests = [
 ]
 bridge = ["list"]
 dolphin = "KFileItem overlays (emblem-symbolic-link, emblem-locked)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer has only the green network marker. Explorer shows a shortcut arrow on links. Existing OpenXplorer part is protected by LOOK-016."
+native = "done"
+native_note = "native/crates/ox-app/src/icons/emblem.rs: every listed item's icon (details rows and icon tiles, FileCell) carries the link glyph in the bottom-left corner when it is a symbolic link (where Windows draws the shortcut arrow) and the lock in the top-right corner when GIO reports access::can-write false, each on a small plate in the background colour; shares in a server listing and Recycle Bin items carry none. Mounted network shares and mapped drives keep the green network bar of LOOK-016. Test: icons/emblem.rs (links_and_read_only_items_carry_their_emblems). Not marked: folders shared from this computer (Samba usershares), which neither app detects."
 
 [[feature]]
 id = "LOOK-018"
@@ -14538,8 +14538,8 @@ python_tests = []
 bridge = []
 dolphin = "KDE regional settings (QLocale)"
 gnome = "org.gnome.desktop.interface clock-format; GDateTime locale formatting"
-native = "partial"
-native_note = "native/crates/ox-core/src/format/locale_pattern.rs (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); clock-format setting not read. Existing OpenXplorer part is protected by VIEW-001."
+native = "done"
+native_note = "native/crates/ox-core/src/format/locale_pattern.rs and format.rs: dates follow the LC_TIME locale (time_patterns_follow_the_locale_clock, date_patterns_keep_the_locale_order_with_a_full_year); Properties timestamps move to GNOME's clock-format (12h/24h) once the user has set it, live, through native/crates/ox-app/src/application/clock_format.rs (properties_timestamps_follow_the_desktop_clock_format). A locale without an AM/PM text keeps its 24-hour clock; inside Flatpak, where the schema holds only defaults, the locale's clock stays."
 
 [[feature]]
 id = "LOOK-027"
