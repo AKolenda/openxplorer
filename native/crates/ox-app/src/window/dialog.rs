@@ -176,6 +176,9 @@ impl Dialog {
         let frame = &dialog.imp().frame;
         frame.set_title(title);
         frame.set_message(message);
+        // A question without fields has no body: its empty scroller would
+        // still take the room of a scroll bar.
+        frame.scroller().set_visible(false);
         dialog.update_relation(&[gtk::accessible::Relation::LabelledBy(&[frame
             .title_label()
             .upcast_ref()])]);
@@ -185,6 +188,12 @@ impl Dialog {
     /// The box the fields, notes and check boxes go in, in the order added.
     fn fields(&self) -> gtk::Box {
         self.imp().frame.body()
+    }
+
+    /// Adds `widget` under the fields added so far.
+    fn append_field(&self, widget: &impl IsA<gtk::Widget>) {
+        self.fields().append(widget);
+        self.imp().frame.scroller().set_visible(true);
     }
 
     /// Adds a labelled one-line text field showing `text`
@@ -206,8 +215,8 @@ impl Dialog {
             .build();
         let control = control.upcast_ref::<gtk::Widget>();
         control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
-        self.fields().append(&caption);
-        self.fields().append(control);
+        self.append_field(&caption);
+        self.append_field(control);
     }
 
     /// Adds a boxed note in muted text (`.modal-note`).
@@ -234,7 +243,7 @@ impl Dialog {
             .build();
         // Selectable with the pointer, but no stop for the keyboard.
         line.set_focusable(false);
-        self.fields().append(&line);
+        self.append_field(&line);
         line
     }
 
@@ -253,7 +262,7 @@ impl Dialog {
             .hscrollbar_policy(gtk::PolicyType::Automatic)
             .min_content_height(height)
             .build();
-        self.fields().append(&scrolled);
+        self.append_field(&scrolled);
     }
 
     /// The text of the scrolled box, for tests.
@@ -284,7 +293,7 @@ impl Dialog {
     pub(crate) fn add_check_button(&self, label: &str, active: bool) -> gtk::CheckButton {
         let check = gtk::CheckButton::builder().label(label).active(active).build();
         check.add_css_class("dialog-check");
-        self.fields().append(&check);
+        self.append_field(&check);
         check
     }
 
