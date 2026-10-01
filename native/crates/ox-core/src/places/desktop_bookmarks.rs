@@ -3,7 +3,7 @@
 //!
 //! GTK's file dialogs, GNOME Files and other GTK file managers list the
 //! bookmarks in `$XDG_CONFIG_HOME/gtk-3.0/bookmarks`, one `uri label`
-//! per line. Quick access pins are kept in OpenXplorer's own settings,
+//! per line. Quick access pins are kept in the app's own settings,
 //! where the Python app reads them too; this module mirrors them into that
 //! file, so a folder pinned here also appears in open and save dialogs.
 //! Lines the user or other apps wrote are kept as they are.
@@ -51,7 +51,7 @@ pub fn merged_bookmarks(text: &str, added: &[Bookmark], removed: &[String]) -> O
         });
         changed = true;
     }
-    changed.then(|| lines.iter().map(|line| format!("{line}\n")).collect())
+    changed.then(|| lines.iter().flat_map(|line| [line.as_str(), "\n"]).collect())
 }
 
 /// Adds `added` to and drops `removed` from the bookmarks file at `path`,
