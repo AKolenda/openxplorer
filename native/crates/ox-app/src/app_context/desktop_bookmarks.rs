@@ -5,66 +5,70 @@
 //!
 //! The application turns it on for the user's own list
 //! ([`AppContext::export_pins_to`]); tests turn it on for a temporary file
-//! only. Each time the places change, the pins added since the last time
-//! are appended and the pins removed are dropped; the first time, every
-//! pin the list lacks is added. Other lines of the list are never touched.
-//! The file is written on a worker thread.
+//! only. Each time the pins change, one worker thread brings the list up
+//! to date with them: it appends the pins the list lacks and drops only
+//! the lines the app added for pins since removed, which it records in
+//! `desktop-bookmarks` in the settings folder. Lines the user or other
+//! apps wrote are never removed. Changes reach the worker in order and it
+//! skips to the newest, so a quick series of changes never loses one.
 
 use std::path::PathBuf;
+use std::sync::mpsc;
 
-use gtk::gio;
 use gtk::subclass::prelude::*;
-use ox_core::location::same_location;
 use ox_core::places::sync_bookmarks;
 use ox_core::settings::Bookmark;
 
 use super::AppContext;
 
-/// The pins of `now` that `before` lacks, and the locations of `before`
-/// that `now` lacks; every pin is new when there was no `before`.
-fn pin_changes(before: Option<&[Bookmark]>, now: &[Bookmark]) -> (Vec<Bookmark>, Vec<String>) {
-    let Some(before) = before else {
-        return (now.to_vec(), Vec::new());
-    };
-    let is_in = |list: &[Bookmark], uri: &str| list.iter().any(|pin| same_location(&pin.uri, uri));
-    let added = now
-        .iter()
-        .filter(|pin| !is_in(before, &pin.uri))
-        .cloned()
-        .collect();
-    let removed = before
-        .iter()
-        .filter(|pin| !is_in(now, &pin.uri))
-        .map(|pin| pin.uri.clone())
-        .collect();
-    (added, removed)
+/// The file in the settings folder listing the lines the app added.
+const OWNED_LINES_FILE: &str = "desktop-bookmarks";
+
+/// Starts the worker that keeps the list at `list` up to date with the
+/// pins it is sent, recording its own lines in `owned`. It ends when the
+/// sender is dropped.
+fn start_mirror(list: PathBuf, owned: PathBuf) -> mpsc::Sender<Vec<Bookmark>> {
+    let (sender, receiver) = mpsc::channel::<Vec<Bookmark>>();
+    // Without a thread the sends fail quietly and the mirror is off.
+    let _ = std::thread::Builder::new()
+        .name("ox-places-mirror".into())
+        .spawn(move || {
+            while let Ok(mut pins) = receiver.recv() {
+                while let Ok(newer) = receiver.try_recv() {
+                    pins = newer;
+                }
+                // A list that cannot be written only loses the mirror,
+                // never a pin, which stays in OpenXplorer's settings.
+                let _ = sync_bookmarks(&list, &owned, &pins);
+            }
+        });
+    sender
 }
 
 impl AppContext {
     /// Mirrors the pins into the places list at `bookmarks` from now on,
     /// starting with every pin it lacks.
     pub(crate) fn export_pins_to(&self, bookmarks: PathBuf) {
-        self.imp().desktop_bookmarks.replace(Some(bookmarks));
+        let owned = self.settings_directory().join(OWNED_LINES_FILE);
+        self.imp()
+            .bookmarks_mirror
+            .replace(Some(start_mirror(bookmarks, owned)));
         self.imp().exported_pins.replace(None);
         self.export_pins();
     }
 
     /// Brings the places list up to date with the pins, if it is mirrored.
     pub(super) fn export_pins(&self) {
-        let Some(path) = self.imp().desktop_bookmarks.borrow().clone() else {
+        let imp = self.imp();
+        let Some(mirror) = imp.bookmarks_mirror.borrow().clone() else {
             return;
         };
         let pins = self.settings_data().pins;
-        let before = self.imp().exported_pins.replace(Some(pins.clone()));
-        let (added, removed) = pin_changes(before.as_deref(), &pins);
-        if added.is_empty() && removed.is_empty() {
+        if imp.exported_pins.borrow().as_ref() == Some(&pins) {
             return;
         }
-        // A list that cannot be written only loses the mirror, never a
-        // pin, which stays in OpenXplorer's settings.
-        gio::spawn_blocking(move || {
-            let _ = sync_bookmarks(&path, &added, &removed);
-        });
+        imp.exported_pins.replace(Some(pins.clone()));
+        let _ = mirror.send(pins);
     }
 }
 
@@ -83,23 +87,34 @@ mod tests {
         let test = TestWindow::open(&fixture.uri());
         let list = fixture.path("gtk-3.0").join("bookmarks");
         fs::create_dir(fixture.path("gtk-3.0")).expect("the list's folder");
-        fs::write(&list, "sftp://build/srv Build server\n").expect("another app's bookmark");
+        let users_line = format!("{} My projects\n", fixture.uri());
+        fs::write(&list, format!("sftp://build/srv Build server\n{users_line}")).expect("other bookmarks");
         test.context.export_pins_to(list.clone());
 
         test.activate("pin-folder", None);
         let pinned = format!("{} Example projects", fixture.uri());
-        wait_until("the pin in the list", || {
-            fs::read_to_string(&list).is_ok_and(|text| text.contains(&pinned))
-        });
         let mut settings = Settings::open(test.settings_directory());
         let request = BookmarkRequest::new(fixture.uri(), String::new());
         settings
             .bookmark(BookmarkAction::Remove, BookmarkKind::Pin, &request)
             .expect("unpinned");
         test.activate("refresh", None);
+        let folder = fixture.uri_of("Documents");
+        let request = BookmarkRequest::new(folder.clone(), String::new());
+        settings
+            .bookmark(BookmarkAction::Add, BookmarkKind::Pin, &request)
+            .expect("pinned");
+        test.activate("refresh", None);
 
-        wait_until("the pin to leave the list", || {
-            fs::read_to_string(&list).is_ok_and(|text| text == "sftp://build/srv Build server\n")
+        wait_until("the new pin in the list", || {
+            fs::read_to_string(&list).is_ok_and(|text| text.contains(&folder))
         });
+        let text = fs::read_to_string(&list).expect("the list");
+        assert!(text.starts_with("sftp://build/srv Build server\n"), "{text}");
+        assert!(
+            text.contains(&users_line),
+            "the user's line for the unpinned folder stays: {text}"
+        );
+        assert!(!text.contains(&pinned), "{text}");
     }
 }

@@ -19,7 +19,7 @@ mod network;
 mod quick_access;
 mod user_dirs;
 
-pub use desktop_bookmarks::{bookmarks_file, merged_bookmarks, sync_bookmarks};
+pub use desktop_bookmarks::{bookmarks_file, merged_bookmarks, sync_bookmarks, MergedBookmarks};
 pub use known_folders::{FolderLocations, KnownFolder, KnownFolderPaths};
 pub use network::{
     merge_network_locations, network_key, NetworkKey, NetworkKind, NetworkLocation, NetworkMount, SavedShare,

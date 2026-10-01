@@ -116,9 +116,10 @@ mod imp {
         pub(super) updates: OnceCell<Updates>,
         /// The desktop integration, made on first use.
         pub(super) desktop_integration: OnceCell<DesktopIntegration>,
-        /// The desktop's places list the pins are mirrored into, once the
-        /// application turns it on (SIDE-013).
-        pub(super) desktop_bookmarks: RefCell<Option<std::path::PathBuf>>,
+        /// The worker mirroring the pins into the desktop's places list,
+        /// once the application turns it on (SIDE-013).
+        pub(super) bookmarks_mirror:
+            RefCell<Option<std::sync::mpsc::Sender<Vec<ox_core::settings::Bookmark>>>>,
         /// The pins as last mirrored there.
         pub(super) exported_pins: RefCell<Option<Vec<ox_core::settings::Bookmark>>>,
         /// In tests, the files that would have been opened.
