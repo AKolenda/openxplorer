@@ -21,6 +21,7 @@ use crate::locations::{self, Page};
 
 use super::desktop_link::{link_target_of_file, may_be_link, LinkTarget};
 use super::dialog::{ButtonStyle, Dialog};
+use super::run_on_open::RunChoice;
 use super::session::TabId;
 use super::software_search::{self, FIND_IN_SOFTWARE};
 use super::BrowserWindow;
@@ -213,6 +214,14 @@ impl BrowserWindow {
             Activation::File => {
                 if let Some(target) = desktop_link(&fresh) {
                     return self.follow_link(target?).await;
+                }
+                match self.run_or_open(&fresh).await {
+                    RunChoice::Open => {}
+                    RunChoice::Run(program) => {
+                        self.run_program(&program, &[]).await?;
+                        return Ok(Resolved::Opened);
+                    }
+                    RunChoice::Cancel => return Ok(Resolved::Opened),
                 }
                 let window = self.upcast_ref::<gtk::Window>();
                 self.context().open_file(&fresh, window).await?;

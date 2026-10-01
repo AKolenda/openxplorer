@@ -44,7 +44,7 @@ use super::file_ops::IncomingItems;
 use super::BrowserWindow;
 
 pub(crate) use action::{DropAction, FirstOffer, PendingDrop};
-pub(super) use program::{ProgramChecks, ProgramTarget};
+pub(super) use program::{query_program, ProgramChecks, ProgramTarget};
 pub(super) use targets::{DragScroll, DropZone};
 
 /// The most items one drop brings.

@@ -258,7 +258,11 @@ impl BrowserWindow {
 
     /// Checks, confirms and starts `program` with `items`; the message to
     /// show when it does not start.
-    async fn run_program(&self, program: &ProgramTarget, items: &[String]) -> Result<(), String> {
+    pub(in crate::window) async fn run_program(
+        &self,
+        program: &ProgramTarget,
+        items: &[String],
+    ) -> Result<(), String> {
         let file = gio::File::for_uri(&program.uri);
         let info = file
             .query_info_future(
@@ -350,7 +354,7 @@ fn is_on_removable_drive(uri: &str) -> bool {
 
 /// Asks GIO whether `entry` is a program or a launcher; `None` for a file
 /// that is neither or cannot be read.
-async fn query_program(entry: &Entry) -> Option<ProgramTarget> {
+pub(in crate::window) async fn query_program(entry: &Entry) -> Option<ProgramTarget> {
     let file = gio::File::for_uri(&entry.uri);
     let info = file
         .query_info_future(

@@ -252,6 +252,10 @@ pub struct Preferences {
     /// `ConfirmClosingMultipleTabs`); off, as Explorer never asks.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub confirm_close_tabs: bool,
+    /// Opening a program or script asks whether to run it or open it in
+    /// its application (Dolphin's "Always ask"); off, it only ever opens.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ask_to_run_programs: bool,
 }
 
 impl Default for Preferences {
@@ -276,6 +280,7 @@ impl Default for Preferences {
             confirm_delete: true,
             confirm_empty_trash: true,
             confirm_close_tabs: false,
+            ask_to_run_programs: false,
         }
     }
 }
@@ -313,6 +318,7 @@ impl Preferences {
         replace_if_some(&mut self.confirm_delete, update.confirm_delete);
         replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
         replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
+        replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
         if let Some(width) = sidebar_width {
             self.sidebar_width = Some(width);
         }
@@ -367,6 +373,8 @@ pub struct PreferencesUpdate {
     pub confirm_empty_trash: Option<bool>,
     /// Ask before closing a window with several tabs.
     pub confirm_close_tabs: Option<bool>,
+    /// Ask whether to run a program or script that is opened.
+    pub ask_to_run_programs: Option<bool>,
 }
 
 impl PreferencesUpdate {
@@ -404,6 +412,7 @@ impl PreferencesUpdate {
             confirm_delete: flag("confirmDelete"),
             confirm_empty_trash: flag("confirmEmptyTrash"),
             confirm_close_tabs: flag("confirmCloseTabs"),
+            ask_to_run_programs: flag("askToRunPrograms"),
         })
     }
 }

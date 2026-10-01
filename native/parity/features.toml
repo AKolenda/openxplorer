@@ -11632,8 +11632,8 @@ python_tests = ["desktop/tests/test_v05.py::OpeningTests::test_unknown_not_direc
 bridge = ["open", "activateItem"]
 dolphin = "ConfirmationsSettingsPage 'When opening an executable file'; Dolphin asks whether to execute or open an executable script, and runs .desktop launchers"
 gnome = "g_app_info_create_from_commandline / g_desktop_app_info_new_from_filename with trust metadata; Nautilus “Run as a Program”"
-native = "todo"
-native_note = "Porting notes: The 'never run silently' safety rule must be kept. The never-execute-on-open rule is a safety behaviour and must not regress."
+native = "done"
+native_note = "Settings > Windows & tabs > Confirmations has 'Ask whether to run programs and scripts' (off). Off, an executable file or script opens in its viewer or editor and nothing runs, as before (OPEN-007). On, opening a regular file the user may execute, or an application launcher, asks 'Run this program?' with Cancel, Open (primary, so Enter never runs it) and Run (native/crates/ox-app/src/window/run_on_open.rs). Run goes through the drop-to-run checks (window/file_drop/program.rs): the execute permission is read again, a program on a share or removable drive asks again, a script runs in the terminal, and arguments never pass through a shell. Dolphin's third choice, running without asking, is deliberately not offered: the never-run-silently rule stays. Test: native/crates/ox-app/src/window/tests/opening.rs (opening_a_script_asks_to_run_it_only_when_the_settings_say_so)."
 
 [[feature]]
 id = "OPEN-009"

@@ -87,6 +87,12 @@ const CONFIRM_CLOSE_TABS: RowText = RowText {
     keywords: "confirm confirmation close window tabs quit question warning",
 };
 
+const ASK_TO_RUN: RowText = RowText {
+    title: "Ask whether to run programs and scripts",
+    description: "Off: opening one shows it in its viewer or editor, and nothing runs.",
+    keywords: "confirm execute run program script executable launcher open",
+};
+
 const MOVE_TABS: RowText = RowText {
     title: "Move tabs between windows",
     description: "Drag a tab onto another OpenXplorer window's tab strip to merge it, or outside \
@@ -168,8 +174,9 @@ fn windows_group(page: &SettingsPage) -> SettingsGroup {
     group
 }
 
-/// The questions asked before items are deleted and before a window with
-/// several tabs closes (Dolphin's Confirmations page, SET-010).
+/// The questions asked before items are deleted, before a program that is
+/// opened runs (OPEN-008) and before a window with several tabs closes
+/// (Dolphin's Confirmations page, SET-010).
 fn confirmations_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new("Confirmations");
     let bindings = [
@@ -199,6 +206,16 @@ fn confirmations_group(page: &SettingsPage) -> SettingsGroup {
                 read: |preferences| preferences.confirm_empty_trash,
                 write: |on| PreferencesUpdate {
                     confirm_empty_trash: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            ASK_TO_RUN,
+            PreferenceBinding {
+                read: |preferences| preferences.ask_to_run_programs,
+                write: |on| PreferencesUpdate {
+                    ask_to_run_programs: Some(on),
                     ..PreferencesUpdate::default()
                 },
             },

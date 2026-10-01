@@ -100,6 +100,7 @@ mod place_menus;
 mod preferences;
 mod quick_access;
 mod result_location;
+mod run_on_open;
 mod saved_search;
 mod search_box;
 mod selection;

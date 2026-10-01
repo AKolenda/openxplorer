@@ -10,6 +10,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use ox_core::settings::{PreferencesUpdate, Settings};
+
 use crate::integration::{installed_application, Tool};
 use crate::locations::Page;
 use crate::test_support::harness::{application, wait_for, wait_until, Fixture, TestWindow, STANDARD_NAMES};
@@ -248,6 +250,44 @@ fn enter_on_several_items_opens_each_and_asks_for_many() {
     dialog.press("Cancel");
     wait_for(std::time::Duration::from_millis(200));
     assert_eq!(test.context.recorded_launches().len(), 2, "nothing more opened");
+}
+
+/// An executable script opens in its application; with "Ask whether to
+/// run programs and scripts" on, opening it asks first, and Open opens it
+/// without running it.
+///
+/// parity: OPEN-008
+#[gtk::test]
+fn opening_a_script_asks_to_run_it_only_when_the_settings_say_so() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = Fixture::standard();
+    let script = fixture.path("tidy.sh");
+    fs::write(&script, "#!/bin/sh\ntouch ran\n").expect("fixture script");
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).expect("executable");
+    let test = TestWindow::open(&fixture.uri());
+
+    test.window.activate_item(test.position_of("tidy.sh"));
+    wait_until("the script to open", || test.context.recorded_launches().len() == 1);
+
+    let update = PreferencesUpdate {
+        ask_to_run_programs: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        test.context.settings_data().preferences.ask_to_run_programs
+    });
+    test.window.activate_item(test.position_of("tidy.sh"));
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.title_text(), "Run this program?");
+    assert_eq!(dialog.button_labels(), ["Cancel", "Open", "Run"]);
+    dialog.press("Open");
+    wait_until("the script to open again", || test.context.recorded_launches().len() == 2);
+    assert!(!fixture.path("ran").exists(), "nothing ran");
 }
 
 /// Shift+F4 opens a terminal in the folder shown and Shift+Alt+F4 one per
