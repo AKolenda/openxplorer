@@ -137,13 +137,20 @@ pub fn may_remember(uri: &str) -> bool {
     let authority = uri
         .split_once("://")
         .map_or("", |(_, rest)| rest.split('/').next().unwrap_or(""));
-    !uri.is_empty() && uri.len() <= MAX_FOLDER_LOCATION && !uri.contains(char::is_control) && !authority.contains('@')
+    !uri.is_empty()
+        && uri.len() <= MAX_FOLDER_LOCATION
+        && !uri.contains(char::is_control)
+        && !authority.contains('@')
 }
 
 /// The folder styles stored in `value`, at most [`MAX_FOLDER_VIEWS`] of the
 /// newest; `None` when `value` is not a list.
 pub(super) fn read_folder_views(value: &Value) -> Option<Vec<FolderView>> {
-    let stored: Vec<FolderView> = value.as_array()?.iter().filter_map(FolderView::from_json).collect();
+    let stored: Vec<FolderView> = value
+        .as_array()?
+        .iter()
+        .filter_map(FolderView::from_json)
+        .collect();
     let skip = stored.len().saturating_sub(MAX_FOLDER_VIEWS);
     Some(stored.into_iter().skip(skip).collect())
 }
@@ -198,7 +205,9 @@ pub(super) fn remember(
         return;
     }
     let subfolders = scope == ViewScope::FolderAndSubfolders;
-    folder_views.retain(|view| !same_location(&view.uri, uri) && !(subfolders && is_below(&view.uri, uri)));
+    let replaced =
+        |view: &FolderView| same_location(&view.uri, uri) || (subfolders && is_below(&view.uri, uri));
+    folder_views.retain(|view| !replaced(view));
     folder_views.push(FolderView {
         uri: uri.to_owned(),
         properties,
@@ -242,7 +251,13 @@ mod tests {
     fn folders_keep_their_own_style_and_the_rest_share_the_default() {
         let mut views = Vec::new();
         let mut defaults = None;
-        remember(&mut views, &mut defaults, "file:///a", sorted_by("size"), ViewScope::Folder);
+        remember(
+            &mut views,
+            &mut defaults,
+            "file:///a",
+            sorted_by("size"),
+            ViewScope::Folder,
+        );
         remember(
             &mut views,
             &mut defaults,
@@ -250,7 +265,13 @@ mod tests {
             sorted_by("type"),
             ViewScope::FolderAndSubfolders,
         );
-        remember(&mut views, &mut defaults, "sftp://me@host/x", sorted_by("type"), ViewScope::Folder);
+        remember(
+            &mut views,
+            &mut defaults,
+            "sftp://me@host/x",
+            sorted_by("type"),
+            ViewScope::Folder,
+        );
         let shared = ViewProperties::default();
         assert_eq!(style_for(&views, &shared, "file:///a/").sort, "size");
         assert_eq!(style_for(&views, &shared, "file:///a/inner").sort, "name");
@@ -261,7 +282,13 @@ mod tests {
         assert_eq!(read_folder_views(&stored), Some(views.clone()));
         assert_eq!(stored[1]["subfolders"], json!(true));
 
-        remember(&mut views, &mut defaults, "file:///a", sorted_by("size"), ViewScope::AllFolders);
+        remember(
+            &mut views,
+            &mut defaults,
+            "file:///a",
+            sorted_by("size"),
+            ViewScope::AllFolders,
+        );
         assert!(views.is_empty());
         assert_eq!(defaults.map(|style| style.sort).as_deref(), Some("size"));
     }

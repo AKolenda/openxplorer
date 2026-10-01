@@ -176,8 +176,9 @@ pub struct Entry {
     /// `standard::icon`, serialized with `g_icon_serialize` because a
     /// `GIcon` cannot cross threads. Use [`Entry::icon`].
     pub serialized_icon: Option<glib::Variant>,
-    /// The other times, the owner, the permissions and a link's target.
-    pub meta: EntryMeta,
+    /// The other times, the owner, the permissions and a link's target;
+    /// boxed, as most code never reads them.
+    pub meta: Box<EntryMeta>,
 }
 
 impl Entry {

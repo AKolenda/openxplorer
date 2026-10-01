@@ -108,6 +108,27 @@ columnview.files .row-icon { margin-top: 1px; }
   border-radius: 0;
 }
 
+/* A group's header in the details view (VIEW-022): Explorer's semibold
+   title and count, then a line to the right edge. */
+columnview.files > listview > header { padding: 0; background: none; }
+columnview.files .group-header { padding: 12px 26px 4px 26px; }
+columnview.files .group-title { font-weight: 600; color: @ox_text; }
+columnview.files .group-header separator { background-color: @ox_border; min-height: 1px; }
+
+/* The arrow before a folder that expands in place (VIEW-035). */
+columnview.files .folder-expander {
+  min-width: 16px;
+  min-height: 16px;
+  padding: 0;
+  /* In the cell's left padding, so icons stay under the Name title. */
+  margin: 0 -7px 0 -20px;
+  border-radius: 4px;
+  background: none;
+  box-shadow: none;
+  color: @ox_muted;
+}
+columnview.files .folder-expander:hover { background-color: @ox_hover; color: @ox_text; }
+
 /* The hover selection marker (SEL-014): a small check-box-like button on
    the icon's corner, as Explorer's item check boxes. */
 .files .selection-marker {

@@ -206,6 +206,10 @@ impl FolderPane {
 
     /// Draws a rubber band over `view` at `rect`, in the view's
     /// coordinates and clipped to it, or hides it with `None`.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "widget sizes are far below 2^23 pixels"
+    )]
     pub(super) fn show_rubber_band(&self, view: &gtk::Widget, rect: Option<&gtk::graphene::Rect>) {
         let band = &self.parts().rubber_band;
         let origin = view.compute_point(self, &gtk::graphene::Point::zero());

@@ -60,7 +60,7 @@ pub(super) fn build_entry(
         can_delete: optional_boolean(info, "access::can-delete"),
         can_write: optional_boolean(info, "access::can-write"),
         serialized_icon: serialized_icon(info),
-        meta: EntryMeta::from_info(info),
+        meta: Box::new(EntryMeta::from_info(info)),
     }
 }
 

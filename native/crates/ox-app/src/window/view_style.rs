@@ -76,7 +76,9 @@ impl BrowserWindow {
             SortBy::Role(role) => {
                 pane.model().set_sort_role(Some((role, state.direction)));
                 // The titles show no arrow for a key that is not a column.
-                details.column_view().sort_by_column(None, state.direction.to_sort_type());
+                details
+                    .column_view()
+                    .sort_by_column(None, state.direction.to_sort_type());
             }
         }
         self.show_sort_state();
@@ -184,21 +186,21 @@ impl BrowserWindow {
     }
 
     /// Saves the style shown now: for the folder shown when each folder
-    /// keeps its own, else for every folder. Showing a saved style saves
-    /// nothing.
+    /// keeps its own (a place that keeps none, such as a search, keeps it
+    /// in this window only), else for every folder. Showing a saved style
+    /// saves nothing.
     pub(super) fn remember_style(&self) {
         if self.imp().applying_style.get() {
             return;
         }
         let style = self.current_style();
-        let per_folder = self.context().settings_data().preferences.per_folder_views;
-        match self.current_uri().filter(|uri| per_folder && may_remember(uri)) {
-            Some(uri) => self.save_style(&uri, style, ViewScope::Folder),
-            None => {
-                let view = self.folder_pane().view();
-                let reply = self.preference_failure_reply();
-                self.context().update_preferences(shared_style_update(style, view), reply);
-            }
+        if !self.context().settings_data().preferences.per_folder_views {
+            let view = self.folder_pane().view();
+            let reply = self.preference_failure_reply();
+            self.context()
+                .update_preferences(shared_style_update(style, view), reply);
+        } else if let Some(uri) = self.current_uri().filter(|uri| may_remember(uri)) {
+            self.save_style(&uri, style, ViewScope::Folder);
         }
     }
 

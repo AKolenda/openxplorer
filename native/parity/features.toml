@@ -2831,8 +2831,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "UseShortRelativeDates (default true)"
-native = "partial"
-native_note = "Date modified shows the locale's numeric date and its clock time without seconds, as Windows Explorer does ('09/06/2026 7:05 PM'; native/crates/ox-core/src/format.rs, column_dates_show_the_time_without_seconds). Missing: Dolphin's relative dates ('Today at 3:00 PM') and the option that switches between relative and absolute; Windows 11 shows absolute dates only."
+native = "done"
+native_note = "Date modified shows the date and the clock time without seconds; by default today's and yesterday's dates read 'Today at 3:00 PM' and 'Yesterday at 3:00 PM', as Dolphin's UseShortRelativeDates does, and Settings > Appearance > Files and folders > Relative dates (preference absoluteDates) switches every window to absolute dates at once. native/crates/ox-core/src/format/relative_date.rs, native/crates/ox-app/src/folder_view/details.rs (set_date_style); tests today_and_yesterday_read_as_words_with_the_time and recent_dates_read_today_until_settings_turn_that_off."
 
 [[feature]]
 id = "VIEW-005"
@@ -2929,8 +2929,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "compact: Ctrl+2"
-native = "todo"
-native_note = "Porting notes: This corresponds to Explorer's 'List' layout."
+native = "done"
+native_note = "View > List (Ctrl+Shift+5), Explorer's name for Dolphin's Compact view: the icon view's grid turned on its side, 16-pixel icons with one-line names in columns as wide as their widest name (cut at 36 characters), filled top to bottom and scrolled sideways; Ctrl+wheel steps Details > List > icons. native/crates/ox-app/src/folder_view/grid.rs (GridLayout::Compact); test the_compact_layout_fills_columns_and_scrolls_sideways."
 
 [[feature]]
 id = "VIEW-009"
@@ -2975,8 +2975,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "view_zoom_in Ctrl++/Ctrl+=, view_zoom_out Ctrl+-, view_zoom_reset Ctrl+0"
-native = "todo"
-native_note = "Porting notes: In OpenXplorer these keys change text size (80-200%), not icon size, and there is only one grid icon size. Keep text size; add icon sizes through the View menu and Ctrl+wheel. Explorer's Ctrl+numpad-Plus auto-sizes columns in Details. Existing OpenXplorer part is protected by VIEW-005, VIEW-043 and VIEW-044."
+native = "done"
+native_note = "The icon view zooms through 14 levels from 16 to 256 pixels (folder_view/icon_size.rs), with Explorer's four named sizes on Ctrl+Shift+1..4. Ctrl+wheel steps through them (stopping at Details and at 256), and a slider in the status bar, shown in the icon view as Dolphin's is, sets the size; the level is saved with the view style. Ctrl+plus/minus/0 keep changing the text size (VIEW-043), so zoom has no keys of its own. Test zooming_changes_and_saves_the_view."
 
 [[feature]]
 id = "VIEW-011"
@@ -2994,7 +2994,7 @@ python_tests = []
 bridge = ["preferences"]
 dolphin = "DolphinView::wheelEvent"
 native = "done"
-native_note = "Ctrl+wheel over the folder pane steps Details, Small, Medium, Large and Extra large icons, one step per wheel notch, and stops at the ends. Smooth-scroll fractions add up, and touchpad deltas in pixels (Wayland's surface unit) count 50 pixels as a notch, so one swipe does not jump several views (native/crates/ox-app/src/window/view_zoom.rs, wheel_and_touchpad_deltas_add_up_to_whole_steps; native/crates/ox-app/src/window/folder_pane/view.rs, the_wheel_steps_through_the_views_and_stops_at_the_ends). The zoomed view is saved and the View menu follows it; unlike a menu choice, zooming keeps the selected item in sight instead of scrolling to the top (native/crates/ox-app/src/window/tests/views.rs, zooming_changes_and_saves_the_view)."
+native_note = "Ctrl+wheel over the folder pane steps Details, List and then every icon size from 16 to 256 pixels (VIEW-010), one step per wheel notch, and stops at the ends. Smooth-scroll fractions add up, and touchpad deltas in pixels (Wayland's surface unit) count 50 pixels as a notch, so one swipe does not jump several views (native/crates/ox-app/src/window/view_zoom.rs, wheel_and_touchpad_deltas_add_up_to_whole_steps; native/crates/ox-app/src/window/folder_pane/view.rs, the_wheel_steps_through_the_views_and_stops_at_the_ends). The zoomed view is saved and the View menu follows it; unlike a menu choice, zooming keeps the selected item in sight instead of scrolling to the top (native/crates/ox-app/src/window/tests/views.rs, zooming_changes_and_saves_the_view)."
 
 [[feature]]
 id = "VIEW-012"
@@ -3031,7 +3031,7 @@ python_tests = ["v2.0.0:desktop/tests/ui_v07.py::Transferred tab restores select
 bridge = []
 dolphin = "sort menu (sort_by_*)"
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/views.rs (the_sort_menu_leaves_one_arrow_on_the_sorted_column, sorting_by_a_header_updates_the_sort_menu): Name, Date modified, Type and Size, the current one checked, a divider, then the direction. The direction has two checked items, Ascending and Descending, as Windows 11's Sort menu has, where app.js had one item that flipped it."
+native_note = "native/crates/ox-app/src/window/tests/views.rs (the_sort_menu_leaves_one_arrow_on_the_sorted_column, sorting_by_a_header_updates_the_sort_menu): Name, Date modified, Type and Size, the current one checked, a divider, the further keys of VIEW-019, a divider, then the direction, then Show in groups and Folders first. The direction has two checked items, Ascending and Descending, as Windows 11's Sort menu has, where app.js had one item that flipped it."
 
 [[feature]]
 id = "VIEW-014"
@@ -3145,7 +3145,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "sort_by_* for every KFileItemModel role"
-native = "todo"
+native = "done"
+native_note = "Besides the four columns, the Sort menu sorts by Date created, Date accessed, File extension, Permissions, Owner, User group and Link destination (read with each listing as EntryMeta; native/crates/ox-app/src/folder_view/sort_roles.rs); the column titles then show no arrow, as Dolphin's header does for a role it does not show, and a title click returns to that column. Deletion time is the Recycle Bin's Date deleted column (dialogs track). Rating, Tags, Comment and media metadata need Baloo or a metadata extractor the app does not link. Test further_sort_keys_compare_their_values."
 
 [[feature]]
 id = "VIEW-020"
@@ -3170,8 +3171,8 @@ python_tests = [
 ]
 bridge = ["preferences"]
 dolphin = "GlobalViewProps (default true) + ViewProperties"
-native = "todo"
-native_note = "Porting notes: OpenXplorer persists view mode, hidden-file visibility and column widths globally. Sort key and order are neither persisted nor tracked per folder. Existing OpenXplorer part is protected by VIEW-007, VIEW-024 and VIEW-028."
+native = "done"
+native_note = "View mode, icon size, sort key and order, groups, folders first and hidden files are saved as one style for all folders (viewDefaults, with the Python app's view and showHidden kept in step) or, with Settings > Appearance > Files and folders > Remember each folder's view (perFolderViews, Dolphin's GlobalViewProps off), for each folder (folderViews, at most 500, no user names): a folder opened or a tab shown later appears in its own style, a style saved for sub-folders reaches below. Column widths stay global (VIEW-028). native/crates/ox-core/src/settings/view_properties.rs, native/crates/ox-app/src/window/view_style.rs; tests folders_keep_their_own_style_and_the_rest_share_the_default and each_folder_keeps_its_own_style_when_asked."
 
 [[feature]]
 id = "VIEW-021"
@@ -3191,8 +3192,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "view_properties"
-native = "todo"
-native_note = "Porting notes: Explorer's equivalent is Folder Options › View › 'Apply to Folders'."
+native = "done"
+native_note = "View > Adjust view display style… opens the app's dialog with View mode, Sort by, Order, Show in groups, Show folders first and Show hidden files; while each folder keeps its own style it applies to this folder, this folder and its subfolders, or all folders (the last two after a confirmation) and can become the default, as Dolphin's dialog does; with one style for all folders it applies everywhere. native/crates/ox-app/src/window/view_properties_dialog.rs; test the_display_style_dialog_applies_its_choices."
 
 [[feature]]
 id = "VIEW-022"
@@ -3210,8 +3211,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "show_in_groups"
-native = "todo"
-native_note = "Porting notes: Explorer offers the same through 'Group by'."
+native = "done"
+native_note = "Sort > Show in groups groups the listing by its sort key, in the sort's order: names by first letter ('0 – 9', '#'), sizes by Explorer's buckets (Tiny … Gigantic, unmeasured Folders first), dates by Today, Yesterday, Earlier this week, Last week, Earlier this month, Last month, Earlier this year, then the year, and types, permissions, owners and the other keys by their text. The details view heads each group with its title, item count and a line (folder_view/details/group_headers.rs); GTK 4.14's grid view has no section headers, so the List and icon views show the grouped order without titles. Tests items_group_by_letter_size_and_period and show_in_groups_heads_each_group."
 
 [[feature]]
 id = "VIEW-023"
@@ -3506,7 +3507,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "ExpandableFolders (Details)"
-native = "todo"
+native = "done"
+native_note = "In the details view of a folder (not while searching or grouped) a chevron before each folder expands it in place: its contents are listed beneath it, indented 16 pixels a level, filtered and sorted as the folder's own items, through a GTK tree list model that passes the items through (folder_view/tree.rs, folder_view/cells/expander.rs). Right expands the current and selected folders, Left collapses them or goes to the containing folder; Back and Forward return with the same folders expanded. Settings > Appearance > Files and folders > Expandable folders turns it off. Expanded folders are listed once and not watched. Test a_folder_expands_in_place_and_back_keeps_it_open."
 
 [[feature]]
 id = "VIEW-036"
@@ -4442,8 +4444,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KItemListRubberBand; Rubber-band selection"
-native = "partial"
-native_note = "GTK's rubber band on both views, allowed only from blank space by the press in native/crates/ox-app/src/window/input.rs (blank_space_press), so dragging an item still drags it; it replaces the selection without modifiers, autoscrolls at the edges and spans full rows in the details view. native/crates/ox-app/src/window/tests/selection.rs (a_rubber_band_starts_on_blank_space_only). Missing: GTK 4.14 applies the band only when it ends, with Ctrl adding the touched items to the selection and Shift (and Ctrl+Shift) removing them; Dolphin toggles with Ctrl and adds with Shift. GTK has no public way to learn the band's items, so matching Dolphin needs our own band."
+native = "done"
+native_note = "The window draws its own rubber band (window/rubber_band.rs), as GTK 4.14's applies only when it ends: a drag from blank space selects the touched items while it moves, Ctrl toggles them and Shift adds them to the selection it started from, as in Dolphin; the view scrolls near its edges, the details view takes whole rows, and a press on an item still drags it. Tests a_band_replaces_adds_or_toggles_what_it_touches and a_rubber_band_selects_the_rows_it_crosses_as_it_moves."
 
 [[feature]]
 id = "SEL-013"
@@ -4476,8 +4478,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "ShowSelectionToggle (default true)"
-native = "todo"
-native_note = "Porting notes: Explorer offers the same through its 'Item check boxes' option. Not done; it shares the preference and cell work of SEL-013."
+native = "done"
+native_note = "Hovering an item shows a small marker on its icon's corner: a plus, or a minus once the item is selected; clicking it toggles that item alone through the list's own Ctrl+click action and keeps the rest of the selection, as Dolphin's selection toggle and Explorer's item check boxes do. Settings > Appearance > Files and folders > Selection marker turns it off. native/crates/ox-app/src/folder_view/cells/selection_marker.rs; test the_selection_marker_toggles_its_item_alone."
 
 [[feature]]
 id = "SEL-015"

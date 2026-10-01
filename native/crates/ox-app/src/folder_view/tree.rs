@@ -161,7 +161,9 @@ impl FolderTree {
     /// Lists the folder at `uri` into `children`, the sorted list the tree
     /// made for it, unless it is listed already.
     fn list_children(&self, uri: &str, children: &gio::ListModel) {
-        let Some(store) = child_store(children) else { return };
+        let Some(store) = child_store(children) else {
+            return;
+        };
         if store.n_items() > 0 || self.0.listings.borrow().contains_key(uri) {
             return;
         }

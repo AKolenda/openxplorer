@@ -39,9 +39,10 @@ const TILE_ICON_GAP: i32 = 8;
 /// Gap between a compact item's icon and its name.
 const COMPACT_ICON_GAP: i32 = 6;
 
-/// The widest a compact item's name is, in characters, before it is cut
-/// off with an ellipsis; each column is as wide as its widest name.
-const COMPACT_NAME_CHARS: i32 = 36;
+/// How wide a compact item's name is, in characters: the columns are all
+/// this wide, and a longer name is cut off with an ellipsis (Dolphin's
+/// Compact view caps its columns the same way).
+const COMPACT_NAME_CHARS: i32 = 28;
 
 /// Lines of name a tile shows (`.tile-name{max-height:33px}` at a 1.35
 /// line height).
@@ -82,8 +83,8 @@ pub(crate) enum CellLayout {
     DetailsRow,
     /// An icon-view tile: the icon above up to two centred lines of name.
     IconTile,
-    /// A compact-view item: a small icon left of a name no wider than
-    /// [`COMPACT_NAME_CHARS`] (VIEW-008).
+    /// A compact-view item: a small icon left of a name
+    /// [`COMPACT_NAME_CHARS`] wide (VIEW-008).
     CompactItem,
 }
 
@@ -185,7 +186,7 @@ impl FileCell {
         label.set_single_line_mode(true);
     }
 
-    /// The icon left of a one-line name of at most [`COMPACT_NAME_CHARS`].
+    /// The icon left of a one-line name [`COMPACT_NAME_CHARS`] wide.
     fn lay_out_as_compact_item(&self) {
         self.set_orientation(gtk::Orientation::Horizontal);
         self.set_spacing(COMPACT_ICON_GAP);
@@ -193,6 +194,7 @@ impl FileCell {
         label.set_xalign(0.0);
         label.set_ellipsize(pango::EllipsizeMode::End);
         label.set_single_line_mode(true);
+        label.set_width_chars(COMPACT_NAME_CHARS);
         label.set_max_width_chars(COMPACT_NAME_CHARS);
     }
 

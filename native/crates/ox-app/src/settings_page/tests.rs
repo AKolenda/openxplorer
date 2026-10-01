@@ -465,6 +465,10 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Text size",
             "Use the desktop font",
             "Right-click menu",
+            "Relative dates",
+            "Remember each folder's view",
+            "Selection marker",
+            "Expandable folders",
             "Sidebar and column widths"
         ]
     );

@@ -18,8 +18,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners};
-pub(crate) use crate::folder_view::icon_size::{cell_size, IconSize};
 use crate::folder_view::icon_size::compact_row;
+pub(crate) use crate::folder_view::icon_size::{cell_size, IconSize};
 use crate::text_size::TextSize;
 
 /// The icon edge of the compact layout (Explorer's List uses small icons).
@@ -114,7 +114,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.grid.add_css_class("files");
-                        self.grid.set_tab_behavior(gtk::ListTabBehavior::Item);
+            self.grid.set_tab_behavior(gtk::ListTabBehavior::Item);
             super::cells::label_view(self.grid.upcast_ref());
             self.scroller.set_child(Some(&self.grid));
             self.scroller.set_parent(&*self.obj());

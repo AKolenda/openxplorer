@@ -34,7 +34,9 @@ fn sort_choices() -> Vec<(SortBy, &'static str)> {
     let columns = SortColumn::IN_SORT_MENU
         .into_iter()
         .map(|column| (SortBy::Column(column), column.label()));
-    let roles = SortRole::ALL.into_iter().map(|role| (SortBy::Role(role), role.label()));
+    let roles = SortRole::ALL
+        .into_iter()
+        .map(|role| (SortBy::Role(role), role.label()));
     columns.chain(roles).collect()
 }
 

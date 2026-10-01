@@ -51,11 +51,11 @@ pub use error::SettingsError;
 pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use pane_options::DetailsPaneOptions;
-pub use view_properties::{may_remember, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS};
 pub use preferences::{
     Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, WindowSize, DEFAULT_TEXT_SIZE,
     NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS, WINDOW_WIDTHS,
 };
+pub use view_properties::{may_remember, FolderView, ViewProperties, ViewScope, MAX_FOLDER_VIEWS};
 
 use crate::location::same_location;
 use save::{replace_private_file, OldFile, SettingsLock};

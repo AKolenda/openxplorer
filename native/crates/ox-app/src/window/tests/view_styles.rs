@@ -29,8 +29,17 @@ fn change_preferences(test: &TestWindow, update: &PreferencesUpdate) {
 fn recent_dates_read_today_until_settings_turn_that_off() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let dates = || test.window.folder_pane().details().cell_texts(SortColumn::Modified, 4);
-    assert!(dates().iter().all(|date| date.starts_with("Today at ")), "{:?}", dates());
+    let dates = || {
+        test.window
+            .folder_pane()
+            .details()
+            .cell_texts(SortColumn::Modified, 4)
+    };
+    assert!(
+        dates().iter().all(|date| date.starts_with("Today at ")),
+        "{:?}",
+        dates()
+    );
     change_preferences(
         &test,
         &PreferencesUpdate {
@@ -38,7 +47,9 @@ fn recent_dates_read_today_until_settings_turn_that_off() {
             ..PreferencesUpdate::default()
         },
     );
-    wait_until("dates in full", || dates().iter().all(|date| !date.starts_with("Today")));
+    wait_until("dates in full", || {
+        dates().iter().all(|date| !date.starts_with("Today"))
+    });
 }
 
 /// With "Remember each folder's view" on, a folder keeps the sort order it
@@ -95,7 +106,9 @@ fn the_display_style_dialog_applies_its_choices() {
         .expect("a groups choice");
     groups.set_active(true);
     dialog.press("OK");
-    wait_until("the chosen style", || test.window.folder_pane().view() == FolderView::Compact);
+    wait_until("the chosen style", || {
+        test.window.folder_pane().view() == FolderView::Compact
+    });
     assert_eq!(test.action_state("sort").as_deref(), Some("size"));
     assert_eq!(test.action_state("direction").as_deref(), Some("descending"));
     wait_until("the style to be saved", || {
@@ -129,7 +142,11 @@ fn show_in_groups_heads_each_group() {
 #[gtk::test]
 fn a_folder_expands_in_place_and_back_keeps_it_open() {
     let fixture = Fixture::standard();
-    fs::write(fixture.path("Documents").join("inner.txt"), b"Synthetic test data\n").expect("a file");
+    fs::write(
+        fixture.path("Documents").join("inner.txt"),
+        b"Synthetic test data\n",
+    )
+    .expect("a file");
     let test = TestWindow::open(&fixture.uri());
     let model = test.window.folder_pane().model();
     let shown = model.n_items();
@@ -144,7 +161,10 @@ fn a_folder_expands_in_place_and_back_keeps_it_open() {
         .owners()
         .file_cell_at(1, &test.window.folder_pane().view_widget());
     wait_for_frames(&test.window, 2);
-    assert!(cell.is_none_or(|cell| cell.expander().is_visible()), "the rows keep the arrow's room");
+    assert!(
+        cell.is_none_or(|cell| cell.expander().is_visible()),
+        "the rows keep the arrow's room"
+    );
 
     test.window
         .navigate(&fixture.uri_of("Documents"))

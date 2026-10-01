@@ -81,7 +81,10 @@ impl SortRole {
         match self {
             SortRole::Created => a.meta.created.cmp(&b.meta.created),
             SortRole::Accessed => a.meta.accessed.cmp(&b.meta.accessed),
-            SortRole::Extension => natural(text(extension(&a.name, a.is_dir)), text(extension(&b.name, b.is_dir))),
+            SortRole::Extension => natural(
+                text(extension(&a.name, a.is_dir)),
+                text(extension(&b.name, b.is_dir)),
+            ),
             SortRole::Permissions => a.meta.permissions.cmp(&b.meta.permissions),
             SortRole::Owner => natural(text(a.meta.owner.as_deref()), text(b.meta.owner.as_deref())),
             SortRole::Group => natural(text(a.meta.group.as_deref()), text(b.meta.group.as_deref())),
@@ -166,7 +169,11 @@ mod tests {
         assert_eq!(SortRole::Owner.compare(&ada, &bob), Ordering::Less);
         assert_eq!(SortRole::Owner.compare(&nobody, &ada), Ordering::Less);
         assert_eq!(SortRole::Created.compare(&ada, &bob), Ordering::Greater);
-        assert_eq!(SortRole::Extension.compare(&bob, &ada), Ordering::Less, "pdf before txt");
+        assert_eq!(
+            SortRole::Extension.compare(&bob, &ada),
+            Ordering::Less,
+            "pdf before txt"
+        );
         assert_eq!(extension(".bashrc", false), None);
         for role in SortRole::ALL {
             assert_eq!(SortBy::from_key(role.as_str()), Some(SortBy::Role(role)));

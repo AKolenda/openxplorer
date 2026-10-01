@@ -21,7 +21,11 @@ impl BrowserWindow {
     /// follow sorting by a column title too.
     pub(super) fn install_sort_actions(&self) {
         self.add_action_entries([
-            choice_action(WindowAction::Sort, SortColumn::Name.as_str(), BrowserWindow::sort_by_key),
+            choice_action(
+                WindowAction::Sort,
+                SortColumn::Name.as_str(),
+                BrowserWindow::sort_by_key,
+            ),
             choice_action(
                 WindowAction::Direction,
                 SortDirection::Ascending.as_str(),

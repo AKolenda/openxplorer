@@ -161,7 +161,10 @@ mod tests {
     fn the_wheel_steps_through_the_views_and_stops_at_the_ends() {
         let large = FolderView::Icons(IconSize::LARGE);
         assert_eq!(FolderView::Details.zoomed(1), FolderView::Compact);
-        assert_eq!(FolderView::Compact.zoomed(1), FolderView::Icons(IconSize::at_index(0)));
+        assert_eq!(
+            FolderView::Compact.zoomed(1),
+            FolderView::Icons(IconSize::at_index(0))
+        );
         assert_eq!(large.zoomed(-2), FolderView::Icons(IconSize::MEDIUM));
         assert_eq!(large.zoomed(50), FolderView::Icons(IconSize::LARGEST));
         assert_eq!(large.zoomed(-90), FolderView::Details);
@@ -171,10 +174,13 @@ mod tests {
     #[test]
     fn saved_styles_name_the_view_they_were_saved_from() {
         for view in FolderView::NAMED {
-            assert_eq!(FolderView::from_style(view.style_mode(), 96), match view {
-                FolderView::Icons(_) => FolderView::Icons(IconSize::EXTRA_LARGE),
-                other => other,
-            });
+            assert_eq!(
+                FolderView::from_style(view.style_mode(), 96),
+                match view {
+                    FolderView::Icons(_) => FolderView::Icons(IconSize::EXTRA_LARGE),
+                    other => other,
+                }
+            );
             assert_eq!(FolderView::from_key(view.as_str()), Some(view));
         }
     }

@@ -297,7 +297,10 @@ impl StatusBar {
         let imp = self.imp();
         let details = view == FolderView::Details;
         let icons = matches!(view, FolderView::Icons(_));
-        for (button, active) in [(&imp.details_view_button, details), (&imp.icons_view_button, icons)] {
+        for (button, active) in [
+            (&imp.details_view_button, details),
+            (&imp.icons_view_button, icons),
+        ] {
             if active {
                 button.add_css_class("active");
             } else {
@@ -353,7 +356,11 @@ fn level_value(size: IconSize) -> f64 {
 /// The level nearest the slider position `value`.
 fn zoom_level_at(value: f64) -> usize {
     // The slider's range is 0 to the last level, so the cast is exact.
-    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a small, non-negative index")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a small, non-negative index"
+    )]
     let level = value.round().max(0.0) as usize;
     level
 }

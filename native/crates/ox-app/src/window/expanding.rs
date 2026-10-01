@@ -67,8 +67,13 @@ impl BrowserWindow {
         if !positions.contains(&current) {
             positions.push(current);
         }
-        let rows: Vec<gtk::TreeListRow> = positions.into_iter().filter_map(|position| tree.row(position)).collect();
-        let changes = rows.iter().any(|row| row.is_expandable() && row.is_expanded() != expand);
+        let rows: Vec<gtk::TreeListRow> = positions
+            .into_iter()
+            .filter_map(|position| tree.row(position))
+            .collect();
+        let changes = rows
+            .iter()
+            .any(|row| row.is_expandable() && row.is_expanded() != expand);
         if changes {
             for row in &rows {
                 tree.set_expanded(row, expand);

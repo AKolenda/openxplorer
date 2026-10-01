@@ -244,7 +244,7 @@ mod imp {
             self.parent_constructed();
             let column_view = &self.column_view;
             column_view.add_css_class("files");
-                        column_view.set_show_row_separators(false);
+            column_view.set_show_row_separators(false);
             column_view.set_show_column_separators(false);
             column_view.set_reorderable(false);
             column_view.set_tab_behavior(gtk::ListTabBehavior::Item);
@@ -361,7 +361,10 @@ impl DetailsView {
 
     /// The cells' shared context, which `new` sets.
     fn cells(&self) -> &CellContext {
-        self.imp().cells.get().expect("DetailsView::new sets the cells' context")
+        self.imp()
+            .cells
+            .get()
+            .expect("DetailsView::new sets the cells' context")
     }
 
     /// How dates are written.

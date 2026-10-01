@@ -167,7 +167,10 @@ fn a_rubber_band_selects_the_rows_it_crosses_as_it_moves() {
         let bounds = row.compute_bounds(&view).expect("a shown item has bounds");
         f64::from(bounds.y() + bounds.height() / 2.0)
     };
-    assert!(!test.window.is_blank_space(&view, 30.0, center_of(1)), "an item drags, not bands");
+    assert!(
+        !test.window.is_blank_space(&view, 30.0, center_of(1)),
+        "an item drags, not bands"
+    );
     let (x, y) = blank_point(&test);
     assert!(test.window.is_blank_space(&view, x, y));
     let last = pane.model().n_items() - 1;
@@ -175,13 +178,21 @@ fn a_rubber_band_selects_the_rows_it_crosses_as_it_moves() {
     test.window.begin_band(&view, (x, y), BandMode::Replace);
     test.window.move_band((x + 40.0, center_of(1)));
     let crossed: Vec<u32> = (1..=last).collect();
-    assert_eq!(selected(&test), crossed, "the selection follows the band before it ends");
+    assert_eq!(
+        selected(&test),
+        crossed,
+        "the selection follows the band before it ends"
+    );
     test.window.end_band();
 
     test.window.begin_band(&view, (x, y), BandMode::Toggle);
     test.window.move_band((x, center_of(last)));
     test.window.end_band();
-    assert_eq!(selected(&test), (1..last).collect::<Vec<u32>>(), "Ctrl toggles the crossed row");
+    assert_eq!(
+        selected(&test),
+        (1..last).collect::<Vec<u32>>(),
+        "Ctrl toggles the crossed row"
+    );
 }
 
 /// The marker on an item's icon toggles that item and keeps the rest of

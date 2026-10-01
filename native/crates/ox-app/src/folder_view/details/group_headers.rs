@@ -29,12 +29,18 @@ fn header_factory(title: GroupTitle) -> gtk::SignalListItemFactory {
         let Some(header) = object.downcast_ref::<gtk::ListHeader>() else {
             return;
         };
-        let label = gtk::Label::builder().xalign(0.0).css_classes(["group-title"]).build();
+        let label = gtk::Label::builder()
+            .xalign(0.0)
+            .css_classes(["group-title"])
+            .build();
         let line = gtk::Separator::builder()
             .hexpand(true)
             .valign(gtk::Align::Center)
             .build();
-        let row = gtk::Box::builder().spacing(10).css_classes(["group-header"]).build();
+        let row = gtk::Box::builder()
+            .spacing(10)
+            .css_classes(["group-header"])
+            .build();
         row.append(&label);
         row.append(&line);
         header.set_child(Some(&row));

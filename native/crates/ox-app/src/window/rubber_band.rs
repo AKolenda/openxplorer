@@ -155,7 +155,12 @@ impl BrowserWindow {
     pub(super) fn begin_band(&self, view: &gtk::Widget, point: (f64, f64), mode: BandMode) {
         self.end_band();
         let (dx, dy) = scroll_offsets(view);
-        let initial = self.folder_pane().model().selected_positions().into_iter().collect();
+        let initial = self
+            .folder_pane()
+            .model()
+            .selected_positions()
+            .into_iter()
+            .collect();
         self.imp().rubber_band.replace(Some(Band {
             view: view.clone(),
             start: (point.0 + dx, point.1 + dy),
@@ -192,7 +197,9 @@ impl BrowserWindow {
         let rect = rect_between(start, band.pointer);
         let full_rows = band.view.is::<gtk::ColumnView>();
         for (position, row) in pane.owners().shown_items(&band.view) {
-            let Some(bounds) = row.compute_bounds(&band.view) else { continue };
+            let Some(bounds) = row.compute_bounds(&band.view) else {
+                continue;
+            };
             let inside = if full_rows {
                 bounds.y() < rect.y() + rect.height() && rect.y() < bounds.y() + bounds.height()
             } else {
@@ -218,7 +225,9 @@ impl BrowserWindow {
     fn scroll_at_edge(&self) {
         let needs_timer = {
             let state = self.imp().rubber_band.borrow();
-            state.as_ref().is_some_and(|band| band.scroll_timer.is_none() && edge_step(band) != (0.0, 0.0))
+            state
+                .as_ref()
+                .is_some_and(|band| band.scroll_timer.is_none() && edge_step(band) != (0.0, 0.0))
         };
         if !needs_timer {
             return;
@@ -268,7 +277,9 @@ impl BrowserWindow {
 
     /// Ends the band: the selection stays as it was drawn.
     pub(super) fn end_band(&self) {
-        let Some(mut band) = self.imp().rubber_band.take() else { return };
+        let Some(mut band) = self.imp().rubber_band.take() else {
+            return;
+        };
         if let Some(timer) = band.scroll_timer.take() {
             timer.remove();
         }
@@ -313,11 +324,23 @@ mod tests {
     fn a_band_replaces_adds_or_toggles_what_it_touches() {
         let initial = set(&[1, 2]);
         let touched = set(&[2, 3]);
-        assert_eq!(banded_selection(&initial, &touched, BandMode::Replace), set(&[2, 3]));
-        assert_eq!(banded_selection(&initial, &touched, BandMode::Add), set(&[1, 2, 3]));
-        assert_eq!(banded_selection(&initial, &touched, BandMode::Toggle), set(&[1, 3]));
+        assert_eq!(
+            banded_selection(&initial, &touched, BandMode::Replace),
+            set(&[2, 3])
+        );
+        assert_eq!(
+            banded_selection(&initial, &touched, BandMode::Add),
+            set(&[1, 2, 3])
+        );
+        assert_eq!(
+            banded_selection(&initial, &touched, BandMode::Toggle),
+            set(&[1, 3])
+        );
         let ctrl_shift = gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK;
         assert_eq!(BandMode::from_modifiers(ctrl_shift), BandMode::Toggle);
-        assert_eq!(BandMode::from_modifiers(gdk::ModifierType::SHIFT_MASK), BandMode::Add);
+        assert_eq!(
+            BandMode::from_modifiers(gdk::ModifierType::SHIFT_MASK),
+            BandMode::Add
+        );
     }
 }

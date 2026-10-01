@@ -61,7 +61,9 @@ impl FileCell {
         }
         let arrow = &imp.expander;
         arrow.set_visible(tree.is_expandable());
-        let Some(row) = row.filter(|_| tree.is_expandable()) else { return };
+        let Some(row) = row.filter(|_| tree.is_expandable()) else {
+            return;
+        };
         let depth = i32::try_from(row.depth()).unwrap_or(0);
         arrow.set_margin_start(depth * INDENT);
         let expandable = row.is_expandable();

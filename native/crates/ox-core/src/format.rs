@@ -38,8 +38,8 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use glib::DateTime;
 
 pub use locale_pattern::ClockFormat;
-pub use relative_date::DateStyle;
 use locale_pattern::LocalePatterns;
+pub use relative_date::DateStyle;
 
 /// The [`ClockFormat`] times are shown on, as its position in
 /// [`CLOCK_FORMATS`]; set by [`set_clock_format`].

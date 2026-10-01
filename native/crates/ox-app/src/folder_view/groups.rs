@@ -48,7 +48,16 @@ pub(crate) struct GroupClock {
 impl GroupClock {
     /// The periods as of `now`, in its time zone.
     pub(crate) fn at(now: &glib::DateTime) -> Option<Self> {
-        let midnight = glib::DateTime::new(&now.timezone(), now.year(), now.month(), now.day_of_month(), 0, 0, 0.0).ok()?;
+        let midnight = glib::DateTime::new(
+            &now.timezone(),
+            now.year(),
+            now.month(),
+            now.day_of_month(),
+            0,
+            0,
+            0.0,
+        )
+        .ok()?;
         let today = midnight.to_unix();
         let weekday = i64::from(now.day_of_week() - 1);
         let month_start = |months_back: i32| {
@@ -156,7 +165,12 @@ pub(crate) fn group_of(by: SortBy, item: &FileItem, clock: &GroupClock) -> Group
         }
         SortBy::Role(SortRole::Permissions) => {
             let permissions = entry.meta.permissions_text();
-            text_or(Some(&permissions).filter(|text| !text.is_empty()).map(String::as_str), "Unknown")
+            text_or(
+                Some(&permissions)
+                    .filter(|text| !text.is_empty())
+                    .map(String::as_str),
+                "Unknown",
+            )
         }
         SortBy::Role(SortRole::Owner) => text_or(entry.meta.owner.as_deref(), "Unknown"),
         SortBy::Role(SortRole::Group) => text_or(entry.meta.group.as_deref(), "Unknown"),
@@ -187,7 +201,10 @@ fn size_group(item: &FileItem) -> Group {
     if size == 0 {
         return Group::numbered("Empty (0 KB)", 0);
     }
-    let bucket = SIZE_GROUPS.iter().position(|(_, below)| size < *below).unwrap_or(SIZE_GROUPS.len() - 1);
+    let bucket = SIZE_GROUPS
+        .iter()
+        .position(|(_, below)| size < *below)
+        .unwrap_or(SIZE_GROUPS.len() - 1);
     Group::numbered(SIZE_GROUPS[bucket].0, i64::try_from(bucket).unwrap_or(0) + 1)
 }
 
@@ -213,7 +230,10 @@ mod tests {
         let clock = GroupClock::at(&now).expect("a clock");
         let by_name = SortBy::Column(SortColumn::Name);
         let group = |name: &str| group_of(by_name, &FileItem::new(file_entry(name)), &clock).title;
-        assert_eq!([group("apple"), group("Égal"), group("7 days"), group("_x")], ["A", "É", "0 – 9", "#"]);
+        assert_eq!(
+            [group("apple"), group("Égal"), group("7 days"), group("_x")],
+            ["A", "É", "0 – 9", "#"]
+        );
 
         let mut big = file_entry("big.iso");
         big.size = Some(2 * 1024 * 1024 * 1024);
