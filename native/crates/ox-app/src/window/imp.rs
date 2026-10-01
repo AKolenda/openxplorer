@@ -82,6 +82,9 @@ pub(crate) struct BrowserWindow {
     /// handle.
     #[template_child]
     pub(super) sidebar_resizer: TemplateChild<ResizerControl>,
+    /// The Places button shown in the navigation row while the navigation
+    /// pane is hidden.
+    pub(super) places_button: OnceCell<gtk::MenuButton>,
     /// The navigation pane.
     #[template_child]
     pub(super) sidebar: TemplateChild<Sidebar>,

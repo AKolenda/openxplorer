@@ -29,9 +29,9 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::location::same_location;
 
-use crate::icons::{self, Icon};
+use crate::icons::{self, Art, Icon};
 
-use super::menu_popover::{MenuEntry, MenuPopover};
+use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::saved_search::saved_search_menu;
 use super::window_action::WindowAction;
 use super::{gestures, preferences, BrowserWindow};
@@ -326,6 +326,29 @@ impl Sidebar {
         self.list().select_row(row.as_ref());
     }
 
+    /// The places as menu items, a divider between sections, for the
+    /// Places button shown while the pane is hidden (SIDE-024).
+    pub(super) fn places_menu(&self) -> Vec<MenuEntry> {
+        let entries = self.imp().entries.borrow();
+        let mut menu = Vec::new();
+        let mut section = None;
+        for entry in entries.iter() {
+            let RowTarget::Location(uri) = &entry.target else {
+                continue;
+            };
+            if section.is_some_and(|section| section != entry.section) {
+                menu.push(MenuEntry::Divider);
+            }
+            section = Some(entry.section);
+            let glyph = match entry.icon {
+                Art::Glyph(icon) | Art::TintedGlyph(icon, _) => icon,
+                Art::Folder | Art::ZipFolder | Art::File(_) | Art::Network(_) => Icon::Folder,
+            };
+            menu.push(MenuItem::with_text_target(&entry.label, glyph, WindowAction::GoTo, uri).into());
+        }
+        menu
+    }
+
     /// The labels shown, for tests.
     #[cfg(test)]
     pub(super) fn labels(&self) -> Vec<String> {
@@ -396,7 +419,6 @@ fn map_network_button() -> gtk::Box {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::icons::Art;
 
     fn place(label: &str, uri: &str) -> SidebarEntry {
         SidebarEntry {

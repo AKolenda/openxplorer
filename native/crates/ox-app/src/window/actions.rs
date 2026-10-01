@@ -272,6 +272,14 @@ impl BrowserWindow {
                     window.save_preference(Preference::DetailsPane(shown));
                 },
             ),
+            toggle_action(
+                WindowAction::Sidebar,
+                !preferences.hide_sidebar,
+                |window, shown| {
+                    window.show_sidebar(shown);
+                    window.save_preference(Preference::Sidebar(shown));
+                },
+            ),
         ]);
     }
 

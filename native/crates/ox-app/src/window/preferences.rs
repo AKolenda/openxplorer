@@ -54,6 +54,8 @@ pub(super) enum Preference {
     WindowSize(WindowSize),
     /// Crumbs from `/` rather than from the home folder (NAV-024).
     ShowFullPath(bool),
+    /// Show the navigation pane (SIDE-024).
+    Sidebar(bool),
 }
 
 impl Preference {
@@ -70,6 +72,7 @@ impl Preference {
             Preference::ColumnWidths(widths) => update.column_widths = Some(widths),
             Preference::WindowSize(size) => update.window_size = Some(size),
             Preference::ShowFullPath(full_path) => update.show_full_path = Some(full_path),
+            Preference::Sidebar(shown) => update.hide_sidebar = Some(!shown),
             Preference::DefaultLayout => {
                 update.sidebar_width = Some(f64::from(DEFAULT_SIDEBAR_WIDTH));
                 // An empty list clears every saved column width.
@@ -138,6 +141,7 @@ impl BrowserWindow {
         self.keep_sidebar_within_limit();
         self.reset_sidebar_on_double_click();
         self.install_sidebar_resizer();
+        self.install_sidebar_toggle();
         self.follow_layout_reset();
     }
 

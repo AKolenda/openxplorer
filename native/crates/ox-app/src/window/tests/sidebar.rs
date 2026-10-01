@@ -5,9 +5,9 @@
 
 use std::fs;
 
+use gtk::gdk;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::gdk;
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
 
 use super::file_ops_support::is_enabled;
@@ -15,6 +15,7 @@ use super::support::middle_click_at;
 use crate::icons::{Art, ArtImage, Icon};
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::window::menu_popover::MenuPopover;
 use crate::window::sidebar::entries::{RowLevel, RowTarget, Section, SidebarEntry};
 
 /// The sidebar row labelled `label`.
@@ -240,8 +241,9 @@ fn a_volume_to_mount_is_neither_dragged_nor_dropped_on() {
     assert!(sidebar.drop_spot_at(local_disk).is_some());
     wait_until("Local Disk's capacity bar", || {
         let bars = descendants::<gtk::ProgressBar>(&row_named(&test, "Local Disk"));
-        bars.iter()
-            .any(|bar| bar.has_css_class("capacity") && bar.tooltip_text().is_some_and(|t| t.contains(" free of ")))
+        bars.iter().any(|bar| {
+            bar.has_css_class("capacity") && bar.tooltip_text().is_some_and(|t| t.contains(" free of "))
+        })
     });
 
     let volume = SidebarEntry {
@@ -297,4 +299,35 @@ fn the_resizer_is_a_titled_separator_that_the_keys_move() {
     assert_eq!(workspace.position(), 140, "never narrower than 140");
     assert!(resizer.request_value(300.0), "a screen reader can set the width");
     assert_eq!(workspace.position(), 300);
+}
+
+/// parity: SIDE-024
+#[gtk::test]
+fn the_navigation_pane_hides_and_a_places_button_lists_its_places() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let places = test.window.places_button().clone();
+    assert!(!places.is_visible(), "no Places button beside the pane");
+
+    test.activate("sidebar", None);
+
+    assert!(!test.window.sidebar().is_visible());
+    assert!(!test.window.sidebar_resizer().is_visible());
+    assert!(places.is_visible());
+    wait_until("the choice to be saved", || {
+        test.context.settings_data().preferences.hide_sidebar
+    });
+    places.popup();
+    let menu = places
+        .popover()
+        .and_downcast::<MenuPopover>()
+        .expect("the places menu");
+    let labels = menu.row_labels();
+    assert!(labels.contains(&"Home".to_owned()), "{labels:?}");
+    assert!(labels.contains(&"Local Disk".to_owned()), "{labels:?}");
+    places.popdown();
+
+    test.activate("sidebar", None);
+    assert!(test.window.sidebar().is_visible());
+    assert!(!places.is_visible());
 }

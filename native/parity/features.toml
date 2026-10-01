@@ -5501,8 +5501,8 @@ sources = [
 python_tests = []
 bridge = ["environment"]
 dolphin = "KFilePlacesModel::CapacityBarRecommendedRole"
-native = "todo"
-native_note = "Porting notes: The This PC drive cards have capacity bars; the sidebar entries do not. Existing OpenXplorer part is protected by HOME-004."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (a_volume_to_mount_is_neither_dragged_nor_dropped_on); native/crates/ox-app/src/window/landing.rs (the_capacity_bar_turns_red_from_ninety_percent_used). Every mounted drive row in the sidebar (Local Disk and drives with a drive menu) shows a 3-pixel capacity bar under its name once GIO has measured the file system off the main loop; it turns the critical colour from 90 % used, as This PC's cards do, and its tooltip says 'N free of M'."
 
 [[feature]]
 id = "SIDE-019"
@@ -5629,8 +5629,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "show_places_panel: F9"
-native = "todo"
-native_note = "Porting notes: Explorer's equivalent is View › Show › Navigation pane."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (the_navigation_pane_hides_and_a_places_button_lists_its_places). View > Navigation pane and F9 (Dolphin's Places panel key) toggle win.sidebar; the choice is saved for every window as hideSidebar (written only when hidden, so the Python app's file keeps its layout). The resizer hides with the pane, and while the pane is hidden a Places button after Back, Forward, Up and Refresh lists the same places, a divider between sections, as Dolphin's location bar offers when its Places panel is closed."
 
 [[feature]]
 id = "SIDE-025"
