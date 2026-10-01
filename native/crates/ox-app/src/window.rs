@@ -124,6 +124,7 @@ mod sidebar;
 mod sidebar_hiding;
 mod sidebar_resizer;
 mod sidebar_toggle;
+mod slow_click_rename;
 mod snapshot_tabs;
 mod software_search;
 mod status_bar;

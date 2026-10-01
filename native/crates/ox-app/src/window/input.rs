@@ -66,6 +66,7 @@ impl BrowserWindow {
         self.folder_input(details.upcast_ref());
         self.folder_input(grid.upcast_ref());
         self.install_selection_keys();
+        self.install_slow_click_rename();
         self.address_bar().connect_cancelled(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -159,7 +160,8 @@ impl BrowserWindow {
     }
 
     /// Gives `view` type-to-select, the window's key handling, prefix
-    /// resets on clicks, deselection by a click on blank space,
+    /// resets on clicks, deselection by a click on blank space, rename by
+    /// a slow second click on a name,
     /// middle-click to open a folder, the context menu, and file drag and
     /// drop.
     fn folder_input(&self, view: &gtk::Widget) {
@@ -176,6 +178,7 @@ impl BrowserWindow {
         ));
         view.add_controller(keys);
         view.add_controller(self.blank_space_press(view));
+        self.attach_slow_click_rename(view);
         view.add_controller(self.folder_middle_click(view));
         self.attach_context_menu(view);
         self.attach_file_drag(view);

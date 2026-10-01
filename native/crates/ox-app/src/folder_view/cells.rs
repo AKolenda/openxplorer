@@ -193,6 +193,20 @@ impl FileCell {
         imp.name_editor.replace(Some(editor.clone()));
     }
 
+    /// Whether `point`, in the cell's coordinates, is on the name's text
+    /// rather than beside it.
+    pub(crate) fn name_text_contains(&self, point: gtk::graphene::Point) -> bool {
+        let label = &self.imp().label;
+        let Some(point) = self.compute_point(label, &point).filter(|_| label.is_visible()) else {
+            return false;
+        };
+        let (left, top) = label.layout_offsets();
+        let (width, height) = label.layout().pixel_size();
+        #[expect(clippy::cast_precision_loss, reason = "label sizes are small")]
+        let text = gtk::graphene::Rect::new(left as f32, top as f32, width as f32, height as f32);
+        text.contains_point(&point)
+    }
+
     /// Shows the name again in place of the text field, if one shows.
     pub(crate) fn hide_name_editor(&self) {
         let imp = self.imp();

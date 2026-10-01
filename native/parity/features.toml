@@ -6756,8 +6756,8 @@ sources = [
 python_tests = []
 bridge = ["rename"]
 dolphin = "two-clicks renaming (RenameInline)"
-native = "todo"
-native_note = "Porting notes: Explorer has the same slow-click rename."
+native = "done"
+native_note = "native/crates/ox-app/src/window/tests/renaming.rs (a_slow_second_click_on_the_selected_name_renames_it_in_place); native/crates/ox-app/src/window/slow_click_rename.rs. A plain primary press on the name text (not the icon or the space beside it) of the item that is already the only one selected schedules a rename in place, which starts after the desktop's double-click interval (gtk-double-click-time) unless the second press of a double-click, a drag, another press, a changed selection or the window losing focus cancels it; nothing starts where Rename is not allowed. Explorer has the same slow-click rename."
 
 [[feature]]
 id = "OPS-012"

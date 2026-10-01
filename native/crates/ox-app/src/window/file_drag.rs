@@ -263,6 +263,7 @@ impl BrowserWindow {
     /// The drag started: its icon follows the pointer, and the window
     /// shows the drag's feedback.
     fn begin_file_drag(&self, drag: &gdk::Drag) {
+        self.cancel_slow_click_rename();
         let Some(outgoing) = self.show_file_drag_feedback() else {
             return;
         };
