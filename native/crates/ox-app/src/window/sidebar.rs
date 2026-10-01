@@ -6,7 +6,9 @@
 //! list-row headers so keyboard and screen-reader users never land on an
 //! empty separator row, and the "Map network location" button pinned below
 //! the list (`.sidebar-bottom`). Rows run [`WindowAction::GoTo`] or
-//! [`WindowAction::MountVolume`]; a middle-click opens a place in a tab.
+//! [`WindowAction::MountVolume`]; a middle-click or Ctrl+click opens a
+//! place in a tab, and the current location highlights the closest place
+//! that holds it.
 //! A right-click opens the row's menu: a Quick access pin's ([`menu`],
 //! `sidebarMenu` in app.js), or a drive's or a network location's
 //! (`driveMenu` and `networkLocationMenu`,
@@ -24,7 +26,7 @@ mod row;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
+use gtk::{gdk, gio, glib};
 use ox_core::location::same_location;
 
 use crate::icons::{self, Icon};
@@ -110,6 +112,7 @@ impl Sidebar {
         list.update_property(&[gtk::accessible::Property::Label("Navigation pane")]);
         self.separate_sections(&list);
         self.open_places_on_middle_click(&list);
+        self.open_places_in_tabs_on_ctrl_click(&list);
         self.open_menus_on_right_click(&list);
         let scroller = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
@@ -165,6 +168,30 @@ impl Sidebar {
             }
         ));
         list.add_controller(gesture);
+    }
+
+    /// Ctrl+click on a place opens it in a background tab and
+    /// Ctrl+Shift+click in a tab in front, as in Dolphin's Places panel;
+    /// a plain click goes on to the row.
+    fn open_places_in_tabs_on_ctrl_click(&self, list: &gtk::ListBox) {
+        let click = gtk::GestureClick::new();
+        click.set_button(gdk::BUTTON_PRIMARY);
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        click.connect_pressed(glib::clone!(
+            #[weak(rename_to = sidebar)]
+            self,
+            move |gesture, _, _, y| {
+                let action = tab_action_for_click(gesture.current_event_state());
+                let target = action.zip(sidebar.location_at(y));
+                let Some((action, uri)) = target else {
+                    gesture.set_state(gtk::EventSequenceState::Denied);
+                    return;
+                };
+                gesture.set_state(gtk::EventSequenceState::Claimed);
+                action.activate_from(&sidebar, Some(&uri.to_variant()));
+            }
+        ));
+        list.add_controller(click);
     }
 
     /// A right-click on a Quick access pin, a drive or a network location
@@ -289,17 +316,10 @@ impl Sidebar {
         }
     }
 
-    /// Highlights the row for `uri`, or none.
+    /// Highlights the row for `uri`, else the closest place that holds it
+    /// (Dolphin's Places panel), or none.
     pub(super) fn select(&self, uri: &str) {
-        let index = self
-            .imp()
-            .entries
-            .borrow()
-            .iter()
-            .position(|entry| match &entry.target {
-                RowTarget::Location(candidate) => same_location(candidate, uri),
-                RowTarget::MountVolume(_) | RowTarget::PinDropTail | RowTarget::SavedSearch(_) => false,
-            });
+        let index = closest_place(&self.imp().entries.borrow(), uri);
         let row = index
             .and_then(|index| i32::try_from(index).ok())
             .and_then(|index| self.list().row_at_index(index));
@@ -312,6 +332,40 @@ impl Sidebar {
         let entries = self.imp().entries.borrow();
         entries.iter().map(|entry| entry.label.clone()).collect()
     }
+}
+
+/// The tab a primary click with `modifiers` opens a place in: with Ctrl,
+/// a background tab, or one in front with Shift too; `None` for a click
+/// that opens the place in the current tab.
+fn tab_action_for_click(modifiers: gdk::ModifierType) -> Option<WindowAction> {
+    modifiers
+        .contains(gdk::ModifierType::CONTROL_MASK)
+        .then(|| gestures::open_action(modifiers))
+}
+
+/// The index of the entry for `uri`: the first that opens it, else the one
+/// whose folder holds it most closely, as Dolphin highlights Documents in
+/// Documents/Reports; `None` when no place holds it.
+fn closest_place(entries: &[SidebarEntry], uri: &str) -> Option<usize> {
+    let location = |entry: &SidebarEntry| match &entry.target {
+        RowTarget::Location(candidate) => Some(candidate.clone()),
+        RowTarget::MountVolume(_) | RowTarget::PinDropTail | RowTarget::SavedSearch(_) => None,
+    };
+    let exact = entries
+        .iter()
+        .position(|entry| location(entry).is_some_and(|candidate| same_location(&candidate, uri)));
+    if exact.is_some() {
+        return exact;
+    }
+    let file = gio::File::for_uri(uri);
+    entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entry)| Some((index, location(entry)?)))
+        .filter(|(_, candidate)| file.has_prefix(&gio::File::for_uri(candidate)))
+        // The deepest holder wins; among equals, the first row.
+        .min_by_key(|(index, candidate)| (std::cmp::Reverse(candidate.trim_end_matches('/').len()), *index))
+        .map(|(index, _)| index)
 }
 
 /// The line between two sections.
@@ -337,4 +391,52 @@ fn map_network_button() -> gtk::Box {
         .build();
     footer.append(&button);
     footer
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::icons::Art;
+
+    fn place(label: &str, uri: &str) -> SidebarEntry {
+        SidebarEntry {
+            section: Section::QuickAccess,
+            level: entries::RowLevel::Place,
+            label: label.to_owned(),
+            icon: Art::Glyph(Icon::Folder),
+            target: RowTarget::Location(uri.to_owned()),
+            tooltip: label.to_owned(),
+            pinned: false,
+            menu: None,
+            eject: None,
+        }
+    }
+
+    /// parity: SIDE-004
+    #[test]
+    fn the_closest_place_that_holds_the_location_is_highlighted() {
+        let entries = [
+            place("Local Disk", "file:///"),
+            place("Home", "file:///home/demo"),
+            place("Documents", "file:///home/demo/Documents"),
+            place("Docs", "file:///home/demo/Docs"),
+        ];
+        let at = |uri: &str| closest_place(&entries, uri).map(|index| entries[index].label.as_str());
+        assert_eq!(at("file:///home/demo/Documents/Reports/2026"), Some("Documents"));
+        assert_eq!(at("file:///home/demo/Documents/"), Some("Documents"));
+        assert_eq!(at("file:///home/demo/Docs2"), Some("Home"), "not a name prefix");
+        assert_eq!(at("file:///etc"), Some("Local Disk"));
+        assert_eq!(at("smb://studio-nas/projects"), None);
+    }
+
+    /// parity: SIDE-015
+    #[test]
+    fn ctrl_click_opens_a_place_in_a_background_tab_and_with_shift_in_front() {
+        let ctrl = gdk::ModifierType::CONTROL_MASK;
+        let shift = gdk::ModifierType::SHIFT_MASK;
+        assert_eq!(tab_action_for_click(gdk::ModifierType::empty()), None);
+        assert_eq!(tab_action_for_click(shift), None);
+        assert_eq!(tab_action_for_click(ctrl), Some(WindowAction::OpenTabBackground));
+        assert_eq!(tab_action_for_click(ctrl | shift), Some(WindowAction::OpenTab));
+    }
 }

@@ -2,9 +2,9 @@
 //! The context menu of a Quick access pin in the sidebar (SIDE-014).
 //!
 //! Ports `sidebarMenu` in `desktop/ui/app.js` for pins: Open, Open in new
-//! tab, Open in Terminal, Open folder with…, the cache entry, Sign out of
-//! server… for SMB, Unpin from Quick access, Previous versions and
-//! Properties. Every item acts on the pin's location, not on the folder
+//! tab, Dolphin's Open in new window (SIDE-015), Open in Terminal, Open
+//! folder with…, the cache entry, Sign out of server… for SMB, Unpin from
+//! Quick access, Previous versions and Properties. Every item acts on the pin's location, not on the folder
 //! shown.
 
 use ox_core::location::is_smb_location;
@@ -21,6 +21,13 @@ pub(super) fn pin_menu(uri: &str, caching: Option<Caching>) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = vec![
         MenuItem::with_text_target("Open", Icon::Folder, WindowAction::GoTo, uri).into(),
         MenuItem::with_text_target("Open in new tab", Icon::Add, WindowAction::OpenTab, uri).into(),
+        MenuItem::with_text_target(
+            "Open in new window",
+            Icon::WindowNew,
+            WindowAction::OpenWindow,
+            uri,
+        )
+        .into(),
         MenuItem::with_text_target(
             "Open in Terminal",
             Icon::WindowConsole,
@@ -75,7 +82,7 @@ mod tests {
             .collect()
     }
 
-    /// parity: SIDE-014
+    /// parity: SIDE-014, SIDE-015
     #[test]
     fn a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb() {
         let local = labels(&pin_menu("file:///home/user/Projects", Some(Caching::Disabled)));
@@ -86,6 +93,7 @@ mod tests {
             [
                 "Open",
                 "Open in new tab",
+                "Open in new window",
                 "Open in Terminal",
                 "Open folder with…",
                 "Cache this folder for search",
@@ -96,7 +104,7 @@ mod tests {
                 "Properties",
             ]
         );
-        assert_eq!(share[5], "Sign out of server…");
+        assert_eq!(share[6], "Sign out of server…");
         assert_eq!(share.len(), local.len() + 1);
     }
 

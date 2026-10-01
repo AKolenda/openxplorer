@@ -5145,8 +5145,8 @@ sources = [
 python_tests = []
 bridge = []
 dolphin = "KFilePlacesModel::closestItem"
-native = "todo"
-native_note = "Porting notes: OpenXplorer highlights exact matches only. Existing OpenXplorer part is protected by SIDE-003."
+native = "done"
+native_note = "native/crates/ox-app/src/window/sidebar.rs (the_closest_place_that_holds_the_location_is_highlighted); native/crates/ox-app/src/window/tests/sidebar.rs (the_open_place_is_highlighted_and_every_row_is_titled_with_its_path). The sidebar highlights the row that opens the current location, else the place whose folder holds it most closely (GIO's has_prefix, so Docs does not hold Docs2), as Dolphin's Places panel does; nothing is highlighted when no place holds it."
 
 [[feature]]
 id = "SIDE-005"
@@ -5443,8 +5443,8 @@ python_tests = [
 ]
 bridge = ["list", "newWindow"]
 dolphin = "KFilePlacesView tabRequested/newWindowRequested"
-native = "todo"
-native_note = "Porting notes: Ctrl+click is missing, and pinned folders have no 'Open in new window'."
+native = "done"
+native_note = "native/crates/ox-app/src/window/sidebar.rs (ctrl_click_opens_a_place_in_a_background_tab_and_with_shift_in_front); native/crates/ox-app/src/window/sidebar/menu.rs (a_pin_menu_lists_the_python_items_and_sign_out_only_for_smb). Ctrl+click on a sidebar place opens it in a background tab and Ctrl+Shift+click in a tab in front, the same tabs as a middle-click and Shift+middle-click; a pin's menu offers 'Open in new window' after 'Open in new tab'."
 
 [[feature]]
 id = "SIDE-016"

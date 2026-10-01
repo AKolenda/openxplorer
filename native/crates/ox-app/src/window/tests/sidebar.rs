@@ -7,10 +7,11 @@ use std::fs;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
+use gtk::gdk;
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, Settings};
 
 use super::file_ops_support::is_enabled;
+use super::support::middle_click_at;
 use crate::icons::{Art, ArtImage, Icon};
 use crate::locations::Page;
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
@@ -103,7 +104,9 @@ fn the_open_place_is_highlighted_and_every_row_is_titled_with_its_path() {
     test.window.sidebar().select(&format!("{}/", fixture.uri()));
     assert!(pin.is_selected(), "a trailing slash is the same place");
     test.window.sidebar().select(&fixture.uri_of("Documents"));
-    assert!(!pin.is_selected(), "only the place itself is highlighted");
+    assert!(pin.is_selected(), "the closest place holding it (SIDE-004)");
+    test.window.sidebar().select("sftp://elsewhere/home");
+    assert!(!pin.is_selected(), "no place holds it");
 }
 
 /// A pin on a share shows the network pipe titled "Network share" and
@@ -139,21 +142,13 @@ fn pins_show_the_pin_mark_and_open_in_a_background_tab_on_a_middle_click() {
         .count();
     assert_eq!(pin_marks, 1);
 
-    let list = test.window.sidebar().list().clone();
-    let middle = list
-        .observe_controllers()
-        .iter::<glib::Object>()
-        .filter_map(Result::ok)
-        .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
-        .find(|gesture| gesture.button() == gdk::BUTTON_MIDDLE)
-        .expect("the sidebar opens places on a middle-click");
     // Rows are found by position once they are laid out.
     wait_until("the rows to be laid out", || {
         let y = test.window.sidebar().middle_of("Projects");
         test.window.sidebar().location_at(y).is_some()
     });
     let y = test.window.sidebar().middle_of("Projects");
-    middle.emit_by_name::<()>("released", &[&1_i32, &5.0_f64, &y]);
+    middle_click_at(test.window.sidebar().list(), (5.0, y));
 
     assert_eq!(test.window.tab_count(), 2);
     assert_eq!(
@@ -231,7 +226,9 @@ fn dragging_a_pin_before_another_moves_it_there() {
 /// middle-click, a drag or a drop does nothing on it; a mounted drive
 /// takes drops.
 ///
-/// parity: SIDE-016
+/// A mounted drive's row shows a capacity bar under its name.
+///
+/// parity: SIDE-016, SIDE-018
 #[gtk::test]
 fn a_volume_to_mount_is_neither_dragged_nor_dropped_on() {
     let fixture = Fixture::standard();
@@ -241,6 +238,11 @@ fn a_volume_to_mount_is_neither_dragged_nor_dropped_on() {
     let local_disk = sidebar.middle_of("Local Disk");
     assert_eq!(sidebar.location_at(local_disk).as_deref(), Some("file:///"));
     assert!(sidebar.drop_spot_at(local_disk).is_some());
+    wait_until("Local Disk's capacity bar", || {
+        let bars = descendants::<gtk::ProgressBar>(&row_named(&test, "Local Disk"));
+        bars.iter()
+            .any(|bar| bar.has_css_class("capacity") && bar.tooltip_text().is_some_and(|t| t.contains(" free of ")))
+    });
 
     let volume = SidebarEntry {
         section: Section::ThisPc,

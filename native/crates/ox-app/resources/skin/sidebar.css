@@ -77,6 +77,13 @@ window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
 /* The 17px glyph is centred on a half pixel as above. */
 .sidebar-bottom image { color: @ox_accent; margin-top: 1px; }
 
+/* A drive's 3px capacity bar under its name (SIDE-018), red when nearly
+   full as on This PC's cards. */
+.sidebar .capacity { min-height: 3px; margin: 2px 0 0 0; }
+.sidebar .capacity > trough { min-height: 3px; background-color: @ox_hover; border-radius: 2px; border: none; }
+.sidebar .capacity > trough > progress { min-height: 3px; background-color: @ox_accent; border-radius: 2px; border: none; }
+.sidebar .capacity.full > trough > progress { background-color: @ox_critical_fill; }
+
 /* ---- Resizer ---- */
 /* The 6px resizer (.sidebar-resizer): sidebar colour with the border line
    at its right; hovered, or while its keyboard side has focus, it shows a
