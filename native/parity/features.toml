@@ -7515,8 +7515,8 @@ python_tests = []
 bridge = ["operate", "cancel"]
 dolphin = "KIO::SkipDialog through AskUserActionInterface::askUserSkip (Retry, Skip, Skip All, Cancel)"
 gnome = "Nautilus file-operation error dialogs (Skip, Skip All, Retry, Cancel)"
-native = "todo"
-native_note = "Existing OpenXplorer part (record the error, continue and list it at the end) is protected by OPS-023. Porting notes: 'Skip all' must end in the OPS-023 report. OPS-028 covers name conflicts only."
+native = "done"
+native_note = "native/crates/ox-core/tests/transfer_cases/gio_engine.rs (a_failed_item_is_retried_or_skipped_as_answered); native/crates/ox-core/src/transfer/item_failure.rs; native/crates/ox-app/src/window/file_ops/failure_dialog.rs (window/tests/worker_questions.rs, the_failed_item_dialog_answers_retry_skip_all_or_cancel_to_the_worker). When an item of a copy, move, Trash or delete fails for a reason other than a name conflict, a cancellation or a problem that needs recovery by hand, the engine asks from its worker thread: the dialog 'Error while copying “name”' shows the error and offers Cancel, 'Skip all' (with more items to come), Skip and Retry. Retry removes the item's staging and runs it again; Skip and 'Skip all' record '<name>: <error>' as before, 'Skip all' for the rest of the operation without asking; Cancel records it and stops, keeping what is done. Every failure still appears in the result (OPS-023), and a skipped item's staging is removed. Without an asker (background and non-interactive runs) or when the window cannot show the dialog, the error is recorded and the next item runs."
 
 [[feature]]
 id = "OPS-048"

@@ -100,7 +100,7 @@ pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME,
 pub use changed_copies::changed_copies;
 pub use chosen_transfer::{run_chosen_transfer, ChosenTransfer, ItemChoice};
 pub use conflicts::find_conflicts;
-pub use context::{MoveByCopyingAsker, OperationContext, UnstorableAsker, WriteProtection};
+pub use context::{FailureAsker, MoveByCopyingAsker, OperationContext, UnstorableAsker, WriteProtection};
 pub use create::{create_folder_path, create_item, create_numbered_folder, CreatedFolderPath, CreatedItem};
 pub use delete_plan::{
     delete_command_label, permanent_delete_confirmation, plan_delete, trash_support, DeleteConfirmation,

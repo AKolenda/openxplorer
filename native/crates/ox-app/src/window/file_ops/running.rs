@@ -103,6 +103,9 @@ impl BrowserWindow {
         // XFER-011 and XFER-013: a move the location cannot do natively is
         // finished by copying only when the user agrees.
         context.move_by_copying = Some(self.move_by_copying_asker());
+        // OPS-047: an item that fails asks whether to retry, skip or
+        // cancel.
+        context.item_failure = Some(self.failure_asker());
         {
             let mut operations = self.imp().file_operations.borrow_mut();
             if operations.is_running() {

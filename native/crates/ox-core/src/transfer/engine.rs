@@ -17,6 +17,7 @@ use super::conflicts::Placement;
 use super::containment::guard_destination;
 use super::error::TransferError;
 use super::guard::{check_write_tree, SourceChange};
+use super::item_failure::{FailedItem, FailureAnswer, ItemFailures};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
 use super::limits::{Incoming, StorageRules};
 use super::move_by_copying::{MoveByCopying, MoveByCopyingItem};
@@ -48,6 +49,8 @@ pub struct TransferEngine {
     unstorable: Unstorable,
     /// Whether moves the backend cannot do are finished by copying.
     move_by_copying: MoveByCopying,
+    /// What to do when an item fails (OPS-047).
+    failures: ItemFailures,
 }
 
 impl fmt::Debug for TransferEngine {
@@ -96,6 +99,7 @@ impl TransferEngine {
             sleep: Box::new(std::thread::sleep),
             unstorable: Unstorable::default(),
             move_by_copying: MoveByCopying::default(),
+            failures: ItemFailures::default(),
         }
     }
 
@@ -139,6 +143,19 @@ impl TransferEngine {
         question: impl FnMut(&MoveByCopyingItem) -> bool + Send + 'static,
     ) -> Self {
         self.move_by_copying = MoveByCopying::with_question(Box::new(question));
+        self
+    }
+
+    /// OPS-047: asks what to do when an item fails for a reason other than
+    /// a name conflict: retry it, skip it, skip every later failure, or
+    /// cancel. It runs on the engine's thread and blocks the run until it
+    /// answers. Without it the error is recorded and the next item runs.
+    #[must_use]
+    pub fn with_failure_question(
+        mut self,
+        question: impl FnMut(&FailedItem) -> FailureAnswer + Send + 'static,
+    ) -> Self {
+        self.failures = ItemFailures::with_question(Box::new(question));
         self
     }
 
@@ -297,9 +314,34 @@ impl TransferEngine {
     /// Runs one top-level item and records its outcome. Staging this item
     /// created is removed afterwards, whatever happened; a leftover is
     /// reported with its exact location.
+    /// A failure the user may answer is asked about first (OPS-047):
+    /// Retry runs the item again once its staging is gone, Cancel stops
+    /// the run after recording it.
     fn run_item(&mut self, batch: &Batch, index: usize, uri: &str, state: &mut RunState) {
         let mut staging = ItemStaging::default();
-        let outcome = self.process_item(batch, index, uri, state, &mut staging);
+        let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
+        while let Err(error) = &outcome {
+            if batch.cancel.is_cancelled() {
+                break;
+            }
+            let failed = FailedItem {
+                mode: batch.mode(),
+                name: self.display_name(uri),
+                error: error.to_string(),
+                more_items: index + 1 < batch.total,
+            };
+            match self.failures.answer(&failed, error) {
+                Some(FailureAnswer::Retry) => {
+                    self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
+                    outcome = self.process_item(batch, index, uri, state, &mut staging);
+                }
+                Some(FailureAnswer::Cancel) => {
+                    state.result.cancelled = true;
+                    break;
+                }
+                Some(FailureAnswer::Skip | FailureAnswer::SkipAll) | None => break,
+            }
+        }
         match outcome {
             Ok(ItemOutcome::Skipped) => state.result.skipped.push(uri.to_owned()),
             Ok(ItemOutcome::Done) => {
