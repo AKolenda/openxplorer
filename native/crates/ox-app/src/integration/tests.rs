@@ -21,7 +21,7 @@ use ox_core::integration::{FileManagerMethod, FileManagerRequest, Sandbox, BUS_N
 use super::{
     BraveDialog, DesktopIntegration, IntegrationFolders, MimeBackend, OpenWithDialog, OpenWithSubject,
 };
-use crate::test_support::harness::{application, capture_dialog, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{application, capture_dialog, settle, wait_until, Fixture, TestWindow};
 
 /// Requests the service handed to the application.
 type Received = Rc<RefCell<Vec<FileManagerRequest>>>;
@@ -329,6 +329,10 @@ fn the_brave_dialog_lists_profiles_and_needs_consent() {
         !dialog.profile_labels().is_empty(),
         "the profiles are listed before it shows"
     );
+    wait_until("the dialog to have its size", || dialog.height() > 0);
+    let first_height = dialog.height();
+    settle();
+    assert_eq!(dialog.height(), first_height, "the dialog keeps its first size");
 
     assert_eq!(dialog.profile_labels(), ["Personal · Brave-Browser\n/tmp/old"]);
     capture_dialog(&dialog, "native-brave-dialog.png");
