@@ -93,7 +93,7 @@ test binary, and the doctests, on its own Xvfb display with a private D-Bus
 session and disposable home, config, cache and runtime directories, so tests
 never see the user's display, session bus, settings or remote volume monitors.
 Each run starts in a new process session. When it finishes, fails or exceeds
-`--test-timeout` (180 seconds by default), every process it started, including
+`--test-timeout` (600 seconds by default), every process it started, including
 Xvfb and the bus daemon, is stopped before its temporary directories are
 deleted.
 
