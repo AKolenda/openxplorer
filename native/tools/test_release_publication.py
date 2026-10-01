@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import tempfile
 import unittest
+from unittest import mock
 
 import package_data
 
@@ -22,9 +23,9 @@ RELEASE_SCRIPT = REPOSITORY / 'tools' / 'release.py'
 
 
 def step_index(lines: list[str], text: str) -> int:
-    """Return the index of the first workflow line that contains text."""
+    """Return the index of the first workflow line, not a comment, that contains text."""
     for index, line in enumerate(lines):
-        if text in line:
+        if text in line and not line.lstrip().startswith('#'):
             return index
     raise AssertionError(f'{text!r} is not in {WORKFLOW.name}')
 
@@ -68,19 +69,48 @@ class ReleasePublicationTest(unittest.TestCase):
         self.assertIn("awk '{ print \"dist/\" $2 }' dist/SHA256SUMS", script)
         self.assertIn('"${assets[@]}" dist/SHA256SUMS', script)
 
+        self.assertEqual(self.build_checksummed_release(), [
+            ('openxplorer_2.0.0_all.deb', hashlib.sha256(b'deb').hexdigest()),
+            (release_bundle_name(), hashlib.sha256(b'flatpak').hexdigest()),
+            ('openxplorer-2.0.0-1.x86_64.rpm', hashlib.sha256(b'rpm').hexdigest()),
+            ('openxplorer-2.0.0-source.zip', hashlib.sha256(b'source').hexdigest()),
+        ])
+
+    def build_checksummed_release(self) -> list[tuple[str, str]]:
+        """Run build_release on fake packages in a temporary dist/ and read SHA256SUMS.
+
+        The package verification, the source archive's contents and the preview are
+        stubbed; the artifact list and the checksums are release.py's own.
+        """
         release = load_release_script()
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
-            package = folder / 'openxplorer_2.0.0_all.deb'
-            source = folder / 'openxplorer-2.0.0-source.zip'
-            package.write_bytes(b'package')
-            source.write_bytes(b'source')
-            sums = folder / 'SHA256SUMS'
-            release.write_checksums([package, source], sums)
-            self.assertEqual(sums.read_text().splitlines(), [
-                f'{hashlib.sha256(b"package").hexdigest()}  {package.name}',
-                f'{hashlib.sha256(b"source").hexdigest()}  {source.name}',
-            ])
+            packages = folder / 'packages'
+            packages.mkdir()
+            (packages / 'openxplorer_2.0.0_all.deb').write_bytes(b'deb')
+            (packages / 'openxplorer-2.0.0-1.x86_64.rpm').write_bytes(b'rpm')
+            (packages / release.FLATPAK_BUNDLE).write_bytes(b'flatpak')
+            (packages / 'notes.txt').write_bytes(b'not released')
+            dist = folder / 'dist'
+            stubs = {
+                'DIST': dist,
+                'TEST_RESULTS': folder / 'test-results',
+                'DESIGNS': folder / 'designs',
+                'WEBSITE_DOWNLOADS': (),
+                'release_version': lambda: '2.0.0',
+                'verify_debian_package': lambda package: None,
+                'write_source_archive': lambda archive: archive.write_bytes(b'source'),
+                'publish_preview': lambda: None,
+            }
+            with mock.patch.multiple(release, **stubs):
+                release.build_release(release.parse_arguments(['--packages', str(packages)]))
+            lines = (dist / 'SHA256SUMS').read_text().splitlines()
+        return [tuple(reversed(line.split('  '))) for line in lines]
+
+
+def release_bundle_name() -> str:
+    """Return the Flatpak bundle's file name in the release."""
+    return load_release_script().FLATPAK_BUNDLE
 
 
 if __name__ == '__main__':

@@ -15900,7 +15900,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "Implemented in the repository's release pipeline, not the app: .github/workflows/checks.yml stages the verified native packages and the corresponding source with tools/release.py, runs tools/audit-public-data.py on the complete release, writes SHA256SUMS and publishes every listed asset with gh release create only when the tag does not exist yet (no --clobber, no gh release upload), so existing assets are never overwritten. native/tools/test_release_publication.py checks that order, the never-overwrite guard and the SHA256SUMS that tools/release.py writes; tests/test_release_source.py and tests/test_public_data.py test the source policy and the audit itself."
+native_note = "Implemented in the repository's release pipeline, not the app: .github/workflows/checks.yml stages the verified native packages and the corresponding source with tools/release.py, runs tools/audit-public-data.py on the complete release, writes SHA256SUMS and publishes every listed asset with gh release create only when the tag does not exist yet (no --clobber, no gh release upload), so existing assets are never overwritten. native/tools/test_release_publication.py checks that order (ignoring commented-out lines), the never-overwrite guard, and runs build_release on fake .deb, RPM and Flatpak packages in a temporary dist/ (verification, source contents and preview stubbed) to check that SHA256SUMS lists every package and openxplorer-<version>-source.zip with their checksums; tests/test_release_source.py and tests/test_public_data.py test the source policy and the audit itself."
 
 [[feature]]
 id = "UPD-022"
