@@ -10,23 +10,7 @@ use std::rc::Rc;
 
 use super::*;
 use crate::test_support::harness::wait_until;
-use crate::test_support::portal::{session_connection, ExportedPortal};
-
-/// The part of `org.freedesktop.portal.Settings` the app uses.
-const SETTINGS_XML: &str = r#"<node>
-  <interface name="org.freedesktop.portal.Settings">
-    <method name="ReadOne">
-      <arg type="s" name="namespace" direction="in"/>
-      <arg type="s" name="key" direction="in"/>
-      <arg type="v" name="value" direction="out"/>
-    </method>
-    <signal name="SettingChanged">
-      <arg type="s" name="namespace"/>
-      <arg type="s" name="key"/>
-      <arg type="v" name="value"/>
-    </signal>
-  </interface>
-</node>"#;
+use crate::test_support::portal::{session_connection, ExportedPortal, SETTINGS_XML};
 
 /// A Settings portal that holds one colour scheme and, as GNOME-based
 /// portals do, may serve a GTK theme name, exported at the portal's

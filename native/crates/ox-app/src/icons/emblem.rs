@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Emblems over a listed item's icon: the link glyph on a symbolic link
-//! and the lock on an item the user cannot write, as Dolphin marks them
-//! (`KFileItemModelRolesUpdater`'s emblems) and as Windows marks a
-//! shortcut with its arrow. Mounted network locations carry the green
-//! network bar instead ([`super::Art::Network`]).
+//! Emblems over a listed item's icon: the link glyph on a symbolic link,
+//! as Dolphin and Windows (its shortcut arrow) mark one, and the lock on
+//! an item GIO reports as not writable, the parity behaviour. Dolphin's
+//! `KFileItem::overlays` locks items that are not readable instead; an item
+//! the user cannot change is the more useful warning in a file manager
+//! that writes. Mounted network locations carry the green network bar
+//! instead ([`super::Art::Network`]). Search results carry no emblems:
+//! the search index does not record links or write access.
 //!
 //! An emblem is a real bundled glyph on a small plate in the window's
 //! background colour, so it reads on any artwork. The link sits in the

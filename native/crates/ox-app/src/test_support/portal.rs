@@ -5,8 +5,32 @@
 //! its unique name, so no real portal is reached and no well-known name is
 //! taken from other tests.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::integration::DESKTOP_PORTAL_PATH;
+
+/// The interface of the Settings portal.
+const PORTAL_SETTINGS: &str = "org.freedesktop.portal.Settings";
+
+/// The part of `org.freedesktop.portal.Settings` the app uses.
+pub(crate) const SETTINGS_XML: &str = r#"<node>
+  <interface name="org.freedesktop.portal.Settings">
+    <method name="ReadOne">
+      <arg type="s" name="namespace" direction="in"/>
+      <arg type="s" name="key" direction="in"/>
+      <arg type="v" name="value" direction="out"/>
+    </method>
+    <signal name="SettingChanged">
+      <arg type="s" name="namespace"/>
+      <arg type="s" name="key"/>
+      <arg type="v" name="value"/>
+    </signal>
+  </interface>
+</node>"#;
 
 /// A new connection to the test's session bus, as another process would
 /// have.
@@ -78,5 +102,71 @@ impl Drop for ExportedPortal {
             let _ = self.connection.unregister_object(registration);
         }
         let _ = self.connection.close_sync(gio::Cancellable::NONE);
+    }
+}
+
+/// The values a [`SettingsPortal`] serves, by namespace and key.
+type PortalValues = Rc<RefCell<HashMap<(String, String), glib::Variant>>>;
+
+/// A Settings portal that answers `ReadOne` from the values it was given
+/// and refuses every other setting, as a portal does for keys it lacks.
+pub(crate) struct SettingsPortal {
+    portal: ExportedPortal,
+    values: PortalValues,
+}
+
+impl SettingsPortal {
+    /// A portal serving `values`, each `(namespace, key, value)`.
+    pub(crate) fn serving(values: &[(&str, &str, glib::Variant)]) -> Self {
+        let values: PortalValues = Rc::new(RefCell::new(
+            values
+                .iter()
+                .map(|(namespace, key, value)| (((*namespace).to_owned(), (*key).to_owned()), value.clone()))
+                .collect(),
+        ));
+        let answers = Rc::clone(&values);
+        let portal = ExportedPortal::export(
+            SETTINGS_XML,
+            PORTAL_SETTINGS,
+            move |_, _, _, _, method, parameters, invocation| {
+                let setting = parameters.get::<(String, String)>().unwrap_or_default();
+                let value = (method == "ReadOne")
+                    .then(|| answers.borrow().get(&setting).cloned())
+                    .flatten();
+                match value {
+                    // `(v)`: a tuple boxes the value it holds.
+                    Some(value) => invocation.return_value(Some(&(value,).to_variant())),
+                    None => invocation.return_dbus_error(
+                        "org.freedesktop.portal.Error.NotFound",
+                        "Requested setting not found",
+                    ),
+                }
+            },
+        );
+        Self { portal, values }
+    }
+
+    /// The bus name the portal answers under.
+    pub(crate) fn name(&self) -> String {
+        self.portal.name()
+    }
+
+    /// Changes `key` in `namespace` and announces it with
+    /// `SettingChanged`, as the portal does when the desktop changes.
+    pub(crate) fn change(&self, namespace: &str, key: &str, value: glib::Variant) {
+        self.values
+            .borrow_mut()
+            .insert((namespace.to_owned(), key.to_owned()), value.clone());
+        let parameters = (namespace, key, value).to_variant();
+        self.portal
+            .connection()
+            .emit_signal(
+                None,
+                DESKTOP_PORTAL_PATH,
+                PORTAL_SETTINGS,
+                "SettingChanged",
+                Some(&parameters),
+            )
+            .expect("the signal is sent");
     }
 }

@@ -2,24 +2,34 @@
 //! The desktop's accent colour.
 //!
 //! Windows 11 draws selection, focus, primary buttons and progress in the
-//! system accent; GNOME 47 and later let the user pick one in Settings >
-//! Appearance (`org.gnome.desktop.interface accent-color`). The skin
-//! follows that key live. Blue, GNOME's default, keeps the Windows accent
-//! of the palettes (`#0067c0` light, `#74beff` dark). Every other accent
-//! has a shade per appearance, chosen as Windows chooses its own: dark
-//! enough in light for white text on it, light enough in dark for black
-//! text on it (at least 4.5:1, which a test checks). Inside Flatpak the
-//! schema holds only the runtime's defaults, so the Windows blue stays.
+//! system accent. GNOME 47 and later let the user pick one in Settings >
+//! Appearance (`org.gnome.desktop.interface accent-color`); Zorin OS picks
+//! it with the variant of its theme (`gtk-theme` `ZorinGreen-Light` and so
+//! on), and inside Flatpak the Settings portal reports both. [`setting`]
+//! follows those sources live. Blue, GNOME's default, keeps the Windows
+//! accent of the palettes (`#0067c0` light, `#74beff` dark). Every other
+//! accent has a shade per appearance, chosen as Windows chooses its own:
+//! dark enough in light for white text on it, light enough in dark for
+//! black text on it (at least 4.5:1, which a test checks).
 
-use gtk::gio;
-use gtk::prelude::*;
-use ox_core::integration::Sandbox;
+mod setting;
+
 use ox_core::settings::Appearance;
 
-const INTERFACE_SCHEMA: &str = "org.gnome.desktop.interface";
+pub(crate) use setting::AccentSetting;
 
-/// GNOME's key behind Settings > Appearance > Accent Color.
-pub(crate) const ACCENT_COLOR_KEY: &str = "accent-color";
+/// GNOME's accents as libadwaita draws them, which the portal reports.
+const GNOME_ACCENTS: [(Accent, u32); 9] = [
+    (Accent::Windows, 0x35_84_e4),
+    (Accent::Teal, 0x21_90_a4),
+    (Accent::Green, 0x3a_94_4a),
+    (Accent::Yellow, 0xc8_88_00),
+    (Accent::Orange, 0xed_5b_00),
+    (Accent::Red, 0xe6_2d_42),
+    (Accent::Pink, 0xd5_61_99),
+    (Accent::Purple, 0x91_41_ac),
+    (Accent::Slate, 0x6f_83_96),
+];
 
 /// An accent the skin draws.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -68,6 +78,45 @@ impl Accent {
         }
     }
 
+    /// The accent of a Zorin OS theme variant (`ZorinGreen-Dark`), or
+    /// `None` for any other theme.
+    pub(crate) fn from_zorin_theme(name: &str) -> Option<Self> {
+        let variant = name.strip_prefix("Zorin")?;
+        let colour = variant.split('-').next().unwrap_or(variant);
+        Some(match colour {
+            "Blue" => Accent::Windows,
+            "Green" => Accent::Green,
+            "Orange" => Accent::Orange,
+            "Red" => Accent::Red,
+            "Purple" => Accent::Purple,
+            "Grey" | "Gray" => Accent::Slate,
+            _ => return None,
+        })
+    }
+
+    /// The GNOME accent nearest to the colour the Settings portal reports
+    /// (`org.freedesktop.appearance accent-color`, red, green and blue
+    /// from 0 to 1), or `None` when a channel is out of range, which
+    /// means the desktop has no accent.
+    pub(crate) fn nearest_to(red: f64, green: f64, blue: f64) -> Option<Self> {
+        let channels = [red, green, blue];
+        if !channels.iter().all(|channel| (0.0..=1.0).contains(channel)) {
+            return None;
+        }
+        let distance = |(_, hex): &(Accent, u32)| {
+            let reference = [hex >> 16, (hex >> 8) & 0xff, hex & 0xff];
+            channels
+                .iter()
+                .zip(reference)
+                .map(|(channel, reference)| (channel * 255.0 - f64::from(reference)).powi(2))
+                .sum::<f64>()
+        };
+        GNOME_ACCENTS
+            .iter()
+            .min_by(|first, second| distance(first).total_cmp(&distance(second)))
+            .map(|(accent, _)| *accent)
+    }
+
     /// The accent's shade in `appearance`, `None` for the Windows blue,
     /// which the palettes draw. GNOME's accent darkened for light and
     /// lightened for dark, as Windows shades its accent.
@@ -110,46 +159,6 @@ pub(crate) fn stylesheet(accent: Accent, appearance: Appearance) -> String {
     )
 }
 
-/// Follows GNOME's accent key while it lives.
-#[derive(Debug)]
-pub(crate) struct AccentSetting {
-    /// GNOME's interface settings, on the host with the key installed.
-    settings: Option<gio::Settings>,
-}
-
-impl AccentSetting {
-    /// Starts following the key; `on_change` hears every later change.
-    pub(crate) fn watch(on_change: impl Fn(Accent) + 'static) -> Self {
-        let settings = interface_settings();
-        if let Some(settings) = &settings {
-            settings.connect_changed(Some(ACCENT_COLOR_KEY), move |settings, _| {
-                on_change(accent_of(settings));
-            });
-        }
-        Self { settings }
-    }
-
-    /// The accent the desktop asks for now.
-    pub(crate) fn accent(&self) -> Accent {
-        self.settings.as_ref().map_or(Accent::Windows, accent_of)
-    }
-}
-
-/// GNOME's interface settings on the host, when the schema has the key.
-pub(crate) fn interface_settings() -> Option<gio::Settings> {
-    if Sandbox::detect().is_flatpak() {
-        return None;
-    }
-    let settings = super::desktop_settings(INTERFACE_SCHEMA)?;
-    let has_key = settings.settings_schema()?.has_key(ACCENT_COLOR_KEY);
-    has_key.then_some(settings)
-}
-
-/// The accent `settings` ask for.
-fn accent_of(settings: &gio::Settings) -> Accent {
-    Accent::from_gnome(&settings.string(ACCENT_COLOR_KEY))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,6 +193,13 @@ mod tests {
         assert_eq!(Accent::from_gnome("blue"), Accent::Windows);
         assert_eq!(Accent::from_gnome("green"), Accent::Green);
         assert_eq!(Accent::from_gnome("magenta"), Accent::Windows);
+        assert_eq!(Accent::from_zorin_theme("ZorinGreen-Dark"), Some(Accent::Green));
+        assert_eq!(Accent::from_zorin_theme("ZorinGrey-Light"), Some(Accent::Slate));
+        assert_eq!(Accent::from_zorin_theme("ZorinBlue-Light"), Some(Accent::Windows));
+        assert_eq!(Accent::from_zorin_theme("Adwaita-dark"), None);
+        assert_eq!(Accent::nearest_to(0.93, 0.36, 0.0), Some(Accent::Orange));
+        assert_eq!(Accent::nearest_to(0.21, 0.52, 0.89), Some(Accent::Windows));
+        assert_eq!(Accent::nearest_to(-1.0, -1.0, -1.0), None);
         assert_eq!(stylesheet(Accent::Windows, Appearance::Light), "");
         for accent in Accent::OTHERS {
             let light = accent.shade(Appearance::Light).expect("a light shade");

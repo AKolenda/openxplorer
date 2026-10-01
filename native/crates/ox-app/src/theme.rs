@@ -310,6 +310,21 @@ impl Skin {
     }
 }
 
+/// GNOME's interface schema, which holds the desktop's look and clock.
+pub(crate) const INTERFACE_SCHEMA: &str = "org.gnome.desktop.interface";
+
+/// The host desktop's settings under `schema_id`, when that schema is
+/// installed with `key`. `None` inside Flatpak, where the schema holds only
+/// the runtime's defaults, not the desktop's.
+pub(crate) fn host_desktop_key(schema_id: &str, key: &str) -> Option<gio::Settings> {
+    if ox_core::integration::Sandbox::detect().is_flatpak() {
+        return None;
+    }
+    let settings = desktop_settings(schema_id)?;
+    let has_key = settings.settings_schema()?.has_key(key);
+    has_key.then_some(settings)
+}
+
 /// The desktop's settings under `schema_id` (GNOME's interface and
 /// accessibility keys), when that schema is installed.
 pub(crate) fn desktop_settings(schema_id: &str) -> Option<gio::Settings> {
@@ -412,7 +427,7 @@ mod tests {
         let _theme = ThemeGuard::keep();
         let display = gdk::Display::default().expect("GTK tests run on a private display");
         let display_settings = gtk::Settings::for_display(&display);
-        let desktop = desktop_settings("org.gnome.desktop.interface").filter(|settings| {
+        let desktop = desktop_settings(INTERFACE_SCHEMA).filter(|settings| {
             let schema = settings.settings_schema();
             schema.is_some_and(|schema| schema.has_key("color-scheme"))
         });

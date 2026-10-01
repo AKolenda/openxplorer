@@ -156,6 +156,38 @@ fn both_views_show_each_name_with_its_icon() {
     }
 }
 
+/// A real symbolic link carries the link emblem and a file without write
+/// permission the lock, as GIO lists them, in both views; other items
+/// carry none.
+///
+/// parity: LOOK-017
+#[gtk::test]
+fn listed_links_and_read_only_files_carry_their_emblems() {
+    use std::os::unix::fs::{symlink, PermissionsExt};
+
+    let fixture = Fixture::standard();
+    symlink(fixture.path("Notes 2.txt"), fixture.path("Shortcut.txt")).expect("make a link");
+    fixture.write("Locked.txt");
+    let locked = std::fs::Permissions::from_mode(0o444);
+    std::fs::set_permissions(fixture.path("Locked.txt"), locked).expect("make it read-only");
+    let test = TestWindow::open(&fixture.uri());
+    for view in ["details", "large"] {
+        test.activate("view", Some(view));
+        let view_widget = test.window.folder_pane().view_widget();
+        wait_until("the cells to be bound", || {
+            descendants::<FileCell>(&view_widget)
+                .iter()
+                .any(|cell| cell.name() == "Locked.txt")
+        });
+        for cell in descendants::<FileCell>(&view_widget) {
+            let name = cell.name();
+            let emblems = cell.emblems();
+            assert_eq!(emblems.link, name == "Shortcut.txt", "{name} in {view}");
+            assert_eq!(emblems.read_only, name == "Locked.txt", "{name} in {view}");
+        }
+    }
+}
+
 /// Regression: after a merge the Documents folder's Type column read
 /// GIO's "Word 2007 document", "Excel 2007 spreadsheet" and "Plain text
 /// document". The files are real, so GIO names their types, the app's

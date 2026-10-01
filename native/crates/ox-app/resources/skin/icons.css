@@ -25,3 +25,13 @@ art .emblem {
   background-color: @ox_bg;
   border-radius: 2px;
 }
+/* On a hovered, pressed or selected item the plate takes the item's fill
+   (folder-views.css), so it does not cut a square into it. */
+columnview.files > listview > row:hover art .emblem,
+gridview.files > child:hover art .emblem { background-color: @ox_hover; }
+columnview.files > listview > row:active art .emblem,
+gridview.files > child:active art .emblem { background-color: @ox_pressed; }
+columnview.files > listview > row:selected art .emblem,
+gridview.files > child:selected art .emblem { background-color: @ox_selected; }
+columnview.files > listview > row:selected:hover art .emblem,
+gridview.files > child:selected:hover art .emblem { background-color: @ox_selected_hover; }

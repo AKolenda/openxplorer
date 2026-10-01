@@ -10,8 +10,8 @@
 //! window actions of their buttons and their glyphs, which name bundled
 //! icons. The last tests prove that no control is left without either.
 
-use gtk::gdk;
 use gtk::prelude::*;
+use gtk::{gdk, glib};
 
 use super::geometry::{bounds, button_for, laid_out, Bounds};
 use super::icons::{
@@ -114,6 +114,16 @@ fn the_address_and_search_boxes_are_34_pixels_tall_14_pixels_below_the_title_bar
 /// parity: LOOK-009
 #[gtk::test]
 fn the_tab_close_is_22_pixels_and_close_hovers_red() {
+    /// Puts the display's decoration layout back, also when a check fails.
+    struct LayoutGuard(gtk::Settings, Option<glib::GString>);
+    impl Drop for LayoutGuard {
+        fn drop(&mut self) {
+            self.0.set_gtk_decoration_layout(self.1.as_deref());
+        }
+    }
+    let settings = gtk::Settings::default().expect("GTK tests run on a private display");
+    let _layout = LayoutGuard(settings.clone(), settings.gtk_decoration_layout());
+    settings.set_gtk_decoration_layout(Some(":minimize,maximize,close"));
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let buttons = descendants::<gtk::Button>(&test.window);
@@ -125,10 +135,8 @@ fn the_tab_close_is_22_pixels_and_close_hovers_red() {
     assert_eq!((place.width, place.height), (22, 22));
     let close = buttons
         .iter()
-        .find(|button| button.has_css_class("caption") && button.has_css_class("close"));
-    let Some(close) = close else {
-        return;
-    };
+        .find(|button| button.has_css_class("caption") && button.has_css_class("close"))
+        .expect("the layout shows Close");
     close.set_state_flags(gtk::StateFlags::PRELIGHT, false);
     wait_for(TRANSITION_TIME);
     wait_for_frames(&test.window, 2);

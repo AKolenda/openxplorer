@@ -216,6 +216,12 @@ impl FileCell {
     pub(crate) fn art(&self) -> Option<Art> {
         self.imp().image.art()
     }
+
+    /// The emblems the icon shows, for tests.
+    #[cfg(test)]
+    pub(crate) fn emblems(&self) -> crate::icons::Emblems {
+        self.imp().image.shown_emblems()
+    }
 }
 
 /// Connects `factory` so every list item shows a [`FileCell`] in

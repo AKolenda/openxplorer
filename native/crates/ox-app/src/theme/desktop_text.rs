@@ -129,19 +129,20 @@ impl Drop for DesktopTextWatch {
     }
 }
 
-/// The text size drawn for the `chosen` size at `factor`: the level
-/// nearest to the chosen percentage times the factor.
+/// The text size drawn for the `chosen` size at `factor`: as many levels
+/// above (or below) the chosen one as the level nearest to 100% times the
+/// factor is above 100%. Moving by whole levels keeps every Ctrl+plus and
+/// Ctrl+minus a visible step until the drawn size reaches an end.
 pub(crate) fn drawn_text_size(chosen: TextSize, factor: f64) -> TextSize {
     if (factor - 1.0).abs() < f64::EPSILON {
         return chosen;
     }
-    let wanted = f64::from(chosen.percent()) * factor;
-    TextSize::all()
-        .min_by(|first, second| {
-            let distance = |size: &TextSize| (f64::from(size.percent()) - wanted).abs();
-            distance(first).total_cmp(&distance(second))
-        })
-        .unwrap_or(chosen)
+    let wanted = f64::from(TextSize::DEFAULT.percent()) * factor;
+    let distance = |size: &TextSize| (f64::from(size.percent()) - wanted).abs();
+    let scaled_default = TextSize::all()
+        .min_by(|first, second| distance(first).total_cmp(&distance(second)))
+        .unwrap_or(TextSize::DEFAULT);
+    chosen.moved_by(scaled_default.levels_above(TextSize::DEFAULT))
 }
 
 /// The rule that sets the window's, menus' and tooltips' font to
@@ -154,6 +155,7 @@ pub(crate) fn font_family_rule(family: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text_size::Step;
 
     /// Large Text draws the app's text a level larger, and the desktop's
     /// font is used, at its size, only when the user asks for it.
@@ -177,6 +179,17 @@ mod tests {
         assert_eq!(drawn_text_size(default, desktop.factor(true)).percent(), 150);
         assert_eq!(drawn_text_size(TextSize::from_percent(200), 1.25).percent(), 200);
         assert_eq!(drawn_text_size(TextSize::from_percent(90), 1.0).percent(), 90);
+        // Every Ctrl+plus draws larger text until the largest size.
+        let mut chosen = TextSize::from_percent(80);
+        while drawn_text_size(chosen, 1.25).percent() < 200 {
+            let larger = Step::Increase.apply(chosen);
+            assert!(
+                drawn_text_size(larger, 1.25).percent() > drawn_text_size(chosen, 1.25).percent(),
+                "from {}%",
+                chosen.percent()
+            );
+            chosen = larger;
+        }
 
         let skin = crate::theme::Skin::detached();
         skin.set_desktop_text(desktop);

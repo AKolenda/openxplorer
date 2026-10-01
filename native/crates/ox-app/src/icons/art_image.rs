@@ -299,6 +299,16 @@ impl ArtImage {
         self.imp().emblems.get()
     }
 
+    /// The emblems the image shows, for tests.
+    #[cfg(test)]
+    pub(crate) fn shown_emblems(&self) -> Emblems {
+        self.emblem_pieces()
+            .map_or_else(Emblems::default, |pieces| Emblems {
+                link: pieces.link.is_visible(),
+                read_only: pieces.lock.is_visible(),
+            })
+    }
+
     /// What the image shows, for tests.
     #[cfg(test)]
     pub(crate) fn art(&self) -> Option<Art> {

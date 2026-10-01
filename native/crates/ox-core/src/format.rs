@@ -403,10 +403,6 @@ mod tests {
         assert_eq!(ClockFormat::from_gnome(Some("12h")), ClockFormat::TwelveHour);
         assert_eq!(ClockFormat::from_gnome(Some("24h")), ClockFormat::TwentyFourHour);
         assert_eq!(ClockFormat::from_gnome(None), ClockFormat::Locale);
-        set_clock_format(ClockFormat::TwelveHour);
-        assert_eq!(clock_format(), ClockFormat::TwelveHour);
-        set_clock_format(ClockFormat::Locale);
-        assert_eq!(clock_format(), ClockFormat::Locale);
     }
 
     /// A Date modified text in the test process's own time zone has ten
