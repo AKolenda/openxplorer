@@ -1,3 +1,14 @@
+# Unreleased
+
+- Optional: other applications' Open and Save dialogs in OpenXplorer.
+  Settings > Default apps > "Apps' Open and Save dialogs" > Enable makes
+  applications that use the desktop portal (Chrome, Firefox, Flatpak apps)
+  choose and save files in an OpenXplorer window, with File name, the type
+  list and Save or Open at the bottom. It is off until enabled, keeps every
+  other portal backend, and Restore Open and Save dialogs undoes it. Host
+  packages install `/usr/share/xdg-desktop-portal/portals/<id>.portal`;
+  the Flatpak cannot offer it.
+
 # 2.0.0 — 2026-09-28
 
 OpenXplorer is now a native GTK 4 application written in Rust. It replaces the

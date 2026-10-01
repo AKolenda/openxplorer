@@ -7,11 +7,39 @@
 //! wildcards `*`, `?` or `[ ]` must match the whole name instead, as in
 //! Dolphin's filter bar (SRCH-004, [`NamePattern`]). While searching,
 //! the search options narrow the items by kind and date too (SRCH-037,
-//! [`SearchFacets`]).
+//! [`SearchFacets`]). In a window that is choosing files for another
+//! application, the dialog's type list narrows the files as well, and a
+//! folder dialog lists only folders ([`ChooserListing`], INT-032).
 
 use gtk::glib;
 use ox_core::entry::Entry;
+use ox_core::integration::FileFilter;
 use ox_core::search::{FacetMatcher, NamePattern, SearchFacets};
+
+/// Which items a file dialog lists (INT-032). Folders always pass, so the
+/// user can still move between them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct ChooserListing {
+    /// Only folders are listed: a folder dialog, or saving several files.
+    pub(crate) folders_only: bool,
+    /// The type chosen in the dialog's list, if any.
+    pub(crate) filter: Option<FileFilter>,
+}
+
+impl ChooserListing {
+    /// Whether `entry` is listed.
+    pub(crate) fn passes(&self, entry: &Entry) -> bool {
+        if entry.is_dir {
+            return true;
+        }
+        if self.folders_only {
+            return false;
+        }
+        self.filter
+            .as_ref()
+            .is_none_or(|filter| filter.matches(&entry.name, entry.content_type.as_deref()))
+    }
+}
 
 /// Whether GIO marks an item hidden (a dot file, or one named in its
 /// folder's `.hidden` file).
@@ -33,6 +61,8 @@ pub(crate) struct FilterState {
     facets: SearchFacets,
     /// `facets` with their date range worked out when they were chosen.
     facet_matcher: FacetMatcher,
+    /// The file dialog's narrowing, in a window choosing files.
+    chooser: ChooserListing,
 }
 
 impl FilterState {
@@ -65,6 +95,18 @@ impl FilterState {
         self.facet_matcher.matches(entry)
     }
 
+    /// Sets the file dialog's narrowing; returns true when it changed.
+    pub(crate) fn set_chooser(&mut self, chooser: ChooserListing) -> bool {
+        let changed = chooser != self.chooser;
+        self.chooser = chooser;
+        changed
+    }
+
+    /// Whether `entry` passes the file dialog's narrowing.
+    pub(crate) fn passes_chooser(&self, entry: &Entry) -> bool {
+        self.chooser.passes(entry)
+    }
+
     /// True when a search is active.
     #[cfg(test)]
     pub(crate) fn is_searching(&self) -> bool {
@@ -93,7 +135,48 @@ fn now() -> glib::DateTime {
 
 #[cfg(test)]
 mod tests {
+    use ox_core::integration::FilterPattern;
+
     use super::*;
+
+    /// An entry called `name`, a folder when `is_dir`.
+    fn entry(name: &str, is_dir: bool, content_type: Option<&str>) -> Entry {
+        let mut entry = if is_dir {
+            crate::test_support::folder_entry(name)
+        } else {
+            crate::test_support::file_entry(name)
+        };
+        entry.content_type = content_type.map(str::to_owned);
+        entry
+    }
+
+    /// parity: INT-032
+    #[test]
+    fn a_file_dialog_narrows_files_but_never_folders() {
+        let images = FileFilter {
+            name: "Images".to_owned(),
+            patterns: vec![
+                FilterPattern::Glob("*.png".to_owned()),
+                FilterPattern::MimeType("image/jpeg".to_owned()),
+            ],
+        };
+        let mut filter = FilterState::default();
+        assert!(filter.passes_chooser(&entry("notes.txt", false, None)));
+        assert!(filter.set_chooser(ChooserListing {
+            folders_only: false,
+            filter: Some(images)
+        }));
+        assert!(filter.passes_chooser(&entry("Shot.PNG", false, None)));
+        assert!(filter.passes_chooser(&entry("photo", false, Some("image/jpeg"))));
+        assert!(!filter.passes_chooser(&entry("notes.txt", false, Some("text/plain"))));
+        assert!(filter.passes_chooser(&entry("Pictures", true, None)));
+        filter.set_chooser(ChooserListing {
+            folders_only: true,
+            filter: None,
+        });
+        assert!(!filter.passes_chooser(&entry("Shot.png", false, None)));
+        assert!(filter.passes_chooser(&entry("Pictures", true, None)));
+    }
 
     /// A filter searching for `query` with hidden files not shown.
     fn searching(query: &str) -> FilterState {

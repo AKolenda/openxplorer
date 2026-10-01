@@ -20,6 +20,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
@@ -275,11 +276,45 @@ impl SystemScheme {
     }
 }
 
+/// Set for a launch by D-Bus activation, which the desktop portal itself
+/// may have started while it starts, to serve Open and Save dialogs
+/// (INT-032).
+static WAIT_FOR_PORTAL: AtomicBool = AtomicBool::new(false);
+
+/// Makes reading the portal's settings wait for the portal to run rather
+/// than start it. Without systemd, starting it from a backend the portal
+/// is waiting for would make the bus spawn a second portal (INT-032).
+pub(crate) fn wait_for_portal_before_reading() {
+    WAIT_FOR_PORTAL.store(true, Ordering::Relaxed);
+}
+
+/// Returns once the desktop portal has an owner on `connection`, without
+/// starting it, when [`wait_for_portal_before_reading`] was called; at
+/// once otherwise.
+pub(super) async fn portal_ready(connection: &gio::DBusConnection) {
+    if !WAIT_FOR_PORTAL.load(Ordering::Relaxed) {
+        return;
+    }
+    let (appeared, appearance) = async_channel::bounded::<()>(1);
+    let watcher = gio::bus_watch_name_on_connection(
+        connection,
+        DESKTOP_PORTAL_NAME,
+        gio::BusNameWatcherFlags::NONE,
+        move |_, _, _| {
+            let _ = appeared.try_send(());
+        },
+        |_, _| {},
+    );
+    let _ = appearance.recv().await;
+    gio::bus_unwatch_name(watcher);
+}
+
 /// Follows the XDG desktop portal on the session bus.
 async fn follow_session_portal(scheme: Weak<SystemScheme>) {
     let Ok(connection) = gio::bus_get_future(gio::BusType::Session).await else {
         return;
     };
+    portal_ready(&connection).await;
     follow_portal(scheme, &connection, DESKTOP_PORTAL_NAME).await;
 }
 

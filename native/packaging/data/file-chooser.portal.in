@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# The desktop portal's backend file for other applications' Open and Save
+# dialogs (INT-032). It names no desktop (no UseIn), so the portal uses it
+# only when the user's portals.conf prefers it: Settings > Default apps >
+# "Apps' Open and Save dialogs" writes that preference. Its D-Bus name is
+# the application's own, which @APP_ID@.service activates.
+[portal]
+DBusName=@APP_ID@
+Interfaces=org.freedesktop.impl.portal.FileChooser;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Desktop integration: default applications, "Show in folder", Brave's
-//! download folder, opening files and Open in Terminal.
+//! Desktop integration: default applications, "Show in folder", other
+//! applications' Open and Save dialogs, Brave's download folder, opening
+//! files and Open in Terminal.
 //!
 //! Ports `v2.0.0:desktop/desktop_integration.py`, `v2.0.0:desktop/filemanager_bus.py`,
 //! `v2.0.0:desktop/reveal_integration.py`, `v2.0.0:desktop/brave_integration.py`,
@@ -46,6 +47,8 @@
 //! | `background_portal` | Starting at login from inside Flatpak | (new) |
 //! | `file_manager_bus` | The `org.freedesktop.FileManager1` service | `filemanager_bus.py` |
 //! | `file_manager_request` | Checking FileManager1 requests | `window_state.py` |
+//! | `file_chooser_bus`, `file_chooser_request` | The `FileChooser` portal backend for Open and Save dialogs | (new) |
+//! | `file_dialogs` | The opt-in that prefers that backend | (new) |
 //! | `brave` | Brave's download folder | `brave_integration.py` |
 //! | `activation`, `opening` | What activating does; opening a file | `activation.py`, `native_opening.py` |
 //! | `applications`, `app_catalog` | Installed applications, Open with, editors | `app_catalog.py` |
@@ -63,6 +66,9 @@ mod background_portal;
 mod brave;
 mod default_apps;
 mod disk_tools;
+mod file_chooser_bus;
+mod file_chooser_request;
+mod file_dialogs;
 mod file_manager_bus;
 mod file_manager_request;
 pub(crate) mod host_command;
@@ -91,6 +97,19 @@ pub use default_apps::{
     ZipAssociation, APP_ID, RESTORE_NOTE,
 };
 pub use disk_tools::{is_disk_image, DiskTool};
+pub use file_chooser_bus::{
+    ChooserCall, ChooserNotShown, ChooserRegistrationFailed, ChooserReply, FileChooserBus,
+    PORTAL_BACKEND_PATH,
+};
+pub use file_chooser_request::{
+    checked_name, glob_matches, options_from_entries, path_variant, Choice, ChooserAnswer, ChooserMethod,
+    ChooserMode, ChooserRequest, ChooserRequestError, FileFilter, FilterPattern, FILE_CHOOSER_INTERFACE,
+    MAX_LIST_ITEMS, RESPONSE_CANCELLED, RESPONSE_OTHER, RESPONSE_SUCCESS,
+};
+pub use file_dialogs::{
+    desktops_from, preferred_value, with_preference, without_preference, DisabledFileDialogs,
+    FileDialogError, FileDialogPaths, FileDialogRegistration, FILE_CHOOSER_KEY, PORTAL_SERVICE,
+};
 pub use file_manager_bus::{
     BusStatus, FileManagerBus, RegistrationFailed, RequestNotOpened, BUS_NAME, OBJECT_PATH,
 };

@@ -256,7 +256,7 @@
         "paragraphs": [
           "Opening the ZIP filename in Brave and Show in folder are different actions. ZIP opening uses an archive association; Show in folder may use a desktop portal, FileManager1, or the default directory handler. Folder defaults alone do not prove either browser route is configured.",
           "Settings shows separate statuses for folders, SMB links, ZIP files and the current FileManager1 owner. Keep Include Brave / other apps’ Show in folder integration checked when applying folder defaults. If ownership says waiting for another file manager, finish operations and close that app; log out and back in if necessary. OpenXplorer does not kill it.",
-          "Restart Brave after changing handlers. Test Show in folder checks FileManager1, not Brave’s portal. A browser portal can retain a different choice; select OpenXplorer in its chooser when available. Do not disable the system portal or replace upload/save file-picker dialogs."
+          "Restart Brave after changing handlers. Test Show in folder checks FileManager1, not Brave’s portal. A browser portal can retain a different choice; select OpenXplorer in its chooser when available. Do not disable the system portal. To pick and save files in OpenXplorer too, see Open and Save dialogs below."
         ]
       },
       {
@@ -270,10 +270,21 @@
         "codeLanguage": "sh"
       },
       {
+        "id": "file-dialogs",
+        "title": "Open and Save dialogs",
+        "paragraphs": [
+          "Settings → Default apps → Apps’ Open and Save dialogs → Enable makes other applications choose and save files in an OpenXplorer window: the same navigation pane, address bar and search, with File name, Save as type and the Save or Open button at the bottom. It works for applications that use the desktop portal for file dialogs, such as Chrome, Firefox and Flatpak apps; applications that draw their own dialog keep it.",
+          "Enabling writes one preference into your own desktop-portal configuration (~/.config/xdg-desktop-portal/<desktop>-portals.conf) and records what the file held; every other portal, such as screenshots or screen sharing, keeps its backend. Click Apply now to restart the desktop portal, or log out and back in. Saving over an existing file always asks first.",
+          "Restore Open and Save dialogs puts the file back as it was, or, if you edited it since, removes only OpenXplorer’s line. The Flatpak cannot change the host’s portal, so this is available in the installed package only."
+        ],
+        "code": "cat ~/.config/xdg-desktop-portal/*-portals.conf\nsystemctl --user try-restart xdg-desktop-portal.service",
+        "codeLanguage": "sh"
+      },
+      {
         "id": "portals",
         "title": "What this does not replace",
         "paragraphs": [
-          "Browsers can route reveal actions through desktop portals or keep a previous application choice. Choose OpenXplorer in a chooser when available. Upload/save file-picker dialogs stay with the system. Super+E is a separate desktop keyboard shortcut; the app does not override it."
+          "Browsers can route reveal actions through desktop portals or keep a previous application choice. Choose OpenXplorer in a chooser when available. Upload/save file-picker dialogs stay with the system unless you turn on Open and Save dialogs. Super+E is a separate desktop keyboard shortcut; the app does not override it."
         ]
       },
       {
@@ -288,7 +299,7 @@
         "id": "restore",
         "title": "Restore the previous setup",
         "paragraphs": [
-          "Disable Show in folder removes only OpenXplorer’s unmodified user-level service files. Restore previous also restores recorded file associations. Modified or third-party configuration is preserved for manual review."
+          "Disable Show in folder removes only OpenXplorer’s unmodified user-level service files. Restore previous also restores recorded file associations. Modified or third-party configuration is preserved for manual review. Restore Open and Save dialogs gives file dialogs back to the desktop the same way."
         ]
       }
     ]

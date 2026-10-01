@@ -19,6 +19,7 @@
 
 mod clock_format;
 mod command_line;
+mod file_dialogs;
 mod requests;
 mod state;
 
@@ -114,6 +115,7 @@ mod imp {
     use gtk::{gio, glib};
     use ox_core::settings::Settings;
 
+    use super::file_dialogs::{self, ChooserRoute};
     use super::{AppState, Launch};
 
     /// Private state of [`super::Application`].
@@ -125,6 +127,11 @@ mod imp {
         pub(super) state: OnceCell<AppState>,
         /// Saving the snapshot failed, so the process exits with an error.
         pub(super) snapshot_failed: Cell<bool>,
+        /// The Open and Save dialog backend, exported in `dbus_register`
+        /// so it answers as soon as the bus name does (INT-032).
+        pub(super) file_chooser: std::cell::RefCell<Option<ox_core::integration::FileChooserBus>>,
+        /// Where its calls go once `startup` has run.
+        pub(super) chooser_route: std::rc::Rc<ChooserRoute>,
     }
 
     #[glib::object_subclass]
@@ -143,6 +150,29 @@ mod imp {
     }
 
     impl ApplicationImpl for Application {
+        /// Exports the Open and Save dialog backend before `GApplication`
+        /// asks for the bus name, so a call from the desktop portal, which
+        /// may have started the app for it, never finds the object missing
+        /// (INT-032). A snapshot instance serves nothing.
+        fn dbus_register(
+            &self,
+            connection: &gio::DBusConnection,
+            object_path: &str,
+        ) -> Result<(), glib::Error> {
+            self.parent_dbus_register(connection, object_path)?;
+            if let Some(Launch::Interactive) = self.launch.get() {
+                let application = self.obj();
+                let bus = file_dialogs::export(application.upcast_ref(), connection, &self.chooser_route);
+                self.file_chooser.replace(bus);
+            }
+            Ok(())
+        }
+
+        fn dbus_unregister(&self, connection: &gio::DBusConnection, object_path: &str) {
+            self.file_chooser.take();
+            self.parent_dbus_unregister(connection, object_path);
+        }
+
         /// Names the application, then creates the shared state once GTK
         /// has started.
         fn startup(&self) {
@@ -225,6 +255,16 @@ impl Application {
             .set(launch)
             .expect("a new application has no launch yet");
         app
+    }
+
+    /// Sends Open and Save dialog calls to `target` from now on, including
+    /// any that arrived before `startup` (INT-032).
+    pub(super) fn route_file_dialogs(
+        &self,
+        target: impl Fn(ox_core::integration::ChooserCall) -> Result<(), ox_core::integration::ChooserNotShown>
+            + 'static,
+    ) {
+        self.imp().chooser_route.attach(target);
     }
 
     /// How the process was started.
@@ -460,6 +500,7 @@ pub fn run() -> glib::ExitCode {
         }
     };
     choose_renderer(&arguments);
+    file_dialogs::prepare_service_launch(&arguments);
     if let Err(error) = check_command_line(&arguments) {
         eprintln!("{error}");
         return glib::ExitCode::from(INVALID_COMMAND_LINE);
@@ -475,6 +516,7 @@ pub fn run() -> glib::ExitCode {
         },
     };
     let app = Application::new(launch);
+    file_dialogs::linger_as_service(&app, &arguments);
     let status = app.run_with_args(&arguments);
     if app.imp().snapshot_failed.get() {
         glib::ExitCode::FAILURE
