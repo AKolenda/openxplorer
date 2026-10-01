@@ -509,9 +509,26 @@ def missing_tools() -> list[str]:
     return [tool for tool in REQUIRED_TOOLS if shutil.which(tool) is None]
 
 
+def leftover_desktop_note(repository: Path) -> str | None:
+    """Return advice to delete a desktop/ folder left behind in an updated clone, or None.
+
+    The Python app was removed from the repository, but updating a clone keeps
+    its untracked and ignored files (preview.html, __pycache__) in desktop/.
+    No check reads that folder.
+    """
+    leftover = repository / 'desktop'
+    if not leftover.is_dir():
+        return None
+    return (f'note: {leftover} is left over from the retired Python app and no check reads it; '
+            'delete it. Its sources are desktop/ at tag v2.0.0.')
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run all checks and return the exit status: 0 passed, 1 failed, 2 unusable setup."""
     arguments = parse_arguments(argv)
+    note = leftover_desktop_note(NATIVE.parent)
+    if note:
+        print(note, file=sys.stderr)
     missing = missing_tools()
     if missing:
         print(f'Required native check tools are missing: {", ".join(missing)}. '

@@ -16043,8 +16043,8 @@ python_tests = [
   "v2.0.0:desktop/tests/ui_v07.py::Version 1.1.4 is visible",
 ]
 bridge = []
-native = "todo"
-native_note = "Needs an explicit product decision by the owner: the website preview is built from v2.0.0:desktop/ui, not from the GTK app (a GTK 4 app cannot run in a browser), and the UI regression suites depend on it. Record n-a only once the owner decides whether the HTML preview stays as a separate artifact. Porting notes: Website/demo artifact rather than desktop behaviour."
+native = "n-a"
+native_note = "Retired by the owner's decision of 2026-09-28 to retire desktop/ and demo the native app instead: a GTK 4 app cannot run in a browser, and the HTML preview built from v2.0.0:desktop/ui went with the Python app. The website's /tour/ viewer (apps/web/public/tour/) replaces /app-preview.html in the same sandboxed iframe; it is a click-through of pictures of the real native app, captured by tools/capture-native-tour.py in an isolated session with a fictional /home/demo and no network, using the test-only snapshot hook (OPENXPLORER_SNAPSHOT with OPENXPLORER_SCENE and OPENXPLORER_HOTSPOTS, native/crates/ox-app/src/snapshot/). It runs no app code and makes no network requests."
 
 [[feature]]
 id = "ACC-001"

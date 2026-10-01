@@ -496,5 +496,18 @@ class DrawnIconTests(unittest.TestCase):
         self.assertEqual(check.stray_images(crates), [])
 
 
+
+class LeftoverDesktopTests(unittest.TestCase):
+    """An updated clone is told to delete the retired app's leftover folder."""
+
+    def test_a_leftover_desktop_folder_is_named(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            self.assertIsNone(check.leftover_desktop_note(repository))
+            (repository / 'desktop/__pycache__').mkdir(parents=True)
+            note = check.leftover_desktop_note(repository)
+            self.assertIn(str(repository / 'desktop'), note)
+            self.assertIn('delete it', note)
+
 if __name__ == '__main__':
     unittest.main()

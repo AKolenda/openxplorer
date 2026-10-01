@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import textwrap
 from typing import Any
@@ -445,8 +446,19 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(inventories.errors, [])
         self.assertTrue(inventories.features)
         self.assertEqual(len(inventories.catalog.tests), 1249)
-        self.assertNotIn('desktop', {path.name for path in check.ROOT.iterdir()},
-                         'the checks must not need the retired Python app')
+
+    def test_the_checks_need_only_the_native_tree(self) -> None:
+        """A copy holding only native/ passes, so nothing reads the retired desktop/.
+
+        An existing clone can keep an untracked desktop/ folder after an update,
+        so the test checks what the checks read, not what the checkout holds.
+        """
+        root = temporary_root(self)
+        shutil.copytree(check.ROOT / 'native', root / 'native',
+                        ignore=shutil.ignore_patterns('target', '__pycache__'))
+        copy = check.check_inventories(root)
+        self.assertEqual(copy.errors, [])
+        self.assertEqual(len(copy.features), len(check.check_inventories(check.ROOT).features))
 
     def test_a_broken_feature_file_is_reported_not_raised(self) -> None:
         """A TOML syntax error becomes one message naming the file."""
