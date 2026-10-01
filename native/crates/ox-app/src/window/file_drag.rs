@@ -295,7 +295,9 @@ impl BrowserWindow {
         if self.imp().outgoing_drag.replace(None).is_some() {
             announce(self, DRAG_ENDED, gtk::AccessibleAnnouncementPriority::Medium);
         }
-        self.folder_pane().owners().show_dragged_items(HashSet::new());
+        for pane in self.folder_panes() {
+            pane.owners().show_dragged_items(HashSet::new());
+        }
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_END);
     }
 

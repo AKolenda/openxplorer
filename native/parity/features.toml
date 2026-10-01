@@ -1607,8 +1607,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "OpenNewTabAfterLastTab (default false = after current)"
-native = "todo"
-native_note = "Porting notes: OpenXplorer always appends new tabs at the end. Existing OpenXplorer part is protected by TAB-001, TAB-020 and OPEN-016."
+native = "done"
+native_note = "Tabs opened from a folder (Open in new tab, middle-click, Open in new tabs, a place's or crumb's Open in new tab, Open file location in tab, Ctrl+opened folders) go right after the current tab, and several opened from it keep their order after it; Ctrl+T, Settings and locations from other apps go at the end. Settings ▸ Windows & tabs ▸ 'Open new tabs: After the current tab / At the end of the tab bar' (preferences.openTabsAtEnd) (native/crates/ox-app/src/window/session.rs add_at, navigation.rs open_tab). Tests: native/crates/ox-app/src/window/session.rs (tabs_opened_from_a_tab_follow_it_in_order_and_new_tabs_go_last)."
 
 [[feature]]
 id = "TAB-018"
@@ -1626,8 +1626,8 @@ sources = [
 python_tests = []
 bridge = ["operate", "transferConflicts", "fileDragLayout"]
 dolphin = "DolphinTabBar drag/drop + auto-activation timer (800 ms)"
-native = "partial"
-native_note = "native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab): items dropped on a tab go into its folder and an 800 ms hover shows the tab. Missing: folders dropped on the empty tab-bar area opening as new tabs."
+native = "done"
+native_note = "Items dropped on a tab go into its folder and an 800 ms hover shows the tab; folders dropped on the tab strip beside the tabs open as background tabs at the end, files among them are left alone (DropDestination::NewTabs, Dolphin's tabDropEvent) (native/crates/ox-app/src/window/file_drop.rs, file_drop/targets/spot.rs). Tests: native/crates/ox-app/src/window/file_drop/targets/tests.rs (a_drop_on_a_tab_goes_into_its_folder_and_hovering_shows_the_tab), window/tests/split_view.rs (folders_dropped_beside_the_tabs_open_as_new_tabs)."
 
 [[feature]]
 id = "TAB-019"
@@ -1804,8 +1804,8 @@ sources = [
 python_tests = []
 bridge = ["list", "newWindow"]
 dolphin = "DolphinViewContainer::slotItemActivated modifiers"
-native = "todo"
-native_note = "Porting notes: Conflict, Explorer wins: in Explorer, Ctrl+double-click opens the folder in a new window."
+native = "done"
+native_note = "Enter or a double-click on a folder with Ctrl opens it in a new tab behind, with Ctrl+Shift in a new tab in front and with Shift in a new window, whatever else is selected; without a modifier it opens in place. Dolphin's mapping is kept over Explorer's Ctrl+double-click new window, as the owner asked (native/crates/ox-app/src/window/input.rs activate_from_view, open_folder_action). Tests: native/crates/ox-app/src/window/tests/split_view.rs (ctrl_opens_a_folder_in_a_new_tab_behind)."
 
 [[feature]]
 id = "TAB-027"
@@ -2651,8 +2651,8 @@ python_tests = ["v2.0.0:desktop/tests/test_v07.py::HandoffTests::test_tab_roundt
 bridge = ["preferences", "environment", "uiReady"]
 dolphin = "RememberOpenedTabs (default true); General → Startup “Show on startup: folders, tabs and window state from last time” (RememberOpenedTabs)"
 gnome = "App-managed state (GNOME 46 has no XSMP restore): persist under $XDG_STATE_HOME; GtkApplication query-end at logout"
-native = "todo"
-native_note = "Porting notes: Explorer has 'Restore previous folder windows at logon', off by default. Provide it as an option. Test HandoffTests::test_tab_roundtrip covers only the reusable snapshot validation."
+native = "done"
+native_note = "Settings ▸ Windows & tabs ▸ Startup ▸ 'Restore previous tabs at startup' (off by default, as Explorer's 'Restore previous folder windows'). While on, the last browsing window to close saves its tabs, split panes, histories, selections and scroll positions to session.json in the settings directory (private, replaced atomically, read back as untrusted TabSnapshots with bounded lists); a start without locations reopens them with the same tab and pane in front, a start with locations shows only those. The window size comes from TAB-054. Settings tabs are not saved; GNOME has no XSMP restore, so the app keeps the state itself (native/crates/ox-core/src/session/saved.rs, native/crates/ox-app/src/window/session_restore.rs, application/state.rs open_first_window). Tests: native/crates/ox-core/src/session/saved.rs (a_saved_session_comes_back_as_it_was_saved), native/crates/ox-app/src/window/session_restore.rs (a_saved_window_reopens_its_tabs_and_split_panes)."
 
 [[feature]]
 id = "TAB-054"
@@ -2686,8 +2686,8 @@ sources = [
 python_tests = []
 bridge = ["preferences"]
 dolphin = "HomeUrl"
-native = "todo"
-native_note = "Porting notes: Explorer's equivalent is 'Open File Explorer to: Home / This PC'."
+native = "done"
+native_note = "Settings ▸ Windows & tabs ▸ Startup ▸ 'Open new windows at': a folder field with 'Use current location' (the folder shown before Settings) and 'Use Home'; a location the app cannot open or a local folder that does not exist is refused with a message, empty means Home (preferences.startupFolder). New windows without a location (first start, --new-window, Ctrl+N from a landing page) open there, or at Home once the folder is gone (native/crates/ox-app/src/settings_page/startup.rs, application/state.rs startup_location). Tests: native/crates/ox-app/src/settings_page/startup.rs (only_a_folder_that_exists_becomes_the_startup_folder), application/state.rs (split_pairs_its_locations_and_new_windows_open_at_the_startup_folder)."
 
 [[feature]]
 id = "TAB-056"
@@ -4057,8 +4057,8 @@ sources = [
 python_tests = []
 bridge = ["list"]
 dolphin = "split_view: F3"
-native = "todo"
-native_note = "Porting notes: Shortcut conflict, Explorer wins: F3 focuses the search box in Explorer, so split view needs another key. Explorer itself has no split view."
+native = "done"
+native_note = "Split view (F3, View ▸ Split view): the tab shows two folder panes side by side, each a tab of the session of its own with its own location, history, selection and listing; the active pane stands in the strip for its tab, so the address bar, history buttons, status bar, details pane, commands and Sort/View menus follow it. A click, keyboard focus, Ctrl+wheel or a drag entering the other pane makes it active; the active pane's caption has the accent underline and the other pane is dimmed. F3 again closes the active pane (Dolphin's default). Settings ▸ Windows & tabs ▸ Split view: 'Open new windows in split view' and 'Switch between split panes with Tab'. Split tabs are saved with the session (TAB-053). F3 was free: Explorer's F3 search is Ctrl+F here. Moving a split tab to another window or reopening a closed one takes its active pane only. (native/crates/ox-app/src/window/split_view.rs, window/session/split.rs, window/pane_content.rs). Tests: native/crates/ox-app/src/window/tests/split_view.rs (each_pane_keeps_its_folder_and_the_window_follows_the_active_one), window/session/split.rs (each_pane_of_a_split_tab_keeps_its_own_history)."
 
 [[feature]]
 id = "VIEW-060"
@@ -14770,8 +14770,8 @@ python_tests = [
 ]
 bridge = ["newWindow"]
 dolphin = "dolphin --select / --split / --new-window / --daemon"
-native = "todo"
-native_note = "Not done: the native app has no split view yet (tracked with VIEW), so --split has nothing to open. Add the option together with split view."
+native = "done"
+native_note = "--split [locations] pairs the locations into split tabs (a lone one is split with itself; none splits the startup folder): in a new window when none is open, --new-window is given or Settings opens folders from other apps in a new window, else as new tabs of the active window (native/crates/ox-app/src/application/command_line.rs, state.rs open_split, window/split_view.rs open_split_tabs). Tests: native/crates/ox-app/src/application/state.rs (split_pairs_its_locations_and_new_windows_open_at_the_startup_folder), command_line.rs (each_option_asks_for_its_own_action)."
 
 [[feature]]
 id = "INT-006"

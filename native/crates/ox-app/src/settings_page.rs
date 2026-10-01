@@ -35,6 +35,7 @@ mod parts;
 mod row;
 mod search;
 mod section;
+mod startup;
 mod status_card;
 mod troubleshooting;
 mod windows_tabs;

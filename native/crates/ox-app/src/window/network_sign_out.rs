@@ -147,14 +147,11 @@ impl BrowserWindow {
 
     /// Stops the listings and folder watches of the tabs on `host`.
     fn stop_reading_host(&self, host: &str) {
-        let mut session = self.imp().session.borrow_mut();
-        let on_host = session
-            .tabs_mut()
-            .iter_mut()
-            .filter(|tab| smb_host_of(tab.uri()).as_deref() == Some(host));
-        for tab in on_host {
-            tab.stop_reading();
-        }
+        self.imp().session.borrow_mut().change_panes(|tab| {
+            if smb_host_of(tab.uri()).as_deref() == Some(host) {
+                tab.stop_reading();
+            }
+        });
     }
 
     /// Shows what Sign out did: on success the tabs on the server are

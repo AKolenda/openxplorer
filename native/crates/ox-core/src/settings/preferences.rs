@@ -14,6 +14,7 @@ use serde_json::Value;
 use super::choices::{ContextMenu, Theme, View};
 use super::pane_options::DetailsPaneOptions;
 use super::SettingsError;
+use crate::location;
 
 /// Text sizes offered in Settings, in percent.
 pub const TEXT_SIZES: [u32; 8] = [80, 90, 100, 110, 125, 150, 175, 200];
@@ -290,6 +291,27 @@ pub struct Preferences {
     /// one is hidden.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hidden_sidebar_places: Vec<String>,
+    /// Tabs opened from a folder go at the end of the strip instead of
+    /// after the current tab (Dolphin's `OpenNewTabAfterLastTab`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub open_tabs_at_end: bool,
+    /// A start without locations reopens the tabs of the last window
+    /// closed (Dolphin's `RememberOpenedTabs`, Explorer's "Restore
+    /// previous folder windows at logon"); off, as in Explorer.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub restore_session: bool,
+    /// Where new windows open, as a canonical location or a landing page
+    /// such as This PC; Home when unset (Dolphin's `HomeUrl`, Explorer's
+    /// "Open File Explorer to").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_folder: Option<String>,
+    /// New windows open split in two panes (Dolphin's `SplitView`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub begin_in_split_view: bool,
+    /// Tab in a folder view moves to the other pane of a split tab
+    /// (Dolphin's `SwitchBetweenSplitViewsWithTabKey`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub tab_switches_split_panes: bool,
 }
 
 /// The most sidebar sections that may be hidden, and the longest key.
@@ -343,6 +365,11 @@ impl Default for Preferences {
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
+            open_tabs_at_end: false,
+            restore_session: false,
+            startup_folder: None,
+            begin_in_split_view: false,
+            tab_switches_split_panes: false,
         }
     }
 }
@@ -420,6 +447,20 @@ impl Preferences {
         if let Some(options) = &update.details_pane_options {
             self.details_pane_options = options.clone();
         }
+        replace_if_some(&mut self.open_tabs_at_end, update.open_tabs_at_end);
+        replace_if_some(&mut self.restore_session, update.restore_session);
+        replace_if_some(&mut self.begin_in_split_view, update.begin_in_split_view);
+        replace_if_some(
+            &mut self.tab_switches_split_panes,
+            update.tab_switches_split_panes,
+        );
+        if let Some(folder) = &update.startup_folder {
+            if folder.is_empty() {
+                self.startup_folder = None;
+            } else if let Ok(uri) = location::normalise_navigation(folder, None, &glib::home_dir()) {
+                self.startup_folder = Some(uri);
+            }
+        }
     }
 }
 
@@ -483,6 +524,17 @@ pub struct PreferencesUpdate {
     /// Replaces the sidebar places hidden one by one; up to 64 locations,
     /// else ignored.
     pub hidden_sidebar_places: Option<Vec<String>>,
+    /// Open tabs from a folder at the end, or after the current tab.
+    pub open_tabs_at_end: Option<bool>,
+    /// Reopen the last window's tabs on a start without locations.
+    pub restore_session: Option<bool>,
+    /// Where new windows open; empty for Home. A location the location
+    /// rules refuse is ignored.
+    pub startup_folder: Option<String>,
+    /// Open new windows split.
+    pub begin_in_split_view: Option<bool>,
+    /// Let Tab move between the panes of a split tab.
+    pub tab_switches_split_panes: Option<bool>,
 }
 
 impl PreferencesUpdate {
@@ -533,6 +585,11 @@ impl PreferencesUpdate {
                 .and_then(|size| u32::try_from(size).ok()),
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
+            open_tabs_at_end: flag("openTabsAtEnd"),
+            restore_session: flag("restoreSession"),
+            startup_folder: text("startupFolder").map(str::to_owned),
+            begin_in_split_view: flag("beginInSplitView"),
+            tab_switches_split_panes: flag("tabSwitchesSplitPanes"),
         })
     }
 }

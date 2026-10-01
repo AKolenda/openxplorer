@@ -147,23 +147,25 @@ impl BrowserWindow {
     /// the ones the user changes.
     pub(super) fn apply_preferences(&self) {
         let preferences = self.context().settings_data().preferences;
-        self.folder_pane()
-            .model()
-            .set_show_hidden(preferences.show_hidden);
+        let view = FolderView::from_setting(preferences.view);
+        for pane in self.folder_panes() {
+            pane.model().set_show_hidden(preferences.show_hidden);
+            pane.show_view(view);
+            let details_view = pane.details();
+            details_view.apply_column_widths(preferences.column_widths.as_ref());
+            details_view.connect_columns_resized(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |widths| window.save_preference(Preference::ColumnWidths(widths))
+            ));
+        }
         // `win.details-pane` starts from the same preferences.
         self.details_pane()
             .set_options(preferences.details_pane_options.clone());
         self.fit_details_pane();
-        self.show_view(FolderView::from_setting(preferences.view));
+        self.show_view(view);
         let workspace = self.workspace();
         workspace.set_position(start_sidebar_width(preferences.sidebar_width));
-        let details_view = self.folder_pane().details();
-        details_view.apply_column_widths(preferences.column_widths.as_ref());
-        details_view.connect_columns_resized(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |widths| window.save_preference(Preference::ColumnWidths(widths))
-        ));
         self.save_sidebar_width_after_drags();
         self.keep_sidebar_within_limit();
         self.reset_sidebar_on_double_click();
@@ -194,7 +196,9 @@ impl BrowserWindow {
     /// saving them: the window that reset the layout saves it once.
     fn show_default_layout(&self) {
         self.workspace().set_position(DEFAULT_SIDEBAR_WIDTH);
-        self.folder_pane().details().apply_column_widths(None);
+        for pane in self.folder_panes() {
+            pane.details().apply_column_widths(None);
+        }
     }
 
     /// The widest the sidebar may be now, or `None` before the workspace

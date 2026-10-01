@@ -38,7 +38,9 @@ impl BrowserWindow {
     /// The pointer is at `point` in `view`, or has left it.
     pub(super) fn pointer_over_items(&self, view: &gtk::Widget, point: Option<(f64, f64)>) {
         let pane = self.details_pane();
-        if !pane.options().follow_hover {
+        // The details pane speaks for the active pane of a split tab.
+        let in_active_pane = self.side_holding(view) == Some(self.active_side());
+        if !pane.options().follow_hover || !in_active_pane {
             return;
         }
         let pane_model = self.folder_pane();

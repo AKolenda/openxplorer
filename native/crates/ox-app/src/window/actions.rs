@@ -155,7 +155,9 @@ impl BrowserWindow {
         self.add_action_entries([
             plain_action(WindowAction::NewTab, |window| {
                 let home = window.imp().locations.borrow().home_uri();
-                window.open_tab_or_report(&home, TabPlacement::Foreground);
+                if let Err(error) = window.add_tab(&home) {
+                    window.show_message(&error.to_string());
+                }
             }),
             plain_action(WindowAction::CloseTab, |window| {
                 let active = window.imp().session.borrow().active_id();
@@ -340,27 +342,36 @@ impl BrowserWindow {
 
     /// Show hidden files: lists or hides them, and saves the choice.
     fn set_hidden_files_shown(&self, shown: bool) {
-        self.folder_pane().model().set_show_hidden(shown);
+        for pane in self.folder_panes() {
+            pane.model().set_show_hidden(shown);
+        }
+        self.update_beside_pane();
         self.update_content();
         // The folder's item count changes with it.
         self.update_details_pane();
         self.save_preference(Preference::ShowHidden(shown));
     }
 
-    /// Keeps the Sort menu in step with sorting by a column header.
+    /// Keeps the Sort menu in step with sorting by a column header, in
+    /// either folder pane.
     fn follow_header_sorting(&self) {
-        let Some(sorter) = self.folder_pane().details().column_view().sorter() else {
-            return;
-        };
-        sorter.connect_changed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_, _| {
-                let order = window.folder_pane().details().sort_order();
-                window.set_action_state(WindowAction::Sort, &order.column.as_str().to_variant());
-                window.set_action_state(WindowAction::Direction, &order.direction.as_str().to_variant());
-            }
-        ));
+        for pane in self.folder_panes() {
+            let Some(sorter) = pane.details().column_view().sorter() else {
+                continue;
+            };
+            sorter.connect_changed(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_, _| window.show_sort_state()
+            ));
+        }
+    }
+
+    /// Shows the active pane's sort order in the Sort menu.
+    pub(super) fn show_sort_state(&self) {
+        let order = self.folder_pane().details().sort_order();
+        self.set_action_state(WindowAction::Sort, &order.column.as_str().to_variant());
+        self.set_action_state(WindowAction::Direction, &order.direction.as_str().to_variant());
     }
 
     fn install_appearance_actions(&self) {
@@ -421,7 +432,7 @@ impl BrowserWindow {
 /// too: each action and its accelerators, as GTK parses them. The keys a
 /// text field keeps are in [`super::window_keys`], [`super::file_ops`] and,
 /// for the history keys, [`super::navigation_buttons`].
-const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 9] = [
+const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 10] = [
     (WindowAction::Refresh, &["F5", "<Primary>r"]),
     (WindowAction::Location, &["<Primary>l", "<Alt>d"]),
     (WindowAction::AddressHistory, &["F4"]),
@@ -433,6 +444,9 @@ const WINDOW_ACCELERATORS: [(WindowAction, &[&str]); 9] = [
     (WindowAction::OpenTerminalHere, &["<Shift><Alt>F4"]),
     // Dolphin's Open Preferred Search Tool (OPEN-024).
     (WindowAction::SearchTool, &["<Primary><Shift>f"]),
+    // Dolphin's Split (VIEW-059); Explorer leaves F3 to its search box,
+    // which Ctrl+F reaches here.
+    (WindowAction::SplitView, &["F3"]),
 ];
 
 /// Ctrl+Q: quit the application, from any window and any focus (TAB-058).

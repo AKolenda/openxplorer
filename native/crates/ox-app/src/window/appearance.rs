@@ -27,13 +27,19 @@ impl BrowserWindow {
         let text_size_handler = self.skin().connect_text_size_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move || window
-                .folder_pane()
-                .set_text_size(window.skin().drawn_text_size())
+            move || window.show_text_size()
         ));
         self.imp().handlers.borrow_mut().skin = vec![appearance_handler, text_size_handler];
         self.show_appearance_choice();
-        self.folder_pane().set_text_size(self.skin().drawn_text_size());
+        self.show_text_size();
+    }
+
+    /// Draws both folder panes' items at the skin's text size.
+    fn show_text_size(&self) {
+        let size = self.skin().drawn_text_size();
+        for pane in self.folder_panes() {
+            pane.set_text_size(size);
+        }
     }
 
     /// Shows the chosen and drawn appearance on the Appearance button and

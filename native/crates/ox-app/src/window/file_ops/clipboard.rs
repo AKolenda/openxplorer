@@ -210,7 +210,9 @@ impl BrowserWindow {
     /// and updates Paste.
     fn remember_clipboard(&self, files: Option<ClipboardFiles>) {
         let cut_uris = cut_uris(files.as_ref());
-        self.folder_pane().owners().show_cut_items(cut_uris);
+        for pane in self.folder_panes() {
+            pane.owners().show_cut_items(cut_uris.clone());
+        }
         self.imp().file_operations.borrow_mut().clipboard = files;
         self.update_file_commands();
     }

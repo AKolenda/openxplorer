@@ -37,6 +37,7 @@ impl BrowserWindow {
         self.open_at_saved_size();
         self.present();
         self.remember_size();
+        self.imp().remembers_session.set(true);
     }
 
     /// Gives the window the saved size, before it is shown.

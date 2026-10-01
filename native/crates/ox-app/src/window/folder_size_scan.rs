@@ -348,7 +348,7 @@ impl BrowserWindow {
         self.size_scans().measured.borrow_mut().set(uri, state.clone());
         let stores: Vec<gtk::gio::ListStore> = {
             let session = self.imp().session.borrow();
-            session.tabs().iter().map(|tab| tab.store.clone()).collect()
+            session.panes().map(|tab| tab.store.clone()).collect()
         };
         for store in stores {
             update_rows_of(&store, uri, state);

@@ -116,6 +116,9 @@ pub(super) fn view_menu() -> Vec<MenuEntry> {
         MenuItem::toggle("Navigation pane", Icon::Folder, WindowAction::Sidebar)
             .with_shortcut("F9")
             .into(),
+        MenuItem::toggle("Split view", Icon::PanelRight, WindowAction::SplitView)
+            .with_shortcut("F3")
+            .into(),
         MenuEntry::Divider,
         text_size_item("Larger text", Icon::Add, Step::Increase, "Ctrl++"),
         text_size_item("Smaller text", Icon::Subtract, Step::Decrease, "Ctrl+−"),

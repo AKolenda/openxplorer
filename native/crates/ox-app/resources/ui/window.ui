@@ -182,7 +182,60 @@
                                        and the details pane (`.transfer`). -->
                                   <object class="GtkOverlay">
                                     <property name="child">
-                                      <object class="OxFolderPane" id="folder_pane"/>
+                                      <!-- The folder pane, and a second one
+                                           beside it while the tab is split
+                                           (VIEW-059, split_view.rs). -->
+                                      <object class="GtkPaned" id="pane_split">
+                                        <style>
+                                          <class name="pane-split"/>
+                                        </style>
+                                        <property name="shrink-start-child">false</property>
+                                        <property name="shrink-end-child">false</property>
+                                        <property name="start-child">
+                                          <object class="GtkBox" id="start_pane_column">
+                                            <property name="orientation">vertical</property>
+                                            <child>
+                                              <object class="GtkLabel" id="start_pane_caption">
+                                                <property name="visible">false</property>
+                                                <property name="xalign">0</property>
+                                                <property name="ellipsize">middle</property>
+                                                <style>
+                                                  <class name="pane-caption"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="OxFolderPane" id="folder_pane">
+                                                <style>
+                                                  <class name="folder-pane-host"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </property>
+                                        <property name="end-child">
+                                          <object class="GtkBox" id="end_pane_column">
+                                            <property name="orientation">vertical</property>
+                                            <property name="visible">false</property>
+                                            <child>
+                                              <object class="GtkLabel" id="end_pane_caption">
+                                                <property name="xalign">0</property>
+                                                <property name="ellipsize">middle</property>
+                                                <style>
+                                                  <class name="pane-caption"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="OxFolderPane" id="split_pane">
+                                                <style>
+                                                  <class name="folder-pane-host"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </property>
+                                      </object>
                                     </property>
                                     <child type="overlay">
                                       <object class="OxTransferPanel" id="transfer_panel"/>

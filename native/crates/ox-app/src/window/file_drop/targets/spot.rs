@@ -4,7 +4,8 @@
 //!
 //! A folder view takes drops on a writable folder, on a program, or on
 //! blank space for the folder shown; the sidebar on a place's folder, and
-//! in Quick access to pin; the breadcrumbs and the tabs on their folders.
+//! in Quick access to pin; the breadcrumbs and the tabs on their folders,
+//! and the tab strip beside the tabs to open dropped folders as tabs.
 //! The Recycle Bin takes drops too, to move them to the Trash.
 //! Nothing takes drops while a file operation runs.
 
@@ -33,6 +34,8 @@ pub(super) enum DropSpot {
     Crumb(String),
     /// A tab's folder.
     Tab { id: TabId, folder: String },
+    /// The tab strip beside the tabs: dropped folders open as new tabs.
+    NewTabs,
 }
 
 impl DropSpot {
@@ -50,6 +53,7 @@ impl DropSpot {
             DropSpot::Crumb(folder) | DropSpot::Tab { folder, .. } => {
                 DropDestination::for_folder(folder.clone())
             }
+            DropSpot::NewTabs => DropDestination::NewTabs,
         }
     }
 }
@@ -77,7 +81,9 @@ impl BrowserWindow {
                 self.takes_drops(&folder).then_some(DropSpot::Crumb(folder))
             }
             DropZone::Tabs => {
-                let tab = self.tab_strip().tab_at(x, y)?;
+                let Some(tab) = self.tab_strip().tab_at(x, y) else {
+                    return Some(DropSpot::NewTabs);
+                };
                 self.takes_drops(&tab.uri).then_some(DropSpot::Tab {
                     id: tab.id,
                     folder: tab.uri,

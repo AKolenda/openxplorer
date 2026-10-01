@@ -155,6 +155,7 @@ impl BrowserWindow {
         search.set_enabled(!on_page && !is_device_location(uri));
         self.update_cache_folder_action();
         self.render_tabs();
+        self.show_pane_captions();
         self.show_snapshot_banner();
         self.update_properties_actions();
         self.sidebar().select(uri);
