@@ -11491,8 +11491,8 @@ sources = [
 python_tests = []
 bridge = ["activateItem", "open"]
 dolphin = "itemsActivated / runPreferredApplications"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's Enter opens only when exactly one item is selected."
+native = "done"
+native_note = "Enter, Open and the item menu's Open act on every selected item (native/crates/ox-app/src/window/open_several.rs): one item opens as a double-click does; with several, each folder opens in a background tab in the order of the view and each file or archive in its default application, one launch per file; more than five ask 'Are you sure you want to open <n> items?' first (Cancel / Open all). Shift+Enter does not open new windows. Test: native/crates/ox-app/src/window/tests/opening.rs (enter_on_several_items_opens_each_and_asks_for_many). Porting notes: OpenXplorer's Enter opened only when exactly one item was selected."
 
 [[feature]]
 id = "OPEN-004"

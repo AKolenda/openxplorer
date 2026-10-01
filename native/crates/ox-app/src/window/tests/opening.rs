@@ -223,6 +223,33 @@ fn open_in_new_tab_opens_the_folder_in_a_tab_in_front() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
 }
 
+/// Enter on several items opens each: folders in background tabs and
+/// files in their applications; more than five are asked about first.
+///
+/// parity: OPEN-003
+#[gtk::test]
+fn enter_on_several_items_opens_each_and_asks_for_many() {
+    let fixture = Fixture::standard();
+    for name in ["A", "B", "C"] {
+        fs::write(fixture.path(name), "").expect("fixture file");
+    }
+    let test = TestWindow::open(&fixture.uri());
+
+    select_names(&test, &["Documents", "Notes 2.txt", "Résumé.txt"]);
+    test.activate("open", None);
+    wait_until("both files to open", || test.context.recorded_launches().len() == 2);
+
+    assert_eq!(tab_uris(&test), [fixture.uri(), fixture.uri_of("Documents")]);
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the tab stays");
+    select_names(&test, &["Notes 2.txt", "Notes 10.txt", "Résumé.txt", "A", "B", "C"]);
+    test.activate("open", None);
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.message_text(), "Are you sure you want to open 6 items?");
+    dialog.press("Cancel");
+    wait_for(std::time::Duration::from_millis(200));
+    assert_eq!(test.context.recorded_launches().len(), 2, "nothing more opened");
+}
+
 /// Shift+F4 opens a terminal in the folder shown and Shift+Alt+F4 one per
 /// folder of the selection, a file standing for its folder; more than
 /// five are asked about first, and Cancel opens none.

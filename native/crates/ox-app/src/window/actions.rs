@@ -218,13 +218,7 @@ impl BrowserWindow {
 
     fn install_selection_actions(&self) {
         self.add_action_entries([
-            plain_action(WindowAction::Open, |window| {
-                // Enter and Open act on exactly one item, as app.js does.
-                let positions = window.folder_pane().model().selected_positions();
-                if let [position] = positions.as_slice() {
-                    window.activate_item(*position);
-                }
-            }),
+            plain_action(WindowAction::Open, BrowserWindow::open_selection),
             plain_action(WindowAction::SelectAll, |window| {
                 window.folder_pane().model().select_all();
             }),

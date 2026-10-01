@@ -316,7 +316,7 @@ impl BrowserWindow {
 
     /// Opens a file in its default application and records it among the
     /// recent files; a failure is shown in a dialog.
-    fn open_file(&self, entry: &Entry) {
+    pub(super) fn open_file(&self, entry: &Entry) {
         let entry = entry.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

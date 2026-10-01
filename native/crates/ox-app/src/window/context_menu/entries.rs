@@ -103,7 +103,7 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     let is_folder = facts.shape == ItemShape::Folder;
     let open = item("Open", Icon::Folder, WindowAction::Open)
         .with_shortcut("Enter")
-        .disabled_when(several || (!is_folder && facts.is_read_only));
+        .disabled_when(!is_folder && facts.is_read_only);
     let mut entries: Vec<MenuEntry> = vec![open.into()];
     if facts.shape == ItemShape::ZipArchive {
         entries.extend(extraction_items(several));
@@ -528,6 +528,8 @@ mod tests {
         assert!(!entries.contains(&"Calculate folder size".to_owned()));
     }
 
+    /// Open stays: it opens each item (OPEN-003).
+    ///
     /// parity: CMD-009, TAB-027
     #[test]
     fn several_selected_items_disable_what_acts_on_one() {
@@ -541,7 +543,6 @@ mod tests {
         assert_eq!(
             disabled(&menu.entries),
             [
-                "Open",
                 "Open in Terminal",
                 "Open folder with…",
                 "Open in new window",

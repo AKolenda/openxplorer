@@ -13,7 +13,8 @@
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::parent_location;
+use ox_core::integration::TerminalError;
+use ox_core::location::{is_smb_server, parent_location};
 use ox_core::update::Activity;
 
 use super::actions::{plain_action, text_action};
@@ -282,6 +283,11 @@ impl BrowserWindow {
     /// Opens the terminal in the folder at `uri`, or in the folder of the
     /// file there; says in the message line what opened or why not.
     fn open_terminal_at(&self, uri: String) {
+        // A server is refused before anything mounts it.
+        if is_smb_server(&uri) {
+            self.show_message(&TerminalError::ServerListing.to_string());
+            return;
+        }
         let place = uri.clone();
         self.after_mounting(&place, move |window| window.open_terminal_in_mounted(uri));
     }
