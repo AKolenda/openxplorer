@@ -27,6 +27,8 @@ use crate::transfer::Cancellation;
 const PERMISSION_BITS: u32 = 0o7777;
 /// The sticky bit: only owners rename and delete a folder's content.
 const STICKY: u32 = 0o1000;
+/// The owner's read and execute bits, which listing a folder needs.
+const OWNER_LISTS: u32 = 0o500;
 /// The attributes a change reads of each item.
 const MODE_ATTRIBUTES: &str = "standard::type,standard::name,unix::mode,unix::uid,unix::gid";
 
@@ -276,16 +278,26 @@ fn apply_to_item(
     } else {
         request.mode.for_content(mode, is_folder)
     };
-    if wanted != mode {
-        file.set_attribute_uint32(
-            "unix::mode",
-            wanted,
-            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
-            Some(cancel.cancellable()),
-        )?;
-    }
+    let set_mode = || -> Result<(), EntryError> {
+        if wanted != mode {
+            file.set_attribute_uint32(
+                "unix::mode",
+                wanted,
+                gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+                Some(cancel.cancellable()),
+            )?;
+        }
+        Ok(())
+    };
     if !(is_folder && request.recursive) {
-        return Ok(());
+        return set_mode();
+    }
+    // A mode that stops the owner listing the folder comes after its
+    // content, which could not be listed any more; any other comes first,
+    // so a folder the owner could not list becomes listable.
+    let locks_out = wanted & OWNER_LISTS != OWNER_LISTS;
+    if !locks_out {
+        set_mode()?;
     }
     let children = file.enumerate_children(
         MODE_ATTRIBUTES,
@@ -295,6 +307,9 @@ fn apply_to_item(
     while let Some(child_info) = children.next_file(Some(cancel.cancellable()))? {
         let child = file.child(child_info.name());
         apply_to_item(&child, &child_info, request, false, cancel)?;
+    }
+    if locks_out {
+        set_mode()?;
     }
     Ok(())
 }
@@ -425,6 +440,42 @@ mod tests {
             0o600,
             "links are not followed"
         );
+    }
+
+    /// Taking the owner's access away from a folder and its content
+    /// reaches every item inside, although the owner can no longer list
+    /// the folder afterwards.
+    ///
+    /// parity: PROP-007
+    #[test]
+    fn no_access_for_the_owner_reaches_a_folders_content() {
+        let root = tempfile::tempdir().expect("a folder");
+        let folder = root.path().join("Locked");
+        fs::create_dir_all(folder.join("Sub")).expect("folders");
+        fs::write(folder.join("Sub/plan.txt"), b"plan").expect("file");
+        let change = PermissionChange {
+            owner: Some(Access::None),
+            group: Some(Access::None),
+            others: Some(Access::None),
+            ..PermissionChange::default()
+        };
+
+        let applied = apply(
+            &file_uri(&folder),
+            &PermissionRequest::simple(change, true),
+            &Cancellation::new(),
+        );
+
+        // Each folder is read, then opened again so what is inside it and
+        // the temporary folder's removal can be reached.
+        let mut modes = Vec::new();
+        for path in [folder.clone(), folder.join("Sub")] {
+            modes.push(mode_of(&path));
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).expect("mode");
+        }
+        modes.push(mode_of(&folder.join("Sub/plan.txt")));
+        applied.expect("applies");
+        assert_eq!(modes, [0, 0, 0], "the folder, its subfolder and the file inside");
     }
 
     /// Advanced Permissions set every bit of the folder, give its files
