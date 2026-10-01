@@ -2,20 +2,25 @@
 //! The sidebar resizer as a keyboard and screen-reader control.
 //!
 //! Ports `#sidebar-resizer` and the keys of `setupSidebarResize` in
-//! `desktop/ui/app.js`: the handle of the workspace's `GtkPaned` takes
-//! focus, is named "Resize sidebar", titled "Drag to resize sidebar ·
-//! double-click to reset", and announces the width with its limits. GTK
-//! 4.14 fixes the handle's role as generic, so unlike app.js's
-//! `role=separator` it is not announced as a separator. Left and Right change the width by 10 pixels (40 with Shift)
-//! and Home returns it to 210; every change is saved. Dragging and the
-//! double-click reset are [`super::preferences`]'.
+//! `desktop/ui/app.js`. The pointer drags the handle of the workspace's
+//! `GtkPaned`, titled "Drag to resize sidebar · double-click to reset";
+//! dragging and the double-click reset are [`super::preferences`]'.
+//! GTK gives that handle a generic role it cannot change, so a separator
+//! of no width beside it (`sidebar_resizer` in `window.ui`) stands for it:
+//! it is the Tab stop between the sidebar and the files, named "Resize
+//! sidebar" with the separator role and the width and its limits as its
+//! value, and lights the handle while it has focus. Left and Right change
+//! the width by 10 pixels (40 with Shift) and Home returns it to 210;
+//! every change is saved.
 
 use gtk::gdk;
 use gtk::glib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 
 use super::preferences::{sidebar_widths, Preference, DEFAULT_SIDEBAR_WIDTH};
 use super::BrowserWindow;
+use crate::resizer_control::ResizerControl;
 
 /// The resizer's hover text (`handle.title` in app.js).
 const TOOLTIP: &str = "Drag to resize sidebar · double-click to reset";
@@ -45,18 +50,29 @@ fn width_for_key(key: gdk::Key, shift: bool, width: i32) -> Option<i32> {
 }
 
 impl BrowserWindow {
-    /// Makes the pane handle a named, focusable control that the arrow
-    /// keys and Home move.
+    /// Titles the pane handle and makes the separator beside it the named,
+    /// focusable resizer that the arrow keys and Home move.
     pub(super) fn install_sidebar_resizer(&self) {
         let workspace = self.workspace();
         let Some(handle) = paned_handle(workspace) else {
             return;
         };
-        handle.set_focusable(true);
-        handle.set_focus_on_click(false);
         handle.set_tooltip_text(Some(TOOLTIP));
         handle.add_css_class("sidebar-resizer");
-        handle.update_property(&[gtk::accessible::Property::Label("Resize sidebar")]);
+        // The separator speaks for the handle, so screen readers meet the
+        // resizer once.
+        handle.update_state(&[gtk::accessible::State::Hidden(true)]);
+        let resizer = self.sidebar_resizer();
+        resizer.set_tooltip_text(Some(TOOLTIP));
+        resizer.set_label("Resize sidebar");
+        resizer.connect_value_requested(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |width| {
+                #[expect(clippy::cast_possible_truncation, reason = "sidebar widths are small")]
+                window.resize_sidebar_to(width.round() as i32);
+            }
+        ));
         let keys = gtk::EventControllerKey::new();
         keys.connect_key_pressed(glib::clone!(
             #[weak(rename_to = window)]
@@ -72,7 +88,19 @@ impl BrowserWindow {
                 }
             }
         ));
-        handle.add_controller(keys);
+        resizer.add_controller(keys);
+        let focus = gtk::EventControllerFocus::new();
+        focus.connect_enter(glib::clone!(
+            #[weak]
+            handle,
+            move |_| handle.add_css_class("keyboard-focus")
+        ));
+        focus.connect_leave(glib::clone!(
+            #[weak]
+            handle,
+            move |_| handle.remove_css_class("keyboard-focus")
+        ));
+        resizer.add_controller(focus);
         workspace.connect_position_notify(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -81,38 +109,42 @@ impl BrowserWindow {
         self.announce_sidebar_width();
     }
 
+    /// The resizer's keyboard and screen-reader side.
+    pub(super) fn sidebar_resizer(&self) -> &ResizerControl {
+        &self.imp().sidebar_resizer
+    }
+
     /// Moves the sidebar for `key`, within its limits, and saves the new
     /// width; false for a key the resizer does not take.
     pub(super) fn resize_sidebar_by_key(&self, key: gdk::Key, shift: bool) -> bool {
-        let workspace = self.workspace();
-        let Some(wanted) = width_for_key(key, shift, workspace.position()) else {
+        let Some(wanted) = width_for_key(key, shift, self.workspace().position()) else {
             return false;
         };
+        self.resize_sidebar_to(wanted);
+        true
+    }
+
+    /// Makes the sidebar `wanted` pixels wide, within its limits, and saves
+    /// the width.
+    fn resize_sidebar_to(&self, wanted: i32) {
         let widest = self.sidebar_limit().unwrap_or(*sidebar_widths().end());
         let width = wanted.clamp(*sidebar_widths().start(), widest);
-        workspace.set_position(width);
+        self.workspace().set_position(width);
         self.save_preference(Preference::SidebarWidth(width));
-        true
     }
 
     /// Tells screen readers the sidebar width and its limits
     /// (`aria-valuemin`, `aria-valuemax`, `aria-valuenow`).
     fn announce_sidebar_width(&self) {
-        let workspace = self.workspace();
-        let Some(handle) = paned_handle(workspace) else {
-            return;
-        };
         let widest = self.sidebar_limit().unwrap_or(*sidebar_widths().end());
-        handle.update_property(&[
-            gtk::accessible::Property::ValueMin(f64::from(*sidebar_widths().start())),
-            gtk::accessible::Property::ValueMax(f64::from(widest)),
-            gtk::accessible::Property::ValueNow(f64::from(workspace.position())),
-        ]);
+        let width = self.workspace().position();
+        self.sidebar_resizer()
+            .set_values(*sidebar_widths().start(), widest, width);
     }
 
     /// The pane handle, for tests.
     #[cfg(test)]
-    pub(super) fn sidebar_resizer(&self) -> gtk::Widget {
+    pub(super) fn sidebar_handle(&self) -> gtk::Widget {
         paned_handle(self.workspace()).expect("the workspace has a handle")
     }
 }

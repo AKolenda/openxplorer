@@ -37,6 +37,7 @@ use super::transfer_panel::TransferPanel;
 use super::type_to_select::Typeahead;
 use crate::app_context::AppContext;
 use crate::network::WindowNetwork;
+use crate::resizer_control::ResizerControl;
 use crate::search::{FolderSearch, SearchInfoStrip};
 use crate::settings_page::SettingsPage;
 use crate::volumes::VolumeRow;
@@ -77,6 +78,10 @@ pub(crate) struct BrowserWindow {
     /// (`.sidebar-resizer`).
     #[template_child]
     pub(super) workspace: TemplateChild<gtk::Paned>,
+    /// The resizer's keyboard and screen-reader side, beside the pane
+    /// handle.
+    #[template_child]
+    pub(super) sidebar_resizer: TemplateChild<ResizerControl>,
     /// The navigation pane.
     #[template_child]
     pub(super) sidebar: TemplateChild<Sidebar>,

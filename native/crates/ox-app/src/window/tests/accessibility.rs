@@ -15,7 +15,9 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::support::app_menu;
+use crate::folder_view::column_widths;
 use crate::folder_view::sorting::{SortColumn, SortDirection};
+use crate::resizer_control::ResizerControl;
 use crate::test_support::harness::{
     application, descendants, skin, wait_for_frames, wait_until, Fixture, TestWindow,
 };
@@ -89,6 +91,15 @@ fn the_file_list_its_items_and_every_icon_button_are_named() {
             .all(|role| *role == gtk::AccessibleRole::ColumnHeader),
         "{roles:?}"
     );
+    let resizers = descendants::<ResizerControl>(&details);
+    assert_eq!(resizers.len(), titles.len(), "every column has its resizer");
+    let size = resizers.last().expect("the Size column's resizer");
+    assert_eq!(size.accessible_role(), gtk::AccessibleRole::Separator);
+    assert!(!size.is_focusable(), "the title takes the keys");
+    assert!(size.request_value(130.0), "a screen reader can set the width");
+    let size_column = test.window.folder_pane().details().column(SortColumn::Size);
+    let fixed = size_column.expect("a Size column").fixed_width();
+    assert_eq!(column_widths::saved_width(SortColumn::Size, fixed), Some(130.0));
 
     let unnamed: Vec<String> = descendants::<gtk::Widget>(&test.window)
         .into_iter()

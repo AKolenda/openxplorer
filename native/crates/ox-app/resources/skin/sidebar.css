@@ -79,7 +79,8 @@ window.ox .sidebar-bottom button { min-height: 34px; padding: 0 11px; }
 
 /* ---- Resizer ---- */
 /* The 6px resizer (.sidebar-resizer): sidebar colour with the border line
-   at its right; hovered, it shows a 2px accent line 2px in. */
+   at its right; hovered, or while its keyboard side has focus, it shows a
+   2px accent line 2px in. */
 paned.workspace > separator {
   min-width: 5px;
   background-color: @ox_sidebar;
@@ -87,7 +88,7 @@ paned.workspace > separator {
   border-right: 1px solid @ox_border;
 }
 paned.workspace > separator:hover,
-paned.workspace > separator:focus-visible {
+paned.workspace > separator.keyboard-focus {
   background-color: @ox_selected;
   box-shadow: inset 2px 0 @ox_selected, inset 4px 0 @ox_accent;
 }

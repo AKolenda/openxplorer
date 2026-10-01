@@ -269,11 +269,14 @@ fn the_resizer_is_a_titled_separator_that_the_keys_move() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let resizer = test.window.sidebar_resizer();
-    assert!(resizer.is_focusable());
+    let handle = test.window.sidebar_handle();
+    assert_eq!(resizer.accessible_role(), gtk::AccessibleRole::Separator);
     assert_eq!(
-        resizer.tooltip_text().as_deref(),
+        handle.tooltip_text().as_deref(),
         Some("Drag to resize sidebar · double-click to reset")
     );
+    assert!(resizer.grab_focus(), "the resizer is a Tab stop");
+    assert!(handle.has_css_class("keyboard-focus"), "focus lights the handle");
     let workspace = test.window.workspace();
     assert_eq!(workspace.position(), 210);
 
@@ -290,4 +293,6 @@ fn the_resizer_is_a_titled_separator_that_the_keys_move() {
         test.window.resize_sidebar_by_key(gdk::Key::Left, true);
     }
     assert_eq!(workspace.position(), 140, "never narrower than 140");
+    assert!(resizer.request_value(300.0), "a screen reader can set the width");
+    assert_eq!(workspace.position(), 300);
 }
