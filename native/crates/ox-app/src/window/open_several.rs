@@ -10,9 +10,9 @@ use ox_core::entry::Entry;
 
 use super::activation::{activation_for, desktop_link, Activation};
 use super::dialog::Dialog;
-use super::ButtonStyle;
 use super::session::TabPlacement;
 use super::BrowserWindow;
+use super::ButtonStyle;
 
 /// More items than this at once are asked about first (Dolphin's limit).
 const MANY_ITEMS: usize = 5;

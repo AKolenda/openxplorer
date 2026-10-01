@@ -422,7 +422,11 @@ mod tests {
         let text = format_date_short_time_with(&time, &us, ClockFormat::Locale);
         assert_eq!(text.as_deref(), Some("09/06/2026 7:05 PM"));
         let on_24_hours = format_date_short_time_with(&time, &us, ClockFormat::TwentyFourHour);
-        assert_eq!(on_24_hours.as_deref(), Some("09/06/2026 19:05"), "the desktop's clock");
+        assert_eq!(
+            on_24_hours.as_deref(),
+            Some("09/06/2026 19:05"),
+            "the desktop's clock"
+        );
         assert_eq!(without_seconds("%H:%M:%S"), "%H:%M");
         assert_eq!(without_seconds("%H시 %M분 %S초"), "%H시 %M분");
         assert_eq!(date_short_time_text(None), "—");

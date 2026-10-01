@@ -14,9 +14,9 @@
 use ox_core::entry::Entry;
 
 use super::dialog::Dialog;
-use super::ButtonStyle;
 use super::file_drop::{query_program, ProgramTarget};
 use super::BrowserWindow;
+use super::ButtonStyle;
 
 /// What to do with an opened item that may be a program.
 #[derive(Debug, Clone, PartialEq, Eq)]

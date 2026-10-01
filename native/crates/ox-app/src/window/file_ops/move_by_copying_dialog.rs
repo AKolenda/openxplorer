@@ -13,8 +13,8 @@ use ox_core::transfer::MoveByCopyingItem;
 
 use super::worker_question::worker_question;
 use crate::window::dialog::Dialog;
-use crate::window::ButtonStyle;
 use crate::window::BrowserWindow;
+use crate::window::ButtonStyle;
 
 /// The dialog's title.
 const TITLE: &str = "Move by copying?";

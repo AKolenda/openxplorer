@@ -9,8 +9,8 @@
 use gtk::{gio, glib};
 
 use super::dialog::Dialog;
-use super::ButtonStyle;
 use super::BrowserWindow;
+use super::ButtonStyle;
 use crate::integration::{change_type, other_applications, type_applications, TypeApplication, TypeChange};
 
 /// Why Remove did nothing.

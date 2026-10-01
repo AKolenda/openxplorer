@@ -626,9 +626,11 @@ fn running_operations_show_their_progress_on_the_dock_icon() {
     test.window.end_operation();
     wait_until("the bar hidden", || *updates.borrow() == [true, false]);
 
-    test.window
-        .transfer_panel()
-        .start(TransferKind::Archive, "Preparing extraction…", Cancellation::new());
+    test.window.transfer_panel().start(
+        TransferKind::Archive,
+        "Preparing extraction…",
+        Cancellation::new(),
+    );
     wait_until("the archive operation's bar", || updates.borrow().len() == 3);
     test.window.finish_archive_operation();
     wait_until("the bar hidden again", || {

@@ -18,8 +18,7 @@ use gtk::subclass::prelude::*;
 
 use super::applications::{
     application_image, list_applications_in_background, prepare_launch, prepare_target, ApplicationChoice,
-    ApplicationList,
-    ApplicationScope, DefaultChoice, OpenWithError, PreparedLaunch,
+    ApplicationList, ApplicationScope, DefaultChoice, OpenWithError, PreparedLaunch,
 };
 use super::custom_command::{run_custom_command, CustomCommand};
 use crate::icons::{self, Icon};

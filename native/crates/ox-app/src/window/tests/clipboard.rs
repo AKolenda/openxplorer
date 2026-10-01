@@ -196,7 +196,11 @@ fn clearing_apply_to_all_asks_about_each_conflict_in_turn() {
         .collect();
     assert_eq!(copies.len(), 1, "Notes 2.txt was skipped: {copies:?}");
     let report = open_dialog(&test);
-    assert_eq!(report.title_text(), "Operation result", "the skipped item is reported");
+    assert_eq!(
+        report.title_text(),
+        "Operation result",
+        "the skipped item is reported"
+    );
     report.press("OK");
 }
 

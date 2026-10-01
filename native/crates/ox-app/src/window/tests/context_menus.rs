@@ -134,9 +134,7 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    for disabled in ["Copy path"] {
-        assert!(!menu.row(disabled).is_sensitive(), "{disabled}");
-    }
+    assert!(!menu.row("Copy path").is_sensitive());
     // CMD-031: a disabled item says why.
     let tooltip = menu.row("Copy path").tooltip_text().unwrap_or_default();
     assert_eq!(tooltip, "Copy path\nSelect only one item for this command.");

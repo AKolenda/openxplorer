@@ -23,9 +23,9 @@ use crate::locations::{self, Page};
 
 use super::desktop_link::{link_target_of_file, may_be_link, LinkTarget};
 use super::run_on_open::RunChoice;
+use super::session::TabId;
 use super::session::TabPlacement;
 use super::BrowserWindow;
-use super::session::TabId;
 
 mod outcome;
 

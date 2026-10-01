@@ -24,8 +24,8 @@ use crate::test_support::harness::{
 use crate::text_size::TextSize;
 use crate::theme::desktop_text::{DesktopText, DesktopTextWatch};
 use crate::window::dialog::Dialog;
-use crate::window::ButtonStyle;
 use crate::window::focus_regions::Region;
+use crate::window::ButtonStyle;
 
 /// Emits `key` with `modifiers` on the key controller of `widget`;
 /// returns true when the widget handled it.
@@ -481,7 +481,10 @@ fn the_desktop_text_scaling_grows_rows_on_top_of_the_app_size() {
     drop(watch);
     skin().set_desktop_text(DesktopText::default());
 
-    assert!(drawn.percent() > chosen.percent(), "{drawn:?} is drawn for {chosen:?}");
+    assert!(
+        drawn.percent() > chosen.percent(),
+        "{drawn:?} is drawn for {chosen:?}"
+    );
     assert!(large_text > unscaled, "{large_text} > {unscaled}");
 }
 
