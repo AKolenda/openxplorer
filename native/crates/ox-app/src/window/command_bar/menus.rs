@@ -70,7 +70,7 @@ fn direction_item(label: &str, glyph: Icon, direction: SortDirection) -> MenuEnt
 
 /// The Sort menu: the columns, then the direction. The direction has an
 /// item each, where app.js had one item that flips it.
-pub(super) fn sort_menu() -> Vec<MenuEntry> {
+pub(in crate::window) fn sort_menu() -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = SortColumn::IN_SORT_MENU.into_iter().map(column_item).collect();
     entries.extend([
         MenuEntry::Divider,
@@ -98,7 +98,7 @@ fn text_size_item(label: &str, glyph: Icon, step: Step, shortcut: &'static str) 
 /// The View menu: the views (every icon size the native app has), the
 /// hidden-files, details-pane and navigation-pane toggles, then the text
 /// size.
-pub(super) fn view_menu() -> Vec<MenuEntry> {
+pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     let details = view_item("Details", Icon::TextBulletList, FolderView::Details);
     let mut entries = vec![details];
     let icon_sizes = IconSize::ALL

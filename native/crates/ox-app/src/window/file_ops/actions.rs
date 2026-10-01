@@ -16,7 +16,7 @@ use ox_core::clipboard::ClipboardMode;
 use ox_core::ops::{BuiltinTemplate, JournalDirection};
 
 use super::new_items::NewFileKind;
-use crate::window::actions::plain_action;
+use crate::window::actions::{plain_action, text_action};
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
 
@@ -85,7 +85,8 @@ impl BrowserWindow {
         ]);
     }
 
-    /// Cut, Copy, Paste, Rename, Delete, Shift+Delete and Duplicate.
+    /// Cut, Copy, Paste, Paste into folder, Rename, Delete, Shift+Delete
+    /// and Duplicate.
     fn install_edit_actions(&self) {
         self.add_action_entries([
             plain_action(WindowAction::Cut, |window| {
@@ -95,7 +96,15 @@ impl BrowserWindow {
                 window.copy_selection(ClipboardMode::Copy);
             }),
             task_action(WindowAction::Paste, |window| async move {
-                window.paste().await;
+                window.paste(None).await;
+            }),
+            text_action(WindowAction::PasteInto, |window, folder| {
+                let folder = folder.to_owned();
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    window,
+                    async move { window.paste(Some(folder)).await }
+                ));
             }),
             task_action(WindowAction::Rename, |window| async move {
                 window.rename_selection().await;

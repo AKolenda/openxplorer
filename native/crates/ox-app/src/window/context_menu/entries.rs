@@ -68,6 +68,8 @@ pub(crate) struct ItemFacts {
     /// It is a search result, listed away from its folder
     /// (`state.query`).
     pub(crate) is_search_result: bool,
+    /// It is a symbolic link, whose target "Show target" opens (CMD-030).
+    pub(crate) is_symlink: bool,
     /// Whether the selection can be compared (Dolphin's Compare Files).
     pub(crate) comparison: Comparison,
     /// The installed code editors, each offered as "Open in <editor>".
@@ -166,6 +168,10 @@ fn open_group(facts: &ItemFacts) -> Vec<MenuEntry> {
     if facts.comparison == Comparison::TwoFiles {
         entries.push(item("Compare files", Icon::DocumentCopy, WindowAction::CompareFiles).into());
     }
+    if facts.is_symlink {
+        let show_target = item("Show target", Icon::Open, WindowAction::ShowTarget);
+        entries.push(for_one_item(show_target, facts, false).into());
+    }
     if facts.is_search_result {
         let locations = [
             ("Open file location", Icon::Folder, WindowAction::OpenFileLocation),
@@ -230,12 +236,23 @@ fn application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
 }
 
 /// Cut, Copy, Paste, Rename and Delete, with their shortcuts; their
-/// actions decide when they are enabled.
+/// actions decide when they are enabled. On one folder, Paste pastes into
+/// it, as Explorer's does and Dolphin's "Paste into folder" (CMD-019).
 fn edit_items(facts: &ItemFacts) -> [MenuItem; 5] {
+    let paste = if facts.shape == ItemShape::Folder && facts.is_single {
+        MenuItem::with_text_target(
+            "Paste into folder",
+            Icon::ClipboardPaste,
+            WindowAction::PasteInto,
+            &facts.navigation_uri,
+        )
+    } else {
+        item("Paste", Icon::ClipboardPaste, WindowAction::Paste).with_shortcut("Ctrl+V")
+    };
     [
         item("Cut", Icon::Cut, WindowAction::Cut).with_shortcut("Ctrl+X"),
         item("Copy", Icon::Copy, WindowAction::Copy).with_shortcut("Ctrl+C"),
-        item("Paste", Icon::ClipboardPaste, WindowAction::Paste).with_shortcut("Ctrl+V"),
+        paste,
         item("Rename", Icon::Rename, WindowAction::Rename).with_shortcut("F2"),
         item(facts.delete_label, Icon::Delete, WindowAction::Trash).with_shortcut("Delete"),
     ]
@@ -246,11 +263,12 @@ fn duplicate_item() -> MenuEntry {
     item("Duplicate", Icon::DocumentCopy, WindowAction::Duplicate).into()
 }
 
-/// Copy path, for one item, with Explorer's key for "Copy as path"
-/// (CLIP-013).
-fn copy_path_item(facts: &ItemFacts) -> MenuEntry {
-    let copy_path = item("Copy path", Icon::Link, WindowAction::CopyPath).with_shortcut("Ctrl+Shift+C");
-    for_one_item(copy_path, facts, false).into()
+/// Copy path, one line per selected item (CLIP-014), with Explorer's key
+/// for "Copy as path" (CLIP-013).
+fn copy_path_item() -> MenuEntry {
+    item("Copy path", Icon::Link, WindowAction::CopyPath)
+        .with_shortcut("Ctrl+Shift+C")
+        .into()
 }
 
 /// Compress to ZIP file, which the Python app did not have (Windows 11's
@@ -307,7 +325,7 @@ pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
 fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     let mut entries = open_group(facts);
     entries.push(duplicate_item());
-    entries.push(copy_path_item(facts));
+    entries.push(copy_path_item());
     entries.push(compress_item());
     entries.push(MenuEntry::Divider);
     entries.extend(details_group(facts));
@@ -335,7 +353,7 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
         rename.into(),
         delete.into(),
         duplicate_item(),
-        copy_path_item(facts),
+        copy_path_item(),
         compress_item(),
         item("Compress to…", Icon::FolderZip, WindowAction::CompressTo).into(),
     ]);
@@ -360,7 +378,7 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
 }
 
 /// The menu of blank space in a folder, acting on the folder
-/// (`backgroundMenu`, CMD-011). `undo_label` and `redo_label` name what
+/// (`backgroundMenu`, CMD-011, CMD-012). `undo_label` and `redo_label` name what
 /// Undo and Redo would do, such as "Undo: Rename".
 pub(crate) fn background_menu(
     undo_label: &str,
@@ -368,6 +386,11 @@ pub(crate) fn background_menu(
     applications: &[ApplicationChoice],
 ) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = vec![
+        // Explorer's and Dolphin's View and Sort by (CMD-012), as the
+        // command bar's menus.
+        item("View", Icon::Grid, WindowAction::ShowViewMenu).into(),
+        item("Sort by", Icon::ArrowSort, WindowAction::ShowSortMenu).into(),
+        MenuEntry::Divider,
         item("New…", Icon::Add, WindowAction::ShowNewMenu).into(),
         item("Paste", Icon::ClipboardPaste, WindowAction::Paste)
             .with_shortcut("Ctrl+V")
@@ -473,6 +496,7 @@ mod tests {
             is_read_only: false,
             is_single: true,
             is_search_result: false,
+            is_symlink: false,
             comparison: Comparison::Unavailable,
             editors: Vec::new(),
             applications: Vec::new(),
@@ -533,7 +557,7 @@ mod tests {
                 "-",
                 "Cut",
                 "Copy",
-                "Paste",
+                "Paste into folder",
                 "-",
                 "Rename",
                 "Move to Trash",
@@ -561,7 +585,7 @@ mod tests {
             ("Open", "Enter"),
             ("Cut", "Ctrl+X"),
             ("Copy", "Ctrl+C"),
-            ("Paste", "Ctrl+V"),
+            // CMD-019: Paste on one folder pastes into it, without a key.
             ("Rename", "F2"),
             ("Move to Trash", "Delete"),
             // A gain: the Python app had no key for Copy path.
@@ -646,7 +670,6 @@ mod tests {
                 "Open folder with…",
                 "Open in new window",
                 "Pin to Quick access",
-                "Copy path",
                 "Previous versions",
             ]
         );
@@ -798,7 +821,10 @@ mod tests {
         let menu = item_menu(&folder(), MenuStyle::Compact);
 
         let strip: Vec<&str> = menu.strip.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(strip, ["Cut", "Copy", "Paste", "Rename", "Move to Trash"]);
+        assert_eq!(
+            strip,
+            ["Cut", "Copy", "Paste into folder", "Rename", "Move to Trash"]
+        );
         assert_eq!(
             labels(&menu.entries),
             [
@@ -838,6 +864,9 @@ mod tests {
         assert_eq!(
             labels(&background_menu("Undo: Rename", "Redo", &[files])),
             [
+                "View",
+                "Sort by",
+                "-",
                 "New…",
                 "Paste",
                 "Undo: Rename",

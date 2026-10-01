@@ -90,6 +90,7 @@ mod input;
 mod integration_actions;
 mod item_dialogs;
 mod landing;
+mod link_target;
 mod listing_state;
 mod live_search;
 mod loading;

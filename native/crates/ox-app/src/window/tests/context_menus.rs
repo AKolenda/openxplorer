@@ -134,10 +134,13 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         2,
         "a selected item keeps the selection"
     );
-    assert!(!menu.row("Copy path").is_sensitive());
+    assert!(!menu.row("Previous versions").is_sensitive());
     // CMD-031: a disabled item says why.
-    let tooltip = menu.row("Copy path").tooltip_text().unwrap_or_default();
-    assert_eq!(tooltip, "Copy path\nSelect only one item for this command.");
+    let tooltip = menu.row("Previous versions").tooltip_text().unwrap_or_default();
+    assert_eq!(
+        tooltip,
+        "Previous versions\nSelect only one item for this command."
+    );
     // Open opens each of them (OPEN-003); Rename renames them together
     // (OPS-014); Properties describe them together (PROP-002).
     for enabled in [
@@ -147,6 +150,7 @@ fn with_several_items_selected_the_one_item_commands_are_disabled() {
         "Rename",
         "Move to Trash",
         "Duplicate",
+        "Copy path",
         "Properties",
     ] {
         assert!(menu.row(enabled).is_sensitive(), "{enabled}");
@@ -166,7 +170,7 @@ fn the_compact_menu_has_the_strip_and_show_more_options_opens_the_classic_one() 
     assert_eq!(menu.style(), MenuStyle::Compact);
     assert_eq!(
         menu.strip_labels(),
-        ["Cut", "Copy", "Paste", "Rename", "Move to Trash"]
+        ["Cut", "Copy", "Paste into folder", "Rename", "Move to Trash"]
     );
     assert!(!menu.row_labels().contains(&"Cut".to_owned()));
     menu.row("Show more options").emit_activate();
@@ -191,7 +195,7 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
         test.selected_names().is_empty(),
         "blank space clears the selection"
     );
-    assert_eq!(menu.row_labels()[0], "New…");
+    assert!(menu.row("New…").is_sensitive());
     assert!(menu.row("Refresh").is_sensitive());
     assert!(!menu.row("Undo").is_sensitive(), "nothing to undo yet");
     menu.row("New…").emit_activate();
@@ -215,6 +219,36 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_in_place() {
             "Link to file or folder…",
         ]
     );
+}
+
+/// The folder menu's "Sort by" opens the command bar's Sort menu in
+/// place, and a choice there sorts the folder.
+///
+/// parity: CMD-012
+#[gtk::test]
+fn the_folder_menu_sorts_and_changes_the_view_in_place() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    assert_eq!(menu.row_labels()[..2], ["View", "Sort by"]);
+
+    menu.row("Sort by").emit_activate();
+    wait_until("the Sort menu", || {
+        menu.is_visible() && menu.row_labels().first().map(String::as_str) == Some("Name")
+    });
+    menu.row("Size").emit_activate();
+
+    let sort = test
+        .window
+        .action_state("sort")
+        .and_then(|state| state.get::<String>());
+    assert_eq!(sort.as_deref(), Some("size"));
+    test.window.right_click(None);
+    menu.row("View").emit_activate();
+    wait_until("the View menu", || {
+        menu.is_visible() && menu.row_labels().first().map(String::as_str) == Some("Details")
+    });
 }
 
 /// parity: CMD-013, CMD-014

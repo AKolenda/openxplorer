@@ -28,9 +28,9 @@ use crate::integration::{self, ApplicationChoice, Tool};
 use crate::locations::Page;
 
 use super::actions::{plain_action, text_action};
-use super::command_bar::new_menu;
+use super::command_bar::{new_menu, sort_menu, view_menu};
 use super::disk_tools::is_installed;
-use super::menu_popover::{MenuPopover, MenuStyle};
+use super::menu_popover::{MenuEntry, MenuPopover, MenuStyle};
 use super::widget_tree::children;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -202,6 +202,7 @@ impl BrowserWindow {
             is_read_only: self.imp().locations.borrow().is_snapshot_location(&entry.uri),
             is_single,
             is_search_result: self.is_searching(),
+            is_symlink: entry.is_symlink,
             comparison: Comparison::Unavailable,
             editors: self.context().desktop_integration().known_editor_shortcuts(),
             applications: if is_single {
@@ -238,24 +239,33 @@ impl BrowserWindow {
         self.open_context_menu(&view, &point, MenuStyle::Classic);
     }
 
-    /// The folder menu's "New…": the New menu where the folder menu was.
-    pub(super) fn show_new_menu_in_place(&self) {
+    /// The folder menu's "New…", "Sort by" and "View": `entries`, the
+    /// command bar's menu, where the folder menu was.
+    fn show_menu_in_place(&self, entries: Vec<MenuEntry>) {
         let view = self.folder_pane().view_widget();
         let Some(popover) = context_menu_of(&view) else {
             return;
         };
-        popover.set_entries(new_menu());
+        popover.set_entries(entries);
         popover.set_style_and_strip(MenuStyle::Classic, Vec::new());
         popover.popup();
     }
 
     /// Adds the actions the context menus run themselves: "Show more
-    /// options", "New…", "Unpin from Quick access" and "Open windows…".
+    /// options", "New…", "Sort by", "View", "Unpin from Quick access" and "Open windows…".
     pub(super) fn install_context_menu_actions(&self) {
         self.install_sidebar_hiding();
         self.add_action_entries([
             plain_action(WindowAction::ShowMoreOptions, BrowserWindow::show_more_options),
-            plain_action(WindowAction::ShowNewMenu, BrowserWindow::show_new_menu_in_place),
+            plain_action(WindowAction::ShowNewMenu, |window| {
+                window.show_menu_in_place(new_menu())
+            }),
+            plain_action(WindowAction::ShowSortMenu, |window| {
+                window.show_menu_in_place(sort_menu())
+            }),
+            plain_action(WindowAction::ShowViewMenu, |window| {
+                window.show_menu_in_place(view_menu())
+            }),
             text_action(WindowAction::Unpin, BrowserWindow::unpin),
             plain_action(WindowAction::AddPlace, |window| {
                 glib::spawn_future_local(glib::clone!(

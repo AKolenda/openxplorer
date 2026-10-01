@@ -71,7 +71,7 @@ impl BrowserWindow {
             #[weak(rename_to = window)]
             self,
             async move {
-                window.paste().await;
+                window.paste(None).await;
             }
         ));
     }

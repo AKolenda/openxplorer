@@ -173,6 +173,9 @@ pub(crate) enum WindowAction {
     Copy,
     /// Paste (Ctrl+V).
     Paste,
+    /// Pastes into the folder in the string target, the one selected
+    /// folder (CMD-019).
+    PasteInto,
     /// Rename (F2): asks for a new name for the one selected item.
     Rename,
     /// Delete: Move to Trash, or Delete permanently where the folder has
@@ -200,6 +203,12 @@ pub(crate) enum WindowAction {
     /// Opens the classic context menu where the compact one was ("Show
     /// more options").
     ShowMoreOptions,
+    /// Opens the Sort menu where the folder's context menu was (its
+    /// "Sort by", CMD-012).
+    ShowSortMenu,
+    /// Opens the View menu where the folder's context menu was (its
+    /// "View", CMD-012).
+    ShowViewMenu,
     /// Removes the Quick access pin of the location in the string target.
     Unpin,
     /// Asks for a label and a location and pins them (SIDE-031).
@@ -260,6 +269,9 @@ pub(crate) enum WindowAction {
     /// Opens the folder of the one selected search result, with the
     /// result selected.
     OpenFileLocation,
+    /// Opens the folder of the selected symbolic link's target with the
+    /// target selected (CMD-030).
+    ShowTarget,
     /// Opens the folder of the one selected search result in a new tab
     /// behind, with the result selected there.
     OpenFileLocationInTab,
@@ -434,6 +446,7 @@ impl WindowAction {
             WindowAction::Cut => "cut",
             WindowAction::Copy => "copy",
             WindowAction::Paste => "paste",
+            WindowAction::PasteInto => "paste-into",
             WindowAction::Rename => "rename",
             WindowAction::Trash => "trash",
             WindowAction::DeletePermanently => "delete-permanently",
@@ -446,6 +459,8 @@ impl WindowAction {
             WindowAction::EmptyTrash => "empty-trash",
             WindowAction::ShowNewMenu => "show-new-menu",
             WindowAction::ShowMoreOptions => "show-more-options",
+            WindowAction::ShowSortMenu => "show-sort-menu",
+            WindowAction::ShowViewMenu => "show-view-menu",
             WindowAction::Unpin => "unpin",
             WindowAction::AddPlace => "add-place",
             WindowAction::EditPin => "edit-pin",
@@ -470,6 +485,7 @@ impl WindowAction {
             WindowAction::CacheFolder => "cache-folder",
             WindowAction::CacheFolderOf => "cache-folder-of",
             WindowAction::OpenFileLocation => "open-file-location",
+            WindowAction::ShowTarget => "show-target",
             WindowAction::OpenFileLocationInTab => "open-file-location-in-tab",
             WindowAction::OpenFileLocationInWindow => "open-file-location-in-window",
             WindowAction::SaveSearch => "save-search",

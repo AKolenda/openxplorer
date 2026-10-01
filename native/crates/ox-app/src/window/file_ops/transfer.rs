@@ -103,17 +103,18 @@ impl TransferPlan {
 
 impl BrowserWindow {
     /// Paste: reads the clipboard, then copies or moves its items into
-    /// the folder shown (`paste`).
-    pub(crate) async fn paste(&self) {
+    /// `into`, a selected folder (Dolphin's "Paste into folder", CMD-019),
+    /// or without one into the folder shown (`paste`).
+    pub(crate) async fn paste(&self, into: Option<String>) {
         let clipboard = self.refresh_file_clipboard().await;
-        if self.is_searching() {
+        if into.is_none() && self.is_searching() {
             self.show_message("Open the destination folder before pasting.");
             return;
         }
         let Some(files) = clipboard else {
             return;
         };
-        let Some(destination_folder) = self.current_uri() else {
+        let Some(destination_folder) = into.or_else(|| self.current_uri()) else {
             return;
         };
         if !self
@@ -122,6 +123,7 @@ impl BrowserWindow {
             .borrow()
             .is_writable_location(&destination_folder)
         {
+            self.show_message("This folder is read-only.");
             return;
         }
         let mode = match files.mode() {

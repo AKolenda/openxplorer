@@ -6068,8 +6068,8 @@ sources = ["dolphin:src/dolphincontextmenu.cpp:276-323", "v2.0.0:desktop/ui/app.
 python_tests = ["v2.0.0:desktop/tests/ui_terminal.py::Background context includes current-folder Terminal"]
 bridge = ["openTerminal", "properties"]
 dolphin = "DolphinContextMenu::addViewportContextMenu"
-native = "todo"
-native_note = "Porting notes: OpenXplorer's background menu lacks Sort By, View mode and Open with for the folder. Explorer's background menu has View, Sort by, Group by, Refresh, Paste, Undo, New and Properties."
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (background_menu): the folder background menu starts with View and Sort by, as Explorer's does, then New…, Paste, Undo, Redo, Refresh, Open in Terminal, the folder's applications and Open folder with… (OPEN-013), pin, cache, folder sizes, Previous versions and Properties. View and Sort by open the command bar's View and Sort menus in place, as New… does (context_menu.rs show_menu_in_place), so their choices and check marks are the same. Test: native/crates/ox-app/src/window/tests/context_menus.rs (the_folder_menu_sorts_and_changes_the_view_in_place)."
 
 [[feature]]
 id = "CMD-013"
@@ -6205,8 +6205,8 @@ sources = [
 python_tests = []
 bridge = ["operate", "transferConflicts", "clipboardGet"]
 dolphin = "pasteIntoFolder"
-native = "todo"
-native_note = "Porting notes: In OpenXplorer, Paste in a folder's menu pastes into the current folder. Explorer's Paste on a folder pastes into it."
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (edit_items): on one selected folder the classic menu's Paste row and the compact strip's Paste are 'Paste into folder' (win.paste-into with the folder's location), which pastes the clipboard into that folder with the usual conflict dialog (file_ops/transfer.rs paste), also from search results; a read-only target says so. Ctrl+V still pastes into the folder shown. Availability: file_ops/availability.rs (FileCommand::PasteInto). Test: native/crates/ox-app/src/window/tests/clipboard.rs (paste_into_folder_pastes_into_the_selected_folder)."
 
 [[feature]]
 id = "CMD-020"
@@ -6402,8 +6402,8 @@ sources = [
 python_tests = []
 bridge = ["properties", "list"]
 dolphin = "show_target"
-native = "todo"
-native_note = "Porting notes: This is close to Explorer's 'Open file location' for shortcuts."
+native = "done"
+native_note = "native/crates/ox-app/src/window/link_target.rs: 'Show target' in the menu of one selected symbolic link reads the link without following it, resolves a relative target against the link's folder, checks that the destination exists, then opens its folder in this tab with the destination selected and scrolled into view (result_location.rs open_item_location, shared with Open file location). A dangling link says 'The target of “<name>” does not exist: <target>'. Test: native/crates/ox-app/src/window/tests/opening.rs (show_target_selects_a_links_target_and_explains_a_missing_one)."
 
 [[feature]]
 id = "CMD-031"
@@ -6494,8 +6494,8 @@ sources = ["v2.0.0:desktop/ui/app.js:1015-1030"]
 python_tests = []
 bridge = []
 gnome = "GtkShortcutController and gtk_application_set_accels_for_action match keyvals across keyboard layout groups"
-native = "todo"
-native_note = "Porting notes: Unverified in WebKitGTK. onKey compares e.key.toLowerCase() with Latin letters, so these shortcuts are expected to fail on a Cyrillic layout. If they work today, this is a current-app behaviour: add openxplorer to origin and make it must."
+native = "done"
+native_note = "Every letter shortcut (Ctrl+A, C, X, V, F, H, L, N, R, T, W, Z, Ctrl+Shift+N, Alt+D) is a GtkShortcutTrigger or an application accelerator; no key handler compares typed letters. GTK matches those triggers with gdk_key_event_matches, which also accepts the same physical key in another layout group, so they fire with a Cyrillic, Greek, Hebrew or Arabic layout active; type-ahead reads the input method's committed text, so it still uses the typed character. Test: native/crates/ox-app/src/window/tests/input.rs (letter_shortcuts_are_layout_independent_gtk_triggers)."
 
 [[feature]]
 id = "OPS-001"
@@ -8599,7 +8599,8 @@ sources = [
 ]
 python_tests = []
 bridge = ["clipboardText"]
-native = "todo"
+native = "done"
+native_note = "native/crates/ox-app/src/window/copy_path.rs: Copy path (command bar, item menus, Ctrl+Shift+C, Ctrl+Alt+C) copies the display path of every selected item, one per line, and the folder's without a selection; it is no longer disabled for several items. Tests: copy_path.rs (several_selected_items_copy_one_path_per_line); native/crates/ox-app/src/window/tests/command_bar.rs (copy_path_asks_for_a_folder_on_a_page_and_copies_every_selected_item)."
 
 [[feature]]
 id = "CLIP-015"
