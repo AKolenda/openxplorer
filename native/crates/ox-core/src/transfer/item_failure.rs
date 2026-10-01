@@ -59,18 +59,26 @@ impl ItemFailures {
         }
     }
 
-    /// What to do about `item`, which failed with `error`: `None` records
-    /// the error and goes on, as without a question. A name conflict, a
-    /// cancellation and a problem that needs recovery by hand are never
-    /// asked about.
-    pub(crate) fn answer(&mut self, item: &FailedItem, error: &TransferError) -> Option<FailureAnswer> {
+    /// Whether an item that failed with `error` is asked about. A name
+    /// conflict, a cancellation, a problem that needs recovery by hand and
+    /// something the location cannot do at all (which has questions of its
+    /// own, such as "Move by copying?") are not, nor anything after "Skip
+    /// all".
+    pub(crate) fn asks_about(&self, error: &TransferError) -> bool {
         let askable = !matches!(
             error,
-            TransferError::Cancelled | TransferError::Exists(_) | TransferError::RecoveryRequired(_)
+            TransferError::Cancelled
+                | TransferError::Exists(_)
+                | TransferError::RecoveryRequired(_)
+                | TransferError::NotSupported(_)
+                | TransferError::ReplaceUnsupported(_)
         );
-        if !askable || self.skip_all {
-            return None;
-        }
+        askable && !self.skip_all && self.question.is_some()
+    }
+
+    /// The user's answer about `item`, which [`Self::asks_about`] allowed;
+    /// `None` without a question.
+    pub(crate) fn answer(&mut self, item: &FailedItem) -> Option<FailureAnswer> {
         let answer = (self.question.as_mut()?)(item);
         self.skip_all = answer == FailureAnswer::SkipAll;
         Some(answer)

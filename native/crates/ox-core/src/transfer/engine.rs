@@ -314,6 +314,7 @@ impl TransferEngine {
     /// Runs one top-level item and records its outcome. Staging this item
     /// created is removed afterwards, whatever happened; a leftover is
     /// reported with its exact location.
+    ///
     /// A failure the user may answer is asked about first (OPS-047):
     /// Retry runs the item again once its staging is gone, Cancel stops
     /// the run after recording it.
@@ -321,7 +322,7 @@ impl TransferEngine {
         let mut staging = ItemStaging::default();
         let mut outcome = self.process_item(batch, index, uri, state, &mut staging);
         while let Err(error) = &outcome {
-            if batch.cancel.is_cancelled() {
+            if batch.cancel.is_cancelled() || !self.failures.asks_about(error) {
                 break;
             }
             let failed = FailedItem {
@@ -330,7 +331,7 @@ impl TransferEngine {
                 error: error.to_string(),
                 more_items: index + 1 < batch.total,
             };
-            match self.failures.answer(&failed, error) {
+            match self.failures.answer(&failed) {
                 Some(FailureAnswer::Retry) => {
                     self.discard_leftover_stage(std::mem::take(&mut staging), &mut state.result);
                     outcome = self.process_item(batch, index, uri, state, &mut staging);

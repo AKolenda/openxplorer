@@ -104,9 +104,11 @@ impl AppContext {
             glib::clone!(
                 #[weak(rename_to = context)]
                 self,
-                move |_, _| {
-                    context.forget_old_recent_files();
-                    context.notify_places_changed();
+                move |_, key| {
+                    if [REMEMBER_KEY, MAX_AGE_KEY].contains(&key) {
+                        context.forget_old_recent_files();
+                        context.notify_places_changed();
+                    }
                 }
             ),
         );

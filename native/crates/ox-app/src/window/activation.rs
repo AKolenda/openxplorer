@@ -211,6 +211,8 @@ impl BrowserWindow {
     /// or closed meanwhile; a folder opens in that tab even when another
     /// one is in front by then (OPEN-001, OPEN-004).
     pub(super) fn activate_item(&self, position: u32) {
+        // A double-click opens; it never also renames (OPS-011).
+        self.cancel_slow_click_rename();
         let Some(item) = self.folder_pane().model().item(position) else {
             return;
         };

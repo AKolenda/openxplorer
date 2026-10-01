@@ -85,8 +85,8 @@ fn name_factory(owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     factory
 }
 
-/// The cells of every column but Name: one
-/// dim label, registered in `owners`, which dims the cells of cut items.
+/// The cells of every column but Name: one dim label, registered in
+/// `owners`, which dims the cells of cut items.
 fn text_factory(column: SortColumn, owners: &Rc<CellOwners>) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let setup_owners = Rc::clone(owners);

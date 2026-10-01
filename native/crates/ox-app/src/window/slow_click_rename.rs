@@ -9,8 +9,8 @@
 //! selection changing and the window losing focus cancel it, and nothing
 //! starts while renaming is not allowed there.
 
-use std::cell::RefCell;
-use std::time::Duration;
+use std::cell::{Cell, RefCell};
+use std::time::{Duration, Instant};
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -23,10 +23,14 @@ use crate::folder_view::cells::FileCell;
 /// GTK's double-click time when the settings do not say (`GtkSettings`).
 const DEFAULT_DOUBLE_CLICK: u32 = 400;
 
-/// The rename a slow second click has scheduled, if any.
+/// The rename a slow second click has scheduled, if any, and when the
+/// last press was.
 #[derive(Debug, Default)]
 pub(super) struct SlowClickRename {
     pending: RefCell<Option<glib::SourceId>>,
+    /// The list's own click handling can reset GTK's click count, so a
+    /// double-click is also told by the time since the press before.
+    last_press: Cell<Option<Instant>>,
 }
 
 /// What a primary press on the folder view lands on.
@@ -113,6 +117,11 @@ impl BrowserWindow {
     /// the name of the only selected item.
     pub(super) fn name_pressed(&self, press: NamePress) {
         self.cancel_slow_click_rename();
+        let now = Instant::now();
+        let earlier = self.imp().slow_click_rename.last_press.replace(Some(now));
+        if earlier.is_some_and(|earlier| now.duration_since(earlier) < double_click_interval()) {
+            return;
+        }
         let selected = self.folder_pane().model().selected_positions();
         let Some(position) = asks_for_rename(press, &selected) else {
             return;
